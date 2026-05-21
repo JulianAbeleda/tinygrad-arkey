@@ -5,7 +5,7 @@ Welcome to the docs for tinygrad. This page is for users of the tinygrad library
 While you can `pip install tinygrad`, we encourage you to install from source:
 
 ```bash
-git clone https://github.com/tinygrad/tinygrad.git
+git clone https://github.com/JulianAbeleda/tinygrad-arkey.git
 cd tinygrad
 python3 -m pip install -e .
 ```

@@ -1042,7 +1042,7 @@ class TestSchedule(unittest.TestCase):
   def test_setitem_paddded_sched(self): self.test_setitem_sched(lambda x: x.shrink_to(4, 1).pad_to(4, 4), 1)
 
   def test_setitem_const_fused(self):
-    # https://github.com/tinygrad/tinygrad/issues/10690
+    # https://github.com/JulianAbeleda/tinygrad-arkey/issues/10690
     a = Tensor.arange(16).contiguous().realize()
     GlobalCounters.reset()
     a[4] = 3

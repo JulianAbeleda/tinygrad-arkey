@@ -7,7 +7,7 @@ Start up a notebook locally, or use [colab](https://colab.research.google.com/).
 ### One-liner to install tinygrad in colab
 
 ```python
-!pip install git+https://github.com/tinygrad/tinygrad.git
+!pip install git+https://github.com/JulianAbeleda/tinygrad-arkey.git
 ```
 
 ### What's the default device?
@@ -52,7 +52,7 @@ print(X_train.shape, X_train.dtype, Y_train.shape, Y_train.dtype)
 # (60000, 1, 28, 28) dtypes.uchar (60000,) dtypes.uchar
 ```
 
-tinygrad includes MNIST, it only adds four lines. Feel free to read the [function](https://github.com/tinygrad/tinygrad/blob/master/tinygrad/nn/datasets.py).
+tinygrad includes MNIST, it only adds four lines. Feel free to read the [function](https://github.com/JulianAbeleda/tinygrad-arkey/blob/master/tinygrad/nn/datasets.py).
 
 ## Using the model
 

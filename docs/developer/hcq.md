@@ -124,5 +124,5 @@ your_device.timeline_signal.wait(your_device.timeline_value - 1)
 
 ## HCQGraph
 
-[HCQGraph](https://github.com/tinygrad/tinygrad/tree/master/tinygrad/runtime/graph/hcq.py) is a core feature that implements `GraphRunner` for HCQ-compatible devices. `HCQGraph` builds static `HWQueue` for all operations per device. To optimize enqueue time, only the necessary parts of the queues are updated for each run using the symbolic variables, avoiding a complete rebuild.
+[HCQGraph](https://github.com/JulianAbeleda/tinygrad-arkey/tree/master/tinygrad/runtime/graph/hcq.py) is a core feature that implements `GraphRunner` for HCQ-compatible devices. `HCQGraph` builds static `HWQueue` for all operations per device. To optimize enqueue time, only the necessary parts of the queues are updated for each run using the symbolic variables, avoiding a complete rebuild.
 Optionally, queues can implement a `bind` API, which allows further optimization by eliminating the need to copy the queues into the device ring.

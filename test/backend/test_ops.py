@@ -675,10 +675,10 @@ class TestOps(unittest.TestCase):
     helper_test_op([(45,65)], lambda x: x**-2)
     helper_test_op([()], lambda x: x**2)
     helper_test_op([()], lambda x: x**-2)
-    # Regression tests for https://github.com/tinygrad/tinygrad/issues/1151
+    # Regression tests for https://github.com/JulianAbeleda/tinygrad-arkey/issues/1151
     helper_test_op([(45,65)], lambda x: x**3, low=-30, high=-27)
     helper_test_op([()], lambda x: x**3, low=-30, high=-27)
-    # Regression tests for https://github.com/tinygrad/tinygrad/issues/1251
+    # Regression tests for https://github.com/JulianAbeleda/tinygrad-arkey/issues/1251
     helper_test_op([(45,65)], lambda x: x**0.2, low=-30, high=-27)
     helper_test_op([(45,65)], lambda x: x**1.2, low=-30, high=-27)
     helper_test_op([()], lambda x: x**0.2, low=-30, high=-27)
@@ -2376,7 +2376,7 @@ class TestOps(unittest.TestCase):
     self.helper_test_exception([(1,1,6,7), (6,1,3,3)],
                                lambda x,w:torch.nn.functional.conv2d(x,w,dilation=3),
                                lambda x,w: Tensor.conv2d(x,w,dilation=3), expected=(RuntimeError, AssertionError))
-    # regression test for https://github.com/tinygrad/tinygrad/pull/7549/
+    # regression test for https://github.com/JulianAbeleda/tinygrad-arkey/pull/7549/
     self.helper_test_exception([(2,16,2,2), (32,16,3,3)], lambda x,w:torch.nn.functional.conv2d(x,w), lambda x,w: Tensor.conv2d(x,w),
                                expected=(RuntimeError, AssertionError))
     self.helper_test_exception([(2,16,2,2), (32,16,3,3)], lambda x,w:torch.nn.functional.conv2d(x,w,padding=(1,1,1)),
@@ -2696,7 +2696,7 @@ class TestOps(unittest.TestCase):
           lambda x: torch.nn.functional.avg_pool2d(x, kernel_size=ksz),
           lambda x: Tensor.avg_pool2d(x, kernel_size=ksz), rtol=1e-5)
 
-    # regression test for https://github.com/tinygrad/tinygrad/pull/7581
+    # regression test for https://github.com/JulianAbeleda/tinygrad-arkey/pull/7581
     helper_test_op([(1,1,8,8)],
       lambda x: torch.nn.functional.avg_pool2d(x, kernel_size=(1,2), padding=(0,1), stride=(5,1)),
       lambda x: Tensor.avg_pool2d(x, kernel_size=(1,2), padding=(0,1), stride=(5,1)), rtol=1e-5)

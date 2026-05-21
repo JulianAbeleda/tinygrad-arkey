@@ -508,7 +508,7 @@ class TestTinygrad(unittest.TestCase):
     np.testing.assert_equal(t.tolist(), data)
     np.testing.assert_equal((t+1).tolist(), data+1)
 
-  # Regression test for https://github.com/tinygrad/tinygrad/issues/1751
+  # Regression test for https://github.com/JulianAbeleda/tinygrad-arkey/issues/1751
   def test_copy_from_numpy_unaligned(self):
     # 2**15 is the minimum for repro
     arr = np.random.randn(2**15).astype(np.float32)

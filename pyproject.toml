@@ -1,5 +1,5 @@
 [project]
-name = "tinygrad"
+name = "tinygrad-arkey"
 version = "0.12.0"
 description = "You like pytorch? You like micrograd? You love tinygrad! <3"
 authors = [{ name = "George Hotz" }]
@@ -75,9 +75,9 @@ testing_minimal = [
   "hypothesis>=6.148.9",
   "z3-solver<4.15.4",  # 4.15.4 has a segfault when creating many z3.Context()
 ]
-testing_unit = ["tinygrad[testing_minimal]", "tqdm", "safetensors", "tabulate", "openai", "gguf>=0.18", "capstone"]
+testing_unit = ["tinygrad-arkey[testing_minimal]", "tqdm", "safetensors", "tabulate", "openai", "gguf>=0.18", "capstone"]
 testing = [
-  "tinygrad[testing_unit]",
+  "tinygrad-arkey[testing_unit]",
   "pillow",
   "onnx==1.19.0",
   "onnx2torch",

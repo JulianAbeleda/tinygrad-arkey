@@ -40,7 +40,7 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
     case .unloaded: return "Driver extension not installed.\n\n"
     case .activating: return "Extension is activating...\n\n"
     case .needsApproval: return "Extension awaiting approval.\n\n" + approvalHelp
-    case .activated: return "Extension is ready! Run tinygrad to use your eGPU.\n\n"
+    case .activated: return "Extension is ready! Run tinygrad-arkey to use your eGPU.\n\n"
     }
   }
 
@@ -92,7 +92,7 @@ final class TinyGPUCLIRunner: NSObject, OSSystemExtensionRequestDelegate {
 
   // MARK: - OSSystemExtensionRequestDelegate
   func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
-    print("\nUser approval required!\n\n\(Self.approvalHelp)After approval, connect the gpu and use it with tinygrad.\n")
+    print("\nUser approval required!\n\n\(Self.approvalHelp)After approval, connect the gpu and use it with tinygrad-arkey.\n")
     done?(.needsApproval)
   }
 

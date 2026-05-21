@@ -6,7 +6,7 @@ This problem uses BERT for NLP.
 
 Install tinygrad and mlperf-logging from master.
 ```
-git clone https://github.com/tinygrad/tinygrad.git
+git clone https://github.com/JulianAbeleda/tinygrad-arkey.git
 python3 -m pip install -e ".[mlperf]"
 ```
 Also install tqdm and tensorflow.

@@ -3,7 +3,7 @@ import unittest, importlib
 
 @unittest.skipUnless(DEV.interface.startswith("MOCK"), 'Testing mockgpu')
 class TestMockGPU(unittest.TestCase):
-  # https://github.com/tinygrad/tinygrad/pull/7627
+  # https://github.com/JulianAbeleda/tinygrad-arkey/pull/7627
   def test_import_typing_extensions(self):
     import test.mockgpu.mockgpu # noqa: F401  # pylint: disable=unused-import
     import typing_extensions

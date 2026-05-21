@@ -17,11 +17,11 @@ The `UOp` graph specifies the compute in terms of low level tinygrad ops. Not al
 
 ## Scheduling
 
-The [scheduler](https://github.com/tinygrad/tinygrad/tree/master/tinygrad/schedule/__init__.py) converts the graph of UOps into a `LINEAR` UOp whose `src` is a list of `CALL` UOps. One `CALL` is one kernel on the GPU, and the scheduler is responsible for breaking the large compute graph into subgraphs that can fit in a kernel. The `CALL`'s `src[0]` (a `SINK` ast) specifies what compute to run, and the remaining `src` are the buffers to run it on.
+The [scheduler](https://github.com/JulianAbeleda/tinygrad-arkey/tree/master/tinygrad/schedule/__init__.py) converts the graph of UOps into a `LINEAR` UOp whose `src` is a list of `CALL` UOps. One `CALL` is one kernel on the GPU, and the scheduler is responsible for breaking the large compute graph into subgraphs that can fit in a kernel. The `CALL`'s `src[0]` (a `SINK` ast) specifies what compute to run, and the remaining `src` are the buffers to run it on.
 
 ## Lowering
 
-The code in [realize](https://github.com/tinygrad/tinygrad/tree/master/tinygrad/engine/realize.py) lowers each `CALL` by compiling its ast into a `PROGRAM` and running it.
+The code in [realize](https://github.com/JulianAbeleda/tinygrad-arkey/tree/master/tinygrad/engine/realize.py) lowers each `CALL` by compiling its ast into a `PROGRAM` and running it.
 
 ::: tinygrad.engine.realize.run_linear
 
@@ -39,8 +39,8 @@ Then we render the UOps into code with a `Renderer`, then we compile the code to
 
 Runtimes are responsible for device-specific interactions. They handle tasks such as initializing devices, allocating memory, loading/launching programs, and more. You can find more information about the runtimes API on the [runtime overview page](runtime.md).
 
-All runtime implementations can be found in the [runtime directory](https://github.com/tinygrad/tinygrad/tree/master/tinygrad/runtime).
+All runtime implementations can be found in the [runtime directory](https://github.com/JulianAbeleda/tinygrad-arkey/tree/master/tinygrad/runtime).
 
 ### HCQ Compatible Runtimes
 
-HCQ API is a lower-level API for defining runtimes. Interaction with HCQ-compatible devices occurs at a lower level, with commands issued directly to hardware queues. Some examples of such backends are [NV](https://github.com/tinygrad/tinygrad/tree/master/tinygrad/runtime/ops_nv.py) and [AMD](https://github.com/tinygrad/tinygrad/tree/master/tinygrad/runtime/ops_amd.py), which are userspace drivers for NVIDIA and AMD devices respectively. You can find more information about the API on [HCQ overview page](hcq.md)
+HCQ API is a lower-level API for defining runtimes. Interaction with HCQ-compatible devices occurs at a lower level, with commands issued directly to hardware queues. Some examples of such backends are [NV](https://github.com/JulianAbeleda/tinygrad-arkey/tree/master/tinygrad/runtime/ops_nv.py) and [AMD](https://github.com/JulianAbeleda/tinygrad-arkey/tree/master/tinygrad/runtime/ops_amd.py), which are userspace drivers for NVIDIA and AMD devices respectively. You can find more information about the API on [HCQ overview page](hcq.md)

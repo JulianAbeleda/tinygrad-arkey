@@ -1,7 +1,7 @@
 # pip install mkdocs mkdocs-material mkdocstrings[python]
 site_name: tinygrad docs
 site_url: https://docs.tinygrad.org/
-repo_url: https://github.com/tinygrad/tinygrad/
+repo_url: https://github.com/JulianAbeleda/tinygrad-arkey/
 nav:
 - Home:
   - index.md

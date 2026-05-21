@@ -6,7 +6,7 @@ from tinygrad.helpers import fetch
 class TestLLMTokenizer(unittest.TestCase):
   @functools.cached_property
   def llama_tok(self):
-    # from https://github.com/tinygrad/tinygrad/blob/e0106b6b257ebc003eb3694144e3e198f7d8cc37/examples/llama3.py#L14
+    # from https://github.com/JulianAbeleda/tinygrad-arkey/blob/e0106b6b257ebc003eb3694144e3e198f7d8cc37/examples/llama3.py#L14
     model_file = fetch("https://huggingface.co/bofenghuang/Meta-Llama-3-8B/resolve/main/original/tokenizer.model")
     with open(model_file, "rt") as fd:
       str_vocab = [line.split(maxsplit=1) for line in fd.read().splitlines() if line]

@@ -9,12 +9,12 @@ tinygrad: For something between [PyTorch](https://github.com/pytorch/pytorch) an
 
 <h3>
 
-[Homepage](https://github.com/tinygrad/tinygrad) | [Documentation](https://docs.tinygrad.org/) | [Discord](https://discord.gg/ZjZadyC7PK)
+[Homepage](https://github.com/JulianAbeleda/tinygrad-arkey) | [Documentation](https://docs.tinygrad.org/) | [Discord](https://discord.gg/ZjZadyC7PK)
 
 </h3>
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/tinygrad/tinygrad)](https://github.com/tinygrad/tinygrad/stargazers)
-[![Unit Tests](https://github.com/tinygrad/tinygrad/actions/workflows/test.yml/badge.svg)](https://github.com/tinygrad/tinygrad/actions/workflows/test.yml)
+[![GitHub Repo stars](https://img.shields.io/github/stars/JulianAbeleda/tinygrad-arkey)](https://github.com/JulianAbeleda/tinygrad-arkey/stargazers)
+[![Unit Tests](https://github.com/JulianAbeleda/tinygrad-arkey/actions/workflows/test.yml/badge.svg)](https://github.com/JulianAbeleda/tinygrad-arkey/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/discord/1068976834382925865)](https://discord.gg/ZjZadyC7PK)
 
 </div>
@@ -120,7 +120,7 @@ The current recommended way to install tinygrad is from source.
 ### From source
 
 ```sh
-git clone https://github.com/tinygrad/tinygrad.git
+git clone https://github.com/JulianAbeleda/tinygrad-arkey.git
 cd tinygrad
 python3 -m pip install -e .
 ```
@@ -128,7 +128,7 @@ python3 -m pip install -e .
 ### Direct (master)
 
 ```sh
-python3 -m pip install git+https://github.com/tinygrad/tinygrad.git
+python3 -m pip install git+https://github.com/JulianAbeleda/tinygrad-arkey.git
 ```
 
 ## Documentation
@@ -198,4 +198,4 @@ python3 -m pytest test/                 # whole test suite
 
 #### Process replay tests
 
-[Process replay](https://github.com/tinygrad/tinygrad/blob/master/test/external/process_replay/README.md) compares your PR's generated kernels against master. If your PR is a refactor or speedup without any expected behavior change, It should include [pr] in the pull request title.
+[Process replay](https://github.com/JulianAbeleda/tinygrad-arkey/blob/master/test/external/process_replay/README.md) compares your PR's generated kernels against master. If your PR is a refactor or speedup without any expected behavior change, It should include [pr] in the pull request title.

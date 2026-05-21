@@ -1,6 +1,6 @@
 # TinyGPU
 
-TinyGPU app lets you use AMD and NVIDIA GPUs on macOS over USB4/Thunderbolt with tinygrad.
+TinyGPU app lets you use AMD and NVIDIA GPUs on macOS over USB4/Thunderbolt with tinygrad-arkey.
 
 ## Requirements
 
@@ -19,7 +19,7 @@ Plug the supported GPU into your Mac over USB4/Thunderbolt.
 > **Note:** If tinygrad is cloned but not installed, run commands with `PYTHONPATH=.`
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tinygrad/tinygrad/master/extra/setup_tinygpu_osx.sh | sh
+curl -fsSL https://raw.githubusercontent.com/JulianAbeleda/tinygrad-arkey/master/extra/setup_tinygpu_osx.sh | sh
 ```
 
 This downloads TinyGPU.app and triggers a system prompt to install the driver extension.
@@ -35,7 +35,7 @@ If you missed the prompt, go to **System Settings > General > Login Items & Exte
 #### AMD
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tinygrad/tinygrad/master/extra/setup_hipcomgr_osx.sh | sh
+curl -fsSL https://raw.githubusercontent.com/JulianAbeleda/tinygrad-arkey/master/extra/setup_hipcomgr_osx.sh | sh
 ```
 
 #### NV
@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/tinygrad/tinygrad/master/extra/setu
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) if you don't have it.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tinygrad/tinygrad/master/extra/setup_nvcc_osx.sh | sh
+curl -fsSL https://raw.githubusercontent.com/JulianAbeleda/tinygrad-arkey/master/extra/setup_nvcc_osx.sh | sh
 ```
 
 Make sure `~/.local/bin` is on your `PATH`:
