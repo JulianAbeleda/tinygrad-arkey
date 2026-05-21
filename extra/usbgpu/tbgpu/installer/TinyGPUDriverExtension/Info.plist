@@ -23,7 +23,7 @@
 			<key>IOUserClass</key>
 			<string>TinyGPUDriver</string>
 			<key>IOUserServerName</key>
-			<string>org.tinygrad-arkey.tinygpu.Driver</string>
+			<string>org.tinygrad.arkey.tinygpu.Driver</string>
 			<key>TinyGPUDriverUserClientProperties</key>
 			<dict>
 				<key>IOClass</key>

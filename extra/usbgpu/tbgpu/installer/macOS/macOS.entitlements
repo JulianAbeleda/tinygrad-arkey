@@ -10,7 +10,7 @@
 	<true/>
 	<key>com.apple.developer.driverkit.userclient-access</key>
 	<array>
-		<string>org.tinygrad-arkey.tinygpu.driver2</string>
+		<string>org.tinygrad.arkey.tinygpu.driver2</string>
 	</array>
 </dict>
 </plist>
