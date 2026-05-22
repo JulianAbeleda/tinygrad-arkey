@@ -21,7 +21,8 @@ The goal is one active target: `tinygrad-arkey`.
 - [x] Add remote-only AMD allocation cap below `16MB`.
 - [x] Retest AMD boot with capped remote staging allocations.
 - [ ] Retest Qwen 1.7B decode after allocation mitigation.
-- [ ] Fix Qwen warmup bridge dirty failure: `MAP_SYSMEM` / `SYSMEM_WRITE` reports `list index out of range`.
+- [x] Add acknowledged remote sysmem writes and explicit invalid-handle errors.
+- [ ] Retest Qwen warmup bridge dirty failure after GPU restart.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
 - [ ] Add a benchmark gate for roundtrips/token regression checks.
 - [ ] Prototype packed Q4_K_M fused dequant plus matvec for AMD/gfx1100.
@@ -44,6 +45,8 @@ Dropout investigation:
 - Escape hatch: `AMD_REMOTE_ALLOC_CAP_MB=0` restores the previous `16MB` setup allocation behavior.
 - Validation: capped AMD boot reached `gfx1100`, reported `has_sdma=True`, completed 16KB/2MB host allocations, and synchronized successfully.
 - Qwen status: Qwen 1.7B warmup still fails, but the latest failure is a bridge dirty `list index out of range` without a macOS PCIe dead-device log.
+- Bridge protocol update: remote `SYSMEM_WRITE` now returns an RPC response, and sysmem reads/writes report explicit invalid handle errors instead of raw `list index out of range`.
+- Latest hardware state: the GPU dropped again at `2026-05-21 23:12:30`; Qwen retest is pending after physical restart.
 
 ## Before Editing
 

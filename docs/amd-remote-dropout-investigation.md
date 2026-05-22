@@ -132,6 +132,8 @@ Current validation result:
 - The checked log window showed `PrepareDMA` entries at 16KB and 2MB, with no `PrepareDMA size=16777216` and no macOS `marking child ... dead` event.
 - A tiny tensor sanity check returned `[2, 3, 4]` on `REMOTE=127.0.0.1:6667 DEV=PCI+AMD`.
 - Qwen 1.7B warmup still fails with bridge dirty state after a `list index out of range` error around sysmem access. The GPU stayed enumerated, so this is now tracked as a bridge/protocol issue rather than the original PCIe dropout trigger.
+- A follow-up bridge protocol patch makes remote `SYSMEM_WRITE` acknowledged and reports explicit invalid sysmem handles for reads/writes. This should prevent write-side errors from surfacing later as misleading `MAP_SYSMEM` failures.
+- During the next Qwen retest attempt, the GPU dropped again at `2026-05-21 23:12:30` with the familiar macOS PCIe dead-device pattern. Retest the sysmem-write acknowledgement after a physical GPU restart.
 
 ## Online verification
 
