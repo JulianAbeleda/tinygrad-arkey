@@ -32,6 +32,8 @@ tinygrad-arkey
 
 The main blocker is still hardware/bridge stability. The RX 7900 XTX can disappear from the macOS PCIe tree under the TinyGPU/USB4 path. When it disappears, tinygrad sees zero AMD devices or a dirty bridge, but the root cause is below tinygrad.
 
+The latest research framing adds one important fact: the ASM2464PD bridge used in this path has an internal 8051-class firmware CPU with Program ROM/RAM and XDATA. That makes the UT4G path an active firmware-mediated bridge. This supports treating bad DMA/MMIO sequences as possible bridge-firmware-state triggers, but it does not prove the ASM2464PD firmware is the isolated root cause. A physical replug likely resets bridge firmware, USB4 tunnel state, TinyGPU DriverKit state, PCIe link training, and GPU endpoint state together.
+
 ## What Was Accomplished
 
 - Renamed and standardized the active fork as `tinygrad-arkey`.
@@ -42,6 +44,7 @@ The main blocker is still hardware/bridge stability. The RX 7900 XTX can disappe
 - Added Q4_K baseline benchmark support.
 - Reproduced the GPU dropout outside model inference.
 - Isolated the first clear local dropout trigger to repeated `16MB` TinyGPU `PrepareDMA` mappings.
+- Documented the ASM2464PD 8051 firmware angle as relevant but unproven causality.
 - Added remote-only AMD setup allocation cap:
   - default: `AMD_REMOTE_ALLOC_CAP_MB=2`
   - escape hatch: `AMD_REMOTE_ALLOC_CAP_MB=0`

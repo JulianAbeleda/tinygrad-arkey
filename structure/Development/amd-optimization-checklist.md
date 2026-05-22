@@ -43,6 +43,7 @@ Dropout investigation:
 
 - Doc: `docs/amd-remote-dropout-investigation.md`
 - Current trigger: repeated `16MB` TinyGPU `PrepareDMA` mappings.
+- Firmware framing: ASM2464PD is an active firmware-mediated bridge with an internal 8051 CPU, Program ROM, Program RAM, and XDATA. Treat this as relevant to the hypothesis, not as proof that the 8051 firmware is the root cause.
 - Passed before trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
 - Current mitigation: remote-only AMD setup allocations default to a `2MB` cap through `AMD_REMOTE_ALLOC_CAP_MB`.
 - Escape hatch: `AMD_REMOTE_ALLOC_CAP_MB=0` restores the previous `16MB` setup allocation behavior.
@@ -53,6 +54,7 @@ Dropout investigation:
 - Small-BAR discovery guard: remote AMD now fails fast before the indirect VRAM MMIO path unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1` is set.
 - Discovery profile: `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` bypasses the unsafe indirect VRAM discovery read for RX 7900 XTX. Local syntax validation passes, but live tensor validation is blocked while macOS/TinyGPU reports zero AMD devices.
 - Latest probe state: after repeated ACIO Gen2/3 link errors, macOS marked the AMD/UT4G PCIe tree dead at `2026-05-22 00:29:01`; `system_profiler` reports only the Apple M4 GPU.
+- Causality boundary: a physical replug likely resets ASM2464PD firmware state, USB4 tunnel state, TinyGPU DriverKit state, PCIe link training, and the GPU endpoint. Do not claim the 8051 firmware is isolated as the stuck component without a narrower test.
 
 ## Before Editing
 

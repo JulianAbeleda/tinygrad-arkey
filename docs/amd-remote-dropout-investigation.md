@@ -23,6 +23,20 @@ tinygrad-arkey
   -> RX 7900 XTX
 ```
 
+## Bridge firmware facts
+
+The ADT-Link UT4G path uses an ASMedia USB4/TB to PCIe bridge. The ASM2464PD datasheet block diagram shows an internal `CPU (8051)`, `Program ROM`, `Program RAM`, and `XDATA`, so the bridge is firmware-mediated rather than a passive electrical adapter.
+
+This is relevant to the dropout hypothesis because PCIe tunnel setup, link state, control transfers, and PCIe TLP handling can involve bridge firmware state. A physical replug likely resets several layers at once:
+
+- ASM2464PD bridge firmware state.
+- USB4/Thunderbolt tunnel state.
+- macOS IOPCIFamily and TinyGPU DriverKit state.
+- PCIe link training state.
+- RX 7900 XTX endpoint state.
+
+The confirmed fact is that firmware exists in the bridge path. The unproven part is whether the observed dropout is specifically an ASM2464PD 8051 firmware bug, a TinyGPU/DriverKit bug, a USB4 tunnel state issue, a GPU-side issue, or an interaction between them.
+
 ## Symptom
 
 The GPU can disappear from the macOS PCI tree while the USB4/UT4G layer remains visible or later re-enumerates. When this happens, tinygrad requests fail above the hardware layer as empty replies, dirty bridge state, or server-side device errors.
@@ -85,6 +99,8 @@ The strongest current conclusion is that repeated `16MB` TinyGPU `PrepareDMA` ma
 ## Current thesis
 
 The dropout is probably caused by large remote DMA/staging mappings stressing the TinyGPU/DriverKit/USB4 path, not by Qwen generation directly.
+
+The ASM2464PD firmware finding refines the thesis: problematic DMA or MMIO sequences may be putting a firmware-mediated bridge path into a bad state, not just overloading passive hardware. This should be treated as a working hypothesis, not as proven causality. Avoid phrasing the root cause as "the ASM2464PD 8051 firmware wedges" until a test isolates bridge firmware state from macOS DriverKit, USB4 tunnel state, PCIe link training, and GPU endpoint state.
 
 Model load and inference can still expose the problem because the AMD runtime allocates large host-visible buffers and staging regions during boot, queue setup, or copy paths. The LLM workload is therefore a trigger for a lower-level transport failure.
 
@@ -153,17 +169,25 @@ Online evidence supports the broader failure class but does not confirm this exa
 
 Confirmed broadly:
 
+- The ASM2464PD block diagram includes an internal 8051 CPU, Program ROM, Program RAM, and XDATA.
+- tinygrad has a public `asm2464pd-firmware` repo that builds MCS-51 firmware with `sdcc -mmcs51` / `sdas8051`, confirming that firmware-level behavior is a real part of this bridge class.
 - USB4/Thunderbolt eGPU setups can disconnect or re-enumerate under load.
 - DIY eGPU stability depends on power, cable quality, link training, OS support, firmware, and driver behavior.
 - An enclosure or bridge layer can remain visible while the GPU function disappears.
+- There is a public tinygrad issue where Apple Silicon + RX 7900 XTX + TinyGPU fails before AMD PCI/TinyGPU bridge discovery. That is behind the local setup, not the same failure mode.
 
 Not confirmed publicly:
 
 - A specific TinyGPU public bug where repeated `PrepareDMA size=16777216` mappings drop an RX 7900 XTX through UT4G.
+- A specific proof that the observed local dropout is caused by ASM2464PD 8051 firmware state rather than TinyGPU DriverKit, macOS USB4/PCIe tunnel state, PCIe link training, GPU endpoint state, or their interaction.
 
 So the current claim should be stated carefully:
 
 > Public reports match the general USB4/eGPU dropout-under-load pattern. Our local logs are the stronger evidence for the specific `16MB` TinyGPU `PrepareDMA` trigger.
+
+And the firmware-specific claim should be stated carefully:
+
+> The ASM2464PD contains an 8051-class firmware CPU, so the UT4G path is an active firmware-mediated bridge. Problematic DMA/MMIO sequences may be putting that bridge path into a bad state, but the exact stuck component has not been isolated.
 
 ## Related docs
 
