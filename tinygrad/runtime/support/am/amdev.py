@@ -288,12 +288,38 @@ class AMDev:
       res.append(self.rreg(0x01))
     return bytes(array.array('I', res))
 
+  def _load_remote_discovery_profile(self, profile:str):
+    if profile != "gfx1100_744c": raise RuntimeError(f"unknown AM_REMOTE_DISCOVERY_PROFILE={profile!r}")
+    from tinygrad.runtime.autogen.am import navi_offsets
+
+    # NBIO 7.9 register metadata references segment 8, but navi_offsets only has explicit bases through segment 4.
+    # Missing segment bases are padded as zero, matching the raw register offsets used for NBIO doorbell registers.
+    def bases(prefix:str) -> dict[int, tuple]:
+      return {i: seg for i in range(7) if any(seg:=tuple(getattr(navi_offsets, f"{prefix}_BASE__INST{i}_SEG{s}", 0) for s in range(9)))}
+
+    self.large_bar = False
+    self.regs_offset = collections.defaultdict(dict, {
+      am.GC_HWIP: bases("GC"), am.HDP_HWIP: bases("HDP"), am.MMHUB_HWIP: bases("MMHUB"), am.NBIO_HWIP: bases("NBIO"),
+      am.MP0_HWIP: bases("MP0"), am.MP1_HWIP: bases("MP1"), am.OSSSYS_HWIP: bases("OSSSYS"), am.SDMA0_HWIP: bases("SDMA0")})
+    self.ip_ver = {am.GC_HWIP: (11,0,0), am.HDP_HWIP: (6,0,0), am.MMHUB_HWIP: (3,0,0), am.NBIO_HWIP: (7,9,0),
+                   am.MP0_HWIP: (13,0,10), am.MP1_HWIP: (13,0,10), am.OSSSYS_HWIP: (6,0,0), am.SDMA0_HWIP: (6,0,0)}
+    self.gc_info = am.struct_gc_info_v1_0()
+    self.gc_info.header.table_id, self.gc_info.header.version_major, self.gc_info.header.version_minor = am.GC, 1, 0
+    self.gc_info.header.size = ctypes.sizeof(self.gc_info)
+    self.gc_info.gc_num_se, self.gc_info.gc_num_wgp0_per_sa, self.gc_info.gc_num_wgp1_per_sa = 6, 2, 2
+    self.gc_info.gc_wave_size, self.gc_info.gc_max_waves_per_simd, self.gc_info.gc_max_scratch_slots_per_cu = 32, 16, 32
+    self.gc_info.gc_lds_size, self.gc_info.gc_num_sa_per_se, self.gc_info.gc_num_rb_per_se = 64, 2, 4
+    self.reserved_vram_size = 64 << 20
+    if DEBUG >= 1: print(f"am {self.devfmt}: using remote discovery profile {profile}")
+
   def _run_discovery(self):
     # NOTE: Fixed register to query memory size without known ip bases to find the discovery table.
     #       The table is located at the end of VRAM - 64KB and is 10KB in size.
     mmRCC_CONFIG_MEMSIZE = 0xde3
     self.vram_size = self.rreg(mmRCC_CONFIG_MEMSIZE) << 20
     self.large_bar = self.vram.nbytes >= self.vram_size
+    if not self.large_bar and type(self.pci_dev).__name__ == "RemotePCIDevice" and (profile:=getenv("AM_REMOTE_DISCOVERY_PROFILE", "")):
+      return self._load_remote_discovery_profile(profile)
     tmr_offset, tmr_size = self.vram_size - (64 << 10), (10 << 10)
 
     disc_tbl = self.vram.view(tmr_offset, tmr_size)[:] if self.large_bar else self._read_vram(tmr_offset, tmr_size)
