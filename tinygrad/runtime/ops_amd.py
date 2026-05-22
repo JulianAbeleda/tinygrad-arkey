@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import cast
-import os, ctypes, struct, hashlib, functools, importlib, mmap, errno, array, contextlib, sys, weakref, itertools, collections, atexit
+import os, ctypes, struct, hashlib, functools, importlib, mmap, errno, array, contextlib, sys, weakref, itertools, collections, atexit, time
 assert sys.platform != 'win32'
 from dataclasses import dataclass
 from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQBuffer, HWQueue, CLikeArgsState, HCQSignal, HCQProgram, FileIOInterface
@@ -45,6 +45,8 @@ class AMDSignal(HCQSignal):
   def __init__(self, *args, **kwargs): super().__init__(*args, **{**kwargs, 'timestamp_divider': 100})
 
   def _sleep(self, time_spent_since_last_sleep_ms:int):
+    if self.owner is not None and self.is_timeline and type(getattr(self.owner.iface, "pci_dev", None)).__name__ == "RemotePCIDevice":
+      if (sleep_us:=getenv("AMD_REMOTE_WAIT_SLEEP_US", 0)) > 0: time.sleep(sleep_us / 1_000_000)
     # Reasonable to sleep for long workloads (which take more than 200ms) and only timeline signals.
     if time_spent_since_last_sleep_ms > 200 and self.owner is not None: self.owner.iface.sleep(200)
 
