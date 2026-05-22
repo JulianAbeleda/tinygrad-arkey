@@ -24,6 +24,10 @@ The goal is one active target: `tinygrad-arkey`.
 - [x] Add acknowledged remote sysmem writes and explicit invalid-handle errors.
 - [x] Guard remote AMD small-BAR discovery from wedging TinyGPU.
 - [x] Add RX 7900 XTX remote discovery profile to bypass unsafe small-BAR discovery.
+- [x] Patch TinyGPU C server `CMD_MMIO_WRITE` to return an RPC response.
+- [x] Build and ad-hoc sign patched TinyGPU app/dext for the No-SIP development path.
+- [ ] Disable SIP from Recovery on the Mac mini and install the patched No-SIP TinyGPU app/dext.
+- [ ] Retest BAR writes after patched TinyGPU app/dext activation.
 - [ ] Retest tensor sanity with `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` after GPU re-enumerates.
 - [ ] Retest Qwen warmup bridge dirty failure after GPU restart.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
@@ -44,7 +48,7 @@ Dropout investigation:
 - Doc: `docs/amd-remote-dropout-investigation.md`
 - Earlier trigger: repeated `16MB` TinyGPU `PrepareDMA` mappings.
 - Current narrowed failure node: mapped BAR reads succeed, but mapped BAR writes can wedge the TinyGPU bridge. A 4-byte BAR0 write and a 4-byte BAR2 write both timed out while the RX 7900 XTX stayed enumerated.
-- Root-cause candidate found: the TinyGPU C server `CMD_MMIO_WRITE` path skipped the RPC response after successful writes. Source is patched; live validation requires rebuilding/reinstalling `TinyGPU.app` with full Xcode.
+- Root-cause candidate found: the TinyGPU C server `CMD_MMIO_WRITE` path skipped the RPC response after successful writes. Source is patched and upstream PR #16333 is open/mergeable. Local Xcode 26.5 builds the patched app after using local DerivedData/module-cache paths.
 - Firmware framing: ASM2464PD is an active firmware-mediated bridge with an internal 8051 CPU, Program ROM, Program RAM, and XDATA. Treat this as relevant to the hypothesis, not as proof that the 8051 firmware is the root cause.
 - Passed before earlier DMA trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
 - Passed in latest isolation: 4-byte reads from BAR0, BAR2, and BAR5.
@@ -56,7 +60,8 @@ Dropout investigation:
 - Latest hardware state: the GPU dropped again at `2026-05-21 23:12:30`; Qwen retest is pending after physical restart.
 - Small-BAR discovery guard: remote AMD now fails fast before the indirect VRAM MMIO path unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1` is set.
 - Discovery profile: `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` bypasses the unsafe indirect VRAM discovery read for RX 7900 XTX. Local syntax validation passes, but live tensor validation is blocked while macOS/TinyGPU reports zero AMD devices.
-- Latest probe state: after repeated ACIO Gen2/3 link errors, macOS marked the AMD/UT4G PCIe tree dead at `2026-05-22 00:29:01`; `system_profiler` reports only the Apple M4 GPU.
+- Latest local state before reboot: the RX 7900 XTX is visible again as external PCIe GPU `0x744c`, but the active system extension is still the old signed `org.tinygrad.tinygpu.driver2`. The patched local app/dext uses `org.tinygrad.arkey.tinygpu.driver2` and is blocked by SIP/AMFI while ad-hoc signed.
+- Reboot gate: on the Apple Silicon Mac mini, shut down, hold the physical power button until startup options load, choose Options, open Utilities > Terminal, run `csrutil disable`, then reboot normally. After that, run `./install_nosip.sh` from `extra/usbgpu/tbgpu/installer`.
 - Causality boundary: a physical replug likely resets ASM2464PD firmware state, USB4 tunnel state, TinyGPU DriverKit state, PCIe link training, and the GPU endpoint. Do not claim the 8051 firmware is isolated as the stuck component without a narrower test.
 
 ## Before Editing

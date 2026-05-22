@@ -1,6 +1,6 @@
 # Session Handoff
 
-## Stop Point: 2026-05-22 AMD Remote Runtime Work
+## Stop Point: 2026-05-22 TinyGPU No-SIP Reboot Gate
 
 This is the current handoff for the `tinygrad-arkey` AMD/TinyGPU work.
 
@@ -13,7 +13,8 @@ Use this file at the start of the next session before changing code or restartin
 - Global root state: symlink to `/Users/julianabeleda/env/tinygrad-arkey`
 - GitHub fork: `https://github.com/JulianAbeleda/tinygrad-arkey`
 - Branch: `master`
-- Latest pushed commit: `0c6301674 [docs] document remote AMD discovery profile`
+- Latest pushed commit on local `master`: `fa8780d1e [runtime] fix TinyGPU Xcode 26 build`
+- Upstream PR: `https://github.com/tinygrad/tinygrad/pull/16333`
 
 ## High-Level Status
 
@@ -30,7 +31,7 @@ tinygrad-arkey
   -> Radeon RX 7900 XTX
 ```
 
-The main blocker is still hardware/bridge stability. The RX 7900 XTX can disappear from the macOS PCIe tree under the TinyGPU/USB4 path. When it disappears, tinygrad sees zero AMD devices or a dirty bridge, but the root cause is below tinygrad.
+The main blocker is now validating a patched TinyGPU app/dext on live hardware. The RX 7900 XTX is visible again in macOS as external PCIe GPU `0x744c`, but the currently active system extension is still the old signed bundle `org.tinygrad.tinygpu.driver2`. The patched local build uses `org.tinygrad.arkey.tinygpu.driver2` and cannot run while SIP/AMFI rejects ad-hoc DriverKit entitlements.
 
 The latest research framing adds one important fact: the ASM2464PD bridge used in this path has an internal 8051-class firmware CPU with Program ROM/RAM and XDATA. That makes the UT4G path an active firmware-mediated bridge. This supports treating bad DMA/MMIO sequences as possible bridge-firmware-state triggers, but it does not prove the ASM2464PD firmware is the isolated root cause. A physical replug likely resets bridge firmware, USB4 tunnel state, TinyGPU DriverKit state, PCIe link training, and GPU endpoint state together.
 
@@ -54,22 +55,25 @@ The latest research framing adds one important fact: the ASM2464PD bridge used i
 - Added explicit invalid sysmem handle errors.
 - Guarded unsafe remote small-BAR discovery unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1`.
 - Added `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` to bypass the unsafe RX 7900 XTX discovery-table read.
+- Found and patched a TinyGPU C server protocol bug: `CMD_MMIO_WRITE` skipped the RPC response path, causing every MMIO write to appear as an RPC timeout.
+- Opened upstream PR #16333 with a narrowly scoped source fix and AI disclosure.
+- Installed Xcode 26.5 and fixed the local Xcode 26 build issue by using the normal `AppIcon` asset instead of `tiny_icon.icon`.
+- Built the patched TinyGPU Debug app with local `DerivedData`/module-cache paths.
+- Ad-hoc signed the patched app/dext for the repo's No-SIP development path:
+  - app: `org.tinygrad.arkey.tinygpu.installer`
+  - dext: `org.tinygrad.arkey.tinygpu.driver2`
+  - dext entitlement includes `com.apple.developer.driverkit.allow-any-userclient-access`.
 
 ## Latest Commits
 
 ```text
-0c6301674 [docs] document remote AMD discovery profile
-b18b8ffed [runtime] add remote AMD discovery profile
-645851d1f [docs] track remote small-BAR discovery guard
-b28f00ddf [runtime] guard remote AMD small-BAR discovery
-8be401fd5 [runtime] acknowledge remote MMIO writes
-6ad0dc357 [docs] track sysmem write acknowledgement
-10ae6ca02 [runtime] acknowledge remote sysmem writes
-11dad8f7d [docs] record AMD cap validation
-b0b602e95 [runtime] tolerate remote socket buffer limits
-a3ee33362 [docs] update AMD dropout mitigation status
-0ccdfb0ee [runtime] cap remote AMD setup allocations
-aa7246081 [docs] document AMD remote dropout investigation
+fa8780d1e [runtime] fix TinyGPU Xcode 26 build
+08751ed0a [runtime] acknowledge TinyGPU MMIO writes
+f1727ee74 [examples] generalize AMD BAR repro
+a04e1d2a2 [examples] add BAR0 remote repro stages
+281cef67f [test] cover remote PCI RPC framing
+dfb47fd25 [runtime] centralize AMD remote detection
+1bad4a9ec [docs] document ASM2464PD firmware hypothesis
 ```
 
 ## Latest Validation
@@ -83,12 +87,13 @@ Passed earlier:
 - No `PrepareDMA size=16777216` during capped AMD boot.
 - Tiny tensor sanity returned `[2, 3, 4]`.
 
-Blocked now:
+Current state before reboot:
 
-- Latest remote probe found zero AMD devices.
-- `system_profiler SPDisplaysDataType` reported only the Apple M4 GPU.
-- macOS logs showed repeated ACIO Gen2/3 link errors, then the AMD/UT4G PCIe tree was marked dead at `2026-05-22 00:29:01`.
-- TinyGPU was force-closed after the PCIe tree died.
+- `csrutil status`: SIP enabled.
+- `system_profiler SPDisplaysDataType`: RX 7900 XTX visible as external PCIe GPU, vendor `0x1002`, device `0x744c`, x16.
+- `systemextensionsctl list`: old signed `org.tinygrad.tinygpu.driver2` active; patched local `org.tinygrad.arkey.tinygpu.driver2` not installed yet.
+- Patched app build path: `/Users/julianabeleda/env/tinygrad-arkey/extra/usbgpu/tbgpu/installer/build/DerivedData/Build/Products/Debug/TinyGPU.app`.
+- Running that ad-hoc app with SIP enabled is blocked by AMFI: restricted entitlements are not validated for an ad-hoc signature.
 
 ## Current Checklist Position
 
@@ -105,44 +110,90 @@ Current unchecked near-term items:
 
 ## Next Session Plan
 
-1. Confirm the RX 7900 XTX is visible again:
+1. After rebooting from Recovery, confirm SIP is disabled:
+
+```text
+csrutil status
+```
+
+Apple Silicon Mac mini Recovery steps:
+
+```text
+1. Shut down the Mac mini.
+2. Hold the physical power button until "Loading startup options" appears.
+3. Choose Options > Continue.
+4. Open Utilities > Terminal.
+5. Run: csrutil disable
+6. Confirm, then restart normally.
+```
+
+2. Confirm the RX 7900 XTX is visible:
 
 ```text
 system_profiler SPDisplaysDataType
 ```
 
-2. Restart the bridge from the global root:
+3. Install and activate the patched No-SIP TinyGPU app/dext:
+
+```text
+cd /Users/julianabeleda/env/tinygrad/extra/usbgpu/tbgpu/installer
+./install_nosip.sh
+```
+
+Expected install target:
+
+```text
+/Applications/TinyGPU.app
+org.tinygrad.arkey.tinygpu.driver2
+```
+
+If macOS asks for approval, use System Settings > Privacy & Security or System Settings > General > Login Items & Extensions > Driver Extensions.
+
+4. Confirm the patched dext is active:
+
+```text
+systemextensionsctl list
+```
+
+5. Restart the bridge from the global root:
 
 ```text
 cd /Users/julianabeleda/env/tinygrad
 DEBUG=1 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python /Users/julianabeleda/env/tinygrad/extra/remote/serve.py 6667
 ```
 
-3. Run the remote probe/health check:
+6. Run the remote probe/health check:
 
 ```text
 REMOTE_TIMEOUT=3 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python /Users/julianabeleda/env/tinygrad-arkey/extra/remote/bench.py 127.0.0.1:6667 --skip-tensor
 ```
 
-4. If isolating the current bridge-write failure, run BAR reads before any writes:
+7. Re-run BAR reads before writes:
 
 ```text
 REMOTE_TIMEOUT=5 REMOTE_RPC_TIMEOUT=10 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python \
 /Users/julianabeleda/env/tinygrad-arkey/extra/remote/amd_repro.py 127.0.0.1:6667 --stage bar-read --bars 0,2,5 --sizes 4 --offsets 0 --repeat 1
 ```
 
-Known result: 4-byte reads from BAR0, BAR2, and BAR5 pass. 4-byte writes to BAR0 and BAR2 time out while the GPU remains visible. Instrumentation showed the Python bridge blocked at `MMIO_WRITE store-start` while waiting for the nested TinyGPU app RPC. The TinyGPU C server source is patched to send an acknowledgement for `CMD_MMIO_WRITE`, but validation requires rebuilding/reinstalling `TinyGPU.app`.
+Known old result before patched install: 4-byte reads from BAR0, BAR2, and BAR5 pass. 4-byte writes to BAR0 and BAR2 time out while the GPU remains visible. Instrumentation showed the Python bridge blocked at `MMIO_WRITE store-start` while waiting for the nested TinyGPU app RPC. After installing the patched app/dext, this timeout should disappear if the missing TinyGPU C server response was the only failure at this node.
 
-5. Run the smallest tensor sanity with the discovery profile:
+8. Run BAR writes:
+
+```text
+REMOTE_TIMEOUT=5 REMOTE_RPC_TIMEOUT=10 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python \
+/Users/julianabeleda/env/tinygrad-arkey/extra/remote/amd_repro.py 127.0.0.1:6667 --stage bar-write --bars 0,2 --sizes 4 --offsets 0 --repeat 1
+```
+
+9. Run the smallest tensor sanity with the discovery profile:
 
 ```text
 REMOTE_TIMEOUT=5 REMOTE=127.0.0.1:6667 DEV=PCI+AMD AMD_REMOTE_ALLOC_CAP_MB=2 AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c \
 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python -c 'from tinygrad import Tensor; print((Tensor([1,2,3])+1).numpy().tolist())'
 ```
 
-6. If tensor sanity passes, run Qwen 1.7B warmup with low max tokens before larger models.
+10. If tensor sanity passes, run Qwen 1.7B warmup with low max tokens before larger models.
 
-7. If the GPU drops again, stop inference work and record the exact stage:
+11. If the GPU drops again, stop inference work and record the exact stage:
 
 - probe/open
 - BAR map
