@@ -102,6 +102,14 @@ Runtime knob:
 - `AMD_REMOTE_ALLOC_CAP_MB=2` is the default for remote PCI AMD setup allocations.
 - `AMD_REMOTE_ALLOC_CAP_MB=0` disables the cap and restores the previous `16MB` setup allocation behavior.
 - Higher values such as `4` or `8` can be used for A/B testing if `2MB` is too small.
+- `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` bypasses the unsafe remote small-BAR discovery table read for the RX 7900 XTX.
+
+Discovery-profile note:
+
+- The normal small-BAR discovery path reads the IP discovery table through the indirect VRAM MMIO aperture.
+- On the TinyGPU remote path, that indirect path can wedge the bridge during early AMD boot.
+- The `gfx1100_744c` profile supplies the known IP versions, register bases, GC geometry, and reserved VRAM size for this card so boot can continue without reading the discovery table.
+- This profile is intentionally explicit and experimental. It should only be used for this RX 7900 XTX remote path until validated on other cards.
 
 Likely code areas to inspect:
 
@@ -136,6 +144,8 @@ Current validation result:
 - During the next Qwen retest attempt, the GPU dropped again at `2026-05-21 23:12:30` with the familiar macOS PCIe dead-device pattern. Retest the sysmem-write acknowledgement after a physical GPU restart.
 - A later debug run showed AMD boot can wedge during small-BAR discovery before Qwen starts. The last bridge command was `MMIO_WRITE dev=0 bar=5 arg0=0x18 arg1=0x4`, from `AMDev._read_vram()` writing the indirect VRAM read register.
 - Remote AMD small-BAR discovery now fails fast before that unsafe MMIO path unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1` is set. This preserves bridge recoverability while we look for a safer discovery source.
+- A remote discovery profile was added for `gfx1100_744c` so the RX 7900 XTX path can bypass the unsafe discovery table read. The profile compiles locally, but live tensor validation is blocked until the GPU is visible to macOS/TinyGPU again.
+- The latest validation attempt found zero AMD devices from the remote probe. `system_profiler SPDisplaysDataType` also omitted the RX 7900 XTX. Logs showed repeated ACIO Gen2/3 link errors followed by macOS marking the AMD/UT4G PCIe tree dead at `2026-05-22 00:29:01`, then `tinygpu ... force close`.
 
 ## Online verification
 

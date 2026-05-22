@@ -23,6 +23,8 @@ The goal is one active target: `tinygrad-arkey`.
 - [ ] Retest Qwen 1.7B decode after allocation mitigation.
 - [x] Add acknowledged remote sysmem writes and explicit invalid-handle errors.
 - [x] Guard remote AMD small-BAR discovery from wedging TinyGPU.
+- [x] Add RX 7900 XTX remote discovery profile to bypass unsafe small-BAR discovery.
+- [ ] Retest tensor sanity with `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` after GPU re-enumerates.
 - [ ] Retest Qwen warmup bridge dirty failure after GPU restart.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
 - [ ] Add a benchmark gate for roundtrips/token regression checks.
@@ -49,6 +51,8 @@ Dropout investigation:
 - Bridge protocol update: remote `SYSMEM_WRITE` now returns an RPC response, and sysmem reads/writes report explicit invalid handle errors instead of raw `list index out of range`.
 - Latest hardware state: the GPU dropped again at `2026-05-21 23:12:30`; Qwen retest is pending after physical restart.
 - Small-BAR discovery guard: remote AMD now fails fast before the indirect VRAM MMIO path unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1` is set.
+- Discovery profile: `AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c` bypasses the unsafe indirect VRAM discovery read for RX 7900 XTX. Local syntax validation passes, but live tensor validation is blocked while macOS/TinyGPU reports zero AMD devices.
+- Latest probe state: after repeated ACIO Gen2/3 link errors, macOS marked the AMD/UT4G PCIe tree dead at `2026-05-22 00:29:01`; `system_profiler` reports only the Apple M4 GPU.
 
 ## Before Editing
 
