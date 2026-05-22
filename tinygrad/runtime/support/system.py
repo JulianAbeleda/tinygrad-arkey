@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, mmap, array, functools, ctypes, select, contextlib, dataclasses, sys, itertools, struct, socket, subprocess, time, enum, atexit
+import os, mmap, array, functools, ctypes, select, contextlib, dataclasses, sys, itertools, struct, socket, subprocess, time, enum, atexit, collections
 from tinygrad.helpers import round_up, getenv, OSX, temp, ceildiv, unwrap, fetch, system, _ensure_downloads_dir, DEBUG, flatten, pluralize
 from tinygrad.runtime.autogen import libc, pci, vfio, iokit, corefoundation
 from tinygrad.runtime.support.hcq import FileIOInterface, MMIOInterface, HCQBuffer, hcq_filter_visible_devices
@@ -298,7 +298,7 @@ class PCIIfaceBase:
 # *** Remote PCI Devices
 
 class RemoteCmd(enum.IntEnum):
-  PROBE,MAP_BAR,MAP_SYSMEM_FD,CFG_READ,CFG_WRITE,RESET,MMIO_READ,MMIO_WRITE,MAP_SYSMEM,SYSMEM_READ,SYSMEM_WRITE,RESIZE_BAR,PING = range(13)
+  PROBE,MAP_BAR,MAP_SYSMEM_FD,CFG_READ,CFG_WRITE,RESET,MMIO_READ,MMIO_WRITE,MAP_SYSMEM,SYSMEM_READ,SYSMEM_WRITE,RESIZE_BAR,PING,HEALTH = range(14)
 
 class RemoteMMIOInterface(MMIOInterface):
   def __init__(self, dev:RemotePCIDevice, residx:int, nbytes:int, fmt='B', off=0, rd_cmd=RemoteCmd.MMIO_READ, wr_cmd=RemoteCmd.MMIO_WRITE):
@@ -325,6 +325,20 @@ class RemotePCIDevice(PCIDevice):
   _bulk_recv:int = 0
   _rpc_count:int = 0
   _start_time:float = 0.0
+  _cmd_stats:dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+
+  @staticmethod
+  def _cmd_name(cmd:int) -> str:
+    return RemoteCmd(cmd).name if cmd in RemoteCmd._value2member_map_ else str(cmd)
+
+  @staticmethod
+  def _record_cmd(cmd:int, delta:float, sent:int=0, recv:int=0, failed:bool=False):
+    st = RemotePCIDevice._cmd_stats[RemotePCIDevice._cmd_name(cmd)]
+    st["count"] += 1
+    st["ms"] += delta * 1000
+    st["sent_bytes"] += sent
+    st["recv_bytes"] += recv
+    if failed: st["failures"] += 1
 
   @staticmethod
   def stats() -> dict[str, float|int]:
@@ -333,9 +347,14 @@ class RemotePCIDevice(PCIDevice):
             "roundtrips": RemotePCIDevice._rpc_count, "elapsed": dt}
 
   @staticmethod
+  def command_stats() -> dict[str, dict[str, float]]:
+    return {k: dict(v) for k,v in RemotePCIDevice._cmd_stats.items()}
+
+  @staticmethod
   def reset_stats():
     RemotePCIDevice._bulk_sent = RemotePCIDevice._bulk_recv = RemotePCIDevice._rpc_count = 0
     RemotePCIDevice._start_time = time.perf_counter()
+    RemotePCIDevice._cmd_stats.clear()
 
   @staticmethod
   @functools.cache
@@ -361,9 +380,9 @@ class RemotePCIDevice(PCIDevice):
     payload = array.array('I', itertools.chain.from_iterable((m, d) for m, ds in devices for d in ds)).tobytes()
     def q(r:str) -> list[tuple[socket.socket, str]]:
       sock = RemotePCIDevice.remote_sock((host:=r.strip().split(":")[0]), (port:=int(r.strip().split(":")[1]) if ":" in r else 6667))
-      data_len, _, _, _ = RemotePCIDevice._rpc(sock, 0, RemoteCmd.PROBE, base_class or 0, len(payload), vendor, payload=payload)
-      if data_len == 0: return []
-      return [(sock, f"remote:{host}:{port}:{d}") for d in RemotePCIDevice._recvall(sock, data_len).decode().split('\n') if d]
+      _, _, data, _ = RemotePCIDevice._rpc(sock, 0, RemoteCmd.PROBE, base_class or 0, len(payload), vendor, payload=payload, readout_size=-1)
+      if not data: return []
+      return [(sock, f"remote:{host}:{port}:{d}") for d in data.decode().split('\n') if d]
     return flatten([q(r) for r in getenv("REMOTE", "").split(",") if r.strip()])
 
   @staticmethod
@@ -377,17 +396,32 @@ class RemotePCIDevice(PCIDevice):
   def _rpc(sock:socket.socket, dev_id:int, cmd:int, *args:int, bar:int=0, readout_size:int=0, payload:bytes=b'', has_fd=False):
     old_timeout, rpc_timeout = sock.gettimeout(), getenv("REMOTE_RPC_TIMEOUT", 0.0)
     if rpc_timeout > 0: sock.settimeout(rpc_timeout)
+    hdr = struct.pack('<BIIQQQ', cmd, dev_id, bar, *(*args, 0, 0, 0)[:3])
+    st, sent, recv, failed = time.perf_counter(), len(hdr) + len(payload), 0, False
     try:
-      sock.sendall(struct.pack('<BIIQQQ', cmd, dev_id, bar, *(*args, 0, 0, 0)[:3]) + payload)
+      sock.sendall(hdr + payload)
       if has_fd:
         msg, anc, _, _ = sock.recvmsg(17, socket.CMSG_LEN(4))
+        recv += len(msg)
         fd = struct.unpack('<i', anc[0][2][:4])[0]
-      else: msg, fd = RemotePCIDevice._recvall(sock, 17), None
+      else:
+        msg, fd = RemotePCIDevice._recvall(sock, 17), None
+        recv += 17
       if (resp:=struct.unpack('<BQQ', msg))[0] != 0:
-        raise RuntimeError(f"RPC failed: {RemotePCIDevice._recvall(sock, resp[1]).decode('utf-8') if resp[1] > 0 else 'unknown error'}")
+        err = RemotePCIDevice._recvall(sock, resp[1]) if resp[1] > 0 else b"unknown error"
+        recv += len(err)
+        failed = True
+        raise RuntimeError(f"RPC failed: {err.decode('utf-8')}")
       RemotePCIDevice._rpc_count += 1
-      return (resp[1], resp[2]) + ((RemotePCIDevice._recvall(sock, readout_size) if readout_size > 0 else None),) + (fd,)
+      to_read = resp[1] if readout_size < 0 else readout_size
+      readout = RemotePCIDevice._recvall(sock, to_read) if to_read > 0 else None
+      recv += len(readout) if readout is not None else 0
+      return (resp[1], resp[2]) + (readout,) + (fd,)
+    except Exception:
+      failed = True
+      raise
     finally:
+      RemotePCIDevice._record_cmd(cmd, time.perf_counter() - st, sent=sent, recv=recv, failed=failed)
       if rpc_timeout > 0: sock.settimeout(old_timeout)
 
   def __init__(self, devpref:str, pcibus:str, sock:socket.socket):
@@ -402,14 +436,20 @@ class RemotePCIDevice(PCIDevice):
     return unwrap(self._rpc(self.sock, self.dev_id, cmd, offset, size, bar=idx, readout_size=size)[2])
   def _bulk_write(self, cmd:int, idx:int, offset:int, data:bytes):
     RemotePCIDevice._bulk_sent += len(data)
-    self.sock.sendall(struct.pack('<BIIQQQ', cmd, self.dev_id, idx, offset, len(data), 0) + data)
+    hdr = struct.pack('<BIIQQQ', cmd, self.dev_id, idx, offset, len(data), 0)
+    st = time.perf_counter()
+    self.sock.sendall(hdr + data)
+    RemotePCIDevice._record_cmd(cmd, time.perf_counter() - st, sent=len(hdr)+len(data))
 
   def alloc_sysmem(self, size:int, vaddr:int=0, contiguous:bool=False) -> tuple[MMIOInterface, list[int]]:
-    paddrs_len, handle, _, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size, int(contiguous))
-    paddrs = list(struct.unpack(f'<{paddrs_len // 8}Q', self._recvall(self.sock, paddrs_len)))
+    paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size, int(contiguous), readout_size=-1)
+    paddrs = list(struct.unpack(f'<{paddrs_len // 8}Q', unwrap(paddrs_data)))
     return RemoteMMIOInterface(self, handle, size, fmt='B', rd_cmd=RemoteCmd.SYSMEM_READ, wr_cmd=RemoteCmd.SYSMEM_WRITE), paddrs
 
   def reset(self): self._rpc(self.sock, self.dev_id, RemoteCmd.RESET)
+  def health(self) -> tuple[bool, str]:
+    _, dirty, data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.HEALTH, readout_size=-1)
+    return dirty == 0, data.decode("utf-8") if data else ""
   def read_config(self, offset:int, size:int): return self._rpc(self.sock, self.dev_id, RemoteCmd.CFG_READ, offset, size)[0]
   def write_config(self, offset:int, value:int, size:int): self._rpc(self.sock, self.dev_id, RemoteCmd.CFG_WRITE, offset, size, value)
 

@@ -31,6 +31,16 @@ def print_stats(prefix:str):
   print(f"{prefix}: roundtrips={stats['roundtrips']} sent={sent_mb:.2f}MB ({sent_mb/elapsed:.2f}MB/s) "
         f"recv={recv_mb:.2f}MB ({recv_mb/elapsed:.2f}MB/s) elapsed={elapsed:.2f}s")
 
+def print_command_stats():
+  cmd_stats = RemotePCIDevice.command_stats()
+  if not cmd_stats: return
+  print(f"\n{'cmd':>14s}  {'count':>7s}  {'avg ms':>9s}  {'fail':>5s}  {'sent':>10s}  {'recv':>10s}")
+  for name, st in sorted(cmd_stats.items()):
+    count = int(st.get("count", 0))
+    avg_ms = float(st.get("ms", 0.0)) / max(count, 1)
+    print(f"{name:>14s}  {count:>7d}  {avg_ms:>9.3f}  {int(st.get('failures', 0)):>5d}  "
+          f"{fmt_bytes(int(st.get('sent_bytes', 0))):>10s}  {fmt_bytes(int(st.get('recv_bytes', 0))):>10s}")
+
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Remote PCI bridge health and throughput benchmark")
   parser.add_argument("remote", nargs="?", default=os.environ.get("REMOTE", "127.0.0.1:6667"))
@@ -67,6 +77,10 @@ if __name__ == "__main__":
     for _ in range(LAT_N_RUNS): RemotePCIDevice._rpc(sock, 0, RemoteCmd.PING)
     ping_lat = (time.perf_counter() - st) / LAT_N_RUNS
     print(f"PING latency: {ping_lat*1e6:.1f} us ({1/ping_lat:,.0f} ops/sec)")
+
+    ok, msg = pci.health()
+    print(f"bridge health: {msg}")
+    if not ok: health = "dirty"
 
     cfg_vendor = pci.read_config(0, 2)
     print(f"config vendor: {cfg_vendor:#06x}")
@@ -112,5 +126,6 @@ if __name__ == "__main__":
       print(f"\ntensor sanity: failed ({e})")
 
   print_stats("\nremote stats")
+  print_command_stats()
   print(f"health: {health}")
   sys.exit(0 if health == "healthy" else 1)

@@ -12,14 +12,28 @@ mapped_bars: dict[tuple[int, int], object] = {}
 sysmem_allocs: list[tuple] = []
 stats = collections.Counter()
 last_error = ""
+dirty_error = ""
 
 def stat(cmd:RemoteCmd, delta:float): stats[f"{cmd.name}_count"] += 1; stats[f"{cmd.name}_ms"] += int(delta * 1000)
 def log(msg:str, level:int=1):
   if DEBUG >= level: print(f"remote: {msg}", flush=True)
+def mark_dirty(msg:str):
+  global dirty_error, last_error
+  dirty_error, last_error = msg, msg
+  log(f"DIRTY {msg}")
+def clear_dirty():
+  global dirty_error
+  if dirty_error: log("HEALTH restored by RESET")
+  dirty_error = ""
 
 def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   if cmd == RemoteCmd.PING:
     return conn.sendall(resp())
+
+  if cmd == RemoteCmd.HEALTH:
+    state = f"dirty: {dirty_error}" if dirty_error else "healthy"
+    data = state.encode()
+    return conn.sendall(resp(len(data), int(bool(dirty_error))) + data)
 
   if cmd == RemoteCmd.PROBE:
     payload = conn.recv(arg1, socket.MSG_WAITALL) if arg1 > 0 else b""
@@ -34,6 +48,9 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     data = "\n".join(f"{p[1]}:{discovered_devices.index(p)}" for p in devs).encode()
     log(f"PROBE vendor={arg2:#x} base_class={base_class} devices={len(devs)}", 2)
     return conn.sendall(resp(len(data), len(devs)) + data)
+
+  if dirty_error and cmd != RemoteCmd.RESET:
+    raise RuntimeError(f"bridge dirty: {dirty_error}")
 
   # lazy device open
   if dev_id not in opened_devices:
@@ -59,6 +76,7 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     conn.sendall(resp())
   elif cmd == RemoteCmd.RESET:
     pci_dev.reset()
+    clear_dirty()
     conn.sendall(resp())
   elif cmd == RemoteCmd.MMIO_READ:
     bar_view = mapped_bars[(dev_id, bar)]
@@ -98,7 +116,10 @@ def serve(conn:socket.socket):
       stat(RemoteCmd(cmd), time.perf_counter() - st)
     except ConnectionError: raise
     except Exception as e:
-      last_error = str(e)
+      if cmd in RemoteCmd._value2member_map_ and RemoteCmd(cmd) not in {RemoteCmd.PING, RemoteCmd.HEALTH, RemoteCmd.PROBE}:
+        mark_dirty(str(e))
+      else:
+        last_error = str(e)
       stats["errors"] += 1
       if cmd in {RemoteCmd.MMIO_WRITE, RemoteCmd.SYSMEM_WRITE}: raise ConnectionError(f"write failed: {e}")
       print(f"ERROR: {e}")
