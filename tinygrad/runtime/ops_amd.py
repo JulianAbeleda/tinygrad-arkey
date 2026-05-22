@@ -15,7 +15,7 @@ from tinygrad.runtime.autogen import kfd, hsa, sqtt, amdgpu_kd, amdgpu_drm
 from tinygrad.runtime.autogen.am import am
 from tinygrad.runtime.support.elf import elf_loader
 from tinygrad.runtime.support.am.amdev import AMDev, AMMemoryManager
-from tinygrad.runtime.support.amd import AMDReg, AMDIP, import_module, import_soc, import_pmc
+from tinygrad.runtime.support.amd import AMD_RUNTIME_DEVICES, AMDReg, AMDIP, import_module, import_soc, import_pmc
 from tinygrad.runtime.support.system import System, PCIIfaceBase, PCIAllocationMeta, USBPCIDevice, MAP_FIXED, MAP_NORESERVE
 from tinygrad.runtime.support.usb import USB3
 from tinygrad.runtime.support.memory import AddrSpace
@@ -45,7 +45,7 @@ class AMDSignal(HCQSignal):
   def __init__(self, *args, **kwargs): super().__init__(*args, **{**kwargs, 'timestamp_divider': 100})
 
   def _sleep(self, time_spent_since_last_sleep_ms:int):
-    if self.owner is not None and self.is_timeline and type(getattr(self.owner.iface, "pci_dev", None)).__name__ == "RemotePCIDevice":
+    if self.owner is not None and self.is_timeline and getattr(getattr(self.owner.iface, "pci_dev", None), "is_remote", False):
       if (sleep_us:=getenv("AMD_REMOTE_WAIT_SLEEP_US", 0)) > 0: time.sleep(sleep_us / 1_000_000)
     # Reasonable to sleep for long workloads (which take more than 200ms) and only timeline signals.
     if time_spent_since_last_sleep_ms > 200 and self.owner is not None: self.owner.iface.sleep(200)
@@ -847,7 +847,7 @@ class KFDIface:
 
 class PCIIface(PCIIfaceBase):
   def __init__(self, dev, dev_id):
-    super().__init__(dev, dev_id, vendor=0x1002, devices=((0xffff, (0x74a1,0x744c,0x7480,0x7550,0x7551,0x7590,0x75a0)),), vram_bar=0,
+    super().__init__(dev, dev_id, vendor=0x1002, devices=((0xffff, AMD_RUNTIME_DEVICES),), vram_bar=0,
       va_start=AMMemoryManager.va_allocator.base, va_size=AMMemoryManager.va_allocator.size, dev_impl_t=AMDev)
     self._compute_props()
 
@@ -953,7 +953,7 @@ class AMDDevice(HCQCompiled):
 
   def is_am(self) -> bool: return isinstance(self.iface, (PCIIface, USBIface))
   def is_usb(self) -> bool: return isinstance(self.iface, USBIface)
-  def is_remote_pci(self) -> bool: return isinstance(self.iface, PCIIface) and type(getattr(self.iface, "pci_dev", None)).__name__ == "RemotePCIDevice"
+  def is_remote_pci(self) -> bool: return isinstance(self.iface, PCIIface) and getattr(getattr(self.iface, "pci_dev", None), "is_remote", False)
   def remote_alloc_size(self, local_size:int, usb_size:int) -> int:
     if self.is_usb(): return usb_size
     if self.is_remote_pci() and (cap_mb:=getenv("AMD_REMOTE_ALLOC_CAP_MB", 2)) > 0: return min(local_size, cap_mb << 20)

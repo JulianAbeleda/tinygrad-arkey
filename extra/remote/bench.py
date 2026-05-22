@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import argparse, os, sys, time
+from tinygrad.runtime.support.amd import AMD_RUNTIME_DEVICES
 from tinygrad.runtime.support.system import RemoteCmd, RemotePCIDevice
 
 LAT_N_RUNS = 500
 THROUGHPUT_N_RUNS = 8
 SIZES = [4, 1 << 10, 8 << 20]
-AMD_RUNTIME_DEVICES = (0x74a1, 0x744c, 0x7480, 0x7550, 0x7551, 0x7590, 0x75a0)
 
 def fmt_bytes(n:int) -> str:
   for suffix, div in [('G',1<<30),('M',1<<20),('K',1<<10)]:

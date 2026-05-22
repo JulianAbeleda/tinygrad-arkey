@@ -278,7 +278,7 @@ class AMDev:
 
   def _read_vram(self, addr, size) -> bytes:
     assert addr % 4 == 0 and size % 4 == 0, f"Invalid address {addr:#x} or size {size:#x}"
-    if type(self.pci_dev).__name__ == "RemotePCIDevice" and not getenv("AM_REMOTE_SMALL_BAR_DISCOVERY", 0):
+    if getattr(self.pci_dev, "is_remote", False) and not getenv("AM_REMOTE_SMALL_BAR_DISCOVERY", 0):
       raise RuntimeError("remote AMD small-BAR discovery is disabled because the indirect VRAM MMIO path can wedge TinyGPU. "
                          "Set AM_REMOTE_SMALL_BAR_DISCOVERY=1 to force the unsafe path.")
     res = []
@@ -318,7 +318,7 @@ class AMDev:
     mmRCC_CONFIG_MEMSIZE = 0xde3
     self.vram_size = self.rreg(mmRCC_CONFIG_MEMSIZE) << 20
     self.large_bar = self.vram.nbytes >= self.vram_size
-    if not self.large_bar and type(self.pci_dev).__name__ == "RemotePCIDevice" and (profile:=getenv("AM_REMOTE_DISCOVERY_PROFILE", "")):
+    if not self.large_bar and getattr(self.pci_dev, "is_remote", False) and (profile:=getenv("AM_REMOTE_DISCOVERY_PROFILE", "")):
       return self._load_remote_discovery_profile(profile)
     tmr_offset, tmr_size = self.vram_size - (64 << 10), (10 << 10)
 

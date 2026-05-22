@@ -152,6 +152,8 @@ System = _System()
 # *** PCI Devices
 
 class PCIDevice:
+  is_remote = False
+
   def __init__(self, devpref:str, pcibus:str):
     self.lock_fd = System.flock_acquire(f"{devpref.lower()}_{pcibus.lower()}.lock")
     self.pcibus, self.irq_poller = pcibus, None
@@ -242,7 +244,7 @@ class PCIAllocationMeta: mapping:VirtMapping; has_cpu_mapping:bool; hMemory:int=
 class PCIIfaceBase:
   @property
   def peer_group(self) -> str: return getattr(self.pci_dev, 'peer_group', type(self.pci_dev).__name__)
-  def is_local(self) -> bool: return not isinstance(self.pci_dev, RemotePCIDevice)
+  def is_local(self) -> bool: return not getattr(self.pci_dev, "is_remote", False)
   def is_bar_small(self) -> bool: return self.pci_dev.bar_info(self.vram_bar)[1] == (256 << 20)
 
   def __init__(self, dev, dev_id, vendor, devices:tuple[tuple[int, tuple[int, ...]], ...], vram_bar, va_start, va_size,
@@ -321,6 +323,8 @@ class RemoteMMIOInterface(MMIOInterface):
     return RemoteMMIOInterface(self.dev, self.residx, size or (self.nbytes - offset), fmt or self.fmt, self.off + offset, self.rd_cmd, self.wr_cmd)
 
 class RemotePCIDevice(PCIDevice):
+  is_remote = True
+
   _bulk_sent:int = 0
   _bulk_recv:int = 0
   _rpc_count:int = 0

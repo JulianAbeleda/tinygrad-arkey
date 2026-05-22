@@ -2,6 +2,8 @@ import functools, tinygrad.runtime.autogen.am
 from dataclasses import dataclass
 from tinygrad.helpers import getbits
 
+AMD_RUNTIME_DEVICES = (0x74a1, 0x744c, 0x7480, 0x7550, 0x7551, 0x7590, 0x75a0)
+
 @dataclass
 class AMDReg:
   name:str; offset:int; segment:int; fields:dict[str, tuple[int, int]]; bases:dict[int, tuple[int, ...]] # noqa: E702

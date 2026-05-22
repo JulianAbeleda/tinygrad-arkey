@@ -2,9 +2,8 @@
 import argparse, os, subprocess, sys, time
 
 from tinygrad.runtime.ops_amd import AMDDevice
+from tinygrad.runtime.support.amd import AMD_RUNTIME_DEVICES
 from tinygrad.runtime.support.system import RemotePCIDevice, System
-
-AMD_RUNTIME_DEVICES = (0x74a1, 0x744c, 0x7480, 0x7550, 0x7551, 0x7590, 0x75a0)
 
 def stamp(msg:str):
   print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)
