@@ -953,6 +953,11 @@ class AMDDevice(HCQCompiled):
 
   def is_am(self) -> bool: return isinstance(self.iface, (PCIIface, USBIface))
   def is_usb(self) -> bool: return isinstance(self.iface, USBIface)
+  def is_remote_pci(self) -> bool: return isinstance(self.iface, PCIIface) and type(getattr(self.iface, "pci_dev", None)).__name__ == "RemotePCIDevice"
+  def remote_alloc_size(self, local_size:int, usb_size:int) -> int:
+    if self.is_usb(): return usb_size
+    if self.is_remote_pci() and (cap_mb:=getenv("AMD_REMOTE_ALLOC_CAP_MB", 2)) > 0: return min(local_size, cap_mb << 20)
+    return local_size
 
   def __init__(self, device:str=""):
     self.device_id = int(device.split(":")[1]) if ":" in device else 0
@@ -990,11 +995,11 @@ class AMDDevice(HCQCompiled):
 
     self.is_aql = getenv("AMD_AQL", int(self.xccs > 1))
     if self.is_aql:
-      self.pm4_ibs = self.iface.alloc(0x2000 if self.is_usb() else (16 << 20), uncached=True, cpu_access=True)
+      self.pm4_ibs = self.iface.alloc(self.remote_alloc_size(16 << 20, 0x2000), uncached=True, cpu_access=True)
       self.pm4_ib_alloc = BumpAllocator(self.pm4_ibs.size, wrap=True)
 
     self.compute_queue = self.create_queue(kfd.KFD_IOC_QUEUE_TYPE_COMPUTE_AQL if self.is_aql else kfd.KFD_IOC_QUEUE_TYPE_COMPUTE,
-      0x2000 if self.is_usb() else (16 << 20), eop_buffer_size=0x1000,
+      self.remote_alloc_size(16 << 20, 0x2000), eop_buffer_size=0x1000,
       ctx_save_restore_size=0 if self.is_am() else wg_data_size + ctl_stack_size, ctl_stack_size=ctl_stack_size, debug_memory_size=debug_memory_size)
 
     self.max_copy_size = 0x40000000 if self.iface.ip_versions[am.SDMA0_HWIP][0] >= 5 else 0x400000
@@ -1004,7 +1009,7 @@ class AMDDevice(HCQCompiled):
     super().__init__(device, AMDAllocator(self), [HIPRenderer, AMDLLVMRenderer, HIPCCRenderer], functools.partial(AMDProgram, self), AMDSignal,
                      functools.partial(AMDComputeAQLQueue if self.is_aql else AMDComputeQueue, self),
                      functools.partial(AMDCopyQueue, self, max_copy_size=self.max_copy_size) if self.has_sdma_queue else None,
-                     kernargs_size=(8 << 10) if self.is_usb() else (16 << 20), sigalloc_size=0x100 if self.is_usb() else 0x1000,
+                     kernargs_size=self.remote_alloc_size(16 << 20, 8 << 10), sigalloc_size=0x100 if self.is_usb() else 0x1000,
                      can_recover=self.is_am(), arch=self.arch)
 
     # Scratch setup
@@ -1061,7 +1066,7 @@ class AMDDevice(HCQCompiled):
     if getenv("AMD_DISABLE_SDMA"): return None
     if idx in self.sdma_queues: return self.sdma_queues[idx]
     with contextlib.suppress(OSError):
-      self.sdma_queues[idx] = self.create_queue(kfd.KFD_IOC_QUEUE_TYPE_SDMA, 0x200 if self.is_usb() else (16 << 20), idx=idx)
+      self.sdma_queues[idx] = self.create_queue(kfd.KFD_IOC_QUEUE_TYPE_SDMA, self.remote_alloc_size(16 << 20, 0x200), idx=idx)
     return self.sdma_queues.get(idx, None)
 
   def _ensure_has_local_memory(self, private_segment_size):
