@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0A52E8692F18FC6900A816CD /* tiny_icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0A52E8682F18FC6900A816CD /* tiny_icon.icon */; };
 		0A5C11DD2F18E466006DBBCA /* server.c in Sources */ = {isa = PBXBuildFile; fileRef = 0A5C11DC2F18E461006DBBCA /* server.c */; };
 		0ACB55392E9CB880007029EF /* PCIDriverKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0ACB55382E9CB880007029EF /* PCIDriverKit.framework */; };
 		0AD7C2E52F18DEBC00562D1A /* TinyGPUCLIRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD7C2E42F18DEB800562D1A /* TinyGPUCLIRunner.swift */; };
@@ -58,7 +57,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0A52E8682F18FC6900A816CD /* tiny_icon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = tiny_icon.icon; sourceTree = "<group>"; };
 		0A5C11DC2F18E461006DBBCA /* server.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = server.c; sourceTree = "<group>"; };
 		0A5C11DE2F18E468006DBBCA /* TinyGPU-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TinyGPU-Bridging-Header.h"; sourceTree = "<group>"; };
 		0ACB55382E9CB880007029EF /* PCIDriverKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = PCIDriverKit.framework; path = System/DriverKit/System/Library/Frameworks/PCIDriverKit.framework; sourceTree = SDKROOT; };
@@ -121,7 +119,6 @@
 				0AD7C2E42F18DEB800562D1A /* TinyGPUCLIRunner.swift */,
 				54E42BB8286A1696000E1E9A /* TinyGPUApp.swift */,
 				54E42BBA286A1697000E1E9A /* Assets.xcassets */,
-				0A52E8682F18FC6900A816CD /* tiny_icon.icon */,
 				0A5C11DE2F18E468006DBBCA /* TinyGPU-Bridging-Header.h */,
 			);
 			path = Shared;
@@ -289,7 +286,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				54E42BCC286A1697000E1E9A /* Assets.xcassets in Resources */,
-				0A52E8692F18FC6900A816CD /* tiny_icon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,7 +334,7 @@
 		54E42BCF286A1697000E1E9A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = tiny_icon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = macOS/macOS.entitlements;
@@ -376,7 +372,7 @@
 		54E42BD0286A1697000E1E9A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = tiny_icon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = macOS/macOS.entitlements;
