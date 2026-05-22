@@ -44,6 +44,7 @@ Dropout investigation:
 - Doc: `docs/amd-remote-dropout-investigation.md`
 - Earlier trigger: repeated `16MB` TinyGPU `PrepareDMA` mappings.
 - Current narrowed failure node: mapped BAR reads succeed, but mapped BAR writes can wedge the TinyGPU bridge. A 4-byte BAR0 write and a 4-byte BAR2 write both timed out while the RX 7900 XTX stayed enumerated.
+- Root-cause candidate found: the TinyGPU C server `CMD_MMIO_WRITE` path skipped the RPC response after successful writes. Source is patched; live validation requires rebuilding/reinstalling `TinyGPU.app` with full Xcode.
 - Firmware framing: ASM2464PD is an active firmware-mediated bridge with an internal 8051 CPU, Program ROM, Program RAM, and XDATA. Treat this as relevant to the hypothesis, not as proof that the 8051 firmware is the root cause.
 - Passed before earlier DMA trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
 - Passed in latest isolation: 4-byte reads from BAR0, BAR2, and BAR5.

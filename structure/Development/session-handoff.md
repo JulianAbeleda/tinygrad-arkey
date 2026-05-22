@@ -131,7 +131,7 @@ REMOTE_TIMEOUT=5 REMOTE_RPC_TIMEOUT=10 /Users/julianabeleda/env/tinygrad-arkey/.
 /Users/julianabeleda/env/tinygrad-arkey/extra/remote/amd_repro.py 127.0.0.1:6667 --stage bar-read --bars 0,2,5 --sizes 4 --offsets 0 --repeat 1
 ```
 
-Known result: 4-byte reads from BAR0, BAR2, and BAR5 pass. 4-byte writes to BAR0 and BAR2 time out while the GPU remains visible, so mapped BAR write handling is the current narrow failure node.
+Known result: 4-byte reads from BAR0, BAR2, and BAR5 pass. 4-byte writes to BAR0 and BAR2 time out while the GPU remains visible. Instrumentation showed the Python bridge blocked at `MMIO_WRITE store-start` while waiting for the nested TinyGPU app RPC. The TinyGPU C server source is patched to send an acknowledgement for `CMD_MMIO_WRITE`, but validation requires rebuilding/reinstalling `TinyGPU.app`.
 
 5. Run the smallest tensor sanity with the discovery profile:
 

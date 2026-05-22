@@ -96,11 +96,17 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     if arg0 % 4 == 0 and arg1 == 4: conn.sendmsg([resp(arg1), struct.pack('<I', bar_view.view(fmt='I')[arg0 // 4])])
     else: conn.sendmsg([resp(arg1), bar_view[arg0:arg0+arg1]])
   elif cmd == RemoteCmd.MMIO_WRITE:
+    log(f"MMIO_WRITE recv-start dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
     data = conn.recv(arg1, socket.MSG_WAITALL)
+    log(f"MMIO_WRITE recv-done dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
     bar_view = mapped_bars[(dev_id, bar)]
-    if arg0 % 4 == 0 and arg1 == 4: bar_view.view(fmt='I')[arg0 // 4] = struct.unpack('<I', data)[0]
+    aligned_u32 = arg0 % 4 == 0 and arg1 == 4
+    log(f"MMIO_WRITE store-start dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x} path={'u32' if aligned_u32 else 'slice'}", 4)
+    if aligned_u32: bar_view.view(fmt='I')[arg0 // 4] = struct.unpack('<I', data)[0]
     else: bar_view[arg0:arg0+arg1] = data
+    log(f"MMIO_WRITE store-done dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
     conn.sendall(resp())
+    log(f"MMIO_WRITE resp-done dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
   elif cmd == RemoteCmd.MAP_SYSMEM:
     st = time.perf_counter()
     memview, paddrs = pci_dev.alloc_sysmem(arg0, contiguous=bool(arg1))
