@@ -278,6 +278,9 @@ class AMDev:
 
   def _read_vram(self, addr, size) -> bytes:
     assert addr % 4 == 0 and size % 4 == 0, f"Invalid address {addr:#x} or size {size:#x}"
+    if type(self.pci_dev).__name__ == "RemotePCIDevice" and not getenv("AM_REMOTE_SMALL_BAR_DISCOVERY", 0):
+      raise RuntimeError("remote AMD small-BAR discovery is disabled because the indirect VRAM MMIO path can wedge TinyGPU. "
+                         "Set AM_REMOTE_SMALL_BAR_DISCOVERY=1 to force the unsafe path.")
     res = []
     for caddr in range(addr, addr + size, 4):
       self.wreg(0x06, caddr >> 31)
