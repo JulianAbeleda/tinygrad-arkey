@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-import argparse, pathlib, struct, time
+import argparse, csv, json, pathlib, struct, sys, time
 from dataclasses import dataclass
 from math import prod
 
 from tinygrad import Tensor
-from tinygrad.helpers import round_up
+from tinygrad.helpers import GlobalCounters, round_up
 from tinygrad.llm.gguf import ggml_data_to_tensor
 
 GGML_Q4_K = 12
@@ -55,12 +55,25 @@ def pick_tensor(infos:list[GGUFInfo], name:str|None) -> GGUFInfo:
     if info.typ == GGML_Q4_K and len(info.dims) == 2: return info
   raise ValueError("no 2D Q4_K tensor found")
 
-def bench(label:str, iters:int, fn):
+def bench(label:str, iters:int, fn) -> dict[str, float|int|str]:
   fn()
+  GlobalCounters.reset()
   st = time.perf_counter()
   for _ in range(iters): fn()
   dt = (time.perf_counter() - st) / iters
-  print(f"{label}: {dt*1000:.3f} ms ({1/dt:.2f}/s)")
+  return {"name": label, "iters": iters, "ms": dt*1000, "per_s": 1/dt, "kernels": GlobalCounters.kernel_count / iters,
+          "global_mem_mb": GlobalCounters.global_mem / iters / 1e6}
+
+def emit(results:list[dict], fmt:str):
+  if fmt == "json":
+    print(json.dumps(results, indent=2, sort_keys=True))
+  elif fmt == "csv":
+    writer = csv.DictWriter(sys.stdout, fieldnames=sorted({k for r in results for k in r.keys()}))
+    writer.writeheader()
+    writer.writerows(results)
+  else:
+    for r in results:
+      print(f"{r['name']}: {r['ms']:.3f} ms ({r['per_s']:.2f}/s) kernels={r['kernels']:.1f} mem={r['global_mem_mb']:.2f} MB")
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="Baseline GGUF Q4_K decode/matvec benchmark")
@@ -68,8 +81,11 @@ if __name__ == "__main__":
   parser.add_argument("--tensor", help="exact tensor name to benchmark")
   parser.add_argument("--device", default=None, help="tinygrad device, for example AMD or CPU")
   parser.add_argument("--iters", type=int, default=5)
+  parser.add_argument("--seq-len", type=int, default=1, help="input rows for matmul; 1 is decode, >1 is prefill-shaped")
+  parser.add_argument("--format", choices=("text", "json", "csv"), default="text")
   parser.add_argument("--list", action="store_true", help="list Q4_K tensors and exit")
   args = parser.parse_args()
+  if args.seq_len < 1: raise ValueError("--seq-len must be >= 1")
 
   data_start, infos = read_metadata(args.gguf)
   if args.list:
@@ -78,7 +94,8 @@ if __name__ == "__main__":
     raise SystemExit(0)
 
   info = pick_tensor(infos, args.tensor)
-  print(f"tensor: {info.name} dims={tuple(reversed(info.dims))} ggml_type={info.typ} device={args.device or 'default'}")
+  if args.format == "text":
+    print(f"tensor: {info.name} dims={tuple(reversed(info.dims))} ggml_type={info.typ} device={args.device or 'default'} seq_len={args.seq_len}")
 
   raw = Tensor(args.gguf, device=args.device)
   raw_slice = raw[data_start + info.off:]
@@ -89,10 +106,17 @@ if __name__ == "__main__":
     ggml_data_to_tensor(raw_slice, n, info.typ).reshape(*shape).contiguous().realize()
 
   decoded = ggml_data_to_tensor(raw_slice, n, info.typ).reshape(*shape).contiguous().realize()
-  x = Tensor.ones((1, decoded.shape[-1]), device=args.device, dtype=decoded.dtype).realize()
+  x = Tensor.ones((args.seq_len, decoded.shape[-1]), device=args.device, dtype=decoded.dtype).realize()
 
   def matvec():
     x.matmul(decoded.transpose()).realize()
 
-  bench("decode_q4_k", args.iters, decode)
-  bench("matvec_decoded", args.iters, matvec)
+  def decode_matvec():
+    x.matmul(ggml_data_to_tensor(raw_slice, n, info.typ).reshape(*shape).transpose()).realize()
+
+  base = {"tensor": info.name, "shape": "x".join(map(str, shape)), "ggml_type": info.typ,
+          "device": args.device or "default", "seq_len": args.seq_len}
+  results = [{**base, **bench("decode_q4_k", args.iters, decode)},
+             {**base, **bench("matmul_decoded", args.iters, matvec)},
+             {**base, **bench("decode_q4_k_plus_matmul", args.iters, decode_matvec)}]
+  emit(results, args.format)
