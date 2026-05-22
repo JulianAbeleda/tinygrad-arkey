@@ -196,13 +196,58 @@ Benchmark findings:
 - Several reports put 7B/8B Q4-class llama.cpp HIP decode far above our current tinygrad 1.7B/4B behavior. That supports the view that our current path is not just "AMD is slow"; it is either remote overhead, generic quant kernels, or both.
 - Vulkan sometimes beats ROCm for llama.cpp on RDNA3 in community tests. That does not directly help TinyGPU, but it is a warning that "ROCm" alone is not automatically the fastest path on Radeon.
 
+## Implementation delta after audit
+
+This section separates existing scaffolds from the next implementation deltas. It is the working plan after the initial runtime-health commits.
+
+Already present:
+
+- `extra/remote/bench.py` is the starting health scaffold. It now checks probe, PING latency, config read, BAR0 mapping, `MAP_SYSMEM`, sysmem read/write throughput, optional tiny AMD tensor sanity, and classifies `healthy`, `dirty`, or `dead`.
+- `tinygrad/runtime/support/system.py` already has global remote counters through `RemotePCIDevice.stats()` and `reset_stats()`, plus optional `REMOTE_RPC_TIMEOUT`.
+- `extra/remote/serve.py` already logs `PROBE`, lazy device open, `MAP_BAR`, and `MAP_SYSMEM`, and tracks process-local command counts/errors.
+- `tinygrad/llm/gguf.py` already supports Q4_K/Q4_K_M correctness through generic tensor dequantization.
+- `extra/q4_k_bench.py` is the current standalone Q4_K baseline scaffold.
+- This document is the source research note for the AMD 7900 XTX optimization thesis.
+
+Slice 1 delta: bridge lifecycle and health semantics.
+
+- Add per-RPC phase timing on the client side, not only server cumulative counters. The minimum output should include command name, count, total ms, average ms, sent bytes, received bytes, and failures.
+- Add a remote health query command to the bridge protocol. The request/response framing should stay compatible with the existing fixed request/response protocol; add a new `RemoteCmd` rather than changing the wire shape of existing commands.
+- Add server-side dirty-state behavior. After a device-level failure in probe/open/BAR/sysmem/MMIO/sysmem access, mark the server dirty and reject subsequent device commands with a clear error until restart or explicit reset.
+- Add a model-server preflight health check before `/v1/models` and generation responses are treated as usable.
+
+Slice 2 delta: per-generation remote pressure metrics.
+
+- Add per-generation stats reset hooks in the LLM inference path, not just global process counters. The likely integration point is `tinygrad/llm/cli.py` around request handling and `tinygrad/llm/model.py` around prefill/decode boundaries.
+- Report prefill and decode separately: tokens, elapsed time, remote roundtrips, MB sent, MB received, roundtrips/token, and MB/token.
+- Keep the existing low-level RPC protocol for now. Roundtrip reduction in this slice should come from caching, residency, and avoiding repeated calls, not from redesigning the wire format.
+- Place session-local mapping/allocation caches in the client runtime first (`RemotePCIDevice` or its owning AMD runtime objects), because `serve.py` allocations are currently process-local and not durable across client reconnects.
+
+Slice 3 delta: Q4_K_M layer benchmark before kernel changes.
+
+- Extend `extra/q4_k_bench.py` so it can benchmark one selected Qwen Q4_K_M layer on CPU and AMD, list tensor names, and emit JSON/CSV-friendly metrics.
+- Measure three timings separately: Q4_K decode, decoded matvec, and end-to-end decode-plus-matvec.
+- Use a validated model target first: Qwen 1.7B Q4_K_M is the initial gate because it has previously loaded on this remote AMD path. Qwen 4B is the stress gate. Qwen 8B/7B is not a first acceptance target until the runtime is stable.
+- Keep `test/unit/test_gguf.py` as correctness coverage and add performance benchmarking separately; do not turn unit tests into GPU performance tests.
+
+Slice 4 delta: packed Q4_K_M fused decode matvec.
+
+- Prototype a packed Q4_K_M decode+matvec path gated behind AMD/gfx1100. The generic GGUF tensor path must remain the fallback for all other devices and quant types.
+- Verify that tinygrad's custom-kernel path can express Q4_K block memory access patterns before committing to a broad rewrite. Existing `extra/llama_kernels/` examples are useful for custom-kernel mechanics but do not prove Q4_K_M coverage.
+- Use llama.cpp `mmvq.cu` as the algorithmic reference: packed block layout, dequant inside the matvec, RDNA3 wave32 assumptions, and per-shape tuning.
+- Start with one Qwen layer shape, prove correctness against current `gguf.py` dequant, then tune rows-per-block/vectorization and expand only if the benchmark wins.
+
+Comparison baseline:
+
+- Standard ROCm/KFD (`KFDIface`) remains a useful comparison path when available. The active target is the remote TinyGPU/DriverKit path, but KFD can help distinguish remote-bridge overhead from AMD kernel quality.
+
 ## Recommended order of work
 
-1. Stabilize and instrument the remote runtime first. The failure mode still looks like device/bridge lifecycle more than a pure kernel issue.
-2. Build a repeatable benchmark matrix: Qwen 0.6B, Qwen 1.7B, Qwen 4B, prompt tokens/sec, generated tokens/sec, remote roundtrips/token, MB sent/received, and whether the GPU remains visible after stop.
-3. Use llama.cpp as the kernel reference for Q4_K_M decode. The first high-value target is fused Q4_K_M dequant plus matvec/matmul for RDNA3.
-4. Use ROCm as the runtime reference. The first high-value runtime target is making the bridge lifecycle explicit: probe, open, map, allocate, queue, compute, teardown, and fail states.
-5. Consider a graph-level remote API once the PCI path is reliable enough to run repeatable benchmarks.
+1. Finish Slice 1 health semantics: client-side RPC phase timings, health query, dirty-state gate, and model-server preflight.
+2. Add Slice 2 per-generation metrics: prefill/decode roundtrips per token and MB per token.
+3. Finish Slice 3 Q4_K_M layer benchmark on Qwen 1.7B and Qwen 4B.
+4. Start Slice 4 only after the benchmark proves the current decoded matvec is the bottleneck.
+5. Consider a graph-level remote API after the PCI path is reliable and per-generation metrics show remote chatter remains material.
 
 ## Relevant local references
 
