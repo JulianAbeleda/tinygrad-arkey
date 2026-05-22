@@ -19,8 +19,9 @@ The goal is one active target: `tinygrad-arkey`.
 - [x] Isolated first clear dropout trigger to repeated `16MB` TinyGPU `PrepareDMA` mappings.
 - [x] Documented dropout investigation in `docs/amd-remote-dropout-investigation.md`.
 - [x] Add remote-only AMD allocation cap below `16MB`.
-- [ ] Retest AMD boot with capped remote staging allocations.
+- [x] Retest AMD boot with capped remote staging allocations.
 - [ ] Retest Qwen 1.7B decode after allocation mitigation.
+- [ ] Fix Qwen warmup bridge dirty failure: `MAP_SYSMEM` / `SYSMEM_WRITE` reports `list index out of range`.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
 - [ ] Add a benchmark gate for roundtrips/token regression checks.
 - [ ] Prototype packed Q4_K_M fused dequant plus matvec for AMD/gfx1100.
@@ -41,6 +42,8 @@ Dropout investigation:
 - Passed before trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
 - Current mitigation: remote-only AMD setup allocations default to a `2MB` cap through `AMD_REMOTE_ALLOC_CAP_MB`.
 - Escape hatch: `AMD_REMOTE_ALLOC_CAP_MB=0` restores the previous `16MB` setup allocation behavior.
+- Validation: capped AMD boot reached `gfx1100`, reported `has_sdma=True`, completed 16KB/2MB host allocations, and synchronized successfully.
+- Qwen status: Qwen 1.7B warmup still fails, but the latest failure is a bridge dirty `list index out of range` without a macOS PCIe dead-device log.
 
 ## Before Editing
 

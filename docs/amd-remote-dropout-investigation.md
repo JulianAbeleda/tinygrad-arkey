@@ -125,6 +125,14 @@ Validation order:
 5. Run a small tensor sanity test on `REMOTE=127.0.0.1:6667 DEV=PCI+AMD`.
 6. Retest Qwen 1.7B before moving to larger models.
 
+Current validation result:
+
+- Capped AMD boot reached `gfx1100`, reported `has_sdma=True`, completed 16KB and 2MB host allocations, and synchronized successfully.
+- After a 70 second wait, the RX 7900 XTX remained visible in `system_profiler SPDisplaysDataType`.
+- The checked log window showed `PrepareDMA` entries at 16KB and 2MB, with no `PrepareDMA size=16777216` and no macOS `marking child ... dead` event.
+- A tiny tensor sanity check returned `[2, 3, 4]` on `REMOTE=127.0.0.1:6667 DEV=PCI+AMD`.
+- Qwen 1.7B warmup still fails with bridge dirty state after a `list index out of range` error around sysmem access. The GPU stayed enumerated, so this is now tracked as a bridge/protocol issue rather than the original PCIe dropout trigger.
+
 ## Online verification
 
 Online evidence supports the broader failure class but does not confirm this exact TinyGPU trigger.
