@@ -4,6 +4,30 @@ Use this checklist for work that changes the AMD remote path, TinyGPU bridge beh
 
 The goal is one active target: `tinygrad-arkey`.
 
+## Progress
+
+- [x] Active target is `tinygrad-arkey`.
+- [x] Global root `/Users/julianabeleda/env/tinygrad` points at `tinygrad-arkey`.
+- [x] AMD/ROCm/llama.cpp research note exists in `docs/`.
+- [x] Runtime bridge health command exists.
+- [x] Runtime bridge dirty-state gate exists.
+- [x] Remote bench targets the AMD compute device path used by tinygrad.
+- [x] Qwen 1.7B live inference baseline recorded on `PCI+AMD`.
+- [x] LLM logs report prefill and decode remote pressure separately.
+- [x] Q4_K baseline benchmark script exists.
+- [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
+- [ ] Add a benchmark gate for roundtrips/token regression checks.
+- [ ] Prototype packed Q4_K_M fused dequant plus matvec for AMD/gfx1100.
+- [ ] Compare fused path against the generic `ggml_data_to_tensor` baseline.
+
+Latest baseline:
+
+- Model: `Qwen3-1.7B`
+- Device: `REMOTE=127.0.0.1:6667 DEV=PCI+AMD`
+- Prefill: `256 tok/s`, `70.86 roundtrips/token`
+- Decode: `33 tok/s`, `926.18 roundtrips/token`
+- Decode pressure: `SYSMEM_READ:72499`, `SYSMEM_WRITE:24569`
+
 ## Before Editing
 
 - Confirm checkout is `/Users/julianabeleda/env/tinygrad-arkey`.
