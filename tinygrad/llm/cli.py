@@ -14,9 +14,11 @@ def format_remote_pressure(label:str, tokens:int, snap:dict[str, typing.Any]) ->
   stats = snap["stats"]
   sent_mb, recv_mb = stats["sent_bytes"] / 1e6, stats["recv_bytes"] / 1e6
   tok = max(tokens, 1)
+  cmds = sorted(snap["commands"].items(), key=lambda x: x[1].get("count", 0), reverse=True)[:4]
+  cmd_s = " ".join(f"{name}:{int(st.get('count', 0))}" for name, st in cmds)
   return (f"{label}: tokens={tokens} roundtrips={stats['roundtrips']} rt/tok={stats['roundtrips']/tok:.2f} "
           f"sent={sent_mb:.2f}MB sent/tok={sent_mb/tok:.2f}MB recv={recv_mb:.2f}MB recv/tok={recv_mb/tok:.2f}MB "
-          f"elapsed={stats['elapsed']:.2f}s")
+          f"elapsed={stats['elapsed']:.2f}s cmds=[{cmd_s}]")
 
 class SimpleTokenizer:
   def __init__(self, normal_tokens:dict[str, int], special_tokens:dict[str, int], preset:str="llama3",

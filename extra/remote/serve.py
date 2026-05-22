@@ -6,8 +6,9 @@ from tinygrad.helpers import DEBUG, OSX
 def resp(resp0=0, resp1=0, status=0): return struct.pack('<BQQ', status, resp0, resp1)
 def resp_err(msg): return struct.pack('<BQQ', 1, len(err:=msg.encode()), 0) + err
 
-discovered_devices: list[str] = []
+discovered_devices: list[tuple[type[PCIDevice], str]] = []
 opened_devices: dict[int, PCIDevice] = {}
+opened_buses: dict[str, int] = {}
 mapped_bars: dict[tuple[int, int], object] = {}
 sysmem_allocs: list[tuple] = []
 stats = collections.Counter()
@@ -25,6 +26,11 @@ def clear_dirty():
   global dirty_error
   if dirty_error: log("HEALTH restored by RESET")
   dirty_error = ""
+def device_index(dev:tuple[type[PCIDevice], str]) -> int:
+  for i, (_, pcibus) in enumerate(discovered_devices):
+    if pcibus == dev[1]: return i
+  discovered_devices.append(dev)
+  return len(discovered_devices) - 1
 
 def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   if cmd == RemoteCmd.PING:
@@ -43,9 +49,7 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
       filter_devices.setdefault(mask, []).append(dev)
     base_class = None if arg0 == 0 else int(arg0)
     devs = System.list_devices(arg2, tuple([(x, tuple(y)) for x,y in filter_devices.items()]), base_class)
-    for p in devs:
-      if p not in discovered_devices: discovered_devices.append(p)
-    data = "\n".join(f"{p[1]}:{discovered_devices.index(p)}" for p in devs).encode()
+    data = "\n".join(f"{p[1]}:{device_index(p)}" for p in devs).encode()
     log(f"PROBE vendor={arg2:#x} base_class={base_class} devices={len(devs)}", 2)
     return conn.sendall(resp(len(data), len(devs)) + data)
 
@@ -56,8 +60,13 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   if dev_id not in opened_devices:
     if dev_id >= len(discovered_devices): raise RuntimeError(f"device {dev_id} not probed")
     cl, pcibus = discovered_devices[dev_id]
-    log(f"OPEN dev={dev_id} pcibus={pcibus}")
-    opened_devices[dev_id] = cl("SV", pcibus)
+    if pcibus in opened_buses:
+      opened_devices[dev_id] = opened_devices[opened_buses[pcibus]]
+      log(f"OPEN dev={dev_id} pcibus={pcibus} reused={opened_buses[pcibus]}")
+    else:
+      log(f"OPEN dev={dev_id} pcibus={pcibus}")
+      opened_devices[dev_id] = cl("SV", pcibus)
+      opened_buses[pcibus] = dev_id
   pci_dev = opened_devices[dev_id]
 
   if cmd == RemoteCmd.MAP_BAR:
