@@ -427,7 +427,11 @@ class RemotePCIDevice(PCIDevice):
   def __init__(self, devpref:str, pcibus:str, sock:socket.socket):
     self.sock, self.pcibus, self.dev_id = sock, pcibus, int(pcibus.split(':')[-1]) if ':' in pcibus else 0
     self.peer_group = sock.getpeername()[0]
-    for buft in [socket.SO_SNDBUF, socket.SO_RCVBUF]: self.sock.setsockopt(socket.SOL_SOCKET, buft, 64 << 20)
+    if (sockbuf:=getenv("REMOTE_SOCKBUF", 64 << 20)) > 0:
+      for buft in [socket.SO_SNDBUF, socket.SO_RCVBUF]:
+        try: self.sock.setsockopt(socket.SOL_SOCKET, buft, sockbuf)
+        except OSError as e:
+          if DEBUG >= 1: print(f"remote: failed to set socket buffer {sockbuf}: {e}")
 
     self.lock_fd = System.flock_acquire(f"{devpref.lower()}_{pcibus.lower()}.lock")
 
