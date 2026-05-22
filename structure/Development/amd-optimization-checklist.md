@@ -22,6 +22,7 @@ The goal is one active target: `tinygrad-arkey`.
 - [x] Retest AMD boot with capped remote staging allocations.
 - [ ] Retest Qwen 1.7B decode after allocation mitigation.
 - [x] Add acknowledged remote sysmem writes and explicit invalid-handle errors.
+- [x] Guard remote AMD small-BAR discovery from wedging TinyGPU.
 - [ ] Retest Qwen warmup bridge dirty failure after GPU restart.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
 - [ ] Add a benchmark gate for roundtrips/token regression checks.
@@ -47,6 +48,7 @@ Dropout investigation:
 - Qwen status: Qwen 1.7B warmup still fails, but the latest failure is a bridge dirty `list index out of range` without a macOS PCIe dead-device log.
 - Bridge protocol update: remote `SYSMEM_WRITE` now returns an RPC response, and sysmem reads/writes report explicit invalid handle errors instead of raw `list index out of range`.
 - Latest hardware state: the GPU dropped again at `2026-05-21 23:12:30`; Qwen retest is pending after physical restart.
+- Small-BAR discovery guard: remote AMD now fails fast before the indirect VRAM MMIO path unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1` is set.
 
 ## Before Editing
 

@@ -134,6 +134,8 @@ Current validation result:
 - Qwen 1.7B warmup still fails with bridge dirty state after a `list index out of range` error around sysmem access. The GPU stayed enumerated, so this is now tracked as a bridge/protocol issue rather than the original PCIe dropout trigger.
 - A follow-up bridge protocol patch makes remote `SYSMEM_WRITE` acknowledged and reports explicit invalid sysmem handles for reads/writes. This should prevent write-side errors from surfacing later as misleading `MAP_SYSMEM` failures.
 - During the next Qwen retest attempt, the GPU dropped again at `2026-05-21 23:12:30` with the familiar macOS PCIe dead-device pattern. Retest the sysmem-write acknowledgement after a physical GPU restart.
+- A later debug run showed AMD boot can wedge during small-BAR discovery before Qwen starts. The last bridge command was `MMIO_WRITE dev=0 bar=5 arg0=0x18 arg1=0x4`, from `AMDev._read_vram()` writing the indirect VRAM read register.
+- Remote AMD small-BAR discovery now fails fast before that unsafe MMIO path unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1` is set. This preserves bridge recoverability while we look for a safer discovery source.
 
 ## Online verification
 
