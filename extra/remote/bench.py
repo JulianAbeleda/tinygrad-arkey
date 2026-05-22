@@ -1,47 +1,116 @@
 #!/usr/bin/env python3
-import os, sys, time
-from tinygrad.runtime.support.system import RemotePCIDevice
+import argparse, os, sys, time
+from tinygrad.runtime.support.system import RemoteCmd, RemotePCIDevice
 
 LAT_N_RUNS = 500
 THROUGHPUT_N_RUNS = 8
 SIZES = [4, 1 << 10, 8 << 20]
 
+def fmt_bytes(n:int) -> str:
+  for suffix, div in [('G',1<<30),('M',1<<20),('K',1<<10)]:
+    if n >= div: return f"{n/div:.4g}{suffix}"
+  return f"{n}B"
+
+def find_device(vendor:str):
+  if vendor in ("amd", "any"):
+    if (devs:=RemotePCIDevice.remote_list(0x1002, ((0, (0,)),), 0)): return "AMD", devs[0]
+  if vendor in ("nvidia", "any"):
+    if (devs:=RemotePCIDevice.remote_list(0x10de, ((0, (0,)),), 0x03)): return "NVIDIA", devs[0]
+  return None, None
+
+def run_tensor_sanity(remote:str) -> str:
+  os.environ["REMOTE"], os.environ["DEV"] = remote, "AMD"
+  from tinygrad import Tensor
+  got = (Tensor([1, 2, 3], device="AMD") + 1).numpy().tolist()
+  return "ok" if got == [2, 3, 4] else f"bad_result={got}"
+
+def print_stats(prefix:str):
+  stats = RemotePCIDevice.stats()
+  elapsed = max(float(stats["elapsed"]), 1e-9)
+  sent_mb, recv_mb = int(stats["sent_bytes"]) / 1e6, int(stats["recv_bytes"]) / 1e6
+  print(f"{prefix}: roundtrips={stats['roundtrips']} sent={sent_mb:.2f}MB ({sent_mb/elapsed:.2f}MB/s) "
+        f"recv={recv_mb:.2f}MB ({recv_mb/elapsed:.2f}MB/s) elapsed={elapsed:.2f}s")
+
 if __name__ == "__main__":
-  os.environ["REMOTE"] = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REMOTE", "127.0.0.1:6667")
+  parser = argparse.ArgumentParser(description="Remote PCI bridge health and throughput benchmark")
+  parser.add_argument("remote", nargs="?", default=os.environ.get("REMOTE", "127.0.0.1:6667"))
+  parser.add_argument("--vendor", choices=("amd", "nvidia", "any"), default="amd")
+  parser.add_argument("--skip-tensor", action="store_true", help="skip tinygrad AMD tensor sanity check")
+  args = parser.parse_args()
 
-  # choose any amd/nv gpu.
-  devs = RemotePCIDevice.remote_list(0x1002, ((0, (0,)),), 0) or RemotePCIDevice.remote_list(0x10de, ((0, (0,)),), 0x03)
-  if not devs: raise RuntimeError("no GPU found on remote")
+  os.environ["REMOTE"] = args.remote
+  os.environ.setdefault("REMOTE_RPC_TIMEOUT", os.environ.get("REMOTE_TIMEOUT", "3"))
+  RemotePCIDevice.reset_stats()
 
-  sock, name = devs[0]
+  print(f"remote target: {args.remote}", flush=True)
+  try:
+    kind, selected = find_device(args.vendor)
+  except Exception as e:
+    print(f"health: dead (probe failed: {e})")
+    sys.exit(2)
+
+  if selected is None:
+    print(f"health: dirty (no {args.vendor.upper()} GPU found on remote)")
+    sys.exit(1)
+
+  sock, name = selected
   pci = RemotePCIDevice("BN", name, sock=sock)
-  print(f"connected to {os.environ['REMOTE']}, device: {name}\n")
+  print(f"device: {kind} {name}")
+
+  health = "healthy"
 
   # ping (minimal server round-trip, no device I/O)
-  from tinygrad.runtime.support.system import RemoteCmd
   sock = pci.sock
-  for _ in range(10): RemotePCIDevice._rpc(sock, 0, RemoteCmd.PING)
-  st = time.perf_counter()
-  for _ in range(LAT_N_RUNS): RemotePCIDevice._rpc(sock, 0, RemoteCmd.PING)
-  ping_lat = (time.perf_counter() - st) / LAT_N_RUNS
-  print(f"PING latency: {ping_lat*1e6:.1f} us ({1/ping_lat:,.0f} ops/sec)\n")
+  try:
+    for _ in range(10): RemotePCIDevice._rpc(sock, 0, RemoteCmd.PING)
+    st = time.perf_counter()
+    for _ in range(LAT_N_RUNS): RemotePCIDevice._rpc(sock, 0, RemoteCmd.PING)
+    ping_lat = (time.perf_counter() - st) / LAT_N_RUNS
+    print(f"PING latency: {ping_lat*1e6:.1f} us ({1/ping_lat:,.0f} ops/sec)")
+
+    cfg_vendor = pci.read_config(0, 2)
+    print(f"config vendor: {cfg_vendor:#06x}")
+
+    bar0_base, bar0_size = pci.bar_info(0)
+    print(f"BAR0: base={bar0_base:#x} size={bar0_size:#x}")
+
+    st = time.perf_counter()
+    sysmem, paddrs = pci.alloc_sysmem(max(SIZES))
+    print(f"MAP_SYSMEM: size={fmt_bytes(max(SIZES))} paddrs={len(paddrs)} ms={(time.perf_counter()-st)*1000:.2f}")
+  except Exception as e:
+    print(f"health: dirty (runtime check failed: {e})")
+    print_stats("remote stats")
+    sys.exit(1)
 
   # throughput
-  sysmem, _ = pci.alloc_sysmem(max(SIZES))
-  print(f"{'size':>10s}  {'write MB/s':>10s}  {'read MB/s':>10s}")
+  print(f"\n{'size':>10s}  {'write MB/s':>10s}  {'read MB/s':>10s}")
   for sz in SIZES:
     data = b'\x01' * sz
 
-    for _ in range(5): sysmem[0:sz] = data
-    st = time.perf_counter()
-    for _ in range(THROUGHPUT_N_RUNS): sysmem[0:sz] = data
-    pci.read_config(0, 4) # flush, since writes are posted
-    w = (time.perf_counter() - st) / THROUGHPUT_N_RUNS
+    try:
+      for _ in range(5): sysmem[0:sz] = data
+      st = time.perf_counter()
+      for _ in range(THROUGHPUT_N_RUNS): sysmem[0:sz] = data
+      pci.read_config(0, 4) # flush, since writes are posted
+      w = (time.perf_counter() - st) / THROUGHPUT_N_RUNS
 
-    for _ in range(5): sysmem[0:sz]
-    st = time.perf_counter()
-    for _ in range(THROUGHPUT_N_RUNS): sysmem[0:sz]
-    r = (time.perf_counter() - st) / THROUGHPUT_N_RUNS
+      for _ in range(5): sysmem[0:sz]
+      st = time.perf_counter()
+      for _ in range(THROUGHPUT_N_RUNS): sysmem[0:sz]
+      r = (time.perf_counter() - st) / THROUGHPUT_N_RUNS
+    except Exception as e:
+      health = "dirty"
+      print(f"{fmt_bytes(sz):>10s}  failed: {e}")
+      continue
 
-    sfx, div = [('B',1),('K',1<<10),('M',1<<20)][[sz>=1<<10,sz>=1<<20,sz>=1<<30].count(True)]
-    print(f"{sz/div:>9.4g}{sfx}  {sz/w/1e6:>10.1f}  {sz/r/1e6:>10.1f}")
+    print(f"{fmt_bytes(sz):>10s}  {sz/w/1e6:>10.1f}  {sz/r/1e6:>10.1f}")
+
+  if not args.skip_tensor and kind == "AMD":
+    try: print(f"\ntensor sanity: {run_tensor_sanity(args.remote)}")
+    except Exception as e:
+      health = "dirty"
+      print(f"\ntensor sanity: failed ({e})")
+
+  print_stats("\nremote stats")
+  print(f"health: {health}")
+  sys.exit(0 if health == "healthy" else 1)

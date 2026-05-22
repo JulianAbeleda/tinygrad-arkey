@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import socket, struct, sys
+import collections, socket, struct, sys, time
 from tinygrad.runtime.support.system import PCIDevice, RemoteCmd, System
 from tinygrad.helpers import DEBUG, OSX
 
@@ -10,6 +10,12 @@ discovered_devices: list[str] = []
 opened_devices: dict[int, PCIDevice] = {}
 mapped_bars: dict[tuple[int, int], object] = {}
 sysmem_allocs: list[tuple] = []
+stats = collections.Counter()
+last_error = ""
+
+def stat(cmd:RemoteCmd, delta:float): stats[f"{cmd.name}_count"] += 1; stats[f"{cmd.name}_ms"] += int(delta * 1000)
+def log(msg:str, level:int=1):
+  if DEBUG >= level: print(f"remote: {msg}", flush=True)
 
 def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   if cmd == RemoteCmd.PING:
@@ -26,17 +32,22 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     for p in devs:
       if p not in discovered_devices: discovered_devices.append(p)
     data = "\n".join(f"{p[1]}:{discovered_devices.index(p)}" for p in devs).encode()
+    log(f"PROBE vendor={arg2:#x} base_class={base_class} devices={len(devs)}", 2)
     return conn.sendall(resp(len(data), len(devs)) + data)
 
   # lazy device open
   if dev_id not in opened_devices:
     if dev_id >= len(discovered_devices): raise RuntimeError(f"device {dev_id} not probed")
     cl, pcibus = discovered_devices[dev_id]
+    log(f"OPEN dev={dev_id} pcibus={pcibus}")
     opened_devices[dev_id] = cl("SV", pcibus)
   pci_dev = opened_devices[dev_id]
 
   if cmd == RemoteCmd.MAP_BAR:
-    if (dev_id, bar) not in mapped_bars: mapped_bars[(dev_id, bar)] = pci_dev.map_bar(bar)
+    if (dev_id, bar) not in mapped_bars:
+      mapped_bars[(dev_id, bar)] = pci_dev.map_bar(bar)
+      base, size = pci_dev.bar_info(bar)
+      log(f"MAP_BAR dev={dev_id} bar={bar} base={base:#x} size={size:#x}")
     conn.sendall(resp(*pci_dev.bar_info(bar)))
   elif cmd == RemoteCmd.CFG_READ:
     conn.sendall(resp(pci_dev.read_config(arg0, arg1)))
@@ -59,9 +70,12 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     if arg0 % 4 == 0 and arg1 == 4: bar_view.view(fmt='I')[arg0 // 4] = struct.unpack('<I', data)[0]
     else: bar_view[arg0:arg0+arg1] = data
   elif cmd == RemoteCmd.MAP_SYSMEM:
+    st = time.perf_counter()
     memview, paddrs = pci_dev.alloc_sysmem(arg0, contiguous=bool(arg1))
     sysmem_allocs.append((memview, paddrs))
     paddrs_bytes = struct.pack(f'<{len(paddrs)}Q', *paddrs)
+    log(f"MAP_SYSMEM dev={dev_id} size={arg0:#x} contiguous={bool(arg1)} paddrs={len(paddrs)} "
+        f"handle={len(sysmem_allocs) - 1} ms={(time.perf_counter()-st)*1000:.2f}")
     conn.sendall(resp(len(paddrs_bytes), len(sysmem_allocs) - 1) + paddrs_bytes)
   elif cmd == RemoteCmd.SYSMEM_READ:
     conn.sendmsg([resp(arg1), sysmem_allocs[bar][0][arg0:arg0+arg1]])
@@ -70,15 +84,22 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   else: raise RuntimeError(f"unknown command {cmd}")
 
 def serve(conn:socket.socket):
+  global last_error
   REQ = '<BIIQQQ'
   while True:
     hdr = conn.recv(struct.calcsize(REQ), socket.MSG_WAITALL)
     if len(hdr) < struct.calcsize(REQ): raise ConnectionError("client disconnected")
     cmd, dev_id, bar, arg0, arg1, arg2 = struct.unpack(REQ, hdr)
-    if DEBUG >= 4: print(f"cmd={RemoteCmd(cmd).name} dev={dev_id} bar={bar} arg0={arg0:#x} arg1={arg1:#x} arg2={arg2:#x}")
-    try: handle(conn, cmd, dev_id, bar, arg0, arg1, arg2)
+    cmd_name = RemoteCmd(cmd).name if cmd in RemoteCmd._value2member_map_ else str(cmd)
+    if DEBUG >= 4: print(f"cmd={cmd_name} dev={dev_id} bar={bar} arg0={arg0:#x} arg1={arg1:#x} arg2={arg2:#x}")
+    st = time.perf_counter()
+    try:
+      handle(conn, RemoteCmd(cmd), dev_id, bar, arg0, arg1, arg2)
+      stat(RemoteCmd(cmd), time.perf_counter() - st)
     except ConnectionError: raise
     except Exception as e:
+      last_error = str(e)
+      stats["errors"] += 1
       if cmd in {RemoteCmd.MMIO_WRITE, RemoteCmd.SYSMEM_WRITE}: raise ConnectionError(f"write failed: {e}")
       print(f"ERROR: {e}")
       conn.sendall(resp_err(str(e)))
@@ -98,4 +119,6 @@ if __name__ == "__main__":
     conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     for bt in [socket.SO_SNDBUF, socket.SO_RCVBUF]: conn.setsockopt(socket.SOL_SOCKET, bt, 64 << 20)
     try: serve(conn)
-    except ConnectionError: print("disconnected")
+    except ConnectionError:
+      if DEBUG >= 1: print(f"disconnected stats={dict(stats)} last_error={last_error}", flush=True)
+      else: print("disconnected")

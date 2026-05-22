@@ -327,6 +327,17 @@ class RemotePCIDevice(PCIDevice):
   _start_time:float = 0.0
 
   @staticmethod
+  def stats() -> dict[str, float|int]:
+    dt = time.perf_counter() - RemotePCIDevice._start_time if RemotePCIDevice._start_time else 0.0
+    return {"sent_bytes": RemotePCIDevice._bulk_sent, "recv_bytes": RemotePCIDevice._bulk_recv,
+            "roundtrips": RemotePCIDevice._rpc_count, "elapsed": dt}
+
+  @staticmethod
+  def reset_stats():
+    RemotePCIDevice._bulk_sent = RemotePCIDevice._bulk_recv = RemotePCIDevice._rpc_count = 0
+    RemotePCIDevice._start_time = time.perf_counter()
+
+  @staticmethod
   @functools.cache
   def remote_sock(host:str, port:int) -> socket.socket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -351,7 +362,8 @@ class RemotePCIDevice(PCIDevice):
     def q(r:str) -> list[tuple[socket.socket, str]]:
       sock = RemotePCIDevice.remote_sock((host:=r.strip().split(":")[0]), (port:=int(r.strip().split(":")[1]) if ":" in r else 6667))
       data_len, _, _, _ = RemotePCIDevice._rpc(sock, 0, RemoteCmd.PROBE, base_class or 0, len(payload), vendor, payload=payload)
-      return [(sock, f"remote:{host}:{port}:{d}") for d in RemotePCIDevice._recvall(sock, data_len).decode().split('\n')]
+      if data_len == 0: return []
+      return [(sock, f"remote:{host}:{port}:{d}") for d in RemotePCIDevice._recvall(sock, data_len).decode().split('\n') if d]
     return flatten([q(r) for r in getenv("REMOTE", "").split(",") if r.strip()])
 
   @staticmethod
@@ -363,15 +375,20 @@ class RemotePCIDevice(PCIDevice):
 
   @staticmethod
   def _rpc(sock:socket.socket, dev_id:int, cmd:int, *args:int, bar:int=0, readout_size:int=0, payload:bytes=b'', has_fd=False):
-    sock.sendall(struct.pack('<BIIQQQ', cmd, dev_id, bar, *(*args, 0, 0, 0)[:3]) + payload)
-    if has_fd:
-      msg, anc, _, _ = sock.recvmsg(17, socket.CMSG_LEN(4))
-      fd = struct.unpack('<i', anc[0][2][:4])[0]
-    else: msg, fd = RemotePCIDevice._recvall(sock, 17), None
-    if (resp:=struct.unpack('<BQQ', msg))[0] != 0:
-      raise RuntimeError(f"RPC failed: {RemotePCIDevice._recvall(sock, resp[1]).decode('utf-8') if resp[1] > 0 else 'unknown error'}")
-    RemotePCIDevice._rpc_count += 1
-    return (resp[1], resp[2]) + ((RemotePCIDevice._recvall(sock, readout_size) if readout_size > 0 else None),) + (fd,)
+    old_timeout, rpc_timeout = sock.gettimeout(), getenv("REMOTE_RPC_TIMEOUT", 0.0)
+    if rpc_timeout > 0: sock.settimeout(rpc_timeout)
+    try:
+      sock.sendall(struct.pack('<BIIQQQ', cmd, dev_id, bar, *(*args, 0, 0, 0)[:3]) + payload)
+      if has_fd:
+        msg, anc, _, _ = sock.recvmsg(17, socket.CMSG_LEN(4))
+        fd = struct.unpack('<i', anc[0][2][:4])[0]
+      else: msg, fd = RemotePCIDevice._recvall(sock, 17), None
+      if (resp:=struct.unpack('<BQQ', msg))[0] != 0:
+        raise RuntimeError(f"RPC failed: {RemotePCIDevice._recvall(sock, resp[1]).decode('utf-8') if resp[1] > 0 else 'unknown error'}")
+      RemotePCIDevice._rpc_count += 1
+      return (resp[1], resp[2]) + ((RemotePCIDevice._recvall(sock, readout_size) if readout_size > 0 else None),) + (fd,)
+    finally:
+      if rpc_timeout > 0: sock.settimeout(old_timeout)
 
   def __init__(self, devpref:str, pcibus:str, sock:socket.socket):
     self.sock, self.pcibus, self.dev_id = sock, pcibus, int(pcibus.split(':')[-1]) if ':' in pcibus else 0
