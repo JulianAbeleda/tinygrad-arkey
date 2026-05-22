@@ -18,7 +18,7 @@ The goal is one active target: `tinygrad-arkey`.
 - [x] Reproduced GPU dropout outside model inference.
 - [x] Isolated first clear dropout trigger to repeated `16MB` TinyGPU `PrepareDMA` mappings.
 - [x] Documented dropout investigation in `docs/amd-remote-dropout-investigation.md`.
-- [ ] Add remote-only AMD allocation cap or splitting mitigation below `16MB`.
+- [x] Add remote-only AMD allocation cap below `16MB`.
 - [ ] Retest AMD boot with capped remote staging allocations.
 - [ ] Retest Qwen 1.7B decode after allocation mitigation.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
@@ -39,7 +39,8 @@ Dropout investigation:
 - Doc: `docs/amd-remote-dropout-investigation.md`
 - Current trigger: repeated `16MB` TinyGPU `PrepareDMA` mappings.
 - Passed before trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
-- Current mitigation target: cap or split remote-only AMD host/staging allocations below `16MB`, starting at `2MB`.
+- Current mitigation: remote-only AMD setup allocations default to a `2MB` cap through `AMD_REMOTE_ALLOC_CAP_MB`.
+- Escape hatch: `AMD_REMOTE_ALLOC_CAP_MB=0` restores the previous `16MB` setup allocation behavior.
 
 ## Before Editing
 

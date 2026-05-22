@@ -92,10 +92,16 @@ Model load and inference can still expose the problem because the AMD runtime al
 
 Short-term mitigation:
 
-- Cap or split remote AMD host/staging allocations below `16MB`.
-- Start with `2MB`, because repeated `2MB` mappings passed the repro.
+- Cap remote AMD host/staging allocations below `16MB`.
+- Default to `2MB`, because repeated `2MB` mappings passed the repro.
 - Preserve local KFD/PCI behavior; only apply the cap to `RemotePCIDevice` / TinyGPU remote paths.
 - Retest staged repro before retesting Qwen.
+
+Runtime knob:
+
+- `AMD_REMOTE_ALLOC_CAP_MB=2` is the default for remote PCI AMD setup allocations.
+- `AMD_REMOTE_ALLOC_CAP_MB=0` disables the cap and restores the previous `16MB` setup allocation behavior.
+- Higher values such as `4` or `8` can be used for A/B testing if `2MB` is too small.
 
 Likely code areas to inspect:
 
@@ -107,14 +113,15 @@ Known allocation suspects:
 
 - AMD kernargs buffer sizing.
 - AMD PM4/AQL indirect buffer sizing.
-- AMD allocator copy/staging batch size.
+- AMD compute queue ring sizing.
+- AMD SDMA queue ring sizing.
 
 Validation order:
 
 1. Restart the bridge from `/Users/julianabeleda/env/tinygrad`.
 2. Run `amd_repro.py --stage remote-sysmem` at `2MB`, `4MB`, `8MB`, and `16MB`.
-3. Apply the remote-only allocation cap.
-4. Run `amd_repro.py --stage amd-boot`.
+3. Run `amd_repro.py --stage amd-boot`.
+4. Watch bridge logs and confirm `PrepareDMA size=16777216` no longer appears during AMD boot with the default cap.
 5. Run a small tensor sanity test on `REMOTE=127.0.0.1:6667 DEV=PCI+AMD`.
 6. Retest Qwen 1.7B before moving to larger models.
 
