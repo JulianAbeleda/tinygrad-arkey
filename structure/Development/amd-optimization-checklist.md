@@ -15,6 +15,12 @@ The goal is one active target: `tinygrad-arkey`.
 - [x] Qwen 1.7B live inference baseline recorded on `PCI+AMD`.
 - [x] LLM logs report prefill and decode remote pressure separately.
 - [x] Q4_K baseline benchmark script exists.
+- [x] Reproduced GPU dropout outside model inference.
+- [x] Isolated first clear dropout trigger to repeated `16MB` TinyGPU `PrepareDMA` mappings.
+- [x] Documented dropout investigation in `docs/amd-remote-dropout-investigation.md`.
+- [ ] Add remote-only AMD allocation cap or splitting mitigation below `16MB`.
+- [ ] Retest AMD boot with capped remote staging allocations.
+- [ ] Retest Qwen 1.7B decode after allocation mitigation.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
 - [ ] Add a benchmark gate for roundtrips/token regression checks.
 - [ ] Prototype packed Q4_K_M fused dequant plus matvec for AMD/gfx1100.
@@ -27,6 +33,13 @@ Latest baseline:
 - Prefill: `256 tok/s`, `70.86 roundtrips/token`
 - Decode: `33 tok/s`, `926.18 roundtrips/token`
 - Decode pressure: `SYSMEM_READ:72499`, `SYSMEM_WRITE:24569`
+
+Dropout investigation:
+
+- Doc: `docs/amd-remote-dropout-investigation.md`
+- Current trigger: repeated `16MB` TinyGPU `PrepareDMA` mappings.
+- Passed before trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
+- Current mitigation target: cap or split remote-only AMD host/staging allocations below `16MB`, starting at `2MB`.
 
 ## Before Editing
 

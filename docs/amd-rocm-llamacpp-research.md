@@ -2,6 +2,8 @@
 
 This note compares the local `tinygrad-arkey` AMD path with the AMD-relevant parts of the forked `llama.cpp` and `ROCm` repos. The goal is to understand what those projects solve, why their design works, and what we can test from first principles to improve TinyGPU/tinygrad inference on the RX 7900 XTX.
 
+For the current hardware/runtime dropout investigation, see `docs/amd-remote-dropout-investigation.md`.
+
 ## Current local path
 
 Our active path is not the normal Linux ROCm stack:
