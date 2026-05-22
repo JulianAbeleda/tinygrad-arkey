@@ -3,8 +3,20 @@ import sys, argparse, codecs, typing, re, unicodedata, json, uuid, time, pathlib
 from tinygrad import nn
 from tinygrad.uop.ops import UOp, Ops
 from tinygrad.helpers import partition, DEBUG, Timing, GlobalCounters, stderr_log, colored, Context, fetch, profile_marker
+from tinygrad.runtime.support.system import RemotePCIDevice
 from tinygrad.viz.serve import TCPServerWithReuse, HTTPRequestHandler
 from tinygrad.llm.model import Transformer
+
+def remote_pressure_snapshot() -> dict[str, typing.Any]:
+  return {"stats": RemotePCIDevice.stats(), "commands": RemotePCIDevice.command_stats()}
+
+def format_remote_pressure(label:str, tokens:int, snap:dict[str, typing.Any]) -> str:
+  stats = snap["stats"]
+  sent_mb, recv_mb = stats["sent_bytes"] / 1e6, stats["recv_bytes"] / 1e6
+  tok = max(tokens, 1)
+  return (f"{label}: tokens={tokens} roundtrips={stats['roundtrips']} rt/tok={stats['roundtrips']/tok:.2f} "
+          f"sent={sent_mb:.2f}MB sent/tok={sent_mb/tok:.2f}MB recv={recv_mb:.2f}MB recv/tok={recv_mb/tok:.2f}MB "
+          f"elapsed={stats['elapsed']:.2f}s")
 
 class SimpleTokenizer:
   def __init__(self, normal_tokens:dict[str, int], special_tokens:dict[str, int], preset:str="llama3",
@@ -124,8 +136,16 @@ class Handler(HTTPRequestHandler):
     finish_reason = "stop"
     st = time.perf_counter()
     dec = tok.stream_decoder()
+    prefill_tokens = len(ids) - cache_start_pos
+    if self.server.remote_metrics: RemotePCIDevice.reset_stats()
+    prefill_snap = None
     for next_id in model.generate(ids, temperature=temperature):
-      if len(out) == 0: stderr_log(f"prefill:{(len(ids)-cache_start_pos)/((pt:=time.perf_counter())-st):4.0f} tok/s  {colored('--', 'BLACK')}  ")
+      if len(out) == 0:
+        pt = time.perf_counter()
+        stderr_log(f"prefill:{prefill_tokens/(pt-st):4.0f} tok/s  {colored('--', 'BLACK')}  ")
+        if self.server.remote_metrics:
+          prefill_snap = remote_pressure_snapshot()
+          RemotePCIDevice.reset_stats()
       if tok.is_end(next_id): break
       out.append(next_id)
       yield {"choices": [{"index":0, "delta":{"content":dec(next_id)}, "finish_reason":None}], **tmpl}
@@ -139,6 +159,9 @@ class Handler(HTTPRequestHandler):
     et = time.perf_counter()
     stderr_log(f"gen:{len(out)/(et-pt) if len(out) > 1 else 0:4.0f} tok/s  {colored('--', 'BLACK')}  "
                f"out:{len(out):5d}  {colored('--', 'BLACK')}  total:{et-st:6.2f}s\n")
+    if self.server.remote_metrics:
+      if prefill_snap is not None: stderr_log(format_remote_pressure("remote prefill", prefill_tokens, prefill_snap) + "\n")
+      stderr_log(format_remote_pressure("remote decode", max(len(out) - 1, 0), remote_pressure_snapshot()) + "\n")
 
   def do_POST(self):
     tok = self.server.tok
@@ -177,8 +200,8 @@ class Handler(HTTPRequestHandler):
       raise RuntimeError(f"unhandled path {self.path}")
 
 class LLMServer(TCPServerWithReuse):
-  def __init__(self, server_address:tuple, model:Transformer, model_name:str, tok:SimpleTokenizer):
-    self.model, self.model_name, self.tok = model, model_name, tok
+  def __init__(self, server_address:tuple, model:Transformer, model_name:str, tok:SimpleTokenizer, remote_metrics:bool=False):
+    self.model, self.model_name, self.tok, self.remote_metrics = model, model_name, tok, remote_metrics
     super().__init__(server_address, Handler)
 
 def main():
@@ -188,6 +211,7 @@ def main():
   parser.add_argument("--serve", nargs='?', type=int, const=8000, metavar="PORT", help="Run OpenAI compatible API (optional port, default 8000)")
   parser.add_argument("--warmup", action="store_true", help="warmup the JIT")
   parser.add_argument("--benchmark", nargs='?', type=int, const=20, metavar="COUNT", help="Benchmark tok/s (optional count, default 20)")
+  parser.add_argument("--remote-metrics", action="store_true", help="Print remote roundtrip and byte metrics for benchmark/server generations")
   args = parser.parse_args()
 
   # load the model
@@ -206,7 +230,7 @@ def main():
       for _ in range(2): list(zip(range(2), model.generate([0])))
 
   # start server
-  if args.serve: LLMServer(('', args.serve), model, model_name, tok).serve_forever()
+  if args.serve: LLMServer(('', args.serve), model, model_name, tok, remote_metrics=args.remote_metrics).serve_forever()
 
   # do benchmark
   if args.benchmark is not None:
@@ -214,9 +238,11 @@ def main():
     for i in range(args.benchmark):
       profile_marker(f"decode @ {i}")
       GlobalCounters.reset()
+      if args.remote_metrics: RemotePCIDevice.reset_stats()
       with Timing(on_exit=lambda x: f", {1e9/x:6.2f} tok/s, {GlobalCounters.global_mem/x:7.2f} GB/s,"
                   f" {GlobalCounters.global_mem//1000000}/{GlobalCounters.mem_used//1000000} MB  --  "+\
                   tok.decode(toks).replace("\n", "\\n")): next(gen)
+      if args.remote_metrics: print(format_remote_pressure(f"remote decode @ {i}", 1, remote_pressure_snapshot()))
     exit(0)
 
   # interactive chat
