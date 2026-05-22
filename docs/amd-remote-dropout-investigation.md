@@ -162,6 +162,7 @@ Current validation result:
 - Remote AMD small-BAR discovery now fails fast before that unsafe MMIO path unless `AM_REMOTE_SMALL_BAR_DISCOVERY=1` is set. This preserves bridge recoverability while we look for a safer discovery source.
 - A remote discovery profile was added for `gfx1100_744c` so the RX 7900 XTX path can bypass the unsafe discovery table read. The profile compiles locally, but live tensor validation is blocked until the GPU is visible to macOS/TinyGPU again.
 - The latest validation attempt found zero AMD devices from the remote probe. `system_profiler SPDisplaysDataType` also omitted the RX 7900 XTX. Logs showed repeated ACIO Gen2/3 link errors followed by macOS marking the AMD/UT4G PCIe tree dead at `2026-05-22 00:29:01`, then `tinygpu ... force close`.
+- After the GPU re-enumerated, BAR read/write isolation shifted the current failure node again. `bar-read` succeeded for BAR0, BAR2, and BAR5 with 4-byte reads, but a 4-byte `bar-write` to BAR2 timed out just like the earlier 4-byte BAR0 writes. The GPU stayed visible afterward. This points at mapped BAR write handling in the TinyGPU/DriverKit bridge path rather than BAR0 size, tensor load, or a `16MB` DMA mapping alone.
 
 ## Online verification
 

@@ -42,9 +42,11 @@ Latest baseline:
 Dropout investigation:
 
 - Doc: `docs/amd-remote-dropout-investigation.md`
-- Current trigger: repeated `16MB` TinyGPU `PrepareDMA` mappings.
+- Earlier trigger: repeated `16MB` TinyGPU `PrepareDMA` mappings.
+- Current narrowed failure node: mapped BAR reads succeed, but mapped BAR writes can wedge the TinyGPU bridge. A 4-byte BAR0 write and a 4-byte BAR2 write both timed out while the RX 7900 XTX stayed enumerated.
 - Firmware framing: ASM2464PD is an active firmware-mediated bridge with an internal 8051 CPU, Program ROM, Program RAM, and XDATA. Treat this as relevant to the hypothesis, not as proof that the 8051 firmware is the root cause.
-- Passed before trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
+- Passed before earlier DMA trigger: BAR/MMIO checks, repeated `16KB` sysmem mappings, repeated `2MB` sysmem mappings.
+- Passed in latest isolation: 4-byte reads from BAR0, BAR2, and BAR5.
 - Current mitigation: remote-only AMD setup allocations default to a `2MB` cap through `AMD_REMOTE_ALLOC_CAP_MB`.
 - Escape hatch: `AMD_REMOTE_ALLOC_CAP_MB=0` restores the previous `16MB` setup allocation behavior.
 - Validation: capped AMD boot reached `gfx1100`, reported `has_sdma=True`, completed 16KB/2MB host allocations, and synchronized successfully.

@@ -124,16 +124,25 @@ DEBUG=1 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python /Users/julianab
 REMOTE_TIMEOUT=3 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python /Users/julianabeleda/env/tinygrad-arkey/extra/remote/bench.py 127.0.0.1:6667 --skip-tensor
 ```
 
-4. Run the smallest tensor sanity with the discovery profile:
+4. If isolating the current bridge-write failure, run BAR reads before any writes:
+
+```text
+REMOTE_TIMEOUT=5 REMOTE_RPC_TIMEOUT=10 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python \
+/Users/julianabeleda/env/tinygrad-arkey/extra/remote/amd_repro.py 127.0.0.1:6667 --stage bar-read --bars 0,2,5 --sizes 4 --offsets 0 --repeat 1
+```
+
+Known result: 4-byte reads from BAR0, BAR2, and BAR5 pass. 4-byte writes to BAR0 and BAR2 time out while the GPU remains visible, so mapped BAR write handling is the current narrow failure node.
+
+5. Run the smallest tensor sanity with the discovery profile:
 
 ```text
 REMOTE_TIMEOUT=5 REMOTE=127.0.0.1:6667 DEV=PCI+AMD AMD_REMOTE_ALLOC_CAP_MB=2 AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c \
 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python -c 'from tinygrad import Tensor; print((Tensor([1,2,3])+1).numpy().tolist())'
 ```
 
-5. If tensor sanity passes, run Qwen 1.7B warmup with low max tokens before larger models.
+6. If tensor sanity passes, run Qwen 1.7B warmup with low max tokens before larger models.
 
-6. If the GPU drops again, stop inference work and record the exact stage:
+7. If the GPU drops again, stop inference work and record the exact stage:
 
 - probe/open
 - BAR map
