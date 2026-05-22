@@ -31,6 +31,9 @@ def device_index(dev:tuple[type[PCIDevice], str]) -> int:
     if pcibus == dev[1]: return i
   discovered_devices.append(dev)
   return len(discovered_devices) - 1
+def device_open_key(cl:type[PCIDevice], pcibus:str) -> str:
+  # APLRemotePCIDevice routes all PCI ids through the same TinyGPU usb4 endpoint.
+  return "aplremote:usb4" if cl.__name__ == "APLRemotePCIDevice" else pcibus
 
 def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   if cmd == RemoteCmd.PING:
@@ -60,13 +63,14 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   if dev_id not in opened_devices:
     if dev_id >= len(discovered_devices): raise RuntimeError(f"device {dev_id} not probed")
     cl, pcibus = discovered_devices[dev_id]
-    if pcibus in opened_buses:
-      opened_devices[dev_id] = opened_devices[opened_buses[pcibus]]
-      log(f"OPEN dev={dev_id} pcibus={pcibus} reused={opened_buses[pcibus]}")
+    open_key = device_open_key(cl, pcibus)
+    if open_key in opened_buses:
+      opened_devices[dev_id] = opened_devices[opened_buses[open_key]]
+      log(f"OPEN dev={dev_id} pcibus={pcibus} reused={opened_buses[open_key]}")
     else:
       log(f"OPEN dev={dev_id} pcibus={pcibus}")
       opened_devices[dev_id] = cl("SV", pcibus)
-      opened_buses[pcibus] = dev_id
+      opened_buses[open_key] = dev_id
   pci_dev = opened_devices[dev_id]
 
   if cmd == RemoteCmd.MAP_BAR:

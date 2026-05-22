@@ -5,6 +5,7 @@ from tinygrad.runtime.support.system import RemoteCmd, RemotePCIDevice
 LAT_N_RUNS = 500
 THROUGHPUT_N_RUNS = 8
 SIZES = [4, 1 << 10, 8 << 20]
+AMD_RUNTIME_DEVICES = (0x74a1, 0x744c, 0x7480, 0x7550, 0x7551, 0x7590, 0x75a0)
 
 def fmt_bytes(n:int) -> str:
   for suffix, div in [('G',1<<30),('M',1<<20),('K',1<<10)]:
@@ -13,13 +14,13 @@ def fmt_bytes(n:int) -> str:
 
 def find_device(vendor:str):
   if vendor in ("amd", "any"):
-    if (devs:=RemotePCIDevice.remote_list(0x1002, ((0, (0,)),), 0)): return "AMD", devs[0]
+    if (devs:=RemotePCIDevice.remote_list(0x1002, ((0xffff, AMD_RUNTIME_DEVICES),), 0)): return "AMD", devs[0]
   if vendor in ("nvidia", "any"):
     if (devs:=RemotePCIDevice.remote_list(0x10de, ((0, (0,)),), 0x03)): return "NVIDIA", devs[0]
   return None, None
 
 def run_tensor_sanity(remote:str) -> str:
-  os.environ["REMOTE"], os.environ["DEV"] = remote, "AMD"
+  os.environ["REMOTE"], os.environ["DEV"] = remote, "PCI+AMD"
   from tinygrad import Tensor
   got = (Tensor([1, 2, 3], device="AMD") + 1).numpy().tolist()
   return "ok" if got == [2, 3, 4] else f"bad_result={got}"
