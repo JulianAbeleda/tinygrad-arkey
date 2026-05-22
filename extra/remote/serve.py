@@ -109,9 +109,12 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
         f"handle={len(sysmem_allocs) - 1} ms={(time.perf_counter()-st)*1000:.2f}")
     conn.sendall(resp(len(paddrs_bytes), len(sysmem_allocs) - 1) + paddrs_bytes)
   elif cmd == RemoteCmd.SYSMEM_READ:
+    if bar >= len(sysmem_allocs): raise RuntimeError(f"invalid sysmem handle {bar} (count={len(sysmem_allocs)})")
     conn.sendmsg([resp(arg1), sysmem_allocs[bar][0][arg0:arg0+arg1]])
   elif cmd == RemoteCmd.SYSMEM_WRITE:
+    if bar >= len(sysmem_allocs): raise RuntimeError(f"invalid sysmem handle {bar} (count={len(sysmem_allocs)})")
     sysmem_allocs[bar][0][arg0:arg0+arg1] = conn.recv(arg1, socket.MSG_WAITALL)
+    conn.sendall(resp())
   else: raise RuntimeError(f"unknown command {cmd}")
 
 def serve(conn:socket.socket):
@@ -134,7 +137,6 @@ def serve(conn:socket.socket):
       else:
         last_error = str(e)
       stats["errors"] += 1
-      if cmd in {RemoteCmd.MMIO_WRITE, RemoteCmd.SYSMEM_WRITE}: raise ConnectionError(f"write failed: {e}")
       print(f"ERROR: {e}")
       conn.sendall(resp_err(str(e)))
 

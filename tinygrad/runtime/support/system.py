@@ -440,10 +440,7 @@ class RemotePCIDevice(PCIDevice):
     return unwrap(self._rpc(self.sock, self.dev_id, cmd, offset, size, bar=idx, readout_size=size)[2])
   def _bulk_write(self, cmd:int, idx:int, offset:int, data:bytes):
     RemotePCIDevice._bulk_sent += len(data)
-    hdr = struct.pack('<BIIQQQ', cmd, self.dev_id, idx, offset, len(data), 0)
-    st = time.perf_counter()
-    self.sock.sendall(hdr + data)
-    RemotePCIDevice._record_cmd(cmd, time.perf_counter() - st, sent=len(hdr)+len(data))
+    self._rpc(self.sock, self.dev_id, cmd, offset, len(data), bar=idx, payload=data)
 
   def alloc_sysmem(self, size:int, vaddr:int=0, contiguous:bool=False) -> tuple[MMIOInterface, list[int]]:
     paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size, int(contiguous), readout_size=-1)
