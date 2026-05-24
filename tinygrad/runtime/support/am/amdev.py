@@ -172,6 +172,13 @@ class AMDev:
 
     # Init hw for IP blocks where it is needed
     if not self.partial_boot:
+      if getenv("AM_PRE_PSP_MODE1_RESET", 0):
+        smu_alive = self.smu.is_smu_alive()
+        if DEBUG >= 2: print(f"am {self.devfmt}: pre-PSP mode1 reset requested smu_alive={smu_alive}")
+        if smu_alive:
+          self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) & ~pci.PCI_COMMAND_MASTER, 2)
+          self.smu.mode1_reset()
+          self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) | pci.PCI_COMMAND_MASTER, 2)
       if self.psp.is_sos_alive() and self.smu.is_smu_alive():
         self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) & ~pci.PCI_COMMAND_MASTER, 2)
         if self.is_hive():
@@ -179,7 +186,11 @@ class AMDev:
           raise RuntimeError("Malformed state. Use extra/amdpci/hive_reset.py to reset the hive")
         self.smu.mode1_reset()
       self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) | pci.PCI_COMMAND_MASTER, 2)
-      self.init_hw(self.soc, self.gmc, self.ih, self.psp, self.smu)
+      if getenv("AM_PSP_BEFORE_GMC", 0):
+        if DEBUG >= 2: print(f"am {self.devfmt}: AM_PSP_BEFORE_GMC=1, initializing PSP before GMC")
+        self.init_hw(self.soc, self.ih, self.psp, self.gmc, self.smu)
+      else:
+        self.init_hw(self.soc, self.gmc, self.ih, self.psp, self.smu)
 
     # Booting done
     self.is_booting = False
@@ -275,6 +286,14 @@ class AMDev:
     if hi32(reg_addr) > 0: self.reg("regBIF_BX0_PCIE_INDEX2_HI").write(hi32(reg_addr) & 0xff)
     self.reg("regBIF_BX0_PCIE_DATA2").write(val)
     if hi32(reg_addr) > 0: self.reg("regBIF_BX0_PCIE_INDEX2_HI").write(0)
+
+  def indirect_rreg_pcie(self, reg:int, aid:int=0) -> int:
+    reg_addr = reg * 4 + ((((aid & 0b11) << 32) | (1 << 34)) if aid > 0 else 0)
+    self.reg("regBIF_BX0_PCIE_INDEX2").write(lo32(reg_addr))
+    if hi32(reg_addr) > 0: self.reg("regBIF_BX0_PCIE_INDEX2_HI").write(hi32(reg_addr) & 0xff)
+    val = self.reg("regBIF_BX0_PCIE_DATA2").read()
+    if hi32(reg_addr) > 0: self.reg("regBIF_BX0_PCIE_INDEX2_HI").write(0)
+    return val
 
   def _read_vram(self, addr, size) -> bytes:
     assert addr % 4 == 0 and size % 4 == 0, f"Invalid address {addr:#x} or size {size:#x}"

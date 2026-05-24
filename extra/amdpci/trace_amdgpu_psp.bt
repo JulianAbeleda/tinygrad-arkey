@@ -1,0 +1,80 @@
+#!/usr/bin/env bpftrace
+
+/*
+ * Linux-good PSP boot trace for Navi 31 / PSP v13.
+ *
+ * Run on a Linux boot where amdgpu owns the card:
+ *
+ *   sudo bpftrace extra/amdpci/trace_amdgpu_psp.bt | tee psp-linux-good.trace
+ *
+ * Start this before loading amdgpu, or unload/reload amdgpu while it is running.
+ * This needs kernel BTF so bpftrace can read struct psp_context and
+ * struct psp_bin_desc fields.
+ */
+
+BEGIN
+{
+  printf("psp trace start\n");
+  printf("columns: time event details\n");
+}
+
+kprobe:psp_hw_start
+{
+  printf("%llu psp_hw_start enter psp=%p\n", nsecs, arg0);
+}
+
+kretprobe:psp_hw_start
+{
+  printf("%llu psp_hw_start ret=%d\n", nsecs, retval);
+}
+
+kprobe:psp_v13_0_bootloader_load_component
+{
+  $psp = (struct psp_context *)arg0;
+  $desc = (struct psp_bin_desc *)arg1;
+  printf("%llu bl_load enter psp=%p desc=%p cmd=0x%x fw_pri_mc=0x%llx c2p36=0x%llx size=0x%x start=%p\n",
+    nsecs, arg0, arg1, arg2, $psp->fw_pri_mc_addr, $psp->fw_pri_mc_addr >> 20,
+    $desc->size_bytes, $desc->start_addr);
+}
+
+kretprobe:psp_v13_0_bootloader_load_component
+{
+  printf("%llu bl_load ret=%d\n", nsecs, retval);
+}
+
+kprobe:psp_v13_0_wait_for_bootloader
+{
+  printf("%llu wait_bl enter psp=%p\n", nsecs, arg0);
+}
+
+kretprobe:psp_v13_0_wait_for_bootloader
+{
+  printf("%llu wait_bl ret=%d\n", nsecs, retval);
+}
+
+kprobe:psp_v13_0_wait_for_vmbx_ready
+{
+  printf("%llu wait_vmbx enter psp=%p\n", nsecs, arg0);
+}
+
+kretprobe:psp_v13_0_wait_for_vmbx_ready
+{
+  printf("%llu wait_vmbx ret=%d\n", nsecs, retval);
+}
+
+kprobe:psp_v13_0_memory_training_send_msg
+{
+  $psp = (struct psp_context *)arg0;
+  printf("%llu mem_train_msg psp=%p msg=0x%x fw_pri_mc=0x%llx c2p36=0x%llx\n",
+    nsecs, arg0, arg1, $psp->fw_pri_mc_addr, $psp->fw_pri_mc_addr >> 20);
+}
+
+kretprobe:psp_v13_0_memory_training_send_msg
+{
+  printf("%llu mem_train_msg ret=%d\n", nsecs, retval);
+}
+
+END
+{
+  printf("psp trace end\n");
+}
