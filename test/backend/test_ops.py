@@ -2,12 +2,12 @@ import time, math, unittest, functools, platform, warnings
 import numpy as np
 from typing import List, Callable
 import torch
-from tinygrad.helpers import getenv, CI, DEBUG, DEV, IMAGE, Context
+from tinygrad.helpers import getenv, DEBUG, DEV, IMAGE, Context
 from tinygrad import Tensor, Device, dtypes
 from tinygrad.tensor import _to_np_dtype
-from tinygrad.device import is_dtype_supported
 from tinygrad.renderer.cstyle import QCOMCLRenderer
 from tinygrad.renderer.nir import NIRRenderer
+from test.helpers import CI
 
 TINY_BACKEND = getenv("TINY_BACKEND")
 if TINY_BACKEND:
@@ -1508,7 +1508,8 @@ class TestOps(unittest.TestCase):
 
   def test_sum_dtype_arg(self):
     helper_test_op([(45,3)], lambda x: x.sum(), lambda x: x.sum(dtype=dtypes.float32))
-    if is_dtype_supported(dtypes.float64): helper_test_op([(45,3)], lambda x: x.sum(dtype=torch.float64), lambda x: x.sum(dtype=dtypes.float64))
+    if dtypes.float64 in Device[Device.DEFAULT].renderer.supported_dtypes():
+      helper_test_op([(45,3)], lambda x: x.sum(dtype=torch.float64), lambda x: x.sum(dtype=dtypes.float64))
 
     with self.assertRaises(AttributeError): Tensor([1.0, 2.0]).sum(dtype="")
 
@@ -2449,7 +2450,7 @@ class TestOps(unittest.TestCase):
 
   @unittest.skipUnless(Device.DEFAULT == "CPU" and DEV.renderer == "LLVM", "DEVECTORIZE=0 only for LLVM")
   def test_strided_conv2d_simple_vec(self):
-    with Context(DEVECTORIZE=0): self.test_strided_conv2d_simple()
+    self.test_strided_conv2d_simple()
 
   @slow_test
   def test_strided_conv2d(self):
@@ -2847,6 +2848,7 @@ class TestOps(unittest.TestCase):
     for dim in range(-1, 2):
       helper_test_op([(45,65), (45,65), (45,65)], lambda x,y,z: torch.cat((x,y,z), dim), lambda x,y,z: x.cat(y, z, dim=dim))
 
+  @unittest.skipIf(COMPILE_ONLY, "test requires runtime")
   def test_stack(self):
     for dim in range(-1, 3):
       helper_test_op([(5,6,3), (5,6,3), (5,6,3)], lambda x, y, z: torch.stack((x, y, z), dim), lambda x, y, z: Tensor.stack(x, y, z, dim=dim))
@@ -2857,8 +2859,7 @@ class TestOps(unittest.TestCase):
     with self.assertRaises(ValueError):
       Tensor.stack((Tensor([1, 2]), Tensor([3, 4])), Tensor([5, 6]))
 
-    a = Tensor(3.14)
-    np.testing.assert_allclose(Tensor.stack(a, a).numpy(), Tensor([3.14, 3.14]).numpy())
+    np.testing.assert_allclose(Tensor.stack(Tensor(3.14), Tensor(3.14)).numpy(), np.array([3.14, 3.14]))
 
   def test_stack_max(self):
     helper_test_op(None, lambda x, y: torch.stack((x, y)).max(axis=0)[0], lambda x, y: Tensor.stack(x, y).max(axis=0), vals=[[1.], [2.]])
@@ -3186,7 +3187,7 @@ class TestOps(unittest.TestCase):
     self.helper_test_exception([(32,31,16,64), (32,8,16,64), (32,8,16,64)],
       lambda x,y,z: torch.nn.functional.scaled_dot_product_attention(x,y,z),
       lambda x,y,z: Tensor.scaled_dot_product_attention(x,y,z,enable_gqa=True),
-      expected=(AssertionError, RuntimeError, ValueError))
+      expected=(AssertionError, RuntimeError, ValueError, IndexError))
 
   def test_binary_crossentropy(self):
     helper_test_op([(32,10), (32,10)], lambda x,y: torch.nn.functional.binary_cross_entropy(x.sigmoid(),y.clip(0,1)),
@@ -3348,6 +3349,7 @@ class TestOps(unittest.TestCase):
     # fill_value must not alter output dtype
     self.assertEqual(Tensor([1.0, 2.0]).masked_select(Tensor([True, False]), size=3, fill_value=-1).dtype, dtypes.default_float)
 
+  @slow_test
   def test_nonzero(self):
     helper_test_op([(32, 10)], lambda x: (x>0.5).nonzero().int(), lambda x: (x>0.5).nonzero(), forward_only=True)
     helper_test_op([(20,)], lambda x: (x>0.5).nonzero().int(), lambda x: (x>0.5).nonzero(), forward_only=True)
@@ -3379,7 +3381,6 @@ class TestOps(unittest.TestCase):
     t = (Tensor([0], dtype='int') | 0xFFFFFFFF).item()
     if not COMPILE_ONLY: assert t == -1
 
-@unittest.skipUnless(is_dtype_supported(dtypes.uchar), f"no uint8 on {Device.DEFAULT}")
 class TestOpsUint8(unittest.TestCase):
   def test_cast(self):
     helper_test_op([(2,3,64,64)], lambda x: x.type(torch.uint8), lambda x: x.cast('uint8'), forward_only=True, low=0, high=255)

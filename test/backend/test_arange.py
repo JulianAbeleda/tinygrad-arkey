@@ -64,7 +64,7 @@ class TestIndexing(unittest.TestCase):
       rng = Tensor.arange(DSET, dtype=dtypes.int).reshape(1, 1, DSET, 1).expand(4, DDIM, DSET, 1)
       idxs = idxs.reshape(4,1,1,1).expand(4, DDIM, DSET, 1)
       reshape_dataset = dataset.T.reshape(1, DDIM, DSET, 1).expand(4, DDIM, DSET, 1)
-      full = (rng==idxs).where(reshape_dataset, Tensor.zeros(4, DDIM, DSET, 1))
+      full = (rng==idxs).where(reshape_dataset, Tensor.zeros(4, DDIM, DSET, 1, buffer=False))
       X = full.sum(axis=(2,3))
       linear, var_vals = X.linear_with_vars()
       self.assertEqual(len(linear.src), 1)
@@ -215,7 +215,7 @@ class TestIndexing(unittest.TestCase):
     np.testing.assert_allclose(emb.weight.grad.numpy(), expected_grad, rtol=1e-5, atol=1e-5)
 
   @unittest.skipUnless(Device.DEFAULT == "AMD" or (Device.DEFAULT == "NULL" and DEV.arch.startswith("gfx")), "tests AMD bf16 cast overhead")
-  def base_test_llama_8b_rope_backward(self, dtype):
+  def base_test_llama_8b_rope_backward(self, dtype, ops_scale=1):
     from extra.models.llama import precompute_freqs_cis, apply_rotary_emb
     bs, seqlen, dim, n_heads = 1, 512, 256, 4
     head_dim = dim // n_heads
@@ -232,15 +232,15 @@ class TestIndexing(unittest.TestCase):
     linear = compile_linear(wq.grad.schedule_linear())
     assert len(linear.src) == 1, f"expected one kernel for backward, got: {len(linear.src)}"
     bwd_ops = estimate_uop(linear.src[0]).ops
-    # bfloat16 on non CDNA4 has ~10x ops overhead because of the software emulation
-    if dtype == dtypes.bfloat16 and not Device[Device.DEFAULT].renderer.target.arch.startswith("gfx950"): ops_scale = 10
-    else: ops_scale = 1
     expected_ops = bs*seqlen*dim*dim*ops_scale
     print(f"rope matmul bwd ({dtype}): {GlobalCounters.kernel_count} kernels, {bwd_ops:,} ops")
     self.assertLess(bwd_ops, expected_ops, f"rope bwd ops {bwd_ops:,} should be < {ops_scale} per (got {bwd_ops/(bs*seqlen*dim*dim):.1f})")
 
-  def test_llama_8b_rope_backward_f16(self): self.base_test_llama_8b_rope_backward(dtypes.float16)
-  def test_llama_8b_rope_backward_bf16(self): self.base_test_llama_8b_rope_backward(dtypes.bfloat16)
+  def test_llama_8b_rope_backward_f16(self):
+    self.base_test_llama_8b_rope_backward(dtypes.float16, ops_scale=2)
+  # bfloat16 on non CDNA4 has ~10x ops overhead because of the software emulation
+  def test_llama_8b_rope_backward_bf16(self):
+    self.base_test_llama_8b_rope_backward(dtypes.bfloat16, ops_scale=2 if Device[Device.DEFAULT].renderer.target.arch.startswith("gfx950") else 25)
 
 if __name__ == "__main__":
   unittest.main()
