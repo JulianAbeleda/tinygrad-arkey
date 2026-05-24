@@ -23,15 +23,36 @@ class DryRunBackend(PowerBackend):
   def on(self): stamp("dry-run power on")
 
 class ShellyBackend(PowerBackend):
-  def __init__(self, host:str, timeout:float):
-    self.host, self.timeout = host, timeout
+  def __init__(self, host:str, timeout:float, api:str):
+    self.host, self.timeout, self.api = host, timeout, api
 
-  def _set(self, state:str):
-    url = f"http://{self.host}/relay/0?turn={state}"
-    stamp(f"shelly {state} {url}")
+  def _request(self, url:str) -> tuple[int, int]:
     with urllib.request.urlopen(url, timeout=self.timeout) as resp:
       body = resp.read(4096)
-    stamp(f"shelly {state} ok status={resp.status} bytes={len(body)}")
+      return resp.status, len(body)
+
+  def _set_relay(self, state:str):
+    url = f"http://{self.host}/relay/0?turn={state}"
+    status, nbytes = self._request(url)
+    stamp(f"shelly relay {state} ok status={status} bytes={nbytes}")
+
+  def _set_rpc(self, state:str):
+    on = "true" if state == "on" else "false"
+    url = f"http://{self.host}/rpc/Switch.Set?id=0&on={on}"
+    status, nbytes = self._request(url)
+    stamp(f"shelly rpc {state} ok status={status} bytes={nbytes}")
+
+  def _set(self, state:str):
+    stamp(f"shelly {state} api={self.api} host={self.host}")
+    if self.api == "rpc":
+      self._set_rpc(state)
+    elif self.api == "relay":
+      self._set_relay(state)
+    else:
+      try: self._set_rpc(state)
+      except Exception as e:
+        stamp(f"shelly rpc {state} failed, trying relay: {e}")
+        self._set_relay(state)
 
   def off(self): self._set("off")
   def on(self): self._set("on")
@@ -118,7 +139,7 @@ def build_backend(args) -> PowerBackend:
   if args.backend == "dry-run": return DryRunBackend()
   if args.backend == "shelly":
     if not args.host: raise SystemExit("--host is required with --backend shelly")
-    return ShellyBackend(args.host, args.http_timeout)
+    return ShellyBackend(args.host, args.http_timeout, args.shelly_api)
   raise AssertionError(args.backend)
 
 def main():
@@ -134,6 +155,8 @@ def main():
   parser.add_argument("--startup-seconds", type=float, default=2.0)
   parser.add_argument("--stop-timeout", type=float, default=3.0)
   parser.add_argument("--http-timeout", type=float, default=5.0)
+  parser.add_argument("--shelly-api", choices=("auto", "rpc", "relay"), default="auto",
+                      help="Shelly control API: Gen2+/Gen4 RPC, legacy relay endpoint, or auto fallback")
   parser.add_argument("--skip-power", action="store_true", help="only stop/start bridge and run checks")
   parser.add_argument("--no-health-check", action="store_true", help="skip bench.py and psp-status checks")
   args = parser.parse_args()
