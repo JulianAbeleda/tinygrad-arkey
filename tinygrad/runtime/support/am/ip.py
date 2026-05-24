@@ -605,6 +605,7 @@ class AM_SDMA(AM_IP):
 class AM_PSP(AM_IP):
   def init_sw(self):
     self.reg_pref = "regMP0_SMN_C2PMSG" if self.adev.ip_ver[am.MP0_HWIP] < (14,0,0) else "regMPASP_SMN_C2PMSG"
+    self.msg1_kind = "vram"
 
     if getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GTT", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
@@ -616,6 +617,7 @@ class AM_PSP(AM_IP):
       self.msg1_addr = self.adev.mm.alloc_vaddr(size=self.msg1_view.nbytes, align=am.PSP_1_MEG)
       self.adev.mm.map_range(self.msg1_addr, self.msg1_view.nbytes, [(paddr, 0x1000) for paddr in paddrs[view_off // 0x1000:][:am.PSP_1_MEG // 0x1000]],
                              AddrSpace.SYS, uncached=True, snooped=True, boot=True)
+      self.msg1_kind = "sysmem-gtt"
       self._trace(f"msg1 sysmem gtt raw={paddrs[0]:#x} view_off={view_off:#x} va={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GART", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
@@ -626,6 +628,7 @@ class AM_PSP(AM_IP):
       self.msg1_view = raw_view.view(view_off, am.PSP_1_MEG)
       self.msg1_addr = self.adev.gmc.gart_start
       self.msg1_gart_args = (paddrs, view_off, am.PSP_1_MEG)
+      self.msg1_kind = "sysmem-gart"
       self._trace(f"msg1 sysmem gart raw={paddrs[0]:#x} view_off={view_off:#x} addr={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_DMA", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
@@ -635,12 +638,14 @@ class AM_PSP(AM_IP):
       assert view_off + am.PSP_1_MEG <= raw_view.nbytes, f"failed to find aligned 1MB PSP window in 2MB DMA buffer: {paddrs[0]:#x}"
       self.msg1_view = raw_view.view(view_off, am.PSP_1_MEG)
       self.msg1_addr = paddrs[0] + view_off
+      self.msg1_kind = "sysmem-dma"
       self._trace(f"msg1 sysmem dma raw={paddrs[0]:#x} view_off={view_off:#x} addr={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif self.adev.devfmt.startswith("usb:") or (getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1", 0)):
       self.msg1_view, paddrs = self.adev.pci_dev.alloc_sysmem(am.PSP_1_MEG)
       self.msg1_addr = self.adev.mm.alloc_vaddr(size=self.msg1_view.nbytes, align=am.PSP_1_MEG)
       self.adev.mm.map_range(self.msg1_addr, self.msg1_view.nbytes, [(paddr, 0x1000) for paddr in paddrs], AddrSpace.SYS,
                              uncached=True, boot=True)
+      self.msg1_kind = "sysmem-va"
       self._trace(f"msg1 sysmem va addr={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     else:
       self.msg1_paddr = self.adev.mm.palloc(am.PSP_1_MEG, align=am.PSP_1_MEG, zero=False, boot=True)
@@ -689,8 +694,10 @@ class AM_PSP(AM_IP):
 
   def is_sos_alive(self): return self.adev.reg(f"{self.reg_pref}_81").read() != 0x0
 
+  def _trace_enabled(self) -> bool: return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0)
+
   def _trace(self, msg:str):
-    if getenv("AM_PSP_TRACE", 0): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
+    if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
 
   def _trace_reg(self, name:str, inst:int|None=None):
     if not hasattr(self.adev, name): return
@@ -701,10 +708,11 @@ class AM_PSP(AM_IP):
       self._trace(f"reg {name}{'' if inst is None else f'[{inst}]'} read failed: {e}")
 
   def _trace_pre_bootloader_regs(self):
-    if not getenv("AM_PSP_TRACE_REGS", 0): return
+    if not (getenv("AM_PSP_TRACE_REGS", 0) or getenv("AM_PSP_PARITY_TRACE", 0)): return
     self._trace(f"pre-bl ipver nbio={self.adev.ip_ver[am.NBIO_HWIP]} gc={self.adev.ip_ver[am.GC_HWIP]} mp0={self.adev.ip_ver[am.MP0_HWIP]}")
     self._trace(f"pre-bl gmc fb_base={self.adev.gmc.fb_base:#x} fb_end={self.adev.gmc.fb_end:#x} mc_base={self.adev.gmc.mc_base:#x} "
                 f"gart={self.adev.gmc.gart_start:#x}-{self.adev.gmc.gart_end:#x} vmhubs={self.adev.gmc.vmhubs}")
+    self._trace(f"pre-bl msg1 kind={self.msg1_kind} addr={self.msg1_addr:#x} c2p36={self.msg1_addr >> 20:#x} size={self.msg1_view.nbytes:#x}")
     for reg in ["regRCC_DEV0_EPF2_STRAP2", "regRCC_DEV0_EPF0_RCC_DOORBELL_APER_EN", "regBIFC_GFX_INT_MONITOR_MASK",
                 "regBIFC_DOORBELL_ACCESS_EN_PF", "regBIF_BX0_REMAP_HDP_MEM_FLUSH_CNTL", "regMMMC_VM_FB_LOCATION_BASE",
                 "regMMMC_VM_FB_LOCATION_TOP"]:
@@ -722,16 +730,30 @@ class AM_PSP(AM_IP):
     for reg in [f"{self.reg_pref}_{x}" for x in (33, 35, 36, 64, 67, 81, 90, 92, 115)]:
       self._trace_reg(reg)
 
+  def _trace_bootloader_snapshot(self, label:str):
+    if not getenv("AM_PSP_PARITY_TRACE", 0): return
+    self._trace(f"parity snapshot {label} begin")
+    for reg in [f"{self.reg_pref}_{x}" for x in (33, 35, 36, 64, 67, 81, 90, 92, 115)]:
+      self._trace_reg(reg)
+    for i in range(getattr(self.adev.gmc, "vmhubs", 0)):
+      for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_CONTEXT0_CNTL",
+                  "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
+                  "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
+                  "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
+        self._trace_reg(reg, inst=i)
+    self._trace(f"parity snapshot {label} end")
+
   def _wait_for_bootloader(self):
     reg = self.adev.reg(f"{self.reg_pref}_35")
     start = time.perf_counter()
     last_val = None
     while (time.perf_counter() - start) * 1000 < 10000:
       val = reg.read()
-      if getenv("AM_PSP_TRACE", 0) and val != last_val:
+      if self._trace_enabled() and val != last_val:
         self._trace(f"wait BL reg35={reg.addr[0]:#x} val={val:#x}")
         last_val = val
       if val != 0xffffffff and val & 0x80000000: return 0x80000000
+    self._trace_bootloader_snapshot("wait-timeout")
     raise TimeoutError(f"BL not ready. Timed out after 10000 ms, condition not met: {last_val & 0x80000000 if last_val is not None else None} != 2147483648")
 
   def _fatal_error_recovery_quirk(self):
@@ -773,7 +795,7 @@ class AM_PSP(AM_IP):
     last_val = None
     while (time.perf_counter() - start) * 1000 < 3000:
       val = reg35.read()
-      if getenv("AM_PSP_TRACE", 0) and val != last_val:
+      if self._trace_enabled() and val != last_val:
         self._trace(f"mem train wait reg35={reg35.addr[0]:#x} val={val:#x}")
         last_val = val
       if val != 0xffffffff and val & 0x80000000: break
@@ -819,7 +841,7 @@ class AM_PSP(AM_IP):
 
     self._prep_msg1(self.adev.fw.sos_fw[fw])
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
-    self._trace(f"write msg1 reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
+    self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
     if getenv("AM_PSP_STRONG_FLUSH", 0):
       self.adev.gmc.flush_hdp()
@@ -830,6 +852,7 @@ class AM_PSP(AM_IP):
     self._trace(f"write compid reg35={reg35.addr[0]:#x} val={compid:#x}")
     reg35.write(compid)
     self._trace(f"write compid done val={compid:#x}")
+    self._trace_bootloader_snapshot(f"post-compid-{compid:#x}")
 
     return self._wait_for_bootloader() if compid != am.PSP_BL__LOAD_SOSDRV else 0
 
