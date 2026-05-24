@@ -37,6 +37,7 @@ The goal is one active target: `tinygrad-arkey`.
 - [x] Probe NBIO 7.9 `BIFC_*` RSMU-vs-PCIE indirect access path.
 - [x] Run `AM_PSP_MEM_TRAIN=long` after the next clean GPU restart to test Linux's pre-KDB memory-training step.
 - [x] Run `AM_PSP_SYSMSG1_GTT=1` to test normal VMID0 contiguous/snooped system-memory mapping for PSP msg1.
+- [x] Add Mac-only PSP Linux-parity trace mode for pre-KDB, post-command, and timeout state capture.
 - [ ] Retest Qwen warmup bridge dirty failure after GPU restart.
 - [ ] Reduce decode-time `SYSMEM_READ`/`SYSMEM_WRITE` roundtrips.
 - [ ] Add a benchmark gate for roundtrips/token regression checks.
@@ -97,6 +98,7 @@ Dropout investigation:
 - `AM_PSP_BEFORE_GMC=1` ran PSP before GMC/MMHUB hardware programming, so KDB used the clean MMHUB state above. It still failed first KDB on default VRAM msg1 (`C2PMSG36=0x80001`, `C2PMSG35_BL=0x0`). This rules out tinygrad's pre-KDB VMID0/MMHUB programming as the cause for the VRAM path.
 - Read-only runtime DB stage ran cleanly. Runtime DB exists (`cookie=0x0ed5`, version `0x0100`) with one entry: `PSP_RUNTIME_ENTRY_TYPE_PPTABLE_ERR_STATUS`, data `00000040`, parsed `scpm_status=0x40000000`. There is no `PSP_RUNTIME_ENTRY_TYPE_BOOT_CONFIG`, so Linux would force memory training on this boot. We already tested long memory training and long-training + GTT + zeroed KDB.
 - Linux-good trace gate: `extra/amdpci/trace_amdgpu_psp.bt` is now the next useful data source. Run it under Linux with `sudo bpftrace extra/amdpci/trace_amdgpu_psp.bt | tee psp-linux-good.trace` before loading or while reloading `amdgpu`. Compare KDB `cmd=0x80000`, `fw_pri_mc_addr`, `c2p36`, descriptor size, and `wait_bl ret` against tinygrad's pre-KDB trace. Do not run another clean-reset KDB test until the next input is either a Linux-good trace difference or a newly identified Linux precondition.
+- Linux-good trace status: deferred while no Linux test environment is available. Use `AM_PSP_PARITY_TRACE=1` as the Mac-only fallback trace, but keep the bpftrace script as the preferred external comparison when Linux access becomes possible.
 - Causality boundary: a physical replug likely resets ASM2464PD firmware state, USB4 tunnel state, TinyGPU DriverKit state, PCIe link training, and the GPU endpoint. Do not claim the 8051 firmware is isolated as the stuck component without a narrower test.
 
 ## Before Editing

@@ -822,6 +822,24 @@ AM_PSP_MEM_TRAIN=long AM_PSP_TRACE=1 AM_PSP_TRACE_REGS=1 AM_PSP_MSG1_READBACK=1 
 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python -c 'from tinygrad import Tensor; print((Tensor([1,2,3])+1).numpy().tolist())'
 ```
 
+Mac-only Linux-parity trace command:
+
+```text
+PYTHONUNBUFFERED=1 REMOTE_TIMEOUT=30 REMOTE_RPC_TIMEOUT=60 REMOTE=127.0.0.1:6667 DEV=PCI+AMD AMD_REMOTE_ALLOC_CAP_MB=2 AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c \
+AM_PSP_PARITY_TRACE=1 AM_PSP_MSG1_READBACK=1 \
+/Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python -c 'from tinygrad import Tensor; print((Tensor([1,2,3])+1).numpy().tolist())'
+```
+
+`AM_PSP_PARITY_TRACE=1` is diagnostics-only. It does not change PSP boot sequencing. It emits:
+
+- pre-KDB IP versions, GMC aperture state, msg1 kind/address/C2PMSG36 value, NBIO/HDP/MMHUB/PSP registers
+- post-bootloader-command PSP mailbox and MMHUB VMID0/protection-fault state
+- final PSP mailbox and MMHUB state on bootloader wait timeout
+
+Use this when Linux-good tracing is unavailable. The goal is to compare tinygrad's first KDB command and immediate post-command state against Linux `amdgpu` source expectations without adding another msg1 placement variant.
+
+Linux-good trace status: deferred while no Linux test environment is available. Keep `extra/amdpci/trace_amdgpu_psp.bt` as the preferred comparison input when Linux access becomes possible; until then, use the Mac-only parity trace to capture comparable local state.
+
 Previous clean high-GART retest command, now that all-ones mailbox reads are rejected:
 
 ```text
@@ -845,6 +863,8 @@ REMOTE_TIMEOUT=5 REMOTE_RPC_TIMEOUT=30 REMOTE=127.0.0.1:6667 DEV=PCI+AMD AMD_REM
 AM_PSP_SYSMSG1_GART=1 AM_PSP_GART_LOW=1 AM_PSP_TRACE=1 AM_PSP_TRACE_REGS=1 AM_PSP_MSG1_READBACK=1 \
 /Users/julianabeleda/env/tinygrad-arkey/.venv/bin/python -c 'from tinygrad import Tensor; print((Tensor([1,2,3])+1).numpy().tolist())'
 ```
+
+Latest low-GART result: harmful. It wrote C2PMSG36 from a low GART address, then C2PMSG35 dropped, mailbox reads returned `0xffffffff`, the remote RPC closed, bridge health became dirty, and macOS no longer listed the AMD GPU. Do not rerun low-GART unless the code changes enough to make it a different experiment.
 
 Previous clean experiment command:
 
