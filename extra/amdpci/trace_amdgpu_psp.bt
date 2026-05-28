@@ -3,13 +3,21 @@
 /*
  * Linux-good PSP boot trace for Navi 31 / PSP v13.
  *
- * Run on a Linux boot where amdgpu owns the card:
+ * Prefer the capture wrapper, which handles baseline files and PCI bind timing:
+ *
+ *   sudo extra/amdpci/capture_linux_psp_good_trace.sh --bind-bdf 0000:03:00.0
+ *
+ * Or run directly on a Linux boot where amdgpu owns the card:
  *
  *   sudo bpftrace extra/amdpci/trace_amdgpu_psp.bt | tee psp-linux-good.trace
  *
  * Start this before loading amdgpu, or unload/reload amdgpu while it is running.
- * This needs kernel BTF so bpftrace can read struct psp_context and
- * struct psp_bin_desc fields.
+ * This script intentionally uses fixed offsets instead of BTF struct field
+ * access. On Ubuntu 6.8.0-117, bpftrace sees vmlinux BTF but does not resolve
+ * amdgpu module-private struct names. Offsets from /sys/kernel/btf/amdgpu:
+ *   struct psp_context.fw_pri_mc_addr: 80
+ *   struct psp_bin_desc.size_bytes: 8
+ *   struct psp_bin_desc.start_addr: 16
  */
 
 BEGIN
@@ -30,11 +38,11 @@ kretprobe:psp_hw_start
 
 kprobe:psp_v13_0_bootloader_load_component
 {
-  $psp = (struct psp_context *)arg0;
-  $desc = (struct psp_bin_desc *)arg1;
+  $fw_pri_mc = *(uint64 *)(arg0 + 80);
+  $size = *(uint32 *)(arg1 + 8);
+  $start = *(uint64 *)(arg1 + 16);
   printf("%llu bl_load enter psp=%p desc=%p cmd=0x%x fw_pri_mc=0x%llx c2p36=0x%llx size=0x%x start=%p\n",
-    nsecs, arg0, arg1, arg2, $psp->fw_pri_mc_addr, $psp->fw_pri_mc_addr >> 20,
-    $desc->size_bytes, $desc->start_addr);
+    nsecs, arg0, arg1, arg2, $fw_pri_mc, $fw_pri_mc >> 20, $size, $start);
 }
 
 kretprobe:psp_v13_0_bootloader_load_component
@@ -52,21 +60,11 @@ kretprobe:psp_v13_0_wait_for_bootloader
   printf("%llu wait_bl ret=%d\n", nsecs, retval);
 }
 
-kprobe:psp_v13_0_wait_for_vmbx_ready
-{
-  printf("%llu wait_vmbx enter psp=%p\n", nsecs, arg0);
-}
-
-kretprobe:psp_v13_0_wait_for_vmbx_ready
-{
-  printf("%llu wait_vmbx ret=%d\n", nsecs, retval);
-}
-
 kprobe:psp_v13_0_memory_training_send_msg
 {
-  $psp = (struct psp_context *)arg0;
+  $fw_pri_mc = *(uint64 *)(arg0 + 80);
   printf("%llu mem_train_msg psp=%p msg=0x%x fw_pri_mc=0x%llx c2p36=0x%llx\n",
-    nsecs, arg0, arg1, $psp->fw_pri_mc_addr, $psp->fw_pri_mc_addr >> 20);
+    nsecs, arg0, arg1, $fw_pri_mc, $fw_pri_mc >> 20);
 }
 
 kretprobe:psp_v13_0_memory_training_send_msg

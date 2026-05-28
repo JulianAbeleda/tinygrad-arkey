@@ -253,6 +253,18 @@ C2PMSG115_SPI   0x80000000
 
 See `structure/Development/amd-optimization-checklist.md`.
 
+Latest operator/session note:
+
+- On 2026-05-25, the SSH/Tailscale session to remote host `100.94.210.27` ended with:
+
+```text
+Read from remote host 100.94.210.27: Connection reset by peer
+Connection to 100.94.210.27 closed.
+client_loop: send disconnect: Broken pipe
+```
+
+- Treat this as a remote shell/session disconnect only unless matching TinyGPU, `extra/remote/serve.py`, kernel, or bridge logs show a device-side failure. It does not change the current PSP hypothesis or the Linux-good trace gate by itself.
+
 Current unchecked near-term items:
 
 - Investigate AMD PSP init connection close / prior bootloader timeout:
@@ -838,7 +850,73 @@ AM_PSP_PARITY_TRACE=1 AM_PSP_MSG1_READBACK=1 \
 
 Use this when Linux-good tracing is unavailable. The goal is to compare tinygrad's first KDB command and immediate post-command state against Linux `amdgpu` source expectations without adding another msg1 placement variant.
 
-Linux-good trace status: deferred while no Linux test environment is available. Keep `extra/amdpci/trace_amdgpu_psp.bt` as the preferred comparison input when Linux access becomes possible; until then, use the Mac-only parity trace to capture comparable local state.
+Linux-good trace status: a Linux evidence bundle from 2026-05-27 is now stored at `extra/amdpci/captures/psp-linux-good-bundle-20260527.tar.gz` with SHA256 `638e3930ac2527dce9cce2a8b2c21aab4498848fc2c2f9fbbf36ca645b476232`. The bundle includes multiple capture attempts, baseline files, BTF files, and the trace helper revisions used on Ubuntu.
+
+Linux ReBAR verification status, 2026-05-28: fixed. Ubuntu now boots in UEFI mode through `Boot0002* ubuntu HD(2,MBR,...)/File(\EFI\UBUNTU\GRUBX64.EFI)`, and `dmesg` reports `[drm] Detected VRAM RAM=24560M, BAR=32768M`. The boot disk is still MBR/msdos with an ESP fallback/Ubuntu EFI install, but it is sufficient for the PSP trace gate as long as future checks continue to report `UEFI` and a large BAR. The current expected RX 7900 XTX BDF is `0000:08:00.0` for device `1002:744c`.
+
+Linux-box checkout status: the Ubuntu repo is at `/home/ubuntu/tinygrad-arkey/tinygrad`, on `master`, with remotes `origin=https://github.com/JulianAbeleda/tinygrad-arkey.git` and `upstream=https://github.com/tinygrad/tinygrad.git`. Before taking the next trace, get this checkout up to the current local trace-tooling revision while preserving local capture outputs. In particular, the Linux box needs:
+
+- `extra/amdpci/trace_amdgpu_psp.bt` fixed-offset version.
+- `extra/amdpci/capture_linux_psp_good_trace.sh`.
+- `docs/amd-linux-psp-good-trace.md`.
+
+Linux-box direction for the next session:
+
+```text
+cd /home/ubuntu/tinygrad-arkey/tinygrad
+[ -d /sys/firmware/efi ] && echo UEFI || echo Legacy
+dmesg | grep -i 'Detected VRAM'
+lspci -Dnn | grep -Ei '1002:744c|amd.*(vga|display|3d)'
+```
+
+Expected gate:
+
+```text
+UEFI
+[drm] Detected VRAM RAM=24560M, BAR=32768M
+```
+
+If the RX 7900 XTX is not the active display GPU, run:
+
+```text
+sudo extra/amdpci/capture_linux_psp_good_trace.sh --rebind-bdf 0000:08:00.0
+```
+
+If it is the active display GPU, do not live-unbind it. Boot once with `modprobe.blacklist=amdgpu`, then run:
+
+```text
+sudo extra/amdpci/capture_linux_psp_good_trace.sh --bind-bdf 0000:08:00.0
+```
+
+After capture, require actual trace events before treating it as the Linux-good comparison:
+
+```text
+OUT="$(ls -td psp-linux-good-* | head -1)"
+grep -E 'bl_load enter|wait_bl ret|psp_hw_start ret|mem_train' "$OUT/psp-linux-good.trace"
+tar -czf "$OUT.tar.gz" "$OUT"
+sha256sum "$OUT.tar.gz"
+```
+
+The key lines must include KDB `bl_load enter` with `cmd=0x80000`, `size=0x1d40`, `fw_pri_mc`, `c2p36`, and a following successful wait such as `wait_bl ret=0`.
+
+Important trace-script finding from that bundle:
+
+- Early bpftrace attempts failed because `struct psp_context` and `struct psp_bin_desc` were not resolvable from bpftrace even with BTF present.
+- `extra/amdpci/trace_amdgpu_psp.bt` now uses fixed offsets from `/sys/kernel/btf/amdgpu` on Ubuntu 6.8.0-117:
+  - `struct psp_context.fw_pri_mc_addr`: `80`
+  - `struct psp_bin_desc.size_bytes`: `8`
+  - `struct psp_bin_desc.start_addr`: `16`
+- The first successful script-start captures in the bundle only show headers, so a future Linux run should still be checked for actual `bl_load enter` / `wait_bl ret` KDB events before treating it as the final comparison trace.
+
+Latest clean Mac parity trace result, 2026-05-24:
+
+- Manual GPU restart restored clean baseline: bridge healthy, macOS listed AMD `0x744c`, PSP `C2PMSG35=0x80000000`, `C2PMSG36=0x00000000`, `C2PMSG81=0`.
+- `AM_PSP_PARITY_TRACE=1 AM_PSP_MSG1_READBACK=1` reproduced the first-KDB stall on default VRAM msg1.
+- KDB handoff details: `msg1_addr=0x8000100000`, `C2PMSG36=0x80001`, payload size `7488`, readback first bytes `b8c9eff09cbcdb3b44884efbd4c12bdd`, zero tail.
+- Immediately after `PSP_BL__LOAD_KEY_DATABASE`, PSP state was `C2PMSG35=0x00000000`, `C2PMSG36=0x00080001`, `C2PMSG81=0x00000000`; timeout snapshot matched.
+- `MMVM_L2_PROTECTION_FAULT_STATUS=0` both after compid and at timeout. Bridge remained healthy and macOS still listed AMD `0x744c`.
+- PSP is now dirty until full GPU power reset. Do not run another KDB experiment on this state.
+- Updated hypothesis: this is not a simple unreadable KDB payload, TinyGPU bridge failure, or MMHUB protection fault. PSP sees the command transition, clears BL-ready, then rejects/stalls internally. Next useful input is Linux-good PSP trace or a newly identified Linux pre-KDB precondition.
 
 Previous clean high-GART retest command, now that all-ones mailbox reads are rejected:
 
