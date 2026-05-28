@@ -106,11 +106,11 @@ fi
 grep -E "$PSP_SYMBOL_RE" /proc/kallsyms > "$OUT/psp-symbols-before-setup.txt" || true
 
 find /lib/firmware/amdgpu -maxdepth 1 -type f \( \
-  -name 'psp_13_0_10_sos.bin' -o \
-  -name 'gc_11_0_3*.bin' -o \
-  -name 'smu_13_0_10*.bin' -o \
-  -name 'sdma_6_0_3*.bin' -o \
-  -name 'vcn_3_1_2*.bin' \
+  -name 'psp_13_0_10_sos.bin' -o -name 'psp_13_0_10_sos.bin.zst' -o \
+  -name 'gc_11_0_3*.bin' -o -name 'gc_11_0_3*.bin.zst' -o \
+  -name 'smu_13_0_10*.bin' -o -name 'smu_13_0_10*.bin.zst' -o \
+  -name 'sdma_6_0_3*.bin' -o -name 'sdma_6_0_3*.bin.zst' -o \
+  -name 'vcn_3_1_2*.bin' -o -name 'vcn_3_1_2*.bin.zst' \
 \) -print0 2>/dev/null | sort -z | xargs -0r sha256sum > "$OUT/firmware-sha256.txt"
 
 lspci -Dnn | grep -Ei '1002:744c|amd.*(vga|display|3d)' > "$OUT/gpu-candidates.txt" || true
