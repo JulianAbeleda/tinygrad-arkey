@@ -73,6 +73,7 @@ need_cmd modprobe
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TRACE_SCRIPT="$SCRIPT_DIR/trace_amdgpu_psp.bt"
 [ -f "$TRACE_SCRIPT" ] || die "missing trace script: $TRACE_SCRIPT"
+PSP_SYMBOL_RE=' psp_hw_start([[:space:]]|$)| psp_v13_0_bootloader_load_component([[:space:]]|$)| psp_v13_0_wait_for_bootloader([[:space:]]|$)| psp_v13_0_wait_for_vmbx_ready([[:space:]]|$)| psp_v13_0_memory_training_send_msg([[:space:]]|$)'
 
 if [ -z "$OUT" ]; then
   OUT="psp-linux-good-$(date +%Y%m%d-%H%M%S)"
@@ -102,8 +103,7 @@ if [ -e /sys/kernel/btf/vmlinux ]; then
   cp /sys/kernel/btf/vmlinux "$OUT/vmlinux.btf" 2>/dev/null || true
 fi
 
-grep -E ' psp_hw_start$| psp_v13_0_bootloader_load_component$| psp_v13_0_wait_for_bootloader$| psp_v13_0_wait_for_vmbx_ready$| psp_v13_0_memory_training_send_msg$' \
-  /proc/kallsyms > "$OUT/psp-symbols-before-setup.txt" || true
+grep -E "$PSP_SYMBOL_RE" /proc/kallsyms > "$OUT/psp-symbols-before-setup.txt" || true
 
 find /lib/firmware/amdgpu -maxdepth 1 -type f \( \
   -name 'psp_13_0_10_sos.bin' -o \
@@ -137,12 +137,11 @@ elif [ "$MODE" = "rebind" ]; then
   echo "$BIND_BDF" > "$DEV/driver/unbind"
 fi
 
-if ! grep -q ' psp_v13_0_bootloader_load_component$' /proc/kallsyms; then
+if ! grep -Eq ' psp_v13_0_bootloader_load_component([[:space:]]|$)' /proc/kallsyms; then
   die "PSP symbols are still not visible after setup; install/load amdgpu with kallsyms available"
 fi
 
-grep -E ' psp_hw_start$| psp_v13_0_bootloader_load_component$| psp_v13_0_wait_for_bootloader$| psp_v13_0_wait_for_vmbx_ready$| psp_v13_0_memory_training_send_msg$' \
-  /proc/kallsyms > "$OUT/psp-symbols-after-setup.txt" || true
+grep -E "$PSP_SYMBOL_RE" /proc/kallsyms > "$OUT/psp-symbols-after-setup.txt" || true
 
 if [ -e /sys/kernel/btf/amdgpu ]; then
   cp /sys/kernel/btf/amdgpu "$OUT/amdgpu.btf" 2>/dev/null || true
