@@ -9,6 +9,10 @@ def _env_int(name:str, default:int=0) -> int:
   raw = getenv(name, "")
   return int(raw, 0) if raw else default
 
+def _env_optional_int(name:str) -> int|None:
+  raw = getenv(name, "")
+  return int(raw, 0) if raw else None
+
 class AM_Experiment:
   @staticmethod
   def audit_pre_kdb() -> int: return _env_int("AM_PSP_AUDIT_PRE_KDB")
@@ -24,6 +28,12 @@ class AM_Experiment:
   def gart_table_addr(default:int) -> int: return _env_int("AM_PSP_GART_TABLE_ADDR", default)
   @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
+  @staticmethod
+  def gart_aperture_low() -> int|None: return _env_optional_int("AM_PSP_GART_APERTURE_LOW")
+  @staticmethod
+  def gart_aperture_high() -> int|None: return _env_optional_int("AM_PSP_GART_APERTURE_HIGH")
+  @staticmethod
+  def gart_default_addr() -> int|None: return _env_optional_int("AM_PSP_GART_DEFAULT_ADDR")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -187,9 +197,19 @@ class AM_GMC(AM_IP):
     self._trace_psp_gart_pte("pte", gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
     linux_context = AM_Experiment.gart_linux_context()
     for inst in range(self.vmhubs):
-      if not linux_context:
+      aperture_low = AM_Experiment.gart_aperture_low()
+      aperture_high = AM_Experiment.gart_aperture_high()
+      default_addr = AM_Experiment.gart_default_addr()
+      if aperture_low is not None:
+        self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR").write(aperture_low, inst=inst)
+      elif not linux_context:
         self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR").write(min(self.fb_base, self.gart_start) >> 18, inst=inst)
+      if aperture_high is not None:
+        self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(aperture_high, inst=inst)
+      elif not linux_context:
         self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(max(self.fb_end, self.gart_end) >> 18, inst=inst)
+      if default_addr is not None:
+        self.adev.wreg_pair("regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR", "_LSB", "_MSB", default_addr, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR", "_LO32", "_HI32", pt_base, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR", "_LO32", "_HI32", self.gart_start >> 12, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
