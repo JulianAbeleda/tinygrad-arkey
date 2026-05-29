@@ -5,6 +5,14 @@ from tinygrad.runtime.autogen.am import am
 from tinygrad.runtime.support.amd import import_soc
 from tinygrad.runtime.support.memory import AddrSpace
 
+def _env_int(name:str, default:int=0) -> int:
+  raw = getenv(name, "")
+  return int(raw, 0) if raw else default
+
+class AM_PSPExperiment:
+  @staticmethod
+  def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
+
 class AM_IP:
   def __init__(self, adev): self.adev = adev
   def init_sw(self): pass # Prepare sw/allocations for this IP
@@ -837,9 +845,14 @@ class AM_PSP(AM_IP):
     self._wait_for_bootloader()
 
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
-    self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(self.adev.fw.sos_fw[fw])}")
+    data = self.adev.fw.sos_fw[fw]
+    if fw == am.PSP_FW_TYPE_PSP_KDB and (skip := AM_PSPExperiment.kdb_skip_prefix()):
+      if skip >= len(data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(data):#x}")
+      self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(data):#x} new_size={len(data) - skip:#x}")
+      data = data[skip:]
 
-    self._prep_msg1(self.adev.fw.sos_fw[fw])
+    self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
+    self._prep_msg1(data)
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
