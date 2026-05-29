@@ -38,6 +38,10 @@ class AM_Experiment:
   def exact_bootloader_wait() -> int: return _env_int("AM_PSP_EXACT_BL_WAIT")
   @staticmethod
   def vram_msg1_paddr() -> int|None: return _env_optional_int("AM_PSP_SYSMSG1_VRAM_PADDR")
+  @staticmethod
+  def mailbox_strong_order() -> int: return _env_int("AM_PSP_MAILBOX_STRONG_ORDER")
+  @staticmethod
+  def wait_trace_ms() -> int: return _env_int("AM_PSP_WAIT_TRACE_MS")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -857,11 +861,15 @@ class AM_PSP(AM_IP):
     reg = self.adev.reg(f"{self.reg_pref}_35")
     start = time.perf_counter()
     last_val = None
+    next_trace_ms = 0
+    trace_every_ms = AM_Experiment.wait_trace_ms()
     while (time.perf_counter() - start) * 1000 < 10000:
+      elapsed_ms = (time.perf_counter() - start) * 1000
       val = reg.read()
-      if self._trace_enabled() and val != last_val:
-        self._trace(f"wait BL reg35={reg.addr[0]:#x} val={val:#x}")
+      if self._trace_enabled() and (val != last_val or (trace_every_ms and elapsed_ms >= next_trace_ms)):
+        self._trace(f"wait BL reg35={reg.addr[0]:#x} val={val:#x} elapsed_ms={elapsed_ms:.3f}")
         last_val = val
+        if trace_every_ms: next_trace_ms = elapsed_ms + trace_every_ms
       if val != 0xffffffff and (val == 0x80000000 if AM_Experiment.exact_bootloader_wait() else val & 0x80000000):
         return 0x80000000
     self._trace_bootloader_snapshot("wait-timeout")
@@ -960,9 +968,12 @@ class AM_PSP(AM_IP):
       self._trace_bootloader_snapshot("audit-pre-kdb")
       raise RuntimeError("AM_PSP_AUDIT_PRE_KDB stopped before KDB mailbox writes")
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
+    if AM_Experiment.mailbox_strong_order():
+      self.adev.gmc.flush_hdp()
+      self._trace(f"mailbox before-reg36 reg35={reg35.read():#x} reg36={reg36.read():#x}")
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
-    if getenv("AM_PSP_STRONG_FLUSH", 0):
+    if AM_Experiment.mailbox_strong_order() or getenv("AM_PSP_STRONG_FLUSH", 0):
       self.adev.gmc.flush_hdp()
       rb36 = reg36.read()
       rb35 = reg35.read()
@@ -971,6 +982,8 @@ class AM_PSP(AM_IP):
     self._trace(f"write compid reg35={reg35.addr[0]:#x} val={compid:#x}")
     reg35.write(compid)
     self._trace(f"write compid done val={compid:#x}")
+    if AM_Experiment.mailbox_strong_order():
+      self._trace(f"mailbox post-compid reg35={reg35.read():#x} reg36={reg36.read():#x}")
     self._trace_bootloader_snapshot(f"post-compid-{compid:#x}")
 
     return self._wait_for_bootloader() if compid != am.PSP_BL__LOAD_SOSDRV else 0

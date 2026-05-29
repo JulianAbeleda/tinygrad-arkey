@@ -165,6 +165,11 @@ runs. `AM_PSP_SYSMSG1_VRAM_PADDR=0x...` can force the 1 MiB-aligned VRAM
 physical address for that buffer. This is useful for avoiding low VRAM while
 checking whether BAR0 writes/readbacks are stable before the KDB mailbox write.
 
+For mailbox ordering experiments, `AM_PSP_MAILBOX_STRONG_ORDER=1` adds an HDP
+flush and C2PMSG35/C2PMSG36 readbacks around the msg1 and component writes.
+`AM_PSP_WAIT_TRACE_MS=100` emits periodic bootloader wait samples instead of
+only tracing value changes.
+
 ## Compare Against TinyGPU Failure
 
 Check the first `bl_load enter` line for KDB:
