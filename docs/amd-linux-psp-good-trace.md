@@ -170,10 +170,12 @@ flush and C2PMSG35/C2PMSG36 readbacks around the msg1 and component writes.
 `AM_PSP_WAIT_TRACE_MS=100` emits periodic bootloader wait samples instead of
 only tracing value changes.
 
-`AM_PSP_TRACE_C2PMSG_DENSE=1` expands tinygrad PSP snapshots from the sparse
-mailbox set to C2PMSG0..127. Use it with `AM_PSP_PARITY_TRACE=1` when comparing
-against a Linux `--deep` capture; the Linux wrapper also writes
-`linux-c2pmsg-events.txt` from the raw register trace.
+`AM_PSP_TRACE_C2PMSG_DENSE=1` expands tinygrad post-compid/timeout PSP
+snapshots from the sparse mailbox set to C2PMSG0..127. Pre-KDB tracing remains
+sparse because dense C2PMSG reads may disturb the stable msg1 readback path. Use
+it with `AM_PSP_PARITY_TRACE=1` when comparing against a Linux `--deep` capture;
+the Linux wrapper also writes `linux-c2pmsg-events.txt` from the raw register
+trace.
 
 ## Compare Against TinyGPU Failure
 

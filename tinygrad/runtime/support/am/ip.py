@@ -823,8 +823,8 @@ class AM_PSP(AM_IP):
     except Exception as e:
       self._trace(f"reg {name}{'' if inst is None else f'[{inst}]'} read failed: {e}")
 
-  def _trace_c2pmsg_regs(self):
-    regs = range(128) if AM_Experiment.trace_c2pmsg_dense() else (33, 35, 36, 64, 67, 81, 90, 92, 115)
+  def _trace_c2pmsg_regs(self, dense=False):
+    regs = range(128) if dense else (33, 35, 36, 64, 67, 81, 90, 92, 115)
     for reg in [f"{self.reg_pref}_{x}" for x in regs]: self._trace_reg(reg)
 
   def _trace_pre_bootloader_regs(self):
@@ -852,7 +852,7 @@ class AM_PSP(AM_IP):
   def _trace_bootloader_snapshot(self, label:str):
     if not getenv("AM_PSP_PARITY_TRACE", 0): return
     self._trace(f"parity snapshot {label} begin")
-    self._trace_c2pmsg_regs()
+    self._trace_c2pmsg_regs(dense=AM_Experiment.trace_c2pmsg_dense())
     for i in range(getattr(self.adev.gmc, "vmhubs", 0)):
       for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_CONTEXT0_CNTL",
                   "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
