@@ -307,6 +307,15 @@ class AMDev:
       res.append(self.rreg(0x01))
     return bytes(array.array('I', res))
 
+  def _write_vram(self, addr:int, data:bytes):
+    if addr % 4 != 0 or len(data) % 4 != 0: raise ValueError(f"Invalid address {addr:#x} or size {len(data):#x}")
+    vals = array.array('I')
+    vals.frombytes(data)
+    for caddr, val in zip(range(addr, addr + len(data), 4), vals):
+      self.wreg(0x06, caddr >> 31)
+      self.wreg(0x00, (caddr & 0x7FFFFFFF) | 0x80000000)
+      self.wreg(0x01, val)
+
   def _load_remote_discovery_profile(self, profile:str):
     if profile != "gfx1100_744c": raise RuntimeError(f"unknown AM_REMOTE_DISCOVERY_PROFILE={profile!r}")
     from tinygrad.runtime.autogen.am import navi_offsets

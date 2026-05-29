@@ -1,4 +1,4 @@
-import ctypes, time, contextlib, functools
+import array, ctypes, time, contextlib, functools
 from typing import Literal
 from tinygrad.helpers import to_mv, data64, lo32, hi32, DEBUG, wait_cond, pad_bytes, getbits, getenv
 from tinygrad.runtime.autogen.am import am
@@ -18,6 +18,10 @@ class AM_Experiment:
   def gart_strong_invalidate() -> int: return _env_int("AM_PSP_GART_STRONG_INVALIDATE")
   @staticmethod
   def gart_linux_context() -> int: return _env_int("AM_PSP_GART_LINUX_CONTEXT")
+  @staticmethod
+  def gart_table_top() -> int: return _env_int("AM_PSP_GART_TABLE_TOP")
+  @staticmethod
+  def gart_table_addr(default:int) -> int: return _env_int("AM_PSP_GART_TABLE_ADDR", default)
   @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
 
@@ -158,8 +162,15 @@ class AM_GMC(AM_IP):
     if msg1_off % 0x1000 != 0 or msg1_off + size > self.gart_size:
       raise ValueError(f"invalid PSP GART msg1 offset={msg1_off:#x} size={size:#x}")
     table_size = self.gart_size // 0x1000 * 8
-    gart_table_paddr = self.adev.mm.palloc(table_size, align=0x1000, zero=True, boot=True)
-    gart_table = self.adev.vram.view(gart_table_paddr, table_size, 'Q')
+    if AM_Experiment.gart_table_top():
+      # Linux amdgpu placed the successful PSP GART table at 0x5feb00000 on this 24GB RX 7900 XTX.
+      gart_table_paddr = AM_Experiment.gart_table_addr(self.adev.vram_size - 0x1500000)
+      if gart_table_paddr % 0x1000 != 0 or gart_table_paddr + table_size > self.adev.vram_size:
+        raise ValueError(f"invalid PSP GART table paddr={gart_table_paddr:#x} size={table_size:#x} vram={self.adev.vram_size:#x}")
+      gart_table = [0] * (table_size // 8)
+    else:
+      gart_table_paddr = self.adev.mm.palloc(table_size, align=0x1000, zero=True, boot=True)
+      gart_table = self.adev.vram.view(gart_table_paddr, table_size, 'Q')
     flags = am.AMDGPU_PTE_VALID | am.AMDGPU_PTE_SYSTEM | am.AMDGPU_PTE_SNOOPED | am.AMDGPU_PTE_EXECUTABLE | \
             am.AMDGPU_PTE_READABLE | am.AMDGPU_PTE_WRITEABLE | am.AMDGPU_PTE_MTYPE_NV10(0, self.adev.soc.module.MTYPE_UC)
     start_page = view_off // 0x1000
@@ -169,6 +180,7 @@ class AM_GMC(AM_IP):
       raise ValueError(f"invalid PSP GART source pages start={start_page:#x} count={page_count:#x} len={len(paddrs):#x}")
     for i, paddr in enumerate(paddrs[start_page:start_page + page_count]):
       gart_table[gart_page + i] = (paddr & 0x0000FFFFFFFFF000) | flags
+    if AM_Experiment.gart_table_top(): self.adev._write_vram(gart_table_paddr, array.array('Q', gart_table).tobytes())
     self.flush_hdp()
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
