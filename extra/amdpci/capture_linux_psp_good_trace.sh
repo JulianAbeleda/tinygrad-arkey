@@ -154,8 +154,9 @@ else
 fi
 
 TRACE_OUT="$OUT/psp-linux-good.trace"
+TRACE_ERR="$OUT/bpftrace.stderr"
 echo "starting bpftrace: $TRACE_OUT"
-bpftrace "$TRACE_SCRIPT" | tee "$TRACE_OUT" &
+bpftrace "$TRACE_SCRIPT" 2>"$TRACE_ERR" | tee "$TRACE_OUT" &
 TRACE_PID=$!
 
 cleanup() {
@@ -171,6 +172,10 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 sleep 2
+if ! kill -0 "$TRACE_PID" >/dev/null 2>&1; then
+  wait "$TRACE_PID" >/dev/null 2>&1 || true
+  die "bpftrace exited before GPU bind; see $TRACE_ERR"
+fi
 if [ "$MODE" = "bind" ] || [ "$MODE" = "rebind" ]; then
   echo "amdgpu" > "$DEV/driver_override"
   echo "$BIND_BDF" > /sys/bus/pci/drivers/amdgpu/bind

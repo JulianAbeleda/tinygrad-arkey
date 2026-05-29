@@ -71,12 +71,18 @@ UEFI
 If BAR falls back to `256M`, stop and fix BIOS/UEFI/ReBAR before taking a PSP
 comparison trace.
 
+If a bind/rebind attempt leaves the GPU unbound or logs an amdgpu probe failure,
+stop and reboot before another capture. Do not stack a `--bind-bdf` attempt on
+top of a failed `--rebind-bdf` run; the kernel/device state is no longer a clean
+Linux-good baseline.
+
 ## Expected Files
 
 - `psp-linux-good.trace`: PSP bootloader, memory-training, and selected GART
   mapping trace.
 - `baseline.txt`: kernel, PCI, `amdgpu`, and BTF baseline.
 - `dmesg-before.txt` / `dmesg-after.txt`: kernel log around the capture.
+- `bpftrace.stderr`: bpftrace compile/attach errors, if any.
 - `firmware-sha256.txt`: hashes for relevant AMD firmware blobs.
 - `gpu-candidates.txt` and `lspci-*.txt`: PCI identity and topology.
 - `psp-symbols-*.txt`: PSP/GART probe symbol visibility before and after setup.
