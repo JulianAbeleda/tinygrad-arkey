@@ -73,12 +73,13 @@ comparison trace.
 
 ## Expected Files
 
-- `psp-linux-good.trace`: PSP bootloader and memory-training trace.
+- `psp-linux-good.trace`: PSP bootloader, memory-training, and selected GART
+  mapping trace.
 - `baseline.txt`: kernel, PCI, `amdgpu`, and BTF baseline.
 - `dmesg-before.txt` / `dmesg-after.txt`: kernel log around the capture.
 - `firmware-sha256.txt`: hashes for relevant AMD firmware blobs.
 - `gpu-candidates.txt` and `lspci-*.txt`: PCI identity and topology.
-- `psp-symbols-*.txt`: PSP probe symbol visibility before and after setup.
+- `psp-symbols-*.txt`: PSP/GART probe symbol visibility before and after setup.
 
 ## Compare Against TinyGPU Failure
 
@@ -90,6 +91,18 @@ cmd=0x80000 size=0x1d40 fw_pri_mc=... c2p36=...
 
 The key comparison points are `fw_pri_mc`, `c2p36`, memory-training order, and
 whether the matching `bl_load ret` / `wait_bl ret` returns `0`.
+
+For the Linux-matching PSP primary firmware buffer, also check the selected
+`gart_map` lines:
+
+```text
+gart_map enter offset=0x700000 pages=256 ... flags=... dma0=... dma_last=...
+gart_map ret offset=0x700000 pages=256 ... pte0=... pte_last=...
+```
+
+Compare those PTE values and flags against the Mac/TinyGPU GART experiment
+trace. A PTE mismatch should become the next Mac-side experiment; a match rules
+out GART PTE flags/cacheability as the KDB blocker.
 
 ## Local Evidence
 
