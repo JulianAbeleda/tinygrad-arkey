@@ -42,6 +42,8 @@ class AM_Experiment:
   def mailbox_strong_order() -> int: return _env_int("AM_PSP_MAILBOX_STRONG_ORDER")
   @staticmethod
   def wait_trace_ms() -> int: return _env_int("AM_PSP_WAIT_TRACE_MS")
+  @staticmethod
+  def trace_c2pmsg_dense() -> int: return _env_int("AM_PSP_TRACE_C2PMSG_DENSE")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -821,6 +823,10 @@ class AM_PSP(AM_IP):
     except Exception as e:
       self._trace(f"reg {name}{'' if inst is None else f'[{inst}]'} read failed: {e}")
 
+  def _trace_c2pmsg_regs(self):
+    regs = range(128) if AM_Experiment.trace_c2pmsg_dense() else (33, 35, 36, 64, 67, 81, 90, 92, 115)
+    for reg in [f"{self.reg_pref}_{x}" for x in regs]: self._trace_reg(reg)
+
   def _trace_pre_bootloader_regs(self):
     if not (getenv("AM_PSP_TRACE_REGS", 0) or getenv("AM_PSP_PARITY_TRACE", 0)): return
     self._trace(f"pre-bl ipver nbio={self.adev.ip_ver[am.NBIO_HWIP]} gc={self.adev.ip_ver[am.GC_HWIP]} mp0={self.adev.ip_ver[am.MP0_HWIP]}")
@@ -841,14 +847,12 @@ class AM_PSP(AM_IP):
                   "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
                   "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
         self._trace_reg(reg, inst=i)
-    for reg in [f"{self.reg_pref}_{x}" for x in (33, 35, 36, 64, 67, 81, 90, 92, 115)]:
-      self._trace_reg(reg)
+    self._trace_c2pmsg_regs()
 
   def _trace_bootloader_snapshot(self, label:str):
     if not getenv("AM_PSP_PARITY_TRACE", 0): return
     self._trace(f"parity snapshot {label} begin")
-    for reg in [f"{self.reg_pref}_{x}" for x in (33, 35, 36, 64, 67, 81, 90, 92, 115)]:
-      self._trace_reg(reg)
+    self._trace_c2pmsg_regs()
     for i in range(getattr(self.adev.gmc, "vmhubs", 0)):
       for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_CONTEXT0_CNTL",
                   "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",

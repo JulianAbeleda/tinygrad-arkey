@@ -19,6 +19,7 @@ LINUX_GART_ENTER_RE = re.compile(
 LINUX_GART_RET_RE = re.compile(
   rf"gart_map ret .* first_idx=(?P<first_idx>{HEX}) last_idx=(?P<last_idx>{HEX}) pte0=(?P<pte0>{HEX}) pte_last=(?P<pte_last>{HEX})"
 )
+LINUX_REG_RE = re.compile(rf"^(?P<t>\d+) (?P<op>[rw]reg) .*reg=(?P<reg>{HEX})(?: val=(?P<val>{HEX}))?")
 
 TG_RE = re.compile(r"PSP (?P<msg>.*)")
 TG_GART_RE = re.compile(
@@ -36,6 +37,8 @@ TG_REG_RE = re.compile(rf"reg (?P<name>reg\S+?)(?:\[(?P<inst>\d+)\])?=(?P<val>{H
 TG_MSG1_READBACK_RE = re.compile(r"msg1 readback ok bytes=(?P<bytes>\d+) first=(?P<first>[0-9a-fA-F]+) last=(?P<last>[0-9a-fA-F]+)")
 TG_SNAPSHOT_BEGIN_RE = re.compile(r"parity snapshot (?P<label>\S+) begin")
 TG_SNAPSHOT_END_RE = re.compile(r"parity snapshot (?P<label>\S+) end")
+C2PMSG_BASE = 0x16040
+C2PMSG_COUNT = 128
 
 REG_NAMES = [
   "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR", "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
@@ -60,6 +63,13 @@ def pte_paddr(pte:int|None) -> int|None:
 
 def pte_flags(pte:int|None) -> int|None:
   return None if pte is None else pte & ~0x0000FFFFFFFFF000
+
+def linux_c2pmsg_idx(reg:int|None) -> int|None:
+  if reg is None or reg < C2PMSG_BASE or reg >= C2PMSG_BASE + C2PMSG_COUNT: return None
+  return reg - C2PMSG_BASE
+
+def c2pmsg_name(idx:int, pref:str="regMP0_SMN_C2PMSG") -> str:
+  return f"{pref}_{idx}"
 
 def read_texts(path:pathlib.Path) -> dict[str, str]:
   if path.is_dir():
@@ -133,9 +143,9 @@ def firmware_report(fname:str, skip:int|None, readback:dict) -> list[str]:
   return lines
 
 def parse_linux(path:pathlib.Path) -> dict:
-  out = {"bl": [], "waits": [], "gart": {}, "source": str(path)}
+  out = {"bl": [], "waits": [], "gart": {}, "c2pmsg_events": [], "source": str(path)}
   wait_start = None
-  for line in lines_for(path, ["psp-linux-good.trace", "psp-linux-good-deep.trace", "linux-pre-kdb-key-events.txt"]):
+  for line in lines_for(path, ["psp-linux-good.trace", "psp-linux-good-deep.trace", "linux-pre-kdb-key-events.txt", "linux-c2pmsg-events.txt"]):
     if m := LINUX_BL_RE.search(line):
       out["bl"].append({k: as_int(v) for k, v in m.groupdict().items()})
     elif m := LINUX_WAIT_ENTER_RE.search(line):
@@ -149,6 +159,10 @@ def parse_linux(path:pathlib.Path) -> dict:
       out["gart"].update({k: as_int(v) for k, v in m.groupdict().items()})
     elif m := LINUX_GART_RET_RE.search(line):
       out["gart"].update({k: as_int(v) for k, v in m.groupdict().items()})
+    elif m := LINUX_REG_RE.search(line):
+      reg, val = as_int(m.group("reg")), as_int(m.group("val"))
+      if (idx := linux_c2pmsg_idx(reg)) is not None:
+        out["c2pmsg_events"].append({"t": as_int(m.group("t")), "op": m.group("op"), "idx": idx, "reg": reg, "val": val})
   return out
 
 def parse_tinygrad(path:pathlib.Path) -> dict:
@@ -192,6 +206,52 @@ def row(label:str, linux, tinygrad, note:str="") -> str:
 
 def reg_lookup(regs:dict, name:str) -> int|None:
   return next((regs[c] for c in (name, f"{name}[0]") if c in regs), None)
+
+def c2pmsg_regs(regs:dict) -> dict[int, int]:
+  out = {}
+  for idx in range(C2PMSG_COUNT):
+    val = next((regs[name] for name in (c2pmsg_name(idx), c2pmsg_name(idx, "regMPASP_SMN_C2PMSG")) if name in regs), None)
+    if val is not None: out[idx] = val
+  return out
+
+def linux_c2pmsg_reads(linux:dict, limit:int=48) -> list[str]:
+  events = [e for e in linux["c2pmsg_events"] if e["val"] is not None and (e["op"] == "wreg" or e["val"] != 0)]
+  lines = []
+  for e in events[:limit]:
+    lines.append(f"{e['t']} {e['op']} C2PMSG{e['idx']}={hexv(e['val'])}")
+  if len(events) > limit: lines.append(f"... {len(events) - limit} more nonzero Linux C2PMSG events")
+  return lines
+
+def c2pmsg_delta_report(linux:dict, tiny:dict) -> list[str]:
+  lines = ["C2PMSG Delta"]
+  linux_nonzero = {}
+  for e in linux["c2pmsg_events"]:
+    if e["val"] not in (None, 0): linux_nonzero[e["idx"]] = e["val"]
+  if linux_nonzero:
+    lines.append("Linux nonzero C2PMSG values seen in rreg/wreg trace:")
+    lines.extend(f"  C2PMSG{idx}={hexv(linux_nonzero[idx])}" for idx in sorted(linux_nonzero))
+  else:
+    lines.append("Linux nonzero C2PMSG values seen in rreg/wreg trace: missing")
+
+  if tiny["snapshots"]:
+    lines.append("Tinygrad snapshot nonzero/different C2PMSG values:")
+    prev = {}
+    for snap in tiny["snapshots"]:
+      cur = c2pmsg_regs(snap["regs"])
+      interesting = sorted(idx for idx, val in cur.items() if val != 0 or prev.get(idx) not in (None, val))
+      shown = ", ".join(f"{idx}={hexv(cur[idx])}" for idx in interesting[:64])
+      if len(interesting) > 64: shown += f", ... {len(interesting) - 64} more"
+      lines.append(f"  {snap['label']}: {shown or 'all zero/missing'}")
+      prev = cur
+  else:
+    lines.append("Tinygrad dense snapshots: missing")
+
+  linux_only = sorted(idx for idx, val in linux_nonzero.items() if all(c2pmsg_regs(s["regs"]).get(idx) != val for s in tiny["snapshots"]))
+  if linux_only:
+    lines.append("Linux nonzero values not matched in any tinygrad snapshot:")
+    lines.append("  " + ", ".join(f"C2PMSG{idx}={hexv(linux_nonzero[idx])}" for idx in linux_only[:64]))
+  lines.append("")
+  return lines
 
 def report(linux:dict, tiny:dict, firmware:str|None) -> str:
   lines = ["PSP trace comparison", f"linux source: {linux['source']}", f"tinygrad source: {tiny['source']}", ""]
@@ -254,6 +314,8 @@ def report(linux:dict, tiny:dict, firmware:str|None) -> str:
                    f"C2PMSG81={hexv(reg_lookup(regs, 'regMP0_SMN_C2PMSG_81'))} "
                    f"FAULT={hexv(reg_lookup(regs, 'regMMVM_L2_PROTECTION_FAULT_STATUS'))}")
     lines.append("")
+
+  lines.extend(c2pmsg_delta_report(linux, tiny))
 
   lines.append("Observations")
   if kdb and tg_kdb and kdb.get("size") == tg_kdb.get("bytes"):
