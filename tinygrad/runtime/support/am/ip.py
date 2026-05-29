@@ -17,6 +17,8 @@ class AM_Experiment:
   @staticmethod
   def gart_strong_invalidate() -> int: return _env_int("AM_PSP_GART_STRONG_INVALIDATE")
   @staticmethod
+  def gart_linux_context() -> int: return _env_int("AM_PSP_GART_LINUX_CONTEXT")
+  @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
 
 class AM_IP:
@@ -171,13 +173,17 @@ class AM_GMC(AM_IP):
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
     self._trace_psp_gart_pte("pte", gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
+    linux_context = AM_Experiment.gart_linux_context()
     for inst in range(self.vmhubs):
-      self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR").write(min(self.fb_base, self.gart_start) >> 18, inst=inst)
-      self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(max(self.fb_end, self.gart_end) >> 18, inst=inst)
+      if not linux_context:
+        self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR").write(min(self.fb_base, self.gart_start) >> 18, inst=inst)
+        self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(max(self.fb_end, self.gart_end) >> 18, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR", "_LO32", "_HI32", pt_base, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR", "_LO32", "_HI32", self.gart_start >> 12, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
-      self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
+      # Linux amdgpu on RX 7900 XTX used this CONTEXT0_CNTL value in the successful PSP KDB trace.
+      if linux_context: self.adev.reg("regMMVM_CONTEXT0_CNTL").write(0x01fffe01, inst=inst)
+      else: self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
     self.flush_tlb("MM", 0)
     if AM_Experiment.gart_strong_invalidate():
       self._strong_invalidate_psp_gart(gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
