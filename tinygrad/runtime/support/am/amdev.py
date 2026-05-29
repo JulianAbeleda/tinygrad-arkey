@@ -123,13 +123,13 @@ class AMPageTableEntry:
   def set_entry(self, entry_id:int, paddr:int, table=False, uncached=False, aspace=AddrSpace.PHYS, snooped=False, frag=0, valid=True):
     is_sys = aspace is AddrSpace.SYS
     if aspace is AddrSpace.PHYS: paddr = self.adev.paddr2xgmi(paddr)
-    assert paddr & self.adev.gmc.address_space_mask == paddr, f"Invalid physical address {paddr:#x}"
+    if paddr & self.adev.gmc.address_space_mask != paddr: raise ValueError(f"Invalid physical address {paddr:#x}")
     self.entries[entry_id] = self.adev.gmc.get_pte_flags(self.lv, table, frag, uncached, is_sys, snooped, valid) | (paddr & 0x0000FFFFFFFFF000)
 
   def entry(self, entry_id:int) -> int: return self.entries[entry_id]
   def valid(self, entry_id:int) -> bool: return (self.entries[entry_id] & am.AMDGPU_PTE_VALID) != 0
   def address(self, entry_id:int) -> int:
-    assert self.entries[entry_id] & am.AMDGPU_PTE_SYSTEM == 0, "should not be system address"
+    if self.entries[entry_id] & am.AMDGPU_PTE_SYSTEM != 0: raise ValueError("should not be system address")
     return self.adev.xgmi2paddr(self.entries[entry_id] & 0x0000FFFFFFFFF000)
   def is_page(self, entry_id:int) -> bool: return self.lv == am.AMDGPU_VM_PTB or self.adev.gmc.is_pte_huge_page(self.lv, self.entries[entry_id])
   def supports_huge_page(self, paddr:int): return self.lv >= am.AMDGPU_VM_PDB2
@@ -296,7 +296,7 @@ class AMDev:
     return val
 
   def _read_vram(self, addr, size) -> bytes:
-    assert addr % 4 == 0 and size % 4 == 0, f"Invalid address {addr:#x} or size {size:#x}"
+    if addr % 4 != 0 or size % 4 != 0: raise ValueError(f"Invalid address {addr:#x} or size {size:#x}")
     if getattr(self.pci_dev, "is_remote", False) and not getenv("AM_REMOTE_SMALL_BAR_DISCOVERY", 0):
       raise RuntimeError("remote AMD small-BAR discovery is disabled because the indirect VRAM MMIO path can wedge TinyGPU. "
                          "Set AM_REMOTE_SMALL_BAR_DISCOVERY=1 to force the unsafe path.")
