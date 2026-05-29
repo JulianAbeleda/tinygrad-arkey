@@ -108,17 +108,29 @@ class AM_GMC(AM_IP):
 
   def setup_psp_gart(self, paddrs:list[int], view_off:int, size:int) -> int:
     assert view_off % 0x1000 == 0 and size % 0x1000 == 0, f"invalid PSP GART window view_off={view_off:#x} size={size:#x}"
+    msg1_off = int(getenv("AM_PSP_GART_MSG1_OFFSET", ""), 0) if getenv("AM_PSP_GART_MSG1_OFFSET", "") else 0
+    assert msg1_off % 0x1000 == 0 and msg1_off + size <= self.gart_size, f"invalid PSP GART msg1 offset={msg1_off:#x} size={size:#x}"
     table_size = self.gart_size // 0x1000 * 8
     gart_table_paddr = self.adev.mm.palloc(table_size, align=0x1000, zero=True, boot=True)
     gart_table = self.adev.vram.view(gart_table_paddr, table_size, 'Q')
     flags = am.AMDGPU_PTE_VALID | am.AMDGPU_PTE_SYSTEM | am.AMDGPU_PTE_SNOOPED | am.AMDGPU_PTE_EXECUTABLE | \
             am.AMDGPU_PTE_READABLE | am.AMDGPU_PTE_WRITEABLE | am.AMDGPU_PTE_MTYPE_NV10(0, self.adev.soc.module.MTYPE_UC)
     start_page = view_off // 0x1000
+    gart_page = msg1_off // 0x1000
     for i, paddr in enumerate(paddrs[start_page:start_page + size // 0x1000]):
-      gart_table[i] = (paddr & 0x0000FFFFFFFFF000) | flags
+      gart_table[gart_page + i] = (paddr & 0x0000FFFFFFFFF000) | flags
     self.flush_hdp()
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
+    if getattr(self.adev, "psp", None) is not None and self.adev.psp._trace_enabled():
+      first_pte, last_pte = gart_table[gart_page], gart_table[gart_page + size // 0x1000 - 1]
+      flag_names = [(am.AMDGPU_PTE_VALID, "VALID"), (am.AMDGPU_PTE_SYSTEM, "SYSTEM"), (am.AMDGPU_PTE_SNOOPED, "SNOOPED"),
+                    (am.AMDGPU_PTE_EXECUTABLE, "EXEC"), (am.AMDGPU_PTE_READABLE, "READ"), (am.AMDGPU_PTE_WRITEABLE, "WRITE")]
+      first_flags = ",".join(name for bit, name in flag_names if first_pte & bit)
+      self.adev.psp._trace(f"gart pte table_paddr={gart_table_paddr:#x} pt_base={pt_base:#x} msg1_off={msg1_off:#x} "
+                           f"gart_page={gart_page:#x} paddr0={paddrs[start_page]:#x} paddr_last={paddrs[start_page + size // 0x1000 - 1]:#x} "
+                           f"pte0={first_pte:#018x} pte_last={last_pte:#018x} flags={first_flags} "
+                           f"mtype={(first_pte & am.AMDGPU_PTE_MTYPE_NV10_MASK) >> 48:#x}")
     for inst in range(self.vmhubs):
       self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR").write(min(self.fb_base, self.gart_start) >> 18, inst=inst)
       self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(max(self.fb_end, self.gart_end) >> 18, inst=inst)
@@ -127,7 +139,20 @@ class AM_GMC(AM_IP):
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
       self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
     self.flush_tlb("MM", 0)
-    return self.gart_start
+    if getenv("AM_PSP_GART_STRONG_INVALIDATE", 0):
+      self.flush_hdp()
+      first_pte, last_pte = gart_table[gart_page], gart_table[gart_page + size // 0x1000 - 1]
+      if getattr(self.adev, "psp", None) is not None and self.adev.psp._trace_enabled():
+        self.adev.psp._trace(f"gart strong invalidate pte0={first_pte:#018x} pte_last={last_pte:#018x}")
+      self.flush_tlb("MM", 0)
+      self.flush_hdp()
+      time.sleep(0.001)
+      if getattr(self.adev, "psp", None) is not None and self.adev.psp._trace_enabled():
+        for inst in range(self.vmhubs):
+          ack = self.adev.reg("regMMVM_INVALIDATE_ENG17_ACK").read(inst=inst)
+          fault = self.adev.reg("regMMVM_L2_PROTECTION_FAULT_STATUS").read(inst=inst)
+          self.adev.psp._trace(f"gart strong invalidate inst={inst} ack={ack:#010x} fault={fault:#010x}")
+    return self.gart_start + msg1_off
 
   def flush_hdp(self): self.adev.wreg(self.adev.reg("regBIF_BX0_REMAP_HDP_MEM_FLUSH_CNTL").read() // 4, 0x0)
   def flush_tlb(self, ip:Literal["MM", "GC"], vmid, flush_type=0):
@@ -837,9 +862,20 @@ class AM_PSP(AM_IP):
     self._wait_for_bootloader()
 
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
-    self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(self.adev.fw.sos_fw[fw])}")
+    data = self.adev.fw.sos_fw[fw]
+    if fw == am.PSP_FW_TYPE_PSP_KDB and (skip_raw := getenv("AM_PSP_KDB_SKIP_PREFIX", "")):
+      skip = int(skip_raw, 0)
+      if skip >= len(data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(data):#x}")
+      self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(data):#x} new_size={len(data) - skip:#x}")
+      data = data[skip:]
 
-    self._prep_msg1(self.adev.fw.sos_fw[fw])
+    self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
+
+    self._prep_msg1(data)
+    if fw == am.PSP_FW_TYPE_PSP_KDB and getenv("AM_PSP_AUDIT_PRE_KDB", 0):
+      self._trace_bootloader_snapshot("audit-pre-kdb")
+      raise RuntimeError("AM_PSP_AUDIT_PRE_KDB stopped before KDB mailbox writes")
+
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
