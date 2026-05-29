@@ -11,6 +11,8 @@ def _env_int(name:str, default:int=0) -> int:
 
 class AM_PSPExperiment:
   @staticmethod
+  def gart_msg1_offset() -> int: return _env_int("AM_PSP_GART_MSG1_OFFSET")
+  @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
 
 class AM_IP:
@@ -115,15 +117,20 @@ class AM_GMC(AM_IP):
   def init_hw(self): self.init_hub("MM", inst_cnt=self.vmhubs)
 
   def setup_psp_gart(self, paddrs:list[int], view_off:int, size:int) -> int:
-    assert view_off % 0x1000 == 0 and size % 0x1000 == 0, f"invalid PSP GART window view_off={view_off:#x} size={size:#x}"
+    assert size > 0 and view_off % 0x1000 == 0 and size % 0x1000 == 0, f"invalid PSP GART window view_off={view_off:#x} size={size:#x}"
+    msg1_off = AM_PSPExperiment.gart_msg1_offset()
+    assert msg1_off % 0x1000 == 0 and msg1_off + size <= self.gart_size, f"invalid PSP GART msg1 offset={msg1_off:#x} size={size:#x}"
     table_size = self.gart_size // 0x1000 * 8
     gart_table_paddr = self.adev.mm.palloc(table_size, align=0x1000, zero=True, boot=True)
     gart_table = self.adev.vram.view(gart_table_paddr, table_size, 'Q')
     flags = am.AMDGPU_PTE_VALID | am.AMDGPU_PTE_SYSTEM | am.AMDGPU_PTE_SNOOPED | am.AMDGPU_PTE_EXECUTABLE | \
             am.AMDGPU_PTE_READABLE | am.AMDGPU_PTE_WRITEABLE | am.AMDGPU_PTE_MTYPE_NV10(0, self.adev.soc.module.MTYPE_UC)
     start_page = view_off // 0x1000
-    for i, paddr in enumerate(paddrs[start_page:start_page + size // 0x1000]):
-      gart_table[i] = (paddr & 0x0000FFFFFFFFF000) | flags
+    gart_page = msg1_off // 0x1000
+    page_count = size // 0x1000
+    assert start_page + page_count <= len(paddrs), f"invalid PSP GART source pages start={start_page:#x} count={page_count:#x} len={len(paddrs):#x}"
+    for i, paddr in enumerate(paddrs[start_page:start_page + page_count]):
+      gart_table[gart_page + i] = (paddr & 0x0000FFFFFFFFF000) | flags
     self.flush_hdp()
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
@@ -135,7 +142,8 @@ class AM_GMC(AM_IP):
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
       self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
     self.flush_tlb("MM", 0)
-    return self.gart_start
+    msg1_addr = self.gart_start + msg1_off
+    return msg1_addr
 
   def flush_hdp(self): self.adev.wreg(self.adev.reg("regBIF_BX0_REMAP_HDP_MEM_FLUSH_CNTL").read() // 4, 0x0)
   def flush_tlb(self, ip:Literal["MM", "GC"], vmid, flush_type=0):
