@@ -34,6 +34,8 @@ class AM_Experiment:
   def gart_aperture_high() -> int|None: return _env_optional_int("AM_PSP_GART_APERTURE_HIGH")
   @staticmethod
   def gart_default_addr() -> int|None: return _env_optional_int("AM_PSP_GART_DEFAULT_ADDR")
+  @staticmethod
+  def exact_bootloader_wait() -> int: return _env_int("AM_PSP_EXACT_BL_WAIT")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -700,7 +702,12 @@ class AM_PSP(AM_IP):
     self.reg_pref = "regMP0_SMN_C2PMSG" if self.adev.ip_ver[am.MP0_HWIP] < (14,0,0) else "regMPASP_SMN_C2PMSG"
     self.msg1_kind = "vram"
 
-    if getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GTT", 0):
+    use_vram_msg1 = getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_VRAM", 0)
+    if use_vram_msg1:
+      self.msg1_paddr = self.adev.mm.palloc(am.PSP_1_MEG, align=am.PSP_1_MEG, zero=False, boot=True)
+      self.msg1_addr, self.msg1_view = self.adev.paddr2mc(self.msg1_paddr), self.adev.vram.view(self.msg1_paddr, am.PSP_1_MEG, 'B')
+      self._trace(f"msg1 vram paddr={self.msg1_paddr:#x} addr={self.msg1_addr:#x} bytes={self.msg1_view.nbytes}")
+    elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GTT", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
       if len(paddrs) != 2 * am.PSP_1_MEG // 0x1000: raise ValueError(f"expected 2MB sysmem pages, got {len(paddrs)}")
       if not all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)): raise ValueError("PSP sysmem GTT buffer is not contiguous")
@@ -846,7 +853,8 @@ class AM_PSP(AM_IP):
       if self._trace_enabled() and val != last_val:
         self._trace(f"wait BL reg35={reg.addr[0]:#x} val={val:#x}")
         last_val = val
-      if val != 0xffffffff and val & 0x80000000: return 0x80000000
+      if val != 0xffffffff and (val == 0x80000000 if AM_Experiment.exact_bootloader_wait() else val & 0x80000000):
+        return 0x80000000
     self._trace_bootloader_snapshot("wait-timeout")
     raise TimeoutError(f"BL not ready. Timed out after 10000 ms, condition not met: {last_val & 0x80000000 if last_val is not None else None} != 2147483648")
 
