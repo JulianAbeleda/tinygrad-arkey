@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse, json, mmap, os, pathlib, struct, subprocess, sys, time
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+
 from tinygrad.runtime.autogen.am import regs as am_regs
 from tinygrad.runtime.autogen.am import navi_offsets
 
