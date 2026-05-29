@@ -664,10 +664,10 @@ class AM_PSP(AM_IP):
 
     if getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GTT", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
-      assert len(paddrs) == 2 * am.PSP_1_MEG // 0x1000, f"expected 2MB sysmem pages, got {len(paddrs)}"
-      assert all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)), "PSP sysmem GTT buffer is not contiguous"
+      if len(paddrs) != 2 * am.PSP_1_MEG // 0x1000: raise ValueError(f"expected 2MB sysmem pages, got {len(paddrs)}")
+      if not all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)): raise ValueError("PSP sysmem GTT buffer is not contiguous")
       view_off = (-paddrs[0]) % am.PSP_1_MEG
-      assert view_off + am.PSP_1_MEG <= raw_view.nbytes, f"failed to find aligned 1MB PSP window in 2MB GTT buffer: {paddrs[0]:#x}"
+      if view_off + am.PSP_1_MEG > raw_view.nbytes: raise ValueError(f"failed to find aligned 1MB PSP window in 2MB GTT buffer: {paddrs[0]:#x}")
       self.msg1_view = raw_view.view(view_off, am.PSP_1_MEG)
       self.msg1_addr = self.adev.mm.alloc_vaddr(size=self.msg1_view.nbytes, align=am.PSP_1_MEG)
       self.adev.mm.map_range(self.msg1_addr, self.msg1_view.nbytes, [(paddr, 0x1000) for paddr in paddrs[view_off // 0x1000:][:am.PSP_1_MEG // 0x1000]],
@@ -676,10 +676,10 @@ class AM_PSP(AM_IP):
       self._trace(f"msg1 sysmem gtt raw={paddrs[0]:#x} view_off={view_off:#x} va={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GART", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
-      assert len(paddrs) == 2 * am.PSP_1_MEG // 0x1000, f"expected 2MB sysmem pages, got {len(paddrs)}"
-      assert all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)), "PSP sysmem GART buffer is not contiguous"
+      if len(paddrs) != 2 * am.PSP_1_MEG // 0x1000: raise ValueError(f"expected 2MB sysmem pages, got {len(paddrs)}")
+      if not all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)): raise ValueError("PSP sysmem GART buffer is not contiguous")
       view_off = (-paddrs[0]) % am.PSP_1_MEG
-      assert view_off + am.PSP_1_MEG <= raw_view.nbytes, f"failed to find aligned 1MB PSP window in 2MB GART buffer: {paddrs[0]:#x}"
+      if view_off + am.PSP_1_MEG > raw_view.nbytes: raise ValueError(f"failed to find aligned 1MB PSP window in 2MB GART buffer: {paddrs[0]:#x}")
       self.msg1_view = raw_view.view(view_off, am.PSP_1_MEG)
       self.msg1_addr = self.adev.gmc.gart_start
       self.msg1_gart_args = (paddrs, view_off, am.PSP_1_MEG)
@@ -687,10 +687,10 @@ class AM_PSP(AM_IP):
       self._trace(f"msg1 sysmem gart raw={paddrs[0]:#x} view_off={view_off:#x} addr={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_DMA", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
-      assert len(paddrs) == 2 * am.PSP_1_MEG // 0x1000, f"expected 2MB sysmem pages, got {len(paddrs)}"
-      assert all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)), "PSP sysmem DMA buffer is not contiguous"
+      if len(paddrs) != 2 * am.PSP_1_MEG // 0x1000: raise ValueError(f"expected 2MB sysmem pages, got {len(paddrs)}")
+      if not all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)): raise ValueError("PSP sysmem DMA buffer is not contiguous")
       view_off = (-paddrs[0]) % am.PSP_1_MEG
-      assert view_off + am.PSP_1_MEG <= raw_view.nbytes, f"failed to find aligned 1MB PSP window in 2MB DMA buffer: {paddrs[0]:#x}"
+      if view_off + am.PSP_1_MEG > raw_view.nbytes: raise ValueError(f"failed to find aligned 1MB PSP window in 2MB DMA buffer: {paddrs[0]:#x}")
       self.msg1_view = raw_view.view(view_off, am.PSP_1_MEG)
       self.msg1_addr = paddrs[0] + view_off
       self.msg1_kind = "sysmem-dma"
@@ -865,7 +865,7 @@ class AM_PSP(AM_IP):
       self._trace(f"mem train restored bottom vram bytes={len(saved_bottom):#x}")
 
   def _prep_msg1(self, data:memoryview):
-    assert len(data) <= self.msg1_view.nbytes, f"msg1 buffer is too small {len(data):#x} > {self.msg1_view.nbytes:#x}"
+    if len(data) > self.msg1_view.nbytes: raise ValueError(f"msg1 buffer is too small {len(data):#x} > {self.msg1_view.nbytes:#x}")
     padded_data = pad_bytes(bytes(data) + b'\x00' * 4, 16) # HACK: apple's memcpy requires 16-bytes alignment
     if getenv("AM_PSP_ZERO_MSG1", 0):
       self.msg1_view[:] = b'\x00' * self.msg1_view.nbytes
@@ -923,7 +923,7 @@ class AM_PSP(AM_IP):
     # Load TOC and calculate TMR size
     self._prep_msg1(fwm:=self.adev.fw.sos_fw[am.PSP_FW_TYPE_PSP_TOC])
     self.tmr_size = self._load_toc_cmd(len(fwm)).resp.tmr_size
-    assert self.tmr_size <= self.max_tmr_size
+    if self.tmr_size > self.max_tmr_size: raise ValueError(f"TMR size is too large {self.tmr_size:#x} > {self.max_tmr_size:#x}")
 
   def _ring_create(self):
     # If the ring is already created, destroy it
