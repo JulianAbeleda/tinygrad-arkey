@@ -24,6 +24,22 @@ Boot Linux with `amdgpu` blacklisted so the card is present but unbound:
 modprobe.blacklist=amdgpu
 ```
 
+For repeated captures, install the helper GRUB entry once and select it from
+the terminal for the next boot:
+
+```sh
+sudo extra/amdpci/linux_amdgpu_grub_switch.sh install
+sudo extra/amdpci/linux_amdgpu_grub_switch.sh next-blacklist
+sudo reboot
+```
+
+After the blacklisted run, select normal boot for the next reboot:
+
+```sh
+sudo extra/amdpci/linux_amdgpu_grub_switch.sh next-normal
+sudo reboot
+```
+
 Find the GPU BDF:
 
 ```sh
