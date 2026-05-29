@@ -36,6 +36,8 @@ class AM_Experiment:
   def gart_default_addr() -> int|None: return _env_optional_int("AM_PSP_GART_DEFAULT_ADDR")
   @staticmethod
   def exact_bootloader_wait() -> int: return _env_int("AM_PSP_EXACT_BL_WAIT")
+  @staticmethod
+  def vram_msg1_paddr() -> int|None: return _env_optional_int("AM_PSP_SYSMSG1_VRAM_PADDR")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -704,7 +706,14 @@ class AM_PSP(AM_IP):
 
     use_vram_msg1 = getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_VRAM", 0)
     if use_vram_msg1:
-      self.msg1_paddr = self.adev.mm.palloc(am.PSP_1_MEG, align=am.PSP_1_MEG, zero=False, boot=True)
+      if (msg1_paddr := AM_Experiment.vram_msg1_paddr()) is not None:
+        if msg1_paddr % am.PSP_1_MEG != 0: raise ValueError(f"AM_PSP_SYSMSG1_VRAM_PADDR must be 1MB aligned, got {msg1_paddr:#x}")
+        if msg1_paddr < 0 or msg1_paddr + am.PSP_1_MEG > self.adev.vram_size:
+          raise ValueError(f"AM_PSP_SYSMSG1_VRAM_PADDR={msg1_paddr:#x} is outside VRAM size {self.adev.vram_size:#x}")
+        self.msg1_paddr = msg1_paddr
+        self.msg1_kind = "vram-forced"
+      else:
+        self.msg1_paddr = self.adev.mm.palloc(am.PSP_1_MEG, align=am.PSP_1_MEG, zero=False, boot=True)
       self.msg1_addr, self.msg1_view = self.adev.paddr2mc(self.msg1_paddr), self.adev.vram.view(self.msg1_paddr, am.PSP_1_MEG, 'B')
       self._trace(f"msg1 vram paddr={self.msg1_paddr:#x} addr={self.msg1_addr:#x} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GTT", 0):

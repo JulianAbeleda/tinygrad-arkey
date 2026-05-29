@@ -158,6 +158,13 @@ snapshot cannot read BAR5 while `amdgpu` owns the display GPU, rerun the normal
 PSP capture from a blacklisted boot; the wrapper will attempt the same snapshot
 after binding `amdgpu`.
 
+## VRAM PSP Message Buffer Experiment
+
+`AM_PSP_SYSMSG1_VRAM=1` uses a VRAM-backed PSP msg1 buffer on remote Linux
+runs. `AM_PSP_SYSMSG1_VRAM_PADDR=0x...` can force the 1 MiB-aligned VRAM
+physical address for that buffer. This is useful for avoiding low VRAM while
+checking whether BAR0 writes/readbacks are stable before the KDB mailbox write.
+
 ## Compare Against TinyGPU Failure
 
 Check the first `bl_load enter` line for KDB:
