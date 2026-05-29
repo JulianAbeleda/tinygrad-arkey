@@ -195,6 +195,15 @@ class PCIDevice:
     sysmem_view, paddrs = MMIOInterface(va, size), [(x, mmap.PAGESIZE) for x in System.system_paddrs(va, size)]
     return sysmem_view, [p + i for p, sz in paddrs for i in range(0, sz, 0x1000)][:ceildiv(size, 0x1000)]
 
+  def alloc_contiguous_sysmem(self, size:int, attempts:int=256) -> tuple[MMIOInterface, list[int]]:
+    keep = []
+    for _ in range(attempts):
+      mem, paddrs = self.alloc_sysmem(size)
+      if len(paddrs) == ceildiv(size, 0x1000) and all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)):
+        return mem, paddrs
+      keep.append((mem, paddrs))
+    raise RuntimeError(f"failed to allocate contiguous sysmem size={size:#x} attempts={attempts}")
+
   def reset(self): os.system(f"sudo sh -c 'echo 1 > /sys/bus/pci/devices/{self.pcibus}/reset'")
   def read_config(self, offset:int, size:int): return int.from_bytes(self.cfg_fd.read(size, binary=True, offset=offset), byteorder='little')
   def write_config(self, offset:int, value:int, size:int): self.cfg_fd.write(value.to_bytes(size, byteorder='little'), binary=True, offset=offset)
@@ -450,6 +459,11 @@ class RemotePCIDevice(PCIDevice):
 
   def alloc_sysmem(self, size:int, vaddr:int=0, contiguous:bool=False) -> tuple[MMIOInterface, list[int]]:
     paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size, int(contiguous), readout_size=-1)
+    paddrs = list(struct.unpack(f'<{paddrs_len // 8}Q', unwrap(paddrs_data)))
+    return RemoteMMIOInterface(self, handle, size, fmt='B', rd_cmd=RemoteCmd.SYSMEM_READ, wr_cmd=RemoteCmd.SYSMEM_WRITE), paddrs
+
+  def alloc_contiguous_sysmem(self, size:int) -> tuple[MMIOInterface, list[int]]:
+    paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size, 2, readout_size=-1)
     paddrs = list(struct.unpack(f'<{paddrs_len // 8}Q', unwrap(paddrs_data)))
     return RemoteMMIOInterface(self, handle, size, fmt='B', rd_cmd=RemoteCmd.SYSMEM_READ, wr_cmd=RemoteCmd.SYSMEM_WRITE), paddrs
 

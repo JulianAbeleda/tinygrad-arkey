@@ -109,10 +109,11 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     log(f"MMIO_WRITE resp-done dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
   elif cmd == RemoteCmd.MAP_SYSMEM:
     st = time.perf_counter()
-    memview, paddrs = pci_dev.alloc_sysmem(arg0, contiguous=bool(arg1))
+    if arg1 == 2: memview, paddrs = pci_dev.alloc_contiguous_sysmem(arg0)
+    else: memview, paddrs = pci_dev.alloc_sysmem(arg0, contiguous=bool(arg1))
     sysmem_allocs.append((memview, paddrs))
     paddrs_bytes = struct.pack(f'<{len(paddrs)}Q', *paddrs)
-    log(f"MAP_SYSMEM dev={dev_id} size={arg0:#x} contiguous={bool(arg1)} paddrs={len(paddrs)} "
+    log(f"MAP_SYSMEM dev={dev_id} size={arg0:#x} contiguous={arg1} paddrs={len(paddrs)} "
         f"handle={len(sysmem_allocs) - 1} ms={(time.perf_counter()-st)*1000:.2f}")
     conn.sendall(resp(len(paddrs_bytes), len(sysmem_allocs) - 1) + paddrs_bytes)
   elif cmd == RemoteCmd.SYSMEM_READ:
