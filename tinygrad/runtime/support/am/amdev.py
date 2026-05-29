@@ -349,7 +349,7 @@ class AMDev:
     mmRCC_CONFIG_MEMSIZE = 0xde3
     self.vram_size = self.rreg(mmRCC_CONFIG_MEMSIZE) << 20
     self.large_bar = self.vram.nbytes >= self.vram_size
-    if not self.large_bar and getattr(self.pci_dev, "is_remote", False) and (profile:=getenv("AM_REMOTE_DISCOVERY_PROFILE", "")):
+    if getattr(self.pci_dev, "is_remote", False) and (profile:=getenv("AM_REMOTE_DISCOVERY_PROFILE", "")):
       return self._load_remote_discovery_profile(profile)
     tmr_offset, tmr_size = self.vram_size - (64 << 10), (10 << 10)
 
