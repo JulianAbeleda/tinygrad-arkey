@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-import argparse, pathlib, re, sys, tarfile
+import argparse, ctypes, hashlib, pathlib, re, sys, tarfile
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+
+from tinygrad.helpers import fetch_fw, mv_address, pad_bytes
+from tinygrad.runtime.autogen.am import am, fw
 
 HEX = r"0x[0-9a-fA-F]+"
 
@@ -29,6 +34,8 @@ TG_WRITE_COMPID_RE = re.compile(rf"write compid reg35={HEX} val=(?P<val>{HEX})")
 TG_WAIT_RE = re.compile(rf"wait BL reg35={HEX} val=(?P<val>{HEX})")
 TG_REG_RE = re.compile(rf"reg (?P<name>reg\S+?)(?:\[(?P<inst>\d+)\])?=(?P<val>{HEX})")
 TG_MSG1_READBACK_RE = re.compile(r"msg1 readback ok bytes=(?P<bytes>\d+) first=(?P<first>[0-9a-fA-F]+) last=(?P<last>[0-9a-fA-F]+)")
+TG_SNAPSHOT_BEGIN_RE = re.compile(r"parity snapshot (?P<label>\S+) begin")
+TG_SNAPSHOT_END_RE = re.compile(r"parity snapshot (?P<label>\S+) end")
 
 REG_NAMES = [
   "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR", "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
@@ -57,7 +64,7 @@ def pte_flags(pte:int|None) -> int|None:
 def read_texts(path:pathlib.Path) -> dict[str, str]:
   if path.is_dir():
     return {str(p.relative_to(path)): p.read_text(errors="replace") for p in path.rglob("*") if p.is_file()}
-  if path.suffixes[-2:] == [".tar", ".gz"] or path.name.endswith(".tar.gz"):
+  if path.suffixes[-2:] == [".tar", ".gz"] or path.name.endswith((".tar.gz", ".tgz")):
     texts = {}
     with tarfile.open(path, "r:gz") as tf:
       for member in tf.getmembers():
@@ -74,6 +81,56 @@ def lines_for(path:pathlib.Path, prefer:list[str]) -> list[str]:
     if any(name.endswith(suffix) for suffix in prefer): selected.append(text)
   if not selected: selected = list(texts.values())
   return "\n".join(selected).splitlines()
+
+def tinygrad_lines(path:pathlib.Path) -> list[str]:
+  texts = read_texts(path)
+  selected = []
+  for primary in ("real.log", "audit.log", "key-grep.txt"):
+    matches = [text for name, text in texts.items() if name.endswith(primary)]
+    if matches:
+      selected.extend(matches)
+      break
+  selected.extend(text for name, text in texts.items() if name.endswith("post-psp-status.log"))
+  if not selected: selected = list(texts.values())
+  return "\n".join(selected).splitlines()
+
+def psp_fw_components(fname:str) -> dict[int, dict]:
+  blob = memoryview(bytearray(fetch_fw("amdgpu", fname, fw.hashes[fname])))
+  chdr = am.struct_common_firmware_header.from_address(mv_address(blob))
+  hdr_t = getattr(am, f"struct_psp_firmware_header_v{chdr.header_version_major}_{chdr.header_version_minor}")
+  hdr = hdr_t.from_address(mv_address(blob))
+  comps = {}
+  for fw_i in range(hdr.psp_fw_bin_count):
+    desc = am.struct_psp_fw_bin_desc.from_address(ctypes.addressof(hdr.psp_fw_bin) + fw_i * ctypes.sizeof(am.struct_psp_fw_bin_desc))
+    start = hdr.header.ucode_array_offset_bytes + desc.offset_bytes
+    data = bytes(blob[start:start + desc.size_bytes])
+    comps[desc.fw_type] = {
+      "index": fw_i, "name": am.enum_psp_fw_type.get(desc.fw_type, f"UNKNOWN_{desc.fw_type}"),
+      "offset": start, "desc_offset": desc.offset_bytes, "size": desc.size_bytes,
+      "sha256": hashlib.sha256(data).hexdigest(), "data": data,
+    }
+  return comps
+
+def firmware_report(fname:str, skip:int|None, readback:dict) -> list[str]:
+  comps = psp_fw_components(fname)
+  kdb = comps.get(am.PSP_FW_TYPE_PSP_KDB)
+  if kdb is None: return [f"firmware {fname}: PSP_KDB missing"]
+  skip = skip or 0
+  skipped = kdb["data"][skip:]
+  padded = pad_bytes(skipped + b"\x00" * 4, 16)
+  lines = [
+    f"firmware file: {fname}",
+    f"kdb full: index={kdb['index']} offset={kdb['offset']:#x} size={kdb['size']:#x} sha256={kdb['sha256']}",
+    f"kdb full bytes: first32={kdb['data'][:32].hex()} last32={kdb['data'][-32:].hex()}",
+    f"kdb skipped: skip={skip:#x} size={len(skipped):#x} sha256={hashlib.sha256(skipped).hexdigest()}",
+    f"kdb skipped bytes: first32={skipped[:32].hex()} last32={skipped[-32:].hex()}",
+    f"kdb padded msg1: size={len(padded):#x} first16={padded[:16].hex()} last16={padded[-16:].hex()}",
+  ]
+  if readback:
+    lines.append(row("readback byte count", str(len(padded)), str(readback.get("bytes"))))
+    lines.append(row("readback first16", padded[:16].hex(), readback.get("first")))
+    lines.append(row("readback last16", padded[-16:].hex(), readback.get("last")))
+  return lines
 
 def parse_linux(path:pathlib.Path) -> dict:
   out = {"bl": [], "waits": [], "gart": {}, "source": str(path)}
@@ -96,11 +153,19 @@ def parse_linux(path:pathlib.Path) -> dict:
 
 def parse_tinygrad(path:pathlib.Path) -> dict:
   out = {"source": str(path), "gart": {}, "pre_bl": {}, "skip": {}, "load": [], "regs": {}, "wait_vals": [],
-         "write_msg1": {}, "write_compid": None, "readback": {}, "timeout": False}
-  for line in lines_for(path, ["real.log", "audit.log", "key-grep.txt", "post-psp-status.log"]):
+         "write_msg1": {}, "write_compid": None, "readback": {}, "timeout": False, "snapshots": [], "post_status": {}}
+  snapshot = None
+  for line in tinygrad_lines(path):
     if "BL not ready" in line: out["timeout"] = True
     if not (m := TG_RE.search(line)): continue
     msg = m.group("msg")
+    if m := TG_SNAPSHOT_BEGIN_RE.search(msg):
+      snapshot = {"label": m.group("label"), "regs": {}}
+      out["snapshots"].append(snapshot)
+      continue
+    if m := TG_SNAPSHOT_END_RE.search(msg):
+      snapshot = None
+      continue
     if m := TG_GART_RE.search(msg): out["gart"].update({k: as_int(v) for k, v in m.groupdict().items()})
     elif m := TG_PRE_BL_RE.search(msg): out["pre_bl"].update({k: (as_int(v) if k != "kind" else v) for k, v in m.groupdict().items()})
     elif m := TG_SKIP_RE.search(msg): out["skip"].update({k: as_int(v) for k, v in m.groupdict().items()})
@@ -118,13 +183,17 @@ def parse_tinygrad(path:pathlib.Path) -> dict:
       name = m.group("name")
       if m.group("inst") is not None: name = f"{name}[{m.group('inst')}]"
       out["regs"][name] = as_int(m.group("val"))
+      if snapshot is not None: snapshot["regs"][name] = as_int(m.group("val"))
   return out
 
 def row(label:str, linux, tinygrad, note:str="") -> str:
   verdict = "same" if linux == tinygrad and linux is not None else ("missing" if linux is None or tinygrad is None else "diff")
   return f"{label:48} linux={linux!s:18} tinygrad={tinygrad!s:18} {verdict:7} {note}".rstrip()
 
-def report(linux:dict, tiny:dict) -> str:
+def reg_lookup(regs:dict, name:str) -> int|None:
+  return next((regs[c] for c in (name, f"{name}[0]") if c in regs), None)
+
+def report(linux:dict, tiny:dict, firmware:str|None) -> str:
   lines = ["PSP trace comparison", f"linux source: {linux['source']}", f"tinygrad source: {tiny['source']}", ""]
   kdb = next((x for x in linux["bl"] if x.get("cmd") == 0x80000), None)
   tg_kdb = next((x for x in tiny["load"] if x.get("compid") == 0x80000), None)
@@ -138,15 +207,25 @@ def report(linux:dict, tiny:dict) -> str:
   ready_waits = [w for w in linux["waits"] if w.get("duration_ns") is not None]
   if ready_waits:
     lines.append(f"linux wait durations ns: {', '.join(str(w['duration_ns']) for w in ready_waits[:8])}")
+  if tiny["wait_vals"]:
+    lines.append(f"tinygrad observed wait BL values: {', '.join(hexv(v) for v in tiny['wait_vals'])}")
   lines.append(f"tinygrad timed out waiting BL: {tiny['timeout']}")
   lines.append("")
 
+  if firmware:
+    lines.append("KDB payload bytes")
+    lines.extend(firmware_report(firmware, tiny["skip"].get("skip"), tiny["readback"]))
+    lines.append("")
+
   lines.append("GART")
   lines.append(row("offset/msg1_off", hexv(linux["gart"].get("offset")), hexv(tiny["gart"].get("msg1_off"))))
-  lines.append(row("pages", str(linux["gart"].get("pages")), "256"))
+  tiny_pages = None
+  if tiny["pre_bl"].get("size") is not None: tiny_pages = tiny["pre_bl"]["size"] // 0x1000
+  elif tiny["gart"].get("paddr_last") is not None and tiny["gart"].get("paddr0") is not None: tiny_pages = (tiny["gart"]["paddr_last"] - tiny["gart"]["paddr0"]) // 0x1000 + 1
+  lines.append(row("pages", str(linux["gart"].get("pages")), str(tiny_pages)))
   lines.append(row("first_idx/gart_page", hexv(linux["gart"].get("first_idx")), hexv(tiny["gart"].get("gart_page"))))
   linux_last_idx = linux["gart"].get("last_idx")
-  tiny_last_idx = tiny["gart"].get("gart_page") + 255 if tiny["gart"].get("gart_page") is not None else None
+  tiny_last_idx = tiny["gart"].get("gart_page") + tiny_pages - 1 if tiny["gart"].get("gart_page") is not None and tiny_pages is not None else None
   lines.append(row("last_idx", hexv(linux_last_idx), hexv(tiny_last_idx)))
   lines.append(row("pte flags", hexv(pte_flags(linux["gart"].get("pte0"))), hexv(pte_flags(tiny["gart"].get("pte0")))))
   linux_pte_delta = None if linux["gart"].get("pte_last") is None or linux["gart"].get("pte0") is None else pte_paddr(linux["gart"]["pte_last"]) - pte_paddr(linux["gart"]["pte0"])
@@ -162,27 +241,42 @@ def report(linux:dict, tiny:dict) -> str:
 
   lines.append("Tinygrad register snapshot")
   for name in REG_NAMES:
-    candidates = [name, f"{name}[0]"]
-    val = next((tiny["regs"][c] for c in candidates if c in tiny["regs"]), None)
+    val = reg_lookup(tiny["regs"], name)
     lines.append(f"{name:48} {hexv(val)}")
   lines.append("")
+
+  if tiny["snapshots"]:
+    lines.append("Tinygrad PSP register timeline")
+    for snap in tiny["snapshots"]:
+      regs = snap["regs"]
+      lines.append(f"{snap['label']}: C2PMSG35={hexv(reg_lookup(regs, 'regMP0_SMN_C2PMSG_35'))} "
+                   f"C2PMSG36={hexv(reg_lookup(regs, 'regMP0_SMN_C2PMSG_36'))} "
+                   f"C2PMSG81={hexv(reg_lookup(regs, 'regMP0_SMN_C2PMSG_81'))} "
+                   f"FAULT={hexv(reg_lookup(regs, 'regMMVM_L2_PROTECTION_FAULT_STATUS'))}")
+    lines.append("")
 
   lines.append("Observations")
   if kdb and tg_kdb and kdb.get("size") == tg_kdb.get("bytes"):
     lines.append("- KDB payload size matches Linux-good: 0x1700. The 0x640 skip is not the leading suspect.")
+  if firmware and tiny["readback"]:
+    lines.append("- Tinygrad msg1 readback can now be checked against the local skipped firmware payload above.")
   if tiny_pte_delta is not None:
     lines.append(f"- Tinygrad PTE physical delta: {tiny_pte_delta:#x}.")
   if tiny["regs"].get("regMMVM_L2_PROTECTION_FAULT_STATUS[0]", tiny["regs"].get("regMMVM_L2_PROTECTION_FAULT_STATUS")) == 0:
     lines.append("- MMHUB fault status stayed zero during the failing attempt.")
-  lines.append("- The main remaining difference in these captures is behavioral: Linux returns ready after the transient 0, tinygrad never does.")
+  if tiny["timeout"]:
+    lines.append("- The remaining visible difference is behavioral: Linux returns ready after transient 0, tinygrad does not.")
+  else:
+    lines.append("- Tinygrad did not time out in this capture.")
   return "\n".join(lines) + "\n"
 
 def main():
   parser = argparse.ArgumentParser(description="Compare Linux-good AMD PSP trace data with a tinygrad PSP boot attempt")
   parser.add_argument("--linux", required=True, type=pathlib.Path, help="Linux-good trace directory or .tar.gz")
   parser.add_argument("--tinygrad", required=True, type=pathlib.Path, help="tinygrad attempt directory or .tar.gz")
+  parser.add_argument("--firmware", default="psp_13_0_10_sos.bin", help="PSP SOS firmware name for KDB byte comparison; empty disables")
   args = parser.parse_args()
-  sys.stdout.write(report(parse_linux(args.linux), parse_tinygrad(args.tinygrad)))
+  sys.stdout.write(report(parse_linux(args.linux), parse_tinygrad(args.tinygrad), args.firmware or None))
 
 if __name__ == "__main__":
   main()
