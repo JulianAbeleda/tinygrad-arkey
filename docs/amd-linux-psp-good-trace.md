@@ -40,6 +40,17 @@ Replace `0000:03:00.0` with the RX 7900 XTX BDF. The script holds that device
 unbound, loads `amdgpu` so PSP symbols exist, starts bpftrace, then binds the
 GPU and saves the trace plus baseline files in `psp-linux-good-YYYYmmdd-HHMMSS`.
 
+For the deeper pre-KDB comparison pass, add `--deep`:
+
+```sh
+sudo extra/amdpci/capture_linux_psp_good_trace.sh --deep --bind-bdf 0000:03:00.0
+```
+
+Deep mode generates a bpftrace script inside the output directory from the
+symbols visible on that boot. It keeps the known-good PSP/GART probes and adds
+optional PSP ring/TMR/helper and filtered register read/write probes when those
+symbols are available.
+
 ## Rebind Capture
 
 If `amdgpu` is already loaded and the RX 7900 XTX is not driving the display:
@@ -80,6 +91,16 @@ Linux-good baseline.
 
 - `psp-linux-good.trace`: PSP bootloader, memory-training, and selected GART
   mapping trace.
+- `psp-linux-good-deep.trace`: deep-mode trace with optional pre-KDB PSP,
+  ring/TMR, MMHUB, and mailbox register events.
+- `trace_amdgpu_psp_deep.generated.bt`: deep-mode bpftrace script generated
+  from symbols visible in `/proc/kallsyms`.
+- `psp-deep-generated-symbols.txt`: generated probe list and skipped optional
+  probe classes.
+- `linux-pre-kdb-key-events.txt`: focused grep output for KDB, mailbox,
+  memory-training, GART, MMHUB, ring, and TMR events.
+- `psp-linux-good-*.tar.gz` and `.sha256`: deep-mode archive and checksum
+  generated after the trace completes.
 - `mmhub-gart-snapshot.txt` / `mmhub-gart-snapshot.json`: read-only MMHUB
   and GART/context register snapshot, when `linux_mmhub_gart_snapshot.py` can
   read BAR5 after bind/rebind.

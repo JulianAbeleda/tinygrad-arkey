@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: capture_linux_psp_good_trace.sh [--out DIR] [--bind-bdf BDF | --rebind-bdf BDF]
+usage: capture_linux_psp_good_trace.sh [--deep] [--out DIR] [--bind-bdf BDF | --rebind-bdf BDF]
 
 Capture a Linux-good AMD PSP boot trace for Navi31/RX 7900 XTX.
 
@@ -17,6 +17,10 @@ Modes:
 If no mode is provided, the script records baseline files and starts bpftrace;
 bind the GPU to amdgpu from another shell while it is running. Manual mode
 requires the amdgpu PSP symbols to already be visible in /proc/kallsyms.
+
+Options:
+  --deep           Generate a wider PSP trace from visible kallsyms and include
+                   optional pre-KDB PSP/MMHUB/register probes when available.
 EOF
 }
 
@@ -33,8 +37,13 @@ OUT=""
 MODE="manual"
 BIND_BDF=""
 DEV=""
+DEEP=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --deep)
+      DEEP=1
+      shift
+      ;;
     --out)
       [ "$#" -ge 2 ] || die "--out needs a directory"
       OUT="$2"
@@ -69,12 +78,18 @@ need_cmd lspci
 need_cmd modinfo
 need_cmd sha256sum
 need_cmd modprobe
+if [ "$DEEP" -eq 1 ]; then
+  need_cmd python3
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TRACE_SCRIPT="$SCRIPT_DIR/trace_amdgpu_psp.bt"
+DEEP_GENERATOR="$SCRIPT_DIR/generate_deep_psp_trace.py"
 SNAPSHOT_SCRIPT="$SCRIPT_DIR/linux_mmhub_gart_snapshot.py"
 [ -f "$TRACE_SCRIPT" ] || die "missing trace script: $TRACE_SCRIPT"
+[ "$DEEP" -eq 0 ] || [ -f "$DEEP_GENERATOR" ] || die "missing deep trace generator: $DEEP_GENERATOR"
 TRACE_SYMBOL_RE=' psp_hw_start([[:space:]]|$)| psp_v13_0_bootloader_load_component([[:space:]]|$)| psp_v13_0_wait_for_bootloader([[:space:]]|$)| psp_v13_0_wait_for_vmbx_ready([[:space:]]|$)| psp_v13_0_memory_training_send_msg([[:space:]]|$)| amdgpu_gart_map([[:space:]]|$)'
+DEEP_SYMBOL_RE="$TRACE_SYMBOL_RE| amdgpu_device_[rw]reg([[:space:]]|$)| psp_v13_0_.*([[:space:]]|$)| psp_.*tmr.*([[:space:]]|$)| psp_ring.*([[:space:]]|$)"
 
 if [ -z "$OUT" ]; then
   OUT="psp-linux-good-$(date +%Y%m%d-%H%M%S)"
@@ -105,6 +120,7 @@ if [ -e /sys/kernel/btf/vmlinux ]; then
 fi
 
 grep -E "$TRACE_SYMBOL_RE" /proc/kallsyms > "$OUT/psp-symbols-before-setup.txt" || true
+[ "$DEEP" -eq 0 ] || grep -E "$DEEP_SYMBOL_RE" /proc/kallsyms > "$OUT/psp-deep-symbols-before-setup.txt" || true
 
 find /lib/firmware/amdgpu -maxdepth 1 -type f \( \
   -name 'psp_13_0_10_sos.bin' -o -name 'psp_13_0_10_sos.bin.zst' -o \
@@ -146,6 +162,7 @@ if ! grep -Eq ' amdgpu_gart_map([[:space:]]|$)' /proc/kallsyms; then
 fi
 
 grep -E "$TRACE_SYMBOL_RE" /proc/kallsyms > "$OUT/psp-symbols-after-setup.txt" || true
+[ "$DEEP" -eq 0 ] || grep -E "$DEEP_SYMBOL_RE" /proc/kallsyms > "$OUT/psp-deep-symbols-after-setup.txt" || true
 
 if [ -e /sys/kernel/btf/amdgpu ]; then
   cp /sys/kernel/btf/amdgpu "$OUT/amdgpu.btf" 2>/dev/null || true
@@ -154,17 +171,32 @@ else
   echo "btf: /sys/kernel/btf/amdgpu missing" >> "$OUT/baseline.txt"
 fi
 
+if [ "$DEEP" -eq 1 ]; then
+  TRACE_SCRIPT="$OUT/trace_amdgpu_psp_deep.generated.bt"
+  python3 "$DEEP_GENERATOR" --out "$TRACE_SCRIPT" --symbols-out "$OUT/psp-deep-generated-symbols.txt"
+fi
+
 TRACE_OUT="$OUT/psp-linux-good.trace"
+[ "$DEEP" -eq 0 ] || TRACE_OUT="$OUT/psp-linux-good-deep.trace"
 TRACE_ERR="$OUT/bpftrace.stderr"
 echo "starting bpftrace: $TRACE_OUT"
 bpftrace "$TRACE_SCRIPT" 2>"$TRACE_ERR" | tee "$TRACE_OUT" &
 TRACE_PID=$!
 
-cleanup() {
+stop_trace() {
   if kill -0 "$TRACE_PID" >/dev/null 2>&1; then
     kill -INT "$TRACE_PID" >/dev/null 2>&1 || true
     wait "$TRACE_PID" >/dev/null 2>&1 || true
   fi
+}
+
+postprocess_trace() {
+  grep -Ei 'psp_hw_start|bl_load|wait_bl|mem_train|gart_map|wreg|rreg|C2PMSG|ring|tmr|toc|LOAD|SETUP|0x1606[13478]|0x1609[01c]|0x160b3|0x1a7|0x1a8|0x80000|0x07fff007' \
+    "$TRACE_OUT" > "$OUT/linux-pre-kdb-key-events.txt" || true
+}
+
+cleanup() {
+  stop_trace
   if [ "$MODE" = "bind" ] && [ -n "$DEV" ] && [ -e "$DEV/driver_override" ]; then
     echo "" > "$DEV/driver_override" || true
   fi
@@ -196,4 +228,12 @@ if [ "$MODE" = "bind" ] || [ "$MODE" = "rebind" ]; then
 else
   echo "manual mode: load or reload amdgpu now, then press Ctrl-C after PSP init completes"
   wait "$TRACE_PID"
+fi
+
+cleanup
+trap - EXIT INT TERM
+postprocess_trace
+if [ "$DEEP" -eq 1 ]; then
+  tar -czf "$OUT.tar.gz" "$OUT"
+  sha256sum "$OUT.tar.gz" | tee "$OUT.tar.gz.sha256"
 fi
