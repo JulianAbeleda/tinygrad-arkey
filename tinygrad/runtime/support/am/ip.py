@@ -11,6 +11,8 @@ def _env_int(name:str, default:int=0) -> int:
 
 class AM_PSPExperiment:
   @staticmethod
+  def audit_pre_kdb() -> int: return _env_int("AM_PSP_AUDIT_PRE_KDB")
+  @staticmethod
   def gart_msg1_offset() -> int: return _env_int("AM_PSP_GART_MSG1_OFFSET")
   @staticmethod
   def gart_strong_invalidate() -> int: return _env_int("AM_PSP_GART_STRONG_INVALIDATE")
@@ -895,6 +897,9 @@ class AM_PSP(AM_IP):
 
     self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
     self._prep_msg1(data)
+    if fw == am.PSP_FW_TYPE_PSP_KDB and AM_PSPExperiment.audit_pre_kdb():
+      self._trace_bootloader_snapshot("audit-pre-kdb")
+      raise RuntimeError("AM_PSP_AUDIT_PRE_KDB stopped before KDB mailbox writes")
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
