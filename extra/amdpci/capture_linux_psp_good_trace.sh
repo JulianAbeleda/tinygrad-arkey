@@ -72,6 +72,7 @@ need_cmd modprobe
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TRACE_SCRIPT="$SCRIPT_DIR/trace_amdgpu_psp.bt"
+SNAPSHOT_SCRIPT="$SCRIPT_DIR/linux_mmhub_gart_snapshot.py"
 [ -f "$TRACE_SCRIPT" ] || die "missing trace script: $TRACE_SCRIPT"
 TRACE_SYMBOL_RE=' psp_hw_start([[:space:]]|$)| psp_v13_0_bootloader_load_component([[:space:]]|$)| psp_v13_0_wait_for_bootloader([[:space:]]|$)| psp_v13_0_wait_for_vmbx_ready([[:space:]]|$)| psp_v13_0_memory_training_send_msg([[:space:]]|$)| amdgpu_gart_map([[:space:]]|$)'
 
@@ -180,6 +181,18 @@ if [ "$MODE" = "bind" ] || [ "$MODE" = "rebind" ]; then
   echo "amdgpu" > "$DEV/driver_override"
   echo "$BIND_BDF" > /sys/bus/pci/drivers/amdgpu/bind
   sleep 20
+  if [ -f "$SNAPSHOT_SCRIPT" ]; then
+    PYTHON_BIN="${PYTHON:-python3}"
+    if command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+      echo "capturing MMHUB/GART snapshot"
+      REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+      PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" "$SNAPSHOT_SCRIPT" \
+        --bdf "$BIND_BDF" --out "$OUT" > "$OUT/mmhub-gart-snapshot.stdout" 2>"$OUT/mmhub-gart-snapshot.err" || \
+        echo "warning: MMHUB/GART snapshot failed; see $OUT/mmhub-gart-snapshot.err" >&2
+    else
+      echo "warning: $PYTHON_BIN not found; skipping MMHUB/GART snapshot" >&2
+    fi
+  fi
 else
   echo "manual mode: load or reload amdgpu now, then press Ctrl-C after PSP init completes"
   wait "$TRACE_PID"

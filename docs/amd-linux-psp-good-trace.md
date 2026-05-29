@@ -10,7 +10,7 @@ ready, and never gets ready back.
 Use the Ubuntu checkout at:
 
 ```text
-/home/ubuntu/tinygrad-arkey/tinygrad
+/home/ubuntu/tinygrad-arkey
 ```
 
 Before capturing, make sure that checkout has the current trace tooling from
@@ -80,12 +80,46 @@ Linux-good baseline.
 
 - `psp-linux-good.trace`: PSP bootloader, memory-training, and selected GART
   mapping trace.
+- `mmhub-gart-snapshot.txt` / `mmhub-gart-snapshot.json`: read-only MMHUB
+  and GART/context register snapshot, when `linux_mmhub_gart_snapshot.py` can
+  read BAR5 after bind/rebind.
+- `mmhub-gart-snapshot.err`: snapshot failure details, if the PSP trace succeeds
+  but the register snapshot fails.
 - `baseline.txt`: kernel, PCI, `amdgpu`, and BTF baseline.
 - `dmesg-before.txt` / `dmesg-after.txt`: kernel log around the capture.
 - `bpftrace.stderr`: bpftrace compile/attach errors, if any.
 - `firmware-sha256.txt`: hashes for relevant AMD firmware blobs.
 - `gpu-candidates.txt` and `lspci-*.txt`: PCI identity and topology.
 - `psp-symbols-*.txt`: PSP/GART probe symbol visibility before and after setup.
+
+## Read-Only MMHUB/GART Snapshot
+
+The snapshot helper can also be run by itself on Ubuntu without unbinding the
+GPU. Try this first on a normal boot before doing another blacklisted PSP
+capture:
+
+```sh
+sudo python3 extra/amdpci/linux_mmhub_gart_snapshot.py \
+  --bdf 0000:08:00.0 \
+  --out linux-mmhub-gart-snapshot-$(date +%Y%m%d-%H%M%S)
+```
+
+Replace the BDF if `lspci -Dnn` reports a different RX 7900 XTX address. The
+helper is read-only: it maps BAR5 and reads named MMHUB registers using the
+same `gfx1100_744c` register metadata as tinygrad. It does not unbind, reset,
+write PCI config, or write MMIO.
+
+Compare `mmhub-gart-snapshot.txt` against a Mac/TinyGPU audit run using:
+
+```text
+AM_PSP_AUDIT_PRE_KDB=1 AM_PSP_PARITY_TRACE=1
+```
+
+The important values are context0 control/base/start/end, system aperture,
+MMHUB L1/L2 controls, and protection-fault status/control. If the standalone
+snapshot cannot read BAR5 while `amdgpu` owns the display GPU, rerun the normal
+PSP capture from a blacklisted boot; the wrapper will attempt the same snapshot
+after binding `amdgpu`.
 
 ## Compare Against TinyGPU Failure
 
@@ -109,6 +143,11 @@ gart_map ret offset=0x700000 pages=256 ... pte0=... pte_last=...
 Compare those PTE values and flags against the Mac/TinyGPU GART experiment
 trace. A PTE mismatch should become the next Mac-side experiment; a match rules
 out GART PTE flags/cacheability as the KDB blocker.
+
+If PTE flags match, compare `mmhub-gart-snapshot.txt` against the Mac parity
+trace before adding another KDB experiment. The next likely difference is
+MMHUB/GART context setup, invalidation semantics, or another Linux pre-KDB init
+side effect.
 
 ## Local Evidence
 
