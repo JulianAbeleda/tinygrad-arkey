@@ -13,6 +13,8 @@ class AM_PSPExperiment:
   @staticmethod
   def gart_msg1_offset() -> int: return _env_int("AM_PSP_GART_MSG1_OFFSET")
   @staticmethod
+  def gart_strong_invalidate() -> int: return _env_int("AM_PSP_GART_STRONG_INVALIDATE")
+  @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
 
 class AM_IP:
@@ -116,6 +118,35 @@ class AM_GMC(AM_IP):
 
   def init_hw(self): self.init_hub("MM", inst_cnt=self.vmhubs)
 
+  def _psp_trace_enabled(self) -> bool:
+    return getattr(self.adev, "psp", None) is not None and self.adev.psp._trace_enabled()
+
+  def _trace_psp_gart_pte(self, label:str, gart_table_paddr:int, pt_base:int, gart_table, paddrs:list[int], start_page:int, gart_page:int,
+                          page_count:int, msg1_off:int):
+    if not self._psp_trace_enabled(): return
+    first_pte, last_pte = gart_table[gart_page], gart_table[gart_page + page_count - 1]
+    flag_names = [(am.AMDGPU_PTE_VALID, "VALID"), (am.AMDGPU_PTE_SYSTEM, "SYSTEM"), (am.AMDGPU_PTE_SNOOPED, "SNOOPED"),
+                  (am.AMDGPU_PTE_EXECUTABLE, "EXEC"), (am.AMDGPU_PTE_READABLE, "READ"), (am.AMDGPU_PTE_WRITEABLE, "WRITE")]
+    first_flags = ",".join(name for bit, name in flag_names if first_pte & bit)
+    self.adev.psp._trace(f"gart {label} table_paddr={gart_table_paddr:#x} pt_base={pt_base:#x} msg1_off={msg1_off:#x} "
+                         f"gart_page={gart_page:#x} paddr0={paddrs[start_page]:#x} paddr_last={paddrs[start_page + page_count - 1]:#x} "
+                         f"pte0={first_pte:#018x} pte_last={last_pte:#018x} flags={first_flags} "
+                         f"mtype={(first_pte & am.AMDGPU_PTE_MTYPE_NV10_MASK) >> 48:#x}")
+
+  def _strong_invalidate_psp_gart(self, gart_table_paddr:int, pt_base:int, gart_table, paddrs:list[int], start_page:int, gart_page:int,
+                                  page_count:int, msg1_off:int):
+    self.flush_hdp()
+    self._trace_psp_gart_pte("strong invalidate", gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
+    self.flush_tlb("MM", 0)
+    self.flush_hdp()
+    # Diagnostic sampling after a second VMID0 invalidate; this settle and readback are not a readiness guarantee.
+    time.sleep(0.001)
+    if self._psp_trace_enabled():
+      for inst in range(self.vmhubs):
+        ack = self.adev.reg("regMMVM_INVALIDATE_ENG17_ACK").read(inst=inst)
+        fault = self.adev.reg(self.pf_status_reg("MM")).read(inst=inst)
+        self.adev.psp._trace(f"gart strong invalidate inst={inst} ack={ack:#010x} fault={fault:#010x}")
+
   def setup_psp_gart(self, paddrs:list[int], view_off:int, size:int) -> int:
     assert size > 0 and view_off % 0x1000 == 0 and size % 0x1000 == 0, f"invalid PSP GART window view_off={view_off:#x} size={size:#x}"
     msg1_off = AM_PSPExperiment.gart_msg1_offset()
@@ -134,6 +165,7 @@ class AM_GMC(AM_IP):
     self.flush_hdp()
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
+    self._trace_psp_gart_pte("pte", gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
     for inst in range(self.vmhubs):
       self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR").write(min(self.fb_base, self.gart_start) >> 18, inst=inst)
       self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(max(self.fb_end, self.gart_end) >> 18, inst=inst)
@@ -142,6 +174,8 @@ class AM_GMC(AM_IP):
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
       self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
     self.flush_tlb("MM", 0)
+    if AM_PSPExperiment.gart_strong_invalidate():
+      self._strong_invalidate_psp_gart(gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
     msg1_addr = self.gart_start + msg1_off
     return msg1_addr
 
