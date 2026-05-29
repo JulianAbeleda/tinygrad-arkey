@@ -9,7 +9,7 @@ def _env_int(name:str, default:int=0) -> int:
   raw = getenv(name, "")
   return int(raw, 0) if raw else default
 
-class AM_PSPExperiment:
+class AM_Experiment:
   @staticmethod
   def audit_pre_kdb() -> int: return _env_int("AM_PSP_AUDIT_PRE_KDB")
   @staticmethod
@@ -141,7 +141,7 @@ class AM_GMC(AM_IP):
     self._trace_psp_gart_pte("strong invalidate", gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
     self.flush_tlb("MM", 0)
     self.flush_hdp()
-    # Diagnostic sampling after a second VMID0 invalidate; this settle and readback are not a readiness guarantee.
+    # Diagnostic sampling after a second VMID0 invalidate; 1ms was enough for macOS/TinyGPU audit reads and is not a readiness guarantee.
     time.sleep(0.001)
     if self._psp_trace_enabled():
       for inst in range(self.vmhubs):
@@ -150,9 +150,11 @@ class AM_GMC(AM_IP):
         self.adev.psp._trace(f"gart strong invalidate inst={inst} ack={ack:#010x} fault={fault:#010x}")
 
   def setup_psp_gart(self, paddrs:list[int], view_off:int, size:int) -> int:
-    assert size > 0 and view_off % 0x1000 == 0 and size % 0x1000 == 0, f"invalid PSP GART window view_off={view_off:#x} size={size:#x}"
-    msg1_off = AM_PSPExperiment.gart_msg1_offset()
-    assert msg1_off % 0x1000 == 0 and msg1_off + size <= self.gart_size, f"invalid PSP GART msg1 offset={msg1_off:#x} size={size:#x}"
+    if size <= 0 or view_off % 0x1000 != 0 or size % 0x1000 != 0:
+      raise ValueError(f"invalid PSP GART window view_off={view_off:#x} size={size:#x}")
+    msg1_off = AM_Experiment.gart_msg1_offset()
+    if msg1_off % 0x1000 != 0 or msg1_off + size > self.gart_size:
+      raise ValueError(f"invalid PSP GART msg1 offset={msg1_off:#x} size={size:#x}")
     table_size = self.gart_size // 0x1000 * 8
     gart_table_paddr = self.adev.mm.palloc(table_size, align=0x1000, zero=True, boot=True)
     gart_table = self.adev.vram.view(gart_table_paddr, table_size, 'Q')
@@ -161,7 +163,8 @@ class AM_GMC(AM_IP):
     start_page = view_off // 0x1000
     gart_page = msg1_off // 0x1000
     page_count = size // 0x1000
-    assert start_page + page_count <= len(paddrs), f"invalid PSP GART source pages start={start_page:#x} count={page_count:#x} len={len(paddrs):#x}"
+    if start_page + page_count > len(paddrs):
+      raise ValueError(f"invalid PSP GART source pages start={start_page:#x} count={page_count:#x} len={len(paddrs):#x}")
     for i, paddr in enumerate(paddrs[start_page:start_page + page_count]):
       gart_table[gart_page + i] = (paddr & 0x0000FFFFFFFFF000) | flags
     self.flush_hdp()
@@ -176,7 +179,7 @@ class AM_GMC(AM_IP):
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
       self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
     self.flush_tlb("MM", 0)
-    if AM_PSPExperiment.gart_strong_invalidate():
+    if AM_Experiment.gart_strong_invalidate():
       self._strong_invalidate_psp_gart(gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
     msg1_addr = self.gart_start + msg1_off
     return msg1_addr
@@ -890,14 +893,14 @@ class AM_PSP(AM_IP):
 
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
     data = self.adev.fw.sos_fw[fw]
-    if fw == am.PSP_FW_TYPE_PSP_KDB and (skip := AM_PSPExperiment.kdb_skip_prefix()):
+    if fw == am.PSP_FW_TYPE_PSP_KDB and (skip := AM_Experiment.kdb_skip_prefix()):
       if skip >= len(data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(data):#x}")
       self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(data):#x} new_size={len(data) - skip:#x}")
       data = data[skip:]
 
     self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
     self._prep_msg1(data)
-    if fw == am.PSP_FW_TYPE_PSP_KDB and AM_PSPExperiment.audit_pre_kdb():
+    if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.audit_pre_kdb():
       self._trace_bootloader_snapshot("audit-pre-kdb")
       raise RuntimeError("AM_PSP_AUDIT_PRE_KDB stopped before KDB mailbox writes")
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
