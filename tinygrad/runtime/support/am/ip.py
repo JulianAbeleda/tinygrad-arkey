@@ -937,7 +937,16 @@ class AM_PSP(AM_IP):
     self.msg1_view[:len(padded_data)] = padded_data
     if getenv("AM_PSP_MSG1_READBACK", 0):
       readback = bytes(self.msg1_view[:len(padded_data)])
-      if readback != padded_data: raise RuntimeError(f"PSP msg1 readback mismatch {len(readback)} bytes")
+      if readback != padded_data:
+        first_bad = next((i for i, (got, exp) in enumerate(zip(readback, padded_data)) if got != exp), -1)
+        mismatch_count = sum(got != exp for got, exp in zip(readback, padded_data))
+        exp = padded_data[first_bad] if first_bad >= 0 else None
+        got = readback[first_bad] if first_bad >= 0 else None
+        raise RuntimeError("PSP msg1 readback mismatch "
+          f"bytes={len(readback)} mismatches={mismatch_count} first_bad={first_bad:#x} "
+          f"expected={exp:#x} actual={got:#x} "
+          f"expected_first32={padded_data[:32].hex()} actual_first32={readback[:32].hex()} "
+          f"expected_last32={padded_data[-32:].hex()} actual_last32={readback[-32:].hex()}")
       self._trace(f"msg1 readback ok bytes={len(readback)} first={readback[:16].hex()} last={readback[-16:].hex()}")
     self.adev.gmc.flush_hdp()
     if getenv("AM_PSP_STRONG_FLUSH", 0):
