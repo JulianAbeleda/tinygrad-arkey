@@ -693,12 +693,10 @@ class AM_PSP(AM_IP):
       self.msg1_kind = "sysmem-gtt"
       self._trace(f"msg1 sysmem gtt raw={paddrs[0]:#x} view_off={view_off:#x} va={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GART", 0):
-      raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
-      if len(paddrs) != 2 * am.PSP_1_MEG // 0x1000: raise ValueError(f"expected 2MB sysmem pages, got {len(paddrs)}")
-      if not all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)): raise ValueError("PSP sysmem GART buffer is not contiguous")
-      view_off = (-paddrs[0]) % am.PSP_1_MEG
-      if view_off + am.PSP_1_MEG > raw_view.nbytes: raise ValueError(f"failed to find aligned 1MB PSP window in 2MB GART buffer: {paddrs[0]:#x}")
-      self.msg1_view = raw_view.view(view_off, am.PSP_1_MEG)
+      raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(am.PSP_1_MEG)
+      if len(paddrs) != am.PSP_1_MEG // 0x1000: raise ValueError(f"expected 1MB sysmem pages, got {len(paddrs)}")
+      view_off = 0
+      self.msg1_view = raw_view
       self.msg1_addr = self.adev.gmc.gart_start
       self.msg1_gart_args = (paddrs, view_off, am.PSP_1_MEG)
       self.msg1_kind = "sysmem-gart"
