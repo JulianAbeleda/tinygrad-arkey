@@ -44,6 +44,8 @@ class AM_Experiment:
   def wait_trace_ms() -> int: return _env_int("AM_PSP_WAIT_TRACE_MS")
   @staticmethod
   def trace_c2pmsg_dense() -> int: return _env_int("AM_PSP_TRACE_C2PMSG_DENSE")
+  @staticmethod
+  def pre_kdb_invalidate_burst() -> int: return _env_int("AM_PSP_PRE_KDB_INVALIDATE_BURST")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -893,6 +895,23 @@ class AM_PSP(AM_IP):
     reg.write(val + 0x10)
     time.sleep(1.0)
 
+  def _pre_kdb_invalidate_burst(self, count:int):
+    if count <= 0: return
+    if count > 256: raise ValueError(f"AM_PSP_PRE_KDB_INVALIDATE_BURST={count} is too large")
+    self._trace(f"pre-KDB invalidate burst count={count}")
+    for i in range(count):
+      self.adev.gmc.flush_hdp()
+      for inst in range(self.adev.gmc.vmhubs):
+        self.adev.reg("regMMVM_INVALIDATE_ENG17_REQ").write(0xf80001, inst=inst)
+        self.adev.reg("regMMVM_INVALIDATE_ENG17_SEM").write(0x0, inst=inst)
+        self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
+        if self._trace_enabled():
+          ack = self.adev.reg("regMMVM_INVALIDATE_ENG17_ACK").read(inst=inst)
+          sem = self.adev.reg("regMMVM_INVALIDATE_ENG17_SEM").read(inst=inst)
+          cid2 = self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").read(inst=inst)
+          fault = self.adev.reg(self.adev.gmc.pf_status_reg("MM")).read(inst=inst)
+          self._trace(f"pre-KDB invalidate burst pass={i} inst={inst} ack={ack:#010x} sem={sem:#010x} cid2={cid2:#010x} fault={fault:#010x}")
+
   def _memory_training_offsets(self) -> tuple[int, int, int]:
     reserve_size = getenv("AM_PSP_MEM_TRAIN_RESERVE", 64 << 10)
     c2p = ((self.vram_size - reserve_size - am.PSP_1_MEG + am.PSP_1_MEG - 1) // am.PSP_1_MEG) * am.PSP_1_MEG
@@ -986,6 +1005,8 @@ class AM_PSP(AM_IP):
     if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.audit_pre_kdb():
       self._trace_bootloader_snapshot("audit-pre-kdb")
       raise RuntimeError("AM_PSP_AUDIT_PRE_KDB stopped before KDB mailbox writes")
+    if fw == am.PSP_FW_TYPE_PSP_KDB:
+      self._pre_kdb_invalidate_burst(AM_Experiment.pre_kdb_invalidate_burst())
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     if AM_Experiment.mailbox_strong_order():
       self.adev.gmc.flush_hdp()
