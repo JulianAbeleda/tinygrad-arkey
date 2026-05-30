@@ -9,6 +9,7 @@ from tinygrad.runtime.support.am.amdev import AMDev
 from tinygrad.runtime.support.amd import AMD_RUNTIME_DEVICES
 from tinygrad.runtime.support.system import RemotePCIDevice, System
 
+# The clean gate classifies VMBX/BL/ADDR/SOS; the remaining PSP registers are printed for operator context.
 PSP_GATE_REGS = {
   "C2PMSG33_VMBX": 0x16061,
   "C2PMSG35_BL": 0x16063,
