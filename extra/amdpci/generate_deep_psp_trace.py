@@ -124,6 +124,10 @@ kretprobe:amdgpu_device_rreg
 '''
 
 OPTIONAL_PROBES = [
+  "psp_v13_0_init_microcode", "psp_v13_0_sw_init", "psp_v13_0_hw_init", "psp_v13_0_hw_start",
+  "psp_v13_0_bootloader_load_kdb", "psp_v13_0_bootloader_load_spl", "psp_v13_0_bootloader_load_sysdrv",
+  "psp_v13_0_bootloader_load_sos", "psp_v13_0_wait_for_vmbx_ready",
+  "psp_v13_0_memory_training", "psp_v13_0_memory_training_init",
   "psp_v13_0_ring_create", "psp_v13_0_ring_stop", "psp_v13_0_ring_destroy",
   "psp_v13_0_ring_get_wptr", "psp_v13_0_ring_set_wptr",
   "psp_tmr_init", "psp_tmr_load", "psp_load_toc", "psp_load_smu_fw",

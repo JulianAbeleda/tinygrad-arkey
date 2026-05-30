@@ -72,6 +72,10 @@ def linux_c2pmsg_idx(reg:int|None) -> int|None:
 def c2pmsg_name(idx:int, pref:str="regMP0_SMN_C2PMSG") -> str:
   return f"{pref}_{idx}"
 
+def linux_reg_name(reg:int|None) -> str:
+  if (idx := linux_c2pmsg_idx(reg)) is not None: return f"C2PMSG{idx}"
+  return hexv(reg)
+
 def read_texts(path:pathlib.Path) -> dict[str, str]:
   if path.is_dir():
     return {str(p.relative_to(path)): p.read_text(errors="replace") for p in path.rglob("*") if p.is_file()}
@@ -144,9 +148,10 @@ def firmware_report(fname:str, skip:int|None, readback:dict) -> list[str]:
   return lines
 
 def parse_linux(path:pathlib.Path) -> dict:
-  out = {"bl": [], "waits": [], "gart": {}, "c2pmsg_events": [], "source": str(path)}
+  out = {"bl": [], "waits": [], "gart": {}, "reg_events": [], "c2pmsg_events": [], "source": str(path)}
   wait_start = None
   seen_bl = set()
+  seen_reg_events = set()
   seen_events = set()
   for line in lines_for(path, ["psp-linux-good.trace", "psp-linux-good-deep.trace", "linux-pre-kdb-key-events.txt", "linux-c2pmsg-events.txt"]):
     if m := LINUX_BL_RE.search(line):
@@ -167,6 +172,10 @@ def parse_linux(path:pathlib.Path) -> dict:
       out["gart"].update({k: as_int(v) for k, v in m.groupdict().items()})
     elif m := LINUX_REG_RE.search(line):
       reg, val = as_int(m.group("reg")), as_int(m.group("val"))
+      reg_item = (as_int(m.group("t")), m.group("op"), reg, val)
+      if reg_item not in seen_reg_events:
+        seen_reg_events.add(reg_item)
+        out["reg_events"].append({"t": reg_item[0], "op": reg_item[1], "reg": reg_item[2], "val": reg_item[3]})
       if (idx := linux_c2pmsg_idx(reg)) is not None:
         item = (as_int(m.group("t")), m.group("op"), idx, reg, val)
         if item not in seen_events:
@@ -259,6 +268,44 @@ def c2pmsg_delta_report(linux:dict, tiny:dict) -> list[str]:
   if linux_only:
     lines.append("Linux nonzero values not matched in any tinygrad snapshot:")
     lines.append("  " + ", ".join(f"C2PMSG{idx}={hexv(linux_nonzero[idx])}" for idx in linux_only[:64]))
+  lines.append("")
+  return lines
+
+def linux_kdb_register_window_report(linux:dict, before:int=48, after:int=96, after_ms:float=2.0) -> list[str]:
+  lines = ["Linux register window around KDB"]
+  kdb = next((x for x in linux["bl"] if x.get("cmd") == 0x80000), None)
+  kdb_t = kdb.get("t") if kdb else None
+  if kdb_t is None:
+    lines.append("  missing KDB bl_load timestamp")
+    lines.append("")
+    return lines
+
+  before_events = [e for e in linux["reg_events"] if e["t"] is not None and e["t"] < kdb_t]
+  after_events = [e for e in linux["reg_events"] if e["t"] is not None and e["t"] >= kdb_t and (e["t"] - kdb_t) <= after_ms * 1_000_000]
+
+  def changed_events(events:list[dict]) -> list[dict]:
+    out, last = [], {}
+    for e in events:
+      key = (e["op"], e["reg"])
+      if e["op"] == "wreg" or last.get(key) != e["val"]:
+        out.append(e)
+      last[key] = e["val"]
+    return out
+
+  before_changed, after_changed = changed_events(before_events), changed_events(after_events)
+
+  lines.append(f"Last {min(before, len(before_changed))} changed/written register events before KDB bl_load:")
+  for e in before_changed[-before:]:
+    dt_ms = (e["t"] - kdb_t) / 1_000_000
+    lines.append(f"  {dt_ms:9.3f} ms {e['op']:4} {linux_reg_name(e['reg']):>12}={hexv(e['val'])}")
+  if not before_changed: lines.append("  none")
+
+  lines.append(f"First changed/written register events from KDB through +{after_ms:g} ms:")
+  for e in after_changed[:after]:
+    dt_ms = (e["t"] - kdb_t) / 1_000_000
+    lines.append(f"  +{dt_ms:8.3f} ms {e['op']:4} {linux_reg_name(e['reg']):>12}={hexv(e['val'])}")
+  if len(after_changed) > after: lines.append(f"  ... {len(after_changed) - after} more changed/written events through +{after_ms:g} ms")
+  if not after_changed: lines.append("  none")
   lines.append("")
   return lines
 
@@ -371,6 +418,7 @@ def report(linux:dict, tiny:dict, firmware:str|None) -> str:
     lines.append("")
 
   lines.extend(c2pmsg_delta_report(linux, tiny))
+  lines.extend(linux_kdb_register_window_report(linux))
   lines.extend(c2pmsg_focus_timeline_report(linux, tiny))
 
   lines.append("Observations")

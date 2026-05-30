@@ -285,6 +285,12 @@ final `C2PMSG35=0x00000000`, final `C2PMSG36=0x07fff007`, and no MMHUB
 protection fault. This rules out low-vs-high PSP GART table placement as the
 KDB readiness blocker for the tested input set.
 
+The next comparison branch is pre-KDB PSP/platform side effects outside the
+msg1/GART handoff. The comparator now prints a Linux register window around KDB
+from the deep trace, and the deep trace generator includes additional PSP
+lifecycle wrapper probes when those symbols are visible. Use a fresh `--deep`
+Linux-good capture if the existing register window does not explain the delta.
+
 ## Local Evidence
 
 The 2026-05-27 Linux capture bundle is stored at:

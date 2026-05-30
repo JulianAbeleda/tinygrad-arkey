@@ -191,7 +191,7 @@ stop_trace() {
 }
 
 postprocess_trace() {
-  grep -Ei 'psp_hw_start|bl_load|wait_bl|mem_train|gart_map|wreg|rreg|C2PMSG|ring|tmr|toc|LOAD|SETUP|0x1606[13478]|0x1609[01c]|0x160b3|0x1a7|0x1a8|0x80000|0x07fff007' \
+  grep -Ei 'psp_hw_start|hw_init|hw_start|sw_init|init_microcode|bl_load|bootloader_load|wait_bl|vmbx|mem_train|gart_map|wreg|rreg|C2PMSG|ring|tmr|toc|LOAD|SETUP|0x1606[13478]|0x1609[01c]|0x160b3|0x1a7|0x1a8|0x80000|0x07fff007' \
     "$TRACE_OUT" > "$OUT/linux-pre-kdb-key-events.txt" || true
   grep -Ei ' [rw]reg .*reg=0x160[4-9a-b][0-9a-f]' \
     "$TRACE_OUT" > "$OUT/linux-c2pmsg-events.txt" || true
