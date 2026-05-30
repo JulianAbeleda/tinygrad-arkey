@@ -834,7 +834,7 @@ class AM_PSP(AM_IP):
       self._trace(f"reg {name}{'' if inst is None else f'[{inst}]'} read failed: {e}")
 
   def _trace_c2pmsg_regs(self, dense=False):
-    regs = range(128) if dense else (33, 35, 36, 64, 67, 81, 90, 92, 115)
+    regs = range(128) if dense else (33, 35, 36, 64, 67, 69, 70, 71, 81, 90, 92, 115)
     for reg in [f"{self.reg_pref}_{x}" for x in regs]: self._trace_reg(reg)
 
   def _trace_pre_bootloader_regs(self):
