@@ -46,6 +46,8 @@ class AM_Experiment:
   def trace_c2pmsg_dense() -> int: return _env_int("AM_PSP_TRACE_C2PMSG_DENSE")
   @staticmethod
   def pre_kdb_invalidate_burst() -> int: return _env_int("AM_PSP_PRE_KDB_INVALIDATE_BURST")
+  @staticmethod
+  def linux_pre_bl_status() -> int: return _env_int("AM_PSP_LINUX_PRE_BL_STATUS")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -998,6 +1000,9 @@ class AM_PSP(AM_IP):
   def _bootloader_load_component(self, fw:int, compid:int):
     if fw not in self.adev.fw.sos_fw: return 0
 
+    if AM_Experiment.linux_pre_bl_status():
+      reg81 = self.adev.reg(f"{self.reg_pref}_81")
+      self._trace(f"linux pre-bl status reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
     self._wait_for_bootloader()
 
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
