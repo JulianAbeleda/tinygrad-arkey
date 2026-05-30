@@ -89,6 +89,15 @@ class TestRemotePCIRPC(unittest.TestCase):
     self.assertEqual(paddrs, [0x1000, 0x2000])
     self.assertEqual(server.requests, [(RemoteCmd.MAP_SYSMEM, 8, 0, 0x2000, 2, 0, b'')])
 
+  def test_alloc_sysmem_contiguous_uses_mode_one(self):
+    sock, server = self.rpc_pair(response(resp0=16, resp1=4, payload=struct.pack("<QQ", 0x1000, 0x2000)))
+    dev = remote_dev(sock, dev_id=8)
+
+    _, paddrs = dev.alloc_sysmem(0x2000, contiguous=True)
+
+    self.assertEqual(paddrs, [0x1000, 0x2000])
+    self.assertEqual(server.requests, [(RemoteCmd.MAP_SYSMEM, 8, 0, 0x2000, 1, 0, b'')])
+
   def test_bulk_read_and_write_account_bytes(self):
     sock, server = self.rpc_pair(response(resp0=3, payload=b'xyz'), response())
     dev = remote_dev(sock, dev_id=9)
