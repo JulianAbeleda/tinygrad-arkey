@@ -262,6 +262,10 @@ write around `0x5feb00000`, outside the currently mapped 256 MiB BAR0 window.
 The current TinyGPU remote protocol exposes mapped BAR slices and DMA sysmem,
 but not an arbitrary high-VRAM write or remapped BAR window.
 
+On local Linux PCI, combine it with `AM_PSP_SYSMSG1_GART=1` to force the
+sysmem-GART msg1 path before testing KDB. Without that flag the PSP path uses
+the default VRAM msg1 buffer and does not exercise the PSP GART table setup.
+
 The tinygrad PSP setup now fails fast when this experiment is requested on a
 remote small-BAR path unless `AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE=1` is set.
 That unsafe override uses the AMD indirect VRAM MMIO aperture, which previously
