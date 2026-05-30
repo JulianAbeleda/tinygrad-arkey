@@ -881,11 +881,12 @@ class AM_PSP(AM_IP):
       elapsed_ms = (time.perf_counter() - start) * 1000
       val = reg.read()
       reads += 1
+      # Linux-good traces show C2PMSG35 can pass through 0 before the ready value.
       if val == 0 and first_zero_ms is None: first_zero_ms = elapsed_ms
       if self._trace_enabled() and (val != last_val or (trace_every_ms and elapsed_ms >= next_trace_ms)):
         self._trace(f"wait BL reg35={reg.addr[0]:#x} val={val:#x} elapsed_ms={elapsed_ms:.3f} reads={reads}")
-        last_val = val
         if trace_every_ms: next_trace_ms = elapsed_ms + trace_every_ms
+      last_val = val
       if val != 0xffffffff and (val == 0x80000000 if AM_Experiment.exact_bootloader_wait() else val & 0x80000000):
         self._trace(f"wait BL ready elapsed_ms={(time.perf_counter() - start) * 1000:.3f} reads={reads} first_zero_ms={first_zero_ms}")
         return 0x80000000
