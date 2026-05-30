@@ -873,17 +873,23 @@ class AM_PSP(AM_IP):
     reg = self.adev.reg(f"{self.reg_pref}_35")
     start = time.perf_counter()
     last_val = None
+    reads = 0
+    first_zero_ms = None
     next_trace_ms = 0
     trace_every_ms = AM_Experiment.wait_trace_ms()
     while (time.perf_counter() - start) * 1000 < 10000:
       elapsed_ms = (time.perf_counter() - start) * 1000
       val = reg.read()
+      reads += 1
+      if val == 0 and first_zero_ms is None: first_zero_ms = elapsed_ms
       if self._trace_enabled() and (val != last_val or (trace_every_ms and elapsed_ms >= next_trace_ms)):
-        self._trace(f"wait BL reg35={reg.addr[0]:#x} val={val:#x} elapsed_ms={elapsed_ms:.3f}")
+        self._trace(f"wait BL reg35={reg.addr[0]:#x} val={val:#x} elapsed_ms={elapsed_ms:.3f} reads={reads}")
         last_val = val
         if trace_every_ms: next_trace_ms = elapsed_ms + trace_every_ms
       if val != 0xffffffff and (val == 0x80000000 if AM_Experiment.exact_bootloader_wait() else val & 0x80000000):
+        self._trace(f"wait BL ready elapsed_ms={(time.perf_counter() - start) * 1000:.3f} reads={reads} first_zero_ms={first_zero_ms}")
         return 0x80000000
+    self._trace(f"wait BL timeout elapsed_ms={(time.perf_counter() - start) * 1000:.3f} reads={reads} first_zero_ms={first_zero_ms} last_val={last_val:#x}")
     self._trace_bootloader_snapshot("wait-timeout")
     raise TimeoutError(f"BL not ready. Timed out after 10000 ms, condition not met: {last_val & 0x80000000 if last_val is not None else None} != 2147483648")
 

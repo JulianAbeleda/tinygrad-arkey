@@ -43,12 +43,18 @@ kretprobe:psp_v13_0_bootloader_load_component
 
 kprobe:psp_v13_0_wait_for_bootloader
 {
+  @wait_bl_start[tid] = nsecs;
+  @wait_bl_reads[tid] = 0;
   printf("%llu wait_bl enter psp=%p\n", nsecs, arg0);
 }
 
 kretprobe:psp_v13_0_wait_for_bootloader
 {
-  printf("%llu wait_bl ret=%d\n", nsecs, retval);
+  $start = @wait_bl_start[tid];
+  $reads = @wait_bl_reads[tid];
+  printf("%llu wait_bl ret=%d duration_ns=%llu reads=%llu\n", nsecs, retval, $start ? nsecs - $start : 0, $reads);
+  delete(@wait_bl_start[tid]);
+  delete(@wait_bl_reads[tid]);
 }
 
 kprobe:psp_v13_0_memory_training_send_msg
@@ -119,6 +125,11 @@ kretprobe:amdgpu_device_rreg
 /@rreg_reg[tid]/
 {
   printf("%llu rreg reg=0x%x val=0x%x\n", nsecs, @rreg_reg[tid], retval);
+  if (@wait_bl_start[tid] && @rreg_reg[tid] == 0x16063) {
+    @wait_bl_reads[tid] = @wait_bl_reads[tid] + 1;
+    printf("%llu wait_bl_rreg dt_ns=%llu read=%llu reg=0x%x val=0x%x\n",
+      nsecs, nsecs - @wait_bl_start[tid], @wait_bl_reads[tid], @rreg_reg[tid], retval);
+  }
   delete(@rreg_reg[tid]);
 }
 '''

@@ -12,7 +12,8 @@ LINUX_BL_RE = re.compile(
   rf"^(?P<t>\d+) bl_load enter .* cmd=(?P<cmd>{HEX}) fw_pri_mc=(?P<fw_pri_mc>{HEX}) c2p36=(?P<c2p36>{HEX}) size=(?P<size>{HEX})"
 )
 LINUX_WAIT_ENTER_RE = re.compile(r"^(?P<t>\d+) wait_bl enter")
-LINUX_WAIT_RET_RE = re.compile(r"^(?P<t>\d+) wait_bl ret=(?P<ret>-?\d+)")
+LINUX_WAIT_RET_RE = re.compile(r"^(?P<t>\d+) wait_bl ret=(?P<ret>-?\d+)(?: duration_ns=(?P<duration_ns>\d+) reads=(?P<reads>\d+))?")
+LINUX_WAIT_RREG_RE = re.compile(rf"^(?P<t>\d+) wait_bl_rreg dt_ns=(?P<dt_ns>\d+) read=(?P<read>\d+) reg=(?P<reg>{HEX}) val=(?P<val>{HEX})")
 LINUX_GART_ENTER_RE = re.compile(
   rf"gart_map enter .* offset=(?P<offset>{HEX}) pages=(?P<pages>\d+) .* dma0=(?P<dma0>{HEX}) dma_last=(?P<dma_last>{HEX}) flags=(?P<flags>{HEX})"
 )
@@ -148,7 +149,7 @@ def firmware_report(fname:str, skip:int|None, readback:dict) -> list[str]:
   return lines
 
 def parse_linux(path:pathlib.Path) -> dict:
-  out = {"bl": [], "waits": [], "gart": {}, "reg_events": [], "c2pmsg_events": [], "source": str(path)}
+  out = {"bl": [], "waits": [], "wait_rregs": [], "gart": {}, "reg_events": [], "c2pmsg_events": [], "source": str(path)}
   wait_start = None
   seen_bl = set()
   seen_reg_events = set()
@@ -164,8 +165,11 @@ def parse_linux(path:pathlib.Path) -> dict:
     elif m := LINUX_WAIT_RET_RE.search(line):
       end = as_int(m.group("t"))
       out["waits"].append({"start": wait_start, "end": end, "ret": int(m.group("ret")),
-                           "duration_ns": None if wait_start is None else end - wait_start})
+                           "duration_ns": as_int(m.group("duration_ns")) if m.group("duration_ns") else (None if wait_start is None else end - wait_start),
+                           "reads": as_int(m.group("reads"))})
       wait_start = None
+    elif m := LINUX_WAIT_RREG_RE.search(line):
+      out["wait_rregs"].append({k: as_int(v) for k, v in m.groupdict().items()})
     elif m := LINUX_GART_ENTER_RE.search(line):
       out["gart"].update({k: as_int(v) for k, v in m.groupdict().items()})
     elif m := LINUX_GART_RET_RE.search(line):
@@ -369,6 +373,13 @@ def report(linux:dict, tiny:dict, firmware:str|None) -> str:
   ready_waits = [w for w in linux["waits"] if w.get("duration_ns") is not None]
   if ready_waits:
     lines.append(f"linux wait durations ns: {', '.join(str(w['duration_ns']) for w in ready_waits[:8])}")
+    if any(w.get("reads") is not None for w in ready_waits):
+      lines.append(f"linux wait read counts: {', '.join(str(w.get('reads')) for w in ready_waits[:8])}")
+  if linux["wait_rregs"]:
+    lines.append("linux wait C2PMSG35 reads:")
+    for e in linux["wait_rregs"][:64]:
+      lines.append(f"  dt_ns={e['dt_ns']} read={e['read']} val={hexv(e['val'])}")
+    if len(linux["wait_rregs"]) > 64: lines.append(f"  ... {len(linux['wait_rregs']) - 64} more wait reads")
   if tiny["wait_vals"]:
     lines.append(f"tinygrad observed wait BL values: {', '.join(hexv(v) for v in tiny['wait_vals'])}")
   lines.append(f"tinygrad timed out waiting BL: {tiny['timeout']}")
