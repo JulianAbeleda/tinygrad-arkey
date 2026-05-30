@@ -9,6 +9,18 @@ from tinygrad.runtime.support.am.amdev import AMDev
 from tinygrad.runtime.support.amd import AMD_RUNTIME_DEVICES
 from tinygrad.runtime.support.system import RemotePCIDevice, System
 
+PSP_GATE_REGS = {
+  "C2PMSG33_VMBX": 0x16061,
+  "C2PMSG35_BL": 0x16063,
+  "C2PMSG36_ADDR": 0x16064,
+  "C2PMSG64_RING": 0x16080,
+  "C2PMSG67_WPTR": 0x16083,
+  "C2PMSG81_SOS": 0x16091,
+  "C2PMSG90_SMU": 0x1609a,
+  "C2PMSG92_STATUS": 0x1609c,
+  "C2PMSG115_SPI": 0x160b3,
+}
+
 def stamp(msg:str):
   print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)
 
@@ -118,22 +130,53 @@ def remote_bar_read(pci, bars:list[int], offsets:list[int], sizes:list[int], rep
           require_visible(f"bar{bar} read off={off:#x} size={sz:#x} iter {i+1}")
 
 def remote_psp_status(pci):
-  regs = {
-    "C2PMSG33_VMBX": 0x16061,
-    "C2PMSG35_BL": 0x16063,
-    "C2PMSG36_ADDR": 0x16064,
-    "C2PMSG64_RING": 0x16080,
-    "C2PMSG67_WPTR": 0x16083,
-    "C2PMSG81_SOS": 0x16091,
-    "C2PMSG90_SMU": 0x1609a,
-    "C2PMSG92_STATUS": 0x1609c,
-    "C2PMSG115_SPI": 0x160b3,
-  }
   stamp("map BAR5")
   view = pci.map_bar(5, fmt="I")
-  for name, reg in regs.items():
+  for name, reg in PSP_GATE_REGS.items():
     stamp(f"psp {name} reg={reg:#x} val={view[reg]:#010x}")
   require_visible("psp-status")
+
+def classify_psp_clean_gate(vals:dict[str, int]) -> tuple[str, list[str]]:
+  reasons = []
+  if vals.get("C2PMSG33_VMBX") == 0xffffffff or vals.get("C2PMSG35_BL") == 0xffffffff:
+    return "DIRTY", ["PSP mailbox returned all-ones MMIO"]
+  if vals.get("C2PMSG35_BL") == 0x0:
+    return "DIRTY", ["bootloader mailbox is stuck at C2PMSG35_BL=0"]
+  if vals.get("C2PMSG81_SOS", 0) != 0:
+    return "DIRTY", [f"sOS is already alive/nonzero C2PMSG81_SOS={vals.get('C2PMSG81_SOS'):#010x}"]
+  if vals.get("C2PMSG33_VMBX") != 0x80000000:
+    reasons.append(f"unexpected C2PMSG33_VMBX={vals.get('C2PMSG33_VMBX', 0):#010x}")
+  if vals.get("C2PMSG35_BL") != 0x80000000:
+    reasons.append(f"unexpected C2PMSG35_BL={vals.get('C2PMSG35_BL', 0):#010x}")
+  if vals.get("C2PMSG36_ADDR", 0) != 0:
+    reasons.append(f"suspicious nonzero C2PMSG36_ADDR={vals.get('C2PMSG36_ADDR'):#010x}")
+  return ("UNKNOWN", reasons) if reasons else ("CLEAN", ["PSP mailbox is at pre-KDB ready baseline"])
+
+def remote_psp_clean_gate(pci) -> int:
+  stamp("clean-gate begin")
+  try:
+    stamp(f"gate cfg0={pci.read_config(0, 4):#x} cmd={pci.read_config(4, 2):#x}")
+    stamp("gate map BAR5")
+    view = pci.map_bar(5, fmt="I")
+    stamp(f"gate memsize_reg={view[0xde3]:#x} vram={view[0xde3] << 20:#x}")
+    vals = {name: view[reg] for name, reg in PSP_GATE_REGS.items()}
+    for name, reg in PSP_GATE_REGS.items(): stamp(f"gate psp {name} reg={reg:#x} val={vals[name]:#010x}")
+    require_visible("psp-clean-gate")
+  except Exception as e:
+    stamp(f"gate error={type(e).__name__}: {e}")
+    print("DIRTY: full hardware restart required", flush=True)
+    return 1
+
+  status, reasons = classify_psp_clean_gate(vals)
+  for reason in reasons: stamp(f"gate {status.lower()} reason={reason}")
+  if status == "CLEAN":
+    print("CLEAN: safe to run audit/real KDB attempt", flush=True)
+    return 0
+  if status == "DIRTY":
+    print("DIRTY: full hardware restart required", flush=True)
+    return 1
+  print("UNKNOWN: do not trust this state", flush=True)
+  return 2
 
 def remote_nbio_status(pci):
   direct_regs = {
@@ -396,7 +439,7 @@ def amd_boot_and_alloc(sizes:list[int], repeat:int):
 if __name__ == "__main__":
   p = argparse.ArgumentParser(description="Narrow AMD/TinyGPU dropout repro without LLM loading")
   p.add_argument("remote", nargs="?", default=os.environ.get("REMOTE", "127.0.0.1:6667"))
-  p.add_argument("--stage", choices=("bars", "bar-read", "bar-write", "bar0-read", "bar0-write", "psp-fw", "psp-status", "psp-pre-kdb-snapshot", "psp-runtime-db", "nbio-status", "nbio-bifc-pcie-write", "nbio-bifc-rsmu-write", "psp-sysmem-probe", "reset", "remote-sysmem", "amd-boot", "all"), default="all")
+  p.add_argument("--stage", choices=("bars", "bar-read", "bar-write", "bar0-read", "bar0-write", "psp-fw", "psp-status", "psp-clean-gate", "psp-pre-kdb-snapshot", "psp-runtime-db", "nbio-status", "nbio-bifc-pcie-write", "nbio-bifc-rsmu-write", "psp-sysmem-probe", "reset", "remote-sysmem", "amd-boot", "all"), default="all")
   p.add_argument("--fw", default="psp_13_0_10_sos.bin", help="PSP firmware file for psp-fw stage")
   p.add_argument("--sizes", default="16384,2097152,16777216", help="comma-separated allocation sizes")
   p.add_argument("--bars", default="0", help="comma-separated BAR indexes for read/write stages")
@@ -417,6 +460,17 @@ if __name__ == "__main__":
   if args.stage == "psp-fw":
     psp_fw_dump(args.fw)
     sys.exit(0)
+  if args.stage == "psp-clean-gate":
+    if not mac_gpu_visible():
+      print("DIRTY: full hardware restart required", flush=True)
+      sys.exit(1)
+    try:
+      pci = open_remote()
+    except Exception as e:
+      stamp(f"gate remote open error={type(e).__name__}: {e}")
+      print("DIRTY: full hardware restart required", flush=True)
+      sys.exit(1)
+    sys.exit(remote_psp_clean_gate(pci))
   require_visible("start")
   pci = open_remote()
   if args.stage in ("bar-read", "bar0-read"):
