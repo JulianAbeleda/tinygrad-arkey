@@ -377,6 +377,7 @@ def report(linux:dict, tiny:dict, firmware:str|None) -> str:
       lines.append(f"linux wait read counts: {', '.join(str(w.get('reads')) for w in ready_waits[:8])}")
   if linux["wait_rregs"]:
     lines.append("linux wait C2PMSG35 reads:")
+    # Keep the report readable when deep tracing captures a long poll loop.
     for e in linux["wait_rregs"][:64]:
       lines.append(f"  dt_ns={e['dt_ns']} read={e['read']} val={hexv(e['val'])}")
     if len(linux["wait_rregs"]) > 64: lines.append(f"  ... {len(linux['wait_rregs']) - 64} more wait reads")
