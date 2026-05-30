@@ -272,6 +272,19 @@ That unsafe override uses the AMD indirect VRAM MMIO aperture, which previously
 closed the TinyGPU RPC connection during the first high-table write. Prefer a
 Linux-side run with full BAR/ReBAR VRAM access for this experiment.
 
+Ubuntu retest from a blacklisted boot on 2026-05-29 exercised the intended
+local Linux path after `8f783c9f5 [runtime] allow local PSP GART msg buffer`.
+The audit log `psp-top-table-audit-clean-20260529-225334.log` used
+`msg1 sysmem gart raw=0x1458e8000 addr=0x7fff00000000`, completed long memory
+training, programmed `table_paddr=0x5fdb00000`, `pt_base=0x5fdb00001`,
+`msg1_off=0x700000`, and stopped before KDB as intended.
+
+The real run `psp-top-table-real-clean-20260529-225458.log` then loaded KDB
+with `C2PMSG36=0x07fff007` and still timed out waiting for bootloader ready:
+final `C2PMSG35=0x00000000`, final `C2PMSG36=0x07fff007`, and no MMHUB
+protection fault. This rules out low-vs-high PSP GART table placement as the
+KDB readiness blocker for the tested input set.
+
 ## Local Evidence
 
 The 2026-05-27 Linux capture bundle is stored at:
