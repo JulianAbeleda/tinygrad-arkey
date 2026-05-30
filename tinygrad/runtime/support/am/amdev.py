@@ -1,6 +1,6 @@
 from __future__ import annotations
 import ctypes, collections, dataclasses, functools, hashlib, array
-from tinygrad.helpers import mv_address, getenv, DEBUG, lo32, hi32, fetch_fw, OSX
+from tinygrad.helpers import mv_address, getenv, DEBUG, lo32, hi32, fetch_fw
 from tinygrad.runtime.autogen import pci
 from tinygrad.runtime.autogen.am import am, fw
 from tinygrad.runtime.support.amd import AMDReg, import_module, import_asic_regs
@@ -308,7 +308,7 @@ class AMDev:
     return bytes(array.array('I', res))
 
   def _write_vram(self, addr:int, data:bytes):
-    if OSX and getattr(self.pci_dev, "is_remote", False) and not getenv("AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE", 0):
+    if getattr(self.pci_dev, "is_remote", False) and not getenv("AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE", 0):
       raise RuntimeError("remote AMD indirect VRAM writes are disabled because this path can close the TinyGPU RPC connection. "
                          "Set AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE=1 to force the unsafe path.")
     if addr % 4 != 0 or len(data) % 4 != 0: raise ValueError(f"Invalid address {addr:#x} or size {len(data):#x}")
