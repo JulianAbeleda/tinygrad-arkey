@@ -745,7 +745,7 @@ class AM_PSP(AM_IP):
       self.msg1_kind = "sysmem-gtt"
       self._trace(f"msg1 sysmem gtt raw={paddrs[0]:#x} view_off={view_off:#x} va={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getenv("AM_PSP_SYSMSG1_GART", 0):
-      raw_view, paddrs = self.adev.pci_dev.alloc_contiguous_sysmem(am.PSP_1_MEG) if getenv("AM_PSP_SYSMSG1_GART_CONTIG", 0) else \
+      raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(am.PSP_1_MEG, contiguous=True) if getenv("AM_PSP_SYSMSG1_GART_CONTIG", 0) else \
                          self.adev.pci_dev.alloc_sysmem(am.PSP_1_MEG)
       if len(paddrs) != am.PSP_1_MEG // 0x1000: raise ValueError(f"expected 1MB sysmem pages, got {len(paddrs)}")
       if getenv("AM_PSP_SYSMSG1_GART_CONTIG", 0) and not all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)):
