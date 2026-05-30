@@ -187,6 +187,12 @@ class AM_GMC(AM_IP):
       gart_table_paddr = AM_Experiment.gart_table_addr(self.adev.vram_size - 0x1500000)
       if gart_table_paddr % 0x1000 != 0 or gart_table_paddr + table_size > self.adev.vram_size:
         raise ValueError(f"invalid PSP GART table paddr={gart_table_paddr:#x} size={table_size:#x} vram={self.adev.vram_size:#x}")
+      if getattr(self.adev.pci_dev, "is_remote", False) and gart_table_paddr + table_size > self.adev.vram.nbytes and \
+         not getenv("AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE", 0):
+        raise RuntimeError(f"AM_PSP_GART_TABLE_TOP=1 needs to write PSP GART table paddr={gart_table_paddr:#x} "
+                           f"size={table_size:#x}, but remote BAR0 maps only {self.adev.vram.nbytes:#x} bytes. "
+                           "Run this experiment from a Linux path with full VRAM BAR access, or explicitly set "
+                           "AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE=1 to force the guarded indirect write path.")
       gart_table = [0] * (table_size // 8)
     else:
       gart_table_paddr = self.adev.mm.palloc(table_size, align=0x1000, zero=True, boot=True)

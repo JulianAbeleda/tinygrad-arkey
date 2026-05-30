@@ -205,6 +205,69 @@ trace before adding another KDB experiment. The next likely difference is
 MMHUB/GART context setup, invalidation semantics, or another Linux pre-KDB init
 side effect.
 
+## 2026-05-29 Dense Trace Result
+
+The useful Linux-good dense capture is:
+
+```text
+extra/amdpci/captures/psp-linux-good-20260529-164412.tar.gz
+sha256 af6d476e597294962eedcb6a9bf9f11425a19d10d6f57fc9e7b88c1b9ffa95a5
+```
+
+The closest tinygrad comparison capture is:
+
+```text
+extra/amdpci/captures/linux-gart-linuxctx-dense-real-20260529-171906.tar.gz
+sha256 efa2e7cb288682fd08c1357c11d06c7e0a9d593b4b34ceddb07d5f7c2e509908
+```
+
+Run:
+
+```bash
+PYTHONPATH=. python3 extra/amdpci/compare_psp_traces.py \
+  --linux extra/amdpci/captures/psp-linux-good-20260529-164412.tar.gz \
+  --tinygrad extra/amdpci/captures/linux-gart-linuxctx-dense-real-20260529-171906.tar.gz
+```
+
+As of this comparison, tinygrad matches Linux-good on KDB compid `0x80000`,
+`C2PMSG36=0x7fff007`, KDB payload bytes, msg1 address, msg1 readback, Linux-like
+MMHUB context0 setup, table base `0x5feb00001`, and zero MMHUB fault status.
+The immediate remaining failure is behavioral: after KDB, Linux sees
+`C2PMSG35` move through the command and a transient zero before returning
+`0x80000000` in about 0.65 ms, while tinygrad sees `C2PMSG35=0` until the
+10-second timeout.
+
+The later nonzero Linux values in C2PMSG64/67/69/70/71/81 are downstream of
+successful KDB and later bootloader/ring work, not evidence that tinygrad should
+preprogram those registers before KDB. In the dense capture they first become
+interesting tens of milliseconds after KDB starts, while tinygrad never gets
+past the first KDB ready wait.
+
+A follow-up contiguous sysmem-GART dense attempt is stored at:
+
+```text
+extra/amdpci/captures/linux-gart-contig-linuxctx-dense-real-20260529-172812.tar.gz
+sha256 e06db7e69e15529e4a1de33e89fd4bff8a4a4696c91d684d061232f36c4b07b3
+```
+
+That run failed during `AM_PSP_MEM_TRAIN=long` before GART PTE setup or KDB
+mailbox writes. Treat it as inconclusive for KDB; it only shows the contiguous
+allocation path can change the earlier memory-training phase.
+
+## Mac/TinyGPU Top-Table Limit
+
+`AM_PSP_GART_TABLE_TOP=1` places the PSP GART page table near Linux amdgpu's
+observed high VRAM location. On the Mac/TinyGPU remote path this requires a
+write around `0x5feb00000`, outside the currently mapped 256 MiB BAR0 window.
+The current TinyGPU remote protocol exposes mapped BAR slices and DMA sysmem,
+but not an arbitrary high-VRAM write or remapped BAR window.
+
+The tinygrad PSP setup now fails fast when this experiment is requested on a
+remote small-BAR path unless `AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE=1` is set.
+That unsafe override uses the AMD indirect VRAM MMIO aperture, which previously
+closed the TinyGPU RPC connection during the first high-table write. Prefer a
+Linux-side run with full BAR/ReBAR VRAM access for this experiment.
+
 ## Local Evidence
 
 The 2026-05-27 Linux capture bundle is stored at:

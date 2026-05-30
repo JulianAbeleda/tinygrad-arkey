@@ -39,6 +39,7 @@ TG_SNAPSHOT_BEGIN_RE = re.compile(r"parity snapshot (?P<label>\S+) begin")
 TG_SNAPSHOT_END_RE = re.compile(r"parity snapshot (?P<label>\S+) end")
 C2PMSG_BASE = 0x16040
 C2PMSG_COUNT = 128
+FOCUS_C2PMSG = (35, 36, 64, 67, 69, 70, 71, 81)
 
 REG_NAMES = [
   "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR", "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
@@ -145,9 +146,14 @@ def firmware_report(fname:str, skip:int|None, readback:dict) -> list[str]:
 def parse_linux(path:pathlib.Path) -> dict:
   out = {"bl": [], "waits": [], "gart": {}, "c2pmsg_events": [], "source": str(path)}
   wait_start = None
+  seen_bl = set()
+  seen_events = set()
   for line in lines_for(path, ["psp-linux-good.trace", "psp-linux-good-deep.trace", "linux-pre-kdb-key-events.txt", "linux-c2pmsg-events.txt"]):
     if m := LINUX_BL_RE.search(line):
-      out["bl"].append({k: as_int(v) for k, v in m.groupdict().items()})
+      item = tuple((k, as_int(v)) for k, v in m.groupdict().items())
+      if item not in seen_bl:
+        seen_bl.add(item)
+        out["bl"].append({k: v for k, v in item})
     elif m := LINUX_WAIT_ENTER_RE.search(line):
       wait_start = as_int(m.group("t"))
     elif m := LINUX_WAIT_RET_RE.search(line):
@@ -162,7 +168,10 @@ def parse_linux(path:pathlib.Path) -> dict:
     elif m := LINUX_REG_RE.search(line):
       reg, val = as_int(m.group("reg")), as_int(m.group("val"))
       if (idx := linux_c2pmsg_idx(reg)) is not None:
-        out["c2pmsg_events"].append({"t": as_int(m.group("t")), "op": m.group("op"), "idx": idx, "reg": reg, "val": val})
+        item = (as_int(m.group("t")), m.group("op"), idx, reg, val)
+        if item not in seen_events:
+          seen_events.add(item)
+          out["c2pmsg_events"].append({"t": item[0], "op": item[1], "idx": item[2], "reg": item[3], "val": item[4]})
   return out
 
 def parse_tinygrad(path:pathlib.Path) -> dict:
@@ -253,6 +262,52 @@ def c2pmsg_delta_report(linux:dict, tiny:dict) -> list[str]:
   lines.append("")
   return lines
 
+def c2pmsg_focus_timeline_report(linux:dict, tiny:dict, limit:int=80) -> list[str]:
+  lines = ["Focused C2PMSG timeline"]
+  kdb = next((x for x in linux["bl"] if x.get("cmd") == 0x80000), None)
+  kdb_t = kdb.get("t") if kdb else None
+
+  lines.append("Linux bootloader load order after KDB:")
+  if kdb_t is None:
+    lines.append("  missing KDB bl_load timestamp")
+  else:
+    for item in [x for x in linux["bl"] if x.get("t") is not None and x["t"] >= kdb_t][:8]:
+      dt_ms = (item["t"] - kdb_t) / 1_000_000
+      lines.append(f"  +{dt_ms:9.3f} ms cmd={hexv(item.get('cmd'))} c2p36={hexv(item.get('c2p36'))} size={hexv(item.get('size'))}")
+
+  lines.append("Linux focused C2PMSG changes after KDB bl_load enter:")
+  if kdb_t is None:
+    lines.append("  missing KDB bl_load timestamp")
+  else:
+    last:dict[int, int|None] = {}
+    shown = 0
+    for e in linux["c2pmsg_events"]:
+      if e["t"] is None or e["t"] < kdb_t or e["idx"] not in FOCUS_C2PMSG: continue
+      val = e["val"]
+      changed = last.get(e["idx"]) != val
+      if e["op"] != "wreg" and not changed: continue
+      last[e["idx"]] = val
+      dt_ms = (e["t"] - kdb_t) / 1_000_000
+      lines.append(f"  +{dt_ms:9.3f} ms {e['op']:4} C2PMSG{e['idx']:<2}={hexv(val)}")
+      shown += 1
+      if shown >= limit:
+        lines.append(f"  ... truncated at {limit} focused events")
+        break
+    if shown == 0: lines.append("  no focused events found")
+
+  lines.append("Tinygrad focused C2PMSG snapshots:")
+  if tiny["snapshots"]:
+    for snap in tiny["snapshots"]:
+      regs = snap["regs"]
+      vals = []
+      for idx in FOCUS_C2PMSG:
+        vals.append(f"{idx}={hexv(reg_lookup(regs, c2pmsg_name(idx)))}")
+      lines.append(f"  {snap['label']}: " + ", ".join(vals))
+  else:
+    lines.append("  missing")
+  lines.append("")
+  return lines
+
 def report(linux:dict, tiny:dict, firmware:str|None) -> str:
   lines = ["PSP trace comparison", f"linux source: {linux['source']}", f"tinygrad source: {tiny['source']}", ""]
   kdb = next((x for x in linux["bl"] if x.get("cmd") == 0x80000), None)
@@ -316,6 +371,7 @@ def report(linux:dict, tiny:dict, firmware:str|None) -> str:
     lines.append("")
 
   lines.extend(c2pmsg_delta_report(linux, tiny))
+  lines.extend(c2pmsg_focus_timeline_report(linux, tiny))
 
   lines.append("Observations")
   if kdb and tg_kdb and kdb.get("size") == tg_kdb.get("bytes"):
