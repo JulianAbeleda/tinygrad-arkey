@@ -291,6 +291,17 @@ from the deep trace, and the deep trace generator includes additional PSP
 lifecycle wrapper probes when those symbols are visible. Use a fresh `--deep`
 Linux-good capture if the existing register window does not explain the delta.
 
+Stop point: a fresh capture attempt from `784dd3e39` created
+`psp-linux-good-20260529-230335`, but it is not a valid Linux-good baseline.
+The bind path failed with `echo: write error: Invalid argument`, KDB returned
+`-62` / `-ETIME`, bpftrace reported lost events, and no archive/checksum was
+produced. After scheduling a fresh blacklisted reboot, the proceed gate failed
+because the RX 7900 XTX BDF `0000:08:00.0` was no longer visible: `lspci`
+showed no `1002:744c`, `/sys/bus/pci/devices/0000:08:00.0` did not exist, and
+`dmesg` did not show the target GPU. Do not use `psp-linux-good-20260529-230335`
+for comparison; recover PCI enumeration before taking the next Linux-good
+capture.
+
 ## Local Evidence
 
 The 2026-05-27 Linux capture bundle is stored at:
