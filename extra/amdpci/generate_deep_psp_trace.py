@@ -109,14 +109,18 @@ kretprobe:amdgpu_gart_map
 REG_TRACE = r'''
 kprobe:amdgpu_device_wreg
 {
-  if ((arg1 >= 0x16040 && arg1 <= 0x160bf) || (arg1 >= 0x1a700 && arg1 <= 0x1a800) || (arg1 >= 0x1a8d0 && arg1 <= 0x1a900)) {
+  if ((arg1 >= 0x16040 && arg1 <= 0x160bf) || (arg1 >= 0x1a700 && arg1 <= 0x1a800) || (arg1 >= 0x1a8d0 && arg1 <= 0x1a900) ||
+      arg1 == 0xc0 || arg1 == 0x106 || arg1 == 0x107 || arg1 == 0x12d || arg1 == 0x12e ||
+      arg1 == 0xcf6e || arg1 == 0xd102 || arg1 == 0xd114 || arg1 == 0xe8ad) {
     printf("%llu wreg adev=%p reg=0x%x val=0x%x\n", nsecs, arg0, arg1, arg2);
   }
 }
 
 kprobe:amdgpu_device_rreg
 {
-  if ((arg1 >= 0x16040 && arg1 <= 0x160bf) || (arg1 >= 0x1a700 && arg1 <= 0x1a800) || (arg1 >= 0x1a8d0 && arg1 <= 0x1a900)) {
+  if ((arg1 >= 0x16040 && arg1 <= 0x160bf) || (arg1 >= 0x1a700 && arg1 <= 0x1a800) || (arg1 >= 0x1a8d0 && arg1 <= 0x1a900) ||
+      arg1 == 0xc0 || arg1 == 0x106 || arg1 == 0x107 || arg1 == 0x12d || arg1 == 0x12e ||
+      arg1 == 0xcf6e || arg1 == 0xd102 || arg1 == 0xd114 || arg1 == 0xe8ad) {
     @rreg_reg[tid] = arg1;
   }
 }
