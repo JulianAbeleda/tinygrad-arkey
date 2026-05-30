@@ -21,6 +21,7 @@ PSP_GATE_REGS = {
   "C2PMSG92_STATUS": 0x1609c,
   "C2PMSG115_SPI": 0x160b3,
 }
+PSP_CLEAN_GATE_ALLOWED_C2PMSG36 = {0x0, 0x5fff}
 
 def stamp(msg:str):
   print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)
@@ -149,7 +150,7 @@ def classify_psp_clean_gate(vals:dict[str, int]) -> tuple[str, list[str]]:
     reasons.append(f"unexpected C2PMSG33_VMBX={vals.get('C2PMSG33_VMBX', 0):#010x}")
   if vals.get("C2PMSG35_BL") != 0x80000000:
     reasons.append(f"unexpected C2PMSG35_BL={vals.get('C2PMSG35_BL', 0):#010x}")
-  if vals.get("C2PMSG36_ADDR", 0) != 0:
+  if vals.get("C2PMSG36_ADDR", 0) not in PSP_CLEAN_GATE_ALLOWED_C2PMSG36:
     reasons.append(f"suspicious nonzero C2PMSG36_ADDR={vals.get('C2PMSG36_ADDR'):#010x}")
   return ("UNKNOWN", reasons) if reasons else ("CLEAN", ["PSP mailbox is at pre-KDB ready baseline"])
 

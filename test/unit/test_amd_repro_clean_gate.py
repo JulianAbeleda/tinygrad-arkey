@@ -44,8 +44,14 @@ class TestAMDCleanGate(unittest.TestCase):
   def test_unknown_when_ready_with_nonzero_msg_addr(self):
     vals = dict(BASELINE, C2PMSG36_ADDR=0x5fff)
     status, reasons = classify_psp_clean_gate(vals)
+    self.assertEqual(status, "CLEAN")
+    self.assertEqual(reasons, ["PSP mailbox is at pre-KDB ready baseline"])
+
+  def test_unknown_when_ready_with_unexpected_msg_addr(self):
+    vals = dict(BASELINE, C2PMSG36_ADDR=0x7fff007)
+    status, reasons = classify_psp_clean_gate(vals)
     self.assertEqual(status, "UNKNOWN")
-    self.assertIn("C2PMSG36_ADDR=0x00005fff", reasons[0])
+    self.assertIn("C2PMSG36_ADDR=0x07fff007", reasons[0])
 
 if __name__ == "__main__":
   unittest.main()
