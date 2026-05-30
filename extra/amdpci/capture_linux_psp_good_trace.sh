@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: capture_linux_psp_good_trace.sh [--deep] [--out DIR] [--bind-bdf BDF | --rebind-bdf BDF]
+usage: capture_linux_psp_good_trace.sh [--deep] [--deep-optional] [--out DIR] [--bind-bdf BDF | --rebind-bdf BDF]
 
 Capture a Linux-good AMD PSP boot trace for Navi31/RX 7900 XTX.
 
@@ -20,7 +20,9 @@ requires the amdgpu PSP symbols to already be visible in /proc/kallsyms.
 
 Options:
   --deep           Generate a wider PSP trace from visible kallsyms and include
-                   optional pre-KDB PSP/MMHUB/register probes when available.
+                   pre-KDB PSP/MMHUB/register probes when available.
+  --deep-optional  With --deep, also include broad optional PSP entry/return
+                   probes. This can slow attach enough to miss early boot events.
 EOF
 }
 
@@ -38,10 +40,16 @@ MODE="manual"
 BIND_BDF=""
 DEV=""
 DEEP=0
+DEEP_OPTIONAL=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --deep)
       DEEP=1
+      shift
+      ;;
+    --deep-optional)
+      DEEP=1
+      DEEP_OPTIONAL=1
       shift
       ;;
     --out)
@@ -173,7 +181,9 @@ fi
 
 if [ "$DEEP" -eq 1 ]; then
   TRACE_SCRIPT="$OUT/trace_amdgpu_psp_deep.generated.bt"
-  python3 "$DEEP_GENERATOR" --out "$TRACE_SCRIPT" --symbols-out "$OUT/psp-deep-generated-symbols.txt"
+  GEN_ARGS=(--out "$TRACE_SCRIPT" --symbols-out "$OUT/psp-deep-generated-symbols.txt")
+  [ "$DEEP_OPTIONAL" -eq 0 ] || GEN_ARGS+=(--optional-probes)
+  python3 "$DEEP_GENERATOR" "${GEN_ARGS[@]}"
 fi
 
 TRACE_OUT="$OUT/psp-linux-good.trace"

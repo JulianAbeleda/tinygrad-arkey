@@ -171,6 +171,7 @@ def main():
   parser.add_argument("--kallsyms", default="/proc/kallsyms")
   parser.add_argument("--out", required=True)
   parser.add_argument("--symbols-out", required=True)
+  parser.add_argument("--optional-probes", action="store_true", help="include broad PSP optional entry/return probes")
   args = parser.parse_args()
 
   symbols = symbols_from_kallsyms(pathlib.Path(args.kallsyms))
@@ -189,10 +190,13 @@ def main():
     emitted.append("skip amdgpu_device_[rw]reg")
 
   emitted.append("optional:")
-  for sym in OPTIONAL_PROBES:
-    if sym in symbols:
-      body.append(optional_entry_ret(sym))
-      emitted.append(sym)
+  if args.optional_probes:
+    for sym in OPTIONAL_PROBES:
+      if sym in symbols:
+        body.append(optional_entry_ret(sym))
+        emitted.append(sym)
+  else:
+    emitted.append("skip optional probes")
 
   body.append('''
 END
