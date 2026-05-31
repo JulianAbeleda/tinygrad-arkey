@@ -311,7 +311,7 @@ class PCIIfaceBase:
 # *** Remote PCI Devices
 
 class RemoteCmd(enum.IntEnum):
-  PROBE,MAP_BAR,MAP_SYSMEM_FD,CFG_READ,CFG_WRITE,RESET,MMIO_READ,MMIO_WRITE,MAP_SYSMEM,SYSMEM_READ,SYSMEM_WRITE,RESIZE_BAR,PING,HEALTH = range(14)
+  PROBE,MAP_BAR,MAP_SYSMEM_FD,CFG_READ,CFG_WRITE,RESET,MMIO_READ,MMIO_WRITE,MAP_SYSMEM,SYSMEM_READ,SYSMEM_WRITE,RESIZE_BAR,PING,HEALTH,SYSMEM_SYNC = range(15)
 
 class RemoteMMIOInterface(MMIOInterface):
   def __init__(self, dev:RemotePCIDevice, residx:int, nbytes:int, fmt='B', off=0, rd_cmd=RemoteCmd.MMIO_READ, wr_cmd=RemoteCmd.MMIO_WRITE):
@@ -332,6 +332,8 @@ class RemoteMMIOInterface(MMIOInterface):
 
   def view(self, offset:int=0, size:int|None=None, fmt=None):
     return RemoteMMIOInterface(self.dev, self.residx, size or (self.nbytes - offset), fmt or self.fmt, self.off + offset, self.rd_cmd, self.wr_cmd)
+  def sync(self, invalidate:bool=False):
+    if self.wr_cmd == RemoteCmd.SYSMEM_WRITE: self.dev.sync_sysmem(self.residx, self.off, self.nbytes, invalidate=invalidate)
 
 class RemotePCIDevice(PCIDevice):
   is_remote = True
@@ -467,6 +469,8 @@ class RemotePCIDevice(PCIDevice):
     paddrs = list(struct.unpack(f'<{paddrs_len // 8}Q', unwrap(paddrs_data)))
     return RemoteMMIOInterface(self, handle, size, fmt='B', rd_cmd=RemoteCmd.SYSMEM_READ, wr_cmd=RemoteCmd.SYSMEM_WRITE), paddrs
 
+  def sync_sysmem(self, handle:int, offset:int, size:int, invalidate:bool=False):
+    self._rpc(self.sock, self.dev_id, RemoteCmd.SYSMEM_SYNC, offset, size, int(invalidate), bar=handle)
   def reset(self): self._rpc(self.sock, self.dev_id, RemoteCmd.RESET)
   def health(self) -> tuple[bool, str]:
     _, dirty, data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.HEALTH, readout_size=-1)

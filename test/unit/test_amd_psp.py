@@ -27,6 +27,16 @@ class FakeMsg1View:
   def __getitem__(self, idx): return bytes(self.data[idx])
   def __setitem__(self, idx, val): self.data[idx] = val
 
+class FakeSyncMsg1View(FakeMsg1View):
+  def __init__(self, data:bytes, off=0, syncs=None):
+    super().__init__(data)
+    self.off, self.syncs = off, [] if syncs is None else syncs
+  def view(self, offset:int=0, size:int|None=None, fmt=None):
+    view = FakeSyncMsg1View(bytes(self.data[offset:offset + (size or len(self.data) - offset)]), self.off + offset, self.syncs)
+    view.nbytes = size or len(self.data) - offset
+    return view
+  def sync(self, invalidate=False): self.syncs.append((self.off, self.nbytes, invalidate))
+
 class TestAMDPSP(unittest.TestCase):
   def test_bootloader_wait_timeout_uses_last_read_with_trace_disabled(self):
     psp = object.__new__(AM_PSP)
@@ -76,6 +86,25 @@ class TestAMDPSP(unittest.TestCase):
 
     self.assertEqual(psp.msg1_view.data, bytearray(bytes(range(256)) * 16))
     self.assertEqual(gmc.flushes, 2)
+
+  def test_msg1_sysmem_sync_uses_written_payload_range(self):
+    gmc = FakeGMC()
+    adev = FakeAdev()
+    adev.gmc = gmc
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_view = FakeSyncMsg1View(b"\x00" * 0x1000)
+
+    with mock.patch.dict(os.environ, {"AM_PSP_MSG1_SYSMEM_SYNC": "1", "AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._prep_msg1(memoryview(b"abc"))
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(psp.msg1_view.syncs, [(0, 16, True)])
+    self.assertEqual(gmc.flushes, 1)
 
   def test_kdb_fail_capture_sampler_skips_missing_focus_regs(self):
     reads = []

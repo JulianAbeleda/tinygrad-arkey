@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import collections, socket, struct, sys, time
+import collections, ctypes, mmap, os, socket, struct, sys, time
+from tinygrad.runtime.autogen import libc
 from tinygrad.runtime.support.system import PCIDevice, RemoteCmd, System
 from tinygrad.helpers import DEBUG, OSX
 
@@ -26,6 +27,16 @@ def clear_dirty():
   global dirty_error
   if dirty_error: log("HEALTH restored by RESET")
   dirty_error = ""
+def msync_flags(invalidate:bool) -> int:
+  sync = 0x10 if sys.platform == "darwin" else libc.MS_SYNC
+  invalidate_flag = 0x2 if sys.platform == "darwin" else libc.MS_INVALIDATE
+  return sync | (invalidate_flag if invalidate else 0)
+def sync_mapping(addr:int, off:int, size:int, invalidate:bool):
+  page = mmap.PAGESIZE
+  aligned_off = off & ~(page - 1)
+  end = (off + size + page - 1) & ~(page - 1)
+  if libc.msync(ctypes.c_void_p(addr + aligned_off), end - aligned_off, msync_flags(invalidate)):
+    raise OSError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
 def device_index(dev:tuple[type[PCIDevice], str]) -> int:
   for i, (_, pcibus) in enumerate(discovered_devices):
     if pcibus == dev[1]: return i
@@ -122,6 +133,12 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   elif cmd == RemoteCmd.SYSMEM_WRITE:
     if bar >= len(sysmem_allocs): raise RuntimeError(f"invalid sysmem handle {bar} (count={len(sysmem_allocs)})")
     sysmem_allocs[bar][0][arg0:arg0+arg1] = conn.recv(arg1, socket.MSG_WAITALL)
+    conn.sendall(resp())
+  elif cmd == RemoteCmd.SYSMEM_SYNC:
+    if bar >= len(sysmem_allocs): raise RuntimeError(f"invalid sysmem handle {bar} (count={len(sysmem_allocs)})")
+    memview = sysmem_allocs[bar][0]
+    if arg0 + arg1 > memview.nbytes: raise RuntimeError(f"invalid sysmem sync range off={arg0:#x} size={arg1:#x} bytes={memview.nbytes:#x}")
+    sync_mapping(memview.addr, arg0, arg1, invalidate=bool(arg2))
     conn.sendall(resp())
   else: raise RuntimeError(f"unknown command {cmd}")
 

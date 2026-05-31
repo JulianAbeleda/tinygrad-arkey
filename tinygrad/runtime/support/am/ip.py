@@ -68,6 +68,10 @@ class AM_Experiment:
   def mailbox_visibility_delay_us() -> int: return _env_int("AM_PSP_MAILBOX_VIS_DELAY_US")
   @staticmethod
   def mailbox_visibility_hdp_flush() -> int: return _env_int("AM_PSP_MAILBOX_VIS_HDP_FLUSH")
+  @staticmethod
+  def msg1_sysmem_sync() -> int: return _env_int("AM_PSP_MSG1_SYSMEM_SYNC")
+  @staticmethod
+  def msg1_sysmem_sync_invalidate() -> int: return _env_int("AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -990,6 +994,20 @@ class AM_PSP(AM_IP):
       self.msg1_view[:probe_len] = original
       self.adev.gmc.flush_hdp()
 
+  def _sync_msg1_sysmem(self, label:str, size:int|None=None):
+    if not AM_Experiment.msg1_sysmem_sync(): return
+    sync = getattr(self.msg1_view, "sync", None)
+    if sync is None:
+      self._trace(f"msg1 sysmem sync {label} skipped kind={self.msg1_kind} no-sync-method")
+      return
+    view = self.msg1_view
+    if size is not None and size != self.msg1_view.nbytes and hasattr(self.msg1_view, "view"):
+      view = self.msg1_view.view(0, size)
+      sync = getattr(view, "sync", sync)
+    invalidate = bool(AM_Experiment.msg1_sysmem_sync_invalidate())
+    sync(invalidate=invalidate)
+    self._trace(f"msg1 sysmem sync {label} kind={self.msg1_kind} bytes={getattr(view, 'nbytes', size or 0):#x} invalidate={int(invalidate)}")
+
   def _wait_for_bootloader(self):
     reg = self.adev.reg(f"{self.reg_pref}_35")
     start = time.perf_counter()
@@ -1105,6 +1123,7 @@ class AM_PSP(AM_IP):
           f"expected_first32={padded_data[:32].hex()} actual_first32={readback[:32].hex()} "
           f"expected_last32={padded_data[-32:].hex()} actual_last32={readback[-32:].hex()}")
       self._trace(f"msg1 readback ok bytes={len(readback)} first={readback[:16].hex()} last={readback[-16:].hex()}")
+    self._sync_msg1_sysmem("prep", len(padded_data))
     self.adev.gmc.flush_hdp()
     if getenv("AM_PSP_STRONG_FLUSH", 0):
       for i in range(3):
