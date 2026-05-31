@@ -25,6 +25,8 @@ class AM_Experiment:
   @staticmethod
   def gart_table_top() -> int: return _env_int("AM_PSP_GART_TABLE_TOP")
   @staticmethod
+  def gart_table_sparse() -> int: return _env_int("AM_PSP_GART_TABLE_SPARSE")
+  @staticmethod
   def gart_table_addr(default:int) -> int: return _env_int("AM_PSP_GART_TABLE_ADDR", default)
   @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
@@ -34,6 +36,8 @@ class AM_Experiment:
   def gart_aperture_high() -> int|None: return _env_optional_int("AM_PSP_GART_APERTURE_HIGH")
   @staticmethod
   def gart_default_addr() -> int|None: return _env_optional_int("AM_PSP_GART_DEFAULT_ADDR")
+  @staticmethod
+  def gart_fault_default_addr() -> int|None: return _env_optional_int("AM_PSP_GART_FAULT_DEFAULT_ADDR")
   @staticmethod
   def exact_bootloader_wait() -> int: return _env_int("AM_PSP_EXACT_BL_WAIT")
   @staticmethod
@@ -192,7 +196,7 @@ class AM_GMC(AM_IP):
       if gart_table_paddr % 0x1000 != 0 or gart_table_paddr + table_size > self.adev.vram_size:
         raise ValueError(f"invalid PSP GART table paddr={gart_table_paddr:#x} size={table_size:#x} vram={self.adev.vram_size:#x}")
       if getattr(self.adev.pci_dev, "is_remote", False) and gart_table_paddr + table_size > self.adev.vram.nbytes and \
-         not getenv("AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE", 0):
+         not AM_Experiment.gart_table_sparse() and not getenv("AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE", 0):
         raise RuntimeError(f"AM_PSP_GART_TABLE_TOP=1 needs to write PSP GART table paddr={gart_table_paddr:#x} "
                            f"size={table_size:#x}, but remote BAR0 maps only {self.adev.vram.nbytes:#x} bytes. "
                            "Run this experiment from a Linux path with full VRAM BAR access, or explicitly set "
@@ -210,7 +214,14 @@ class AM_GMC(AM_IP):
       raise ValueError(f"invalid PSP GART source pages start={start_page:#x} count={page_count:#x} len={len(paddrs):#x}")
     for i, paddr in enumerate(paddrs[start_page:start_page + page_count]):
       gart_table[gart_page + i] = (paddr & 0x0000FFFFFFFFF000) | flags
-    if AM_Experiment.gart_table_top(): self.adev._write_vram(gart_table_paddr, array.array('Q', gart_table).tobytes())
+    if AM_Experiment.gart_table_top():
+      if AM_Experiment.gart_table_sparse():
+        sparse_off, sparse_count = gart_page * 8, page_count
+        sparse_data = array.array('Q', gart_table[gart_page:gart_page + page_count]).tobytes()
+        self.adev.psp._trace(f"gart sparse table write paddr={gart_table_paddr + sparse_off:#x} entries={sparse_count}")
+        self.adev._write_vram(gart_table_paddr + sparse_off, sparse_data, allow_remote_sparse=True)
+      else:
+        self.adev._write_vram(gart_table_paddr, array.array('Q', gart_table).tobytes())
     self.flush_hdp()
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
@@ -220,6 +231,7 @@ class AM_GMC(AM_IP):
       aperture_low = AM_Experiment.gart_aperture_low()
       aperture_high = AM_Experiment.gart_aperture_high()
       default_addr = AM_Experiment.gart_default_addr()
+      fault_default_addr = AM_Experiment.gart_fault_default_addr()
       if aperture_low is not None:
         self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR").write(aperture_low, inst=inst)
       elif not linux_context:
@@ -230,6 +242,8 @@ class AM_GMC(AM_IP):
         self.adev.reg("regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(max(self.fb_end, self.gart_end) >> 18, inst=inst)
       if default_addr is not None:
         self.adev.wreg_pair("regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR", "_LSB", "_MSB", default_addr, inst=inst)
+      if fault_default_addr is not None:
+        self.adev.wreg_pair("regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR", "_LO32", "_HI32", fault_default_addr, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR", "_LO32", "_HI32", pt_base, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR", "_LO32", "_HI32", self.gart_start >> 12, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
@@ -852,7 +866,12 @@ class AM_PSP(AM_IP):
                   "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR", "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
                   "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB", "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB",
                   "regMMMC_VM_MX_L1_TLB_CNTL", "regMMVM_L2_CNTL", "regMMVM_L2_CNTL2", "regMMVM_L2_CNTL3",
-                  "regMMVM_L2_PROTECTION_FAULT_CNTL", "regMMVM_L2_PROTECTION_FAULT_CNTL2", "regMMVM_CONTEXT0_CNTL",
+                  "regMMVM_L2_CNTL4", "regMMVM_L2_CNTL5", "regMMVM_L2_PROTECTION_FAULT_CNTL",
+                  "regMMVM_L2_PROTECTION_FAULT_CNTL2", "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32",
+                  "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32",
+                  "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32",
+                  "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32", "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32",
+                  "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32", "regMMVM_CONTEXT0_CNTL",
                   "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
                   "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
                   "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
@@ -864,7 +883,10 @@ class AM_PSP(AM_IP):
     self._trace(f"parity snapshot {label} begin")
     self._trace_c2pmsg_regs(dense=AM_Experiment.trace_c2pmsg_dense())
     for i in range(getattr(self.adev.gmc, "vmhubs", 0)):
-      for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_CONTEXT0_CNTL",
+      for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_L2_CNTL", "regMMVM_L2_CNTL2", "regMMVM_L2_CNTL3",
+                  "regMMVM_L2_CNTL4", "regMMVM_L2_CNTL5", "regMMVM_L2_PROTECTION_FAULT_CNTL",
+                  "regMMVM_L2_PROTECTION_FAULT_CNTL2", "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32",
+                  "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32", "regMMVM_CONTEXT0_CNTL",
                   "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
                   "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
                   "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
