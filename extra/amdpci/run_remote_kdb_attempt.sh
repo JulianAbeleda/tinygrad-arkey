@@ -15,6 +15,7 @@ Variants:
   sync-invalidate   Real KDB attempt plus AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE=1.
   contig-msg1-gart Real KDB attempt plus AM_PSP_SYSMSG1_GART_CONTIG=1.
   top-table-sparse Real KDB attempt with sparse GART table near Linux top-of-VRAM.
+  payload-audit   Real KDB attempt with exact msg1 payload byte audit.
   audit             Stop before KDB mailbox writes at AM_PSP_AUDIT_PRE_KDB=1.
 
 Options:
@@ -62,7 +63,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|top-table-sparse|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -118,6 +119,10 @@ if [ "$VARIANT" = "top-table-sparse" ]; then
   envs+=(AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000)
 fi
 
+if [ "$VARIANT" = "payload-audit" ]; then
+  envs+=(AM_PSP_KDB_PAYLOAD_AUDIT=1 AM_PSP_KDB_PAYLOAD_AUDIT_BYTES=128)
+fi
+
 if [ "$VARIANT" = "audit" ]; then
   envs+=(AM_PSP_AUDIT_PRE_KDB=1)
 fi
@@ -132,7 +137,7 @@ echo "rc=$rc"
 echo "out=$out"
 sha256sum "$out"
 
-grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|KDB order barrier\\|mailbox before-reg36\\|mailbox post-compid\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
+grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|KDB order barrier\\|KDB payload audit\\|mailbox before-reg36\\|mailbox post-compid\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
 
 tail -240 "$out"
 exit "$rc"

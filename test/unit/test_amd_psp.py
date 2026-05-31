@@ -126,6 +126,28 @@ class TestAMDPSP(unittest.TestCase):
     self.assertEqual(psp.msg1_view.syncs, [(0, 16, False)])
     self.assertEqual(gmc.flushes, 1)
 
+  def test_kdb_payload_audit_traces_hash_and_bounded_windows(self):
+    psp = object.__new__(AM_PSP)
+    psp.adev = FakeAdev()
+    traces = []
+    psp._trace = traces.append
+    payload = bytes(range(32))
+    padded = payload + b"\x00" * 16
+
+    with mock.patch.dict(os.environ, {"AM_PSP_KDB_PAYLOAD_AUDIT": "1", "AM_PSP_KDB_PAYLOAD_AUDIT_BYTES": "8"}):
+      getenv.cache_clear()
+      try:
+        psp._kdb_payload_audit(payload, padded)
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(len(traces), 3)
+    self.assertIn("payload_size=0x20 padded_size=0x30", traces[0])
+    self.assertIn("payload_sha256=", traces[0])
+    self.assertIn("first8=0001020304050607", traces[1])
+    self.assertIn("last8=0000000000000000", traces[1])
+    self.assertIn("dwords_le", traces[2])
+
   def test_kdb_fail_capture_sampler_skips_missing_focus_regs(self):
     reads = []
     regs = {f"regMP0_SMN_C2PMSG_{idx}": FakeReg(f"regMP0_SMN_C2PMSG_{idx}", reads) for idx in [35, 36, 64, 67, 81, 90, 92]}

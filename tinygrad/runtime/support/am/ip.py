@@ -1,4 +1,4 @@
-import array, ctypes, time, contextlib, functools, sys
+import array, ctypes, hashlib, time, contextlib, functools, sys
 from typing import Literal
 from tinygrad.helpers import to_mv, data64, lo32, hi32, DEBUG, wait_cond, pad_bytes, getbits, getenv
 from tinygrad.runtime.autogen.am import am
@@ -76,6 +76,10 @@ class AM_Experiment:
   def msg1_sysmem_sync_invalidate() -> int: return _env_int("AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE")
   @staticmethod
   def kdb_order_barrier() -> int: return _env_int("AM_PSP_KDB_ORDER_BARRIER")
+  @staticmethod
+  def kdb_payload_audit() -> int: return _env_int("AM_PSP_KDB_PAYLOAD_AUDIT")
+  @staticmethod
+  def kdb_payload_audit_bytes() -> int: return _env_int("AM_PSP_KDB_PAYLOAD_AUDIT_BYTES", 64)
   @staticmethod
   def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
   @staticmethod
@@ -1292,6 +1296,16 @@ class AM_PSP(AM_IP):
       self._trace("msg1 strong flush complete")
     return padded_data
 
+  def _kdb_payload_audit(self, payload:bytes, padded_data:bytes):
+    if not AM_Experiment.kdb_payload_audit(): return
+    window = AM_Experiment.kdb_payload_audit_bytes()
+    if window < 0 or window > 512: raise ValueError(f"AM_PSP_KDB_PAYLOAD_AUDIT_BYTES={window} is outside 0..512")
+    words = [f"{int.from_bytes(padded_data[i:i + 4], 'little'):#010x}" for i in range(0, min(len(padded_data), 64), 4)]
+    self._trace(f"KDB payload audit payload_size={len(payload):#x} padded_size={len(padded_data):#x} "
+                f"payload_sha256={hashlib.sha256(payload).hexdigest()} padded_sha256={hashlib.sha256(padded_data).hexdigest()}")
+    self._trace(f"KDB payload audit bytes first{window}={padded_data[:window].hex()} last{window}={padded_data[-window:].hex()}")
+    self._trace(f"KDB payload audit dwords_le first{len(words)}={','.join(words)}")
+
   def _bootloader_load_component(self, fw:int, compid:int):
     if fw not in self.adev.fw.sos_fw: return 0
 
@@ -1309,6 +1323,7 @@ class AM_PSP(AM_IP):
 
     self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
     padded_data = self._prep_msg1(data)
+    if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_payload_audit(bytes(data), padded_data)
     if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.audit_pre_kdb():
       self._kdb_order_barrier("audit-pre-mailbox", padded_data)
       self._trace_bootloader_snapshot("audit-pre-kdb")
