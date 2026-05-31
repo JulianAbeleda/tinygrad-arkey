@@ -148,7 +148,14 @@ class AMDev:
   def __init__(self, pci_dev:PCIDevice, reset_mode=False):
     self.pci_dev, self.devfmt = pci_dev, pci_dev.pcibus
     self._init_trace_raw("before-map-bars")
-    if AM_Experiment.trace_map_bar5_first():
+    if AM_Experiment.trace_map_bar0_last():
+      self.mmio = self.pci_dev.map_bar(5, fmt='I')
+      self._init_trace_raw("after-map-bar5-first")
+      self.doorbell64 = self.pci_dev.map_bar(2, fmt='Q')
+      self._init_trace_raw("after-map-bar2")
+      self.vram = self.pci_dev.map_bar(0)
+      self._init_trace_raw("after-map-bar0-last")
+    elif AM_Experiment.trace_map_bar5_first():
       self.mmio = self.pci_dev.map_bar(5, fmt='I')
       self._init_trace_raw("after-map-bar5-first")
       self.vram = self.pci_dev.map_bar(0)
