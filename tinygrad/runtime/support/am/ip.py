@@ -72,6 +72,8 @@ class AM_Experiment:
   def msg1_sysmem_sync() -> int: return _env_int("AM_PSP_MSG1_SYSMEM_SYNC")
   @staticmethod
   def msg1_sysmem_sync_invalidate() -> int: return _env_int("AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE")
+  @staticmethod
+  def kdb_order_barrier() -> int: return _env_int("AM_PSP_KDB_ORDER_BARRIER")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -246,6 +248,7 @@ class AM_GMC(AM_IP):
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
     self._trace_psp_gart_pte("pte", gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
+    self.adev.psp.msg1_gart_info = (gart_table, gart_page, page_count)
     linux_context = AM_Experiment.gart_linux_context()
     for inst in range(self.vmhubs):
       aperture_low = AM_Experiment.gart_aperture_low()
@@ -862,7 +865,8 @@ class AM_PSP(AM_IP):
   def is_sos_alive(self): return self.adev.reg(f"{self.reg_pref}_81").read() != 0x0
 
   def _trace_enabled(self) -> bool:
-    return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or AM_Experiment.mailbox_visibility()
+    return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or \
+      AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -994,8 +998,8 @@ class AM_PSP(AM_IP):
       self.msg1_view[:probe_len] = original
       self.adev.gmc.flush_hdp()
 
-  def _sync_msg1_sysmem(self, label:str, size:int|None=None):
-    if not AM_Experiment.msg1_sysmem_sync(): return
+  def _sync_msg1_sysmem(self, label:str, size:int|None=None, force:bool=False):
+    if not (force or AM_Experiment.msg1_sysmem_sync()): return
     sync = getattr(self.msg1_view, "sync", None)
     if sync is None:
       self._trace(f"msg1 sysmem sync {label} skipped kind={self.msg1_kind} no-sync-method")
@@ -1007,6 +1011,25 @@ class AM_PSP(AM_IP):
     invalidate = bool(AM_Experiment.msg1_sysmem_sync_invalidate())
     sync(invalidate=invalidate)
     self._trace(f"msg1 sysmem sync {label} kind={self.msg1_kind} bytes={getattr(view, 'nbytes', size or 0):#x} invalidate={int(invalidate)}")
+
+  def _kdb_order_barrier(self, label:str, expected:bytes, reg35=None, reg36=None):
+    if not AM_Experiment.kdb_order_barrier(): return
+    size, sample_len = len(expected), min(len(expected), 4096)
+    self._sync_msg1_sysmem(f"order-{label}", size, force=True)
+    self.adev.gmc.flush_hdp()
+    readback = bytes(self.msg1_view[:sample_len])
+    if readback != expected[:sample_len]:
+      first_bad = next((i for i, (got, exp) in enumerate(zip(readback, expected[:sample_len])) if got != exp), -1)
+      raise RuntimeError(f"KDB order barrier msg1 mismatch {label} first_bad={first_bad:#x} expected={expected[first_bad]:#x} actual={readback[first_bad]:#x}")
+    checksum = sum(readback) & 0xffffffff
+    self._trace(f"KDB order barrier {label} msg1 bytes={size:#x} sample={sample_len:#x} checksum={checksum:#010x} "
+                f"first={readback[:16].hex()} last={readback[-16:].hex()}")
+    if (info := getattr(self, "msg1_gart_info", None)) is not None:
+      gart_table, gart_page, page_count = info
+      first_pte, last_pte = gart_table[gart_page], gart_table[gart_page + page_count - 1]
+      self._trace(f"KDB order barrier {label} pte0={first_pte:#018x} pte_last={last_pte:#018x} pages={page_count:#x}")
+    if reg35 is not None and reg36 is not None:
+      self._trace(f"KDB order barrier {label} regs reg35={reg35.read():#010x} reg36={reg36.read():#010x}")
 
   def _wait_for_bootloader(self):
     reg = self.adev.reg(f"{self.reg_pref}_35")
@@ -1134,6 +1157,7 @@ class AM_PSP(AM_IP):
         _ = self.adev.reg(f"{self.reg_pref}_35").read()
       time.sleep(0.001)
       self._trace("msg1 strong flush complete")
+    return padded_data
 
   def _bootloader_load_component(self, fw:int, compid:int):
     if fw not in self.adev.fw.sos_fw: return 0
@@ -1151,8 +1175,9 @@ class AM_PSP(AM_IP):
       data = data[skip:]
 
     self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
-    self._prep_msg1(data)
+    padded_data = self._prep_msg1(data)
     if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.audit_pre_kdb():
+      self._kdb_order_barrier("audit-pre-mailbox", padded_data)
       self._trace_bootloader_snapshot("audit-pre-kdb")
       raise RuntimeError("AM_PSP_AUDIT_PRE_KDB stopped before KDB mailbox writes")
     if fw == am.PSP_FW_TYPE_PSP_KDB:
@@ -1164,9 +1189,11 @@ class AM_PSP(AM_IP):
     kdb_fail_capture = fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_fail_capture()
     if kdb_fail_capture: self._kdb_fail_capture_snapshot("pre-command")
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("pre-reg36", reg35, reg36)
+    if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_order_barrier("pre-reg36", padded_data, reg35, reg36)
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("post-reg36", reg35, reg36)
+    if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_order_barrier("post-reg36", padded_data, reg35, reg36)
     if AM_Experiment.mailbox_strong_order() or getenv("AM_PSP_STRONG_FLUSH", 0):
       self.adev.gmc.flush_hdp()
       rb36 = reg36.read()
@@ -1175,6 +1202,7 @@ class AM_PSP(AM_IP):
       time.sleep(0.001)
     self._trace(f"write compid reg35={reg35.addr[0]:#x} val={compid:#x}")
     reg35.write(compid)
+    if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_order_barrier(): self.adev.gmc.flush_hdp()
     self._trace(f"write compid done val={compid:#x}")
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("post-compid", reg35, reg36)
     if kdb_fail_capture: self._kdb_fail_capture_sample(reg35, reg36)

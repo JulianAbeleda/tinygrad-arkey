@@ -106,6 +106,26 @@ class TestAMDPSP(unittest.TestCase):
     self.assertEqual(psp.msg1_view.syncs, [(0, 16, True)])
     self.assertEqual(gmc.flushes, 1)
 
+  def test_kdb_order_barrier_checks_msg1_and_traces_regs(self):
+    gmc = FakeGMC()
+    adev = FakeAdev()
+    adev.gmc = gmc
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_view = FakeSyncMsg1View(b"abc" + b"\x00" * 13)
+    psp.msg1_gart_info = ([0x3000000000077, 0x3000000010077], 0, 2)
+
+    with mock.patch.dict(os.environ, {"AM_PSP_KDB_ORDER_BARRIER": "1", "AM_PSP_TRACE": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._kdb_order_barrier("unit", b"abc" + b"\x00" * 13, FakeReg(), FakeReg())
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(psp.msg1_view.syncs, [(0, 16, False)])
+    self.assertEqual(gmc.flushes, 1)
+
   def test_kdb_fail_capture_sampler_skips_missing_focus_regs(self):
     reads = []
     regs = {f"regMP0_SMN_C2PMSG_{idx}": FakeReg(f"regMP0_SMN_C2PMSG_{idx}", reads) for idx in [35, 36, 64, 67, 81, 90, 92]}
