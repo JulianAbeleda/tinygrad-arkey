@@ -922,7 +922,7 @@ class AM_PSP(AM_IP):
   def _kdb_fail_capture_sample(self, reg35, reg36):
     max_ms, max_reads = AM_Experiment.kdb_fail_capture_ms(), AM_Experiment.kdb_fail_capture_reads()
     focus = [35, 36, 64, 67, 81, 90, 92, 115]
-    regs = [(idx, self.adev.reg(f"{self.reg_pref}_{idx}")) for idx in focus]
+    regs = [(idx, self.adev.reg(f"{self.reg_pref}_{idx}")) for idx in focus if hasattr(self.adev, f"{self.reg_pref}_{idx}")]
     start, last35, reads = time.perf_counter(), None, 0
     self._trace(f"kdb fail capture sample begin max_ms={max_ms} max_reads={max_reads}")
     while reads < max_reads:

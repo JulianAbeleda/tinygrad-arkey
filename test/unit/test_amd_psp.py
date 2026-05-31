@@ -5,10 +5,11 @@ from tinygrad.runtime.support.am.ip import AM_PSP
 
 class FakeReg:
   def __init__(self, name="regMP0_SMN_C2PMSG_35", reads=None):
-    self.name, self.addr, self.reads = name, (0x16063,), reads if reads is not None else []
+    self.name, self.addr, self.reads, self.writes = name, (0x16063,), reads if reads is not None else [], []
   def read(self):
     self.reads.append(self.name)
     return 0
+  def write(self, val): self.writes.append(val)
 
 class FakeAdev:
   devfmt = "fake"
@@ -74,6 +75,22 @@ class TestAMDPSP(unittest.TestCase):
 
     self.assertEqual(psp.msg1_view.data, bytearray(bytes(range(256)) * 16))
     self.assertEqual(gmc.flushes, 2)
+
+  def test_kdb_fail_capture_sampler_skips_missing_focus_regs(self):
+    reads = []
+    regs = {f"regMP0_SMN_C2PMSG_{idx}": FakeReg(f"regMP0_SMN_C2PMSG_{idx}", reads) for idx in [35, 36, 64, 67, 81, 90, 92]}
+    adev = FakeAdev()
+    adev.reg = lambda name: regs[name]
+    for name, reg in regs.items(): setattr(adev, name, reg)
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.reg_pref = "regMP0_SMN_C2PMSG"
+
+    with mock.patch.dict(os.environ, {"AM_PSP_TRACE": "1", "AM_PSP_KDB_FAIL_CAPTURE_READS": "1"}):
+      psp._kdb_fail_capture_sample(regs["regMP0_SMN_C2PMSG_35"], regs["regMP0_SMN_C2PMSG_36"])
+
+    self.assertNotIn("regMP0_SMN_C2PMSG_115", reads)
+    self.assertIn("regMP0_SMN_C2PMSG_92", reads)
 
 if __name__ == "__main__":
   unittest.main()
