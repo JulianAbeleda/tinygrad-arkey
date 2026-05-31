@@ -250,6 +250,15 @@ class AMDev:
     for reg, name in [(0x16063, "C2PMSG35"), (0x16064, "C2PMSG36"), (0x16091, "C2PMSG81")]:
       try: vals.append(f"{name}={self.mmio[reg]:#010x}")
       except Exception as e: vals.append(f"{name}=read_failed:{type(e).__name__}")
+    if hasattr(self, "regs_offset") and hasattr(self, "ip_ver") and am.MMHUB_HWIP in self.ip_ver:
+      try:
+        mmhub_regs = import_asic_regs("mmhub", self.ip_ver[am.MMHUB_HWIP],
+                                      cls=functools.partial(AMRegister, adev=self, bases=self.regs_offset[am.MMHUB_HWIP]))
+        for reg in ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_ACK",
+                    "regMMVM_L2_BANK_SELECT_RESERVED_CID2"]:
+          vals.append(f"{reg}={mmhub_regs[reg].read():#010x}")
+      except Exception as e:
+        vals.append(f"MMHUB_raw=read_failed:{type(e).__name__}")
     print(f"am {self.devfmt}: AMDev init {label} " + " ".join(vals), flush=True)
 
   def init_sw(self, smi_dev=False):
