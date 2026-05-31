@@ -250,6 +250,11 @@ class AMDev:
     for reg, name in [(0x16063, "C2PMSG35"), (0x16064, "C2PMSG36"), (0x16091, "C2PMSG81")]:
       try: vals.append(f"{name}={self.mmio[reg]:#010x}")
       except Exception as e: vals.append(f"{name}=read_failed:{type(e).__name__}")
+    profile = getattr(self.pci_dev, "is_remote", False) and getenv("AM_REMOTE_DISCOVERY_PROFILE", "") == "gfx1100_744c"
+    if profile and not hasattr(self, "regs_offset"):
+      from tinygrad.runtime.autogen.am import navi_offsets
+      self.regs_offset = {am.MMHUB_HWIP: {0: tuple(getattr(navi_offsets, f"MMHUB_BASE__INST0_SEG{s}", 0) for s in range(9))}}
+      self.ip_ver = {am.MMHUB_HWIP: (3,0,0)}
     if hasattr(self, "regs_offset") and hasattr(self, "ip_ver") and am.MMHUB_HWIP in self.ip_ver:
       try:
         mmhub_regs = import_asic_regs("mmhub", self.ip_ver[am.MMHUB_HWIP],
@@ -259,6 +264,8 @@ class AMDev:
           vals.append(f"{reg}={mmhub_regs[reg].read():#010x}")
       except Exception as e:
         vals.append(f"MMHUB_raw=read_failed:{type(e).__name__}")
+    if profile and set(getattr(self, "ip_ver", {})) == {am.MMHUB_HWIP}:
+      del self.regs_offset, self.ip_ver
     print(f"am {self.devfmt}: AMDev init {label} " + " ".join(vals), flush=True)
 
   def init_sw(self, smi_dev=False):
