@@ -1,4 +1,4 @@
-import array, ctypes, time, contextlib, functools
+import array, ctypes, time, contextlib, functools, sys
 from typing import Literal
 from tinygrad.helpers import to_mv, data64, lo32, hi32, DEBUG, wait_cond, pad_bytes, getbits, getenv
 from tinygrad.runtime.autogen.am import am
@@ -76,6 +76,8 @@ class AM_Experiment:
   def msg1_sysmem_sync_invalidate() -> int: return _env_int("AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE")
   @staticmethod
   def kdb_order_barrier() -> int: return _env_int("AM_PSP_KDB_ORDER_BARRIER")
+  @staticmethod
+  def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -293,26 +295,71 @@ class AM_GMC(AM_IP):
     return msg1_addr
 
   def flush_hdp(self): self.adev.wreg(self.adev.reg("regBIF_BX0_REMAP_HDP_MEM_FLUSH_CNTL").read() // 4, 0x0)
+
+  def _tlb_trace_enabled(self) -> bool:
+    return bool(AM_Experiment.tlb_trace())
+
+  def _tlb_trace_context(self) -> str:
+    parts = []
+    frame = None
+    with contextlib.suppress(Exception): frame = sys._getframe(2)
+    while frame is not None and len(parts) < 4:
+      code = frame.f_code
+      parts.append(f"{code.co_name}:{frame.f_lineno}")
+      frame = frame.f_back
+    return " <- ".join(parts)
+
+  def _tlb_trace(self, msg:str):
+    if not self._tlb_trace_enabled(): return
+    if self._psp_trace_enabled(): self.adev.psp._trace(f"tlb {msg}")
+    else: print(f"am {self.adev.devfmt}: TLB {msg}", flush=True)
+
+  def _tlb_trace_regs(self, label:str, ip:Literal["MM", "GC"], inst:int):
+    if not self._tlb_trace_enabled(): return
+    regs = [f"reg{ip}VM_INVALIDATE_ENG17_REQ", f"reg{ip}VM_INVALIDATE_ENG17_ACK"]
+    if ip == "MM": regs += ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_L2_BANK_SELECT_RESERVED_CID2", self.pf_status_reg("MM")]
+    vals = []
+    for reg in regs:
+      try: vals.append(f"{reg}={self.adev.reg(reg).read(inst=inst):#010x}")
+      except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
+    self._tlb_trace(f"{label} ip={ip} inst={inst} " + " ".join(vals))
+
   def flush_tlb(self, ip:Literal["MM", "GC"], vmid, flush_type=0):
     self.flush_hdp()
 
     # Can't issue TLB invalidation if the hub isn't initialized.
     if not self.hub_initted[ip]: return
 
+    self._tlb_trace(f"begin ip={ip} vmid={vmid} flush_type={flush_type} caller={self._tlb_trace_context()}")
     for inst in range(self.adev.gmc.vmhubs if ip == "MM" else self.adev.gfx.xccs):
-      if ip == "MM": wait_cond(lambda: self.adev.regMMVM_INVALIDATE_ENG17_SEM.read(inst=inst) & 0x1, value=1, msg="mm flush_tlb timeout")
+      self._tlb_trace_regs("before-wait", ip, inst)
+      if ip == "MM":
+        try:
+          wait_cond(lambda: self.adev.regMMVM_INVALIDATE_ENG17_SEM.read(inst=inst) & 0x1, value=1, msg="mm flush_tlb timeout")
+        except TimeoutError:
+          self._tlb_trace_regs("sem-timeout", ip, inst)
+          raise
+        self._tlb_trace_regs("after-sem", ip, inst)
 
       self.adev.reg(f"reg{ip}VM_INVALIDATE_ENG17_REQ").write(flush_type=flush_type, per_vmid_invalidate_req=(1 << vmid), invalidate_l2_ptes=1,
         invalidate_l2_pde0=1, invalidate_l2_pde1=1, invalidate_l2_pde2=1, invalidate_l1_ptes=1, clear_protection_fault_status_addr=0, inst=inst)
+      self._tlb_trace_regs("after-req", ip, inst)
 
-      wait_cond(lambda: self.adev.reg(f"reg{ip}VM_INVALIDATE_ENG17_ACK").read(inst=inst) & (1 << vmid), value=(1 << vmid), msg="flush_tlb timeout")
+      try:
+        wait_cond(lambda: self.adev.reg(f"reg{ip}VM_INVALIDATE_ENG17_ACK").read(inst=inst) & (1 << vmid), value=(1 << vmid), msg="flush_tlb timeout")
+      except TimeoutError:
+        self._tlb_trace_regs("ack-timeout", ip, inst)
+        raise
+      self._tlb_trace_regs("after-ack", ip, inst)
 
       if ip == "MM": self.adev.regMMVM_INVALIDATE_ENG17_SEM.write(0x0, inst=inst)
+      if ip == "MM": self._tlb_trace_regs("after-sem-release", ip, inst)
       if self.adev.ip_ver[am.GC_HWIP] >= (11,0,0) and ip == "MM":
         self.adev.regMMVM_L2_BANK_SELECT_RESERVED_CID2.update(reserved_cache_private_invalidation=1, inst=inst)
 
         # Read back the register to ensure the invalidation is complete
         self.adev.regMMVM_L2_BANK_SELECT_RESERVED_CID2.read(inst=inst)
+        self._tlb_trace_regs("after-cid2-readback", ip, inst)
 
   def enable_vm_addressing(self, page_table, ip:Literal["MM", "GC"], vmid, inst):
     self.adev.wreg_pair(f"reg{ip}VM_CONTEXT{vmid}_PAGE_TABLE_START_ADDR", "_LO32", "_HI32", self.vm_base >> 12, inst=inst)
