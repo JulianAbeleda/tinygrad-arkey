@@ -262,7 +262,12 @@ class PCIIfaceBase:
                dev_impl_t, base_class:int|None=None):
     self.pci_dev = System.pci_probe_device(dn:=dev.__class__.__name__[:-6], dev_id, vendor, devices, base_class=base_class)
     if self.is_local(): System.reserve_va(va_start, va_size)
-    with contextlib.suppress(Exception): self.pci_dev.resize_bar(vram_bar)
+    if getenv("AM_PSP_GMC_INIT_TRACE", 0): print(f"{dn}: pci iface before resize_bar remote={int(not self.is_local())}", flush=True)
+    if not (not self.is_local() and getenv("AM_REMOTE_SKIP_RESIZE_BAR", 0)):
+      with contextlib.suppress(Exception): self.pci_dev.resize_bar(vram_bar)
+    elif getenv("AM_PSP_GMC_INIT_TRACE", 0):
+      print(f"{dn}: pci iface skipped remote resize_bar", flush=True)
+    if getenv("AM_PSP_GMC_INIT_TRACE", 0): print(f"{dn}: pci iface after resize_bar", flush=True)
     self.dev_impl = dev_impl_t(self.pci_dev)
     self.dev, self.vram_bar, self.count = dev, vram_bar, len(hcq_filter_visible_devices(System.list_devices(vendor, devices, base_class), dn))
 

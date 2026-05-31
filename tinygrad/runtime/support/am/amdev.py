@@ -147,9 +147,18 @@ class AMDev:
 
   def __init__(self, pci_dev:PCIDevice, reset_mode=False):
     self.pci_dev, self.devfmt = pci_dev, pci_dev.pcibus
-    self.vram, self.doorbell64, self.mmio = self.pci_dev.map_bar(0), self.pci_dev.map_bar(2, fmt='Q'), self.pci_dev.map_bar(5, fmt='I')
+    self._init_trace_raw("before-map-bars")
+    self.vram = self.pci_dev.map_bar(0)
+    self._init_trace_raw("after-map-bar0")
+    self.doorbell64 = self.pci_dev.map_bar(2, fmt='Q')
+    self._init_trace_raw("after-map-bar2")
+    self.mmio = self.pci_dev.map_bar(5, fmt='I')
+    self._init_trace_raw("after-map-bar5")
 
+    self._init_trace_raw("before-run-discovery")
     self._run_discovery()
+    self._init_trace_raw("after-run-discovery")
+    self._init_trace_raw("before-build-regs")
     self._build_regs()
     self._init_trace_regs("after-build-regs")
 
@@ -230,6 +239,17 @@ class AMDev:
         continue
       try: vals.append(f"{reg}={self.reg(reg).read():#010x}")
       except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
+    print(f"am {self.devfmt}: AMDev init {label} " + " ".join(vals), flush=True)
+
+  def _init_trace_raw(self, label:str):
+    if not self._init_trace_enabled(): return
+    if not hasattr(self, "mmio"):
+      print(f"am {self.devfmt}: AMDev init {label} BAR5=unmapped", flush=True)
+      return
+    vals = []
+    for reg, name in [(0x16063, "C2PMSG35"), (0x16064, "C2PMSG36"), (0x16091, "C2PMSG81")]:
+      try: vals.append(f"{name}={self.mmio[reg]:#010x}")
+      except Exception as e: vals.append(f"{name}=read_failed:{type(e).__name__}")
     print(f"am {self.devfmt}: AMDev init {label} " + " ".join(vals), flush=True)
 
   def init_sw(self, smi_dev=False):
