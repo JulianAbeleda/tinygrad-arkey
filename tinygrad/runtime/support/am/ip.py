@@ -54,6 +54,12 @@ class AM_Experiment:
   def linux_pre_bl_status() -> int: return _env_int("AM_PSP_LINUX_PRE_BL_STATUS")
   @staticmethod
   def msg1_visibility_probe() -> int: return _env_int("AM_PSP_MSG1_VIS_PROBE")
+  @staticmethod
+  def kdb_fail_capture() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE")
+  @staticmethod
+  def kdb_fail_capture_ms() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE_MS", 20)
+  @staticmethod
+  def kdb_fail_capture_reads() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE_READS", 256)
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -843,7 +849,7 @@ class AM_PSP(AM_IP):
 
   def is_sos_alive(self): return self.adev.reg(f"{self.reg_pref}_81").read() != 0x0
 
-  def _trace_enabled(self) -> bool: return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0)
+  def _trace_enabled(self) -> bool: return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -901,6 +907,39 @@ class AM_PSP(AM_IP):
                   "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
         self._trace_reg(reg, inst=i)
     self._trace(f"parity snapshot {label} end")
+
+  def _kdb_fail_capture_snapshot(self, label:str):
+    self._trace(f"kdb fail capture {label} begin")
+    self._trace_c2pmsg_regs(dense=True)
+    for i in range(getattr(self.adev.gmc, "vmhubs", 0)):
+      for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_L2_CNTL", "regMMVM_CONTEXT0_CNTL",
+                  "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
+                  "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
+                  "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
+        self._trace_reg(reg, inst=i)
+    self._trace(f"kdb fail capture {label} end")
+
+  def _kdb_fail_capture_sample(self, reg35, reg36):
+    max_ms, max_reads = AM_Experiment.kdb_fail_capture_ms(), AM_Experiment.kdb_fail_capture_reads()
+    focus = [35, 36, 64, 67, 81, 90, 92, 115]
+    regs = [(idx, self.adev.reg(f"{self.reg_pref}_{idx}")) for idx in focus]
+    start, last35, reads = time.perf_counter(), None, 0
+    self._trace(f"kdb fail capture sample begin max_ms={max_ms} max_reads={max_reads}")
+    while reads < max_reads:
+      elapsed_ms = (time.perf_counter() - start) * 1000
+      if reads and elapsed_ms >= max_ms: break
+      val35 = reg35.read()
+      reads += 1
+      if reads <= 16 or val35 != last35 or val35 & 0x80000000:
+        self._trace(f"kdb fail capture reg35 sample read={reads} elapsed_ms={elapsed_ms:.3f} val={val35:#010x}")
+      if reads == 1 or reads % 16 == 0 or val35 != last35 or val35 & 0x80000000:
+        vals = " ".join(f"{idx}={reg.read():#010x}" for idx, reg in regs)
+        self._trace(f"kdb fail capture focus read={reads} elapsed_ms={elapsed_ms:.3f} {vals}")
+      last35 = val35
+      if val35 != 0xffffffff and val35 & 0x80000000: break
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    vals = " ".join(f"{idx}={reg.read():#010x}" for idx, reg in regs)
+    self._trace(f"kdb fail capture sample end reads={reads} elapsed_ms={elapsed_ms:.3f} reg36_written={reg36.addr[0]:#x} {vals}")
 
   def _msg1_visibility_probe(self):
     probe_len = min(0x1000, self.msg1_view.nbytes)
@@ -1076,6 +1115,8 @@ class AM_PSP(AM_IP):
     if AM_Experiment.mailbox_strong_order():
       self.adev.gmc.flush_hdp()
       self._trace(f"mailbox before-reg36 reg35={reg35.read():#x} reg36={reg36.read():#x}")
+    kdb_fail_capture = fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_fail_capture()
+    if kdb_fail_capture: self._kdb_fail_capture_snapshot("pre-command")
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
     if AM_Experiment.mailbox_strong_order() or getenv("AM_PSP_STRONG_FLUSH", 0):
@@ -1087,11 +1128,17 @@ class AM_PSP(AM_IP):
     self._trace(f"write compid reg35={reg35.addr[0]:#x} val={compid:#x}")
     reg35.write(compid)
     self._trace(f"write compid done val={compid:#x}")
+    if kdb_fail_capture: self._kdb_fail_capture_sample(reg35, reg36)
     if AM_Experiment.mailbox_strong_order():
       self._trace(f"mailbox post-compid reg35={reg35.read():#x} reg36={reg36.read():#x}")
     self._trace_bootloader_snapshot(f"post-compid-{compid:#x}")
 
-    return self._wait_for_bootloader() if compid != am.PSP_BL__LOAD_SOSDRV else 0
+    if compid == am.PSP_BL__LOAD_SOSDRV: return 0
+    try:
+      return self._wait_for_bootloader()
+    except Exception:
+      if kdb_fail_capture: self._kdb_fail_capture_snapshot("wait-exception")
+      raise
 
   def _tmr_init(self):
     # Load TOC and calculate TMR size
