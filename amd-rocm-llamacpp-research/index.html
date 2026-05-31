@@ -1,0 +1,1663 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://docs.tinygrad.org/amd-rocm-llamacpp-research/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>AMD ROCm and llama.cpp research for tinygrad-arkey - tinygrad docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_markdown_exec_pyodide.css">
+    
+      <link rel="stylesheet" href="../assets/_markdown_exec_ansi.css">
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#amd-rocm-and-llamacpp-research-for-tinygrad-arkey" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="tinygrad docs" class="md-header__button md-logo" aria-label="tinygrad docs" data-md-component="logo">
+      
+  <img src="../logo_tiny_dark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            tinygrad docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              AMD ROCm and llama.cpp research for tinygrad-arkey
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/JulianAbeleda/tinygrad-arkey/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="tinygrad docs" class="md-nav__button md-logo" aria-label="tinygrad docs" data-md-component="logo">
+      
+  <img src="../logo_tiny_dark.svg" alt="logo">
+
+    </a>
+    tinygrad docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/JulianAbeleda/tinygrad-arkey/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href=".." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_1" id="__nav_1_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Home
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mnist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MNIST Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_5" id="__nav_1_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_5_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../tensor/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tensor
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_1_5_1" id="__nav_1_5_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_5_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_5_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tensor
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/movement/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/elementwise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Elementwise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/ops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complex Ops
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dtypes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dtypes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nn (Neural Networks)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../env_vars/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_5_5" id="__nav_1_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Runtime
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tinygpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    egpu for mac
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_6" id="__nav_1_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Intro
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/layout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/speed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/uop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UOp
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_6_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_6_5" id="__nav_1_6_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_6_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_6_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Runtime
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/hcq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HCQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/am/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AM Driver
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tinybox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tinybox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/JulianAbeleda/tinygrad-arkey/edit/master/docs/amd-rocm-llamacpp-research.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+    
+      
+    
+    <a href="https://github.com/JulianAbeleda/tinygrad-arkey/raw/master/docs/amd-rocm-llamacpp-research.md" title="View source of this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"/></svg>
+    </a>
+  
+
+
+<h1 id="amd-rocm-and-llamacpp-research-for-tinygrad-arkey">AMD ROCm and llama.cpp research for tinygrad-arkey<a class="headerlink" href="#amd-rocm-and-llamacpp-research-for-tinygrad-arkey" title="Permanent link">¤</a></h1>
+<p>This note compares the local <code class="language-python highlight"><span class="n">tinygrad</span><span class="o">-</span><span class="n">arkey</span></code> AMD path with the AMD-relevant parts of the forked <code class="language-python highlight"><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span></code> and <code class="language-python highlight"><span class="n">ROCm</span></code> repos. The goal is to understand what those projects solve, why their design works, and what we can test from first principles to improve TinyGPU/tinygrad inference on the RX 7900 XTX.</p>
+<p>For the current hardware/runtime dropout investigation, see <code class="language-python highlight"><span class="n">docs</span><span class="o">/</span><span class="n">amd</span><span class="o">-</span><span class="n">remote</span><span class="o">-</span><span class="n">dropout</span><span class="o">-</span><span class="n">investigation</span><span class="o">.</span><span class="n">md</span></code>.</p>
+<h2 id="current-local-path">Current local path<a class="headerlink" href="#current-local-path" title="Permanent link">¤</a></h2>
+<p>Our active path is not the normal Linux ROCm stack:</p>
+<div class="language-text highlight"><pre><span></span><code>tinygrad-arkey Python
+  -&gt; tinygrad AMD runtime
+  -&gt; RemotePCIDevice RPC
+  -&gt; extra/remote/serve.py
+  -&gt; TinyGPU DriverKit / UT4G
+  -&gt; AMD RX 7900 XTX
+</code></pre></div>
+<p>The relevant tinygrad pieces are:</p>
+<ul>
+<li><code class="language-python highlight"><span class="n">tinygrad</span><span class="o">/</span><span class="n">runtime</span><span class="o">/</span><span class="n">support</span><span class="o">/</span><span class="n">system</span><span class="o">.</span><span class="n">py</span></code>: <code class="language-python highlight"><span class="n">RemotePCIDevice</span></code> opens a TCP socket, sends raw PCI/MMIO/sysmem commands, tracks bulk bytes, and can print RPC roundtrip statistics.</li>
+<li><code class="language-python highlight"><span class="n">extra</span><span class="o">/</span><span class="n">remote</span><span class="o">/</span><span class="n">serve</span><span class="o">.</span><span class="n">py</span></code>: the remote server probes devices, lazily opens the PCI device, maps BARs, allocates system memory with <code class="language-python highlight"><span class="n">MAP_SYSMEM</span></code>, and keeps allocations in a process-local list.</li>
+<li><code class="language-python highlight"><span class="n">tinygrad</span><span class="o">/</span><span class="n">llm</span><span class="o">/</span><span class="n">gguf</span><span class="o">.</span><span class="n">py</span></code>: GGUF quantized weights are decoded into tinygrad Tensor expressions. It supports Q4_K/Q5_K/Q6_K/IQ variants, including Q4_K_M model files.</li>
+<li><code class="language-python highlight"><span class="n">tinygrad</span><span class="o">/</span><span class="n">llm</span><span class="o">/</span><span class="n">model</span><span class="o">.</span><span class="n">py</span></code>: transformer blocks currently run with implicit weights and a comment says the GGUF is unpacked on the fly.</li>
+</ul>
+<p>That means our current bottlenecks can live in two different places:</p>
+<ol>
+<li>Runtime/transport reliability: device discovery, BAR setup, sysmem mapping, MMIO, command queue setup, and reconnect behavior.</li>
+<li>Kernel quality: what code runs after the model is loaded, especially quantized matmul/dequant, attention, KV cache access, and per-token scheduling.</li>
+</ol>
+<p>The observed failures fit the first category first. We have seen <code class="language-python highlight"><span class="n">MAP_SYSMEM</span></code> errors, empty replies from the HTTP server after device loss, stale bridge state after model failure, and cases where the UT4G is still visible but the AMD GPU path is gone. The performance gap against expected ROCm paths probably lives in both categories.</p>
+<h2 id="what-llamacpp-does-for-amd">What llama.cpp does for AMD<a class="headerlink" href="#what-llamacpp-does-for-amd" title="Permanent link">¤</a></h2>
+<p><code class="language-python highlight"><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span></code> uses <code class="language-python highlight"><span class="n">ggml</span></code> backends. For AMD, the important path is HIP:</p>
+<ul>
+<li>Build flag: <code class="language-python highlight"><span class="o">-</span><span class="n">DGGML_HIP</span><span class="o">=</span><span class="n">ON</span></code>.</li>
+<li>GPU target: <code class="language-python highlight"><span class="o">-</span><span class="n">DGPU_TARGETS</span><span class="o">=</span><span class="n">gfx1100</span></code> for Radeon RX 7900 XTX/XT/GRE.</li>
+<li>Optional fast attention path: <code class="language-python highlight"><span class="o">-</span><span class="n">DGGML_HIP_ROCWMMA_FATTN</span><span class="o">=</span><span class="n">ON</span></code> for RDNA3+ or CDNA when rocWMMA headers are available.</li>
+<li>Device selection and compatibility are delegated to ROCm/HIP environment behavior such as <code class="language-python highlight"><span class="n">HIP_VISIBLE_DEVICES</span></code> and <code class="language-python highlight"><span class="n">HSA_OVERRIDE_GFX_VERSION</span></code>.</li>
+</ul>
+<p>The useful idea is that <code class="language-python highlight"><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span></code> keeps CUDA-like kernel code but routes it through HIP for AMD. In <code class="language-python highlight"><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">vendors</span><span class="o">/</span><span class="n">hip</span><span class="o">.</span><span class="n">h</span></code>, CUDA/cuBLAS names are mapped to HIP/hipBLAS equivalents. That lets one backend family share a lot of code while still compiling for AMD.</p>
+<p>The second useful idea is that <code class="language-python highlight"><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span></code> does not treat all AMD GPUs the same. In <code class="language-python highlight"><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">common</span><span class="o">.</span><span class="n">cuh</span></code>, AMD architectures are separated into GCN, CDNA, RDNA1, RDNA2, RDNA3, RDNA3.5, and RDNA4. RX 7900 XTX is RDNA3 / <code class="language-python highlight"><span class="n">gfx1100</span></code>. In <code class="language-python highlight"><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">mmvq</span><span class="o">.</span><span class="n">cu</span></code>, quantized matvec behavior branches on those architecture classes and chooses RDNA3-specific limits. This is directly relevant because single-token generation is dominated by repeated quantized matvec/matmul work.</p>
+<p><code class="language-python highlight"><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span></code> also has an RPC backend, but it operates at a higher level than our remote PCI path. Its RPC commands include buffer allocation, tensor transfer, tensor copy, graph compute, graph recompute, and device memory queries. The server exposes <code class="language-python highlight"><span class="n">ggml</span></code> devices, and the client offloads computation to those devices. It can cache large tensors so they do not need to be resent. That is a very different design from sending raw PCI/MMIO/sysmem operations from tinygrad.</p>
+<p>The practical lesson from <code class="language-python highlight"><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span></code> is:</p>
+<ul>
+<li>Use AMD as an explicit architecture target, not just a generic GPU.</li>
+<li>Keep quantized weights packed as long as possible.</li>
+<li>Fuse dequant and matvec/matmul where the hot path needs it.</li>
+<li>Keep model tensors and KV cache resident near the device.</li>
+<li>Move remote APIs up toward graph/tensor operations when possible, not down toward repeated raw bus operations.</li>
+</ul>
+<h2 id="what-rocm-solves">What ROCm solves<a class="headerlink" href="#what-rocm-solves" title="Permanent link">¤</a></h2>
+<p>ROCm is the full AMD software stack: compilers, HIP, runtimes, profilers, debuggers, and tuned libraries. HIP is the main runtime and kernel language for AMD GPU programming. It is designed as a CUDA-portable layer, so projects can port CUDA-style kernels to AMD without rewriting the whole runtime model.</p>
+<p>The relevant ROCm components for our goal are:</p>
+<ul>
+<li>
+<div class="admonition hip">
+<p class="admonition-title">Hip</p>
+<p>kernel launch, runtime API, memory management, streams/queues, and CUDA portability.</p>
+</div>
+</li>
+<li>rocBLAS / hipBLAS / hipBLASLt: optimized GEMM and matrix paths.</li>
+<li>rocWMMA: mixed-precision matrix multiply-accumulate support, relevant to RDNA3+/CDNA paths.</li>
+<li>Composable Kernel: performance-critical ML kernels across architectures.</li>
+<li>ROCProfiler / ROCTracer / ROCm Bandwidth Test: measurement tools for runtime calls, async activity, copy bandwidth, and kernel behavior.</li>
+</ul>
+<p>ROCm also documents BAR and MMIO behavior. AMD GPUs expose PCIe BARs for GPU memory, doorbells, I/O, and MMIO. The doorbell BAR tells the GPU that new work is in its queue. BAR placement and physical address limits matter; if a BAR address is outside what a peer device can address, DMA/P2P access can fail. This is very close to our TinyGPU/UT4G path because we are doing explicit BAR and sysmem work instead of letting the ROCm kernel driver hide it.</p>
+<p>The practical lesson from ROCm is:</p>
+<ul>
+<li>A stable AMD runtime is mostly a lifecycle problem: discover device, establish address spaces, map memory, create queues, ring doorbells, launch kernels, handle errors, and clean up.</li>
+<li>A fast AMD runtime is mostly a residency and specialization problem: avoid unnecessary host/device transfers, avoid repeated setup, use arch-specific kernels, and measure queue/copy/kernel time separately.</li>
+<li>Our remote server is currently responsible for pieces that ROCm normally owns. That makes instrumentation and error recovery more important.</li>
+</ul>
+<h2 id="first-principles-hypotheses">First-principles hypotheses<a class="headerlink" href="#first-principles-hypotheses" title="Permanent link">¤</a></h2>
+<h3 id="hypothesis-1-the-remote-pci-lifecycle-is-the-first-reliability-bottleneck">Hypothesis 1: the remote PCI lifecycle is the first reliability bottleneck<a class="headerlink" href="#hypothesis-1-the-remote-pci-lifecycle-is-the-first-reliability-bottleneck" title="Permanent link">¤</a></h3>
+<p>If the device drops or the bridge gets into a dirty state, the model server can still appear alive while generation fails. This explains the pattern where <code class="language-python highlight"><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">models</span></code> can answer but generation returns an empty reply or hangs. From first principles, the HTTP server and Python process are not the source of truth; the source of truth is whether the AMD device can still respond to BAR, sysmem, queue, and kernel operations.</p>
+<p>How to leverage ROCm/llama.cpp:</p>
+<ul>
+<li>Add a tinygrad health check that validates the remote AMD path before serving model requests.</li>
+<li>Treat <code class="language-python highlight"><span class="n">MAP_SYSMEM</span></code>, BAR mapping, and queue setup as explicit lifecycle states with clear logs.</li>
+<li>Make the bridge fail closed when the GPU disappears instead of leaving the API server half-alive.</li>
+<li>Copy the design principle from ROCm: device liveness and allocation ownership are runtime invariants, not incidental side effects.</li>
+</ul>
+<p>Test:</p>
+<ul>
+<li>Before and after each model load, run a one-op AMD tensor sanity check through <code class="language-python highlight"><span class="n">REMOTE</span><span class="o">=</span><span class="mf">127.0.0.1</span><span class="p">:</span><span class="mi">6667</span> <span class="n">DEV</span><span class="o">=</span><span class="n">AMD</span></code>.</li>
+<li>Log every <code class="language-python highlight"><span class="n">MAP_SYSMEM</span></code> request size, contiguous flag, paddr count, and returned handle.</li>
+<li>On failure, compare whether the UT4G is visible, the AMD GPU is visible, and whether a fresh bridge process fixes it without power cycling.</li>
+</ul>
+<h3 id="hypothesis-2-raw-remote-operations-are-costing-too-much-per-token">Hypothesis 2: raw remote operations are costing too much per token<a class="headerlink" href="#hypothesis-2-raw-remote-operations-are-costing-too-much-per-token" title="Permanent link">¤</a></h3>
+<p>USB4/DriverKit can work, but every remote roundtrip is expensive compared with a local ROCm runtime. If per-token generation causes too many MMIO reads/writes, sysmem reads/writes, or repeated setup operations, token/sec will fall even if kernels are decent.</p>
+<p>How to leverage ROCm/llama.cpp:</p>
+<ul>
+<li>Use llama.cpp RPC as the design reference: remote APIs should move tensors/graphs, not every low-level operation.</li>
+<li>Cache model tensors and KV state close to the device.</li>
+<li>Coalesce remote commands where possible.</li>
+<li>Avoid redoing sysmem/BAR/queue setup after the model is already resident.</li>
+</ul>
+<p>Test:</p>
+<ul>
+<li>Run inference with <code class="language-python highlight"><span class="n">DEBUG</span><span class="o">=</span><span class="mi">1</span></code> so <code class="language-python highlight"><span class="n">RemotePCIDevice</span></code> prints sent MB, received MB, and roundtrip count at exit.</li>
+<li>Compare 0.6B, 1.7B, and 4B for roundtrips per generated token.</li>
+<li>If roundtrips/token scales with model depth or token count, optimize the remote path first.</li>
+<li>If roundtrips/token is low but token/sec is still low, focus on kernel quality.</li>
+</ul>
+<h3 id="hypothesis-3-q4_k_m-performance-is-limited-by-generic-unpackdequant-instead-of-packed-quantized-kernels">Hypothesis 3: Q4_K_M performance is limited by generic unpack/dequant instead of packed quantized kernels<a class="headerlink" href="#hypothesis-3-q4_k_m-performance-is-limited-by-generic-unpackdequant-instead-of-packed-quantized-kernels" title="Permanent link">¤</a></h3>
+<p>Qwen 1.7B and larger Q4_K_M models depend heavily on quantized matvec/matmul. tinygrad currently decodes GGUF quant blocks through tensor expressions in <code class="language-python highlight"><span class="n">gguf</span><span class="o">.</span><span class="n">py</span></code>, and <code class="language-python highlight"><span class="n">model</span><span class="o">.</span><span class="n">py</span></code> notes that weights are unpacked on the fly. llama.cpp has dedicated quantized kernels and RDNA3-specific choices for MMVQ/MMQ. That is probably a major reason ROCm/llama.cpp paths can outperform our tinygrad path.</p>
+<p>How to leverage llama.cpp:</p>
+<ul>
+<li>Study <code class="language-python highlight"><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">mmvq</span><span class="o">.</span><span class="n">cu</span></code>, <code class="language-python highlight"><span class="n">mmq</span><span class="o">.</span><span class="n">cu</span></code>, and quant dequant helpers as algorithms, not as code to copy blindly.</li>
+<li>Identify the exact Q4_K_M layout tinygrad sees in <code class="language-python highlight"><span class="n">gguf</span><span class="o">.</span><span class="n">py</span></code>.</li>
+<li>Add or pattern-match a fused path for Q4_K_M dequant plus matvec/matmul on AMD.</li>
+<li>Specialize for RDNA3 / <code class="language-python highlight"><span class="n">gfx1100</span></code> assumptions where tinygrad can express them.</li>
+</ul>
+<p>Test:</p>
+<ul>
+<li>Benchmark a single representative Q4_K_M linear layer with the same input shape as decode.</li>
+<li>Compare generic unpack-then-matmul against a fused quantized path.</li>
+<li>Track generated token/sec separately from prompt prefill token/sec, because decode stresses matvec more heavily.</li>
+</ul>
+<h3 id="hypothesis-4-the-best-long-term-remote-design-is-graph-level-not-pci-level">Hypothesis 4: the best long-term remote design is graph-level, not PCI-level<a class="headerlink" href="#hypothesis-4-the-best-long-term-remote-design-is-graph-level-not-pci-level" title="Permanent link">¤</a></h3>
+<p>The current TinyGPU path proves we can reach the AMD card through DriverKit, but it exposes a very low-level contract. llama.cpp RPC exposes a higher-level compute contract: allocate buffers, set tensors, compute graph, get memory. That reduces host involvement during the hot path.</p>
+<p>How to leverage llama.cpp:</p>
+<ul>
+<li>Treat its RPC backend as a reference architecture for remote tensor execution.</li>
+<li>Keep the existing remote PCI path for bring-up and hardware access.</li>
+<li>Experiment with a higher-level tinygrad remote executor that ships compiled kernels/graphs and persistent buffers, then performs token steps with minimal host chatter.</li>
+</ul>
+<p>Test:</p>
+<ul>
+<li>Measure whether one decode step can be represented as a small number of remote commands after warmup.</li>
+<li>Prototype a resident session object: model buffers, KV cache, compiled kernels, queue state, and a single step command.</li>
+</ul>
+<h2 id="external-research-map">External research map<a class="headerlink" href="#external-research-map" title="Permanent link">¤</a></h2>
+<p>arXiv is useful, but it should not be the only source. Papers usually explain the kernel principle, while repos and benchmark threads show what actually works on RDNA3 / <code class="language-python highlight"><span class="n">gfx1100</span></code>.</p>
+<p>Where to look:</p>
+<ul>
+<li>Official AMD ROCm docs first, especially HIP, hipBLAS/hipBLASLt, rocWMMA, Composable Kernel, profiling, and BAR/MMIO docs. These tell us what AMD expects the runtime and kernel stack to do.</li>
+<li>llama.cpp and ggml code/issues/PRs second. This is the closest production codebase to our workload: GGUF, Q4_K_M, decode-heavy inference, HIP, RDNA3 branches, and RPC.</li>
+<li>ROCm library repos third: <code class="language-python highlight"><span class="n">ROCm</span><span class="o">/</span><span class="n">composable_kernel</span></code>, <code class="language-python highlight"><span class="n">ROCm</span><span class="o">/</span><span class="n">rocBLAS</span></code>, <code class="language-python highlight"><span class="n">ROCm</span><span class="o">/</span><span class="n">hipBLASLt</span></code>, and <code class="language-python highlight"><span class="n">ROCm</span><span class="o">/</span><span class="n">rocWMMA</span></code>. These are useful when we need to understand AMD tiling, WMMA, architecture-specific GEMM, and why some kernels only target Instinct/CDNA.</li>
+<li>arXiv fourth, for kernel ideas we can translate into tinygrad: packed quantized matvec, dequant fusion, shared-memory staging, offline layout transforms, and avoiding bank conflicts.</li>
+<li>Community benchmark and patch reports fifth. These are noisy, but they expose the real 7900 XTX failure modes: missing <code class="language-python highlight"><span class="n">gfx1100</span></code> targeting, ROCm version regressions, Vulkan vs HIP differences, and per-shape MMVQ tuning.</li>
+</ul>
+<p>Current online leads:</p>
+<ul>
+<li>AMD's llama.cpp ROCm documentation lists the relevant ROCm libraries: hipBLAS for matrix/vector operations, hipBLASLt for fused GEMM features and integer tensor cores, and rocWMMA for mixed-precision matrix multiply/accumulate and flash-attention acceleration.</li>
+<li>AMD's Composable Kernel docs show the first-principles pattern we care about: fuse the operations around quantized linear layers into one GPU kernel instead of materializing intermediate tensors. The same page warns that some XDL instances are Instinct-specific and do not run on Radeon, so RX 7900 XTX work must be checked for RDNA3 support.</li>
+<li>QUICK (<code class="language-python highlight"><span class="n">arXiv</span><span class="p">:</span><span class="mf">2402.10076</span></code>) is relevant because it optimizes quantized LLM inference by interleaving quantized weights offline and avoiding shared-memory write-back after dequantization. Even though it is CUDA/NVIDIA-focused, the principle maps to our Q4_K_M path: layout and dequant strategy matter.</li>
+<li>Fast NF4 Dequantization Kernels (<code class="language-python highlight"><span class="n">arXiv</span><span class="p">:</span><span class="mf">2604.02556</span></code>) is relevant because it frames dequantization itself as the bottleneck and improves it through memory hierarchy use. The exact NF4 format differs from GGUF Q4_K_M, but the principle is directly applicable.</li>
+<li>Recent 7900 XTX reports keep pointing at explicit RDNA3 targeting (<code class="language-python highlight"><span class="n">gfx1100</span></code> / <code class="language-python highlight"><span class="n">HSA_OVERRIDE_GFX_VERSION</span><span class="o">=</span><span class="mf">11.0.0</span></code>) and model-shape-specific MMVQ tuning. Those are not canonical sources, but they match the local hypothesis that generic AMD kernels leave decode performance on the table.</li>
+</ul>
+<p>The practical conclusion: use arXiv to learn the kernel principles, but use llama.cpp/ROCm to decide what to implement first. For <code class="language-python highlight"><span class="n">tinygrad</span><span class="o">-</span><span class="n">arkey</span></code>, the best next paper topic is not "LLM inference" broadly; it is "weight-only quantized matvec/dequant fusion for decode on AMD RDNA3."</p>
+<h2 id="parallel-search-findings">Parallel search findings<a class="headerlink" href="#parallel-search-findings" title="Permanent link">¤</a></h2>
+<p>The parallel search was split into runtime, libraries, llama.cpp implementation, papers, and real-world benchmarks.</p>
+<p>Runtime findings:</p>
+<ul>
+<li>ROCm BAR documentation is directly relevant to TinyGPU. AMD GPUs expose framebuffer BARs, doorbell BARs, optional BARs, and MMIO BARs. The doorbell BAR signals queued GPU work. That maps to why our bridge can fail even before kernel quality matters: if BAR setup, physical addressing, or sysmem mapping is wrong, the runtime cannot reliably submit work.</li>
+<li>ROCm and llama.cpp reports mention VMM and allocation failures on Radeon/HIP paths. Even with the normal ROCm stack, memory management can be version-sensitive. For our custom DriverKit path, this makes <code class="language-python highlight"><span class="n">MAP_SYSMEM</span></code> logging and allocation ownership a first-class test target.</li>
+</ul>
+<p>Library findings:</p>
+<ul>
+<li>hipBLAS and rocBLAS matter for dense matrix paths, but llama.cpp's decode hot path is often custom quantized kernels rather than plain BLAS.</li>
+<li>hipBLASLt and rocWMMA are important, but support must be checked per architecture. Some AMD docs and community notes warn that certain high-performance instances are Instinct/CDNA-oriented, not Radeon/RDNA3-oriented.</li>
+<li>rocWMMA explicitly lists RDNA3 <code class="language-python highlight"><span class="n">gfx1100</span><span class="o">/</span><span class="n">gfx1101</span><span class="o">/</span><span class="n">gfx1102</span></code> support in newer documentation, so it is worth checking for flash-attention and matrix paths, but not assuming it covers our Q4_K_M decode bottleneck.</li>
+</ul>
+<p>llama.cpp findings:</p>
+<ul>
+<li>Official llama.cpp supports HIP as an AMD backend and RPC as a backend, but its RPC is graph/tensor-level rather than raw PCI-level.</li>
+<li>The AMD path needs explicit RDNA3 targeting. Online benchmarks repeatedly mention <code class="language-python highlight"><span class="n">gfx1100</span></code>, <code class="language-python highlight"><span class="n">AMDGPU_TARGETS</span><span class="o">=</span><span class="n">gfx1100</span></code>, or <code class="language-python highlight"><span class="n">HSA_OVERRIDE_GFX_VERSION</span><span class="o">=</span><span class="mf">11.0.0</span></code> as the difference between a correct HIP path and a slow/fallback path.</li>
+<li>The most relevant implementation area remains <code class="language-python highlight"><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">mmvq</span><span class="o">.</span><span class="n">cu</span></code> and adjacent quantized matrix kernels. Community tuning reports claim large gains by tuning MMVQ parameters per model shape on 7900 XTX, which matches our hypothesis that shape-specific decode kernels matter.</li>
+</ul>
+<p>Paper findings:</p>
+<ul>
+<li>QUICK argues for offline layout/interleaving of quantized weights to reduce dequant/shared-memory overhead. The useful principle is not CUDA-specific: quant layout can determine whether the kernel wastes memory traffic.</li>
+<li>Fast NF4 Dequantization frames dequantization as the bottleneck and improves it by exploiting shared memory. The format differs from GGUF Q4_K_M, but the memory-hierarchy lesson applies.</li>
+<li>CodeGEMM and LUT-GEMM style papers are useful because they ask whether dequantization can be avoided or replaced with lookup/precomputed partial products. These are longer-term ideas, not first patches.</li>
+</ul>
+<p>Benchmark findings:</p>
+<ul>
+<li>Public 7900 XTX numbers vary heavily with ROCm version, build flags, backend, model, context length, and quant. That means they are useful for order-of-magnitude targets, not exact pass/fail numbers.</li>
+<li>Several reports put 7B/8B Q4-class llama.cpp HIP decode far above our current tinygrad 1.7B/4B behavior. That supports the view that our current path is not just "AMD is slow"; it is either remote overhead, generic quant kernels, or both.</li>
+<li>Vulkan sometimes beats ROCm for llama.cpp on RDNA3 in community tests. That does not directly help TinyGPU, but it is a warning that "ROCm" alone is not automatically the fastest path on Radeon.</li>
+</ul>
+<h2 id="implementation-delta-after-audit">Implementation delta after audit<a class="headerlink" href="#implementation-delta-after-audit" title="Permanent link">¤</a></h2>
+<p>This section separates existing scaffolds from the next implementation deltas. It is the working plan after the initial runtime-health commits.</p>
+<p>Already present:</p>
+<ul>
+<li><code class="language-python highlight"><span class="n">extra</span><span class="o">/</span><span class="n">remote</span><span class="o">/</span><span class="n">bench</span><span class="o">.</span><span class="n">py</span></code> is the starting health scaffold. It now checks probe, PING latency, config read, BAR0 mapping, <code class="language-python highlight"><span class="n">MAP_SYSMEM</span></code>, sysmem read/write throughput, optional tiny AMD tensor sanity, and classifies <code class="language-python highlight"><span class="n">healthy</span></code>, <code class="language-python highlight"><span class="n">dirty</span></code>, or <code class="language-python highlight"><span class="n">dead</span></code>.</li>
+<li><code class="language-python highlight"><span class="n">tinygrad</span><span class="o">/</span><span class="n">runtime</span><span class="o">/</span><span class="n">support</span><span class="o">/</span><span class="n">system</span><span class="o">.</span><span class="n">py</span></code> already has global remote counters through <code class="language-python highlight"><span class="n">RemotePCIDevice</span><span class="o">.</span><span class="n">stats</span><span class="p">()</span></code> and <code class="language-python highlight"><span class="n">reset_stats</span><span class="p">()</span></code>, plus optional <code class="language-python highlight"><span class="n">REMOTE_RPC_TIMEOUT</span></code>.</li>
+<li><code class="language-python highlight"><span class="n">extra</span><span class="o">/</span><span class="n">remote</span><span class="o">/</span><span class="n">serve</span><span class="o">.</span><span class="n">py</span></code> already logs <code class="language-python highlight"><span class="n">PROBE</span></code>, lazy device open, <code class="language-python highlight"><span class="n">MAP_BAR</span></code>, and <code class="language-python highlight"><span class="n">MAP_SYSMEM</span></code>, and tracks process-local command counts/errors.</li>
+<li><code class="language-python highlight"><span class="n">tinygrad</span><span class="o">/</span><span class="n">llm</span><span class="o">/</span><span class="n">gguf</span><span class="o">.</span><span class="n">py</span></code> already supports Q4_K/Q4_K_M correctness through generic tensor dequantization.</li>
+<li><code class="language-python highlight"><span class="n">extra</span><span class="o">/</span><span class="n">q4_k_bench</span><span class="o">.</span><span class="n">py</span></code> is the current standalone Q4_K baseline scaffold.</li>
+<li>This document is the source research note for the AMD 7900 XTX optimization thesis.</li>
+</ul>
+<p>Slice 1 delta: bridge lifecycle and health semantics.</p>
+<ul>
+<li>Add per-RPC phase timing on the client side, not only server cumulative counters. The minimum output should include command name, count, total ms, average ms, sent bytes, received bytes, and failures.</li>
+<li>Add a remote health query command to the bridge protocol. The request/response framing should stay compatible with the existing fixed request/response protocol; add a new <code class="language-python highlight"><span class="n">RemoteCmd</span></code> rather than changing the wire shape of existing commands.</li>
+<li>Add server-side dirty-state behavior. After a device-level failure in probe/open/BAR/sysmem/MMIO/sysmem access, mark the server dirty and reject subsequent device commands with a clear error until restart or explicit reset.</li>
+<li>Add a model-server preflight health check before <code class="language-python highlight"><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">models</span></code> and generation responses are treated as usable.</li>
+</ul>
+<p>Slice 2 delta: per-generation remote pressure metrics.</p>
+<ul>
+<li>Add per-generation stats reset hooks in the LLM inference path, not just global process counters. The likely integration point is <code class="language-python highlight"><span class="n">tinygrad</span><span class="o">/</span><span class="n">llm</span><span class="o">/</span><span class="n">cli</span><span class="o">.</span><span class="n">py</span></code> around request handling and <code class="language-python highlight"><span class="n">tinygrad</span><span class="o">/</span><span class="n">llm</span><span class="o">/</span><span class="n">model</span><span class="o">.</span><span class="n">py</span></code> around prefill/decode boundaries.</li>
+<li>Report prefill and decode separately: tokens, elapsed time, remote roundtrips, MB sent, MB received, roundtrips/token, and MB/token.</li>
+<li>Keep the existing low-level RPC protocol for now. Roundtrip reduction in this slice should come from caching, residency, and avoiding repeated calls, not from redesigning the wire format.</li>
+<li>Place session-local mapping/allocation caches in the client runtime first (<code class="language-python highlight"><span class="n">RemotePCIDevice</span></code> or its owning AMD runtime objects), because <code class="language-python highlight"><span class="n">serve</span><span class="o">.</span><span class="n">py</span></code> allocations are currently process-local and not durable across client reconnects.</li>
+</ul>
+<p>Slice 3 delta: Q4_K_M layer benchmark before kernel changes.</p>
+<ul>
+<li>Extend <code class="language-python highlight"><span class="n">extra</span><span class="o">/</span><span class="n">q4_k_bench</span><span class="o">.</span><span class="n">py</span></code> so it can benchmark one selected Qwen Q4_K_M layer on CPU and AMD, list tensor names, and emit JSON/CSV-friendly metrics.</li>
+<li>Measure three timings separately: Q4_K decode, decoded matvec, and end-to-end decode-plus-matvec.</li>
+<li>Use a validated model target first: Qwen 1.7B Q4_K_M is the initial gate because it has previously loaded on this remote AMD path. Qwen 4B is the stress gate. Qwen 8B/7B is not a first acceptance target until the runtime is stable.</li>
+<li>Keep <code class="language-python highlight"><span class="n">test</span><span class="o">/</span><span class="n">unit</span><span class="o">/</span><span class="n">test_gguf</span><span class="o">.</span><span class="n">py</span></code> as correctness coverage and add performance benchmarking separately; do not turn unit tests into GPU performance tests.</li>
+</ul>
+<p>Slice 4 delta: packed Q4_K_M fused decode matvec.</p>
+<ul>
+<li>Prototype a packed Q4_K_M decode+matvec path gated behind AMD/gfx1100. The generic GGUF tensor path must remain the fallback for all other devices and quant types.</li>
+<li>Verify that tinygrad's custom-kernel path can express Q4_K block memory access patterns before committing to a broad rewrite. Existing <code class="language-python highlight"><span class="n">extra</span><span class="o">/</span><span class="n">llama_kernels</span><span class="o">/</span></code> examples are useful for custom-kernel mechanics but do not prove Q4_K_M coverage.</li>
+<li>Use llama.cpp <code class="language-python highlight"><span class="n">mmvq</span><span class="o">.</span><span class="n">cu</span></code> as the algorithmic reference: packed block layout, dequant inside the matvec, RDNA3 wave32 assumptions, and per-shape tuning.</li>
+<li>Start with one Qwen layer shape, prove correctness against current <code class="language-python highlight"><span class="n">gguf</span><span class="o">.</span><span class="n">py</span></code> dequant, then tune rows-per-block/vectorization and expand only if the benchmark wins.</li>
+</ul>
+<p>Comparison baseline:</p>
+<ul>
+<li>Standard ROCm/KFD (<code class="language-python highlight"><span class="n">KFDIface</span></code>) remains a useful comparison path when available. The active target is the remote TinyGPU/DriverKit path, but KFD can help distinguish remote-bridge overhead from AMD kernel quality.</li>
+</ul>
+<h2 id="recommended-order-of-work">Recommended order of work<a class="headerlink" href="#recommended-order-of-work" title="Permanent link">¤</a></h2>
+<ol>
+<li>Finish Slice 1 health semantics: client-side RPC phase timings, health query, dirty-state gate, and model-server preflight.</li>
+<li>Add Slice 2 per-generation metrics: prefill/decode roundtrips per token and MB per token.</li>
+<li>Finish Slice 3 Q4_K_M layer benchmark on Qwen 1.7B and Qwen 4B.</li>
+<li>Start Slice 4 only after the benchmark proves the current decoded matvec is the bottleneck.</li>
+<li>Consider a graph-level remote API after the PCI path is reliable and per-generation metrics show remote chatter remains material.</li>
+</ol>
+<h2 id="relevant-local-references">Relevant local references<a class="headerlink" href="#relevant-local-references" title="Permanent link">¤</a></h2>
+<ul>
+<li>tinygrad remote client: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">-</span><span class="n">arkey</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">/</span><span class="n">runtime</span><span class="o">/</span><span class="n">support</span><span class="o">/</span><span class="n">system</span><span class="o">.</span><span class="n">py</span></code></li>
+<li>tinygrad remote server: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">-</span><span class="n">arkey</span><span class="o">/</span><span class="n">extra</span><span class="o">/</span><span class="n">remote</span><span class="o">/</span><span class="n">serve</span><span class="o">.</span><span class="n">py</span></code></li>
+<li>tinygrad GGUF quant decode: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">-</span><span class="n">arkey</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">/</span><span class="n">llm</span><span class="o">/</span><span class="n">gguf</span><span class="o">.</span><span class="n">py</span></code></li>
+<li>tinygrad LLM execution: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">-</span><span class="n">arkey</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">/</span><span class="n">llm</span><span class="o">/</span><span class="n">model</span><span class="o">.</span><span class="n">py</span></code></li>
+<li>llama.cpp HIP build docs: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span><span class="o">/</span><span class="n">docs</span><span class="o">/</span><span class="n">build</span><span class="o">.</span><span class="n">md</span></code></li>
+<li>llama.cpp AMD arch definitions: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span><span class="o">/</span><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">common</span><span class="o">.</span><span class="n">cuh</span></code></li>
+<li>llama.cpp quantized matvec path: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span><span class="o">/</span><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">mmvq</span><span class="o">.</span><span class="n">cu</span></code></li>
+<li>llama.cpp HIP compatibility layer: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span><span class="o">/</span><span class="n">ggml</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">cuda</span><span class="o">/</span><span class="n">vendors</span><span class="o">/</span><span class="n">hip</span><span class="o">.</span><span class="n">h</span></code></li>
+<li>llama.cpp RPC docs: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span><span class="o">/</span><span class="n">tools</span><span class="o">/</span><span class="n">rpc</span><span class="o">/</span><span class="n">README</span><span class="o">.</span><span class="n">md</span></code></li>
+<li>ROCm overview: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">ROCm</span><span class="o">/</span><span class="n">docs</span><span class="o">/</span><span class="n">what</span><span class="o">-</span><span class="ow">is</span><span class="o">-</span><span class="n">rocm</span><span class="o">.</span><span class="n">rst</span></code></li>
+<li>ROCm HIP programming guide: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">ROCm</span><span class="o">/</span><span class="n">docs</span><span class="o">/</span><span class="n">how</span><span class="o">-</span><span class="n">to</span><span class="o">/</span><span class="n">programming_guide</span><span class="o">.</span><span class="n">rst</span></code></li>
+<li>ROCm BAR memory doc: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">ROCm</span><span class="o">/</span><span class="n">docs</span><span class="o">/</span><span class="n">how</span><span class="o">-</span><span class="n">to</span><span class="o">/</span><span class="n">Bar</span><span class="o">-</span><span class="n">Memory</span><span class="o">.</span><span class="n">rst</span></code></li>
+<li>ROCm API libraries: <code class="language-python highlight"><span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">julianabeleda</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">ROCm</span><span class="o">/</span><span class="n">docs</span><span class="o">/</span><span class="n">reference</span><span class="o">/</span><span class="n">api</span><span class="o">-</span><span class="n">libraries</span><span class="o">.</span><span class="n">md</span></code></li>
+<li>AMD llama.cpp ROCm docs: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">rocm</span><span class="o">.</span><span class="n">docs</span><span class="o">.</span><span class="n">amd</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">projects</span><span class="o">/</span><span class="n">llama</span><span class="o">-</span><span class="n">cpp</span><span class="o">/</span><span class="n">en</span><span class="o">/</span><span class="n">docs</span><span class="o">-</span><span class="mf">26.02</span><span class="o">/</span><span class="n">install</span><span class="o">/</span><span class="n">llama</span><span class="o">-</span><span class="n">cpp</span><span class="o">-</span><span class="n">install</span><span class="o">.</span><span class="n">html</span></code></li>
+<li>AMD Composable Kernel inference docs: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">rocm</span><span class="o">.</span><span class="n">docs</span><span class="o">.</span><span class="n">amd</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">en</span><span class="o">/</span><span class="n">latest</span><span class="o">/</span><span class="n">how</span><span class="o">-</span><span class="n">to</span><span class="o">/</span><span class="n">rocm</span><span class="o">-</span><span class="k">for</span><span class="o">-</span><span class="n">ai</span><span class="o">/</span><span class="n">inference</span><span class="o">-</span><span class="n">optimization</span><span class="o">/</span><span class="n">optimizing</span><span class="o">-</span><span class="k">with</span><span class="o">-</span><span class="n">composable</span><span class="o">-</span><span class="n">kernel</span><span class="o">.</span><span class="n">html</span></code></li>
+<li>ROCm BAR access documentation: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">rocm</span><span class="o">.</span><span class="n">docs</span><span class="o">.</span><span class="n">amd</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">en</span><span class="o">/</span><span class="n">develop</span><span class="o">/</span><span class="n">how</span><span class="o">-</span><span class="n">to</span><span class="o">/</span><span class="n">Bar</span><span class="o">-</span><span class="n">Memory</span><span class="o">.</span><span class="n">html</span></code></li>
+<li>ROCm HIP compiler docs: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">rocm</span><span class="o">.</span><span class="n">docs</span><span class="o">.</span><span class="n">amd</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">projects</span><span class="o">/</span><span class="n">HIP</span><span class="o">/</span><span class="n">en</span><span class="o">/</span><span class="n">latest</span><span class="o">/</span><span class="n">understand</span><span class="o">/</span><span class="n">compilers</span><span class="o">.</span><span class="n">html</span></code></li>
+<li>rocWMMA API docs: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">rocm</span><span class="o">.</span><span class="n">docs</span><span class="o">.</span><span class="n">amd</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">projects</span><span class="o">/</span><span class="n">rocWMMA</span><span class="o">/</span><span class="n">en</span><span class="o">/</span><span class="n">docs</span><span class="o">-</span><span class="mf">6.4.3</span><span class="o">/</span><span class="n">API_Reference_Guide</span><span class="o">.</span><span class="n">html</span></code></li>
+<li>llama.cpp ROCm allocation issue: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">org</span><span class="o">/</span><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span><span class="o">/</span><span class="n">issues</span><span class="o">/</span><span class="mi">14178</span></code></li>
+<li>llama.cpp TurboQuant HIP discussion: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">ggml</span><span class="o">-</span><span class="n">org</span><span class="o">/</span><span class="n">llama</span><span class="o">.</span><span class="n">cpp</span><span class="o">/</span><span class="n">discussions</span><span class="o">/</span><span class="mi">21526</span></code></li>
+<li>QUICK quantized-kernel paper: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">arxiv</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="nb">abs</span><span class="o">/</span><span class="mf">2402.10076</span></code></li>
+<li>Fast NF4 dequantization paper: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">arxiv</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="nb">abs</span><span class="o">/</span><span class="mf">2604.02556</span></code></li>
+<li>CodeGEMM quantized GEMM paper: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">arxiv</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="nb">abs</span><span class="o">/</span><span class="mf">2512.17970</span></code></li>
+<li>LUT-GEMM quantized matrix multiplication paper: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">arxiv</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="nb">abs</span><span class="o">/</span><span class="mf">2206.09557</span></code></li>
+<li>RDNA3 MMVQ tuning report: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">www</span><span class="o">.</span><span class="n">reddit</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">r</span><span class="o">/</span><span class="n">ROCm</span><span class="o">/</span><span class="n">comments</span><span class="o">/</span><span class="mi">1</span><span class="n">s7jgvl</span><span class="o">/</span><span class="n">kernelanvil_2x_decode_speedup_on_7900_xtx_by</span><span class="o">/</span></code></li>
+<li>7900 XTX ROCm/Vulkan comparison report: <code class="language-python highlight"><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">www</span><span class="o">.</span><span class="n">reddit</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">r</span><span class="o">/</span><span class="n">ROCm</span><span class="o">/</span><span class="n">comments</span><span class="o">/</span><span class="mi">1</span><span class="n">s1vo37</span><span class="o">/</span><span class="n">rocm_on_7900_xtx_significantly_slower_than_vulkan</span><span class="o">/</span></code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["announce.dismiss", "content.action.edit", "content.action.view", "content.code.annotate", "content.code.copy", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.expand", "navigation.top", "navigation.path", "search.highlight", "search.suggest", "toc.follow", "toc.integrate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../assets/_markdown_exec_pyodide.js"></script>
+      
+    
+  </body>
+</html>

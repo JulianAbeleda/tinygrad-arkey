@@ -1,0 +1,1633 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://docs.tinygrad.org/amd-linux-psp-good-trace/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>AMD Linux PSP Good Trace - tinygrad docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_markdown_exec_pyodide.css">
+    
+      <link rel="stylesheet" href="../assets/_markdown_exec_ansi.css">
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#amd-linux-psp-good-trace" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="tinygrad docs" class="md-header__button md-logo" aria-label="tinygrad docs" data-md-component="logo">
+      
+  <img src="../logo_tiny_dark.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            tinygrad docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              AMD Linux PSP Good Trace
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/JulianAbeleda/tinygrad-arkey/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="tinygrad docs" class="md-nav__button md-logo" aria-label="tinygrad docs" data-md-component="logo">
+      
+  <img src="../logo_tiny_dark.svg" alt="logo">
+
+    </a>
+    tinygrad docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/JulianAbeleda/tinygrad-arkey/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href=".." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_1" id="__nav_1_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Home
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mnist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MNIST Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_5" id="__nav_1_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_5_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../tensor/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tensor
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_1_5_1" id="__nav_1_5_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_5_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_5_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tensor
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/movement/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/elementwise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Elementwise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensor/ops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complex Ops
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dtypes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dtypes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nn (Neural Networks)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../env_vars/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_5_5" id="__nav_1_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Runtime
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tinygpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    egpu for mac
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_6" id="__nav_1_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Intro
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/layout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Layout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/speed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/uop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UOp
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_1_6_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_1_6_5" id="__nav_1_6_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_1_6_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1_6_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Runtime
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runtime Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/hcq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HCQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/am/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AM Driver
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tinybox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tinybox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/JulianAbeleda/tinygrad-arkey/edit/master/docs/amd-linux-psp-good-trace.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+    
+      
+    
+    <a href="https://github.com/JulianAbeleda/tinygrad-arkey/raw/master/docs/amd-linux-psp-good-trace.md" title="View source of this page" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"/></svg>
+    </a>
+  
+
+
+<h1 id="amd-linux-psp-good-trace">AMD Linux PSP Good Trace<a class="headerlink" href="#amd-linux-psp-good-trace" title="Permanent link">¤</a></h1>
+<p>This captures the Linux-good PSP boot path for a Navi31/RX 7900 XTX installed
+directly in a Linux PC PCIe slot. Use it to compare Linux <code class="language-python highlight"><span class="n">amdgpu</span></code> against the
+Mac/TinyGPU failure where first KDB load writes <code class="language-python highlight"><span class="n">C2PMSG35</span><span class="o">=</span><span class="mh">0x80000</span></code>, clears
+ready, and never gets ready back.</p>
+<h2 id="preferred-capture">Preferred Capture<a class="headerlink" href="#preferred-capture" title="Permanent link">¤</a></h2>
+<p>Use the Ubuntu checkout at:</p>
+<div class="language-text highlight"><pre><span></span><code>/home/ubuntu/tinygrad-arkey
+</code></pre></div>
+<p>Before capturing, make sure that checkout has the current trace tooling from
+<code class="language-python highlight"><span class="n">JulianAbeleda</span><span class="o">/</span><span class="n">tinygrad</span><span class="o">-</span><span class="n">arkey</span></code> and preserve any local capture outputs. The trace
+script must be the fixed-offset version because Ubuntu 6.8.0-117 did not expose
+AMD module-private struct names to <code class="language-python highlight"><span class="n">bpftrace</span></code> even with BTF present.</p>
+<p>Boot Linux with <code class="language-python highlight"><span class="n">amdgpu</span></code> blacklisted so the card is present but unbound:</p>
+<div class="language-sh highlight"><pre><span></span><code>modprobe.blacklist<span class="o">=</span>amdgpu
+</code></pre></div>
+<p>For repeated captures, install the helper GRUB entry once and select it from
+the terminal for the next boot:</p>
+<div class="language-sh highlight"><pre><span></span><code>sudo<span class="w"> </span>extra/amdpci/linux_amdgpu_grub_switch.sh<span class="w"> </span>install
+sudo<span class="w"> </span>extra/amdpci/linux_amdgpu_grub_switch.sh<span class="w"> </span>next-blacklist
+sudo<span class="w"> </span>reboot
+</code></pre></div>
+<p>After the blacklisted run, select normal boot for the next reboot:</p>
+<div class="language-sh highlight"><pre><span></span><code>sudo<span class="w"> </span>extra/amdpci/linux_amdgpu_grub_switch.sh<span class="w"> </span>next-normal
+sudo<span class="w"> </span>reboot
+</code></pre></div>
+<p>Find the GPU BDF:</p>
+<div class="language-sh highlight"><pre><span></span><code>lspci<span class="w"> </span>-Dnn<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-Ei<span class="w"> </span><span class="s1">&#39;1002:744c|amd.*(vga|display|3d)&#39;</span>
+</code></pre></div>
+<p>Run the capture wrapper from this repo:</p>
+<div class="language-sh highlight"><pre><span></span><code>sudo<span class="w"> </span>extra/amdpci/capture_linux_psp_good_trace.sh<span class="w"> </span>--bind-bdf<span class="w"> </span><span class="m">0000</span>:03:00.0
+</code></pre></div>
+<p>Replace <code class="language-python highlight"><span class="mi">0000</span><span class="p">:</span><span class="mi">03</span><span class="p">:</span><span class="mf">00.0</span></code> with the RX 7900 XTX BDF. The script holds that device
+unbound, loads <code class="language-python highlight"><span class="n">amdgpu</span></code> so PSP symbols exist, starts bpftrace, then binds the
+GPU and saves the trace plus baseline files in <code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">good</span><span class="o">-</span><span class="n">YYYYmmdd</span><span class="o">-</span><span class="n">HHMMSS</span></code>.</p>
+<p>For the deeper pre-KDB comparison pass, add <code class="language-python highlight"><span class="o">--</span><span class="n">deep</span></code>:</p>
+<div class="language-sh highlight"><pre><span></span><code>sudo<span class="w"> </span>extra/amdpci/capture_linux_psp_good_trace.sh<span class="w"> </span>--deep<span class="w"> </span>--bind-bdf<span class="w"> </span><span class="m">0000</span>:03:00.0
+</code></pre></div>
+<p>Deep mode generates a bpftrace script inside the output directory from the
+symbols visible on that boot. It keeps the known-good PSP/GART probes and adds
+optional PSP ring/TMR/helper and filtered register read/write probes when those
+symbols are available.</p>
+<h2 id="rebind-capture">Rebind Capture<a class="headerlink" href="#rebind-capture" title="Permanent link">¤</a></h2>
+<p>If <code class="language-python highlight"><span class="n">amdgpu</span></code> is already loaded and the RX 7900 XTX is not driving the display:</p>
+<div class="language-sh highlight"><pre><span></span><code>sudo<span class="w"> </span>extra/amdpci/capture_linux_psp_good_trace.sh<span class="w"> </span>--rebind-bdf<span class="w"> </span><span class="m">0000</span>:03:00.0
+</code></pre></div>
+<p>This unbinds the device, attaches bpftrace while the module symbols remain
+visible, then binds the device again. Do not use this on the active display GPU.</p>
+<h2 id="ubuntu-preflight">Ubuntu Preflight<a class="headerlink" href="#ubuntu-preflight" title="Permanent link">¤</a></h2>
+<p>Confirm UEFI/ReBAR state before capture:</p>
+<div class="language-sh highlight"><pre><span></span><code><span class="o">[</span><span class="w"> </span>-d<span class="w"> </span>/sys/firmware/efi<span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>UEFI<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>Legacy
+dmesg<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;Detected VRAM&#39;</span>
+lspci<span class="w"> </span>-Dnn<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-Ei<span class="w"> </span><span class="s1">&#39;1002:744c|amd.*(vga|display|3d)&#39;</span>
+</code></pre></div>
+<p>Known good direction from the 2026-05-28 BIOS pass:</p>
+<div class="language-text highlight"><pre><span></span><code>UEFI
+[drm] Detected VRAM RAM=24560M, BAR=32768M
+</code></pre></div>
+<p>If BAR falls back to <code class="language-python highlight"><span class="mi">256</span><span class="n">M</span></code>, stop and fix BIOS/UEFI/ReBAR before taking a PSP
+comparison trace.</p>
+<p>If a bind/rebind attempt leaves the GPU unbound or logs an amdgpu probe failure,
+stop and reboot before another capture. Do not stack a <code class="language-python highlight"><span class="o">--</span><span class="n">bind</span><span class="o">-</span><span class="n">bdf</span></code> attempt on
+top of a failed <code class="language-python highlight"><span class="o">--</span><span class="n">rebind</span><span class="o">-</span><span class="n">bdf</span></code> run; the kernel/device state is no longer a clean
+Linux-good baseline.</p>
+<h2 id="expected-files">Expected Files<a class="headerlink" href="#expected-files" title="Permanent link">¤</a></h2>
+<ul>
+<li><code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">good</span><span class="o">.</span><span class="n">trace</span></code>: PSP bootloader, memory-training, and selected GART
+  mapping trace.</li>
+<li><code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">good</span><span class="o">-</span><span class="n">deep</span><span class="o">.</span><span class="n">trace</span></code>: deep-mode trace with optional pre-KDB PSP,
+  ring/TMR, MMHUB, and mailbox register events.</li>
+<li><code class="language-python highlight"><span class="n">trace_amdgpu_psp_deep</span><span class="o">.</span><span class="n">generated</span><span class="o">.</span><span class="n">bt</span></code>: deep-mode bpftrace script generated
+  from symbols visible in <code class="language-python highlight"><span class="o">/</span><span class="n">proc</span><span class="o">/</span><span class="n">kallsyms</span></code>.</li>
+<li><code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">deep</span><span class="o">-</span><span class="n">generated</span><span class="o">-</span><span class="n">symbols</span><span class="o">.</span><span class="n">txt</span></code>: generated probe list and skipped optional
+  probe classes.</li>
+<li><code class="language-python highlight"><span class="n">linux</span><span class="o">-</span><span class="n">pre</span><span class="o">-</span><span class="n">kdb</span><span class="o">-</span><span class="n">key</span><span class="o">-</span><span class="n">events</span><span class="o">.</span><span class="n">txt</span></code>: focused grep output for KDB, mailbox,
+  memory-training, GART, MMHUB, ring, and TMR events.</li>
+<li><code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">good</span><span class="o">-*.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span></code> and <code class="language-python highlight"><span class="o">.</span><span class="n">sha256</span></code>: deep-mode archive and checksum
+  generated after the trace completes.</li>
+<li><code class="language-python highlight"><span class="n">mmhub</span><span class="o">-</span><span class="n">gart</span><span class="o">-</span><span class="n">snapshot</span><span class="o">.</span><span class="n">txt</span></code> / <code class="language-python highlight"><span class="n">mmhub</span><span class="o">-</span><span class="n">gart</span><span class="o">-</span><span class="n">snapshot</span><span class="o">.</span><span class="n">json</span></code>: read-only MMHUB
+  and GART/context register snapshot, when <code class="language-python highlight"><span class="n">linux_mmhub_gart_snapshot</span><span class="o">.</span><span class="n">py</span></code> can
+  read BAR5 after bind/rebind.</li>
+<li><code class="language-python highlight"><span class="n">mmhub</span><span class="o">-</span><span class="n">gart</span><span class="o">-</span><span class="n">snapshot</span><span class="o">.</span><span class="n">err</span></code>: snapshot failure details, if the PSP trace succeeds
+  but the register snapshot fails.</li>
+<li><code class="language-python highlight"><span class="n">baseline</span><span class="o">.</span><span class="n">txt</span></code>: kernel, PCI, <code class="language-python highlight"><span class="n">amdgpu</span></code>, and BTF baseline.</li>
+<li><code class="language-python highlight"><span class="n">dmesg</span><span class="o">-</span><span class="n">before</span><span class="o">.</span><span class="n">txt</span></code> / <code class="language-python highlight"><span class="n">dmesg</span><span class="o">-</span><span class="n">after</span><span class="o">.</span><span class="n">txt</span></code>: kernel log around the capture.</li>
+<li><code class="language-python highlight"><span class="n">bpftrace</span><span class="o">.</span><span class="n">stderr</span></code>: bpftrace compile/attach errors, if any.</li>
+<li><code class="language-python highlight"><span class="n">firmware</span><span class="o">-</span><span class="n">sha256</span><span class="o">.</span><span class="n">txt</span></code>: hashes for relevant AMD firmware blobs.</li>
+<li><code class="language-python highlight"><span class="n">gpu</span><span class="o">-</span><span class="n">candidates</span><span class="o">.</span><span class="n">txt</span></code> and <code class="language-python highlight"><span class="n">lspci</span><span class="o">-*.</span><span class="n">txt</span></code>: PCI identity and topology.</li>
+<li><code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">symbols</span><span class="o">-*.</span><span class="n">txt</span></code>: PSP/GART probe symbol visibility before and after setup.</li>
+</ul>
+<h2 id="read-only-mmhubgart-snapshot">Read-Only MMHUB/GART Snapshot<a class="headerlink" href="#read-only-mmhubgart-snapshot" title="Permanent link">¤</a></h2>
+<p>The snapshot helper can also be run by itself on Ubuntu without unbinding the
+GPU. Try this first on a normal boot before doing another blacklisted PSP
+capture:</p>
+<div class="language-sh highlight"><pre><span></span><code>sudo<span class="w"> </span>python3<span class="w"> </span>extra/amdpci/linux_mmhub_gart_snapshot.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bdf<span class="w"> </span><span class="m">0000</span>:08:00.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--out<span class="w"> </span>linux-mmhub-gart-snapshot-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d-%H%M%S<span class="k">)</span>
+</code></pre></div>
+<p>Replace the BDF if <code class="language-python highlight"><span class="n">lspci</span> <span class="o">-</span><span class="n">Dnn</span></code> reports a different RX 7900 XTX address. The
+helper is read-only: it maps BAR5 and reads named MMHUB registers using the
+same <code class="language-python highlight"><span class="n">gfx1100_744c</span></code> register metadata as tinygrad. It does not unbind, reset,
+write PCI config, or write MMIO.</p>
+<p>Compare <code class="language-python highlight"><span class="n">mmhub</span><span class="o">-</span><span class="n">gart</span><span class="o">-</span><span class="n">snapshot</span><span class="o">.</span><span class="n">txt</span></code> against a Mac/TinyGPU audit run using:</p>
+<div class="language-text highlight"><pre><span></span><code>AM_PSP_AUDIT_PRE_KDB=1 AM_PSP_PARITY_TRACE=1
+</code></pre></div>
+<p>The important values are context0 control/base/start/end, system aperture,
+MMHUB L1/L2 controls, and protection-fault status/control. If the standalone
+snapshot cannot read BAR5 while <code class="language-python highlight"><span class="n">amdgpu</span></code> owns the display GPU, rerun the normal
+PSP capture from a blacklisted boot; the wrapper will attempt the same snapshot
+after binding <code class="language-python highlight"><span class="n">amdgpu</span></code>.</p>
+<h2 id="vram-psp-message-buffer-experiment">VRAM PSP Message Buffer Experiment<a class="headerlink" href="#vram-psp-message-buffer-experiment" title="Permanent link">¤</a></h2>
+<p><code class="language-python highlight"><span class="n">AM_PSP_SYSMSG1_VRAM</span><span class="o">=</span><span class="mi">1</span></code> uses a VRAM-backed PSP msg1 buffer on remote Linux
+runs. <code class="language-python highlight"><span class="n">AM_PSP_SYSMSG1_VRAM_PADDR</span><span class="o">=</span><span class="mi">0</span><span class="n">x</span><span class="o">...</span></code> can force the 1 MiB-aligned VRAM
+physical address for that buffer. This is useful for avoiding low VRAM while
+checking whether BAR0 writes/readbacks are stable before the KDB mailbox write.</p>
+<p>For mailbox ordering experiments, <code class="language-python highlight"><span class="n">AM_PSP_MAILBOX_STRONG_ORDER</span><span class="o">=</span><span class="mi">1</span></code> adds an HDP
+flush and C2PMSG35/C2PMSG36 readbacks around the msg1 and component writes.
+<code class="language-python highlight"><span class="n">AM_PSP_WAIT_TRACE_MS</span><span class="o">=</span><span class="mi">100</span></code> emits periodic bootloader wait samples instead of
+only tracing value changes.</p>
+<p><code class="language-python highlight"><span class="n">AM_PSP_TRACE_C2PMSG_DENSE</span><span class="o">=</span><span class="mi">1</span></code> expands tinygrad post-compid/timeout PSP
+snapshots from the sparse mailbox set to C2PMSG0..127. Pre-KDB tracing remains
+sparse because dense C2PMSG reads may disturb the stable msg1 readback path. Use
+it with <code class="language-python highlight"><span class="n">AM_PSP_PARITY_TRACE</span><span class="o">=</span><span class="mi">1</span></code> when comparing against a Linux <code class="language-python highlight"><span class="o">--</span><span class="n">deep</span></code> capture;
+the Linux wrapper also writes <code class="language-python highlight"><span class="n">linux</span><span class="o">-</span><span class="n">c2pmsg</span><span class="o">-</span><span class="n">events</span><span class="o">.</span><span class="n">txt</span></code> from the raw register
+trace.</p>
+<h2 id="compare-against-tinygpu-failure">Compare Against TinyGPU Failure<a class="headerlink" href="#compare-against-tinygpu-failure" title="Permanent link">¤</a></h2>
+<p>Check the first <code class="language-python highlight"><span class="n">bl_load</span> <span class="n">enter</span></code> line for KDB:</p>
+<div class="language-text highlight"><pre><span></span><code>cmd=0x80000 size=0x1d40 fw_pri_mc=... c2p36=...
+</code></pre></div>
+<p>The key comparison points are <code class="language-python highlight"><span class="n">fw_pri_mc</span></code>, <code class="language-python highlight"><span class="n">c2p36</span></code>, memory-training order, and
+whether the matching <code class="language-python highlight"><span class="n">bl_load</span> <span class="n">ret</span></code> / <code class="language-python highlight"><span class="n">wait_bl</span> <span class="n">ret</span></code> returns <code class="language-python highlight"><span class="mi">0</span></code>.</p>
+<p>For the Linux-matching PSP primary firmware buffer, also check the selected
+<code class="language-python highlight"><span class="n">gart_map</span></code> lines:</p>
+<div class="language-text highlight"><pre><span></span><code>gart_map enter offset=0x700000 pages=256 ... flags=... dma0=... dma_last=...
+gart_map ret offset=0x700000 pages=256 ... pte0=... pte_last=...
+</code></pre></div>
+<p>Compare those PTE values and flags against the Mac/TinyGPU GART experiment
+trace. A PTE mismatch should become the next Mac-side experiment; a match rules
+out GART PTE flags/cacheability as the KDB blocker.</p>
+<p>If PTE flags match, compare <code class="language-python highlight"><span class="n">mmhub</span><span class="o">-</span><span class="n">gart</span><span class="o">-</span><span class="n">snapshot</span><span class="o">.</span><span class="n">txt</span></code> against the Mac parity
+trace before adding another KDB experiment. The next likely difference is
+MMHUB/GART context setup, invalidation semantics, or another Linux pre-KDB init
+side effect.</p>
+<h2 id="2026-05-29-dense-trace-result">2026-05-29 Dense Trace Result<a class="headerlink" href="#2026-05-29-dense-trace-result" title="Permanent link">¤</a></h2>
+<p>The useful Linux-good dense capture is:</p>
+<div class="language-text highlight"><pre><span></span><code>extra/amdpci/captures/psp-linux-good-20260529-164412.tar.gz
+sha256 af6d476e597294962eedcb6a9bf9f11425a19d10d6f57fc9e7b88c1b9ffa95a5
+</code></pre></div>
+<p>The closest tinygrad comparison capture is:</p>
+<div class="language-text highlight"><pre><span></span><code>extra/amdpci/captures/linux-gart-linuxctx-dense-real-20260529-171906.tar.gz
+sha256 efa2e7cb288682fd08c1357c11d06c7e0a9d593b4b34ceddb07d5f7c2e509908
+</code></pre></div>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span class="nv">PYTHONPATH</span><span class="o">=</span>.<span class="w"> </span>python3<span class="w"> </span>extra/amdpci/compare_psp_traces.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--linux<span class="w"> </span>extra/amdpci/captures/psp-linux-good-20260529-164412.tar.gz<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--tinygrad<span class="w"> </span>extra/amdpci/captures/linux-gart-linuxctx-dense-real-20260529-171906.tar.gz
+</code></pre></div>
+<p>As of this comparison, tinygrad matches Linux-good on KDB compid <code class="language-python highlight"><span class="mh">0x80000</span></code>,
+<code class="language-python highlight"><span class="n">C2PMSG36</span><span class="o">=</span><span class="mh">0x7fff007</span></code>, KDB payload bytes, msg1 address, msg1 readback, Linux-like
+MMHUB context0 setup, table base <code class="language-python highlight"><span class="mh">0x5feb00001</span></code>, and zero MMHUB fault status.
+The immediate remaining failure is behavioral: after KDB, Linux sees
+<code class="language-python highlight"><span class="n">C2PMSG35</span></code> move through the command and a transient zero before returning
+<code class="language-python highlight"><span class="mh">0x80000000</span></code> in about 0.65 ms, while tinygrad sees <code class="language-python highlight"><span class="n">C2PMSG35</span><span class="o">=</span><span class="mi">0</span></code> until the
+10-second timeout.</p>
+<p>The later nonzero Linux values in C2PMSG64/67/69/70/71/81 are downstream of
+successful KDB and later bootloader/ring work, not evidence that tinygrad should
+preprogram those registers before KDB. In the dense capture they first become
+interesting tens of milliseconds after KDB starts, while tinygrad never gets
+past the first KDB ready wait.</p>
+<p>A follow-up contiguous sysmem-GART dense attempt is stored at:</p>
+<div class="language-text highlight"><pre><span></span><code>extra/amdpci/captures/linux-gart-contig-linuxctx-dense-real-20260529-172812.tar.gz
+sha256 e06db7e69e15529e4a1de33e89fd4bff8a4a4696c91d684d061232f36c4b07b3
+</code></pre></div>
+<p>That run failed during <code class="language-python highlight"><span class="n">AM_PSP_MEM_TRAIN</span><span class="o">=</span><span class="n">long</span></code> before GART PTE setup or KDB
+mailbox writes. Treat it as inconclusive for KDB; it only shows the contiguous
+allocation path can change the earlier memory-training phase.</p>
+<h2 id="mactinygpu-top-table-limit">Mac/TinyGPU Top-Table Limit<a class="headerlink" href="#mactinygpu-top-table-limit" title="Permanent link">¤</a></h2>
+<p><code class="language-python highlight"><span class="n">AM_PSP_GART_TABLE_TOP</span><span class="o">=</span><span class="mi">1</span></code> places the PSP GART page table near Linux amdgpu's
+observed high VRAM location. On the Mac/TinyGPU remote path this requires a
+write around <code class="language-python highlight"><span class="mh">0x5feb00000</span></code>, outside the currently mapped 256 MiB BAR0 window.
+The current TinyGPU remote protocol exposes mapped BAR slices and DMA sysmem,
+but not an arbitrary high-VRAM write or remapped BAR window.</p>
+<p>On local Linux PCI, combine it with <code class="language-python highlight"><span class="n">AM_PSP_SYSMSG1_GART</span><span class="o">=</span><span class="mi">1</span></code> to force the
+sysmem-GART msg1 path before testing KDB. Without that flag the PSP path uses
+the default VRAM msg1 buffer and does not exercise the PSP GART table setup.</p>
+<p>The tinygrad PSP setup now fails fast when this experiment is requested on a
+remote small-BAR path unless <code class="language-python highlight"><span class="n">AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE</span><span class="o">=</span><span class="mi">1</span></code> is set.
+That unsafe override uses the AMD indirect VRAM MMIO aperture, which previously
+closed the TinyGPU RPC connection during the first high-table write. Prefer a
+Linux-side run with full BAR/ReBAR VRAM access for this experiment.</p>
+<p>Ubuntu retest from a blacklisted boot on 2026-05-29 exercised the intended
+local Linux path after <code class="language-python highlight"><span class="mi">8</span><span class="n">f783c9f5</span> <span class="p">[</span><span class="n">runtime</span><span class="p">]</span> <span class="n">allow</span> <span class="n">local</span> <span class="n">PSP</span> <span class="n">GART</span> <span class="n">msg</span> <span class="n">buffer</span></code>.
+The audit log <code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">top</span><span class="o">-</span><span class="n">table</span><span class="o">-</span><span class="n">audit</span><span class="o">-</span><span class="n">clean</span><span class="o">-</span><span class="mi">20260529</span><span class="o">-</span><span class="mf">225334.</span><span class="n">log</span></code> used
+<code class="language-python highlight"><span class="n">msg1</span> <span class="n">sysmem</span> <span class="n">gart</span> <span class="n">raw</span><span class="o">=</span><span class="mh">0x1458e8000</span> <span class="n">addr</span><span class="o">=</span><span class="mh">0x7fff00000000</span></code>, completed long memory
+training, programmed <code class="language-python highlight"><span class="n">table_paddr</span><span class="o">=</span><span class="mh">0x5fdb00000</span></code>, <code class="language-python highlight"><span class="n">pt_base</span><span class="o">=</span><span class="mh">0x5fdb00001</span></code>,
+<code class="language-python highlight"><span class="n">msg1_off</span><span class="o">=</span><span class="mh">0x700000</span></code>, and stopped before KDB as intended.</p>
+<p>The real run <code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">top</span><span class="o">-</span><span class="n">table</span><span class="o">-</span><span class="n">real</span><span class="o">-</span><span class="n">clean</span><span class="o">-</span><span class="mi">20260529</span><span class="o">-</span><span class="mf">225458.</span><span class="n">log</span></code> then loaded KDB
+with <code class="language-python highlight"><span class="n">C2PMSG36</span><span class="o">=</span><span class="mh">0x07fff007</span></code> and still timed out waiting for bootloader ready:
+final <code class="language-python highlight"><span class="n">C2PMSG35</span><span class="o">=</span><span class="mh">0x00000000</span></code>, final <code class="language-python highlight"><span class="n">C2PMSG36</span><span class="o">=</span><span class="mh">0x07fff007</span></code>, and no MMHUB
+protection fault. This rules out low-vs-high PSP GART table placement as the
+KDB readiness blocker for the tested input set.</p>
+<p>The next comparison branch is pre-KDB PSP/platform side effects outside the
+msg1/GART handoff. The comparator now prints a Linux register window around KDB
+from the deep trace, and the deep trace generator includes additional PSP
+lifecycle wrapper probes when those symbols are visible. Use a fresh <code class="language-python highlight"><span class="o">--</span><span class="n">deep</span></code>
+Linux-good capture if the existing register window does not explain the delta.</p>
+<p>Stop point: a fresh capture attempt from <code class="language-python highlight"><span class="mi">784</span><span class="n">dd3e39</span></code> created
+<code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">good</span><span class="o">-</span><span class="mi">20260529</span><span class="o">-</span><span class="mi">230335</span></code>, but it is not a valid Linux-good baseline.
+The bind path failed with <code class="language-python highlight"><span class="n">echo</span><span class="p">:</span> <span class="n">write</span> <span class="n">error</span><span class="p">:</span> <span class="n">Invalid</span> <span class="n">argument</span></code>, KDB returned
+<code class="language-python highlight"><span class="o">-</span><span class="mi">62</span></code> / <code class="language-python highlight"><span class="o">-</span><span class="n">ETIME</span></code>, bpftrace reported lost events, and no archive/checksum was
+produced. After scheduling a fresh blacklisted reboot, the proceed gate failed
+because the RX 7900 XTX BDF <code class="language-python highlight"><span class="mi">0000</span><span class="p">:</span><span class="mi">08</span><span class="p">:</span><span class="mf">00.0</span></code> was no longer visible: <code class="language-python highlight"><span class="n">lspci</span></code>
+showed no <code class="language-python highlight"><span class="mi">1002</span><span class="p">:</span><span class="mi">744</span><span class="n">c</span></code>, <code class="language-python highlight"><span class="o">/</span><span class="n">sys</span><span class="o">/</span><span class="n">bus</span><span class="o">/</span><span class="n">pci</span><span class="o">/</span><span class="n">devices</span><span class="o">/</span><span class="mi">0000</span><span class="p">:</span><span class="mi">08</span><span class="p">:</span><span class="mf">00.0</span></code> did not exist, and
+<code class="language-python highlight"><span class="n">dmesg</span></code> did not show the target GPU. Do not use <code class="language-python highlight"><span class="n">psp</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">good</span><span class="o">-</span><span class="mi">20260529</span><span class="o">-</span><span class="mi">230335</span></code>
+for comparison; recover PCI enumeration before taking the next Linux-good
+capture.</p>
+<h2 id="local-evidence">Local Evidence<a class="headerlink" href="#local-evidence" title="Permanent link">¤</a></h2>
+<p>The 2026-05-27 Linux capture bundle is stored at:</p>
+<div class="language-text highlight"><pre><span></span><code>extra/amdpci/captures/psp-linux-good-bundle-20260527.tar.gz
+</code></pre></div>
+<p>SHA256:</p>
+<div class="language-text highlight"><pre><span></span><code>638e3930ac2527dce9cce2a8b2c21aab4498848fc2c2f9fbbf36ca645b476232
+</code></pre></div>
+<p>The first attempts in that bundle show why the trace script uses fixed offsets:
+<code class="language-python highlight"><span class="n">bpftrace</span></code> could see kernel BTF but could not resolve AMD module-private struct
+names. The fixed offsets came from <code class="language-python highlight"><span class="o">/</span><span class="n">sys</span><span class="o">/</span><span class="n">kernel</span><span class="o">/</span><span class="n">btf</span><span class="o">/</span><span class="n">amdgpu</span></code> on the Ubuntu host.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["announce.dismiss", "content.action.edit", "content.action.view", "content.code.annotate", "content.code.copy", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.expand", "navigation.top", "navigation.path", "search.highlight", "search.suggest", "toc.follow", "toc.integrate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../assets/_markdown_exec_pyodide.js"></script>
+      
+    
+  </body>
+</html>
