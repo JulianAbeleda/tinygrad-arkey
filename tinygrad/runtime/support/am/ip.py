@@ -78,6 +78,8 @@ class AM_Experiment:
   def kdb_order_barrier() -> int: return _env_int("AM_PSP_KDB_ORDER_BARRIER")
   @staticmethod
   def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
+  @staticmethod
+  def gart_setup_trace() -> int: return _env_int("AM_PSP_GART_SETUP_TRACE")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -209,6 +211,15 @@ class AM_GMC(AM_IP):
         fault = self.adev.reg(self.pf_status_reg("MM")).read(inst=inst)
         self.adev.psp._trace(f"gart strong invalidate inst={inst} ack={ack:#010x} fault={fault:#010x}")
 
+  def _trace_psp_gart_setup_regs(self, label:str):
+    if not (AM_Experiment.gart_setup_trace() and self._psp_trace_enabled()): return
+    for inst in range(self.vmhubs):
+      vals = []
+      for reg in ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_ACK",
+                  "regMMVM_L2_BANK_SELECT_RESERVED_CID2", self.pf_status_reg("MM")]:
+        with contextlib.suppress(Exception): vals.append(f"{reg}={self.adev.reg(reg).read(inst=inst):#010x}")
+      self.adev.psp._trace(f"gart setup {label} inst={inst} " + " ".join(vals))
+
   def setup_psp_gart(self, paddrs:list[int], view_off:int, size:int) -> int:
     if size <= 0 or view_off % 0x1000 != 0 or size % 0x1000 != 0:
       raise ValueError(f"invalid PSP GART window view_off={view_off:#x} size={size:#x}")
@@ -240,6 +251,7 @@ class AM_GMC(AM_IP):
       raise ValueError(f"invalid PSP GART source pages start={start_page:#x} count={page_count:#x} len={len(paddrs):#x}")
     for i, paddr in enumerate(paddrs[start_page:start_page + page_count]):
       gart_table[gart_page + i] = (paddr & 0x0000FFFFFFFFF000) | flags
+    self._trace_psp_gart_setup_regs("after-pte-fill")
     if AM_Experiment.gart_table_top():
       if AM_Experiment.gart_table_sparse():
         sparse_off, sparse_count = gart_page * 8, page_count
@@ -248,7 +260,9 @@ class AM_GMC(AM_IP):
         self.adev._write_vram(gart_table_paddr + sparse_off, sparse_data, allow_remote_sparse=True)
       else:
         self.adev._write_vram(gart_table_paddr, array.array('Q', gart_table).tobytes())
+    self._trace_psp_gart_setup_regs("after-table-write")
     self.flush_hdp()
+    self._trace_psp_gart_setup_regs("after-hdp-flush")
 
     pt_base = self.adev.paddr2xgmi(gart_table_paddr) | am.AMDGPU_PTE_VALID
     self._trace_psp_gart_pte("pte", gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
@@ -271,19 +285,25 @@ class AM_GMC(AM_IP):
         self.adev.wreg_pair("regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR", "_LSB", "_MSB", default_addr, inst=inst)
       if fault_default_addr is not None:
         self.adev.wreg_pair("regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR", "_LO32", "_HI32", fault_default_addr, inst=inst)
+      self._trace_psp_gart_setup_regs("after-aperture")
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR", "_LO32", "_HI32", pt_base, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR", "_LO32", "_HI32", self.gart_start >> 12, inst=inst)
       self.adev.wreg_pair("regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", self.gart_end >> 12, inst=inst)
+      self._trace_psp_gart_setup_regs("after-context0-table")
       # Linux amdgpu on RX 7900 XTX used this CONTEXT0_CNTL value in the successful PSP KDB trace.
       if linux_context: self.adev.reg("regMMVM_CONTEXT0_CNTL").write(0x01fffe01, inst=inst)
       else: self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
+      self._trace_psp_gart_setup_regs("after-context0-cntl")
       if AM_Experiment.gart_linux_full_context():
         self.adev.reg("regMMMC_VM_MX_L1_TLB_CNTL").write(0x1859, inst=inst)
         self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
+        self._trace_psp_gart_setup_regs("after-linux-full-base")
         for vmid in range(1, 16):
           self.adev.reg(f"regMMVM_CONTEXT{vmid}_CNTL").write(0x01fffe07, inst=inst)
           self.adev.wreg_pair(f"regMMVM_CONTEXT{vmid}_PAGE_TABLE_START_ADDR", "_LO32", "_HI32", 0x0, inst=inst)
           self.adev.wreg_pair(f"regMMVM_CONTEXT{vmid}_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", 0xfffffffff, inst=inst)
+          self._trace_psp_gart_setup_regs(f"after-context{vmid}")
+    self._trace_psp_gart_setup_regs("before-flush-tlb")
     self.flush_tlb("MM", 0)
     if AM_Experiment.gart_linux_full_context():
       for inst in range(self.vmhubs): self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
