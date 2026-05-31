@@ -81,6 +81,8 @@ class AM_Experiment:
   @staticmethod
   def kdb_payload_audit_bytes() -> int: return _env_int("AM_PSP_KDB_PAYLOAD_AUDIT_BYTES", 64)
   @staticmethod
+  def sysmsg1_gart_sort_paddrs() -> int: return _env_int("AM_PSP_SYSMSG1_GART_SORT_PADDRS")
+  @staticmethod
   def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
   @staticmethod
   def gart_setup_trace() -> int: return _env_int("AM_PSP_GART_SETUP_TRACE")
@@ -97,6 +99,54 @@ class AM_IP:
   def init_hw(self): pass # Initialize hw for this IP
   def fini_hw(self): pass # Finalize hw for this IP
   def set_clockgating_state(self): pass # Set clockgating state for this IP
+
+class AM_ReorderedMsg1View:
+  def __init__(self, raw_view, order:list[int], offset:int=0, size:int|None=None):
+    self.raw_view, self.order, self.offset = raw_view, order, offset
+    self.nbytes = len(order) * 0x1000 - offset if size is None else size
+
+  def _raw_offset(self, logical:int) -> int:
+    absolute = self.offset + logical
+    page, page_off = divmod(absolute, 0x1000)
+    return self.order[page] * 0x1000 + page_off
+
+  def __getitem__(self, idx):
+    if isinstance(idx, slice):
+      start, stop, step = idx.indices(self.nbytes)
+      if step != 1: return bytes(self[i] for i in range(start, stop, step))
+      chunks = []
+      cur = start
+      while cur < stop:
+        absolute = self.offset + cur
+        page, page_off = divmod(absolute, 0x1000)
+        n = min(stop - cur, 0x1000 - page_off)
+        raw_off = self.order[page] * 0x1000 + page_off
+        chunks.append(bytes(self.raw_view[raw_off:raw_off + n]))
+        cur += n
+      return b"".join(chunks)
+    return self.raw_view[self._raw_offset(idx)]
+
+  def __setitem__(self, idx, val):
+    if isinstance(idx, slice):
+      start, stop, step = idx.indices(self.nbytes)
+      if step != 1: raise ValueError("AM_ReorderedMsg1View only supports contiguous slice writes")
+      if len(val) != stop - start: raise ValueError(f"slice write size mismatch {len(val)} != {stop - start}")
+      cur, src_off = start, 0
+      while cur < stop:
+        absolute = self.offset + cur
+        page, page_off = divmod(absolute, 0x1000)
+        n = min(stop - cur, 0x1000 - page_off)
+        raw_off = self.order[page] * 0x1000 + page_off
+        self.raw_view[raw_off:raw_off + n] = val[src_off:src_off + n]
+        cur, src_off = cur + n, src_off + n
+    else:
+      self.raw_view[self._raw_offset(idx)] = val
+
+  def view(self, offset:int=0, size:int|None=None, fmt=None):
+    return AM_ReorderedMsg1View(self.raw_view, self.order, self.offset + offset, size)
+
+  def sync(self, invalidate=False):
+    if hasattr(self.raw_view, "sync"): self.raw_view.sync(invalidate=invalidate)
 
 class AM_SOC(AM_IP):
   def init_sw(self):
@@ -925,6 +975,13 @@ class AM_PSP(AM_IP):
       if getenv("AM_PSP_SYSMSG1_GART_CONTIG", 0) and not all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)):
         raise ValueError("PSP sysmem GART buffer is not contiguous")
       view_off = 0
+      if AM_Experiment.sysmsg1_gart_sort_paddrs():
+        order = sorted(range(len(paddrs)), key=paddrs.__getitem__)
+        raw_first, raw_last = paddrs[0], paddrs[-1]
+        paddrs = [paddrs[i] for i in order]
+        raw_view = AM_ReorderedMsg1View(raw_view, order)
+        self._trace(f"msg1 sysmem gart sorted paddr order raw_first={raw_first:#x} raw_last={raw_last:#x} "
+                    f"sorted_first={paddrs[0]:#x} sorted_last={paddrs[-1]:#x}")
       self.msg1_view = raw_view
       self.msg1_addr = self.adev.gmc.gart_start
       self.msg1_gart_args = (paddrs, view_off, am.PSP_1_MEG)

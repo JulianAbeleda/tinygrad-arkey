@@ -2,7 +2,7 @@ import os, unittest
 from unittest import mock
 
 from tinygrad.helpers import getenv
-from tinygrad.runtime.support.am.ip import AM_PSP
+from tinygrad.runtime.support.am.ip import AM_PSP, AM_ReorderedMsg1View
 
 class FakeReg:
   def __init__(self, name="regMP0_SMN_C2PMSG_35", reads=None):
@@ -147,6 +147,20 @@ class TestAMDPSP(unittest.TestCase):
     self.assertIn("first8=0001020304050607", traces[1])
     self.assertIn("last8=0000000000000000", traces[1])
     self.assertIn("dwords_le", traces[2])
+
+  def test_reordered_msg1_view_maps_logical_pages_to_sorted_physical_pages(self):
+    raw = FakeSyncMsg1View(b"\x00" * 0x3000)
+    view = AM_ReorderedMsg1View(raw, [2, 0, 1])
+    view[:0x1004] = b"a" * 0x1000 + b"bcde"
+
+    self.assertEqual(raw.data[0x2000:0x2004], bytearray(b"aaaa"))
+    self.assertEqual(raw.data[0x0000:0x0004], bytearray(b"bcde"))
+    self.assertEqual(view[:0x1004], b"a" * 0x1000 + b"bcde")
+
+    sub = view.view(0x1000, 4)
+    self.assertEqual(sub[:], b"bcde")
+    sub.sync(invalidate=True)
+    self.assertEqual(raw.syncs, [(0, 0x3000, True)])
 
   def test_kdb_fail_capture_sampler_skips_missing_focus_regs(self):
     reads = []
