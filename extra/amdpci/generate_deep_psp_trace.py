@@ -138,6 +138,45 @@ kretprobe:amdgpu_device_rreg
 }
 '''
 
+BO_TRACE = r'''
+kprobe:amdgpu_bo_create_kernel
+{
+  @bo_size[tid] = arg1;
+  @bo_align[tid] = arg2;
+  @bo_domain[tid] = arg3;
+  @bo_ptrp[tid] = arg4;
+  @bo_gpu_addrp[tid] = arg5;
+
+  if (arg1 == 0x100000 || arg2 == 0x100000) {
+    printf("%llu bo_create_kernel enter adev=%p size=0x%llx align=0x%llx domain=0x%x bo_ptrp=%p gpu_addrp=%p\n",
+      nsecs, arg0, arg1, arg2, arg3, arg4, arg5);
+  }
+}
+
+kretprobe:amdgpu_bo_create_kernel
+/@bo_size[tid]/
+{
+  $size = @bo_size[tid];
+  $align = @bo_align[tid];
+  $domain = @bo_domain[tid];
+  $bo_ptrp = @bo_ptrp[tid];
+  $gpu_addrp = @bo_gpu_addrp[tid];
+
+  if ($size == 0x100000 || $align == 0x100000) {
+    $gpu_addr = $gpu_addrp ? *(uint64 *)$gpu_addrp : 0;
+    $bo = $bo_ptrp ? *(uint64 *)$bo_ptrp : 0;
+    printf("%llu bo_create_kernel ret=%d size=0x%llx align=0x%llx domain=0x%x bo=%p gpu_addr=0x%llx\n",
+      nsecs, retval, $size, $align, $domain, $bo, $gpu_addr);
+  }
+
+  delete(@bo_size[tid]);
+  delete(@bo_align[tid]);
+  delete(@bo_domain[tid]);
+  delete(@bo_ptrp[tid]);
+  delete(@bo_gpu_addrp[tid]);
+}
+'''
+
 OPTIONAL_PROBES = [
   "psp_v13_0_init_microcode", "psp_v13_0_sw_init", "psp_v13_0_hw_init", "psp_v13_0_hw_start",
   "psp_v13_0_bootloader_load_kdb", "psp_v13_0_bootloader_load_spl", "psp_v13_0_bootloader_load_sysdrv",
@@ -192,6 +231,12 @@ def main():
     emitted.append("amdgpu_device_rreg")
   else:
     emitted.append("skip amdgpu_device_[rw]reg")
+
+  if "amdgpu_bo_create_kernel" in symbols:
+    body.append(BO_TRACE)
+    emitted.append("amdgpu_bo_create_kernel")
+  else:
+    emitted.append("skip amdgpu_bo_create_kernel")
 
   emitted.append("optional:")
   if args.optional_probes:

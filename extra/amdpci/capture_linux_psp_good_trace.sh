@@ -97,7 +97,7 @@ SNAPSHOT_SCRIPT="$SCRIPT_DIR/linux_mmhub_gart_snapshot.py"
 [ -f "$TRACE_SCRIPT" ] || die "missing trace script: $TRACE_SCRIPT"
 [ "$DEEP" -eq 0 ] || [ -f "$DEEP_GENERATOR" ] || die "missing deep trace generator: $DEEP_GENERATOR"
 TRACE_SYMBOL_RE=' psp_hw_start([[:space:]]|$)| psp_v13_0_bootloader_load_component([[:space:]]|$)| psp_v13_0_wait_for_bootloader([[:space:]]|$)| psp_v13_0_wait_for_vmbx_ready([[:space:]]|$)| psp_v13_0_memory_training_send_msg([[:space:]]|$)| amdgpu_gart_map([[:space:]]|$)'
-DEEP_SYMBOL_RE="$TRACE_SYMBOL_RE| amdgpu_device_[rw]reg([[:space:]]|$)| psp_v13_0_.*([[:space:]]|$)| psp_.*tmr.*([[:space:]]|$)| psp_ring.*([[:space:]]|$)"
+DEEP_SYMBOL_RE="$TRACE_SYMBOL_RE| amdgpu_device_[rw]reg([[:space:]]|$)| amdgpu_bo_create_kernel([[:space:]]|$)| psp_v13_0_.*([[:space:]]|$)| psp_.*tmr.*([[:space:]]|$)| psp_ring.*([[:space:]]|$)"
 
 if [ -z "$OUT" ]; then
   OUT="psp-linux-good-$(date +%Y%m%d-%H%M%S)"
@@ -201,7 +201,7 @@ stop_trace() {
 }
 
 postprocess_trace() {
-  grep -Ei 'psp_hw_start|hw_init|hw_start|sw_init|init_microcode|bl_load|bootloader_load|wait_bl|vmbx|mem_train|gart_map|wreg|rreg|C2PMSG|ring|tmr|toc|LOAD|SETUP|0x1606[13478]|0x1609[01c]|0x160b3|0x1a7|0x1a8|0x80000|0x07fff007' \
+  grep -Ei 'psp_hw_start|hw_init|hw_start|sw_init|init_microcode|bl_load|bootloader_load|wait_bl|vmbx|mem_train|gart_map|bo_create_kernel|wreg|rreg|C2PMSG|ring|tmr|toc|LOAD|SETUP|0x1606[13478]|0x1609[01c]|0x160b3|0x1a7|0x1a8|0x80000|0x07fff007' \
     "$TRACE_OUT" > "$OUT/linux-pre-kdb-key-events.txt" || true
   grep -Ei ' [rw]reg .*reg=0x160[4-9a-b][0-9a-f]' \
     "$TRACE_OUT" > "$OUT/linux-c2pmsg-events.txt" || true

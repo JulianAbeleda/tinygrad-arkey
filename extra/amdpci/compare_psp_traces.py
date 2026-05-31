@@ -20,6 +20,14 @@ LINUX_GART_ENTER_RE = re.compile(
 LINUX_GART_RET_RE = re.compile(
   rf"gart_map ret .* first_idx=(?P<first_idx>{HEX}) last_idx=(?P<last_idx>{HEX}) pte0=(?P<pte0>{HEX}) pte_last=(?P<pte_last>{HEX})"
 )
+LINUX_BO_ENTER_RE = re.compile(
+  rf"^(?P<t>\d+) bo_create_kernel enter .* size=(?P<size>{HEX}) align=(?P<align>{HEX}) domain=(?P<domain>{HEX}) "
+  rf"bo_ptrp=(?P<bo_ptrp>{HEX}) gpu_addrp=(?P<gpu_addrp>{HEX})"
+)
+LINUX_BO_RET_RE = re.compile(
+  rf"^(?P<t>\d+) bo_create_kernel ret=(?P<ret>-?\d+) size=(?P<size>{HEX}) align=(?P<align>{HEX}) domain=(?P<domain>{HEX}) "
+  rf"bo=(?P<bo>{HEX}) gpu_addr=(?P<gpu_addr>{HEX})"
+)
 LINUX_REG_RE = re.compile(rf"^(?P<t>\d+) (?P<op>[rw]reg) .*reg=(?P<reg>{HEX})(?: val=(?P<val>{HEX}))?")
 
 TG_RE = re.compile(r"PSP (?P<msg>.*)")
@@ -149,11 +157,12 @@ def firmware_report(fname:str, skip:int|None, readback:dict) -> list[str]:
   return lines
 
 def parse_linux(path:pathlib.Path) -> dict:
-  out = {"bl": [], "waits": [], "wait_rregs": [], "gart": {}, "reg_events": [], "c2pmsg_events": [], "source": str(path)}
+  out = {"bl": [], "waits": [], "wait_rregs": [], "gart": {}, "bo": [], "reg_events": [], "c2pmsg_events": [], "source": str(path)}
   wait_start = None
   seen_bl = set()
   seen_reg_events = set()
   seen_events = set()
+  pending_bo = {}
   for line in lines_for(path, ["psp-linux-good.trace", "psp-linux-good-deep.trace", "linux-pre-kdb-key-events.txt", "linux-c2pmsg-events.txt"]):
     if m := LINUX_BL_RE.search(line):
       item = tuple((k, as_int(v)) for k, v in m.groupdict().items())
@@ -174,6 +183,14 @@ def parse_linux(path:pathlib.Path) -> dict:
       out["gart"].update({k: as_int(v) for k, v in m.groupdict().items()})
     elif m := LINUX_GART_RET_RE.search(line):
       out["gart"].update({k: as_int(v) for k, v in m.groupdict().items()})
+    elif m := LINUX_BO_ENTER_RE.search(line):
+      item = {k: as_int(v) for k, v in m.groupdict().items()}
+      pending_bo[(item["size"], item["align"], item["domain"])] = item
+    elif m := LINUX_BO_RET_RE.search(line):
+      ret_item = {k: as_int(v) for k, v in m.groupdict().items()}
+      key = (ret_item["size"], ret_item["align"], ret_item["domain"])
+      item = {**pending_bo.pop(key, {}), **ret_item}
+      if item not in out["bo"]: out["bo"].append(item)
     elif m := LINUX_REG_RE.search(line):
       reg, val = as_int(m.group("reg")), as_int(m.group("val"))
       reg_item = (as_int(m.group("t")), m.group("op"), reg, val)
@@ -411,6 +428,20 @@ def report(linux:dict, tiny:dict, firmware:str|None) -> str:
                    "physical address need not match across boots"))
   lines.append(row("tiny table_paddr", "not captured", hexv(tiny["gart"].get("table_paddr"))))
   lines.append(row("tiny pt_base", "not captured", hexv(tiny["gart"].get("pt_base"))))
+  lines.append("")
+
+  lines.append("Linux fw_pri BO candidates")
+  bo_candidates = [bo for bo in linux["bo"] if bo.get("size") == am.PSP_1_MEG or bo.get("align") == am.PSP_1_MEG]
+  if bo_candidates:
+    for bo in bo_candidates[:8]:
+      note = "matches KDB msg1 addr" if kdb and bo.get("gpu_addr") == kdb.get("fw_pri_mc") else ""
+      lines.append(
+        f"  ret={bo.get('ret')} size={hexv(bo.get('size'))} align={hexv(bo.get('align'))} "
+        f"domain={hexv(bo.get('domain'))} gpu_addr={hexv(bo.get('gpu_addr'))} bo={hexv(bo.get('bo'))} {note}".rstrip()
+      )
+    if len(bo_candidates) > 8: lines.append(f"  ... {len(bo_candidates) - 8} more BO candidates")
+  else:
+    lines.append("  missing; run a fresh Linux --deep capture with the updated trace generator")
   lines.append("")
 
   lines.append("Tinygrad register snapshot")
