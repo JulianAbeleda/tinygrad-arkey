@@ -183,6 +183,38 @@ def remote_psp_clean_gate(pci) -> int:
   print("UNKNOWN: do not trust this state", flush=True)
   return 2
 
+def remote_psp_setup_clean_gate(pci) -> int:
+  rc = remote_psp_clean_gate(pci)
+  if rc != 0: return rc
+  try:
+    view = pci.map_bar(5, fmt="I")
+    c2p36 = view[PSP_GATE_REGS["C2PMSG36_ADDR"]]
+    if c2p36 != 0:
+      stamp(f"setup-gate unknown reason=C2PMSG36_ADDR must be zero before real setup, got {c2p36:#010x}")
+      print("UNKNOWN: do not trust this state", flush=True)
+      return 2
+    dev = _open_discovery_only_amdev(pci)
+    sem_reg = dev.reg("regMMVM_INVALIDATE_ENG17_SEM")
+    ack_reg = dev.reg("regMMVM_INVALIDATE_ENG17_ACK")
+    req_reg = dev.reg("regMMVM_INVALIDATE_ENG17_REQ")
+    cid2_reg = dev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2")
+    bad = []
+    for inst in range(len(sem_reg.addr)):
+      sem, ack, req, cid2 = sem_reg.read(inst=inst), ack_reg.read(inst=inst), req_reg.read(inst=inst), cid2_reg.read(inst=inst)
+      stamp(f"setup-gate mmhub inst={inst} invalidate17_sem={sem:#010x} ack={ack:#010x} req={req:#010x} cid2={cid2:#010x}")
+      if (sem & 0x1) != 0x1: bad.append(f"inst{inst} invalidate17_sem={sem:#010x}")
+    require_visible("psp-setup-clean-gate")
+  except Exception as e:
+    stamp(f"setup-gate error={type(e).__name__}: {e}")
+    print("DIRTY: full hardware restart required", flush=True)
+    return 1
+  if bad:
+    for reason in bad: stamp(f"setup-gate dirty reason={reason}")
+    print("DIRTY: full hardware restart required", flush=True)
+    return 1
+  print("CLEAN: safe to run PSP/GART setup", flush=True)
+  return 0
+
 def remote_nbio_status(pci):
   direct_regs = {
     "BIF_BX0_REMAP_HDP_MEM_FLUSH_CNTL": 301,
@@ -465,7 +497,7 @@ def amd_boot_and_alloc(sizes:list[int], repeat:int):
 if __name__ == "__main__":
   p = argparse.ArgumentParser(description="Narrow AMD/TinyGPU dropout repro without LLM loading")
   p.add_argument("remote", nargs="?", default=os.environ.get("REMOTE", "127.0.0.1:6667"))
-  p.add_argument("--stage", choices=("bars", "bar-read", "bar-write", "bar0-read", "bar0-write", "psp-fw", "psp-status", "psp-clean-gate", "psp-pre-kdb-snapshot", "psp-runtime-db", "nbio-status", "nbio-bifc-pcie-write", "nbio-bifc-rsmu-write", "psp-sysmem-probe", "reset", "remote-sysmem", "amd-boot", "all"), default="all")
+  p.add_argument("--stage", choices=("bars", "bar-read", "bar-write", "bar0-read", "bar0-write", "psp-fw", "psp-status", "psp-clean-gate", "psp-setup-clean-gate", "psp-pre-kdb-snapshot", "psp-runtime-db", "nbio-status", "nbio-bifc-pcie-write", "nbio-bifc-rsmu-write", "psp-sysmem-probe", "reset", "remote-sysmem", "amd-boot", "all"), default="all")
   p.add_argument("--fw", default="psp_13_0_10_sos.bin", help="PSP firmware file for psp-fw stage")
   p.add_argument("--sizes", default="16384,2097152,16777216", help="comma-separated allocation sizes")
   p.add_argument("--bars", default="0", help="comma-separated BAR indexes for read/write stages")
@@ -486,7 +518,7 @@ if __name__ == "__main__":
   if args.stage == "psp-fw":
     psp_fw_dump(args.fw)
     sys.exit(0)
-  if args.stage == "psp-clean-gate":
+  if args.stage in ("psp-clean-gate", "psp-setup-clean-gate"):
     if not mac_gpu_visible():
       print("DIRTY: full hardware restart required", flush=True)
       sys.exit(1)
@@ -496,7 +528,7 @@ if __name__ == "__main__":
       stamp(f"gate remote open error={type(e).__name__}: {e}")
       print("DIRTY: full hardware restart required", flush=True)
       sys.exit(1)
-    sys.exit(remote_psp_clean_gate(pci))
+    sys.exit(remote_psp_setup_clean_gate(pci) if args.stage == "psp-setup-clean-gate" else remote_psp_clean_gate(pci))
   require_visible("start")
   pci = open_remote()
   if args.stage in ("bar-read", "bar0-read"):
