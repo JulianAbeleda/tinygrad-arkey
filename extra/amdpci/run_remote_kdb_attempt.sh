@@ -14,6 +14,7 @@ Variants:
   real-sync-order   Real KDB attempt with msg1 sysmem sync and mailbox ordering.
   sync-invalidate   Real KDB attempt plus AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE=1.
   contig-msg1-gart Real KDB attempt plus AM_PSP_SYSMSG1_GART_CONTIG=1.
+  contig-top-table Real KDB attempt with contiguous msg1 and top sparse GART table.
   sorted-msg1-gart Real KDB attempt with msg1 GART pages sorted by paddr.
   top-table-sparse Real KDB attempt with sparse GART table near Linux top-of-VRAM.
   payload-audit   Real KDB attempt with exact msg1 payload byte audit.
@@ -64,7 +65,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -110,6 +111,10 @@ envs=(
 
 if [ "$VARIANT" = "contig-msg1-gart" ]; then
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1)
+fi
+
+if [ "$VARIANT" = "contig-top-table" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000)
 fi
 
 if [ "$VARIANT" = "sorted-msg1-gart" ]; then
