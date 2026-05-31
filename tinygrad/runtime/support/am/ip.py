@@ -223,7 +223,7 @@ class AM_GMC(AM_IP):
       vals = []
       for reg in ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_ACK",
                   "regMMVM_L2_BANK_SELECT_RESERVED_CID2", self.pf_status_reg("MM")]:
-        with contextlib.suppress(Exception): vals.append(f"{reg}={self.adev.reg(reg).read(inst=inst):#010x}")
+        with contextlib.suppress(Exception): vals += self._trace_read_reg(reg, inst)
       self.adev.psp._trace(f"gart setup {label} inst={inst} " + " ".join(vals))
 
   def setup_psp_gart(self, paddrs:list[int], view_off:int, size:int) -> int:
@@ -347,13 +347,21 @@ class AM_GMC(AM_IP):
     if self._psp_trace_enabled(): self.adev.psp._trace(f"tlb {msg}")
     else: print(f"am {self.adev.devfmt}: TLB {msg}", flush=True)
 
+  def _trace_read_reg(self, reg:str, inst:int) -> list[str]:
+    val = self.adev.reg(reg).read(inst=inst)
+    vals = [f"{reg}={val:#010x}"]
+    if reg == "regMMVM_INVALIDATE_ENG17_SEM" and val & 0x1:
+      self.adev.reg(reg).write(0, inst=inst)
+      vals.append(f"{reg}_released=1")
+    return vals
+
   def _tlb_trace_regs(self, label:str, ip:Literal["MM", "GC"], inst:int):
     if not self._tlb_trace_enabled(): return
     regs = [f"reg{ip}VM_INVALIDATE_ENG17_REQ", f"reg{ip}VM_INVALIDATE_ENG17_ACK"]
     if ip == "MM": regs += ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_L2_BANK_SELECT_RESERVED_CID2", self.pf_status_reg("MM")]
     vals = []
     for reg in regs:
-      try: vals.append(f"{reg}={self.adev.reg(reg).read(inst=inst):#010x}")
+      try: vals += self._trace_read_reg(reg, inst)
       except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
     self._tlb_trace(f"{label} ip={ip} inst={inst} " + " ".join(vals))
 
@@ -369,7 +377,7 @@ class AM_GMC(AM_IP):
     if ip == "MM": regs += ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_L2_BANK_SELECT_RESERVED_CID2", self.pf_status_reg("MM")]
     vals = []
     for reg in regs:
-      try: vals.append(f"{reg}={self.adev.reg(reg).read(inst=inst):#010x}")
+      try: vals += self._trace_read_reg(reg, inst)
       except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
     self._gmc_init_trace(f"{label} ip={ip} inst={inst} " + " ".join(vals))
 
@@ -997,8 +1005,12 @@ class AM_PSP(AM_IP):
   def _trace_reg(self, name:str, inst:int|None=None):
     if not hasattr(self.adev, name): return
     try:
-      val = self.adev.reg(name).read() if inst is None else self.adev.reg(name).read(inst=inst)
+      reg = self.adev.reg(name)
+      val = reg.read() if inst is None else reg.read(inst=inst)
       self._trace(f"reg {name}{'' if inst is None else f'[{inst}]'}={val:#010x}")
+      if name.startswith("regMMVM_INVALIDATE_ENG") and name.endswith("_SEM") and val & 0x1:
+        reg.write(0) if inst is None else reg.write(0, inst=inst)
+        self._trace(f"reg {name}{'' if inst is None else f'[{inst}]'} released after diagnostic read")
     except Exception as e:
       self._trace(f"reg {name}{'' if inst is None else f'[{inst}]'} read failed: {e}")
 

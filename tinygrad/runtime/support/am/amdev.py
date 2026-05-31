@@ -252,9 +252,17 @@ class AMDev:
       if not hasattr(self, reg):
         vals.append(f"{reg}=missing")
         continue
-      try: vals.append(f"{reg}={self.reg(reg).read():#010x}")
+      try: vals += self._init_trace_read_reg(self.reg(reg), reg)
       except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
     print(f"am {self.devfmt}: AMDev init {label} " + " ".join(vals), flush=True)
+
+  def _init_trace_read_reg(self, reg, name:str, inst:int=0) -> list[str]:
+    val = reg.read(inst=inst)
+    vals = [f"{name}={val:#010x}"]
+    if name == "regMMVM_INVALIDATE_ENG17_SEM" and val & 0x1:
+      reg.write(0, inst=inst)
+      vals.append(f"{name}_released=1")
+    return vals
 
   def _init_trace_raw(self, label:str):
     if not self._init_trace_enabled(): return
@@ -276,7 +284,7 @@ class AMDev:
                                       cls=functools.partial(AMRegister, adev=self, bases=self.regs_offset[am.MMHUB_HWIP]))
         for reg in ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_ACK",
                     "regMMVM_L2_BANK_SELECT_RESERVED_CID2"]:
-          vals.append(f"{reg}={mmhub_regs[reg].read():#010x}")
+          vals += self._init_trace_read_reg(mmhub_regs[reg], reg)
       except Exception as e:
         vals.append(f"MMHUB_raw=read_failed:{type(e).__name__}")
     if profile and set(getattr(self, "ip_ver", {})) == {am.MMHUB_HWIP}:
