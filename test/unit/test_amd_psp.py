@@ -1,6 +1,7 @@
 import os, unittest
 from unittest import mock
 
+from tinygrad.helpers import getenv
 from tinygrad.runtime.support.am.ip import AM_PSP
 
 class FakeReg:
@@ -91,6 +92,44 @@ class TestAMDPSP(unittest.TestCase):
 
     self.assertNotIn("regMP0_SMN_C2PMSG_115", reads)
     self.assertIn("regMP0_SMN_C2PMSG_92", reads)
+
+  def test_mailbox_visibility_samples_focus_regs_and_flushes_when_requested(self):
+    reads = []
+    regs = {f"regMP0_SMN_C2PMSG_{idx}": FakeReg(f"regMP0_SMN_C2PMSG_{idx}", reads) for idx in [35, 36, 64, 67, 81, 90, 92]}
+    adev = FakeAdev()
+    adev.reg = lambda name: regs[name]
+    adev.gmc = FakeGMC()
+    for name, reg in regs.items(): setattr(adev, name, reg)
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.reg_pref = "regMP0_SMN_C2PMSG"
+
+    with mock.patch.dict(os.environ, {"AM_PSP_MAILBOX_VIS": "1", "AM_PSP_MAILBOX_VIS_READS": "2", "AM_PSP_MAILBOX_VIS_HDP_FLUSH": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._mailbox_visibility_sample("post-compid", regs["regMP0_SMN_C2PMSG_35"], regs["regMP0_SMN_C2PMSG_36"])
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(adev.gmc.flushes, 2)
+    self.assertEqual(reads.count("regMP0_SMN_C2PMSG_35"), 2)
+    self.assertEqual(reads.count("regMP0_SMN_C2PMSG_92"), 2)
+    self.assertNotIn("regMP0_SMN_C2PMSG_115", reads)
+
+  def test_mailbox_visibility_read_cap(self):
+    adev = FakeAdev()
+    adev.gmc = FakeGMC()
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.reg_pref = "regMP0_SMN_C2PMSG"
+
+    with mock.patch.dict(os.environ, {"AM_PSP_MAILBOX_VIS": "1", "AM_PSP_MAILBOX_VIS_READS": "4097"}):
+      getenv.cache_clear()
+      try:
+        with self.assertRaisesRegex(ValueError, "too large"):
+          psp._mailbox_visibility_sample("post-compid", FakeReg(), FakeReg())
+      finally:
+        getenv.cache_clear()
 
 if __name__ == "__main__":
   unittest.main()

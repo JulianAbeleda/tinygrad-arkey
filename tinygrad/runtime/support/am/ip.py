@@ -60,6 +60,14 @@ class AM_Experiment:
   def kdb_fail_capture_ms() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE_MS", 20)
   @staticmethod
   def kdb_fail_capture_reads() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE_READS", 256)
+  @staticmethod
+  def mailbox_visibility() -> int: return _env_int("AM_PSP_MAILBOX_VIS")
+  @staticmethod
+  def mailbox_visibility_reads() -> int: return _env_int("AM_PSP_MAILBOX_VIS_READS", 8)
+  @staticmethod
+  def mailbox_visibility_delay_us() -> int: return _env_int("AM_PSP_MAILBOX_VIS_DELAY_US")
+  @staticmethod
+  def mailbox_visibility_hdp_flush() -> int: return _env_int("AM_PSP_MAILBOX_VIS_HDP_FLUSH")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -849,7 +857,8 @@ class AM_PSP(AM_IP):
 
   def is_sos_alive(self): return self.adev.reg(f"{self.reg_pref}_81").read() != 0x0
 
-  def _trace_enabled(self) -> bool: return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture()
+  def _trace_enabled(self) -> bool:
+    return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or AM_Experiment.mailbox_visibility()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -940,6 +949,24 @@ class AM_PSP(AM_IP):
     elapsed_ms = (time.perf_counter() - start) * 1000
     vals = " ".join(f"{idx}={reg.read():#010x}" for idx, reg in regs)
     self._trace(f"kdb fail capture sample end reads={reads} elapsed_ms={elapsed_ms:.3f} reg36_written={reg36.addr[0]:#x} {vals}")
+
+  def _mailbox_visibility_sample(self, label:str, reg35, reg36):
+    if not AM_Experiment.mailbox_visibility(): return
+    reads, delay_us = AM_Experiment.mailbox_visibility_reads(), AM_Experiment.mailbox_visibility_delay_us()
+    if reads <= 0: return
+    if reads > 4096: raise ValueError(f"AM_PSP_MAILBOX_VIS_READS={reads} is too large")
+    if delay_us < 0: raise ValueError(f"AM_PSP_MAILBOX_VIS_DELAY_US={delay_us} must be non-negative")
+    focus = [35, 36, 64, 67, 81, 90, 92, 115]
+    regs = [(idx, self.adev.reg(f"{self.reg_pref}_{idx}")) for idx in focus if hasattr(self.adev, f"{self.reg_pref}_{idx}")]
+    start = time.perf_counter()
+    self._trace(f"mailbox vis {label} begin reads={reads} delay_us={delay_us} hdp_flush={AM_Experiment.mailbox_visibility_hdp_flush()}")
+    for read in range(1, reads + 1):
+      if AM_Experiment.mailbox_visibility_hdp_flush(): self.adev.gmc.flush_hdp()
+      elapsed_ms = (time.perf_counter() - start) * 1000
+      vals = " ".join(f"{idx}={reg.read():#010x}" for idx, reg in regs)
+      self._trace(f"mailbox vis {label} read={read} elapsed_ms={elapsed_ms:.3f} {vals}")
+      if delay_us: time.sleep(delay_us / 1_000_000)
+    self._trace(f"mailbox vis {label} end elapsed_ms={(time.perf_counter() - start) * 1000:.3f}")
 
   def _msg1_visibility_probe(self):
     probe_len = min(0x1000, self.msg1_view.nbytes)
@@ -1117,8 +1144,10 @@ class AM_PSP(AM_IP):
       self._trace(f"mailbox before-reg36 reg35={reg35.read():#x} reg36={reg36.read():#x}")
     kdb_fail_capture = fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_fail_capture()
     if kdb_fail_capture: self._kdb_fail_capture_snapshot("pre-command")
+    if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("pre-reg36", reg35, reg36)
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
+    if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("post-reg36", reg35, reg36)
     if AM_Experiment.mailbox_strong_order() or getenv("AM_PSP_STRONG_FLUSH", 0):
       self.adev.gmc.flush_hdp()
       rb36 = reg36.read()
@@ -1128,6 +1157,7 @@ class AM_PSP(AM_IP):
     self._trace(f"write compid reg35={reg35.addr[0]:#x} val={compid:#x}")
     reg35.write(compid)
     self._trace(f"write compid done val={compid:#x}")
+    if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("post-compid", reg35, reg36)
     if kdb_fail_capture: self._kdb_fail_capture_sample(reg35, reg36)
     if AM_Experiment.mailbox_strong_order():
       self._trace(f"mailbox post-compid reg35={reg35.read():#x} reg36={reg36.read():#x}")
