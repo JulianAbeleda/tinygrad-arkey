@@ -14,6 +14,17 @@ class FakeAdev:
   devfmt = "fake"
   def reg(self, name): return FakeReg()
 
+class FakeGMC:
+  def __init__(self): self.flushes = 0
+  def flush_hdp(self): self.flushes += 1
+
+class FakeMsg1View:
+  def __init__(self, data:bytes):
+    self.data = bytearray(data)
+    self.nbytes = len(self.data)
+  def __getitem__(self, idx): return bytes(self.data[idx])
+  def __setitem__(self, idx, val): self.data[idx] = val
+
 class TestAMDPSP(unittest.TestCase):
   def test_bootloader_wait_timeout_uses_last_read_with_trace_disabled(self):
     psp = object.__new__(AM_PSP)
@@ -46,6 +57,23 @@ class TestAMDPSP(unittest.TestCase):
 
     self.assertEqual(reads, ["regMP0_SMN_C2PMSG_81"])
     self.assertEqual(order, ["wait"])
+
+  def test_msg1_visibility_probe_restores_original_buffer(self):
+    gmc = FakeGMC()
+    adev = FakeAdev()
+    adev.gmc = gmc
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_addr = 0x7fff00700000
+    psp.msg1_view = FakeMsg1View(bytes(range(256)) * 16)
+    psp.msg1_paddrs = [0x100000 + i * 0x1000 for i in range(256)]
+
+    with mock.patch.dict(os.environ, {"AM_PSP_TRACE": "1"}):
+      psp._msg1_visibility_probe()
+
+    self.assertEqual(psp.msg1_view.data, bytearray(bytes(range(256)) * 16))
+    self.assertEqual(gmc.flushes, 2)
 
 if __name__ == "__main__":
   unittest.main()

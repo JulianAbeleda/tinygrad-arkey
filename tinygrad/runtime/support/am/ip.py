@@ -52,6 +52,8 @@ class AM_Experiment:
   def pre_kdb_invalidate_burst() -> int: return _env_int("AM_PSP_PRE_KDB_INVALIDATE_BURST")
   @staticmethod
   def linux_pre_bl_status() -> int: return _env_int("AM_PSP_LINUX_PRE_BL_STATUS")
+  @staticmethod
+  def msg1_visibility_probe() -> int: return _env_int("AM_PSP_MSG1_VIS_PROBE")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -745,6 +747,7 @@ class AM_PSP(AM_IP):
       else:
         self.msg1_paddr = self.adev.mm.palloc(am.PSP_1_MEG, align=am.PSP_1_MEG, zero=False, boot=True)
       self.msg1_addr, self.msg1_view = self.adev.paddr2mc(self.msg1_paddr), self.adev.vram.view(self.msg1_paddr, am.PSP_1_MEG, 'B')
+      self.msg1_paddrs = [self.msg1_paddr + i * 0x1000 for i in range(am.PSP_1_MEG // 0x1000)]
       self._trace(f"msg1 vram paddr={self.msg1_paddr:#x} addr={self.msg1_addr:#x} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_GTT", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
@@ -757,6 +760,7 @@ class AM_PSP(AM_IP):
       self.adev.mm.map_range(self.msg1_addr, self.msg1_view.nbytes, [(paddr, 0x1000) for paddr in paddrs[view_off // 0x1000:][:am.PSP_1_MEG // 0x1000]],
                              AddrSpace.SYS, uncached=True, snooped=True, boot=True)
       self.msg1_kind = "sysmem-gtt"
+      self.msg1_paddrs = paddrs[view_off // 0x1000:][:am.PSP_1_MEG // 0x1000]
       self._trace(f"msg1 sysmem gtt raw={paddrs[0]:#x} view_off={view_off:#x} va={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getenv("AM_PSP_SYSMSG1_GART", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(am.PSP_1_MEG, contiguous=True) if getenv("AM_PSP_SYSMSG1_GART_CONTIG", 0) else \
@@ -769,6 +773,7 @@ class AM_PSP(AM_IP):
       self.msg1_addr = self.adev.gmc.gart_start
       self.msg1_gart_args = (paddrs, view_off, am.PSP_1_MEG)
       self.msg1_kind = "sysmem-gart"
+      self.msg1_paddrs = paddrs
       self._trace(f"msg1 sysmem gart raw={paddrs[0]:#x} view_off={view_off:#x} addr={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1_DMA", 0):
       raw_view, paddrs = self.adev.pci_dev.alloc_sysmem(2 * am.PSP_1_MEG, contiguous=True)
@@ -779,6 +784,7 @@ class AM_PSP(AM_IP):
       self.msg1_view = raw_view.view(view_off, am.PSP_1_MEG)
       self.msg1_addr = paddrs[0] + view_off
       self.msg1_kind = "sysmem-dma"
+      self.msg1_paddrs = paddrs[view_off // 0x1000:][:am.PSP_1_MEG // 0x1000]
       self._trace(f"msg1 sysmem dma raw={paddrs[0]:#x} view_off={view_off:#x} addr={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     elif self.adev.devfmt.startswith("usb:") or (getattr(self.adev.pci_dev, "is_remote", False) and getenv("AM_PSP_SYSMSG1", 0)):
       self.msg1_view, paddrs = self.adev.pci_dev.alloc_sysmem(am.PSP_1_MEG)
@@ -786,10 +792,12 @@ class AM_PSP(AM_IP):
       self.adev.mm.map_range(self.msg1_addr, self.msg1_view.nbytes, [(paddr, 0x1000) for paddr in paddrs], AddrSpace.SYS,
                              uncached=True, boot=True)
       self.msg1_kind = "sysmem-va"
+      self.msg1_paddrs = paddrs
       self._trace(f"msg1 sysmem va addr={self.msg1_addr:#x} pages={len(paddrs)} bytes={self.msg1_view.nbytes}")
     else:
       self.msg1_paddr = self.adev.mm.palloc(am.PSP_1_MEG, align=am.PSP_1_MEG, zero=False, boot=True)
       self.msg1_addr, self.msg1_view = self.adev.paddr2mc(self.msg1_paddr), self.adev.vram.view(self.msg1_paddr, am.PSP_1_MEG, 'B')
+      self.msg1_paddrs = [self.msg1_paddr + i * 0x1000 for i in range(am.PSP_1_MEG // 0x1000)]
 
     self.cmd_paddr = self.adev.mm.palloc(am.PSP_CMD_BUFFER_SIZE, zero=False, boot=True)
     self.fence_paddr = self.adev.mm.palloc(am.PSP_FENCE_BUFFER_SIZE, zero=True, boot=True)
@@ -816,6 +824,7 @@ class AM_PSP(AM_IP):
       if hasattr(self, "msg1_gart_args"):
         self.msg1_addr = self.adev.gmc.setup_psp_gart(*self.msg1_gart_args)
         self._trace(f"msg1 gart programmed addr={self.msg1_addr:#x}")
+      if AM_Experiment.msg1_visibility_probe(): self._msg1_visibility_probe()
       self._trace_pre_bootloader_regs()
       for fw, compid in sos_components: self._bootloader_load_component(fw, compid)
       wait_cond(self.is_sos_alive, value=True, msg="sOS failed to start")
@@ -892,6 +901,28 @@ class AM_PSP(AM_IP):
                   "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
         self._trace_reg(reg, inst=i)
     self._trace(f"parity snapshot {label} end")
+
+  def _msg1_visibility_probe(self):
+    probe_len = min(0x1000, self.msg1_view.nbytes)
+    original = bytes(self.msg1_view[:probe_len])
+    pattern = bytes(((i * 37 + 0x5a) & 0xff) for i in range(probe_len))
+    paddrs = getattr(self, "msg1_paddrs", [])
+    contiguous = bool(paddrs) and all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs))
+    self._trace(f"msg1 vis probe begin kind={self.msg1_kind} addr={self.msg1_addr:#x} c2p36={self.msg1_addr >> 20:#x} "
+                f"bytes={self.msg1_view.nbytes:#x} probe_len={probe_len:#x} pages={len(paddrs)} "
+                f"first_paddr={(paddrs[0] if paddrs else 0):#x} last_paddr={(paddrs[-1] if paddrs else 0):#x} contiguous={int(contiguous)}")
+    try:
+      self.msg1_view[:probe_len] = pattern
+      self.adev.gmc.flush_hdp()
+      readback = bytes(self.msg1_view[:probe_len])
+      if readback != pattern:
+        first_bad = next((i for i, (got, exp) in enumerate(zip(readback, pattern)) if got != exp), -1)
+        raise RuntimeError(f"PSP msg1 visibility probe mismatch first_bad={first_bad:#x} "
+                           f"expected={pattern[first_bad]:#x} actual={readback[first_bad]:#x}")
+      self._trace(f"msg1 vis probe ok first={readback[:16].hex()} last={readback[-16:].hex()}")
+    finally:
+      self.msg1_view[:probe_len] = original
+      self.adev.gmc.flush_hdp()
 
   def _wait_for_bootloader(self):
     reg = self.adev.reg(f"{self.reg_pref}_35")
