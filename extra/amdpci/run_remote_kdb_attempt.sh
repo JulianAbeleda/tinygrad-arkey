@@ -12,6 +12,7 @@ Run the second-shell remote PSP KDB repro command after the operator has:
 
 Variants:
   real-sync-order   Real KDB attempt with msg1 sysmem sync and mailbox ordering.
+  sync-invalidate   Real KDB attempt plus AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE=1.
   contig-msg1-gart Real KDB attempt plus AM_PSP_SYSMSG1_GART_CONTIG=1.
   audit             Stop before KDB mailbox writes at AM_PSP_AUDIT_PRE_KDB=1.
 
@@ -60,7 +61,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|contig-msg1-gart|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -106,6 +107,10 @@ envs=(
 
 if [ "$VARIANT" = "contig-msg1-gart" ]; then
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1)
+fi
+
+if [ "$VARIANT" = "sync-invalidate" ]; then
+  envs+=(AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE=1)
 fi
 
 if [ "$VARIANT" = "audit" ]; then
