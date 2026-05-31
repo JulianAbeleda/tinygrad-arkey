@@ -80,6 +80,8 @@ class AM_Experiment:
   def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
   @staticmethod
   def gart_setup_trace() -> int: return _env_int("AM_PSP_GART_SETUP_TRACE")
+  @staticmethod
+  def gmc_init_trace() -> int: return _env_int("AM_PSP_GMC_INIT_TRACE")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
@@ -351,6 +353,22 @@ class AM_GMC(AM_IP):
       except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
     self._tlb_trace(f"{label} ip={ip} inst={inst} " + " ".join(vals))
 
+  def _gmc_init_trace(self, msg:str):
+    if not AM_Experiment.gmc_init_trace(): return
+    if self._psp_trace_enabled(): self.adev.psp._trace(f"gmc init {msg}")
+    else: print(f"am {self.adev.devfmt}: GMC init {msg}", flush=True)
+
+  def _gmc_init_trace_regs(self, label:str, ip:Literal["MM", "GC"], inst:int):
+    if not AM_Experiment.gmc_init_trace(): return
+    regs = [f"reg{ip}VM_INVALIDATE_ENG17_REQ", f"reg{ip}VM_INVALIDATE_ENG17_ACK", f"reg{ip}VM_L2_CNTL",
+            f"reg{ip}VM_L2_CNTL2", f"reg{ip}VM_CONTEXT0_CNTL"]
+    if ip == "MM": regs += ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_L2_BANK_SELECT_RESERVED_CID2", self.pf_status_reg("MM")]
+    vals = []
+    for reg in regs:
+      try: vals.append(f"{reg}={self.adev.reg(reg).read(inst=inst):#010x}")
+      except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
+    self._gmc_init_trace(f"{label} ip={ip} inst={inst} " + " ".join(vals))
+
   def flush_tlb(self, ip:Literal["MM", "GC"], vmid, flush_type=0):
     self.flush_hdp()
 
@@ -401,39 +419,53 @@ class AM_GMC(AM_IP):
   def init_hub(self, ip:Literal["MM", "GC"], inst_cnt:int):
     # Init system apertures
     for inst in range(inst_cnt):
+      self._gmc_init_trace_regs("entry", ip, inst)
       self.adev.reg(f"reg{ip}MC_VM_AGP_BASE").write(0, inst=inst)
       self.adev.reg(f"reg{ip}MC_VM_AGP_BOT").write(0xffffffffffff >> 24, inst=inst) # disable AGP
       self.adev.reg(f"reg{ip}MC_VM_AGP_TOP").write(0, inst=inst)
+      self._gmc_init_trace_regs("after-agp", ip, inst)
 
       self.adev.reg(f"reg{ip}MC_VM_SYSTEM_APERTURE_LOW_ADDR").write(self.fb_base >> 18, inst=inst)
       self.adev.reg(f"reg{ip}MC_VM_SYSTEM_APERTURE_HIGH_ADDR").write(self.fb_end >> 18, inst=inst)
       self.adev.wreg_pair(f"reg{ip}MC_VM_SYSTEM_APERTURE_DEFAULT_ADDR", "_LSB", "_MSB", self.memscratch_xgmi_paddr >> 12, inst=inst)
       self.adev.wreg_pair(f"reg{ip}VM_L2_PROTECTION_FAULT_DEFAULT_ADDR", "_LO32", "_HI32", self.dummy_page_xgmi_paddr >> 12, inst=inst)
+      self._gmc_init_trace_regs("after-aperture", ip, inst)
 
       self.adev.reg(f"reg{ip}VM_L2_PROTECTION_FAULT_CNTL2").update(active_page_migration_pte_read_retry=1, inst=inst)
+      self._gmc_init_trace_regs("after-fault-cntl", ip, inst)
 
       # Init TLB and cache
       self.adev.reg(f"reg{ip}MC_VM_MX_L1_TLB_CNTL").update(enable_l1_tlb=1, system_access_mode=3, enable_advanced_driver_model=1,
         system_aperture_unmapped_access=0, mtype=self.adev.soc.module.MTYPE_UC, inst=inst)
+      self._gmc_init_trace_regs("after-l1-tlb", ip, inst)
 
       self.adev.reg(f"reg{ip}VM_L2_CNTL").update(enable_l2_cache=1, enable_default_page_out_to_system_memory=1,
         l2_pde0_cache_tag_generation_mode=0, pde_fault_classification=0, context1_identity_access_mode=1, identity_mode_fragment_size=0,
         enable_l2_fragment_processing=int(self.adev.ip_ver[am.GC_HWIP] < (10,0,0)), inst=inst)
+      self._gmc_init_trace_regs("after-l2-cntl", ip, inst)
+      self._gmc_init_trace_regs("before-l2-cntl2", ip, inst)
       self.adev.reg(f"reg{ip}VM_L2_CNTL2").update(invalidate_all_l1_tlbs=1, invalidate_l2_cache=1, inst=inst)
+      self._gmc_init_trace_regs("after-l2-cntl2", ip, inst)
       self.adev.reg(f"reg{ip}VM_L2_CNTL3").write(l2_cache_4k_associativity=1, l2_cache_bigk_associativity=1,
         bank_select=12 if self.trans_futher else 9, l2_cache_bigk_fragment_size=9 if self.trans_futher else 6, inst=inst)
       self.adev.reg(f"reg{ip}VM_L2_CNTL4").write(l2_cache_4k_partition_count=1, inst=inst)
       if self.adev.ip_ver[am.GC_HWIP] >= (10,0,0): self.adev.reg(f"reg{ip}VM_L2_CNTL5").write(walker_priority_client_id=0x1ff, inst=inst)
+      self._gmc_init_trace_regs("after-l2-cntl3-5", ip, inst)
 
+      self._gmc_init_trace_regs("before-context0", ip, inst)
       self.enable_vm_addressing(self.adev.mm.root_page_table, ip, vmid=0, inst=inst)
+      self._gmc_init_trace_regs("after-context0", ip, inst)
 
       # Disable identity aperture
       self.adev.wreg_pair(f"reg{ip}VM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR", "_LO32", "_HI32", 0xfffffffff, inst=inst)
       self.adev.wreg_pair(f"reg{ip}VM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR", "_LO32", "_HI32", 0x0, inst=inst)
       self.adev.wreg_pair(f"reg{ip}VM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET", "_LO32", "_HI32", 0x0, inst=inst)
+      self._gmc_init_trace_regs("after-identity-aperture", ip, inst)
 
       for eng_i in range(18): self.adev.wreg_pair(f"reg{ip}VM_INVALIDATE_ENG{eng_i}_ADDR_RANGE", "_LO32", "_HI32", 0x1fffffffff, inst=inst)
+      self._gmc_init_trace_regs("after-invalidate-ranges", ip, inst)
     self.hub_initted[ip] = True
+    for inst in range(inst_cnt): self._gmc_init_trace_regs("after-hub-initted", ip, inst)
 
   @functools.cache  # pylint: disable=method-cache-max-size-none
   def get_pte_flags(self, pte_lv, is_table, frag, uncached, system, snooped, valid, extra=0):
