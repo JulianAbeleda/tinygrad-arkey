@@ -551,7 +551,7 @@ if __name__ == "__main__":
     remote_psp_sysmem_probe(pci, sizes[0], args.contiguous)
   elif args.stage == "reset":
     remote_reset(pci)
-  else:
+  elif args.stage == "all":
     remote_bars(pci)
   if args.stage in ("remote-sysmem", "all"): remote_sysmem(pci, sizes, args.repeat)
   if args.stage in ("amd-boot", "all"): amd_boot_and_alloc(sizes, args.repeat)
