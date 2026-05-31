@@ -82,6 +82,8 @@ class AM_Experiment:
   def gart_setup_trace() -> int: return _env_int("AM_PSP_GART_SETUP_TRACE")
   @staticmethod
   def gmc_init_trace() -> int: return _env_int("AM_PSP_GMC_INIT_TRACE")
+  @staticmethod
+  def trace_map_bar5_first() -> int: return _env_int("AM_PSP_TRACE_MAP_BAR5_FIRST")
 
 class AM_IP:
   def __init__(self, adev): self.adev = adev
