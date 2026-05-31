@@ -883,6 +883,31 @@ class AM_PSP(AM_IP):
     regs = range(128) if dense else (33, 35, 36, 64, 67, 69, 70, 71, 81, 90, 92, 115)
     for reg in [f"{self.reg_pref}_{x}" for x in regs]: self._trace_reg(reg)
 
+  def _trace_mmhub_gart_regs(self, inst:int):
+    base_regs = [
+      "regMMMC_VM_AGP_BASE", "regMMMC_VM_AGP_BOT", "regMMMC_VM_AGP_TOP", "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR",
+      "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR", "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB",
+      "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB", "regMMMC_VM_MX_L1_TLB_CNTL", "regMMVM_L2_CNTL",
+      "regMMVM_L2_CNTL2", "regMMVM_L2_CNTL3", "regMMVM_L2_CNTL4", "regMMVM_L2_CNTL5",
+      "regMMVM_L2_BANK_SELECT_RESERVED_CID2", "regMMVM_L2_PROTECTION_FAULT_CNTL", "regMMVM_L2_PROTECTION_FAULT_CNTL2",
+      "regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32",
+      "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32",
+      "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32",
+      "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32", "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32",
+      "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32",
+    ]
+    context_suffixes = [
+      "CNTL", "PAGE_TABLE_BASE_ADDR_LO32", "PAGE_TABLE_BASE_ADDR_HI32", "PAGE_TABLE_START_ADDR_LO32",
+      "PAGE_TABLE_START_ADDR_HI32", "PAGE_TABLE_END_ADDR_LO32", "PAGE_TABLE_END_ADDR_HI32",
+    ]
+    invalidate_suffixes = ["ADDR_RANGE_LO32", "ADDR_RANGE_HI32", "REQ", "ACK", "SEM"]
+    for reg in [
+      *base_regs,
+      *(f"regMMVM_CONTEXT{i}_{suffix}" for i in range(16) for suffix in context_suffixes),
+      *(f"regMMVM_INVALIDATE_ENG{i}_{suffix}" for i in range(18) for suffix in invalidate_suffixes),
+    ]:
+      self._trace_reg(reg, inst=inst)
+
   def _trace_pre_bootloader_regs(self):
     if not (getenv("AM_PSP_TRACE_REGS", 0) or getenv("AM_PSP_PARITY_TRACE", 0)): return
     self._trace(f"pre-bl ipver nbio={self.adev.ip_ver[am.NBIO_HWIP]} gc={self.adev.ip_ver[am.GC_HWIP]} mp0={self.adev.ip_ver[am.MP0_HWIP]}")
@@ -893,47 +918,20 @@ class AM_PSP(AM_IP):
                 "regBIFC_DOORBELL_ACCESS_EN_PF", "regBIF_BX0_REMAP_HDP_MEM_FLUSH_CNTL", "regMMMC_VM_FB_LOCATION_BASE",
                 "regMMMC_VM_FB_LOCATION_TOP"]:
       self._trace_reg(reg)
-    for i in range(self.adev.gmc.vmhubs):
-      for reg in ["regMMMC_VM_AGP_BASE", "regMMMC_VM_AGP_BOT", "regMMMC_VM_AGP_TOP",
-                  "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR", "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
-                  "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB", "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB",
-                  "regMMMC_VM_MX_L1_TLB_CNTL", "regMMVM_L2_CNTL", "regMMVM_L2_CNTL2", "regMMVM_L2_CNTL3",
-                  "regMMVM_L2_CNTL4", "regMMVM_L2_CNTL5", "regMMVM_L2_PROTECTION_FAULT_CNTL",
-                  "regMMVM_L2_PROTECTION_FAULT_CNTL2", "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32",
-                  "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32",
-                  "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32",
-                  "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32", "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32",
-                  "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32", "regMMVM_CONTEXT0_CNTL",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
-        self._trace_reg(reg, inst=i)
+    for i in range(self.adev.gmc.vmhubs): self._trace_mmhub_gart_regs(i)
     self._trace_c2pmsg_regs()
 
   def _trace_bootloader_snapshot(self, label:str):
     if not getenv("AM_PSP_PARITY_TRACE", 0): return
     self._trace(f"parity snapshot {label} begin")
     self._trace_c2pmsg_regs(dense=AM_Experiment.trace_c2pmsg_dense())
-    for i in range(getattr(self.adev.gmc, "vmhubs", 0)):
-      for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_L2_CNTL", "regMMVM_L2_CNTL2", "regMMVM_L2_CNTL3",
-                  "regMMVM_L2_CNTL4", "regMMVM_L2_CNTL5", "regMMVM_L2_PROTECTION_FAULT_CNTL",
-                  "regMMVM_L2_PROTECTION_FAULT_CNTL2", "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32",
-                  "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32", "regMMVM_CONTEXT0_CNTL",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
-        self._trace_reg(reg, inst=i)
+    for i in range(getattr(self.adev.gmc, "vmhubs", 0)): self._trace_mmhub_gart_regs(i)
     self._trace(f"parity snapshot {label} end")
 
   def _kdb_fail_capture_snapshot(self, label:str):
     self._trace(f"kdb fail capture {label} begin")
     self._trace_c2pmsg_regs(dense=True)
-    for i in range(getattr(self.adev.gmc, "vmhubs", 0)):
-      for reg in ["regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_L2_CNTL", "regMMVM_CONTEXT0_CNTL",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32",
-                  "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32"]:
-        self._trace_reg(reg, inst=i)
+    for i in range(getattr(self.adev.gmc, "vmhubs", 0)): self._trace_mmhub_gart_regs(i)
     self._trace(f"kdb fail capture {label} end")
 
   def _kdb_fail_capture_sample(self, reg35, reg36):

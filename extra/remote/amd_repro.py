@@ -246,6 +246,31 @@ def _reg_table_regs(table:dict[str, tuple], names:list[str]) -> dict[str, int]:
 def _c2pmsg_dense_regs(prefix:str, base:int) -> dict[str, int]:
   return {f"{prefix}_C2PMSG{i:03d}": base + i for i in range(128)}
 
+def _mmhub_gart_reg_names() -> list[str]:
+  base_names = [
+    "regMMMC_VM_FB_LOCATION_BASE", "regMMMC_VM_FB_LOCATION_TOP", "regMMMC_VM_AGP_BASE", "regMMMC_VM_AGP_BOT",
+    "regMMMC_VM_AGP_TOP", "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR", "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
+    "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB", "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB",
+    "regMMMC_VM_MX_L1_TLB_CNTL", "regMMVM_L2_CNTL", "regMMVM_L2_CNTL2", "regMMVM_L2_CNTL3", "regMMVM_L2_CNTL4",
+    "regMMVM_L2_CNTL5", "regMMVM_L2_BANK_SELECT_RESERVED_CID2", "regMMVM_L2_PROTECTION_FAULT_CNTL",
+    "regMMVM_L2_PROTECTION_FAULT_CNTL2", "regMMVM_L2_PROTECTION_FAULT_STATUS",
+    "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32", "regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32",
+    "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32",
+    "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32",
+    "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32", "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32",
+    "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32",
+  ]
+  context_suffixes = [
+    "CNTL", "PAGE_TABLE_BASE_ADDR_LO32", "PAGE_TABLE_BASE_ADDR_HI32", "PAGE_TABLE_START_ADDR_LO32",
+    "PAGE_TABLE_START_ADDR_HI32", "PAGE_TABLE_END_ADDR_LO32", "PAGE_TABLE_END_ADDR_HI32",
+  ]
+  invalidate_suffixes = ["ADDR_RANGE_LO32", "ADDR_RANGE_HI32", "REQ", "ACK", "SEM"]
+  return [
+    *base_names,
+    *(f"regMMVM_CONTEXT{i}_{suffix}" for i in range(16) for suffix in context_suffixes),
+    *(f"regMMVM_INVALIDATE_ENG{i}_{suffix}" for i in range(18) for suffix in invalidate_suffixes),
+  ]
+
 def _open_discovery_only_amdev(pci):
   if getattr(pci, "is_remote", False):
     os.environ.setdefault("AM_REMOTE_DISCOVERY_PROFILE", "gfx1100_744c")
@@ -298,20 +323,7 @@ def remote_psp_pre_kdb_snapshot(pci):
     "RCC_DEV0_EPF2_STRAP2": 53506, "RCC_DEV0_EPF2_STRAP20": 53524,
     "BIFC_DOORBELL_ACCESS_EN_PF": 53102, "BIFC_GFX_INT_MONITOR_MASK": 59565,
   }
-  mmhub_names = [
-    "regMMMC_VM_FB_LOCATION_BASE", "regMMMC_VM_FB_LOCATION_TOP", "regMMMC_VM_AGP_BASE", "regMMMC_VM_AGP_BOT",
-    "regMMMC_VM_AGP_TOP", "regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR", "regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
-    "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB", "regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB",
-    "regMMMC_VM_MX_L1_TLB_CNTL", "regMMVM_L2_CNTL", "regMMVM_L2_CNTL2", "regMMVM_L2_CNTL3", "regMMVM_L2_CNTL4",
-    "regMMVM_L2_CNTL5", "regMMVM_L2_PROTECTION_FAULT_CNTL", "regMMVM_L2_PROTECTION_FAULT_CNTL2",
-    "regMMVM_L2_PROTECTION_FAULT_STATUS", "regMMVM_CONTEXT0_CNTL", "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32",
-    "regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32", "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32",
-    "regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32", "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32",
-    "regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32",
-    "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32", "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32",
-    "regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32", "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32",
-    "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32",
-  ]
+  mmhub_names = _mmhub_gart_reg_names()
   _dump_direct_regs(view, "psp", psp_regs)
   _dump_direct_regs(view, "mp0-c2pmsg-dense", _c2pmsg_dense_regs("MP0", 0x16040))
   _dump_direct_regs(view, "mp1-c2pmsg-dense", _c2pmsg_dense_regs("MP1", 0x16240))
