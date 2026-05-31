@@ -222,6 +222,19 @@ if ! kill -0 "$TRACE_PID" >/dev/null 2>&1; then
   die "bpftrace exited before GPU bind; see $TRACE_ERR"
 fi
 if [ "$MODE" = "bind" ] || [ "$MODE" = "rebind" ]; then
+  if [ "$MODE" = "bind" ] && [ -f "$SNAPSHOT_SCRIPT" ]; then
+    PYTHON_BIN="${PYTHON:-python3}"
+    if command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+      echo "capturing pre-bind PSP/MMHUB snapshot"
+      REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+      PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" "$SNAPSHOT_SCRIPT" \
+        --bdf "$BIND_BDF" --out "$OUT" --name prebind-mmhub-gart-snapshot \
+        > "$OUT/prebind-mmhub-gart-snapshot.stdout" 2>"$OUT/prebind-mmhub-gart-snapshot.err" || \
+        echo "warning: pre-bind PSP/MMHUB snapshot failed; see $OUT/prebind-mmhub-gart-snapshot.err" >&2
+    else
+      echo "warning: $PYTHON_BIN not found; skipping pre-bind PSP/MMHUB snapshot" >&2
+    fi
+  fi
   echo "amdgpu" > "$DEV/driver_override"
   echo "$BIND_BDF" > /sys/bus/pci/drivers/amdgpu/bind
   sleep 20

@@ -21,6 +21,16 @@ MMHUB_REGS = [
   "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32",
 ]
 
+PSP_C2PMSG_REGS = {
+  "C2PMSG33_VMBX": 0x16061, "C2PMSG35_BL": 0x16063, "C2PMSG36_ADDR": 0x16064,
+  "C2PMSG58_SOS_FW_VERSION": 0x1607a,
+  "C2PMSG64_RING": 0x16080, "C2PMSG67_WPTR": 0x16083, "C2PMSG69_RING_LO": 0x16085,
+  "C2PMSG70_RING_HI": 0x16086, "C2PMSG71_RING_SIZE": 0x16087, "C2PMSG73_SPI_DOORBELL": 0x16089,
+  "C2PMSG81_SOS": 0x16091, "C2PMSG90_SMU": 0x1609a, "C2PMSG92_STATUS": 0x1609c,
+  "C2PMSG101_GPCOM_CMD": 0x160a5, "C2PMSG102_GPCOM_LO": 0x160a6, "C2PMSG103_GPCOM_HI": 0x160a7,
+  "C2PMSG115_SPI": 0x160b3, "C2PMSG116_SPI_ARG": 0x160b4, "C2PMSG127_RAS_CAP": 0x160bf,
+}
+
 PROFILE_IP = {
   "gfx1100_744c": {"mmhub": (3, 0, 0)},
 }
@@ -67,6 +77,13 @@ def collect(bdf:str, profile:str) -> dict:
   try:
     regs = getattr(am_regs, f"mmhub_{'_'.join(map(str, PROFILE_IP[profile]['mmhub']))}")
     bases = navi_bases("MMHUB")
+    psp_entries = []
+    for name, addr in PSP_C2PMSG_REGS.items():
+      byte_off = addr * 4
+      if byte_off + 4 > len(bar5):
+        psp_entries.append({"name": name, "dword_addr": addr, "out_of_range": True})
+        continue
+      psp_entries.append({"name": name, "dword_addr": addr, "value": struct.unpack_from("<I", bar5, byte_off)[0]})
     entries = []
     for name in MMHUB_REGS:
       if name not in regs:
@@ -92,15 +109,16 @@ def collect(bdf:str, profile:str) -> dict:
       "lspci": run(["lspci", "-Dnnk", "-s", bdf]),
       "bar5": {"base": bar5_start, "size": bar5_size, "open_mode": open_mode},
       "resources": [{"bar": i, "base": s, "size": e - s + 1, "flags": f} for i, (s, e, f) in enumerate(resources)],
+      "psp_registers": psp_entries,
       "registers": entries,
     }
   finally:
     bar5.close()
     os.close(fd)
 
-def write_outputs(snapshot:dict, out:pathlib.Path):
+def write_outputs(snapshot:dict, out:pathlib.Path, name:str):
   out.mkdir(parents=True, exist_ok=True)
-  (out/"mmhub-gart-snapshot.json").write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+  (out/f"{name}.json").write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
   lines = [
     f"captured_at {snapshot['captured_at']}",
     f"bdf {snapshot['bdf']}",
@@ -111,6 +129,11 @@ def write_outputs(snapshot:dict, out:pathlib.Path):
     "lspci end",
     f"bar5 base={snapshot['bar5']['base']:#x} size={snapshot['bar5']['size']:#x} open_mode={snapshot['bar5']['open_mode']}",
   ]
+  for reg in snapshot["psp_registers"]:
+    if reg.get("out_of_range"):
+      lines.append(f"psp {reg['name']} addr={reg['dword_addr']:#x} out_of_range")
+    else:
+      lines.append(f"psp {reg['name']} addr={reg['dword_addr']:#x} value={reg['value']:#010x}")
   for reg in snapshot["registers"]:
     if reg.get("missing"):
       lines.append(f"reg {reg['name']} missing")
@@ -120,16 +143,17 @@ def write_outputs(snapshot:dict, out:pathlib.Path):
       lines.append(f"reg {reg['name']}[{reg['instance']}] addr={reg['dword_addr']:#x} out_of_range")
     else:
       lines.append(f"reg {reg['name']}[{reg['instance']}] addr={reg['dword_addr']:#x} value={reg['value']:#010x}")
-  (out/"mmhub-gart-snapshot.txt").write_text("\n".join(lines) + "\n")
+  (out/f"{name}.txt").write_text("\n".join(lines) + "\n")
 
 def main():
   parser = argparse.ArgumentParser(description="Read-only Linux MMHUB/GART register snapshot for RX 7900 XTX PSP comparison")
   parser.add_argument("--bdf", required=True, help="PCI BDF, for example 0000:08:00.0")
   parser.add_argument("--out", required=True, help="Output directory")
   parser.add_argument("--profile", default="gfx1100_744c", choices=sorted(PROFILE_IP))
+  parser.add_argument("--name", default="mmhub-gart-snapshot", help="Output basename without .txt/.json")
   args = parser.parse_args()
   snapshot = collect(args.bdf, args.profile)
-  write_outputs(snapshot, pathlib.Path(args.out))
+  write_outputs(snapshot, pathlib.Path(args.out), args.name)
 
 if __name__ == "__main__":
   try:
