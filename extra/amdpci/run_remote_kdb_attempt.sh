@@ -14,6 +14,7 @@ Variants:
   real-sync-order   Real KDB attempt with msg1 sysmem sync and mailbox ordering.
   sync-invalidate   Real KDB attempt plus AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE=1.
   contig-msg1-gart Real KDB attempt plus AM_PSP_SYSMSG1_GART_CONTIG=1.
+  top-table-sparse Real KDB attempt with sparse GART table near Linux top-of-VRAM.
   audit             Stop before KDB mailbox writes at AM_PSP_AUDIT_PRE_KDB=1.
 
 Options:
@@ -61,7 +62,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|top-table-sparse|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -111,6 +112,10 @@ fi
 
 if [ "$VARIANT" = "sync-invalidate" ]; then
   envs+=(AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE=1)
+fi
+
+if [ "$VARIANT" = "top-table-sparse" ]; then
+  envs+=(AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000)
 fi
 
 if [ "$VARIANT" = "audit" ]; then
