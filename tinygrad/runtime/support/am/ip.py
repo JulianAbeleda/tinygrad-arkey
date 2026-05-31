@@ -221,6 +221,7 @@ class AM_GMC(AM_IP):
       self.adev.psp._trace(f"gart setup {label} inst={inst} " + " ".join(vals))
 
   def setup_psp_gart(self, paddrs:list[int], view_off:int, size:int) -> int:
+    self._trace_psp_gart_setup_regs("entry")
     if size <= 0 or view_off % 0x1000 != 0 or size % 0x1000 != 0:
       raise ValueError(f"invalid PSP GART window view_off={view_off:#x} size={size:#x}")
     msg1_off = AM_Experiment.gart_msg1_offset()
@@ -239,9 +240,13 @@ class AM_GMC(AM_IP):
                            "Run this experiment from a Linux path with full VRAM BAR access, or explicitly set "
                            "AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE=1 to force the guarded indirect write path.")
       gart_table = [0] * (table_size // 8)
+      self._trace_psp_gart_setup_regs("after-top-table-list")
     else:
+      self._trace_psp_gart_setup_regs("before-table-palloc")
       gart_table_paddr = self.adev.mm.palloc(table_size, align=0x1000, zero=True, boot=True)
+      self._trace_psp_gart_setup_regs("after-table-palloc")
       gart_table = self.adev.vram.view(gart_table_paddr, table_size, 'Q')
+      self._trace_psp_gart_setup_regs("after-table-view")
     flags = am.AMDGPU_PTE_VALID | am.AMDGPU_PTE_SYSTEM | am.AMDGPU_PTE_SNOOPED | am.AMDGPU_PTE_EXECUTABLE | \
             am.AMDGPU_PTE_READABLE | am.AMDGPU_PTE_WRITEABLE | am.AMDGPU_PTE_MTYPE_NV10(0, self.adev.soc.module.MTYPE_UC)
     start_page = view_off // 0x1000
@@ -249,8 +254,10 @@ class AM_GMC(AM_IP):
     page_count = size // 0x1000
     if start_page + page_count > len(paddrs):
       raise ValueError(f"invalid PSP GART source pages start={start_page:#x} count={page_count:#x} len={len(paddrs):#x}")
+    self._trace_psp_gart_setup_regs("before-pte-fill")
     for i, paddr in enumerate(paddrs[start_page:start_page + page_count]):
       gart_table[gart_page + i] = (paddr & 0x0000FFFFFFFFF000) | flags
+      if i in (0, page_count - 1): self._trace_psp_gart_setup_regs(f"after-pte-{i}")
     self._trace_psp_gart_setup_regs("after-pte-fill")
     if AM_Experiment.gart_table_top():
       if AM_Experiment.gart_table_sparse():
