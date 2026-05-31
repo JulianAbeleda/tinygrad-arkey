@@ -31,6 +31,11 @@ PSP_C2PMSG_REGS = {
   "C2PMSG115_SPI": 0x160b3, "C2PMSG116_SPI_ARG": 0x160b4, "C2PMSG127_RAS_CAP": 0x160bf,
 }
 
+PSP_DENSE_C2PMSG_REGS = {
+  **{f"MP0_C2PMSG{i:03d}": 0x16040 + i for i in range(128)},
+  **{f"MP1_C2PMSG{i:03d}": 0x16240 + i for i in range(128)},
+}
+
 PROFILE_IP = {
   "gfx1100_744c": {"mmhub": (3, 0, 0)},
 }
@@ -77,13 +82,18 @@ def collect(bdf:str, profile:str) -> dict:
   try:
     regs = getattr(am_regs, f"mmhub_{'_'.join(map(str, PROFILE_IP[profile]['mmhub']))}")
     bases = navi_bases("MMHUB")
-    psp_entries = []
-    for name, addr in PSP_C2PMSG_REGS.items():
-      byte_off = addr * 4
-      if byte_off + 4 > len(bar5):
-        psp_entries.append({"name": name, "dword_addr": addr, "out_of_range": True})
-        continue
-      psp_entries.append({"name": name, "dword_addr": addr, "value": struct.unpack_from("<I", bar5, byte_off)[0]})
+    def read_bar5_regs(regs:dict[str, int]) -> list[dict]:
+      out = []
+      for name, addr in regs.items():
+        byte_off = addr * 4
+        if byte_off + 4 > len(bar5):
+          out.append({"name": name, "dword_addr": addr, "out_of_range": True})
+          continue
+        out.append({"name": name, "dword_addr": addr, "value": struct.unpack_from("<I", bar5, byte_off)[0]})
+      return out
+
+    psp_entries = read_bar5_regs(PSP_C2PMSG_REGS)
+    psp_dense_entries = read_bar5_regs(PSP_DENSE_C2PMSG_REGS)
     entries = []
     for name in MMHUB_REGS:
       if name not in regs:
@@ -110,6 +120,7 @@ def collect(bdf:str, profile:str) -> dict:
       "bar5": {"base": bar5_start, "size": bar5_size, "open_mode": open_mode},
       "resources": [{"bar": i, "base": s, "size": e - s + 1, "flags": f} for i, (s, e, f) in enumerate(resources)],
       "psp_registers": psp_entries,
+      "psp_dense_registers": psp_dense_entries,
       "registers": entries,
     }
   finally:
@@ -134,6 +145,11 @@ def write_outputs(snapshot:dict, out:pathlib.Path, name:str):
       lines.append(f"psp {reg['name']} addr={reg['dword_addr']:#x} out_of_range")
     else:
       lines.append(f"psp {reg['name']} addr={reg['dword_addr']:#x} value={reg['value']:#010x}")
+  for reg in snapshot["psp_dense_registers"]:
+    if reg.get("out_of_range"):
+      lines.append(f"psp-dense {reg['name']} addr={reg['dword_addr']:#x} out_of_range")
+    else:
+      lines.append(f"psp-dense {reg['name']} addr={reg['dword_addr']:#x} value={reg['value']:#010x}")
   for reg in snapshot["registers"]:
     if reg.get("missing"):
       lines.append(f"reg {reg['name']} missing")

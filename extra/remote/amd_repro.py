@@ -243,6 +243,9 @@ def _dump_indirect_regs(view, group:str, regs:dict[str, int], index_reg:int, dat
 def _reg_table_regs(table:dict[str, tuple], names:list[str]) -> dict[str, int]:
   return {name: table[name][0] for name in names if name in table}
 
+def _c2pmsg_dense_regs(prefix:str, base:int) -> dict[str, int]:
+  return {f"{prefix}_C2PMSG{i:03d}": base + i for i in range(128)}
+
 def _open_discovery_only_amdev(pci):
   if getattr(pci, "is_remote", False):
     os.environ.setdefault("AM_REMOTE_DISCOVERY_PROFILE", "gfx1100_744c")
@@ -310,6 +313,8 @@ def remote_psp_pre_kdb_snapshot(pci):
     "regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32",
   ]
   _dump_direct_regs(view, "psp", psp_regs)
+  _dump_direct_regs(view, "mp0-c2pmsg-dense", _c2pmsg_dense_regs("MP0", 0x16040))
+  _dump_direct_regs(view, "mp1-c2pmsg-dense", _c2pmsg_dense_regs("MP1", 0x16240))
   _dump_direct_regs(view, "nbio-direct", nbio_direct)
   _dump_indirect_regs(view, "nbio-rsmu", nbio_indirect, 0, 1)
   _dump_indirect_regs(view, "nbio-pcie", nbio_indirect, 14, 15)
