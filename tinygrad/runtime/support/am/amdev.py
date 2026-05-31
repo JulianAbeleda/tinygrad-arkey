@@ -6,7 +6,7 @@ from tinygrad.runtime.autogen.am import am, fw
 from tinygrad.runtime.support.amd import AMDReg, import_module, import_asic_regs
 from tinygrad.runtime.support.memory import TLSFAllocator, MemoryManager, AddrSpace
 from tinygrad.runtime.support.system import PCIDevice
-from tinygrad.runtime.support.am.ip import AM_IP, AM_SOC, AM_GMC, AM_IH, AM_PSP, AM_SMU, AM_GFX, AM_SDMA
+from tinygrad.runtime.support.am.ip import AM_Experiment, AM_IP, AM_SOC, AM_GMC, AM_IH, AM_PSP, AM_SMU, AM_GFX, AM_SDMA
 
 AM_DEBUG = getenv("AM_DEBUG", 0)
 
@@ -151,6 +151,7 @@ class AMDev:
 
     self._run_discovery()
     self._build_regs()
+    self._init_trace_regs("after-build-regs")
 
     # AM boot Process:
     # The GPU being passed can be in one of several states: 1. Not initialized. 2. Initialized by amdgpu. 3. Initialized by AM.
@@ -163,12 +164,16 @@ class AMDev:
     # To determine if the GPU is in the third state, AM uses regSCRATCH_REG7 as a flag.
     # To determine if the previous AM session finalized correctly, AM uses regSCRATCH_REG6 as a flag.
     self.is_booting = True # During boot only boot memory can be allocated. This flag is to validate this.
+    self._init_trace_regs("before-init-sw")
     self.init_sw(smi_dev=False)
+    self._init_trace_regs("after-init-sw")
 
     self.partial_boot = (self.reg("regSCRATCH_REG7").read() == AMDev.Version) and (getenv("AM_RESET", 0) != 1)
+    self._init_trace_regs(f"after-partial-boot-check partial_boot={int(self.partial_boot)}")
     if self.partial_boot and (self.reg("regSCRATCH_REG6").read() != 0 or self.reg(self.gmc.pf_status_reg("GC")).read() != 0):
       if DEBUG >= 2: print(f"am {self.devfmt}: Malformed state. Issuing a full reset.")
       self.partial_boot = False
+      self._init_trace_regs("after-malformed-partial-boot")
 
     # Init hw for IP blocks where it is needed
     if not self.partial_boot:
@@ -180,12 +185,16 @@ class AMDev:
           self.smu.mode1_reset()
           self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) | pci.PCI_COMMAND_MASTER, 2)
       if self.psp.is_sos_alive() and self.smu.is_smu_alive():
+        self._init_trace_regs("before-sos-alive-reset")
         self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) & ~pci.PCI_COMMAND_MASTER, 2)
         if self.is_hive():
           if reset_mode: return # in reset mode, do not raise
           raise RuntimeError("Malformed state. Use extra/amdpci/hive_reset.py to reset the hive")
         self.smu.mode1_reset()
+        self._init_trace_regs("after-sos-alive-reset")
+      self._init_trace_regs("before-bus-master-enable")
       self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) | pci.PCI_COMMAND_MASTER, 2)
+      self._init_trace_regs("after-bus-master-enable")
       if getenv("AM_PSP_BEFORE_GMC", 0):
         if DEBUG >= 2: print(f"am {self.devfmt}: AM_PSP_BEFORE_GMC=1, initializing PSP before GMC")
         self.init_hw(self.soc, self.ih, self.psp, self.gmc, self.smu)
@@ -194,6 +203,7 @@ class AMDev:
 
     # Booting done
     self.is_booting = False
+    self._init_trace_regs("after-booting-flag-clear")
 
     # Re-initialize main blocks
     self.init_hw(self.gfx, self.sdma)
@@ -207,14 +217,32 @@ class AMDev:
     self.reg("regSCRATCH_REG6").write(1) # set initialized state.
     if DEBUG >= 2: print(f"am {self.devfmt}: boot done")
 
+  def _init_trace_enabled(self) -> bool:
+    return bool(AM_Experiment.gmc_init_trace())
+
+  def _init_trace_regs(self, label:str):
+    if not self._init_trace_enabled(): return
+    vals = []
+    for reg in ["regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_ACK",
+                "regMMVM_L2_BANK_SELECT_RESERVED_CID2", "regMP0_SMN_C2PMSG_35", "regMP0_SMN_C2PMSG_36", "regMP0_SMN_C2PMSG_81"]:
+      if not hasattr(self, reg):
+        vals.append(f"{reg}=missing")
+        continue
+      try: vals.append(f"{reg}={self.reg(reg).read():#010x}")
+      except Exception as e: vals.append(f"{reg}=read_failed:{type(e).__name__}")
+    print(f"am {self.devfmt}: AMDev init {label} " + " ".join(vals), flush=True)
+
   def init_sw(self, smi_dev=False):
     self.smi_dev, self.is_err_state = smi_dev, False
 
     # Memory manager & firmware
+    self._init_trace_regs("init-sw-entry")
     self.mm = AMMemoryManager(self, self.vram_size - self.reserved_vram_size, boot_size=(32 << 20), pt_t=AMPageTableEntry, va_shifts=[12, 21, 30, 39],
       va_bits=48, first_lv=am.AMDGPU_VM_PDB2, va_base=AMMemoryManager.va_allocator.base, reserve_ptable=not self.large_bar,
       palloc_ranges=[(1 << (i + 12), (2 << 20) if i >= 9 else 0x1000) for i in range(9 * (3 - am.AMDGPU_VM_PDB2), -1, -1)])
+    self._init_trace_regs("after-memory-manager")
     self.fw = AMFirmware(self)
+    self._init_trace_regs("after-firmware")
 
     # Initialize IP blocks
     self.soc:AM_SOC = AM_SOC(self)
@@ -226,11 +254,18 @@ class AMDev:
     self.sdma:AM_SDMA = AM_SDMA(self)
 
     # Init sw for all IP blocks
-    for ip in [self.soc, self.gmc, self.ih, self.psp, self.smu, self.gfx, self.sdma]: ip.init_sw()
+    for ip in [self.soc, self.gmc, self.ih, self.psp, self.smu, self.gfx, self.sdma]:
+      name = ip.__class__.__name__
+      self._init_trace_regs(f"before-{name}.init_sw")
+      ip.init_sw()
+      self._init_trace_regs(f"after-{name}.init_sw")
 
   def init_hw(self, *blocks:AM_IP):
     for ip in blocks:
+      name = ip.__class__.__name__
+      self._init_trace_regs(f"before-{name}.init_hw")
       ip.init_hw()
+      self._init_trace_regs(f"after-{name}.init_hw")
       if DEBUG >= 2: print(f"am {self.devfmt}: {ip.__class__.__name__} initialized")
 
   def fini(self):
