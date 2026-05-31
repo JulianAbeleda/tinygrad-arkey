@@ -1,6 +1,7 @@
 import os, socket, struct, threading, unittest
 
-from tinygrad.runtime.support.system import RemoteCmd, RemotePCIDevice
+from tinygrad.runtime.support.am.amdev import AMDev
+from tinygrad.runtime.support.system import RemoteCmd, RemoteMMIOInterface, RemotePCIDevice
 
 REQ = '<BIIQQQ'
 
@@ -110,6 +111,32 @@ class TestRemotePCIRPC(unittest.TestCase):
     self.assertEqual(stats["sent_bytes"], 5)
     self.assertEqual(server.requests[0], (RemoteCmd.MMIO_READ, 9, 5, 0x20, 3, 0, b''))
     self.assertEqual(server.requests[1], (RemoteCmd.MMIO_WRITE, 9, 6, 0x30, 5, 0, b'abcde'))
+
+  def test_remote_sparse_vram_write_uses_mmio_rpc_without_unsafe_env(self):
+    sock, server = self.rpc_pair(*(response() for _ in range(6)))
+    dev = remote_dev(sock, dev_id=7)
+    adev = object.__new__(AMDev)
+    adev.pci_dev = dev
+    adev.mmio = RemoteMMIOInterface(dev, 0, 0x100, fmt='I')
+
+    old_unsafe = os.environ.pop("AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE", None)
+    try:
+      adev._write_vram(0x12345000, struct.pack("<II", 0x11223344, 0x55667788), allow_remote_sparse=True)
+    finally:
+      if old_unsafe is not None: os.environ["AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE"] = old_unsafe
+
+    payload_vals = [struct.unpack("<I", req[6])[0] for req in server.requests]
+    self.assertEqual([req[:6] for req in server.requests], [
+      (RemoteCmd.MMIO_WRITE, 7, 0, 0x18, 4, 0),
+      (RemoteCmd.MMIO_WRITE, 7, 0, 0x00, 4, 0),
+      (RemoteCmd.MMIO_WRITE, 7, 0, 0x04, 4, 0),
+      (RemoteCmd.MMIO_WRITE, 7, 0, 0x18, 4, 0),
+      (RemoteCmd.MMIO_WRITE, 7, 0, 0x00, 4, 0),
+      (RemoteCmd.MMIO_WRITE, 7, 0, 0x04, 4, 0),
+    ])
+    self.assertEqual(payload_vals, [0, 0x92345000, 0x11223344, 0, 0x92345004, 0x55667788])
+    self.assertEqual(RemotePCIDevice.command_stats()["MMIO_WRITE"]["count"], 6)
+    self.assertEqual(RemotePCIDevice.stats()["sent_bytes"], 24)
 
   def test_rpc_timeout_is_restored_on_success_and_error(self):
     sock, _ = self.rpc_pair(response(), response(status=1, resp0=len(b'nope'), payload=b'nope'))
