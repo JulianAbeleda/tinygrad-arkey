@@ -287,6 +287,8 @@ class AM_GMC(AM_IP):
       for inst in range(self.vmhubs): self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
     if AM_Experiment.gart_strong_invalidate():
       self._strong_invalidate_psp_gart(gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
+      if AM_Experiment.gart_linux_full_context():
+        for inst in range(self.vmhubs): self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
     msg1_addr = self.gart_start + msg1_off
     return msg1_addr
 
