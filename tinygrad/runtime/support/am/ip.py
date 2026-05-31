@@ -23,6 +23,8 @@ class AM_Experiment:
   @staticmethod
   def gart_linux_context() -> int: return _env_int("AM_PSP_GART_LINUX_CONTEXT")
   @staticmethod
+  def gart_linux_full_context() -> int: return _env_int("AM_PSP_GART_LINUX_FULL_CONTEXT")
+  @staticmethod
   def gart_table_top() -> int: return _env_int("AM_PSP_GART_TABLE_TOP")
   @staticmethod
   def gart_table_sparse() -> int: return _env_int("AM_PSP_GART_TABLE_SPARSE")
@@ -273,7 +275,16 @@ class AM_GMC(AM_IP):
       # Linux amdgpu on RX 7900 XTX used this CONTEXT0_CNTL value in the successful PSP KDB trace.
       if linux_context: self.adev.reg("regMMVM_CONTEXT0_CNTL").write(0x01fffe01, inst=inst)
       else: self.adev.reg("regMMVM_CONTEXT0_CNTL").write(enable_context=1, page_table_depth=0, retry_permission_or_invalid_page_fault=0, inst=inst)
+      if AM_Experiment.gart_linux_full_context():
+        self.adev.reg("regMMMC_VM_MX_L1_TLB_CNTL").write(0x1859, inst=inst)
+        self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
+        for vmid in range(1, 16):
+          self.adev.reg(f"regMMVM_CONTEXT{vmid}_CNTL").write(0x01fffe07, inst=inst)
+          self.adev.wreg_pair(f"regMMVM_CONTEXT{vmid}_PAGE_TABLE_START_ADDR", "_LO32", "_HI32", 0x0, inst=inst)
+          self.adev.wreg_pair(f"regMMVM_CONTEXT{vmid}_PAGE_TABLE_END_ADDR", "_LO32", "_HI32", 0xfffffffff, inst=inst)
     self.flush_tlb("MM", 0)
+    if AM_Experiment.gart_linux_full_context():
+      for inst in range(self.vmhubs): self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
     if AM_Experiment.gart_strong_invalidate():
       self._strong_invalidate_psp_gart(gart_table_paddr, pt_base, gart_table, paddrs, start_page, gart_page, page_count, msg1_off)
     msg1_addr = self.gart_start + msg1_off
