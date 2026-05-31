@@ -205,6 +205,9 @@ def remote_psp_setup_clean_gate(pci) -> int:
             f"req_reg={req_reg.addr[inst]:#x} cid2_reg={cid2_reg.addr[inst]:#x} invalidate17_sem={sem:#010x} "
             f"ack={ack:#010x} req={req:#010x} cid2={cid2:#010x}")
       if (sem & 0x1) != 0x1: bad.append(f"inst{inst} invalidate17_sem={sem:#010x}")
+      else:
+        sem_reg.write(0, inst=inst)
+        stamp(f"setup-gate mmhub inst={inst} released invalidate17_sem after diagnostic read")
     require_visible("psp-setup-clean-gate")
   except Exception as e:
     stamp(f"setup-gate error={type(e).__name__}: {e}")
