@@ -308,6 +308,7 @@ class AMDev:
     return bytes(array.array('I', res))
 
   def _write_vram(self, addr:int, data:bytes, *, allow_remote_sparse:bool=False):
+    # Keep remote indirect writes bounded to a single page; larger writes can close the TinyGPU RPC connection.
     remote_sparse = allow_remote_sparse and len(data) <= 0x1000
     if getattr(self.pci_dev, "is_remote", False) and not remote_sparse and not getenv("AM_REMOTE_UNSAFE_INDIRECT_VRAM_WRITE", 0):
       raise RuntimeError("remote AMD indirect VRAM writes are disabled because this path can close the TinyGPU RPC connection. "
