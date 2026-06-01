@@ -83,6 +83,10 @@ class AM_Experiment:
   @staticmethod
   def sysmsg1_gart_sort_paddrs() -> int: return _env_int("AM_PSP_SYSMSG1_GART_SORT_PADDRS")
   @staticmethod
+  def kdb_pipeline_seq() -> int: return _env_int("AM_PSP_KDB_PIPELINE_SEQ")
+  @staticmethod
+  def kdb_pipeline_delay_us() -> int: return _env_int("AM_PSP_KDB_PIPELINE_DELAY_US", 900)
+  @staticmethod
   def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
   @staticmethod
   def gart_setup_trace() -> int: return _env_int("AM_PSP_GART_SETUP_TRACE")
@@ -1369,7 +1373,11 @@ class AM_PSP(AM_IP):
     if AM_Experiment.linux_pre_bl_status():
       reg81 = self.adev.reg(f"{self.reg_pref}_81")
       self._trace(f"linux pre-bl status reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
-    self._wait_for_bootloader()
+    if getattr(self, "_skip_next_bootloader_prewait", False):
+      self._skip_next_bootloader_prewait = False
+      self._trace(f"KDB pipeline skip prewait for fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x}")
+    else:
+      self._wait_for_bootloader()
 
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
     data = self.adev.fw.sos_fw[fw]
@@ -1414,6 +1422,14 @@ class AM_PSP(AM_IP):
     if AM_Experiment.mailbox_strong_order():
       self._trace(f"mailbox post-compid reg35={reg35.read():#x} reg36={reg36.read():#x}")
     self._trace_bootloader_snapshot(f"post-compid-{compid:#x}")
+
+    if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_pipeline_seq():
+      delay_us = AM_Experiment.kdb_pipeline_delay_us()
+      if delay_us < 0 or delay_us > 100000: raise ValueError(f"AM_PSP_KDB_PIPELINE_DELAY_US={delay_us} is outside 0..100000")
+      self._trace(f"KDB pipeline continue after delay_us={delay_us}")
+      if delay_us: time.sleep(delay_us / 1_000_000)
+      self._skip_next_bootloader_prewait = True
+      return 0
 
     if compid == am.PSP_BL__LOAD_SOSDRV: return 0
     try:
