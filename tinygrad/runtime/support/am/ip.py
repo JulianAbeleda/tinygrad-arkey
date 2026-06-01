@@ -1050,7 +1050,13 @@ class AM_PSP(AM_IP):
       if AM_Experiment.msg1_visibility_probe(): self._msg1_visibility_probe()
       self._trace_pre_bootloader_regs()
       for fw, compid in sos_components: self._bootloader_load_component(fw, compid)
+      if AM_Experiment.bl_pipeline_count():
+        reg81 = self.adev.reg(f"{self.reg_pref}_81")
+        self._trace(f"bootloader pipeline before sOS wait reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
       wait_cond(self.is_sos_alive, value=True, msg="sOS failed to start")
+      if AM_Experiment.bl_pipeline_count():
+        reg81 = self.adev.reg(f"{self.reg_pref}_81")
+        self._trace(f"bootloader pipeline sOS alive reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
 
     self._ring_create()
     if am.PSP_FW_TYPE_PSP_TOC in self.adev.fw.sos_fw: self._tmr_init()

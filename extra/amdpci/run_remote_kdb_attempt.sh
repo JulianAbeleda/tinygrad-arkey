@@ -19,6 +19,7 @@ Variants:
   linux-pre-kdb-seq Real KDB attempt with Linux-like pre-KDB invalidate cadence.
   kdb-pipeline-seq Real KDB attempt that pipelines the post-KDB component.
   bl-pipeline-seq Real KDB attempt that pipelines early bootloader components.
+  sos-pipeline-seq Real KDB attempt that pipelines the full sOS bootloader sequence.
   vram-msg1-quiet Real KDB attempt with VRAM msg1 and minimal observers.
   sorted-msg1-gart Real KDB attempt with msg1 GART pages sorted by paddr.
   top-table-sparse Real KDB attempt with sparse GART table near Linux top-of-VRAM.
@@ -83,7 +84,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -169,6 +170,15 @@ if [ "$VARIANT" = "bl-pipeline-seq" ]; then
   done
 fi
 
+if [ "$VARIANT" = "sos-pipeline-seq" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000 \
+         AM_PSP_PRE_KDB_INVALIDATE_BURST=16 AM_PSP_BL_PIPELINE_COUNT=8 AM_PSP_BL_PIPELINE_DELAY_US=900)
+  for name in AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_FAIL_CAPTURE \
+              AM_PSP_KDB_FAIL_CAPTURE_MS AM_PSP_KDB_FAIL_CAPTURE_READS AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
+    drop_env "$name"
+  done
+fi
+
 if [ "$VARIANT" = "vram-msg1-quiet" ]; then
   envs+=(AM_PSP_SYSMSG1_VRAM=1)
   for name in AM_PSP_SYSMSG1_GART AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_FAIL_CAPTURE \
@@ -207,7 +217,7 @@ echo "rc=$rc"
 echo "out=$out"
 sha256sum "$out"
 
-grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|KDB order barrier\\|KDB payload audit\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
+grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|KDB order barrier\\|KDB payload audit\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|bootloader pipeline\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
 
 tail -240 "$out"
 exit "$rc"
