@@ -113,7 +113,7 @@ Required state:
 If any condition fails, do not run the bridge or KDB attempt. Use the timed normal
 shutdown prompt.
 
-## KDB Pipeline Attempt
+## Bootloader Pipeline Attempt
 
 Run this only after the blacklisted preflight passes.
 
@@ -127,8 +127,8 @@ echo "bridge_pid=$bridge_pid"
 sleep 2
 
 echo
-echo "STEP 2: run kdb-pipeline-seq"
-extra/amdpci/run_remote_kdb_attempt.sh --variant kdb-pipeline-seq
+echo "STEP 2: run bl-pipeline-seq"
+extra/amdpci/run_remote_kdb_attempt.sh --variant bl-pipeline-seq
 rc=$?
 
 echo
@@ -144,12 +144,12 @@ sudo grub-editenv list || true
 
 echo
 echo "STEP 5: report latest log"
-log=$(ls -t extra/amdpci/captures/kdb-kdb-pipeline-seq-*.log | head -1)
+log=$(ls -t extra/amdpci/captures/kdb-bl-pipeline-seq-*.log | head -1)
 echo "rc=$rc"
 echo "log=$log"
 sha256sum "$log"
 
-grep -n "KDB pipeline continue\|KDB pipeline skip prewait\|pre-KDB invalidate burst\|write msg1\|write compid\|wait BL\|C2PMSG35\|C2PMSG36\|C2PMSG81\|AMDDevice ready\|Traceback\|RuntimeError\|TimeoutError" "$log" | tail -240 || true
+grep -n "bootloader pipeline continue\|bootloader pipeline skip prewait\|KDB pipeline continue\|KDB pipeline skip prewait\|pre-KDB invalidate burst\|write msg1\|write compid\|wait BL\|C2PMSG35\|C2PMSG36\|C2PMSG81\|AMDDevice ready\|Traceback\|RuntimeError\|TimeoutError" "$log" | tail -240 || true
 
 echo
 echo "STEP 6: sync and poweroff to normal boot in 10 seconds"
@@ -158,7 +158,7 @@ sleep 10
 sudo poweroff
 ```
 
-Report the `rc`, log path, SHA256, KDB pipeline lines, component writes, wait-BL
+Report the `rc`, log path, SHA256, pipeline lines, component writes, wait-BL
 lines, and whether `AMDDevice ready` appeared.
 
 ## Normal Recovery Check

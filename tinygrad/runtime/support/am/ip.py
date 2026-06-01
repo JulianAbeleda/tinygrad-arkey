@@ -89,6 +89,10 @@ class AM_Experiment:
   @staticmethod
   def kdb_pipeline_delay_us() -> int: return _env_int("AM_PSP_KDB_PIPELINE_DELAY_US", 900)
   @staticmethod
+  def bl_pipeline_count() -> int: return _env_int("AM_PSP_BL_PIPELINE_COUNT")
+  @staticmethod
+  def bl_pipeline_delay_us() -> int: return _env_int("AM_PSP_BL_PIPELINE_DELAY_US", 900)
+  @staticmethod
   def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
   @staticmethod
   def gart_setup_trace() -> int: return _env_int("AM_PSP_GART_SETUP_TRACE")
@@ -1377,7 +1381,8 @@ class AM_PSP(AM_IP):
       self._trace(f"linux pre-bl status reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
     if getattr(self, "_skip_next_bootloader_prewait", False):
       self._skip_next_bootloader_prewait = False
-      self._trace(f"KDB pipeline skip prewait for fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x}")
+      pipeline_name = "KDB pipeline" if AM_Experiment.kdb_pipeline_seq() else "bootloader pipeline"
+      self._trace(f"{pipeline_name} skip prewait for fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x}")
     else:
       self._wait_for_bootloader()
 
@@ -1424,6 +1429,19 @@ class AM_PSP(AM_IP):
     if AM_Experiment.mailbox_strong_order():
       self._trace(f"mailbox post-compid reg35={reg35.read():#x} reg36={reg36.read():#x}")
     self._trace_bootloader_snapshot(f"post-compid-{compid:#x}")
+
+    if bl_pipeline_count := AM_Experiment.bl_pipeline_count():
+      if bl_pipeline_count < 0 or bl_pipeline_count > 16: raise ValueError(f"AM_PSP_BL_PIPELINE_COUNT={bl_pipeline_count} is outside 0..16")
+      pipeline_done = getattr(self, "_bl_pipeline_done", 0)
+      if pipeline_done < bl_pipeline_count:
+        delay_us = AM_Experiment.bl_pipeline_delay_us()
+        if delay_us < 0 or delay_us > 100000: raise ValueError(f"AM_PSP_BL_PIPELINE_DELAY_US={delay_us} is outside 0..100000")
+        self._trace(f"bootloader pipeline continue after delay_us={delay_us} count={pipeline_done + 1}/{bl_pipeline_count} "
+                    f"fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x}")
+        if delay_us: time.sleep(delay_us / 1_000_000)
+        self._bl_pipeline_done = pipeline_done + 1
+        self._skip_next_bootloader_prewait = True
+        return 0
 
     if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_pipeline_seq():
       pipeline_count = AM_Experiment.kdb_pipeline_count()
