@@ -20,6 +20,7 @@ Variants:
   kdb-pipeline-seq Real KDB attempt that pipelines the post-KDB component.
   bl-pipeline-seq Real KDB attempt that pipelines early bootloader components.
   sos-pipeline-seq Real KDB attempt that pipelines the full sOS bootloader sequence.
+  sos-pipeline-slow Real KDB attempt that pipelines full sOS with a 2500us gap.
   vram-msg1-quiet Real KDB attempt with VRAM msg1 and minimal observers.
   sorted-msg1-gart Real KDB attempt with msg1 GART pages sorted by paddr.
   top-table-sparse Real KDB attempt with sparse GART table near Linux top-of-VRAM.
@@ -84,7 +85,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -173,6 +174,15 @@ fi
 if [ "$VARIANT" = "sos-pipeline-seq" ]; then
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000 \
          AM_PSP_PRE_KDB_INVALIDATE_BURST=16 AM_PSP_BL_PIPELINE_COUNT=8 AM_PSP_BL_PIPELINE_DELAY_US=900)
+  for name in AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_FAIL_CAPTURE \
+              AM_PSP_KDB_FAIL_CAPTURE_MS AM_PSP_KDB_FAIL_CAPTURE_READS AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
+    drop_env "$name"
+  done
+fi
+
+if [ "$VARIANT" = "sos-pipeline-slow" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000 \
+         AM_PSP_PRE_KDB_INVALIDATE_BURST=16 AM_PSP_BL_PIPELINE_COUNT=8 AM_PSP_BL_PIPELINE_DELAY_US=2500)
   for name in AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_FAIL_CAPTURE \
               AM_PSP_KDB_FAIL_CAPTURE_MS AM_PSP_KDB_FAIL_CAPTURE_READS AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
     drop_env "$name"

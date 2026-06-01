@@ -130,8 +130,8 @@ echo "bridge_pid=$bridge_pid"
 sleep 2
 
 echo
-echo "STEP 2: run sos-pipeline-seq"
-extra/amdpci/run_remote_kdb_attempt.sh --variant sos-pipeline-seq
+echo "STEP 2: run sos-pipeline-slow"
+extra/amdpci/run_remote_kdb_attempt.sh --variant sos-pipeline-slow
 rc=$?
 
 echo
@@ -150,7 +150,7 @@ sudo grub-editenv list || true
 
 echo
 echo "STEP 5: report latest log"
-log=$(ls -t extra/amdpci/captures/kdb-sos-pipeline-seq-*.log | head -1)
+log=$(ls -t extra/amdpci/captures/kdb-sos-pipeline-slow-*.log | head -1)
 echo "rc=$rc"
 echo "log=$log"
 sha256sum "$log"
