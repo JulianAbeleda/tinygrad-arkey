@@ -85,6 +85,8 @@ class AM_Experiment:
   @staticmethod
   def kdb_pipeline_seq() -> int: return _env_int("AM_PSP_KDB_PIPELINE_SEQ")
   @staticmethod
+  def kdb_pipeline_count() -> int: return _env_int("AM_PSP_KDB_PIPELINE_COUNT", 1)
+  @staticmethod
   def kdb_pipeline_delay_us() -> int: return _env_int("AM_PSP_KDB_PIPELINE_DELAY_US", 900)
   @staticmethod
   def tlb_trace() -> int: return _env_int("AM_PSP_TLB_TRACE")
@@ -1424,10 +1426,15 @@ class AM_PSP(AM_IP):
     self._trace_bootloader_snapshot(f"post-compid-{compid:#x}")
 
     if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_pipeline_seq():
+      pipeline_count = AM_Experiment.kdb_pipeline_count()
+      if pipeline_count < 0 or pipeline_count > 16: raise ValueError(f"AM_PSP_KDB_PIPELINE_COUNT={pipeline_count} is outside 0..16")
+      pipeline_done = getattr(self, "_kdb_pipeline_done", 0)
+      if pipeline_done >= pipeline_count: return self._wait_for_bootloader()
       delay_us = AM_Experiment.kdb_pipeline_delay_us()
       if delay_us < 0 or delay_us > 100000: raise ValueError(f"AM_PSP_KDB_PIPELINE_DELAY_US={delay_us} is outside 0..100000")
-      self._trace(f"KDB pipeline continue after delay_us={delay_us}")
+      self._trace(f"KDB pipeline continue after delay_us={delay_us} count={pipeline_done + 1}/{pipeline_count}")
       if delay_us: time.sleep(delay_us / 1_000_000)
+      self._kdb_pipeline_done = pipeline_done + 1
       self._skip_next_bootloader_prewait = True
       return 0
 
