@@ -52,7 +52,10 @@ sleep 1
 
 echo
 echo "STEP 2: stop old bridge if any"
-sudo pkill -f 'extra/remote/serve.py 6667' || true
+old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk '$0 ~ / 6667$/ {print $1}')
+if [ -n "$old_bridge_pids" ]; then
+  echo "$old_bridge_pids" | xargs sudo kill
+fi
 sleep 1
 
 echo
@@ -134,7 +137,10 @@ rc=$?
 echo
 echo "STEP 3: stop bridge"
 sudo kill "$bridge_pid" || true
-sudo pkill -f 'extra/remote/serve.py 6667' || true
+old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk '$0 ~ / 6667$/ {print $1}')
+if [ -n "$old_bridge_pids" ]; then
+  echo "$old_bridge_pids" | xargs sudo kill
+fi
 pgrep -af 'extra/remote/serve.py|extra/remote/amd_repro.py' || true
 
 echo
