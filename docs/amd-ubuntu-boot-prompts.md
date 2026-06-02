@@ -15,6 +15,13 @@ cd ~/tinygrad-arkey || exit 1
 extra/amdpci/linux_amd_state.sh
 ```
 
+To update the checkout first:
+
+```bash
+cd ~/tinygrad-arkey || exit 1
+extra/amdpci/linux_amd_state.sh --pull
+```
+
 Important interpreted states:
 
 - `NORMAL_HEALTHY`: safe to queue a blacklisted test boot.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+BRIDGE_PORT="${BRIDGE_PORT:-6667}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
@@ -10,7 +11,7 @@ sleep 1
 
 echo
 echo "STEP 2: stop old bridge if any"
-old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk '$0 ~ / 6667$/ {print $1}')
+old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk -v port="$BRIDGE_PORT" '$0 ~ (" " port "$") {print $1}')
 if [ -n "$old_bridge_pids" ]; then
   echo "$old_bridge_pids" | xargs sudo kill
 fi
