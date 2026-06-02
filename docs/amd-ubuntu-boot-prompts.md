@@ -99,6 +99,20 @@ cd ~/tinygrad-arkey || exit 1
 extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-pipeline-slow --poweroff
 ```
 
+If sudo cannot prompt inside the helper, start the bridge separately:
+
+```bash
+cd ~/tinygrad-arkey || exit 1
+sudo .venv/bin/python extra/remote/serve.py 6667
+```
+
+Then run the attempt in another shell:
+
+```bash
+cd ~/tinygrad-arkey || exit 1
+extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-pipeline-slow --use-existing-bridge
+```
+
 Report the `rc`, log path, SHA256, pipeline lines, component writes, wait-BL
 lines, `C2PMSG81`, and whether `AMDDevice ready` appeared.
 

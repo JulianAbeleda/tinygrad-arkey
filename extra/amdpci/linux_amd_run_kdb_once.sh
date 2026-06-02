@@ -3,11 +3,11 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: linux_amd_run_kdb_once.sh [--variant NAME] [--remote HOST:PORT] [--out DIR] [--poweroff]
+usage: linux_amd_run_kdb_once.sh [--variant NAME] [--remote HOST:PORT] [--out DIR] [--use-existing-bridge] [--poweroff]
 
 Runs one blacklisted-boot KDB attempt:
   1. validates BLACKLISTED_READY,
-  2. starts extra/remote/serve.py,
+  2. starts extra/remote/serve.py, unless --use-existing-bridge is passed,
   3. runs run_remote_kdb_attempt.sh,
   4. stops the bridge,
   5. queues next-normal,
@@ -18,6 +18,10 @@ Default remote: 127.0.0.1:6667
 
 By default this does not power off. Pass --poweroff to run the normal timed
 poweroff sequence after the report, or run linux_amd_poweroff_normal.sh later.
+
+Use --use-existing-bridge when serve.py is already running as root in another
+terminal. In that mode this script does not require sudo to start or stop the
+bridge.
 EOF
 }
 
@@ -28,6 +32,7 @@ VARIANT="sos-pipeline-slow"
 REMOTE="127.0.0.1:6667"
 OUT_DIR="extra/amdpci/captures"
 POWEROFF=0
+USE_EXISTING_BRIDGE=0
 BRIDGE_PID=""
 
 while [ "$#" -gt 0 ]; do
@@ -51,6 +56,10 @@ while [ "$#" -gt 0 ]; do
       POWEROFF=1
       shift
       ;;
+    --use-existing-bridge)
+      USE_EXISTING_BRIDGE=1
+      shift
+      ;;
     --no-poweroff)
       # Backward-compatible no-op. No poweroff is now the default.
       POWEROFF=0
@@ -69,6 +78,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 cleanup_bridge() {
+  [ "$USE_EXISTING_BRIDGE" -eq 0 ] || return 0
   if [ -n "$BRIDGE_PID" ] && kill -0 "$BRIDGE_PID" 2>/dev/null; then
     sudo kill "$BRIDGE_PID" 2>/dev/null || true
     sleep 1
@@ -86,17 +96,29 @@ extra/amdpci/linux_amd_blacklisted_preflight.sh
 echo
 echo "STEP 2: start bridge"
 mkdir -p "$OUT_DIR"
-bridge_log="$OUT_DIR/bridge-${VARIANT}-$(date +%Y%m%d-%H%M%S).log"
-sudo -v
-sudo .venv/bin/python extra/remote/serve.py "${REMOTE##*:}" > "$bridge_log" 2>&1 &
-BRIDGE_PID=$!
-echo "bridge_pid=$BRIDGE_PID"
-echo "bridge_log=$bridge_log"
-sleep 2
-if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
-  echo "FAIL: bridge exited early"
-  tail -80 "$bridge_log" || true
-  exit 3
+if [ "$USE_EXISTING_BRIDGE" -eq 1 ]; then
+  echo "using existing bridge at $REMOTE"
+  if ! pgrep -af 'extra/remote/serve[.]py' | awk -v port="${REMOTE##*:}" '$0 ~ (" " port "$") {found=1} END {exit !found}'; then
+    echo "FAIL: no existing serve.py bridge found on port ${REMOTE##*:}"
+    exit 3
+  fi
+else
+  bridge_log="$OUT_DIR/bridge-${VARIANT}-$(date +%Y%m%d-%H%M%S).log"
+  if ! sudo -n true 2>/dev/null; then
+    echo "FAIL: sudo is required to start serve.py and cannot prompt here."
+    echo "Run 'sudo -v' in an interactive terminal first, or start the bridge manually and rerun with --use-existing-bridge."
+    exit 3
+  fi
+  sudo .venv/bin/python extra/remote/serve.py "${REMOTE##*:}" > "$bridge_log" 2>&1 &
+  BRIDGE_PID=$!
+  echo "bridge_pid=$BRIDGE_PID"
+  echo "bridge_log=$bridge_log"
+  sleep 2
+  if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
+    echo "FAIL: bridge exited early"
+    tail -80 "$bridge_log" || true
+    exit 3
+  fi
 fi
 
 echo
@@ -110,7 +132,11 @@ echo
 echo "STEP 4: stop bridge"
 cleanup_bridge
 BRIDGE_PID=""
-pgrep -af 'extra/remote/serve.py|extra/remote/amd_repro.py' || true
+if [ "$USE_EXISTING_BRIDGE" -eq 1 ]; then
+  echo "left existing bridge running"
+else
+  pgrep -af 'extra/remote/serve.py|extra/remote/amd_repro.py' || true
+fi
 
 echo
 echo "STEP 5: queue normal next boot"
