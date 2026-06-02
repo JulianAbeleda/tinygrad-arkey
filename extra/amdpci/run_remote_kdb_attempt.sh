@@ -24,7 +24,7 @@ Variants:
   sos-payload-audit Real slow sOS pipeline plus all-component payload audit.
   sos-delay20    Real slow sOS pipeline plus Linux-like post-SOS 20ms delay.
   sos-final-state-audit Real sOS delay attempt plus final mailbox state audit.
-  bl-boundary-4..8 Pipeline to a bootloader boundary, then wait and audit state.
+  bl-boundary-1..8 Pipeline to a bootloader boundary, then wait and audit state.
   vram-msg1-quiet Real KDB attempt with VRAM msg1 and minimal observers.
   sorted-msg1-gart Real KDB attempt with msg1 GART pages sorted by paddr.
   top-table-sparse Real KDB attempt with sparse GART table near Linux top-of-VRAM.
@@ -89,7 +89,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -223,7 +223,7 @@ if [ "$VARIANT" = "sos-final-state-audit" ]; then
   done
 fi
 
-if [[ "$VARIANT" =~ ^bl-boundary-([4-8])$ ]]; then
+if [[ "$VARIANT" =~ ^bl-boundary-([1-8])$ ]]; then
   boundary_count="${BASH_REMATCH[1]}"
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000 \
          AM_PSP_PRE_KDB_INVALIDATE_BURST=16 AM_PSP_BL_PIPELINE_COUNT="$boundary_count" AM_PSP_BL_PIPELINE_DELAY_US=2500 \
