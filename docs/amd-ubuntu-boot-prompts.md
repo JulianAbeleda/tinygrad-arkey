@@ -2,9 +2,26 @@
 
 Reusable prompts for the RX 7900 GRE / Navi31 Ubuntu host during PSP/KDB testing.
 
-The important rule is to keep every shutdown sequenced: queue the GRUB one-shot entry,
-print the state, `sync`, pause, then power off. After KDB attempts or failed gates,
-always queue the next boot back to normal.
+The important rule is to keep every shutdown sequenced: queue the GRUB one-shot
+entry, print the state, `sync`, pause, then power off. After KDB attempts or
+failed gates, always queue the next boot back to normal.
+
+## Current State
+
+Run this before deciding what to do next.
+
+```bash
+cd ~/tinygrad-arkey || exit 1
+extra/amdpci/linux_amd_state.sh
+```
+
+Important interpreted states:
+
+- `NORMAL_HEALTHY`: safe to queue a blacklisted test boot.
+- `BLACKLISTED_READY`: safe to run a PSP/KDB attempt.
+- `GPU_MISSING_FROM_PCI`: stop software testing; use normal shutdown plus full
+  hardware power cycle.
+- `MIXED_OR_DIRTY`: do not run KDB until the state is understood.
 
 ## Timed Normal Shutdown
 
@@ -13,26 +30,7 @@ blacklisted gate or when the GPU is missing from PCI.
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
-
-echo "STEP 1: queue normal next boot"
-sudo extra/amdpci/linux_amdgpu_grub_switch.sh next-normal || true
-sleep 1
-
-echo
-echo "STEP 2: verify grub one-shot state"
-sudo grub-editenv list || true
-sleep 3
-
-echo
-echo "STEP 3: sync disks"
-sync
-sleep 3
-
-echo
-echo "STEP 4: poweroff in 10 seconds"
-sleep 10
-
-sudo poweroff
+extra/amdpci/linux_amd_poweroff_normal.sh
 ```
 
 After poweroff, use a full hardware power cycle when PCI enumeration is wedged:
@@ -41,69 +39,23 @@ then boot.
 
 ## Timed Blacklisted Shutdown
 
-Use this to queue the next boot for a clean blacklisted PSP/KDB attempt.
+Use this from `NORMAL_HEALTHY` to queue the next boot for a clean blacklisted
+PSP/KDB attempt.
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
-
-echo "STEP 1: pull latest"
-git pull --ff-only || exit 1
-sleep 1
-
-echo
-echo "STEP 2: stop old bridge if any"
-old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk '$0 ~ / 6667$/ {print $1}')
-if [ -n "$old_bridge_pids" ]; then
-  echo "$old_bridge_pids" | xargs sudo kill
-fi
-sleep 1
-
-echo
-echo "STEP 3: queue blacklisted next boot"
-sudo extra/amdpci/linux_amdgpu_grub_switch.sh next-blacklist || exit 1
-sleep 1
-
-echo
-echo "STEP 4: verify grub one-shot state"
-sudo grub-editenv list || true
-sleep 3
-
-echo
-echo "STEP 5: sync disks"
-sync
-sleep 3
-
-echo
-echo "STEP 6: poweroff in 10 seconds"
-sleep 10
-
-sudo poweroff
+extra/amdpci/linux_amd_poweroff_blacklist.sh
 ```
 
 After poweroff, use a full hardware power cycle, then boot Ubuntu.
 
 ## Blacklisted Preflight
 
-Run this after a blacklisted boot before starting the remote bridge. Continue only if
-all required conditions are met.
+Run this after a blacklisted boot before starting the remote bridge.
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
-
-echo "STEP 1: pull latest"
-git pull --ff-only || exit 1
-
-echo
-echo "STEP 2: boot command line"
-cat /proc/cmdline
-
-echo
-echo "STEP 3: amdgpu module"
-lsmod | grep '^amdgpu' || true
-
-echo
-echo "STEP 4: target GPU"
-lspci -Dnnk -s 0000:08:00.0 || true
+extra/amdpci/linux_amd_blacklisted_preflight.sh
 ```
 
 Required state:
@@ -113,83 +65,37 @@ Required state:
 - `0000:08:00.0` is present.
 - `0000:08:00.0` has no `Kernel driver in use` line.
 
-If any condition fails, do not run the bridge or KDB attempt. Use the timed normal
-shutdown prompt.
+If this fails, do not run the bridge or KDB attempt. Use timed normal shutdown.
 
 ## sOS Pipeline Attempt
 
-Run this only after the blacklisted preflight passes.
+Run this only after blacklisted preflight passes. It starts the bridge, runs one
+KDB attempt, stops the bridge, queues normal boot, reports the latest log, then
+powers off.
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
+extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-pipeline-slow
+```
 
-echo "STEP 1: start bridge"
-sudo .venv/bin/python extra/remote/serve.py 6667 > /tmp/kdb-bridge.log 2>&1 &
-bridge_pid=$!
-echo "bridge_pid=$bridge_pid"
-sleep 2
+For a dry run that does not power off automatically:
 
-echo
-echo "STEP 2: run sos-pipeline-slow"
-extra/amdpci/run_remote_kdb_attempt.sh --variant sos-pipeline-slow
-rc=$?
-
-echo
-echo "STEP 3: stop bridge"
-sudo kill "$bridge_pid" || true
-old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk '$0 ~ / 6667$/ {print $1}')
-if [ -n "$old_bridge_pids" ]; then
-  echo "$old_bridge_pids" | xargs sudo kill
-fi
-pgrep -af 'extra/remote/serve.py|extra/remote/amd_repro.py' || true
-
-echo
-echo "STEP 4: queue normal next boot"
-sudo extra/amdpci/linux_amdgpu_grub_switch.sh next-normal || true
-sudo grub-editenv list || true
-
-echo
-echo "STEP 5: report latest log"
-log=$(ls -t extra/amdpci/captures/kdb-sos-pipeline-slow-*.log | head -1)
-echo "rc=$rc"
-echo "log=$log"
-sha256sum "$log"
-
-grep -n "bootloader pipeline continue\|bootloader pipeline skip prewait\|KDB pipeline continue\|KDB pipeline skip prewait\|pre-KDB invalidate burst\|write msg1\|write compid\|wait BL\|sOS\|C2PMSG35\|C2PMSG36\|C2PMSG81\|AMDDevice ready\|Traceback\|RuntimeError\|TimeoutError" "$log" | tail -240 || true
-
-echo
-echo "STEP 6: sync and poweroff to normal boot in 10 seconds"
-sync
-sleep 10
-sudo poweroff
+```bash
+cd ~/tinygrad-arkey || exit 1
+extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-pipeline-slow --no-poweroff
 ```
 
 Report the `rc`, log path, SHA256, pipeline lines, component writes, wait-BL
-lines, and whether `AMDDevice ready` appeared.
+lines, `C2PMSG81`, and whether `AMDDevice ready` appeared.
 
 ## Normal Recovery Check
 
-Run this after a normal boot. The healthy state is `Kernel driver in use: amdgpu`.
+Run current state after a normal boot. The healthy state is `NORMAL_HEALTHY`.
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
-git pull --ff-only
-
-echo "=== boot command line ==="
-cat /proc/cmdline
-
-echo
-echo "=== amdgpu module ==="
-lsmod | grep '^amdgpu' || true
-
-echo
-echo "=== target GPU ==="
-lspci -Dnnk -s 0000:08:00.0 || true
-
-echo
-echo "=== AMDGPU init markers ==="
-sudo dmesg | grep -E 'Detected VRAM|PCIE GART|ring .* ib test pass|Initialized amdgpu' | tail -40
+extra/amdpci/linux_amd_state.sh
 ```
 
-If the GPU is missing from PCI, stop software testing and use the timed normal
+If the GPU is missing from PCI, stop software testing and use timed normal
 shutdown plus a full hardware power cycle.

@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+usage: linux_amd_run_kdb_once.sh [--variant NAME] [--remote HOST:PORT] [--out DIR] [--no-poweroff]
+
+Runs one blacklisted-boot KDB attempt:
+  1. validates BLACKLISTED_READY,
+  2. starts extra/remote/serve.py,
+  3. runs run_remote_kdb_attempt.sh,
+  4. stops the bridge,
+  5. queues next-normal,
+  6. powers off unless --no-poweroff is passed.
+
+Default variant: sos-pipeline-slow
+Default remote: 127.0.0.1:6667
+EOF
+}
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+
+VARIANT="sos-pipeline-slow"
+REMOTE="127.0.0.1:6667"
+OUT_DIR="extra/amdpci/captures"
+POWEROFF=1
+BRIDGE_PID=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --variant)
+      [ "$#" -ge 2 ] || { echo "error: --variant needs NAME" >&2; exit 2; }
+      VARIANT="$2"
+      shift 2
+      ;;
+    --remote)
+      [ "$#" -ge 2 ] || { echo "error: --remote needs HOST:PORT" >&2; exit 2; }
+      REMOTE="$2"
+      shift 2
+      ;;
+    --out)
+      [ "$#" -ge 2 ] || { echo "error: --out needs DIR" >&2; exit 2; }
+      OUT_DIR="$2"
+      shift 2
+      ;;
+    --no-poweroff)
+      POWEROFF=0
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      echo "error: unknown argument $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+cleanup_bridge() {
+  if [ -n "$BRIDGE_PID" ] && kill -0 "$BRIDGE_PID" 2>/dev/null; then
+    sudo kill "$BRIDGE_PID" 2>/dev/null || true
+    sleep 1
+  fi
+  old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk -v port="${REMOTE##*:}" '$0 ~ (" " port "$") {print $1}')
+  if [ -n "$old_bridge_pids" ]; then
+    echo "$old_bridge_pids" | xargs sudo kill || true
+  fi
+}
+trap cleanup_bridge EXIT
+
+echo "STEP 1: validate blacklisted preflight"
+extra/amdpci/linux_amd_blacklisted_preflight.sh
+
+echo
+echo "STEP 2: start bridge"
+mkdir -p "$OUT_DIR"
+bridge_log="$OUT_DIR/bridge-${VARIANT}-$(date +%Y%m%d-%H%M%S).log"
+sudo -v
+sudo .venv/bin/python extra/remote/serve.py "${REMOTE##*:}" > "$bridge_log" 2>&1 &
+BRIDGE_PID=$!
+echo "bridge_pid=$BRIDGE_PID"
+echo "bridge_log=$bridge_log"
+sleep 2
+if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
+  echo "FAIL: bridge exited early"
+  tail -80 "$bridge_log" || true
+  exit 3
+fi
+
+echo
+echo "STEP 3: run $VARIANT"
+set +e
+extra/amdpci/run_remote_kdb_attempt.sh --variant "$VARIANT" --remote "$REMOTE" --out "$OUT_DIR"
+rc=$?
+set -e
+
+echo
+echo "STEP 4: stop bridge"
+cleanup_bridge
+BRIDGE_PID=""
+pgrep -af 'extra/remote/serve.py|extra/remote/amd_repro.py' || true
+
+echo
+echo "STEP 5: queue normal next boot"
+sudo extra/amdpci/linux_amdgpu_grub_switch.sh next-normal || true
+sudo grub-editenv list || true
+
+echo
+echo "STEP 6: report latest log"
+log=$(ls -t "$OUT_DIR"/kdb-"$VARIANT"-*.log 2>/dev/null | head -1 || true)
+echo "rc=$rc"
+echo "log=${log:-not found}"
+if [ -n "$log" ]; then
+  sha256sum "$log"
+  grep -n "bootloader pipeline continue\\|bootloader pipeline skip prewait\\|KDB pipeline continue\\|KDB pipeline skip prewait\\|pre-KDB invalidate burst\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$log" | tail -240 || true
+fi
+
+if [ "$POWEROFF" -eq 1 ]; then
+  echo
+  echo "STEP 7: sync and poweroff to normal boot in 10 seconds"
+  sync
+  sleep 10
+  sudo poweroff
+fi
+
+exit "$rc"
