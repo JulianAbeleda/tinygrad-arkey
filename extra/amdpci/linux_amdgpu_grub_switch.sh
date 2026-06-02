@@ -6,6 +6,7 @@ ENTRY_ID="tinygrad-amdgpu-blacklist"
 CUSTOM_FILE="/etc/grub.d/40_custom"
 MARK_BEGIN="# tinygrad-amdgpu-blacklist begin"
 MARK_END="# tinygrad-amdgpu-blacklist end"
+TARGET_BDF="${TARGET_BDF:-0000:08:00.0}"
 
 usage() {
   cat <<EOF
@@ -124,12 +125,31 @@ EOF
 
 cmd_status() {
   need_linux
+  local cmdline amdgpu_loaded gpu_info blacklist_present gpu_present gpu_bound next_state
+  cmdline="$(cat /proc/cmdline)"
   echo "current kernel: $(uname -r)"
   echo "root arg: $(root_arg || true)"
-  echo "cmdline: $(cat /proc/cmdline)"
+  echo "cmdline: $cmdline"
+  if grep -q 'modprobe.blacklist=amdgpu' <<<"$cmdline"; then
+    blacklist_present=1
+    echo "current boot mode: blacklisted"
+  else
+    blacklist_present=0
+    echo "current boot mode: normal"
+  fi
+
+  if command -v grub-editenv >/dev/null 2>&1; then
+    next_state="$(grub-editenv list 2>/dev/null || true)"
+    echo "grub one-shot state: ${next_state:-<empty>}"
+  else
+    echo "grub one-shot state: unavailable; missing grub-editenv"
+  fi
+
   if lsmod | grep -q '^amdgpu '; then
+    amdgpu_loaded=1
     echo "amdgpu module: loaded"
   else
+    amdgpu_loaded=0
     echo "amdgpu module: not loaded"
   fi
   if entry_exists; then
@@ -141,6 +161,40 @@ cmd_status() {
     echo "grub.cfg entry: present"
   else
     echo "grub.cfg entry: missing"
+  fi
+
+  echo "target BDF: $TARGET_BDF"
+  if command -v lspci >/dev/null 2>&1; then
+    gpu_info="$(lspci -Dnnk -s "$TARGET_BDF" 2>/dev/null || true)"
+    if [ -n "$gpu_info" ]; then
+      gpu_present=1
+      echo "target GPU: present"
+      echo "$gpu_info"
+    else
+      gpu_present=0
+      echo "target GPU: missing at $TARGET_BDF"
+    fi
+    echo "Navi31 functions:"
+    lspci -Dnn | grep -Ei '1002:744c|1002:ab30|1002:7446|1002:7444|vga|3d|display' || true
+  else
+    gpu_present=0
+    echo "target GPU: unknown; missing lspci"
+  fi
+
+  if [ "${gpu_present:-0}" -eq 1 ] && grep -q 'Kernel driver in use:' <<<"$gpu_info"; then
+    gpu_bound=1
+  else
+    gpu_bound=0
+  fi
+
+  if [ "$blacklist_present" -eq 0 ] && [ "$amdgpu_loaded" -eq 1 ] && [ "${gpu_present:-0}" -eq 1 ] && [ "$gpu_bound" -eq 1 ]; then
+    echo "interpreted state: NORMAL_HEALTHY"
+  elif [ "$blacklist_present" -eq 1 ] && [ "$amdgpu_loaded" -eq 0 ] && [ "${gpu_present:-0}" -eq 1 ] && [ "$gpu_bound" -eq 0 ]; then
+    echo "interpreted state: BLACKLISTED_READY"
+  elif [ "${gpu_present:-0}" -eq 0 ]; then
+    echo "interpreted state: GPU_MISSING_FROM_PCI"
+  else
+    echo "interpreted state: MIXED_OR_DIRTY"
   fi
 }
 
