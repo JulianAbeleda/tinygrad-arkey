@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: linux_amd_run_kdb_once.sh [--variant NAME] [--remote HOST:PORT] [--out DIR] [--no-poweroff]
+usage: linux_amd_run_kdb_once.sh [--variant NAME] [--remote HOST:PORT] [--out DIR] [--poweroff]
 
 Runs one blacklisted-boot KDB attempt:
   1. validates BLACKLISTED_READY,
@@ -11,10 +11,13 @@ Runs one blacklisted-boot KDB attempt:
   3. runs run_remote_kdb_attempt.sh,
   4. stops the bridge,
   5. queues next-normal,
-  6. powers off unless --no-poweroff is passed.
+  6. prints the latest log report.
 
 Default variant: sos-pipeline-slow
 Default remote: 127.0.0.1:6667
+
+By default this does not power off. Pass --poweroff to run the normal timed
+poweroff sequence after the report, or run linux_amd_poweroff_normal.sh later.
 EOF
 }
 
@@ -24,7 +27,7 @@ cd "$ROOT"
 VARIANT="sos-pipeline-slow"
 REMOTE="127.0.0.1:6667"
 OUT_DIR="extra/amdpci/captures"
-POWEROFF=1
+POWEROFF=0
 BRIDGE_PID=""
 
 while [ "$#" -gt 0 ]; do
@@ -44,7 +47,12 @@ while [ "$#" -gt 0 ]; do
       OUT_DIR="$2"
       shift 2
       ;;
+    --poweroff)
+      POWEROFF=1
+      shift
+      ;;
     --no-poweroff)
+      # Backward-compatible no-op. No poweroff is now the default.
       POWEROFF=0
       shift
       ;;
@@ -121,10 +129,13 @@ fi
 
 if [ "$POWEROFF" -eq 1 ]; then
   echo
-  echo "STEP 7: sync and poweroff to normal boot in 10 seconds"
-  sync
-  sleep 10
-  sudo poweroff
+  echo "STEP 7: timed normal poweroff"
+  extra/amdpci/linux_amd_poweroff_normal.sh
+else
+  echo
+  echo "STEP 7: poweroff skipped"
+  echo "Run this when ready:"
+  echo "  extra/amdpci/linux_amd_poweroff_normal.sh"
 fi
 
 exit "$rc"

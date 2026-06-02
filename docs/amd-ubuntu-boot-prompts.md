@@ -70,19 +70,26 @@ If this fails, do not run the bridge or KDB attempt. Use timed normal shutdown.
 ## sOS Pipeline Attempt
 
 Run this only after blacklisted preflight passes. It starts the bridge, runs one
-KDB attempt, stops the bridge, queues normal boot, reports the latest log, then
-powers off.
+KDB attempt, stops the bridge, queues normal boot, and reports the latest log.
+It does not power off by default.
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
 extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-pipeline-slow
 ```
 
-For a dry run that does not power off automatically:
+After reviewing the report, run the separate timed normal shutdown:
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
-extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-pipeline-slow --no-poweroff
+extra/amdpci/linux_amd_poweroff_normal.sh
+```
+
+To intentionally combine the attempt and poweroff in one command:
+
+```bash
+cd ~/tinygrad-arkey || exit 1
+extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-pipeline-slow --poweroff
 ```
 
 Report the `rc`, log path, SHA256, pipeline lines, component writes, wait-BL
