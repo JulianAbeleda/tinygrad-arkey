@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: linux_amd_run_kdb_once.sh [--variant NAME] [--remote HOST:PORT] [--out DIR] [--use-existing-bridge] [--poweroff]
+usage: linux_amd_run_kdb_once.sh [--variant NAME] [--remote HOST:PORT] [--out DIR] [--use-existing-bridge] [--stop-existing-bridge] [--poweroff]
 
 Runs one blacklisted-boot KDB attempt:
   1. validates BLACKLISTED_READY,
@@ -22,6 +22,9 @@ poweroff sequence after the report, or run linux_amd_poweroff_normal.sh later.
 Use --use-existing-bridge when serve.py is already running as root in another
 terminal. In that mode this script does not require sudo to start or stop the
 bridge.
+
+Use --stop-existing-bridge with --use-existing-bridge to kill the existing bridge
+at the end of this run.
 EOF
 }
 
@@ -33,6 +36,7 @@ REMOTE="127.0.0.1:6667"
 OUT_DIR="extra/amdpci/captures"
 POWEROFF=0
 USE_EXISTING_BRIDGE=0
+STOP_EXISTING_BRIDGE=0
 BRIDGE_PID=""
 
 while [ "$#" -gt 0 ]; do
@@ -60,6 +64,10 @@ while [ "$#" -gt 0 ]; do
       USE_EXISTING_BRIDGE=1
       shift
       ;;
+    --stop-existing-bridge)
+      STOP_EXISTING_BRIDGE=1
+      shift
+      ;;
     --no-poweroff)
       # Backward-compatible no-op. No poweroff is now the default.
       POWEROFF=0
@@ -78,12 +86,14 @@ while [ "$#" -gt 0 ]; do
 done
 
 cleanup_bridge() {
-  [ "$USE_EXISTING_BRIDGE" -eq 0 ] || return 0
   if [ -n "$BRIDGE_PID" ] && kill -0 "$BRIDGE_PID" 2>/dev/null; then
     sudo kill "$BRIDGE_PID" 2>/dev/null || true
     sleep 1
   fi
-  old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk -v port="${REMOTE##*:}" '$0 ~ (" " port "$") {print $1}')
+  if [ "$USE_EXISTING_BRIDGE" -eq 1 ] && [ "$STOP_EXISTING_BRIDGE" -eq 0 ]; then
+    return 0
+  fi
+  old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk -v port="${REMOTE##*:}" '$0 ~ (" " port "$") {print $1}' || true)
   if [ -n "$old_bridge_pids" ]; then
     echo "$old_bridge_pids" | xargs sudo kill || true
   fi
@@ -133,7 +143,12 @@ echo "STEP 4: stop bridge"
 cleanup_bridge
 BRIDGE_PID=""
 if [ "$USE_EXISTING_BRIDGE" -eq 1 ]; then
-  echo "left existing bridge running"
+  if [ "$STOP_EXISTING_BRIDGE" -eq 1 ]; then
+    echo "stopped existing bridge (requested)"
+  else
+    echo "left existing bridge running"
+    echo "to clean it in this run, add --stop-existing-bridge"
+  fi
 else
   pgrep -af 'extra/remote/serve.py|extra/remote/amd_repro.py' || true
 fi
