@@ -74,15 +74,17 @@ Required state:
 
 If this fails, do not run the bridge or KDB attempt. Use timed normal shutdown.
 
-## sOS Delay Attempt
+## Boundary Audit Attempt
 
 Run this only after blacklisted preflight passes. It starts the bridge, runs one
 KDB attempt, stops the bridge, queues normal boot, and reports the latest log.
 It does not power off by default.
 
+Current next evidence run:
+
 ```bash
 cd ~/tinygrad-arkey || exit 1
-extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-delay20
+extra/amdpci/linux_amd_run_kdb_once.sh --variant bl-boundary-3
 ```
 
 After reviewing the report, run the separate timed normal shutdown:
@@ -96,7 +98,7 @@ To intentionally combine the attempt and poweroff in one command:
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
-extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-delay20 --poweroff
+extra/amdpci/linux_amd_run_kdb_once.sh --variant bl-boundary-3 --poweroff
 ```
 
 If sudo cannot prompt inside the helper, start the bridge separately:
@@ -110,11 +112,42 @@ Then run the attempt in another shell:
 
 ```bash
 cd ~/tinygrad-arkey || exit 1
-extra/amdpci/linux_amd_run_kdb_once.sh --variant sos-delay20 --use-existing-bridge
+extra/amdpci/linux_amd_run_kdb_once.sh --variant bl-boundary-3 --use-existing-bridge --stop-existing-bridge
 ```
 
-Report the `rc`, log path, SHA256, pipeline lines, component writes, wait-BL
-lines, `sOS wait delay`, `C2PMSG81`, and whether `AMDDevice ready` appeared.
+Report the `rc`, log path, SHA256, all `sOS final state audit` lines, `wait BL`
+lines, final exception, and whether `AMDDevice ready` appeared.
+
+Boundary variants:
+
+- `bl-boundary-3`: next preferred run; tests whether `SOC_DRV` completes before the known `INTF_DRV` failure.
+- `bl-boundary-4`: already failed after `INTF_DRV` with `C2PMSG35=0x000d0000`.
+- `bl-boundary-1..8`: available for directed follow-up.
+
+## Capture Tar Transfer
+
+On the Mac, start the receiver:
+
+```bash
+cd /Users/julianabeleda/env/tinygrad-arkey || exit 1
+extra/amdpci/receive_capture_tar.py --port 8765
+```
+
+On Ubuntu, package and upload a log:
+
+```bash
+cd ~/tinygrad-arkey || exit 1
+log=extra/amdpci/captures/<log-name>.log
+tarball=/tmp/$(basename "$log" .log).tar.gz
+
+sha256sum "$log"
+tar -czf "$tarball" "$log"
+sha256sum "$tarball"
+curl -T "$tarball" http://MAC_MINI_IP:8765/$(basename "$tarball")
+```
+
+The Mac receiver saves the tarball under `extra/amdpci/captures` and extracts it
+into the repo root.
 
 ## Normal Recovery Check
 
