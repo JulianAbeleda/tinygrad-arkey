@@ -76,6 +76,18 @@ grub_cfg_has_entry() {
   [ -f /boot/grub/grub.cfg ] && grep -qF "$ENTRY_TITLE" /boot/grub/grub.cfg
 }
 
+grub_cfg_state() {
+  if [ ! -f /boot/grub/grub.cfg ]; then
+    echo "missing"
+  elif [ ! -r /boot/grub/grub.cfg ]; then
+    echo "unreadable"
+  elif grep -qF "$ENTRY_TITLE" /boot/grub/grub.cfg; then
+    echo "present"
+  else
+    echo "missing"
+  fi
+}
+
 write_entry() {
   local kver root rootuuid search_line tmp
   kver="$(uname -r)"
@@ -157,11 +169,11 @@ cmd_status() {
   else
     echo "custom entry: not installed in $CUSTOM_FILE"
   fi
-  if grub_cfg_has_entry; then
-    echo "grub.cfg entry: present"
-  else
-    echo "grub.cfg entry: missing"
-  fi
+  case "$(grub_cfg_state)" in
+    present) echo "grub.cfg entry: present" ;;
+    unreadable) echo "grub.cfg entry: unknown; /boot/grub/grub.cfg is not readable by this user" ;;
+    *) echo "grub.cfg entry: missing" ;;
+  esac
 
   echo "target BDF: $TARGET_BDF"
   if command -v lspci >/dev/null 2>&1; then
