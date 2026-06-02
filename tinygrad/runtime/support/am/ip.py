@@ -89,6 +89,8 @@ class AM_Experiment:
   @staticmethod
   def sos_final_state_audit() -> int: return _env_int("AM_PSP_SOS_FINAL_STATE_AUDIT")
   @staticmethod
+  def bl_boundary_audit() -> int: return _env_int("AM_PSP_BL_BOUNDARY_AUDIT")
+  @staticmethod
   def sysmsg1_gart_sort_paddrs() -> int: return _env_int("AM_PSP_SYSMSG1_GART_SORT_PADDRS")
   @staticmethod
   def kdb_pipeline_seq() -> int: return _env_int("AM_PSP_KDB_PIPELINE_SEQ")
@@ -1163,7 +1165,7 @@ class AM_PSP(AM_IP):
     self._trace(f"parity snapshot {label} end")
 
   def _sos_final_state_audit(self, label:str):
-    if not AM_Experiment.sos_final_state_audit(): return
+    if not AM_Experiment.sos_final_state_audit() and not AM_Experiment.bl_boundary_audit(): return
     parts = []
     for idx in [35, 36, 64, 67, 81, 90, 92, 115]:
       if not hasattr(self.adev, f"{self.reg_pref}_{idx}"): continue
@@ -1511,8 +1513,12 @@ class AM_PSP(AM_IP):
 
     if compid == am.PSP_BL__LOAD_SOSDRV: return 0
     try:
-      return self._wait_for_bootloader()
+      if AM_Experiment.bl_boundary_audit(): self._sos_final_state_audit(f"boundary-before-wait-{compid:#x}")
+      ret = self._wait_for_bootloader()
+      if AM_Experiment.bl_boundary_audit(): self._sos_final_state_audit(f"boundary-after-wait-{compid:#x}")
+      return ret
     except Exception:
+      if AM_Experiment.bl_boundary_audit(): self._sos_final_state_audit(f"boundary-wait-exception-{compid:#x}")
       if kdb_fail_capture: self._kdb_fail_capture_snapshot("wait-exception")
       raise
 
