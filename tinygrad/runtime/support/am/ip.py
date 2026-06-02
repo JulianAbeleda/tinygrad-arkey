@@ -87,6 +87,8 @@ class AM_Experiment:
   @staticmethod
   def sos_wait_delay_ms() -> int: return _env_int("AM_PSP_SOS_WAIT_DELAY_MS")
   @staticmethod
+  def sos_final_state_audit() -> int: return _env_int("AM_PSP_SOS_FINAL_STATE_AUDIT")
+  @staticmethod
   def sysmsg1_gart_sort_paddrs() -> int: return _env_int("AM_PSP_SYSMSG1_GART_SORT_PADDRS")
   @staticmethod
   def kdb_pipeline_seq() -> int: return _env_int("AM_PSP_KDB_PIPELINE_SEQ")
@@ -1059,6 +1061,7 @@ class AM_PSP(AM_IP):
       if AM_Experiment.bl_pipeline_count():
         reg81 = self.adev.reg(f"{self.reg_pref}_81")
         self._trace(f"bootloader pipeline before sOS wait reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
+      self._sos_final_state_audit("before-wait")
       if (delay_ms := AM_Experiment.sos_wait_delay_ms()):
         if delay_ms < 0 or delay_ms > 10000: raise ValueError(f"AM_PSP_SOS_WAIT_DELAY_MS={delay_ms} is outside 0..10000")
         self._trace(f"sOS wait delay ms={delay_ms}")
@@ -1066,10 +1069,16 @@ class AM_PSP(AM_IP):
         if AM_Experiment.bl_pipeline_count():
           reg81 = self.adev.reg(f"{self.reg_pref}_81")
           self._trace(f"bootloader pipeline after sOS wait delay reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
-      wait_cond(self.is_sos_alive, value=True, msg="sOS failed to start")
+        self._sos_final_state_audit("after-delay")
+      try:
+        wait_cond(self.is_sos_alive, value=True, msg="sOS failed to start")
+      except Exception:
+        self._sos_final_state_audit("wait-exception")
+        raise
       if AM_Experiment.bl_pipeline_count():
         reg81 = self.adev.reg(f"{self.reg_pref}_81")
         self._trace(f"bootloader pipeline sOS alive reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
+      self._sos_final_state_audit("alive")
 
     self._ring_create()
     if am.PSP_FW_TYPE_PSP_TOC in self.adev.fw.sos_fw: self._tmr_init()
@@ -1152,6 +1161,15 @@ class AM_PSP(AM_IP):
     self._trace_c2pmsg_regs(dense=AM_Experiment.trace_c2pmsg_dense())
     for i in range(getattr(self.adev.gmc, "vmhubs", 0)): self._trace_mmhub_gart_regs(i)
     self._trace(f"parity snapshot {label} end")
+
+  def _sos_final_state_audit(self, label:str):
+    if not AM_Experiment.sos_final_state_audit(): return
+    parts = []
+    for idx in [35, 36, 64, 67, 81, 90, 92, 115]:
+      if not hasattr(self.adev, f"{self.reg_pref}_{idx}"): continue
+      reg = self.adev.reg(f"{self.reg_pref}_{idx}")
+      parts.append(f"{idx}=0x{reg.read():08x}")
+    self._trace(f"sOS final state audit {label} {' '.join(parts)}")
 
   def _kdb_fail_capture_snapshot(self, label:str):
     self._trace(f"kdb fail capture {label} begin")
@@ -1442,8 +1460,10 @@ class AM_PSP(AM_IP):
     if kdb_fail_capture: self._kdb_fail_capture_snapshot("pre-command")
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("pre-reg36", reg35, reg36)
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_order_barrier("pre-reg36", padded_data, reg35, reg36)
+    if compid == am.PSP_BL__LOAD_SOSDRV: self._sos_final_state_audit("pre-reg36")
     self._trace(f"write msg1 kind={self.msg1_kind} reg36={reg36.addr[0]:#x} val={self.msg1_addr >> 20:#x} msg1_addr={self.msg1_addr:#x}")
     reg36.write(self.msg1_addr >> 20)
+    if compid == am.PSP_BL__LOAD_SOSDRV: self._sos_final_state_audit("post-reg36")
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("post-reg36", reg35, reg36)
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_order_barrier("post-reg36", padded_data, reg35, reg36)
     if AM_Experiment.mailbox_strong_order() or getenv("AM_PSP_STRONG_FLUSH", 0):
@@ -1456,6 +1476,7 @@ class AM_PSP(AM_IP):
     reg35.write(compid)
     if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_order_barrier(): self.adev.gmc.flush_hdp()
     self._trace(f"write compid done val={compid:#x}")
+    if compid == am.PSP_BL__LOAD_SOSDRV: self._sos_final_state_audit("post-compid")
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("post-compid", reg35, reg36)
     if kdb_fail_capture: self._kdb_fail_capture_sample(reg35, reg36)
     if AM_Experiment.mailbox_strong_order():

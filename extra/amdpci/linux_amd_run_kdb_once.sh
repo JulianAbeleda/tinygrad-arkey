@@ -165,7 +165,7 @@ echo "rc=$rc"
 echo "log=${log:-not found}"
 if [ -n "$log" ]; then
   sha256sum "$log"
-  grep -n "bootloader payload audit\\|bootloader pipeline continue\\|bootloader pipeline skip prewait\\|KDB pipeline continue\\|KDB pipeline skip prewait\\|pre-KDB invalidate burst\\|write msg1\\|write compid\\|wait BL\\|sOS wait delay\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$log" | tail -320 || true
+  grep -n "bootloader payload audit\\|bootloader pipeline continue\\|bootloader pipeline skip prewait\\|KDB pipeline continue\\|KDB pipeline skip prewait\\|pre-KDB invalidate burst\\|write msg1\\|write compid\\|wait BL\\|sOS final state audit\\|sOS wait delay\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$log" | tail -320 || true
 fi
 
 if [ "$POWEROFF" -eq 1 ]; then
