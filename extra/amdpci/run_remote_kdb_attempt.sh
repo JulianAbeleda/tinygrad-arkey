@@ -29,6 +29,7 @@ Variants:
   tos-spl-normal-wait Normal first-KDB wait, then audit/wait the 0x10000000 load.
   kdb-first-audit Normal first-KDB wait plus payload, boundary, and fail-window audit.
   kdb-first-linux-invalidate First-KDB audit with Linux-count pre-KDB invalidate burst.
+  kdb-first-minimal-gart First-KDB audit with simpler msg1 GART placement.
   vram-msg1-quiet Real KDB attempt with VRAM msg1 and minimal observers.
   sorted-msg1-gart Real KDB attempt with msg1 GART pages sorted by paddr.
   top-table-sparse Real KDB attempt with sparse GART table near Linux top-of-VRAM.
@@ -93,7 +94,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -271,6 +272,15 @@ fi
 if [ "$VARIANT" = "kdb-first-linux-invalidate" ]; then
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_GART_TABLE_TOP=1 AM_PSP_GART_TABLE_SPARSE=1 AM_PSP_GART_TABLE_ADDR=0x5feb00000 \
          AM_PSP_PRE_KDB_INVALIDATE_BURST=30 AM_PSP_BL_BOUNDARY_AUDIT=1 \
+         AM_PSP_BL_PAYLOAD_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT_BYTES=256 \
+         AM_PSP_KDB_FAIL_CAPTURE=1 AM_PSP_KDB_FAIL_CAPTURE_PRE_COMMAND=0 AM_PSP_KDB_FAIL_CAPTURE_MS=50 AM_PSP_KDB_FAIL_CAPTURE_READS=512)
+  for name in AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
+    drop_env "$name"
+  done
+fi
+
+if [ "$VARIANT" = "kdb-first-minimal-gart" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_BL_BOUNDARY_AUDIT=1 \
          AM_PSP_BL_PAYLOAD_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT_BYTES=256 \
          AM_PSP_KDB_FAIL_CAPTURE=1 AM_PSP_KDB_FAIL_CAPTURE_PRE_COMMAND=0 AM_PSP_KDB_FAIL_CAPTURE_MS=50 AM_PSP_KDB_FAIL_CAPTURE_READS=512)
   for name in AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
