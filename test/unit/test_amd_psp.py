@@ -149,6 +149,29 @@ class TestAMDPSP(unittest.TestCase):
     self.assertIn("last8=0000000000000000", traces[1])
     self.assertIn("dwords_le", traces[2])
 
+  def test_bootloader_payload_audit_traces_component_hash_and_bounded_windows(self):
+    psp = object.__new__(AM_PSP)
+    psp.adev = FakeAdev()
+    traces = []
+    psp._trace = traces.append
+    payload = bytes(range(32))
+    padded = payload + b"\x00" * 16
+
+    with mock.patch.dict(os.environ, {"AM_PSP_BL_PAYLOAD_AUDIT": "1", "AM_PSP_BL_PAYLOAD_AUDIT_BYTES": "8"}):
+      getenv.cache_clear()
+      try:
+        psp._bootloader_payload_audit(am.PSP_FW_TYPE_PSP_SYS_DRV, 0x10000, payload, padded)
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(len(traces), 3)
+    self.assertIn("fw=PSP_FW_TYPE_PSP_SYS_DRV compid=0x10000", traces[0])
+    self.assertIn("payload_size=0x20 padded_size=0x30", traces[0])
+    self.assertIn("payload_sha256=", traces[0])
+    self.assertIn("first8=0001020304050607", traces[1])
+    self.assertIn("last8=0000000000000000", traces[1])
+    self.assertIn("dwords_le", traces[2])
+
   def test_kdb_skip_prefix_only_applies_to_key_database_load(self):
     adev = FakeAdev()
     adev.fw = type("FakeFW", (), {"sos_fw": {am.PSP_FW_TYPE_PSP_KDB: b"abcdef"}})()

@@ -81,6 +81,10 @@ class AM_Experiment:
   @staticmethod
   def kdb_payload_audit_bytes() -> int: return _env_int("AM_PSP_KDB_PAYLOAD_AUDIT_BYTES", 64)
   @staticmethod
+  def bl_payload_audit() -> int: return _env_int("AM_PSP_BL_PAYLOAD_AUDIT")
+  @staticmethod
+  def bl_payload_audit_bytes() -> int: return _env_int("AM_PSP_BL_PAYLOAD_AUDIT_BYTES", 64)
+  @staticmethod
   def sysmsg1_gart_sort_paddrs() -> int: return _env_int("AM_PSP_SYSMSG1_GART_SORT_PADDRS")
   @staticmethod
   def kdb_pipeline_seq() -> int: return _env_int("AM_PSP_KDB_PIPELINE_SEQ")
@@ -1074,7 +1078,7 @@ class AM_PSP(AM_IP):
 
   def _trace_enabled(self) -> bool:
     return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or \
-      AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier()
+      AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier() or AM_Experiment.bl_payload_audit()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -1379,6 +1383,18 @@ class AM_PSP(AM_IP):
     self._trace(f"KDB payload audit bytes first{window}={padded_data[:window].hex()} last{window}={padded_data[-window:].hex()}")
     self._trace(f"KDB payload audit dwords_le first{len(words)}={','.join(words)}")
 
+  def _bootloader_payload_audit(self, fw:int, compid:int, payload:bytes, padded_data:bytes):
+    if not AM_Experiment.bl_payload_audit(): return
+    window = AM_Experiment.bl_payload_audit_bytes()
+    if window < 0 or window > 512: raise ValueError(f"AM_PSP_BL_PAYLOAD_AUDIT_BYTES={window} is outside 0..512")
+    fw_name = am.enum_psp_fw_type.get(fw, fw)
+    words = [f"{int.from_bytes(padded_data[i:i + 4], 'little'):#010x}" for i in range(0, min(len(padded_data), 64), 4)]
+    self._trace(f"bootloader payload audit fw={fw_name} compid={compid:#x} payload_size={len(payload):#x} padded_size={len(padded_data):#x} "
+                f"payload_sha256={hashlib.sha256(payload).hexdigest()} padded_sha256={hashlib.sha256(padded_data).hexdigest()}")
+    self._trace(f"bootloader payload audit bytes fw={fw_name} compid={compid:#x} "
+                f"first{window}={padded_data[:window].hex()} last{window}={padded_data[-window:].hex()}")
+    self._trace(f"bootloader payload audit dwords_le fw={fw_name} compid={compid:#x} first{len(words)}={','.join(words)}")
+
   def _bootloader_load_component(self, fw:int, compid:int):
     if fw not in self.adev.fw.sos_fw: return 0
 
@@ -1401,6 +1417,7 @@ class AM_PSP(AM_IP):
 
     self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
     padded_data = self._prep_msg1(data)
+    self._bootloader_payload_audit(fw, compid, bytes(data), padded_data)
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_payload_audit(bytes(data), padded_data)
     if fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.audit_pre_kdb():
       self._kdb_order_barrier("audit-pre-mailbox", padded_data)
