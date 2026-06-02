@@ -1439,7 +1439,8 @@ class AM_PSP(AM_IP):
 
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
     data = self.adev.fw.sos_fw[fw]
-    if fw == am.PSP_FW_TYPE_PSP_KDB and compid == am.PSP_BL__LOAD_KEY_DATABASE and (skip := AM_Experiment.kdb_skip_prefix()):
+    kdb_skip_compids = {am.PSP_BL__LOAD_KEY_DATABASE, am.PSP_BL__LOAD_TOS_SPL_TABLE}
+    if fw == am.PSP_FW_TYPE_PSP_KDB and compid in kdb_skip_compids and (skip := AM_Experiment.kdb_skip_prefix()):
       if skip >= len(data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(data):#x}")
       self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(data):#x} new_size={len(data) - skip:#x}")
       data = data[skip:]

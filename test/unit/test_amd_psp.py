@@ -172,7 +172,7 @@ class TestAMDPSP(unittest.TestCase):
     self.assertIn("last8=0000000000000000", traces[1])
     self.assertIn("dwords_le", traces[2])
 
-  def test_kdb_skip_prefix_only_applies_to_key_database_load(self):
+  def test_kdb_skip_prefix_applies_to_key_database_and_tos_spl_loads(self):
     adev = FakeAdev()
     adev.fw = type("FakeFW", (), {"sos_fw": {am.PSP_FW_TYPE_PSP_KDB: b"abcdef"}})()
     psp = object.__new__(AM_PSP)
@@ -195,7 +195,7 @@ class TestAMDPSP(unittest.TestCase):
       finally:
         getenv.cache_clear()
 
-    self.assertEqual(prepped, [b"cdef", b"abcdef"])
+    self.assertEqual(prepped, [b"cdef", b"cdef"])
 
   def test_reordered_msg1_view_maps_logical_pages_to_sorted_physical_pages(self):
     raw = FakeSyncMsg1View(b"\x00" * 0x3000)
