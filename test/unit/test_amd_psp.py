@@ -197,6 +197,31 @@ class TestAMDPSP(unittest.TestCase):
 
     self.assertEqual(prepped, [b"cdef", b"cdef"])
 
+  def test_kdb_slice_overrides_skip_prefix_for_kdb_loads(self):
+    adev = FakeAdev()
+    adev.fw = type("FakeFW", (), {"sos_fw": {am.PSP_FW_TYPE_PSP_KDB: b"abcdefghij"}})()
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.reg_pref = "regMP0_SMN_C2PMSG"
+    prepped = []
+
+    def capture_prep(data):
+      prepped.append(bytes(data))
+      raise RuntimeError("stop after prep")
+
+    with mock.patch.dict(os.environ, {"AM_PSP_KDB_SKIP_PREFIX": "6", "AM_PSP_KDB_SLICE_OFFSET": "2", "AM_PSP_KDB_SLICE_SIZE": "4"}):
+      getenv.cache_clear()
+      try:
+        with mock.patch.object(psp, "_wait_for_bootloader", return_value=0), mock.patch.object(psp, "_prep_msg1", side_effect=capture_prep):
+          with self.assertRaisesRegex(RuntimeError, "stop after prep"):
+            psp._bootloader_load_component(am.PSP_FW_TYPE_PSP_KDB, am.PSP_BL__LOAD_KEY_DATABASE)
+          with self.assertRaisesRegex(RuntimeError, "stop after prep"):
+            psp._bootloader_load_component(am.PSP_FW_TYPE_PSP_KDB, am.PSP_BL__LOAD_TOS_SPL_TABLE)
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(prepped, [b"cdef", b"cdef"])
+
   def test_reordered_msg1_view_maps_logical_pages_to_sorted_physical_pages(self):
     raw = FakeSyncMsg1View(b"\x00" * 0x3000)
     view = AM_ReorderedMsg1View(raw, [2, 0, 1])

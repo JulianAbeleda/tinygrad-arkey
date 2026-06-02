@@ -33,6 +33,10 @@ class AM_Experiment:
   @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
   @staticmethod
+  def kdb_slice_offset() -> int|None: return _env_optional_int("AM_PSP_KDB_SLICE_OFFSET")
+  @staticmethod
+  def kdb_slice_size() -> int|None: return _env_optional_int("AM_PSP_KDB_SLICE_SIZE")
+  @staticmethod
   def gart_aperture_low() -> int|None: return _env_optional_int("AM_PSP_GART_APERTURE_LOW")
   @staticmethod
   def gart_aperture_high() -> int|None: return _env_optional_int("AM_PSP_GART_APERTURE_HIGH")
@@ -1442,10 +1446,18 @@ class AM_PSP(AM_IP):
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
     data = self.adev.fw.sos_fw[fw]
     kdb_skip_compids = {am.PSP_BL__LOAD_KEY_DATABASE, am.PSP_BL__LOAD_TOS_SPL_TABLE}
-    if fw == am.PSP_FW_TYPE_PSP_KDB and compid in kdb_skip_compids and (skip := AM_Experiment.kdb_skip_prefix()):
-      if skip >= len(data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(data):#x}")
-      self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(data):#x} new_size={len(data) - skip:#x}")
-      data = data[skip:]
+    if fw == am.PSP_FW_TYPE_PSP_KDB and compid in kdb_skip_compids:
+      if (slice_off := AM_Experiment.kdb_slice_offset()) is not None:
+        slice_size = AM_Experiment.kdb_slice_size()
+        end = slice_off + slice_size if slice_size is not None else len(data)
+        if slice_off < 0 or end < slice_off or end > len(data):
+          raise ValueError(f"AM_PSP_KDB_SLICE_OFFSET={slice_off:#x} AM_PSP_KDB_SLICE_SIZE={slice_size} exceeds KDB bytes={len(data):#x}")
+        self._trace(f"KDB slice offset={slice_off:#x} size={end - slice_off:#x} old_size={len(data):#x}")
+        data = data[slice_off:end]
+      elif skip := AM_Experiment.kdb_skip_prefix():
+        if skip >= len(data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(data):#x}")
+        self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(data):#x} new_size={len(data) - skip:#x}")
+        data = data[skip:]
 
     self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
     padded_data = self._prep_msg1(data)
