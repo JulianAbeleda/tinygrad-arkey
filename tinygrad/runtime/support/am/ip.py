@@ -85,6 +85,8 @@ class AM_Experiment:
   @staticmethod
   def bl_payload_audit_bytes() -> int: return _env_int("AM_PSP_BL_PAYLOAD_AUDIT_BYTES", 64)
   @staticmethod
+  def sos_wait_delay_ms() -> int: return _env_int("AM_PSP_SOS_WAIT_DELAY_MS")
+  @staticmethod
   def sysmsg1_gart_sort_paddrs() -> int: return _env_int("AM_PSP_SYSMSG1_GART_SORT_PADDRS")
   @staticmethod
   def kdb_pipeline_seq() -> int: return _env_int("AM_PSP_KDB_PIPELINE_SEQ")
@@ -1057,6 +1059,13 @@ class AM_PSP(AM_IP):
       if AM_Experiment.bl_pipeline_count():
         reg81 = self.adev.reg(f"{self.reg_pref}_81")
         self._trace(f"bootloader pipeline before sOS wait reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
+      if (delay_ms := AM_Experiment.sos_wait_delay_ms()):
+        if delay_ms < 0 or delay_ms > 10000: raise ValueError(f"AM_PSP_SOS_WAIT_DELAY_MS={delay_ms} is outside 0..10000")
+        self._trace(f"sOS wait delay ms={delay_ms}")
+        time.sleep(delay_ms / 1000)
+        if AM_Experiment.bl_pipeline_count():
+          reg81 = self.adev.reg(f"{self.reg_pref}_81")
+          self._trace(f"bootloader pipeline after sOS wait delay reg81={reg81.addr[0]:#x} val={reg81.read():#x}")
       wait_cond(self.is_sos_alive, value=True, msg="sOS failed to start")
       if AM_Experiment.bl_pipeline_count():
         reg81 = self.adev.reg(f"{self.reg_pref}_81")
