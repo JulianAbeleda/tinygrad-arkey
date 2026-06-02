@@ -59,6 +59,8 @@ class AM_Experiment:
   @staticmethod
   def kdb_fail_capture() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE")
   @staticmethod
+  def kdb_fail_capture_pre_command() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE_PRE_COMMAND", 1)
+  @staticmethod
   def kdb_fail_capture_ms() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE_MS", 20)
   @staticmethod
   def kdb_fail_capture_reads() -> int: return _env_int("AM_PSP_KDB_FAIL_CAPTURE_READS", 256)
@@ -1460,7 +1462,7 @@ class AM_PSP(AM_IP):
       self.adev.gmc.flush_hdp()
       self._trace(f"mailbox before-reg36 reg35={reg35.read():#x} reg36={reg36.read():#x}")
     kdb_fail_capture = fw == am.PSP_FW_TYPE_PSP_KDB and AM_Experiment.kdb_fail_capture()
-    if kdb_fail_capture: self._kdb_fail_capture_snapshot("pre-command")
+    if kdb_fail_capture and AM_Experiment.kdb_fail_capture_pre_command(): self._kdb_fail_capture_snapshot("pre-command")
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._mailbox_visibility_sample("pre-reg36", reg35, reg36)
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_order_barrier("pre-reg36", padded_data, reg35, reg36)
     if compid == am.PSP_BL__LOAD_SOSDRV: self._sos_final_state_audit("pre-reg36")
