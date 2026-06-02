@@ -11,7 +11,7 @@ sleep 1
 
 echo
 echo "STEP 2: stop old bridge if any"
-old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk -v port="$BRIDGE_PORT" '$0 ~ (" " port "$") {print $1}')
+old_bridge_pids=$(pgrep -af 'extra/remote/serve[.]py' | awk -v port="$BRIDGE_PORT" '$0 ~ (" " port "$") {print $1}' || true)
 if [ -n "$old_bridge_pids" ]; then
   echo "$old_bridge_pids" | xargs sudo kill
 fi
