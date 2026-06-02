@@ -157,7 +157,7 @@ cmd_status() {
     echo "grub one-shot state: unavailable; missing grub-editenv"
   fi
 
-  if lsmod | grep -q '^amdgpu '; then
+  if lsmod | awk '{print $1}' | grep -qx 'amdgpu'; then
     amdgpu_loaded=1
     echo "amdgpu module: loaded"
   else

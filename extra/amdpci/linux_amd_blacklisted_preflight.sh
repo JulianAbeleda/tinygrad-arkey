@@ -18,7 +18,7 @@ if ! grep -q 'modprobe.blacklist=amdgpu' <<<"$cmdline"; then
   exit 2
 fi
 
-if lsmod | grep -q '^amdgpu '; then
+if lsmod | awk '{print $1}' | grep -qx 'amdgpu'; then
   echo "FAIL: amdgpu is loaded"
   exit 2
 fi
