@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 echo "STEP 1: pull latest"
-git pull --ff-only
+git pull --ff-only origin master
 
 echo
 echo "STEP 2: status"

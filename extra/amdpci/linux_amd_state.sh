@@ -24,7 +24,7 @@ done
 
 echo "=== repo ==="
 if [ "$DO_PULL" -eq 1 ]; then
-  git pull --ff-only || true
+  git pull --ff-only origin master || true
 else
   git status --short --branch || true
   echo "note: state query did not pull; use --pull to update first"
