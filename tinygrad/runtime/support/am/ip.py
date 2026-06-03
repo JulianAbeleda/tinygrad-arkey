@@ -97,6 +97,8 @@ class AM_Experiment:
   @staticmethod
   def bl_metadata_audit_stop() -> int: return _env_int("AM_PSP_BL_METADATA_AUDIT_STOP")
   @staticmethod
+  def bl_metadata_audit_stop_after() -> int: return _env_int("AM_PSP_BL_METADATA_AUDIT_STOP_AFTER", 1)
+  @staticmethod
   def sos_wait_delay_ms() -> int: return _env_int("AM_PSP_SOS_WAIT_DELAY_MS")
   @staticmethod
   def sos_final_state_audit() -> int: return _env_int("AM_PSP_SOS_FINAL_STATE_AUDIT")
@@ -1485,7 +1487,13 @@ class AM_PSP(AM_IP):
     padded_preview = pad_bytes(bytes(data) + b'\x00' * 4, 16)
     self._bootloader_metadata_audit(fw, compid, bytes(raw_data), bytes(data), padded_preview, source, selected_offset)
     if AM_Experiment.bl_metadata_audit_stop():
-      raise RuntimeError("AM_PSP_BL_METADATA_AUDIT_STOP stopped before msg1/mailbox writes")
+      audited = getattr(self, "_bl_metadata_audited", 0) + 1
+      self._bl_metadata_audited = audited
+      stop_after = AM_Experiment.bl_metadata_audit_stop_after()
+      if audited >= stop_after:
+        raise RuntimeError(f"AM_PSP_BL_METADATA_AUDIT_STOP stopped before msg1/mailbox writes after {audited} components")
+      self._skip_next_bootloader_prewait = True
+      return 0
     padded_data = self._prep_msg1(data)
     self._bootloader_payload_audit(fw, compid, bytes(data), padded_data)
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_payload_audit(bytes(data), padded_data)
