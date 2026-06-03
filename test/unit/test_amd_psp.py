@@ -107,6 +107,27 @@ class TestAMDPSP(unittest.TestCase):
     self.assertEqual(psp.msg1_view.syncs, [(0, 16, True)])
     self.assertEqual(gmc.flushes, 1)
 
+  def test_msg1_primary_sync_uses_full_primary_buffer(self):
+    gmc = FakeGMC()
+    adev = FakeAdev()
+    adev.gmc = gmc
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_view = FakeSyncMsg1View(b"\xff" * 0x1000)
+
+    with mock.patch.dict(os.environ, {"AM_PSP_ZERO_MSG1": "1", "AM_PSP_MSG1_PRIMARY_SYNC": "1", "AM_PSP_TRACE": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._prep_msg1(memoryview(b"abc"))
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(psp.msg1_view.syncs, [(0, 0x1000, False)])
+    self.assertEqual(gmc.flushes, 2)
+    self.assertEqual(psp.msg1_view.data[:16], bytearray(b"abc\x00" + b"\x00" * 12))
+    self.assertEqual(psp.msg1_view.data[16:], bytearray(b"\x00" * (0x1000 - 16)))
+
   def test_kdb_order_barrier_checks_msg1_and_traces_regs(self):
     gmc = FakeGMC()
     adev = FakeAdev()

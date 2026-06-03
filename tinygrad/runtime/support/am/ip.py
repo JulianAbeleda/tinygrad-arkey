@@ -81,6 +81,8 @@ class AM_Experiment:
   @staticmethod
   def msg1_sysmem_sync_invalidate() -> int: return _env_int("AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE")
   @staticmethod
+  def msg1_primary_sync() -> int: return _env_int("AM_PSP_MSG1_PRIMARY_SYNC")
+  @staticmethod
   def kdb_order_barrier() -> int: return _env_int("AM_PSP_KDB_ORDER_BARRIER")
   @staticmethod
   def kdb_payload_audit() -> int: return _env_int("AM_PSP_KDB_PAYLOAD_AUDIT")
@@ -1337,6 +1339,14 @@ class AM_PSP(AM_IP):
     sync(invalidate=invalidate)
     self._trace(f"msg1 sysmem sync {label} kind={self.msg1_kind} bytes={getattr(view, 'nbytes', size or 0):#x} invalidate={int(invalidate)}")
 
+  def _sync_msg1_primary(self, label:str):
+    if not AM_Experiment.msg1_primary_sync(): return
+    self._sync_msg1_sysmem(f"primary-{label}", self.msg1_view.nbytes, force=True)
+    self.adev.gmc.flush_hdp()
+    data = bytes(self.msg1_view[:self.msg1_view.nbytes])
+    self._trace(f"msg1 primary sync {label} kind={self.msg1_kind} bytes={len(data):#x} sha256={hashlib.sha256(data).hexdigest()} "
+                f"first16={data[:16].hex()} last16={data[-16:].hex()}")
+
   def _kdb_order_barrier(self, label:str, expected:bytes, reg35=None, reg36=None):
     if not AM_Experiment.kdb_order_barrier(): return
     size, sample_len = len(expected), min(len(expected), 4096)
@@ -1471,6 +1481,7 @@ class AM_PSP(AM_IP):
           f"expected_first32={padded_data[:32].hex()} actual_first32={readback[:32].hex()} "
           f"expected_last32={padded_data[-32:].hex()} actual_last32={readback[-32:].hex()}")
       self._trace(f"msg1 readback ok bytes={len(readback)} first={readback[:16].hex()} last={readback[-16:].hex()}")
+    self._sync_msg1_primary("prep")
     self._sync_msg1_sysmem("prep", len(padded_data))
     self.adev.gmc.flush_hdp()
     if getenv("AM_PSP_STRONG_FLUSH", 0):
