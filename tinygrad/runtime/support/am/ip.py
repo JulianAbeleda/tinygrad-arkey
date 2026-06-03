@@ -91,6 +91,12 @@ class AM_Experiment:
   @staticmethod
   def bl_payload_audit_bytes() -> int: return _env_int("AM_PSP_BL_PAYLOAD_AUDIT_BYTES", 64)
   @staticmethod
+  def bl_metadata_audit() -> int: return _env_int("AM_PSP_BL_METADATA_AUDIT")
+  @staticmethod
+  def bl_metadata_audit_bytes() -> int: return _env_int("AM_PSP_BL_METADATA_AUDIT_BYTES", 64)
+  @staticmethod
+  def bl_metadata_audit_stop() -> int: return _env_int("AM_PSP_BL_METADATA_AUDIT_STOP")
+  @staticmethod
   def sos_wait_delay_ms() -> int: return _env_int("AM_PSP_SOS_WAIT_DELAY_MS")
   @staticmethod
   def sos_final_state_audit() -> int: return _env_int("AM_PSP_SOS_FINAL_STATE_AUDIT")
@@ -1430,6 +1436,19 @@ class AM_PSP(AM_IP):
                 f"first{window}={padded_data[:window].hex()} last{window}={padded_data[-window:].hex()}")
     self._trace(f"bootloader payload audit dwords_le fw={fw_name} compid={compid:#x} first{len(words)}={','.join(words)}")
 
+  def _bootloader_metadata_audit(self, fw:int, compid:int, raw_data:bytes, payload:bytes, padded_data:bytes, source:str, offset:int):
+    if not AM_Experiment.bl_metadata_audit(): return
+    window = AM_Experiment.bl_metadata_audit_bytes()
+    if window < 0 or window > 512: raise ValueError(f"AM_PSP_BL_METADATA_AUDIT_BYTES={window} is outside 0..512")
+    fw_name = am.enum_psp_fw_type.get(fw, fw)
+    self._trace(f"bootloader metadata audit fw={fw_name} compid={compid:#x} source={source} "
+                f"raw_size={len(raw_data):#x} selected_offset={offset:#x} selected_size={len(payload):#x} "
+                f"padded_size={len(padded_data):#x} raw_sha256={hashlib.sha256(raw_data).hexdigest()} "
+                f"payload_sha256={hashlib.sha256(payload).hexdigest()} padded_sha256={hashlib.sha256(padded_data).hexdigest()}")
+    self._trace(f"bootloader metadata audit bytes fw={fw_name} compid={compid:#x} "
+                f"raw_first{window}={raw_data[:window].hex()} raw_last{window}={raw_data[-window:].hex()} "
+                f"payload_first{window}={payload[:window].hex()} payload_last{window}={payload[-window:].hex()}")
+
   def _bootloader_load_component(self, fw:int, compid:int):
     if fw not in self.adev.fw.sos_fw: return 0
 
@@ -1444,22 +1463,29 @@ class AM_PSP(AM_IP):
       self._wait_for_bootloader()
 
     if DEBUG >= 2: print(f"am {self.adev.devfmt}: loading sos component: {am.enum_psp_fw_type.get(fw)}")
-    data = self.adev.fw.sos_fw[fw]
+    raw_data = self.adev.fw.sos_fw[fw]
+    data, source, selected_offset = raw_data, "raw", 0
     kdb_skip_compids = {am.PSP_BL__LOAD_KEY_DATABASE, am.PSP_BL__LOAD_TOS_SPL_TABLE}
     if fw == am.PSP_FW_TYPE_PSP_KDB and compid in kdb_skip_compids:
       if (slice_off := AM_Experiment.kdb_slice_offset()) is not None:
         slice_size = AM_Experiment.kdb_slice_size()
-        end = slice_off + slice_size if slice_size is not None else len(data)
-        if slice_off < 0 or end < slice_off or end > len(data):
-          raise ValueError(f"AM_PSP_KDB_SLICE_OFFSET={slice_off:#x} AM_PSP_KDB_SLICE_SIZE={slice_size} exceeds KDB bytes={len(data):#x}")
-        self._trace(f"KDB slice offset={slice_off:#x} size={end - slice_off:#x} old_size={len(data):#x}")
+        end = slice_off + slice_size if slice_size is not None else len(raw_data)
+        if slice_off < 0 or end < slice_off or end > len(raw_data):
+          raise ValueError(f"AM_PSP_KDB_SLICE_OFFSET={slice_off:#x} AM_PSP_KDB_SLICE_SIZE={slice_size} exceeds KDB bytes={len(raw_data):#x}")
+        self._trace(f"KDB slice offset={slice_off:#x} size={end - slice_off:#x} old_size={len(raw_data):#x}")
         data = data[slice_off:end]
+        source, selected_offset = "kdb-slice", slice_off
       elif skip := AM_Experiment.kdb_skip_prefix():
-        if skip >= len(data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(data):#x}")
-        self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(data):#x} new_size={len(data) - skip:#x}")
+        if skip >= len(raw_data): raise ValueError(f"AM_PSP_KDB_SKIP_PREFIX={skip:#x} exceeds KDB bytes={len(raw_data):#x}")
+        self._trace(f"KDB skip prefix bytes={skip:#x} old_size={len(raw_data):#x} new_size={len(raw_data) - skip:#x}")
         data = data[skip:]
+        source, selected_offset = "kdb-skip-prefix", skip
 
     self._trace(f"load component fw={am.enum_psp_fw_type.get(fw, fw)} compid={compid:#x} bytes={len(data)}")
+    padded_preview = pad_bytes(bytes(data) + b'\x00' * 4, 16)
+    self._bootloader_metadata_audit(fw, compid, bytes(raw_data), bytes(data), padded_preview, source, selected_offset)
+    if AM_Experiment.bl_metadata_audit_stop():
+      raise RuntimeError("AM_PSP_BL_METADATA_AUDIT_STOP stopped before msg1/mailbox writes")
     padded_data = self._prep_msg1(data)
     self._bootloader_payload_audit(fw, compid, bytes(data), padded_data)
     if fw == am.PSP_FW_TYPE_PSP_KDB: self._kdb_payload_audit(bytes(data), padded_data)
