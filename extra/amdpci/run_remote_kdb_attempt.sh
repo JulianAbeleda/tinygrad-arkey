@@ -39,6 +39,7 @@ Variants:
   kdb-slice-000/100/400/500/600/640 First-KDB dense trace with fixed 0x1700 KDB slice.
   kdb-rec-150/540/690/7e0/a80 First-KDB dense trace with record-boundary KDB slice.
   kdb-rec-690-tail/7e0-tail/a80-tail First-KDB dense trace from record boundary to KDB end.
+  kdb-full-raw First-KDB dense trace with full raw KDB blob, matching Linux v13 memcpy path.
   kdb-pair-linux-timing Send 0x80000 then 0x10000000 with Linux-like timing.
   vram-msg1-quiet Real KDB attempt with VRAM msg1 and minimal observers.
   sorted-msg1-gart Real KDB attempt with msg1 GART pages sorted by paddr.
@@ -104,7 +105,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-header-audit|kdb-record-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-rec-150|kdb-rec-540|kdb-rec-690|kdb-rec-7e0|kdb-rec-a80|kdb-rec-690-tail|kdb-rec-7e0-tail|kdb-rec-a80-tail|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-header-audit|kdb-record-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-rec-150|kdb-rec-540|kdb-rec-690|kdb-rec-7e0|kdb-rec-a80|kdb-rec-690-tail|kdb-rec-7e0-tail|kdb-rec-a80-tail|kdb-full-raw|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -377,6 +378,15 @@ if [[ "$VARIANT" =~ ^kdb-rec-(690|7e0|a80)-tail$ ]]; then
          AM_PSP_KDB_FAIL_CAPTURE=1 AM_PSP_KDB_FAIL_CAPTURE_PRE_COMMAND=0 AM_PSP_KDB_FAIL_CAPTURE_MS=2 AM_PSP_KDB_FAIL_CAPTURE_READS=256)
   for name in AM_PSP_KDB_SKIP_PREFIX AM_PSP_KDB_SLICE_SIZE AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE \
               AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
+    drop_env "$name"
+  done
+fi
+
+if [ "$VARIANT" = "kdb-full-raw" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_BL_PAYLOAD_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT_BYTES=256 \
+         AM_PSP_KDB_FAIL_CAPTURE=1 AM_PSP_KDB_FAIL_CAPTURE_PRE_COMMAND=0 AM_PSP_KDB_FAIL_CAPTURE_MS=2 AM_PSP_KDB_FAIL_CAPTURE_READS=256)
+  for name in AM_PSP_KDB_SKIP_PREFIX AM_PSP_KDB_SLICE_OFFSET AM_PSP_KDB_SLICE_SIZE AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE \
+              AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
     drop_env "$name"
   done
 fi
