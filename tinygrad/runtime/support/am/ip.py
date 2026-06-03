@@ -111,6 +111,16 @@ class AM_Experiment:
   @staticmethod
   def kdb_header_audit_stop() -> int: return _env_int("AM_PSP_KDB_HEADER_AUDIT_STOP")
   @staticmethod
+  def kdb_record_audit() -> int: return _env_int("AM_PSP_KDB_RECORD_AUDIT")
+  @staticmethod
+  def kdb_record_audit_start() -> int: return _env_int("AM_PSP_KDB_RECORD_AUDIT_START", 0x150)
+  @staticmethod
+  def kdb_record_audit_stride() -> int: return _env_int("AM_PSP_KDB_RECORD_AUDIT_STRIDE", 0x150)
+  @staticmethod
+  def kdb_record_audit_bytes() -> int: return _env_int("AM_PSP_KDB_RECORD_AUDIT_BYTES", 64)
+  @staticmethod
+  def kdb_record_audit_stop() -> int: return _env_int("AM_PSP_KDB_RECORD_AUDIT_STOP")
+  @staticmethod
   def sos_wait_delay_ms() -> int: return _env_int("AM_PSP_SOS_WAIT_DELAY_MS")
   @staticmethod
   def sos_final_state_audit() -> int: return _env_int("AM_PSP_SOS_FINAL_STATE_AUDIT")
@@ -1114,6 +1124,23 @@ class AM_PSP(AM_IP):
           if val in needles or (0 < val < len(data) and val % 0x10 == 0):
             self._trace(f"KDB header audit candidate field_off={off:#x} val={val:#x}")
         if AM_Experiment.kdb_header_audit_stop(): raise RuntimeError("AM_PSP_KDB_HEADER_AUDIT_STOP stopped before bootloader component loads")
+      if AM_Experiment.kdb_record_audit():
+        data = self.adev.fw.sos_fw.get(am.PSP_FW_TYPE_PSP_KDB)
+        if data is None: raise RuntimeError("AM_PSP_KDB_RECORD_AUDIT requested but PSP_FW_TYPE_PSP_KDB is absent")
+        start, stride, window = AM_Experiment.kdb_record_audit_start(), AM_Experiment.kdb_record_audit_stride(), AM_Experiment.kdb_record_audit_bytes()
+        if start < 0 or start >= len(data): raise ValueError(f"AM_PSP_KDB_RECORD_AUDIT_START={start:#x} is outside KDB size {len(data):#x}")
+        if stride <= 0 or stride > len(data): raise ValueError(f"AM_PSP_KDB_RECORD_AUDIT_STRIDE={stride:#x} is outside 1..{len(data):#x}")
+        if window < 0 or window > 512: raise ValueError(f"AM_PSP_KDB_RECORD_AUDIT_BYTES={window} is outside 0..512")
+        self._trace(f"KDB record audit size={len(data):#x} sha256={hashlib.sha256(data).hexdigest()} start={start:#x} stride={stride:#x} window={window:#x}")
+        idx, off = 0, start
+        while off < len(data):
+          rec = data[off:min(off + stride, len(data))]
+          dwords = [int.from_bytes(rec[i:i + 4], "little") for i in range(0, min(len(rec), 0x40) & ~3, 4)]
+          self._trace(f"KDB record audit rec={idx} off={off:#x} size={len(rec):#x} sha256={hashlib.sha256(rec).hexdigest()} "
+                      f"first{window}={rec[:window].hex()} last{window}={rec[-window:].hex()}")
+          self._trace(f"KDB record audit rec={idx} dwords={','.join(f'{w:#010x}' for w in dwords)}")
+          idx, off = idx + 1, off + stride
+        if AM_Experiment.kdb_record_audit_stop(): raise RuntimeError("AM_PSP_KDB_RECORD_AUDIT_STOP stopped before bootloader component loads")
       for fw, compid in sos_components: self._bootloader_load_component(fw, compid)
       if AM_Experiment.bl_pipeline_count():
         reg81 = self.adev.reg(f"{self.reg_pref}_81")
