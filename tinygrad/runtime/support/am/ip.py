@@ -105,6 +105,12 @@ class AM_Experiment:
   @staticmethod
   def sos_fw_inventory_audit_stop() -> int: return _env_int("AM_PSP_SOS_FW_INVENTORY_AUDIT_STOP")
   @staticmethod
+  def kdb_header_audit() -> int: return _env_int("AM_PSP_KDB_HEADER_AUDIT")
+  @staticmethod
+  def kdb_header_audit_bytes() -> int: return _env_int("AM_PSP_KDB_HEADER_AUDIT_BYTES", 0x200)
+  @staticmethod
+  def kdb_header_audit_stop() -> int: return _env_int("AM_PSP_KDB_HEADER_AUDIT_STOP")
+  @staticmethod
   def sos_wait_delay_ms() -> int: return _env_int("AM_PSP_SOS_WAIT_DELAY_MS")
   @staticmethod
   def sos_final_state_audit() -> int: return _env_int("AM_PSP_SOS_FINAL_STATE_AUDIT")
@@ -1092,6 +1098,22 @@ class AM_PSP(AM_IP):
                       f"sha256={hashlib.sha256(data).hexdigest()} first{window}={data[:window].hex()} last{window}={data[-window:].hex()}")
         self._trace("sos fw inventory end")
         if AM_Experiment.sos_fw_inventory_audit_stop(): raise RuntimeError("AM_PSP_SOS_FW_INVENTORY_AUDIT_STOP stopped before bootloader component loads")
+      if AM_Experiment.kdb_header_audit():
+        data = self.adev.fw.sos_fw.get(am.PSP_FW_TYPE_PSP_KDB)
+        if data is None: raise RuntimeError("AM_PSP_KDB_HEADER_AUDIT requested but PSP_FW_TYPE_PSP_KDB is absent")
+        window = AM_Experiment.kdb_header_audit_bytes()
+        if window < 0 or window > len(data): raise ValueError(f"AM_PSP_KDB_HEADER_AUDIT_BYTES={window:#x} is outside 0..{len(data):#x}")
+        words = [int.from_bytes(data[i:i + 4], "little") for i in range(0, window & ~3, 4)]
+        self._trace(f"KDB header audit size={len(data):#x} sha256={hashlib.sha256(data).hexdigest()} window={window:#x}")
+        for base in range(0, len(words), 8):
+          chunk = ",".join(f"{w:#010x}" for w in words[base:base + 8])
+          self._trace(f"KDB header audit dwords off={base * 4:#x} {chunk}")
+        needles = {0x640, 0x1700, 0x1710, 0x1d40, len(data)}
+        for off in range(0, len(data) - 3, 4):
+          val = int.from_bytes(data[off:off + 4], "little")
+          if val in needles or (0 < val < len(data) and val % 0x10 == 0):
+            self._trace(f"KDB header audit candidate field_off={off:#x} val={val:#x}")
+        if AM_Experiment.kdb_header_audit_stop(): raise RuntimeError("AM_PSP_KDB_HEADER_AUDIT_STOP stopped before bootloader component loads")
       for fw, compid in sos_components: self._bootloader_load_component(fw, compid)
       if AM_Experiment.bl_pipeline_count():
         reg81 = self.adev.reg(f"{self.reg_pref}_81")

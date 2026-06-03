@@ -33,6 +33,7 @@ Variants:
   kdb-metadata-audit Audit bootloader component metadata and stop before mailbox writes.
   kdb-metadata-pair-audit Audit first two KDB-family component metadata without mailbox writes.
   tos-source-metadata-audit Inventory available PSP firmware blobs before mailbox writes.
+  kdb-header-audit Audit raw KDB header dwords and candidate offsets before mailbox writes.
   kdb-first-wait-trace-dense First-KDB minimal GART with dense post-command C2PMSG sample.
   kdb-slice-000/100/400/500/600/640 First-KDB dense trace with fixed 0x1700 KDB slice.
   kdb-pair-linux-timing Send 0x80000 then 0x10000000 with Linux-like timing.
@@ -100,7 +101,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-header-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -319,6 +320,14 @@ if [ "$VARIANT" = "tos-source-metadata-audit" ]; then
   done
 fi
 
+if [ "$VARIANT" = "kdb-header-audit" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_KDB_HEADER_AUDIT=1 AM_PSP_KDB_HEADER_AUDIT_BYTES=0x200 AM_PSP_KDB_HEADER_AUDIT_STOP=1)
+  for name in AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE AM_PSP_KDB_FAIL_CAPTURE \
+              AM_PSP_KDB_FAIL_CAPTURE_MS AM_PSP_KDB_FAIL_CAPTURE_READS AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER; do
+    drop_env "$name"
+  done
+fi
+
 if [ "$VARIANT" = "kdb-first-wait-trace-dense" ]; then
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_BL_PAYLOAD_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT_BYTES=256 \
          AM_PSP_KDB_FAIL_CAPTURE=1 AM_PSP_KDB_FAIL_CAPTURE_PRE_COMMAND=0 AM_PSP_KDB_FAIL_CAPTURE_MS=2 AM_PSP_KDB_FAIL_CAPTURE_READS=256)
@@ -385,7 +394,7 @@ echo "rc=$rc"
 echo "out=$out"
 sha256sum "$out"
 
-grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|KDB order barrier\\|KDB payload audit\\|bootloader payload audit\\|bootloader metadata audit\\|sos fw inventory\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|bootloader pipeline\\|sOS final state audit\\|sOS wait delay\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
+grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|KDB order barrier\\|KDB payload audit\\|bootloader payload audit\\|bootloader metadata audit\\|sos fw inventory\\|KDB header audit\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|bootloader pipeline\\|sOS final state audit\\|sOS wait delay\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
 
 tail -240 "$out"
 exit "$rc"
