@@ -99,6 +99,12 @@ class AM_Experiment:
   @staticmethod
   def bl_metadata_audit_stop_after() -> int: return _env_int("AM_PSP_BL_METADATA_AUDIT_STOP_AFTER", 1)
   @staticmethod
+  def sos_fw_inventory_audit() -> int: return _env_int("AM_PSP_SOS_FW_INVENTORY_AUDIT")
+  @staticmethod
+  def sos_fw_inventory_audit_bytes() -> int: return _env_int("AM_PSP_SOS_FW_INVENTORY_AUDIT_BYTES", 64)
+  @staticmethod
+  def sos_fw_inventory_audit_stop() -> int: return _env_int("AM_PSP_SOS_FW_INVENTORY_AUDIT_STOP")
+  @staticmethod
   def sos_wait_delay_ms() -> int: return _env_int("AM_PSP_SOS_WAIT_DELAY_MS")
   @staticmethod
   def sos_final_state_audit() -> int: return _env_int("AM_PSP_SOS_FINAL_STATE_AUDIT")
@@ -1073,6 +1079,19 @@ class AM_PSP(AM_IP):
         self._trace(f"msg1 gart programmed addr={self.msg1_addr:#x}")
       if AM_Experiment.msg1_visibility_probe(): self._msg1_visibility_probe()
       self._trace_pre_bootloader_regs()
+      if AM_Experiment.sos_fw_inventory_audit():
+        window = AM_Experiment.sos_fw_inventory_audit_bytes()
+        if window < 0 or window > 512: raise ValueError(f"AM_PSP_SOS_FW_INVENTORY_AUDIT_BYTES={window} is outside 0..512")
+        used = {fw: compid for fw, compid in sos_components}
+        self._trace(f"sos fw inventory begin entries={len(self.adev.fw.sos_fw)} used={len(used)} spl_key={am.enum_psp_fw_type.get(spl_key, spl_key)}")
+        for fw, data in sorted(self.adev.fw.sos_fw.items()):
+          fw_name = am.enum_psp_fw_type.get(fw, fw)
+          used_compid = used.get(fw)
+          used_s = "none" if used_compid is None else f"{used_compid:#x}"
+          self._trace(f"sos fw inventory fw={fw_name} id={fw:#x} used_compid={used_s} size={len(data):#x} "
+                      f"sha256={hashlib.sha256(data).hexdigest()} first{window}={data[:window].hex()} last{window}={data[-window:].hex()}")
+        self._trace("sos fw inventory end")
+        if AM_Experiment.sos_fw_inventory_audit_stop(): raise RuntimeError("AM_PSP_SOS_FW_INVENTORY_AUDIT_STOP stopped before bootloader component loads")
       for fw, compid in sos_components: self._bootloader_load_component(fw, compid)
       if AM_Experiment.bl_pipeline_count():
         reg81 = self.adev.reg(f"{self.reg_pref}_81")
