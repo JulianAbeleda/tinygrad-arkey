@@ -8,18 +8,19 @@ from tinygrad.runtime.support.am.ip import AM_PSP, AM_ReorderedMsg1View
 class FakeReg:
   def __init__(self, name="regMP0_SMN_C2PMSG_35", reads=None):
     self.name, self.addr, self.reads, self.writes = name, (0x16063,), reads if reads is not None else [], []
-  def read(self):
+  def read(self, *args, **kwargs):
     self.reads.append(self.name)
-    return 0
-  def write(self, val): self.writes.append(val)
+    return self.writes[-1] if self.writes else 0
+  def write(self, val, *args, **kwargs): self.writes.append(val)
 
 class FakeAdev:
   devfmt = "fake"
   def reg(self, name): return FakeReg()
 
 class FakeGMC:
-  def __init__(self): self.flushes = 0
+  def __init__(self): self.flushes, self.vmhubs = 0, 1
   def flush_hdp(self): self.flushes += 1
+  def pf_status_reg(self, ip): return f"reg{ip}VM_L2_PROTECTION_FAULT_STATUS"
 
 class FakeMsg1View:
   def __init__(self, data:bytes):
@@ -153,6 +154,30 @@ class TestAMDPSP(unittest.TestCase):
         getenv.cache_clear()
 
     self.assertEqual(gmc.flushes, 2)
+
+  def test_pre_kdb_linux_final_invalidate_writes_linux_observed_cid2(self):
+    gmc = FakeGMC()
+    regs = {name: FakeReg(name) for name in [
+      "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_SEM", "regMMVM_L2_BANK_SELECT_RESERVED_CID2",
+      "regMMVM_INVALIDATE_ENG17_ACK", "regMMVM_L2_PROTECTION_FAULT_STATUS",
+    ]}
+    adev = FakeAdev()
+    adev.gmc = gmc
+    adev.reg = lambda name: regs[name]
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+
+    with mock.patch.dict(os.environ, {"AM_PSP_PRE_KDB_LINUX_FINAL_INVALIDATE": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._pre_kdb_linux_final_invalidate()
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(gmc.flushes, 2)
+    self.assertEqual(regs["regMMVM_INVALIDATE_ENG17_REQ"].writes, [0xf80001])
+    self.assertEqual(regs["regMMVM_INVALIDATE_ENG17_SEM"].writes, [0x0])
+    self.assertEqual(regs["regMMVM_L2_BANK_SELECT_RESERVED_CID2"].writes, [0x12104010])
 
   def test_kdb_order_barrier_checks_msg1_and_traces_regs(self):
     gmc = FakeGMC()
