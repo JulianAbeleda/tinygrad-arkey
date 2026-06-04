@@ -57,6 +57,10 @@ class AM_Experiment:
   @staticmethod
   def pre_kdb_invalidate_burst() -> int: return _env_int("AM_PSP_PRE_KDB_INVALIDATE_BURST")
   @staticmethod
+  def pre_kdb_gart_audit() -> int: return _env_int("AM_PSP_PRE_KDB_GART_AUDIT")
+  @staticmethod
+  def pre_kdb_gart_audit_stop() -> int: return _env_int("AM_PSP_PRE_KDB_GART_AUDIT_STOP")
+  @staticmethod
   def linux_pre_bl_status() -> int: return _env_int("AM_PSP_LINUX_PRE_BL_STATUS")
   @staticmethod
   def msg1_visibility_probe() -> int: return _env_int("AM_PSP_MSG1_VIS_PROBE")
@@ -1182,7 +1186,8 @@ class AM_PSP(AM_IP):
 
   def _trace_enabled(self) -> bool:
     return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or \
-      AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier() or AM_Experiment.bl_payload_audit()
+      AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier() or AM_Experiment.bl_payload_audit() or \
+      AM_Experiment.pre_kdb_gart_audit()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -1247,6 +1252,24 @@ class AM_PSP(AM_IP):
     self._trace_c2pmsg_regs(dense=AM_Experiment.trace_c2pmsg_dense())
     for i in range(getattr(self.adev.gmc, "vmhubs", 0)): self._trace_mmhub_gart_regs(i)
     self._trace(f"parity snapshot {label} end")
+
+  def _pre_kdb_gart_audit(self, label:str):
+    if not AM_Experiment.pre_kdb_gart_audit(): return
+    self.adev.gmc.flush_hdp()
+    paddrs = getattr(self, "msg1_paddrs", [])
+    contiguous = bool(paddrs) and all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs))
+    self._trace(f"pre-KDB GART audit {label} begin")
+    self._trace(f"pre-KDB GART audit msg1 kind={self.msg1_kind} addr={self.msg1_addr:#x} c2p36={self.msg1_addr >> 20:#x} "
+                f"bytes={self.msg1_view.nbytes:#x} pages={len(paddrs)} contiguous={int(contiguous)} "
+                f"first_paddr={(paddrs[0] if paddrs else 0):#x} last_paddr={(paddrs[-1] if paddrs else 0):#x}")
+    if (info := getattr(self, "msg1_gart_info", None)) is not None:
+      gart_table, gart_page, page_count = info
+      first_pte, last_pte = gart_table[gart_page], gart_table[gart_page + page_count - 1]
+      self._trace(f"pre-KDB GART audit pte gart_page={gart_page:#x} pages={page_count:#x} "
+                  f"pte0={first_pte:#018x} pte_last={last_pte:#018x}")
+    self._trace_c2pmsg_regs(dense=False)
+    for i in range(getattr(self.adev.gmc, "vmhubs", 0)): self._trace_mmhub_gart_regs(i)
+    self._trace(f"pre-KDB GART audit {label} end")
 
   def _sos_final_state_audit(self, label:str):
     if not AM_Experiment.sos_final_state_audit() and not AM_Experiment.bl_boundary_audit(): return
@@ -1582,6 +1605,9 @@ class AM_PSP(AM_IP):
       raise RuntimeError("AM_PSP_AUDIT_PRE_KDB stopped before KDB mailbox writes")
     if fw == am.PSP_FW_TYPE_PSP_KDB:
       self._pre_kdb_invalidate_burst(AM_Experiment.pre_kdb_invalidate_burst())
+      self._pre_kdb_gart_audit("pre-mailbox")
+      if AM_Experiment.pre_kdb_gart_audit_stop():
+        raise RuntimeError("AM_PSP_PRE_KDB_GART_AUDIT_STOP stopped before KDB mailbox writes")
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     if AM_Experiment.mailbox_strong_order():
       self.adev.gmc.flush_hdp()

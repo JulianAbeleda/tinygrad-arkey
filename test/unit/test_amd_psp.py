@@ -128,6 +128,32 @@ class TestAMDPSP(unittest.TestCase):
     self.assertEqual(psp.msg1_view.data[:16], bytearray(b"abc\x00" + b"\x00" * 12))
     self.assertEqual(psp.msg1_view.data[16:], bytearray(b"\x00" * (0x1000 - 16)))
 
+  def test_pre_kdb_gart_audit_stop_happens_before_mailbox_writes(self):
+    gmc = FakeGMC()
+    gmc.vmhubs = 0
+    adev = FakeAdev()
+    adev.gmc = gmc
+    adev.fw = type("FakeFW", (), {"sos_fw": {am.PSP_FW_TYPE_PSP_KDB: b"abcdef"}})()
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.reg_pref = "regMP0_SMN_C2PMSG"
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_addr = 0x7fff00700000
+    psp.msg1_view = FakeSyncMsg1View(b"\x00" * 0x1000)
+    psp.msg1_paddrs = [0x100000 + i * 0x1000 for i in range(256)]
+    psp.msg1_gart_info = ([0] * 0x1000, 0x700, 0x100)
+
+    with mock.patch.dict(os.environ, {"AM_PSP_PRE_KDB_GART_AUDIT": "1", "AM_PSP_PRE_KDB_GART_AUDIT_STOP": "1"}):
+      getenv.cache_clear()
+      try:
+        with mock.patch.object(psp, "_wait_for_bootloader", return_value=0):
+          with self.assertRaisesRegex(RuntimeError, "stopped before KDB mailbox writes"):
+            psp._bootloader_load_component(am.PSP_FW_TYPE_PSP_KDB, am.PSP_BL__LOAD_KEY_DATABASE)
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(gmc.flushes, 2)
+
   def test_kdb_order_barrier_checks_msg1_and_traces_regs(self):
     gmc = FakeGMC()
     adev = FakeAdev()
