@@ -61,6 +61,10 @@ class AM_Experiment:
   @staticmethod
   def pre_kdb_linux_final_cid2() -> int: return _env_int("AM_PSP_PRE_KDB_LINUX_FINAL_CID2", 0x12104010)
   @staticmethod
+  def pre_kdb_cid2_audit() -> int: return _env_int("AM_PSP_PRE_KDB_CID2_AUDIT")
+  @staticmethod
+  def pre_kdb_cid2_audit_stop() -> int: return _env_int("AM_PSP_PRE_KDB_CID2_AUDIT_STOP")
+  @staticmethod
   def pre_kdb_gart_audit() -> int: return _env_int("AM_PSP_PRE_KDB_GART_AUDIT")
   @staticmethod
   def pre_kdb_gart_audit_stop() -> int: return _env_int("AM_PSP_PRE_KDB_GART_AUDIT_STOP")
@@ -1191,7 +1195,7 @@ class AM_PSP(AM_IP):
   def _trace_enabled(self) -> bool:
     return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or \
       AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier() or AM_Experiment.bl_payload_audit() or \
-      AM_Experiment.pre_kdb_gart_audit() or AM_Experiment.pre_kdb_linux_final_invalidate()
+      AM_Experiment.pre_kdb_gart_audit() or AM_Experiment.pre_kdb_linux_final_invalidate() or AM_Experiment.pre_kdb_cid2_audit()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -1460,6 +1464,36 @@ class AM_PSP(AM_IP):
         self._trace(f"pre-KDB linux final invalidate inst={inst} ack={ack:#010x} sem={sem:#010x} cid2={cid2:#010x} fault={fault:#010x}")
     self.adev.gmc.flush_hdp()
 
+  def _pre_kdb_cid2_audit(self):
+    if not AM_Experiment.pre_kdb_cid2_audit(): return
+    self.adev.gmc.flush_hdp()
+    self._trace("pre-KDB CID2 audit begin")
+
+    def sample(inst:int, label:str):
+      req = self.adev.reg("regMMVM_INVALIDATE_ENG17_REQ").read(inst=inst)
+      ack = self.adev.reg("regMMVM_INVALIDATE_ENG17_ACK").read(inst=inst)
+      sem = self.adev.reg("regMMVM_INVALIDATE_ENG17_SEM").read(inst=inst)
+      cid2 = self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").read(inst=inst)
+      fault = self.adev.reg(self.adev.gmc.pf_status_reg("MM")).read(inst=inst)
+      self._trace(f"pre-KDB CID2 audit {label} inst={inst} req={req:#010x} ack={ack:#010x} sem={sem:#010x} cid2={cid2:#010x} fault={fault:#010x}")
+
+    for inst in range(self.adev.gmc.vmhubs):
+      sample(inst, "initial")
+      self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
+      sample(inst, "after-cid2-12104010")
+      self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x10104010, inst=inst)
+      sample(inst, "after-cid2-10104010")
+      self.adev.reg("regMMVM_INVALIDATE_ENG17_REQ").write(0xf80001, inst=inst)
+      self.adev.reg("regMMVM_INVALIDATE_ENG17_SEM").write(0x0, inst=inst)
+      self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
+      sample(inst, "after-req-sem-cid2-12104010")
+      self.adev.reg("regMMVM_L2_BANK_SELECT_RESERVED_CID2").write(0x12104010, inst=inst)
+      self.adev.reg("regMMVM_INVALIDATE_ENG17_REQ").write(0xf80001, inst=inst)
+      self.adev.reg("regMMVM_INVALIDATE_ENG17_SEM").write(0x0, inst=inst)
+      sample(inst, "after-cid2-req-sem-12104010")
+    self.adev.gmc.flush_hdp()
+    self._trace("pre-KDB CID2 audit end")
+
   def _memory_training_offsets(self) -> tuple[int, int, int]:
     reserve_size = getenv("AM_PSP_MEM_TRAIN_RESERVE", 64 << 10)
     c2p = ((self.vram_size - reserve_size - am.PSP_1_MEG + am.PSP_1_MEG - 1) // am.PSP_1_MEG) * am.PSP_1_MEG
@@ -1629,6 +1663,9 @@ class AM_PSP(AM_IP):
       self._pre_kdb_gart_audit("pre-mailbox")
       if AM_Experiment.pre_kdb_gart_audit_stop():
         raise RuntimeError("AM_PSP_PRE_KDB_GART_AUDIT_STOP stopped before KDB mailbox writes")
+      self._pre_kdb_cid2_audit()
+      if AM_Experiment.pre_kdb_cid2_audit_stop():
+        raise RuntimeError("AM_PSP_PRE_KDB_CID2_AUDIT_STOP stopped before KDB mailbox writes")
       self._pre_kdb_linux_final_invalidate()
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     if AM_Experiment.mailbox_strong_order():

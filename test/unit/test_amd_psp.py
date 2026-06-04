@@ -179,6 +179,37 @@ class TestAMDPSP(unittest.TestCase):
     self.assertEqual(regs["regMMVM_INVALIDATE_ENG17_SEM"].writes, [0x0])
     self.assertEqual(regs["regMMVM_L2_BANK_SELECT_RESERVED_CID2"].writes, [0x12104010])
 
+  def test_pre_kdb_cid2_audit_stops_before_mailbox_writes(self):
+    gmc = FakeGMC()
+    regs = {name: FakeReg(name) for name in [
+      "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_ACK", "regMMVM_INVALIDATE_ENG17_SEM",
+      "regMMVM_L2_BANK_SELECT_RESERVED_CID2", "regMMVM_L2_PROTECTION_FAULT_STATUS",
+      "regMP0_SMN_C2PMSG_35", "regMP0_SMN_C2PMSG_36",
+    ]}
+    adev = FakeAdev()
+    adev.gmc = gmc
+    adev.fw = type("FakeFW", (), {"sos_fw": {am.PSP_FW_TYPE_PSP_KDB: b"abcdef"}})()
+    adev.reg = lambda name: regs[name]
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.reg_pref = "regMP0_SMN_C2PMSG"
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_addr = 0x7fff00700000
+    psp.msg1_view = FakeSyncMsg1View(b"\x00" * 0x1000)
+
+    with mock.patch.dict(os.environ, {"AM_PSP_PRE_KDB_CID2_AUDIT": "1", "AM_PSP_PRE_KDB_CID2_AUDIT_STOP": "1"}):
+      getenv.cache_clear()
+      try:
+        with mock.patch.object(psp, "_wait_for_bootloader", return_value=0):
+          with self.assertRaisesRegex(RuntimeError, "CID2_AUDIT_STOP stopped before KDB mailbox writes"):
+            psp._bootloader_load_component(am.PSP_FW_TYPE_PSP_KDB, am.PSP_BL__LOAD_KEY_DATABASE)
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(regs["regMP0_SMN_C2PMSG_36"].writes, [])
+    self.assertEqual(regs["regMP0_SMN_C2PMSG_35"].writes, [])
+    self.assertIn(0x12104010, regs["regMMVM_L2_BANK_SELECT_RESERVED_CID2"].writes)
+
   def test_kdb_order_barrier_checks_msg1_and_traces_regs(self):
     gmc = FakeGMC()
     adev = FakeAdev()
