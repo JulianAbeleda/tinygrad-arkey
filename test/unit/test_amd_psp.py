@@ -15,7 +15,11 @@ class FakeReg:
 
 class FakeAdev:
   devfmt = "fake"
+  def __init__(self):
+    self.raw_writes, self.raw_reads = [], {}
   def reg(self, name): return FakeReg()
+  def wreg(self, reg, val): self.raw_writes.append((reg, val))
+  def rreg(self, reg): return self.raw_reads.get(reg, 0)
 
 class FakeGMC:
   def __init__(self): self.flushes, self.vmhubs = 0, 1
@@ -178,6 +182,27 @@ class TestAMDPSP(unittest.TestCase):
     self.assertEqual(regs["regMMVM_INVALIDATE_ENG17_REQ"].writes, [0xf80001])
     self.assertEqual(regs["regMMVM_INVALIDATE_ENG17_SEM"].writes, [0x0])
     self.assertEqual(regs["regMMVM_L2_BANK_SELECT_RESERVED_CID2"].writes, [0x12104010])
+
+  def test_pre_kdb_linux_mmhub_window_replays_final_trace_writes(self):
+    gmc = FakeGMC()
+    adev = FakeAdev()
+    adev.gmc = gmc
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+
+    with mock.patch.dict(os.environ, {"AM_PSP_PRE_KDB_LINUX_MMHUB_WINDOW": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._pre_kdb_linux_mmhub_window()
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(gmc.flushes, 2)
+    self.assertEqual(adev.raw_writes[:3], [(0x1a740, 0x01fffe01), (0x1a712, 0xffffffff), (0x1a713, 0x0000000f)])
+    self.assertIn((0x1a74e, 0x01fffe07), adev.raw_writes)
+    self.assertIn((0x1a787, 0xffffffff), adev.raw_writes)
+    self.assertIn((0x1a7aa, 0x0000001f), adev.raw_writes)
+    self.assertEqual(adev.raw_writes[-3:], [(0x1a774, 0x00f80001), (0x1a762, 0x00000000), (0x1a71b, 0x12104010)])
 
   def test_pre_kdb_cid2_audit_stops_before_mailbox_writes(self):
     gmc = FakeGMC()

@@ -45,6 +45,7 @@ Variants:
   kdb-full-raw-gart-audit Audit full raw KDB msg1/MMHUB/GART state before mailbox writes.
   kdb-full-raw-cid2-audit Audit whether Linux-observed CID2 can stick before mailbox writes.
   kdb-full-raw-linux-final-invalidate Full raw KDB with Linux-observed final CID2/invalidate before mailbox writes.
+  kdb-full-raw-linux-mmhub-window Full raw KDB with Linux-observed final MMHUB write window before mailbox writes.
   kdb-pair-linux-timing Send 0x80000 then 0x10000000 with Linux-like timing.
   vram-msg1-quiet Real KDB attempt with VRAM msg1 and minimal observers.
   sorted-msg1-gart Real KDB attempt with msg1 GART pages sorted by paddr.
@@ -110,7 +111,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-header-audit|kdb-record-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-rec-150|kdb-rec-540|kdb-rec-690|kdb-rec-7e0|kdb-rec-a80|kdb-rec-690-tail|kdb-rec-7e0-tail|kdb-rec-a80-tail|kdb-full-raw|kdb-full-raw-linux-wait|kdb-full-raw-primary-sync|kdb-full-raw-gart-audit|kdb-full-raw-cid2-audit|kdb-full-raw-linux-final-invalidate|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-header-audit|kdb-record-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-rec-150|kdb-rec-540|kdb-rec-690|kdb-rec-7e0|kdb-rec-a80|kdb-rec-690-tail|kdb-rec-7e0-tail|kdb-rec-a80-tail|kdb-full-raw|kdb-full-raw-linux-wait|kdb-full-raw-primary-sync|kdb-full-raw-gart-audit|kdb-full-raw-cid2-audit|kdb-full-raw-linux-final-invalidate|kdb-full-raw-linux-mmhub-window|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -453,6 +454,18 @@ if [ "$VARIANT" = "kdb-full-raw-linux-final-invalidate" ]; then
   done
 fi
 
+if [ "$VARIANT" = "kdb-full-raw-linux-mmhub-window" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_MSG1_PRIMARY_SYNC=1 \
+         AM_PSP_PRE_KDB_LINUX_MMHUB_WINDOW=1 \
+         AM_PSP_BL_PAYLOAD_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT_BYTES=256)
+  for name in AM_PSP_KDB_SKIP_PREFIX AM_PSP_KDB_SLICE_OFFSET AM_PSP_KDB_SLICE_SIZE \
+              AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE \
+              AM_PSP_KDB_FAIL_CAPTURE AM_PSP_KDB_FAIL_CAPTURE_MS AM_PSP_KDB_FAIL_CAPTURE_READS \
+              AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER AM_PSP_PRE_KDB_LINUX_FINAL_INVALIDATE; do
+    drop_env "$name"
+  done
+fi
+
 if [ "$VARIANT" = "kdb-pair-linux-timing" ]; then
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_KDB_PIPELINE_SEQ=1 AM_PSP_KDB_PIPELINE_COUNT=1 AM_PSP_KDB_PIPELINE_DELAY_US=700 \
          AM_PSP_BL_BOUNDARY_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT_BYTES=256)
@@ -500,7 +513,7 @@ echo "rc=$rc"
 echo "out=$out"
 sha256sum "$out"
 
-grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|msg1 primary sync\\|pre-KDB GART audit\\|pre-KDB CID2 audit\\|pre-KDB linux final invalidate\\|regMM\\|KDB order barrier\\|KDB payload audit\\|bootloader payload audit\\|bootloader metadata audit\\|sos fw inventory\\|KDB header audit\\|KDB record audit\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|bootloader pipeline\\|sOS final state audit\\|sOS wait delay\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
+grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|msg1 primary sync\\|pre-KDB GART audit\\|pre-KDB CID2 audit\\|pre-KDB linux final invalidate\\|pre-KDB linux MMHUB window\\|regMM\\|KDB order barrier\\|KDB payload audit\\|bootloader payload audit\\|bootloader metadata audit\\|sos fw inventory\\|KDB header audit\\|KDB record audit\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|bootloader pipeline\\|sOS final state audit\\|sOS wait delay\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
 
 tail -240 "$out"
 exit "$rc"

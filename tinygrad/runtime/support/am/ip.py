@@ -61,6 +61,8 @@ class AM_Experiment:
   @staticmethod
   def pre_kdb_linux_final_cid2() -> int: return _env_int("AM_PSP_PRE_KDB_LINUX_FINAL_CID2", 0x12104010)
   @staticmethod
+  def pre_kdb_linux_mmhub_window() -> int: return _env_int("AM_PSP_PRE_KDB_LINUX_MMHUB_WINDOW")
+  @staticmethod
   def pre_kdb_cid2_audit() -> int: return _env_int("AM_PSP_PRE_KDB_CID2_AUDIT")
   @staticmethod
   def pre_kdb_cid2_audit_stop() -> int: return _env_int("AM_PSP_PRE_KDB_CID2_AUDIT_STOP")
@@ -1195,7 +1197,8 @@ class AM_PSP(AM_IP):
   def _trace_enabled(self) -> bool:
     return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or \
       AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier() or AM_Experiment.bl_payload_audit() or \
-      AM_Experiment.pre_kdb_gart_audit() or AM_Experiment.pre_kdb_linux_final_invalidate() or AM_Experiment.pre_kdb_cid2_audit()
+      AM_Experiment.pre_kdb_gart_audit() or AM_Experiment.pre_kdb_linux_final_invalidate() or \
+      AM_Experiment.pre_kdb_linux_mmhub_window() or AM_Experiment.pre_kdb_cid2_audit()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -1464,6 +1467,54 @@ class AM_PSP(AM_IP):
         self._trace(f"pre-KDB linux final invalidate inst={inst} ack={ack:#010x} sem={sem:#010x} cid2={cid2:#010x} fault={fault:#010x}")
     self.adev.gmc.flush_hdp()
 
+  def _pre_kdb_linux_mmhub_window(self):
+    if not AM_Experiment.pre_kdb_linux_mmhub_window(): return
+    self.adev.gmc.flush_hdp()
+    # Linux-good trace window immediately before the first KDB mailbox write. These are raw MMHUB
+    # register dword addresses from the trace, kept as an isolated experiment so normal init stays untouched.
+    writes = [
+      (0x1a740, 0x01fffe01),
+      (0x1a712, 0xffffffff), (0x1a713, 0x0000000f), (0x1a714, 0x00000000), (0x1a715, 0x00000000),
+      (0x1a716, 0x00000000), (0x1a717, 0x00000000),
+      (0x1a741, 0x01fffe07), (0x1a7cd, 0x00000000), (0x1a7ce, 0x00000000),
+      (0x1a7ed, 0xffffffff), (0x1a7ee, 0x0000000f),
+      (0x1a742, 0x01fffe07), (0x1a7cf, 0x00000000), (0x1a7d0, 0x00000000),
+      (0x1a7ef, 0xffffffff), (0x1a7f0, 0x0000000f),
+      (0x1a743, 0x01fffe07), (0x1a7d1, 0x00000000), (0x1a7d2, 0x00000000),
+      (0x1a7f1, 0xffffffff), (0x1a7f2, 0x0000000f),
+      (0x1a744, 0x01fffe07), (0x1a7d3, 0x00000000), (0x1a7d4, 0x00000000),
+      (0x1a7f3, 0xffffffff), (0x1a7f4, 0x0000000f),
+      (0x1a745, 0x01fffe07), (0x1a7d5, 0x00000000), (0x1a7d6, 0x00000000),
+      (0x1a7f5, 0xffffffff), (0x1a7f6, 0x0000000f),
+      (0x1a746, 0x01fffe07), (0x1a7d7, 0x00000000), (0x1a7d8, 0x00000000),
+      (0x1a7f7, 0xffffffff), (0x1a7f8, 0x0000000f),
+      (0x1a747, 0x01fffe07), (0x1a7d9, 0x00000000), (0x1a7da, 0x00000000),
+      (0x1a7f9, 0xffffffff), (0x1a7fa, 0x0000000f),
+      (0x1a748, 0x01fffe07), (0x1a7db, 0x00000000), (0x1a7dc, 0x00000000),
+      (0x1a7fb, 0xffffffff), (0x1a7fc, 0x0000000f),
+      (0x1a749, 0x01fffe07), (0x1a7dd, 0x00000000), (0x1a7de, 0x00000000),
+      (0x1a7fd, 0xffffffff), (0x1a7fe, 0x0000000f),
+      (0x1a74a, 0x01fffe07), (0x1a7df, 0x00000000), (0x1a7e0, 0x00000000),
+      (0x1a7ff, 0xffffffff), (0x1a800, 0x0000000f),
+      (0x1a74b, 0x01fffe07), (0x1a7e1, 0x00000000), (0x1a7e2, 0x00000000),
+      (0x1a74c, 0x01fffe07), (0x1a7e3, 0x00000000), (0x1a7e4, 0x00000000),
+      (0x1a74d, 0x01fffe07), (0x1a7e5, 0x00000000), (0x1a7e6, 0x00000000),
+      (0x1a74e, 0x01fffe07), (0x1a7e7, 0x00000000), (0x1a7e8, 0x00000000),
+      (0x1a74f, 0x01fffe07), (0x1a7e9, 0x00000000), (0x1a7ea, 0x00000000),
+      *[(r, v) for reg in range(0x1a787, 0x1a7ab, 2) for r, v in ((reg, 0xffffffff), (reg + 1, 0x0000001f))],
+      (0x1a708, 0x3ffffffc), (0x1a774, 0x00f80001), (0x1a762, 0x00000000), (0x1a71b, 0x12104010),
+    ]
+    self._trace(f"pre-KDB linux MMHUB window begin raw_writes={len(writes)}")
+    for reg, val in writes: self.adev.wreg(reg, val)
+    if self._trace_enabled():
+      vals = []
+      for reg in (0x1a740, 0x1a741, 0x1a74e, 0x1a74f, 0x1a708, 0x1a774, 0x1a786, 0x1a762, 0x1a71b):
+        try: vals.append(f"{reg:#x}={self.adev.rreg(reg):#010x}")
+        except Exception as e: vals.append(f"{reg:#x}=ERR:{e}")
+      self._trace(f"pre-KDB linux MMHUB window readback {' '.join(vals)}")
+    self.adev.gmc.flush_hdp()
+    self._trace("pre-KDB linux MMHUB window end")
+
   def _pre_kdb_cid2_audit(self):
     if not AM_Experiment.pre_kdb_cid2_audit(): return
     self.adev.gmc.flush_hdp()
@@ -1666,6 +1717,7 @@ class AM_PSP(AM_IP):
       self._pre_kdb_cid2_audit()
       if AM_Experiment.pre_kdb_cid2_audit_stop():
         raise RuntimeError("AM_PSP_PRE_KDB_CID2_AUDIT_STOP stopped before KDB mailbox writes")
+      self._pre_kdb_linux_mmhub_window()
       self._pre_kdb_linux_final_invalidate()
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     if AM_Experiment.mailbox_strong_order():
