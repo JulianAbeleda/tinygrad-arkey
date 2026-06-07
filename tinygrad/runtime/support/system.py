@@ -188,17 +188,19 @@ class PCIDevice:
 
     self.cfg_fd = FileIOInterface(f"/sys/bus/pci/devices/{self.pcibus}/config", os.O_RDWR | os.O_SYNC | os.O_CLOEXEC)
 
-  def alloc_sysmem(self, size:int, vaddr:int=0, contiguous:bool=False) -> tuple[MMIOInterface, list[int]]:
+  def alloc_sysmem(self, size:int, vaddr:int=0, contiguous:bool=False, locked:bool=True, populate:bool=True, huge:bool=True) -> tuple[MMIOInterface, list[int]]:
     assert not contiguous or size <= (2 << 20), "Contiguous allocation is only supported for sizes up to 2MB"
-    flags = (libc.MAP_HUGETLB if contiguous and (size:=round_up(size, mmap.PAGESIZE)) > mmap.PAGESIZE else 0) | (MAP_FIXED if vaddr else 0)
-    va = FileIOInterface.anon_mmap(vaddr, size, mmap.PROT_READ|mmap.PROT_WRITE, mmap.MAP_SHARED|mmap.MAP_ANONYMOUS|MAP_POPULATE|MAP_LOCKED|flags, 0)
+    flags = (libc.MAP_HUGETLB if contiguous and huge and (size:=round_up(size, mmap.PAGESIZE)) > mmap.PAGESIZE else 0) | \
+            (MAP_POPULATE if populate else 0) | (MAP_LOCKED if locked else 0) | (MAP_FIXED if vaddr else 0)
+    va = FileIOInterface.anon_mmap(vaddr, size, mmap.PROT_READ|mmap.PROT_WRITE, mmap.MAP_SHARED|mmap.MAP_ANONYMOUS|flags, 0)
+    if not populate: ctypes.memset(ctypes.c_void_p(va), 0, size)
     sysmem_view, paddrs = MMIOInterface(va, size), [(x, mmap.PAGESIZE) for x in System.system_paddrs(va, size)]
     return sysmem_view, [p + i for p, sz in paddrs for i in range(0, sz, 0x1000)][:ceildiv(size, 0x1000)]
 
-  def alloc_contiguous_sysmem(self, size:int, attempts:int=256) -> tuple[MMIOInterface, list[int]]:
+  def alloc_contiguous_sysmem(self, size:int, attempts:int=256, locked:bool=True, populate:bool=True) -> tuple[MMIOInterface, list[int]]:
     keep = []
     for _ in range(attempts):
-      mem, paddrs = self.alloc_sysmem(size)
+      mem, paddrs = self.alloc_sysmem(size, locked=locked, populate=populate)
       if len(paddrs) == ceildiv(size, 0x1000) and all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs)):
         return mem, paddrs
       keep.append((mem, paddrs))
@@ -464,13 +466,20 @@ class RemotePCIDevice(PCIDevice):
     RemotePCIDevice._bulk_sent += len(data)
     self._rpc(self.sock, self.dev_id, cmd, offset, len(data), bar=idx, payload=data)
 
+  def _sysmem_alloc_mode(self, default:int) -> int:
+    mode = getenv("AM_REMOTE_SYSMEM_MODE", default)
+    if mode not in (0, 1, 2, 3, 4): raise ValueError(f"invalid AM_REMOTE_SYSMEM_MODE={mode}")
+    return mode
+
   def alloc_sysmem(self, size:int, vaddr:int=0, contiguous:bool=False) -> tuple[MMIOInterface, list[int]]:
-    paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size, int(contiguous), readout_size=-1)
+    paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size,
+                                                   self._sysmem_alloc_mode(int(contiguous)), readout_size=-1)
     paddrs = list(struct.unpack(f'<{paddrs_len // 8}Q', unwrap(paddrs_data)))
     return RemoteMMIOInterface(self, handle, size, fmt='B', rd_cmd=RemoteCmd.SYSMEM_READ, wr_cmd=RemoteCmd.SYSMEM_WRITE), paddrs
 
   def alloc_contiguous_sysmem(self, size:int) -> tuple[MMIOInterface, list[int]]:
-    paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size, 2, readout_size=-1)
+    paddrs_len, handle, paddrs_data, _ = self._rpc(self.sock, self.dev_id, RemoteCmd.MAP_SYSMEM, size,
+                                                   self._sysmem_alloc_mode(2), readout_size=-1)
     paddrs = list(struct.unpack(f'<{paddrs_len // 8}Q', unwrap(paddrs_data)))
     return RemoteMMIOInterface(self, handle, size, fmt='B', rd_cmd=RemoteCmd.SYSMEM_READ, wr_cmd=RemoteCmd.SYSMEM_WRITE), paddrs
 

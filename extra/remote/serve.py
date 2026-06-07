@@ -37,6 +37,13 @@ def sync_mapping(addr:int, off:int, size:int, invalidate:bool):
   end = (off + size + page - 1) & ~(page - 1)
   if libc.msync(ctypes.c_void_p(addr + aligned_off), end - aligned_off, msync_flags(invalidate)):
     raise OSError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
+def alloc_sysmem_mode(pci_dev:PCIDevice, size:int, mode:int):
+  if mode == 0: return "normal", pci_dev.alloc_sysmem(size)
+  if mode == 1: return "hugetlb", pci_dev.alloc_sysmem(size, contiguous=True)
+  if mode == 2: return "contiguous", pci_dev.alloc_contiguous_sysmem(size)
+  if mode == 3: return "contiguous-unlocked", pci_dev.alloc_contiguous_sysmem(size, locked=False)
+  if mode == 4: return "contiguous-no-populate", pci_dev.alloc_contiguous_sysmem(size, populate=False)
+  raise RuntimeError(f"invalid MAP_SYSMEM mode {mode}")
 def device_index(dev:tuple[type[PCIDevice], str]) -> int:
   for i, (_, pcibus) in enumerate(discovered_devices):
     if pcibus == dev[1]: return i
@@ -120,11 +127,10 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     log(f"MMIO_WRITE resp-done dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
   elif cmd == RemoteCmd.MAP_SYSMEM:
     st = time.perf_counter()
-    if arg1 == 2: memview, paddrs = pci_dev.alloc_contiguous_sysmem(arg0)
-    else: memview, paddrs = pci_dev.alloc_sysmem(arg0, contiguous=bool(arg1))
+    mode_name, (memview, paddrs) = alloc_sysmem_mode(pci_dev, arg0, arg1)
     sysmem_allocs.append((memview, paddrs))
     paddrs_bytes = struct.pack(f'<{len(paddrs)}Q', *paddrs)
-    log(f"MAP_SYSMEM dev={dev_id} size={arg0:#x} contiguous={arg1} paddrs={len(paddrs)} "
+    log(f"MAP_SYSMEM dev={dev_id} size={arg0:#x} mode={mode_name}({arg1}) paddrs={len(paddrs)} "
         f"handle={len(sysmem_allocs) - 1} ms={(time.perf_counter()-st)*1000:.2f}")
     conn.sendall(resp(len(paddrs_bytes), len(sysmem_allocs) - 1) + paddrs_bytes)
   elif cmd == RemoteCmd.SYSMEM_READ:
