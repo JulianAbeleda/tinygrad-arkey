@@ -31,6 +31,8 @@ class AM_Experiment:
   @staticmethod
   def gart_table_addr(default:int) -> int: return _env_int("AM_PSP_GART_TABLE_ADDR", default)
   @staticmethod
+  def gart_snooped() -> int: return _env_int("AM_PSP_GART_SNOOPED", 1)
+  @staticmethod
   def kdb_skip_prefix() -> int: return _env_int("AM_PSP_KDB_SKIP_PREFIX")
   @staticmethod
   def kdb_slice_offset() -> int|None: return _env_optional_int("AM_PSP_KDB_SLICE_OFFSET")
@@ -379,8 +381,9 @@ class AM_GMC(AM_IP):
       self._trace_psp_gart_setup_regs("after-table-palloc")
       gart_table = self.adev.vram.view(gart_table_paddr, table_size, 'Q')
       self._trace_psp_gart_setup_regs("after-table-view")
-    flags = am.AMDGPU_PTE_VALID | am.AMDGPU_PTE_SYSTEM | am.AMDGPU_PTE_SNOOPED | am.AMDGPU_PTE_EXECUTABLE | \
-            am.AMDGPU_PTE_READABLE | am.AMDGPU_PTE_WRITEABLE | am.AMDGPU_PTE_MTYPE_NV10(0, self.adev.soc.module.MTYPE_UC)
+    flags = am.AMDGPU_PTE_VALID | am.AMDGPU_PTE_SYSTEM | am.AMDGPU_PTE_EXECUTABLE | am.AMDGPU_PTE_READABLE | \
+            am.AMDGPU_PTE_WRITEABLE | am.AMDGPU_PTE_MTYPE_NV10(0, self.adev.soc.module.MTYPE_UC)
+    if AM_Experiment.gart_snooped(): flags |= am.AMDGPU_PTE_SNOOPED
     start_page = view_off // 0x1000
     gart_page = msg1_off // 0x1000
     page_count = size // 0x1000
