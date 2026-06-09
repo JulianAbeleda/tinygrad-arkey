@@ -47,6 +47,7 @@ Variants:
   kdb-full-raw-linux-final-invalidate Full raw KDB with Linux-observed final CID2/invalidate before mailbox writes.
   kdb-full-raw-linux-mmhub-window Full raw KDB with Linux-observed final MMHUB write window before mailbox writes.
   kdb-linux-mmhub-window Linux-sized KDB payload with Linux-observed final MMHUB write window before mailbox writes.
+  kdb-linux-msg1-full-audit Linux-sized KDB/MMHUB path with full 1MB msg1 zero-tail audit.
   kdb-linux-mmhub-sync-invalidate Linux-sized KDB/MMHUB path with msg1 sync invalidate before mailbox writes.
   kdb-linux-mmhub-nosnoop Linux-sized KDB/MMHUB path with non-snooped sysmem GART PTEs.
   kdb-linux-mmhub-map-unlocked Linux-sized KDB/MMHUB path with unlocked contiguous remote sysmem.
@@ -116,7 +117,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$VARIANT" in
-  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-header-audit|kdb-record-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-rec-150|kdb-rec-540|kdb-rec-690|kdb-rec-7e0|kdb-rec-a80|kdb-rec-690-tail|kdb-rec-7e0-tail|kdb-rec-a80-tail|kdb-full-raw|kdb-full-raw-linux-wait|kdb-full-raw-primary-sync|kdb-full-raw-gart-audit|kdb-full-raw-cid2-audit|kdb-full-raw-linux-final-invalidate|kdb-full-raw-linux-mmhub-window|kdb-linux-mmhub-window|kdb-linux-mmhub-sync-invalidate|kdb-linux-mmhub-nosnoop|kdb-linux-mmhub-map-unlocked|kdb-linux-mmhub-map-nopopulate|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
+  real-sync-order|sync-invalidate|contig-msg1-gart|contig-top-table|contig-top-quiet|linux-pre-kdb-seq|kdb-pipeline-seq|bl-pipeline-seq|sos-pipeline-seq|sos-pipeline-slow|sos-payload-audit|sos-delay20|sos-final-state-audit|tos-spl-audit|tos-spl-normal-wait|kdb-first-audit|kdb-first-linux-invalidate|kdb-first-minimal-gart|kdb-metadata-audit|kdb-metadata-pair-audit|tos-source-metadata-audit|kdb-header-audit|kdb-record-audit|kdb-first-wait-trace-dense|kdb-slice-000|kdb-slice-100|kdb-slice-400|kdb-slice-500|kdb-slice-600|kdb-slice-640|kdb-rec-150|kdb-rec-540|kdb-rec-690|kdb-rec-7e0|kdb-rec-a80|kdb-rec-690-tail|kdb-rec-7e0-tail|kdb-rec-a80-tail|kdb-full-raw|kdb-full-raw-linux-wait|kdb-full-raw-primary-sync|kdb-full-raw-gart-audit|kdb-full-raw-cid2-audit|kdb-full-raw-linux-final-invalidate|kdb-full-raw-linux-mmhub-window|kdb-linux-mmhub-window|kdb-linux-msg1-full-audit|kdb-linux-mmhub-sync-invalidate|kdb-linux-mmhub-nosnoop|kdb-linux-mmhub-map-unlocked|kdb-linux-mmhub-map-nopopulate|kdb-pair-linux-timing|bl-boundary-1|bl-boundary-2|bl-boundary-3|bl-boundary-4|bl-boundary-5|bl-boundary-6|bl-boundary-7|bl-boundary-8|vram-msg1-quiet|sorted-msg1-gart|top-table-sparse|payload-audit|audit) ;;
   *) die "unknown variant: $VARIANT" ;;
 esac
 
@@ -483,6 +484,18 @@ if [ "$VARIANT" = "kdb-linux-mmhub-window" ]; then
   done
 fi
 
+if [ "$VARIANT" = "kdb-linux-msg1-full-audit" ]; then
+  envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_MSG1_PRIMARY_SYNC=1 AM_PSP_MSG1_FULL_AUDIT=1 AM_PSP_KDB_SKIP_PREFIX=0x640 \
+         AM_PSP_PRE_KDB_LINUX_MMHUB_WINDOW=1 \
+         AM_PSP_BL_PAYLOAD_AUDIT=1 AM_PSP_BL_PAYLOAD_AUDIT_BYTES=256)
+  for name in AM_PSP_KDB_SLICE_OFFSET AM_PSP_KDB_SLICE_SIZE \
+              AM_PSP_TRACE_REGS AM_PSP_PARITY_TRACE AM_PSP_TRACE_C2PMSG_DENSE \
+              AM_PSP_KDB_FAIL_CAPTURE AM_PSP_KDB_FAIL_CAPTURE_MS AM_PSP_KDB_FAIL_CAPTURE_READS \
+              AM_PSP_KDB_ORDER_BARRIER AM_PSP_MAILBOX_STRONG_ORDER AM_PSP_PRE_KDB_LINUX_FINAL_INVALIDATE; do
+    drop_env "$name"
+  done
+fi
+
 if [ "$VARIANT" = "kdb-linux-mmhub-sync-invalidate" ]; then
   envs+=(AM_PSP_SYSMSG1_GART_CONTIG=1 AM_PSP_MSG1_PRIMARY_SYNC=1 AM_PSP_MSG1_SYSMEM_SYNC_INVALIDATE=1 \
          AM_PSP_KDB_SKIP_PREFIX=0x640 AM_PSP_PRE_KDB_LINUX_MMHUB_WINDOW=1 \
@@ -578,7 +591,7 @@ echo "rc=$rc"
 echo "out=$out"
 sha256sum "$out"
 
-grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|msg1 primary sync\\|pre-KDB GART audit\\|pre-KDB CID2 audit\\|pre-KDB linux final invalidate\\|pre-KDB linux MMHUB window\\|regMM\\|KDB order barrier\\|KDB payload audit\\|bootloader payload audit\\|bootloader metadata audit\\|sos fw inventory\\|KDB header audit\\|KDB record audit\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|bootloader pipeline\\|sOS final state audit\\|sOS wait delay\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
+grep -n "setup-gate\\|released invalidate17_sem\\|_released=1\\|msg1 sysmem gart\\|msg1 sysmem sync\\|msg1 primary sync\\|msg1 full audit\\|pre-KDB GART audit\\|pre-KDB CID2 audit\\|pre-KDB linux final invalidate\\|pre-KDB linux MMHUB window\\|regMM\\|KDB order barrier\\|KDB payload audit\\|bootloader payload audit\\|bootloader metadata audit\\|sos fw inventory\\|KDB header audit\\|KDB record audit\\|gart pte\\|mailbox before-reg36\\|mailbox post-compid\\|bootloader pipeline\\|sOS final state audit\\|sOS wait delay\\|KDB\\|load component\\|write msg1\\|write compid\\|wait BL\\|sOS\\|C2PMSG35\\|C2PMSG36\\|C2PMSG81\\|kdb fail capture\\|AMDDevice ready\\|Traceback\\|RuntimeError\\|TimeoutError" "$out" | tail -560 || true
 
 tail -240 "$out"
 exit "$rc"

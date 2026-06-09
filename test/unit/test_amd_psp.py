@@ -133,6 +133,32 @@ class TestAMDPSP(unittest.TestCase):
     self.assertEqual(psp.msg1_view.data[:16], bytearray(b"abc\x00" + b"\x00" * 12))
     self.assertEqual(psp.msg1_view.data[16:], bytearray(b"\x00" * (0x1000 - 16)))
 
+  def test_msg1_full_audit_reports_zero_tail_after_padded_payload(self):
+    gmc = FakeGMC()
+    adev = FakeAdev()
+    adev.gmc = gmc
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_view = FakeSyncMsg1View(b"\xff" * 0x40)
+    traces = []
+    psp._trace = traces.append
+
+    with mock.patch.dict(os.environ, {"AM_PSP_ZERO_MSG1": "1", "AM_PSP_MSG1_FULL_AUDIT": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._prep_msg1(memoryview(b"abc"))
+      finally:
+        getenv.cache_clear()
+
+    audit = next(line for line in traces if line.startswith("msg1 full audit prep "))
+    self.assertIn("bytes=0x40 padded_size=0x10", audit)
+    self.assertIn("tail_zero=1 tail_nonzero_count=0", audit)
+    self.assertIn("first16=61626300000000000000000000000000", audit)
+    self.assertIn("padded_last16=61626300000000000000000000000000", audit)
+    self.assertIn("tail_first16=00000000000000000000000000000000", audit)
+    self.assertIn("last16=00000000000000000000000000000000", audit)
+
   def test_pre_kdb_gart_audit_stop_happens_before_mailbox_writes(self):
     gmc = FakeGMC()
     gmc.vmhubs = 0

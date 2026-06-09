@@ -99,6 +99,8 @@ class AM_Experiment:
   @staticmethod
   def msg1_primary_sync() -> int: return _env_int("AM_PSP_MSG1_PRIMARY_SYNC")
   @staticmethod
+  def msg1_full_audit() -> int: return _env_int("AM_PSP_MSG1_FULL_AUDIT")
+  @staticmethod
   def kdb_order_barrier() -> int: return _env_int("AM_PSP_KDB_ORDER_BARRIER")
   @staticmethod
   def kdb_payload_audit() -> int: return _env_int("AM_PSP_KDB_PAYLOAD_AUDIT")
@@ -1384,6 +1386,17 @@ class AM_PSP(AM_IP):
     self._trace(f"msg1 primary sync {label} kind={self.msg1_kind} bytes={len(data):#x} sha256={hashlib.sha256(data).hexdigest()} "
                 f"first16={data[:16].hex()} last16={data[-16:].hex()}")
 
+  def _msg1_full_audit(self, label:str, padded_size:int):
+    if not AM_Experiment.msg1_full_audit(): return
+    data = bytes(self.msg1_view[:self.msg1_view.nbytes])
+    tail = data[padded_size:]
+    tail_nonzero_count = sum(x != 0 for x in tail)
+    padded_tail = data[max(0, padded_size - 16):padded_size]
+    self._trace(f"msg1 full audit {label} kind={self.msg1_kind} bytes={len(data):#x} padded_size={padded_size:#x} "
+                f"sha256={hashlib.sha256(data).hexdigest()} tail_zero={int(tail_nonzero_count == 0)} "
+                f"tail_nonzero_count={tail_nonzero_count} first16={data[:16].hex()} "
+                f"padded_last16={padded_tail.hex()} tail_first16={tail[:16].hex()} last16={data[-16:].hex()}")
+
   def _kdb_order_barrier(self, label:str, expected:bytes, reg35=None, reg36=None):
     if not AM_Experiment.kdb_order_barrier(): return
     size, sample_len = len(expected), min(len(expected), 4096)
@@ -1616,6 +1629,7 @@ class AM_PSP(AM_IP):
     self._sync_msg1_primary("prep")
     self._sync_msg1_sysmem("prep", len(padded_data))
     self.adev.gmc.flush_hdp()
+    self._msg1_full_audit("prep", len(padded_data))
     if getenv("AM_PSP_STRONG_FLUSH", 0):
       for i in range(3):
         self.adev.gmc.flush_hdp()
