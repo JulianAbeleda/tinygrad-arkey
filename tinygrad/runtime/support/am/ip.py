@@ -73,6 +73,8 @@ class AM_Experiment:
   @staticmethod
   def pre_kdb_gart_audit_stop() -> int: return _env_int("AM_PSP_PRE_KDB_GART_AUDIT_STOP")
   @staticmethod
+  def fw_pri_equiv_audit() -> int: return _env_int("AM_PSP_FW_PRI_EQUIV_AUDIT")
+  @staticmethod
   def linux_pre_bl_status() -> int: return _env_int("AM_PSP_LINUX_PRE_BL_STATUS")
   @staticmethod
   def msg1_visibility_probe() -> int: return _env_int("AM_PSP_MSG1_VIS_PROBE")
@@ -1203,7 +1205,8 @@ class AM_PSP(AM_IP):
     return getenv("AM_PSP_TRACE", 0) or getenv("AM_PSP_PARITY_TRACE", 0) or AM_Experiment.kdb_fail_capture() or \
       AM_Experiment.mailbox_visibility() or AM_Experiment.kdb_order_barrier() or AM_Experiment.bl_payload_audit() or \
       AM_Experiment.pre_kdb_gart_audit() or AM_Experiment.pre_kdb_linux_final_invalidate() or \
-      AM_Experiment.pre_kdb_linux_mmhub_window() or AM_Experiment.pre_kdb_cid2_audit()
+      AM_Experiment.pre_kdb_linux_mmhub_window() or AM_Experiment.pre_kdb_cid2_audit() or \
+      AM_Experiment.msg1_full_audit() or AM_Experiment.fw_pri_equiv_audit()
 
   def _trace(self, msg:str):
     if self._trace_enabled(): print(f"am {self.adev.devfmt}: PSP {msg}", flush=True)
@@ -1286,6 +1289,59 @@ class AM_PSP(AM_IP):
     self._trace_c2pmsg_regs(dense=False)
     for i in range(getattr(self.adev.gmc, "vmhubs", 0)): self._trace_mmhub_gart_regs(i)
     self._trace(f"pre-KDB GART audit {label} end")
+
+  def _fmt_reg_value(self, val:int|None) -> str: return "unreadable" if val is None else f"{val:#010x}"
+
+  def _read_reg_value(self, name:str, inst:int|None=None) -> int|None:
+    try:
+      reg = self.adev.reg(name)
+      return reg.read() if inst is None else reg.read(inst=inst)
+    except Exception:
+      return None
+
+  def _fw_pri_equiv_audit(self, label:str, padded_data:bytes):
+    if not AM_Experiment.fw_pri_equiv_audit(): return
+    self.adev.gmc.flush_hdp()
+    full_data = bytes(self.msg1_view[:self.msg1_view.nbytes])
+    tail = full_data[len(padded_data):]
+    tail_nonzero_count = sum(x != 0 for x in tail)
+    paddrs = getattr(self, "msg1_paddrs", [])
+    contiguous = bool(paddrs) and all(paddr == paddrs[0] + i * 0x1000 for i, paddr in enumerate(paddrs))
+    first_paddrs = ",".join(f"{paddr:#x}" for paddr in paddrs[:4])
+    last_paddrs = ",".join(f"{paddr:#x}" for paddr in paddrs[-4:])
+    c2p35 = self._read_reg_value(f"{self.reg_pref}_35")
+    c2p36 = self._read_reg_value(f"{self.reg_pref}_36")
+    c2p81 = self._read_reg_value(f"{self.reg_pref}_81")
+    self._trace(f"fw_pri equivalence {label} msg1 kind={self.msg1_kind} fw_pri_mc={self.msg1_addr:#x} c2p36={self.msg1_addr >> 20:#x} "
+                f"bytes={self.msg1_view.nbytes:#x} padded_size={len(padded_data):#x} "
+                f"padded_sha256={hashlib.sha256(padded_data).hexdigest()} full_sha256={hashlib.sha256(full_data).hexdigest()} "
+                f"tail_zero={int(tail_nonzero_count == 0)} tail_nonzero_count={tail_nonzero_count} "
+                f"C2PMSG35={self._fmt_reg_value(c2p35)} C2PMSG36={self._fmt_reg_value(c2p36)} C2PMSG81={self._fmt_reg_value(c2p81)}")
+    self._trace(f"fw_pri equivalence {label} paddrs pages={len(paddrs)} contiguous={int(contiguous)} "
+                f"first_paddr={(paddrs[0] if paddrs else 0):#x} last_paddr={(paddrs[-1] if paddrs else 0):#x} "
+                f"first4={first_paddrs} last4={last_paddrs}")
+    if (info := getattr(self, "msg1_gart_info", None)) is not None:
+      gart_table, gart_page, page_count = info
+      first_pte, last_pte = gart_table[gart_page], gart_table[gart_page + page_count - 1]
+      flag_names = [(am.AMDGPU_PTE_VALID, "VALID"), (am.AMDGPU_PTE_SYSTEM, "SYSTEM"), (am.AMDGPU_PTE_SNOOPED, "SNOOPED"),
+                    (am.AMDGPU_PTE_EXECUTABLE, "EXEC"), (am.AMDGPU_PTE_READABLE, "READ"), (am.AMDGPU_PTE_WRITEABLE, "WRITE")]
+      first_flags = ",".join(name for bit, name in flag_names if first_pte & bit)
+      self._trace(f"fw_pri equivalence {label} pte gart_page={gart_page:#x} pages={page_count:#x} "
+                  f"pte0={first_pte:#018x} pte_last={last_pte:#018x} flags={first_flags} "
+                  f"mtype={(first_pte & am.AMDGPU_PTE_MTYPE_NV10_MASK) >> 48:#x}")
+    for inst in range(getattr(self.adev.gmc, "vmhubs", 0)):
+      fault_reg = self.adev.gmc.pf_status_reg("MM") if hasattr(self.adev.gmc, "pf_status_reg") else "regMMVM_L2_PROTECTION_FAULT_STATUS"
+      vals = {
+        "req": self._read_reg_value("regMMVM_INVALIDATE_ENG17_REQ", inst),
+        "ack": self._read_reg_value("regMMVM_INVALIDATE_ENG17_ACK", inst),
+        "sem": self._read_reg_value("regMMVM_INVALIDATE_ENG17_SEM", inst),
+        "cid2": self._read_reg_value("regMMVM_L2_BANK_SELECT_RESERVED_CID2", inst),
+        "fault": self._read_reg_value(fault_reg, inst),
+      }
+      self._trace(f"fw_pri equivalence {label} mmhub inst={inst} "
+                  f"req={self._fmt_reg_value(vals['req'])} ack={self._fmt_reg_value(vals['ack'])} "
+                  f"sem={self._fmt_reg_value(vals['sem'])} cid2={self._fmt_reg_value(vals['cid2'])} "
+                  f"fault={self._fmt_reg_value(vals['fault'])}")
 
   def _sos_final_state_audit(self, label:str):
     if not AM_Experiment.sos_final_state_audit() and not AM_Experiment.bl_boundary_audit(): return
@@ -1736,6 +1792,7 @@ class AM_PSP(AM_IP):
         raise RuntimeError("AM_PSP_PRE_KDB_CID2_AUDIT_STOP stopped before KDB mailbox writes")
       self._pre_kdb_linux_mmhub_window()
       self._pre_kdb_linux_final_invalidate()
+      self._fw_pri_equiv_audit("pre-mailbox", padded_data)
     reg36, reg35 = self.adev.reg(f"{self.reg_pref}_36"), self.adev.reg(f"{self.reg_pref}_35")
     if AM_Experiment.mailbox_strong_order():
       self.adev.gmc.flush_hdp()

@@ -159,6 +159,51 @@ class TestAMDPSP(unittest.TestCase):
     self.assertIn("tail_first16=00000000000000000000000000000000", audit)
     self.assertIn("last16=00000000000000000000000000000000", audit)
 
+  def test_fw_pri_equivalence_audit_traces_msg1_paddrs_pte_and_mmhub(self):
+    gmc = FakeGMC()
+    regs = {name: FakeReg(name) for name in [
+      "regMP0_SMN_C2PMSG_35", "regMP0_SMN_C2PMSG_36", "regMP0_SMN_C2PMSG_81",
+      "regMMVM_INVALIDATE_ENG17_REQ", "regMMVM_INVALIDATE_ENG17_ACK", "regMMVM_INVALIDATE_ENG17_SEM",
+      "regMMVM_L2_BANK_SELECT_RESERVED_CID2", "regMMVM_L2_PROTECTION_FAULT_STATUS",
+    ]}
+    regs["regMP0_SMN_C2PMSG_35"].writes.append(0x80000000)
+    regs["regMMVM_INVALIDATE_ENG17_REQ"].writes.append(0x00f80001)
+    regs["regMMVM_INVALIDATE_ENG17_ACK"].writes.append(0x1)
+    regs["regMMVM_INVALIDATE_ENG17_SEM"].writes.append(0x1)
+    regs["regMMVM_L2_BANK_SELECT_RESERVED_CID2"].writes.append(0x10104010)
+    adev = FakeAdev()
+    adev.gmc = gmc
+    adev.reg = lambda name: regs[name]
+    psp = object.__new__(AM_PSP)
+    psp.adev = adev
+    psp.reg_pref = "regMP0_SMN_C2PMSG"
+    psp.msg1_kind = "sysmem-gart"
+    psp.msg1_addr = 0x7fff00700000
+    psp.msg1_view = FakeSyncMsg1View(b"abc\x00" + b"\x00" * 0x3c)
+    psp.msg1_paddrs = [0x100000 + i * 0x1000 for i in range(4)]
+    psp.msg1_gart_info = ([0] * 0x704, 0x700, 4)
+    psp.msg1_gart_info[0][0x700] = 0x0003000000100077
+    psp.msg1_gart_info[0][0x703] = 0x0003000000130077
+    traces = []
+    psp._trace = traces.append
+
+    with mock.patch.dict(os.environ, {"AM_PSP_FW_PRI_EQUIV_AUDIT": "1"}):
+      getenv.cache_clear()
+      try:
+        psp._fw_pri_equiv_audit("unit", b"abc\x00" + b"\x00" * 0xc)
+      finally:
+        getenv.cache_clear()
+
+    self.assertEqual(gmc.flushes, 1)
+    self.assertIn("fw_pri_mc=0x7fff00700000 c2p36=0x7fff007", traces[0])
+    self.assertIn("padded_size=0x10", traces[0])
+    self.assertIn("tail_zero=1 tail_nonzero_count=0", traces[0])
+    self.assertIn("C2PMSG35=0x80000000", traces[0])
+    self.assertIn("pages=4 contiguous=1 first_paddr=0x100000 last_paddr=0x103000", traces[1])
+    self.assertIn("pte0=0x0003000000100077 pte_last=0x0003000000130077", traces[2])
+    self.assertIn("flags=VALID,SYSTEM,SNOOPED,EXEC,READ,WRITE", traces[2])
+    self.assertIn("req=0x00f80001 ack=0x00000001 sem=0x00000001 cid2=0x10104010", traces[3])
+
   def test_pre_kdb_gart_audit_stop_happens_before_mailbox_writes(self):
     gmc = FakeGMC()
     gmc.vmhubs = 0
