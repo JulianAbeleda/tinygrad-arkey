@@ -1,0 +1,3 @@
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP pre-bl ipver nbio=(4, 3, 0) gc=(11, 0, 0) mp0=(13, 0, 0)
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP pre-bl gmc fb_base=0x8000000000 fb_end=0x85ff000000 mc_base=0x8000000000 gart=0x7fff00000000-0x7fff1fffffff vmhubs=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP pre-bl msg1 kind=vram addr=0x8000100000 c2p36=0x80001 size=0x100000
