@@ -98,3 +98,26 @@ was the two different source binaries.
 - The original problems the fork exists for remain: slowness (RPC round trips
   per MMIO access) and dropouts under sustained DMA load (16MB PrepareDMA
   trigger mitigated by `AMD_REMOTE_ALLOC_CAP_MB=2`, mechanism unexplained).
+
+## 2026-06-10 evening addendum: Mac path closed too
+
+Same day, the fixed profile was validated on the original Mac/TinyGPU path.
+Full AM boot (`boot done`, all IP blocks including PSP) completed in 11.4s /
+26,263 roundtrips, and `Tensor([1,2,3])+1 -> [2, 3, 4]` executed on the GPU —
+the first successful Mac boot and computation on this card.
+
+Two additional root causes found and fixed along the way:
+
+- `ensure_app` downloaded the pinned upstream TinyGPU release mid-session,
+  pkilled the running patched app, and installed over /Applications. The
+  resulting mismatched stack (upstream app + arkey dext) made single u32 BAR0
+  writes close the bridge — masquerading as a transport fragility for several
+  hours. Fixed in 9eb0b042b (never clobber an arkey-signed app). All write
+  sizes up to 4KB pass on the matched stack.
+- MMHUB register reads hang the fabric (and drop the PCIe tree) when the card
+  is in a stale gated state. Recovery rule: a TRUE power-off of the GPU resets
+  it; a cable replug does not.
+
+Operational rules for the Mac path: check serve.py's age before reuse (a
+stale bridge runs stale protocol code), verify /Applications/TinyGPU.app is
+the arkey build, and power-cycle (not replug) after any bridge death.
