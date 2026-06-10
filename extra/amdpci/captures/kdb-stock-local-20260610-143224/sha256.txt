@@ -1,0 +1,3 @@
+b3f99ca78fd4398a74e5b65096701a04e0de9aec51ef52ed8bd2b2bd32166a56  extra/amdpci/captures/kdb-stock-local-20260610-143224/dmesg-after.txt
+40d853e815b891b2e6e3027cc298ff868812f8c9a8fdda9ba8a6f1c2e492e41d  extra/amdpci/captures/kdb-stock-local-20260610-143224/dmesg-before.txt
+5635692c75b96e4ad9a433ab08fbbf703afeeaa3c2708fbcf14e8cee24c9e843  extra/amdpci/captures/kdb-stock-local-20260610-143224/stock-local.log
