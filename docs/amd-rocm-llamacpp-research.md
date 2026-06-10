@@ -333,3 +333,39 @@ Session plan:
 - Session B: relax mitigations one at a time; hardware swaps if link errors
   appeared in Session A.
 - Session C: scale model size toward the 27B-class target; Qwen end-to-end.
+
+### Goal refinement (2026-06-10): the target is ROCm-native speed, not upstream parity
+
+Operator-defined goal: the AM driver on the Mac mini should reach what this
+same card delivers under ROCm/llama.cpp on native Linux PCIe. Upstream's
+18.5 tok/s (Qwen 3.5 27B) is a waypoint, not the destination — ROCm-class
+llama.cpp on a 7900 XTX is roughly 30-40 tok/s for that size class, i.e.
+upstream tinygrad-over-USB4 runs at ~50-60% of ROCm. Closing that gap has
+three distinct phases with different physics:
+
+- **Phase 1 — reach upstream parity (transport taxes).** Remove the serve.py
+  shim, fix link health, relax mitigations. Bounded, mostly done-or-known.
+- **Phase 2 — close the kernel gap (H3 revived).** The upstream-vs-ROCm gap
+  is dominated by kernel quality: llama.cpp has fused MMVQ/MMQ quantized
+  kernels with RDNA3 tuning; tinygrad unpacks quant blocks generically.
+  Levers: tinygrad BEAM search (cheap, try first), then a fused Q4_K
+  dequant+matvec path specialized for gfx1100 (`extra/q4_k_bench.py` is the
+  harness). This phase is identical for Mac and native Linux — develop and
+  measure it on the Ubuntu boot where iteration is fast, deploy to the Mac.
+- **Phase 3 — dispatch amortization.** Decode is GPU-memory-bound, so USB4
+  only costs what per-token host chatter costs. TinyJit/graph batching must
+  collapse each token step to ~one submission; measure roundtrips/token and
+  drive it toward O(1). If achieved, the USB4 asymptote is within ~10% of
+  native for decode.
+
+Required baseline before any optimization: **measure actual ROCm/llama.cpp
+tok/s on this exact card** (Ubuntu normal boot, card in the PCIe slot) for
+the model sizes under test (1.7B/7B/27B-class, Q4_K_M, decode and prefill
+separately). That number — not a literature estimate — is the finish line,
+and it also calibrates how much of the gap is kernels (Phase 2) vs
+dispatch (Phase 3).
+
+Feasibility assessment: decode-speed parity with native ROCm is plausible
+(memory-bound work happens entirely on-card); weight-load time will always
+lose to native PCIe (USB4 ~1/4 the bandwidth); prefill sits in between.
+"ROCm speed" should therefore be scored on steady-state decode tok/s.
