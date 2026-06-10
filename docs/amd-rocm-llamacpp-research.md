@@ -369,3 +369,81 @@ Feasibility assessment: decode-speed parity with native ROCm is plausible
 (memory-bound work happens entirely on-card); weight-load time will always
 lose to native PCIe (USB4 ~1/4 the bandwidth); prefill sits in between.
 "ROCm speed" should therefore be scored on steady-state decode tok/s.
+
+## Layer 1 / Layer 2 campaign scope (2026-06-10)
+
+Goal restated as arithmetic: decode tok/s = effective_GB/s ÷ weight_bytes.
+Today's stack ~300 GB/s effective; llama.cpp/ROCm ~530-690; streaming ceiling
+on a 7900 XTX ~820-860 (85-90% of 960 spec). Layer 1 closes tinygrad->llama.cpp.
+Layer 2 exploits what llama.cpp's architecture cannot: whole-graph fusion and
+layout freedom. All hypotheses are scored on the same metric: effective GB/s
+per decode layer, and end-to-end tg128.
+
+Hypotheses continue the H1-H4 numbering above.
+
+### Layer 1 — reach ROCm-class effective bandwidth (target: >=530 GB/s)
+
+**H5 — schedule gap (BEAM).** A measurable share of the gap is generic
+scheduling, recoverable by search with zero code changes.
+- Prediction: BEAM=2..4 improves quantized decode tok/s 10-30% over BEAM=0.
+- Test: Ubuntu native boot, same GGUF, tg128 with BEAM=0/2/4; per-kernel
+  GB/s via DEBUG=2.
+- Confirmed if >=15% gain. Falsified if <5% — then the gap is ~all idiom (H6).
+
+**H6 — idiom gap (fused quantized matvec).** The dominant gap is instruction
+selection: dequant lowered to generic ALU instead of RDNA3 packed integer dot
+(v_dot4/v_dot8), plus unfused dequant-matvec memory traffic.
+- Prediction: a fused Q4_K dequant+matvec path emitting packed-dot ops on one
+  representative decode layer reaches >=500 GB/s effective (within ~15% of
+  llama.cpp's per-layer number measured on the same shape).
+- Test: extra/q4_k_bench.py — bench the same layer shape three ways:
+  current generic path, BEAM-tuned path, fused-idiom path; compare against
+  llama.cpp MMVQ on identical shape/quant.
+- Known unknown: tinygrad's RDNA3 renderer may need a v_dot intrinsic or
+  assembly pattern added before the idiom is expressible. Scope that first;
+  it is the long pole of Layer 1.
+- Confirmed if >=500 GB/s. Partially confirmed if packed-dot emission works
+  but GB/s stalls 30%+ below llama.cpp — then the residual is memory-pipeline
+  idioms (LDS swizzle, software pipelining), iterate within H6.
+
+**H7 — transport neutrality.** With Layer-1 kernels, the Mac/USB4 path decodes
+within 10% of Ubuntu-native tinygrad on the same model.
+- Prediction: TinyJit batching collapses per-token host traffic to O(1)
+  submissions; USB4 latency then costs <10% at decode.
+- Test: identical model both machines; DEBUG=1 roundtrips/token; tg128 ratio.
+- Falsified if roundtrips/token scales with layer count after JIT warmup —
+  then dispatch work (H4 territory) precedes further kernel work.
+
+### Layer 2 — beat llama.cpp (target: >=700 GB/s effective end-to-end)
+
+**H8 — fusion headroom.** llama.cpp's fixed kernel boundaries force VRAM
+round-trips (norms, rope, residuals, attention glue) costing >=15% of decode;
+whole-graph compilation can eliminate most of them.
+- Prediction: bytes-moved-per-token (measurable from per-kernel DEBUG stats)
+  exceeds weight-bytes by >=25% on the current path; fusing norm/rope/residual
+  into matvec prologues/epilogues brings it within 10% of weight-bytes, and
+  end-to-end tok/s then exceeds llama.cpp on the same model.
+- Test: instrument bytes/token before and after enabling/adding fusions;
+  end-to-end tg128 vs the ROCm baseline.
+
+**H9 — layout freedom.** GGUF's fixed block layout is suboptimal for RDNA3
+wavefront coalescing; re-tiling weights at load (fork-only freedom; llama.cpp
+cannot) buys an additional 5-10%.
+- Prediction: an A/B of GGUF-native vs re-tiled layout on the H6 fused kernel
+  shows >=5% GB/s improvement.
+- Test: q4_k_bench layout variants on the same layer.
+
+### Sequencing and gates
+
+1. ROCm baseline (in progress) — converts all targets above from estimates
+   to measured numbers; recalibrate H5-H9 predictions when it lands.
+2. Per-kernel gap audit: DEBUG=2 decode profile on Ubuntu-native tinygrad;
+   rank kernels by (bytes x deficit). Apportions the 2x between H5 and H6.
+3. H5 (free) -> H6 scoping (renderer expressibility) -> H6 build -> H7 check
+   on Mac -> H8 -> H9.
+4. Decision rule unchanged: optimize the layer the measurement convicts.
+   Each hypothesis has a falsifier; record kills in this doc, not just wins.
+
+Risks: BEAM search wall-clock on large models (mitigate: bench single layers);
+renderer work in H6 may be deeper than expected (scope before building);
+H8 fusion may fight the scheduler (incremental fusions, measure each).
