@@ -319,3 +319,42 @@ SHA256:
 The first attempts in that bundle show why the trace script uses fixed offsets:
 `bpftrace` could see kernel BTF but could not resolve AMD module-private struct
 names. The fixed offsets came from `/sys/kernel/btf/amdgpu` on the Ubuntu host.
+
+## 2026-06-10 Stock Local KDB Control
+
+From a blacklisted boot on the RX 7900 XTX host, stock local tinygrad with no
+`serve.py`, no `AM_*` experiment flags, no `AM_REMOTE_*` flags, real local PCI
+discovery, full BAR/ReBAR, and the default VRAM PSP msg1 buffer passed KDB and
+completed a trivial AMD tensor run:
+
+```text
+extra/amdpci/captures/kdb-stock-local-20260610-143224
+```
+
+The preflight gate reported `PASS: BLACKLISTED_READY` on kernel
+`6.8.0-117-generic` with `amdgpu` unloaded and BDF `0000:08:00.0` present. The
+actual control command used only:
+
+```text
+DEBUG=2 DEV=PCI+AMD PYTHONPATH=.
+```
+
+The run initialized `AM_SOC`, `AM_GMC`, `AM_IH`, loaded the PSP KDB/sysdrv/SOS
+components plus SMU/GFX/SDMA firmware, printed `boot done`, executed the tensor
+program, printed `[2, 3, 4]`, finalized, and exited `rc=0`.
+
+This kills the hypothesis that this Ubuntu host/card is inherently unable to
+complete the first PSP KDB load from tinygrad. It also rules out the stock local
+VRAM msg1 path, native PCI device path, real IP discovery over the full BAR, and
+enabled ReBAR as the cause of the earlier `BL not ready` signature. Since the
+prior failing Ubuntu attempts all used the remote bridge plus Mac-era
+scaffolding (`AM_REMOTE_DISCOVERY_PROFILE=gfx1100_744c`,
+`AM_REMOTE_SMALL_BAR_DISCOVERY=1`, `AM_REMOTE_SKIP_RESIZE_BAR=1`, and the
+`run_remote_kdb_attempt.sh` base experiment block), the active discriminator is
+now in the remote/scaffolding stack.
+
+Next patch direction: bisect the remote path one layer at a time, starting with
+stock settings through `serve.py` and then adding small-BAR/skip-resize,
+discovery-profile, and finally the base experiment block. The proposed fix
+should live behind explicit `AM_*` or `AM_REMOTE_*` flags until the first
+remote configuration that reproduces `BL not ready` is isolated.
