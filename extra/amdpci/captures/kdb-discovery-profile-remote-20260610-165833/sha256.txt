@@ -1,0 +1,4 @@
+5ef072a70fb6d5509fb9a8ac89c3b723a5c4d98d18046a625ed9de52178111d1  extra/amdpci/captures/kdb-discovery-profile-remote-20260610-165833/boot_id.txt
+2a7ed3e60cfb12be06c64fb659481606ad1d936bd2adc7cfc22d0addf3a7bc33  extra/amdpci/captures/kdb-discovery-profile-remote-20260610-165833/dmesg-after.txt
+5fadd7cd5c8c7566b7cf6fb5a49e5704bd7ebdac1bbd332b70ab4201ab79625f  extra/amdpci/captures/kdb-discovery-profile-remote-20260610-165833/dmesg-before.txt
+0f95c005fbd4f07b8699511032a8421b3b662b8e577d8208f8c86701de46675d  extra/amdpci/captures/kdb-discovery-profile-remote-20260610-165833/run.log
