@@ -503,6 +503,11 @@ class APLRemotePCIDevice(RemotePCIDevice):
 
   @classmethod
   def ensure_app(cls):
+    # Never replace a locally-built arkey app (ad-hoc signed, carries local TinyGPU fixes) with the pinned
+    # upstream release: the pinned app paired with the arkey dext is a version-mismatched stack.
+    if os.path.exists(cls.APP_PATH):
+      ident = subprocess.run(["codesign", "-dv", "/Applications/TinyGPU.app"], capture_output=True, text=True).stderr
+      if "org.tinygrad.arkey" in ident: return
     commit = "c0d024f9ff0e1dc8fdf217f255da7101d91e8323"
     app_name = f"TinyGPU_{commit}.zip"
     if (_ensure_downloads_dir() / app_name).is_file() and os.path.exists(cls.APP_PATH): return
