@@ -1,0 +1,389 @@
+opened device PYTHON from pid:2610
+scheduled     2 kernels in    17.98 ms | CACHE MISS 7b84c87e |      45 uops in cache
+am remote:127.0.0.1:6667:0000:08:00.0:0: using remote discovery profile gfx1100_744c
+am remote:127.0.0.1:6667:0000:08:00.0:0: AM_SOC initialized
+am remote:127.0.0.1:6667:0000:08:00.0:0: AM_GMC initialized
+am remote:127.0.0.1:6667:0000:08:00.0:0: AM_IH initialized
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP pre-bl ipver nbio=(4, 3, 0) gc=(11, 0, 0) mp0=(13, 0, 0)
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP pre-bl gmc fb_base=0x8000000000 fb_end=0x85ff000000 mc_base=0x8000000000 gart=0x7fff00000000-0x7fff1fffffff vmhubs=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP pre-bl msg1 kind=vram addr=0x8000100000 c2p36=0x80001 size=0x100000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regRCC_DEV0_EPF2_STRAP2=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regRCC_DEV0_EPF0_RCC_DOORBELL_APER_EN=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regBIF_BX0_REMAP_HDP_MEM_FLUSH_CNTL=0x0000385c
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_FB_LOCATION_BASE=0x00008000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_FB_LOCATION_TOP=0x000085ff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_AGP_BASE[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_AGP_BOT[0]=0x00ffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_AGP_TOP[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_SYSTEM_APERTURE_LOW_ADDR[0]=0x00200000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_SYSTEM_APERTURE_HIGH_ADDR[0]=0x00217fc0
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_MSB[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMMC_VM_MX_L1_TLB_CNTL[0]=0x00001d59
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CNTL[0]=0x00080e01
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CNTL2[0]=0x00000003
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CNTL3[0]=0x80130009
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CNTL4[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CNTL5[0]=0x00003fe0
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_BANK_SELECT_RESERVED_CID2[0]=0x10104010
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_PROTECTION_FAULT_CNTL[0]=0x3ffffffc
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_PROTECTION_FAULT_CNTL2[0]=0x000e0000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_PROTECTION_FAULT_STATUS[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32[0]=0x00000002
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32[0]=0x0000000f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT0_CNTL[0]=0x01fffe07
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32[0]=0x00000002
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32[0]=0x00000007
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT1_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT2_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT2_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT2_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT2_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT2_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT2_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT2_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT3_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT3_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT3_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT3_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT3_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT3_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT3_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT4_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT4_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT4_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT4_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT4_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT4_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT4_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT5_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT5_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT5_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT5_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT5_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT5_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT5_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT6_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT6_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT6_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT6_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT6_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT6_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT6_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT7_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT7_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT7_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT7_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT7_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT7_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT7_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT8_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT8_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT8_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT8_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT8_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT8_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT8_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT9_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT9_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT9_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT9_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT9_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT9_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT9_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT10_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT10_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT10_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT10_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT10_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT10_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT10_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT11_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT11_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT11_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT11_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT11_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT11_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT11_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT12_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT12_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT12_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT12_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT12_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT12_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT12_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT13_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT13_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT13_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT13_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT13_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT13_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT13_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT14_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT14_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT14_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT14_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT14_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT14_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT14_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT15_CNTL[0]=0x01fffe00
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT15_PAGE_TABLE_BASE_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT15_PAGE_TABLE_BASE_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT15_PAGE_TABLE_START_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT15_PAGE_TABLE_START_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT15_PAGE_TABLE_END_ADDR_LO32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_CONTEXT15_PAGE_TABLE_END_ADDR_HI32[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG0_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG0_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG0_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG0_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG0_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG0_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG1_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG1_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG1_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG1_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG1_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG1_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG2_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG2_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG2_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG2_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG2_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG2_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG3_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG3_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG3_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG3_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG3_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG3_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG4_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG4_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG4_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG4_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG4_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG4_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG5_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG5_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG5_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG5_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG5_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG5_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG6_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG6_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG6_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG6_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG6_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG6_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG7_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG7_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG7_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG7_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG7_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG7_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG8_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG8_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG8_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG8_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG8_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG8_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG9_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG9_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG9_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG9_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG9_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG9_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG10_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG10_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG10_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG10_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG10_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG10_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG11_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG11_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG11_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG11_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG11_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG11_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG12_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG12_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG12_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG12_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG12_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG12_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG13_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG13_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG13_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG13_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG13_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG13_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG14_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG14_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG14_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG14_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG14_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG14_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG15_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG15_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG15_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG15_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG15_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG15_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG16_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG16_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG16_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG16_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG16_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG16_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG17_ADDR_RANGE_LO32[0]=0xffffffff
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG17_ADDR_RANGE_HI32[0]=0x0000001f
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG17_REQ[0]=0x02f80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG17_ACK[0]=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG17_SEM[0]=0x00000001
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMMVM_INVALIDATE_ENG17_SEM[0] released after diagnostic read
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_33=0x80000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_35=0x80000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_36=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_64=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_67=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_69=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_70=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_71=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_81=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_90=0x1e983568
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP reg regMP0_SMN_C2PMSG_92=0x00000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x80000000 elapsed_ms=0.003 reads=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL ready elapsed_ms=0.058 reads=1 first_zero_ms=None
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading sos component: PSP_FW_TYPE_PSP_KDB
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP load component fw=PSP_FW_TYPE_PSP_KDB compid=0x80000 bytes=5888
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write msg1 kind=vram reg36=0x16064 val=0x80001 msg1_addr=0x8000100000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid reg35=0x16063 val=0x80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid done val=0x80000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x0 elapsed_ms=0.001 reads=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x80000000 elapsed_ms=0.574 reads=17
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL ready elapsed_ms=0.618 reads=17 first_zero_ms=0.001142000002118948
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x80000000 elapsed_ms=0.001 reads=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL ready elapsed_ms=0.052 reads=1 first_zero_ms=None
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading sos component: PSP_FW_TYPE_PSP_KDB
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP load component fw=PSP_FW_TYPE_PSP_KDB compid=0x10000000 bytes=5888
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write msg1 kind=vram reg36=0x16064 val=0x80001 msg1_addr=0x8000100000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid reg35=0x16063 val=0x10000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid done val=0x10000000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x80000000 elapsed_ms=0.001 reads=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL ready elapsed_ms=0.051 reads=1 first_zero_ms=None
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x80000000 elapsed_ms=0.001 reads=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL ready elapsed_ms=0.051 reads=1 first_zero_ms=None
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading sos component: PSP_FW_TYPE_PSP_SYS_DRV
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP load component fw=PSP_FW_TYPE_PSP_SYS_DRV compid=0x10000 bytes=157584
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write msg1 kind=vram reg36=0x16064 val=0x80001 msg1_addr=0x8000100000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid reg35=0x16063 val=0x10000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid done val=0x10000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x0 elapsed_ms=0.001 reads=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x80000000 elapsed_ms=1.330 reads=40
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL ready elapsed_ms=1.369 reads=40 first_zero_ms=0.0008009999987734773
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL reg35=0x16063 val=0x80000000 elapsed_ms=0.000 reads=1
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP wait BL ready elapsed_ms=0.048 reads=1 first_zero_ms=None
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading sos component: PSP_FW_TYPE_PSP_SOS
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP load component fw=PSP_FW_TYPE_PSP_SOS compid=0x20000 bytes=99200
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write msg1 kind=vram reg36=0x16064 val=0x80001 msg1_addr=0x8000100000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid reg35=0x16063 val=0x20000
+am remote:127.0.0.1:6667:0000:08:00.0:0: PSP write compid done val=0x20000
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 1574, in _wrapper
+    ret = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 339, in tolist
+    return self.data().tolist()
+           ^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 1548, in _wrapper
+    if TRACEMETA < 1 or _METADATA.get() is not None: return fn(*args, **kwargs)
+                                                            ^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 308, in data
+    return self._buffer().as_memoryview().cast(self.dtype.base.fmt, self.shape)
+           ^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 1548, in _wrapper
+    if TRACEMETA < 1 or _METADATA.get() is not None: return fn(*args, **kwargs)
+                                                            ^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 292, in _buffer
+    return cast(Buffer, x.realize().uop.buffer).ensure_allocated()
+                        ^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 1548, in _wrapper
+    if TRACEMETA < 1 or _METADATA.get() is not None: return fn(*args, **kwargs)
+                                                            ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py", line 244, in realize
+    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 253, in run_linear
+    if not jit: linear = compile_linear(linear, validate=VALIDATE_WITH_CPU)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 249, in compile_linear
+    linear = graph_rewrite(linear, pm_compile, name="precompile kernels", walk=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py", line 1406, in wrap_profile_matches
+    return fxn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py", line 1586, in graph_rewrite
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py", line 1513, in walk_rewrite
+    if self.pm is not None and (rewritten:=self.pm_rewrite(new_n)) is not None: new_n = rewritten
+                                           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py", line 1485, in pm_rewrite
+    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py", line 1322, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py", line 226, in <lambda>
+    call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),
+                                      ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 26, in __getitem__
+    return self.__get_canonicalized_item(ix)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/device.py", line 31, in __get_canonicalized_item
+    ret = [cls for cname, cls in inspect.getmembers(importlib.import_module(f'{base}.runtime.ops_{x}')) \
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/tinygrad-arkey/tinygrad/runtime/ops_amd.py", line 993, in __init__
+    self.nbio = AMDIP('nbio' if self.target[0] < 12 else 'nbif', self.iface.ip_versions[am.NBIF_HWIP],
+                                                                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+KeyError: 26
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_SMU
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_SDMA_UCODE_TH1
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_SDMA_UCODE_TH0
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_RS64_MEC
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_RS64_MEC_P0_STACK
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_IMU_I
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_IMU_D
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_RLC_IRAM
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_RLC_DRAM_BOOT
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_RLC_P
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_RLC_V
+am remote:127.0.0.1:6667:0000:08:00.0:0: loading fw: GFX_FW_TYPE_RLC_G
+am remote:127.0.0.1:6667:0000:08:00.0:0: AM_PSP initialized
+am remote:127.0.0.1:6667:0000:08:00.0:0: AM_SMU initialized
+am remote:127.0.0.1:6667:0000:08:00.0:0: AM_GFX initialized
+am remote:127.0.0.1:6667:0000:08:00.0:0: AM_SDMA initialized
+am remote:127.0.0.1:6667:0000:08:00.0:0: boot done
+AMDDevice: opening 0 with target (11, 0, 0) arch gfx1100
+remote: sent 1.28 MB (2.48 MB/s), recv 0.04 MB (0.07 MB/s), 6,239 roundtrips in 0.52s
+rc=1
