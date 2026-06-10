@@ -20,16 +20,22 @@ def stat(cmd:RemoteCmd, delta:float): stats[f"{cmd.name}_count"] += 1; stats[f"{
 
 # Bulk MMIO slice ops through the TinyGPU bridge can close the app connection (observed with a 0x1000-byte write to
 # BAR0; u32 ops are safe). Chunk slice reads/writes into u32-sized ops by default. REMOTE_MMIO_CHUNK=0 restores bulk ops.
+# A tight u32 store loop can still kill the bridge (burst rate / write coalescing), so fence each store with a
+# serializing readback. REMOTE_MMIO_FENCE_EVERY=N fences every N stores; 0 disables fencing.
 MMIO_CHUNK = int(os.getenv("REMOTE_MMIO_CHUNK", "4"))
+MMIO_FENCE_EVERY = int(os.getenv("REMOTE_MMIO_FENCE_EVERY", "1"))
 def bar_store(bar_view, off:int, data:bytes):
   if MMIO_CHUNK == 0 or not OSX: bar_view[off:off+len(data)] = data; return
   if off % 4 == 0 and len(data) % 4 == 0:
     view = bar_view.view(fmt='I')
-    for i, val in enumerate(struct.unpack(f'<{len(data)//4}I', data)): view[off // 4 + i] = val
+    for i, val in enumerate(struct.unpack(f'<{len(data)//4}I', data)):
+      view[off // 4 + i] = val
+      if MMIO_FENCE_EVERY and (i + 1) % MMIO_FENCE_EVERY == 0: _ = view[off // 4 + i]
   else:
     for i in range(0, len(data), 4):
       n = min(4, len(data) - i)
       bar_view[off+i:off+i+n] = data[i:i+n]
+      if MMIO_FENCE_EVERY: _ = bytes(bar_view[off+i:off+i+n])
 def bar_load(bar_view, off:int, size:int) -> bytes:
   if MMIO_CHUNK == 0 or not OSX: return bytes(bar_view[off:off+size])
   if off % 4 == 0 and size % 4 == 0:
