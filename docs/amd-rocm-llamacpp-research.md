@@ -279,3 +279,57 @@ Comparison baseline:
 - LUT-GEMM quantized matrix multiplication paper: `https://arxiv.org/abs/2206.09557`
 - RDNA3 MMVQ tuning report: `https://www.reddit.com/r/ROCm/comments/1s7jgvl/kernelanvil_2x_decode_speedup_on_7900_xtx_by/`
 - 7900 XTX ROCm/Vulkan comparison report: `https://www.reddit.com/r/ROCm/comments/1s1vo37/rocm_on_7900_xtx_significantly_slower_than_vulkan/`
+
+## 2026-06-10 status update: hypotheses re-scored, optimization campaign defined
+
+Context that changed since the hypotheses were written: the KDB blocker is
+solved (`docs/amd-kdb-root-cause.md`), the card boots and computes from the
+Mac, and upstream's Apple-approved TinyGPU driver publicly achieves
+**18.5 tok/s on Qwen 3.5 27B with a Mac mini M4 + RX 7900 XTX over USB4** —
+the same GPU and machine class as this rig, on stock tinygrad kernels.
+That number is now the calibration target: it proves what this hardware does
+when the path is healthy, and it re-scores the hypotheses:
+
+- **H1 (lifecycle/reliability): VALIDATED.** Predicted the dirty-bridge and
+  dropout work. Completed by the idle keepalive in serve.py (idle ASPM/CLx
+  transitions drop the link; a 1Hz config read suppresses them).
+- **H2 (per-token roundtrip cost): STRENGTHENED, culprit sharpened.** Prior
+  inference runs went through the serve.py TCP shim — a debugging layer the
+  upstream product path does not have. The shim doubles serialization on
+  every operation. H2's own test (DEBUG=1 roundtrips/token) is the first
+  measurement of the campaign.
+- **H3 (fused Q4_K kernels): DEMOTED.** Upstream's 18.5 tok/s uses the same
+  stock kernels this fork has. Kernels cannot explain a gap vs upstream;
+  H3 is only live again if roundtrips/token are low and tok/s still lags on
+  the same model+quant. `extra/q4_k_bench.py` stands ready for that case.
+- **H4 (graph-level remote): HALF-MOOTED.** The expensive "remote" was our
+  own shim; the direct path (`DEV=AMD` -> APLRemotePCIDevice -> TinyGPU) is
+  already in-process. H4 remains relevant only for the Ubuntu-as-GPU-server
+  use case.
+
+### Optimization campaign (measurement-first)
+
+Known taxes, in expected order of magnitude:
+
+1. **serve.py TCP shim** — removable by running the direct path. Measure
+   first: tok/s direct vs through-shim on the same small model.
+2. **Physical link health** — May captures show ACIO Gen2/3 retraining
+   storms on the bare UT4G board. Watch link errors during weight upload;
+   if present, try certified TB4 cable / other port / powered dock before
+   any software work.
+3. **Conservative mitigations** — `AMD_REMOTE_ALLOC_CAP_MB=2` (fragmented
+   allocations), `REMOTE_MMIO_CHUNK`/`REMOTE_MMIO_FENCE_EVERY` (slow bulk
+   MMIO, serve-path only). Relax one at a time, measuring each.
+4. **Kernels (H3)** — only after 1-3, and only if a gap vs upstream remains.
+
+Decision rule (unchanged from H2, now with a target): measure
+roundtrips/token and tok/s against the upstream-proportional expectation for
+the model under test. Optimize the layer the measurement convicts, never the
+layer the intuition suspects.
+
+Session plan:
+- Session A: direct-path tok/s on a small model (0.6B/1.7B), DEBUG=1
+  roundtrip stats, ACIO error watch during load. One power cycle.
+- Session B: relax mitigations one at a time; hardware swaps if link errors
+  appeared in Session A.
+- Session C: scale model size toward the 27B-class target; Qwen end-to-end.
