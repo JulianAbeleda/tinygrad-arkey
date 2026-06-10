@@ -419,7 +419,7 @@ class AMDev:
     if profile != "gfx1100_744c": raise RuntimeError(f"unknown AM_REMOTE_DISCOVERY_PROFILE={profile!r}")
     from tinygrad.runtime.autogen.am import navi_offsets
 
-    # NBIO 7.9 register metadata references segment 8, but navi_offsets only has explicit bases through segment 4.
+    # Some register metadata references segments beyond navi_offsets' explicit bases.
     # Missing segment bases are padded as zero, matching the raw register offsets used for NBIO doorbell registers.
     def bases(prefix:str) -> dict[int, tuple]:
       return {i: seg for i in range(7) if any(seg:=tuple(getattr(navi_offsets, f"{prefix}_BASE__INST{i}_SEG{s}", 0) for s in range(9)))}
@@ -428,8 +428,11 @@ class AMDev:
     self.regs_offset = collections.defaultdict(dict, {
       am.GC_HWIP: bases("GC"), am.HDP_HWIP: bases("HDP"), am.MMHUB_HWIP: bases("MMHUB"), am.NBIO_HWIP: bases("NBIO"),
       am.MP0_HWIP: bases("MP0"), am.MP1_HWIP: bases("MP1"), am.OSSSYS_HWIP: bases("OSSSYS"), am.SDMA0_HWIP: bases("SDMA0")})
-    self.ip_ver = {am.GC_HWIP: (11,0,0), am.HDP_HWIP: (6,0,0), am.MMHUB_HWIP: (3,0,0), am.NBIO_HWIP: (7,9,0),
-                   am.MP0_HWIP: (13,0,10), am.MP1_HWIP: (13,0,10), am.OSSSYS_HWIP: (6,0,0), am.SDMA0_HWIP: (6,0,0)}
+    # IP versions confirmed against this card's real discovery table (pre-bl ipver trace, 2026-06-10):
+    # nbio=(4,3,0) gc=(11,0,0) mp0=(13,0,0). The previous MP0/MP1 (13,0,10) selected wrong-ASIC signed
+    # PSP/SMU firmware, which the PSP bootloader silently rejected (first-KDB "BL not ready" hang).
+    self.ip_ver = {am.GC_HWIP: (11,0,0), am.HDP_HWIP: (6,0,0), am.MMHUB_HWIP: (3,0,0), am.NBIO_HWIP: (4,3,0),
+                   am.MP0_HWIP: (13,0,0), am.MP1_HWIP: (13,0,0), am.OSSSYS_HWIP: (6,0,0), am.SDMA0_HWIP: (6,0,0)}
     self.gc_info = am.struct_gc_info_v1_0()
     self.gc_info.header.table_id, self.gc_info.header.version_major, self.gc_info.header.version_minor = am.GC, 1, 0
     self.gc_info.header.size = ctypes.sizeof(self.gc_info)
