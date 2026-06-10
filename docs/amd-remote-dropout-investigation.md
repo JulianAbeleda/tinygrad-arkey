@@ -198,3 +198,31 @@ And the firmware-specific claim should be stated carefully:
 
 - `docs/amd-rocm-llamacpp-research.md`
 - `structure/Development/amd-optimization-checklist.md`
+
+## Resolution update (2026-06-10)
+
+The `BL not ready` PSP failure that ended the timeline above was root-caused
+and fixed: the `gfx1100_744c` discovery profile hardcoded wrong IP versions
+(MP0/MP1 13.0.10 instead of 13.0.0), so every profile-driven run fed the PSP a
+wrongly-signed KDB from another ASIC's sOS bundle. Full story, bisection
+matrix, and fixes: `docs/amd-kdb-root-cause.md`.
+
+With the fixed profile, the matched arkey TinyGPU app+dext pair, and a truly
+power-cycled card, the Mac path completed its first full AM boot (`boot done`,
+11.4s, 26,263 roundtrips) and computed `Tensor([1,2,3])+1 -> [2, 3, 4]` on the
+GPU.
+
+Operational rules discovered on the way (also in `docs/tinygpu.md`):
+
+- Power-cycle the GPU (remove power) after any bridge death; a cable replug
+  leaves stale gated state and MMHUB reads then drop the PCIe tree.
+- `ensure_app` could clobber the local arkey TinyGPU app with the pinned
+  upstream release mid-session (fixed in `9eb0b042b`); a mismatched app/dext
+  stack makes single u32 BAR0 writes close the bridge.
+- Never reuse a long-lived serve.py bridge; protocol skew between an old
+  server and a new client hangs and can drop the device.
+
+Still open from this document's original scope: the dropout under sustained
+DMA load (the 16MB `PrepareDMA` trigger) has not been re-tested on the now
+fully-fixed stack, and `AMD_REMOTE_ALLOC_CAP_MB=2` remains the default
+mitigation. The Qwen workload retest is the next milestone.

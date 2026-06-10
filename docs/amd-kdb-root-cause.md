@@ -121,3 +121,9 @@ Two additional root causes found and fixed along the way:
 Operational rules for the Mac path: check serve.py's age before reuse (a
 stale bridge runs stale protocol code), verify /Applications/TinyGPU.app is
 the arkey build, and power-cycle (not replug) after any bridge death.
+
+The "Open / next" items above are superseded by the addendum: the Mac path is
+validated. Remaining: re-test whether the patched TinyGPU survives a real
+discovery-table read (if yes, delete the profile), retest Qwen under load
+(the original dropout investigation's open item), and relax
+`REMOTE_MMIO_CHUNK`/`REMOTE_MMIO_FENCE_EVERY` for speed once stability holds.

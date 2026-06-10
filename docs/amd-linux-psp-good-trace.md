@@ -1,5 +1,11 @@
 # AMD Linux PSP Good Trace
 
+> **Investigation concluded 2026-06-10.** The KDB `BL not ready` failure this
+> document was built to diagnose was a firmware-identity bug in the
+> `gfx1100_744c` discovery profile — see `docs/amd-kdb-root-cause.md`. This
+> document is retained for its Linux-good capture methodology (bpftrace
+> tracing, MMHUB/GART snapshots, comparison workflow).
+
 This captures the Linux-good PSP boot path for a Navi31/RX 7900 XTX installed
 directly in a Linux PC PCIe slot. Use it to compare Linux `amdgpu` against the
 Mac/TinyGPU failure where first KDB load writes `C2PMSG35=0x80000`, clears
