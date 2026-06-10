@@ -17,6 +17,26 @@ last_error = ""
 dirty_error = ""
 
 def stat(cmd:RemoteCmd, delta:float): stats[f"{cmd.name}_count"] += 1; stats[f"{cmd.name}_ms"] += int(delta * 1000)
+
+# Bulk MMIO slice ops through the TinyGPU bridge can close the app connection (observed with a 0x1000-byte write to
+# BAR0; u32 ops are safe). Chunk slice reads/writes into u32-sized ops by default. REMOTE_MMIO_CHUNK=0 restores bulk ops.
+MMIO_CHUNK = int(os.getenv("REMOTE_MMIO_CHUNK", "4"))
+def bar_store(bar_view, off:int, data:bytes):
+  if MMIO_CHUNK == 0 or not OSX: bar_view[off:off+len(data)] = data; return
+  if off % 4 == 0 and len(data) % 4 == 0:
+    view = bar_view.view(fmt='I')
+    for i, val in enumerate(struct.unpack(f'<{len(data)//4}I', data)): view[off // 4 + i] = val
+  else:
+    for i in range(0, len(data), 4):
+      n = min(4, len(data) - i)
+      bar_view[off+i:off+i+n] = data[i:i+n]
+def bar_load(bar_view, off:int, size:int) -> bytes:
+  if MMIO_CHUNK == 0 or not OSX: return bytes(bar_view[off:off+size])
+  if off % 4 == 0 and size % 4 == 0:
+    view = bar_view.view(fmt='I')
+    return struct.pack(f'<{size//4}I', *(view[off // 4 + i] for i in range(size // 4)))
+  return b"".join(bytes(bar_view[off+i:off+i+min(4, size-i)]) for i in range(0, size, 4))
+
 def log(msg:str, level:int=1):
   if DEBUG >= level: print(f"remote: {msg}", flush=True)
 def mark_dirty(msg:str):
@@ -112,7 +132,7 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
   elif cmd == RemoteCmd.MMIO_READ:
     bar_view = mapped_bars[(dev_id, bar)]
     if arg0 % 4 == 0 and arg1 == 4: conn.sendmsg([resp(arg1), struct.pack('<I', bar_view.view(fmt='I')[arg0 // 4])])
-    else: conn.sendmsg([resp(arg1), bar_view[arg0:arg0+arg1]])
+    else: conn.sendmsg([resp(arg1), bar_load(bar_view, arg0, arg1)])
   elif cmd == RemoteCmd.MMIO_WRITE:
     log(f"MMIO_WRITE recv-start dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
     data = conn.recv(arg1, socket.MSG_WAITALL)
@@ -121,7 +141,7 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     aligned_u32 = arg0 % 4 == 0 and arg1 == 4
     log(f"MMIO_WRITE store-start dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x} path={'u32' if aligned_u32 else 'slice'}", 4)
     if aligned_u32: bar_view.view(fmt='I')[arg0 // 4] = struct.unpack('<I', data)[0]
-    else: bar_view[arg0:arg0+arg1] = data
+    else: bar_store(bar_view, arg0, data)
     log(f"MMIO_WRITE store-done dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
     conn.sendall(resp())
     log(f"MMIO_WRITE resp-done dev={dev_id} bar={bar} off={arg0:#x} size={arg1:#x}", 4)
