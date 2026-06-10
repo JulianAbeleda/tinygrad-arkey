@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import collections, ctypes, mmap, os, socket, struct, sys, time
+import collections, ctypes, mmap, os, select, socket, struct, sys, time
 from tinygrad.runtime.autogen import libc
 from tinygrad.runtime.support.system import PCIDevice, RemoteCmd, System
 from tinygrad.helpers import DEBUG, OSX
@@ -174,10 +174,32 @@ def handle(conn, cmd, dev_id, bar, arg0, arg1, arg2):
     conn.sendall(resp())
   else: raise RuntimeError(f"unknown command {cmd}")
 
+# The USB4/UT4G link dies on idle->sleep-state transitions (ASPM/CLx retraining fails and macOS drops the PCIe tree).
+# Keep the link out of those states with a harmless 1Hz config-space read whenever a device is open and traffic is idle.
+# REMOTE_KEEPALIVE_S sets the cadence; 0 disables. Default on only for OSX.
+KEEPALIVE_S = float(os.getenv("REMOTE_KEEPALIVE_S", "1.0" if OSX else "0"))
+_keepalive_fail = 0
+def keepalive_tick():
+  global _keepalive_fail
+  if not KEEPALIVE_S or dirty_error: return
+  for dev_id, pci_dev in opened_devices.items():
+    try:
+      pci_dev.read_config(0, 4)
+      if _keepalive_fail: log(f"KEEPALIVE recovered after {_keepalive_fail} failures")
+      _keepalive_fail = 0
+    except Exception as e:
+      _keepalive_fail += 1
+      if _keepalive_fail in (1, 10, 100): log(f"KEEPALIVE failed x{_keepalive_fail} dev={dev_id}: {e}")
+
 def serve(conn:socket.socket):
   global last_error
   REQ = '<BIIQQQ'
   while True:
+    if KEEPALIVE_S:
+      readable, _, _ = select.select([conn], [], [], KEEPALIVE_S)
+      if not readable:
+        keepalive_tick()
+        continue
     hdr = conn.recv(struct.calcsize(REQ), socket.MSG_WAITALL)
     if len(hdr) < struct.calcsize(REQ): raise ConnectionError("client disconnected")
     cmd, dev_id, bar, arg0, arg1, arg2 = struct.unpack(REQ, hdr)
@@ -207,8 +229,12 @@ if __name__ == "__main__":
   try: s.connect(("8.8.8.8", 80)); ip = s.getsockname()[0]
   finally: s.close()
   print(f"listening on {ip}:{port}")
+  if KEEPALIVE_S: server.settimeout(KEEPALIVE_S)
   while True:
-    conn, addr = server.accept()
+    try: conn, addr = server.accept()
+    except socket.timeout:
+      keepalive_tick()
+      continue
     conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     for bt in [socket.SO_SNDBUF, socket.SO_RCVBUF]: conn.setsockopt(socket.SOL_SOCKET, bt, 64 << 20)
     try: serve(conn)
