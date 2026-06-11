@@ -271,26 +271,42 @@ tinygrad's codegen can express packed loads + dot efficiently. Right plan, not
 a guaranteed win. "BEAM + primitive" >> "BEAM harder" is correct; do not expect
 plain BEAM to contribute beyond tuning the primitive's parameters.
 
-## FINAL agreed plan (2026-06-11) — locked, execute in order
+## FINAL agreed plan (2026-06-11) — execute in order
 
 Ordering (Codex, agreed): microbench -> expression-vectorization probe ->
 primitive if needed -> BEAM tunes primitive -> full decode. BEAM native-Ubuntu
-only (never the Mac bridge). This is the plan of record; stop refining, execute.
+only (never the Mac bridge). This is the plan of record.
 
-1. Native Ubuntu only for BEAM (Mac bridge would drop on a faulting candidate).
-2. Build the Q4_K GEMV microbench (extra/q4_k_bench.py exists) at the dominant
-   decode shape (pick the biggest: FFN up/down/gate; optionally bench the few
-   distinct attn/ffn shapes). Fast iteration target for all of the below.
-3. Cheap expression-vectorization probe FIRST: rewrite gguf.py:57 Q4_K path to
-   encourage wider loads (bitcast blocks to wider int, vector bit-op unpack);
-   inspect DEBUG=4; accept only if scalar uint8 loads become vectorized AND
-   microbench improves.
-4. If the rewrite fails, add a real PRIMITIVE (not a heuristic): packed Q4_K
-   load + scale/min unpack + fp16 dot, in the spirit of TC/WMMA, near
-   heuristic.py:63.
-5. BEAM tunes around the primitive (rows/thread, group, local, unroll). Not
-   expected to discover packed dot from scalar ops.
-6. Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
+1. [x] Native Ubuntu only for BEAM (Mac bridge would drop on a faulting
+   candidate). Current execution has used no BEAM and no Mac bridge.
+2. [x] Build the Q4_K GEMV microbench at the dominant decode shapes.
+   Implemented in `extra/q4_k_bench.py`; representative Qwen3-8B FFN/attention
+   shapes are selected from GGUF metadata.
+3. [x] Cheap expression-vectorization probe FIRST: rewrite `gguf.py` Q4_K path
+   to encourage wider loads; inspect DEBUG=4; accept only if scalar uint8 loads
+   become vectorized AND microbench improves. Result: NO-GO. `GGUF_Q4K_WIDE=1`
+   is bit-exact, but still emits scalar `unsigned char` loads and regresses the
+   microbench.
+4. [x] Primitive load-width viability probe. `extra/q4_k_primitive_probe.py`
+   confirms a custom UOp kernel can emit `unsigned int` loads over a word-typed
+   Q4_K buffer.
+5. [x] Representation staging probe. Opening the GGUF file as
+   `Tensor(path, dtype=dtypes.uint32)`, slicing the aligned Q4_K tensor range on
+   DISK, then copying that slice to AMD avoids the scalar byte-pack kernel and
+   copies only the target tensor range. This is the viable input path for the
+   primitive.
+6. [ ] Add the real primitive: packed Q4_K load + scale/min unpack + fp16 dot,
+   in the spirit of TC/WMMA. It must consume the word-typed Q4_K storage path
+   from step 5, not a byte-bitcast expression.
+7. [ ] Wire the primitive into the microbench behind a flag and compare against
+   the existing fused expression. Correctness must match the frozen Q4_K
+   reference before any speed number counts.
+8. [ ] Tune the primitive's exposed parameters with search/BEAM on native
+   Ubuntu only: rows/thread, group size, local shape, unroll. BEAM is expected
+   to tune around the primitive, not discover packed loads from scalar ops.
+9. [ ] Run full 8B decode only after the microbench passes correctness and
+   clears the speed gate. Then repeat on 14B.
+10. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
    find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
    fail safe, not hard-fault). Report it.
 
@@ -309,5 +325,10 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
    A microbench win must also be confirmed to translate to a full-decode win
    (step: full decode last) before claiming success.
 
-### Status: planning converged. Next concrete action = steps 1-2 (microbench),
-then step 3 (expression probe). No further plan refinement needed.
+### Current next action
+
+Step 6: implement the first correctness-only Q4_K custom GEMV primitive over
+the word-typed Q4_K storage path. Do not optimize it first. The first gate is:
+same output as `q4_k_reference(...).reshape(shape).cast(float16) @ x.T` on a
+small fixed tensor slice. Only after that should the primitive be timed and
+tuned.

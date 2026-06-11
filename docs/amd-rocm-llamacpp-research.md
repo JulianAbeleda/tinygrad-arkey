@@ -842,3 +842,33 @@ This is the next representation boundary. The expression rewrite failed because
 bitcasting inside the graph does not change load width. The custom primitive
 can emit the desired load width, but only after the input storage type/path is
 fixed.
+
+### Follow-up: direct GGUF `uint32` storage path
+
+Updated `extra/q4_k_primitive_probe.py` with `--source disk-u32`.
+
+Instead of opening the GGUF as a `uint8` Tensor and bitcasting inside the graph,
+this opens the file as `Tensor(path, dtype=dtypes.uint32)`, slices the aligned
+Q4_K tensor range while it is still DISK-backed, and then copies only that slice
+to AMD:
+
+```bash
+DEV=AMD DEBUG=4 PYTHONPATH=. .venv/bin/python extra/q4_k_primitive_probe.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --tensor blk.0.ffn_gate.weight --source disk-u32 --iters 5
+```
+
+Result:
+
+| stage | observation |
+|---|---|
+| DISK view | 27 MB slice at the Q4_K tensor offset, not the whole GGUF |
+| DISK -> AMD copy | 27 MB copied, matching the selected tensor's packed bytes |
+| raw word check | first 16 `uint32` words match file bytes |
+| custom kernel | `unsigned int val0 = (*(data1_7077888+gidx0))` |
+| scalar byte-pack kernel | absent |
+
+This resolves the representation staging problem for the primitive prototype:
+the first real Q4_K GEMV primitive should consume a word-typed packed buffer
+created this way. The remaining work is the actual packed-load + scale/min
+unpack + dot kernel and its correctness gate.
