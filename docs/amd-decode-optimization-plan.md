@@ -350,9 +350,14 @@ only (never the Mac bridge). This is the plan of record.
    and reaches ~369 Q4-GB/s device time over 10 iterations on the full FFN
    shape. Broad `--schedule auto` still fails AMD compilation, so BEAM remains
    gated until compile-failure containment is isolated.
-10. [ ] Wire the tuned primitive into the microbench behind a flag and compare against
-   the existing fused expression. Correctness must match the frozen Q4_K
-   reference before any speed number counts.
+10. [x] Wire the tuned primitive into the microbench behind a flag and compare
+   against the existing fused expression. `extra/q4_k_bench.py --primitive`
+   now runs the `LOCAL:0:32` primitive under JIT, uses deterministic random
+   fp16 activations by default, checks exact primitive unpack against
+   `q4_k_reference`, and checks GEMV against the decoded matmul reference before
+   timing. On Qwen3-8B representative shapes, the primitive wins on the large
+   FFN and attention-Q shapes; the tiny KV projection is device-time weaker, so
+   model integration should be shape-aware rather than blanket replacement.
 11. [ ] Tune the primitive's exposed parameters with search/BEAM on native
    Ubuntu only: rows/thread, group size, local shape, unroll. BEAM is expected
    to tune around the primitive, not discover packed loads from scalar ops.
@@ -379,10 +384,12 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 10: wire the tuned `LOCAL:0:32` primitive into the representative Q4_K
-microbench path behind a flag. The goal is to prove the tuned primitive is not
-an orphan script and can replace the existing fused graph path for the same
-tensor/activation contract before any model.py/full-decode integration.
+Step 11: run a safe, shape-aware primitive parameter search on native Ubuntu.
+Start from the subprocess opt-sweep harness, not broad `--schedule auto` BEAM:
+search explicit local size / part count / unroll candidates per representative
+shape, classify compile failures without faulting the process, and keep the
+primitive enabled only where it beats the existing fused graph path under the
+same correctness gates. Full decode waits until this microbench policy is clear.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 

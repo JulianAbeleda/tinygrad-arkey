@@ -729,7 +729,7 @@ Command:
 ```bash
 DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/q4_k_bench.py \
   /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --all-shapes \
-  --iters 5 --format json
+  --iters 5 --activation ones --format json
 ```
 
 Baseline fused decode+matvec bandwidth, counted as Q4 weight bytes / kernel
@@ -1061,3 +1061,68 @@ The contribution is not "search over schedules" or "search over graph
 partitions"; those exist. The useful boundary is exposing Q4_K as a verified
 packed tile primitive so schedule/search systems have a representation to tune
 instead of opaque scalar byte math.
+
+## Q4_K primitive integrated into microbench (2026-06-11)
+
+Step 10 result: the tuned primitive is no longer an orphan script. Added
+`--primitive` to `extra/q4_k_bench.py`, wired to the `LOCAL:0:32` custom Q4_K
+GEMV primitive under `TinyJit`. The integrated bench now uses deterministic
+random fp16 activations by default, checks exact primitive unpack against
+`q4_k_reference`, and checks primitive GEMV against the decoded matmul reference
+before timing. Device-time bandwidth is reported when `DEBUG=2`; with lower
+debug levels it prints `n/a` instead of a fake zero.
+
+Repro note: this changes `extra/q4_k_bench.py`'s default activation from
+all-ones to random. Use `--activation ones` only when intentionally reproducing
+older timing tables; primitive correctness runs should keep random activations.
+
+Wall-time command:
+
+```bash
+DEV=AMD DEBUG=0 PYTHONPATH=. .venv/bin/python extra/q4_k_bench.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --all-shapes --primitive --iters 10 --format text
+```
+
+All primitive correctness gates passed:
+
+| tensor | primitive unpack | primitive GEMV max_abs |
+|---|---:|---:|
+| `blk.0.ffn_gate.weight` | 0 | 0.00179243 |
+| `blk.4.ffn_down.weight` | 0 | 0.00262928 |
+| `blk.0.attn_q.weight` | 0 | 0.00239778 |
+| `blk.0.attn_k.weight` | 0 | 0.00180006 |
+
+Wall-time results with JIT replay (`DEBUG=0`, Q4 bytes / wall time):
+
+| tensor | shape | fused graph GB/s | primitive GB/s | primitive ms |
+|---|---:|---:|---:|---:|
+| `blk.0.ffn_gate.weight` | 12288x4096 | 24.38 | 204.82 | 0.138 |
+| `blk.4.ffn_down.weight` | 4096x12288 | 24.06 | 209.77 | 0.135 |
+| `blk.0.attn_q.weight` | 4096x4096 | 8.11 | 68.42 | 0.138 |
+| `blk.0.attn_k.weight` | 1024x4096 | 2.00 | 17.23 | 0.137 |
+
+Device-time command:
+
+```bash
+DEV=AMD DEBUG=2 PYTHONPATH=. .venv/bin/python extra/q4_k_bench.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --all-shapes --primitive --iters 3 --format text
+```
+
+Device-time results (`DEBUG=2`, Q4 bytes / GPU event time):
+
+| tensor | shape | fused graph GB/s | primitive GB/s | verdict |
+|---|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 12288x4096 | 81.40 | 379.85 | primitive wins |
+| `blk.4.ffn_down.weight` | 4096x12288 | 15.76 | 193.97 | primitive wins |
+| `blk.0.attn_q.weight` | 4096x4096 | 15.56 | 176.24 | primitive wins |
+| `blk.0.attn_k.weight` | 1024x4096 | 111.43 | 49.90 | fused graph wins on raw kernel time |
+
+Verdict: the tuned primitive is integrated enough to compare under the same
+tensor/activation contract and clears the microbench speed gate for the large
+decode matrices. It should not be wired into model execution as a blanket
+replacement yet: the small KV projection shows that the choice must be
+shape-aware. Next step is a safe parameter search over primitive knobs per
+shape, using subprocess classification first; broad scheduler/BEAM auto-search
+remains gated by compile/fault containment.
