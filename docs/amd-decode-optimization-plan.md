@@ -227,3 +227,46 @@ which is the layer-2 residue the field hand-writes. So the honest order is:
 (1) BEAM to harvest layer-1 on the existing kernel [machine], (2) profile to
 size the residual, (3) specialized GEMV lowering for the rest [human-shaped,
 possibly templated so BEAM tunes its params].
+
+## T-SPECIALIZE refined: "BEAM + Q4_K primitive" (2026-06-11, agreed with Codex audit)
+
+Verified: BEAM's action set (search.py:13-22) is 8 schedule transforms
+(UPCAST/UNROLL/LOCAL/GROUP/GROUPTOP/THREAD/SWAP/TC); the ONLY hardware
+primitive is TC (tensor cores), and it is HAND-ADDED (search.py:20,22). So
+BEAM provably cannot synthesize a packed quant GEMV — confirming the wall is
+the action set's span, not search depth. The plan is "BEAM + a Q4_K primitive",
+modeled exactly on how TC was added. Harness exists: extra/q4_k_bench.py.
+
+Two tracks (Codex), with refinements:
+
+### Track 1 — BEAM containment (safety, do first; it currently faults the GPU)
+- Run BEAM on the q4_k_bench microbench, NOT the full model.
+- PARALLEL=0, lower candidate count, strict timeout, BEAM_DEBUG=2.
+- Identify the faulting Opt candidate; blacklist/constrain its shape on AMD.
+- The HW fault (memory_lost=1) is itself a bug: a candidate kernel should never
+  hard-fault the GPU — add a guard. REPORT it.
+- HARD RULE: BEAM must NEVER run on the Mac remote path — a faulting candidate
+  would drop the TinyGPU bridge / PCIe tree. Tune on Ubuntu native ONLY, cache
+  schedules, ship the cache to the Mac ("separation in time").
+
+### Track 2 — the primitive (the real lever)
+- REFINEMENT (try the cheap machine-side shot FIRST): attempt to vectorize the
+  Q4_K dequant by RESTRUCTURING the gguf.py:57 expression (bitcast blocks to a
+  wider dtype, unpack with vector bit-ops) so codegen emits vector loads instead
+  of scalar uint8 — no new Opt needed. If codegen still scalarizes (the gather
+  pattern forces it), THEN add the primitive. (Skip if Codex already determined
+  the gather forces scalarization.)
+- PRECISION: the primitive must introduce VECTORIZED PACKED LOAD + DOT
+  capability (like TC introduces WMMA), not merely a tuned schedule/heuristic —
+  a heuristic within the existing action set cannot add vectorization. Add it
+  near the matvec heuristic (heuristic.py:63) as a new candidate.
+- Then let BEAM tune around it: rows/thread, group size, local shape, unroll.
+- Only then re-run full decode; then T6 Mac deploy with cached schedules.
+
+### Honest expectation
+This is the right architecture (templated-autotuning, the field standard) and
+the only path with a real shot at llama.cpp parity. But the primitive's QUALITY
+is itself the hard, uncertain part — reaching parity depends on whether
+tinygrad's codegen can express packed loads + dot efficiently. Right plan, not
+a guaranteed win. "BEAM + primitive" >> "BEAM harder" is correct; do not expect
+plain BEAM to contribute beyond tuning the primitive's parameters.
