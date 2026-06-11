@@ -133,3 +133,56 @@ no building without a number.
 - BEAM runs are nondeterministic in search but deterministic in output; verify
   output unchanged across BEAM levels.
 - Keep a frozen baseline tag before kernel edits for A/B and rollback.
+
+## Audit + external validation (2026-06-11)
+
+Checked the plan's load-bearing claims against outside sources. Three
+corrections, one confirmation.
+
+### CONFIRMED: fusion is the right lever (field-validated, not just our reasoning)
+External literature is unambiguous that fused dequant+matmul is THE known
+solution to quantized-decode speed: "kernel fusion is essential to developing
+a quantized model with superior throughput to FP16"; the SplitK W4A16 work is
+a one-step fused dequant+matmul kernel built precisely for this. So T3 aims at
+the field-proven target. Good.
+
+### CORRECTION 1: the 4.4x / 1.6x split is ONE measurement + a residual, not two
+We measured the ~4.4x bytes ratio (DEBUG=2: kernels ~355 GB/s vs 81 eff) and
+then ASSIGNED the remaining 1.6x to scheduling to reach 7x. BEAM's actual
+contribution is unmeasured (no public quantitative BEAM speedup found; tinygrad
+docs only say BEAM makes it "competitive with PyTorch"). So the decomposition
+is suggestive, not established. **T0 is what actually tests the split** — treat
+it as a hypothesis test, not a confirmation. Don't cite 4.4x/1.6x as if both
+were measured.
+
+### CORRECTION 2: "parity with llama.cpp" ceiling is likely too optimistic
+tinygrad's own claim is BEAM makes it "competitive with PyTorch" — and PyTorch
+quantized decode is itself below llama.cpp. llama.cpp's 567 GB/s (59% of peak)
+is a years-tuned kernel. Realistic best case for tinygrad fusion+BEAM is more
+like PyTorch-class = ~50-70% of llama.cpp; full parity is aspirational, not
+expected. Down-weight the "ceiling ~100 tok/s 8B" scenario; treat "mid
+~50-70 tok/s" as the realistic success target.
+
+### CORRECTION 3: every fast quant-decode in the wild is a HAND-WRITTEN fused kernel
+llama.cpp MMVQ, the SplitK Triton kernel — the existence proofs of fast
+quantized decode are all hand-fused, not compiler-auto-fused. Nobody has shown
+auto-fusion MATCHING hand-fusion for this workload. So T3 (tinygrad auto-fuses
+the dequant) is the OPTIMISTIC bet, and T5 (hand-add a fused primitive) is more
+likely than "last resort, decode-unlikely" implied. Reweight: T3 success would
+be a mildly novel result, not the expected one; budget for T5. The "machine
+takes most" path is worth trying FIRST (it's the goal, and a clean win if it
+lands) but the field's prior favors needing some hand-fusion.
+
+### ADDED to T1: rule out CPU/dispatch overhead
+At 15 tok/s on 8B, part of the gap could be Python/dispatch per token, not GPU
+kernel bandwidth. T1 must check whether summed GPU kernel time accounts for the
+full per-token wall time; if there's a large gap, that residue is dispatch
+(TinyJit/batching work), which fusion won't fix.
+
+### Net audit verdict
+Structure sound, central lever (fusion) externally validated. But: the gap
+decomposition is one measurement not two (T0 tests it), the parity ceiling is
+optimistic (target ~50-70% of llama as realistic), and hand-fusion (T5) is more
+probable than framed (auto-fusion is the hopeful path, not the safe one). The
+plan's ordering still holds — try the machine-first path first — but with
+honest expectations, not the optimistic ones this session has repeatedly shown.
