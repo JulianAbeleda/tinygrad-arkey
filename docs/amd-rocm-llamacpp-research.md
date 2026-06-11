@@ -796,3 +796,49 @@ Conclusion: the current gather/slice/bitcast expression is outside the useful
 span of tinygrad's existing vectorization/codegen. The next step is the layer-2
 work: introduce a real packed Q4_K GEMV primitive/candidate that represents
 wide packed loads + dequant + dot, then let search tune around that primitive.
+
+## Q4_K primitive scaffold probe (2026-06-11)
+
+Follow-up after the expression-vectorization no-go. Goal: verify whether the
+custom-kernel/UOp primitive path can emit wide loads at all, independent of the
+current `gguf.py` Tensor expression.
+
+Added `extra/q4_k_primitive_probe.py`, which:
+
+1. Reads the same real Qwen3-8B Q4_K tensor metadata.
+2. Creates an explicit `uint32` view of the Q4 bytes.
+3. Calls a minimal UOp custom kernel over that `uint32` buffer.
+4. Checks the copy is bit-exact.
+5. Dumps generated code under `DEBUG=4`.
+
+Command:
+
+```bash
+DEV=AMD DEBUG=4 PYTHONPATH=. .venv/bin/python extra/q4_k_primitive_probe.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --tensor blk.0.ffn_gate.weight --iters 5
+```
+
+Result:
+
+| stage | generated load | note |
+|---|---|---|
+| `raw_u8.bitcast(uint32).contiguous()` prep | scalar `unsigned char` loads | Tensor expression still byte-packs |
+| `q4k_u32_copy_probe` custom kernel | `unsigned int val0 = (*(data1+gidx0))` | primitive path can issue 32-bit loads |
+
+Correctness passed: copied `uint32` words equal the prepared `uint32` view.
+
+Important implication: the primitive path is viable only if it can reinterpret
+or receive the packed Q4 buffer as word-typed storage without first materializing
+a scalar byte-pack Tensor kernel. A real Q4_K GEMV primitive therefore needs one
+of:
+
+- a custom lowering that treats the raw `uint8` Q4 pointer as aligned `uint32*`
+  internally, or
+- a GGUF/model-load representation that stores Q4_K packed buffers in a
+  word-typed backing Tensor while preserving the generic `uint8` fallback.
+
+This is the next representation boundary. The expression rewrite failed because
+bitcasting inside the graph does not change load width. The custom primitive
+can emit the desired load width, but only after the input storage type/path is
+fixed.
