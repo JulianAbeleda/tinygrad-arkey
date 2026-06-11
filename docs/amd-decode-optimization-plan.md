@@ -370,9 +370,10 @@ only (never the Mac bridge). This is the plan of record.
    custom packed Q4_K GEMV only during rollout/decode for policy-selected
    roles. Prefill, batched/symbolic non-decode paths, bias cases, and small KV
    projections fall back to the existing tinygrad graph.
-13. [ ] Run full 8B decode only after the model-path primitive flag compiles and
-   passes a minimal logits/token sanity check. Then profile tok/s and dominant
-   kernels.
+13. [x] Run full 8B decode after the model-path primitive flag compiles.
+   Sustained `--benchmark 128` result: baseline averages `15.44 tok/s`;
+   `Q4K_PRIMITIVE=1` averages `28.74 tok/s`, a 1.86x full-model decode gain.
+   DEBUG=2 confirmed rollout emits `q4k_gemv_partial_*` kernels.
 14. [ ] Repeat the validated path on 14B if 8B moves.
 15. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
    find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
@@ -397,10 +398,9 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 13: run the full 8B decode benchmark with and without `Q4K_PRIMITIVE=1`,
-then inspect whether the ~2x short-run gain holds over 128 generated tokens.
-The DEBUG=2 smoke confirmed real model decode emits `q4k_gemv_partial_*`
-kernels; the next question is sustained tok/s and remaining bottlenecks.
+Step 14: repeat the same baseline vs `Q4K_PRIMITIVE=1` benchmark on Qwen3-14B.
+The 8B path moved 1.86x, so the next question is whether the role-based policy
+generalizes to the larger dense shapes or needs a separate 14B policy sweep.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 

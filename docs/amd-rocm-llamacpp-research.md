@@ -1243,3 +1243,43 @@ microbench path.
 Next: run sustained 8B decode (`--benchmark 128`) with and without the flag.
 The short run shows a real full-model gain, but the decision point is sustained
 tok/s and the remaining dominant kernels.
+
+## Q4_K primitive sustained 8B decode (2026-06-11)
+
+Step 13 result: sustained 8B decode confirms the model-path primitive gain.
+
+Commands:
+
+```bash
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --warmup --benchmark 128 2>&1 | tee /home/ubuntu/tg-8b-baseline-128.log
+
+DEV=AMD Q4K_PRIMITIVE=1 JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --warmup --benchmark 128 2>&1 | tee /home/ubuntu/tg-8b-q4k-primitive-128.log
+```
+
+Parsed tok/s:
+
+| mode | samples | avg tok/s | avg last 32 | median last 32 | last |
+|---|---:|---:|---:|---:|---:|
+| baseline | 128 | 15.44 | 15.40 | 15.42 | 15.40 |
+| `Q4K_PRIMITIVE=1` | 128 | 28.74 | 28.32 | 28.93 | 28.66 |
+
+Full-model gain: `28.74 / 15.44 = 1.86x`.
+
+Representative final steady lines:
+
+- baseline: ~`64.9-65.2 ms`, ~`15.3-15.4 tok/s`, ~`75 GB/s`.
+- `Q4K_PRIMITIVE=1`: usually ~`34.6-35.0 ms`, ~`28.6-28.9 tok/s`,
+  ~`140-142 GB/s`, with one observed late outlier around `24 tok/s`.
+
+Verdict: the primitive is no longer just a microbench win. It moves actual 8B
+decode from ~15% of llama.cpp's cited ~101 tok/s to ~28% on this machine. The
+remaining gap is still large, but the project crossed an important boundary:
+the packed primitive can be wired through model execution and produce sustained
+full-decode speedup.
+
+Next: repeat on Qwen3-14B. If 14B underperforms, run a 14B-specific policy
+sweep before changing the role policy.
