@@ -1283,3 +1283,42 @@ full-decode speedup.
 
 Next: repeat on Qwen3-14B. If 14B underperforms, run a 14B-specific policy
 sweep before changing the role policy.
+
+## Q4_K primitive sustained 14B decode (2026-06-11)
+
+Step 14 result: the 8B role policy generalizes to Qwen3-14B and produces a
+large sustained full-decode gain.
+
+Commands:
+
+```bash
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf \
+  --warmup --benchmark 128 2>&1 | tee /home/ubuntu/tg-14b-baseline-128.log
+
+DEV=AMD Q4K_PRIMITIVE=1 JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf \
+  --warmup --benchmark 128 2>&1 | tee /home/ubuntu/tg-14b-q4k-primitive-128.log
+```
+
+Parsed tok/s:
+
+| mode | samples | avg tok/s | avg last 32 | median last 32 | last |
+|---|---:|---:|---:|---:|---:|
+| baseline | 128 | 8.88 | 8.88 | 8.98 | 8.88 |
+| `Q4K_PRIMITIVE=1` | 128 | 14.90 | 14.48 | 15.72 | 15.72 |
+
+Full-model gain: `14.90 / 8.88 = 1.68x` by all-sample average. The flagged
+run has visible outliers, including one late ~`10 tok/s` sample, while normal
+steady samples are mostly `15.3-15.8 tok/s`.
+
+Representative final steady lines:
+
+- baseline: ~`111-113 ms`, ~`8.9 tok/s`, ~`79 GB/s`.
+- `Q4K_PRIMITIVE=1`: usually ~`63-65 ms`, ~`15.3-15.8 tok/s`, ~`136-140 GB/s`.
+
+Verdict: the role-based primitive policy is not just overfit to Qwen3-8B. It
+moves Qwen3-14B from ~`8.9 tok/s` to ~`14.9 tok/s` average, about 22.6% of the
+cited llama.cpp ~66 tok/s reference instead of ~13.5%. The remaining gap is
+still specialized-kernel and graph/dispatch quality, but this is a real
+end-to-end decode improvement on both target models.

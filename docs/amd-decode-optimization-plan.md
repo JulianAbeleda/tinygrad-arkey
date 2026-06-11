@@ -374,7 +374,10 @@ only (never the Mac bridge). This is the plan of record.
    Sustained `--benchmark 128` result: baseline averages `15.44 tok/s`;
    `Q4K_PRIMITIVE=1` averages `28.74 tok/s`, a 1.86x full-model decode gain.
    DEBUG=2 confirmed rollout emits `q4k_gemv_partial_*` kernels.
-14. [ ] Repeat the validated path on 14B if 8B moves.
+14. [x] Repeat the validated path on 14B. Sustained `--benchmark 128` result:
+   baseline averages `8.88 tok/s`; `Q4K_PRIMITIVE=1` averages `14.90 tok/s`
+   over all samples, with last-32 median `15.72 tok/s`. The same role policy
+   generalizes, though 14B has visible outliers.
 15. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
    find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
    fail safe, not hard-fault). Report it.
@@ -398,9 +401,9 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 14: repeat the same baseline vs `Q4K_PRIMITIVE=1` benchmark on Qwen3-14B.
-The 8B path moved 1.86x, so the next question is whether the role-based policy
-generalizes to the larger dense shapes or needs a separate 14B policy sweep.
+Step 15: contain the remaining BEAM/search fault path on the microbench. The
+primitive policy is now useful without broad BEAM, but search candidates still
+need fail-closed behavior before live BEAM can be trusted again.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 
