@@ -295,18 +295,24 @@ only (never the Mac bridge). This is the plan of record.
    DISK, then copying that slice to AMD avoids the scalar byte-pack kernel and
    copies only the target tensor range. This is the viable input path for the
    primitive.
-6. [ ] Add the real primitive: packed Q4_K load + scale/min unpack + fp16 dot,
-   in the spirit of TC/WMMA. It must consume the word-typed Q4_K storage path
-   from step 5, not a byte-bitcast expression.
-7. [ ] Wire the primitive into the microbench behind a flag and compare against
+6. [x] Add the first correctness-only primitive scaffold: packed Q4_K
+   `uint32` load + scale/min unpack + fp16 dot over a small GEMV slice.
+   Implemented in `extra/q4_k_gemv_primitive.py`; it consumes the word-typed
+   storage path from step 5 and passes the frozen reference gate on 2 and 16
+   rows of `blk.0.ffn_gate.weight`.
+7. [ ] Turn the correctness scaffold into a tunable parallel primitive:
+   split rows/reduction across work-items, expose rows/thread, group size,
+   local shape, and unroll parameters. The current scaffold is deliberately
+   serial per row and is not a speed candidate.
+8. [ ] Wire the tuned primitive into the microbench behind a flag and compare against
    the existing fused expression. Correctness must match the frozen Q4_K
    reference before any speed number counts.
-8. [ ] Tune the primitive's exposed parameters with search/BEAM on native
+9. [ ] Tune the primitive's exposed parameters with search/BEAM on native
    Ubuntu only: rows/thread, group size, local shape, unroll. BEAM is expected
    to tune around the primitive, not discover packed loads from scalar ops.
-9. [ ] Run full 8B decode only after the microbench passes correctness and
+10. [ ] Run full 8B decode only after the microbench passes correctness and
    clears the speed gate. Then repeat on 14B.
-10. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
+11. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
    find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
    fail safe, not hard-fault). Report it.
 
@@ -327,8 +333,7 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 6: implement the first correctness-only Q4_K custom GEMV primitive over
-the word-typed Q4_K storage path. Do not optimize it first. The first gate is:
-same output as `q4_k_reference(...).reshape(shape).cast(float16) @ x.T` on a
-small fixed tensor slice. Only after that should the primitive be timed and
-tuned.
+Step 7: parallelize the correct Q4_K custom GEMV scaffold. The next gate is not
+full decode; it is microbench speed on the dominant FFN shape with correctness
+still passing. Only after the primitive beats the existing fused expression
+microbench should it be wired into full decode.

@@ -872,3 +872,53 @@ This resolves the representation staging problem for the primitive prototype:
 the first real Q4_K GEMV primitive should consume a word-typed packed buffer
 created this way. The remaining work is the actual packed-load + scale/min
 unpack + dot kernel and its correctness gate.
+
+## Q4_K correctness-only GEMV primitive scaffold (2026-06-11)
+
+Added `extra/q4_k_gemv_primitive.py` as the first step-6 primitive scaffold.
+This is intentionally a correctness harness, not a speed candidate.
+
+What it does:
+
+1. Opens the GGUF Q4_K tensor through the direct `uint32` storage path.
+2. Copies only the selected packed row slice to AMD.
+3. Runs a custom UOp kernel that unpacks Q4_K scales/mins and nibbles from
+   `uint32` words.
+4. Computes a GEMV against fp16 activations.
+5. Compares against the frozen `q4_k_reference` dequant path plus dot product.
+
+Commands:
+
+```bash
+DEV=AMD DEBUG=2 PYTHONPATH=. .venv/bin/python extra/q4_k_gemv_primitive.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --tensor blk.0.ffn_gate.weight --rows 2 --iters 2
+
+DEV=AMD DEBUG=2 PYTHONPATH=. .venv/bin/python extra/q4_k_gemv_primitive.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --tensor blk.0.ffn_gate.weight --rows 16 --iters 1
+```
+
+Results:
+
+| rows | Q4 bytes | correctness |
+|---:|---:|---:|
+| 2 | 4.5 KB | max_abs `2.88486e-4` |
+| 16 | 36 KB | max_abs `8.53777e-4` |
+
+Generated-code check (`DEBUG=4`, rows=2): the custom primitive kernel
+`q4k_gemv_ref_2_4096` loads Q4_K packed data as `unsigned int`, for example:
+
+```c
+unsigned int val0 = (*(data1_1152+(alu1+1)));
+unsigned int val3 = (*(data1_1152+alu1));
+```
+
+The `unsigned char` loads still visible in the same debug log come from the
+reference dequant path used for correctness comparison, not from the primitive.
+
+Verdict: step 6 is partially complete. The Q4_K layout arithmetic is correct
+enough to proceed, and the primitive consumes the right word-typed storage. It
+is still serial per output row and therefore not a performance candidate. Next:
+parallelize the reduction/work distribution and expose tunable parameters
+before comparing against `extra/q4_k_bench.py`.
