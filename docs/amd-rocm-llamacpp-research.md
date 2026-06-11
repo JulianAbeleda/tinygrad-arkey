@@ -922,3 +922,66 @@ enough to proceed, and the primitive consumes the right word-typed storage. It
 is still serial per output row and therefore not a performance candidate. Next:
 parallelize the reduction/work distribution and expose tunable parameters
 before comparing against `extra/q4_k_bench.py`.
+
+## Q4_K partial parallel primitive pass (2026-06-11)
+
+Extended `extra/q4_k_gemv_primitive.py` with:
+
+- `--mode partial`: writes per-row/per-part partial sums, then reduces them.
+- `--parts N`: splits the K-block reduction into `N` partitions.
+- device-time reporting from `GlobalCounters.time_sum_s`, separate from Python
+  wall time.
+- `--schedule auto`: leaves custom-kernel opts open for scheduler experiments.
+- deterministic random fp16 activations for GEMV correctness, replacing the
+  earlier all-ones vector.
+- a direct unpacked-weight gate (`--unpack-check-rows`) that compares the
+  primitive's decoded weights element-wise against `q4_k_reference`.
+
+Correctness gates:
+
+```bash
+DEV=AMD DEBUG=2 PYTHONPATH=. .venv/bin/python extra/q4_k_gemv_primitive.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --tensor blk.0.ffn_gate.weight --rows 16 --mode partial --parts 16 --iters 1
+
+DEV=AMD DEBUG=2 PYTHONPATH=. .venv/bin/python extra/q4_k_gemv_primitive.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --tensor blk.0.ffn_gate.weight --rows 12288 --mode partial --parts 1 --iters 3
+```
+
+Results:
+
+| shape | mode | parts | correctness | device time | Q4 eff GB/s |
+|---|---|---:|---:|---:|---:|
+| 16x4096 | partial | 16 | unpack max_abs `0`; GEMV max_abs `5.90324e-4` | 0.017 ms | 2.19 |
+| 12288x4096 | partial | 1 | unpack max_abs `0`; GEMV max_abs `0.00123835` | 0.732 ms | 38.67 |
+
+Full FFN `--parts` sweep:
+
+| parts | correctness | device Q4 GB/s | kernels |
+|---:|---:|---:|---:|
+| 1 | max_abs `0.00177777` | 38.58 | 1 |
+| 2 | max_abs `0.00177777` | 38.80 | 2 |
+| 4 | max_abs `0.00177777` | 39.00 | 2 |
+| 8 | max_abs `0.00177777` | 38.82 | 2 |
+| 16 | max_abs `0.00177777` | 37.82 | 2 |
+
+Comparison anchor from `extra/q4_k_bench.py` on the same tensor:
+
+- existing fused graph `decode_q4_k_plus_matmul` device kernel: ~0.34-0.36 ms,
+  about ~80 Q4-GB/s by packed Q4 bytes.
+- custom primitive partial scaffold: ~0.73 ms, about ~39 Q4-GB/s.
+
+Correctness-gap follow-up: the remote audit was right that `x=ones` was too
+weak because a sum is permutation-insensitive. The harness now uses random fp16
+activations and an exact decoded-weight comparison. The direct unpack gate
+passes with max_abs `0`, so the Q4_K scale/nibble ordering is now tested
+directly instead of inferred from a loose GEMV tolerance.
+
+Verdict: the first parallel primitive pass is correct but not fast enough.
+Splitting K into partials does not help yet; the bottleneck is still the custom
+kernel's schedule/codegen shape. Pinned custom kernels use poor row-local shape
+(`flat_work_group_size(1, 1)` in the simplest generated form). `--schedule auto`
+can render a better-looking row-local/upcast shape, but normal AMD compilation
+fails, so broad BEAM is still premature. Next work is scheduler-safe opts or a
+custom UOp shape that gets local/upcast parallelism without compile failures.

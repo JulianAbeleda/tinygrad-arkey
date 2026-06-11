@@ -300,19 +300,31 @@ only (never the Mac bridge). This is the plan of record.
    Implemented in `extra/q4_k_gemv_primitive.py`; it consumes the word-typed
    storage path from step 5 and passes the frozen reference gate on 2 and 16
    rows of `blk.0.ffn_gate.weight`.
-7. [ ] Turn the correctness scaffold into a tunable parallel primitive:
-   split rows/reduction across work-items, expose rows/thread, group size,
-   local shape, and unroll parameters. The current scaffold is deliberately
-   serial per row and is not a speed candidate.
-8. [ ] Wire the tuned primitive into the microbench behind a flag and compare against
+7. [x] First tunable parallel primitive pass: `--mode partial --parts N` splits
+   the K-block reduction into per-row/per-part partial sums and reduces those
+   partials with tinygrad. Correctness passes on the full FFN shape. Result:
+   no speed win yet; `parts=1` is best, and the kernel still tops out around
+   38-39 Q4-GB/s device time on `blk.0.ffn_gate.weight`, below the existing
+   fused graph path's ~80 Q4-GB/s device time.
+8. [x] Harden primitive correctness gates: deterministic random fp16
+   activations replace the earlier all-ones vector, and a direct unpacked-weight
+   comparison checks the primitive's decoded Q4_K weights element-wise against
+   `q4_k_reference`. Result: unpack max_abs `0`; random-GEMV max_abs
+   `0.00123835` on the full FFN shape.
+9. [ ] Scheduler-safe parallelization: the primitive needs row-local/upcast or
+   reduce-splitting opts comparable to the graph path. Letting `--schedule auto`
+   render scheduler opts produces a better-looking local row shape, but normal
+   AMD compilation fails. Do not run broad BEAM until this compile/fault
+   containment issue is isolated.
+10. [ ] Wire the tuned primitive into the microbench behind a flag and compare against
    the existing fused expression. Correctness must match the frozen Q4_K
    reference before any speed number counts.
-9. [ ] Tune the primitive's exposed parameters with search/BEAM on native
+11. [ ] Tune the primitive's exposed parameters with search/BEAM on native
    Ubuntu only: rows/thread, group size, local shape, unroll. BEAM is expected
    to tune around the primitive, not discover packed loads from scalar ops.
-10. [ ] Run full 8B decode only after the microbench passes correctness and
+12. [ ] Run full 8B decode only after the microbench passes correctness and
    clears the speed gate. Then repeat on 14B.
-11. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
+13. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
    find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
    fail safe, not hard-fault). Report it.
 
@@ -333,10 +345,11 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 7: parallelize the correct Q4_K custom GEMV scaffold. The next gate is not
-full decode; it is microbench speed on the dominant FFN shape with correctness
-still passing. Only after the primitive beats the existing fused expression
-microbench should it be wired into full decode.
+Step 9: isolate scheduler-safe opts for the custom primitive. The immediate
+target is a compiling, correct custom primitive with a local/upcast workgroup
+shape similar to the existing graph path. Only after that should BEAM/search be
+used; right now the broad scheduler path can render better opts but fails AMD
+compilation.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 
