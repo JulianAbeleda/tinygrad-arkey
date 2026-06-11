@@ -1179,3 +1179,67 @@ Verdict: step 11 produces a usable shape policy. The next model-path work must
 be selective: preserve packed Q4_K storage and dispatch the primitive only for
 policy-winning shapes. A blanket replacement would regress the small KV path by
 raw device time.
+
+## Q4_K primitive model-path flag (2026-06-11)
+
+Step 12 result: added an off-by-default real model path behind
+`Q4K_PRIMITIVE=1`.
+
+Implementation:
+
+- `tinygrad/llm/gguf.py` now has `gguf_load_with_metadata`, returning the GGUF
+  tensor table (`data_start`, tensor names/dims/types/offsets) alongside the
+  normal decoded state dict for single-file GGUFs.
+- `tinygrad/llm/model.py` installs `Q4KPrimitiveLinear` wrappers after normal
+  state loading when `Q4K_PRIMITIVE=1` is set.
+- The wrappers keep the ordinary loaded weight as fallback, but carry packed
+  `uint32` Q4_K word storage for policy-selected tensors.
+- Decode-vs-prefill is controlled at `Transformer.__call__`: prefill captures
+  the normal fallback graph; rollout captures the primitive graph. This avoids
+  branching on a symbolic token dimension inside the block.
+- Packed word storage and the wrapper registry are hidden from state traversal
+  with `__slots__`, so CLI parameter counting does not double-count the packed
+  buffers.
+
+Policy installed for Qwen3-style dense blocks:
+
+| role | primitive policy |
+|---|---|
+| `ffn_gate`, `ffn_up` | `LOCAL:0:64`, `parts=1` |
+| `ffn_down` | `LOCAL:0:32`, `parts=4` |
+| `attn_q`, `attn_output` | `LOCAL:0:64`, `parts=1` |
+| `attn_k`, `attn_v` | fallback fused graph |
+
+Construction smoke:
+
+```bash
+DEV=AMD Q4K_PRIMITIVE=1 PYTHONPATH=. .venv/bin/python - <<'PY'
+from tinygrad import nn
+from tinygrad.llm.model import Transformer, Q4KPrimitiveLinear
+m, kv = Transformer.from_gguf('/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf', max_context=8)
+count = sum(isinstance(getattr(blk, name), Q4KPrimitiveLinear)
+            for blk in m.blk for name in ('ffn_gate','ffn_up','ffn_down','attn_q','attn_output','attn_k','attn_v')
+            if hasattr(blk, name))
+params = sum(p.numel() for p in nn.state.get_parameters(m))
+print(count, params)
+PY
+```
+
+Result: `162` primitive linears installed; parameter count remains
+`8,190,735,360` instead of double-counting packed Q4 buffers.
+
+Short 8B decode comparison (`--warmup --benchmark 4`):
+
+| mode | steady tok/s | note |
+|---|---:|---|
+| baseline | ~15.9-16.1 | existing fused graph |
+| `Q4K_PRIMITIVE=1` | ~29.6-30.1 | selective primitive policy |
+
+DEBUG=2 confirmation: flagged rollout emits real model kernels including
+`q4k_gemv_partial_4096_4096_1`, `q4k_gemv_partial_12288_4096_1`, and
+`q4k_gemv_partial_4096_12288_4`. This verifies step 12 is not just a standalone
+microbench path.
+
+Next: run sustained 8B decode (`--benchmark 128`) with and without the flag.
+The short run shows a real full-model gain, but the decision point is sustained
+tok/s and the remaining dominant kernels.

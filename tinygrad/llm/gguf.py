@@ -141,7 +141,7 @@ readers: dict[int, Callable[[io.BufferedIOBase], Any]] = { 8: read_str, 9: read_
     [ (0,"c",1), (1,"b",1), (2,"H",2), (3,"h",2), (4,"I",4), (5,"i",4), (6,"f",4), (7,"?",1), (10,"Q",8), (11,"q",8), (12,"d",8) ] } }
 read_uint32, read_int32, read_uint64, read_int64 = readers[4], readers[5], readers[10], readers[11]
 
-def _gguf_parse(tensor: Tensor) -> tuple[dict, dict[str, Tensor]]:
+def _gguf_parse(tensor: Tensor, include_metadata:bool=False) -> tuple[dict, dict[str, Tensor]]|tuple[dict, dict[str, Tensor], dict]:
   # TODO: remove the need for copy to default device
   tensor = tensor.to(None).realize()
   r = io.BufferedReader(TensorIO(tensor), 1_000_000)
@@ -158,6 +158,7 @@ def _gguf_parse(tensor: Tensor) -> tuple[dict, dict[str, Tensor]]:
   data_start = round_up(pos, alignment)
 
   state_dict = {name: ggml_data_to_tensor(tensor[data_start + off:], prod(dims), typ).reshape(*reversed(dims)) for name, dims, typ, off in t_infos}
+  if include_metadata: return kv_data, state_dict, {"data_start": data_start, "tensor_infos": t_infos}
   return kv_data, state_dict
 
 def _gguf_split_paths(path: pathlib.Path, kv: dict) -> list[pathlib.Path]:
@@ -186,3 +187,12 @@ def gguf_load(fn: Tensor|str|pathlib.Path) -> tuple[dict, dict[str, Tensor]]:
   if isinstance(fn, Tensor): raise ValueError("multi-part GGUF requires a path argument (got Tensor)")
   for pp in _gguf_split_paths(pathlib.Path(fn), kv)[1:]: sd.update(_gguf_parse(Tensor(pp))[1])
   return kv, sd
+
+def gguf_load_with_metadata(fn: str|pathlib.Path) -> tuple[dict, dict[str, Tensor], dict]:
+  """
+  Loads a single-file GGUF and returns `kv_data`, `state_dict`, and tensor table metadata.
+  This is for experimental paths that need the original packed tensor offsets.
+  """
+  kv, sd, meta = _gguf_parse(Tensor(pathlib.Path(fn)), include_metadata=True)
+  if kv.get('split.count', 1) > 1: raise ValueError("gguf_load_with_metadata currently requires a single-file GGUF")
+  return kv, sd, meta

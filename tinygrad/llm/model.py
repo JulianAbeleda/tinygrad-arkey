@@ -1,8 +1,9 @@
 from __future__ import annotations
 import functools, itertools, pathlib
 from dataclasses import dataclass, replace
-from tinygrad import Tensor, nn, UOp, TinyJit, getenv, function
-from tinygrad.llm.gguf import gguf_load
+from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function
+from tinygrad.helpers import prod
+from tinygrad.llm.gguf import gguf_load, gguf_load_with_metadata
 from tinygrad.uop.ops import resolve
 
 @functools.cache
@@ -19,11 +20,79 @@ class ExpertWeights:
     # sel: (B, T, k), x: (B, T, 1, in) or (B, T, k, in) -> output: (B, T, k, out)
     return (x.unsqueeze(-2) @ self.weight[sel].transpose(-1, -2)).contiguous().squeeze(-2)
 
+class Q4KPrimitiveStorage:
+  __slots__ = ("words",)
+  def __init__(self, words:Tensor): self.words = words
+
+class Q4KPrimitiveRegistry:
+  __slots__ = ("linears",)
+  def __init__(self, linears:list[Q4KPrimitiveLinear]|None=None): self.linears = linears or []
+
+class Q4KPrimitiveLinear:
+  def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple, name:str):
+    self.weight, self.bias, self.q4k_storage = weight, bias, Q4KPrimitiveStorage(words)
+    self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
+    self.decode_enabled = False
+
+  def _fallback(self, x:Tensor) -> Tensor:
+    return x.linear(self.weight.transpose(), self.bias)
+
+  def __call__(self, x:Tensor) -> Tensor:
+    # This primitive is a decode GEMV path. Prefill, batching, and unsupported bias cases use the normal tinygrad graph.
+    if not self.decode_enabled or self.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != self.in_features:
+      return self._fallback(x)
+    from extra.q4_k_gemv_primitive import q4k_gemv_partial_kernel
+    x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
+    partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
+    partial = partials.custom_kernel(self.q4k_storage.words.to(x.device), x_vec,
+                                     fxn=q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
+    return partial.sum(axis=1).reshape(1, 1, self.out_features)
+
 def apply_rope(x:Tensor, freqs_cis:Tensor) -> Tensor:
   assert x.shape[-1] % 2 == 0
   cos, sin = freqs_cis.reshape(1, 1, x.shape[2], -1).chunk(2, dim=-1)
   x1, x2 = x.chunk(2, dim=-1)
   return (x1 * cos - x2 * sin).cat(x2 * cos + x1 * sin, dim=-1)
+
+def _q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
+  if ".ffn_gate.weight" in name or ".ffn_up.weight" in name: return 1, ("LOCAL:0:64",)
+  if ".ffn_down.weight" in name: return 4, ("LOCAL:0:32",)
+  if ".attn_q.weight" in name or ".attn_output.weight" in name: return 1, ("LOCAL:0:64",)
+  return None
+
+def _module_at(root, path:str):
+  obj = root
+  for part in path.split("."):
+    obj = obj[int(part)] if isinstance(obj, list) and part.isdigit() else getattr(obj, part)
+  return obj
+
+def _set_module_at(root, path:str, value) -> None:
+  parent_path, attr = path.rsplit(".", 1)
+  parent = _module_at(root, parent_path)
+  if isinstance(parent, list) and attr.isdigit(): parent[int(attr)] = value
+  else: setattr(parent, attr, value)
+
+def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q4KPrimitiveLinear]:
+  from extra.q4_k_gemv_primitive import parse_opt
+  raw_words = Tensor(gguf, dtype=dtypes.uint32)
+  installed = []
+  for name, dims, typ, off in meta["tensor_infos"]:
+    if typ != 12 or len(dims) != 2 or not name.endswith(".weight"): continue
+    if (policy := _q4k_policy(name)) is None: continue
+    rows, cols = tuple(reversed(dims))
+    byte_start = meta["data_start"] + off
+    if byte_start % 4 != 0: continue
+    module_path = name[:-len(".weight")]
+    try: module = _module_at(model, module_path)
+    except (AttributeError, IndexError, ValueError): continue
+    if not hasattr(module, "weight") or getattr(module, "bias", None) is not None: continue
+    q4_bytes = prod(dims) // 256 * 144
+    words = raw_words[byte_start//4:byte_start//4+q4_bytes//4].to(None).contiguous().realize()
+    parts, opt_specs = policy
+    q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name)
+    _set_module_at(model, module_path, q4k_linear)
+    installed.append(q4k_linear)
+  return installed
 
 def pairwise_topk(x: Tensor, k: int) -> tuple[Tensor, Tensor]:
   n = x.shape[-1]
@@ -306,6 +375,7 @@ class Transformer:
     self.max_context = config.max_context
     self.has_recurrent_block = any(isinstance(b, GatedDeltaNetBlock) for b in self.blk)
     self._cached_tokens: list[int] = []
+    self._q4k_linears = Q4KPrimitiveRegistry()
     # we specialize the JIT for prefill and rollout
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
@@ -318,13 +388,21 @@ class Transformer:
     return (logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
 
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
-    return (self.prefill_jit if resolve(tokens.shape[1] != 1) else self.rollout_jit)(tokens.contiguous(), start_pos, temperature)
+    is_prefill = resolve(tokens.shape[1] != 1)
+    for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = not is_prefill
+    return (self.prefill_jit if is_prefill else self.rollout_jit)(tokens.contiguous(), start_pos, temperature)
 
   @staticmethod
   def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:int|None=None,
                 realize=bool(getenv("REALIZE", 0))) -> tuple[Transformer, dict]:
     # TODO: remove the need for copy to default device
-    kv, state_dict = gguf_load(gguf.to(None).realize() if isinstance(gguf, Tensor) else gguf)
+    use_q4k_primitive = bool(getenv("Q4K_PRIMITIVE", 0))
+    if use_q4k_primitive:
+      if isinstance(gguf, Tensor): raise ValueError("Q4K_PRIMITIVE requires a GGUF path, not a preloaded Tensor")
+      kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
+    else:
+      kv, state_dict = gguf_load(gguf.to(None).realize() if isinstance(gguf, Tensor) else gguf)
+      q4k_meta = None
 
     # all state items should be float16, not float32
     state_dict = {k:v.cast('float16') if getenv("HALF", 1) else v for k,v in state_dict.items()}
@@ -383,6 +461,8 @@ class Transformer:
       expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict)
     model = Transformer(config)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
+    if use_q4k_primitive and q4k_meta is not None:
+      model._q4k_linears = Q4KPrimitiveRegistry(_install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta))
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())

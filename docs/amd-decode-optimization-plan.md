@@ -364,9 +364,12 @@ only (never the Mac bridge). This is the plan of record.
    `12288x4096` and `4096x4096`, `LOCAL:0:32 --parts 4` wins
    `4096x12288`, and the existing fused graph remains best for `1024x4096`
    KV projection by device time. This is the first usable shape policy.
-12. [ ] Wire the selective primitive policy into the real model path behind a
-   flag. Do not blanket-replace Q4_K linears; dispatch only the shapes/tensors
-   selected by the policy and preserve the fused graph fallback.
+12. [x] Wire the selective primitive policy into the real model path behind a
+   flag. `Q4K_PRIMITIVE=1` now preserves GGUF tensor metadata, installs
+   `Q4KPrimitiveLinear` wrappers after normal state loading, and dispatches
+   custom packed Q4_K GEMV only during rollout/decode for policy-selected
+   roles. Prefill, batched/symbolic non-decode paths, bias cases, and small KV
+   projections fall back to the existing tinygrad graph.
 13. [ ] Run full 8B decode only after the model-path primitive flag compiles and
    passes a minimal logits/token sanity check. Then profile tok/s and dominant
    kernels.
@@ -394,10 +397,10 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 12: wire the selective primitive policy into the real model path behind an
-off-by-default flag. The code question is how to preserve Q4_K packed storage
-metadata through GGUF loading and dispatch a custom linear only for policy
-winning shapes, while leaving ordinary decoded/fused tensors as the fallback.
+Step 13: run the full 8B decode benchmark with and without `Q4K_PRIMITIVE=1`,
+then inspect whether the ~2x short-run gain holds over 128 generated tokens.
+The DEBUG=2 smoke confirmed real model decode emits `q4k_gemv_partial_*`
+kernels; the next question is sustained tok/s and remaining bottlenecks.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 
