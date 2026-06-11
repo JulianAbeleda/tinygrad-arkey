@@ -496,3 +496,56 @@ kernel-only effective GB/s with zero transport confound — the real H5/H6
 starting point. The 18.5 tok/s figure is Mac/USB4 and conflates kernels with
 transport; it cannot be the kernel baseline. Same machine, same card, same
 files = pure kernel delta vs the 567 above.
+
+## tinygrad-native MEASURED (2026-06-11, same card/models/machine, BEAM=0)
+
+The clean kernel-only baseline (Ubuntu native, local PCIe, no USB4). The
+transport theory is now dead: native tinygrad is barely faster than the
+USB4 number, so the gap is KERNELS, not transport.
+
+| model | tg tok/s | llama.cpp | gap | tg eff GB/s | llama GB/s | tg % of peak |
+|---|---|---|---|---|---|---|
+| 4B | 18.82 | 152.8 | 8.1x | 44 | 354 | 4.5% |
+| 8B | 15.77 | 101.2 | 6.4x | 74 | 474 | 7.7% |
+| 14B | 9.09 | 65.8 | 7.2x | 76 | 551 | 7.9% |
+| 32B | 4.41 | 30.8 | 7.0x | 81 | 567 | 8.5% |
+
+**The gap is ~7x, not the ~2x literature-extrapolation. tinygrad reaches
+~8% of memory peak vs llama.cpp's ~59%.** (Estimate correction: the earlier
+"40-70% of llama.cpp" guess was 3-4x too optimistic. Recorded as a miss.)
+
+### Cause, verified in code (not asserted)
+
+`tinygrad/llm/gguf.py:57-67` — Q4_K dequant (ggml_type 12) is a generic
+multi-op tensor expression (stack/cat/bitwise/reshape across several passes)
+returning **float32**:
+`return (d * sc.unsqueeze(-1) * q - dmin * mn.unsqueeze(-1)).flatten(-2)`
+
+This is H6 confirmed at the source: dequant is generic tensor algebra, not a
+fused in-register kernel hitting RDNA3 packed-dot ops. DEBUG=2 corroborates —
+individual graph chunks run 300-410 GB/s, but the model achieves only ~74-81
+GB/s effective on the quantized size, i.e. far more bytes are moved than the
+Q4 weights require (fp32 dequant materialization + unfused passes).
+
+### TWO caveats before concluding 7x is fundamental
+
+1. **BEAM=0.** This is tinygrad's known-pathological default; BEAM=2/4 kernel
+   search routinely recovers 2-5x on individual kernels. A large fraction of
+   the 7x may be absent search, not absent idiom. **BEAM sweep is the single
+   most important next measurement** — it apportions the gap between H5
+   (free) and H6 (engineering).
+2. **fp32 dequant.** dequant casts to float32, not fp16/bf16; even before a
+   fused kernel, dequantizing to half (or keeping quant resident and fusing)
+   cuts dequant-side traffic.
+
+### Revised next steps (supersede prior sequencing)
+
+1. **BEAM=2 then BEAM=4 sweep** on 8B + one large model, native Ubuntu. Record
+   tok/s and eff GB/s. This is the gate: if BEAM gets 8B from 15.77 toward
+   ~50+, the gap is mostly schedule (H5) and large; if it barely moves, the
+   gap is the fused-dequant idiom (H6) and the kernel-build work starts.
+2. Confirm whether dequantized weights are materialized once vs recomputed
+   per token (inspect model.py weight handling / realize). Recompute-per-token
+   would be a separate, cheaper win than the fused kernel.
+3. Only after BEAM is known: scope H6 (can the RDNA3 renderer emit packed-dot
+   from a fused dequant-matvec pattern?).
