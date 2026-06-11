@@ -1,0 +1,135 @@
+# AMD Decode Optimization — Execution Plan
+
+Executable plan for closing tinygrad's decode-speed gap vs llama.cpp/ROCm on
+gfx1100. Hypothesis derivation and measured baselines live in
+`docs/amd-rocm-llamacpp-research.md` (H-OPT section); this doc is the test plan
+and action checklist. Goal: ROCm-parity-class decode (tg128), reached by
+letting the machine (fusion + BEAM) do the work, minimizing hand-written code.
+
+## Hypothesis (H-OPT, condensed)
+
+tinygrad's ~7x decode gap is ~4.4x bytes-moved (fp32 dequant + broken fusion)
+x ~1.6x scheduling (BEAM=0). Both are machine-reachable: the fused-Q4-GEMV is
+expressible in existing ops, so it's a fusion+search problem, not a hand-kernel
+problem. Predicted post: 8B from 15.8 -> ~60-100 tok/s (mid-to-parity).
+
+## Baselines (measured, 2026-06-11, Qwen3 Q4_K_M, single 7900 XTX)
+
+| model | tinygrad BEAM=0 | llama.cpp ROCm | gap |
+|---|---|---|---|
+| 4B | 18.8 | 152.8 | 8.1x |
+| 8B | 15.8 | 101.2 | 6.4x |
+| 14B | 9.1 | 65.8 | 7.2x |
+| 32B | 4.4 | 30.8 | 7.0x |
+
+Primary working model: **8B** (fits comfortably, big enough to be bandwidth-
+bound). All tests on Ubuntu native (DEV=AMD, local PCIe) unless noted.
+
+## Test plan
+
+Each test: purpose / method / expected / falsifier / gate.
+
+### T0 — BEAM sweep (wall-locator, delivers the floor)
+- **Purpose**: how much is pure scheduling (machine, free)? Locate the wall.
+- **Method**: `DEV=AMD BEAM=2 JIT=1 python -m tinygrad.llm --model ~/models/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 128` then BEAM=4. First run pays search cost (slow); BEAM cache persists. Repeat on 14B.
+- **Expected**: 8B -> ~22-30 tok/s (per decomposition's 1.6x).
+- **FALSIFIER**: if BEAM alone > ~50 tok/s (>50% of llama), the bytes-bloat
+  thesis is WRONG — scheduling was the gap. Re-derive.
+- **Gate**: always run first. Cheap, no code.
+
+### T1 — Byte-bloat diagnostic (confirm the 4.4x and its source)
+- **Purpose**: prove bytes-moved >> Q4 weight size, and find where.
+- **Method**: `DEV=AMD DEBUG=2` on one 8B decode step; sum kernel bytes
+  (time x GB/s per kernel) for one token; compare to Q4 weight bytes (~4.68GB).
+  Identify whether a fp32 weight tensor is materialized between dequant and
+  matmul (look for a large write+read pair).
+- **Expected**: ~3-5x more bytes than 4.68GB/token; a visible fp32 weight
+  materialization.
+- **FALSIFIER**: if bytes/token ~= Q4 size, dequant already fuses and the gap
+  is elsewhere (scheduling/occupancy) — pivot to T0-style work only.
+- **Gate**: run alongside T0; it interprets T0's result.
+
+### T2 — fp16 dequant (cheapest byte fix)
+- **Purpose**: stop emitting fp32 from dequant.
+- **Method**: in `tinygrad/llm/gguf.py` Q4_K path (ggml_type 12), output
+  fp16/bf16 instead of float32 (the `.cast(dtypes.float32)` chain). Confirm the
+  matmul accumulates in half where safe.
+- **Expected**: measurable tok/s gain if accumulation was fp32-bound.
+- **CORRECTNESS CHECK (mandatory)**: fixed-prompt completion before/after must
+  stay coherent; spot-check a few generations. fp16 dequant of Q4_K should be
+  lossless-ish (scales are fp16 already) but verify.
+- **Gate**: after T0/T1 confirm bytes are the lever.
+
+### T3 — dequant fusion (the main lever, machine's job)
+- **Purpose**: make tinygrad fuse dequant into the GEMV so Q4 weights are read
+  once, no fp32 spill.
+- **Method**: identify what breaks fusion in the Q4_K dequant expression
+  (the `.contiguous()` on blocks, the transpose in q_to_uint8, expression
+  complexity). Try: simplify/restructure the dequant graph; test whether BEAM
+  + the scheduler then fuse it; measure bytes/token (T1 method) drop toward Q4
+  size. This is "gardening the graph", not writing a kernel.
+- **Expected**: bytes/token -> ~1.2x Q4 size; 8B -> ~50-70 tok/s.
+- **FALSIFIER**: if no graph restructuring makes it fuse (scheduler refuses),
+  the fusion is a tinygrad capability gap — escalate to improving tinygrad's
+  fusion (still machine-side) or, last resort, T5.
+- **Gate**: the campaign's center of mass; after T2.
+
+### T4 — llama.cpp kernel inspection (decides if T5 is ever needed)
+- **Purpose**: name llama.cpp's actual gfx1100 decode primitive.
+- **Method**: read `ggml/src/ggml-cuda/mmvq.cu` + HIP path / `mul_mat_vec_q`;
+  determine plain vectorized FMA vs dp4a/v_dot4 for the quantized matvec.
+- **Expected**: identifies whether a packed-dot instruction is in play for
+  DECODE (vs only GEMM/prefill).
+- **Gate**: do before contemplating any renderer work (T5).
+
+### T5 — hand-added primitive (LAST RESORT, likely unneeded for decode)
+- **Purpose**: only if T0-T3 wall well below parity AND T4 shows a needed
+  instruction. Add packed-dot emission to the RDNA3 renderer as a templated
+  primitive + BEAM tune (the AutoTVM/CUTLASS blend).
+- **Gate**: only if T3 falsifier fires and T4 justifies it. Decode-unlikely.
+
+### T6 — Mac transport-neutrality (H7 confirmation)
+- **Purpose**: confirm kernel wins transfer to the Mac over USB4.
+- **Method**: same model + winning BEAM-cached schedules on the Mac
+  (DEV=AMD via TinyGPU); compare decode tok/s to Ubuntu native.
+- **Expected**: within ~10% of native (decode is on-card; transport carries
+  only per-token dispatch).
+- **FALSIFIER**: if Mac >10% slower after JIT warmup, dispatch/roundtrips
+  matter — separate dispatch-amortization work (TinyJit/graph batching).
+- **Gate**: after a kernel win exists worth deploying.
+
+## Action items (ordered; machine; cost; dependency)
+
+1. [ ] **T0 BEAM sweep** — Ubuntu native, 8B+14B, BEAM=2/4. Free. → records the
+   floor and tests the central falsifier. (no deps)
+2. [ ] **T1 byte diagnostic** — Ubuntu, DEBUG=2 bytes/token on 8B. Free.
+   (parallel with T0)
+3. [ ] **Decision gate A**: if T0 falsifier fires (BEAM alone >50% llama) →
+   thesis wrong, pivot to scheduling-only. Else continue.
+4. [ ] **T2 fp16 dequant** — edit gguf.py; bench + correctness check. ~hours.
+   (after gate A)
+5. [ ] **T3 dequant fusion** — graph-restructure for fusion; bytes/token + tok/s.
+   ~days; the main work. (after T2)
+6. [ ] **Decision gate B**: if T3 reaches parity-class → done, go to T6. If it
+   walls → run T4.
+7. [ ] **T4 llama.cpp kernel read** — name the primitive. ~hours. (only if T3 walls)
+8. [ ] **T5 primitive (if justified)** — renderer + BEAM. ~weeks. (only if gate B + T4)
+9. [ ] **T6 Mac neutrality** — deploy winning schedules to Mac, compare. 1 power
+   cycle. (after any real win)
+10. [ ] **BEAM cache for deployment** — tune once on Ubuntu, ship cached schedules
+    to Mac ("separation in time" — search cost paid once). (with T6)
+11. [ ] Record every result + falsification in amd-rocm-llamacpp-research.md.
+
+## Decision tree (one line)
+
+T0 big win → scheduling was it (thesis wrong, easy). T0 small + T2/T3 big →
+bytes were it (thesis right, machine took it, no kernel). T3 walls + T4 shows
+instruction → one templated primitive (T5). Each branch has a measured gate;
+no building without a number.
+
+## Correctness / safety (do not skip)
+
+- Any dtype change (T2) requires a generation-quality check, not just speed.
+- BEAM runs are nondeterministic in search but deterministic in output; verify
+  output unchanged across BEAM levels.
+- Keep a frozen baseline tag before kernel edits for A/B and rollback.
