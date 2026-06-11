@@ -378,9 +378,12 @@ only (never the Mac bridge). This is the plan of record.
    baseline averages `8.88 tok/s`; `Q4K_PRIMITIVE=1` averages `14.90 tok/s`
    over all samples, with last-32 median `15.72 tok/s`. The same role policy
    generalizes, though 14B has visible outliers.
-15. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
-   find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
-   fail safe, not hard-fault). Report it.
+15. [x] Contain BEAM/search failures on microbench. Added
+   `extra/q4_k_beam_containment.py`: it runs the risky `--schedule auto`
+   primitive path in a subprocess with `PARALLEL=0`, classifies the expected
+   AMD compile failure, then immediately runs a known-good `LOCAL:0:64` health
+   kernel. Also verified a small `BEAM=1` graph microbench completes safely and
+   reports final opts `[GROUPTOP:0:16, GROUP:0:0, LOCAL:0:2]`.
 16. [ ] Mac neutrality/deployment: never run live BEAM on the Mac/TinyGPU path;
    ship only native-Ubuntu-proven primitive policies/schedule cache.
 
@@ -401,9 +404,9 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 15: contain the remaining BEAM/search fault path on the microbench. The
-primitive policy is now useful without broad BEAM, but search candidates still
-need fail-closed behavior before live BEAM can be trusted again.
+Step 16: record Mac/deployment rules. No live BEAM on Mac/TinyGPU; deploy only
+native-Ubuntu-proven `Q4K_PRIMITIVE=1` policy and keep risky scheduler search
+behind subprocess containment.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 

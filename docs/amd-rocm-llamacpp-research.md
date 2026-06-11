@@ -1322,3 +1322,61 @@ moves Qwen3-14B from ~`8.9 tok/s` to ~`14.9 tok/s` average, about 22.6% of the
 cited llama.cpp ~66 tok/s reference instead of ~13.5%. The remaining gap is
 still specialized-kernel and graph/dispatch quality, but this is a real
 end-to-end decode improvement on both target models.
+
+## Q4_K BEAM/search containment (2026-06-11)
+
+Step 15 result: added `extra/q4_k_beam_containment.py`, a small subprocess
+harness for risky primitive scheduler/search paths. It deliberately runs the
+`extra/q4_k_gemv_primitive.py --schedule auto` path with `PARALLEL=0`,
+`BEAM_DEBUG=2`, `BEAM_STRICT_MODE=0`, and `BEAM_DEV_TIMEOUT=1`, classifies the
+failure, then immediately runs a known-good `LOCAL:0:64` primitive kernel as a
+GPU health check.
+
+Command:
+
+```bash
+DEV=AMD PYTHONPATH=. .venv/bin/python extra/q4_k_beam_containment.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --repo /home/ubuntu/tinygrad-arkey \
+  --log-dir /home/ubuntu/q4k-beam-containment \
+  --timeout 60
+```
+
+Result:
+
+| path | status | elapsed | note |
+|---|---:|---:|---|
+| risky `--schedule auto` | `compile-fail` | `1.508s` | normal `tinygrad.device.CompileError`, contained in subprocess |
+| health `LOCAL:0:64` | `pass` | | `0.069 ms`, `408.18 Q4-GB/s`, unpack max_abs `0` |
+
+The harness reported `contained: true`: the risky scheduler path failed without
+leaving the AMD device unusable for the subsequent known-good kernel. This does
+not make broad search fast or useful yet; it only establishes a safer failure
+boundary for primitive-level tuning.
+
+I also ran a deliberately tiny graph-level BEAM probe on the existing fused
+microbench path, not the full model:
+
+```bash
+DEV=AMD BEAM=1 PARALLEL=0 BEAM_DEBUG=2 BEAM_STRICT_MODE=0 DEBUG=2 \
+  PYTHONPATH=. .venv/bin/python extra/q4_k_bench.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --device AMD --tensor blk.0.attn_k.weight --iters 1 --format text
+```
+
+It completed safely and reported:
+
+```text
+BEAM_SEARCH: final tm=19.44us, applied_opts=[Opt(op=OptOps.GROUPTOP, axis=0, arg=16), Opt(op=OptOps.GROUP, axis=0, arg=0), Opt(op=OptOps.LOCAL, axis=0, arg=2)]
+```
+
+The measured fused microbench summaries from that run were:
+
+| path | device Q4 GB/s |
+|---|---:|
+| decoded matmul | `13.80` |
+| fused Q4_K expression + matmul | `130.49` |
+
+Verdict: step 15 is a containment result, not a performance result. Risky
+search must stay subprocessed and health-checked on native Ubuntu only. No live
+BEAM/search path should be run on the Mac/TinyGPU bridge.
