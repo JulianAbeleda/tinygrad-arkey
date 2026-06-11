@@ -685,3 +685,114 @@ to prefill, a separate battle.
 Revised step 4/5 of H-OPT: step 4 is "remove fusion barriers so the existing
 machinery fuses dequant into GEMV" (gardening, not authoring); step 5 (hand
 primitive) is decode-unlikely and prefill-only.
+
+## Q4_K expression-vectorization probe (2026-06-11)
+
+Scope: steps 1-3 of `docs/amd-decode-optimization-plan.md` final plan, native
+Ubuntu only (`DEV=AMD`, local PCIe), no BEAM. Goal was to test the cheap
+machine-side shot before adding a new primitive: can the Q4_K dequant expression
+be rewritten so codegen emits wider/vectorized quant loads while remaining
+bit-exact?
+
+### Microbench harness
+
+`extra/q4_k_bench.py` now selects representative Qwen3-8B Q4_K decode GEMV
+shapes from GGUF metadata instead of guessed dimensions. Model config read from
+the GGUF:
+
+| key | value |
+|---|---:|
+| architecture | qwen3 |
+| embedding_length | 4096 |
+| feed_forward_length | 12288 |
+| block_count | 36 |
+| attention.head_count | 32 |
+| attention.head_count_kv | 8 |
+
+Representative Q4_K tensors/shapes:
+
+| tensor | GEMV W shape N x K | Q4 bytes |
+|---|---:|---:|
+| `blk.0.ffn_gate.weight` | 12288 x 4096 | 28.31 MB |
+| `blk.4.ffn_down.weight` | 4096 x 12288 | 28.31 MB |
+| `blk.0.attn_q.weight` | 4096 x 4096 | 9.44 MB |
+| `blk.0.attn_k.weight` | 1024 x 4096 | 2.36 MB |
+
+Correctness gate: before timing each tensor, the active `ggml_data_to_tensor`
+Q4_K path is compared bit-exact against a frozen copy of the previous Q4_K
+expression in the benchmark. No timing is emitted if this fails.
+
+### Baseline scalar path
+
+Command:
+
+```bash
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/q4_k_bench.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --all-shapes \
+  --iters 5 --format json
+```
+
+Baseline fused decode+matvec bandwidth, counted as Q4 weight bytes / kernel
+time:
+
+| tensor | kernels | ms | Q4 eff GB/s |
+|---|---:|---:|---:|
+| `blk.0.ffn_gate.weight` | 1 | 2.18 | 12.97 |
+| `blk.4.ffn_down.weight` | 1 | 2.19 | 12.95 |
+| `blk.0.attn_q.weight` | 1 | 3.46 | 2.73 |
+| `blk.0.attn_k.weight` | 1 | 2.21 | 1.07 |
+
+The decoded-fp16 matvec-only control is much faster for the large FFN shapes
+(~65 GB/s by Q4-byte denominator), but it reads fp16 weights, so it is not a
+viable decode path by itself.
+
+Generated-code baseline (`DEBUG=4`) for `blk.0.ffn_gate.weight`:
+
+- fused kernel: `r_128_32_3_16_4_2_32`
+- launch bound: `amdgpu_flat_work_group_size(1, 32)`
+- quant load width: scalar `unsigned char`
+- activation load/store: `half4`
+
+### Variant: `GGUF_Q4K_WIDE=1`
+
+Change: in `tinygrad/llm/gguf.py`, the Q4_K scale bytes and quant bytes are
+bitcast through `uint32` words and unpacked with vector bit operations. The
+change is flag-gated with `GGUF_Q4K_WIDE=1`; baseline remains the default.
+
+Correctness: PASS, bit-exact against the frozen benchmark reference on all
+representative tensors.
+
+Performance:
+
+| tensor | kernels | ms | Q4 eff GB/s |
+|---|---:|---:|---:|
+| `blk.0.ffn_gate.weight` | 2 | 5.64 | 5.02 |
+| `blk.4.ffn_down.weight` | 2 | 5.62 | 5.04 |
+| `blk.0.attn_q.weight` | 2 | 5.70 | 1.66 |
+| `blk.0.attn_k.weight` | 2 | 5.76 | 0.41 |
+
+Generated-code result: NO vectorized quant loads. The renderer reconstructs
+`uint32` values from scalar `unsigned char` loads, for example:
+
+```c
+unsigned char val0 = (*(data1 + ...));
+unsigned char val1 = (*(data1 + ...));
+unsigned int alu = (((unsigned int)(val0))<<0u) + ...
+```
+
+It also introduces a small `unsigned int*` constant-shift buffer and splits the
+path into two kernels on the microbench. This is both slower and still scalar.
+
+### Verdict
+
+NO-GO for the expression-vectorization path.
+
+The preset acceptance gate was bit-exact correctness plus movement toward at
+least 200 GB/s. The only attempted pure-expression variant was bit-exact but
+regressed from ~13 GB/s to ~5 GB/s on the dominant FFN shapes and did not emit
+wider loads. Full 8B decode was not run because the microbench gate failed.
+
+Conclusion: the current gather/slice/bitcast expression is outside the useful
+span of tinygrad's existing vectorization/codegen. The next step is the layer-2
+work: introduce a real packed Q4_K GEMV primitive/candidate that represents
+wide packed loads + dequant + dot, then let search tune around that primitive.
