@@ -337,3 +337,36 @@ Step 7: parallelize the correct Q4_K custom GEMV scaffold. The next gate is not
 full decode; it is microbench speed on the dominant FFN shape with correctness
 still passing. Only after the primitive beats the existing fused expression
 microbench should it be wired into full decode.
+
+## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
+
+Good: expression-vectorization probe correctly FAILED (bitcast inside the graph
+does not change load width) and was correctly concluded — we are now in
+primitive/layer-2 territory as planned. The word-typed disk-u32 storage staging
+is elegant. The primitive issues real uint32 loads and the layout arithmetic is
+plausibly correct.
+
+TWO CORRECTNESS-TESTING FIXES NEEDED before trusting the primitive (the current
+gate is weaker than the locked "bit-exact dequant" requirement):
+
+1. **Test uses x = Tensor.ones (q4_k_gemv_primitive.py:88).** A dot against ones
+   is a SUM — permutation-invariant. A Q4_K layout bug that misorders the 256
+   elements within a block (wrong sub-block/scale assignment) is INVISIBLE under
+   ones. Use RANDOM fp16 activations so element-ordering errors surface.
+
+2. **Gate is GEMV max_abs < 1e-2 (line 101), not bit-exact dequant.** A loose
+   end-to-end tolerance over k=4096 can mask a few wrong weights. Add a SEPARATE
+   gate that compares the primitive's UNPACKED WEIGHTS element-wise against
+   q4_k_reference (exact, or fp16-ULP if dtypes differ), BEFORE the dot. That is
+   the gate that catches the fiddly 6-bit-scale / nibble-interleave layout bug;
+   the GEMV tolerance does not.
+
+The observed max_abs ~2.9e-4 is consistent with fp16-rounding (reference casts
+weights to fp16; primitive keeps fp32), i.e. probably NOT a layout bug — but
+"probably" is exactly what the per-weight exact gate exists to remove.
+
+Also: no PERFORMANCE number yet. The primitive is serial per row; whether wide
+loads beat the ~75 GB/s scalar path is still unproven. Parallelize + tune, then
+compare vs q4_k_bench — and keep an eye on integration (the primitive must be
+wireable into the model's real matvec / a codegen lowering, not a standalone
+orphan).
