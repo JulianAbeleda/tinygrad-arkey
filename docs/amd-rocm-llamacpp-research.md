@@ -1380,3 +1380,51 @@ The measured fused microbench summaries from that run were:
 Verdict: step 15 is a containment result, not a performance result. Risky
 search must stay subprocessed and health-checked on native Ubuntu only. No live
 BEAM/search path should be run on the Mac/TinyGPU bridge.
+
+## Q4_K Mac/deployment boundary (2026-06-11)
+
+Step 16 result: the deployment rule is recorded. This is not a Mac transport
+neutrality benchmark; no Mac/TinyGPU run was performed in steps 11-16.
+
+Native Ubuntu is the only approved place for search/tuning:
+
+- primitive opt sweeps;
+- shape policy sweeps;
+- `--schedule auto`;
+- live `BEAM=*` search;
+- containment probes that intentionally compile unknown kernels.
+
+The Mac/TinyGPU path should receive only fixed artifacts that already passed on
+native Ubuntu. For the current implementation, that artifact is the explicit
+role/shape policy behind `Q4K_PRIMITIVE=1`; it does not depend on live BEAM.
+
+Allowed Mac/TinyGPU smoke command:
+
+```bash
+DEV=AMD Q4K_PRIMITIVE=1 JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /path/to/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 4
+```
+
+Allowed sustained command after the smoke passes:
+
+```bash
+DEV=AMD Q4K_PRIMITIVE=1 JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /path/to/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 128
+```
+
+Fallback is immediate: unset `Q4K_PRIMITIVE` and run the existing tinygrad fused
+graph path.
+
+Prohibited on Mac/TinyGPU:
+
+- `BEAM=*`;
+- `--schedule auto`;
+- `extra/q4_k_policy_sweep.py`;
+- `extra/q4_k_opt_sweep.py`;
+- `extra/q4_k_beam_containment.py`;
+- any subprocess search that compiles/runs unknown AMD kernels.
+
+Reason: a bad search candidate has already shown it can destabilize the AMD
+path. On native Ubuntu that can be contained and health-checked; over the
+Mac/TinyGPU bridge it risks dropping the bridge/PCIe path. The search cost and
+risk should be paid once on native Ubuntu, then the fixed result deployed later.

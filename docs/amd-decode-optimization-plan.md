@@ -384,8 +384,11 @@ only (never the Mac bridge). This is the plan of record.
    AMD compile failure, then immediately runs a known-good `LOCAL:0:64` health
    kernel. Also verified a small `BEAM=1` graph microbench completes safely and
    reports final opts `[GROUPTOP:0:16, GROUP:0:0, LOCAL:0:2]`.
-16. [ ] Mac neutrality/deployment: never run live BEAM on the Mac/TinyGPU path;
-   ship only native-Ubuntu-proven primitive policies/schedule cache.
+16. [x] Mac neutrality/deployment rules recorded. Do not run live BEAM,
+   `--schedule auto`, or primitive policy sweeps on the Mac/TinyGPU path.
+   Deploy only native-Ubuntu-proven fixed policies (`Q4K_PRIMITIVE=1`) with
+   fallback available by unsetting the flag. This step records the safety rule;
+   T6 transport-neutrality benchmarking is still unmeasured.
 
 ### Two additions (both mandatory, easy to miss)
 
@@ -402,11 +405,41 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
    A microbench win must also be confirmed to translate to a full-decode win
    (step: full decode last) before claiming success.
 
+### Step 16 deployment rules
+
+This sequence does **not** claim Mac transport neutrality. It only records the
+deployment boundary after the native-Ubuntu primitive win.
+
+Allowed on Mac/TinyGPU:
+
+- Fixed, native-Ubuntu-proven decode path only:
+  `DEV=AMD Q4K_PRIMITIVE=1 JIT=1 PYTHONPATH=. .venv/bin/python -m tinygrad.llm
+  --model <gguf> --warmup --benchmark 128`.
+- Immediate fallback: unset `Q4K_PRIMITIVE` and use the existing tinygrad fused
+  graph.
+- First Mac run should be a short smoke (`--benchmark 4`) before any sustained
+  benchmark.
+
+Prohibited on Mac/TinyGPU:
+
+- `BEAM=*` live search.
+- `--schedule auto`.
+- `extra/q4_k_policy_sweep.py`, `extra/q4_k_opt_sweep.py`, and
+  `extra/q4_k_beam_containment.py`.
+- Any subprocess search whose candidates can compile/run unknown AMD kernels.
+
+Native Ubuntu remains the only place for search/tuning. When a schedule or
+policy wins there, deploy the fixed artifact to Mac afterward ("separation in
+time"). For the current code, the deployable artifact is the explicit
+role/shape policy behind `Q4K_PRIMITIVE=1`; there is no live BEAM dependency in
+that path.
+
 ### Current next action
 
-Step 16: record Mac/deployment rules. No live BEAM on Mac/TinyGPU; deploy only
-native-Ubuntu-proven `Q4K_PRIMITIVE=1` policy and keep risky scheduler search
-behind subprocess containment.
+Steps 11-16 are complete. The next useful step is residual profiling of the
+flagged model path (`Q4K_PRIMITIVE=1 DEBUG=2`) to identify whether the remaining
+gap is primitive math/memory quality, non-Q4 kernels, graph overhead, or decode
+outliers.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 
