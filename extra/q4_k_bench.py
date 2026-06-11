@@ -184,7 +184,7 @@ if __name__ == "__main__":
     if args.primitive:
       print(f"primitive: mode={args.primitive_mode} parts={args.primitive_parts} schedule={args.primitive_schedule} opts={list(primitive_opts)}")
 
-  raw = Tensor(args.gguf, device=args.device)
+  raw = Tensor(args.gguf)
   if args.primitive:
     from extra.q4_k_gemv_primitive import parse_opt, q4k_gemv_kernel, q4k_gemv_partial_kernel, q4k_unpack_kernel
     parsed_primitive_opts = tuple(parse_opt(x) for x in primitive_opts)
@@ -192,8 +192,9 @@ if __name__ == "__main__":
   Tensor.manual_seed(args.seed)
   results = []
   for info in targets:
-    raw_slice = raw[meta.data_start + info.off:]
     n, shape, q4_bytes = prod(info.dims), tensor_shape(info), q4_k_weight_bytes(info)
+    byte_start = meta.data_start + info.off
+    raw_slice = raw[byte_start:byte_start+q4_bytes].to(args.device).contiguous().realize()
     if not args.no_correctness:
       correctness_gate(raw_slice, n, info)
       if args.format == "text": print(f"correctness: PASS {info.name}")
@@ -217,7 +218,6 @@ if __name__ == "__main__":
     if args.primitive:
       rows, k = shape
       if k % Q4_K_BLOCK_ELEMS != 0: raise ValueError(f"{info.name} K={k} is not Q4_K block aligned")
-      byte_start = meta.data_start + info.off
       if byte_start % 4 != 0: raise ValueError(f"{info.name} byte offset is not uint32 aligned: {byte_start}")
       row_bytes = k // Q4_K_BLOCK_ELEMS * Q4_K_BLOCK_BYTES
       parts = min(args.primitive_parts, k // Q4_K_BLOCK_ELEMS)

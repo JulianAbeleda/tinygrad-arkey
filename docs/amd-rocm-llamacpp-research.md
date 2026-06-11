@@ -1126,3 +1126,56 @@ replacement yet: the small KV projection shows that the choice must be
 shape-aware. Next step is a safe parameter search over primitive knobs per
 shape, using subprocess classification first; broad scheduler/BEAM auto-search
 remains gated by compile/fault containment.
+
+## Q4_K shape-aware primitive policy sweep (2026-06-11)
+
+Step 11 result: added `extra/q4_k_policy_sweep.py`, a subprocess-contained
+policy harness that runs the existing integrated microbench per tensor and per
+primitive candidate. It parses the same correctness-gated bench output and
+chooses the primitive only when it beats the fused graph by the selected metric.
+Default metric is `device_q4_eff_gbs`, so the policy is based on raw kernel
+quality rather than DEBUG logging wall time.
+
+Also changed `extra/q4_k_bench.py` to stage only the selected Q4_K tensor slice
+from GGUF instead of copying the full model file to AMD before slicing. This
+makes per-shape subprocess search practical and does not change the timed
+matvec kernels.
+
+Command:
+
+```bash
+DEV=AMD DEBUG=2 PYTHONPATH=. .venv/bin/python extra/q4_k_policy_sweep.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --repo /home/ubuntu/tinygrad-arkey --iters 3 --timeout 60 \
+  --json /home/ubuntu/q4k-policy-full.json
+```
+
+Candidate set: explicit local sizes `8/16/32/64`, selected `parts` values
+`1/2/4`, and two combined local+upcast candidates. No broad `--schedule auto`
+or BEAM was used.
+
+Best policy by device-time Q4 bandwidth:
+
+| tensor | shape | fused graph GB/s | best primitive | primitive GB/s | ratio | choice |
+|---|---:|---:|---|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 12288x4096 | 81.19 | `local64_p1` | 415.86 | 5.12x | primitive |
+| `blk.4.ffn_down.weight` | 4096x12288 | 15.72 | `local32_p4` | 273.19 | 17.38x | primitive |
+| `blk.0.attn_q.weight` | 4096x4096 | 15.53 | `local64_p1` | 186.70 | 12.02x | primitive |
+| `blk.0.attn_k.weight` | 1024x4096 | 117.89 | `local32_p4` | 59.32 | 0.50x | fused graph |
+
+Selected candidate details:
+
+| candidate | opts | parts | notes |
+|---|---|---:|---|
+| `local64_p1` | `LOCAL:0:64` | 1 | best for `12288x4096` and `4096x4096` |
+| `local32_p4` | `LOCAL:0:32` | 4 | best for `4096x12288`, but still loses on `1024x4096` |
+| fused graph | existing Q4_K expression path | | keep for small KV projection |
+
+Failures were contained as normal subprocess failures. Example:
+`local32_upcast3_p1` became `illegal-opt` on several shapes instead of
+terminating the sweep.
+
+Verdict: step 11 produces a usable shape policy. The next model-path work must
+be selective: preserve packed Q4_K storage and dispatch the primitive only for
+policy-winning shapes. A blanket replacement would regress the small KV path by
+raw device time.

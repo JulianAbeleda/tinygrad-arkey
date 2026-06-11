@@ -358,14 +358,24 @@ only (never the Mac bridge). This is the plan of record.
    timing. On Qwen3-8B representative shapes, the primitive wins on the large
    FFN and attention-Q shapes; the tiny KV projection is device-time weaker, so
    model integration should be shape-aware rather than blanket replacement.
-11. [ ] Tune the primitive's exposed parameters with search/BEAM on native
-   Ubuntu only: rows/thread, group size, local shape, unroll. BEAM is expected
-   to tune around the primitive, not discover packed loads from scalar ops.
-12. [ ] Run full 8B decode only after the microbench passes correctness and
-   clears the speed gate. Then repeat on 14B.
-13. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
+11. [x] Tune the primitive's exposed parameters with search on native Ubuntu
+   only. Added `extra/q4_k_policy_sweep.py`, a subprocess-contained,
+   shape-aware sweep over explicit primitive opts. Result: `LOCAL:0:64` wins
+   `12288x4096` and `4096x4096`, `LOCAL:0:32 --parts 4` wins
+   `4096x12288`, and the existing fused graph remains best for `1024x4096`
+   KV projection by device time. This is the first usable shape policy.
+12. [ ] Wire the selective primitive policy into the real model path behind a
+   flag. Do not blanket-replace Q4_K linears; dispatch only the shapes/tensors
+   selected by the policy and preserve the fused graph fallback.
+13. [ ] Run full 8B decode only after the model-path primitive flag compiles and
+   passes a minimal logits/token sanity check. Then profile tok/s and dominant
+   kernels.
+14. [ ] Repeat the validated path on 14B if 8B moves.
+15. [ ] Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
    find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
    fail safe, not hard-fault). Report it.
+16. [ ] Mac neutrality/deployment: never run live BEAM on the Mac/TinyGPU path;
+   ship only native-Ubuntu-proven primitive policies/schedule cache.
 
 ### Two additions (both mandatory, easy to miss)
 
@@ -384,12 +394,10 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 11: run a safe, shape-aware primitive parameter search on native Ubuntu.
-Start from the subprocess opt-sweep harness, not broad `--schedule auto` BEAM:
-search explicit local size / part count / unroll candidates per representative
-shape, classify compile failures without faulting the process, and keep the
-primitive enabled only where it beats the existing fused graph path under the
-same correctness gates. Full decode waits until this microbench policy is clear.
+Step 12: wire the selective primitive policy into the real model path behind an
+off-by-default flag. The code question is how to preserve Q4_K packed storage
+metadata through GGUF loading and dispatch a custom linear only for policy
+winning shapes, while leaving ordinary decoded/fused tensors as the fallback.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 
