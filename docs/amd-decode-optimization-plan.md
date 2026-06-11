@@ -186,3 +186,44 @@ optimistic (target ~50-70% of llama as realistic), and hand-fusion (T5) is more
 probable than framed (auto-fusion is the hopeful path, not the safe one). The
 plan's ordering still holds — try the machine-first path first — but with
 honest expectations, not the optimistic ones this session has repeatedly shown.
+
+## REVISED PLAN (post-audit, 2026-06-11) — supersedes T2/T3 framing
+
+Independent audit (Codex) falsified the fp32-spill thesis: tinygrad ALREADY
+fuses Q4_K dequant into a fp16 GEMV (no fp32 materialization; HALF=1 default).
+The gap is the QUALITY of that fused kernel (scalarized, poor vectorization/
+occupancy/access pattern) vs llama.cpp's tuned packed MMVQ. Revised tests:
+
+- **T2 (fp16 dequant): MOOT** — already default (model.py:329, HALF=1).
+- **T3 (make dequant fuse): MOOT** — already fuses (REALIZE=0 default).
+- **T0 (BEAM): still run, now the primary MACHINE-side lever**, not a floor.
+  BEAM tunes the existing fused kernel's schedule (tiling, vectorization,
+  occupancy) within the move set. Expectation tempered: it cannot add a
+  packed-dot primitive the renderer lacks. Measures how far layer-1 search
+  gets on the already-fused kernel.
+- **T1' (NEW — kernel-quality profile): the new diagnostic.** Inspect the
+  generated fused GEMV kernel: scalar vs vectorized loads, occupancy, memory
+  access pattern; diff against llama.cpp MMVQ behaviour. Names the specific
+  deficiency. (Audit already showed: fused, scalarized, GPU-bound not dispatch.)
+- **T1b (NEW — cheap A/B): REALIZE / recompute.** Default recomputes dequant
+  every token (model.py:385 NOTE). Test REALIZE=1 (materialize fp16 weights
+  once): does avoiding per-token recompute help, or does the larger fp16 read
+  hurt? One env var, no code.
+- **T-SPECIALIZE (was T5, now PRIMARY hard lever): specialized packed Q4_K
+  GEMV lowering** — vectorized/packed loads + dot, better occupancy. This is
+  layer-2 (expand the representation). Could be a tinygrad lowering improvement
+  (machine-general-ish) or a hand-written/templated kernel. The field prior and
+  the audit both say this is likely REQUIRED to approach llama.cpp, not optional.
+- **T6 (Mac neutrality): unchanged**, after any real win.
+
+Revised ceiling: OPEN. 50% of llama.cpp = 3.2x over current; audit lowers
+confidence that BEAM alone reaches it since fusion is not the missing piece.
+Honest framing: BEAM measures the layer-1 ceiling on the existing kernel;
+the gap beyond that needs the specialized lowering (layer-2), effort unknown.
+
+Revised "machine takes most" assessment: PARTIALLY ALREADY TRUE — the machine
+did the fusion. The REMAINING gap is the vectorized packed GEMV primitive,
+which is the layer-2 residue the field hand-writes. So the honest order is:
+(1) BEAM to harvest layer-1 on the existing kernel [machine], (2) profile to
+size the residual, (3) specialized GEMV lowering for the rest [human-shaped,
+possibly templated so BEAM tunes its params].
