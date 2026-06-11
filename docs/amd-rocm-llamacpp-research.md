@@ -447,3 +447,52 @@ cannot) buys an additional 5-10%.
 Risks: BEAM search wall-clock on large models (mitigate: bench single layers);
 renderer work in H6 may be deeper than expected (scope before building);
 H8 fusion may fight the scheduler (incremental fusions, measure each).
+
+## ROCm baseline MEASURED (2026-06-11, Ubuntu native, Ryzen 5800X, ROCm 7.2.4, llama.cpp ac4cddeb0)
+
+Qwen3 family, Q4_K_M (1.7B is Q8_0 — no Q4_K_M published). Effective decode
+bandwidth = tg128 x file_GB. This is the finish line; tinygrad is scored
+against the GB/s column, not raw tok/s (which is model-size dependent).
+
+| model | file GB | tg128 fa0 | eff GB/s | pp512 fa0 |
+|---|---|---|---|---|
+| 1.7B Q8_0 | 1.70 | 230.2 | 391 | 11330 |
+| 4B Q4_K_M | 2.32 | 152.8 | 354 | 4789 |
+| 8B Q4_K_M | 4.68 | 101.2 | 473 | 3108 |
+| 14B Q4_K_M | 8.38 | 65.8 | 551 | 1751 |
+| 32B Q4_K_M | 18.40 | 30.8 | 567 | 750 |
+
+**Effective bandwidth rises monotonically and asymptotes at ~567 GB/s (59% of
+960 peak) on large models.** Small models are dispatch/overhead-bound (354-473);
+large models are the true memory-bound ceiling. The clean monotonic curve is
+itself the validity proof — a non-boosting card or broken build would show a
+flat low ceiling. Card confirmed boosting (post-run sclk 2854 MHz).
+
+Correction: the earlier "8B Q4_K_M should be 110-150 t/s" sanity gate was
+anchored to Llama2-7B **Q4_0** published numbers. Qwen3-8B Q4_K_M is a larger,
+heavier-to-dequant model; 101-106 t/s is in line, NOT a failure. Baseline valid.
+
+Anomaly: **32B fa1 collapses to 16.8 t/s (309 GB/s) with huge variance
+(+/-1.04)** vs 30.8 t/s fa0. Host RAM was nearly exhausted at capture
+(free 398Mi of 31Gi); the 18.4GB model + FA buffers likely forced swap
+mid-run. Use fa0 for the 32B finish line (30.8); re-run 32B fa1 with more
+free RAM before trusting it. FA helps at <=14B (+2-6%), so this is setup,
+not a kernel result.
+
+### Recalibrated targets (replacing the literature estimates in H5-H9)
+
+Finish line (llama.cpp eff GB/s, large-model regime): **~567 GB/s**.
+Roofline (85-90% of 960): **~820-860 GB/s**.
+
+- **Layer 1 target (H5+H6): tinygrad decode eff GB/s -> >=520** (within ~8%
+  of llama.cpp's 567). Per-model tg128 to match within 10%: 8B>=93, 14B>=61,
+  32B>=28.
+- **Layer 2 target (H8+H9): >=650 GB/s** end-to-end (beat llama.cpp by ~15%
+  via fusion + layout, exploiting the 567->820 headroom llama.cpp leaves).
+
+CRITICAL NEXT MEASUREMENT: run these SAME GGUFs through tinygrad on the
+Ubuntu native boot (DEV=AMD, local PCIe, no USB4). That gives tinygrad's
+kernel-only effective GB/s with zero transport confound — the real H5/H6
+starting point. The 18.5 tok/s figure is Mac/USB4 and conflates kernels with
+transport; it cannot be the kernel baseline. Same machine, same card, same
+files = pure kernel delta vs the 567 above.
