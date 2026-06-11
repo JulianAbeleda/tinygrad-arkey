@@ -270,3 +270,44 @@ is itself the hard, uncertain part — reaching parity depends on whether
 tinygrad's codegen can express packed loads + dot efficiently. Right plan, not
 a guaranteed win. "BEAM + primitive" >> "BEAM harder" is correct; do not expect
 plain BEAM to contribute beyond tuning the primitive's parameters.
+
+## FINAL agreed plan (2026-06-11) — locked, execute in order
+
+Ordering (Codex, agreed): microbench -> expression-vectorization probe ->
+primitive if needed -> BEAM tunes primitive -> full decode. BEAM native-Ubuntu
+only (never the Mac bridge). This is the plan of record; stop refining, execute.
+
+1. Native Ubuntu only for BEAM (Mac bridge would drop on a faulting candidate).
+2. Build the Q4_K GEMV microbench (extra/q4_k_bench.py exists) at the dominant
+   decode shape (pick the biggest: FFN up/down/gate; optionally bench the few
+   distinct attn/ffn shapes). Fast iteration target for all of the below.
+3. Cheap expression-vectorization probe FIRST: rewrite gguf.py:57 Q4_K path to
+   encourage wider loads (bitcast blocks to wider int, vector bit-op unpack);
+   inspect DEBUG=4; accept only if scalar uint8 loads become vectorized AND
+   microbench improves.
+4. If the rewrite fails, add a real PRIMITIVE (not a heuristic): packed Q4_K
+   load + scale/min unpack + fp16 dot, in the spirit of TC/WMMA, near
+   heuristic.py:63.
+5. BEAM tunes around the primitive (rows/thread, group, local, unroll). Not
+   expected to discover packed dot from scalar ops.
+6. Contain BEAM faults: reproduce on microbench (PARALLEL=0, BEAM_DEBUG=2),
+   find the faulting Opt sequence; it's a tinygrad-arkey bug (candidates must
+   fail safe, not hard-fault). Report it.
+
+### Two additions (both mandatory, easy to miss)
+
+A. CORRECTNESS GATE on step 3/4: any dequant rewrite must match the current
+   ggml_data_to_tensor output BIT-EXACTLY on a test block before any speed
+   number counts. Q4_K layout (6-bit scales packed across bytes, nibble
+   interleave) is fiddly; a fast-but-wrong kernel silently corrupts weights.
+   The microbench must assert numerical equality vs the reference, not just time.
+
+B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
+   drift: microbench effective bandwidth must move from ~75 GB/s toward
+   >=200 GB/s to justify carrying the expression rewrite to full decode. Below
+   that, the gather forces scalarization -> go to the primitive (step 4).
+   A microbench win must also be confirmed to translate to a full-decode win
+   (step: full decode last) before claiming success.
+
+### Status: planning converged. Next concrete action = steps 1-2 (microbench),
+then step 3 (expression probe). No further plan refinement needed.
