@@ -1,0 +1,51 @@
+ROCm baseline benchmark report
+Date: 2026-06-10
+
+Phase 0
+- tinygrad-arkey at commit: c12aee6e9
+- commit-msg hook installed: /home/ubuntu/tinygrad-arkey/.git/hooks/commit-msg
+
+Phase 1 — environment report
+1) lspci -nnk -s 08:00.0
+08:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [Radeon RX 7900 XT/7900 XTX/7900M] [1002:744c] (rev c8)
+	subsystem: Advanced Micro Devices, Inc. [AMD/ATI] RX 7900 GRE [XFX] [1002:0e3b]
+	Kernel driver in use: amdgpu
+
+2) extra/amdpci/linux_amd_state.sh
+interpreted state: NORMAL_HEALTHY
+
+3) uname -r; lscpu | grep "Model name"; free -h | head -2
+6.8.0-124-generic
+Model name:			AMD Ryzen 7 5800X 8-Core Processor
+Mem:		  31Gi
+
+4) rocminfo | grep -E "gfx|Marketing" | head -4
+Marketing Name:          AMD Ryzen 7 5800X 8-Core Processor 
+Name:                    gfx1100                            
+Marketing Name:          AMD Radeon RX 7900 XTX             
+Name:                    amdgcn-amd-amdhsa--gfx1100
+
+5) rocm-smi --showclocks --showpower | head -10
+(no errors; output shows clocks/power present)
+	dcefclk:1563Mhz, fclk:2301Mhz, mclk:96Mhz, sclk:150Mhz, socclk:1500Mhz
+
+6) llama.cpp state
+llama-bench executable: /home/ubuntu/env/llama.cpp/build/bin/llama-bench
+Commit: ac4cddeb0  vendor : update LibreSSL to 4.3.2 (#24397)
+Build cache indicates GGML_HIP=ON and AMD HIP compiler settings:
+CMAKE_HIP_COMPILER=/opt/rocm/bin/amdclang++
+CMAKE_HIP_COMPILER_ROCM_ROOT=/opt/rocm
+
+GGML_HIP is ON. LLAMA_HIP symbol not present in CMake cache for this tree.
+
+7) GGUF inventory (find ~ -name '*.gguf' -size +100M)
+No GGUF files found.
+
+Phase 2 — benchmarks
+No models found locally, so no llama-bench runs were executed.
+
+Phase 3 — sanity
+No 7-8B Q4 tg128 model available for sanity check at this time.
+
+Notes:
+- ROCm package stream now consistent for build tooling and HIP libs.
