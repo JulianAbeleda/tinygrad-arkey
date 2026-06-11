@@ -109,3 +109,49 @@ auto-tuners vs hardware-native): https://arxiv.org/pdf/2110.15238
 - Is >=50% of llama.cpp realistic for tinygrad fusion+BEAM on gfx1100, or is the
   honest ceiling lower?
 - Is the test ordering (T0-T6 in the plan) the right risk-minimizing sequence?
+
+## FALSIFIED by independent audit (Codex, 2026-06-11)
+
+The central thesis claim — "generic float32 expression and not fused into the
+matvec" — is MATERIALLY WRONG and is retracted. Independent audit built a
+minimal Q4_K GEMV from ggml_data_to_tensor(ggml_type=12) and inspected the
+generated AMD kernel:
+- tinygrad DOES fuse Q4_K dequant into the GEMV. The kernel loads packed uint8
+  Q4_K blocks, unpacks nibbles/scales, converts to half, multiplies the
+  activation, writes only the output. NO fp32 dequant buffer is materialized.
+- Weights are fp16 by default (model.py:329, HALF=1); decoded weights are only
+  materialized under REALIZE=1 (model.py:386). Default REALIZE=0 fuses.
+- The 4.4x-bytes / 1.6x-scheduling decomposition is REJECTED. Decode time is
+  mostly real graphed GPU work, not CPU dispatch and not an fp32 spill.
+
+### Corrected thesis
+
+tinygrad already fuses Q4_K dequant into a fp16 GEMV. The ~7x gap (measured
+~15-16% of llama.cpp on 8B, NOT the proposed 50-70%) is the QUALITY of that
+fused kernel: it is generic/scalarized with poor memory-access pattern,
+vectorization, and occupancy, versus llama.cpp's tuned packed MMVQ-style GEMV.
+
+### Corrected lever
+
+NOT "make dequant fuse" (already done) and NOT primarily BEAM (the important
+fusion already happens). The lever is SPECIALIZING the fused GEMV kernel —
+vectorized/packed Q4_K loads and dot, better occupancy — which is a specialized
+lowering or hand-written kernel. This is layer-2 (expand the representation),
+the part the field consistently hand-writes. The "machine takes most" hope is
+weakened: the machine already did the fusion; the residue is the hard part.
+
+### Corrected ceiling
+
+50% of llama.cpp = 3.2x over current. Audit lowers confidence sharply that
+BEAM+fusion reaches it, since fusion is not the missing piece. A specialized
+packed Q4_K GEMV lowering is likely required; ceiling and effort are now open
+questions, not a 50-70% estimate.
+
+### What this vindicates
+
+The layer-1/layer-2 framework predicted exactly this: the machine completed
+layer-1 (fusion is reachable, and it reached it); the wall sits at the
+representation boundary (vectorized packed-dot GEMV is the primitive the
+scheduler's move set does not contain). The human-shaped hole is the
+specialized GEMV lowering. The wall is where the theory said; this session's
+error was mislocating it one step too early (claiming fusion was the gap).
