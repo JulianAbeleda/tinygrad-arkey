@@ -571,3 +571,81 @@ faster (neutral on ROCm 6.3.1, regression on 7.2.1). Implication for H6:
 Revised build order: (1) eliminate fp32 dequant materialization, (2) BEAM
 sweep as wall-locator, (3) inspect llama.cpp's real decode kernel to name the
 residual primitive — do NOT pre-commit to a matrix/dot renderer change.
+
+## THE OPTIMIZATION BET (2026-06-11) — H-OPT
+
+Synthesis of all measured + fact-checked data into one falsifiable bet, with
+decomposed pre/post estimates. Estimates are bounded by the 960 GB/s roofline
+and decomposed from measured contributions, not hero-guessed. (Caveat: this
+session's point estimates have run optimistic 3-4x; trust the DECOMPOSITION
+and SCENARIOS, treat single numbers as midpoints of wide bands.)
+
+### The bet, in one sentence
+
+tinygrad's ~7x decode gap vs llama.cpp on gfx1100 is dominated by BYTES MOVED
+(fp32 dequant materialization + unfused multi-pass dequant), NOT by a missing
+hardware instruction; therefore most of it is layer-1 + fusion reachable
+(cheap), with a residual idiom wall that — if it exists — is ONE templated
+primitive (the proven AutoTVM/CUTLASS blend), not a research program.
+
+### Gap decomposition (32B asymptote, measured)
+
+| source | factor | mechanism | layer |
+|---|---|---|---|
+| A: bytes bloat | 4.4x | kernels run ~355 GB/s actual but model gets ~81 eff on Q4 size; fp32 dequant + unfused passes move ~4.4x the Q4 bytes | 1 + fusion |
+| B: scheduling | 1.6x | kernels at 37% of peak vs llama's 59%; BEAM=0 | 1 (BEAM) |
+| total | 7.0x | matches measured 567/81 | |
+
+The decomposition is the load-bearing claim: most of the gap (4.4x) is bytes,
+which is dtype + fusion, the cheap/reachable end — NOT the 1.6x scheduling that
+BEAM alone addresses, and NOT a missing instruction.
+
+### Pre / post estimates (8B Q4_K_M, decode tok/s)
+
+| state | tok/s | % of llama (101) | eff GB/s | what it takes |
+|---|---|---|---|---|
+| PRE (measured) | 15.8 | 16% | 74 | BEAM=0, fp32 dequant |
+| floor | ~24 | ~23% | ~110 | BEAM only (no byte fix) |
+| mid | ~62 | ~61% | ~290 | BEAM + fp16 dequant + partial fusion |
+| ceiling | ~100 | ~parity | ~470+ | full fused-Q4-dequant-GEMV idiom + BEAM |
+
+Decode is transport-neutral (H7), so the SAME numbers should hold on the Mac
+within ~10% — i.e. ROCm-parity-class decode over USB4 is the ceiling outcome.
+
+### How we get there (ordered, each gates the next)
+
+1. **BEAM=2/4 sweep** (free, native Ubuntu). Locates the wall, delivers the
+   floor number. If 8B lands ~24 and flattens, confirms bytes (not schedule)
+   is the gap — the central bet.
+2. **Kill fp32 dequant materialization**: dequant to fp16/bf16 in gguf.py;
+   confirm matvec accumulation dtype. Cheap; attacks Source A directly.
+3. **Confirm dequant caching**: does tinygrad recompute dequant per token or
+   once? (inspect model.py / realize). Recompute-per-token is a separate cheap
+   win.
+4. **Fuse dequant into the GEMV** so Q4 weights are read once in-register.
+   May be reachable by BEAM's existing fusion moves (test) or need a rewrite-
+   rule hint. This is the bulk of Source A and the campaign's center of mass.
+5. **Residual wall only**: read llama.cpp's actual gfx1100 decode kernel
+   (MMVQ / TILE-VEC) to name the exact missing primitive; add it as a
+   templated primitive + BEAM tune. Do NOT pre-build this.
+
+### Things to look into (open questions, ranked)
+
+1. Does the matvec accumulate in fp32 or can it be fp16/bf16? (gguf.py dequant
+   is fp32-out — the single most checkable byte-bloat source)
+2. Is dequant materialized once or recomputed per token? (model.py weight path)
+3. Is dequant->GEMV fusion in BEAM's current move set, or does it need a rule?
+4. What does llama.cpp's gfx1100 decode kernel actually use — plain vectorized
+   FMA, or dp4a/v_dot4? (decides whether step 5 is even needed)
+5. Can tinygrad's RDNA3 renderer emit v_dot4 if step 4 says it's needed?
+6. BEAM wall-clock on large models (mitigate: tune one layer, cache schedules,
+   the "separation in time" resolution of the search-cost contradiction).
+
+### Falsifiers
+
+- If BEAM alone reaches >50% of llama (8B > ~50 tok/s), the bytes-bloat
+  decomposition is wrong (scheduling was the gap) — revise.
+- If killing fp32 + fusion does NOT move eff GB/s above ~150, bytes were not
+  the dominant source — the wall is lower/different than the model predicts.
+- If the ceiling stalls 2x+ below llama after a fused idiom, there IS a
+  hardware-primitive wall (step 5 real) — the layer-2 hole is instruction-deep.
