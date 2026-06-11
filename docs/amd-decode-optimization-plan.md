@@ -271,6 +271,39 @@ tinygrad's codegen can express packed loads + dot efficiently. Right plan, not
 a guaranteed win. "BEAM + primitive" >> "BEAM harder" is correct; do not expect
 plain BEAM to contribute beyond tuning the primitive's parameters.
 
+## Search-literature reference point (2026-06-11)
+
+Corrected framing: schedule search and graph search are not novel. TASO searches
+verified DNN graph substitutions; Tensat uses equality saturation for tensor
+graph superoptimization; Welder uses tile-graph and tile-traffic cost modeling
+for memory-access scheduling; Mirage uses µGraphs to search across algebra,
+kernel, thread-block, and thread levels.
+
+What remains relevant here is one layer lower: packed sub-byte quantized
+representations are not exposed as clean dense tensor algebra or tile objects.
+Q4_K is a packed struct layout: fp16 scale words, 6-bit packed scales/mins,
+nibble weights, and interleaved sub-blocks. The project framing is therefore:
+
+> Make packed quantized formats expressible to tensor search/scheduling systems
+> by exposing Q4_K as a verified packed tile primitive rather than opaque scalar
+> byte math.
+
+Practical implications:
+
+- Welder/Mirage are the right mental models for the final abstraction: search
+  wants tile-level objects plus a memory-traffic objective, not orphan kernels.
+- The immediate engineering path remains unchanged: make Q4_K word storage and
+  primitive lowering correct, then give search scheduler-safe knobs.
+- BEAM's role is local tuning after representation exists. It is not expected
+  to discover Q4_K packing semantics from scalar byte arithmetic.
+
+References:
+
+- TASO: https://github.com/jiazhihao/taso
+- Tensat: https://arxiv.org/abs/2101.01332
+- Welder: https://www.usenix.org/conference/osdi23/presentation/shi
+- Mirage: https://www.usenix.org/conference/osdi25/presentation/wu-mengdi
+
 ## FINAL agreed plan (2026-06-11) — execute in order
 
 Ordering (Codex, agreed): microbench -> expression-vectorization probe ->
@@ -311,11 +344,12 @@ only (never the Mac bridge). This is the plan of record.
    comparison checks the primitive's decoded Q4_K weights element-wise against
    `q4_k_reference`. Result: unpack max_abs `0`; random-GEMV max_abs
    `0.00123835` on the full FFN shape.
-9. [ ] Scheduler-safe parallelization: the primitive needs row-local/upcast or
-   reduce-splitting opts comparable to the graph path. Letting `--schedule auto`
-   render scheduler opts produces a better-looking local row shape, but normal
-   AMD compilation fails. Do not run broad BEAM until this compile/fault
-   containment issue is isolated.
+9. [x] Scheduler-safe parallelization: explicit opt sweep found the first
+   compiling, correct, fast primitive schedule. `LOCAL:0:32` keeps exact unpack
+   correctness, random-GEMV correctness, emits `unsigned int` packed Q4 loads,
+   and reaches ~369 Q4-GB/s device time over 10 iterations on the full FFN
+   shape. Broad `--schedule auto` still fails AMD compilation, so BEAM remains
+   gated until compile-failure containment is isolated.
 10. [ ] Wire the tuned primitive into the microbench behind a flag and compare against
    the existing fused expression. Correctness must match the frozen Q4_K
    reference before any speed number counts.
@@ -345,11 +379,10 @@ B. GO/NO-GO NUMBER for the probe (step 3), set before running so it can't
 
 ### Current next action
 
-Step 9: isolate scheduler-safe opts for the custom primitive. The immediate
-target is a compiling, correct custom primitive with a local/upcast workgroup
-shape similar to the existing graph path. Only after that should BEAM/search be
-used; right now the broad scheduler path can render better opts but fails AMD
-compilation.
+Step 10: wire the tuned `LOCAL:0:32` primitive into the representative Q4_K
+microbench path behind a flag. The goal is to prove the tuned primitive is not
+an orphan script and can replace the existing fused graph path for the same
+tensor/activation contract before any model.py/full-decode integration.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 

@@ -985,3 +985,79 @@ kernel's schedule/codegen shape. Pinned custom kernels use poor row-local shape
 can render a better-looking row-local/upcast shape, but normal AMD compilation
 fails, so broad BEAM is still premature. Next work is scheduler-safe opts or a
 custom UOp shape that gets local/upcast parallelism without compile failures.
+
+## Q4_K scheduler-safe opt sweep (2026-06-11)
+
+Added `extra/q4_k_opt_sweep.py`, a subprocess-based sweep harness for explicit
+primitive opts. Each candidate runs `extra/q4_k_gemv_primitive.py` and is
+classified as:
+
+- `pass`: unpack exact, random-GEMV correct, timed.
+- `illegal-opt`: tinygrad rejected the Opt shape.
+- `compile-fail`: AMD compiler failed.
+- `wrong`: compiled but failed correctness.
+- `error`: renderer/runtime error outside the above buckets.
+
+Command:
+
+```bash
+.venv/bin/python extra/q4_k_opt_sweep.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --repo /home/ubuntu/tinygrad-arkey --rows 12288 --iters 2 \
+  --timeout 60 --json /home/ubuntu/q4k-opt-sweep-full.json
+```
+
+Full FFN shape results (`blk.0.ffn_gate.weight`, 12288x4096):
+
+| candidate | status | Q4 GB/s | device ms | correctness |
+|---|---|---:|---:|---|
+| baseline | pass | 38.51 | 0.735 | unpack 0, GEMV `0.00123835` |
+| auto | compile-fail | | | unpack 0 |
+| `LOCAL:0:2` | pass | 53.43 | 0.530 | unpack 0, GEMV `0.00123835` |
+| `LOCAL:0:4` | pass | 100.78 | 0.281 | unpack 0, GEMV `0.00123835` |
+| `LOCAL:0:8` | pass | 182.91 | 0.155 | unpack 0, GEMV `0.00123835` |
+| `LOCAL:0:16` | pass | 301.44 | 0.094 | unpack 0, GEMV `0.00123835` |
+| `LOCAL:0:32` | pass | 403.64 | 0.070 | unpack 0, GEMV `0.00123835` |
+| `UPCAST:0:2` | pass | 27.20 | 1.041 | unpack 0, GEMV `0.00123835` |
+| `UPCAST:0:3` | pass | 33.84 | 0.837 | unpack 0, GEMV `0.00123835` |
+| `UPCAST:0:4` | pass | 28.58 | 0.991 | unpack 0, GEMV `0.00123835` |
+| `UPCAST:0:5` | illegal-opt | | | |
+| `UNROLL:*` | compile-fail / illegal / renderer error | | | unpack 0 before failure |
+| `GROUP:0:{4,8,16}` | wrong | | | GEMV error ~4.3-4.5 |
+| `GROUPTOP:0:16` | wrong | | | GEMV error ~4.4 |
+| `GROUPTOP:0:32` | illegal-opt | | | |
+| auto-like `UPCAST:0:3 UNROLL:2:0 LOCAL:0:32` | compile-fail | | | |
+| `LOCAL:0:32 UPCAST:0:3` | pass | 165.74 | 0.171 | unpack 0, GEMV `0.00123835` |
+| `LOCAL:0:32 UPCAST:0:4` | pass | 110.70 | 0.256 | unpack 0, GEMV `0.00123835` |
+
+Stable rerun of the winning candidate:
+
+```bash
+DEV=AMD DEBUG=2 PYTHONPATH=. .venv/bin/python extra/q4_k_gemv_primitive.py \
+  /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD \
+  --tensor blk.0.ffn_gate.weight --rows 12288 --mode partial --parts 1 \
+  --opt LOCAL:0:32 --iters 10
+```
+
+Result: unpack max_abs `0`, random-GEMV max_abs `0.00123835`, device `0.077`
+ms, `368.66` Q4-GB/s, one kernel.
+
+Generated-code check (`DEBUG=4`) for `LOCAL:0:32`:
+
+- primitive kernel: `q4k_gemv_partial_12288_4096_1`
+- opts: `Opt(op=OptOps.LOCAL, axis=0, arg=32)`
+- launch: `amdgpu_flat_work_group_size(1, 32)`
+- packed Q4 loads: `unsigned int val0 = (*(data1_7077888+...))`
+
+Verdict: scheduler-safe local row parallelism is found. This clears the
+standalone primitive speed gate: the custom primitive now beats the existing
+fused graph microbench anchor (~80 Q4-GB/s) by a wide margin on this layer. The
+next risk is integration: wire this tuned primitive into `extra/q4_k_bench.py`
+or an equivalent lowering flag so it is not a standalone orphan, then compare
+the same tensor/activation contract before touching full decode.
+
+Search framing update: this result fits the corrected Welder/Mirage framing.
+The contribution is not "search over schedules" or "search over graph
+partitions"; those exist. The useful boundary is exposing Q4_K as a verified
+packed tile primitive so schedule/search systems have a representation to tune
+instead of opaque scalar byte math.

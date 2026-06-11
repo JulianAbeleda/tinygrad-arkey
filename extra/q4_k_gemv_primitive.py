@@ -3,6 +3,7 @@ import argparse, pathlib, time
 from math import prod
 
 from tinygrad import Tensor, dtypes
+from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import GlobalCounters, cdiv
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
@@ -41,11 +42,21 @@ def _q4k_block_dot(words:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
     contrib = contrib + _q4k_weight(words, base, grp, pos) * x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
   return contrib
 
-def _kernel_info(name:str, schedule:str) -> KernelInfo:
+def parse_opt(spec:str) -> Opt:
+  parts = spec.split(":")
+  if len(parts) == 1:
+    return Opt(OptOps[parts[0].upper()])
+  if len(parts) != 3:
+    raise ValueError(f"opt must be OP or OP:AXIS:ARG, got {spec!r}")
+  op, axis, arg = parts
+  return Opt(OptOps[op.upper()], int(axis), int(arg))
+
+def _kernel_info(name:str, schedule:str, opts:tuple[Opt, ...]) -> KernelInfo:
+  if opts: return KernelInfo(name=name, opts_to_apply=opts)
   if schedule == "auto": return KernelInfo(name=name)
   return KernelInfo(name=name, opts_to_apply=())
 
-def q4k_gemv_kernel(rows:int, k:int, schedule:str):
+def q4k_gemv_kernel(rows:int, k:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
 
   def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
@@ -56,11 +67,11 @@ def q4k_gemv_kernel(rows:int, k:int, schedule:str):
 
     acc = out[row].set(0.0)
     acc = out[row].set(acc.after(blk, pos)[row] + _q4k_block_dot(words, x, base, blk, pos), end=pos)
-    return acc.end(row, blk).sink(arg=_kernel_info(f"q4k_gemv_ref_{rows}_{k}", schedule))
+    return acc.end(row, blk).sink(arg=_kernel_info(f"q4k_gemv_ref_{rows}_{k}", schedule, opts))
 
   return kernel
 
-def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str):
+def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)
 
@@ -76,11 +87,11 @@ def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str):
 
     acc = partials[row, part].set(0.0)
     acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
-    return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q4k_gemv_partial_{rows}_{k}_{parts}", schedule))
+    return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q4k_gemv_partial_{rows}_{k}_{parts}", schedule, opts))
 
   return kernel
 
-def q4k_unpack_kernel(rows:int, k:int, schedule:str):
+def q4k_unpack_kernel(rows:int, k:int):
   k_blocks = k // Q4_K_BLOCK_ELEMS
 
   def kernel(out:UOp, words:UOp) -> UOp:
@@ -91,7 +102,7 @@ def q4k_unpack_kernel(rows:int, k:int, schedule:str):
     stores = []
     for grp in range(8):
       stores.append(out[row, blk*Q4_K_BLOCK_ELEMS + grp*32 + pos].store(_q4k_weight(words, base, grp, pos)))
-    return UOp.group(*stores).end(row, blk, pos).sink(arg=_kernel_info(f"q4k_unpack_{rows}_{k}", schedule))
+    return UOp.group(*stores).end(row, blk, pos).sink(arg=_kernel_info(f"q4k_unpack_{rows}_{k}", "none", ()))
 
   return kernel
 
@@ -117,6 +128,7 @@ if __name__ == "__main__":
   parser.add_argument("--parts", type=int, default=16, help="number of K-block partitions for --mode partial")
   parser.add_argument("--schedule", choices=("none", "auto"), default="none",
                       help="schedule opts for the custom primitive")
+  parser.add_argument("--opt", action="append", default=[], help="explicit primitive opt OP:AXIS:ARG, e.g. LOCAL:0:32")
   parser.add_argument("--unpack-check-rows", type=int, default=2, help="rows to use for direct decoded-weight correctness gate")
   parser.add_argument("--seed", type=int, default=1337, help="seed for random activation correctness gate")
   args = parser.parse_args()
@@ -136,8 +148,9 @@ if __name__ == "__main__":
   nwords = q4_bytes // 4
   if args.parts < 1: raise ValueError("--parts must be >= 1")
   parts = min(args.parts, k // Q4_K_BLOCK_ELEMS)
+  opts = tuple(parse_opt(x) for x in args.opt)
   print(f"tensor={info.name} full_shape={shape} primitive_shape=({rows},{k}) q4_bytes={q4_bytes} nwords={nwords} "
-        f"mode={args.mode} parts={parts} device={args.device or 'default'}")
+        f"mode={args.mode} parts={parts} schedule={args.schedule} opts={[str(x) for x in opts]} device={args.device or 'default'}")
 
   raw_words = Tensor(args.gguf, dtype=dtypes.uint32)
   words = raw_words[byte_start//4:byte_start//4+nwords].to(args.device).contiguous().realize()
@@ -154,7 +167,7 @@ if __name__ == "__main__":
   if unpack_rows > 0:
     unpack_words = raw_words[byte_start//4:byte_start//4+(unpack_rows*row_bytes)//4].to(args.device).contiguous().realize()
     unpack_out = Tensor.empty(unpack_rows, k, dtype=dtypes.float32, device=args.device)
-    unpack_got = unpack_out.custom_kernel(unpack_words, fxn=q4k_unpack_kernel(unpack_rows, k, args.schedule))[0].realize()
+    unpack_got = unpack_out.custom_kernel(unpack_words, fxn=q4k_unpack_kernel(unpack_rows, k))[0].realize()
     unpack_ref = q4_k_reference(Tensor(args.gguf)[byte_start:byte_start+unpack_rows*row_bytes].to(args.device), unpack_rows*k).reshape(unpack_rows, k).realize()
     unpack_max_abs = (unpack_got - unpack_ref).abs().max().item()
     print(f"unpack_correctness: rows={unpack_rows} max_abs={unpack_max_abs:.6g}")
@@ -163,8 +176,8 @@ if __name__ == "__main__":
 
   def primitive():
     if args.mode == "serial":
-      return out.custom_kernel(words, x, fxn=q4k_gemv_kernel(rows, k, args.schedule))[0]
-    partial = partials.custom_kernel(words, x, fxn=q4k_gemv_partial_kernel(rows, k, parts, args.schedule))[0]
+      return out.custom_kernel(words, x, fxn=q4k_gemv_kernel(rows, k, args.schedule, opts))[0]
+    partial = partials.custom_kernel(words, x, fxn=q4k_gemv_partial_kernel(rows, k, parts, args.schedule, opts))[0]
     return partial.sum(axis=1)
 
   got = primitive().realize()
