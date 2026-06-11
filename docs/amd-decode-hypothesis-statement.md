@@ -155,3 +155,46 @@ representation boundary (vectorized packed-dot GEMV is the primitive the
 scheduler's move set does not contain). The human-shaped hole is the
 specialized GEMV lowering. The wall is where the theory said; this session's
 error was mislocating it one step too early (claiming fusion was the gap).
+
+## Results: BEAM + profile (2026-06-11, commit 1c065d7a8) — diagnosis CONFIRMED
+
+[MEASURED] BEAM produced NO improvement: BEAM=2 caused an AMD HW fault
+(memory_lost=1), BEAM=4 not cleanly reached; BEAM=0 stays best (8B ~15.6-15.8,
+14B ~5.8 tok/s). The layer-1 search lever is exhausted AND unstable on this
+path — it cannot close the gap.
+
+[MEASURED] REALIZE=1 (materialize fp16 weights once) is WORSE: ~13.6-14.2 vs
+~15.6 tok/s and ~15.3GB vs ~4.9GB VRAM. Per-token dequant recompute (default)
+is correct; materializing fp16 is not a win.
+
+[MEASURED] Generated Q4_K GEMV source: the fused kernel is SCALAR on the quant
+loads — many scalar uint8 loads + scalar nibble/dequant, with half4 activation
+loads/stores. Kernel shape r_32_32_4_16_4_2_32, 32-thread workgroup. Best
+per-kernel BW ~420 GB/s (inside batched-142), but end-to-end only ~75-79 GB/s
+(~14% of llama's 567). Dominant cost: batched-256 ~25ms, batched-142 ~16ms,
+batched-128 ~12ms per decode step.
+
+### Confirmed diagnosis (evidence, not inference)
+
+The gap is the SCALARIZED QUANT WEIGHT LOAD in the already-fused GEMV. Scalar
+uint8 loads cannot coalesce/saturate memory bandwidth; llama.cpp loads Q4
+blocks as vectorized words and unpacks in-register. This is the entire residual
+and it is squarely layer-2 (the renderer/lowering's move set does not vectorize
+this quant-gather pattern; BEAM searching schedules cannot add it).
+
+### Honest verdict on "machine takes most"
+
+For THIS gap, the machine has already given everything it can: it produced the
+fusion (the medium-hard part) for free, but BEAM adds nothing (and crashes), so
+the remaining ~6.5x is NOT machine-reachable by search. It requires the
+specialized vectorized-packed Q4_K GEMV — the layer-2 human-shaped work.
+
+### The one machine-ish shot left (next scoping question)
+
+Is vectorized quant-load reachable by RESTRUCTURING the gguf.py dequant
+expression (bitcast Q4 blocks to wider dtype, unpack with vector bit-ops) so
+tinygrad's codegen emits vector loads instead of scalar uint8 — vs needing
+renderer/hand-kernel work? If the former, it stays "garden the expression, let
+codegen vectorize" (machine emits it). If the scalar load is forced by how
+tinygrad lowers the gather/index, it needs deeper lowering work. This is
+T-SPECIALIZE's first question and the next concrete step.
