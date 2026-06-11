@@ -649,3 +649,39 @@ within ~10% — i.e. ROCm-parity-class decode over USB4 is the ceiling outcome.
   the dominant source — the wall is lower/different than the model predicts.
 - If the ceiling stalls 2x+ below llama after a fused idiom, there IS a
   hardware-primitive wall (step 5 real) — the layer-2 hole is instruction-deep.
+
+## Correction (2026-06-11): "fused-Q4-GEMV" is fusion+search, NOT hand-writing
+
+Grounded in the code: the dequant is ALREADY a lazy graph designed to fuse.
+- gguf.py: weights load as a LAZY ggml_data_to_tensor() expression on the raw
+  Q4 bytes; only the Q4 blob is realized, not the dequant.
+- model.py:131-136: the forward is jitted with the comment "we unpack the GGUF
+  on the fly" — the dequant lives INSIDE the forward graph, meant to fuse into
+  the matmul so Q4 weights are read once and dequant'd in-register.
+
+So the 4.4x byte bloat is the fusion BREAKING (complex dequant expression with
+.contiguous()/transpose/stack barriers + BEAM=0 + fp32 output), not a missing
+hand-written kernel. The fused-Q4-GEMV is expressible in tinygrad's EXISTING
+ops (elementwise dequant + reduce matmul) — therefore reaching it is a
+graph-rewrite + scheduling + search problem, i.e. the MACHINE's domain.
+
+Three tiers of "let the machine do it" (increasing human input):
+- A. BEAM on — machine searches schedules. Addresses the 1.6x scheduling.
+- B. Make dequant fuse — restructure the lazy graph (fp16 not fp32, simpler
+     ops, drop materialization barriers) so tinygrad's EXISTING fusion pushes
+     dequant through the matmul. Still the machine (rewrite+schedule); human
+     role is minimal "representation gardening", not kernel authorship.
+     Captures most of the 4.4x.
+- C. Hand-add a primitive (packed-dot) — only if A+B wall. Fact-checked as a
+     PREFILL/GEMM concern, likely NOT needed for decode.
+
+Key consequence for the "machine takes most" goal: for DECODE the idiom needs
+NO new op, so the machine can in principle take ~all of it; the irreducible
+human residue shrinks from "write a kernel" to "make the dequant fusion-
+friendly + turn on search". That is the machine-maximal path and it is the
+recommended strategy. The one genuine layer-2 hole (a new instruction) belongs
+to prefill, a separate battle.
+
+Revised step 4/5 of H-OPT: step 4 is "remove fusion barriers so the existing
+machinery fuses dequant into GEMV" (gardening, not authoring); step 5 (hand
+primitive) is decode-unlikely and prefill-only.
