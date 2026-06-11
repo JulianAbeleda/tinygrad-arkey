@@ -549,3 +549,25 @@ Q4 weights require (fp32 dequant materialization + unfused passes).
    would be a separate, cheaper win than the fused kernel.
 3. Only after BEAM is known: scope H6 (can the RDNA3 renderer emit packed-dot
    from a fused dequant-matvec pattern?).
+
+## H6 build-order correction (2026-06-11, fact-checked)
+
+Verified against llama.cpp ROCm data: on RDNA3/gfx1100, WMMA (matrix units)
+is NEUTRAL-to-HARMFUL for inference; the standard TILE/VEC path is as fast or
+faster (neutral on ROCm 6.3.1, regression on 7.2.1). Implication for H6:
+
+- DECODE (tg128) is GEMV, memory-bound. Matrix instructions are irrelevant to
+  it by construction. The decode lever is bytes-moved: kill fp32 dequant
+  materialization (gguf.py casts Q4_K -> float32), fuse dequant into the GEMV,
+  schedule vector loads well. This is layer-1 + fusion, not a missing matrix
+  primitive — cheaper and more BEAM-reachable than the "packed-dot renderer
+  patch" framing assumed.
+- Matrix/dot instructions (WMMA, and possibly v_dot4 via dp4a) belong to the
+  PREFILL/GEMM battle (pp512), a separate compute-bound problem.
+- Open: whether llama.cpp's gfx1100 MMVQ decode kernel uses v_dot4 or plain
+  vectorized FMA — unresolved by web search; read the actual kernel before
+  committing any renderer work.
+
+Revised build order: (1) eliminate fp32 dequant materialization, (2) BEAM
+sweep as wall-locator, (3) inspect llama.cpp's real decode kernel to name the
+residual primitive — do NOT pre-commit to a matrix/dot renderer change.
