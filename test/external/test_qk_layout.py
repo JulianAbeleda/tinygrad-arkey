@@ -7,7 +7,7 @@ from tinygrad.llm.gguf import ggml_data_to_tensor
 
 from extra.qk_layout import (
   GGML_Q4_K, GGML_Q6_K, GGUFInfo, GGUFMetadata, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q6_K_BLOCK_BYTES, Q6_K_BLOCK_ELEMS,
-  packed_byte_range, q4_k_reference, q6_k_reference, quant_weight_bytes, role_from_name, tensor_shape,
+  packed_byte_range, q4_k_reference, q6_k_reference, q8_1_dequantize, q8_1_quantize, quant_weight_bytes, role_from_name, tensor_shape,
 )
 
 def _synthetic_blocks(block_bytes:int, nblocks:int, half_offsets:tuple[int, ...]) -> bytearray:
@@ -39,6 +39,19 @@ class TestQKLayout(unittest.TestCase):
     self.assertEqual(tensor_shape(info), (4096, 12288))
     self.assertEqual(role_from_name(info.name), "ffn_down")
     self.assertEqual(packed_byte_range(meta, info), (192, quant_weight_bytes(info)))
+
+  def test_q8_1_quantize_dequantize(self):
+    x = Tensor(np.linspace(-2.0, 2.0, 64, dtype=np.float32))
+    q, scales = q8_1_quantize(x)
+    self.assertEqual(q.dtype, dtypes.int8)
+    self.assertEqual(scales.shape, (2,))
+    deq = q8_1_dequantize(q, scales).numpy()
+    self.assertLess(np.max(np.abs(deq - x.numpy())), 0.02)
+
+  def test_q8_1_zero_block_is_finite(self):
+    q, scales = q8_1_quantize(Tensor.zeros(32))
+    np.testing.assert_equal(q.numpy(), np.zeros(32, dtype=np.int8))
+    np.testing.assert_equal(scales.numpy(), np.ones(1, dtype=np.float32))
 
 if __name__ == "__main__":
   unittest.main()

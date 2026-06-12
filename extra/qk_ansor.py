@@ -23,6 +23,14 @@ Q4_SUMMARY_RE = re.compile(
 )
 Q4_GEMV_RE = re.compile(r"^primitive_gemv_correctness: PASS \S+ max_abs=([0-9.eE+-]+)", re.MULTILINE)
 Q4_UNPACK_RE = re.compile(r"^primitive_unpack_correctness: PASS \S+ .* max_abs=([0-9.eE+-]+)", re.MULTILINE)
+Q4_Q8_BENCH_RE = re.compile(
+  r"^q4k_q8_1_gemv_partial: wall=(?P<wall_ms>[0-9.]+) ms \((?P<wall_gbs>[0-9.]+) Q4-GB/s\), "
+  r"device=(?P<device_ms>[0-9.]+ ms \((?P<device_gbs>[0-9.]+) Q4-GB/s\)|n/a), kernels=(?P<kernels>[0-9.]+)",
+  re.MULTILINE,
+)
+Q4_Q8_GEMV_RE = re.compile(r"^correctness: max_abs=([0-9.eE+-]+)", re.MULTILINE)
+Q4_Q8_UNPACK_RE = re.compile(r"^unpack_correctness: .* max_abs=([0-9.eE+-]+)", re.MULTILINE)
+Q4_Q8_PACK_RE = re.compile(r"^q8_1_pack_correctness: .* activation_max_abs=([0-9.eE+-]+)", re.MULTILINE)
 
 Q6_HEADER_RE = re.compile(r"^tensor=(?P<tensor>\S+) full_shape=\((?P<shape>[^)]*)\).*?quant_bytes=(?P<bytes>\d+)", re.MULTILINE)
 Q6_BENCH_RE = re.compile(
@@ -136,6 +144,10 @@ def generate_candidates(desc:QuantGemvDescriptor, level:int=0) -> list[Candidate
       ):
         candidates.append(CandidateSpec(name, "q4_k_packed_u32", desc.dtype_activation, "split_k_partial", parts, opts,
                                         ("q4k_gemv_partial_kernel", "u32_packed_storage")))
+    if level >= 2:
+      parts, opts = _q4_v1_default(desc)
+      candidates.append(CandidateSpec("q8_1_q4_packed", "q4_k_q8_1_packed_u32", "q8_1", "split_k_partial", parts, opts,
+                                      ("q8_1_pack", "q4k_q8_1_gemv_partial_kernel", "u32_packed_storage")))
   elif desc.ggml_type == GGML_Q6_K:
     _require_alignment(desc, 2, "v1_q6_packed")
     candidates.append(CandidateSpec("v1_q6_packed", "q6_k_packed_u16", desc.dtype_activation, "split_k_partial", 1, ("LOCAL:0:64",),
@@ -149,7 +161,7 @@ def generate_candidates(desc:QuantGemvDescriptor, level:int=0) -> list[Candidate
                                         ("q6k_gemv_partial_kernel", "u16_packed_storage")))
   else:
     raise ValueError(f"unsupported descriptor type {desc.ggml_type}")
-  if level >= 2:
+  if desc.ggml_type == GGML_Q6_K and level >= 2:
     candidates.append(CandidateSpec(f"q8_1_{desc.format.lower()}_sketch", "q8_1_packed_activation_sketch", "q8_1",
                                     "split_k_partial", max(1, candidates[-1].parts), candidates[-1].opts,
                                     ("q8_1_pack", "q8_1_x_quant_dot", "not_implemented")))
@@ -208,6 +220,24 @@ def _parse_q6(desc:QuantGemvDescriptor, candidate:CandidateSpec, out:str, status
     "tail": "\n".join(out.strip().splitlines()[-tail_lines:]),
   }
 
+def _parse_q4_q8(desc:QuantGemvDescriptor, candidate:CandidateSpec, out:str, status:str, elapsed_s:float, tail_lines:int) -> dict:
+  row = Q4_Q8_BENCH_RE.search(out)
+  device_gbs = None if row is None or row["device_ms"] == "n/a" else float(row["device_gbs"])
+  quant_gbs = device_gbs if device_gbs is not None else (None if row is None else float(row["wall_gbs"]))
+  return {
+    "tensor": desc.tensor, "format": desc.format, "shape": [desc.rows, desc.cols], "candidate": candidate.name,
+    "family": candidate.family, "status": status, "elapsed_s": round(elapsed_s, 3),
+    "device_ms": None if row is None or row["device_ms"] == "n/a" else float(row["device_ms"].split()[0]),
+    "quant_gbs": quant_gbs, "wall_ms": None if row is None else float(row["wall_ms"]),
+    "wall_quant_gbs": None if row is None else float(row["wall_gbs"]),
+    "kernels": None if row is None else float(row["kernels"]),
+    "gemv_max_abs": float(m.group(1)) if (m:=Q4_Q8_GEMV_RE.search(out)) else None,
+    "unpack_max_abs": float(m.group(1)) if (m:=Q4_Q8_UNPACK_RE.search(out)) else None,
+    "activation_max_abs": float(m.group(1)) if (m:=Q4_Q8_PACK_RE.search(out)) else None,
+    "parts": candidate.parts, "opts": list(candidate.opts), "requires": list(candidate.requires),
+    "tail": "\n".join(out.strip().splitlines()[-tail_lines:]),
+  }
+
 def run_candidate(desc:QuantGemvDescriptor, candidate:CandidateSpec, repo:pathlib.Path, iters:int, debug:int, timeout:float,
                   seed:int, tail_lines:int) -> dict:
   if "not_implemented" in candidate.requires:
@@ -218,6 +248,12 @@ def run_candidate(desc:QuantGemvDescriptor, candidate:CandidateSpec, repo:pathli
       "requires": list(candidate.requires), "tail": "q8_1 generated sketch only; no kernel lowering exists yet",
     }
   if desc.ggml_type == GGML_Q4_K:
+    if candidate.family == "q4_k_q8_1_packed_u32":
+      cmd = [sys.executable, "extra/q8_1_q4k_bench.py", desc.model, "--device", desc.device, "--tensor", desc.tensor,
+             "--iters", str(iters), "--parts", str(candidate.parts), "--seed", str(seed)]
+      for opt in candidate.opts: cmd += ["--opt", opt]
+      rc, out, timeout_hit, elapsed_s = _run_subprocess(cmd, repo, desc.device, debug, timeout)
+      return _parse_q4_q8(desc, candidate, out, _classify(rc, out, timeout_hit), elapsed_s, tail_lines)
     cmd = [sys.executable, "extra/q4_k_bench.py", desc.model, "--device", desc.device, "--tensor", desc.tensor,
            "--iters", str(iters), "--format", "text", "--activation", "random", "--seed", str(seed)]
     if candidate.name != "fused_graph":

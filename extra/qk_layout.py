@@ -18,6 +18,7 @@ Q4K_WORDS_PER_BLOCK = Q4_K_BLOCK_BYTES // 4
 Q6_K_BLOCK_ELEMS = QK_BLOCK_ELEMS
 Q6_K_BLOCK_BYTES = 210
 Q6K_HALFWORDS_PER_BLOCK = Q6_K_BLOCK_BYTES // 2
+Q8_1_BLOCK_ELEMS = 32
 
 _QUANT_BYTES = {GGML_Q4_K: Q4_K_BLOCK_BYTES, GGML_Q6_K: Q6_K_BLOCK_BYTES}
 _FORMAT_NAMES = {GGML_Q4_K: "Q4_K", GGML_Q6_K: "Q6_K"}
@@ -177,3 +178,15 @@ def quant_reference(t:Tensor, n:int, ggml_type:int) -> Tensor:
   if ggml_type == GGML_Q4_K: return q4_k_reference(t, n)
   if ggml_type == GGML_Q6_K: return q6_k_reference(t, n)
   raise ValueError(f"unsupported quant reference type {ggml_type}")
+
+def q8_1_quantize(x:Tensor, block_elems:int=Q8_1_BLOCK_ELEMS) -> tuple[Tensor, Tensor]:
+  if x.shape[-1] % block_elems != 0: raise ValueError(f"last dimension {x.shape[-1]} is not q8_1 block aligned")
+  blocks = x.cast(dtypes.float32).reshape(-1, block_elems)
+  scales = blocks.abs().max(axis=1, keepdim=True) / 127.0
+  scales = (scales == 0).where(1.0, scales)
+  qs = (blocks / scales).round().clip(-128, 127).cast(dtypes.int8)
+  return qs.flatten().contiguous(), scales.reshape(-1).contiguous()
+
+def q8_1_dequantize(qs:Tensor, scales:Tensor, block_elems:int=Q8_1_BLOCK_ELEMS) -> Tensor:
+  if qs.shape[-1] % block_elems != 0: raise ValueError(f"last dimension {qs.shape[-1]} is not q8_1 block aligned")
+  return (qs.reshape(-1, block_elems).cast(dtypes.float32) * scales.reshape(-1, 1).cast(dtypes.float32)).flatten()

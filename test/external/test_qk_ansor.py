@@ -34,8 +34,16 @@ class TestQKAnsor(unittest.TestCase):
     self.assertEqual([c.name for c in candidates], ["fused_graph", "v1_q6_packed"])
     self.assertEqual(candidates[1].requires, ("q6k_gemv_partial_kernel", "u16_packed_storage"))
 
-  def test_level2_emits_q8_1_sketch_without_runtime_claim(self):
+  def test_level2_emits_q8_1_q4_candidate(self):
     info = GGUFInfo("blk.0.ffn_gate.weight", (4096, 12288), GGML_Q4_K, 64)
+    desc = descriptor_from_info(pathlib.Path("/tmp/model.gguf"), self._meta(info), info, device="AMD", arch="gfx1100")
+    q8 = generate_candidates(desc, level=2)[-1]
+    self.assertEqual(q8.name, "q8_1_q4_packed")
+    self.assertEqual(q8.activation, "q8_1")
+    self.assertNotIn("not_implemented", q8.requires)
+
+  def test_level2_keeps_q8_1_q6_as_sketch_without_runtime_claim(self):
+    info = GGUFInfo("blk.0.ffn_down.weight", (12288, 4096), GGML_Q6_K, 64)
     desc = descriptor_from_info(pathlib.Path("/tmp/model.gguf"), self._meta(info), info, device="AMD", arch="gfx1100")
     sketch = generate_candidates(desc, level=2)[-1]
     self.assertEqual(sketch.activation, "q8_1")

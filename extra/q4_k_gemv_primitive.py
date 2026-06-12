@@ -9,7 +9,8 @@ from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
 from extra.q4_k_safety import assert_q4k_risky_search_allowed
 from extra.qk_layout import (
-  GGML_Q4_K, Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, pick_tensor, q4_k_reference, read_metadata, tensor_shape,
+  GGML_Q4_K, Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, pick_tensor, q4_k_reference,
+  read_metadata, tensor_shape,
 )
 
 def _f16_word(word:UOp, high:bool) -> UOp:
@@ -41,6 +42,14 @@ def _q4k_block_dot(words:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
   contrib = UOp.const(dtypes.float32, 0.0)
   for grp in range(8):
     contrib = contrib + _q4k_weight(words, base, grp, pos) * x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
+  return contrib
+
+def _q4k_block_dot_q8_1(words:UOp, xq:UOp, xscales:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for grp in range(8):
+    x_idx = x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos
+    x = xq[x_idx].cast(dtypes.float32) * xscales[x_idx//Q8_1_BLOCK_ELEMS].cast(dtypes.float32)
+    contrib = contrib + _q4k_weight(words, base, grp, pos) * x
   return contrib
 
 def parse_opt(spec:str) -> Opt:
@@ -89,6 +98,26 @@ def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple
     acc = partials[row, part].set(0.0)
     acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
     return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q4k_gemv_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_q8_1_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, xq:UOp, xscales:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    part = UOp.range(parts, 1)
+    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
+    pos = UOp.range(32, 3, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_q8_1(words, xq, xscales, base, blk, pos), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, part].set(0.0)
+    acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
+    return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q4k_q8_1_gemv_partial_{rows}_{k}_{parts}", schedule, opts))
 
   return kernel
 
