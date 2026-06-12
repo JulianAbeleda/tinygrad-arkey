@@ -1,0 +1,391 @@
+{
+  "min_gain": 0.05,
+  "policy": [
+    {
+      "best_primitive": "local32_p2",
+      "best_primitive_quant_gbs": 201.95,
+      "choice": "local32_p2",
+      "fused_quant_gbs": 21.24,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 2,
+      "ratio": 9.508003766478343,
+      "shape": "4096x12288",
+      "tensor": "blk.0.ffn_down.weight"
+    },
+    {
+      "best_primitive": "local16_p1",
+      "best_primitive_quant_gbs": 133.69,
+      "choice": "local16_p1",
+      "fused_quant_gbs": 121.57,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 1,
+      "ratio": 1.0996956485975158,
+      "shape": "151936x4096",
+      "tensor": "output.weight"
+    }
+  ],
+  "results": [
+    {
+      "candidate": "fused_graph",
+      "device_ms": 1.943,
+      "dot_tflops": 0.051808181163149766,
+      "elapsed_s": 1.905,
+      "gemv_max_abs": 0.00151622,
+      "opts": [],
+      "parts": null,
+      "quant_bytes": 41287680,
+      "quant_gbs": 21.24,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=9.070 ms (4.55 quant-GB/s), device=1.943 ms (21.24 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    337.36us/    10.05ms (   1884 GFLOPS  123|607    GB/s) \n*** AMD        1 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    319.04us/     0.32ms (   1992 GFLOPS  130|642    GB/s) \n*** AMD        2 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    319.92us/     0.64ms (   1986 GFLOPS  129|640    GB/s) \n*** AMD        3 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    319.04us/     0.96ms (   1992 GFLOPS  130|642    GB/s) \n*** AMD        4 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    318.40us/     1.28ms (   1996 GFLOPS  130|643    GB/s) \n*** AMD        5 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    319.60us/     1.60ms (   1988 GFLOPS  129|641    GB/s) \nq6k_gemv_primitive_partial: wall=6.309 ms (6.54 quant-GB/s), device=0.319 ms (129.35 quant-GB/s), kernels=1.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local16_p1",
+      "device_ms": 0.325,
+      "dot_tflops": 0.30973321846153845,
+      "elapsed_s": 1.945,
+      "gemv_max_abs": 0.00151622,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 1,
+      "quant_bytes": 41287680,
+      "quant_gbs": 127.04,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=8.932 ms (4.62 quant-GB/s), device=1.944 ms (21.24 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    353.84us/    10.07ms (   1796 GFLOPS  117|579    GB/s) \n*** AMD        1 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    323.68us/     0.32ms (   1963 GFLOPS  128|633    GB/s) \n*** AMD        2 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    324.12us/     0.65ms (   1960 GFLOPS  128|632    GB/s) \n*** AMD        3 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    325.24us/     0.97ms (   1954 GFLOPS  127|630    GB/s) \n*** AMD        4 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    328.04us/     1.30ms (   1937 GFLOPS  126|625    GB/s) \n*** AMD        5 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    323.92us/     1.63ms (   1962 GFLOPS  128|633    GB/s) \nq6k_gemv_primitive_partial: wall=6.298 ms (6.56 quant-GB/s), device=0.325 ms (127.04 quant-GB/s), kernels=1.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local32_p1",
+      "device_ms": 0.357,
+      "dot_tflops": 0.2819700168067227,
+      "elapsed_s": 1.946,
+      "gemv_max_abs": 0.00151622,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 1,
+      "quant_bytes": 41287680,
+      "quant_gbs": 115.65,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=8.960 ms (4.61 quant-GB/s), device=1.946 ms (21.22 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    389.64us/    10.12ms (   1631 GFLOPS  106|526    GB/s) \n*** AMD        1 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    369.68us/     0.37ms (   1719 GFLOPS  112|554    GB/s) \n*** AMD        2 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    345.44us/     0.72ms (   1840 GFLOPS  120|593    GB/s) \n*** AMD        3 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    331.16us/     1.05ms (   1919 GFLOPS  125|619    GB/s) \n*** AMD        4 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    371.68us/     1.42ms (   1710 GFLOPS  111|551    GB/s) \n*** AMD        5 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    367.00us/     1.78ms (   1731 GFLOPS  113|558    GB/s) \nq6k_gemv_primitive_partial: wall=6.432 ms (6.42 quant-GB/s), device=0.357 ms (115.65 quant-GB/s), kernels=1.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_p1",
+      "device_ms": 0.319,
+      "dot_tflops": 0.3155589216300941,
+      "elapsed_s": 1.881,
+      "gemv_max_abs": 0.00151622,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 1,
+      "quant_bytes": 41287680,
+      "quant_gbs": 129.52,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=9.015 ms (4.58 quant-GB/s), device=1.945 ms (21.23 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    337.16us/    10.06ms (   1885 GFLOPS  123|608    GB/s) \n*** AMD        1 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    319.04us/     0.32ms (   1992 GFLOPS  130|642    GB/s) \n*** AMD        2 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    318.64us/     0.64ms (   1994 GFLOPS  130|643    GB/s) \n*** AMD        3 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    319.68us/     0.96ms (   1988 GFLOPS  129|641    GB/s) \n*** AMD        4 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    318.32us/     1.28ms (   1996 GFLOPS  130|644    GB/s) \n*** AMD        5 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    318.20us/     1.59ms (   1997 GFLOPS  130|644    GB/s) \nq6k_gemv_primitive_partial: wall=6.352 ms (6.50 quant-GB/s), device=0.319 ms (129.52 quant-GB/s), kernels=1.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local128_p1",
+      "device_ms": 0.39,
+      "dot_tflops": 0.2581110153846154,
+      "elapsed_s": 1.95,
+      "gemv_max_abs": 0.00151622,
+      "opts": [
+        "LOCAL:0:128"
+      ],
+      "parts": 1,
+      "quant_bytes": 41287680,
+      "quant_gbs": 105.79,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=9.297 ms (4.44 quant-GB/s), device=1.945 ms (21.23 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    412.60us/    10.14ms (   1540 GFLOPS  100|497    GB/s) \n*** AMD        1 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    389.44us/     0.39ms (   1632 GFLOPS  106|526    GB/s) \n*** AMD        2 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    391.64us/     0.78ms (   1623 GFLOPS  106|523    GB/s) \n*** AMD        3 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    389.60us/     1.17ms (   1631 GFLOPS  106|526    GB/s) \n*** AMD        4 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    390.88us/     1.56ms (   1626 GFLOPS  106|524    GB/s) \n*** AMD        5 q6k_gemv_partial_4096_12288_1                  arg  3 mem   0.18 GB tm    389.92us/     1.95ms (   1630 GFLOPS  106|525    GB/s) \nq6k_gemv_primitive_partial: wall=6.386 ms (6.47 quant-GB/s), device=0.390 ms (105.79 quant-GB/s), kernels=1.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local32_p2",
+      "device_ms": 0.204,
+      "dot_tflops": 0.49344752941176473,
+      "elapsed_s": 1.975,
+      "gemv_max_abs": 0.00151372,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 2,
+      "quant_bytes": 41287680,
+      "quant_gbs": 201.95,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        6 r_32_32_4_2                                    arg  2 mem   0.18 GB tm      6.00us/     0.62ms (      1 GFLOPS    8|8      GB/s) \nscheduled     2 kernels in     0.74 ms |  cache hit 2133c8c7 |    8817 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_4096_12288_2                  arg  3 mem   0.18 GB tm    181.68us/     0.80ms (   3498 GFLOPS  228|1128   GB/s) \n*** AMD        8 r_32_32_4_2                                    arg  2 mem   0.18 GB tm      5.92us/     0.81ms (      1 GFLOPS    8|8      GB/s) \nscheduled     2 kernels in     0.74 ms |  cache hit 2133c8c7 |    8817 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_4096_12288_2                  arg  3 mem   0.18 GB tm    210.48us/     1.02ms (   3019 GFLOPS  197|973    GB/s) \n*** AMD       10 r_32_32_4_2                                    arg  2 mem   0.18 GB tm      5.96us/     1.02ms (      1 GFLOPS    8|8      GB/s) \nq6k_gemv_primitive_partial: wall=7.691 ms (5.37 quant-GB/s), device=0.204 ms (201.95 quant-GB/s), kernels=2.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_p2",
+      "device_ms": 0.209,
+      "dot_tflops": 0.48164256459330146,
+      "elapsed_s": 1.946,
+      "gemv_max_abs": 0.00151372,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 2,
+      "quant_bytes": 41287680,
+      "quant_gbs": 197.1,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        6 r_32_32_4_2                                    arg  2 mem   0.18 GB tm      6.00us/     0.63ms (      1 GFLOPS    8|8      GB/s) \nscheduled     2 kernels in     0.73 ms |  cache hit af8e1473 |    8818 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_4096_12288_2                  arg  3 mem   0.18 GB tm    201.28us/     0.83ms (   3157 GFLOPS  206|1018   GB/s) \n*** AMD        8 r_32_32_4_2                                    arg  2 mem   0.18 GB tm      5.92us/     0.84ms (      1 GFLOPS    8|8      GB/s) \nscheduled     2 kernels in     0.73 ms |  cache hit af8e1473 |    8818 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_4096_12288_2                  arg  3 mem   0.18 GB tm    200.68us/     1.04ms (   3166 GFLOPS  206|1021   GB/s) \n*** AMD       10 r_32_32_4_2                                    arg  2 mem   0.18 GB tm      5.96us/     1.05ms (      1 GFLOPS    8|8      GB/s) \nq6k_gemv_primitive_partial: wall=7.522 ms (5.49 quant-GB/s), device=0.209 ms (197.10 quant-GB/s), kernels=2.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local32_p4",
+      "device_ms": 0.307,
+      "dot_tflops": 0.3278934723127036,
+      "elapsed_s": 1.985,
+      "gemv_max_abs": 0.00151622,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 4,
+      "quant_bytes": 41287680,
+      "quant_gbs": 134.67,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        6 r_32_32_4_4                                    arg  2 mem   0.18 GB tm      6.04us/     0.92ms (      2 GFLOPS   14|14     GB/s) \nscheduled     2 kernels in     0.73 ms |  cache hit 315db286 |    8841 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_4096_12288_4                  arg  3 mem   0.18 GB tm    301.44us/     1.22ms (   2108 GFLOPS  137|680    GB/s) \n*** AMD        8 r_32_32_4_4                                    arg  2 mem   0.18 GB tm      6.00us/     1.23ms (      2 GFLOPS   14|14     GB/s) \nscheduled     2 kernels in     0.74 ms |  cache hit 315db286 |    8841 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_4096_12288_4                  arg  3 mem   0.18 GB tm    299.72us/     1.53ms (   2120 GFLOPS  138|684    GB/s) \n*** AMD       10 r_32_32_4_4                                    arg  2 mem   0.18 GB tm      6.04us/     1.53ms (      2 GFLOPS   14|14     GB/s) \nq6k_gemv_primitive_partial: wall=7.695 ms (5.37 quant-GB/s), device=0.307 ms (134.67 quant-GB/s), kernels=2.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_p4",
+      "device_ms": 0.298,
+      "dot_tflops": 0.33779629530201344,
+      "elapsed_s": 1.978,
+      "gemv_max_abs": 0.00151622,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 4,
+      "quant_bytes": 41287680,
+      "quant_gbs": 138.37,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        6 r_32_32_4_4                                    arg  2 mem   0.18 GB tm      6.00us/     0.90ms (      2 GFLOPS   14|14     GB/s) \nscheduled     2 kernels in     0.75 ms |  cache hit f4a9093a |    8843 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_4096_12288_4                  arg  3 mem   0.18 GB tm    290.96us/     1.19ms (   2184 GFLOPS  142|704    GB/s) \n*** AMD        8 r_32_32_4_4                                    arg  2 mem   0.18 GB tm      6.00us/     1.19ms (      2 GFLOPS   14|14     GB/s) \nscheduled     2 kernels in     0.75 ms |  cache hit f4a9093a |    8843 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_4096_12288_4                  arg  3 mem   0.18 GB tm    292.08us/     1.49ms (   2176 GFLOPS  142|702    GB/s) \n*** AMD       10 r_32_32_4_4                                    arg  2 mem   0.18 GB tm      6.04us/     1.49ms (      2 GFLOPS   14|14     GB/s) \nq6k_gemv_primitive_partial: wall=7.678 ms (5.38 quant-GB/s), device=0.298 ms (138.37 quant-GB/s), kernels=2.0",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_upcast2_p1",
+      "device_ms": null,
+      "dot_tflops": null,
+      "elapsed_s": 1.349,
+      "gemv_max_abs": null,
+      "opts": [
+        "LOCAL:0:64",
+        "UPCAST:0:2"
+      ],
+      "parts": 1,
+      "quant_bytes": 41287680,
+      "quant_gbs": null,
+      "shape": "4096x12288",
+      "status": "wrong",
+      "tail": "  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/late/devectorizer.py\", line 89, in fold_expanded_index\n    idx: Any = midx.src[i].src[1].get_idx()\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 577, in get_idx\n    assert self.dtype.scalar() is dtypes.weakint, \"Can only call get_idx on index dtype\"\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Can only call get_idx on index dtype",
+      "tensor": "blk.0.ffn_down.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "fused_graph",
+      "device_ms": 4.199,
+      "dot_tflops": 0.29641812622052877,
+      "elapsed_s": 2.52,
+      "gemv_max_abs": 0.00178289,
+      "opts": [],
+      "parts": null,
+      "quant_bytes": 510504960,
+      "quant_gbs": 121.57,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=11.490 ms (44.43 quant-GB/s), device=4.199 ms (121.57 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5336.76us/    26.33ms (   1472 GFLOPS   96|475    GB/s) \n*** AMD        1 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5409.28us/     5.41ms (   1452 GFLOPS   95|468    GB/s) \n*** AMD        2 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5350.20us/    10.76ms (   1469 GFLOPS   96|474    GB/s) \n*** AMD        3 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5365.72us/    16.13ms (   1464 GFLOPS   95|472    GB/s) \n*** AMD        4 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5370.76us/    21.50ms (   1463 GFLOPS   95|472    GB/s) \n*** AMD        5 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5418.08us/    26.91ms (   1450 GFLOPS   94|468    GB/s) \nq6k_gemv_primitive_partial: wall=12.025 ms (42.45 quant-GB/s), device=5.383 ms (94.84 quant-GB/s), kernels=1.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local16_p1",
+      "device_ms": 3.818,
+      "dot_tflops": 0.32599782922996334,
+      "elapsed_s": 2.53,
+      "gemv_max_abs": 0.00178289,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 1,
+      "quant_bytes": 510504960,
+      "quant_gbs": 133.69,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=11.320 ms (45.10 quant-GB/s), device=4.259 ms (119.86 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   3835.52us/    25.13ms (   2048 GFLOPS  133|661    GB/s) \n*** AMD        1 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   3804.52us/     3.80ms (   2065 GFLOPS  135|666    GB/s) \n*** AMD        2 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   3830.68us/     7.64ms (   2051 GFLOPS  134|661    GB/s) \n*** AMD        3 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   3802.92us/    11.44ms (   2066 GFLOPS  135|666    GB/s) \n*** AMD        4 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   3808.80us/    15.25ms (   2063 GFLOPS  134|665    GB/s) \n*** AMD        5 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   3845.44us/    19.09ms (   2043 GFLOPS  133|659    GB/s) \nq6k_gemv_primitive_partial: wall=9.895 ms (51.59 quant-GB/s), device=3.818 ms (133.69 quant-GB/s), kernels=1.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local32_p1",
+      "device_ms": 5.401,
+      "dot_tflops": 0.2304498633586373,
+      "elapsed_s": 2.553,
+      "gemv_max_abs": 0.00178289,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 1,
+      "quant_bytes": 510504960,
+      "quant_gbs": 94.53,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=11.295 ms (45.20 quant-GB/s), device=4.215 ms (121.13 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5410.56us/    26.48ms (   1452 GFLOPS   95|468    GB/s) \n*** AMD        1 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5424.32us/     5.42ms (   1448 GFLOPS   94|467    GB/s) \n*** AMD        2 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5398.40us/    10.82ms (   1455 GFLOPS   95|469    GB/s) \n*** AMD        3 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5417.52us/    16.24ms (   1450 GFLOPS   94|468    GB/s) \n*** AMD        4 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5382.60us/    21.62ms (   1460 GFLOPS   95|471    GB/s) \n*** AMD        5 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5380.72us/    27.00ms (   1460 GFLOPS   95|471    GB/s) \nq6k_gemv_primitive_partial: wall=11.569 ms (44.13 quant-GB/s), device=5.401 ms (94.53 quant-GB/s), kernels=1.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_p1",
+      "device_ms": 5.416,
+      "dot_tflops": 0.2298116159527326,
+      "elapsed_s": 2.514,
+      "gemv_max_abs": 0.00178289,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 1,
+      "quant_bytes": 510504960,
+      "quant_gbs": 94.25,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=11.473 ms (44.50 quant-GB/s), device=4.212 ms (121.21 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5368.16us/    26.43ms (   1464 GFLOPS   95|472    GB/s) \n*** AMD        1 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5435.08us/     5.44ms (   1446 GFLOPS   94|466    GB/s) \n*** AMD        2 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5402.56us/    10.84ms (   1454 GFLOPS   95|469    GB/s) \n*** AMD        3 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5409.00us/    16.25ms (   1453 GFLOPS   95|468    GB/s) \n*** AMD        4 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5401.28us/    21.65ms (   1455 GFLOPS   95|469    GB/s) \n*** AMD        5 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5434.24us/    27.08ms (   1446 GFLOPS   94|466    GB/s) \nq6k_gemv_primitive_partial: wall=11.542 ms (44.23 quant-GB/s), device=5.416 ms (94.25 quant-GB/s), kernels=1.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local128_p1",
+      "device_ms": 5.437,
+      "dot_tflops": 0.22892398602170316,
+      "elapsed_s": 2.512,
+      "gemv_max_abs": 0.00178289,
+      "opts": [
+        "LOCAL:0:128"
+      ],
+      "parts": 1,
+      "quant_bytes": 510504960,
+      "quant_gbs": 93.89,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "q6k_fused_graph: wall=11.096 ms (46.01 quant-GB/s), device=4.260 ms (119.83 quant-GB/s), kernels=1.0\n*** AMD        6 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5456.24us/    26.76ms (   1440 GFLOPS   94|464    GB/s) \n*** AMD        1 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5444.28us/     5.44ms (   1443 GFLOPS   94|465    GB/s) \n*** AMD        2 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5431.36us/    10.88ms (   1447 GFLOPS   94|466    GB/s) \n*** AMD        3 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5428.04us/    16.30ms (   1447 GFLOPS   94|467    GB/s) \n*** AMD        4 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5429.04us/    21.73ms (   1447 GFLOPS   94|467    GB/s) \n*** AMD        5 q6k_gemv_partial_151936_4096_1                 arg  3 mem   2.27 GB tm   5452.52us/    27.19ms (   1441 GFLOPS   94|465    GB/s) \nq6k_gemv_primitive_partial: wall=11.344 ms (45.00 quant-GB/s), device=5.437 ms (93.89 quant-GB/s), kernels=1.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local32_p2",
+      "device_ms": 5.503,
+      "dot_tflops": 0.22617839578411775,
+      "elapsed_s": 2.615,
+      "gemv_max_abs": 0.0017817,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 2,
+      "quant_bytes": 510504960,
+      "quant_gbs": 92.76,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "*** AMD        6 r_1187_32_4_2                                  arg  2 mem   2.27 GB tm      7.48us/    16.53ms (     20 GFLOPS  244|244    GB/s) \nscheduled     2 kernels in     0.73 ms |  cache hit 9dc49f4b |    9193 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_151936_4096_2                 arg  3 mem   2.27 GB tm   5468.80us/    22.00ms (   1437 GFLOPS   94|463    GB/s) \n*** AMD        8 r_1187_32_4_2                                  arg  2 mem   2.27 GB tm      7.64us/    22.00ms (     20 GFLOPS  239|239    GB/s) \nscheduled     2 kernels in     0.73 ms |  cache hit 9dc49f4b |    9193 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_151936_4096_2                 arg  3 mem   2.27 GB tm   5506.32us/    27.51ms (   1427 GFLOPS   93|460    GB/s) \n*** AMD       10 r_1187_32_4_2                                  arg  2 mem   2.27 GB tm      7.56us/    27.52ms (     20 GFLOPS  241|241    GB/s) \nq6k_gemv_primitive_partial: wall=13.154 ms (38.81 quant-GB/s), device=5.503 ms (92.76 quant-GB/s), kernels=2.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_p2",
+      "device_ms": 5.512,
+      "dot_tflops": 0.22580909143686506,
+      "elapsed_s": 2.576,
+      "gemv_max_abs": 0.0017817,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 2,
+      "quant_bytes": 510504960,
+      "quant_gbs": 92.62,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "*** AMD        6 r_1187_32_4_2                                  arg  2 mem   2.27 GB tm      7.60us/    16.56ms (     20 GFLOPS  240|240    GB/s) \nscheduled     2 kernels in     0.75 ms |  cache hit 259f8e1e |    9194 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_151936_4096_2                 arg  3 mem   2.27 GB tm   5453.72us/    22.01ms (   1441 GFLOPS   94|465    GB/s) \n*** AMD        8 r_1187_32_4_2                                  arg  2 mem   2.27 GB tm      7.60us/    22.02ms (     20 GFLOPS  240|240    GB/s) \nscheduled     2 kernels in     0.79 ms |  cache hit 259f8e1e |    9194 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_151936_4096_2                 arg  3 mem   2.27 GB tm   5533.52us/    27.55ms (   1420 GFLOPS   93|458    GB/s) \n*** AMD       10 r_1187_32_4_2                                  arg  2 mem   2.27 GB tm      7.24us/    27.56ms (     21 GFLOPS  252|252    GB/s) \nq6k_gemv_primitive_partial: wall=12.998 ms (39.28 quant-GB/s), device=5.512 ms (92.62 quant-GB/s), kernels=2.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local32_p4",
+      "device_ms": 5.553,
+      "dot_tflops": 0.22414185341256979,
+      "elapsed_s": 2.613,
+      "gemv_max_abs": 0.00177741,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 4,
+      "quant_bytes": 510504960,
+      "quant_gbs": 91.93,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "*** AMD        6 r_1187_32_4_4                                  arg  2 mem   2.27 GB tm      8.92us/    16.63ms (     51 GFLOPS  341|341    GB/s) \nscheduled     2 kernels in     0.76 ms |  cache hit ef0f7d9d |    9219 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_151936_4096_4                 arg  3 mem   2.27 GB tm   5549.04us/    22.18ms (   1416 GFLOPS   93|457    GB/s) \n*** AMD        8 r_1187_32_4_4                                  arg  2 mem   2.27 GB tm      8.88us/    22.18ms (     51 GFLOPS  342|342    GB/s) \nscheduled     2 kernels in     0.75 ms |  cache hit ef0f7d9d |    9219 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_151936_4096_4                 arg  3 mem   2.27 GB tm   5573.64us/    27.76ms (   1410 GFLOPS   92|455    GB/s) \n*** AMD       10 r_1187_32_4_4                                  arg  2 mem   2.27 GB tm      8.76us/    27.77ms (     52 GFLOPS  347|347    GB/s) \nq6k_gemv_primitive_partial: wall=13.094 ms (38.99 quant-GB/s), device=5.553 ms (91.93 quant-GB/s), kernels=2.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_p4",
+      "device_ms": 5.532,
+      "dot_tflops": 0.22499271728127257,
+      "elapsed_s": 2.546,
+      "gemv_max_abs": 0.00177741,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 4,
+      "quant_bytes": 510504960,
+      "quant_gbs": 92.28,
+      "shape": "151936x4096",
+      "status": "pass",
+      "tail": "*** AMD        6 r_1187_32_4_4                                  arg  2 mem   2.27 GB tm      8.88us/    16.63ms (     51 GFLOPS  342|342    GB/s) \nscheduled     2 kernels in     0.74 ms |  cache hit 7391c8ec |    9221 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        7 q6k_gemv_partial_151936_4096_4                 arg  3 mem   2.27 GB tm   5531.48us/    22.16ms (   1420 GFLOPS   93|458    GB/s) \n*** AMD        8 r_1187_32_4_4                                  arg  2 mem   2.27 GB tm      8.80us/    22.17ms (     52 GFLOPS  345|345    GB/s) \nscheduled     2 kernels in     0.74 ms |  cache hit 7391c8ec |    9221 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:101\n*** AMD        9 q6k_gemv_partial_151936_4096_4                 arg  3 mem   2.27 GB tm   5484.28us/    27.65ms (   1433 GFLOPS   94|462    GB/s) \n*** AMD       10 r_1187_32_4_4                                  arg  2 mem   2.27 GB tm      8.60us/    27.66ms (     53 GFLOPS  353|353    GB/s) \nq6k_gemv_primitive_partial: wall=12.861 ms (39.69 quant-GB/s), device=5.532 ms (92.28 quant-GB/s), kernels=2.0",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    },
+    {
+      "candidate": "local64_upcast2_p1",
+      "device_ms": null,
+      "dot_tflops": null,
+      "elapsed_s": 1.869,
+      "gemv_max_abs": null,
+      "opts": [
+        "LOCAL:0:64",
+        "UPCAST:0:2"
+      ],
+      "parts": 1,
+      "quant_bytes": 510504960,
+      "quant_gbs": null,
+      "shape": "151936x4096",
+      "status": "wrong",
+      "tail": "  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/late/devectorizer.py\", line 89, in fold_expanded_index\n    idx: Any = midx.src[i].src[1].get_idx()\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 577, in get_idx\n    assert self.dtype.scalar() is dtypes.weakint, \"Can only call get_idx on index dtype\"\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Can only call get_idx on index dtype",
+      "tensor": "output.weight",
+      "unpack_max_abs": 0.0
+    }
+  ]
+}

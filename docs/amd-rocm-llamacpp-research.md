@@ -1650,3 +1650,60 @@ half of named AMD kernel time) plus the Q6 output projection, where this
 primitive is not the right shape. Next work should tune/build v2 for primitive
 GEMV and separately investigate an output-projection-specific path; do not turn
 on Q6 output/attn_v with the current primitive.
+
+## Q4+Q6 profile completion and automated primitive sweep (2026-06-11)
+
+Executed the scoped Step 1-3 pass: complete Q4+Q6 profiling, automated primitive
+knob sweep, and Q6 output projection decision. Artifacts are in
+`bench/q4q6-profile-20260611/`.
+
+Step 1 profile:
+
+| model | mode | tok/s | AMD ms/tok | residual | key attribution |
+|---|---|---:|---:|---:|---|
+| 8B | batched | `58.77` | `16.32` | `4.28%` | runtime residual low |
+| 8B | named | `5.42` | `33.94` | `81.63%` | Q4 primitive `33.02%`, Q6 primitive `17.50%`, fallback quant `14.34%` |
+| 14B | batched | `28.79` | `34.06` | `1.98%` | runtime residual low |
+| 14B | named | `4.01` | `78.11` | `68.71%` | Q4 primitive `26.53%`, Q6 primitive `12.73%`, reductions `17.80%`, fallback quant `24.13%` |
+
+This confirms the batched residual is not the immediate bottleneck. The named
+rows remain attribution-only; they justify primitive tuning, but throughput
+acceptance is based on batched 128-token decode.
+
+Step 2 was automated, not manual:
+
+- Existing `extra/q4_k_policy_sweep.py` swept Q4 gate/up, square attn/output,
+  and down representatives for 8B and 14B.
+- Added `extra/q6_k_policy_sweep.py` for Q6 `ffn_down` and `output.weight`,
+  with unpack and random-GEMV correctness gates preserved.
+
+Microbench results found apparent candidates:
+
+| area | best microbench candidate | result |
+|---|---|---|
+| 8B Q4 | current policies | already best in sweep |
+| 14B Q4 gate/up | `parts=1 LOCAL:0:32` | faster than current in microbench |
+| 14B Q4 down | `parts=2 LOCAL:0:32` | faster than current in microbench |
+| Q6 `ffn_down` 8B/14B | `parts=2 LOCAL:0:32` | `201.95` / `218.13` quant-GB/s, faster than current primitive |
+| Q6 `output.weight` 8B/14B | `parts=1 LOCAL:0:16` | only `1.10x` / `1.09x` over fused graph |
+
+The diagnosis is mixed: the primitive paths are not simply saturating DRAM.
+Q6 `ffn_down` best reaches only about `202-218` quant-GB/s and about
+`0.49-0.53` dot TFLOP/s, so unpack arithmetic, occupancy, and reduction shape
+remain plausible limiters.
+
+Step 3 full-decode gates rejected the candidates:
+
+| variant | 8B avg | 8B last16 | 14B avg | 14B last16 | verdict |
+|---|---:|---:|---:|---:|---|
+| previous Q4+Q6 policy | `58.17` | `55.98` | `28.27` | `27.80` | stable baseline |
+| output enabled + sweep policies | `53.85` | `25.21` | `28.87` | `28.39` | reject, 8B collapse |
+| no output + sweep policies | `59.98`, then `15.12` rerun | `54.39`, then `14.43` rerun | `27.13`, then `28.77` rerun | `17.43`, then `28.22` rerun | reject, unstable |
+| reverted policy rerun | `57.45` | `54.89` | not rerun | not rerun | stable range restored |
+
+Verdict: do not carry any runtime policy change from this sweep. Q6 output stays
+fallback. Q6 `ffn_down` stays at the last stable policy (`parts=1
+LOCAL:0:64`). The useful result is negative but valuable: automated knob search
+found microbench wins, and full-decode gates showed they are not production
+wins. Next optimization should be a real primitive-v2 design change, not just
+retuning the current primitive knobs.

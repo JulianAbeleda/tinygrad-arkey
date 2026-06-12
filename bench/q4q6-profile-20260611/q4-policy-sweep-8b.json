@@ -1,0 +1,620 @@
+{
+  "metric": "device_q4_eff_gbs",
+  "min_gain": 0.05,
+  "policy": [
+    {
+      "best_primitive": "local64_p1",
+      "best_primitive_metric": 420.05,
+      "choice": "local64_p1",
+      "fused": 87.72,
+      "metric": "device_q4_eff_gbs",
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 1,
+      "ratio": 4.788531691746466,
+      "shape": "12288x4096",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "best_primitive": "local64_p1",
+      "best_primitive_metric": 188.77,
+      "choice": "local64_p1",
+      "fused": 15.54,
+      "metric": "device_q4_eff_gbs",
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 1,
+      "ratio": 12.147361647361649,
+      "shape": "4096x4096",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "best_primitive": "local32_p4",
+      "best_primitive_metric": 268.78,
+      "choice": "local32_p4",
+      "fused": 16.17,
+      "metric": "device_q4_eff_gbs",
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 4,
+      "ratio": 16.622139764996906,
+      "shape": "4096x12288",
+      "tensor": "blk.4.ffn_down.weight"
+    }
+  ],
+  "results": [
+    {
+      "candidate": "fused_graph",
+      "device_q4_eff_gbs": 87.72,
+      "elapsed_s": 1.667,
+      "kernels": 1.0,
+      "ms": 3.445,
+      "opts": [],
+      "parts": null,
+      "primitive_gemv_max_abs": null,
+      "primitive_unpack_max_abs": null,
+      "q4_eff_gbs": 8.22,
+      "schedule": null,
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "JIT captured 1 linears with 0 inputs\n*** AMD        1 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    351.36us/     0.35ms (   1230 GFLOPS   81|192    GB/s) \n*** AMD        2 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    286.40us/     0.64ms (   1509 GFLOPS   99|235    GB/s) \n*** AMD        3 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    286.20us/     0.92ms (   1510 GFLOPS   99|235    GB/s) \n*** AMD        4 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    349.84us/     1.27ms (   1235 GFLOPS   81|193    GB/s) \n*** AMD        5 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    339.96us/     1.61ms (   1271 GFLOPS   83|198    GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.743 ms (1346.75/s) q4_eff=38.13 GB/s device_q4_eff=136.72 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.445 ms (290.28/s) q4_eff=8.22 GB/s device_q4_eff=87.72 GB/s kernels=1.0 mem=28.34 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local8_p1",
+      "device_q4_eff_gbs": 187.65,
+      "elapsed_s": 1.911,
+      "kernels": 1.0,
+      "ms": 0.37,
+      "opts": [
+        "LOCAL:0:8"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00179243,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 76.51,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    150.80us/     0.15ms (   2111 GFLOPS  188|1189   GB/s) \n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    150.84us/     0.30ms (   2110 GFLOPS  188|1189   GB/s) \n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    150.72us/     0.45ms (   2112 GFLOPS  189|1190   GB/s) \n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    151.12us/     0.60ms (   2106 GFLOPS  188|1187   GB/s) \n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    150.88us/     0.75ms (   2110 GFLOPS  188|1189   GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.733 ms (1364.63/s) q4_eff=38.63 GB/s device_q4_eff=136.03 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.307 ms (433.48/s) q4_eff=12.27 GB/s device_q4_eff=80.93 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.370 ms (2702.31/s) q4_eff=76.51 GB/s device_q4_eff=187.65 GB/s kernels=1.0 mem=28.42 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local16_p1",
+      "device_q4_eff_gbs": 313.54,
+      "elapsed_s": 1.895,
+      "kernels": 1.0,
+      "ms": 0.307,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00179243,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 92.08,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     90.08us/     0.09ms (   3534 GFLOPS  315|1991   GB/s) \n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     90.48us/     0.18ms (   3518 GFLOPS  314|1982   GB/s) \n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     90.12us/     0.27ms (   3532 GFLOPS  315|1990   GB/s) \n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     90.20us/     0.36ms (   3529 GFLOPS  315|1988   GB/s) \n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     90.60us/     0.45ms (   3513 GFLOPS  314|1980   GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.113 ms (898.34/s) q4_eff=25.43 GB/s device_q4_eff=137.94 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.322 ms (430.67/s) q4_eff=12.19 GB/s device_q4_eff=81.35 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.307 ms (3252.31/s) q4_eff=92.08 GB/s device_q4_eff=313.54 GB/s kernels=1.0 mem=28.42 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local32_p1",
+      "device_q4_eff_gbs": 383.0,
+      "elapsed_s": 1.927,
+      "kernels": 1.0,
+      "ms": 0.29,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00179243,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 97.78,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     73.64us/     0.07ms (   4322 GFLOPS  386|2436   GB/s) \n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.44us/     0.15ms (   4276 GFLOPS  382|2409   GB/s) \n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     73.36us/     0.22ms (   4339 GFLOPS  387|2445   GB/s) \n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     73.60us/     0.30ms (   4325 GFLOPS  386|2437   GB/s) \n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.56us/     0.37ms (   4269 GFLOPS  381|2406   GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.741 ms (1350.13/s) q4_eff=38.22 GB/s device_q4_eff=137.46 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.360 ms (423.78/s) q4_eff=12.00 GB/s device_q4_eff=81.13 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.290 ms (3453.56/s) q4_eff=97.78 GB/s device_q4_eff=383.00 GB/s kernels=1.0 mem=28.42 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local64_p1",
+      "device_q4_eff_gbs": 420.05,
+      "elapsed_s": 1.914,
+      "kernels": 1.0,
+      "ms": 0.283,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00179243,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 100.05,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     67.08us/     0.07ms (   4745 GFLOPS  424|2674   GB/s) \n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     67.40us/     0.13ms (   4723 GFLOPS  422|2661   GB/s) \n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     66.96us/     0.20ms (   4754 GFLOPS  424|2679   GB/s) \n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     68.00us/     0.27ms (   4681 GFLOPS  418|2638   GB/s) \n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     67.56us/     0.34ms (   4711 GFLOPS  421|2655   GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.734 ms (1363.30/s) q4_eff=38.60 GB/s device_q4_eff=137.35 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.302 ms (434.43/s) q4_eff=12.30 GB/s device_q4_eff=81.12 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.283 ms (3533.90/s) q4_eff=100.05 GB/s device_q4_eff=420.05 GB/s kernels=1.0 mem=28.42 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local16_p2",
+      "device_q4_eff_gbs": 177.95,
+      "elapsed_s": 1.95,
+      "kernels": 1.0,
+      "ms": 0.228,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 2,
+      "primitive_gemv_max_abs": 0.00179029,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 124.43,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.16 GB tm    161.74us/     0.16ms (   1968 GFLOPS  177|1110   GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.16 GB tm    155.02us/     0.32ms (   2053 GFLOPS  185|1158   GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.16 GB tm    158.15us/     0.47ms (   2013 GFLOPS  181|1135   GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.16 GB tm    161.97us/     0.64ms (   1965 GFLOPS  177|1109   GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.16 GB tm    158.61us/     0.80ms (   2007 GFLOPS  181|1132   GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.735 ms (1360.64/s) q4_eff=38.52 GB/s device_q4_eff=136.41 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.307 ms (433.39/s) q4_eff=12.27 GB/s device_q4_eff=81.32 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.228 ms (4395.07/s) q4_eff=124.43 GB/s device_q4_eff=177.95 GB/s kernels=1.0 mem=28.66 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local32_p2",
+      "device_q4_eff_gbs": 182.72,
+      "elapsed_s": 1.927,
+      "kernels": 1.0,
+      "ms": 0.224,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 2,
+      "primitive_gemv_max_abs": 0.00179029,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 126.59,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.16 GB tm    156.94us/     0.16ms (   2028 GFLOPS  183|1144   GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.16 GB tm    156.32us/     0.31ms (   2036 GFLOPS  183|1149   GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.16 GB tm    151.84us/     0.47ms (   2096 GFLOPS  189|1183   GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.16 GB tm    157.14us/     0.62ms (   2026 GFLOPS  182|1143   GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.16 GB tm    152.48us/     0.77ms (   2088 GFLOPS  188|1178   GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.737 ms (1356.27/s) q4_eff=38.40 GB/s device_q4_eff=136.20 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.341 ms (427.13/s) q4_eff=12.09 GB/s device_q4_eff=81.38 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.224 ms (4471.14/s) q4_eff=126.59 GB/s device_q4_eff=182.72 GB/s kernels=1.0 mem=28.66 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local32_p4",
+      "device_q4_eff_gbs": 136.14,
+      "elapsed_s": 1.945,
+      "kernels": 1.0,
+      "ms": 0.278,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 4,
+      "primitive_gemv_max_abs": 0.00179052,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 101.8,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.16 GB tm    209.29us/     0.21ms (   1521 GFLOPS  138|859    GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.16 GB tm    206.55us/     0.42ms (   1541 GFLOPS  140|870    GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.16 GB tm    206.70us/     0.62ms (   1540 GFLOPS  140|870    GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.16 GB tm    210.23us/     0.83ms (   1514 GFLOPS  138|855    GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.16 GB tm    207.05us/     1.04ms (   1538 GFLOPS  140|868    GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.739 ms (1352.38/s) q4_eff=38.29 GB/s device_q4_eff=139.81 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.299 ms (435.05/s) q4_eff=12.32 GB/s device_q4_eff=81.13 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.278 ms (3595.74/s) q4_eff=101.80 GB/s device_q4_eff=136.14 GB/s kernels=1.0 mem=28.96 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local32_upcast2_p1",
+      "device_q4_eff_gbs": 209.91,
+      "elapsed_s": 2.004,
+      "kernels": 1.0,
+      "ms": 0.359,
+      "opts": [
+        "LOCAL:0:32",
+        "UPCAST:0:2"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00179243,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 78.81,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    134.40us/     0.13ms (   2368 GFLOPS  211|960    GB/s) \n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    134.44us/     0.27ms (   2368 GFLOPS  211|960    GB/s) \n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    135.28us/     0.40ms (   2353 GFLOPS  210|954    GB/s) \n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    135.56us/     0.54ms (   2348 GFLOPS  210|952    GB/s) \n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    134.68us/     0.67ms (   2363 GFLOPS  211|958    GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.745 ms (1343.09/s) q4_eff=38.02 GB/s device_q4_eff=135.97 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.368 ms (422.29/s) q4_eff=11.96 GB/s device_q4_eff=81.87 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.359 ms (2783.69/s) q4_eff=78.81 GB/s device_q4_eff=209.91 GB/s kernels=1.0 mem=28.42 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "local32_upcast3_p1",
+      "device_q4_eff_gbs": 157.97,
+      "elapsed_s": 1.99,
+      "kernels": 1.0,
+      "ms": 0.4,
+      "opts": [
+        "LOCAL:0:32",
+        "UPCAST:0:3"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00179243,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 70.71,
+      "schedule": "none",
+      "shape": "12288x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    181.84us/     0.18ms (   1750 GFLOPS  156|617    GB/s) \n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    154.84us/     0.34ms (   2056 GFLOPS  184|725    GB/s) \n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    190.08us/     0.53ms (   1675 GFLOPS  150|591    GB/s) \n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    182.00us/     0.71ms (   1749 GFLOPS  156|617    GB/s) \n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm    187.32us/     0.90ms (   1699 GFLOPS  152|599    GB/s) \nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.734 ms (1361.51/s) q4_eff=38.55 GB/s device_q4_eff=135.95 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.347 ms (426.12/s) q4_eff=12.06 GB/s device_q4_eff=81.22 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.400 ms (2497.42/s) q4_eff=70.71 GB/s device_q4_eff=157.97 GB/s kernels=1.0 mem=28.42 MB",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": "fused_graph",
+      "device_q4_eff_gbs": 15.54,
+      "elapsed_s": 1.729,
+      "kernels": 1.0,
+      "ms": 2.593,
+      "opts": [],
+      "parts": null,
+      "primitive_gemv_max_abs": null,
+      "primitive_unpack_max_abs": null,
+      "q4_eff_gbs": 3.64,
+      "schedule": null,
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "JIT captured 1 linears with 0 inputs\n*** AMD        1 r_32_32_4_16_4_2_32                            arg  3 mem   0.04 GB tm    607.88us/     0.61ms (    237 GFLOPS   16|32     GB/s) \n*** AMD        2 r_32_32_4_16_4_2_32                            arg  3 mem   0.04 GB tm    608.32us/     1.22ms (    237 GFLOPS   16|32     GB/s) \n*** AMD        3 r_32_32_4_16_4_2_32                            arg  3 mem   0.04 GB tm    604.52us/     1.82ms (    238 GFLOPS   16|33     GB/s) \n*** AMD        4 r_32_32_4_16_4_2_32                            arg  3 mem   0.04 GB tm    607.08us/     2.43ms (    237 GFLOPS   16|32     GB/s) \n*** AMD        5 r_32_32_4_16_4_2_32                            arg  3 mem   0.04 GB tm    608.12us/     3.04ms (    237 GFLOPS   16|32     GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.839 ms (1191.79/s) q4_eff=11.25 GB/s device_q4_eff=29.52 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.593 ms (385.73/s) q4_eff=3.64 GB/s device_q4_eff=15.54 GB/s kernels=1.0 mem=9.45 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local8_p1",
+      "device_q4_eff_gbs": 111.49,
+      "elapsed_s": 2.001,
+      "kernels": 1.0,
+      "ms": 0.303,
+      "opts": [
+        "LOCAL:0:8"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00238562,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 31.14,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     85.08us/     0.09ms (   1247 GFLOPS  111|703    GB/s) \n*** AMD        2 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     85.08us/     0.17ms (   1247 GFLOPS  111|703    GB/s) \n*** AMD        3 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     83.36us/     0.25ms (   1273 GFLOPS  114|717    GB/s) \n*** AMD        4 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     84.88us/     0.34ms (   1250 GFLOPS  112|704    GB/s) \n*** AMD        5 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     84.84us/     0.42ms (   1251 GFLOPS  112|705    GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.841 ms (1188.67/s) q4_eff=11.22 GB/s device_q4_eff=29.57 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.594 ms (385.44/s) q4_eff=3.64 GB/s device_q4_eff=15.54 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.303 ms (3299.37/s) q4_eff=31.14 GB/s device_q4_eff=111.49 GB/s kernels=1.0 mem=9.48 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local16_p1",
+      "device_q4_eff_gbs": 167.85,
+      "elapsed_s": 1.993,
+      "kernels": 1.0,
+      "ms": 0.278,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00238562,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 33.96,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     56.20us/     0.06ms (   1888 GFLOPS  169|1064   GB/s) \n*** AMD        2 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     56.20us/     0.11ms (   1888 GFLOPS  169|1064   GB/s) \n*** AMD        3 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     56.04us/     0.17ms (   1893 GFLOPS  169|1067   GB/s) \n*** AMD        4 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     56.40us/     0.22ms (   1881 GFLOPS  168|1060   GB/s) \n*** AMD        5 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     56.28us/     0.28ms (   1885 GFLOPS  168|1062   GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.855 ms (1169.79/s) q4_eff=11.04 GB/s device_q4_eff=29.50 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.609 ms (383.32/s) q4_eff=3.62 GB/s device_q4_eff=15.53 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.278 ms (3599.03/s) q4_eff=33.96 GB/s device_q4_eff=167.85 GB/s kernels=1.0 mem=9.48 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local32_p1",
+      "device_q4_eff_gbs": 175.1,
+      "elapsed_s": 1.993,
+      "kernels": 1.0,
+      "ms": 0.269,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00238562,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 35.15,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     54.92us/     0.05ms (   1932 GFLOPS  173|1089   GB/s) \n*** AMD        2 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     54.96us/     0.11ms (   1931 GFLOPS  172|1088   GB/s) \n*** AMD        3 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     49.00us/     0.16ms (   2165 GFLOPS  193|1220   GB/s) \n*** AMD        4 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     55.80us/     0.21ms (   1901 GFLOPS  170|1071   GB/s) \n*** AMD        5 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     54.80us/     0.27ms (   1936 GFLOPS  173|1091   GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.840 ms (1190.31/s) q4_eff=11.23 GB/s device_q4_eff=29.43 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.584 ms (387.07/s) q4_eff=3.65 GB/s device_q4_eff=15.55 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.269 ms (3724.39/s) q4_eff=35.15 GB/s device_q4_eff=175.10 GB/s kernels=1.0 mem=9.48 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local64_p1",
+      "device_q4_eff_gbs": 188.77,
+      "elapsed_s": 2.015,
+      "kernels": 1.0,
+      "ms": 0.262,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00238562,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 36.0,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     50.04us/     0.05ms (   2120 GFLOPS  189|1195   GB/s) \n*** AMD        2 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     50.00us/     0.10ms (   2122 GFLOPS  190|1196   GB/s) \n*** AMD        3 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     49.92us/     0.15ms (   2125 GFLOPS  190|1198   GB/s) \n*** AMD        4 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     50.00us/     0.20ms (   2122 GFLOPS  190|1196   GB/s) \n*** AMD        5 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     50.00us/     0.25ms (   2122 GFLOPS  190|1196   GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.837 ms (1194.44/s) q4_eff=11.27 GB/s device_q4_eff=29.51 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.625 ms (380.91/s) q4_eff=3.59 GB/s device_q4_eff=15.54 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.262 ms (3814.19/s) q4_eff=36.00 GB/s device_q4_eff=188.77 GB/s kernels=1.0 mem=9.48 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local16_p2",
+      "device_q4_eff_gbs": 136.88,
+      "elapsed_s": 2.027,
+      "kernels": 1.0,
+      "ms": 0.137,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 2,
+      "primitive_gemv_max_abs": 0.00238013,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 68.82,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.05 GB tm     71.24us/     0.07ms (   1489 GFLOPS  134|840    GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.05 GB tm     73.30us/     0.14ms (   1448 GFLOPS  130|817    GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.05 GB tm     68.26us/     0.21ms (   1554 GFLOPS  140|877    GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.05 GB tm     66.16us/     0.28ms (   1604 GFLOPS  144|905    GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.05 GB tm     65.76us/     0.34ms (   1613 GFLOPS  145|910    GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.837 ms (1194.51/s) q4_eff=11.27 GB/s device_q4_eff=29.62 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.627 ms (380.69/s) q4_eff=3.59 GB/s device_q4_eff=15.54 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.137 ms (7292.16/s) q4_eff=68.82 GB/s device_q4_eff=136.88 GB/s kernels=1.0 mem=9.56 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local32_p2",
+      "device_q4_eff_gbs": 167.06,
+      "elapsed_s": 2.026,
+      "kernels": 1.0,
+      "ms": 0.127,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 2,
+      "primitive_gemv_max_abs": 0.00238013,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 74.54,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.05 GB tm     58.47us/     0.06ms (   1815 GFLOPS  164|1024   GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.05 GB tm     57.78us/     0.12ms (   1836 GFLOPS  165|1036   GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.05 GB tm     55.31us/     0.17ms (   1918 GFLOPS  173|1082   GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.05 GB tm     58.62us/     0.23ms (   1810 GFLOPS  163|1021   GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.05 GB tm     52.26us/     0.28ms (   2030 GFLOPS  183|1145   GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.837 ms (1195.20/s) q4_eff=11.28 GB/s device_q4_eff=29.49 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.593 ms (385.60/s) q4_eff=3.64 GB/s device_q4_eff=15.54 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.127 ms (7899.02/s) q4_eff=74.54 GB/s device_q4_eff=167.06 GB/s kernels=1.0 mem=9.56 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local32_p4",
+      "device_q4_eff_gbs": 162.54,
+      "elapsed_s": 2.061,
+      "kernels": 1.0,
+      "ms": 0.129,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 4,
+      "primitive_gemv_max_abs": 0.00238061,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 73.3,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.05 GB tm     60.08us/     0.06ms (   1766 GFLOPS  161|997    GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.05 GB tm     60.75us/     0.12ms (   1747 GFLOPS  159|986    GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.05 GB tm     54.37us/     0.18ms (   1952 GFLOPS  178|1102   GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.05 GB tm     59.86us/     0.24ms (   1773 GFLOPS  161|1001   GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.05 GB tm     55.22us/     0.29ms (   1922 GFLOPS  175|1085   GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.836 ms (1196.57/s) q4_eff=11.29 GB/s device_q4_eff=29.51 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.628 ms (380.57/s) q4_eff=3.59 GB/s device_q4_eff=15.54 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.129 ms (7767.47/s) q4_eff=73.30 GB/s device_q4_eff=162.54 GB/s kernels=1.0 mem=9.66 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local32_upcast2_p1",
+      "device_q4_eff_gbs": 96.51,
+      "elapsed_s": 2.014,
+      "kernels": 1.0,
+      "ms": 0.317,
+      "opts": [
+        "LOCAL:0:32",
+        "UPCAST:0:2"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00238562,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 29.8,
+      "schedule": "none",
+      "shape": "4096x4096",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     97.92us/     0.10ms (   1084 GFLOPS   97|439    GB/s) \n*** AMD        2 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     97.52us/     0.20ms (   1088 GFLOPS   97|441    GB/s) \n*** AMD        3 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     98.00us/     0.29ms (   1083 GFLOPS   97|439    GB/s) \n*** AMD        4 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     98.08us/     0.39ms (   1082 GFLOPS   97|438    GB/s) \n*** AMD        5 q4k_gemv_partial_4096_4096_1                   arg  3 mem   0.05 GB tm     97.40us/     0.49ms (   1089 GFLOPS   97|442    GB/s) \nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.828 ms (1207.12/s) q4_eff=11.39 GB/s device_q4_eff=29.48 GB/s kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.610 ms (383.19/s) q4_eff=3.62 GB/s device_q4_eff=15.55 GB/s kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.317 ms (3157.87/s) q4_eff=29.80 GB/s device_q4_eff=96.51 GB/s kernels=1.0 mem=9.48 MB",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "local32_upcast3_p1",
+      "device_q4_eff_gbs": null,
+      "elapsed_s": 1.961,
+      "kernels": null,
+      "ms": null,
+      "opts": [
+        "LOCAL:0:32",
+        "UPCAST:0:3"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": null,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": null,
+      "schedule": "none",
+      "shape": null,
+      "status": "illegal-opt",
+      "tail": "    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/opt/postrange.py\", line 176, in apply_opt\n    ret = self.shift_to(rng, amt, opt_to_at[opt.op], top=opt.op in {OptOps.GROUPTOP, OptOps.THREAD})\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/opt/postrange.py\", line 96, in shift_to\n    raise KernelOptError(f\"{amount} can't divide {rng.src[0]} in {self.colored_shape()}\")\ntinygrad.codegen.opt.KernelOptError: 3 can't divide UOp(Ops.CONST, dtypes.weakint, arg=128, src=()) in  128   32   16    8    4",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": "fused_graph",
+      "device_q4_eff_gbs": 16.17,
+      "elapsed_s": 1.714,
+      "kernels": 1.0,
+      "ms": 3.781,
+      "opts": [],
+      "parts": null,
+      "primitive_gemv_max_abs": null,
+      "primitive_unpack_max_abs": null,
+      "q4_eff_gbs": 7.49,
+      "schedule": null,
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "JIT captured 1 linears with 0 inputs\n*** AMD        1 r_32_32_4_48_4_2_32                            arg  3 mem   0.13 GB tm   1803.80us/     1.80ms (    240 GFLOPS   16|33     GB/s) \n*** AMD        2 r_32_32_4_48_4_2_32                            arg  3 mem   0.13 GB tm   1806.96us/     3.61ms (    239 GFLOPS   16|33     GB/s) \n*** AMD        3 r_32_32_4_48_4_2_32                            arg  3 mem   0.13 GB tm   1795.96us/     5.41ms (    241 GFLOPS   16|33     GB/s) \n*** AMD        4 r_32_32_4_48_4_2_32                            arg  3 mem   0.13 GB tm   1790.84us/     7.20ms (    241 GFLOPS   16|33     GB/s) \n*** AMD        5 r_32_32_4_48_4_2_32                            arg  3 mem   0.13 GB tm   1556.80us/     8.75ms (    278 GFLOPS   18|38     GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.501 ms (666.33/s) q4_eff=18.86 GB/s device_q4_eff=29.98 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.781 ms (264.51/s) q4_eff=7.49 GB/s device_q4_eff=16.17 GB/s kernels=1.0 mem=28.34 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local8_p1",
+      "device_q4_eff_gbs": 132.22,
+      "elapsed_s": 2.02,
+      "kernels": 1.0,
+      "ms": 0.434,
+      "opts": [
+        "LOCAL:0:8"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00208139,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 65.18,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    207.40us/     0.21ms (   1535 GFLOPS  137|865    GB/s) \n*** AMD        2 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    207.08us/     0.41ms (   1537 GFLOPS  137|866    GB/s) \n*** AMD        3 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    241.00us/     0.66ms (   1321 GFLOPS  118|744    GB/s) \n*** AMD        4 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    208.44us/     0.86ms (   1527 GFLOPS  136|860    GB/s) \n*** AMD        5 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    206.68us/     1.07ms (   1540 GFLOPS  137|868    GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.484 ms (673.81/s) q4_eff=19.08 GB/s device_q4_eff=30.00 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.817 ms (262.00/s) q4_eff=7.42 GB/s device_q4_eff=16.05 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.434 ms (2302.12/s) q4_eff=65.18 GB/s device_q4_eff=132.22 GB/s kernels=1.0 mem=28.37 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local16_p1",
+      "device_q4_eff_gbs": 182.29,
+      "elapsed_s": 1.97,
+      "kernels": 1.0,
+      "ms": 0.367,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00208139,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 77.19,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    155.16us/     0.16ms (   2051 GFLOPS  183|1156   GB/s) \n*** AMD        2 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    155.96us/     0.31ms (   2041 GFLOPS  182|1150   GB/s) \n*** AMD        3 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    155.52us/     0.47ms (   2047 GFLOPS  182|1153   GB/s) \n*** AMD        4 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    155.20us/     0.62ms (   2051 GFLOPS  183|1155   GB/s) \n*** AMD        5 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    154.72us/     0.78ms (   2057 GFLOPS  183|1159   GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.485 ms (673.24/s) q4_eff=19.06 GB/s device_q4_eff=29.87 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.800 ms (263.19/s) q4_eff=7.45 GB/s device_q4_eff=15.94 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.367 ms (2726.61/s) q4_eff=77.19 GB/s device_q4_eff=182.29 GB/s kernels=1.0 mem=28.37 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local32_p1",
+      "device_q4_eff_gbs": 196.71,
+      "elapsed_s": 2.022,
+      "kernels": 1.0,
+      "ms": 0.364,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00208139,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 77.78,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    130.68us/     0.13ms (   2436 GFLOPS  217|1372   GB/s) \n*** AMD        2 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    152.24us/     0.28ms (   2091 GFLOPS  186|1178   GB/s) \n*** AMD        3 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    152.48us/     0.44ms (   2088 GFLOPS  186|1176   GB/s) \n*** AMD        4 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    132.20us/     0.57ms (   2408 GFLOPS  215|1356   GB/s) \n*** AMD        5 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    152.04us/     0.72ms (   2094 GFLOPS  187|1179   GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.501 ms (666.31/s) q4_eff=18.86 GB/s device_q4_eff=30.03 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.809 ms (262.54/s) q4_eff=7.43 GB/s device_q4_eff=16.04 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.364 ms (2747.28/s) q4_eff=77.78 GB/s device_q4_eff=196.71 GB/s kernels=1.0 mem=28.37 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local64_p1",
+      "device_q4_eff_gbs": 212.24,
+      "elapsed_s": 1.96,
+      "kernels": 1.0,
+      "ms": 0.352,
+      "opts": [
+        "LOCAL:0:64"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00208139,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 80.51,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    134.08us/     0.13ms (   2374 GFLOPS  212|1337   GB/s) \n*** AMD        2 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    132.84us/     0.27ms (   2396 GFLOPS  214|1350   GB/s) \n*** AMD        3 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    133.08us/     0.40ms (   2392 GFLOPS  213|1347   GB/s) \n*** AMD        4 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    133.32us/     0.53ms (   2388 GFLOPS  213|1345   GB/s) \n*** AMD        5 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    133.64us/     0.67ms (   2382 GFLOPS  212|1342   GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.474 ms (678.33/s) q4_eff=19.20 GB/s device_q4_eff=30.00 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.810 ms (262.46/s) q4_eff=7.43 GB/s device_q4_eff=15.95 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.352 ms (2843.60/s) q4_eff=80.51 GB/s device_q4_eff=212.24 GB/s kernels=1.0 mem=28.37 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local16_p2",
+      "device_q4_eff_gbs": 188.93,
+      "elapsed_s": 2.023,
+      "kernels": 1.0,
+      "ms": 0.219,
+      "opts": [
+        "LOCAL:0:16"
+      ],
+      "parts": 2,
+      "primitive_gemv_max_abs": 0.00208473,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 129.3,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.16 GB tm    159.35us/     0.16ms (   1998 GFLOPS  179|1126   GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.16 GB tm    153.87us/     0.31ms (   2069 GFLOPS  185|1166   GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.16 GB tm    149.25us/     0.46ms (   2133 GFLOPS  191|1202   GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.16 GB tm    138.91us/     0.60ms (   2291 GFLOPS  205|1291   GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.16 GB tm    147.87us/     0.75ms (   2153 GFLOPS  192|1213   GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.479 ms (675.98/s) q4_eff=19.14 GB/s device_q4_eff=29.90 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.810 ms (262.49/s) q4_eff=7.43 GB/s device_q4_eff=16.14 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.219 ms (4567.01/s) q4_eff=129.30 GB/s device_q4_eff=188.93 GB/s kernels=1.0 mem=28.45 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local32_p2",
+      "device_q4_eff_gbs": 252.62,
+      "elapsed_s": 1.993,
+      "kernels": 1.0,
+      "ms": 0.181,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 2,
+      "primitive_gemv_max_abs": 0.00208473,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 156.6,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.16 GB tm    113.38us/     0.11ms (   2807 GFLOPS  251|1582   GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.16 GB tm    112.12us/     0.23ms (   2839 GFLOPS  254|1600   GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.16 GB tm    109.10us/     0.33ms (   2917 GFLOPS  261|1644   GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.16 GB tm    115.55us/     0.45ms (   2755 GFLOPS  246|1553   GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.16 GB tm    110.21us/     0.56ms (   2888 GFLOPS  258|1628   GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.483 ms (674.28/s) q4_eff=19.09 GB/s device_q4_eff=29.88 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.796 ms (263.42/s) q4_eff=7.46 GB/s device_q4_eff=16.02 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.181 ms (5531.35/s) q4_eff=156.60 GB/s device_q4_eff=252.62 GB/s kernels=1.0 mem=28.45 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local32_p4",
+      "device_q4_eff_gbs": 268.78,
+      "elapsed_s": 2.02,
+      "kernels": 1.0,
+      "ms": 0.176,
+      "opts": [
+        "LOCAL:0:32"
+      ],
+      "parts": 4,
+      "primitive_gemv_max_abs": 0.00207901,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 160.83,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 batched 2                                      arg  0 mem   0.16 GB tm    105.12us/     0.11ms (   3028 GFLOPS  272|1707   GB/s) \n*** AMD        2 batched 2                                      arg  0 mem   0.16 GB tm    108.75us/     0.21ms (   2927 GFLOPS  263|1650   GB/s) \n*** AMD        3 batched 2                                      arg  0 mem   0.16 GB tm    107.20us/     0.32ms (   2969 GFLOPS  266|1674   GB/s) \n*** AMD        4 batched 2                                      arg  0 mem   0.16 GB tm    104.24us/     0.43ms (   3054 GFLOPS  274|1722   GB/s) \n*** AMD        5 batched 2                                      arg  0 mem   0.16 GB tm    101.35us/     0.53ms (   3141 GFLOPS  282|1771   GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.483 ms (674.52/s) q4_eff=19.10 GB/s device_q4_eff=29.94 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.799 ms (263.23/s) q4_eff=7.45 GB/s device_q4_eff=16.11 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.176 ms (5680.76/s) q4_eff=160.83 GB/s device_q4_eff=268.78 GB/s kernels=1.0 mem=28.55 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local32_upcast2_p1",
+      "device_q4_eff_gbs": 101.38,
+      "elapsed_s": 1.997,
+      "kernels": 1.0,
+      "ms": 0.493,
+      "opts": [
+        "LOCAL:0:32",
+        "UPCAST:0:2"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": 0.00208139,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": 57.41,
+      "schedule": "none",
+      "shape": "4096x12288",
+      "status": "pass",
+      "tail": "*** AMD        1 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    279.44us/     0.28ms (   1139 GFLOPS  102|462    GB/s) \n*** AMD        2 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    279.12us/     0.56ms (   1140 GFLOPS  102|462    GB/s) \n*** AMD        3 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    279.16us/     0.84ms (   1140 GFLOPS  102|462    GB/s) \n*** AMD        4 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    279.56us/     1.12ms (   1139 GFLOPS  101|461    GB/s) \n*** AMD        5 q4k_gemv_partial_4096_12288_1                  arg  3 mem   0.16 GB tm    279.08us/     1.40ms (   1141 GFLOPS  102|462    GB/s) \nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 1.483 ms (674.29/s) q4_eff=19.09 GB/s device_q4_eff=30.01 GB/s kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 3.776 ms (264.85/s) q4_eff=7.50 GB/s device_q4_eff=15.96 GB/s kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.493 ms (2027.67/s) q4_eff=57.41 GB/s device_q4_eff=101.38 GB/s kernels=1.0 mem=28.37 MB",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": "local32_upcast3_p1",
+      "device_q4_eff_gbs": null,
+      "elapsed_s": 1.941,
+      "kernels": null,
+      "ms": null,
+      "opts": [
+        "LOCAL:0:32",
+        "UPCAST:0:3"
+      ],
+      "parts": 1,
+      "primitive_gemv_max_abs": null,
+      "primitive_unpack_max_abs": 0.0,
+      "q4_eff_gbs": null,
+      "schedule": "none",
+      "shape": null,
+      "status": "illegal-opt",
+      "tail": "    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/opt/postrange.py\", line 176, in apply_opt\n    ret = self.shift_to(rng, amt, opt_to_at[opt.op], top=opt.op in {OptOps.GROUPTOP, OptOps.THREAD})\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/opt/postrange.py\", line 96, in shift_to\n    raise KernelOptError(f\"{amount} can't divide {rng.src[0]} in {self.colored_shape()}\")\ntinygrad.codegen.opt.KernelOptError: 3 can't divide UOp(Ops.CONST, dtypes.weakint, arg=128, src=()) in  128   32   48    8    4",
+      "tensor": "blk.4.ffn_down.weight"
+    }
+  ]
+}

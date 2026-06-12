@@ -660,3 +660,31 @@ This reaches about `57.6%` of the 8B llama.cpp reference (`101 tok/s`) and
 `42.8%` of the 14B reference (`66 tok/s`). The next bottleneck is no longer a
 simple policy hole: it is primitive GEMV quality plus the Q6 output projection,
 where the current primitive loses and should remain disabled.
+
+## Step 20 profile-complete + automated knob sweep (2026-06-11)
+
+Completed Q4+Q6 profiling for both 8B and 14B in batched and named modes under
+`bench/q4q6-profile-20260611/`. Batched residual is low (`4.28%` on 8B,
+`1.98%` on 14B), so the remaining target is GPU kernel quality rather than
+host/runtime overhead. Named attribution is now Amdahl-relevant for primitives:
+Q4+Q6 primitive GEMV plus Q4 reductions are about `53%` of named AMD time on 8B
+and `57%` on 14B.
+
+Added `extra/q6_k_policy_sweep.py` so Q6 tuning is automated like Q4 tuning.
+The sweep found plausible microbench candidates (`Q6 ffn_down parts=2
+LOCAL:0:32`, Q6 output `LOCAL:0:16`, and 14B-specific Q4 schedule changes), but
+the full 128-token decode gates rejected them:
+
+- Q6 output improved its isolated microbench by only ~`9-10%`, then collapsed
+  8B sustained decode (`53.85 tok/s` avg, `25.21` last16), so output remains
+  fallback.
+- The no-output sweep-policy candidate was unstable (`59.98 tok/s` on one 8B
+  run, `15.12` on rerun), so no Q4/Q6 policy change was accepted.
+- Reverting to the prior production policy restored the stable range
+  (`57.45 tok/s` on the 8B rerun, matching the prior `58.17`-class result).
+
+Decision: keep the existing runtime policy. The next accepted work should be a
+primitive-v2 representation/design change with a larger search space, not more
+retuning of the current knobs. Any v2 candidate must pass microbench
+correctness, greedy output A/B, and repeated 128-token batched decode before it
+is wired into `model.py`.
