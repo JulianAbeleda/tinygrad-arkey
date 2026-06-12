@@ -159,6 +159,416 @@ Better first step:
    action, a scheduler rewrite, a new `Ops` primitive, or a renderer-level
    lowering.
 
+## Full execution scope
+
+### Phase 0: invariants and baseline
+
+Purpose: prevent the research path from corrupting the working inference path.
+
+Artifacts:
+
+- `bench/qk-ansor-YYYYMMDD/README.md`;
+- baseline run logs for the current Q4+Q6 v1 policy;
+- one JSON file containing the selected representative descriptors.
+
+Tasks:
+
+1. Freeze the current v1 production numbers and commands:
+   - 8B Q4+Q6 stable target: about `57-58 tok/s`;
+   - 14B Q4+Q6 stable target: about `28 tok/s`;
+   - flags: `DEV=AMD Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1 JIT=1`.
+2. Record the exact GGUF paths, device string, arch, git commit, and env flags.
+3. Keep the existing v1 model wrappers unchanged.
+4. Add no runtime policy changes in this phase.
+
+Exit gate:
+
+- current v1 path still runs;
+- docs and artifact directory identify this as a search/generation experiment,
+  not a production decode policy change.
+
+### Phase 1: shared quant layout module
+
+Purpose: make packed format semantics reusable by candidate generation.
+
+Proposed file:
+
+- `extra/qk_layout.py`
+
+Contents:
+
+- `GGML_Q4_K = 12`, `GGML_Q6_K = 14`;
+- block element/byte constants;
+- `GGUFInfo`, `GGUFMetadata`, `read_metadata`, `tensor_shape`;
+- Q4_K reference unpack;
+- Q6_K reference unpack;
+- packed storage slice helpers:
+  - `packed_u8_slice(path, info, meta)`;
+  - `packed_u32_slice(...)` for Q4_K where aligned;
+  - `packed_u16_slice(...)` for Q6_K where aligned;
+- byte-size helpers;
+- role inference helper that maps tensor names to roles without deciding policy.
+
+Migration:
+
+- update `extra/q4_k_bench.py` to import Q4 metadata/layout helpers;
+- update `extra/q4_k_gemv_primitive.py` to import Q4 constants and references;
+- update `extra/q6_k_gemv_primitive.py` and `extra/q6_k_policy_sweep.py` to
+  import Q6 constants and references;
+- preserve public CLI behavior.
+
+Tests:
+
+- `python -m py_compile extra/qk_layout.py extra/q4_k_bench.py extra/q4_k_gemv_primitive.py extra/q6_k_gemv_primitive.py`;
+- a small unit test that Q4_K and Q6_K references match `ggml_data_to_tensor`
+  on a fixed real GGUF tensor slice;
+- existing primitive unpack correctness gates.
+
+Exit gate:
+
+- no speed claims;
+- current Q4/Q6 primitive correctness gates still pass;
+- layout math now has one source of truth.
+
+### Phase 2: semantic descriptor
+
+Purpose: represent "what is being optimized" independently from model path
+strings and hand policies.
+
+Proposed file:
+
+- `extra/qk_ansor.py`
+
+Core dataclasses:
+
+```python
+@dataclass(frozen=True)
+class QuantGemvDescriptor:
+  model: str
+  tensor: str
+  role: str
+  ggml_type: int
+  rows: int
+  cols: int
+  block_elems: int
+  block_bytes: int
+  data_start: int
+  tensor_offset: int
+  dtype_activation: str
+  dtype_output: str
+  device: str
+  arch: str|None
+```
+
+```python
+@dataclass(frozen=True)
+class CandidateSpec:
+  name: str
+  family: str
+  activation: str
+  reduction: str
+  parts: int
+  opts: tuple[str, ...]
+  requires: tuple[str, ...]
+```
+
+Descriptor generation:
+
+- read GGUF metadata;
+- select tensor by exact name or representative role/shape;
+- infer role from name for reporting only;
+- validate:
+  - type in `{Q4_K, Q6_K}`;
+  - matrix shape;
+  - K divisible by block size;
+  - packed storage alignment for candidate families that need it.
+
+Non-goal:
+
+- do not install wrappers into `model.py`;
+- do not decide a model policy.
+
+Tests:
+
+- construct descriptors for known Qwen3-8B Q4_K FFN tensors;
+- construct descriptors for known Q6_K `ffn_down`;
+- reject unsupported GGUF types with clear errors;
+- JSON round-trip candidate and descriptor.
+
+Exit gate:
+
+- a descriptor can be produced without importing `tinygrad/llm/model.py`;
+- no hard-coded "use primitive for this tensor" policy appears in the
+  descriptor.
+
+### Phase 3: candidate generator v0
+
+Purpose: make the machine produce the candidate list from the descriptor.
+
+Candidate families for v0:
+
+- `fused_graph`: existing tinygrad `ggml_data_to_tensor(...).matmul(...)`;
+- `v1_q4_packed`: existing Q4 primitive if `ggml_type == Q4_K`;
+- `v1_q6_packed`: existing Q6 primitive if `ggml_type == Q6_K`;
+- optional rejected variants only if explicitly requested:
+  - Q4 parts/local candidates from the old sweep;
+  - Q6 parts/local candidates from the old sweep.
+
+Generator contract:
+
+```python
+def generate_candidates(desc: QuantGemvDescriptor, level: int = 0) -> list[CandidateSpec]:
+  ...
+```
+
+Rules:
+
+- level 0 emits only baseline + current known-good v1 candidate;
+- level 1 may emit the old sweep space;
+- level 2 is reserved for q8_1 sketches later.
+
+This is the first Ansor-ward move. The candidate list must be generated from
+descriptor capabilities, not copied from `model.py` policies.
+
+Tests:
+
+- Q4 descriptor emits `fused_graph` and `v1_q4_packed`;
+- Q6 descriptor emits `fused_graph` and `v1_q6_packed`;
+- Q4 descriptor does not emit Q6 candidates;
+- alignment requirements suppress incompatible packed candidates loudly.
+
+Exit gate:
+
+- generated candidate list is deterministic and explainable;
+- no candidate is selected yet.
+
+### Phase 4: candidate runner
+
+Purpose: compile, correctness-check, time, and compare generated candidates.
+
+Proposed CLI:
+
+```bash
+DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_ansor.py \
+  --model ~/models/Qwen3-8B-Q4_K_M.gguf \
+  --tensor blk.0.ffn_gate.weight \
+  --device AMD \
+  --level 0 \
+  --iters 5 \
+  --json bench/qk-ansor-YYYYMMDD/8b-ffn-gate.json
+```
+
+Runner requirements:
+
+- run each candidate in a subprocess by default;
+- use existing risky-search guard for any candidate that could trigger BEAM or
+  auto-schedule;
+- correctness before timing:
+  - unpack reference equality for packed candidates;
+  - random-activation GEMV tolerance against common reference;
+- collect:
+  - status;
+  - correctness max abs;
+  - device ms;
+  - effective quant GB/s;
+  - kernel count;
+  - generated code/load-width note if available;
+  - tail output on failure.
+
+Candidate implementation:
+
+- reuse `extra/q4_k_bench.py` and `extra/q6_k_gemv_primitive.py` initially;
+- do not duplicate kernel code in the runner;
+- runner is orchestration, not a new primitive.
+
+Exit gate:
+
+- for Q4_K FFN descriptor, generated v0 runner chooses the current v1 primitive
+  over `fused_graph`;
+- for a small Q4_K KV-like descriptor, generated v0 runner can choose
+  `fused_graph` if that is faster;
+- generated report explains the choice.
+
+### Phase 5: policy cache, not model policy
+
+Purpose: make generated choices reusable without hard-coding them into
+`model.py`.
+
+Proposed output:
+
+```json
+{
+  "device": "AMD",
+  "arch": "gfx1100",
+  "format": "Q4_K",
+  "shape": [12288, 4096],
+  "activation": "fp16",
+  "candidate_version": 0,
+  "winner": "v1_q4_packed",
+  "reason": "device_ms best after correctness",
+  "candidate": {"parts": 1, "opts": ["LOCAL:0:64"]}
+}
+```
+
+Cache key:
+
+- device;
+- arch;
+- ggml type;
+- rows;
+- cols;
+- activation format;
+- candidate generator version;
+- tinygrad commit.
+
+Non-goal:
+
+- do not wire cache into model runtime yet.
+
+Exit gate:
+
+- cache can be loaded and used by the runner to skip search;
+- stale commit or generator version invalidates cache loudly.
+
+### Phase 6: optional runtime integration
+
+Purpose: use the generated policy in decode only after the generator/runner is
+proven.
+
+Possible flags:
+
+- `QK_GENERATED_POLICY=/path/to/policy.json`;
+- `QK_GENERATED_POLICY_DEBUG=1`.
+
+Rules:
+
+- v1 `Q4K_PRIMITIVE` / `Q6K_PRIMITIVE` flags remain unchanged;
+- generated policy is opt-in;
+- if a tensor/shape is missing from the generated policy, fallback is explicit
+  and counted;
+- no live search during model load;
+- no BEAM or auto-schedule on Mac/TinyGPU/remote.
+
+Exit gate:
+
+- generated policy reproduces current v1 full-decode speed within noise;
+- generated policy passes 32-token output validation;
+- skip/install diagnostics are at least as clear as current primitive debug.
+
+### Phase 7: generated q8_1 sketch
+
+Purpose: add a new structural candidate only after v0 proves candidate
+generation and selection.
+
+New generated candidate:
+
+- q8_1 activation pack;
+- Q4_K/Q6_K x q8_1 packed dot;
+- split/reduction mode variants.
+
+Acceptance:
+
+- q8_1 reference correctness;
+- pack overhead included in candidate total;
+- model-output validation uses the q8_1 semantic contract, not exact fp16-token
+  identity only;
+- repeated full decode beats generated v1 policy before runtime integration.
+
+Exit gate:
+
+- q8_1 candidate is generated from descriptor rules;
+- it either wins and is cached, or loses and is rejected without touching
+  `model.py`.
+
+### Phase 8: decide core integration shape
+
+Only after phases 1-7 should we choose a core tinygrad integration:
+
+- `OptOps.QK`: appropriate only if quant GEMV is an optimization of an existing
+  AST pattern and can be applied like TC;
+- new `Ops` primitive: appropriate if packed quant dot is semantic enough that
+  lowering should see it directly;
+- scheduler rewrite: appropriate if GGUF dequant + matvec should be grouped into
+  a special internal op before codegen;
+- renderer lowering: appropriate if UOp-level generation cannot express the
+  required vector dot efficiently.
+
+Decision criteria:
+
+- smallest core surface;
+- generated candidates remain inspectable;
+- correctness reference stays centralized;
+- BEAM/search sees the choice.
+
+## Milestones
+
+| milestone | deliverable | success |
+|---|---|---|
+| M1 | `extra/qk_layout.py` | Q4/Q6 references centralized, current gates pass |
+| M2 | `QuantGemvDescriptor` | real GGUF tensors become semantic descriptors |
+| M3 | generator v0 | descriptor emits fused + v1 candidates |
+| M4 | runner v0 | generated search chooses current v1 where it should |
+| M5 | policy cache | winner reusable without hard-coded model policy |
+| M6 | optional runtime flag | generated policy reproduces current v1 decode |
+| M7 | q8_1 candidate | new structural candidate generated and fairly accepted/rejected |
+| M8 | core integration decision | choose OptOps/Ops/scheduler/renderer route |
+
+## Test plan
+
+Unit tests:
+
+- metadata parse and tensor shape;
+- Q4_K reference equality vs `ggml_data_to_tensor`;
+- Q6_K reference equality vs `ggml_data_to_tensor`;
+- descriptor validation errors;
+- candidate generation by format/capability;
+- cache key invalidation.
+
+Integration tests:
+
+- generated Q4_K descriptor for `blk.0.ffn_gate.weight`;
+- generated Q4_K descriptor for a known fallback/small shape;
+- generated Q6_K descriptor for `blk.0.ffn_down.weight`;
+- correctness and timing run with `--iters 1` on native AMD when available;
+- skip GPU timing tests when AMD is unavailable.
+
+Full gates:
+
+- current v1 output A/B remains available;
+- no generated runtime policy accepted without repeated `--benchmark 128`;
+- no live risky search outside native Ubuntu.
+
+## Risks and mitigations
+
+- Risk: this becomes another wrapper around the old sweep.
+  Mitigation: require generated candidates from `QuantGemvDescriptor`; fail the
+  milestone if model-path policy drives candidate choice.
+- Risk: too much core churn too early.
+  Mitigation: phases 1-5 stay in `extra/`; core integration is phase 8.
+- Risk: candidate generator hides hand-written templates.
+  Mitigation: candidate specs must explain required capabilities and structural
+  choices in JSON.
+- Risk: BEAM faults AMD again.
+  Mitigation: no live BEAM in early phases; any BEAM candidate uses the existing
+  native-only risky-search guard and subprocess containment.
+- Risk: speed regresses while architecture improves.
+  Mitigation: v1 flags remain stable; generated policy is opt-in until it
+  reproduces v1 full-decode results.
+
+## Stop conditions
+
+Stop or rethink if:
+
+- descriptors are just model-path aliases;
+- generator v0 cannot reproduce the current v1 choice;
+- centralizing layout creates correctness churn;
+- the runner requires special cases per tensor role before q8_1 is even added;
+- runtime integration would require live search during model load.
+
+The intended first win is architectural: "the machine chooses between generated
+equivalent quant GEMV implementations." Only after that should this path chase
+new tok/s.
+
 ## Minimal spike
 
 A useful Ansor-direction spike is small and falsifiable:
