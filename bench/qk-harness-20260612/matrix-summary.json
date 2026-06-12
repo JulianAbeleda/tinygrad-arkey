@@ -1,0 +1,74 @@
+{
+  "kind": "qk_experiment_matrix",
+  "rows": [
+    {
+      "ab_match": true,
+      "explicit_tok_s": 49.34614583333333,
+      "gain": 0.08407286536646952,
+      "generated_pct_llama": 52.8604918066535,
+      "generated_tok_s": 53.494817708333336,
+      "model_size": "8B",
+      "path": "bench/qk-harness-20260612/8b",
+      "policy_cap_bytes": null,
+      "policy_selected_bytes": 107347968,
+      "policy_selected_primitive_entries": 4,
+      "reasons": [
+        "generated beats explicit by 8.41%"
+      ],
+      "reference_mode": "explicit",
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 3970695168,
+      "runtime_storage_bytes": 3970695168,
+      "status": "accept"
+    },
+    {
+      "ab_match": true,
+      "explicit_tok_s": 22.723177083333333,
+      "gain": 0.5293099694007359,
+      "generated_pct_llama": 52.81273746200609,
+      "generated_tok_s": 34.75078125,
+      "model_size": "14B",
+      "path": "bench/qk-harness-20260612/14b",
+      "policy_cap_bytes": null,
+      "policy_selected_bytes": 195379200,
+      "policy_selected_primitive_entries": 6,
+      "reasons": [
+        "generated unstable: generated3 avg 23.75 is >10% below mean 34.75"
+      ],
+      "reference_mode": "explicit",
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7918387200,
+      "runtime_storage_bytes": 7918387200,
+      "status": "needs-rerun"
+    },
+    {
+      "ab_match": true,
+      "explicit_tok_s": 3.441536458333333,
+      "gain": 0.2098066664144378,
+      "generated_pct_llama": 13.518161525974026,
+      "generated_tok_s": 4.16359375,
+      "model_size": "32B",
+      "path": "bench/qk-policy-cap-20260612/32b-1536mb",
+      "policy_cap_bytes": 1610612736,
+      "policy_selected_bytes": 1600389120,
+      "policy_selected_primitive_entries": 144,
+      "reasons": [
+        "generated beats explicit by 20.98%"
+      ],
+      "reference_mode": "generic",
+      "runtime_cap_bytes": null,
+      "runtime_cap_used_bytes": null,
+      "runtime_storage_bytes": null,
+      "status": "accept"
+    }
+  ],
+  "summary": {
+    "accepted": 2,
+    "accepted_mean_gain": 0.14693976589045366,
+    "experiments": 3,
+    "statuses": {
+      "accept": 2,
+      "needs-rerun": 1
+    }
+  }
+}

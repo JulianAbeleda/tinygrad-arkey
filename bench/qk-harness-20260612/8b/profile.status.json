@@ -1,0 +1,14 @@
+{
+  "inputs": [
+    "bench/qk-harness-20260612/8b/policy.json"
+  ],
+  "metadata": {
+    "preliminary_gain": 0.08407286536646952,
+    "profile": "auto"
+  },
+  "outputs": [],
+  "reused": false,
+  "stage": "profile",
+  "status": "skipped",
+  "updated_at": "2026-06-12T10:31:31.623390"
+}

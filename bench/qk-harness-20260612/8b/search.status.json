@@ -1,0 +1,10 @@
+{
+  "inputs": [],
+  "outputs": [
+    "bench/qk-harness-20260612/8b/search.json"
+  ],
+  "reused": true,
+  "stage": "search",
+  "status": "passed",
+  "updated_at": "2026-06-12T10:31:31.599552"
+}

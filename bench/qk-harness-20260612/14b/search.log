@@ -1,0 +1,153 @@
+=== blk.0.ffn_gate.weight Q4_K 17408x5120 candidates=13 ===
+--- fused_graph parts=0 opts=[] ops/byte=3.55 ---
+pass quant_gbs=57.65 gemv=None
+--- v1_q4_packed parts=1 opts=['LOCAL:0:64'] ops/byte=3.55 ---
+pass quant_gbs=357.9 gemv=0.00317574
+--- q4_local16_p1 parts=1 opts=['LOCAL:0:16'] ops/byte=3.55 ---
+pass quant_gbs=317.19 gemv=0.00317574
+--- q4_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=3.55 ---
+pass quant_gbs=379.81 gemv=0.00317574
+--- q4_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.55 ---
+pass quant_gbs=358.72 gemv=0.00317574
+--- q4_local32_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.53 ---
+pass quant_gbs=187.93 gemv=0.00317621
+--- q4_local32_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.511 ---
+pass quant_gbs=150.91 gemv=0.00317287
+--- q8_1_q4_packed parts=1 opts=['LOCAL:0:64'] ops/byte=3.549 ---
+pass quant_gbs=195.67 gemv=0.00147247
+--- q8_1_q4_intdot parts=1 opts=['LOCAL:0:64'] ops/byte=3.549 ---
+pass quant_gbs=324.32 gemv=0.00147223
+--- q8_1_q4_vdot parts=1 opts=[] ops/byte=3.548 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.548 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.529 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.509 ---
+skipped-stop quant_gbs=None gemv=None
+=== blk.5.ffn_down.weight Q4_K 5120x17408 candidates=13 ===
+--- fused_graph parts=0 opts=[] ops/byte=3.552 ---
+pass quant_gbs=19.61 gemv=None
+--- v1_q4_packed parts=4 opts=['LOCAL:0:32'] ops/byte=3.54 ---
+pass quant_gbs=253.24 gemv=0.00282669
+--- q4_local16_p1 parts=1 opts=['LOCAL:0:16'] ops/byte=3.552 ---
+pass quant_gbs=176.35 gemv=0.00282097
+--- q4_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=3.552 ---
+pass quant_gbs=229.07 gemv=0.00282097
+--- q4_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.552 ---
+pass quant_gbs=269.37 gemv=0.00282097
+--- q4_local32_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.546 ---
+pass quant_gbs=312.96 gemv=0.00282812
+--- q4_local32_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.54 ---
+pass quant_gbs=252.92 gemv=0.00282669
+--- q8_1_q4_packed parts=4 opts=['LOCAL:0:32'] ops/byte=3.536 ---
+pass quant_gbs=156.78 gemv=0.00148895
+--- q8_1_q4_intdot parts=4 opts=['LOCAL:0:32'] ops/byte=3.536 ---
+pass quant_gbs=332.98 gemv=0.00148597
+--- q8_1_q4_vdot parts=1 opts=[] ops/byte=3.546 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.546 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.541 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.535 ---
+skipped-stop quant_gbs=None gemv=None
+=== blk.0.attn_q.weight Q4_K 5120x5120 candidates=13 ===
+--- fused_graph parts=0 opts=[] ops/byte=3.548 ---
+pass quant_gbs=19.21 gemv=None
+--- v1_q4_packed parts=1 opts=['LOCAL:0:64'] ops/byte=3.548 ---
+pass quant_gbs=240.08 gemv=0.00561523
+--- q4_local16_p1 parts=1 opts=['LOCAL:0:16'] ops/byte=3.548 ---
+pass quant_gbs=161.51 gemv=0.00561523
+--- q4_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=3.548 ---
+pass quant_gbs=229.54 gemv=0.00561523
+--- q4_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.548 ---
+pass quant_gbs=239.07 gemv=0.00561523
+--- q4_local32_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.529 ---
+pass quant_gbs=217.06 gemv=0.00559807
+--- q4_local32_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.509 ---
+pass quant_gbs=189.54 gemv=0.0056076
+--- q8_1_q4_packed parts=1 opts=['LOCAL:0:64'] ops/byte=3.544 ---
+pass quant_gbs=95.83 gemv=0.00264716
+--- q8_1_q4_intdot parts=1 opts=['LOCAL:0:64'] ops/byte=3.544 ---
+pass quant_gbs=104.36 gemv=0.00265276
+--- q8_1_q4_vdot parts=1 opts=[] ops/byte=3.543 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.543 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.523 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.504 ---
+skipped-stop quant_gbs=None gemv=None
+=== blk.0.attn_k.weight Q4_K 1024x5120 candidates=13 ===
+--- fused_graph parts=0 opts=[] ops/byte=3.538 ---
+pass quant_gbs=3.78 gemv=None
+--- v1_q4_packed parts=4 opts=['LOCAL:0:32'] ops/byte=3.5 ---
+pass quant_gbs=62.96 gemv=0.00420666
+--- q4_local16_p1 parts=1 opts=['LOCAL:0:16'] ops/byte=3.538 ---
+pass quant_gbs=50.97 gemv=0.00420713
+--- q4_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=3.538 ---
+pass quant_gbs=49.2 gemv=0.00420713
+--- q4_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.538 ---
+pass quant_gbs=46.02 gemv=0.00420713
+--- q4_local32_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.519 ---
+pass quant_gbs=50.92 gemv=0.00420761
+--- q4_local32_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.5 ---
+pass quant_gbs=62.43 gemv=0.00420666
+--- q8_1_q4_packed parts=4 opts=['LOCAL:0:32'] ops/byte=3.48 ---
+pass quant_gbs=40.76 gemv=0.00267982
+--- q8_1_q4_intdot parts=4 opts=['LOCAL:0:32'] ops/byte=3.48 ---
+pass quant_gbs=43.17 gemv=0.00267982
+--- q8_1_q4_vdot parts=1 opts=[] ops/byte=3.513 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=3.513 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p2 parts=2 opts=['LOCAL:0:32'] ops/byte=3.493 ---
+skipped-stop quant_gbs=None gemv=None
+--- q8_1_q4_vdot_parallel_p4 parts=4 opts=['LOCAL:0:32'] ops/byte=3.474 ---
+skipped-stop quant_gbs=None gemv=None
+=== output.weight Q6_K 151936x5120 candidates=7 ===
+--- fused_graph parts=0 opts=[] ops/byte=2.436 ---
+pass quant_gbs=122.14 gemv=0.00166261
+--- v1_q6_packed parts=1 opts=['LOCAL:0:64'] ops/byte=2.436 ---
+pass quant_gbs=94.31 gemv=0.00166261
+--- q6_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=2.436 ---
+pass quant_gbs=94.09 gemv=0.00166261
+--- q6_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=2.436 ---
+pass quant_gbs=93.7 gemv=0.00166261
+--- q6_local128_p1 parts=1 opts=['LOCAL:0:128'] ops/byte=2.436 ---
+pass quant_gbs=92.44 gemv=0.00166261
+--- q6_local64_p2 parts=2 opts=['LOCAL:0:64'] ops/byte=2.427 ---
+pass quant_gbs=110.89 gemv=0.00166094
+--- q8_1_q6_k_sketch parts=2 opts=['LOCAL:0:64'] ops/byte=2.426 ---
+not-implemented quant_gbs=None gemv=None
+=== blk.0.attn_v.weight Q6_K 1024x5120 candidates=7 ===
+--- fused_graph parts=0 opts=[] ops/byte=2.43 ---
+pass quant_gbs=5.24 gemv=0.0015738
+--- v1_q6_packed parts=1 opts=['LOCAL:0:64'] ops/byte=2.43 ---
+pass quant_gbs=29.89 gemv=0.0015738
+--- q6_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=2.43 ---
+pass quant_gbs=29.48 gemv=0.0015738
+--- q6_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=2.43 ---
+pass quant_gbs=28.88 gemv=0.0015738
+--- q6_local128_p1 parts=1 opts=['LOCAL:0:128'] ops/byte=2.43 ---
+pass quant_gbs=21.8 gemv=0.0015738
+--- q6_local64_p2 parts=2 opts=['LOCAL:0:64'] ops/byte=2.421 ---
+pass quant_gbs=49.69 gemv=0.00157785
+--- q8_1_q6_k_sketch parts=2 opts=['LOCAL:0:64'] ops/byte=2.412 ---
+not-implemented quant_gbs=None gemv=None
+=== blk.0.ffn_down.weight Q6_K 5120x17408 candidates=7 ===
+--- fused_graph parts=0 opts=[] ops/byte=2.436 ---
+pass quant_gbs=26.36 gemv=0.00121832
+--- v1_q6_packed parts=1 opts=['LOCAL:0:64'] ops/byte=2.436 ---
+pass quant_gbs=153.67 gemv=0.00121832
+--- q6_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=2.436 ---
+pass quant_gbs=132.63 gemv=0.00121832
+--- q6_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=2.436 ---
+pass quant_gbs=152.3 gemv=0.00121832
+--- q6_local128_p1 parts=1 opts=['LOCAL:0:128'] ops/byte=2.436 ---
+pass quant_gbs=112.87 gemv=0.00121832
+--- q6_local64_p2 parts=2 opts=['LOCAL:0:64'] ops/byte=2.434 ---
+pass quant_gbs=212.68 gemv=0.00121784
+--- q8_1_q6_k_sketch parts=2 opts=['LOCAL:0:64'] ops/byte=2.432 ---
+not-implemented quant_gbs=None gemv=None

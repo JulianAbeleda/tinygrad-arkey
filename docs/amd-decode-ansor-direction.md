@@ -1000,6 +1000,11 @@ This encodes the current stop rule: do exactly enough storage work to enable the
 loop, then move up. Do not chase a third 32B scaling point by perfecting 32B,
 and do not resume kernel search from the storage track.
 
+Fresh harness validation artifact: `bench/qk-harness-20260612/`. The new
+manifest/stage-status machinery accepts the fresh 8B run, correctly marks the
+fresh 14B run `needs-rerun` after generated decode instability, and produces a
+matrix including the existing capped 32B result.
+
 ## Relationship to existing docs
 
 - `docs/amd-decode-optimization-plan.md` remains the historical execution log.

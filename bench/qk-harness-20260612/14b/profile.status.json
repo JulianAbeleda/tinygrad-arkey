@@ -1,0 +1,13 @@
+{
+  "inputs": [
+    "bench/qk-harness-20260612/14b/policy.json"
+  ],
+  "outputs": [
+    "bench/qk-harness-20260612/14b/profile-report.json",
+    "bench/qk-harness-20260612/14b/profile-report.md"
+  ],
+  "reused": true,
+  "stage": "profile",
+  "status": "passed",
+  "updated_at": "2026-06-12T10:31:31.719680"
+}

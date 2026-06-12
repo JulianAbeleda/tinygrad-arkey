@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    "bench/qk-harness-20260612/14b/search.json"
+  ],
+  "outputs": [
+    "bench/qk-harness-20260612/14b/semantic-report.md"
+  ],
+  "reused": true,
+  "stage": "semantic",
+  "status": "passed",
+  "updated_at": "2026-06-12T10:31:31.698003"
+}

@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    "bench/qk-harness-20260612/14b/decision.json"
+  ],
+  "outputs": [
+    "bench/qk-harness-20260612/14b/README.md"
+  ],
+  "reused": false,
+  "stage": "report",
+  "status": "passed",
+  "updated_at": "2026-06-12T10:31:31.727017"
+}
