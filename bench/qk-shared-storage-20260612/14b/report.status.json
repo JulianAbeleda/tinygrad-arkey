@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    "bench/qk-shared-storage-20260612/14b/decision.json"
+  ],
+  "outputs": [
+    "bench/qk-shared-storage-20260612/14b/README.md"
+  ],
+  "reused": false,
+  "stage": "report",
+  "status": "passed",
+  "updated_at": "2026-06-12T13:32:27.664660"
+}

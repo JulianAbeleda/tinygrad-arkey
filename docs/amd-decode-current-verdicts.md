@@ -14,16 +14,18 @@ goal explicitly changes to compiler research.
 
 Current stable paths:
 
-- Qwen3-8B-Q4_K_M: explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` is still
-  the boring path, but the reproducible generated-policy pipeline now accepts
-  a modest opt-in generated artifact:
-  `QK_GENERATED_POLICY=bench/qk-harness-20260612/8b/policy.json`.
-  Current harness-matrix result: `53.49 tok/s` generated versus `49.35 tok/s`
-  explicit.
-- Qwen3-14B-Q4_K_M: use the accepted generated policy
-  `QK_GENERATED_POLICY=bench/qk-harness-20260612/14b-rerun/policy.json`.
-  Current harness-matrix result: `39.61 tok/s` generated versus `22.76 tok/s`
-  explicit, about `60.2%` of the llama.cpp reference.
+- Qwen3-8B-Q4_K_M: generated policy is accepted under both sidecar and shared
+  storage. Current shared-storage matrix result with
+  `QK_PRIMITIVE_STORAGE=shared` and
+  `QK_GENERATED_POLICY=bench/qk-shared-storage-20260612/8b/policy.json` gives
+  `52.07 tok/s` generated versus `50.41 tok/s` explicit. The older sidecar row
+  remains the 8B peak artifact at `53.49 tok/s`.
+- Qwen3-14B-Q4_K_M: use the accepted generated policy. Current shared-storage
+  matrix result with `QK_PRIMITIVE_STORAGE=shared` and
+  `QK_GENERATED_POLICY=bench/qk-shared-storage-20260612/14b/policy.json` gives
+  `40.55 tok/s` generated versus `21.77 tok/s` explicit, about `61.6%` of the
+  llama.cpp reference. This is slightly above the older sidecar row
+  (`39.61 tok/s`).
 - Qwen3-32B-Q4_K_M: shared primitive storage now makes the uncapped generated
   policy fit and pass the full harness against an explicit primitive reference:
   `QK_PRIMITIVE_STORAGE=shared` with
@@ -36,12 +38,14 @@ Current stable paths:
 
 Recommendation by default: keep generated policies opt-in and artifact-pinned.
 Use `bench/qk-shared-storage-20260612/matrix-summary.md` as the current
-8B/14B/32B source of truth. Use the 8B/14B harness artifacts only for the
-matching model/hardware path; use the 32B shared-storage artifact only with
-`QK_PRIMITIVE_STORAGE=shared`. Stop adding `extra/` q8 arithmetic variants, and
-move effort to the next higher-value goal unless compiler research is the point.
-Storage accounting, runtime caps, and shared storage are now in place; do not
-turn this into another kernel-search loop.
+8B/14B/32B source of truth. Shared storage is validated across all three rows
+and is the recommended generated-policy storage mode when memory behavior or
+cross-model consistency matters. Keep it as an explicit runtime mode for now;
+sidecar remains available, and is still slightly faster on the 8B peak artifact.
+Stop adding `extra/` q8 arithmetic variants, and move effort to the next
+higher-value goal unless compiler research is the point. Storage accounting,
+runtime caps, and shared storage are now in place; do not turn this into another
+kernel-search loop.
 
 ## Verdict Table
 
@@ -51,8 +55,8 @@ turn this into another kernel-search loop.
 | Generic BEAM | Not enough for this gap, and unsafe on remote/Mac without guards. | BEAM returns only after there is a semantic primitive/candidate space worth tuning. |
 | Expression-vectorization probe | Failed. Rewriting byte expressions did not make codegen emit wider useful loads. | Stop trying to garden `gguf.py` scalar byte math. |
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
-| Generated policy | Model-specific result. The current shared-storage matrix accepts 8B as a modest win (`53.49` vs `49.35 tok/s`), 14B as a strong win (`39.61` vs `22.76 tok/s`), and 32B as a strong shared-storage win (`17.23` vs `11.15 tok/s`). All pass 32-token greedy A/B. The older 32B capped result remains historical evidence that tensor-scoped fallback can fit under sidecar storage pressure. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts from `bench/qk-harness-20260612/` when running those exact model/hardware paths. Use the 32B artifact from `bench/qk-shared-storage-20260612/32b/` only with `QK_PRIMITIVE_STORAGE=shared`. Do not make it a global default. |
-| QK policy storage | Shape-scoped policy is too coarse for large models under sidecar storage; 32B needs either tensor-scoped storage decisions or shared source storage. Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. `QK_PRIMITIVE_STORAGE=shared` references the already-realized raw GGUF buffer through typed views; it has now passed 8B smoke/A-B and the full 32B harness with `storage_bytes=0` and `shared_bytes=18.68 GB`. | Treat shared storage as the validated opt-in path for 32B generated-policy comparisons. Future policy generation should still include storage cost, benefit, and fallback decisions because sidecar remains the default and shared storage is model/runtime specific. |
+| Generated policy | Model-specific result. The current shared-storage matrix accepts 8B as a modest win (`52.07` vs `50.41 tok/s`), 14B as a strong win (`40.55` vs `21.77 tok/s`), and 32B as a strong win (`17.23` vs `11.15 tok/s`). All pass 32-token greedy A/B. The older 8B sidecar row is still slightly faster (`53.49 tok/s`), and the older 32B capped result remains historical evidence that tensor-scoped fallback can fit under sidecar storage pressure. | Keep `QK_GENERATED_POLICY` opt-in and artifact-pinned. Prefer `QK_PRIMITIVE_STORAGE=shared` for generated-policy runs when memory behavior or cross-model consistency matters. Use sidecar only when chasing the exact 8B peak artifact. Do not make generated policies global defaults. |
+| QK policy storage | Shape-scoped policy is too coarse for large models under sidecar storage; 32B needs either tensor-scoped storage decisions or shared source storage. Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. `QK_PRIMITIVE_STORAGE=shared` references the already-realized raw GGUF buffer through typed views; it has now passed full 8B, 14B, and 32B harnesses with `storage_bytes=0`. | Treat shared storage as the validated generated-policy storage mode, but keep it explicit until it has more runtime soak. Future policy generation should still include storage cost, benefit, and fallback decisions because sidecar remains supported and useful as a performance control. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
@@ -100,6 +104,11 @@ It is a representation/lowering boundary:
     current 32B run. The full uncapped generated policy now fits as typed views
     over the already-realized GGUF source buffer, passes greedy A/B, and beats
     the shared explicit primitive reference by `54.56%`.
+12. Full 8B/14B shared-storage promotion checks now pass too. 8B shared is
+    accepted but slightly below the sidecar peak (`52.07` vs `53.49 tok/s`);
+    14B shared is accepted and slightly above sidecar (`40.55` vs
+    `39.61 tok/s`). This supports recommending shared storage for generated
+    policies without changing the runtime default.
 
 So the machine-first research hypothesis is:
 
@@ -117,7 +126,7 @@ Choose the next step by goal:
 
 | Goal | Track | Recommended next step |
 |---|---|---|
-| Reliable local Qwen inference | Consolidate | Use the accepted generated-policy artifacts for 8B/14B when you want peak local speed; keep explicit Q4/Q6 flags as the boring fallback. For 32B, use the shared-storage generated artifact with `QK_PRIMITIVE_STORAGE=shared`; keep the capped generic-baseline result as a fallback/historical control. |
+| Reliable local Qwen inference | Consolidate | Use accepted generated-policy artifacts when you want peak local speed; keep explicit Q4/Q6 flags as the boring fallback. For uniform generated-policy runs, set `QK_PRIMITIVE_STORAGE=shared`. For exact 8B peak, the older sidecar artifact remains slightly faster. |
 | More speed on this one GPU | v2 template grind | Write a richer hand template and sweep it, accepting lower ROI. |
 | Honor tinygrad's search thesis | Compiler research | Build semantic packed-layout and schedule/codegen generation, then feed it through the generated-search harness. |
 | Use the inference win | Training | Validate the smallest real QLoRA/SFT or RLVR stack using the faster decode path for rollouts/eval. |
@@ -132,8 +141,8 @@ worth doing only if the research itself is the goal.
 - Do not start isolated renderer/core packed-dot lowering unless a future
   roofline/counter profile overturns the memory/schedule-bound verdict, or the
   packed-dot work is part of a broader semantic layout/schedule rewrite.
-- Do not make `QK_GENERATED_POLICY` a global default. The accepted 14B policy is
-  model/hardware-specific and must stay an explicit artifact path.
+- Do not make `QK_GENERATED_POLICY` a global default. Generated policies are
+  model/hardware-specific and must stay explicit artifact paths.
 - Do not pursue more 32B generated-policy speed work by hand. Shared storage
   removed the OOM blocker for the current uncapped policy; further 32B claims
   should go through the harness matrix, not bespoke tuning.

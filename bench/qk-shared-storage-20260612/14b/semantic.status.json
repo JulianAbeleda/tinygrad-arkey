@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    "bench/qk-shared-storage-20260612/14b/search.json"
+  ],
+  "outputs": [
+    "bench/qk-shared-storage-20260612/14b/semantic-report.md"
+  ],
+  "reused": false,
+  "stage": "semantic",
+  "status": "passed",
+  "updated_at": "2026-06-12T13:19:28.997743"
+}

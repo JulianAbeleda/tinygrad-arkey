@@ -3,42 +3,42 @@
   "rows": [
     {
       "ab_match": true,
-      "explicit_tok_s": 49.34614583333333,
-      "gain": 0.08407286536646952,
-      "generated_pct_llama": 52.8604918066535,
-      "generated_tok_s": 53.494817708333336,
+      "explicit_tok_s": 50.40674479166667,
+      "gain": 0.03308708996966847,
+      "generated_pct_llama": 51.457072422595516,
+      "generated_tok_s": 52.074557291666665,
       "model_size": "8B",
-      "path": "bench/qk-harness-20260612/8b",
+      "path": "bench/qk-shared-storage-20260612/8b",
       "policy_cap_bytes": null,
       "policy_selected_bytes": 107347968,
       "policy_selected_primitive_entries": 4,
       "reasons": [
-        "generated beats explicit by 8.41%"
+        "generated beats explicit by 3.31%"
       ],
       "reference_mode": "explicit",
       "runtime_cap_bytes": -1,
-      "runtime_cap_used_bytes": 3970695168,
-      "runtime_storage_bytes": 3970695168,
+      "runtime_cap_used_bytes": 0,
+      "runtime_storage_bytes": 0,
       "status": "accept"
     },
     {
       "ab_match": true,
-      "explicit_tok_s": 22.764817708333332,
-      "gain": 0.7401749547284338,
-      "generated_pct_llama": 60.204810980243174,
-      "generated_tok_s": 39.614765625000004,
+      "explicit_tok_s": 21.76833333333333,
+      "gain": 0.8629088986295079,
+      "generated_pct_llama": 61.62982047872341,
+      "generated_tok_s": 40.552421875,
       "model_size": "14B",
-      "path": "bench/qk-harness-20260612/14b-rerun",
+      "path": "bench/qk-shared-storage-20260612/14b",
       "policy_cap_bytes": null,
       "policy_selected_bytes": 195379200,
       "policy_selected_primitive_entries": 6,
       "reasons": [
-        "generated beats explicit by 74.02%"
+        "generated beats explicit by 86.29%"
       ],
       "reference_mode": "explicit",
       "runtime_cap_bytes": -1,
-      "runtime_cap_used_bytes": 7918387200,
-      "runtime_storage_bytes": 7918387200,
+      "runtime_cap_used_bytes": 0,
+      "runtime_storage_bytes": 0,
       "status": "accept"
     },
     {
@@ -64,7 +64,7 @@
   ],
   "summary": {
     "accepted": 3,
-    "accepted_mean_gain": 0.4566029232404473,
+    "accepted_mean_gain": 0.4805189794085383,
     "experiments": 3,
     "statuses": {
       "accept": 3

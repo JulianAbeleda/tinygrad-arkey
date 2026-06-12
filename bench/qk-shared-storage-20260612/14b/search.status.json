@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf"
+  ],
+  "outputs": [
+    "bench/qk-shared-storage-20260612/14b/search.json"
+  ],
+  "reused": false,
+  "stage": "search",
+  "status": "passed",
+  "updated_at": "2026-06-12T13:19:28.967120"
+}

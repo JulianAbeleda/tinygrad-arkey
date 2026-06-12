@@ -1,0 +1,166 @@
+{
+  "commit": "aa2827350",
+  "created_at": "2026-06-12T13:03:02.463210",
+  "env": {
+    "QK_PRIMITIVE_STORAGE": "shared"
+  },
+  "kind": "qk_policy_pipeline_manifest",
+  "model": {
+    "mtime_ns": 1781138912862342896,
+    "path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "size_bytes": 5027783488
+  },
+  "repo": "/home/ubuntu/tinygrad-arkey",
+  "spec": {
+    "ab_tokens": 32,
+    "accept_gain": 0.03,
+    "benchmark": 128,
+    "candidate_timeout": 120,
+    "device": "AMD",
+    "iters": 2,
+    "level": 2,
+    "max_extra_repeats": 4,
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "policy_max_storage_mb": null,
+    "profile": "auto",
+    "profile_gain": 0.2,
+    "profile_tokens": 8,
+    "reference_mode": "explicit",
+    "repeats": 3,
+    "tie_band": 0.03
+  },
+  "stages": {
+    "ab": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/policy.json"
+      ],
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/output-ab.json"
+      ],
+      "reused": false,
+      "stage": "ab",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:17:30.402182"
+    },
+    "decide": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/decode-summary.json",
+        "bench/qk-shared-storage-20260612/8b/output-ab.json"
+      ],
+      "metadata": {
+        "status": "accept"
+      },
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/decision.json"
+      ],
+      "reused": false,
+      "stage": "decide",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:17:30.410438"
+    },
+    "decode": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/policy.json"
+      ],
+      "metadata": {
+        "explicit_logs": [
+          "bench/qk-shared-storage-20260612/8b/explicit-run1.log",
+          "bench/qk-shared-storage-20260612/8b/explicit-run2.log",
+          "bench/qk-shared-storage-20260612/8b/explicit-run3.log"
+        ],
+        "generated_logs": [
+          "bench/qk-shared-storage-20260612/8b/generated-run1.log",
+          "bench/qk-shared-storage-20260612/8b/generated-run2.log",
+          "bench/qk-shared-storage-20260612/8b/generated-run3.log",
+          "bench/qk-shared-storage-20260612/8b/generated-run4.log",
+          "bench/qk-shared-storage-20260612/8b/generated-run5.log"
+        ]
+      },
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/decode-summary.json",
+        "bench/qk-shared-storage-20260612/8b/decode-summary.md"
+      ],
+      "reused": false,
+      "stage": "decode",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:16:33.026957"
+    },
+    "parity": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/policy.json"
+      ],
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/policy-parity.json",
+        "bench/qk-shared-storage-20260612/8b/policy-parity.md"
+      ],
+      "reused": false,
+      "stage": "parity",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:11:47.877421"
+    },
+    "policy": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/search.json"
+      ],
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/policy.json"
+      ],
+      "reused": false,
+      "stage": "policy",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:11:47.566046"
+    },
+    "profile": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/policy.json"
+      ],
+      "metadata": {
+        "preliminary_gain": 0.03308708996966847,
+        "profile": "auto"
+      },
+      "outputs": [],
+      "reused": false,
+      "stage": "profile",
+      "status": "skipped",
+      "updated_at": "2026-06-12T13:17:30.406516"
+    },
+    "report": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/decision.json"
+      ],
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/README.md"
+      ],
+      "reused": false,
+      "stage": "report",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:17:30.414400"
+    },
+    "search": {
+      "inputs": [
+        "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+      ],
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/search.json"
+      ],
+      "reused": false,
+      "stage": "search",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:11:47.563836"
+    },
+    "semantic": {
+      "inputs": [
+        "bench/qk-shared-storage-20260612/8b/search.json"
+      ],
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/semantic-report.md"
+      ],
+      "reused": false,
+      "stage": "semantic",
+      "status": "passed",
+      "updated_at": "2026-06-12T13:11:47.593925"
+    }
+  },
+  "updated_at": "2026-06-12T13:17:30.415834",
+  "version": 1
+}

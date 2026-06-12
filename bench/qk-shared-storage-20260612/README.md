@@ -11,6 +11,8 @@ second persistent packed-weight sidecar.
 | model | run | result |
 |---|---|---|
 | Qwen3-8B-Q4_K_M | smoke + greedy A/B | shared storage installs `162` Q4 and `18` Q6 wrappers, reports `storage_bytes=0`, warms at about `57 tok/s`, and passes 32-token greedy A/B |
+| Qwen3-8B-Q4_K_M | full harness | accept: `52.07 tok/s` generated versus `50.41 tok/s` explicit, `3.31%` gain, greedy A/B match |
+| Qwen3-14B-Q4_K_M | full harness | accept: `40.55 tok/s` generated versus `21.77 tok/s` explicit, `86.29%` gain, `61.6%` of llama.cpp reference, greedy A/B match |
 | Qwen3-32B-Q4_K_M | smoke | uncapped generated policy installs `384` Q4 and `64` Q6 wrappers with `storage_bytes=0` and `shared_bytes=18,677,760,000` |
 | Qwen3-32B-Q4_K_M | full harness | accept: `17.23 tok/s` generated versus `11.15 tok/s` explicit, `54.56%` gain, `55.9%` of llama.cpp reference, greedy A/B match |
 
@@ -48,6 +50,22 @@ Artifacts:
 - `8b-shared-output-ab.log`
 - `decode-summary.md`
 - `decode-summary.json`
+
+## Full Harness Matrix
+
+Current matrix:
+
+| model | explicit tok/s | generated tok/s | gain | % llama | runtime storage |
+|---|---:|---:|---:|---:|---:|
+| 8B | `50.41` | `52.07` | `3.31%` | `51.5%` | `0 MB` |
+| 14B | `21.77` | `40.55` | `86.29%` | `61.6%` | `0 MB` |
+| 32B | `11.15` | `17.23` | `54.56%` | `55.9%` | `0 MB` |
+
+Compared with the prior sidecar rows, shared storage is a small 8B regression
+(`52.07` vs `53.49 tok/s`), a small 14B improvement (`40.55` vs
+`39.61 tok/s`), and required for the full uncapped 32B comparison. This supports
+shared storage as the recommended generated-policy storage mode, while keeping
+the sidecar path available for exact 8B peak-speed comparisons.
 
 ## 32B Harness
 
@@ -88,6 +106,7 @@ Shared storage resolves the 32B duplicate-sidecar OOM for this generated policy.
 It turns the 32B row from a capped generic-baseline comparison into a full
 explicit-reference comparison.
 
-This does not make shared storage the global default. It is still opt-in while
-the sidecar path remains the established fast path for 8B/14B. Future promotion
-should run full 8B and 14B shared-storage harness comparisons first.
+Shared storage is now validated across 8B, 14B, and 32B. It remains an explicit
+environment mode in runtime code, not a global default, because the 8B sidecar
+artifact is still slightly faster and `shared` is newer. For generated-policy
+runs where uniform memory behavior matters, use `QK_PRIMITIVE_STORAGE=shared`.

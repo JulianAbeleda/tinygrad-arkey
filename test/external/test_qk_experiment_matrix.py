@@ -74,8 +74,8 @@ class TestQKExperimentMatrix(unittest.TestCase):
       "bench/qk-shared-storage-20260612/matrix-summary.json",
       "bench/qk-shared-storage-20260612/matrix-summary.md",
       [
-        "bench/qk-harness-20260612/8b",
-        "bench/qk-harness-20260612/14b-rerun",
+        "bench/qk-shared-storage-20260612/8b",
+        "bench/qk-shared-storage-20260612/14b",
         "bench/qk-shared-storage-20260612/32b",
       ],
     )

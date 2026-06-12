@@ -3,8 +3,8 @@
 Date: 2026-06-12
 
 Status: memory-aware policy, runtime storage accounting, and opt-in shared
-primitive storage implemented. Shared storage is validated for the current 8B
-smoke and full 32B harness run; sidecar remains the default.
+primitive storage implemented. Shared storage is validated for full 8B, 14B,
+and 32B generated-policy harness runs; sidecar remains the runtime default.
 
 ## Problem
 
@@ -72,11 +72,13 @@ Relevant environment variables:
 Q4 persistent sidecar bytes can be removed, but the per-token copy cost destroys
 decode throughput.
 
-`shared` is the first real dedup path. It is not the default fast path because
-the sidecar path remains the established 8B/14B default, but it has passed a
-cheap 8B smoke/A-B and the full 32B pipeline. The key property is now measured:
-selected Q4_K/Q6_K tensors report `storage_bytes=0` and `shared_bytes` equal to
-the selected source ranges instead of allocating duplicate primitive sidecars.
+`shared` is the first real dedup path. It has passed full 8B, 14B, and 32B
+pipelines. The key property is now measured: selected Q4_K/Q6_K tensors report
+`storage_bytes=0` and `shared_bytes` equal to the selected source ranges instead
+of allocating duplicate primitive sidecars. It is recommended for generated
+policy runs when memory behavior or cross-model consistency matters, but it is
+not the code default because the older 8B sidecar artifact remains slightly
+faster and sidecar is still useful as a performance control.
 
 ## 32B Capped Sidecar Result
 
@@ -133,11 +135,18 @@ primitive policies without sidecar duplication.
 
 Artifact: `bench/qk-shared-storage-20260612/`.
 
-8B smoke:
+8B validation:
 
 | mode | Q4 wrappers | Q6 wrappers | storage bytes | shared bytes | result |
 |---|---:|---:|---:|---:|---|
-| generated shared policy | `162` | `18` | `0` | `3,970,695,168` | warm decode about `57 tok/s`, greedy A/B match |
+| generated shared smoke | `162` | `18` | `0` | `3,970,695,168` | warm decode about `57 tok/s`, greedy A/B match |
+| full shared harness | `162` | `18` | `0` | `3,970,695,168` | accept, `52.07` vs `50.41 tok/s`, `3.31%` gain |
+
+14B validation:
+
+| mode | Q4 wrappers | Q6 wrappers | storage bytes | shared bytes | result |
+|---|---:|---:|---:|---:|---|
+| full shared harness | `240` | `40` | `0` | `7,918,387,200` | accept, `40.55` vs `21.77 tok/s`, `86.29%` gain |
 
 32B smoke:
 
@@ -163,8 +172,8 @@ Decision:
 |---|---|---|---|---|
 | Qwen3-32B-Q4_K_M | shared explicit Q4/Q6 primitives | shared generated policy | accept, `17.23` vs `11.15 tok/s`, `54.56%` gain | `storage_bytes=0`, `shared_bytes=18,677,760,000` |
 
-The 32B row now passes parity, greedy output A/B, repeated decode, and profile.
-It is also included in
+The 8B, 14B, and 32B rows now pass parity, greedy output A/B, repeated decode,
+and required profile gates. They are included in
 `bench/qk-shared-storage-20260612/matrix-summary.md`, which is covered by the
 matrix reproducibility test.
 
@@ -222,9 +231,10 @@ storage:
      tensor through a typed view under `QK_PRIMITIVE_STORAGE=shared`.
    - This avoids making a second persistent device copy when the source storage
      is already resident and can be viewed safely.
-   - Current validation covers 8B smoke/A-B and full 32B harness. The remaining
-     promotion question is whether 8B/14B full harness runs stay at parity with
-     sidecar often enough to make shared the default for generated policies.
+   - Current validation covers full 8B, 14B, and 32B harnesses. The promotion
+     decision is recommendation-level, not runtime-default-level: use shared for
+     generated-policy runs when memory behavior matters; keep sidecar available
+     for the slightly faster 8B peak artifact.
 
 2. Lazy materialization
    - Install primitive metadata at model load, not necessarily all sidecar
@@ -254,11 +264,12 @@ storage:
 
 Ordered by architectural value:
 
-1. Keep shared storage opt-in while it remains newer than sidecar.
-2. If promoting it, run full 8B and 14B shared-storage harness comparisons
-   against the existing sidecar matrix first.
-3. Use the shared-storage 32B row as the third scaling point, not as a reason to
-   restart 32B-specific tuning.
+1. Keep shared storage explicit in the environment while it gets more soak.
+2. Treat shared as the recommended generated-policy storage mode for memory
+   behavior and cross-model consistency; keep sidecar as a control and 8B
+   peak-speed fallback.
+3. Use the shared-storage 8B/14B/32B matrix as the scaling point, not as a
+   reason to restart model-specific tuning.
 4. Do not resume kernel search from this track. The storage work is now
    infrastructure; use it to support higher-level loop/harness work.
 

@@ -6,12 +6,13 @@ Repo: `/home/ubuntu/tinygrad-arkey`
 
 Branch: `master`
 
-Implementation baseline: `5661baecf694b6e23ae33cc769ea86012e76f213`
-(`[runtime] add shared QK primitive storage`)
+Implementation baseline before shared-promotion rerun:
+`aa2827350b36ea477a20ad7fbff426e6db970345`
+(`[docs] add AMD decode session handoff`)
 
-Remote cache state after `git fetch --all --prune`:
+Remote cache state before the shared-promotion rerun:
 
-- `origin/master`: `5661baecf694b6e23ae33cc769ea86012e76f213`
+- `origin/master`: `aa2827350b36ea477a20ad7fbff426e6db970345`
 - `upstream/master`: `51100d2c5c283fd4522eb603b2c291f34d373b1d`
 
 ## Environment
@@ -36,16 +37,18 @@ Models present under `/home/ubuntu/models`:
 
 ## What Just Landed
 
-The storage track reached a clean stopping point.
+The storage track reached a clean stopping point, then the shared-storage
+promotion checks completed for 8B and 14B.
 
 `QK_PRIMITIVE_STORAGE=shared` now lets Q4_K/Q6_K primitive wrappers view the raw
 GGUF storage through typed buffer views instead of allocating duplicate sidecar
 storage. Sidecar remains the default; shared storage is an opt-in mode.
 
-Latest implementation commits before this handoff:
+Latest implementation commits before the shared-promotion rerun:
 
 - `0da79f8ac [docs] make QK harness matrix canonical`
 - `5661baecf [runtime] add shared QK primitive storage`
+- `aa2827350 [docs] add AMD decode session handoff`
 
 Key implementation files:
 
@@ -63,13 +66,18 @@ Key implementation files:
 Use `bench/qk-shared-storage-20260612/matrix-summary.md` as the current
 8B/14B/32B source of truth.
 
-Current matrix:
+Current fully shared-storage matrix:
 
 | model | reference | generated | gain | note |
 |---|---:|---:|---:|---|
-| 8B | `49.35 tok/s` | `53.49 tok/s` | `8.41%` | sidecar generated policy, A/B pass |
-| 14B | `22.76 tok/s` | `39.61 tok/s` | `74.02%` | sidecar generated policy, A/B pass |
+| 8B | `50.41 tok/s` | `52.07 tok/s` | `3.31%` | shared storage, A/B pass; sidecar peak was `53.49 tok/s` |
+| 14B | `21.77 tok/s` | `40.55 tok/s` | `86.29%` | shared storage, A/B pass, profile complete |
 | 32B | `11.15 tok/s` | `17.23 tok/s` | `54.56%` | shared storage, explicit reference, A/B pass |
+
+Decision: shared storage is validated across 8B, 14B, and 32B and should be the
+recommended explicit generated-policy storage mode. Do not flip the runtime
+default yet; sidecar remains useful as a control and is still slightly faster on
+the old 8B peak artifact.
 
 32B shared generated runtime storage:
 
@@ -78,13 +86,23 @@ Current matrix:
 - `shared_bytes=18,677,760,000`
 - generated percent of llama.cpp reference: `55.9%`
 
-8B shared smoke:
+8B shared validation:
 
 - installed wrappers: `180`
 - `storage_bytes=0`
 - `shared_bytes=3,970,695,168`
 - warm decode about `57 tok/s`
+- full harness generated `52.07 tok/s` vs explicit `50.41 tok/s`
 - greedy A/B `match=True`
+
+14B shared validation:
+
+- installed generated wrappers: `280`
+- `storage_bytes=0`
+- `shared_bytes=7,918,387,200`
+- full harness generated `40.55 tok/s` vs explicit `21.77 tok/s`
+- greedy A/B `match=True`
+- profile complete
 
 ## Source Of Truth
 
@@ -100,6 +118,8 @@ Current artifacts:
 
 - `bench/qk-shared-storage-20260612/README.md`
 - `bench/qk-shared-storage-20260612/matrix-summary.md`
+- `bench/qk-shared-storage-20260612/8b/README.md`
+- `bench/qk-shared-storage-20260612/14b/README.md`
 - `bench/qk-shared-storage-20260612/32b/README.md`
 - `bench/qk-shared-storage-20260612/32b/decision.json`
 - `bench/qk-shared-storage-20260612/32b/profile-report.md`
@@ -147,8 +167,8 @@ Reproduce the current matrix:
 ```sh
 cd /home/ubuntu/tinygrad-arkey
 PYTHONPATH=. .venv/bin/python extra/qk_experiment_matrix.py \
-  bench/qk-harness-20260612/8b \
-  bench/qk-harness-20260612/14b-rerun \
+  bench/qk-shared-storage-20260612/8b \
+  bench/qk-shared-storage-20260612/14b \
   bench/qk-shared-storage-20260612/32b \
   --json bench/qk-shared-storage-20260612/matrix-summary.json \
   --md bench/qk-shared-storage-20260612/matrix-summary.md
@@ -173,8 +193,9 @@ PYTHONPATH=. .venv/bin/python -m unittest \
 - Do not chase 32B by hand. If 32B is discussed, use the harness matrix and
   shared-storage artifacts.
 - Do not run BEAM or risky schedule search on Mac/TinyGPU/remote paths.
-- Do not make `QK_GENERATED_POLICY` or `QK_PRIMITIVE_STORAGE=shared` global
-  defaults without full 8B/14B shared-storage harness confirmation.
+- Do not make `QK_GENERATED_POLICY` a global default. Do not flip
+  `QK_PRIMITIVE_STORAGE=shared` to the runtime default without non-campaign
+  soak; keep it explicit for now.
 
 ## Next Decision
 
@@ -183,14 +204,13 @@ inference result and a third scaling point.
 
 When resuming, choose one track explicitly:
 
-1. Promote shared storage: run full 8B and 14B shared-storage harness comparisons
-   against the current sidecar rows, then decide whether shared should remain
-   32B-only opt-in or become the generated-policy default.
-2. Use the inference win: validate a smallest-real training/eval stack using the
+1. Use the inference win: validate a smallest-real training/eval stack using the
    faster decode path.
-3. Compiler research: pursue the Ansor-style semantic packed-layout/codegen
+2. Compiler research: pursue the Ansor-style semantic packed-layout/codegen
    direction. Do not confuse this with more hand-written primitive tuning.
+3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
+   and only consider making it the runtime default after more non-campaign use.
 
 Recommended next track if the goal is practical progress: training/eval stack.
-Recommended next track if the goal is architecture quality: full 8B/14B shared
-storage harness before any promotion.
+Recommended next track if the goal is architecture quality: Ansor-style semantic
+packed-layout/codegen research.

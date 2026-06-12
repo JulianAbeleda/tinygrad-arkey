@@ -1,0 +1,27 @@
+{
+  "inputs": [
+    "bench/qk-shared-storage-20260612/8b/policy.json"
+  ],
+  "metadata": {
+    "explicit_logs": [
+      "bench/qk-shared-storage-20260612/8b/explicit-run1.log",
+      "bench/qk-shared-storage-20260612/8b/explicit-run2.log",
+      "bench/qk-shared-storage-20260612/8b/explicit-run3.log"
+    ],
+    "generated_logs": [
+      "bench/qk-shared-storage-20260612/8b/generated-run1.log",
+      "bench/qk-shared-storage-20260612/8b/generated-run2.log",
+      "bench/qk-shared-storage-20260612/8b/generated-run3.log",
+      "bench/qk-shared-storage-20260612/8b/generated-run4.log",
+      "bench/qk-shared-storage-20260612/8b/generated-run5.log"
+    ]
+  },
+  "outputs": [
+    "bench/qk-shared-storage-20260612/8b/decode-summary.json",
+    "bench/qk-shared-storage-20260612/8b/decode-summary.md"
+  ],
+  "reused": false,
+  "stage": "decode",
+  "status": "passed",
+  "updated_at": "2026-06-12T13:16:33.026957"
+}

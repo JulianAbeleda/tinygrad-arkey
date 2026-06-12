@@ -82,7 +82,7 @@ JSON file containing an `experiments` list. It emits:
 - model, status, reference mode, speed, gain, percent of llama.cpp reference;
 - policy and runtime storage MB.
 
-The committed harness matrices, including the shared-storage matrix in
+The committed harness matrices, including the fully shared-storage matrix in
 `bench/qk-shared-storage-20260612/`, are covered by
 `test/external/test_qk_experiment_matrix.py`, which regenerates them from the
 committed `decision.json` directories and compares both JSON and Markdown
