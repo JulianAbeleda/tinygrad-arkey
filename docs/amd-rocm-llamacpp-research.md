@@ -1711,3 +1711,44 @@ LOCAL:0:64`). The useful result is negative but valuable: automated knob search
 found microbench wins, and full-decode gates showed they are not production
 wins. Next optimization should be a real primitive-v2 design change, not just
 retuning the current primitive knobs.
+
+## Vdot premise check: roofline + llama.cpp MMVQ read (2026-06-12)
+
+Executed the cheap gate before any renderer/core packed-dot lowering. Artifacts
+are in `bench/vdot-premise-20260612/`.
+
+Representative v1 measurements:
+
+| model | format | tensor | policy | quant GB/s | logical TFLOP/s | memory peak |
+|---|---|---|---|---:|---:|---:|
+| 8B | Q4_K | `blk.0.ffn_gate.weight` | `parts=1 LOCAL:0:64` | `421.10` | `1.50` | `43.9%` |
+| 8B | Q4_K | `blk.4.ffn_down.weight` | `parts=4 LOCAL:0:32` | `270.56` | `0.96` | `28.2%` |
+| 8B | Q6_K | `blk.0.ffn_down.weight` | `parts=1 LOCAL:0:64` | `131.63` | `0.32` | `13.7%` |
+| 14B | Q4_K | `blk.0.ffn_gate.weight` | `parts=1 LOCAL:0:64` | `360.89` | `1.28` | `37.6%` |
+| 14B | Q6_K | `blk.0.ffn_down.weight` | `parts=1 LOCAL:0:64` | `154.55` | `0.38` | `16.1%` |
+
+The accepted v1 kernels are memory/schedule-bound by roofline. Their logical
+dot intensity is only about `2.4-3.6` ops per packed quant byte, far below the
+RX 7900 XTX FP32 ridge point of about `64` ops/byte. Their logical dot
+throughput is also only `0.3-1.5` TFLOP/s, so the remaining gap is not explained
+by a saturated dot/compute pipeline.
+
+`DEBUG=4` confirms the accepted v1 kernels do not emit `v_dot4`/`dp4a`; they use
+packed Q4/Q6 loads, half activation loads, bit/nibble extraction, and scalar
+fp32 accumulation. That fact alone does not justify packed-dot lowering, because
+the kernels are not compute-bound.
+
+llama.cpp was read at pinned commit
+`ba1df050f3dc7827fc64936b2e24fe499c9f74eb`:
+
+- MMVQ maps Q4_K/Q6_K to q8_1 vecdot helpers.
+- The helpers call `ggml_cuda_dp4a`; on HIP RDNA3 this maps to
+  `__builtin_amdgcn_sudot4(...)`.
+- The activation side is staged into q8_1 before MMVQ.
+- RDNA3 scheduling is type-specific rather than a generic "more warps" rule.
+
+Verdict: llama.cpp agrees that packed dot is part of a fast design, but it is
+part of a larger representation/schedule package. Do not start isolated
+renderer/core `v_dot4` lowering as the next default task. If compiler research
+continues, target semantic packed-layout plus schedule/codegen generation; if
+local inference speed is the goal, keep the consolidated Q4/Q6 v1 path.

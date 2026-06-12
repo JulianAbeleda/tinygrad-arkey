@@ -824,5 +824,42 @@ Generated-search result on Qwen3-8B:
 Verdict: the previous serial-schedule failure is fixed, and correctness passes,
 but `CUSTOMI` packed dot still loses to the current primitive path. This rejects
 the `extra/`-only q8_1 vdot path. Do not add more q8 arithmetic variants at
-this level. The only justified q8 continuation is renderer/core lowering for a
-semantic packed-dot pattern, followed by the same generated-search gate.
+this level. At this point, the only plausible q8 continuation looked like a
+renderer/core semantic packed-dot lowering followed by the same generated-search
+gate; Step 26 below checks whether that expensive continuation is actually
+justified.
+
+## Step 26 vdot premise check (2026-06-12)
+
+The next gate checked whether the accepted v1 path is compute-bound enough to
+justify the expensive renderer/core packed-dot lowering.
+
+Measured artifacts:
+
+- `bench/vdot-premise-20260612/v1-roofline.md`;
+- `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`;
+- DEBUG=2 and DEBUG=4 logs for representative 8B and 14B Q4/Q6 shapes.
+
+Result: v1 is memory/schedule-bound, not compute-bound. The dominant Q4/Q6
+kernels have logical dot intensity of only about `2.4-3.6` ops per packed quant
+byte, far below the RX 7900 XTX FP32 ridge of about `64` ops/byte. They also
+reach only about `0.3-1.5` logical TFLOP/s, so the remaining gap is not a
+saturated dot pipeline waiting for a single packed-dot instruction.
+
+llama.cpp comparison at pinned commit
+`ba1df050f3dc7827fc64936b2e24fe499c9f74eb`:
+
+- MMVQ maps Q4_K/Q6_K to q8_1 vecdot helpers.
+- The helpers use `ggml_cuda_dp4a`; on HIP RDNA3 this maps to
+  `__builtin_amdgcn_sudot4(...)`.
+- The activation side is staged into q8_1 before MMVQ.
+- RDNA3 scheduling is type-specific: Q6_K single-column decode gets two warps,
+  while Q4_K falls back to the default path.
+
+Verdict: llama.cpp confirms packed dot is part of a fast quant-decode design,
+but not as an isolated peephole. It is coupled to q8_1 staging, packed lane
+layout, correction terms, and architecture-specific schedule choices. Therefore
+do not start isolated renderer/core `v_dot4` lowering as the next default task.
+If compiler research continues, the target is semantic packed-layout plus
+schedule/codegen generation. If local inference speed is the goal, keep the
+consolidated Q4/Q6 v1 path.

@@ -39,8 +39,10 @@ unless compiler research is the point.
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
 | Serial vdot candidate | Correct but rejected. It serializes the K loop per row. | Serial custom-C integration is the wrong shape. |
 | Parallel vdot candidate | Correct and scheduled, but still rejected on speed. | `Ops.CUSTOMI` inline asm is not a good enough integration layer. |
+| v1 roofline premise check | Accepted v1 Q4/Q6 kernels are memory/schedule-bound, not compute-bound. | Do not start isolated packed-dot renderer/core lowering as the next default task. |
+| llama.cpp MMVQ comparison | llama.cpp uses q8_1 staging plus packed dot plus RDNA-specific scheduling. | Its advantage is a whole representation/schedule package, not proof that `v_dot4` alone closes the gap. |
 | Further q8 `extra/` variants | Stop. | More arithmetic variants repeat a rejected level of abstraction. |
-| Next q8 path | Renderer/core lowering for a semantic packed-dot pattern. | Only justified if continuing compiler research. |
+| Next q8 path | Semantic packed-layout plus schedule/codegen generation. | Only justified if continuing compiler research; do not build an isolated `v_dot4` peephole first. |
 
 ## Current Hypothesis
 
@@ -55,12 +57,17 @@ It is a representation/lowering boundary:
 5. The parallel vdot rejection shows that merely inserting inline asm through
    `Ops.CUSTOMI` is not enough; the compiler/searcher needs a semantic packed-dot
    lowering it can optimize around.
+6. The v1 roofline check shows the accepted Q4/Q6 kernels are memory/schedule-
+   bound. Their logical dot intensity is far below the RX 7900 XTX FP32 ridge,
+   and their logical dot throughput is nowhere near peak compute. That makes
+   isolated packed-dot lowering a weak next bet.
 
 So the machine-first research hypothesis is:
 
 > Packed quant decode can move further toward tinygrad's search philosophy only
-> if Q4_K/Q6_K layouts and packed-dot operations become compiler-visible
-> semantic objects, not opaque hand-written kernels or inline-asm statements.
+> if Q4_K/Q6_K layouts, q8_1 staging, packed-dot operations, and RDNA scheduling
+> choices become compiler-visible semantic objects, not opaque hand-written
+> kernels or inline-asm statements.
 
 That is an Ansor-style direction. It is a different goal from "make my local
 Qwen faster this week."
@@ -73,7 +80,7 @@ Choose the next step by goal:
 |---|---|---|
 | Reliable local Qwen inference | Consolidate | Keep explicit Q4/Q6 flags, document run commands, and stop decode optimization. |
 | More speed on this one GPU | v2 template grind | Write a richer hand template and sweep it, accepting lower ROI. |
-| Honor tinygrad's search thesis | Compiler research | Build renderer/core semantic packed-dot lowering and feed it through the generated-search harness. |
+| Honor tinygrad's search thesis | Compiler research | Build semantic packed-layout and schedule/codegen generation, then feed it through the generated-search harness. |
 | Use the inference win | Training | Validate the smallest real QLoRA/SFT or RLVR stack using the faster decode path for rollouts/eval. |
 
 Default recommendation remains consolidation or training. The compiler path is
@@ -81,8 +88,11 @@ worth doing only if the research itself is the goal.
 
 ## Stop Rules
 
-- Do not add another q8_1 arithmetic candidate in `extra/` unless it first
-  changes the integration layer to renderer/core semantic lowering.
+- Do not add another q8_1 arithmetic candidate in `extra/` unless it is part of
+  a broader semantic layout/schedule/codegen rewrite.
+- Do not start isolated renderer/core packed-dot lowering unless a future
+  roofline/counter profile overturns the memory/schedule-bound verdict, or the
+  packed-dot work is part of a broader semantic layout/schedule rewrite.
 - Do not make `QK_GENERATED_POLICY` default until it matches or beats explicit
   primitive flags in repeated full-decode runs.
 - Do not run BEAM or risky schedule search on Mac/TinyGPU/remote paths.
@@ -97,3 +107,5 @@ worth doing only if the research itself is the goal.
 - Optional v2 template scope: `docs/amd-decode-primitive-v2-design.md`
 - Measurement log and detailed verdicts: `docs/amd-rocm-llamacpp-research.md`
 - Current generated-search artifacts: `bench/qk-ansor-20260612/README.md`
+- Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
+- llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

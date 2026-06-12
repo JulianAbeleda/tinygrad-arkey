@@ -183,9 +183,31 @@ Update after the parallel candidate: the schedule issue is fixed, but the
 This is a useful negative result. Packed-dot is no longer blocked by a serial
 schedule, but the current inline-asm helper still loses, likely because the
 compiler cannot see through the statement expression and because the q8 bias
-packing is still a separate kernel. The next q8_1 move, if any, is renderer or
-core lowering for a semantic packed-dot pattern. Another `extra/` arithmetic
-variant would be repeating the same rejected integration level.
+packing is still a separate kernel. At this point another `extra/` arithmetic
+variant would be repeating the same rejected integration level; the premise
+check below narrows any continuation to a broader layout/schedule/codegen
+rewrite, not a standalone packed-dot peephole.
+
+Update after the v1 roofline premise check: do not treat renderer/core packed
+dot as the next default task.
+
+- The accepted v1 Q4/Q6 kernels are memory/schedule-bound by roofline. On the
+  measured dominant shapes, logical dot intensity is about `2.4-3.6` ops per
+  packed quant byte, far below the RX 7900 XTX FP32 ridge point of about
+  `64` ops/byte.
+- The accepted v1 kernels reach only about `0.3-1.5` logical TFLOP/s while using
+  about `14-44%` of peak memory bandwidth, so the remaining gap is not explained
+  by a saturated dot/compute pipeline.
+- llama.cpp's MMVQ path does use packed dot on RDNA3: `ggml_cuda_dp4a` lowers
+  through `__builtin_amdgcn_sudot4(...)`. But that path also stages activations
+  to q8_1, uses packed layout-specific lane extraction and correction terms, and
+  applies RDNA-specific scheduling choices.
+
+Revised conclusion: packed dot is part of the known-fast design, but isolated
+`v_dot4` lowering is not the next justified tinygrad change. If this thread
+continues as compiler research, the candidate should be generated as a semantic
+packed-layout plus schedule/codegen package. If the goal is local Qwen speed,
+the consolidated v1 path remains the stopping point.
 
 Renderer/core scope:
 
@@ -204,12 +226,13 @@ Renderer/core scope:
   the extra-only candidate proves correctness and speed, because otherwise it
   turns into another hand-authored template knob without evidence.
 
-So the scoped order is now: keep the AMD compiler smoke as the instruction
+So the old scoped order was: keep the AMD compiler smoke as the instruction
 proof -> replace the serial custom-C vdot candidate with a parallel-schedule
 vdot helper -> generated q8 candidate rerun -> optional AMD renderer matcher ->
-optional core op or search action. This preserves the Ansor direction: the
-candidate is still generated from quant GEMV semantics, while the renderer only
-supplies a missing machine instruction capability.
+optional core op or search action. The premise check changes that order. The
+instruction proof and parallel helper are complete and negative as speed paths;
+the next research step is broader semantic layout/schedule generation, not an
+isolated AMD renderer matcher.
 
 ## Core Integration Decision
 

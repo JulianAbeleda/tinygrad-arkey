@@ -1,0 +1,1426 @@
+model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}
+variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random
+primitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']
+scheduled     2 kernels in    19.56 ms | CACHE MISS 2ec3118d |      41 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:101
+loading libc from /lib/x86_64-linux-gnu/libc.so.6
+opened device DISK:/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf from pid:48034
+*** DISK:/h    1 view   27.00 MB @ 932517696                    arg  2 mem   0.00 GB tm     10.83ms/    10.83ms (      0 GFLOPS    0|0      GB/s)
+loading iokit failed: not found on system
+loading corefoundation failed: not found on system
+loading libusb from /lib/x86_64-linux-gnu/libusb-1.0.so.0
+AMDDevice: opening 0 with target (11, 0, 0) arch gfx1100
+opened device AMD from pid:48034
+*** AMD        2 copy   27.00 MB,     AMD <- DISK:/h            arg  2 mem   0.03 GB tm    113.91ms/   124.73ms (      0 GFLOPS    0|0      GB/s)
+scheduled     1 kernels in    60.66 ms | CACHE MISS 3bf95106 |     627 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:15
+loading comgr from /opt/rocm/lib/libamd_comgr.so
+loading comgr_3 from /opt/rocm/lib/libamd_comgr.so
+loading llvm from /lib/x86_64-linux-gnu/libLLVM-20.so
+upcasting masked axis : 1
+upcasting masked axis : 2
+more upcast axis : [(2, 2, 1, 4)]
+E_12288_16_8_2_4_4        opts: (Opt(op=OptOps.UPCAST, axis=2, arg=0), Opt(op=OptOps.UPCAST, axis=1, arg=0), Opt(op=OptOps.UPCAST, axis=1, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=16), Opt(op=OptOps.LOCAL, axis=1, arg=8))
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef float float4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) float4 make_float4(float x, float y, float z, float w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 128))) E_12288_16_8_2_4_4(float* data0_50331648, unsigned char* data1_28311552) {
+  int gidx0 = __ockl_get_group_id(0); /* 12288 */
+  int lidx0 = __ockl_get_local_id(0); /* 16 */
+  int lidx1 = __ockl_get_local_id(1); /* 8 */
+  int alu0 = ((gidx0*2304)+(lidx0*144));
+  int alu1 = (lidx1<<2);
+  int alu2 = (alu0+alu1);
+  unsigned char val0 = (*(data1_28311552+(alu2+16)));
+  unsigned char val1 = (*(data1_28311552+(alu2+17)));
+  unsigned char val2 = (*(data1_28311552+(alu2+18)));
+  unsigned char val3 = (*(data1_28311552+(alu2+19)));
+  unsigned char val4 = (*(data1_28311552+(alu2+48)));
+  unsigned char val5 = (*(data1_28311552+(alu2+49)));
+  unsigned char val6 = (*(data1_28311552+(alu2+50)));
+  unsigned char val7 = (*(data1_28311552+(alu2+51)));
+  unsigned char val8 = (*(data1_28311552+(alu2+80)));
+  unsigned char val9 = (*(data1_28311552+(alu2+81)));
+  unsigned char val10 = (*(data1_28311552+(alu2+82)));
+  unsigned char val11 = (*(data1_28311552+(alu2+83)));
+  unsigned char val12 = (*(data1_28311552+(alu2+112)));
+  unsigned char val13 = (*(data1_28311552+(alu2+113)));
+  unsigned char val14 = (*(data1_28311552+(alu2+114)));
+  unsigned char val15 = (*(data1_28311552+(alu2+115)));
+  unsigned char val16 = (*(data1_28311552+(alu0+1)));
+  unsigned char val17 = (*(data1_28311552+(alu0+2)));
+  unsigned char val18 = (*(data1_28311552+(alu0+3)));
+  unsigned char val19 = (*(data1_28311552+(alu0+4)));
+  unsigned char val20 = (*(data1_28311552+(alu0+5)));
+  unsigned char val21 = (*(data1_28311552+(alu0+6)));
+  unsigned char val22 = (*(data1_28311552+(alu0+7)));
+  unsigned char val23 = (*(data1_28311552+(alu0+8)));
+  unsigned char val24 = (*(data1_28311552+(alu0+9)));
+  unsigned char val25 = (*(data1_28311552+(alu0+10)));
+  unsigned char val26 = (*(data1_28311552+(alu0+11)));
+  unsigned char val27 = (*(data1_28311552+(alu0+12)));
+  unsigned char val28 = (*(data1_28311552+(alu0+13)));
+  unsigned char val29 = (*(data1_28311552+(alu0+14)));
+  unsigned char val30 = (*(data1_28311552+(alu0+15)));
+  unsigned char val31 = (*(data1_28311552+alu0));
+  float cast0 = ((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val17))<<((unsigned short)(0u)))+(((unsigned short)(val18))<<((unsigned short)(8u))))))));
+  float cast1 = ((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val31))<<((unsigned short)(0u)))+(((unsigned short)(val16))<<((unsigned short)(8u))))))));
+  float alu3 = (cast0*((float)(((val27>>((unsigned char)(4u)))|((val23>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu4 = (cast1*((float)(((val27&((unsigned char)(15u)))|((val19>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu5 = (cast0*((float)(((val28>>((unsigned char)(4u)))|((val24>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu6 = (cast1*((float)(((val28&((unsigned char)(15u)))|((val20>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu7 = (cast0*((float)(((val29>>((unsigned char)(4u)))|((val25>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu8 = (cast1*((float)(((val29&((unsigned char)(15u)))|((val21>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu9 = (cast0*((float)(((val30>>((unsigned char)(4u)))|((val26>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu10 = (cast1*((float)(((val30&((unsigned char)(15u)))|((val22>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu11 = (cast0*((float)((val23&((unsigned char)(63u))))));
+  float alu12 = (cast1*((float)((val19&((unsigned char)(63u))))));
+  float alu13 = (cast0*((float)((val24&((unsigned char)(63u))))));
+  float alu14 = (cast1*((float)((val20&((unsigned char)(63u))))));
+  float alu15 = (cast0*((float)((val25&((unsigned char)(63u))))));
+  float alu16 = (cast1*((float)((val21&((unsigned char)(63u))))));
+  float alu17 = (cast0*((float)((val26&((unsigned char)(63u))))));
+  float alu18 = (cast1*((float)((val22&((unsigned char)(63u))))));
+  int alu19 = ((gidx0<<12)+(lidx0<<8)+alu1);
+  *((float4*)((data0_50331648+(alu19+32)))) = make_float4(((alu14*((float)((val0>>((unsigned char)(4u))))))-alu13),((alu14*((float)((val1>>((unsigned char)(4u))))))-alu13),((alu14*((float)((val2>>((unsigned char)(4u))))))-alu13),((alu14*((float)((val3>>((unsigned char)(4u))))))-alu13));
+  *((float4*)((data0_50331648+(alu19+64)))) = make_float4(((alu16*((float)((val4&((unsigned char)(15u))))))-alu15),((alu16*((float)((val5&((unsigned char)(15u))))))-alu15),((alu16*((float)((val6&((unsigned char)(15u))))))-alu15),((alu16*((float)((val7&((unsigned char)(15u))))))-alu15));
+  *((float4*)((data0_50331648+(alu19+96)))) = make_float4(((alu18*((float)((val4>>((unsigned char)(4u))))))-alu17),((alu18*((float)((val5>>((unsigned char)(4u))))))-alu17),((alu18*((float)((val6>>((unsigned char)(4u))))))-alu17),((alu18*((float)((val7>>((unsigned char)(4u))))))-alu17));
+  *((float4*)((data0_50331648+(alu19+128)))) = make_float4(((alu4*((float)((val8&((unsigned char)(15u))))))-alu3),((alu4*((float)((val9&((unsigned char)(15u))))))-alu3),((alu4*((float)((val10&((unsigned char)(15u))))))-alu3),((alu4*((float)((val11&((unsigned char)(15u))))))-alu3));
+  *((float4*)((data0_50331648+(alu19+160)))) = make_float4(((alu6*((float)((val8>>((unsigned char)(4u))))))-alu5),((alu6*((float)((val9>>((unsigned char)(4u))))))-alu5),((alu6*((float)((val10>>((unsigned char)(4u))))))-alu5),((alu6*((float)((val11>>((unsigned char)(4u))))))-alu5));
+  *((float4*)((data0_50331648+(alu19+192)))) = make_float4(((alu8*((float)((val12&((unsigned char)(15u))))))-alu7),((alu8*((float)((val13&((unsigned char)(15u))))))-alu7),((alu8*((float)((val14&((unsigned char)(15u))))))-alu7),((alu8*((float)((val15&((unsigned char)(15u))))))-alu7));
+  *((float4*)((data0_50331648+(alu19+224)))) = make_float4(((alu10*((float)((val12>>((unsigned char)(4u))))))-alu9),((alu10*((float)((val13>>((unsigned char)(4u))))))-alu9),((alu10*((float)((val14>>((unsigned char)(4u))))))-alu9),((alu10*((float)((val15>>((unsigned char)(4u))))))-alu9));
+  *((float4*)((data0_50331648+alu19))) = make_float4(((alu12*((float)((val0&((unsigned char)(15u))))))-alu11),((alu12*((float)((val1&((unsigned char)(15u))))))-alu11),((alu12*((float)((val2&((unsigned char)(15u))))))-alu11),((alu12*((float)((val3&((unsigned char)(15u))))))-alu11));
+}
+*** AMD        3 E_12288_16_8_2_4_4                             arg  2 mem   0.23 GB tm    368.00us/   125.10ms (    675 GFLOPS  624|684    GB/s)
+scheduled     1 kernels in     1.30 ms |  cache hit 3bf95106 |    1131 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:16
+*** AMD        4 E_12288_16_8_2_4_4                             arg  2 mem   0.43 GB tm    364.80us/   125.47ms (    681 GFLOPS  629|690    GB/s)
+split 256: (12288, 4096) -> (48, 4096, 256) -> (1, 1)
+split 48: (48, 4096, 256) -> (1, 4096, 256, 48) -> (1, 1, 256)
+scheduled     3 kernels in    19.82 ms | CACHE MISS 33872de5 |    1111 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:18
+more upcast axis : [(2, 8193, 0, 3), (2, 8193, 0, 4)]
+r_128_32_3_1024_4         opts: (Opt(op=OptOps.UPCAST, axis=0, arg=3), Opt(op=OptOps.UNROLL, axis=0, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=32))
+typedef long unsigned int size_t;
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef bool bool3 __attribute__((ext_vector_type(3)));
+static inline __attribute__((device)) bool3 make_bool3(bool x, bool y, bool z) { return { x, y, z }; }
+typedef float float4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) float4 make_float4(float x, float y, float z, float w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) r_128_32_3_1024_4(bool* data0_12288, float* data1_50331648, float* data2_50331648) {
+  int gidx0 = __ockl_get_group_id(0); /* 128 */
+  int lidx0 = __ockl_get_local_id(0); /* 32 */
+  bool buf0[3];
+  (*(buf0+0)) = 1;
+  (*(buf0+1)) = 1;
+  (*(buf0+2)) = 1;
+  for (int Ridx0 = 0; Ridx0 < 1024; Ridx0++) {
+    int alu3 = ((gidx0*393216)+(lidx0*12288)+(Ridx0<<2));
+    int alu4 = (alu3+4096);
+    float4 val0 = (*((float4*)((data1_50331648+alu4))));
+    int alu5 = (alu3+8192);
+    float4 val1 = (*((float4*)((data1_50331648+alu5))));
+    float4 val2 = (*((float4*)((data1_50331648+alu3))));
+    float4 val3 = (*((float4*)((data2_50331648+alu4))));
+    float4 val4 = (*((float4*)((data2_50331648+alu5))));
+    float4 val5 = (*((float4*)((data2_50331648+alu3))));
+    (*(buf0+0)) = ((*(buf0+0))&(val2.x==val5.x)&(val2.y==val5.y)&(val2.z==val5.z)&(val2.w==val5.w));
+    (*(buf0+1)) = ((*(buf0+1))&(val0.x==val3.x)&(val0.y==val3.y)&(val0.z==val3.z)&(val0.w==val3.w));
+    (*(buf0+2)) = ((*(buf0+2))&(val1.x==val4.x)&(val1.y==val4.y)&(val1.z==val4.z)&(val1.w==val4.w));
+  }
+  int alu10 = ((gidx0*96)+(lidx0*3));
+  *(data0_12288+(alu10+1)) = (*(buf0+1));
+  *(data0_12288+(alu10+2)) = (*(buf0+2));
+  *(data0_12288+alu10) = (*(buf0+0));
+}
+r_256_16_3                opts: (Opt(op=OptOps.GROUPTOP, axis=0, arg=16),)
+typedef long unsigned int size_t;
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 16))) r_256_16_3(bool* data0_256, bool* data1_12288) {
+  int gidx0 = __ockl_get_group_id(0); /* 256 */
+  int lidx0 = __ockl_get_local_id(0); /* 16 */
+  bool buf0[1];
+  (*(buf0+0)) = 1;
+  for (int Ridx0 = 0; Ridx0 < 3; Ridx0++) {
+    bool val0 = (*(data1_12288+((lidx0*3)+Ridx0+(gidx0*48))));
+    (*(buf0+0)) = ((*(buf0+0))&val0);
+  }
+  __attribute__((shared, aligned(16)))bool buf1[16];
+  bool buf2[1];
+  *(buf1+lidx0) = (*(buf0+0));
+  __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup");__builtin_amdgcn_s_barrier();__builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup");
+  (*(buf2+0)) = 1;
+  for (int Ridx102 = 0; Ridx102 < 16; Ridx102++) {
+    bool val1 = (*(buf1+Ridx102));
+    (*(buf2+0)) = ((*(buf2+0))&val1);
+  }
+  if ((lidx0==0)) {
+    *(data0_256+gidx0) = (*(buf2+0));
+  }
+}
+r_16_16                   opts: (Opt(op=OptOps.GROUPTOP, axis=0, arg=16),)
+typedef long unsigned int size_t;
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 16))) r_16_16(bool* data0_1, bool* data1_256) {
+  int lidx0 = __ockl_get_local_id(0); /* 16 */
+  bool buf0[1];
+  (*(buf0+0)) = 1;
+  for (int Ridx0 = 0; Ridx0 < 16; Ridx0++) {
+    bool val0 = (*(data1_256+((lidx0<<4)+Ridx0)));
+    (*(buf0+0)) = ((*(buf0+0))&val0);
+  }
+  __attribute__((shared, aligned(16)))bool buf1[16];
+  bool buf2[1];
+  *(buf1+lidx0) = (*(buf0+0));
+  __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup");__builtin_amdgcn_s_barrier();__builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup");
+  (*(buf2+0)) = 1;
+  for (int Ridx101 = 0; Ridx101 < 16; Ridx101++) {
+    bool val1 = (*(buf1+Ridx101));
+    (*(buf2+0)) = ((*(buf2+0))&val1);
+  }
+  if ((lidx0==0)) {
+    *(data0_1+0) = (*(buf2+0));
+  }
+}
+*** AMD        5 r_128_32_3_1024_4                              arg  3 mem   0.43 GB tm   1613.20us/   127.08ms (     62 GFLOPS  250|250    GB/s)
+*** AMD        6 r_256_16_3                                     arg  2 mem   0.43 GB tm      6.52us/   127.09ms (     12 GFLOPS    2|13     GB/s)
+*** AMD        7 r_16_16                                        arg  2 mem   0.43 GB tm      7.48us/   127.09ms (      0 GFLOPS    0|0      GB/s)
+correctness: PASS blk.0.ffn_gate.weight
+scheduled     1 kernels in    14.95 ms | CACHE MISS a68b7bd7 |    1499 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:106
+upcasting masked axis : 1
+upcasting masked axis : 2
+more upcast axis : [(2, 2, 1, 4)]
+E_12288_16_8_2_4_4n1      opts: (Opt(op=OptOps.UPCAST, axis=2, arg=0), Opt(op=OptOps.UPCAST, axis=1, arg=0), Opt(op=OptOps.UPCAST, axis=1, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=16), Opt(op=OptOps.LOCAL, axis=1, arg=8))
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef half half4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) half4 make_half4(half x, half y, half z, half w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 128))) E_12288_16_8_2_4_4n1(half* data0_50331648, unsigned char* data1_28311552) {
+  int gidx0 = __ockl_get_group_id(0); /* 12288 */
+  int lidx0 = __ockl_get_local_id(0); /* 16 */
+  int lidx1 = __ockl_get_local_id(1); /* 8 */
+  int alu0 = ((gidx0*2304)+(lidx0*144));
+  int alu1 = (lidx1<<2);
+  int alu2 = (alu0+alu1);
+  unsigned char val0 = (*(data1_28311552+(alu2+16)));
+  unsigned char val1 = (*(data1_28311552+(alu2+17)));
+  unsigned char val2 = (*(data1_28311552+(alu2+18)));
+  unsigned char val3 = (*(data1_28311552+(alu2+19)));
+  unsigned char val4 = (*(data1_28311552+(alu2+48)));
+  unsigned char val5 = (*(data1_28311552+(alu2+49)));
+  unsigned char val6 = (*(data1_28311552+(alu2+50)));
+  unsigned char val7 = (*(data1_28311552+(alu2+51)));
+  unsigned char val8 = (*(data1_28311552+(alu2+80)));
+  unsigned char val9 = (*(data1_28311552+(alu2+81)));
+  unsigned char val10 = (*(data1_28311552+(alu2+82)));
+  unsigned char val11 = (*(data1_28311552+(alu2+83)));
+  unsigned char val12 = (*(data1_28311552+(alu2+112)));
+  unsigned char val13 = (*(data1_28311552+(alu2+113)));
+  unsigned char val14 = (*(data1_28311552+(alu2+114)));
+  unsigned char val15 = (*(data1_28311552+(alu2+115)));
+  unsigned char val16 = (*(data1_28311552+(alu0+1)));
+  unsigned char val17 = (*(data1_28311552+(alu0+2)));
+  unsigned char val18 = (*(data1_28311552+(alu0+3)));
+  unsigned char val19 = (*(data1_28311552+(alu0+4)));
+  unsigned char val20 = (*(data1_28311552+(alu0+5)));
+  unsigned char val21 = (*(data1_28311552+(alu0+6)));
+  unsigned char val22 = (*(data1_28311552+(alu0+7)));
+  unsigned char val23 = (*(data1_28311552+(alu0+8)));
+  unsigned char val24 = (*(data1_28311552+(alu0+9)));
+  unsigned char val25 = (*(data1_28311552+(alu0+10)));
+  unsigned char val26 = (*(data1_28311552+(alu0+11)));
+  unsigned char val27 = (*(data1_28311552+(alu0+12)));
+  unsigned char val28 = (*(data1_28311552+(alu0+13)));
+  unsigned char val29 = (*(data1_28311552+(alu0+14)));
+  unsigned char val30 = (*(data1_28311552+(alu0+15)));
+  unsigned char val31 = (*(data1_28311552+alu0));
+  float cast0 = ((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val17))<<((unsigned short)(0u)))+(((unsigned short)(val18))<<((unsigned short)(8u))))))));
+  float cast1 = ((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val31))<<((unsigned short)(0u)))+(((unsigned short)(val16))<<((unsigned short)(8u))))))));
+  float alu3 = (cast0*((float)(((val27>>((unsigned char)(4u)))|((val23>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu4 = (cast1*((float)(((val27&((unsigned char)(15u)))|((val19>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu5 = (cast0*((float)(((val28>>((unsigned char)(4u)))|((val24>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu6 = (cast1*((float)(((val28&((unsigned char)(15u)))|((val20>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu7 = (cast0*((float)(((val29>>((unsigned char)(4u)))|((val25>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu8 = (cast1*((float)(((val29&((unsigned char)(15u)))|((val21>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu9 = (cast0*((float)(((val30>>((unsigned char)(4u)))|((val26>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu10 = (cast1*((float)(((val30&((unsigned char)(15u)))|((val22>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu11 = (cast0*((float)((val23&((unsigned char)(63u))))));
+  float alu12 = (cast1*((float)((val19&((unsigned char)(63u))))));
+  float alu13 = (cast0*((float)((val24&((unsigned char)(63u))))));
+  float alu14 = (cast1*((float)((val20&((unsigned char)(63u))))));
+  float alu15 = (cast0*((float)((val25&((unsigned char)(63u))))));
+  float alu16 = (cast1*((float)((val21&((unsigned char)(63u))))));
+  float alu17 = (cast0*((float)((val26&((unsigned char)(63u))))));
+  float alu18 = (cast1*((float)((val22&((unsigned char)(63u))))));
+  int alu19 = ((gidx0<<12)+(lidx0<<8)+alu1);
+  *((half4*)((data0_50331648+(alu19+32)))) = make_half4(((half)(((alu14*((float)((val0>>((unsigned char)(4u))))))-alu13))),((half)(((alu14*((float)((val1>>((unsigned char)(4u))))))-alu13))),((half)(((alu14*((float)((val2>>((unsigned char)(4u))))))-alu13))),((half)(((alu14*((float)((val3>>((unsigned char)(4u))))))-alu13))));
+  *((half4*)((data0_50331648+(alu19+64)))) = make_half4(((half)(((alu16*((float)((val4&((unsigned char)(15u))))))-alu15))),((half)(((alu16*((float)((val5&((unsigned char)(15u))))))-alu15))),((half)(((alu16*((float)((val6&((unsigned char)(15u))))))-alu15))),((half)(((alu16*((float)((val7&((unsigned char)(15u))))))-alu15))));
+  *((half4*)((data0_50331648+(alu19+96)))) = make_half4(((half)(((alu18*((float)((val4>>((unsigned char)(4u))))))-alu17))),((half)(((alu18*((float)((val5>>((unsigned char)(4u))))))-alu17))),((half)(((alu18*((float)((val6>>((unsigned char)(4u))))))-alu17))),((half)(((alu18*((float)((val7>>((unsigned char)(4u))))))-alu17))));
+  *((half4*)((data0_50331648+(alu19+128)))) = make_half4(((half)(((alu4*((float)((val8&((unsigned char)(15u))))))-alu3))),((half)(((alu4*((float)((val9&((unsigned char)(15u))))))-alu3))),((half)(((alu4*((float)((val10&((unsigned char)(15u))))))-alu3))),((half)(((alu4*((float)((val11&((unsigned char)(15u))))))-alu3))));
+  *((half4*)((data0_50331648+(alu19+160)))) = make_half4(((half)(((alu6*((float)((val8>>((unsigned char)(4u))))))-alu5))),((half)(((alu6*((float)((val9>>((unsigned char)(4u))))))-alu5))),((half)(((alu6*((float)((val10>>((unsigned char)(4u))))))-alu5))),((half)(((alu6*((float)((val11>>((unsigned char)(4u))))))-alu5))));
+  *((half4*)((data0_50331648+(alu19+192)))) = make_half4(((half)(((alu8*((float)((val12&((unsigned char)(15u))))))-alu7))),((half)(((alu8*((float)((val13&((unsigned char)(15u))))))-alu7))),((half)(((alu8*((float)((val14&((unsigned char)(15u))))))-alu7))),((half)(((alu8*((float)((val15&((unsigned char)(15u))))))-alu7))));
+  *((half4*)((data0_50331648+(alu19+224)))) = make_half4(((half)(((alu10*((float)((val12>>((unsigned char)(4u))))))-alu9))),((half)(((alu10*((float)((val13>>((unsigned char)(4u))))))-alu9))),((half)(((alu10*((float)((val14>>((unsigned char)(4u))))))-alu9))),((half)(((alu10*((float)((val15>>((unsigned char)(4u))))))-alu9))));
+  *((half4*)((data0_50331648+alu19))) = make_half4(((half)(((alu12*((float)((val0&((unsigned char)(15u))))))-alu11))),((half)(((alu12*((float)((val1&((unsigned char)(15u))))))-alu11))),((half)(((alu12*((float)((val2&((unsigned char)(15u))))))-alu11))),((half)(((alu12*((float)((val3&((unsigned char)(15u))))))-alu11))));
+}
+*** AMD        8 E_12288_16_8_2_4_4n1                           arg  2 mem   0.13 GB tm    495.68us/   127.59ms (    501 GFLOPS  260|305    GB/s)
+opened device PYTHON from pid:48034
+scheduled     5 kernels in    32.07 ms | CACHE MISS 216fa51e |    1945 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:108
+upcasting masked axis : 0
+E_2                       opts: (Opt(op=OptOps.UPCAST, axis=0, arg=0),)
+
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 1))) E_2(unsigned int* data0_2) {
+  unsigned int val0 = (*(data0_2+0));
+  unsigned int val1 = (*(data0_2+1));
+  unsigned int alu0 = (val0+8192u);
+  *(data0_2+0) = alu0;
+  *(data0_2+1) = (val1+((unsigned int)((alu0<val0))));
+}
+more upcast axis : [(0, 1, 0, 4)]
+E_64_32_4                 opts: (Opt(op=OptOps.UPCAST, axis=0, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=32))
+typedef long unsigned int size_t;
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef float float4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) float4 make_float4(float x, float y, float z, float w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) E_64_32_4(float* data0_8192, unsigned int* data1_2, unsigned int* data2_2) {
+  unsigned int val0 = (*(data1_2+0));
+  unsigned int val1 = (*(data1_2+1));
+  unsigned int val2 = (*(data2_2+0));
+  unsigned int val3 = (*(data2_2+1));
+  int gidx0 = __ockl_get_group_id(0); /* 64 */
+  int lidx0 = __ockl_get_local_id(0); /* 32 */
+  int alu0 = ((gidx0<<7)+(lidx0<<2));
+  unsigned int cast0 = ((unsigned int)((alu0+-4095)));
+  unsigned int cast1 = ((unsigned int)((alu0+-4094)));
+  unsigned int cast2 = ((unsigned int)((alu0+-4093)));
+  unsigned int cast3 = ((unsigned int)((alu0+-4092)));
+  unsigned int cast4 = ((unsigned int)((alu0+1)));
+  unsigned int cast5 = ((unsigned int)((alu0+2)));
+  unsigned int cast6 = ((unsigned int)((alu0+3)));
+  unsigned int cast7 = ((unsigned int)((alu0+4)));
+  unsigned int alu1 = ((val1-((unsigned int)((val0<8192u))))+val3);
+  unsigned int alu2 = (val0+4294959104u+val2+alu1);
+  unsigned int alu3 = (alu2^((alu1<<13u)+((alu1>>19u)-((unsigned int)((((alu1%524288u)!=0u)&((alu1<0u)!=0)))))));
+  unsigned int alu4 = (alu2+alu3);
+  unsigned int alu5 = (alu4^((alu3<<15u)+(alu3>>17u)));
+  unsigned int alu6 = (alu4+alu5);
+  unsigned int alu7 = (alu6^((alu5<<26u)+(alu5>>6u)));
+  unsigned int alu8 = (alu6+alu7);
+  unsigned int alu9 = (val2^val3^466688986u);
+  unsigned int alu10 = ((alu8^((alu7<<6u)+(alu7>>26u)))+alu9+1u);
+  unsigned int alu11 = (alu8+val3+alu10);
+  unsigned int alu12 = (alu11^((alu10<<17u)+(alu10>>15u)));
+  unsigned int alu13 = (alu11+alu12);
+  unsigned int alu14 = (alu13^((alu12<<29u)+(alu12>>3u)));
+  unsigned int alu15 = (alu13+alu14);
+  unsigned int alu16 = (alu15^((alu14<<16u)+(alu14>>16u)));
+  unsigned int alu17 = (alu15+alu16);
+  unsigned int alu18 = ((alu17^((alu16<<24u)+(alu16>>8u)))+val2+1u+1u);
+  unsigned int alu19 = (alu17+alu9+alu18);
+  unsigned int alu20 = (alu19^((alu18<<13u)+(alu18>>19u)));
+  unsigned int alu21 = (alu19+alu20);
+  unsigned int alu22 = (alu21^((alu20<<15u)+(alu20>>17u)));
+  unsigned int alu23 = (alu21+alu22);
+  unsigned int alu24 = (alu23^((alu22<<26u)+(alu22>>6u)));
+  unsigned int alu25 = (alu23+alu24);
+  unsigned int alu26 = ((alu25^((alu24<<6u)+(alu24>>26u)))+val3+2u+1u);
+  unsigned int alu27 = (alu25+val2+alu26);
+  unsigned int alu28 = (alu27^((alu26<<17u)+(alu26>>15u)));
+  unsigned int alu29 = (alu27+alu28);
+  unsigned int alu30 = (alu29^((alu28<<29u)+(alu28>>3u)));
+  unsigned int alu31 = (alu29+alu30);
+  unsigned int alu32 = (alu31^((alu30<<16u)+(alu30>>16u)));
+  unsigned int alu33 = (alu31+alu32);
+  unsigned int alu34 = ((alu33^((alu32<<24u)+(alu32>>8u)))+alu9+3u+1u);
+  unsigned int alu35 = (alu33+val3+alu34);
+  unsigned int alu36 = (alu35^((alu34<<13u)+(alu34>>19u)));
+  unsigned int alu37 = (alu35+alu36);
+  unsigned int alu38 = (alu37^((alu36<<15u)+(alu36>>17u)));
+  unsigned int alu39 = (alu37+alu38);
+  unsigned int alu40 = (alu39^((alu38<<26u)+(alu38>>6u)));
+  unsigned int alu41 = (alu39+alu40);
+  unsigned int alu42 = (alu41+alu9);
+  unsigned int alu43 = ((alu41^((alu40<<6u)+(alu40>>26u)))+val2+4u+1u);
+  unsigned int alu44 = (cast0+4095u+alu43);
+  unsigned int alu45 = (cast0+4294967295u+alu42+alu44);
+  unsigned int alu46 = (alu45^((alu44<<13u)+(alu44>>19u)));
+  unsigned int alu47 = (alu45+alu46);
+  unsigned int alu48 = (alu47^((alu46<<15u)+(alu46>>17u)));
+  unsigned int alu49 = (alu47+alu48);
+  unsigned int alu50 = (alu49^((alu48<<26u)+(alu48>>6u)));
+  unsigned int alu51 = (alu49+alu50);
+  unsigned int alu52 = (alu42^alu43^466688986u);
+  unsigned int alu53 = ((alu51^((alu50<<6u)+(alu50>>26u)))+alu52+1u);
+  unsigned int alu54 = (alu51+alu43+alu53);
+  unsigned int alu55 = (alu54^((alu53<<17u)+(alu53>>15u)));
+  unsigned int alu56 = (alu54+alu55);
+  unsigned int alu57 = (alu56^((alu55<<29u)+(alu55>>3u)));
+  unsigned int alu58 = (alu56+alu57);
+  unsigned int alu59 = (alu58^((alu57<<16u)+(alu57>>16u)));
+  unsigned int alu60 = (alu58+alu59);
+  unsigned int alu61 = ((alu60^((alu59<<24u)+(alu59>>8u)))+alu42+1u+1u);
+  unsigned int alu62 = (cast1+4095u+alu43);
+  unsigned int alu63 = (cast1+4294967295u+alu42+alu62);
+  unsigned int alu64 = (alu63^((alu62<<13u)+(alu62>>19u)));
+  unsigned int alu65 = (alu63+alu64);
+  unsigned int alu66 = (alu65^((alu64<<15u)+(alu64>>17u)));
+  unsigned int alu67 = (alu65+alu66);
+  unsigned int alu68 = (alu67^((alu66<<26u)+(alu66>>6u)));
+  unsigned int alu69 = (alu67+alu68);
+  unsigned int alu70 = ((alu69^((alu68<<6u)+(alu68>>26u)))+alu52+1u);
+  unsigned int alu71 = (alu69+alu43+alu70);
+  unsigned int alu72 = (alu71^((alu70<<17u)+(alu70>>15u)));
+  unsigned int alu73 = (alu71+alu72);
+  unsigned int alu74 = (alu73^((alu72<<29u)+(alu72>>3u)));
+  unsigned int alu75 = (alu73+alu74);
+  unsigned int alu76 = (alu75^((alu74<<16u)+(alu74>>16u)));
+  unsigned int alu77 = (alu75+alu76);
+  unsigned int alu78 = ((alu77^((alu76<<24u)+(alu76>>8u)))+alu42+1u+1u);
+  unsigned int alu79 = (cast2+4095u+alu43);
+  unsigned int alu80 = (cast2+4294967295u+alu42+alu79);
+  unsigned int alu81 = (alu80^((alu79<<13u)+(alu79>>19u)));
+  unsigned int alu82 = (alu80+alu81);
+  unsigned int alu83 = (alu82^((alu81<<15u)+(alu81>>17u)));
+  unsigned int alu84 = (alu82+alu83);
+  unsigned int alu85 = (alu84^((alu83<<26u)+(alu83>>6u)));
+  unsigned int alu86 = (alu84+alu85);
+  unsigned int alu87 = ((alu86^((alu85<<6u)+(alu85>>26u)))+alu52+1u);
+  unsigned int alu88 = (alu86+alu43+alu87);
+  unsigned int alu89 = (alu88^((alu87<<17u)+(alu87>>15u)));
+  unsigned int alu90 = (alu88+alu89);
+  unsigned int alu91 = (alu90^((alu89<<29u)+(alu89>>3u)));
+  unsigned int alu92 = (alu90+alu91);
+  unsigned int alu93 = (alu92^((alu91<<16u)+(alu91>>16u)));
+  unsigned int alu94 = (alu92+alu93);
+  unsigned int alu95 = ((alu94^((alu93<<24u)+(alu93>>8u)))+alu42+1u+1u);
+  unsigned int alu96 = (cast3+4095u+alu43);
+  unsigned int alu97 = (cast3+4294967295u+alu42+alu96);
+  unsigned int alu98 = (alu97^((alu96<<13u)+(alu96>>19u)));
+  unsigned int alu99 = (alu97+alu98);
+  unsigned int alu100 = (alu99^((alu98<<15u)+(alu98>>17u)));
+  unsigned int alu101 = (alu99+alu100);
+  unsigned int alu102 = (alu101^((alu100<<26u)+(alu100>>6u)));
+  unsigned int alu103 = (alu101+alu102);
+  unsigned int alu104 = ((alu103^((alu102<<6u)+(alu102>>26u)))+alu52+1u);
+  unsigned int alu105 = (alu103+alu43+alu104);
+  unsigned int alu106 = (alu105^((alu104<<17u)+(alu104>>15u)));
+  unsigned int alu107 = (alu105+alu106);
+  unsigned int alu108 = (alu107^((alu106<<29u)+(alu106>>3u)));
+  unsigned int alu109 = (alu107+alu108);
+  unsigned int alu110 = (alu109^((alu108<<16u)+(alu108>>16u)));
+  unsigned int alu111 = (alu109+alu110);
+  unsigned int alu112 = ((alu111^((alu110<<24u)+(alu110>>8u)))+alu42+1u+1u);
+  unsigned int alu113 = (cast4+4095u+alu43);
+  unsigned int alu114 = (cast4+4294967295u+alu42+alu113);
+  unsigned int alu115 = (alu114^((alu113<<13u)+(alu113>>19u)));
+  unsigned int alu116 = (alu114+alu115);
+  unsigned int alu117 = (alu116^((alu115<<15u)+(alu115>>17u)));
+  unsigned int alu118 = (alu116+alu117);
+  unsigned int alu119 = (alu118^((alu117<<26u)+(alu117>>6u)));
+  unsigned int alu120 = (alu118+alu119);
+  unsigned int alu121 = ((alu120^((alu119<<6u)+(alu119>>26u)))+alu52+1u);
+  unsigned int alu122 = (alu120+alu43+alu121);
+  unsigned int alu123 = (alu122^((alu121<<17u)+(alu121>>15u)));
+  unsigned int alu124 = (alu122+alu123);
+  unsigned int alu125 = (alu124^((alu123<<29u)+(alu123>>3u)));
+  unsigned int alu126 = (alu124+alu125);
+  unsigned int alu127 = (alu126^((alu125<<16u)+(alu125>>16u)));
+  unsigned int alu128 = (alu126+alu127);
+  unsigned int alu129 = ((alu128^((alu127<<24u)+(alu127>>8u)))+alu42+1u+1u);
+  unsigned int alu130 = (cast5+4095u+alu43);
+  unsigned int alu131 = (cast5+4294967295u+alu42+alu130);
+  unsigned int alu132 = (alu131^((alu130<<13u)+(alu130>>19u)));
+  unsigned int alu133 = (alu131+alu132);
+  unsigned int alu134 = (alu133^((alu132<<15u)+(alu132>>17u)));
+  unsigned int alu135 = (alu133+alu134);
+  unsigned int alu136 = (alu135^((alu134<<26u)+(alu134>>6u)));
+  unsigned int alu137 = (alu135+alu136);
+  unsigned int alu138 = ((alu137^((alu136<<6u)+(alu136>>26u)))+alu52+1u);
+  unsigned int alu139 = (alu137+alu43+alu138);
+  unsigned int alu140 = (alu139^((alu138<<17u)+(alu138>>15u)));
+  unsigned int alu141 = (alu139+alu140);
+  unsigned int alu142 = (alu141^((alu140<<29u)+(alu140>>3u)));
+  unsigned int alu143 = (alu141+alu142);
+  unsigned int alu144 = (alu143^((alu142<<16u)+(alu142>>16u)));
+  unsigned int alu145 = (alu143+alu144);
+  unsigned int alu146 = ((alu145^((alu144<<24u)+(alu144>>8u)))+alu42+1u+1u);
+  unsigned int alu147 = (cast6+4095u+alu43);
+  unsigned int alu148 = (cast6+4294967295u+alu42+alu147);
+  unsigned int alu149 = (alu148^((alu147<<13u)+(alu147>>19u)));
+  unsigned int alu150 = (alu148+alu149);
+  unsigned int alu151 = (alu150^((alu149<<15u)+(alu149>>17u)));
+  unsigned int alu152 = (alu150+alu151);
+  unsigned int alu153 = (alu152^((alu151<<26u)+(alu151>>6u)));
+  unsigned int alu154 = (alu152+alu153);
+  unsigned int alu155 = ((alu154^((alu153<<6u)+(alu153>>26u)))+alu52+1u);
+  unsigned int alu156 = (alu154+alu43+alu155);
+  unsigned int alu157 = (alu156^((alu155<<17u)+(alu155>>15u)));
+  unsigned int alu158 = (alu156+alu157);
+  unsigned int alu159 = (alu158^((alu157<<29u)+(alu157>>3u)));
+  unsigned int alu160 = (alu158+alu159);
+  unsigned int alu161 = (alu160^((alu159<<16u)+(alu159>>16u)));
+  unsigned int alu162 = (alu160+alu161);
+  unsigned int alu163 = ((alu162^((alu161<<24u)+(alu161>>8u)))+alu42+1u+1u);
+  unsigned int alu164 = (cast7+4095u+alu43);
+  unsigned int alu165 = (cast7+4294967295u+alu42+alu164);
+  unsigned int alu166 = (alu165^((alu164<<13u)+(alu164>>19u)));
+  unsigned int alu167 = (alu165+alu166);
+  unsigned int alu168 = (alu167^((alu166<<15u)+(alu166>>17u)));
+  unsigned int alu169 = (alu167+alu168);
+  unsigned int alu170 = (alu169^((alu168<<26u)+(alu168>>6u)));
+  unsigned int alu171 = (alu169+alu170);
+  unsigned int alu172 = ((alu171^((alu170<<6u)+(alu170>>26u)))+alu52+1u);
+  unsigned int alu173 = (alu171+alu43+alu172);
+  unsigned int alu174 = (alu173^((alu172<<17u)+(alu172>>15u)));
+  unsigned int alu175 = (alu173+alu174);
+  unsigned int alu176 = (alu175^((alu174<<29u)+(alu174>>3u)));
+  unsigned int alu177 = (alu175+alu176);
+  unsigned int alu178 = (alu177^((alu176<<16u)+(alu176>>16u)));
+  unsigned int alu179 = (alu177+alu178);
+  unsigned int alu180 = ((alu179^((alu178<<24u)+(alu178>>8u)))+alu42+1u+1u);
+  unsigned int alu181 = (alu60+alu52+alu61);
+  unsigned int alu182 = (alu128+alu52+alu129);
+  unsigned int alu183 = (alu181^((alu61<<13u)+((alu61>>19u)-((unsigned int)((((alu61%524288u)!=0u)&((alu61<0u)!=0)))))));
+  unsigned int alu184 = (alu181+alu183);
+  unsigned int alu185 = (alu182^((alu129<<13u)+((alu129>>19u)-((unsigned int)((((alu129%524288u)!=0u)&((alu129<0u)!=0)))))));
+  unsigned int alu186 = (alu182+alu185);
+  unsigned int alu187 = (alu184^((alu183<<15u)+(alu183>>17u)));
+  unsigned int alu188 = (alu184+alu187);
+  unsigned int alu189 = (alu186^((alu185<<15u)+(alu185>>17u)));
+  unsigned int alu190 = (alu186+alu189);
+  unsigned int alu191 = (alu188^((alu187<<26u)+(alu187>>6u)));
+  unsigned int alu192 = (alu188+alu191);
+  unsigned int alu193 = (alu190^((alu189<<26u)+(alu189>>6u)));
+  unsigned int alu194 = (alu190+alu193);
+  unsigned int alu195 = ((alu192^((alu191<<6u)+(alu191>>26u)))+alu43+2u+1u);
+  unsigned int alu196 = (alu192+alu42+alu195);
+  unsigned int alu197 = ((alu194^((alu193<<6u)+(alu193>>26u)))+alu43+2u+1u);
+  unsigned int alu198 = (alu194+alu42+alu197);
+  unsigned int alu199 = (alu196^((alu195<<17u)+(alu195>>15u)));
+  unsigned int alu200 = (alu196+alu199);
+  unsigned int alu201 = (alu198^((alu197<<17u)+(alu197>>15u)));
+  unsigned int alu202 = (alu198+alu201);
+  unsigned int alu203 = (alu200^((alu199<<29u)+(alu199>>3u)));
+  unsigned int alu204 = (alu200+alu203);
+  unsigned int alu205 = (alu202^((alu201<<29u)+(alu201>>3u)));
+  unsigned int alu206 = (alu202+alu205);
+  unsigned int alu207 = (alu204^((alu203<<16u)+(alu203>>16u)));
+  unsigned int alu208 = (alu204+alu207);
+  unsigned int alu209 = (alu206^((alu205<<16u)+(alu205>>16u)));
+  unsigned int alu210 = (alu206+alu209);
+  unsigned int alu211 = ((alu208^((alu207<<24u)+(alu207>>8u)))+alu52+3u+1u);
+  unsigned int alu212 = (alu208+alu43+alu211);
+  unsigned int alu213 = ((alu210^((alu209<<24u)+(alu209>>8u)))+alu52+3u+1u);
+  unsigned int alu214 = (alu210+alu43+alu213);
+  unsigned int alu215 = (alu212^((alu211<<13u)+(alu211>>19u)));
+  unsigned int alu216 = (alu212+alu215);
+  unsigned int alu217 = (alu214^((alu213<<13u)+(alu213>>19u)));
+  unsigned int alu218 = (alu214+alu217);
+  unsigned int alu219 = (alu216^((alu215<<15u)+(alu215>>17u)));
+  unsigned int alu220 = (alu216+alu219);
+  unsigned int alu221 = (alu218^((alu217<<15u)+(alu217>>17u)));
+  unsigned int alu222 = (alu218+alu221);
+  unsigned int alu223 = (alu220^((alu219<<26u)+(alu219>>6u)));
+  bool alu224 = (gidx0<32);
+  unsigned int alu225 = (alu224?(alu222+(alu222^((alu221<<26u)+(alu221>>6u)))+alu52):0u);
+  unsigned int alu226 = (alu224?0u:(((alu220+alu223)^((alu223<<6u)+(alu223>>26u)))+alu42+4u+1u));
+  unsigned int alu227 = (alu77+alu52+alu78);
+  unsigned int alu228 = (alu145+alu52+alu146);
+  unsigned int alu229 = (alu227^((alu78<<13u)+((alu78>>19u)-((unsigned int)((((alu78%524288u)!=0u)&((alu78<0u)!=0)))))));
+  unsigned int alu230 = (alu227+alu229);
+  unsigned int alu231 = (alu228^((alu146<<13u)+((alu146>>19u)-((unsigned int)((((alu146%524288u)!=0u)&((alu146<0u)!=0)))))));
+  unsigned int alu232 = (alu228+alu231);
+  unsigned int alu233 = (alu230^((alu229<<15u)+(alu229>>17u)));
+  unsigned int alu234 = (alu230+alu233);
+  unsigned int alu235 = (alu232^((alu231<<15u)+(alu231>>17u)));
+  unsigned int alu236 = (alu232+alu235);
+  unsigned int alu237 = (alu234^((alu233<<26u)+(alu233>>6u)));
+  unsigned int alu238 = (alu234+alu237);
+  unsigned int alu239 = (alu236^((alu235<<26u)+(alu235>>6u)));
+  unsigned int alu240 = (alu236+alu239);
+  unsigned int alu241 = ((alu238^((alu237<<6u)+(alu237>>26u)))+alu43+2u+1u);
+  unsigned int alu242 = (alu238+alu42+alu241);
+  unsigned int alu243 = ((alu240^((alu239<<6u)+(alu239>>26u)))+alu43+2u+1u);
+  unsigned int alu244 = (alu240+alu42+alu243);
+  unsigned int alu245 = (alu242^((alu241<<17u)+(alu241>>15u)));
+  unsigned int alu246 = (alu242+alu245);
+  unsigned int alu247 = (alu244^((alu243<<17u)+(alu243>>15u)));
+  unsigned int alu248 = (alu244+alu247);
+  unsigned int alu249 = (alu246^((alu245<<29u)+(alu245>>3u)));
+  unsigned int alu250 = (alu246+alu249);
+  unsigned int alu251 = (alu248^((alu247<<29u)+(alu247>>3u)));
+  unsigned int alu252 = (alu248+alu251);
+  unsigned int alu253 = (alu250^((alu249<<16u)+(alu249>>16u)));
+  unsigned int alu254 = (alu250+alu253);
+  unsigned int alu255 = (alu252^((alu251<<16u)+(alu251>>16u)));
+  unsigned int alu256 = (alu252+alu255);
+  unsigned int alu257 = ((alu254^((alu253<<24u)+(alu253>>8u)))+alu52+3u+1u);
+  unsigned int alu258 = (alu254+alu43+alu257);
+  unsigned int alu259 = ((alu256^((alu255<<24u)+(alu255>>8u)))+alu52+3u+1u);
+  unsigned int alu260 = (alu256+alu43+alu259);
+  unsigned int alu261 = (alu258^((alu257<<13u)+(alu257>>19u)));
+  unsigned int alu262 = (alu258+alu261);
+  unsigned int alu263 = (alu260^((alu259<<13u)+(alu259>>19u)));
+  unsigned int alu264 = (alu260+alu263);
+  unsigned int alu265 = (alu262^((alu261<<15u)+(alu261>>17u)));
+  unsigned int alu266 = (alu262+alu265);
+  unsigned int alu267 = (alu264^((alu263<<15u)+(alu263>>17u)));
+  unsigned int alu268 = (alu264+alu267);
+  unsigned int alu269 = (alu266^((alu265<<26u)+(alu265>>6u)));
+  unsigned int alu270 = (alu224?(alu268+(alu268^((alu267<<26u)+(alu267>>6u)))+alu52):0u);
+  unsigned int alu271 = (alu224?0u:(((alu266+alu269)^((alu269<<6u)+(alu269>>26u)))+alu42+4u+1u));
+  unsigned int alu272 = (alu94+alu52+alu95);
+  unsigned int alu273 = (alu162+alu52+alu163);
+  unsigned int alu274 = (alu272^((alu95<<13u)+((alu95>>19u)-((unsigned int)((((alu95%524288u)!=0u)&((alu95<0u)!=0)))))));
+  unsigned int alu275 = (alu272+alu274);
+  unsigned int alu276 = (alu273^((alu163<<13u)+((alu163>>19u)-((unsigned int)((((alu163%524288u)!=0u)&((alu163<0u)!=0)))))));
+  unsigned int alu277 = (alu273+alu276);
+  unsigned int alu278 = (alu275^((alu274<<15u)+(alu274>>17u)));
+  unsigned int alu279 = (alu275+alu278);
+  unsigned int alu280 = (alu277^((alu276<<15u)+(alu276>>17u)));
+  unsigned int alu281 = (alu277+alu280);
+  unsigned int alu282 = (alu279^((alu278<<26u)+(alu278>>6u)));
+  unsigned int alu283 = (alu279+alu282);
+  unsigned int alu284 = (alu281^((alu280<<26u)+(alu280>>6u)));
+  unsigned int alu285 = (alu281+alu284);
+  unsigned int alu286 = ((alu283^((alu282<<6u)+(alu282>>26u)))+alu43+2u+1u);
+  unsigned int alu287 = (alu283+alu42+alu286);
+  unsigned int alu288 = ((alu285^((alu284<<6u)+(alu284>>26u)))+alu43+2u+1u);
+  unsigned int alu289 = (alu285+alu42+alu288);
+  unsigned int alu290 = (alu287^((alu286<<17u)+(alu286>>15u)));
+  unsigned int alu291 = (alu287+alu290);
+  unsigned int alu292 = (alu289^((alu288<<17u)+(alu288>>15u)));
+  unsigned int alu293 = (alu289+alu292);
+  unsigned int alu294 = (alu291^((alu290<<29u)+(alu290>>3u)));
+  unsigned int alu295 = (alu291+alu294);
+  unsigned int alu296 = (alu293^((alu292<<29u)+(alu292>>3u)));
+  unsigned int alu297 = (alu293+alu296);
+  unsigned int alu298 = (alu295^((alu294<<16u)+(alu294>>16u)));
+  unsigned int alu299 = (alu295+alu298);
+  unsigned int alu300 = (alu297^((alu296<<16u)+(alu296>>16u)));
+  unsigned int alu301 = (alu297+alu300);
+  unsigned int alu302 = ((alu299^((alu298<<24u)+(alu298>>8u)))+alu52+3u+1u);
+  unsigned int alu303 = (alu299+alu43+alu302);
+  unsigned int alu304 = ((alu301^((alu300<<24u)+(alu300>>8u)))+alu52+3u+1u);
+  unsigned int alu305 = (alu301+alu43+alu304);
+  unsigned int alu306 = (alu303^((alu302<<13u)+(alu302>>19u)));
+  unsigned int alu307 = (alu303+alu306);
+  unsigned int alu308 = (alu305^((alu304<<13u)+(alu304>>19u)));
+  unsigned int alu309 = (alu305+alu308);
+  unsigned int alu310 = (alu307^((alu306<<15u)+(alu306>>17u)));
+  unsigned int alu311 = (alu307+alu310);
+  unsigned int alu312 = (alu309^((alu308<<15u)+(alu308>>17u)));
+  unsigned int alu313 = (alu309+alu312);
+  unsigned int alu314 = (alu311^((alu310<<26u)+(alu310>>6u)));
+  unsigned int alu315 = (alu224?(alu313+(alu313^((alu312<<26u)+(alu312>>6u)))+alu52):0u);
+  unsigned int alu316 = (alu224?0u:(((alu311+alu314)^((alu314<<6u)+(alu314>>26u)))+alu42+4u+1u));
+  unsigned int alu317 = (alu111+alu52+alu112);
+  unsigned int alu318 = (alu179+alu52+alu180);
+  unsigned int alu319 = (alu317^((alu112<<13u)+((alu112>>19u)-((unsigned int)((((alu112%524288u)!=0u)&((alu112<0u)!=0)))))));
+  unsigned int alu320 = (alu317+alu319);
+  unsigned int alu321 = (alu318^((alu180<<13u)+((alu180>>19u)-((unsigned int)((((alu180%524288u)!=0u)&((alu180<0u)!=0)))))));
+  unsigned int alu322 = (alu318+alu321);
+  unsigned int alu323 = (alu320^((alu319<<15u)+(alu319>>17u)));
+  unsigned int alu324 = (alu320+alu323);
+  unsigned int alu325 = (alu322^((alu321<<15u)+(alu321>>17u)));
+  unsigned int alu326 = (alu322+alu325);
+  unsigned int alu327 = (alu324^((alu323<<26u)+(alu323>>6u)));
+  unsigned int alu328 = (alu324+alu327);
+  unsigned int alu329 = (alu326^((alu325<<26u)+(alu325>>6u)));
+  unsigned int alu330 = (alu326+alu329);
+  unsigned int alu331 = ((alu328^((alu327<<6u)+(alu327>>26u)))+alu43+2u+1u);
+  unsigned int alu332 = (alu328+alu42+alu331);
+  unsigned int alu333 = ((alu330^((alu329<<6u)+(alu329>>26u)))+alu43+2u+1u);
+  unsigned int alu334 = (alu330+alu42+alu333);
+  unsigned int alu335 = (alu332^((alu331<<17u)+(alu331>>15u)));
+  unsigned int alu336 = (alu332+alu335);
+  unsigned int alu337 = (alu334^((alu333<<17u)+(alu333>>15u)));
+  unsigned int alu338 = (alu334+alu337);
+  unsigned int alu339 = (alu336^((alu335<<29u)+(alu335>>3u)));
+  unsigned int alu340 = (alu336+alu339);
+  unsigned int alu341 = (alu338^((alu337<<29u)+(alu337>>3u)));
+  unsigned int alu342 = (alu338+alu341);
+  unsigned int alu343 = (alu340^((alu339<<16u)+(alu339>>16u)));
+  unsigned int alu344 = (alu340+alu343);
+  unsigned int alu345 = (alu342^((alu341<<16u)+(alu341>>16u)));
+  unsigned int alu346 = (alu342+alu345);
+  unsigned int alu347 = ((alu344^((alu343<<24u)+(alu343>>8u)))+alu52+3u+1u);
+  unsigned int alu348 = (alu344+alu43+alu347);
+  unsigned int alu349 = ((alu346^((alu345<<24u)+(alu345>>8u)))+alu52+3u+1u);
+  unsigned int alu350 = (alu346+alu43+alu349);
+  unsigned int alu351 = (alu348^((alu347<<13u)+(alu347>>19u)));
+  unsigned int alu352 = (alu348+alu351);
+  unsigned int alu353 = (alu350^((alu349<<13u)+(alu349>>19u)));
+  unsigned int alu354 = (alu350+alu353);
+  unsigned int alu355 = (alu352^((alu351<<15u)+(alu351>>17u)));
+  unsigned int alu356 = (alu352+alu355);
+  unsigned int alu357 = (alu354^((alu353<<15u)+(alu353>>17u)));
+  unsigned int alu358 = (alu354+alu357);
+  unsigned int alu359 = (alu356^((alu355<<26u)+(alu355>>6u)));
+  unsigned int alu360 = (alu224?(alu358+(alu358^((alu357<<26u)+(alu357>>6u)))+alu52):0u);
+  unsigned int alu361 = (alu224?0u:(((alu356+alu359)^((alu359<<6u)+(alu359>>26u)))+alu42+4u+1u));
+  *((float4*)((data0_8192+alu0))) = make_float4((__builtin_bit_cast(float, (unsigned int)((((alu225+alu226)>>9u)|1065353216u)))+-1.0f),(__builtin_bit_cast(float, (unsigned int)((((alu270+alu271)>>9u)|1065353216u)))+-1.0f),(__builtin_bit_cast(float, (unsigned int)((((alu315+alu316)>>9u)|1065353216u)))+-1.0f),(__builtin_bit_cast(float, (unsigned int)((((alu360+alu361)>>9u)|1065353216u)))+-1.0f));
+}
+more upcast axis : [(1, 3, 0, 4)]
+E_32_32_4                 opts: (Opt(op=OptOps.UPCAST, axis=0, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=32))
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((device, pure)) float __ocml_log2_f32(float);
+extern "C" __attribute__((device)) float __ocml_sin_f32(float);
+extern "C" __attribute__((device, const)) float __ocml_sqrt_f32(float);
+typedef float float4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) float4 make_float4(float x, float y, float z, float w) { return { x, y, z, w }; }
+typedef half half4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) half4 make_half4(half x, half y, half z, half w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) E_32_32_4(half* data0_4096, float* data1_8192) {
+  int gidx0 = __ockl_get_group_id(0); /* 32 */
+  int lidx0 = __ockl_get_local_id(0); /* 32 */
+  int alu0 = ((gidx0<<7)+(lidx0<<2));
+  float4 val0 = (*((float4*)((data1_8192+(alu0+4096)))));
+  float4 val1 = (*((float4*)((data1_8192+alu0))));
+  *((half4*)((data0_4096+alu0))) = make_half4(((half)((__ocml_sin_f32((1.5707963267948966f+(val1.x*-6.283185307179586f)))*__ocml_sqrt_f32((__ocml_log2_f32((1.0f-val0.x))*-1.3862943611198906f))))),((half)((__ocml_sin_f32((1.5707963267948966f+(val1.y*-6.283185307179586f)))*__ocml_sqrt_f32((__ocml_log2_f32((1.0f-val0.y))*-1.3862943611198906f))))),((half)((__ocml_sin_f32((1.5707963267948966f+(val1.z*-6.283185307179586f)))*__ocml_sqrt_f32((__ocml_log2_f32((1.0f-val0.z))*-1.3862943611198906f))))),((half)((__ocml_sin_f32((1.5707963267948966f+(val1.w*-6.283185307179586f)))*__ocml_sqrt_f32((__ocml_log2_f32((1.0f-val0.w))*-1.3862943611198906f))))));
+}
+*** AMD        9 copy        8 B,     AMD <- PYTHON             arg  2 mem   0.13 GB tm    812.38us/   128.40ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       10 copy        8 B,     AMD <- PYTHON             arg  2 mem   0.13 GB tm     60.97us/   128.46ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       11 E_2                                            arg  1 mem   0.13 GB tm     15.60us/   128.48ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       12 E_64_32_4                                      arg  3 mem   0.13 GB tm      9.96us/   128.49ms (    235 GFLOPS    3|3      GB/s)
+*** AMD       13 E_32_32_4                                      arg  2 mem   0.13 GB tm      8.96us/   128.50ms (      4 GFLOPS    5|5      GB/s)
+scheduled     1 kernels in     3.91 ms | CACHE MISS 1f800075 |    3024 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:22
+TC(0): [] [(1, 12288)] [(0, 4096)]
+more upcast axis : [(1, 4097, 0, 3), (1, 4097, 0, 4)]
+r_128_32_3_1024_4n1       opts: (Opt(op=OptOps.UPCAST, axis=0, arg=3), Opt(op=OptOps.UNROLL, axis=0, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=32))
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef float float3 __attribute__((ext_vector_type(3)));
+static inline __attribute__((device)) float3 make_float3(float x, float y, float z) { return { x, y, z }; }
+typedef half half4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) half4 make_half4(half x, half y, half z, half w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) r_128_32_3_1024_4n1(half* data0_12288, half* data1_4096, half* data2_50331648) {
+  int gidx0 = __ockl_get_group_id(0); /* 128 */
+  int lidx0 = __ockl_get_local_id(0); /* 32 */
+  float buf0[3];
+  (*(buf0+0)) = 0.0f;
+  (*(buf0+1)) = 0.0f;
+  (*(buf0+2)) = 0.0f;
+  for (int Ridx0 = 0; Ridx0 < 1024; Ridx0++) {
+    int alu3 = (Ridx0<<2);
+    half4 val0 = (*((half4*)((data1_4096+alu3))));
+    int alu4 = ((gidx0*393216)+(lidx0*12288)+alu3);
+    half4 val1 = (*((half4*)((data2_50331648+(alu4+4096)))));
+    half4 val2 = (*((half4*)((data2_50331648+(alu4+8192)))));
+    half4 val3 = (*((half4*)((data2_50331648+alu4))));
+    (*(buf0+0)) = ((*(buf0+0))+((float)((val0.x*val3.x)))+((float)((val0.y*val3.y)))+((float)((val0.z*val3.z)))+((float)((val0.w*val3.w))));
+    (*(buf0+1)) = ((*(buf0+1))+((float)((val0.x*val1.x)))+((float)((val0.y*val1.y)))+((float)((val0.z*val1.z)))+((float)((val0.w*val1.w))));
+    (*(buf0+2)) = ((*(buf0+2))+((float)((val0.x*val2.x)))+((float)((val0.y*val2.y)))+((float)((val0.z*val2.z)))+((float)((val0.w*val2.w))));
+  }
+  int alu9 = ((gidx0*96)+(lidx0*3));
+  *(data0_12288+(alu9+1)) = ((half)((*(buf0+1))));
+  *(data0_12288+(alu9+2)) = ((half)((*(buf0+2))));
+  *(data0_12288+alu9) = ((half)((*(buf0+0))));
+}
+*** AMD       14 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    273.72us/   128.77ms (    368 GFLOPS  368|490    GB/s)
+scheduled     1 kernels in     0.86 ms |  cache hit 1f800075 |    3123 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:25
+JIT captured 1 linears with 0 inputs
+*** AMD        1 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    199.36us/     0.20ms (    505 GFLOPS  505|673    GB/s)
+scheduled     1 kernels in    19.09 ms | CACHE MISS 16bd6419 |    3429 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:22
+more upcast axis : [(10, 23041, 0, 3), (10, 23041, 0, 4)]
+r_128_32_3_16_4_2_32      opts: (Opt(op=OptOps.UPCAST, axis=0, arg=3), Opt(op=OptOps.UNROLL, axis=3, arg=0), Opt(op=OptOps.LOCAL, axis=0, arg=32))
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef float float3 __attribute__((ext_vector_type(3)));
+static inline __attribute__((device)) float3 make_float3(float x, float y, float z) { return { x, y, z }; }
+typedef half half4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) half4 make_half4(half x, half y, half z, half w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) r_128_32_3_16_4_2_32(half* data0_12288, half* data1_4096, unsigned char* data2_28311552) {
+  int gidx0 = __ockl_get_group_id(0); /* 128 */
+  int lidx0 = __ockl_get_local_id(0); /* 32 */
+  float buf0[3];
+  (*(buf0+0)) = 0.0f;
+  (*(buf0+1)) = 0.0f;
+  (*(buf0+2)) = 0.0f;
+  for (int Ridx0_0_0 = 0; Ridx0_0_0 < 16; Ridx0_0_0++) {
+    int alu3 = ((gidx0*221184)+(lidx0*6912)+(Ridx0_0_0*144));
+    unsigned char val0 = (*(data2_28311552+(alu3+1)));
+    unsigned char val1 = (*(data2_28311552+(alu3+2)));
+    unsigned char val2 = (*(data2_28311552+(alu3+3)));
+    unsigned char val3 = (*(data2_28311552+(alu3+2304)));
+    unsigned char val4 = (*(data2_28311552+(alu3+2305)));
+    unsigned char val5 = (*(data2_28311552+(alu3+2306)));
+    unsigned char val6 = (*(data2_28311552+(alu3+2307)));
+    unsigned char val7 = (*(data2_28311552+(alu3+4608)));
+    unsigned char val8 = (*(data2_28311552+(alu3+4609)));
+    unsigned char val9 = (*(data2_28311552+(alu3+4610)));
+    unsigned char val10 = (*(data2_28311552+(alu3+4611)));
+    unsigned char val11 = (*(data2_28311552+alu3));
+    for (int Ridx0_0_1_0 = 0; Ridx0_0_1_0 < 4; Ridx0_0_1_0++) {
+      int alu4 = (alu3+(Ridx0_0_1_0<<5));
+      unsigned char val12 = (*(data2_28311552+(alu4+16)));
+      unsigned char val13 = (*(data2_28311552+(alu4+17)));
+      unsigned char val14 = (*(data2_28311552+(alu4+18)));
+      unsigned char val15 = (*(data2_28311552+(alu4+19)));
+      unsigned char val16 = (*(data2_28311552+(alu4+20)));
+      unsigned char val17 = (*(data2_28311552+(alu4+21)));
+      unsigned char val18 = (*(data2_28311552+(alu4+22)));
+      unsigned char val19 = (*(data2_28311552+(alu4+23)));
+      unsigned char val20 = (*(data2_28311552+(alu4+24)));
+      unsigned char val21 = (*(data2_28311552+(alu4+25)));
+      unsigned char val22 = (*(data2_28311552+(alu4+26)));
+      unsigned char val23 = (*(data2_28311552+(alu4+27)));
+      unsigned char val24 = (*(data2_28311552+(alu4+28)));
+      unsigned char val25 = (*(data2_28311552+(alu4+29)));
+      unsigned char val26 = (*(data2_28311552+(alu4+30)));
+      unsigned char val27 = (*(data2_28311552+(alu4+31)));
+      unsigned char val28 = (*(data2_28311552+(alu4+32)));
+      unsigned char val29 = (*(data2_28311552+(alu4+33)));
+      unsigned char val30 = (*(data2_28311552+(alu4+34)));
+      unsigned char val31 = (*(data2_28311552+(alu4+35)));
+      unsigned char val32 = (*(data2_28311552+(alu4+36)));
+      unsigned char val33 = (*(data2_28311552+(alu4+37)));
+      unsigned char val34 = (*(data2_28311552+(alu4+38)));
+      unsigned char val35 = (*(data2_28311552+(alu4+39)));
+      unsigned char val36 = (*(data2_28311552+(alu4+40)));
+      unsigned char val37 = (*(data2_28311552+(alu4+41)));
+      unsigned char val38 = (*(data2_28311552+(alu4+42)));
+      unsigned char val39 = (*(data2_28311552+(alu4+43)));
+      unsigned char val40 = (*(data2_28311552+(alu4+44)));
+      unsigned char val41 = (*(data2_28311552+(alu4+45)));
+      unsigned char val42 = (*(data2_28311552+(alu4+46)));
+      unsigned char val43 = (*(data2_28311552+(alu4+47)));
+      unsigned char val44 = (*(data2_28311552+(alu4+2320)));
+      unsigned char val45 = (*(data2_28311552+(alu4+2321)));
+      unsigned char val46 = (*(data2_28311552+(alu4+2322)));
+      unsigned char val47 = (*(data2_28311552+(alu4+2323)));
+      unsigned char val48 = (*(data2_28311552+(alu4+2324)));
+      unsigned char val49 = (*(data2_28311552+(alu4+2325)));
+      unsigned char val50 = (*(data2_28311552+(alu4+2326)));
+      unsigned char val51 = (*(data2_28311552+(alu4+2327)));
+      unsigned char val52 = (*(data2_28311552+(alu4+2328)));
+      unsigned char val53 = (*(data2_28311552+(alu4+2329)));
+      unsigned char val54 = (*(data2_28311552+(alu4+2330)));
+      unsigned char val55 = (*(data2_28311552+(alu4+2331)));
+      unsigned char val56 = (*(data2_28311552+(alu4+2332)));
+      unsigned char val57 = (*(data2_28311552+(alu4+2333)));
+      unsigned char val58 = (*(data2_28311552+(alu4+2334)));
+      unsigned char val59 = (*(data2_28311552+(alu4+2335)));
+      unsigned char val60 = (*(data2_28311552+(alu4+2336)));
+      unsigned char val61 = (*(data2_28311552+(alu4+2337)));
+      unsigned char val62 = (*(data2_28311552+(alu4+2338)));
+      unsigned char val63 = (*(data2_28311552+(alu4+2339)));
+      unsigned char val64 = (*(data2_28311552+(alu4+2340)));
+      unsigned char val65 = (*(data2_28311552+(alu4+2341)));
+      unsigned char val66 = (*(data2_28311552+(alu4+2342)));
+      unsigned char val67 = (*(data2_28311552+(alu4+2343)));
+      unsigned char val68 = (*(data2_28311552+(alu4+2344)));
+      unsigned char val69 = (*(data2_28311552+(alu4+2345)));
+      unsigned char val70 = (*(data2_28311552+(alu4+2346)));
+      unsigned char val71 = (*(data2_28311552+(alu4+2347)));
+      unsigned char val72 = (*(data2_28311552+(alu4+2348)));
+      unsigned char val73 = (*(data2_28311552+(alu4+2349)));
+      unsigned char val74 = (*(data2_28311552+(alu4+2350)));
+      unsigned char val75 = (*(data2_28311552+(alu4+2351)));
+      unsigned char val76 = (*(data2_28311552+(alu4+4624)));
+      unsigned char val77 = (*(data2_28311552+(alu4+4625)));
+      unsigned char val78 = (*(data2_28311552+(alu4+4626)));
+      unsigned char val79 = (*(data2_28311552+(alu4+4627)));
+      unsigned char val80 = (*(data2_28311552+(alu4+4628)));
+      unsigned char val81 = (*(data2_28311552+(alu4+4629)));
+      unsigned char val82 = (*(data2_28311552+(alu4+4630)));
+      unsigned char val83 = (*(data2_28311552+(alu4+4631)));
+      unsigned char val84 = (*(data2_28311552+(alu4+4632)));
+      unsigned char val85 = (*(data2_28311552+(alu4+4633)));
+      unsigned char val86 = (*(data2_28311552+(alu4+4634)));
+      unsigned char val87 = (*(data2_28311552+(alu4+4635)));
+      unsigned char val88 = (*(data2_28311552+(alu4+4636)));
+      unsigned char val89 = (*(data2_28311552+(alu4+4637)));
+      unsigned char val90 = (*(data2_28311552+(alu4+4638)));
+      unsigned char val91 = (*(data2_28311552+(alu4+4639)));
+      unsigned char val92 = (*(data2_28311552+(alu4+4640)));
+      unsigned char val93 = (*(data2_28311552+(alu4+4641)));
+      unsigned char val94 = (*(data2_28311552+(alu4+4642)));
+      unsigned char val95 = (*(data2_28311552+(alu4+4643)));
+      unsigned char val96 = (*(data2_28311552+(alu4+4644)));
+      unsigned char val97 = (*(data2_28311552+(alu4+4645)));
+      unsigned char val98 = (*(data2_28311552+(alu4+4646)));
+      unsigned char val99 = (*(data2_28311552+(alu4+4647)));
+      unsigned char val100 = (*(data2_28311552+(alu4+4648)));
+      unsigned char val101 = (*(data2_28311552+(alu4+4649)));
+      unsigned char val102 = (*(data2_28311552+(alu4+4650)));
+      unsigned char val103 = (*(data2_28311552+(alu4+4651)));
+      unsigned char val104 = (*(data2_28311552+(alu4+4652)));
+      unsigned char val105 = (*(data2_28311552+(alu4+4653)));
+      unsigned char val106 = (*(data2_28311552+(alu4+4654)));
+      unsigned char val107 = (*(data2_28311552+(alu4+4655)));
+      bool alu5 = (Ridx0_0_1_0<2);
+      bool alu6 = (1<Ridx0_0_1_0);
+      for (int Ridx0_0_1_1 = 0; Ridx0_0_1_1 < 2; Ridx0_0_1_1++) {
+        int alu7 = (alu3+(Ridx0_0_1_0<<1)+Ridx0_0_1_1);
+        unsigned char val108 = (alu5?*(data2_28311552+(alu7+4)):((unsigned char)(0u)));
+        unsigned char val109 = (alu6?*(data2_28311552+(alu7+4)):((unsigned char)(0u)));
+        unsigned char val110 = (alu5?*(data2_28311552+(alu7+8)):((unsigned char)(0u)));
+        unsigned char val111 = (alu6?*(data2_28311552+(alu7+8)):((unsigned char)(0u)));
+        unsigned char val112 = (alu6?*(data2_28311552+(alu7+2304)):((unsigned char)(0u)));
+        unsigned char val113 = (alu5?*(data2_28311552+(alu7+2308)):((unsigned char)(0u)));
+        unsigned char val114 = (alu6?*(data2_28311552+(alu7+2308)):((unsigned char)(0u)));
+        unsigned char val115 = (alu5?*(data2_28311552+(alu7+2312)):((unsigned char)(0u)));
+        unsigned char val116 = (alu6?*(data2_28311552+(alu7+2312)):((unsigned char)(0u)));
+        unsigned char val117 = (alu6?*(data2_28311552+(alu7+4608)):((unsigned char)(0u)));
+        unsigned char val118 = (alu5?*(data2_28311552+(alu7+4612)):((unsigned char)(0u)));
+        unsigned char val119 = (alu6?*(data2_28311552+(alu7+4612)):((unsigned char)(0u)));
+        unsigned char val120 = (alu5?*(data2_28311552+(alu7+4616)):((unsigned char)(0u)));
+        unsigned char val121 = (alu6?*(data2_28311552+(alu7+4616)):((unsigned char)(0u)));
+        unsigned char val122 = (alu6?*(data2_28311552+alu7):((unsigned char)(0u)));
+        int alu8 = ((Ridx0_0_1_0<<6)+(Ridx0_0_1_1<<5)+(Ridx0_0_0<<8));
+        half4 val123 = (*((half4*)((data1_4096+(alu8+4)))));
+        half4 val124 = (*((half4*)((data1_4096+(alu8+8)))));
+        half4 val125 = (*((half4*)((data1_4096+(alu8+12)))));
+        half4 val126 = (*((half4*)((data1_4096+(alu8+16)))));
+        half4 val127 = (*((half4*)((data1_4096+(alu8+20)))));
+        half4 val128 = (*((half4*)((data1_4096+(alu8+24)))));
+        half4 val129 = (*((half4*)((data1_4096+(alu8+28)))));
+        half4 val130 = (*((half4*)((data1_4096+alu8))));
+        unsigned char alu9 = (alu5?(val113&((unsigned char)(63u))):((unsigned char)(0u)));
+        unsigned char alu10 = (alu5?((unsigned char)(0u)):((val116&((unsigned char)(15u)))|((val112>>((unsigned char)(6u)))<<((unsigned char)(4u)))));
+        unsigned char alu11 = (alu5?(val115&((unsigned char)(63u))):((unsigned char)(0u)));
+        unsigned char alu12 = (alu5?((unsigned char)(0u)):((val116>>((unsigned char)(4u)))|((val114>>((unsigned char)(6u)))<<((unsigned char)(4u)))));
+        bool alu13 = (Ridx0_0_1_1<1);
+        unsigned char alu14 = (alu13?(val44&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu15 = (alu13?((unsigned char)(0u)):(val44>>((unsigned char)(4u))));
+        float alu16 = (((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val3))<<((unsigned short)(0u)))+(((unsigned short)(val4))<<((unsigned short)(8u))))))))*((float)((alu9+alu10))));
+        float alu17 = (((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val5))<<((unsigned short)(0u)))+(((unsigned short)(val6))<<((unsigned short)(8u))))))))*((float)((alu11+alu12))));
+        unsigned char alu18 = (alu13?(val45&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu19 = (alu13?((unsigned char)(0u)):(val45>>((unsigned char)(4u))));
+        unsigned char alu20 = (alu13?(val46&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu21 = (alu13?((unsigned char)(0u)):(val46>>((unsigned char)(4u))));
+        unsigned char alu22 = (alu13?(val47&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu23 = (alu13?((unsigned char)(0u)):(val47>>((unsigned char)(4u))));
+        unsigned char alu24 = (alu13?(val48&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu25 = (alu13?((unsigned char)(0u)):(val48>>((unsigned char)(4u))));
+        unsigned char alu26 = (alu13?(val49&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu27 = (alu13?((unsigned char)(0u)):(val49>>((unsigned char)(4u))));
+        unsigned char alu28 = (alu13?(val50&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu29 = (alu13?((unsigned char)(0u)):(val50>>((unsigned char)(4u))));
+        unsigned char alu30 = (alu13?(val51&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu31 = (alu13?((unsigned char)(0u)):(val51>>((unsigned char)(4u))));
+        unsigned char alu32 = (alu13?(val52&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu33 = (alu13?((unsigned char)(0u)):(val52>>((unsigned char)(4u))));
+        unsigned char alu34 = (alu13?(val53&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu35 = (alu13?((unsigned char)(0u)):(val53>>((unsigned char)(4u))));
+        unsigned char alu36 = (alu13?(val54&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu37 = (alu13?((unsigned char)(0u)):(val54>>((unsigned char)(4u))));
+        unsigned char alu38 = (alu13?(val55&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu39 = (alu13?((unsigned char)(0u)):(val55>>((unsigned char)(4u))));
+        unsigned char alu40 = (alu13?(val56&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu41 = (alu13?((unsigned char)(0u)):(val56>>((unsigned char)(4u))));
+        unsigned char alu42 = (alu13?(val57&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu43 = (alu13?((unsigned char)(0u)):(val57>>((unsigned char)(4u))));
+        unsigned char alu44 = (alu13?(val58&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu45 = (alu13?((unsigned char)(0u)):(val58>>((unsigned char)(4u))));
+        unsigned char alu46 = (alu13?(val59&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu47 = (alu13?((unsigned char)(0u)):(val59>>((unsigned char)(4u))));
+        unsigned char alu48 = (alu13?(val60&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu49 = (alu13?((unsigned char)(0u)):(val60>>((unsigned char)(4u))));
+        unsigned char alu50 = (alu13?(val61&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu51 = (alu13?((unsigned char)(0u)):(val61>>((unsigned char)(4u))));
+        unsigned char alu52 = (alu13?(val62&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu53 = (alu13?((unsigned char)(0u)):(val62>>((unsigned char)(4u))));
+        unsigned char alu54 = (alu13?(val63&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu55 = (alu13?((unsigned char)(0u)):(val63>>((unsigned char)(4u))));
+        unsigned char alu56 = (alu13?(val64&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu57 = (alu13?((unsigned char)(0u)):(val64>>((unsigned char)(4u))));
+        unsigned char alu58 = (alu13?(val65&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu59 = (alu13?((unsigned char)(0u)):(val65>>((unsigned char)(4u))));
+        unsigned char alu60 = (alu13?(val66&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu61 = (alu13?((unsigned char)(0u)):(val66>>((unsigned char)(4u))));
+        unsigned char alu62 = (alu13?(val67&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu63 = (alu13?((unsigned char)(0u)):(val67>>((unsigned char)(4u))));
+        unsigned char alu64 = (alu13?(val68&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu65 = (alu13?((unsigned char)(0u)):(val68>>((unsigned char)(4u))));
+        unsigned char alu66 = (alu13?(val69&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu67 = (alu13?((unsigned char)(0u)):(val69>>((unsigned char)(4u))));
+        unsigned char alu68 = (alu13?(val70&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu69 = (alu13?((unsigned char)(0u)):(val70>>((unsigned char)(4u))));
+        unsigned char alu70 = (alu13?(val71&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu71 = (alu13?((unsigned char)(0u)):(val71>>((unsigned char)(4u))));
+        unsigned char alu72 = (alu13?(val72&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu73 = (alu13?((unsigned char)(0u)):(val72>>((unsigned char)(4u))));
+        unsigned char alu74 = (alu13?(val73&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu75 = (alu13?((unsigned char)(0u)):(val73>>((unsigned char)(4u))));
+        unsigned char alu76 = (alu13?(val74&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu77 = (alu13?((unsigned char)(0u)):(val74>>((unsigned char)(4u))));
+        unsigned char alu78 = (alu13?(val75&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu79 = (alu13?((unsigned char)(0u)):(val75>>((unsigned char)(4u))));
+        unsigned char alu80 = (alu5?(val118&((unsigned char)(63u))):((unsigned char)(0u)));
+        unsigned char alu81 = (alu5?((unsigned char)(0u)):((val121&((unsigned char)(15u)))|((val117>>((unsigned char)(6u)))<<((unsigned char)(4u)))));
+        unsigned char alu82 = (alu5?(val120&((unsigned char)(63u))):((unsigned char)(0u)));
+        unsigned char alu83 = (alu5?((unsigned char)(0u)):((val121>>((unsigned char)(4u)))|((val119>>((unsigned char)(6u)))<<((unsigned char)(4u)))));
+        unsigned char alu84 = (alu13?(val76&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu85 = (alu13?((unsigned char)(0u)):(val76>>((unsigned char)(4u))));
+        float alu86 = (((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val7))<<((unsigned short)(0u)))+(((unsigned short)(val8))<<((unsigned short)(8u))))))))*((float)((alu80+alu81))));
+        float alu87 = (((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val9))<<((unsigned short)(0u)))+(((unsigned short)(val10))<<((unsigned short)(8u))))))))*((float)((alu82+alu83))));
+        unsigned char alu88 = (alu13?(val77&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu89 = (alu13?((unsigned char)(0u)):(val77>>((unsigned char)(4u))));
+        unsigned char alu90 = (alu13?(val78&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu91 = (alu13?((unsigned char)(0u)):(val78>>((unsigned char)(4u))));
+        unsigned char alu92 = (alu13?(val79&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu93 = (alu13?((unsigned char)(0u)):(val79>>((unsigned char)(4u))));
+        unsigned char alu94 = (alu13?(val80&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu95 = (alu13?((unsigned char)(0u)):(val80>>((unsigned char)(4u))));
+        unsigned char alu96 = (alu13?(val81&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu97 = (alu13?((unsigned char)(0u)):(val81>>((unsigned char)(4u))));
+        unsigned char alu98 = (alu13?(val82&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu99 = (alu13?((unsigned char)(0u)):(val82>>((unsigned char)(4u))));
+        unsigned char alu100 = (alu13?(val83&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu101 = (alu13?((unsigned char)(0u)):(val83>>((unsigned char)(4u))));
+        unsigned char alu102 = (alu13?(val84&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu103 = (alu13?((unsigned char)(0u)):(val84>>((unsigned char)(4u))));
+        unsigned char alu104 = (alu13?(val85&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu105 = (alu13?((unsigned char)(0u)):(val85>>((unsigned char)(4u))));
+        unsigned char alu106 = (alu13?(val86&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu107 = (alu13?((unsigned char)(0u)):(val86>>((unsigned char)(4u))));
+        unsigned char alu108 = (alu13?(val87&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu109 = (alu13?((unsigned char)(0u)):(val87>>((unsigned char)(4u))));
+        unsigned char alu110 = (alu13?(val88&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu111 = (alu13?((unsigned char)(0u)):(val88>>((unsigned char)(4u))));
+        unsigned char alu112 = (alu13?(val89&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu113 = (alu13?((unsigned char)(0u)):(val89>>((unsigned char)(4u))));
+        unsigned char alu114 = (alu13?(val90&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu115 = (alu13?((unsigned char)(0u)):(val90>>((unsigned char)(4u))));
+        unsigned char alu116 = (alu13?(val91&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu117 = (alu13?((unsigned char)(0u)):(val91>>((unsigned char)(4u))));
+        unsigned char alu118 = (alu13?(val92&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu119 = (alu13?((unsigned char)(0u)):(val92>>((unsigned char)(4u))));
+        unsigned char alu120 = (alu13?(val93&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu121 = (alu13?((unsigned char)(0u)):(val93>>((unsigned char)(4u))));
+        unsigned char alu122 = (alu13?(val94&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu123 = (alu13?((unsigned char)(0u)):(val94>>((unsigned char)(4u))));
+        unsigned char alu124 = (alu13?(val95&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu125 = (alu13?((unsigned char)(0u)):(val95>>((unsigned char)(4u))));
+        unsigned char alu126 = (alu13?(val96&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu127 = (alu13?((unsigned char)(0u)):(val96>>((unsigned char)(4u))));
+        unsigned char alu128 = (alu13?(val97&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu129 = (alu13?((unsigned char)(0u)):(val97>>((unsigned char)(4u))));
+        unsigned char alu130 = (alu13?(val98&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu131 = (alu13?((unsigned char)(0u)):(val98>>((unsigned char)(4u))));
+        unsigned char alu132 = (alu13?(val99&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu133 = (alu13?((unsigned char)(0u)):(val99>>((unsigned char)(4u))));
+        unsigned char alu134 = (alu13?(val100&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu135 = (alu13?((unsigned char)(0u)):(val100>>((unsigned char)(4u))));
+        unsigned char alu136 = (alu13?(val101&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu137 = (alu13?((unsigned char)(0u)):(val101>>((unsigned char)(4u))));
+        unsigned char alu138 = (alu13?(val102&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu139 = (alu13?((unsigned char)(0u)):(val102>>((unsigned char)(4u))));
+        unsigned char alu140 = (alu13?(val103&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu141 = (alu13?((unsigned char)(0u)):(val103>>((unsigned char)(4u))));
+        unsigned char alu142 = (alu13?(val104&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu143 = (alu13?((unsigned char)(0u)):(val104>>((unsigned char)(4u))));
+        unsigned char alu144 = (alu13?(val105&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu145 = (alu13?((unsigned char)(0u)):(val105>>((unsigned char)(4u))));
+        unsigned char alu146 = (alu13?(val106&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu147 = (alu13?((unsigned char)(0u)):(val106>>((unsigned char)(4u))));
+        unsigned char alu148 = (alu13?(val107&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu149 = (alu13?((unsigned char)(0u)):(val107>>((unsigned char)(4u))));
+        unsigned char alu150 = (alu5?(val108&((unsigned char)(63u))):((unsigned char)(0u)));
+        unsigned char alu151 = (alu5?((unsigned char)(0u)):((val111&((unsigned char)(15u)))|((val122>>((unsigned char)(6u)))<<((unsigned char)(4u)))));
+        unsigned char alu152 = (alu5?(val110&((unsigned char)(63u))):((unsigned char)(0u)));
+        unsigned char alu153 = (alu5?((unsigned char)(0u)):((val111>>((unsigned char)(4u)))|((val109>>((unsigned char)(6u)))<<((unsigned char)(4u)))));
+        unsigned char alu154 = (alu13?(val12&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu155 = (alu13?((unsigned char)(0u)):(val12>>((unsigned char)(4u))));
+        float alu156 = (((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val1))<<((unsigned short)(0u)))+(((unsigned short)(val2))<<((unsigned short)(8u))))))))*((float)((alu152+alu153))));
+        float alu157 = (((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val11))<<((unsigned short)(0u)))+(((unsigned short)(val0))<<((unsigned short)(8u))))))))*((float)((alu150+alu151))));
+        unsigned char alu158 = (alu13?(val13&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu159 = (alu13?((unsigned char)(0u)):(val13>>((unsigned char)(4u))));
+        unsigned char alu160 = (alu13?(val14&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu161 = (alu13?((unsigned char)(0u)):(val14>>((unsigned char)(4u))));
+        unsigned char alu162 = (alu13?(val15&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu163 = (alu13?((unsigned char)(0u)):(val15>>((unsigned char)(4u))));
+        unsigned char alu164 = (alu13?(val16&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu165 = (alu13?((unsigned char)(0u)):(val16>>((unsigned char)(4u))));
+        unsigned char alu166 = (alu13?(val17&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu167 = (alu13?((unsigned char)(0u)):(val17>>((unsigned char)(4u))));
+        unsigned char alu168 = (alu13?(val18&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu169 = (alu13?((unsigned char)(0u)):(val18>>((unsigned char)(4u))));
+        unsigned char alu170 = (alu13?(val19&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu171 = (alu13?((unsigned char)(0u)):(val19>>((unsigned char)(4u))));
+        unsigned char alu172 = (alu13?(val20&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu173 = (alu13?((unsigned char)(0u)):(val20>>((unsigned char)(4u))));
+        unsigned char alu174 = (alu13?(val21&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu175 = (alu13?((unsigned char)(0u)):(val21>>((unsigned char)(4u))));
+        unsigned char alu176 = (alu13?(val22&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu177 = (alu13?((unsigned char)(0u)):(val22>>((unsigned char)(4u))));
+        unsigned char alu178 = (alu13?(val23&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu179 = (alu13?((unsigned char)(0u)):(val23>>((unsigned char)(4u))));
+        unsigned char alu180 = (alu13?(val24&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu181 = (alu13?((unsigned char)(0u)):(val24>>((unsigned char)(4u))));
+        unsigned char alu182 = (alu13?(val25&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu183 = (alu13?((unsigned char)(0u)):(val25>>((unsigned char)(4u))));
+        unsigned char alu184 = (alu13?(val26&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu185 = (alu13?((unsigned char)(0u)):(val26>>((unsigned char)(4u))));
+        unsigned char alu186 = (alu13?(val27&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu187 = (alu13?((unsigned char)(0u)):(val27>>((unsigned char)(4u))));
+        unsigned char alu188 = (alu13?(val28&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu189 = (alu13?((unsigned char)(0u)):(val28>>((unsigned char)(4u))));
+        unsigned char alu190 = (alu13?(val29&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu191 = (alu13?((unsigned char)(0u)):(val29>>((unsigned char)(4u))));
+        unsigned char alu192 = (alu13?(val30&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu193 = (alu13?((unsigned char)(0u)):(val30>>((unsigned char)(4u))));
+        unsigned char alu194 = (alu13?(val31&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu195 = (alu13?((unsigned char)(0u)):(val31>>((unsigned char)(4u))));
+        unsigned char alu196 = (alu13?(val32&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu197 = (alu13?((unsigned char)(0u)):(val32>>((unsigned char)(4u))));
+        unsigned char alu198 = (alu13?(val33&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu199 = (alu13?((unsigned char)(0u)):(val33>>((unsigned char)(4u))));
+        unsigned char alu200 = (alu13?(val34&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu201 = (alu13?((unsigned char)(0u)):(val34>>((unsigned char)(4u))));
+        unsigned char alu202 = (alu13?(val35&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu203 = (alu13?((unsigned char)(0u)):(val35>>((unsigned char)(4u))));
+        unsigned char alu204 = (alu13?(val36&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu205 = (alu13?((unsigned char)(0u)):(val36>>((unsigned char)(4u))));
+        unsigned char alu206 = (alu13?(val37&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu207 = (alu13?((unsigned char)(0u)):(val37>>((unsigned char)(4u))));
+        unsigned char alu208 = (alu13?(val38&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu209 = (alu13?((unsigned char)(0u)):(val38>>((unsigned char)(4u))));
+        unsigned char alu210 = (alu13?(val39&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu211 = (alu13?((unsigned char)(0u)):(val39>>((unsigned char)(4u))));
+        unsigned char alu212 = (alu13?(val40&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu213 = (alu13?((unsigned char)(0u)):(val40>>((unsigned char)(4u))));
+        unsigned char alu214 = (alu13?(val41&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu215 = (alu13?((unsigned char)(0u)):(val41>>((unsigned char)(4u))));
+        unsigned char alu216 = (alu13?(val42&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu217 = (alu13?((unsigned char)(0u)):(val42>>((unsigned char)(4u))));
+        unsigned char alu218 = (alu13?(val43&((unsigned char)(15u))):((unsigned char)(0u)));
+        unsigned char alu219 = (alu13?((unsigned char)(0u)):(val43>>((unsigned char)(4u))));
+        (*(buf0+0)) = ((*(buf0+0))+((float)((val130.x*((half)(((alu157*((float)((alu154+alu155))))-alu156))))))+((float)((val130.y*((half)(((alu157*((float)((alu158+alu159))))-alu156))))))+((float)((val130.z*((half)(((alu157*((float)((alu160+alu161))))-alu156))))))+((float)((val130.w*((half)(((alu157*((float)((alu162+alu163))))-alu156))))))+((float)((val123.x*((half)(((alu157*((float)((alu164+alu165))))-alu156))))))+((float)((val123.y*((half)(((alu157*((float)((alu166+alu167))))-alu156))))))+((float)((val123.z*((half)(((alu157*((float)((alu168+alu169))))-alu156))))))+((float)((val123.w*((half)(((alu157*((float)((alu170+alu171))))-alu156))))))+((float)((val124.x*((half)(((alu157*((float)((alu172+alu173))))-alu156))))))+((float)((val124.y*((half)(((alu157*((float)((alu174+alu175))))-alu156))))))+((float)((val124.z*((half)(((alu157*((float)((alu176+alu177))))-alu156))))))+((float)((val124.w*((half)(((alu157*((float)((alu178+alu179))))-alu156))))))+((float)((val125.x*((half)(((alu157*((float)((alu180+alu181))))-alu156))))))+((float)((val125.y*((half)(((alu157*((float)((alu182+alu183))))-alu156))))))+((float)((val125.z*((half)(((alu157*((float)((alu184+alu185))))-alu156))))))+((float)((val125.w*((half)(((alu157*((float)((alu186+alu187))))-alu156))))))+((float)((val126.x*((half)(((alu157*((float)((alu188+alu189))))-alu156))))))+((float)((val126.y*((half)(((alu157*((float)((alu190+alu191))))-alu156))))))+((float)((val126.z*((half)(((alu157*((float)((alu192+alu193))))-alu156))))))+((float)((val126.w*((half)(((alu157*((float)((alu194+alu195))))-alu156))))))+((float)((val127.x*((half)(((alu157*((float)((alu196+alu197))))-alu156))))))+((float)((val127.y*((half)(((alu157*((float)((alu198+alu199))))-alu156))))))+((float)((val127.z*((half)(((alu157*((float)((alu200+alu201))))-alu156))))))+((float)((val127.w*((half)(((alu157*((float)((alu202+alu203))))-alu156))))))+((float)((val128.x*((half)(((alu157*((float)((alu204+alu205))))-alu156))))))+((float)((val128.y*((half)(((alu157*((float)((alu206+alu207))))-alu156))))))+((float)((val128.z*((half)(((alu157*((float)((alu208+alu209))))-alu156))))))+((float)((val128.w*((half)(((alu157*((float)((alu210+alu211))))-alu156))))))+((float)((val129.x*((half)(((alu157*((float)((alu212+alu213))))-alu156))))))+((float)((val129.y*((half)(((alu157*((float)((alu214+alu215))))-alu156))))))+((float)((val129.z*((half)(((alu157*((float)((alu216+alu217))))-alu156))))))+((float)((val129.w*((half)(((alu157*((float)((alu218+alu219))))-alu156)))))));
+        (*(buf0+1)) = ((*(buf0+1))+((float)((val130.x*((half)(((alu16*((float)((alu14+alu15))))-alu17))))))+((float)((val130.y*((half)(((alu16*((float)((alu18+alu19))))-alu17))))))+((float)((val130.z*((half)(((alu16*((float)((alu20+alu21))))-alu17))))))+((float)((val130.w*((half)(((alu16*((float)((alu22+alu23))))-alu17))))))+((float)((val123.x*((half)(((alu16*((float)((alu24+alu25))))-alu17))))))+((float)((val123.y*((half)(((alu16*((float)((alu26+alu27))))-alu17))))))+((float)((val123.z*((half)(((alu16*((float)((alu28+alu29))))-alu17))))))+((float)((val123.w*((half)(((alu16*((float)((alu30+alu31))))-alu17))))))+((float)((val124.x*((half)(((alu16*((float)((alu32+alu33))))-alu17))))))+((float)((val124.y*((half)(((alu16*((float)((alu34+alu35))))-alu17))))))+((float)((val124.z*((half)(((alu16*((float)((alu36+alu37))))-alu17))))))+((float)((val124.w*((half)(((alu16*((float)((alu38+alu39))))-alu17))))))+((float)((val125.x*((half)(((alu16*((float)((alu40+alu41))))-alu17))))))+((float)((val125.y*((half)(((alu16*((float)((alu42+alu43))))-alu17))))))+((float)((val125.z*((half)(((alu16*((float)((alu44+alu45))))-alu17))))))+((float)((val125.w*((half)(((alu16*((float)((alu46+alu47))))-alu17))))))+((float)((val126.x*((half)(((alu16*((float)((alu48+alu49))))-alu17))))))+((float)((val126.y*((half)(((alu16*((float)((alu50+alu51))))-alu17))))))+((float)((val126.z*((half)(((alu16*((float)((alu52+alu53))))-alu17))))))+((float)((val126.w*((half)(((alu16*((float)((alu54+alu55))))-alu17))))))+((float)((val127.x*((half)(((alu16*((float)((alu56+alu57))))-alu17))))))+((float)((val127.y*((half)(((alu16*((float)((alu58+alu59))))-alu17))))))+((float)((val127.z*((half)(((alu16*((float)((alu60+alu61))))-alu17))))))+((float)((val127.w*((half)(((alu16*((float)((alu62+alu63))))-alu17))))))+((float)((val128.x*((half)(((alu16*((float)((alu64+alu65))))-alu17))))))+((float)((val128.y*((half)(((alu16*((float)((alu66+alu67))))-alu17))))))+((float)((val128.z*((half)(((alu16*((float)((alu68+alu69))))-alu17))))))+((float)((val128.w*((half)(((alu16*((float)((alu70+alu71))))-alu17))))))+((float)((val129.x*((half)(((alu16*((float)((alu72+alu73))))-alu17))))))+((float)((val129.y*((half)(((alu16*((float)((alu74+alu75))))-alu17))))))+((float)((val129.z*((half)(((alu16*((float)((alu76+alu77))))-alu17))))))+((float)((val129.w*((half)(((alu16*((float)((alu78+alu79))))-alu17)))))));
+        (*(buf0+2)) = ((*(buf0+2))+((float)((val130.x*((half)(((alu86*((float)((alu84+alu85))))-alu87))))))+((float)((val130.y*((half)(((alu86*((float)((alu88+alu89))))-alu87))))))+((float)((val130.z*((half)(((alu86*((float)((alu90+alu91))))-alu87))))))+((float)((val130.w*((half)(((alu86*((float)((alu92+alu93))))-alu87))))))+((float)((val123.x*((half)(((alu86*((float)((alu94+alu95))))-alu87))))))+((float)((val123.y*((half)(((alu86*((float)((alu96+alu97))))-alu87))))))+((float)((val123.z*((half)(((alu86*((float)((alu98+alu99))))-alu87))))))+((float)((val123.w*((half)(((alu86*((float)((alu100+alu101))))-alu87))))))+((float)((val124.x*((half)(((alu86*((float)((alu102+alu103))))-alu87))))))+((float)((val124.y*((half)(((alu86*((float)((alu104+alu105))))-alu87))))))+((float)((val124.z*((half)(((alu86*((float)((alu106+alu107))))-alu87))))))+((float)((val124.w*((half)(((alu86*((float)((alu108+alu109))))-alu87))))))+((float)((val125.x*((half)(((alu86*((float)((alu110+alu111))))-alu87))))))+((float)((val125.y*((half)(((alu86*((float)((alu112+alu113))))-alu87))))))+((float)((val125.z*((half)(((alu86*((float)((alu114+alu115))))-alu87))))))+((float)((val125.w*((half)(((alu86*((float)((alu116+alu117))))-alu87))))))+((float)((val126.x*((half)(((alu86*((float)((alu118+alu119))))-alu87))))))+((float)((val126.y*((half)(((alu86*((float)((alu120+alu121))))-alu87))))))+((float)((val126.z*((half)(((alu86*((float)((alu122+alu123))))-alu87))))))+((float)((val126.w*((half)(((alu86*((float)((alu124+alu125))))-alu87))))))+((float)((val127.x*((half)(((alu86*((float)((alu126+alu127))))-alu87))))))+((float)((val127.y*((half)(((alu86*((float)((alu128+alu129))))-alu87))))))+((float)((val127.z*((half)(((alu86*((float)((alu130+alu131))))-alu87))))))+((float)((val127.w*((half)(((alu86*((float)((alu132+alu133))))-alu87))))))+((float)((val128.x*((half)(((alu86*((float)((alu134+alu135))))-alu87))))))+((float)((val128.y*((half)(((alu86*((float)((alu136+alu137))))-alu87))))))+((float)((val128.z*((half)(((alu86*((float)((alu138+alu139))))-alu87))))))+((float)((val128.w*((half)(((alu86*((float)((alu140+alu141))))-alu87))))))+((float)((val129.x*((half)(((alu86*((float)((alu142+alu143))))-alu87))))))+((float)((val129.y*((half)(((alu86*((float)((alu144+alu145))))-alu87))))))+((float)((val129.z*((half)(((alu86*((float)((alu146+alu147))))-alu87))))))+((float)((val129.w*((half)(((alu86*((float)((alu148+alu149))))-alu87)))))));
+      }
+    }
+  }
+  int alu226 = ((gidx0*96)+(lidx0*3));
+  *(data0_12288+(alu226+1)) = ((half)((*(buf0+1))));
+  *(data0_12288+(alu226+2)) = ((half)((*(buf0+2))));
+  *(data0_12288+alu226) = ((half)((*(buf0+0))));
+}
+*** AMD        2 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    348.84us/     0.55ms (   1239 GFLOPS   81|193    GB/s)
+scheduled     1 kernels in     1.13 ms |  cache hit 16bd6419 |    5366 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:25
+JIT captured 1 linears with 0 inputs
+*** AMD        1 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    351.76us/     0.35ms (   1229 GFLOPS   81|192    GB/s)
+scheduled     2 kernels in     2.25 ms | CACHE MISS dffde006 |    5178 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:128
+*** DISK:/h    2 view   27.00 MB @ 932517696                    arg  2 mem   0.13 GB tm      3.20us/     0.35ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        3 copy   27.00 MB,     AMD <- DISK:/h            arg  2 mem   0.16 GB tm     15.60ms/    15.96ms (      0 GFLOPS    2|2      GB/s)
+scheduled     2 kernels in     2.23 ms | CACHE MISS e3e169ff |    5202 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:134
+*** DISK:/h    4 view    4.50 KB @ 932517696                    arg  2 mem   0.16 GB tm      2.29us/    15.96ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        5 copy    4.50 KB,     AMD <- DISK:/h            arg  2 mem   0.16 GB tm    318.87us/    16.28ms (      0 GFLOPS    0|0      GB/s)
+scheduled     1 kernels in     2.67 ms | CACHE MISS efc529da |    5440 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:136
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 1))) q4k_unpack_2_4096(float* data0_8192, unsigned int* data1_1152) {
+  int gidx1 = __ockl_get_group_id(1); /* 8 */
+  int gidx2 = __ockl_get_group_id(2); /* 32 */
+  int alu0 = (gidx2*36);
+  int alu1 = (gidx1+alu0);
+  unsigned int val0 = (*(data1_1152+(alu1+4)));
+  unsigned int val1 = (*(data1_1152+(alu1+12)));
+  unsigned int val2 = (*(data1_1152+(alu1+20)));
+  unsigned int val3 = (*(data1_1152+(alu1+28)));
+  unsigned int val4 = (*(data1_1152+(alu0+1)));
+  unsigned int val5 = (*(data1_1152+(alu0+2)));
+  unsigned int val6 = (*(data1_1152+(alu0+3)));
+  unsigned int val7 = (*(data1_1152+alu0));
+  int gidx0 = __ockl_get_group_id(0); /* 4 */
+  int alu2 = (gidx0+(gidx1<<2)+(gidx2<<8));
+  int alu3 = (gidx0<<3);
+  unsigned int cast0 = ((unsigned int)((alu3+4)));
+  unsigned int cast1 = ((unsigned int)(alu3));
+  float cast2 = ((float)(__builtin_bit_cast(half, (unsigned short)(((unsigned short)((val7&65535u)))))));
+  float cast3 = ((float)(__builtin_bit_cast(half, (unsigned short)(((unsigned short)(((val7>>16u)&65535u)))))));
+  unsigned int alu4 = (val5>>0u);
+  unsigned int alu5 = (val6>>0u);
+  unsigned int alu6 = (val5>>8u);
+  unsigned int alu7 = (val6>>8u);
+  unsigned int alu8 = (val5>>16u);
+  unsigned int alu9 = (val6>>16u);
+  unsigned int alu10 = (val5>>24u);
+  unsigned int alu11 = (val6>>24u);
+  unsigned int alu12 = (val4>>0u);
+  unsigned int alu13 = (val4>>8u);
+  unsigned int alu14 = (val4>>16u);
+  unsigned int alu15 = (val4>>24u);
+  *(data0_8192+alu2) = ((cast2*((float)((alu12&63u)))*((float)(((val0>>cast1)&15u))))-(cast3*((float)((alu4&63u)))));
+  *(data0_8192+(alu2+32)) = ((cast2*((float)((alu13&63u)))*((float)(((val0>>cast0)&15u))))-(cast3*((float)((alu6&63u)))));
+  *(data0_8192+(alu2+64)) = ((cast2*((float)((alu14&63u)))*((float)(((val1>>cast1)&15u))))-(cast3*((float)((alu8&63u)))));
+  *(data0_8192+(alu2+96)) = ((cast2*((float)((alu15&63u)))*((float)(((val1>>cast0)&15u))))-(cast3*((float)((alu10&63u)))));
+  *(data0_8192+(alu2+128)) = ((cast2*((float)(((alu5&15u)|(((alu12&255u)>>6u)<<4u))))*((float)(((val2>>cast1)&15u))))-(cast3*((float)((((alu5&255u)>>4u)|(((alu4&255u)>>6u)<<4u))))));
+  *(data0_8192+(alu2+160)) = ((cast2*((float)(((alu7&15u)|(((alu13&255u)>>6u)<<4u))))*((float)(((val2>>cast0)&15u))))-(cast3*((float)((((alu7&255u)>>4u)|(((alu6&255u)>>6u)<<4u))))));
+  *(data0_8192+(alu2+192)) = ((cast2*((float)(((alu9&15u)|(((alu14&255u)>>6u)<<4u))))*((float)(((val3>>cast1)&15u))))-(cast3*((float)((((alu9&255u)>>4u)|(((alu8&255u)>>6u)<<4u))))));
+  *(data0_8192+(alu2+224)) = ((cast2*((float)(((alu11&15u)|(((alu15&255u)>>6u)<<4u))))*((float)(((val3>>cast0)&15u))))-(cast3*((float)((((alu11&255u)>>4u)|(((alu10&255u)>>6u)<<4u))))));
+}
+*** AMD        6 q4k_unpack_2_4096                              arg  2 mem   0.16 GB tm      7.56us/    16.29ms (     16 GFLOPS    5|5      GB/s)
+scheduled     4 kernels in    29.46 ms | CACHE MISS 257d7b50 |    6264 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:137
+more upcast axis : [(0, 2, 0, 3), (0, 2, 0, 4)]
+E_48_32_3                 opts: (Opt(op=OptOps.UPCAST, axis=0, arg=3), Opt(op=OptOps.LOCAL, axis=0, arg=32))
+typedef long unsigned int size_t;
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) E_48_32_3(unsigned char* data0_4608, unsigned char* data1_4608) {
+  int gidx0 = __ockl_get_group_id(0); /* 48 */
+  int lidx0 = __ockl_get_local_id(0); /* 32 */
+  int alu0 = ((gidx0*96)+(lidx0*3));
+  int alu1 = (alu0+1);
+  unsigned char val0 = (*(data1_4608+alu1));
+  int alu2 = (alu0+2);
+  unsigned char val1 = (*(data1_4608+alu2));
+  unsigned char val2 = (*(data1_4608+alu0));
+  *(data0_4608+alu1) = val0;
+  *(data0_4608+alu2) = val1;
+  *(data0_4608+alu0) = val2;
+}
+upcasting masked axis : 1
+upcasting masked axis : 2
+more upcast axis : [(2, 2, 1, 4)]
+E_2_16_8_2_4_4            opts: (Opt(op=OptOps.UPCAST, axis=2, arg=0), Opt(op=OptOps.UPCAST, axis=1, arg=0), Opt(op=OptOps.UPCAST, axis=1, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=16), Opt(op=OptOps.LOCAL, axis=1, arg=8))
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef float float4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) float4 make_float4(float x, float y, float z, float w) { return { x, y, z, w }; }
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 128))) E_2_16_8_2_4_4(float* data0_8192, unsigned char* data1_4608) {
+  int gidx0 = __ockl_get_group_id(0); /* 2 */
+  int lidx0 = __ockl_get_local_id(0); /* 16 */
+  int lidx1 = __ockl_get_local_id(1); /* 8 */
+  int alu0 = ((gidx0*2304)+(lidx0*144));
+  int alu1 = (lidx1<<2);
+  int alu2 = (alu0+alu1);
+  unsigned char val0 = (*(data1_4608+(alu2+16)));
+  unsigned char val1 = (*(data1_4608+(alu2+17)));
+  unsigned char val2 = (*(data1_4608+(alu2+18)));
+  unsigned char val3 = (*(data1_4608+(alu2+19)));
+  unsigned char val4 = (*(data1_4608+(alu2+48)));
+  unsigned char val5 = (*(data1_4608+(alu2+49)));
+  unsigned char val6 = (*(data1_4608+(alu2+50)));
+  unsigned char val7 = (*(data1_4608+(alu2+51)));
+  unsigned char val8 = (*(data1_4608+(alu2+80)));
+  unsigned char val9 = (*(data1_4608+(alu2+81)));
+  unsigned char val10 = (*(data1_4608+(alu2+82)));
+  unsigned char val11 = (*(data1_4608+(alu2+83)));
+  unsigned char val12 = (*(data1_4608+(alu2+112)));
+  unsigned char val13 = (*(data1_4608+(alu2+113)));
+  unsigned char val14 = (*(data1_4608+(alu2+114)));
+  unsigned char val15 = (*(data1_4608+(alu2+115)));
+  unsigned char val16 = (*(data1_4608+(alu0+1)));
+  unsigned char val17 = (*(data1_4608+(alu0+2)));
+  unsigned char val18 = (*(data1_4608+(alu0+3)));
+  unsigned char val19 = (*(data1_4608+(alu0+4)));
+  unsigned char val20 = (*(data1_4608+(alu0+5)));
+  unsigned char val21 = (*(data1_4608+(alu0+6)));
+  unsigned char val22 = (*(data1_4608+(alu0+7)));
+  unsigned char val23 = (*(data1_4608+(alu0+8)));
+  unsigned char val24 = (*(data1_4608+(alu0+9)));
+  unsigned char val25 = (*(data1_4608+(alu0+10)));
+  unsigned char val26 = (*(data1_4608+(alu0+11)));
+  unsigned char val27 = (*(data1_4608+(alu0+12)));
+  unsigned char val28 = (*(data1_4608+(alu0+13)));
+  unsigned char val29 = (*(data1_4608+(alu0+14)));
+  unsigned char val30 = (*(data1_4608+(alu0+15)));
+  unsigned char val31 = (*(data1_4608+alu0));
+  float cast0 = ((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val17))<<((unsigned short)(0u)))+(((unsigned short)(val18))<<((unsigned short)(8u))))))));
+  float cast1 = ((float)(__builtin_bit_cast(half, (unsigned short)(((((unsigned short)(val31))<<((unsigned short)(0u)))+(((unsigned short)(val16))<<((unsigned short)(8u))))))));
+  float alu3 = (cast0*((float)(((val27>>((unsigned char)(4u)))|((val23>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu4 = (cast1*((float)(((val27&((unsigned char)(15u)))|((val19>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu5 = (cast0*((float)(((val28>>((unsigned char)(4u)))|((val24>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu6 = (cast1*((float)(((val28&((unsigned char)(15u)))|((val20>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu7 = (cast0*((float)(((val29>>((unsigned char)(4u)))|((val25>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu8 = (cast1*((float)(((val29&((unsigned char)(15u)))|((val21>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu9 = (cast0*((float)(((val30>>((unsigned char)(4u)))|((val26>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu10 = (cast1*((float)(((val30&((unsigned char)(15u)))|((val22>>((unsigned char)(6u)))<<((unsigned char)(4u)))))));
+  float alu11 = (cast0*((float)((val23&((unsigned char)(63u))))));
+  float alu12 = (cast1*((float)((val19&((unsigned char)(63u))))));
+  float alu13 = (cast0*((float)((val24&((unsigned char)(63u))))));
+  float alu14 = (cast1*((float)((val20&((unsigned char)(63u))))));
+  float alu15 = (cast0*((float)((val25&((unsigned char)(63u))))));
+  float alu16 = (cast1*((float)((val21&((unsigned char)(63u))))));
+  float alu17 = (cast0*((float)((val26&((unsigned char)(63u))))));
+  float alu18 = (cast1*((float)((val22&((unsigned char)(63u))))));
+  int alu19 = ((gidx0<<12)+(lidx0<<8)+alu1);
+  *((float4*)((data0_8192+(alu19+32)))) = make_float4(((alu14*((float)((val0>>((unsigned char)(4u))))))-alu13),((alu14*((float)((val1>>((unsigned char)(4u))))))-alu13),((alu14*((float)((val2>>((unsigned char)(4u))))))-alu13),((alu14*((float)((val3>>((unsigned char)(4u))))))-alu13));
+  *((float4*)((data0_8192+(alu19+64)))) = make_float4(((alu16*((float)((val4&((unsigned char)(15u))))))-alu15),((alu16*((float)((val5&((unsigned char)(15u))))))-alu15),((alu16*((float)((val6&((unsigned char)(15u))))))-alu15),((alu16*((float)((val7&((unsigned char)(15u))))))-alu15));
+  *((float4*)((data0_8192+(alu19+96)))) = make_float4(((alu18*((float)((val4>>((unsigned char)(4u))))))-alu17),((alu18*((float)((val5>>((unsigned char)(4u))))))-alu17),((alu18*((float)((val6>>((unsigned char)(4u))))))-alu17),((alu18*((float)((val7>>((unsigned char)(4u))))))-alu17));
+  *((float4*)((data0_8192+(alu19+128)))) = make_float4(((alu4*((float)((val8&((unsigned char)(15u))))))-alu3),((alu4*((float)((val9&((unsigned char)(15u))))))-alu3),((alu4*((float)((val10&((unsigned char)(15u))))))-alu3),((alu4*((float)((val11&((unsigned char)(15u))))))-alu3));
+  *((float4*)((data0_8192+(alu19+160)))) = make_float4(((alu6*((float)((val8>>((unsigned char)(4u))))))-alu5),((alu6*((float)((val9>>((unsigned char)(4u))))))-alu5),((alu6*((float)((val10>>((unsigned char)(4u))))))-alu5),((alu6*((float)((val11>>((unsigned char)(4u))))))-alu5));
+  *((float4*)((data0_8192+(alu19+192)))) = make_float4(((alu8*((float)((val12&((unsigned char)(15u))))))-alu7),((alu8*((float)((val13&((unsigned char)(15u))))))-alu7),((alu8*((float)((val14&((unsigned char)(15u))))))-alu7),((alu8*((float)((val15&((unsigned char)(15u))))))-alu7));
+  *((float4*)((data0_8192+(alu19+224)))) = make_float4(((alu10*((float)((val12>>((unsigned char)(4u))))))-alu9),((alu10*((float)((val13>>((unsigned char)(4u))))))-alu9),((alu10*((float)((val14>>((unsigned char)(4u))))))-alu9),((alu10*((float)((val15>>((unsigned char)(4u))))))-alu9));
+  *((float4*)((data0_8192+alu19))) = make_float4(((alu12*((float)((val0&((unsigned char)(15u))))))-alu11),((alu12*((float)((val1&((unsigned char)(15u))))))-alu11),((alu12*((float)((val2&((unsigned char)(15u))))))-alu11),((alu12*((float)((val3&((unsigned char)(15u))))))-alu11));
+}
+*** DISK:/h    7 view    4.50 KB @ 932517696                    arg  2 mem   0.16 GB tm      2.36us/    16.29ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        8 copy    4.50 KB,     AMD <- DISK:/h            arg  2 mem   0.16 GB tm    798.77us/    17.09ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        9 E_48_32_3                                      arg  2 mem   0.16 GB tm     15.48us/    17.10ms (      0 GFLOPS    1|1      GB/s)
+*** AMD       10 E_2_16_8_2_4_4                                 arg  2 mem   0.16 GB tm      8.40us/    17.11ms (      5 GFLOPS    4|5      GB/s)
+scheduled     1 kernels in     4.70 ms | CACHE MISS 604e29f1 |    6529 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:138
+r_16_512                  opts: (Opt(op=OptOps.GROUPTOP, axis=0, arg=16),)
+#define INFINITY (__builtin_inff())
+#define NAN (__builtin_nanf(""))
+typedef long unsigned int size_t;
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 16))) r_16_512(float* data0_1, float* data1_8192, float* data2_8192) {
+  int lidx0 = __ockl_get_local_id(0); /* 16 */
+  float buf0[1];
+  (*(buf0+0)) = ((float)(-INFINITY));
+  for (int Ridx0 = 0; Ridx0 < 512; Ridx0++) {
+    int alu1 = ((lidx0<<9)+Ridx0);
+    float val0 = (*(data1_8192+alu1));
+    float val1 = (*(data2_8192+alu1));
+    float alu2 = (val0-val1);
+    float alu3 = ((alu2<0.0f)?-1.0f:1.0f);
+    float alu4 = ((alu2!=0.0f)?alu3:0.0f);
+    float alu5 = (alu2*alu4);
+    float alu6 = (((*(buf0+0))<alu5)?alu5:(*(buf0+0)));
+    (*(buf0+0)) = alu6;
+  }
+  __attribute__((shared, aligned(16)))float buf1[16];
+  float buf2[1];
+  *(buf1+lidx0) = (*(buf0+0));
+  __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup");__builtin_amdgcn_s_barrier();__builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup");
+  (*(buf2+0)) = ((float)(-INFINITY));
+  for (int Ridx101 = 0; Ridx101 < 16; Ridx101++) {
+    float val2 = (*(buf1+Ridx101));
+    float alu12 = (((*(buf2+0))<val2)?val2:(*(buf2+0)));
+    (*(buf2+0)) = alu12;
+  }
+  if ((lidx0==0)) {
+    *(data0_1+0) = (*(buf2+0));
+  }
+}
+*** AMD       11 r_16_512                                       arg  3 mem   0.16 GB tm     24.76us/    17.14ms (      3 GFLOPS    3|3      GB/s)
+primitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0
+*** AMD       12 r_128_32_3_1024_4n1                            arg  3 mem   0.16 GB tm    245.84us/    17.38ms (    409 GFLOPS  410|546    GB/s)
+scheduled     1 kernels in     2.42 ms | CACHE MISS c96b36c3 |    6821 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:151
+q4k_gemv_partial_12288_4096_1 opts: (Opt(op=OptOps.LOCAL, axis=0, arg=64),)
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 64))) q4k_gemv_partial_12288_4096_1(float* data0_12288, unsigned int* data1_7077888, half* data2_4096) {
+  int gidx0 = __ockl_get_group_id(0); /* 192 */
+  int lidx0 = __ockl_get_local_id(0); /* 64 */
+  int alu0 = (lidx0+(gidx0<<6));
+  *(data0_12288+alu0) = 0.0f;
+  for (int Ridx2 = 0; Ridx2 < 16; Ridx2++) {
+    int alu2 = ((gidx0*36864)+(lidx0*576)+(Ridx2*36));
+    unsigned int val0 = (*(data1_7077888+(alu2+1)));
+    unsigned int val1 = (*(data1_7077888+(alu2+2)));
+    unsigned int val2 = (*(data1_7077888+(alu2+3)));
+    unsigned int val3 = (*(data1_7077888+alu2));
+    float cast0 = ((float)(__builtin_bit_cast(half, (unsigned short)(((unsigned short)((val3&65535u)))))));
+    float cast1 = ((float)(__builtin_bit_cast(half, (unsigned short)(((unsigned short)(((val3>>16u)&65535u)))))));
+    unsigned int alu3 = (val1>>0u);
+    unsigned int alu4 = (val2>>0u);
+    unsigned int alu5 = (val1>>8u);
+    unsigned int alu6 = (val2>>8u);
+    unsigned int alu7 = (val1>>16u);
+    unsigned int alu8 = (val2>>16u);
+    unsigned int alu9 = (val1>>24u);
+    unsigned int alu10 = (val2>>24u);
+    unsigned int alu11 = (val0>>0u);
+    unsigned int alu12 = (val0>>8u);
+    unsigned int alu13 = (val0>>16u);
+    unsigned int alu14 = (val0>>24u);
+    for (int Ridx3_0 = 0; Ridx3_0 < 8; Ridx3_0++) {
+      int alu15 = (alu2+Ridx3_0);
+      unsigned int val4 = (*(data1_7077888+(alu15+4)));
+      unsigned int val5 = (*(data1_7077888+(alu15+12)));
+      unsigned int val6 = (*(data1_7077888+(alu15+20)));
+      unsigned int val7 = (*(data1_7077888+(alu15+28)));
+      for (int Ridx3_1 = 0; Ridx3_1 < 4; Ridx3_1++) {
+        int alu16 = ((Ridx3_0<<2)+Ridx3_1+(Ridx2<<8));
+        half val8 = (*(data2_4096+(alu16+32)));
+        half val9 = (*(data2_4096+(alu16+64)));
+        half val10 = (*(data2_4096+(alu16+96)));
+        half val11 = (*(data2_4096+(alu16+128)));
+        half val12 = (*(data2_4096+(alu16+160)));
+        half val13 = (*(data2_4096+(alu16+192)));
+        half val14 = (*(data2_4096+(alu16+224)));
+        half val15 = (*(data2_4096+alu16));
+        float val16 = (*(data0_12288+alu0));
+        int alu17 = (Ridx3_1<<3);
+        unsigned int cast2 = ((unsigned int)((alu17+4)));
+        unsigned int cast3 = ((unsigned int)(alu17));
+        *(data0_12288+alu0) = (val16+(((cast0*((float)((alu11&63u)))*((float)(((val4>>cast3)&15u))))-(cast1*((float)((alu3&63u)))))*((float)(val15)))+(((cast0*((float)((alu12&63u)))*((float)(((val4>>cast2)&15u))))-(cast1*((float)((alu5&63u)))))*((float)(val8)))+(((cast0*((float)((alu13&63u)))*((float)(((val5>>cast3)&15u))))-(cast1*((float)((alu7&63u)))))*((float)(val9)))+(((cast0*((float)((alu14&63u)))*((float)(((val5>>cast2)&15u))))-(cast1*((float)((alu9&63u)))))*((float)(val10)))+(((cast0*((float)(((alu4&15u)|(((alu11&255u)>>6u)<<4u))))*((float)(((val6>>cast3)&15u))))-(cast1*((float)((((alu4&255u)>>4u)|(((alu3&255u)>>6u)<<4u))))))*((float)(val11)))+(((cast0*((float)(((alu6&15u)|(((alu12&255u)>>6u)<<4u))))*((float)(((val6>>cast2)&15u))))-(cast1*((float)((((alu6&255u)>>4u)|(((alu5&255u)>>6u)<<4u))))))*((float)(val12)))+(((cast0*((float)(((alu8&15u)|(((alu13&255u)>>6u)<<4u))))*((float)(((val7>>cast3)&15u))))-(cast1*((float)((((alu8&255u)>>4u)|(((alu7&255u)>>6u)<<4u))))))*((float)(val13)))+(((cast0*((float)(((alu10&15u)|(((alu14&255u)>>6u)<<4u))))*((float)(((val7>>cast2)&15u))))-(cast1*((float)((((alu10&255u)>>4u)|(((alu9&255u)>>6u)<<4u))))))*((float)(val14))));
+      }
+    }
+  }
+}
+*** AMD       13 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     79.12us/    17.46ms (   4023 GFLOPS  359|2267   GB/s)
+scheduled     1 kernels in     3.06 ms | CACHE MISS 2446956f |    7153 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:152
+r_16_768                  opts: (Opt(op=OptOps.GROUPTOP, axis=0, arg=16),)
+#define INFINITY (__builtin_inff())
+#define NAN (__builtin_nanf(""))
+typedef long unsigned int size_t;
+#define half _Float16
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 16))) r_16_768(float* data0_1, float* data1_12288, half* data2_12288) {
+  int lidx0 = __ockl_get_local_id(0); /* 16 */
+  float buf0[1];
+  (*(buf0+0)) = ((float)(-INFINITY));
+  for (int Ridx0 = 0; Ridx0 < 768; Ridx0++) {
+    int alu1 = ((lidx0*768)+Ridx0);
+    half val0 = (*(data2_12288+alu1));
+    float val1 = (*(data1_12288+alu1));
+    float alu2 = (val1-((float)(val0)));
+    float alu3 = ((alu2<0.0f)?-1.0f:1.0f);
+    float alu4 = ((alu2!=0.0f)?alu3:0.0f);
+    float alu5 = (alu2*alu4);
+    float alu6 = (((*(buf0+0))<alu5)?alu5:(*(buf0+0)));
+    (*(buf0+0)) = alu6;
+  }
+  __attribute__((shared, aligned(16)))float buf1[16];
+  float buf2[1];
+  *(buf1+lidx0) = (*(buf0+0));
+  __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup");__builtin_amdgcn_s_barrier();__builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup");
+  (*(buf2+0)) = ((float)(-INFINITY));
+  for (int Ridx101 = 0; Ridx101 < 16; Ridx101++) {
+    float val2 = (*(buf1+Ridx101));
+    float alu12 = (((*(buf2+0))<val2)?val2:(*(buf2+0)));
+    (*(buf2+0)) = alu12;
+  }
+  if ((lidx0==0)) {
+    *(data0_1+0) = (*(buf2+0));
+  }
+}
+*** AMD       14 r_16_768                                       arg  3 mem   0.16 GB tm     32.36us/    17.49ms (      3 GFLOPS    2|2      GB/s)
+primitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243
+scheduled     1 kernels in     0.87 ms |  cache hit c96b36c3 |    7170 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q4_k_bench.py:22
+JIT captured 1 linears with 0 inputs
+*** AMD       15 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     66.56us/    17.56ms (   4782 GFLOPS  427|2695   GB/s)
+*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     66.40us/     0.07ms (   4794 GFLOPS  428|2701   GB/s)
+blk.0.ffn_gate.weight 12288x4096 matmul_decoded: 2.770 ms (361.02/s) q4_eff=10.22 GB/s device_q4_eff=142.01 GB/s kernels=1.0 mem=100.70 MB
+blk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 10.293 ms (97.15/s) q4_eff=2.75 GB/s device_q4_eff=80.49 GB/s kernels=1.0 mem=28.34 MB
+blk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.299 ms (3342.44/s) q4_eff=94.63 GB/s device_q4_eff=426.38 GB/s kernels=1.0 mem=28.42 MB
