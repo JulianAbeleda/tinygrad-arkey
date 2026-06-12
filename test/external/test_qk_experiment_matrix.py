@@ -1,4 +1,4 @@
-import json, pathlib, unittest
+import json, os, pathlib, unittest
 from tempfile import TemporaryDirectory
 
 from extra.qk_experiment_matrix import make_matrix, matrix_markdown
@@ -35,6 +35,39 @@ class TestQKExperimentMatrix(unittest.TestCase):
       spec.write_text(json.dumps({"experiments": [{"out": str(out)}]}))
       matrix = make_matrix([spec])
       self.assertEqual(matrix["rows"][0]["path"], str(out))
+
+  def _assert_committed_matrix_reproduces(self, json_path:str, md_path:str, experiments:list[str]):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    cwd = pathlib.Path.cwd()
+    try:
+      os.chdir(repo)
+      matrix = make_matrix([pathlib.Path(x) for x in experiments])
+      self.assertEqual(json.loads((repo / json_path).read_text()), matrix)
+      self.assertEqual((repo / md_path).read_text(), matrix_markdown(matrix))
+    finally:
+      os.chdir(cwd)
+
+  def test_committed_harness_matrix_reproduces(self):
+    self._assert_committed_matrix_reproduces(
+      "bench/qk-harness-20260612/matrix-summary.json",
+      "bench/qk-harness-20260612/matrix-summary.md",
+      [
+        "bench/qk-harness-20260612/8b",
+        "bench/qk-harness-20260612/14b",
+        "bench/qk-policy-cap-20260612/32b-1536mb",
+      ],
+    )
+
+  def test_committed_harness_rerun_matrix_reproduces(self):
+    self._assert_committed_matrix_reproduces(
+      "bench/qk-harness-20260612/matrix-summary-rerun.json",
+      "bench/qk-harness-20260612/matrix-summary-rerun.md",
+      [
+        "bench/qk-harness-20260612/8b",
+        "bench/qk-harness-20260612/14b-rerun",
+        "bench/qk-policy-cap-20260612/32b-1536mb",
+      ],
+    )
 
 
 if __name__ == "__main__":
