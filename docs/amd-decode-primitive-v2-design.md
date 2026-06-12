@@ -42,6 +42,11 @@ There are now three explicit tracks:
 The rest of this document is for the second track. It should not be used to
 justify delaying consolidation of the current win.
 
+For the third track, see `docs/amd-decode-ansor-direction.md`. That document is
+the source of truth if the goal changes from a richer v2 template to making
+tinygrad generate or select packed quant implementations from semantic
+descriptors.
+
 ## Current measured state
 
 Stable runtime policy:

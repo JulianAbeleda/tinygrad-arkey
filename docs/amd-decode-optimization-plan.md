@@ -740,3 +740,11 @@ verifiable math task. Smallest-real-target-first, gate-on-metric, scale-after.
 consolidate the local inference win by default, pursue v2 only as an optional
 CUTLASS/AutoTVM-style rich-template grind, or treat Ansor-style search-space
 generation as a separate compiler-research project.
+
+## Step 23 Ansor-direction scope (2026-06-12)
+
+`docs/amd-decode-ansor-direction.md` now scopes the machine-first research path.
+The key correction: a TC-style quant primitive is tinygrad-native but still
+template-guided; the Ansor-ward move is to make quant GEMV a semantic descriptor
+and generate candidate implementations from it. BEAM then tunes/selects
+generated candidates instead of searching only inside a hand-authored wrapper.
