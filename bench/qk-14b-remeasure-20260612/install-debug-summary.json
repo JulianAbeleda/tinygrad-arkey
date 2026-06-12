@@ -1,0 +1,67 @@
+[
+  {
+    "avg_drop1_tok_s": 24.37333333333333,
+    "avg_last16_tok_s": 19.794999999999998,
+    "avg_last32_tok_s": 19.794999999999998,
+    "avg_last64_tok_s": 19.794999999999998,
+    "avg_ms": 72.0425,
+    "avg_tok_s": 19.794999999999998,
+    "installs": {
+      "Q4K": {
+        "installed": 180,
+        "not_q4_k": 202,
+        "policy_fallback": 61,
+        "skipped_total": 263
+      },
+      "Q6K": {
+        "installed": 20,
+        "not_q6_k": 402,
+        "policy_fallback": 21,
+        "skipped_total": 423
+      }
+    },
+    "label": "explicit_install",
+    "max_ms": 165.09,
+    "max_tok_s": 24.43,
+    "median_tok_s": 24.345,
+    "min_tok_s": 6.06,
+    "path": "bench/qk-14b-remeasure-20260612/current-14b-explicit-install-debug.log",
+    "policy": null,
+    "samples": 4,
+    "stdev_tok_s": 9.156864456060637
+  },
+  {
+    "avg_drop1_tok_s": 43.06666666666667,
+    "avg_last16_tok_s": 33.8225,
+    "avg_last32_tok_s": 33.8225,
+    "avg_last64_tok_s": 33.8225,
+    "avg_ms": 58.489999999999995,
+    "avg_tok_s": 33.8225,
+    "installs": {
+      "Q4K": {
+        "installed": 240,
+        "not_q4_k": 202,
+        "policy_missing": 1,
+        "skipped_total": 203
+      },
+      "Q6K": {
+        "installed": 40,
+        "not_q6_k": 402,
+        "policy_fused": 1,
+        "skipped_total": 403
+      }
+    },
+    "label": "generated_install",
+    "max_ms": 164.29,
+    "max_tok_s": 43.15,
+    "median_tok_s": 43.025000000000006,
+    "min_tok_s": 6.09,
+    "path": "bench/qk-14b-remeasure-20260612/current-14b-generated-install-debug.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-semantic-20260612/14b-full-level2-skip-stopped-policy.json"
+    },
+    "samples": 4,
+    "stdev_tok_s": 18.488503409776936
+  }
+]

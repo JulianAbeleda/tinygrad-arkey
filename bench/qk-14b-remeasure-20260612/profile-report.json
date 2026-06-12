@@ -1,0 +1,458 @@
+[
+  {
+    "path": "bench/qk-14b-remeasure-20260612/14b-q4q6-primitive-batched-debug2.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
+    "model": "14B",
+    "mode": "Q4K+Q6K_PRIMITIVE=1 batched",
+    "tokens": 8,
+    "parse_stats": {
+      "lines": 3340,
+      "amd_lines": 2735,
+      "token_lines": 8,
+      "ignored_lines": 397,
+      "non_amd_debug_lines": 200,
+      "trailing_amd_lines": 0,
+      "tokens": 8
+    },
+    "summary": {
+      "samples": 7,
+      "wall_ms_tok": 41.54571428571428,
+      "median_ms_tok": 41.47,
+      "tok_s": 24.07,
+      "amd_kernel_ms_tok": 40.835028571428566,
+      "residual_ms_tok": 0.7106857142857166,
+      "residual_pct": 1.7106113747335177,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q6k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_quant_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.04045714285714286,
+        "other_amd": 40.79457142857142,
+        "residual_overhead": 0.7106857142857166
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q6k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_quant_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.09737982257066227,
+        "other_amd": 98.19200880269582,
+        "residual_overhead": 1.7106113747335177
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q6k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_quant_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.09907460401643968,
+        "other_amd": 99.90092539598356,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "batched 410",
+          145.28
+        ],
+        [
+          "batched 256",
+          73.48
+        ],
+        [
+          "batched 128",
+          35.17301
+        ],
+        [
+          "batched 64",
+          21.42379
+        ],
+        [
+          "batched 32",
+          10.2052
+        ],
+        [
+          "copy        4 B,     AMD <- AMD",
+          0.2832
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/qk-14b-remeasure-20260612/14b-generated-batched-debug2.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
+    "model": "14B",
+    "mode": "QK_GENERATED_POLICY batched",
+    "tokens": 8,
+    "parse_stats": {
+      "lines": 3660,
+      "amd_lines": 2895,
+      "token_lines": 8,
+      "ignored_lines": 477,
+      "non_amd_debug_lines": 280,
+      "trailing_amd_lines": 0,
+      "tokens": 8
+    },
+    "summary": {
+      "samples": 7,
+      "wall_ms_tok": 23.685714285714287,
+      "median_ms_tok": 23.69,
+      "tok_s": 42.21857142857143,
+      "amd_kernel_ms_tok": 22.94974714285715,
+      "residual_ms_tok": 0.7359671428571387,
+      "residual_pct": 3.1072195416163875,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q6k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_quant_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.038040000000000004,
+        "other_amd": 22.911707142857143,
+        "residual_overhead": 0.7359671428571387
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q6k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_quant_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.16060313630880577,
+        "other_amd": 96.73217732207478,
+        "residual_overhead": 3.1072195416163875
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q6k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_quant_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.165753460215528,
+        "other_amd": 99.83424653978444,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "batched 490",
+          93.71000000000001
+        ],
+        [
+          "batched 256",
+          34.00184
+        ],
+        [
+          "batched 128",
+          18.36712
+        ],
+        [
+          "batched 64",
+          9.752899999999999
+        ],
+        [
+          "batched 32",
+          4.55009
+        ],
+        [
+          "copy        4 B,     AMD <- AMD",
+          0.26628
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/qk-14b-remeasure-20260612/14b-q4q6-primitive-named-debug2.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
+    "model": "14B",
+    "mode": "Q4K+Q6K_PRIMITIVE=1 named",
+    "tokens": 8,
+    "parse_stats": {
+      "lines": 12427,
+      "amd_lines": 11823,
+      "token_lines": 8,
+      "ignored_lines": 396,
+      "non_amd_debug_lines": 200,
+      "trailing_amd_lines": 0,
+      "tokens": 8
+    },
+    "summary": {
+      "samples": 7,
+      "wall_ms_tok": 251.74,
+      "median_ms_tok": 251.65,
+      "tok_s": 3.972857142857143,
+      "amd_kernel_ms_tok": 77.35311857142861,
+      "residual_ms_tok": 174.3868814285714,
+      "residual_pct": 69.27261516984643,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 20.63002857142853,
+        "q6k_primitive_gemv": 9.906045714285714,
+        "q4k_primitive_reduction": 13.857194285714291,
+        "fallback_quant_fused": 18.747434285714288,
+        "attention_misc": 1.5635828571428634,
+        "norm_sampling_misc": 2.2495885714285615,
+        "copy": 0.06198714285714286,
+        "other_amd": 10.337257142857178,
+        "residual_overhead": 174.3868814285714
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 8.194974406700773,
+        "q6k_primitive_gemv": 3.935030473617905,
+        "q4k_primitive_reduction": 5.504565935375503,
+        "fallback_quant_fused": 7.447141608689238,
+        "attention_misc": 0.6211102157554871,
+        "norm_sampling_misc": 0.8936158621707164,
+        "copy": 0.024623477737802043,
+        "other_amd": 4.106322850106132,
+        "residual_overhead": 69.27261516984643
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 26.66993775096289,
+        "q6k_primitive_gemv": 12.80626547091101,
+        "q4k_primitive_reduction": 17.91420248030262,
+        "fallback_quant_fused": 24.236171251974447,
+        "attention_misc": 2.0213572329330662,
+        "norm_sampling_misc": 2.908206692857858,
+        "copy": 0.08013528607757855,
+        "other_amd": 13.363723833980467,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "r_8_32_4_20_4_2_32",
+          188.54848000000004
+        ],
+        [
+          "q4k_gemv_partial_17408_5120_1",
+          81.96731999999997
+        ],
+        [
+          "q6k_gemv_partial_5120_17408_1",
+          69.34232
+        ],
+        [
+          "q4k_gemv_partial_5120_5120_1",
+          37.58720000000002
+        ],
+        [
+          "r_1187_32_4_20_2_2_2_32n1",
+          37.08432
+        ],
+        [
+          "r_8_8_16_2_20_2_2_2_32",
+          31.809000000000022
+        ],
+        [
+          "r_8_8_16_2_20_4_2_32",
+          31.30388
+        ],
+        [
+          "q4k_gemv_partial_5120_17408_4",
+          24.855680000000003
+        ],
+        [
+          "E_5_2_2_16_4_4",
+          3.715759999999999
+        ],
+        [
+          "r_16_320n1",
+          3.67436
+        ],
+        [
+          "r_16_320",
+          3.4391999999999983
+        ],
+        [
+          "r_40_(start_pos+1)_16_8",
+          2.4077199999999963
+        ],
+        [
+          "r_5_2_4_(start_pos+1)n1",
+          2.316360000000001
+        ],
+        [
+          "r_5_2_8_16_4_(start_pos+1)",
+          2.285719999999998
+        ],
+        [
+          "r_5_2_4_(start_pos+1)",
+          2.021160000000002
+        ],
+        [
+          "r_32_4_1187",
+          1.9773599999999998
+        ],
+        [
+          "E_136_32_4",
+          1.9278399999999998
+        ],
+        [
+          "E_5_(start_pos+1)_2_4",
+          1.9141199999999992
+        ],
+        [
+          "r_8_16_8",
+          1.8638400000000048
+        ],
+        [
+          "r_40_16_8",
+          1.8361200000000042
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/qk-14b-remeasure-20260612/14b-generated-named-debug2.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
+    "model": "14B",
+    "mode": "QK_GENERATED_POLICY named",
+    "tokens": 8,
+    "parse_stats": {
+      "lines": 13387,
+      "amd_lines": 12623,
+      "token_lines": 8,
+      "ignored_lines": 476,
+      "non_amd_debug_lines": 280,
+      "trailing_amd_lines": 0,
+      "tokens": 8
+    },
+    "summary": {
+      "samples": 7,
+      "wall_ms_tok": 224.72285714285715,
+      "median_ms_tok": 223.54,
+      "tok_s": 4.45,
+      "amd_kernel_ms_tok": 41.74807142857132,
+      "residual_ms_tok": 182.97478571428582,
+      "residual_pct": 81.42241872528706,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 21.642028571428543,
+        "q6k_primitive_gemv": 8.602371428571427,
+        "q4k_primitive_reduction": 1.1408114285714237,
+        "fallback_quant_fused": 5.337702857142857,
+        "attention_misc": 1.5551485714285753,
+        "norm_sampling_misc": 2.1190628571428487,
+        "copy": 0.06960857142857144,
+        "other_amd": 1.281337142857143,
+        "residual_overhead": 182.97478571428582
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 9.630541746659365,
+        "q6k_primitive_gemv": 3.8279913035739255,
+        "q4k_primitive_reduction": 0.5076526006636726,
+        "fallback_quant_fused": 2.3752380710208127,
+        "attention_misc": 0.6920295475061363,
+        "norm_sampling_misc": 0.9429672104051938,
+        "copy": 0.030975296555757568,
+        "other_amd": 0.5701854983280994,
+        "residual_overhead": 81.42241872528706
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 51.83958882617339,
+        "q6k_primitive_gemv": 20.60543429722165,
+        "q4k_primitive_reduction": 2.7326086919327284,
+        "fallback_quant_fused": 12.78550762823949,
+        "attention_misc": 3.7250788316996872,
+        "norm_sampling_misc": 5.075834127496045,
+        "copy": 0.1667348192303156,
+        "other_amd": 3.0692127780068623,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "q4k_gemv_partial_17408_5120_1",
+          79.66536000000006
+        ],
+        [
+          "q6k_gemv_partial_5120_17408_2",
+          49.195599999999985
+        ],
+        [
+          "q4k_gemv_partial_5120_5120_1",
+          37.379
+        ],
+        [
+          "r_1187_32_4_20_2_2_2_32n1",
+          37.36392
+        ],
+        [
+          "q4k_gemv_partial_5120_17408_2",
+          23.95572
+        ],
+        [
+          "q6k_gemv_partial_1024_5120_2",
+          11.020999999999997
+        ],
+        [
+          "q4k_gemv_partial_1024_5120_4",
+          10.494120000000006
+        ],
+        [
+          "E_5_2_2_16_4_4",
+          3.7482799999999994
+        ],
+        [
+          "r_16_320n1",
+          3.670560000000003
+        ],
+        [
+          "r_16_320",
+          3.421720000000002
+        ],
+        [
+          "r_40_(start_pos+1)_16_8",
+          2.383839999999998
+        ],
+        [
+          "r_5_2_4_(start_pos+1)n1",
+          2.3167600000000017
+        ],
+        [
+          "r_5_2_8_16_4_(start_pos+1)",
+          2.2723599999999986
+        ],
+        [
+          "r_5_2_4_(start_pos+1)",
+          2.0034
+        ],
+        [
+          "r_32_4_1187",
+          1.9452800000000001
+        ],
+        [
+          "E_136_32_4",
+          1.9138000000000017
+        ],
+        [
+          "E_5_(start_pos+1)_2_4",
+          1.9096799999999987
+        ],
+        [
+          "r_8_16_8",
+          1.8548400000000052
+        ],
+        [
+          "r_40_16_8",
+          1.8256000000000054
+        ],
+        [
+          "E_40_32_4n1",
+          1.7929199999999972
+        ]
+      ]
+    }
+  }
+]

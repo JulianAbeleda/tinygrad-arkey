@@ -1,0 +1,29 @@
+Q4K_PRIMITIVE_DEBUG installed=180 skipped_total=263 not_q4_k=202 policy_fallback=61
+Q4K_PRIMITIVE_DEBUG installed_linears blk.0.attn_output.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.ffn_gate.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.ffn_up.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.attn_output.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.ffn_gate.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.ffn_up.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] ...+172
+Q6K_PRIMITIVE_DEBUG installed=20 skipped_total=423 not_q6_k=402 policy_fallback=21
+Q6K_PRIMITIVE_DEBUG installed_linears blk.0.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.2.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.3.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.4.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.7.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.10.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.13.ffn_down.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] ...+12
+using model "Qwen3 14B Awq Compatible Instruct" with 9,001,752,960 bytes and 14,768,307,200 params
+scheduled     3 kernels in    12.29 ms | CACHE MISS 50c9ac64 |   30788 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   346.19 ms | CACHE MISS f6d7c233 |   46660 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   252.18 ms | CACHE MISS 549b27d5 |   48034 uops in cache | <frozen runpy>:88
+scheduled   617 kernels in  2076.02 ms | CACHE MISS 9178f71e |   53703 uops in cache | <frozen runpy>:88
+memory reduced from 2931.70 MB -> 44.25 MB, 1208 -> 1 bufs
+scheduled    22 kernels in   170.94 ms | CACHE MISS f73b4ea6 |   81099 uops in cache | <frozen runpy>:88
+scheduled    22 kernels in   118.77 ms | CACHE MISS 1906d7d3 |   81482 uops in cache | <frozen runpy>:88
+scheduled    50 kernels in   117.84 ms | CACHE MISS 83946bfd |   82095 uops in cache | <frozen runpy>:88
+memory reduced from 60.80 MB -> 1.33 MB, 606 -> 1 bufs
+scheduled     3 kernels in     1.45 ms |  cache hit 50c9ac64 |   93453 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   182.43 ms | CACHE MISS 3beab7ad |   96326 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   172.46 ms | CACHE MISS f4a12339 |   96351 uops in cache | <frozen runpy>:88
+scheduled    50 kernels in   145.04 ms | CACHE MISS 88aa2fee |   96683 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 2959.10 MB -> 45.51 MB, 968 -> 1 bufs
+scheduled    22 kernels in     2.50 ms |  cache hit f73b4ea6 |   98674 uops in cache | <frozen runpy>:88
+scheduled    22 kernels in     1.59 ms |  cache hit 1906d7d3 |   98684 uops in cache | <frozen runpy>:88
+scheduled    50 kernels in     3.02 ms |  cache hit 83946bfd |   98783 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 71.50 MB -> 2.01 MB, 848 -> 1 bufs
+165.09 ms,   6.06 tok/s,   53.54 GB/s, 8839/18048 MB  --  !:
+ 40.93 ms,  24.43 tok/s,  210.70 GB/s, 8623/18048 MB  --  !:
+ 41.17 ms,  24.29 tok/s,  209.49 GB/s, 8625/18048 MB  --  !: 1
+ 40.98 ms,  24.40 tok/s,  210.50 GB/s, 8627/18048 MB  --  !: 1.

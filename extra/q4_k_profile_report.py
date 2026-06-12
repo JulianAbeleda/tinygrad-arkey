@@ -48,7 +48,9 @@ NORM_SAMPLING_EXACT = ("r_16_8", "r_16_8n1", "r_16_256", "r_16_256n1", "r_16_256
 MODEL_ORDER = {"8B": 0, "14B": 1}
 MODE_ORDER = {
   "baseline batched": 0, "Q4K_PRIMITIVE=1 batched": 1, "Q4K+Q6K_PRIMITIVE=1 batched": 2,
-  "baseline named": 3, "Q4K_PRIMITIVE=1 named": 4, "Q4K+Q6K_PRIMITIVE=1 named": 5,
+  "QK_GENERATED_POLICY batched": 3,
+  "baseline named": 4, "Q4K_PRIMITIVE=1 named": 5, "Q4K+Q6K_PRIMITIVE=1 named": 6,
+  "QK_GENERATED_POLICY named": 7,
 }
 
 @dataclass
@@ -96,13 +98,16 @@ def _label(path:pathlib.Path) -> tuple[str, str]:
   model = model_match.group(1).upper()
   is_baseline = "baseline" in stem
   is_primitive = "primitive" in stem
-  if is_baseline == is_primitive:
-    raise ValueError(f"{path}: filename must include exactly one of baseline or primitive")
+  is_generated = "generated" in stem or "policy" in stem
+  if sum((is_baseline, is_primitive, is_generated)) != 1:
+    raise ValueError(f"{path}: filename must include exactly one of baseline, primitive, or generated/policy")
   is_batched = "batched" in stem
   is_named = "jitbs1" in stem or "named" in stem
   if is_batched == is_named:
     raise ValueError(f"{path}: filename must include exactly one of batched or jitbs1/named")
-  mode = "Q4K+Q6K_PRIMITIVE=1" if is_primitive and "q4q6" in stem else "Q4K_PRIMITIVE=1" if is_primitive else "baseline"
+  mode = ("QK_GENERATED_POLICY" if is_generated else
+          "Q4K+Q6K_PRIMITIVE=1" if is_primitive and "q4q6" in stem else
+          "Q4K_PRIMITIVE=1" if is_primitive else "baseline")
   mode += " named" if is_named else " batched"
   return model, mode
 

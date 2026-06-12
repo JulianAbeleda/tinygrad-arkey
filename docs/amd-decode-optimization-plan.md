@@ -912,3 +912,43 @@ Verdict:
   full-decode gate exist;
 - do not make generated policy a global default. The accepted artifact is the
   14B full-shape policy under `bench/qk-semantic-20260612/`.
+
+## Step 28 14B generated-policy remeasure audit (2026-06-12)
+
+The Step 27 14B result had three red flags: explicit baseline was lower than
+older notes, generated 14B reached a higher fraction of llama.cpp than 8B, and
+the explicit-to-generated delta was too large to accept without attribution.
+
+Audit artifact: `bench/qk-14b-remeasure-20260612/`.
+
+Repeated decode:
+
+| mode | runs | mean tok/s | range | conclusion |
+|---|---:|---:|---:|---|
+| prior `c3315d6ad` explicit Q4/Q6 | 3 | `22.78` | `22.04-23.16` | prior explicit also low |
+| current `a5ee7f65a` explicit Q4/Q6 | 3 | `23.27` | `23.18-23.36` | no current regression |
+| current generated policy | 3 | `39.68` | `39.42-40.05` | stable generated result |
+
+Coverage:
+
+- explicit installs `180` Q4 + `20` Q6 wrappers;
+- generated installs `240` Q4 + `40` Q6 wrappers;
+- generated adds primitive coverage for all 40 Q4 `attn_k` tensors, 20 Q4
+  `attn_v` tensors, and 20 Q6 `attn_v` tensors;
+- generated changes Q4 FFN gate/up local size, Q4 FFN down split, and Q6 FFN
+  down split choices.
+
+Profile:
+
+| mode | batched tok/s | batched AMD ms/tok | residual |
+|---|---:|---:|---:|
+| explicit Q4/Q6 | `24.07` | `40.84` | `1.71%` |
+| generated policy | `42.22` | `22.95` | `3.11%` |
+
+Named attribution explains the delta: fallback quant drops `18.75 -> 5.34
+ms/tok`, Q4 primitive reductions drop `13.86 -> 1.14 ms/tok`, and anonymous
+other AMD drops `10.34 -> 1.28 ms/tok`.
+
+Verdict: accept the 14B generated policy as a real, artifact-pinned,
+model-specific win. The suspected explicit-regression explanation is false on
+fresh runs. Do not generalize this into a global generated-policy default.

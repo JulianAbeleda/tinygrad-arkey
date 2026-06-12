@@ -18,8 +18,8 @@ Current stable paths:
   Same-commit rerun: `51.36 tok/s`; prior stable run: about `58 tok/s`.
 - Qwen3-14B-Q4_K_M: use the accepted generated policy
   `QK_GENERATED_POLICY=bench/qk-semantic-20260612/14b-full-level2-skip-stopped-policy.json`.
-  Repeated 128-token runs: `40.50` and `40.09 tok/s`, about `61%` of the
-  llama.cpp reference.
+  Remeasure audit: `39.68 tok/s` mean across three fresh runs (`39.42-40.05`
+  range), about `60%` of the llama.cpp reference.
 - Correctness is verified at the kernel boundary and by greedy end-to-end A/B.
 - BEAM/risky schedule search is guarded and must not run on Mac/TinyGPU paths.
 
@@ -36,7 +36,7 @@ compiler research is the point.
 | Generic BEAM | Not enough for this gap, and unsafe on remote/Mac without guards. | BEAM returns only after there is a semantic primitive/candidate space worth tuning. |
 | Expression-vectorization probe | Failed. Rewriting byte expressions did not make codegen emit wider useful loads. | Stop trying to garden `gguf.py` scalar byte math. |
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
-| Generated policy | Model-specific result. Full-shape stop-gated generation is flat on 8B (`50.94` vs `51.36 tok/s`) and accepted on 14B (`40.50`/`40.09` vs explicit `23.44 tok/s` same-commit rerun). Both generated policies pass 32-token greedy A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 14B artifact when running that exact model/hardware path; do not make it a global default. |
+| Generated policy | Model-specific result. Full-shape stop-gated generation is flat on 8B (`50.94` vs `51.36 tok/s`) and accepted on 14B after remeasure audit (`39.68 tok/s` mean vs current explicit `23.27`; prior `c3315d6ad` explicit also only `22.78`). Both generated policies pass 32-token greedy A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 14B artifact when running that exact model/hardware path; do not make it a global default. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, and policy cache exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
@@ -69,6 +69,10 @@ It is a representation/lowering boundary:
    machine-generated schedule/layout policy can matter when it changes coverage
    and split decisions at the model level. It produced a real 14B win while also
    rejecting isolated packed-dot candidates by stop rule.
+8. The 14B remeasure audit explains that win: generated policy installs `280`
+   wrappers versus `200` explicit, adds Q4 `attn_k`, Q4/Q6 `attn_v` coverage,
+   changes FFN split/local choices, and drops batched AMD kernel time from
+   `40.84` to `22.95 ms/tok`.
 
 So the machine-first research hypothesis is:
 
@@ -116,5 +120,6 @@ worth doing only if the research itself is the goal.
 - Measurement log and detailed verdicts: `docs/amd-rocm-llamacpp-research.md`
 - Current generated-search artifacts: `bench/qk-ansor-20260612/README.md`
 - Semantic generated-search artifacts: `bench/qk-semantic-20260612/README.md`
+- 14B generated-policy audit: `bench/qk-14b-remeasure-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

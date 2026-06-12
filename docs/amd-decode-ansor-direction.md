@@ -11,9 +11,9 @@ contains the research-path details after that decision state.
 
 Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
 Follow-up work added policy parity diagnostics, q8_1 level-2 candidates,
-semantic stop gates, PMC parsing, and full-shape generated-policy decode gates.
-The result is split: 8B generated policy is flat versus explicit flags, while
-14B generated policy is a real opt-in runtime win.
+semantic stop gates, PMC parsing, full-shape generated-policy decode gates, and
+a 14B remeasure audit. The result is split: 8B generated policy is flat versus
+explicit flags, while 14B generated policy is a real opt-in runtime win.
 
 ## Decision
 
@@ -100,6 +100,22 @@ comparison. The useful win is therefore not a q8/vdot win; it is generated
 selection over the existing runtime-supported Q4/Q6 primitive families.
 
 Artifacts: `bench/qk-semantic-20260612/`.
+
+Remeasure audit:
+
+| check | result |
+|---|---|
+| current explicit, 3 fresh runs | `23.27 tok/s` mean, `23.18-23.36` range |
+| prior `c3315d6ad` explicit, 3 fresh runs | `22.78 tok/s` mean, `22.04-23.16` range |
+| current generated, 3 fresh runs | `39.68 tok/s` mean, `39.42-40.05` range |
+| batched DEBUG=2 AMD ms/tok | explicit `40.84`, generated `22.95` |
+| named fallback quant ms/tok | explicit `18.75`, generated `5.34` |
+| named Q4 reduction ms/tok | explicit `13.86`, generated `1.14` |
+
+The audit rules out the suspected `model.py` explicit-regression explanation:
+the prior commit is also around `23 tok/s`. The win is explained by coverage and
+schedule-policy selection, not by q8/vdot. Artifact:
+`bench/qk-14b-remeasure-20260612/`.
 
 Level-2 generation now includes real Q4_K x q8_1 activation candidates. The
 first lowering used per-element float-style dequant and lost. The second lowering

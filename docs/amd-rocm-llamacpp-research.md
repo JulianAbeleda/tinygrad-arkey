@@ -1827,3 +1827,62 @@ Interpretation:
   speed gates.
 - Generated policy should stay opt-in and artifact-pinned; do not make it a
   global default.
+
+## 14B generated-policy remeasure audit (2026-06-12)
+
+The 14B generated-policy result was remeasured because it had plausible artifact
+signals: a low explicit baseline, a surprisingly high percent of the llama.cpp
+reference, and a large explicit-to-generated jump.
+
+Artifacts: `bench/qk-14b-remeasure-20260612/`.
+
+Repeated fresh-process decode:
+
+| mode | runs | avg tok/s mean | range | note |
+|---|---:|---:|---:|---|
+| prior `c3315d6ad` explicit Q4/Q6 | 3 | `22.78` | `22.04-23.16` | prior code also low |
+| current `a5ee7f65a` explicit Q4/Q6 | 3 | `23.27` | `23.18-23.36` | stable |
+| current `a5ee7f65a` generated policy | 3 | `39.68` | `39.42-40.05` | stable |
+
+This rules out the proposed explanation that the `model.py` generated-family
+matching refactor regressed explicit 14B. The older `~28 tok/s` 14B number was
+not reproduced on either commit in this audit.
+
+Install/debug and policy parity:
+
+| mode | Q4 wrappers | Q6 wrappers | total generated/explicit policy installs |
+|---|---:|---:|---:|
+| explicit Q4/Q6 flags | `180` | `20` | `200` |
+| generated policy | `240` | `40` | `280` |
+
+Generated policy adds real coverage and schedule changes:
+
+- Q4 `attn_k`: 40 tensors move from fused graph to primitive;
+- Q4 `attn_v`: 20 tensors move from fused graph to primitive;
+- Q6 `attn_v`: 20 tensors move from fused graph to primitive;
+- Q4 `ffn_gate` and `ffn_up`: 40 tensors each change `LOCAL:0:64` to
+  `LOCAL:0:32`;
+- Q4 `ffn_down`: 20 tensors change split from `parts=4` to `parts=2`;
+- Q6 `ffn_down`: 20 tensors change split from `parts=1` to `parts=2`.
+
+DEBUG=2 profile:
+
+| mode | tok/s | wall ms/tok | AMD kernel ms/tok | residual ms/tok | residual |
+|---|---:|---:|---:|---:|---:|
+| explicit Q4/Q6 batched | `24.07` | `41.55` | `40.84` | `0.71` | `1.71%` |
+| generated policy batched | `42.22` | `23.69` | `22.95` | `0.74` | `3.11%` |
+
+Named attribution, AMD-kernel ms/tok:
+
+| bucket | explicit | generated | movement |
+|---|---:|---:|---|
+| Q4 primitive GEMV | `20.63` | `21.64` | similar |
+| Q6 primitive GEMV | `9.91` | `8.60` | slightly lower |
+| Q4 primitive reductions | `13.86` | `1.14` | major reduction overhead removed |
+| fallback quant fused | `18.75` | `5.34` | major coverage win |
+| other AMD | `10.34` | `1.28` | anonymous leftovers mostly removed |
+
+Verdict: the 14B generated policy survives the audit. The win is explained by
+coverage plus schedule-policy selection over existing Q4/Q6 primitive families,
+not by q8/vdot and not by residual/dispatch noise. Keep it opt-in and
+artifact-pinned.
