@@ -1502,3 +1502,44 @@ Verdict: do not start with primitive GEMV v2. The current primitive GEMV is only
 The next target is mapping the remaining anonymous generic kernels back to
 model ops and policy coverage holes, then deciding whether to extend primitive
 coverage, revise the role policy, or add a fused FFN/intermediate lowering.
+
+## Q4_K correctness and safety gates (2026-06-11)
+
+Step 18 added `extra/q4_k_output_ab.py`, `extra/q4_k_safety.py`, guarded the
+risky auto-schedule entry points, and added `Q4K_PRIMITIVE_DEBUG=1` install
+diagnostics.
+
+Greedy output A/B results:
+
+| model | tokens | result | baseline elapsed | primitive elapsed |
+|---|---:|---|---:|---:|
+| Qwen3-8B-Q4_K_M | 32 | exact token match | `29.067s` | `32.727s` |
+| Qwen3-14B-Q4_K_M | 32 | exact token match | `37.542s` | `41.835s` |
+
+The harness runs baseline and primitive in separate subprocesses and compares
+generated token IDs exactly. These timings include model load/JIT/wall overhead
+and are not used as speed measurements.
+
+Safety checks:
+
+| check | result |
+|---|---|
+| direct primitive `--schedule auto` without override | refused before risky path |
+| default opt sweep containing the `auto` candidate | refused before risky path |
+| BEAM containment harness without override | refused before risky path |
+| policy sweep with synthetic `PCI+AMD` device label | refused before model metadata/GPU work |
+| policy sweep with synthetic `CUDA` device label | refused as non-native AMD |
+| explicit fixed opt sweep candidate (`baseline`) | passes |
+| fixed primitive smoke (`LOCAL:0:64`, 64 rows) | passes correctness |
+
+Diagnostics check:
+
+```text
+Q4K_PRIMITIVE_DEBUG installed=162 skipped_total=237 not_q4_k=182 policy_fallback=55
+```
+
+Verdict: the model-level "fast garbage" risk is closed for the tested 8B and
+14B greedy path, and the BEAM/auto-schedule safety rule is now enforced in code.
+The remaining optimization target is still the step 17 residual: map anonymous
+generic kernels back to model ops and decide whether coverage/policy expansion
+or a new fused lowering is the next move.

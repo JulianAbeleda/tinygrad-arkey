@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse, json, os, pathlib, subprocess, sys, time
 
+from extra.q4_k_safety import assert_q4k_risky_search_allowed
+
 def classify(rc:int, out:str, timeout:bool) -> str:
   if timeout: return "timeout"
   if rc == 0: return "pass"
@@ -36,6 +38,7 @@ if __name__ == "__main__":
   parser.add_argument("--log-dir", type=pathlib.Path)
   parser.add_argument("--tail-lines", type=int, default=12)
   args = parser.parse_args()
+  assert_q4k_risky_search_allowed(args.device, "Q4_K BEAM containment auto-schedule probe")
 
   base = [sys.executable, "extra/q4_k_gemv_primitive.py", str(args.gguf), "--device", args.device,
           "--tensor", args.tensor, "--rows", str(args.rows), "--mode", "partial", "--parts", "1",

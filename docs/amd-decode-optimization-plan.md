@@ -595,3 +595,39 @@ TWO open items before it is production-trustworthy:
       work: add a CODE guard refusing BEAM/auto-schedule on remote/Mac devices,
       and treat in-process HW-fault as unrecoverable (real process isolation or
       a device-reset path), since the harness gives false confidence.
+
+## Step 18 gate closure (2026-06-11)
+
+Step 18 closes both audit gates before more optimization:
+
+1. End-to-end greedy output A/B now exists in `extra/q4_k_output_ab.py`.
+   Baseline (`Q4K_PRIMITIVE=0`) and primitive (`Q4K_PRIMITIVE=1`) run in
+   separate subprocesses so env flags, JIT state, caches, and model lifetime do
+   not leak across the comparison.
+
+2. Exact 32-token greedy output A/B passed on both local Qwen3 models:
+
+| model | generated tokens | result | baseline elapsed | primitive elapsed |
+|---|---:|---|---:|---:|
+| Qwen3-8B-Q4_K_M | 32 | exact token match | `29.067s` | `32.727s` |
+| Qwen3-14B-Q4_K_M | 32 | exact token match | `37.542s` | `41.835s` |
+
+These elapsed numbers are harness wall time, not throughput claims. The purpose
+is correctness at the assembled model boundary.
+
+3. Risky Q4_K search now has a real code guard in `extra/q4_k_safety.py`.
+   `--schedule auto`, the opt-sweep auto candidate, and the BEAM containment
+   probe are disabled by default and require `Q4K_ALLOW_RISKY_SEARCH=1`. Any
+   Mac/TinyGPU/remote-risk device label (`REMOTE`, `APL_REMOTE_SOCK`, `PCI`,
+   `REMOTE`, `TINYGPU`, `APL`) is refused even before model metadata is read.
+   Fixed explicit primitive schedules and `Q4K_PRIMITIVE=1` remain allowed.
+
+4. `Q4K_PRIMITIVE_DEBUG=1` now reports install coverage and skip reasons. On
+   Qwen3-8B it reports `installed=162`, `skipped_total=237`, with
+   `not_q4_k=182` and `policy_fallback=55`.
+
+Status after step 18: the 1.86x/1.68x primitive win has passed the cheap
+end-to-end correctness gate, and risky search is guarded in code rather than
+only by prose. The next optimization decision can proceed from the step 17
+profile: map the remaining anonymous generic kernels back to model ops/policy
+coverage holes before starting primitive v2.

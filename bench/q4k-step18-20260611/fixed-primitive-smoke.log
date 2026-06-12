@@ -1,0 +1,5 @@
+tensor=blk.0.ffn_gate.weight full_shape=(12288, 4096) primitive_shape=(64,4096) q4_bytes=147456 nwords=36864 mode=partial parts=1 schedule=none opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] device=AMD
+unpack_correctness: rows=2 max_abs=0
+correctness: max_abs=0.000589013
+q4k_gemv_primitive_partial: wall=3.310 ms (0.04 Q4-GB/s), device=n/a, kernels=1.0
+rc=0

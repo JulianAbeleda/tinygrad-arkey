@@ -1,0 +1,14 @@
+[
+  {
+    "device_ms": 0.051,
+    "elapsed_s": 1.423,
+    "gemv_max_abs": 0.000589013,
+    "name": "baseline",
+    "opts": [],
+    "q4_gbs": 2.88,
+    "schedule": "none",
+    "status": "pass",
+    "tail": "*** AMD       20 r_16_512                                       arg  3 mem   0.00 GB tm     26.92us/   127.88ms (      2 GFLOPS    2|2      GB/s) \nunpack_correctness: rows=2 max_abs=0\n*** AMD       21 q4k_gemv_partial_64_4096_1                     arg  3 mem   0.00 GB tm     90.28us/   127.97ms (     18 GFLOPS    2|10     GB/s) \n*** AMD       22 r_16_4                                         arg  3 mem   0.00 GB tm      7.60us/   127.98ms (      0 GFLOPS    0|0      GB/s) \ncorrectness: max_abs=0.000589013\n*** AMD       23 q4k_gemv_partial_64_4096_1                     arg  3 mem   0.00 GB tm     51.16us/   128.03ms (     32 GFLOPS    3|18     GB/s) \n*** AMD        1 q4k_gemv_partial_64_4096_1                     arg  3 mem   0.00 GB tm     51.16us/     0.05ms (     32 GFLOPS    3|18     GB/s) \nq4k_gemv_primitive_partial: wall=3.597 ms (0.04 Q4-GB/s), device=0.051 ms (2.88 Q4-GB/s), kernels=1.0",
+    "unpack_max_abs": 0.0
+  }
+]

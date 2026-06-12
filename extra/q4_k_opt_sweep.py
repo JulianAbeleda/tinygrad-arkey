@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse, json, os, pathlib, re, subprocess, sys, time
 
+from extra.q4_k_safety import assert_q4k_risky_search_allowed
+
 DEFAULT_CANDIDATES: list[tuple[str, str, list[str]]] = [
   ("baseline", "none", []),
   ("auto", "auto", []),
@@ -85,6 +87,8 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   selected = [c for c in DEFAULT_CANDIDATES if not args.only or c[0] in set(args.only)]
+  if any(schedule == "auto" for _, schedule, _ in selected):
+    assert_q4k_risky_search_allowed(args.device, "Q4_K opt sweep auto-schedule candidate")
   results = []
   for name, schedule, opts in selected:
     print(f"=== {name} ===", flush=True)

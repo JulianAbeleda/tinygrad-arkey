@@ -8,6 +8,7 @@ from tinygrad.helpers import GlobalCounters, cdiv
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
 from extra.q4_k_bench import GGML_Q4_K, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, pick_tensor, q4_k_reference, read_metadata, tensor_shape
+from extra.q4_k_safety import assert_q4k_risky_search_allowed
 
 Q4K_WORDS_PER_BLOCK = Q4_K_BLOCK_BYTES // 4
 
@@ -132,6 +133,8 @@ if __name__ == "__main__":
   parser.add_argument("--unpack-check-rows", type=int, default=2, help="rows to use for direct decoded-weight correctness gate")
   parser.add_argument("--seed", type=int, default=1337, help="seed for random activation correctness gate")
   args = parser.parse_args()
+  if args.schedule == "auto":
+    assert_q4k_risky_search_allowed(args.device, "Q4_K primitive --schedule auto")
 
   meta = read_metadata(args.gguf)
   info = pick_tensor(meta.infos, args.tensor)

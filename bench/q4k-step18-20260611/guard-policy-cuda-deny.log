@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/extra/q4_k_policy_sweep.py", line 154, in <module>
+    assert_q4k_native_sweep_allowed(args.device, "Q4_K policy sweep")
+  File "/home/ubuntu/tinygrad-arkey/extra/q4_k_safety.py", line 21, in assert_q4k_native_sweep_allowed
+    raise RuntimeError(f"Refusing {what} on {reason}. Run Q4_K search/tuning only on native Ubuntu AMD.")
+RuntimeError: Refusing Q4_K policy sweep on non-native AMD device 'CUDA'. Run Q4_K search/tuning only on native Ubuntu AMD.
+rc=1

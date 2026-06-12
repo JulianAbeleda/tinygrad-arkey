@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/ubuntu/tinygrad-arkey/extra/q4_k_beam_containment.py", line 41, in <module>
+    assert_q4k_risky_search_allowed(args.device, "Q4_K BEAM containment auto-schedule probe")
+  File "/home/ubuntu/tinygrad-arkey/extra/q4_k_safety.py", line 25, in assert_q4k_risky_search_allowed
+    raise RuntimeError(f"{what} is disabled by default. Set Q4K_ALLOW_RISKY_SEARCH=1 only on native Ubuntu AMD.")
+RuntimeError: Q4_K BEAM containment auto-schedule probe is disabled by default. Set Q4K_ALLOW_RISKY_SEARCH=1 only on native Ubuntu AMD.
+rc=1

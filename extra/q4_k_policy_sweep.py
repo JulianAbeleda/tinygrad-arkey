@@ -3,6 +3,7 @@ import argparse, json, os, pathlib, re, subprocess, sys, time
 from dataclasses import dataclass
 
 from extra.q4_k_bench import GGML_Q4_K, model_shape_targets, read_metadata, tensor_shape
+from extra.q4_k_safety import assert_q4k_native_sweep_allowed
 
 SUMMARY_RE = re.compile(
   r"^(?P<tensor>\S+) (?P<shape>\S+) (?P<name>\S+): (?P<ms>[0-9.]+) ms .*?"
@@ -150,6 +151,7 @@ if __name__ == "__main__":
   parser.add_argument("--tail-lines", type=int, default=8)
   parser.add_argument("--json", type=pathlib.Path, help="write full JSON results and policy")
   args = parser.parse_args()
+  assert_q4k_native_sweep_allowed(args.device, "Q4_K policy sweep")
 
   meta = read_metadata(args.gguf)
   if args.tensor:

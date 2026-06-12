@@ -1,5 +1,5 @@
 from __future__ import annotations
-import functools, itertools, pathlib
+import collections, functools, itertools, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function
 from tinygrad.helpers import prod
@@ -75,23 +75,50 @@ def _set_module_at(root, path:str, value) -> None:
 def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q4KPrimitiveLinear]:
   from extra.q4_k_gemv_primitive import parse_opt
   raw_words = Tensor(gguf, dtype=dtypes.uint32)
-  installed = []
+  installed: list[Q4KPrimitiveLinear] = []
+  skipped: collections.Counter[str] = collections.Counter()
+  debug = bool(getenv("Q4K_PRIMITIVE_DEBUG", 0))
   for name, dims, typ, off in meta["tensor_infos"]:
-    if typ != 12 or len(dims) != 2 or not name.endswith(".weight"): continue
-    if (policy := _q4k_policy(name)) is None: continue
+    if typ != 12:
+      skipped["not_q4_k"] += 1
+      continue
+    if len(dims) != 2:
+      skipped["not_2d"] += 1
+      continue
+    if not name.endswith(".weight"):
+      skipped["not_weight"] += 1
+      continue
+    if (policy := _q4k_policy(name)) is None:
+      skipped["policy_fallback"] += 1
+      continue
     rows, cols = tuple(reversed(dims))
     byte_start = meta["data_start"] + off
-    if byte_start % 4 != 0: continue
+    if byte_start % 4 != 0:
+      skipped["misaligned"] += 1
+      continue
     module_path = name[:-len(".weight")]
     try: module = _module_at(model, module_path)
-    except (AttributeError, IndexError, ValueError): continue
-    if not hasattr(module, "weight") or getattr(module, "bias", None) is not None: continue
+    except (AttributeError, IndexError, ValueError):
+      skipped["missing_module"] += 1
+      continue
+    if not hasattr(module, "weight"):
+      skipped["missing_weight"] += 1
+      continue
+    if getattr(module, "bias", None) is not None:
+      skipped["bias"] += 1
+      continue
     q4_bytes = prod(dims) // 256 * 144
     words = raw_words[byte_start//4:byte_start//4+q4_bytes//4].to(None).contiguous().realize()
     parts, opt_specs = policy
     q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name)
     _set_module_at(model, module_path, q4k_linear)
     installed.append(q4k_linear)
+  if debug:
+    skipped_s = " ".join(f"{k}={v}" for k, v in sorted(skipped.items()))
+    installed_s = " ".join(f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}" for x in installed[:8])
+    more_s = f" ...+{len(installed)-8}" if len(installed) > 8 else ""
+    print(f"Q4K_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s}")
+    if installed: print(f"Q4K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
   return installed
 
 def pairwise_topk(x: Tensor, k: int) -> tuple[Tensor, Tensor]:
