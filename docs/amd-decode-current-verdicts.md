@@ -17,13 +17,13 @@ Current stable paths:
 - Qwen3-8B-Q4_K_M: explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` is still
   the boring path, but the reproducible generated-policy pipeline now accepts
   a modest opt-in generated artifact:
-  `QK_GENERATED_POLICY=bench/qk-policy-pipeline-20260612/8b/policy.json`.
-  Stable-window result: `52.65 tok/s` generated versus `49.61 tok/s`
+  `QK_GENERATED_POLICY=bench/qk-harness-20260612/8b/policy.json`.
+  Current harness-matrix result: `53.49 tok/s` generated versus `49.35 tok/s`
   explicit.
 - Qwen3-14B-Q4_K_M: use the accepted generated policy
-  `QK_GENERATED_POLICY=bench/qk-policy-pipeline-20260612/14b/policy.json`.
-  Stable-window result: `39.99 tok/s` generated versus `22.53 tok/s`
-  explicit, about `60.8%` of the llama.cpp reference.
+  `QK_GENERATED_POLICY=bench/qk-harness-20260612/14b-rerun/policy.json`.
+  Current harness-matrix result: `39.61 tok/s` generated versus `22.76 tok/s`
+  explicit, about `60.2%` of the llama.cpp reference.
 - Qwen3-32B-Q4_K_M: the uncapped generated policy still OOMs, but a
   tensor-scoped `1536 MB` memory-capped generated policy now fits and is
   accepted against the generic fused baseline:
@@ -35,14 +35,14 @@ Current stable paths:
 - Correctness is verified at the kernel boundary and by greedy end-to-end A/B.
 - BEAM/risky schedule search is guarded and must not run on Mac/TinyGPU paths.
 
-Recommendation by default: keep generated policies opt-in and artifact-pinned,
-use the 8B/14B pipeline artifacts only for the matching model/hardware path,
-use the 32B capped artifact only when accepting the generic-baseline comparison,
-stop adding `extra/` q8 arithmetic variants, and move effort to the next
-higher-value goal unless compiler research is the point. Storage accounting and
-runtime caps are now in place; do not turn this into another kernel-search loop.
-The next layer is harness reliability: pinned specs, manifest-checked reuse,
-stage statuses, normalized decisions, and matrix summaries.
+Recommendation by default: keep generated policies opt-in and artifact-pinned.
+Use `bench/qk-harness-20260612/matrix-summary-rerun.md` as the current
+8B/14B/32B source of truth; use the 8B/14B harness artifacts only for the
+matching model/hardware path; use the 32B capped artifact only when accepting
+the generic-baseline comparison. Stop adding `extra/` q8 arithmetic variants,
+and move effort to the next higher-value goal unless compiler research is the
+point. Storage accounting and runtime caps are now in place; do not turn this
+into another kernel-search loop.
 
 ## Verdict Table
 
@@ -52,7 +52,7 @@ stage statuses, normalized decisions, and matrix summaries.
 | Generic BEAM | Not enough for this gap, and unsafe on remote/Mac without guards. | BEAM returns only after there is a semantic primitive/candidate space worth tuning. |
 | Expression-vectorization probe | Failed. Rewriting byte expressions did not make codegen emit wider useful loads. | Stop trying to garden `gguf.py` scalar byte math. |
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
-| Generated policy | Model-specific result. The reproducible pipeline accepts 8B as a modest win (`52.65` vs `49.61 tok/s`) and 14B as a strong win (`39.99` vs `22.53 tok/s`). Both pass 32-token greedy A/B. 32B uncapped policy OOMs, but a tensor-scoped `1536 MB` capped policy accepts versus generic baseline (`4.16` vs `3.44 tok/s`) and passes A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts when running those exact model/hardware paths. Use the 32B capped artifact only with the generic-baseline caveat. Do not make it a global default. |
+| Generated policy | Model-specific result. The current harness rerun matrix accepts 8B as a modest win (`53.49` vs `49.35 tok/s`) and 14B as a strong win (`39.61` vs `22.76 tok/s`). Both pass 32-token greedy A/B. 32B uncapped policy OOMs, but a tensor-scoped `1536 MB` capped policy accepts versus generic baseline (`4.16` vs `3.44 tok/s`) and passes A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts from `bench/qk-harness-20260612/` when running those exact model/hardware paths. Use the 32B capped artifact only with the generic-baseline caveat. Do not make it a global default. |
 | QK policy storage | Shape-scoped policy is too coarse for large models; 32B needs tensor-scoped storage decisions. A first memory cap exists and selects `144` primitive tensors under `1.49 GiB` (`64 attn_k`, `64 attn_v`, `16 ffn_down`). Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. | Future policy generation must include storage cost, benefit, and fallback decisions. Runtime caps are guardrails, not optimizers. Long-term fix is shared packed storage without per-token copies; otherwise move up to harness work. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |

@@ -77,6 +77,11 @@ JSON file containing an `experiments` list. It emits:
 - model, status, reference mode, speed, gain, percent of llama.cpp reference;
 - policy and runtime storage MB.
 
+The committed harness matrices are covered by
+`test/external/test_qk_experiment_matrix.py`, which regenerates them from the
+committed `decision.json` directories and compares both JSON and Markdown
+exactly. A stale matrix is now a test failure, not a prose audit finding.
+
 This is the layer that should answer 8B/14B/32B questions. Do not perfect 32B by
 hand; add it to the matrix when storage/harness changes make the run natural.
 
