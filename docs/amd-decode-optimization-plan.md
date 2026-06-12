@@ -507,3 +507,61 @@ run perplexity on a fixed text and require parity). Cheap, mandatory.
 - Intermittent slow outliers (8B ~24, 14B ~10 tok/s) — glance at cause.
 - Commit-discipline: f4876230c changes CORE tinygrad/llm/model.py+gguf.py runtime
   behavior but is tagged [test]; per coding-principles it is [runtime]. Minor.
+
+## CONSOLIDATED PARALLEL AUDIT (2026-06-11, 5 independent agents)
+
+1. PRIMITIVE KERNEL — PRIMITIVE-CORRECT. Scale/min 6-bit unpack, nibble
+   extraction + 8x32 element ordering (no permutation bug), dequant formula,
+   and split-K bounds (cdiv + in_range.where mask, parts=1 and 4) all verified
+   mathematically equivalent to the upstream-faithful q4_k_reference. The OOB
+   base for masked slots is harmless (contribution zeroed).
+
+2. MODEL INTEGRATION (f4876230c) — INTEGRATION-SOUND. Fallback guards complete;
+   decode_enabled-across-JIT is SAFE (prefill_jit/rollout_jit are separate JITs
+   and the flag is a pure function of the same shape that selects the JIT — no
+   stale-graph replay). CORRECTION to the prior single-thread audit: there is NO
+   dtype seam — the residual stream is fp32 (token_embd().float()), so BOTH the
+   primitive and the fallback return fp32. My earlier "fp32 vs fp16 seam"
+   concern was wrong. Path-walking safe, no prefill leakage, no expert-tensor
+   corruption (dotted policy names don't substring-match exps/shexp).
+
+3. MEASUREMENT — MEASUREMENT-FAIR. 1.86x/1.68x is real autoregressive decode,
+   wall-clock timed (conservative, includes dispatch), fair un-handicapped
+   baseline, identical warmup/window, headline is the full-128 average (not a
+   cherry-picked tail). Concerns: device_q4_eff_gbs "GB/s" is weight-bytes-
+   relative not true HBM bandwidth (narrative only, doesn't touch tok/s); the
+   avg/median reduction is manual/uncommitted; outlier causes uninvestigated.
+
+4. STORAGE — STORAGE-SOUND. 4-byte alignment guard correct and sufficient;
+   q4_bytes=prod//256*144 always %4==0; byte_start=data_start+off matches the
+   real loader's slice exactly; no overrun; little-endian consistent; runtime
+   self-checked vs struct.unpack.
+
+5. SHAPE POLICY — POLICY-SOUND (with overfit caveat). KV falls back for a REAL
+   measured reason: the primitive is device-time SLOWER than the fused graph on
+   the small KV shape (sweep, >5% min-gain guard). Foregone KV speedup is
+   immaterial (~5% of bytes, negative gain). Caveat: policy is name-keyed not
+   shape-keyed, overfit to one 8B/AMD sweep.
+
+6. BEAM CONTAINMENT (d6e4f629a) — CONTAINMENT-INSUFFICIENT (the one RED finding).
+   - The harness subprocess-isolates only the COMPILE-failure mode; it never
+     exercises the BEAM candidate-EXECUTION path that caused memory_lost=1.
+   - BEAM execution/timing runs IN-PROCESS on the live device (search.py:157-159);
+     a memory_lost HW fault is UNRECOVERABLE on the KFD/PCIe path (recover()
+     gated to AM only, ops_amd.py:897/1013). search.py:160-162 catches the fault
+     RuntimeError and keeps searching on an already-wedged GPU.
+   - NO code guard keeps BEAM off the Mac/TinyGPU path — only a prose doc rule.
+     A faulting candidate on the Mac would drop the PCIe bridge.
+   - No faulting-Opt extraction / blacklist exists; the "contained=true" signal
+     can be a FALSE NEGATIVE (stdout string-match classification + a single tiny
+     health kernel a partially-wedged GPU may still service).
+
+### Net
+The 1.86x win is correctness-verified (kernel + integration) and fairly measured.
+TWO open items before it is production-trustworthy:
+  (a) [YELLOW, standing] end-to-end greedy output A/B (Q4K_PRIMITIVE 0 vs 1,
+      temp 0, identical tokens) — still not done.
+  (b) [RED, new] BEAM containment is prose-only safety. Before ANY further BEAM
+      work: add a CODE guard refusing BEAM/auto-schedule on remote/Mac devices,
+      and treat in-process HW-fault as unrecoverable (real process isolation or
+      a device-reset path), since the harness gives false confidence.
