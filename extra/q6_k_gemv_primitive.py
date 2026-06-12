@@ -10,12 +10,9 @@ from tinygrad.helpers import GlobalCounters, cdiv
 from tinygrad.llm.gguf import ggml_data_to_tensor
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
-from extra.q4_k_bench import read_metadata, tensor_shape
-
-GGML_Q6_K = 14
-Q6_K_BLOCK_ELEMS = 256
-Q6_K_BLOCK_BYTES = 210
-Q6K_HALFWORDS_PER_BLOCK = Q6_K_BLOCK_BYTES // 2
+from extra.qk_layout import (
+  GGML_Q6_K, Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_BYTES, Q6_K_BLOCK_ELEMS, q6_k_reference, read_metadata, tensor_shape,
+)
 
 def parse_opt(spec:str) -> Opt:
   parts = spec.split(":")
@@ -158,7 +155,7 @@ if __name__ == "__main__":
     unpack_halfs = raw_halfs[byte_start//2:byte_start//2+(unpack_rows*row_bytes)//2].to(args.device).contiguous().realize()
     unpack_out = Tensor.empty(unpack_rows, k, dtype=dtypes.float32, device=args.device)
     unpack_got = unpack_out.custom_kernel(unpack_halfs, fxn=q6k_unpack_kernel(unpack_rows, k))[0].realize()
-    unpack_ref = ggml_data_to_tensor(raw[byte_start:byte_start+unpack_rows*row_bytes].to(args.device), unpack_rows*k, info.typ).reshape(unpack_rows, k).realize()
+    unpack_ref = q6_k_reference(raw[byte_start:byte_start+unpack_rows*row_bytes].to(args.device), unpack_rows*k).reshape(unpack_rows, k).realize()
     unpack_max_abs = (unpack_got - unpack_ref).abs().max().item()
     print(f"unpack_correctness: rows={unpack_rows} max_abs={unpack_max_abs:.6g}")
     if unpack_max_abs != 0:

@@ -4,9 +4,8 @@ from __future__ import annotations
 import argparse, json, os, pathlib, re, subprocess, sys, time
 from dataclasses import dataclass
 
-from extra.q4_k_bench import read_metadata, tensor_shape
 from extra.q4_k_safety import assert_q4k_native_sweep_allowed
-from extra.q6_k_gemv_primitive import GGML_Q6_K
+from extra.qk_layout import GGML_Q6_K, read_metadata, tensor_shape
 
 HEADER_RE = re.compile(r"^tensor=(?P<tensor>\S+) full_shape=\((?P<shape>[^)]*)\).*?quant_bytes=(?P<bytes>\d+)", re.MULTILINE)
 BENCH_RE = re.compile(r"^(?P<name>q6k_(?:fused_graph|gemv_primitive_partial)): .*?device=(?P<ms>[0-9.]+) ms \((?P<gbs>[0-9.]+) quant-GB/s\)", re.MULTILINE)

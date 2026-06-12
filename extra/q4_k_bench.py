@@ -1,91 +1,15 @@
 #!/usr/bin/env python3
-import argparse, csv, json, os, pathlib, struct, sys, time
-from dataclasses import dataclass
+import argparse, csv, json, os, pathlib, sys, time
 from math import prod
 
 from tinygrad import Tensor, TinyJit, dtypes
-from tinygrad.helpers import GlobalCounters, round_up
+from tinygrad.helpers import GlobalCounters
 from tinygrad.llm.gguf import ggml_data_to_tensor
 
-GGML_Q4_K = 12
-Q4_K_BLOCK_ELEMS = 256
-Q4_K_BLOCK_BYTES = 144
-
-@dataclass(frozen=True)
-class GGUFInfo:
-  name: str
-  dims: tuple[int, ...]
-  typ: int
-  off: int
-
-@dataclass(frozen=True)
-class GGUFMetadata:
-  data_start: int
-  infos: list[GGUFInfo]
-  kv: dict[str, int|float|str|bool|list]
-
-def read(fmt:str, f):
-  return struct.unpack("<"+fmt, f.read(struct.calcsize(fmt)))[0]
-
-def read_str(f) -> str:
-  return f.read(read("Q", f)).decode("utf-8")
-
-def read_value(f, typ:int):
-  if typ == 8: return read_str(f)
-  if typ == 9:
-    item_typ, n = read("i", f), read("Q", f)
-    return [read_value(f, item_typ) for _ in range(n)]
-  if typ == 0: return read("?", f)
-  if typ == 1: return read("b", f)
-  if typ == 2: return read("h", f)
-  if typ == 3: return read("H", f)
-  if typ == 4: return read("i", f)
-  if typ == 5: return read("I", f)
-  if typ == 6: return read("f", f)
-  if typ == 7: return read("?", f)
-  if typ == 10: return read("q", f)
-  if typ == 11: return read("Q", f)
-  if typ == 12: return read("d", f)
-  raise ValueError(f"unsupported GGUF value type {typ}")
-
-def read_metadata(path:pathlib.Path) -> GGUFMetadata:
-  with path.open("rb") as f:
-    magic, version, n_tensors, n_kv = f.read(4), read("i", f), read("q", f), read("q", f)
-    if magic != b"GGUF" or version not in (2, 3): raise ValueError(f"{path} is not a supported GGUF file")
-    alignment, kv = 32, {}
-    for _ in range(n_kv):
-      key, typ = read_str(f), read("i", f)
-      kv[key] = read_value(f, typ)
-      if key == "general.alignment": alignment = int(kv[key])
-    infos = [GGUFInfo(read_str(f), tuple(read("Q", f) for _ in range(read("I", f))), read("i", f), read("Q", f)) for _ in range(n_tensors)]
-    return GGUFMetadata(round_up(f.tell(), alignment), infos, kv)
-
-def pick_tensor(infos:list[GGUFInfo], name:str|None) -> GGUFInfo:
-  if name is not None:
-    for info in infos:
-      if info.name == name: return info
-    raise ValueError(f"tensor {name!r} not found")
-  for info in infos:
-    if info.typ == GGML_Q4_K and len(info.dims) == 2 and any(x in info.name for x in ("ffn_down", "ffn_up", "attn_q", "attn_output")):
-      return info
-  for info in infos:
-    if info.typ == GGML_Q4_K and len(info.dims) == 2: return info
-  raise ValueError("no 2D Q4_K tensor found")
-
-def tensor_shape(info:GGUFInfo) -> tuple[int, ...]:
-  return tuple(reversed(info.dims))
-
-def q4_k_weight_bytes(info:GGUFInfo) -> int:
-  return prod(info.dims) // Q4_K_BLOCK_ELEMS * Q4_K_BLOCK_BYTES
-
-def q4_k_reference(t:Tensor, n:int) -> Tensor:
-  blocks = t[:(n//Q4_K_BLOCK_ELEMS)*Q4_K_BLOCK_BYTES].reshape((-1, Q4_K_BLOCK_BYTES)).contiguous()
-  d, dmin = (blocks[:,i:i+2].bitcast(dtypes.float16).cast(dtypes.float32).unsqueeze(-1) for i in [0, 2])
-  s = blocks[:,4:16]
-  sc = s[:,0:4].bitwise_and(63).cat(s[:,8:12].bitwise_and(0xF).bitwise_or(s[:,0:4].rshift(6).lshift(4)), dim=-1)
-  mn = s[:,4:8].bitwise_and(63).cat(s[:,8:12].rshift(4).bitwise_or(s[:,4:8].rshift(6).lshift(4)), dim=-1)
-  q = Tensor.stack((qs:=blocks[:,16:144].reshape(-1,4,32)).bitwise_and(0xF), qs.rshift(4), dim=2).reshape(-1,8,32)
-  return (d * sc.unsqueeze(-1) * q - dmin * mn.unsqueeze(-1)).flatten(-2)
+from extra.qk_layout import (
+  GGML_Q4_K, GGUFInfo, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, model_shape_targets, pick_tensor, q4_k_reference,
+  q4_k_weight_bytes, read_metadata, tensor_shape,
+)
 
 def correctness_gate(raw_slice:Tensor, n:int, info:GGUFInfo) -> None:
   ref = q4_k_reference(raw_slice, n).reshape(*tensor_shape(info)).contiguous().realize()
@@ -106,26 +30,6 @@ def bench(label:str, iters:int, q4_bytes:int, fn) -> dict[str, float|int|str|Non
           "device_q4_eff_gbs": q4_bytes / dev_dt / 1e9 if dev_dt > 0 else None,
           "global_mem_mb": GlobalCounters.global_mem / iters / 1e6, "q4_weight_mb": q4_bytes / 1e6,
           "q4_eff_gbs": q4_bytes / dt / 1e9}
-
-def model_shape_targets(infos:list[GGUFInfo], kv:dict, max_shapes:int|None=None) -> list[GGUFInfo]:
-  arch = kv.get("general.architecture", "")
-  dim = int(kv.get(f"{arch}.embedding_length", 0)) if arch else 0
-  hidden = int(kv.get(f"{arch}.feed_forward_length", 0)) if arch else 0
-  targets = []
-  # Prefer real model tensors from early dense blocks, grouped by distinct decode GEMV shape.
-  preferred = ("ffn_gate", "ffn_up", "ffn_down", "attn_q", "attn_output", "attn_k", "attn_v")
-  seen: set[tuple[int, int]] = set()
-  for kind in preferred:
-    for info in infos:
-      if info.typ != GGML_Q4_K or len(info.dims) != 2 or f".{kind}.weight" not in info.name: continue
-      shape = tensor_shape(info)
-      if len(shape) != 2: continue
-      if dim and shape[1] not in (dim, hidden) and shape[0] not in (dim, hidden): continue
-      if shape in seen: continue
-      seen.add(shape)
-      targets.append(info)
-      break
-  return targets[:max_shapes] if max_shapes is not None else targets
 
 def emit(results:list[dict], fmt:str):
   if fmt == "json":

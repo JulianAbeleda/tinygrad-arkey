@@ -5,7 +5,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.helpers import GlobalCounters
 from tinygrad.uop.ops import UOp, KernelInfo
 
-from extra.q4_k_bench import GGML_Q4_K, pick_tensor, q4_k_weight_bytes, read_metadata, tensor_shape
+from extra.qk_layout import GGML_Q4_K, pick_tensor, q4_k_weight_bytes, read_metadata, tensor_shape
 
 def u32_copy_kernel(nwords:int):
   def copy_words(out:UOp, words:UOp) -> UOp:

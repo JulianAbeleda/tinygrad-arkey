@@ -2,8 +2,8 @@
 import argparse, json, os, pathlib, re, subprocess, sys, time
 from dataclasses import dataclass
 
-from extra.q4_k_bench import GGML_Q4_K, model_shape_targets, read_metadata, tensor_shape
 from extra.q4_k_safety import assert_q4k_native_sweep_allowed
+from extra.qk_layout import GGML_Q4_K, model_shape_targets, read_metadata, tensor_shape
 
 SUMMARY_RE = re.compile(
   r"^(?P<tensor>\S+) (?P<shape>\S+) (?P<name>\S+): (?P<ms>[0-9.]+) ms .*?"

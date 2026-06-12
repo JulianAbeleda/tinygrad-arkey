@@ -7,10 +7,10 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import GlobalCounters, cdiv
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
-from extra.q4_k_bench import GGML_Q4_K, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, pick_tensor, q4_k_reference, read_metadata, tensor_shape
 from extra.q4_k_safety import assert_q4k_risky_search_allowed
-
-Q4K_WORDS_PER_BLOCK = Q4_K_BLOCK_BYTES // 4
+from extra.qk_layout import (
+  GGML_Q4_K, Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, pick_tensor, q4_k_reference, read_metadata, tensor_shape,
+)
 
 def _f16_word(word:UOp, high:bool) -> UOp:
   bits = (word.rshift(16) if high else word).bitwise_and(0xffff)
