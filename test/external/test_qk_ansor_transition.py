@@ -1,5 +1,9 @@
 import json, os, pathlib, unittest
 
+from extra.qk_ansor_transition_loop import build_loop, loop_markdown, write_candidate_policies
+from extra.qk_candidate_generator import build_candidate_set, candidates_markdown
+from extra.qk_candidate_static_gate import build_static_gate, gate_policy, static_gate_markdown
+from extra.qk_descriptor_policy import build_policy_from_descriptor, diff_markdown, diff_policies, runtime_entries
 from extra.qk_gap_profile import build_gap_profile, gap_profile_markdown
 from extra.qk_llama_scorecard import build_scorecard, scorecard_markdown
 from extra.qk_semantic_descriptor import build_descriptor, descriptor_markdown
@@ -37,7 +41,7 @@ class TestQKAnsorTransition(unittest.TestCase):
     ])
     self.assertEqual(json.loads((out / "gap-profile.json").read_text()), report)
     self.assertEqual((out / "gap-profile.md").read_text(), gap_profile_markdown(report))
-    self.assertEqual(report["summary"]["missing_profile"], ["8B"])
+    self.assertEqual(report["summary"]["missing_profile"], [])
     for row in report["models"]:
       if row["status"] == "profiled":
         self.assertEqual(row["next_decision"], "qk_semantic_schedule_or_codegen")
@@ -58,6 +62,59 @@ class TestQKAnsorTransition(unittest.TestCase):
         self.assertGreater(row["shape"]["rows"], 0)
         self.assertGreater(row["shape"]["cols"], 0)
         self.assertIn("parts", row["current_lowering"])
+
+  def test_descriptor_policies_reproduce_runtime_semantics(self):
+    out = pathlib.Path("bench/qk-ansor-transition-20260612/reproduced")
+    for label in ("8B", "14B", "32B"):
+      stem = label.lower()
+      descriptor = json.loads(pathlib.Path(f"bench/qk-ansor-transition-20260612/descriptors/{stem}.json").read_text())
+      accepted = json.loads(pathlib.Path(f"bench/qk-shared-storage-20260612/{stem}/policy.json").read_text())
+      reproduced = build_policy_from_descriptor(descriptor)
+      diff = diff_policies(accepted, reproduced)
+      self.assertEqual(json.loads((out / f"{stem}-policy.json").read_text()), reproduced)
+      self.assertEqual(json.loads((out / f"{stem}-diff.json").read_text()), diff)
+      self.assertEqual((out / f"{stem}-diff.md").read_text(), diff_markdown(diff, label=label))
+      self.assertTrue(diff["semantic_equal"])
+      self.assertEqual(runtime_entries(accepted), runtime_entries(reproduced))
+
+  def test_candidates_and_static_gates_reproduce(self):
+    base = pathlib.Path("bench/qk-ansor-transition-20260612")
+    expected_counts = {"8b": 21, "14b": 29, "32b": 33}
+    for stem, expected_count in expected_counts.items():
+      descriptor = json.loads((base / "descriptors" / f"{stem}.json").read_text())
+      candidate_set = build_candidate_set(descriptor)
+      self.assertEqual(json.loads((base / "candidates" / f"{stem}-candidates.json").read_text()), candidate_set)
+      self.assertEqual((base / "candidates" / f"{stem}-candidates.md").read_text(), candidates_markdown(candidate_set))
+      self.assertEqual(candidate_set["summary"]["candidates"], expected_count)
+      self.assertEqual(candidate_set["candidates"][0]["id"], "current")
+      self.assertTrue(all(len(candidate["changes"]) <= 1 for candidate in candidate_set["candidates"]))
+
+      gate = build_static_gate(candidate_set)
+      self.assertEqual(json.loads((base / "static-gates" / f"{stem}-static-gate.json").read_text()), gate)
+      self.assertEqual((base / "static-gates" / f"{stem}-static-gate.md").read_text(), static_gate_markdown(gate))
+      self.assertEqual(gate["summary"]["passing"], expected_count)
+      self.assertEqual(gate["summary"]["failing"], 0)
+
+      bad_policy = json.loads(json.dumps(candidate_set["candidates"][0]["policy"]))
+      bad_policy["entries"][0]["candidate"]["family"] = "q8_1_packed_dot"
+      passed, reasons = gate_policy(bad_policy)
+      self.assertFalse(passed)
+      self.assertTrue(any("unsupported family" in reason for reason in reasons))
+
+  def test_search_loop_v0_reproduces(self):
+    base = pathlib.Path("bench/qk-ansor-transition-20260612")
+    scorecard = json.loads((base / "scorecard.json").read_text())
+    gap_profile = json.loads((base / "gap-profile.json").read_text())
+    for stem in ("8b", "14b", "32b"):
+      candidate_set = json.loads((base / "candidates" / f"{stem}-candidates.json").read_text())
+      gate = json.loads((base / "static-gates" / f"{stem}-static-gate.json").read_text())
+      loop = build_loop(candidate_set, gate, scorecard=scorecard, gap_profile=gap_profile, max_to_benchmark=6)
+      write_candidate_policies(loop, candidate_set, base / "search" / stem / "policies")
+      self.assertEqual(json.loads((base / "search" / stem / "run.json").read_text()), loop)
+      self.assertEqual((base / "search" / stem / "run.md").read_text(), loop_markdown(loop))
+      self.assertEqual(loop["summary"]["benchmark_next"], 6)
+      self.assertEqual(loop["summary"]["static_rejects"], 0)
+      self.assertEqual(loop["rows"][0]["decision"], "baseline")
 
 
 if __name__ == "__main__":

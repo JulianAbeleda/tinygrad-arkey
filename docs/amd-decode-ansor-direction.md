@@ -20,6 +20,15 @@ useful capped generated-policy result against the generic baseline. The storage
 work is now infrastructure for the harness, not a reason to resume kernel
 search.
 
+Update, later 2026-06-12: the llama.cpp-comparable transition layer now has a
+static descriptor-to-candidate loop in `bench/qk-ansor-transition-20260612/`.
+The loop closes the shared 8B profile gap, reproduces accepted policies from
+semantic descriptors with zero runtime diff, generates bounded `parts`/`LOCAL`
+policy candidates for the supported Q4_K/Q6_K primitive families, statically
+gates them, and writes six `benchmark_next` policy files per model. This is the
+first machine-readable search surface for the next phase. It does not yet prove
+a speedup; the emitted policies still need the full QK harness gates.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

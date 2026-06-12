@@ -86,9 +86,19 @@ generated-policy storage mode.
       `extra/qk_semantic_descriptor.py`, with committed artifacts under
       `bench/qk-ansor-transition-20260612/`. Current scorecard:
       8B `51.46%`, 14B `61.63%`, 32B `55.94%` of llama.cpp; all are below the
-      first `70%` comparable-speed target. Current gap profile marks shared 8B
-      as needing a fresh DEBUG=2 profile, while 14B/32B named attribution points
-      at QK semantic schedule/codegen as the next bottleneck.
+      first `70%` comparable-speed target.
+- [x] Closed the shared 8B DEBUG=2 profile gap and regenerated the
+      Ansor-transition gap profile. 8B/14B/32B are all profiled, and named
+      attribution still points at QK semantic schedule/codegen as the next
+      bottleneck.
+- [x] Added descriptor policy reproduction and the candidate/search-loop v0
+      surface: `extra/qk_descriptor_policy.py`,
+      `extra/qk_candidate_generator.py`, `extra/qk_candidate_static_gate.py`,
+      and `extra/qk_ansor_transition_loop.py`. Descriptors reproduce accepted
+      runtime policy semantics with zero diff; the bounded candidate sets are
+      8B `21`, 14B `29`, 32B `33`; all static gates pass; each model has
+      `current` plus six `benchmark_next` policy files under
+      `bench/qk-ansor-transition-20260612/search/`.
 
 ## Open But Not Urgent
 
@@ -113,7 +123,7 @@ generated-policy storage mode.
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen
    direction from `docs/amd-decode-ansor-direction.md`, starting from the
-   scorecard/gap-profile/descriptor foundation in
+   descriptor/candidate/static-loop foundation in
    `bench/qk-ansor-transition-20260612/`.
 
 Default recommendation: pause here, then resume with practical training/eval

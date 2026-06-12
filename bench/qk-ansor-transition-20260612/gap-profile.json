@@ -2,10 +2,100 @@
   "kind": "qk_gap_profile",
   "models": [
     {
+      "attribution_named": {
+        "amd_kernel_ms_tok": 31.189880000000404,
+        "dominant_amd_buckets": [
+          {
+            "bucket": "q4k_primitive_gemv",
+            "ms_tok": 11.111942857142841,
+            "pct": 35.6267573236662
+          },
+          {
+            "bucket": "other_amd",
+            "ms_tok": 6.5974342857143045,
+            "pct": 21.152483708543343
+          },
+          {
+            "bucket": "fallback_quant_fused",
+            "ms_tok": 4.781314285714287,
+            "pct": 15.32969759971576
+          },
+          {
+            "bucket": "q6k_primitive_gemv",
+            "ms_tok": 3.799891428571428,
+            "pct": 12.183090889004314
+          },
+          {
+            "bucket": "norm_sampling_misc",
+            "ms_tok": 2.5402171428571485,
+            "pct": 8.144363309051256
+          },
+          {
+            "bucket": "attention_misc",
+            "ms_tok": 1.45857714285714,
+            "pct": 4.6764435863719935
+          },
+          {
+            "bucket": "q4k_primitive_reduction",
+            "ms_tok": 0.844977142857144,
+            "pct": 2.709138806744794
+          },
+          {
+            "bucket": "copy",
+            "ms_tok": 0.05552571428571429,
+            "pct": 0.1780247769010768
+          }
+        ],
+        "fallback_quant_ms_tok": 4.781314285714287,
+        "mode": "QK_GENERATED_POLICY named",
+        "qk_gemv_ms_tok": 14.911834285714269,
+        "qk_reduction_ms_tok": 0.844977142857144,
+        "residual_ms_tok": 148.1172628571425,
+        "wall_ms_tok": 179.30714285714285
+      },
+      "explicit_reference": {
+        "batched_tok_s": 52.17857142857143,
+        "named_amd_kernel_ms_tok": 33.39715571428609
+      },
       "model": "8B",
+      "next_decision": "qk_semantic_schedule_or_codegen",
       "path": "bench/qk-shared-storage-20260612/8b",
-      "reason": "bench/qk-shared-storage-20260612/8b/profile-report.json is missing; run DEBUG=2 generated/explicit profile before optimizing this model.",
-      "status": "profile_missing"
+      "profile_report": "bench/qk-shared-storage-20260612/8b/profile-report.json",
+      "status": "profiled",
+      "throughput_truth": {
+        "amd_kernel_ms_tok": 17.324742857142855,
+        "mode": "QK_GENERATED_POLICY batched",
+        "residual_ms_tok": 0.6924000000000043,
+        "tok_s": 55.504285714285714,
+        "top_batched_wall_buckets": [
+          {
+            "bucket": "other_amd",
+            "ms_tok": 17.288244285714285,
+            "pct": 95.95441642879796
+          },
+          {
+            "bucket": "residual_overhead",
+            "ms_tok": 0.6924000000000043,
+            "pct": 3.843006660323525
+          },
+          {
+            "bucket": "copy",
+            "ms_tok": 0.03649857142857143,
+            "pct": 0.2025769108785284
+          },
+          {
+            "bucket": "q4k_primitive_gemv",
+            "ms_tok": 0.0,
+            "pct": 0.0
+          },
+          {
+            "bucket": "q6k_primitive_gemv",
+            "ms_tok": 0.0,
+            "pct": 0.0
+          }
+        ],
+        "wall_ms_tok": 18.017142857142858
+      }
     },
     {
       "attribution_named": {
@@ -202,14 +292,13 @@
   ],
   "scope": "Ansor-transition bottleneck attribution over committed DEBUG=2 profile reports",
   "summary": {
-    "missing_profile": [
-      "8B"
-    ],
+    "missing_profile": [],
     "models": 3,
     "next_decisions": {
       "14B": "qk_semantic_schedule_or_codegen",
-      "32B": "qk_semantic_schedule_or_codegen"
+      "32B": "qk_semantic_schedule_or_codegen",
+      "8B": "qk_semantic_schedule_or_codegen"
     },
-    "profiled": 2
+    "profiled": 3
   }
 }

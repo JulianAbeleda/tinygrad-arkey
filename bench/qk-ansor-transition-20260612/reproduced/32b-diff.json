@@ -1,0 +1,10 @@
+{
+  "accepted_entries": 8,
+  "changed_runtime_entries": [],
+  "extra_runtime_keys": [],
+  "kind": "qk_descriptor_policy_diff",
+  "metadata_note": "Only runtime dispatch semantics are compared; timestamps, benchmark metadata, and archival fields may differ.",
+  "missing_runtime_keys": [],
+  "reproduced_entries": 8,
+  "semantic_equal": true
+}

@@ -58,7 +58,7 @@ kernel-search loop.
 | Generated policy | Model-specific result. The current shared-storage matrix accepts 8B as a modest win (`52.07` vs `50.41 tok/s`), 14B as a strong win (`40.55` vs `21.77 tok/s`), and 32B as a strong win (`17.23` vs `11.15 tok/s`). All pass 32-token greedy A/B. The older 8B sidecar row is still slightly faster (`53.49 tok/s`), and the older 32B capped result remains historical evidence that tensor-scoped fallback can fit under sidecar storage pressure. | Keep `QK_GENERATED_POLICY` opt-in and artifact-pinned. Prefer `QK_PRIMITIVE_STORAGE=shared` for generated-policy runs when memory behavior or cross-model consistency matters. Use sidecar only when chasing the exact 8B peak artifact. Do not make generated policies global defaults. |
 | QK policy storage | Shape-scoped policy is too coarse for large models under sidecar storage; 32B needs either tensor-scoped storage decisions or shared source storage. Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. `QK_PRIMITIVE_STORAGE=shared` references the already-realized raw GGUF buffer through typed views; it has now passed full 8B, 14B, and 32B harnesses with `storage_bytes=0`. | Treat shared storage as the validated generated-policy storage mode, but keep it explicit until it has more runtime soak. Future policy generation should still include storage cost, benefit, and fallback decisions because sidecar remains supported and useful as a performance control. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
-| Ansor-transition scorecard/descriptors | Started. `bench/qk-ansor-transition-20260612/` freezes the llama.cpp-comparable objective, records the current gap profile, and converts accepted generated policies into machine-readable Q4_K/Q6_K semantic descriptors. | Use this as the next research foundation: reproduce current policies from descriptors, then generate candidate policies/schedules from descriptor data. |
+| Ansor-transition descriptor/candidate loop | Started and reproducible. `bench/qk-ansor-transition-20260612/` freezes the llama.cpp-comparable objective, records profiles for 8B/14B/32B, converts accepted generated policies into machine-readable Q4_K/Q6_K semantic descriptors, round-trips those descriptors back into equivalent runtime policies, generates bounded policy candidates, statically gates them, and emits benchmark-next policy files. | Use this as the next research foundation: benchmark generated candidates through the QK harness, then decide whether descriptor-level policy search is enough or whether real semantic schedule/codegen generation is required. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -110,6 +110,12 @@ It is a representation/lowering boundary:
     14B shared is accepted and slightly above sidecar (`40.55` vs
     `39.61 tok/s`). This supports recommending shared storage for generated
     policies without changing the runtime default.
+13. The Ansor-transition foundation now has a full static loop: 8B/14B/32B
+    shared profiles all exist; descriptors reproduce accepted policy semantics
+    with zero runtime diff; bounded `parts`/`LOCAL` candidates are generated for
+    the supported Q4_K/Q6_K primitive families; all candidates pass static
+    validation; and the loop emits six `benchmark_next` policy files per model.
+    This is a search surface, not a new kernel or a performance claim.
 
 So the machine-first research hypothesis is:
 
@@ -139,6 +145,12 @@ Current generated shared-storage rows are `51.46%` (8B), `61.63%` (14B), and
 three rows; all current rows are below it, so further work needs a real QK
 schedule/codegen improvement rather than more rollout/eval plumbing.
 
+The current generated frontier is static-planning only: each model has `current`
+plus six ranked `benchmark_next` policies under
+`bench/qk-ansor-transition-20260612/search/`. Those policies must go through the
+same decode, A/B, and stability gates as the accepted generated policies before
+any speedup is banked.
+
 Default recommendation remains consolidation or training. The compiler path is
 worth doing only if the research itself is the goal.
 
@@ -163,6 +175,8 @@ worth doing only if the research itself is the goal.
 - Do not widen tinygrad core optimizer APIs for quant GEMV until an `extra/`
   or renderer-level candidate passes correctness and wins a generated-search
   gate.
+- Do not treat loop v0 artifacts as performance results. They are candidate
+  policies selected for benchmarking, not accepted winners.
 
 ## Pointers
 

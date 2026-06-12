@@ -6,16 +6,29 @@ batching is disabled for readable kernel names.
 
 ## Summary
 
-- profiled models: `2/3`
-- missing profiles: `8B`
+- profiled models: `3/3`
+- missing profiles: `none`
 
 | model | status | generated tok/s | batched wall ms/tok | named QK GEMV ms/tok | named reduction ms/tok | fallback ms/tok | next decision |
 |---|---|---:|---:|---:|---:|---:|---|
-| `8B` | `profile_missing` | n/a | n/a | n/a | n/a | n/a | `bench/qk-shared-storage-20260612/8b/profile-report.json is missing; run DEBUG=2 generated/explicit profile before optimizing this model.` |
+| `8B` | `profiled` | 55.50 | 18.02 | 14.91 | 0.84 | 4.78 | `qk_semantic_schedule_or_codegen` |
 | `14B` | `profiled` | 42.19 | 23.71 | 30.08 | 1.13 | 5.27 | `qk_semantic_schedule_or_codegen` |
 | `32B` | `profiled` | 17.99 | 55.63 | 82.44 | 1.97 | 5.33 | `qk_semantic_schedule_or_codegen` |
 
 ## Dominant Named AMD Buckets
+
+### 8B
+
+| bucket | ms/tok | % named AMD |
+|---|---:|---:|
+| `q4k_primitive_gemv` | 11.11 | 35.63 |
+| `other_amd` | 6.60 | 21.15 |
+| `fallback_quant_fused` | 4.78 | 15.33 |
+| `q6k_primitive_gemv` | 3.80 | 12.18 |
+| `norm_sampling_misc` | 2.54 | 8.14 |
+| `attention_misc` | 1.46 | 4.68 |
+| `q4k_primitive_reduction` | 0.84 | 2.71 |
+| `copy` | 0.06 | 0.18 |
 
 ### 14B
 

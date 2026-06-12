@@ -2038,3 +2038,33 @@ Interpretation:
 - The next step is not more kernel search. If storage work continues, it should
   be real shared ownership of packed storage without per-token copies; otherwise
   pivot up to the loop/harness layer.
+
+## Ansor-transition loop v0 (2026-06-12)
+
+Artifact: `bench/qk-ansor-transition-20260612/`.
+
+The llama.cpp-comparable research path now has a committed static loop:
+
+- `extra/qk_llama_scorecard.py` freezes the current objective:
+  8B `52.07 tok/s` (`51.46%` llama.cpp), 14B `40.55 tok/s` (`61.63%`), and
+  32B `17.23 tok/s` (`55.94%`).
+- `extra/qk_gap_profile.py` now has shared DEBUG=2 profiles for all three
+  models. Named attribution says QK GEMV remains dominant: 8B `14.91 ms/tok`,
+  14B `30.08 ms/tok`, 32B `82.44 ms/tok`.
+- `extra/qk_semantic_descriptor.py` converts accepted generated policies into
+  machine-readable Q4_K/Q6_K packed-GEMV descriptors.
+- `extra/qk_descriptor_policy.py` round-trips those descriptors back into
+  runtime policies with zero semantic diff against the accepted policies.
+- `extra/qk_candidate_generator.py` creates bounded `parts`/`LOCAL` variants
+  over the supported Q4_K/Q6_K primitive families: 8B `21`, 14B `29`, 32B `33`
+  candidates.
+- `extra/qk_candidate_static_gate.py` fails closed before GPU execution; all
+  current v0 candidates pass because they stay inside supported primitive
+  families.
+- `extra/qk_ansor_transition_loop.py` writes `current` plus six ranked
+  `benchmark_next` policy files per model.
+
+This is not a new speed result. It is the first reproducible descriptor ->
+candidate -> static-gate -> benchmark-frontier surface. The next accepted speed
+claim must run the emitted policies through the QK policy pipeline with the same
+correctness and stability gates as the existing generated policies.

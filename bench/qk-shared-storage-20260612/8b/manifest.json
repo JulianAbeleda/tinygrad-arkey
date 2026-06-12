@@ -114,15 +114,14 @@
       "inputs": [
         "bench/qk-shared-storage-20260612/8b/policy.json"
       ],
-      "metadata": {
-        "preliminary_gain": 0.03308708996966847,
-        "profile": "auto"
-      },
-      "outputs": [],
+      "outputs": [
+        "bench/qk-shared-storage-20260612/8b/profile-report.json",
+        "bench/qk-shared-storage-20260612/8b/profile-report.md"
+      ],
       "reused": false,
       "stage": "profile",
-      "status": "skipped",
-      "updated_at": "2026-06-12T13:17:30.406516"
+      "status": "passed",
+      "updated_at": "2026-06-12T20:40:00"
     },
     "report": {
       "inputs": [

@@ -238,27 +238,39 @@ passes `75/75`; generated and explicit are token-identical on all `75` prompts
 with quality delta `0`, regressions `0`, text changes `0/75`, and token changes
 `0/75`. This is an offline score/output comparator, not an LLM-as-judge.
 
-The Ansor-transition layer is now started for the llama.cpp-comparable goal.
-New tools: `extra/qk_llama_scorecard.py`, `extra/qk_gap_profile.py`, and
-`extra/qk_semantic_descriptor.py`. Current artifacts live under
-`bench/qk-ansor-transition-20260612/`. The scorecard freezes the objective:
-8B `52.07 tok/s` (`51.46%` llama.cpp), 14B `40.55 tok/s` (`61.63%`), and
-32B `17.23 tok/s` (`55.94%`), all correctness-gated. The first target is
-`>=70%` llama.cpp on all three. The gap profile has committed profiles for
-14B/32B and explicitly marks shared 8B as needing a fresh DEBUG=2 profile before
-8B-specific bottleneck claims. The semantic descriptors convert accepted
-generated policies into machine-readable Q4_K/Q6_K packed-GEMV objects:
-format, role, shape, packed layout metadata, parts/local/reduction choices, and
-storage/benefit metadata.
+The Ansor-transition layer is now the current compiler-research foundation for
+the llama.cpp-comparable goal. Tools: `extra/qk_llama_scorecard.py`,
+`extra/qk_gap_profile.py`, `extra/qk_semantic_descriptor.py`,
+`extra/qk_descriptor_policy.py`, `extra/qk_candidate_generator.py`,
+`extra/qk_candidate_static_gate.py`, and `extra/qk_ansor_transition_loop.py`.
+Artifacts live under `bench/qk-ansor-transition-20260612/`.
+
+The scorecard freezes the objective: 8B `52.07 tok/s` (`51.46%` llama.cpp),
+14B `40.55 tok/s` (`61.63%`), and 32B `17.23 tok/s` (`55.94%`), all
+correctness-gated. The first target is `>=70%` llama.cpp on all three. Fresh
+shared DEBUG=2 profiles now exist for 8B/14B/32B; named attribution says QK GEMV
+still dominates (`14.91`, `30.08`, `82.44 ms/tok` respectively), so the next
+research target remains QK semantic schedule/codegen.
+
+The semantic descriptors convert accepted generated policies into
+machine-readable Q4_K/Q6_K packed-GEMV objects: format, role, shape, packed
+layout metadata, parts/local/reduction choices, and storage/benefit metadata.
+Those descriptors now round-trip back into runtime policies with zero semantic
+diff against the accepted generated policies. Candidate generation creates
+bounded `parts`/`LOCAL` policy variants: 8B `21`, 14B `29`, 32B `33`; all pass
+the static gate. The loop v0 writes `current` plus six ranked `benchmark_next`
+policy files per model. It is static planning only; promotion still requires
+the QK harness correctness/stability gates.
 
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
    RLVR/SFT pipeline on top of the validated rollout/comparator backend.
 2. Compiler research: continue from the Ansor-transition descriptor foundation:
-   next fresh-profile shared 8B if needed, then build descriptor-based policy
-   reproduction/candidate generation. Do not confuse this with more hand-written
-   primitive tuning.
+   run the loop v0 `benchmark_next` policies through the QK harness, then use
+   the results to decide whether descriptor-level candidate generation is enough
+   or whether the next step needs real semantic schedule/codegen. Do not confuse
+   this with more hand-written primitive tuning.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 
