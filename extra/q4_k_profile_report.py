@@ -12,8 +12,9 @@ MODEL_RE = re.compile(r"(?:^|[-_])(8b|14b)(?:[-_]|$)", re.IGNORECASE)
 
 BUCKETS = (
   "q4k_primitive_gemv",
+  "q6k_primitive_gemv",
   "q4k_primitive_reduction",
-  "fallback_q4k_fused",
+  "fallback_quant_fused",
   "attention_misc",
   "norm_sampling_misc",
   "copy",
@@ -21,7 +22,7 @@ BUCKETS = (
   "residual_overhead",
 )
 
-FALLBACK_Q4K_PATTERNS = (
+FALLBACK_QUANT_PATTERNS = (
   # Baseline fused Q4_K matvec/dequant kernels are large anonymous reductions.
   # These patterns intentionally describe the known dense decode matvec shapes;
   # attention and norm/sampling signatures are kept disjoint below.
@@ -34,7 +35,10 @@ FALLBACK_Q4K_PATTERNS = (
 )
 NORM_SAMPLING_EXACT = ("r_16_8", "r_16_8n1", "r_16_256", "r_16_256n1", "r_16_256n2")
 MODEL_ORDER = {"8B": 0, "14B": 1}
-MODE_ORDER = {"baseline batched": 0, "Q4K_PRIMITIVE=1 batched": 1, "baseline named": 2, "Q4K_PRIMITIVE=1 named": 3}
+MODE_ORDER = {
+  "baseline batched": 0, "Q4K_PRIMITIVE=1 batched": 1, "Q4K+Q6K_PRIMITIVE=1 batched": 2,
+  "baseline named": 3, "Q4K_PRIMITIVE=1 named": 4, "Q4K+Q6K_PRIMITIVE=1 named": 5,
+}
 
 @dataclass
 class Kernel:
@@ -87,7 +91,7 @@ def _label(path:pathlib.Path) -> tuple[str, str]:
   is_named = "jitbs1" in stem or "named" in stem
   if is_batched == is_named:
     raise ValueError(f"{path}: filename must include exactly one of batched or jitbs1/named")
-  mode = "Q4K_PRIMITIVE=1" if is_primitive else "baseline"
+  mode = "Q4K+Q6K_PRIMITIVE=1" if is_primitive and "q4q6" in stem else "Q4K_PRIMITIVE=1" if is_primitive else "baseline"
   mode += " named" if is_named else " batched"
   return model, mode
 
@@ -134,13 +138,13 @@ def _is_norm_sampling_kernel(name:str) -> bool:
   if re.search(r"^r_32_4_\d+", name) is not None: return True
   return name in NORM_SAMPLING_EXACT
 
-def _is_fallback_q4k_kernel(name:str) -> bool:
+def _is_fallback_quant_kernel(name:str) -> bool:
   if not name.startswith("r_"): return False
-  return any(re.search(pat, name) is not None for pat in FALLBACK_Q4K_PATTERNS)
+  return any(re.search(pat, name) is not None for pat in FALLBACK_QUANT_PATTERNS)
 
 KERNEL_RULES = (
   KernelRule("copy", "copy kernels", lambda name: name.startswith("copy")),
-  KernelRule("fallback_q4k_fused", "known fused Q4_K decode matvec signatures", _is_fallback_q4k_kernel),
+  KernelRule("fallback_quant_fused", "known fused dense quant decode matvec signatures", _is_fallback_quant_kernel),
   KernelRule("attention_misc", "decode attention signatures", _is_attention_kernel),
   KernelRule("norm_sampling_misc", "norm/sampling signatures", _is_norm_sampling_kernel),
 )
@@ -162,6 +166,8 @@ def classify_token(kernels:list[Kernel]) -> list[tuple[Kernel, str]]:
       bucket = "q4k_primitive_gemv"
       parts = name.rsplit("_", 1)[-1]
       primitive_reduce_followups = max(primitive_reduce_followups, 3 if parts != "1" else 0)
+    elif name.startswith("q6k_gemv_partial_"):
+      bucket = "q6k_primitive_gemv"
     elif primitive_reduce_followups and name.startswith("r_"):
       bucket = "q4k_primitive_reduction"
       primitive_reduce_followups -= 1
@@ -272,9 +278,9 @@ def make_report(results:list[dict], steady_drop:int) -> str:
       else:
         decisions.append("real graph-batched runtime has low residual and no outliers; use named logs for inner-kernel ownership")
     else:
-      if pct["q4k_primitive_gemv"] > 50: decisions.append("primitive GEMV >50% of profile basis: build primitive v2")
+      if pct["q4k_primitive_gemv"] + pct["q6k_primitive_gemv"] > 50: decisions.append("primitive GEMV >50% of profile basis: build primitive v2")
       if pct["q4k_primitive_reduction"] > 15: decisions.append("primitive reductions >15% of profile basis: fuse/avoid partial reduction")
-      if pct["fallback_q4k_fused"] > 20: decisions.append("fallback/generic Q4_K remains large: extend primitive coverage or revise policy")
+      if pct["fallback_quant_fused"] > 20: decisions.append("fallback/generic dense quant remains large: extend primitive coverage or revise policy")
       non_q4 = pct["attention_misc"] + pct["norm_sampling_misc"] + pct["other_amd"] + pct["copy"]
       if non_q4 > 35: decisions.append("non-Q4 kernels >35% of profile basis: pivot to the new dominant bucket")
       if s["residual_pct"] > 20:

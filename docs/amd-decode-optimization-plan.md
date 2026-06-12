@@ -631,3 +631,29 @@ end-to-end correctness gate, and risky search is guarded in code rather than
 only by prose. The next optimization decision can proceed from the step 17
 profile: map the remaining anonymous generic kernels back to model ops/policy
 coverage holes before starting primitive v2.
+
+## Step 19 Q6_K coverage fix (2026-06-11)
+
+The step 17 residual mapping found the largest anonymous fallback kernels were
+not missing Q4_K policy coverage. They were mostly `Q6_K` (`ggml_type=14`):
+half of `ffn_down`, plus `output.weight` and some `attn_v`.
+
+Implemented a narrow Q6 primitive path:
+
+- `extra/q6_k_gemv_primitive.py` with exact unpack correctness and random GEMV
+  correctness gates;
+- `Q6KPrimitiveLinear`, enabled by `Q6K_PRIMITIVE=1`;
+- policy installs only `*.ffn_down.weight`, because output and attn_v measured
+  slower with this primitive.
+
+Measured results:
+
+| model | Q4 primitive | Q4+Q6 primitive | correctness |
+|---|---:|---:|---|
+| Qwen3-8B | `~28.7 tok/s` | `58.17 tok/s` avg | 32-token exact A/B pass |
+| Qwen3-14B | `~14.9 tok/s` | `28.27 tok/s` avg | 32-token exact A/B pass |
+
+This reaches about `57.6%` of the 8B llama.cpp reference (`101 tok/s`) and
+`42.8%` of the 14B reference (`66 tok/s`). The next bottleneck is no longer a
+simple policy hole: it is primitive GEMV quality plus the Q6 output projection,
+where the current primitive loses and should remain disabled.

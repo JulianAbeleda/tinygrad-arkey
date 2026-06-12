@@ -1,0 +1,43 @@
+tensor=blk.0.attn_v.weight full_shape=(1024, 4096) primitive_shape=(1024,4096) quant_bytes=3440640 mode=partial parts=1 opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] device=AMD
+scheduled     2 kernels in    19.30 ms | CACHE MISS 3ff03616 |      41 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:143
+opened device DISK:/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf from pid:25355
+*** DISK:/h    1 view    3.28 MB @ 887789376                    arg  2 mem   0.00 GB tm     10.48ms/    10.48ms (      0 GFLOPS    0|0      GB/s)
+AMDDevice: opening 0 with target (11, 0, 0) arch gfx1100
+opened device AMD from pid:25355
+*** AMD        2 copy    3.28 MB,     AMD <- DISK:/h            arg  2 mem   0.00 GB tm    107.41ms/   117.89ms (      0 GFLOPS    0|0      GB/s)
+opened device PYTHON from pid:25355
+scheduled     5 kernels in    54.31 ms | CACHE MISS cdae10de |     613 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:145
+*** AMD        3 copy        8 B,     AMD <- PYTHON             arg  2 mem   0.00 GB tm    807.26us/   118.70ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        4 copy        8 B,     AMD <- PYTHON             arg  2 mem   0.00 GB tm     64.05us/   118.77ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        5 E_2                                            arg  1 mem   0.00 GB tm      9.08us/   118.78ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        6 E_64_32_4                                      arg  3 mem   0.00 GB tm      9.64us/   118.78ms (    243 GFLOPS    3|3      GB/s)
+*** AMD        7 E_32_32_4                                      arg  2 mem   0.00 GB tm      8.92us/   118.79ms (      4 GFLOPS    5|5      GB/s)
+scheduled     2 kernels in     2.48 ms | CACHE MISS 57596939 |    1670 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:148
+*** DISK:/h    8 view    3.28 MB @ 887789376                    arg  2 mem   0.00 GB tm      3.22us/   118.80ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        9 copy    3.28 MB,     AMD <- DISK:/h            arg  2 mem   0.01 GB tm   2412.24us/   121.21ms (      0 GFLOPS    1|1      GB/s)
+*** AMD       10 E_4096_2_4_2_16_2_2                            arg  2 mem   0.02 GB tm     87.72us/   121.30ms (    466 GFLOPS  135|158    GB/s)
+*** AMD       11 r_1024_16_256                                  arg  3 mem   0.02 GB tm     21.24us/   121.32ms (    407 GFLOPS  396|845    GB/s)
+scheduled     2 kernels in     2.12 ms | CACHE MISS 99058ed6 |    2535 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:158
+*** DISK:/h   12 view    6.56 KB @ 887789376                    arg  2 mem   0.02 GB tm      2.03us/   121.32ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       13 copy    6.56 KB,     AMD <- DISK:/h            arg  2 mem   0.02 GB tm    289.55us/   121.61ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       14 q6k_unpack_2_4096                              arg  2 mem   0.02 GB tm     17.20us/   121.63ms (      6 GFLOPS    2|3      GB/s)
+scheduled     4 kernels in    23.74 ms | CACHE MISS 5fe8af7c |    4146 uops in cache | /home/ubuntu/tinygrad-arkey/extra/q6_k_gemv_primitive.py:161
+*** DISK:/h   15 view    6.56 KB @ 887789376                    arg  2 mem   0.02 GB tm      2.34us/   121.63ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       16 copy    6.56 KB,     AMD <- DISK:/h            arg  2 mem   0.02 GB tm    723.14us/   122.35ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       17 E_70_32_3                                      arg  2 mem   0.02 GB tm      8.04us/   122.36ms (      0 GFLOPS    2|2      GB/s)
+*** AMD       18 E_8_2_4_2_16_2_2                               arg  2 mem   0.02 GB tm      6.84us/   122.37ms (     12 GFLOPS    6|6      GB/s)
+*** AMD       19 r_16_512                                       arg  3 mem   0.02 GB tm     23.64us/   122.39ms (      3 GFLOPS    3|3      GB/s)
+unpack_correctness: rows=2 max_abs=0
+*** AMD       20 q6k_gemv_partial_1024_4096_1                   arg  3 mem   0.02 GB tm    181.12us/   122.57ms (    292 GFLOPS   19|94     GB/s)
+*** AMD       21 r_16_64                                        arg  3 mem   0.02 GB tm      9.28us/   122.58ms (      1 GFLOPS    1|1      GB/s)
+correctness: max_abs=0.000838041
+*** AMD       22 r_1024_16_2_2_2_32                             arg  3 mem   0.02 GB tm     66.48us/   122.65ms (    699 GFLOPS   52|334    GB/s)
+*** AMD        1 r_1024_16_2_2_2_32                             arg  3 mem   0.02 GB tm     40.20us/     0.04ms (   1155 GFLOPS   86|552    GB/s)
+*** AMD        2 r_1024_16_2_2_2_32                             arg  3 mem   0.02 GB tm     39.96us/     0.08ms (   1162 GFLOPS   86|555    GB/s)
+*** AMD        3 r_1024_16_2_2_2_32                             arg  3 mem   0.02 GB tm     39.96us/     0.12ms (   1162 GFLOPS   86|555    GB/s)
+q6k_fused_graph: wall=7.004 ms (0.49 quant-GB/s), device=0.040 ms (85.93 quant-GB/s), kernels=1.0
+*** AMD        4 q6k_gemv_partial_1024_4096_1                   arg  3 mem   0.02 GB tm    116.64us/     0.24ms (    454 GFLOPS   30|146    GB/s)
+*** AMD        1 q6k_gemv_partial_1024_4096_1                   arg  3 mem   0.02 GB tm    112.00us/     0.11ms (    473 GFLOPS   31|152    GB/s)
+*** AMD        2 q6k_gemv_partial_1024_4096_1                   arg  3 mem   0.02 GB tm    109.80us/     0.22ms (    482 GFLOPS   31|156    GB/s)
+*** AMD        3 q6k_gemv_partial_1024_4096_1                   arg  3 mem   0.02 GB tm    109.64us/     0.33ms (    483 GFLOPS   32|156    GB/s)
+q6k_gemv_primitive_partial: wall=6.050 ms (0.57 quant-GB/s), device=0.110 ms (31.14 quant-GB/s), kernels=1.0

@@ -24,9 +24,13 @@ class Q4KPrimitiveStorage:
   __slots__ = ("words",)
   def __init__(self, words:Tensor): self.words = words
 
+class Q6KPrimitiveStorage:
+  __slots__ = ("halfs",)
+  def __init__(self, halfs:Tensor): self.halfs = halfs
+
 class Q4KPrimitiveRegistry:
   __slots__ = ("linears",)
-  def __init__(self, linears:list[Q4KPrimitiveLinear]|None=None): self.linears = linears or []
+  def __init__(self, linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]|None=None): self.linears = linears or []
 
 class Q4KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple, name:str):
@@ -48,6 +52,26 @@ class Q4KPrimitiveLinear:
                                      fxn=q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
 
+class Q6KPrimitiveLinear:
+  def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple, name:str):
+    self.weight, self.bias, self.q6k_storage = weight, bias, Q6KPrimitiveStorage(halfs)
+    self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
+    self.decode_enabled = False
+
+  def _fallback(self, x:Tensor) -> Tensor:
+    return x.linear(self.weight.transpose(), self.bias)
+
+  def __call__(self, x:Tensor) -> Tensor:
+    # Q6_K is currently only a measured win for the large decode GEMV ffn_down shape.
+    if not self.decode_enabled or self.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != self.in_features:
+      return self._fallback(x)
+    from extra.q6_k_gemv_primitive import q6k_gemv_partial_kernel
+    x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
+    partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
+    partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
+                                     fxn=q6k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, self.opts))[0]
+    return partial.sum(axis=1).reshape(1, 1, self.out_features)
+
 def apply_rope(x:Tensor, freqs_cis:Tensor) -> Tensor:
   assert x.shape[-1] % 2 == 0
   cos, sin = freqs_cis.reshape(1, 1, x.shape[2], -1).chunk(2, dim=-1)
@@ -58,6 +82,11 @@ def _q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
   if ".ffn_gate.weight" in name or ".ffn_up.weight" in name: return 1, ("LOCAL:0:64",)
   if ".ffn_down.weight" in name: return 4, ("LOCAL:0:32",)
   if ".attn_q.weight" in name or ".attn_output.weight" in name: return 1, ("LOCAL:0:64",)
+  return None
+
+def _q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
+  # Measured on Qwen3 8B/14B: ffn_down wins decisively, output.weight and attn_v lose to the fused graph.
+  if ".ffn_down.weight" in name: return 1, ("LOCAL:0:64",)
   return None
 
 def _module_at(root, path:str):
@@ -119,6 +148,55 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q4KPrim
     more_s = f" ...+{len(installed)-8}" if len(installed) > 8 else ""
     print(f"Q4K_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s}")
     if installed: print(f"Q4K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
+  return installed
+
+def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q6KPrimitiveLinear]:
+  from extra.q6_k_gemv_primitive import parse_opt
+  raw_halfs = Tensor(gguf, dtype=dtypes.uint16)
+  installed: list[Q6KPrimitiveLinear] = []
+  skipped: collections.Counter[str] = collections.Counter()
+  debug = bool(getenv("Q6K_PRIMITIVE_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", 0)))
+  for name, dims, typ, off in meta["tensor_infos"]:
+    if typ != 14:
+      skipped["not_q6_k"] += 1
+      continue
+    if len(dims) != 2:
+      skipped["not_2d"] += 1
+      continue
+    if not name.endswith(".weight"):
+      skipped["not_weight"] += 1
+      continue
+    if (policy := _q6k_policy(name)) is None:
+      skipped["policy_fallback"] += 1
+      continue
+    rows, cols = tuple(reversed(dims))
+    byte_start = meta["data_start"] + off
+    if byte_start % 2 != 0:
+      skipped["misaligned"] += 1
+      continue
+    module_path = name[:-len(".weight")]
+    try: module = _module_at(model, module_path)
+    except (AttributeError, IndexError, ValueError):
+      skipped["missing_module"] += 1
+      continue
+    if not hasattr(module, "weight"):
+      skipped["missing_weight"] += 1
+      continue
+    if getattr(module, "bias", None) is not None:
+      skipped["bias"] += 1
+      continue
+    q6_bytes = prod(dims) // 256 * 210
+    halfs = raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous().realize()
+    parts, opt_specs = policy
+    q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name)
+    _set_module_at(model, module_path, q6k_linear)
+    installed.append(q6k_linear)
+  if debug:
+    skipped_s = " ".join(f"{k}={v}" for k, v in sorted(skipped.items()))
+    installed_s = " ".join(f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}" for x in installed[:8])
+    more_s = f" ...+{len(installed)-8}" if len(installed) > 8 else ""
+    print(f"Q6K_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s}")
+    if installed: print(f"Q6K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
   return installed
 
 def pairwise_topk(x: Tensor, k: int) -> tuple[Tensor, Tensor]:
@@ -424,8 +502,9 @@ class Transformer:
                 realize=bool(getenv("REALIZE", 0))) -> tuple[Transformer, dict]:
     # TODO: remove the need for copy to default device
     use_q4k_primitive = bool(getenv("Q4K_PRIMITIVE", 0))
-    if use_q4k_primitive:
-      if isinstance(gguf, Tensor): raise ValueError("Q4K_PRIMITIVE requires a GGUF path, not a preloaded Tensor")
+    use_q6k_primitive = bool(getenv("Q6K_PRIMITIVE", 0))
+    if use_q4k_primitive or use_q6k_primitive:
+      if isinstance(gguf, Tensor): raise ValueError("quant primitive paths require a GGUF path, not a preloaded Tensor")
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
     else:
       kv, state_dict = gguf_load(gguf.to(None).realize() if isinstance(gguf, Tensor) else gguf)
@@ -488,8 +567,11 @@ class Transformer:
       expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict)
     model = Transformer(config)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
-    if use_q4k_primitive and q4k_meta is not None:
-      model._q4k_linears = Q4KPrimitiveRegistry(_install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta))
+    if q4k_meta is not None:
+      primitive_linears = []
+      if use_q4k_primitive: primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta)
+      if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta)
+      if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())

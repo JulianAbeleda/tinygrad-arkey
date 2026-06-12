@@ -8,6 +8,7 @@ TOKEN_LINE = "226.08 ms,   4.42 tok/s,   21.10 GB/s, 4770/9504 MB  -- sample"
 class TestQ4KProfileReport(unittest.TestCase):
   def test_label_strict(self):
     self.assertEqual(_label(pathlib.Path("8b-q4k-primitive-debug2-jitbs1.log")), ("8B", "Q4K_PRIMITIVE=1 named"))
+    self.assertEqual(_label(pathlib.Path("8b-q4q6-primitive-debug2-jitbs1.log")), ("8B", "Q4K+Q6K_PRIMITIVE=1 named"))
     self.assertEqual(_label(pathlib.Path("14b-baseline-debug2-batched.log")), ("14B", "baseline batched"))
     with self.assertRaisesRegex(ValueError, "8b or 14b"):
       _label(pathlib.Path("q4k-primitive-debug2-jitbs1.log"))
@@ -41,6 +42,7 @@ class TestQ4KProfileReport(unittest.TestCase):
     kernels = [
       Kernel("copy        4 B,     AMD <- AMD", 1.0),
       Kernel("q4k_gemv_partial_4096_4096_1", 1.0),
+      Kernel("q6k_gemv_partial_4096_12288_1", 1.0),
       Kernel("r_32_32_4_48_2_2_2_32", 1.0),
       Kernel("r_1024_16_4_2_32", 1.0),
       Kernel("r_4_2_8_16_4_(start_pos+1)", 1.0),
@@ -53,8 +55,9 @@ class TestQ4KProfileReport(unittest.TestCase):
     self.assertEqual(buckets, [
       "copy",
       "q4k_primitive_gemv",
-      "fallback_q4k_fused",
-      "fallback_q4k_fused",
+      "q6k_primitive_gemv",
+      "fallback_quant_fused",
+      "fallback_quant_fused",
       "attention_misc",
       "attention_misc",
       "norm_sampling_misc",
@@ -75,7 +78,7 @@ class TestQ4KProfileReport(unittest.TestCase):
       "q4k_primitive_reduction",
       "q4k_primitive_reduction",
       "q4k_primitive_reduction",
-      "fallback_q4k_fused",
+      "fallback_quant_fused",
     ])
 
 if __name__ == "__main__":

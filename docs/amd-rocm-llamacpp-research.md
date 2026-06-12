@@ -1565,3 +1565,72 @@ Changes:
 The regenerated profile report kept the same performance conclusion. The added
 guardrail is methodological: a changed log format, misnamed file, or ambiguous
 kernel signature now stops the analysis instead of defaulting to a quiet bucket.
+
+## Q6_K ffn_down primitive and residual mapping (2026-06-11)
+
+Follow-up to the step 17/18 residual: the largest anonymous "fallback Q4-style"
+kernels were misnamed by the profiler. Mapping model metadata against kernel
+shapes showed the dominant residual is type-14 `Q6_K`, not missing Q4_K
+coverage:
+
+- `ffn_down.weight`: half of the Qwen3 blocks are `Q6_K` (`ggml_type=14`);
+- `output.weight`: `Q6_K`, huge vocab projection;
+- some `attn_v.weight`: `Q6_K`, small KV projection.
+
+The profiler bucket is now renamed to `fallback_quant_fused`, and
+`q6k_gemv_partial_*` gets its own bucket.
+
+Microbench results, real shapes, random activations, DEBUG=2 device time:
+
+| tensor | fused graph | Q6 primitive | verdict |
+|---|---:|---:|---|
+| 8B `blk.0.ffn_down.weight` `(4096,12288)` | `1.945 ms` | `0.319 ms` | install |
+| 14B `blk.0.ffn_down.weight` `(5120,17408)` | `2.760 ms` | `0.474 ms` | install |
+| 8B `output.weight` `(151936,4096)` | `4.286 ms` | `5.409 ms` | fallback |
+| 8B `blk.0.attn_v.weight` `(1024,4096)` | `0.040 ms` | `0.110 ms` | fallback |
+
+Implementation:
+
+- added `extra/q6_k_gemv_primitive.py`, with bit-exact unpack gate and random
+  GEMV correctness gate;
+- added `Q6KPrimitiveLinear`, enabled only by `Q6K_PRIMITIVE=1`;
+- Q6 policy is intentionally narrow: only `*.ffn_down.weight`;
+- `output.weight` and `attn_v.weight` stay on the generic fused graph because
+  the measured primitive loses there.
+
+Install diagnostics on 8B with `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1
+Q4K_PRIMITIVE_DEBUG=1`:
+
+```text
+Q4K_PRIMITIVE_DEBUG installed=162 skipped_total=237 not_q4_k=182 policy_fallback=55
+Q6K_PRIMITIVE_DEBUG installed=18 skipped_total=381 not_q6_k=362 policy_fallback=19
+```
+
+End-to-end correctness:
+
+| model | mode | tokens | result |
+|---|---|---:|---|
+| Qwen3-8B-Q4_K_M | `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` | 32 | exact match vs baseline |
+| Qwen3-14B-Q4_K_M | `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` | 32 | exact match vs baseline |
+
+End-to-end decode, full 128-token benchmark:
+
+| model | Q4 primitive prior | Q4+Q6 primitive | vs llama.cpp ref |
+|---|---:|---:|---:|
+| 8B | `~28.7 tok/s` | `58.17 tok/s` avg (`58.54` drop-first) | `~57.6%` of `101 tok/s` |
+| 14B | `~14.9 tok/s` | `28.27 tok/s` avg (`28.43` drop-first) | `~42.8%` of `66 tok/s` |
+
+Named 8B Q4+Q6 profile:
+
+| bucket | ms/tok | % AMD kernel |
+|---|---:|---:|
+| `q4k_primitive_gemv` | `11.36` | `33.18%` |
+| `q6k_primitive_gemv` | `5.96` | `17.41%` |
+| `fallback_quant_fused` | `4.92` | `14.37%` |
+
+Verdict: the remaining gap moved. The old dominant FFN-down fallback is fixed.
+The current residual is mostly primitive quality (`q4k` + `q6k` GEMV now about
+half of named AMD kernel time) plus the Q6 output projection, where this
+primitive is not the right shape. Next work should tune/build v2 for primitive
+GEMV and separately investigate an output-projection-specific path; do not turn
+on Q6 output/attn_v with the current primitive.

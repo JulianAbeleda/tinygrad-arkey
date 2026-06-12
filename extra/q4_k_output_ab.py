@@ -12,7 +12,8 @@ def _json_from_output(out:str) -> dict:
   raise RuntimeError("child produced no JSON line\n" + out[-2000:])
 
 def run_child(args, primitive:bool) -> dict:
-  env = {**os.environ, "PYTHONPATH": ".", "Q4K_PRIMITIVE": "1" if primitive else "0"}
+  env = {**os.environ, "PYTHONPATH": ".", "Q4K_PRIMITIVE": "1" if primitive else "0",
+         "Q6K_PRIMITIVE": "1" if primitive and args.q6_primitive else "0"}
   cmd = [sys.executable, __file__, "--child", "--model", str(args.model), "--tokens", str(args.tokens),
          "--max-context", str(args.max_context), "--seed", str(args.seed), "--temperature", str(args.temperature),
          "--prompt", args.prompt, "--primitive", "1" if primitive else "0"]
@@ -73,6 +74,7 @@ if __name__ == "__main__":
   parser.add_argument("--timeout", type=float, default=900)
   parser.add_argument("--tail-lines", type=int, default=8)
   parser.add_argument("--json", type=pathlib.Path, help="write comparison JSON")
+  parser.add_argument("--q6-primitive", action="store_true", help="enable Q6K_PRIMITIVE=1 only for the primitive child")
   parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
   parser.add_argument("--primitive", type=int, choices=(0, 1), default=0, help=argparse.SUPPRESS)
   args = parser.parse_args()
