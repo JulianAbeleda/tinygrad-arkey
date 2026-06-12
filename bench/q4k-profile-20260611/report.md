@@ -1,6 +1,10 @@
-# Q4_K Residual Decode Profile
+# Quant Residual Decode Profile
 
-Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal graph batching and are the real runtime profile. `named` logs set `JIT_BATCH_SIZE=1`; they keep the rollout JIT but avoid graph batching so DEBUG=2 exposes kernel names for attribution.
+Scope: Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode.
+
+Classifier rules are calibrated to Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode logs. Use this report outside that scope only after adding boundary tests for the new kernel signatures.
+
+Steady-state rows drop the first 1 benchmark token(s). `batched` rows are the throughput truth. `named` rows are attribution-only: they disable graph batching via JIT_BATCH_SIZE=1, so use AMD-kernel percentages rather than named wall time for bottleneck decisions.
 
 ## Summary
 

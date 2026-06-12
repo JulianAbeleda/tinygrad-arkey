@@ -1,6 +1,7 @@
 [
   {
     "path": "bench/q4k-profile-20260611/8b-baseline-debug2-batched.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "8B",
     "mode": "baseline batched",
     "tokens": 32,
@@ -86,6 +87,7 @@
   },
   {
     "path": "bench/q4k-profile-20260611/8b-q4k-primitive-debug2-batched.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "8B",
     "mode": "Q4K_PRIMITIVE=1 batched",
     "tokens": 32,
@@ -171,6 +173,7 @@
   },
   {
     "path": "bench/q4k-profile-20260611/8b-baseline-debug2-jitbs1.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "8B",
     "mode": "baseline named",
     "tokens": 32,
@@ -312,6 +315,7 @@
   },
   {
     "path": "bench/q4k-profile-20260611/8b-q4k-primitive-debug2-jitbs1.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "8B",
     "mode": "Q4K_PRIMITIVE=1 named",
     "tokens": 32,
@@ -453,6 +457,7 @@
   },
   {
     "path": "bench/q4k-profile-20260611/14b-baseline-debug2-batched.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "14B",
     "mode": "baseline batched",
     "tokens": 32,
@@ -538,6 +543,7 @@
   },
   {
     "path": "bench/q4k-profile-20260611/14b-q4k-primitive-debug2-batched.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "14B",
     "mode": "Q4K_PRIMITIVE=1 batched",
     "tokens": 32,
@@ -623,6 +629,7 @@
   },
   {
     "path": "bench/q4k-profile-20260611/14b-baseline-debug2-jitbs1.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "14B",
     "mode": "baseline named",
     "tokens": 32,
@@ -764,6 +771,7 @@
   },
   {
     "path": "bench/q4k-profile-20260611/14b-q4k-primitive-debug2-jitbs1.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "14B",
     "mode": "Q4K_PRIMITIVE=1 named",
     "tokens": 32,

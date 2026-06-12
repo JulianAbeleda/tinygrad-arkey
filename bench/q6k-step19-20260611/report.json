@@ -1,6 +1,7 @@
 [
   {
     "path": "bench/q6k-step19-20260611/8b-q4q6-primitive-debug2-jitbs1.log",
+    "profile_scope": "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode",
     "model": "8B",
     "mode": "Q4K+Q6K_PRIMITIVE=1 named",
     "tokens": 32,

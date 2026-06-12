@@ -397,7 +397,10 @@ only (never the Mac bridge). This is the plan of record.
    (`JIT_BATCH_SIZE=1`) show the primitive GEMV is not the next bottleneck:
    Q4_K primitive GEMV is ~14% of named AMD kernel time on both 8B and 14B;
    primitive reductions are ~1% on 8B and ~10% on 14B; remaining generic/fallback
-   dense Q4-style kernels are ~71% on 8B and ~67% on 14B.
+   dense Q4-style kernels are ~71% on 8B and ~67% on 14B. Use the batched
+   rows for throughput; named rows are attribution-only because
+   `JIT_BATCH_SIZE=1` deliberately changes wall time. Parser hardening did not
+   materially move the `~14%`/`~71%` conclusion.
 
 ### Two additions (both mandatory, easy to miss)
 

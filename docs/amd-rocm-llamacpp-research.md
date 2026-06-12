@@ -1489,6 +1489,17 @@ Named attribution summary, using `% AMD kernel` as the basis:
 | 14B | baseline | `0.00%` | `0.00%` | `94.69%` |
 | 14B | `Q4K_PRIMITIVE=1` | `14.06%` | `9.56%` | `66.79%` |
 
+Interpretation caveat: the named rows are attribution-only. They use
+`JIT_BATCH_SIZE=1` to expose individual kernel names, which deliberately changes
+wall time. Use the batched rows for throughput and residual overhead, and use
+the named rows only for the `% AMD kernel` ownership split.
+
+Parser-hardening check: after the strict classifier and the
+`fallback_quant_fused` rename, these attribution numbers did not materially
+move. The original claim still holds on the stricter report: primitive GEMV is
+about `14%` of named AMD kernel time, and the remaining generic/fallback quant
+bucket is about `71%` on 8B and `67%` on 14B.
+
 Top remaining named kernels after the primitive flag:
 
 | model | top remaining kernel | named ms/tok | note |
@@ -1579,6 +1590,11 @@ coverage:
 
 The profiler bucket is now renamed to `fallback_quant_fused`, and
 `q6k_gemv_partial_*` gets its own bucket.
+
+Scope note: `extra/q4_k_profile_report.py` is explicitly a Qwen3 8B/14B
+Q4_K_M AMD `DEBUG=2` decode classifier. The dense fallback signatures are not a
+general tinygrad kernel taxonomy; foreign models or devices need new boundary
+tests before their bucket attribution should be trusted.
 
 Microbench results, real shapes, random activations, DEBUG=2 device time:
 

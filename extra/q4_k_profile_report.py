@@ -10,6 +10,17 @@ TOKEN_RE = re.compile(r"^\s*(?P<ms>[0-9.]+) ms,\s+(?P<tps>[0-9.]+) tok/s,\s+(?P<
 AMD_RE = re.compile(r"^\*\*\* AMD\s+\d+\s+(?P<name>.*?)\s+arg\s+\d+\s+mem\s+.*?\btm\s+(?P<tm>[0-9.]+)(?P<unit>us|ms|s)/")
 MODEL_RE = re.compile(r"(?:^|[-_])(8b|14b)(?:[-_]|$)", re.IGNORECASE)
 
+PROFILE_SCOPE = "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode"
+PROFILE_SCOPE_NOTE = (
+  "Classifier rules are calibrated to Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode logs. "
+  "Use this report outside that scope only after adding boundary tests for the new kernel signatures."
+)
+PROFILE_MODE_NOTE = (
+  "`batched` rows are the throughput truth. `named` rows are attribution-only: "
+  "they disable graph batching via JIT_BATCH_SIZE=1, so use AMD-kernel percentages "
+  "rather than named wall time for bottleneck decisions."
+)
+
 BUCKETS = (
   "q4k_primitive_gemv",
   "q6k_primitive_gemv",
@@ -22,10 +33,10 @@ BUCKETS = (
   "residual_overhead",
 )
 
-FALLBACK_QUANT_PATTERNS = (
-  # Baseline fused Q4_K matvec/dequant kernels are large anonymous reductions.
-  # These patterns intentionally describe the known dense decode matvec shapes;
-  # attention and norm/sampling signatures are kept disjoint below.
+QWEN3_AMD_FALLBACK_QUANT_PATTERNS = (
+  # Fused quant matvec/dequant kernels are large anonymous reductions in this
+  # Qwen3/AMD DEBUG=2 corpus. Keep attention and norm/sampling signatures
+  # disjoint below.
   r"^r_128_32_3_16_4_2_32",
   r"^r_\d+_32_4_\d+_(2_2_2_32|4_2_32)",
   r"^r_\d+_16_4_2_32",
@@ -140,11 +151,11 @@ def _is_norm_sampling_kernel(name:str) -> bool:
 
 def _is_fallback_quant_kernel(name:str) -> bool:
   if not name.startswith("r_"): return False
-  return any(re.search(pat, name) is not None for pat in FALLBACK_QUANT_PATTERNS)
+  return any(re.search(pat, name) is not None for pat in QWEN3_AMD_FALLBACK_QUANT_PATTERNS)
 
 KERNEL_RULES = (
   KernelRule("copy", "copy kernels", lambda name: name.startswith("copy")),
-  KernelRule("fallback_quant_fused", "known fused dense quant decode matvec signatures", _is_fallback_quant_kernel),
+  KernelRule("fallback_quant_fused", "Qwen3/AMD fused dense quant decode matvec signatures", _is_fallback_quant_kernel),
   KernelRule("attention_misc", "decode attention signatures", _is_attention_kernel),
   KernelRule("norm_sampling_misc", "norm/sampling signatures", _is_norm_sampling_kernel),
 )
@@ -224,9 +235,13 @@ def result_sort_key(result:dict) -> tuple[int, int, str]:
 
 def make_report(results:list[dict], steady_drop:int) -> str:
   lines = [
-    "# Q4_K Residual Decode Profile",
+    "# Quant Residual Decode Profile",
     "",
-    f"Steady-state rows drop the first {steady_drop} benchmark token(s). `batched` logs use normal graph batching and are the real runtime profile. `named` logs set `JIT_BATCH_SIZE=1`; they keep the rollout JIT but avoid graph batching so DEBUG=2 exposes kernel names for attribution.",
+    f"Scope: {PROFILE_SCOPE}.",
+    "",
+    PROFILE_SCOPE_NOTE,
+    "",
+    f"Steady-state rows drop the first {steady_drop} benchmark token(s). {PROFILE_MODE_NOTE}",
     "",
     "## Summary",
     "",
@@ -292,7 +307,7 @@ def make_report(results:list[dict], steady_drop:int) -> str:
   return "\n".join(lines)
 
 def main():
-  parser = argparse.ArgumentParser(description="Parse tinygrad DEBUG=2 LLM decode logs into residual Q4_K profile buckets")
+  parser = argparse.ArgumentParser(description=f"Parse tinygrad DEBUG=2 LLM decode logs into residual quant profile buckets ({PROFILE_SCOPE})")
   parser.add_argument("logs", nargs="+", type=pathlib.Path)
   parser.add_argument("--out", type=pathlib.Path)
   parser.add_argument("--json", type=pathlib.Path)
@@ -303,7 +318,7 @@ def main():
   for path in args.logs:
     model, mode = _label(path)
     parsed = parse_log(path)
-    results.append({"path": str(path), "model": model, "mode": mode, "tokens": len(parsed.tokens),
+    results.append({"path": str(path), "profile_scope": PROFILE_SCOPE, "model": model, "mode": mode, "tokens": len(parsed.tokens),
                     "parse_stats": {**parsed.stats.__dict__, "tokens": len(parsed.tokens)},
                     "summary": summarize(parsed.tokens, args.steady_drop)})
   results.sort(key=result_sort_key)

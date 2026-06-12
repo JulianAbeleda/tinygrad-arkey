@@ -1,6 +1,6 @@
 import pathlib, tempfile, unittest
 
-from extra.q4_k_profile_report import Kernel, _label, classify_token, parse_log
+from extra.q4_k_profile_report import Kernel, PROFILE_SCOPE, Token, _label, classify_token, make_report, parse_log, summarize
 
 AMD_LINE = "*** AMD        1 q4k_gemv_partial_4096_4096_1                   arg  3 mem   9.50 GB tm     55.08us/    60.41ms (   1955 GFLOPS  175|1101   GB/s) "
 TOKEN_LINE = "226.08 ms,   4.42 tok/s,   21.10 GB/s, 4770/9504 MB  -- sample"
@@ -80,6 +80,19 @@ class TestQ4KProfileReport(unittest.TestCase):
       "q4k_primitive_reduction",
       "fallback_quant_fused",
     ])
+
+  def test_report_declares_scope_and_named_caveat(self):
+    summary = summarize([Token(10.0, 100.0, 1.0, [Kernel("q4k_gemv_partial_4096_4096_1", 1.0)])], 0)
+    report = make_report([{
+      "path": "8b-q4k-primitive-debug2-jitbs1.log",
+      "model": "8B",
+      "mode": "Q4K_PRIMITIVE=1 named",
+      "parse_stats": {"lines": 2, "tokens": 1, "amd_lines": 1, "ignored_lines": 0, "non_amd_debug_lines": 0, "trailing_amd_lines": 0},
+      "summary": summary,
+    }], 0)
+    self.assertIn(PROFILE_SCOPE, report)
+    self.assertIn("`batched` rows are the throughput truth", report)
+    self.assertIn("`named` rows are attribution-only", report)
 
 if __name__ == "__main__":
   unittest.main()
