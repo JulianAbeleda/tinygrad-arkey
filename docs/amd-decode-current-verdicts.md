@@ -39,8 +39,8 @@ Recommendation by default: keep generated policies opt-in and artifact-pinned,
 use the 8B/14B pipeline artifacts only for the matching model/hardware path,
 use the 32B capped artifact only when accepting the generic-baseline comparison,
 stop adding `extra/` q8 arithmetic variants, and move effort to the next
-higher-value goal unless compiler research is the point. For 32B, the next
-required work is long-term storage architecture, not more candidate search.
+higher-value goal unless compiler research is the point. Storage accounting and
+runtime caps are now in place; do not turn this into another kernel-search loop.
 
 ## Verdict Table
 
@@ -51,7 +51,7 @@ required work is long-term storage architecture, not more candidate search.
 | Expression-vectorization probe | Failed. Rewriting byte expressions did not make codegen emit wider useful loads. | Stop trying to garden `gguf.py` scalar byte math. |
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
 | Generated policy | Model-specific result. The reproducible pipeline accepts 8B as a modest win (`52.65` vs `49.61 tok/s`) and 14B as a strong win (`39.99` vs `22.53 tok/s`). Both pass 32-token greedy A/B. 32B uncapped policy OOMs, but a tensor-scoped `1536 MB` capped policy accepts versus generic baseline (`4.16` vs `3.44 tok/s`) and passes A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts when running those exact model/hardware paths. Use the 32B capped artifact only with the generic-baseline caveat. Do not make it a global default. |
-| QK policy storage | Shape-scoped policy is too coarse for large models; 32B needs tensor-scoped storage decisions. A first memory cap exists and selects `144` primitive tensors under `1.49 GiB` (`64 attn_k`, `64 attn_v`, `16 ffn_down`). | Future policy generation must include storage cost, benefit, and fallback decisions. Long-term fix is shared/lazy packed storage, not bigger caps. |
+| QK policy storage | Shape-scoped policy is too coarse for large models; 32B needs tensor-scoped storage decisions. A first memory cap exists and selects `144` primitive tensors under `1.49 GiB` (`64 attn_k`, `64 attn_v`, `16 ffn_down`). Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. | Future policy generation must include storage cost, benefit, and fallback decisions. Runtime caps are guardrails, not optimizers. Long-term fix is shared packed storage without per-token copies; otherwise move up to harness work. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, and policy cache exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
@@ -136,6 +136,8 @@ worth doing only if the research itself is the goal.
 - Do not expand 32B caps blindly. Cap selection must report persistent bytes,
   selected tensors, fallback reasons, greedy output A/B, and a stable decode
   window.
+- Do not use `QK_PRIMITIVE_STORAGE=q4_ondemand` as a performance path. It is a
+  negative storage prototype: lower persistent bytes, unacceptable decode speed.
 - Do not run BEAM or risky schedule search on Mac/TinyGPU/remote paths.
 - Do not widen tinygrad core optimizer APIs for quant GEMV until an `extra/`
   or renderer-level candidate passes correctness and wins a generated-search
@@ -152,6 +154,7 @@ worth doing only if the research itself is the goal.
 - 14B generated-policy audit: `bench/qk-14b-remeasure-20260612/README.md`
 - Reproducible generated-policy pipeline: `bench/qk-policy-pipeline-20260612/README.md`
 - 32B memory-aware capped policy: `bench/qk-policy-cap-20260612/README.md`
+- QK runtime storage-control artifacts: `bench/qk-storage-20260612/README.md`
 - QK storage architecture: `docs/amd-decode-qk-storage-architecture.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

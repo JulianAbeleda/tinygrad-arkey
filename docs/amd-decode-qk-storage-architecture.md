@@ -2,8 +2,8 @@
 
 Date: 2026-06-12
 
-Status: first memory-aware policy pass implemented; long-term storage
-architecture still open.
+Status: memory-aware policy and runtime storage accounting implemented;
+long-term shared storage architecture still open.
 
 ## Problem
 
@@ -46,6 +46,27 @@ The pipeline can compare this capped generated policy against a generic fused
 baseline with `--reference-mode generic`, needed for 32B because the full
 explicit primitive baseline also OOMs.
 
+## Runtime Controls
+
+The runtime now reports actual primitive sidecar bytes under
+`Q4K_PRIMITIVE_DEBUG`, `Q6K_PRIMITIVE_DEBUG`, or `QK_GENERATED_POLICY_DEBUG`.
+
+Relevant environment variables:
+
+- `QK_PRIMITIVE_MAX_STORAGE_MB=N`: cap total persistent primitive sidecar bytes
+  across Q4_K and Q6_K installers. Tensors that would exceed the cap fall back
+  and increment `runtime_storage_cap`.
+- `QK_GENERATED_POLICY_STRICT=1`: turn storage-cap fallback into a loud error
+  for generated-policy runs.
+- `QK_PRIMITIVE_STORAGE=sidecar`: default fast path, preloads packed primitive
+  storage on device.
+- `QK_PRIMITIVE_STORAGE=q4_ondemand`: experimental Q4_K-only non-persistent
+  path. It keeps the Q4 packed slice disk-backed and copies at decode time.
+
+`q4_ondemand` is a negative prototype, not a recommended mode. It proves that
+Q4 persistent sidecar bytes can be removed, but the per-token copy cost destroys
+decode throughput.
+
 ## 32B Result
 
 Artifact: `bench/qk-policy-cap-20260612/32b-1536mb/`.
@@ -84,6 +105,10 @@ Storage selection:
 
 Selected bytes: `1,600,389,120` under a cap of `1,610,612,736`.
 
+The same policy re-run with runtime accounting reports exactly
+`1,600,389,120` persistent bytes (`1526.25 MB`) and reaches about `4.30 tok/s`
+after warmup in a short benchmark-4 smoke.
+
 Important caveat: this is not an explicit-full-primitive comparison. The full
 explicit Q4/Q6 primitive baseline does not fit for 32B. This result says a
 memory-aware generated policy can recover some speed while fitting beside the
@@ -106,6 +131,32 @@ Tensor-scoped policy is the minimum required control surface:
 This moves the project in the Ansor direction without pretending the storage
 problem is solved. The searcher now reasons about a model-level resource budget,
 not only per-shape speed.
+
+## Storage-Control Validation
+
+Artifact: `bench/qk-storage-20260612/`.
+
+8B smokes:
+
+| mode | Q4 wrappers | Q6 wrappers | persistent storage MB | warm tok/s | verdict |
+|---|---:|---:|---:|---:|---|
+| generated sidecar | `162` | `18` | `3786.75` | `57.77` | fast path |
+| generated runtime cap `512 MB` | `28` | `0` | `504.00` | `13.46` | cap works, install-order selection is slow |
+| generated `q4_ondemand` | `162` | `18` | `708.75` | `0.55` | rejects per-token Q4 copy |
+
+32B smokes:
+
+| mode | Q4 wrappers | Q6 wrappers | persistent storage MB | warm tok/s | verdict |
+|---|---:|---:|---:|---:|---|
+| static generated cap `1536 MB` | `112` | `32` | `1526.25` | `4.30` | useful selected policy |
+| full generated policy + runtime cap `1536 MB` | `43` | `0` | `1535.62` | `3.71` | guard works, but not an optimizer |
+
+Interpretation:
+
+- Runtime accounting matches the generated policy storage estimate.
+- The runtime cap prevents OOM and explains skipped tensors.
+- Install-order capping is slower than generated benefit-per-MB capping.
+- Q4 on-demand removes persistent Q4 sidecar bytes but is too slow to use.
 
 ## Long-Term Design
 
@@ -146,16 +197,14 @@ storage:
 
 Ordered by architectural value:
 
-1. Add runtime accounting for actual primitive sidecar bytes installed and print
-   it under `Q4K_PRIMITIVE_DEBUG` / `Q6K_PRIMITIVE_DEBUG`.
-2. Add a "remaining memory" policy mode that chooses a cap from device memory
-   instead of a fixed CLI number.
-3. Prototype shared/lazy packed storage for one Q4_K family, guarded by the same
-   bit-exact and greedy A/B tests.
-4. Re-run 32B after shared/lazy storage. If full explicit and full generated
-   policies fit, then measure explicit-vs-generated as the true scaling point.
-5. Only after storage is fixed, consider richer generated candidates or BEAM
-   integration for 32B.
+1. Move up to the harness/infrastructure layer. Treat storage caps and accounting
+   as available primitives for future experiments.
+2. If storage work resumes, prototype real shared ownership for one Q4_K family:
+   no duplicate persistent buffer and no per-token disk copy.
+3. Re-run a cheap 32B true comparison only if shared ownership makes full
+   explicit/full generated policies fit naturally.
+4. Do not resume kernel search from this track. The storage work is now
+   infrastructure; use it to support higher-level loop/harness work.
 
 Stop rule: do not spend more time on 32B candidate search until the storage
 architecture can explain where every persistent packed-weight byte lives.

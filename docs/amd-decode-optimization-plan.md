@@ -6,8 +6,11 @@ falsified.
 
 Latest storage update: 32B uncapped generated policy still OOMs, but a
 tensor-scoped `1536 MB` capped generated policy now fits and accepts versus the
-generic fused baseline (`4.16` vs `3.44 tok/s`, greedy A/B match). The design
-details are in `docs/amd-decode-qk-storage-architecture.md`.
+generic fused baseline (`4.16` vs `3.44 tok/s`, greedy A/B match). Runtime
+storage accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now make sidecar bytes
+visible and bounded. `QK_PRIMITIVE_STORAGE=q4_ondemand` was tested and rejected
+because per-token Q4 copies destroy decode speed. The design details are in
+`docs/amd-decode-qk-storage-architecture.md`.
 
 Executable plan for closing tinygrad's decode-speed gap vs llama.cpp/ROCm on
 gfx1100. Hypothesis derivation and measured baselines live in
@@ -996,7 +999,9 @@ Results:
   `MemoryError: Allocation of 70.31 MB failed on AMD. Used: 23.80 GB`.
 
 Verdict: generated-policy selection is now a reproducible opt-in win for 8B and
-14B on this local gfx1100 path. The 32B scaling question is unresolved because
-the current primitive integration duplicates too much packed-weight storage on
-GPU. The next 32B task is memory/storage design, not more generated candidate
-search.
+14B on this local gfx1100 path. The 32B scaling question is partially answered
+by a capped generated policy against the generic baseline, and runtime storage
+accounting/caps now prevent opaque primitive over-allocation. The next task is
+not more generated candidate search from this track; move up to harness and
+infrastructure unless shared packed ownership can be implemented without
+per-token copies.

@@ -1,0 +1,160 @@
+[
+  {
+    "avg_drop1_tok_s": 57.77333333333333,
+    "avg_last16_tok_s": 45.795,
+    "avg_last32_tok_s": 45.795,
+    "avg_last64_tok_s": 45.795,
+    "avg_ms": 38.3275,
+    "avg_tok_s": 45.795,
+    "installs": {
+      "Q4K": {
+        "installed": 162,
+        "not_q4_k": 182,
+        "policy_fused": 54,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 3227516928,
+        "skipped_total": 237,
+        "source_bytes": 3227516928,
+        "storage_bytes": 3227516928
+      },
+      "Q6K": {
+        "installed": 18,
+        "not_q6_k": 362,
+        "policy_fused": 19,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 3970695168,
+        "skipped_total": 381,
+        "source_bytes": 743178240,
+        "storage_bytes": 743178240
+      }
+    },
+    "label": "sidecar",
+    "max_ms": 101.38,
+    "max_tok_s": 58.11,
+    "median_tok_s": 57.605000000000004,
+    "min_tok_s": 9.86,
+    "path": "bench/qk-storage-20260612/8b-generated-storage-debug.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-policy-pipeline-20260612/8b/policy.json"
+    },
+    "samples": 4,
+    "stdev_tok_s": 23.958228231653525,
+    "storage": {
+      "by_kind": "Q4K:3227516928,Q6K:743178240",
+      "by_mode": "sidecar:180",
+      "installed": 180,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 3970695168,
+      "source_bytes": 3970695168,
+      "storage_bytes": 3970695168
+    }
+  },
+  {
+    "avg_drop1_tok_s": 13.463333333333333,
+    "avg_last16_tok_s": 12.2675,
+    "avg_last32_tok_s": 12.2675,
+    "avg_last64_tok_s": 12.2675,
+    "avg_ms": 84.515,
+    "avg_tok_s": 12.2675,
+    "installs": {
+      "Q4K": {
+        "installed": 28,
+        "not_q4_k": 182,
+        "policy_fused": 54,
+        "policy_missing": 1,
+        "runtime_cap_bytes": 536870912,
+        "runtime_cap_used_bytes": 528482304,
+        "runtime_storage_cap": 134,
+        "skipped_total": 371,
+        "source_bytes": 528482304,
+        "storage_bytes": 528482304
+      },
+      "Q6K": {
+        "installed": 0,
+        "not_q6_k": 362,
+        "policy_fused": 19,
+        "runtime_cap_bytes": 536870912,
+        "runtime_cap_used_bytes": 528482304,
+        "runtime_storage_cap": 18,
+        "skipped_total": 399,
+        "source_bytes": 0,
+        "storage_bytes": 0
+      }
+    },
+    "label": "cap512",
+    "max_ms": 115.22,
+    "max_tok_s": 13.51,
+    "median_tok_s": 13.440000000000001,
+    "min_tok_s": 8.68,
+    "path": "bench/qk-storage-20260612/8b-generated-runtime-cap512.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-policy-pipeline-20260612/8b/policy.json"
+    },
+    "samples": 4,
+    "stdev_tok_s": 2.3919500412843075,
+    "storage": {
+      "by_kind": "Q4K:528482304",
+      "by_mode": "sidecar:28",
+      "installed": 28,
+      "runtime_cap_bytes": 536870912,
+      "runtime_cap_used_bytes": 528482304,
+      "source_bytes": 528482304,
+      "storage_bytes": 528482304
+    }
+  },
+  {
+    "avg_drop1_tok_s": 0.55,
+    "avg_last16_tok_s": 2.8725,
+    "avg_last32_tok_s": 2.8725,
+    "avg_last64_tok_s": 2.8725,
+    "avg_ms": 1386.8975,
+    "avg_tok_s": 2.8725,
+    "installs": {
+      "Q4K": {
+        "installed": 162,
+        "not_q4_k": 182,
+        "policy_fused": 54,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "skipped_total": 237,
+        "source_bytes": 3227516928,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 18,
+        "not_q6_k": 362,
+        "policy_fused": 19,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 743178240,
+        "skipped_total": 381,
+        "source_bytes": 743178240,
+        "storage_bytes": 743178240
+      }
+    },
+    "label": "ondemand",
+    "max_ms": 1838.46,
+    "max_tok_s": 9.84,
+    "median_tok_s": 0.555,
+    "min_tok_s": 0.54,
+    "path": "bench/qk-storage-20260612/8b-generated-q4-ondemand.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-policy-pipeline-20260612/8b/policy.json"
+    },
+    "samples": 4,
+    "stdev_tok_s": 4.645007176169555,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:743178240",
+      "by_mode": "q4_ondemand:162,sidecar:18",
+      "installed": 180,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 743178240,
+      "source_bytes": 3970695168,
+      "storage_bytes": 743178240
+    }
+  }
+]

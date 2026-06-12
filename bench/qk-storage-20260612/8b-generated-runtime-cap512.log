@@ -1,0 +1,36 @@
+QK_GENERATED_POLICY_DEBUG loaded=bench/qk-policy-pipeline-20260612/8b/policy.json entries=7
+Q4K_PRIMITIVE_DEBUG installed=28 skipped_total=371 not_q4_k=182 policy_fused=54 policy_missing=1 runtime_storage_cap=134 source_bytes=528482304 storage_bytes=528482304 runtime_cap_bytes=536870912 runtime_cap_used_bytes=528482304 storage_mode=sidecar
+Q4K_PRIMITIVE_DEBUG installed_linears blk.0.attn_output.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.ffn_gate.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.ffn_up.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.attn_output.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.ffn_gate.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.ffn_up.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] ...+20
+Q6K_PRIMITIVE_DEBUG installed=0 skipped_total=399 not_q6_k=362 policy_fused=19 runtime_storage_cap=18 source_bytes=0 storage_bytes=0 runtime_cap_bytes=536870912 runtime_cap_used_bytes=528482304 storage_mode=sidecar
+QK_PRIMITIVE_STORAGE_DEBUG installed=28 source_bytes=528482304 storage_bytes=528482304 runtime_cap_bytes=536870912 runtime_cap_used_bytes=528482304 by_kind=Q4K:528482304 by_mode=sidecar:28
+using model "Qwen3 8B Awq Compatible Instruct" with 5,027,783,488 bytes and 8,190,735,360 params
+scheduled     3 kernels in    12.38 ms | CACHE MISS 50c9ac64 |   26691 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   353.65 ms | CACHE MISS 19e5c9ba |   41523 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   257.00 ms | CACHE MISS 0529e33e |   42896 uops in cache | <frozen runpy>:88
+scheduled   557 kernels in  1831.54 ms | CACHE MISS ef18bf24 |   48110 uops in cache | <frozen runpy>:88
+memory reduced from 2101.78 MB -> 35.53 MB, 1088 -> 1 bufs
+scheduled    20 kernels in   182.14 ms | CACHE MISS bcb4a5ae |   70337 uops in cache | <frozen runpy>:88
+scheduled    22 kernels in   121.96 ms | CACHE MISS fffd7a25 |   70720 uops in cache | <frozen runpy>:88
+scheduled    19 kernels in   156.53 ms | CACHE MISS 5ec30830 |   71331 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in   229.92 ms | CACHE MISS 606b14c1 |   72663 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in   181.46 ms | CACHE MISS 810227e5 |   73142 uops in cache | <frozen runpy>:88
+scheduled    46 kernels in   120.23 ms | CACHE MISS 1f7be4ee |   73705 uops in cache | <frozen runpy>:88
+memory reduced from 45.10 MB -> 1.09 MB, 542 -> 1 bufs
+scheduled     3 kernels in     1.50 ms |  cache hit 50c9ac64 |  100850 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   183.97 ms | CACHE MISS 3ff2bc99 |  103619 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   172.94 ms | CACHE MISS 53b9a88e |  103644 uops in cache | <frozen runpy>:88
+scheduled    46 kernels in   141.52 ms | CACHE MISS 385943cd |  103958 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 2121.72 MB -> 36.67 MB, 872 -> 1 bufs
+scheduled    20 kernels in     2.73 ms |  cache hit bcb4a5ae |  106938 uops in cache | <frozen runpy>:88
+scheduled    22 kernels in     1.69 ms |  cache hit fffd7a25 |  106946 uops in cache | <frozen runpy>:88
+scheduled    19 kernels in     1.80 ms |  cache hit 5ec30830 |  106950 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in     2.97 ms |  cache hit 606b14c1 |  106952 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in     1.60 ms |  cache hit 810227e5 |  106956 uops in cache | <frozen runpy>:88
+scheduled    46 kernels in     3.27 ms |  cache hit 1f7be4ee |  107039 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 47.26 MB -> 2.11 MB, 608 -> 1 bufs
+115.22 ms,   8.68 tok/s,   42.41 GB/s, 4887/6805 MB  --  ![](
+ 74.03 ms,  13.51 tok/s,   63.73 GB/s, 4717/6805 MB  --  ![](s
+ 74.31 ms,  13.46 tok/s,   63.51 GB/s, 4719/6805 MB  --  ![](screenshot
+ 74.50 ms,  13.42 tok/s,   63.37 GB/s, 4720/6805 MB  --  ![](screenshot.png

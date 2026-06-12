@@ -1996,3 +1996,45 @@ when storage is treated as a first-class policy constraint.
 Design conclusion: shape-scoped policy is too coarse for large models. The
 long-term fix is shared/lazy primitive storage and runtime byte accounting, not
 larger unconditional caps. See `docs/amd-decode-qk-storage-architecture.md`.
+
+## Runtime QK storage controls (2026-06-12)
+
+Artifact: `bench/qk-storage-20260612/`.
+
+Runtime changes:
+
+- Q4/Q6 primitive installers now report actual source bytes and persistent
+  sidecar bytes under debug.
+- `QK_PRIMITIVE_MAX_STORAGE_MB` caps total persistent primitive sidecar storage
+  across Q4_K and Q6_K wrappers.
+- `QK_GENERATED_POLICY_STRICT=1` turns cap fallback into a loud error.
+- `QK_PRIMITIVE_STORAGE=q4_ondemand` tests a Q4_K non-persistent storage mode
+  by keeping Q4 packed slices disk-backed and copying at decode time.
+
+8B smokes:
+
+| mode | Q4 wrappers | Q6 wrappers | persistent storage MB | warm tok/s | result |
+|---|---:|---:|---:|---:|---|
+| generated sidecar | `162` | `18` | `3786.75` | `57.77` | normal fast path |
+| generated runtime cap `512 MB` | `28` | `0` | `504.00` | `13.46` | cap works, but install-order selection is slow |
+| generated `q4_ondemand` | `162` | `18` | `708.75` | `0.55` | rejects per-token Q4 copying |
+
+32B smokes:
+
+| mode | Q4 wrappers | Q6 wrappers | persistent storage MB | warm tok/s | result |
+|---|---:|---:|---:|---:|---|
+| static generated cap `1536 MB` | `112` | `32` | `1526.25` | `4.30` | useful selected policy |
+| full generated policy + runtime cap `1536 MB` | `43` | `0` | `1535.62` | `3.71` | guard prevents OOM, but is not an optimizer |
+
+Interpretation:
+
+- Runtime accounting matches the generated policy storage estimate for the
+  accepted 32B capped policy: `1,600,389,120` bytes.
+- Runtime caps are safety/diagnostic guardrails. They should prevent OOM and
+  explain fallback, not replace benefit-per-MB policy generation.
+- The Q4 on-demand storage probe is a useful negative. It removes persistent Q4
+  sidecar bytes but moves the packed-weight transfer into every decode token,
+  collapsing throughput.
+- The next step is not more kernel search. If storage work continues, it should
+  be real shared ownership of packed storage without per-token copies; otherwise
+  pivot up to the loop/harness layer.

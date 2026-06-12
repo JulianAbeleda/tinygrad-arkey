@@ -1,0 +1,34 @@
+QK_GENERATED_POLICY_DEBUG loaded=bench/qk-policy-pipeline-20260612/32b/policy.json entries=8
+Q4K_PRIMITIVE_DEBUG installed=43 skipped_total=664 not_q4_k=322 policy_missing=1 runtime_storage_cap=341 source_bytes=1610219520 storage_bytes=1610219520 runtime_cap_bytes=1610612736 runtime_cap_used_bytes=1610219520 storage_mode=sidecar
+Q4K_PRIMITIVE_DEBUG installed_linears blk.0.attn_k.weight:parts=4:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.0.attn_output.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.0.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.0.ffn_gate.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.ffn_up.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.attn_k.weight:parts=4:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.1.attn_output.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.1.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] ...+35
+Q6K_PRIMITIVE_DEBUG installed=0 skipped_total=707 not_q6_k=642 policy_fused=1 runtime_storage_cap=64 source_bytes=0 storage_bytes=0 runtime_cap_bytes=1610612736 runtime_cap_used_bytes=1610219520 storage_mode=sidecar
+QK_PRIMITIVE_STORAGE_DEBUG installed=43 source_bytes=1610219520 storage_bytes=1610219520 runtime_cap_bytes=1610612736 runtime_cap_used_bytes=1610219520 by_kind=Q4K:1610219520 by_mode=sidecar:43
+using model "Qwen3 32B Awq Compatible Instruct" with 19,762,149,024 bytes and 32,762,123,264 params
+scheduled     3 kernels in    12.46 ms | CACHE MISS 50c9ac64 |   46944 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   362.54 ms | CACHE MISS fe198419 |   69146 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   256.36 ms | CACHE MISS 019a16cd |   70524 uops in cache | <frozen runpy>:88
+scheduled   977 kernels in  4370.80 ms | CACHE MISS 4063148b |   78775 uops in cache | <frozen runpy>:88
+memory reduced from 7359.63 MB -> 70.00 MB, 1928 -> 1 bufs
+scheduled    22 kernels in   158.80 ms | CACHE MISS 106dae6d |  100279 uops in cache | <frozen runpy>:88
+scheduled    21 kernels in   178.36 ms | CACHE MISS f98a27d2 |  101458 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in   209.04 ms | CACHE MISS 297f194c |  102437 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in   189.36 ms | CACHE MISS 6f2a1cc4 |  103022 uops in cache | <frozen runpy>:88
+scheduled    74 kernels in   141.87 ms | CACHE MISS 5e949986 |  103684 uops in cache | <frozen runpy>:88
+memory reduced from 156.15 MB -> 2.17 MB, 967 -> 1 bufs
+scheduled     3 kernels in     1.50 ms |  cache hit 50c9ac64 |  130301 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   186.09 ms | CACHE MISS a35eabb2 |  133803 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   174.12 ms | CACHE MISS 802b4745 |  133828 uops in cache | <frozen runpy>:88
+scheduled    74 kernels in   189.95 ms | CACHE MISS 5aa44a14 |  134227 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 7402.72 MB -> 71.26 MB, 1544 -> 1 bufs
+scheduled    22 kernels in     2.57 ms |  cache hit 106dae6d |  138701 uops in cache | <frozen runpy>:88
+scheduled    21 kernels in     2.66 ms |  cache hit f98a27d2 |  138717 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in     3.09 ms |  cache hit 297f194c |  138719 uops in cache | <frozen runpy>:88
+scheduled    17 kernels in     1.61 ms |  cache hit 6f2a1cc4 |  138721 uops in cache | <frozen runpy>:88
+scheduled    74 kernels in     4.04 ms |  cache hit 5e949986 |  138858 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 160.52 MB -> 3.43 MB, 1076 -> 1 bufs
+318.03 ms,   3.14 tok/s,   62.50 GB/s, 19876/23596 MB  --  !ll
+269.01 ms,   3.72 tok/s,   72.13 GB/s, 19404/23596 MB  --  !ll\n
+269.97 ms,   3.70 tok/s,   71.89 GB/s, 19409/23596 MB  --  !ll\nThe
+269.19 ms,   3.71 tok/s,   72.12 GB/s, 19414/23596 MB  --  !ll\nThe sum

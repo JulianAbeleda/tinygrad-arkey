@@ -6,6 +6,11 @@ import argparse, json, pathlib, re, statistics
 TOK_RE = re.compile(r"(?P<ms>[0-9]+\.[0-9]+) ms,\s+(?P<tps>[0-9]+\.[0-9]+) tok/s,\s+(?P<gbs>[0-9]+\.[0-9]+) GB/s")
 POLICY_RE = re.compile(r"QK_GENERATED_POLICY_DEBUG loaded=(?P<path>\S+) entries=(?P<entries>\d+)")
 INSTALL_RE = re.compile(r"(?P<kind>Q[46]K)_PRIMITIVE_DEBUG installed=(?P<installed>\d+) skipped_total=(?P<skipped>\d+)(?P<rest>.*)")
+STORAGE_RE = re.compile(
+  r"QK_PRIMITIVE_STORAGE_DEBUG installed=(?P<installed>\d+) source_bytes=(?P<source_bytes>\d+) "
+  r"storage_bytes=(?P<storage_bytes>\d+) runtime_cap_bytes=(?P<runtime_cap_bytes>-?\d+) "
+  r"runtime_cap_used_bytes=(?P<runtime_cap_used_bytes>\d+) by_kind=(?P<by_kind>\S+) by_mode=(?P<by_mode>\S+)"
+)
 
 def _mean(xs:list[float]) -> float|None:
   return statistics.mean(xs) if xs else None
@@ -40,6 +45,9 @@ def parse_log(label:str, path:pathlib.Path) -> dict:
       "skipped_total": int(m.group("skipped")),
       **_parse_counts(m.group("rest")),
     }
+  storage = None
+  if (m:=list(STORAGE_RE.finditer(text))):
+    storage = {k: int(v) if k not in ("by_kind", "by_mode") else v for k, v in m[-1].groupdict().items()}
   return {
     "label": label,
     "path": str(path),
@@ -57,23 +65,25 @@ def parse_log(label:str, path:pathlib.Path) -> dict:
     "max_ms": max(ms),
     "policy": policy[-1] if policy else None,
     "installs": installs,
+    "storage": storage,
   }
 
 def _md(rows:list[dict]) -> str:
   lines = [
     "# QK Decode Summary",
     "",
-    "| label | samples | avg tok/s | drop1 | last64 | last32 | last16 | stdev | min | max | Q4 install | Q6 install | policy |",
-    "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    "| label | samples | avg tok/s | drop1 | last64 | last32 | last16 | stdev | min | max | Q4 install | Q6 install | storage MB | policy |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
   ]
   for row in rows:
     q4, q6 = row["installs"].get("Q4K", {}), row["installs"].get("Q6K", {})
+    storage_mb = None if row["storage"] is None else row["storage"]["storage_bytes"] / (1024*1024)
     policy = row["policy"]["path"] if row["policy"] else ""
     lines.append(
       f"| `{row['label']}` | {row['samples']} | {_fmt(row['avg_tok_s'])} | {_fmt(row['avg_drop1_tok_s'])} | "
       f"{_fmt(row['avg_last64_tok_s'])} | {_fmt(row['avg_last32_tok_s'])} | {_fmt(row['avg_last16_tok_s'])} | "
       f"{_fmt(row['stdev_tok_s'])} | {_fmt(row['min_tok_s'])} | {_fmt(row['max_tok_s'])} | "
-      f"{q4.get('installed', '')} | {q6.get('installed', '')} | `{policy}` |"
+      f"{q4.get('installed', '')} | {q6.get('installed', '')} | {_fmt(storage_mb)} | `{policy}` |"
     )
   return "\n".join(lines) + "\n"
 

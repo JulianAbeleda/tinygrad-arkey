@@ -13,10 +13,12 @@ contains the research-path details after that decision state.
 Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
 Follow-up work added policy parity diagnostics, q8_1 level-2 candidates,
 semantic stop gates, PMC parsing, full-shape generated-policy decode gates, a
-14B remeasure audit, and tensor-scoped memory-capped policy generation. The
-result is split by model and baseline: 8B is a modest generated-policy win, 14B
-is a large generated-policy win, and 32B needs a memory cap because the full
-primitive policy duplicates too much packed-weight storage.
+14B remeasure audit, tensor-scoped memory-capped policy generation, and runtime
+storage accounting/caps. The result is split by model and baseline: 8B is a
+modest generated-policy win, 14B is a large generated-policy win, and 32B has a
+useful capped generated-policy result against the generic baseline. The storage
+work is now infrastructure for the harness, not a reason to resume kernel
+search.
 
 ## Decision
 
@@ -153,6 +155,19 @@ memory budget. It is not a true 32B explicit-vs-generated scaling result,
 because full explicit primitive storage still OOMs on the 24 GB card.
 
 Design note: see `docs/amd-decode-qk-storage-architecture.md`.
+
+Runtime storage-control update:
+
+- `QK_PRIMITIVE_MAX_STORAGE_MB` caps actual persistent primitive sidecar bytes
+  during runtime install and reports `runtime_storage_cap` fallback counts.
+- Runtime storage accounting matches the generated 32B capped-policy estimate
+  on the accepted `1536 MB` artifact.
+- `QK_PRIMITIVE_STORAGE=q4_ondemand` removes persistent Q4 sidecar bytes but
+  collapses decode speed, so it is rejected as a production path.
+
+This closes the immediate storage-accounting task. The remaining long-term
+storage idea is shared packed ownership without per-token copies, but it should
+not block the next harness-level work.
 
 Level-2 generation now includes real Q4_K x q8_1 activation candidates. The
 first lowering used per-element float-style dequant and lost. The second lowering
@@ -964,9 +979,12 @@ This changes the research state in two ways:
    GPU. Search cannot answer the 32B scaling question until storage is lazy,
    shared with the fallback graph, or capped by a memory-aware policy.
 
-Next Ansor-direction step, if continuing research: make memory cost a first-class
-constraint in the generated policy and remove duplicated primitive storage before
-trying to prove 32B scaling.
+Follow-up storage work made memory cost a first-class generated-policy
+constraint and added runtime storage accounting/caps. The current next
+Ansor-direction step, if continuing research, is to pivot up to the harness:
+make descriptor generation, policy selection, artifact validation, and runtime
+guards boring enough that new candidate families can be evaluated without
+another bespoke campaign.
 
 ## Relationship to existing docs
 
