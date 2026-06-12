@@ -1,5 +1,5 @@
 from __future__ import annotations
-import collections, functools, itertools, pathlib
+import collections, functools, itertools, json, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function
 from tinygrad.helpers import prod
@@ -89,6 +89,28 @@ def _q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
   if ".ffn_down.weight" in name: return 1, ("LOCAL:0:64",)
   return None
 
+def _load_qk_generated_policy(path:str) -> dict[tuple[int, int, int], dict]:
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("kind") != "qk_generated_policy": raise ValueError(f"{policy_path} is not a QK generated policy cache")
+  if data.get("generator_version") != 0: raise ValueError(f"{policy_path} has unsupported generator_version={data.get('generator_version')}")
+  table: dict[tuple[int, int, int], dict] = {}
+  for entry in data.get("entries", []):
+    desc, cand = entry.get("descriptor", {}), entry.get("candidate") or {}
+    key = (int(desc["ggml_type"]), int(desc["rows"]), int(desc["cols"]))
+    value = {
+      "winner": entry.get("winner"), "parts": int(cand.get("parts", 0)),
+      "opts": tuple(cand.get("opts", ())), "family": cand.get("family", ""),
+    }
+    if key in table and table[key] != value:
+      raise ValueError(f"{policy_path} has conflicting generated policy entries for key={key}: {table[key]} vs {value}")
+    table[key] = value
+  if not table: raise ValueError(f"{policy_path} contains no generated policy entries")
+  return table
+
+def _qk_generated_policy_entry(policy:dict[tuple[int, int, int], dict]|None, typ:int, rows:int, cols:int) -> dict|None:
+  return None if policy is None else policy.get((typ, rows, cols))
+
 def _module_at(root, path:str):
   obj = root
   for part in path.split("."):
@@ -101,12 +123,12 @@ def _set_module_at(root, path:str, value) -> None:
   if isinstance(parent, list) and attr.isdigit(): parent[int(attr)] = value
   else: setattr(parent, attr, value)
 
-def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q4KPrimitiveLinear]:
+def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict[tuple[int, int, int], dict]|None=None) -> list[Q4KPrimitiveLinear]:
   from extra.q4_k_gemv_primitive import parse_opt
   raw_words = Tensor(gguf, dtype=dtypes.uint32)
   installed: list[Q4KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
-  debug = bool(getenv("Q4K_PRIMITIVE_DEBUG", 0))
+  debug = bool(getenv("Q4K_PRIMITIVE_DEBUG", getenv("QK_GENERATED_POLICY_DEBUG", 0)))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != 12:
       skipped["not_q4_k"] += 1
@@ -117,10 +139,23 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q4KPrim
     if not name.endswith(".weight"):
       skipped["not_weight"] += 1
       continue
-    if (policy := _q4k_policy(name)) is None:
-      skipped["policy_fallback"] += 1
-      continue
     rows, cols = tuple(reversed(dims))
+    if generated_policy is None:
+      if (policy := _q4k_policy(name)) is None:
+        skipped["policy_fallback"] += 1
+        continue
+      parts, opt_specs = policy
+    else:
+      if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols)) is None:
+        skipped["policy_missing"] += 1
+        continue
+      if policy_entry["winner"] == "fused_graph":
+        skipped["policy_fused"] += 1
+        continue
+      if policy_entry["winner"] != "v1_q4_packed":
+        skipped["policy_unsupported"] += 1
+        continue
+      parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
     byte_start = meta["data_start"] + off
     if byte_start % 4 != 0:
       skipped["misaligned"] += 1
@@ -138,7 +173,6 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q4KPrim
       continue
     q4_bytes = prod(dims) // 256 * 144
     words = raw_words[byte_start//4:byte_start//4+q4_bytes//4].to(None).contiguous().realize()
-    parts, opt_specs = policy
     q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name)
     _set_module_at(model, module_path, q4k_linear)
     installed.append(q4k_linear)
@@ -150,12 +184,12 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q4KPrim
     if installed: print(f"Q4K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
   return installed
 
-def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q6KPrimitiveLinear]:
+def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict[tuple[int, int, int], dict]|None=None) -> list[Q6KPrimitiveLinear]:
   from extra.q6_k_gemv_primitive import parse_opt
   raw_halfs = Tensor(gguf, dtype=dtypes.uint16)
   installed: list[Q6KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
-  debug = bool(getenv("Q6K_PRIMITIVE_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", 0)))
+  debug = bool(getenv("Q6K_PRIMITIVE_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", getenv("QK_GENERATED_POLICY_DEBUG", 0))))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != 14:
       skipped["not_q6_k"] += 1
@@ -166,10 +200,23 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q6KPrim
     if not name.endswith(".weight"):
       skipped["not_weight"] += 1
       continue
-    if (policy := _q6k_policy(name)) is None:
-      skipped["policy_fallback"] += 1
-      continue
     rows, cols = tuple(reversed(dims))
+    if generated_policy is None:
+      if (policy := _q6k_policy(name)) is None:
+        skipped["policy_fallback"] += 1
+        continue
+      parts, opt_specs = policy
+    else:
+      if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols)) is None:
+        skipped["policy_missing"] += 1
+        continue
+      if policy_entry["winner"] == "fused_graph":
+        skipped["policy_fused"] += 1
+        continue
+      if policy_entry["winner"] != "v1_q6_packed":
+        skipped["policy_unsupported"] += 1
+        continue
+      parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
     byte_start = meta["data_start"] + off
     if byte_start % 2 != 0:
       skipped["misaligned"] += 1
@@ -187,7 +234,6 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict) -> list[Q6KPrim
       continue
     q6_bytes = prod(dims) // 256 * 210
     halfs = raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous().realize()
-    parts, opt_specs = policy
     q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name)
     _set_module_at(model, module_path, q6k_linear)
     installed.append(q6k_linear)
@@ -503,8 +549,11 @@ class Transformer:
     # TODO: remove the need for copy to default device
     use_q4k_primitive = bool(getenv("Q4K_PRIMITIVE", 0))
     use_q6k_primitive = bool(getenv("Q6K_PRIMITIVE", 0))
-    if use_q4k_primitive or use_q6k_primitive:
-      if isinstance(gguf, Tensor): raise ValueError("quant primitive paths require a GGUF path, not a preloaded Tensor")
+    qk_generated_policy_path = getenv("QK_GENERATED_POLICY", "")
+    use_qk_generated_policy = bool(qk_generated_policy_path)
+    if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy) and isinstance(gguf, Tensor):
+      raise ValueError("quant primitive paths require a GGUF path, not a preloaded Tensor")
+    if use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
     else:
       kv, state_dict = gguf_load(gguf.to(None).realize() if isinstance(gguf, Tensor) else gguf)
@@ -569,8 +618,15 @@ class Transformer:
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if q4k_meta is not None:
       primitive_linears = []
-      if use_q4k_primitive: primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta)
-      if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta)
+      generated_policy = _load_qk_generated_policy(qk_generated_policy_path) if use_qk_generated_policy else None
+      if generated_policy is not None:
+        if bool(getenv("QK_GENERATED_POLICY_DEBUG", 0)):
+          print(f"QK_GENERATED_POLICY_DEBUG loaded={qk_generated_policy_path} entries={len(generated_policy)}")
+        primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy)
+        primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy)
+      else:
+        if use_q4k_primitive: primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta)
+        if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta)
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:

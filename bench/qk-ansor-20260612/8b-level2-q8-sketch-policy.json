@@ -1,0 +1,94 @@
+{
+  "commit": "2f07ddf43",
+  "created_at": "2026-06-12T04:34:17.099857+00:00",
+  "entries": [
+    {
+      "candidate": {
+        "activation": "fp16",
+        "family": "q4_k_packed_u32",
+        "name": "q4_local64_p1",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ]
+      },
+      "descriptor": {
+        "arch": "gfx1100",
+        "block_bytes": 144,
+        "block_elems": 256,
+        "byte_start": 932517696,
+        "cols": 4096,
+        "data_start": 5956416,
+        "device": "AMD",
+        "dtype_activation": "fp16",
+        "dtype_output": "fp32",
+        "format": "Q4_K",
+        "ggml_type": 12,
+        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+        "packed_bytes": 28311552,
+        "role": "ffn_gate",
+        "rows": 12288,
+        "tensor": "blk.0.ffn_gate.weight",
+        "tensor_offset": 926561280
+      },
+      "format": "Q4_K",
+      "key": {
+        "activation": "fp16",
+        "arch": "gfx1100",
+        "commit": "2f07ddf43",
+        "device": "AMD",
+        "format": "Q4_K",
+        "generator_version": 0,
+        "ggml_type": 12,
+        "shape": [
+          12288,
+          4096
+        ]
+      },
+      "metric": "quant_gbs",
+      "metric_value": 420.05,
+      "reason": "quant_gbs best after correctness",
+      "result": {
+        "candidate": "q4_local64_p1",
+        "device_ms": 0.06740043328175217,
+        "elapsed_s": 1.88,
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "gemv_max_abs": 0.00179243,
+        "kernels": 1.0,
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "quant_gbs": 420.05,
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "shape": [
+          12288,
+          4096
+        ],
+        "status": "pass",
+        "tensor": "blk.0.ffn_gate.weight",
+        "unpack_max_abs": 0.0,
+        "wall_ms": 0.29,
+        "wall_quant_gbs": 97.78
+      },
+      "shape": [
+        12288,
+        4096
+      ],
+      "tensor": "blk.0.ffn_gate.weight",
+      "winner": "q4_local64_p1"
+    }
+  ],
+  "generator_version": 0,
+  "kind": "qk_generated_policy",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+}

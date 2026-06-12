@@ -1,8 +1,11 @@
 # AMD decode Ansor direction
 
-Status: research direction, not implementation.
+Status: implemented research spike, opt-in only.
 
 Date: 2026-06-12
+
+Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
+The result is architecturally useful but not a new default runtime path.
 
 ## Decision
 
@@ -21,6 +24,74 @@ There are two levels:
 The second is the direction we want to evaluate. The first can be a stepping
 stone only if it moves the primitive into the scheduler, not if it remains a
 model.py wrapper plus an external sweep script.
+
+## Implementation Result
+
+This pass implemented the smallest useful Ansor-direction spike:
+
+- `extra/qk_layout.py`: shared Q4_K/Q6_K layout constants, GGUF metadata helpers,
+  packed byte ranges, and centralized Q4/Q6 reference unpacking.
+- `extra/qk_ansor.py`: `QuantGemvDescriptor`, `CandidateSpec`, deterministic
+  candidate generation, subprocess correctness/timing runner, policy-cache
+  writer, and fail-closed cache validation.
+- `QK_GENERATED_POLICY=/path/to/policy.json`: optional runtime policy consumer
+  in `tinygrad/llm/model.py`, with no live search during model load.
+- `bench/qk-ansor-20260612/`: baseline logs, descriptor snapshots, generated
+  search reports, generated policy caches, runtime smoke/full decode logs, and
+  q8_1 sketch proof.
+
+Generated level-0 search on Qwen3-8B reproduced the intended shape decisions:
+
+| tensor | format | shape | fused GB/s | generated winner | winner GB/s |
+|---|---|---:|---:|---|---:|
+| `blk.0.ffn_gate.weight` | Q4_K | 12288x4096 | 81.20 | `v1_q4_packed` | 417.94 |
+| `blk.4.ffn_down.weight` | Q4_K | 4096x12288 | 15.67 | `v1_q4_packed` | 265.90 |
+| `blk.0.attn_q.weight` | Q4_K | 4096x4096 | 15.44 | `v1_q4_packed` | 183.60 |
+| `blk.0.attn_k.weight` | Q4_K | 1024x4096 | 100.22 | `fused_graph` | 100.22 |
+| `blk.0.ffn_down.weight` | Q6_K | 4096x12288 | 21.18 | `v1_q6_packed` | 128.83 |
+
+Runtime policy consumption works but remains opt-in:
+
+| mode | avg tok/s | note |
+|---|---:|---|
+| explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` rerun | 58.00 | current production path |
+| `QK_GENERATED_POLICY=...8b-level0-policy-full.json` rerun | 56.07 | installed 162 Q4 + 18 Q6 wrappers |
+
+The generated policy installs the right wrappers and explicitly keeps the small
+KV shape on `fused_graph`, but it was still about 3-5% slower in the full decode
+reruns. Treat that as unresolved runtime variance/path difference. It is not a
+reason to make generated policy the default.
+
+Level-2 generation now emits a `q8_1_*_sketch` candidate. The runner marks it
+`not-implemented`, so it is visible to the search report but cannot win a policy.
+That closes the "generated sketch exists" milestone without pretending there is
+a q8_1 lowering or speed result.
+
+## Core Integration Decision
+
+Do not add `OptOps.QK` or a core `Ops` primitive yet.
+
+The current implementation proves that a semantic descriptor can generate and
+time equivalent candidates, but the winning packed candidates still call
+hand-written `custom_kernel` implementations from `extra/`. That is not enough
+evidence to widen tinygrad's core optimizer surface.
+
+Current decision:
+
+- keep `extra/qk_ansor.py` as the research harness;
+- keep `QK_GENERATED_POLICY` opt-in;
+- keep `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` as the faster/stabler runtime path;
+- defer core integration until a new structural candidate, such as q8_1
+  activation packing or fused partial reduction, is generated and accepted by
+  the same harness.
+
+If core integration resumes, the likely order is:
+
+1. scheduler rewrite or internal op that recognizes packed quant GEMV semantics;
+2. renderer/UOp lowering if the required packed load/dot shape cannot be
+   expressed cleanly;
+3. `OptOps.QK` only if the transformation can behave like tensor cores: a small
+   first-class search action with clear applicability and correctness limits.
 
 ## Why the current path is not Ansor-ward
 
