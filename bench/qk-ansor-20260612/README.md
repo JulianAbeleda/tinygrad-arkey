@@ -136,3 +136,38 @@ Verdict: int-dot validates the diagnosis that q8_1 needs a better inner dot, but
 the current UOp/register-reduction lowering still loses. The ffn_down result is
 a near-tie, not an acceptance margin, and gate remains far behind v1. It is
 rejected by the generated policy and is not wired into `model.py`.
+
+## DEBUG=4 q8_1 Int-Dot Codegen Inspection
+
+Artifacts:
+
+- `q8-intdot-ffn-gate-debug4.log`
+- `q4-v1-ffn-gate-debug4.log`
+
+The q8_1 int-dot candidate does not emit a packed dot instruction. The generated
+kernel is `q4k_q8_1_intdot_partial_12288_4096_1` and uses scalar nested loops for
+the hot dot:
+
+- line 983: kernel entry;
+- lines 1008-1013: `uint32` Q4 word load, scalar nibble extraction, scalar
+  `signed char` Q8 load, scalar integer multiply/add;
+- lines 1016-1019: separate scalar `sum(q8)` loop for the min correction;
+- line 1145: timed kernel line, about `150.64us` in this DEBUG=4 run;
+- line 1190: clean candidate summary, about `209.63 Q4-GB/s` by device time.
+
+Search for dot-related names found no `v_dot`/`dot4` style intrinsic in the
+hot q8_1 kernel. The only AMD builtins in these logs are barriers/fences, not
+packed integer dot operations.
+
+The v1 Q4_K packed candidate is `q4k_gemv_partial_12288_4096_1`. It also does
+not emit a packed integer dot instruction, but its fp16-activation path is much
+simpler: packed Q4 words are loaded once and multiplied directly against fp16
+activation values. In the same DEBUG=4 artifact, the clean timed lines for this
+kernel are about `67us`, roughly half the q8_1 int-dot kernel time for the same
+FFN gate shape.
+
+Conclusion: the q8_1 experiments have isolated the wall to packed-dot lowering,
+not q8_1 representation or algebra. Another q8_1 candidate built from the same
+generic scalar loops is not justified. The next q8_1 experiment must first prove
+that tinygrad's AMD path can emit a real RDNA3 packed-dot operation and pack the
+Q4/Q8 lanes in the form that operation expects.

@@ -748,3 +748,36 @@ The key correction: a TC-style quant primitive is tinygrad-native but still
 template-guided; the Ansor-ward move is to make quant GEMV a semantic descriptor
 and generate candidate implementations from it. BEAM then tunes/selects
 generated candidates instead of searching only inside a hand-authored wrapper.
+
+## Step 24 packed-dot inspection (2026-06-12)
+
+`DEBUG=4` inspection of the generated q8_1 int-dot candidate confirms the current
+candidate does not emit RDNA3 packed dot instructions. The hot kernel
+`q4k_q8_1_intdot_partial_12288_4096_1` uses scalar nested loops: load a packed Q4
+word, extract one nibble, load one signed q8 byte, multiply/add into an integer
+accumulator, then run separate scalar `sum(q8)` loops for the Q4_K min term.
+
+This explains why q8_1 int-dot improved over the first q8_1 float lowering but
+still lost to v1. The representation is reachable and the algebra is valid; the
+remaining wall is packed-dot lowering, including lane packing and AMD instruction
+emission.
+
+Recorded artifacts:
+
+- `bench/qk-ansor-20260612/q8-intdot-ffn-gate-debug4.log`;
+- `bench/qk-ansor-20260612/q4-v1-ffn-gate-debug4.log`.
+
+Next gate: add only a tiny AMD packed-dot smoke in `extra/`, inspect for real
+`v_dot*` emission, and stop q8_1 work if that compiler path cannot be made to
+emit the instruction. No further q8_1 arithmetic variants are justified without
+that emission proof.
+
+Scoped implementation order:
+
+1. use the existing AMD HIP compile/disassemble path for a dot-instruction smoke;
+2. if it works, expose the dot through an `extra/` helper using `Ops.CUSTOM` or
+   inline asm;
+3. add a generated q8 candidate that consumes that helper and rerun the same
+   correctness/timing harness;
+4. only after a winning candidate, consider an AMD renderer `extra_matcher`,
+   new core op, or `OptOps.QK`.

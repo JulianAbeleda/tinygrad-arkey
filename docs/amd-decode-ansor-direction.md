@@ -92,6 +92,81 @@ lowering does not produce a llama.cpp-class packed dot. The ffn_down int-dot
 near-tie is not an acceptance margin because the gate shape still loses heavily.
 Q6_K x q8_1 remains a sketch only.
 
+## Packed-Dot Lowering Inspection
+
+The q8_1 int-dot candidate was inspected with `DEBUG=4` on the Qwen3-8B
+`blk.0.ffn_gate.weight` shape.
+
+Artifacts:
+
+- `bench/qk-ansor-20260612/q8-intdot-ffn-gate-debug4.log`;
+- `bench/qk-ansor-20260612/q4-v1-ffn-gate-debug4.log`.
+
+Finding:
+
+- `q4k_q8_1_intdot_partial_12288_4096_1` emits scalar nested C loops, not a
+  packed dot instruction.
+- The hot loop loads a Q4 `uint32` word, extracts one nibble at a time, loads one
+  signed Q8 byte at a time, and accumulates scalar integer products.
+- The `sum(q8)` term needed for the Q4_K min correction is also a separate
+  scalar loop.
+- Searches for `v_dot`/`dot4` style names found no packed integer dot operation
+  in the generated hot kernel. AMD builtins present in the log are barrier/fence
+  operations, not dot operations.
+- The current v1 Q4_K primitive also does not use packed dot, but it is a much
+  simpler fp16-activation kernel and still wins the measured shapes.
+
+This resolves the q8_1 thread to one named missing capability: packed-dot
+lowering. More precisely, the missing capability is lane packing plus instruction
+emission. The Q4 nibbles must be expanded or arranged into int8 lanes compatible
+with the AMD dot instruction, the q8_1 activation lanes must match that packing,
+and the Q4_K scale/min correction still has to be applied without destroying the
+benefit.
+
+The next justified experiment is therefore not another q8_1 arithmetic variant.
+It is a minimal AMD packed-dot smoke:
+
+1. In `extra/`, compile a tiny AMD-only kernel that uses either a clang AMDGCN
+   builtin or inline asm for the candidate packed-dot instruction.
+2. Inspect the compiled output and require a real `v_dot*` instruction before
+   any model-path or core change.
+3. If the smoke passes, build a small correctness harness for one 32-element
+   Q4/Q8 group that returns the same integer dot and `sum(q8)` as the scalar
+   int-dot reference.
+4. Only then add a generated candidate, for example
+   `q8_1_q4_packed_dot`, to `extra/qk_ansor.py`.
+5. Accept it only if correctness passes and the dominant FFN gate shape beats
+   the existing v1 primitive by a material margin. The ffn_down near-tie alone
+   is not sufficient.
+
+Stop rule: do not write another q8_1 candidate without packed-dot emission. The
+representation and algebra questions have already been answered; the remaining
+unknown is whether tinygrad's AMD renderer/compiler path can expose the packed
+dot operation in a usable form.
+
+Renderer/core scope:
+
+- `tinygrad/runtime/support/compiler_amd.py` already has the low-level AMD HIP
+  compile/disassemble path. Use that first for the dot-instruction smoke, before
+  touching scheduler or model code.
+- `tinygrad/renderer/cstyle.py` already renders `Ops.CUSTOM`/`Ops.CUSTOMI` as
+  formatted source strings, and `extra/gemm/amd_flash_attention.py` already uses
+  this to call AMDGCN builtins. If the dot smoke works, this is the narrowest
+  way to test a packed-dot helper inside an `extra/` candidate.
+- `tinygrad/codegen/__init__.py` already applies a renderer `extra_matcher` in
+  the final rewrite. If a direct `Ops.CUSTOM` helper becomes too ad hoc, the
+  next integration point is an AMD-specific matcher that lowers a semantic
+  packed-dot expression into the builtin/asm form.
+- A new core `Ops` node or `OptOps.QK` should remain last. Add one only after
+  the extra-only candidate proves correctness and speed, because otherwise it
+  turns into another hand-authored template knob without evidence.
+
+So the scoped order is: AMD compiler smoke -> `extra/` packed-dot helper ->
+generated q8 candidate -> optional AMD renderer matcher -> optional core op or
+search action. This preserves the Ansor direction: the candidate is still
+generated from quant GEMV semantics, while the renderer only supplies a missing
+machine instruction capability.
+
 ## Core Integration Decision
 
 Do not add `OptOps.QK` or a core `Ops` primitive yet.
