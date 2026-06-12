@@ -686,5 +686,17 @@ the full 128-token decode gates rejected them:
 Decision: keep the existing runtime policy. The next accepted work should be a
 primitive-v2 representation/design change with a larger search space, not more
 retuning of the current knobs. Any v2 candidate must pass microbench
-correctness, greedy output A/B, and repeated 128-token batched decode before it
-is wired into `model.py`.
+correctness, model-output validation for its chosen arithmetic contract, and
+repeated 128-token batched decode before it is wired into `model.py`.
+
+## Step 21 design scope: primitive v2 (2026-06-12)
+
+The primitive-v2 scope is now split into a standalone design doc:
+`docs/amd-decode-primitive-v2-design.md`.
+
+Short version: stop retuning v1's shallow `parts`/`LOCAL` knobs. The next
+hypothesis is a representation change: q8_1 activation staging plus
+`Q4_K/Q6_K x q8_1` packed vector-dot primitives, with split/reduction as
+first-class searchable knobs. Keep the current Q4+Q6 v1 policy as the stable
+baseline, and accept v2 only after correctness, repeated full decode, and
+profile gates.
