@@ -152,7 +152,7 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       if policy_entry["winner"] == "fused_graph":
         skipped["policy_fused"] += 1
         continue
-      if policy_entry["winner"] != "v1_q4_packed":
+      if policy_entry["family"] != "q4_k_packed_u32":
         skipped["policy_unsupported"] += 1
         continue
       parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
@@ -213,7 +213,7 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       if policy_entry["winner"] == "fused_graph":
         skipped["policy_fused"] += 1
         continue
-      if policy_entry["winner"] != "v1_q6_packed":
+      if policy_entry["family"] != "q6_k_packed_u16":
         skipped["policy_unsupported"] += 1
         continue
       parts, opt_specs = policy_entry["parts"], policy_entry["opts"]

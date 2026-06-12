@@ -12,11 +12,22 @@ def _json_from_output(out:str) -> dict:
   raise RuntimeError("child produced no JSON line\n" + out[-2000:])
 
 def run_child(args, primitive:bool) -> dict:
-  env = {**os.environ, "PYTHONPATH": ".", "Q4K_PRIMITIVE": "1" if primitive else "0",
-         "Q6K_PRIMITIVE": "1" if primitive and args.q6_primitive else "0"}
+  env = {**os.environ, "PYTHONPATH": "."}
+  env.pop("QK_GENERATED_POLICY", None)
+  env.pop("QK_GENERATED_POLICY_DEBUG", None)
+  if primitive and args.candidate_policy is not None:
+    env["QK_GENERATED_POLICY"] = str(args.candidate_policy)
+    if args.policy_debug: env["QK_GENERATED_POLICY_DEBUG"] = "1"
+    env["Q4K_PRIMITIVE"] = "0"
+    env["Q6K_PRIMITIVE"] = "0"
+  else:
+    env["Q4K_PRIMITIVE"] = "1" if primitive else "0"
+    env["Q6K_PRIMITIVE"] = "1" if primitive and args.q6_primitive else "0"
   cmd = [sys.executable, __file__, "--child", "--model", str(args.model), "--tokens", str(args.tokens),
          "--max-context", str(args.max_context), "--seed", str(args.seed), "--temperature", str(args.temperature),
          "--prompt", args.prompt, "--primitive", "1" if primitive else "0"]
+  if primitive and args.candidate_policy is not None: cmd += ["--candidate-policy", str(args.candidate_policy)]
+  if primitive and args.policy_debug: cmd += ["--policy-debug"]
   st = time.perf_counter()
   proc = subprocess.run(cmd, cwd=args.repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         timeout=args.timeout)
@@ -29,7 +40,15 @@ def run_child(args, primitive:bool) -> dict:
   return data
 
 def run_generation(args) -> None:
-  os.environ["Q4K_PRIMITIVE"] = "1" if args.primitive else "0"
+  if args.primitive and args.candidate_policy is not None:
+    os.environ["QK_GENERATED_POLICY"] = str(args.candidate_policy)
+    if args.policy_debug: os.environ["QK_GENERATED_POLICY_DEBUG"] = "1"
+    os.environ["Q4K_PRIMITIVE"] = "0"
+    os.environ["Q6K_PRIMITIVE"] = "0"
+  else:
+    os.environ.pop("QK_GENERATED_POLICY", None)
+    os.environ.pop("QK_GENERATED_POLICY_DEBUG", None)
+    os.environ["Q4K_PRIMITIVE"] = "1" if args.primitive else "0"
   from tinygrad import Tensor
   from tinygrad.llm.cli import SimpleTokenizer
   from tinygrad.llm.model import Transformer
@@ -44,7 +63,8 @@ def run_generation(args) -> None:
     out.append(tid)
     if len(out) >= args.tokens: break
   print(json.dumps({
-    "primitive": bool(args.primitive), "tokens": out, "text": tok.decode(out),
+    "primitive": bool(args.primitive), "candidate_policy": str(args.candidate_policy) if args.candidate_policy else None,
+    "tokens": out, "text": tok.decode(out),
     "prompt_len": len(prompt_ids), "generated": len(out), "model": str(args.model),
   }, sort_keys=True))
 
@@ -52,6 +72,7 @@ def print_summary(baseline:dict, primitive:dict) -> None:
   print("| path | generated | elapsed_s | first tokens |")
   print("|---|---:|---:|---|")
   for name, row in (("baseline", baseline), ("primitive", primitive)):
+    if name == "primitive" and row.get("candidate_policy"): name = "generated_policy"
     print(f"| {name} | {row['generated']} | {row['elapsed_s']} | {row['tokens'][:8]} |")
   print(f"match={baseline['tokens'] == primitive['tokens']}")
   if baseline["tokens"] != primitive["tokens"]:
@@ -75,6 +96,8 @@ if __name__ == "__main__":
   parser.add_argument("--tail-lines", type=int, default=8)
   parser.add_argument("--json", type=pathlib.Path, help="write comparison JSON")
   parser.add_argument("--q6-primitive", action="store_true", help="enable Q6K_PRIMITIVE=1 only for the primitive child")
+  parser.add_argument("--candidate-policy", type=pathlib.Path, help="compare baseline against this QK_GENERATED_POLICY instead of explicit primitive flags")
+  parser.add_argument("--policy-debug", action="store_true", help="enable QK_GENERATED_POLICY_DEBUG in the candidate child")
   parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
   parser.add_argument("--primitive", type=int, choices=(0, 1), default=0, help=argparse.SUPPRESS)
   args = parser.parse_args()

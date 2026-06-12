@@ -12,17 +12,21 @@ execution-plan sections as historical unless they agree with this file.
 The local inference win is real and should be considered consolidated unless the
 goal explicitly changes to compiler research.
 
-Current stable path:
+Current stable paths:
 
-- `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1 JIT=1 DEV=AMD`
-- Qwen3-8B-Q4_K_M: about `58 tok/s`, roughly `57%` of the llama.cpp reference.
-- Qwen3-14B-Q4_K_M: about `28 tok/s`, roughly `43%` of the llama.cpp reference.
+- Qwen3-8B-Q4_K_M: use explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1`.
+  Same-commit rerun: `51.36 tok/s`; prior stable run: about `58 tok/s`.
+- Qwen3-14B-Q4_K_M: use the accepted generated policy
+  `QK_GENERATED_POLICY=bench/qk-semantic-20260612/14b-full-level2-skip-stopped-policy.json`.
+  Repeated 128-token runs: `40.50` and `40.09 tok/s`, about `61%` of the
+  llama.cpp reference.
 - Correctness is verified at the kernel boundary and by greedy end-to-end A/B.
 - BEAM/risky schedule search is guarded and must not run on Mac/TinyGPU paths.
 
-Recommendation by default: keep the explicit Q4/Q6 primitive path, stop adding
-`extra/` q8 arithmetic variants, and move effort to the next higher-value goal
-unless compiler research is the point.
+Recommendation by default: keep explicit Q4/Q6 flags for 8B, use the generated
+14B policy only for the matching model/hardware artifact, stop adding `extra/`
+q8 arithmetic variants, and move effort to the next higher-value goal unless
+compiler research is the point.
 
 ## Verdict Table
 
@@ -32,7 +36,7 @@ unless compiler research is the point.
 | Generic BEAM | Not enough for this gap, and unsafe on remote/Mac without guards. | BEAM returns only after there is a semantic primitive/candidate space worth tuning. |
 | Expression-vectorization probe | Failed. Rewriting byte expressions did not make codegen emit wider useful loads. | Stop trying to garden `gguf.py` scalar byte math. |
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
-| Generated policy | Functional but opt-in. It matches wrapper coverage, but is slightly slower/noisier than explicit flags. | Keep `QK_GENERATED_POLICY` as research infrastructure, not default runtime. |
+| Generated policy | Model-specific result. Full-shape stop-gated generation is flat on 8B (`50.94` vs `51.36 tok/s`) and accepted on 14B (`40.50`/`40.09` vs explicit `23.44 tok/s` same-commit rerun). Both generated policies pass 32-token greedy A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 14B artifact when running that exact model/hardware path; do not make it a global default. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, and policy cache exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
@@ -61,6 +65,10 @@ It is a representation/lowering boundary:
    bound. Their logical dot intensity is far below the RX 7900 XTX FP32 ridge,
    and their logical dot throughput is nowhere near peak compute. That makes
    isolated packed-dot lowering a weak next bet.
+7. The semantic generated-search pass confirms the useful next abstraction:
+   machine-generated schedule/layout policy can matter when it changes coverage
+   and split decisions at the model level. It produced a real 14B win while also
+   rejecting isolated packed-dot candidates by stop rule.
 
 So the machine-first research hypothesis is:
 
@@ -78,7 +86,7 @@ Choose the next step by goal:
 
 | Goal | Track | Recommended next step |
 |---|---|---|
-| Reliable local Qwen inference | Consolidate | Keep explicit Q4/Q6 flags, document run commands, and stop decode optimization. |
+| Reliable local Qwen inference | Consolidate | Use explicit Q4/Q6 flags for 8B; use the accepted generated-policy artifact for 14B; document commands and stop decode optimization. |
 | More speed on this one GPU | v2 template grind | Write a richer hand template and sweep it, accepting lower ROI. |
 | Honor tinygrad's search thesis | Compiler research | Build semantic packed-layout and schedule/codegen generation, then feed it through the generated-search harness. |
 | Use the inference win | Training | Validate the smallest real QLoRA/SFT or RLVR stack using the faster decode path for rollouts/eval. |
@@ -93,8 +101,8 @@ worth doing only if the research itself is the goal.
 - Do not start isolated renderer/core packed-dot lowering unless a future
   roofline/counter profile overturns the memory/schedule-bound verdict, or the
   packed-dot work is part of a broader semantic layout/schedule rewrite.
-- Do not make `QK_GENERATED_POLICY` default until it matches or beats explicit
-  primitive flags in repeated full-decode runs.
+- Do not make `QK_GENERATED_POLICY` a global default. The accepted 14B policy is
+  model/hardware-specific and must stay an explicit artifact path.
 - Do not run BEAM or risky schedule search on Mac/TinyGPU/remote paths.
 - Do not widen tinygrad core optimizer APIs for quant GEMV until an `extra/`
   or renderer-level candidate passes correctness and wins a generated-search
@@ -107,5 +115,6 @@ worth doing only if the research itself is the goal.
 - Optional v2 template scope: `docs/amd-decode-primitive-v2-design.md`
 - Measurement log and detailed verdicts: `docs/amd-rocm-llamacpp-research.md`
 - Current generated-search artifacts: `bench/qk-ansor-20260612/README.md`
+- Semantic generated-search artifacts: `bench/qk-semantic-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

@@ -863,3 +863,52 @@ do not start isolated renderer/core `v_dot4` lowering as the next default task.
 If compiler research continues, the target is semantic packed-layout plus
 schedule/codegen generation. If local inference speed is the goal, keep the
 consolidated Q4/Q6 v1 path.
+
+## Step 27 semantic stop-gated generated search (2026-06-12)
+
+This step executed the next Ansor-direction slice without live BEAM:
+
+1. add a semantic roofline stop gate to `extra/qk_ansor.py`;
+2. keep isolated packed-dot/q8 candidates as explicit experiments, but skip them
+   by default after the v1 roofline premise check;
+3. generate full-shape Q4/Q6 policies for Qwen3-8B and Qwen3-14B at level 2;
+4. make `model.py` consume any runtime-supported generated family, not only
+   hard-coded `v1_q*_packed` candidate names;
+5. run policy parity, full 128-token decode, repeated 14B decode, and greedy
+   output A/B gates.
+
+The semantic search now records per-candidate estimates:
+
+- minimum global bytes;
+- ops per byte versus the RX 7900 XTX FP32 ridge;
+- q8 staging overhead;
+- stop reason for isolated packed-dot candidates when the premise already says
+  the shape is memory/schedule-bound.
+
+Full-shape search result:
+
+| model | policy result | same-commit decode result |
+|---|---|---|
+| Qwen3-8B-Q4_K_M | generated policy installs `162` Q4 + `18` Q6 wrappers | `50.94 tok/s`, flat versus explicit `51.36 tok/s` |
+| Qwen3-14B-Q4_K_M | generated policy installs `240` Q4 + `40` Q6 wrappers | `40.50 tok/s`, repeated at `40.09`, versus explicit `23.44 tok/s` |
+
+Both generated policies passed a 32-token greedy output A/B against the generic
+baseline (`match=True`). The 14B generated policy is therefore accepted as an
+opt-in model/hardware-specific artifact. The 8B generated policy is correct but
+not a runtime win; keep the explicit flags there.
+
+PMC smoke on the accepted Q4 primitive path:
+
+| kernel | GL2 hit rate | VALU / busy | interpretation |
+|---|---:|---:|---|
+| `q4k_gemv_partial_12288_4096_1` | `0.1613` | `1.2584` | schedule/layout signal, not missing-instruction proof |
+
+Verdict:
+
+- generated search produced a real 14B runtime win without adding a new
+  handwritten kernel;
+- isolated packed-dot work remains rejected as the next default task;
+- q8 research wins, if any, remain research-only until a runtime wrapper and
+  full-decode gate exist;
+- do not make generated policy a global default. The accepted artifact is the
+  14B full-shape policy under `bench/qk-semantic-20260612/`.

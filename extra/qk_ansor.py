@@ -14,6 +14,10 @@ from extra.qk_layout import (
 )
 
 GENERATOR_VERSION = 0
+RX7900XTX_MEM_GBS = 960.0
+RX7900XTX_FP32_TFLOPS = 61.4
+RX7900XTX_FP32_RIDGE_OPS_PER_BYTE = RX7900XTX_FP32_TFLOPS * 1e12 / (RX7900XTX_MEM_GBS * 1e9)
+RUNTIME_SUPPORTED_FAMILIES = {GGML_Q4_K: "q4_k_packed_u32", GGML_Q6_K: "q6_k_packed_u16"}
 
 Q4_SUMMARY_RE = re.compile(
   r"^(?P<tensor>\S+) (?P<shape>\S+) (?P<name>\S+): (?P<ms>[0-9.]+) ms .*?"
@@ -70,6 +74,51 @@ class CandidateSpec:
   parts: int
   opts: tuple[str, ...]
   requires: tuple[str, ...]
+
+def estimate_candidate(desc:QuantGemvDescriptor, cand:CandidateSpec) -> dict:
+  logical_ops = 2 * desc.rows * desc.cols
+  activation_read_bytes = desc.cols * (2 if cand.activation == "fp16" else 1)
+  q8_blocks = desc.cols // 32
+  q8_scale_bytes = q8_blocks * 4
+  q8_stage_bytes = 0
+  if cand.activation.startswith("q8_1"):
+    # Read fp16 activation, write/read int8 activation and fp32 q8_1 scales. Biased vdot also writes/reads packed uint32 lanes.
+    q8_stage_bytes = desc.cols * 2 + desc.cols + q8_scale_bytes + desc.cols + q8_scale_bytes
+    if "biased" in cand.activation: q8_stage_bytes += desc.cols
+  partial_bytes = 0 if cand.parts <= 1 else desc.rows * cand.parts * 4 * 2
+  output_bytes = desc.rows * 4
+  min_global_bytes = desc.packed_bytes + activation_read_bytes + q8_stage_bytes + partial_bytes + output_bytes
+  ops_per_min_byte = logical_ops / max(1, min_global_bytes)
+  ops_per_quant_byte = logical_ops / max(1, desc.packed_bytes)
+  packed_dot = "vdot" in cand.family or "amd_v_dot4_u32_u8" in cand.requires
+  q8_staging = cand.activation.startswith("q8_1")
+  generated_schedule = cand.family not in ("fused_graph", "q4_k_packed_u32", "q6_k_packed_u16")
+  isolated_packed_dot = packed_dot and q8_staging and "semantic_layout_schedule_package" not in cand.requires
+  stop_reason = None
+  if isolated_packed_dot and ops_per_min_byte < RX7900XTX_FP32_RIDGE_OPS_PER_BYTE:
+    stop_reason = ("isolated_packed_dot_below_compute_ridge: v1 roofline says this shape is memory/schedule-bound; "
+                   "run only as an explicit experiment, not as the next default compiler task")
+  return {
+    "logical_ops": logical_ops,
+    "packed_weight_bytes": desc.packed_bytes,
+    "activation_read_bytes": activation_read_bytes,
+    "q8_stage_bytes": q8_stage_bytes,
+    "partial_reduction_bytes": partial_bytes,
+    "output_bytes": output_bytes,
+    "min_global_bytes": min_global_bytes,
+    "ops_per_quant_byte": round(ops_per_quant_byte, 3),
+    "ops_per_min_byte": round(ops_per_min_byte, 3),
+    "fp32_ridge_ops_per_byte": round(RX7900XTX_FP32_RIDGE_OPS_PER_BYTE, 3),
+    "peak_mem_gbs": RX7900XTX_MEM_GBS,
+    "features": {
+      "packed_weight": cand.family != "fused_graph",
+      "q8_staging": q8_staging,
+      "packed_dot": packed_dot,
+      "generated_schedule": generated_schedule,
+      "isolated_packed_dot": isolated_packed_dot,
+    },
+    "stop_reason": stop_reason,
+  }
 
 def _git_commit(repo:pathlib.Path) -> str:
   try:
@@ -305,6 +354,22 @@ def select_winner(desc:QuantGemvDescriptor, candidates:list[CandidateSpec], resu
     "candidate": candidate_to_json(cand), "result": {k: v for k, v in best.items() if k != "tail"},
   }
 
+def select_runtime_policy_winner(desc:QuantGemvDescriptor, candidates:list[CandidateSpec], results:list[dict], min_gain:float=0.0) -> dict:
+  supported_family = RUNTIME_SUPPORTED_FAMILIES.get(desc.ggml_type)
+  supported_names = {"fused_graph"} | {c.name for c in candidates if c.family == supported_family}
+  supported_results = [r for r in results if r.get("candidate") in supported_names]
+  winner = select_winner(desc, candidates, supported_results, min_gain)
+  winner["policy_reason"] = "best runtime-supported generated candidate"
+  if winner["winner"] is None: return winner
+  best_overall = select_winner(desc, candidates, results, min_gain)
+  if best_overall.get("winner") != winner.get("winner"):
+    winner["research_winner"] = {
+      "winner": best_overall.get("winner"),
+      "metric_value": best_overall.get("metric_value"),
+      "reason": "not runtime-supported by model.py generated policy integration",
+    }
+  return winner
+
 def cache_key(desc:QuantGemvDescriptor, repo:pathlib.Path) -> dict:
   return {
     "device": desc.device, "arch": desc.arch, "ggml_type": desc.ggml_type, "format": desc.format,
@@ -362,14 +427,26 @@ def run_search(args) -> dict:
     print(f"=== {desc.tensor} {desc.format} {desc.rows}x{desc.cols} candidates={len(candidates)} ===", flush=True)
     results = []
     for cand in candidates:
-      print(f"--- {cand.name} parts={cand.parts} opts={list(cand.opts)} ---", flush=True)
-      res = run_candidate(desc, cand, repo, args.iters, args.debug, args.timeout, args.seed, args.tail_lines)
+      estimate = estimate_candidate(desc, cand)
+      print(f"--- {cand.name} parts={cand.parts} opts={list(cand.opts)} ops/byte={estimate['ops_per_min_byte']} ---", flush=True)
+      if args.skip_stopped and estimate["stop_reason"] is not None:
+        res = {
+          "tensor": desc.tensor, "format": desc.format, "shape": [desc.rows, desc.cols], "candidate": cand.name,
+          "family": cand.family, "status": "skipped-stop", "elapsed_s": 0.0, "device_ms": None, "quant_gbs": None,
+          "gemv_max_abs": None, "unpack_max_abs": None, "parts": cand.parts, "opts": list(cand.opts),
+          "requires": list(cand.requires), "tail": estimate["stop_reason"],
+        }
+      else:
+        res = run_candidate(desc, cand, repo, args.iters, args.debug, args.timeout, args.seed, args.tail_lines)
+      res["estimate"] = estimate
       results.append(res)
       print(f"{res['status']} quant_gbs={res.get('quant_gbs')} gemv={res.get('gemv_max_abs')}", flush=True)
     winner = select_winner(desc, candidates, results, args.min_gain)
-    policy_entries.append({"key": cache_key(desc, repo), "descriptor": descriptor_to_json(desc), **winner})
-    descriptor_reports.append({"descriptor": descriptor_to_json(desc), "candidates": [candidate_to_json(c) for c in candidates],
-                               "results": results, "winner": winner})
+    policy_winner = select_runtime_policy_winner(desc, candidates, results, args.min_gain)
+    policy_entries.append({"key": cache_key(desc, repo), "descriptor": descriptor_to_json(desc), **policy_winner})
+    descriptor_reports.append({"descriptor": descriptor_to_json(desc),
+                               "candidates": [{**candidate_to_json(c), "estimate": estimate_candidate(desc, c)} for c in candidates],
+                               "results": results, "winner": winner, "policy_winner": policy_winner})
   policy = make_policy_cache(model, repo, policy_entries)
   report = {"generator_version": GENERATOR_VERSION, "model": str(model), "device": args.device, "arch": arch,
             "descriptors": descriptor_reports, "policy": policy}
@@ -391,6 +468,8 @@ def main() -> None:
   parser.add_argument("--seed", type=int, default=1337)
   parser.add_argument("--min-gain", type=float, default=0.0)
   parser.add_argument("--only", action="append", default=[])
+  parser.add_argument("--skip-stopped", action="store_true",
+                      help="skip candidates rejected by semantic stop gates instead of timing them")
   parser.add_argument("--tail-lines", type=int, default=8)
   parser.add_argument("--describe-only", action="store_true")
   parser.add_argument("--descriptors-json", type=pathlib.Path)

@@ -7,9 +7,9 @@ from dataclasses import asdict, dataclass
 from extra.qk_layout import GGML_Q4_K, GGML_Q6_K, GGUFMetadata, format_name, read_metadata, tensor_shape
 from tinygrad.llm.model import _load_qk_generated_policy, _q4k_policy, _q6k_policy
 
-SUPPORTED_WINNERS = {
-  GGML_Q4_K: "v1_q4_packed",
-  GGML_Q6_K: "v1_q6_packed",
+SUPPORTED_FAMILIES = {
+  GGML_Q4_K: "q4_k_packed_u32",
+  GGML_Q6_K: "q6_k_packed_u16",
 }
 
 @dataclass(frozen=True)
@@ -49,11 +49,11 @@ def _explicit_decision(name:str, typ:int) -> PolicyDecision:
   if typ == GGML_Q4_K:
     if (policy := _q4k_policy(name)) is None:
       return PolicyDecision("explicit", "fused_graph", "fused_graph", 0, (), "policy_fallback")
-    return PolicyDecision("explicit", "v1_q4_packed", "v1_q4_packed", policy[0], tuple(policy[1]), "policy_primitive")
+    return PolicyDecision("explicit", "v1_q4_packed", "q4_k_packed_u32", policy[0], tuple(policy[1]), "policy_primitive")
   if typ == GGML_Q6_K:
     if (policy := _q6k_policy(name)) is None:
       return PolicyDecision("explicit", "fused_graph", "fused_graph", 0, (), "policy_fallback")
-    return PolicyDecision("explicit", "v1_q6_packed", "v1_q6_packed", policy[0], tuple(policy[1]), "policy_primitive")
+    return PolicyDecision("explicit", "v1_q6_packed", "q6_k_packed_u16", policy[0], tuple(policy[1]), "policy_primitive")
   raise ValueError(f"unsupported ggml_type={typ}")
 
 def _generated_decision(policy:dict[tuple[int, int, int], dict], typ:int, rows:int, cols:int) -> PolicyDecision:
@@ -63,16 +63,17 @@ def _generated_decision(policy:dict[tuple[int, int, int], dict], typ:int, rows:i
   winner = str(entry["winner"])
   if winner == "fused_graph":
     return PolicyDecision("generated", "fused_graph", "fused_graph", 0, (), "policy_fused")
-  if winner != SUPPORTED_WINNERS[typ]:
-    # This is how model.py behaves today: unsupported generated winners are skipped, so the model falls back.
+  family = str(entry.get("family", ""))
+  if family != SUPPORTED_FAMILIES[typ]:
+    # Unsupported generated winners are skipped, so the model falls back.
     return PolicyDecision("generated", winner, "fused_graph", int(entry.get("parts", 0)),
                           tuple(entry.get("opts", ())), "policy_unsupported", True)
-  return PolicyDecision("generated", winner, winner, int(entry.get("parts", 0)), tuple(entry.get("opts", ())), "policy_primitive")
+  return PolicyDecision("generated", winner, family, int(entry.get("parts", 0)), tuple(entry.get("opts", ())), "policy_primitive")
 
 def compare_policies(meta:GGUFMetadata, generated_policy:dict[tuple[int, int, int], dict]) -> list[TensorParity]:
   rows: list[TensorParity] = []
   for info in meta.infos:
-    if info.typ not in SUPPORTED_WINNERS or len(info.dims) != 2 or not info.name.endswith(".weight"): continue
+    if info.typ not in SUPPORTED_FAMILIES or len(info.dims) != 2 or not info.name.endswith(".weight"): continue
     shape = tensor_shape(info)
     if len(shape) != 2: continue
     explicit = _explicit_decision(info.name, info.typ)

@@ -1752,3 +1752,78 @@ part of a larger representation/schedule package. Do not start isolated
 renderer/core `v_dot4` lowering as the next default task. If compiler research
 continues, target semantic packed-layout plus schedule/codegen generation; if
 local inference speed is the goal, keep the consolidated Q4/Q6 v1 path.
+
+## Semantic stop-gated generated search (2026-06-12)
+
+Executed the next compiler-research slice after the roofline premise check.
+Artifacts are in `bench/qk-semantic-20260612/`.
+
+Code changes:
+
+- `extra/qk_ansor.py` now estimates each generated candidate's minimum global
+  bytes, ops/byte, q8 staging bytes, and semantic stop reason.
+- `--skip-stopped` skips isolated packed-dot candidates when the v1 roofline
+  premise already says the shape is memory/schedule-bound.
+- Runtime policy selection now separates the research winner from the
+  model-supported policy winner. q8 winners can be reported without being
+  emitted as a runtime policy.
+- `tinygrad/llm/model.py` accepts generated Q4/Q6 primitive-family candidates
+  by family (`q4_k_packed_u32`, `q6_k_packed_u16`), not only by the historical
+  `v1_q*_packed` names.
+- `extra/q4_k_output_ab.py` can run the greedy output A/B against a generated
+  policy artifact.
+- `extra/qk_profile_pmc.py` parses tinygrad AMD PMC profile events.
+
+Full-shape generated-search highlights:
+
+| model | tensor | research winner | runtime policy | winner GB/s | best q8 GB/s | stopped vdot |
+|---|---|---|---|---:|---:|---:|
+| 8B | `blk.0.ffn_gate.weight` Q4 | `q4_local64_p1` | `q4_local64_p1` | `422.31` | `243.07` | `4` |
+| 8B | `blk.4.ffn_down.weight` Q4 | `q4_local32_p4` | `q4_local32_p4` | `268.74` | `257.77` | `4` |
+| 8B | `blk.0.attn_k.weight` Q4 | `fused_graph` | `fused_graph` | `103.21` | `37.98` | `4` |
+| 8B | `blk.0.ffn_down.weight` Q6 | `q6_local64_p2` | `q6_local64_p2` | `198.19` | n/a | `0` |
+| 14B | `blk.0.ffn_gate.weight` Q4 | `q4_local32_p1` | `q4_local32_p1` | `366.16` | `318.69` | `4` |
+| 14B | `blk.5.ffn_down.weight` Q4 | `q8_1_q4_intdot` | `q4_local32_p2` | `328.89` | `328.89` | `4` |
+| 14B | `blk.0.attn_k.weight` Q4 | `v1_q4_packed` | `v1_q4_packed` | `64.05` | `47.86` | `4` |
+| 14B | `blk.0.ffn_down.weight` Q6 | `q6_local64_p2` | `q6_local64_p2` | `212.32` | n/a | `0` |
+
+Policy parity:
+
+| model | generated installed | generated unsupported | effective mismatches | interpretation |
+|---|---:|---:|---:|---|
+| 8B full policy | `180` | `0` | `18` | generated policy changes some Q6 split choices, but not enough to win full decode |
+| 14B full policy | `280` | `0` | `200` | generated policy materially expands primitive coverage |
+
+Full decode gates:
+
+| model | mode | avg tok/s | last64 tok/s | last16 tok/s | verdict |
+|---|---|---:|---:|---:|---|
+| 8B | explicit Q4/Q6 flags | `51.36` | `50.23` | `49.10` | stable baseline for this rerun |
+| 8B | generated full policy | `50.94` | `46.80` | `51.89` | correct but flat; do not prefer |
+| 14B | explicit Q4/Q6 flags | `23.44` | `23.11` | `22.83` | same-commit comparison |
+| 14B | generated full policy | `40.50` | `39.54` | `38.62` | accepted |
+| 14B | generated full policy rerun | `40.09` | `39.88` | `39.09` | accepted repeat |
+
+Greedy output A/B:
+
+| model | baseline | candidate | tokens | result |
+|---|---|---|---:|---|
+| 8B | generic fused graph | generated full policy | `32` | `match=True` |
+| 14B | generic fused graph | generated full policy | `32` | `match=True` |
+
+PMC smoke for `q4k_gemv_partial_12288_4096_1`:
+
+| GL2 hit rate | VALU / busy | SALU / busy | SQ busy | VALU inst |
+|---:|---:|---:|---:|---:|
+| `0.1613` | `1.2584` | `0.0508` | `16411721` | `20653056` |
+
+Interpretation:
+
+- The stop gate correctly prevents another isolated vdot chase.
+- The useful generated-search win is 14B Q4/Q6 coverage and split-policy
+  selection using existing runtime-supported primitive families.
+- q8 remains a research signal only. The one 14B q8 research winner is not a
+  runtime policy until there is a q8 wrapper plus full-decode correctness and
+  speed gates.
+- Generated policy should stay opt-in and artifact-pinned; do not make it a
+  global default.

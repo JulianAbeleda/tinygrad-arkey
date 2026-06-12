@@ -1,0 +1,15 @@
+=== blk.0.ffn_down.weight Q6_K 5120x17408 candidates=7 ===
+--- fused_graph parts=0 opts=[] ops/byte=2.436 ---
+pass quant_gbs=26.34 gemv=0.00121832
+--- v1_q6_packed parts=1 opts=['LOCAL:0:64'] ops/byte=2.436 ---
+pass quant_gbs=153.18 gemv=0.00121832
+--- q6_local32_p1 parts=1 opts=['LOCAL:0:32'] ops/byte=2.436 ---
+pass quant_gbs=133.92 gemv=0.00121832
+--- q6_local64_p1 parts=1 opts=['LOCAL:0:64'] ops/byte=2.436 ---
+pass quant_gbs=152.91 gemv=0.00121832
+--- q6_local128_p1 parts=1 opts=['LOCAL:0:128'] ops/byte=2.436 ---
+pass quant_gbs=112.11 gemv=0.00121832
+--- q6_local64_p2 parts=2 opts=['LOCAL:0:64'] ops/byte=2.434 ---
+pass quant_gbs=216.27 gemv=0.00121784
+--- q8_1_q6_k_sketch parts=2 opts=['LOCAL:0:64'] ops/byte=2.432 ---
+not-implemented quant_gbs=None gemv=None

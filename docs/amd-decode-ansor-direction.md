@@ -1,6 +1,8 @@
 # AMD decode Ansor direction
 
-Status: implemented research spike, opt-in only.
+Status: implemented research spike, opt-in only. One generated policy artifact
+is accepted for Qwen3-14B on the local gfx1100 path; generated policy is not a
+global default.
 
 Date: 2026-06-12
 
@@ -8,9 +10,10 @@ Current decision state: see `docs/amd-decode-current-verdicts.md`. This file
 contains the research-path details after that decision state.
 
 Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
-Follow-up work added policy parity diagnostics and the first runnable Q4_K x
-q8_1 level-2 candidate. The result remains architecturally useful but not a new
-default runtime path.
+Follow-up work added policy parity diagnostics, q8_1 level-2 candidates,
+semantic stop gates, PMC parsing, and full-shape generated-policy decode gates.
+The result is split: 8B generated policy is flat versus explicit flags, while
+14B generated policy is a real opt-in runtime win.
 
 ## Decision
 
@@ -69,6 +72,34 @@ and `0` unsupported generated winners. The raw differences are fallback-reason
 differences only (`policy_fallback` vs measured `policy_fused` or unsearched
 `policy_missing`). That rules out a generated-policy coverage bug as the cause
 of the 56.07 vs 58.00 tok/s rerun difference.
+
+Update after full-shape semantic search: generated policy is now useful, but
+only behind the same measurement gates as the hand policies.
+
+- `extra/qk_ansor.py --level 2 --skip-stopped` estimates each candidate's
+  memory/compute shape and skips isolated packed-dot candidates whose roofline
+  premise already failed.
+- Runtime policy selection now chooses the best model-supported family
+  (`q4_k_packed_u32`, `q6_k_packed_u16`, or `fused_graph`) even when the
+  research winner is a q8 candidate that model runtime cannot consume yet.
+- `tinygrad/llm/model.py` now accepts any generated Q4/Q6 candidate in the
+  supported family, not only the historical `v1_q*_packed` names.
+- `extra/q4_k_output_ab.py` can compare baseline decode against a generated
+  policy artifact.
+
+Full-shape decode gates on native AMD:
+
+| model | explicit flags avg tok/s | generated policy avg tok/s | generated rerun | output A/B | verdict |
+|---|---:|---:|---:|---|---|
+| Qwen3-8B-Q4_K_M | `51.36` | `50.94` | n/a | `match=True` | flat; keep explicit flags |
+| Qwen3-14B-Q4_K_M | `23.44` | `40.50` | `40.09` | `match=True` | accept generated policy artifact |
+
+The 14B generated policy changes runtime coverage materially: it installs `240`
+Q4 wrappers and `40` Q6 wrappers, versus `200` explicit wrappers in the parity
+comparison. The useful win is therefore not a q8/vdot win; it is generated
+selection over the existing runtime-supported Q4/Q6 primitive families.
+
+Artifacts: `bench/qk-semantic-20260612/`.
 
 Level-2 generation now includes real Q4_K x q8_1 activation candidates. The
 first lowering used per-element float-style dequant and lost. The second lowering
@@ -682,14 +713,14 @@ Rules:
 
 - v1 `Q4K_PRIMITIVE` / `Q6K_PRIMITIVE` flags remain unchanged;
 - generated policy is opt-in;
-- if a tensor/shape is missing from the generated policy, fallback is explicit
-  and counted;
+- if a tensor/shape is missing from the generated policy, it falls back to the
+  generic fused graph and is counted;
 - no live search during model load;
 - no BEAM or auto-schedule on Mac/TinyGPU/remote.
 
 Exit gate:
 
-- generated policy reproduces current v1 full-decode speed within noise;
+- generated policy reproduces or beats current explicit full-decode speed;
 - generated policy passes 32-token output validation;
 - skip/install diagnostics are at least as clear as current primitive debug.
 
