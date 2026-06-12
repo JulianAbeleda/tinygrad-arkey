@@ -1,6 +1,8 @@
 # AMD decode primitive v2 design
 
-Status: design scope, not implemented.
+Status: optional design scope, not implemented. Default recommendation is
+consolidate v1 unless the goal is explicitly more kernel grind or scheduler
+research.
 
 Date: 2026-06-12
 
@@ -9,16 +11,36 @@ Date: 2026-06-12
 The Q4_K and Q6_K v1 primitives proved the main representation thesis: tinygrad
 could be sped up by giving the scheduler a packed quantized GEMV primitive
 instead of asking the generic graph to discover one. The current stable policy
-is a real end-to-end win, but the last sweep showed that retuning the v1 knobs
-is not enough. The accepted path is now a primitive-v2 representation change:
-quantize the decode activation vector to a `q8_1`-style block format, then run
-`Q4_K x q8_1` and `Q6_K x q8_1` packed vector-dot kernels with first-class
-split/reduction parameters.
+is a real end-to-end win. The last sweep also showed the limit of the current
+approach: retuning the v1 `parts`/`LOCAL` knobs is an AutoTVM-style template
+sweep, and it cannot cross the representation boundary that the human template
+does not expose.
 
-This keeps the project aligned with the original search principle. The human
-work is to expose the missing representation and a small set of hardware-shaped
-knobs. The machine work is then to sweep those knobs under correctness and
-full-decode gates.
+This doc scopes the optional v2 path, not the default next step. If the goal is
+"faster Qwen on this gfx1100 card", consolidate the verified v1 win first. If
+the goal is "squeeze more out of this one kernel family", v2 is the pragmatic
+CUTLASS/AutoTVM path: write a richer template and sweep it. If the goal is
+"make the machine take over kernel-writing", v2 is not enough; that is an
+Ansor-style scheduler/codegen research project with different success metrics.
+
+The v2 hypothesis remains technically coherent: quantize the decode activation
+vector to a `q8_1`-style block format, then run `Q4_K x q8_1` and
+`Q6_K x q8_1` packed vector-dot kernels with first-class split/reduction
+parameters. The scope correction is economic: for one model family on one GPU,
+this is optional hand-template work, not the necessary next engineering step.
+
+## Scope decision
+
+There are now three explicit tracks:
+
+| goal | track | success metric | default? |
+|---|---|---|---|
+| make local Qwen faster and reliable | consolidate v1 | reproducible `~58 tok/s` 8B and `~28 tok/s` 14B with clear flags/tests/docs | yes |
+| push 57% higher on gfx1100 | v2 rich template | repeated full-decode win over stable v1 | optional |
+| make tinygrad generate packed quant kernels | scheduler/codegen research | reusable representation/search machinery beyond Qwen/gfx1100 | separate project |
+
+The rest of this document is for the second track. It should not be used to
+justify delaying consolidation of the current win.
 
 ## Current measured state
 
@@ -71,6 +93,29 @@ The Q4+Q6 profile and sweep in `bench/q4q6-profile-20260611/` found:
    throughput target. The hardened profiler now makes the correct split:
    batched rows are throughput truth; named rows are attribution only.
 
+6. The search space was a human-authored template. That is exactly the AutoTVM
+   regime: the machine can choose from exposed parameters, but it cannot invent
+   a missing packed-dot representation.
+
+## Field mapping
+
+This project's current state maps cleanly onto the established auto-tuning
+taxonomy:
+
+- AutoTVM-style: human writes a schedule/kernel template, then search chooses
+  parameters. This is the current Q4/Q6 primitive plus policy sweep.
+- Ansor-style: the system derives a larger search space from the mathematical
+  definition of the computation using sketches/rules, then searches that space.
+  This is the machine-first path, but it is compiler work, not a small decode
+  optimization.
+- CUTLASS-style: humans provide a rich kernel-template family and a profiler or
+  analytical heuristic prunes/searches configurations. This is the pragmatic v2
+  direction if the goal is more speed on one kernel family.
+
+The user-facing consequence is simple: "BEAM harder" is not a plan. Either
+consolidate the accepted result, write a richer v2 template, or start a separate
+scheduler/codegen research effort.
+
 ## Current hypothesis
 
 The remaining gap is mostly primitive quality, specifically the inner packed
@@ -103,6 +148,20 @@ Why this is the right next hypothesis:
 
 Primary sources agree with this direction:
 
+- Ansor's paper presents template-free search-space construction from tensor
+  programs and reports gains over template-based systems:
+  https://www.usenix.org/system/files/osdi20-zheng.pdf
+- TVM's auto-scheduler introduction frames AutoTVM as template-based and Ansor
+  as the move toward writing mathematical expressions and having the system find
+  efficient implementations:
+  https://tvm.apache.org/2021/03/03/intro-auto-scheduler
+- NVIDIA's CUTLASS heuristics documentation describes analytical heuristics
+  that rank and prune GEMM kernels before profiling:
+  https://github.com/nvidia/cutlass/blob/main/media/docs/cpp/heuristics.md
+- NVIDIA's CUTLASS 4.2 blog describes using nvMatmulHeuristics to predict a
+  targeted subset of high-potential kernel configurations instead of brute-force
+  profiling:
+  https://developer.nvidia.com/blog/improving-gemm-kernel-auto-tuning-efficiency-on-nvidia-gpus-with-heuristics-and-cutlass-4-2/
 - llama.cpp current CUDA MMVQ source selects `vec_dot_q4_K_q8_1` and
   `vec_dot_q6_K_q8_1`, and includes RDNA-specific MMVQ tables:
   https://raw.githubusercontent.com/ggml-org/llama.cpp/master/ggml/src/ggml-cuda/mmvq.cu
@@ -122,7 +181,9 @@ Primary sources agree with this direction:
 
 These sources do not prove our exact RDNA3/tinygrad v2 will win. They do support
 the architectural bet: fast decode paths are specialized packed quant kernels,
-not generic dequant expressions plus deeper schedule search.
+not generic dequant expressions plus deeper schedule search. They also clarify
+the scope split: v2 is a CUTLASS/AutoTVM-style template path; an Ansor-style
+machine-generated search space is a larger compiler project.
 
 ## Semantic decision
 
@@ -472,6 +533,15 @@ inline-asm primitive for packed quant dot, still behind the same model-policy an
 full-decode gates.
 
 ## Immediate next checklist
+
+Default next checklist, if stopping at the practical win:
+
+1. Preserve the stable Q4+Q6 v1 flags and policy.
+2. Add/keep concise reproduction commands and expected ranges.
+3. Keep correctness/output A/B and search-safety guards available.
+4. Do not change runtime policy based on isolated microbench wins.
+
+Optional v2 checklist, if explicitly reopening kernel work:
 
 1. Freeze current Q4+Q6 baseline in a fresh v2 bench directory.
 2. Centralize Q4_K/Q6_K layout helpers and preserve v1 behavior.

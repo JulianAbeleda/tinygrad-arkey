@@ -683,23 +683,27 @@ the full 128-token decode gates rejected them:
 - Reverting to the prior production policy restored the stable range
   (`57.45 tok/s` on the 8B rerun, matching the prior `58.17`-class result).
 
-Decision: keep the existing runtime policy. The next accepted work should be a
-primitive-v2 representation/design change with a larger search space, not more
-retuning of the current knobs. Any v2 candidate must pass microbench
-correctness, model-output validation for its chosen arithmetic contract, and
-repeated 128-token batched decode before it is wired into `model.py`.
+Decision: keep the existing runtime policy. The default next work is
+consolidation of the verified Q4+Q6 v1 win, not another tuning pass. If more
+kernel work is explicitly reopened, it should be a primitive-v2
+representation/design change with a larger search space, not more retuning of
+the current knobs. Any v2 candidate must pass microbench correctness,
+model-output validation for its chosen arithmetic contract, and repeated
+128-token batched decode before it is wired into `model.py`.
 
 ## Step 21 design scope: primitive v2 (2026-06-12)
 
 The primitive-v2 scope is now split into a standalone design doc:
 `docs/amd-decode-primitive-v2-design.md`.
 
-Short version: stop retuning v1's shallow `parts`/`LOCAL` knobs. The next
-hypothesis is a representation change: q8_1 activation staging plus
-`Q4_K/Q6_K x q8_1` packed vector-dot primitives, with split/reduction as
-first-class searchable knobs. Keep the current Q4+Q6 v1 policy as the stable
-baseline, and accept v2 only after correctness, repeated full decode, and
-profile gates.
+Short version: stop retuning v1's shallow `parts`/`LOCAL` knobs. For the
+practical "faster Qwen on this card" goal, consolidate the current Q4+Q6 v1
+policy as the stable result. If pursuing more speed, the next hypothesis is a
+v2 representation change: q8_1 activation staging plus `Q4_K/Q6_K x q8_1`
+packed vector-dot primitives, with split/reduction as first-class searchable
+knobs. If pursuing the machine-first research goal, v2 is not enough; the work
+is an Ansor-style scheduler/codegen project that generates richer search spaces
+from the math instead of searching inside hand-authored templates.
 
 ## STRATEGIC INFLECTION (2026-06-11) — inference plateau + the AutoTVM-regime conclusion
 
@@ -729,3 +733,10 @@ Action path A: (1) freeze+declare inference result, (2) clean docs/checklist to
 "inference consolidated", (3) validate training stack with smallest real run
 (QLoRA SFT 1.5-4B, native Linux, few steps), (4) flagship GRPO/RLVR 1.5-3B on a
 verifiable math task. Smallest-real-target-first, gate-on-metric, scale-after.
+
+## Step 22 scope correction encoded in v2 doc (2026-06-12)
+
+`docs/amd-decode-primitive-v2-design.md` now records the three-track split:
+consolidate the local inference win by default, pursue v2 only as an optional
+CUTLASS/AutoTVM-style rich-template grind, or treat Ansor-style search-space
+generation as a separate compiler-research project.
