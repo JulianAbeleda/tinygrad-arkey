@@ -10,7 +10,7 @@ from tinygrad.llm.gguf import ggml_data_to_tensor
 
 from extra.q4_k_gemv_primitive import (
   parse_opt, q8_1_bias_pack_u32_kernel, q4k_q8_1_gemv_partial_kernel, q4k_q8_1_intdot_partial_kernel,
-  q4k_q8_1_vdot_partial_kernel, q4k_unpack_kernel,
+  q4k_q8_1_vdot_parallel_partial_kernel, q4k_q8_1_vdot_partial_kernel, q4k_unpack_kernel,
 )
 from extra.qk_layout import (
   GGML_Q4_K, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference, q8_1_dequantize, q8_1_quantize, read_metadata, tensor_shape,
@@ -36,7 +36,7 @@ if __name__ == "__main__":
   parser.add_argument("--iters", type=int, default=3)
   parser.add_argument("--parts", type=int, default=1)
   parser.add_argument("--opt", action="append", default=None)
-  parser.add_argument("--kernel", choices=("float", "intdot", "vdot"), default="float")
+  parser.add_argument("--kernel", choices=("float", "intdot", "vdot", "vdot_parallel"), default="float")
   parser.add_argument("--unpack-check-rows", type=int, default=2)
   parser.add_argument("--seed", type=int, default=1337)
   parser.add_argument("--tol", type=float, default=1e-2)
@@ -91,11 +91,13 @@ if __name__ == "__main__":
   @TinyJit
   def candidate():
     q, scales = q8_1_quantize(x.cast(dtypes.float32))
-    if args.kernel == "vdot":
+    if args.kernel in ("vdot", "vdot_parallel"):
       if opts:
-        raise ValueError("q8_1 vdot candidate is fixed inline asm; --opt is not supported")
+        if args.kernel == "vdot": raise ValueError("q8_1 vdot candidate is fixed inline asm; --opt is not supported")
       q_bias_words = Tensor.empty(k//4, dtype=dtypes.uint32, device=args.device).custom_kernel(q, fxn=q8_1_bias_pack_u32_kernel(k))[0]
-      partial = partials.custom_kernel(words, q_bias_words, scales, fxn=q4k_q8_1_vdot_partial_kernel(rows, k, parts, "none", ()))[0]
+      kernel = q4k_q8_1_vdot_partial_kernel if args.kernel == "vdot" else q4k_q8_1_vdot_parallel_partial_kernel
+      partial = partials.custom_kernel(words, q_bias_words, scales,
+                                       fxn=kernel(rows, k, parts, "none", () if args.kernel == "vdot" else opts))[0]
     else:
       kernel = q4k_q8_1_intdot_partial_kernel if args.kernel == "intdot" else q4k_q8_1_gemv_partial_kernel
       partial = partials.custom_kernel(words, q, scales, fxn=kernel(rows, k, parts, "none", opts))[0]
@@ -108,5 +110,6 @@ if __name__ == "__main__":
     print("got", got.numpy())
     print("ref", ref.numpy())
     raise AssertionError("Q4_K x q8_1 GEMV primitive correctness failed")
-  bench({"float": "q4k_q8_1_gemv_partial", "intdot": "q4k_q8_1_intdot_partial", "vdot": "q4k_q8_1_vdot_partial"}[args.kernel],
+  bench({"float": "q4k_q8_1_gemv_partial", "intdot": "q4k_q8_1_intdot_partial", "vdot": "q4k_q8_1_vdot_partial",
+         "vdot_parallel": "q4k_q8_1_vdot_parallel_partial"}[args.kernel],
         args.iters, q4_bytes, candidate)

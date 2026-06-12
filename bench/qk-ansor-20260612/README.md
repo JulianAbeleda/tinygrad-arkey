@@ -58,6 +58,8 @@ Files:
   activation candidate.
 - `8b-level2-q8-intdot.json`: level-2 run with the Q4_K x q8_1 integer-dot
   candidate.
+- `8b-level2-q8-vdot-parallel.json`: level-2 run with the scheduled
+  `v_dot4_u32_u8` q8_1 candidate.
 
 Level-0 generated search, Qwen3-8B:
 
@@ -218,3 +220,37 @@ candidate and a useful rejection, not a speed candidate.
 
 Next implication: packed-dot has to be exposed inside a parallel schedule or
 renderer lowering. A serial custom-C loop around `v_dot4` is the wrong shape.
+
+## Parallel vdot Candidate
+
+The follow-up candidate exposes `v_dot4_u32_u8` inside the existing parallel
+UOp schedule instead of wrapping the whole K loop in a serial custom-C statement.
+`extra/qk_ansor.py` level 2 now emits:
+
+- `q8_1_q4_vdot_parallel_p1`: parts=1, `LOCAL:0:64`;
+- `q8_1_q4_vdot_parallel_p2`: parts=2, `LOCAL:0:32`;
+- `q8_1_q4_vdot_parallel_p4`: parts=4, `LOCAL:0:32`.
+
+`q8-vdot-parallel-gate-debug4.log` confirms the scheduled kernel shape:
+
+- kernel: `q4k_q8_1_vdot_parallel_partial_64_4096_1`;
+- workgroup: `amdgpu_flat_work_group_size(1, 64)`;
+- hot loop: inline `v_dot4_u32_u8` calls inside the generated scheduled kernel;
+- correctness: `max_abs=0.00058949` on the 64-row gate.
+
+Generated level-2 search on the two large Q4_K FFN shapes rejected every
+parallel-vdot variant:
+
+| tensor | existing winner | winner GB/s | best parallel vdot | vdot GB/s | vdot correctness |
+|---|---|---:|---|---:|---:|
+| `blk.0.ffn_gate.weight` | `q4_local32_p2` | 391.88 | `q8_1_q4_vdot_parallel_p1` | 335.01 | 0.00122976 |
+| `blk.4.ffn_down.weight` | `v1_q4_packed` | 408.47 | `q8_1_q4_vdot_parallel_p4` | 242.44 | 0.00114174 |
+
+Verdict: packed-dot instruction emission now works inside a parallel scheduled
+kernel, so the earlier serial-integration failure is resolved. It still does
+not beat the existing v1/intdot candidates through `Ops.CUSTOMI`. The likely
+causes are the inline-asm statement-expression overhead, extra q8 bias-pack
+kernel, and lost compiler visibility around the fused dot/correction arithmetic.
+No more `extra/` q8 arithmetic variants are justified from this point. If q8_1
+continues, the next step is renderer/core lowering for the semantic packed-dot
+pattern, followed by the same generated-search gate.

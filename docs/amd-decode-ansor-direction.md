@@ -162,6 +162,28 @@ work item per row. The instruction is present, but the schedule is wrong. The
 next search-facing version must expose the packed dot inside a parallel UOp or
 renderer lowering so the existing row/local/split schedule can still operate.
 
+Update after the parallel candidate: the schedule issue is fixed, but the
+`Ops.CUSTOMI` packed-dot path is still not a winner.
+
+- `q4k_q8_1_vdot_parallel_partial_*` emits inline `v_dot4_u32_u8` inside the
+  generated scheduled UOp kernel.
+- `DEBUG=4` confirms `q4k_q8_1_vdot_parallel_partial_64_4096_1` runs with
+  `amdgpu_flat_work_group_size(1, 64)`.
+- Correctness passes on the generated-search gates.
+- On Qwen3-8B FFN gate, the best parallel-vdot candidate reaches
+  `335.01 Q4-GB/s`, below the existing `q4_local32_p2` winner at
+  `391.88 Q4-GB/s`.
+- On Qwen3-8B FFN down, the best parallel-vdot candidate reaches
+  `242.44 Q4-GB/s`, below the existing `v1_q4_packed` winner at
+  `408.47 Q4-GB/s`.
+
+This is a useful negative result. Packed-dot is no longer blocked by a serial
+schedule, but the current inline-asm helper still loses, likely because the
+compiler cannot see through the statement expression and because the q8 bias
+packing is still a separate kernel. The next q8_1 move, if any, is renderer or
+core lowering for a semantic packed-dot pattern. Another `extra/` arithmetic
+variant would be repeating the same rejected integration level.
+
 Renderer/core scope:
 
 - `tinygrad/runtime/support/compiler_amd.py` already has the low-level AMD HIP

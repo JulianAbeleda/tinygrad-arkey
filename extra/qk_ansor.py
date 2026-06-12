@@ -24,7 +24,7 @@ Q4_SUMMARY_RE = re.compile(
 Q4_GEMV_RE = re.compile(r"^primitive_gemv_correctness: PASS \S+ max_abs=([0-9.eE+-]+)", re.MULTILINE)
 Q4_UNPACK_RE = re.compile(r"^primitive_unpack_correctness: PASS \S+ .* max_abs=([0-9.eE+-]+)", re.MULTILINE)
 Q4_Q8_BENCH_RE = re.compile(
-  r"^(?P<name>q4k_q8_1_(?:gemv|intdot|vdot)_partial): wall=(?P<wall_ms>[0-9.]+) ms \((?P<wall_gbs>[0-9.]+) Q4-GB/s\), "
+  r"^(?P<name>q4k_q8_1_(?:gemv|intdot|vdot|vdot_parallel)_partial): wall=(?P<wall_ms>[0-9.]+) ms \((?P<wall_gbs>[0-9.]+) Q4-GB/s\), "
   r"device=(?P<device_ms>[0-9.]+ ms \((?P<device_gbs>[0-9.]+) Q4-GB/s\)|n/a), kernels=(?P<kernels>[0-9.]+)",
   re.MULTILINE,
 )
@@ -153,6 +153,15 @@ def generate_candidates(desc:QuantGemvDescriptor, level:int=0) -> list[Candidate
       candidates.append(CandidateSpec("q8_1_q4_vdot", "q4_k_q8_1_vdot_u32", "q8_1_biased_u8", "direct_vdot_partial", 1, (),
                                       ("q8_1_pack", "q8_1_bias_u32", "amd_v_dot4_u32_u8", "q4k_q8_1_vdot_partial_kernel",
                                        "u32_packed_storage")))
+      for name, vdot_parts, vdot_opts in (
+        ("q8_1_q4_vdot_parallel_p1", 1, ("LOCAL:0:64",)),
+        ("q8_1_q4_vdot_parallel_p2", 2, ("LOCAL:0:32",)),
+        ("q8_1_q4_vdot_parallel_p4", 4, ("LOCAL:0:32",)),
+      ):
+        candidates.append(CandidateSpec(name, "q4_k_q8_1_vdot_parallel_u32", "q8_1_biased_u8",
+                                        "split_k_vdot_parallel_partial", vdot_parts, vdot_opts,
+                                        ("q8_1_pack", "q8_1_bias_u32", "amd_v_dot4_u32_u8",
+                                         "q4k_q8_1_vdot_parallel_partial_kernel", "u32_packed_storage")))
   elif desc.ggml_type == GGML_Q6_K:
     _require_alignment(desc, 2, "v1_q6_packed")
     candidates.append(CandidateSpec("v1_q6_packed", "q6_k_packed_u16", desc.dtype_activation, "split_k_partial", 1, ("LOCAL:0:64",),
@@ -253,11 +262,13 @@ def run_candidate(desc:QuantGemvDescriptor, candidate:CandidateSpec, repo:pathli
       "requires": list(candidate.requires), "tail": "q8_1 generated sketch only; no kernel lowering exists yet",
     }
   if desc.ggml_type == GGML_Q4_K:
-    if candidate.family in ("q4_k_q8_1_packed_u32", "q4_k_q8_1_intdot_u32", "q4_k_q8_1_vdot_u32"):
+    if candidate.family in ("q4_k_q8_1_packed_u32", "q4_k_q8_1_intdot_u32", "q4_k_q8_1_vdot_u32",
+                            "q4_k_q8_1_vdot_parallel_u32"):
       cmd = [sys.executable, "extra/q8_1_q4k_bench.py", desc.model, "--device", desc.device, "--tensor", desc.tensor,
              "--iters", str(iters), "--parts", str(candidate.parts), "--seed", str(seed)]
       if candidate.family == "q4_k_q8_1_intdot_u32": cmd += ["--kernel", "intdot"]
       if candidate.family == "q4_k_q8_1_vdot_u32": cmd += ["--kernel", "vdot"]
+      if candidate.family == "q4_k_q8_1_vdot_parallel_u32": cmd += ["--kernel", "vdot_parallel"]
       for opt in candidate.opts: cmd += ["--opt", opt]
       rc, out, timeout_hit, elapsed_s = _run_subprocess(cmd, repo, desc.device, debug, timeout)
       return _parse_q4_q8(desc, candidate, out, _classify(rc, out, timeout_hit), elapsed_s, tail_lines)

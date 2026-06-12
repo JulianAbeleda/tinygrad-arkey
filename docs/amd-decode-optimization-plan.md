@@ -798,3 +798,27 @@ naive integration shape. The next implementation step, if continuing q8_1, is
 not another arithmetic variant; it is making packed dot usable inside the
 parallel schedule, likely through a renderer helper/matcher rather than a
 monolithic custom C loop.
+
+## Step 25 parallel vdot candidate (2026-06-12)
+
+The follow-up implemented packed dot inside a parallel UOp schedule:
+
+- `q4k_q8_1_vdot_parallel_partial_kernel` emits `v_dot4_u32_u8` via
+  `Ops.CUSTOMI` inside the scheduled kernel.
+- `extra/q8_1_q4k_bench.py --kernel vdot_parallel` runs the candidate.
+- `extra/qk_ansor.py --level 2` generates `q8_1_q4_vdot_parallel_p{1,2,4}`.
+- `DEBUG=4` confirms a scheduled kernel with
+  `amdgpu_flat_work_group_size(1, 64)` and inline `v_dot4_u32_u8`.
+
+Generated-search result on Qwen3-8B:
+
+| tensor | current winner | winner GB/s | best parallel vdot | vdot GB/s |
+|---|---|---:|---|---:|
+| `blk.0.ffn_gate.weight` | `q4_local32_p2` | 391.88 | `q8_1_q4_vdot_parallel_p1` | 335.01 |
+| `blk.4.ffn_down.weight` | `v1_q4_packed` | 408.47 | `q8_1_q4_vdot_parallel_p4` | 242.44 |
+
+Verdict: the previous serial-schedule failure is fixed, and correctness passes,
+but `CUSTOMI` packed dot still loses to the current primitive path. This rejects
+the `extra/`-only q8_1 vdot path. Do not add more q8 arithmetic variants at
+this level. The only justified q8 continuation is renderer/core lowering for a
+semantic packed-dot pattern, followed by the same generated-search gate.

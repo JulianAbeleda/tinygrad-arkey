@@ -83,6 +83,40 @@ def _q4k_block_dot_q8_1_intdot(words:UOp, xq:UOp, xscales:UOp, base:UOp, x_block
     contrib = contrib + _q4k_group_dot_q8_1_intdot(words, xq, xscales, base, x_block, grp, afters)
   return contrib
 
+def _vdot4_q4_q8_accum(acc:UOp, q8_bias:UOp, q4:UOp, d:UOp, dmin:UOp, sc:UOp, mn:UOp, xscale:UOp) -> UOp:
+  return UOp(Ops.CUSTOMI, dtypes.float32, (acc, q8_bias, q4, d, dmin, sc, mn, xscale),
+             arg='({{ float _acc = {0}; unsigned int _q8 = (unsigned int)({1}); unsigned int _q4 = (unsigned int)({2}); '
+                 'unsigned int _dot = 0u; '
+                 'asm volatile("v_dot4_u32_u8 %0, %1, %2, %0" : "+v"(_dot) : "v"(_q8), "v"(_q4)); '
+                 'int _q4sum = (int)(_q4 & 255u) + (int)((_q4 >> 8) & 255u) + '
+                 '(int)((_q4 >> 16) & 255u) + (int)((_q4 >> 24) & 255u); '
+                 'int _q8sum = (int)(_q8 & 255u) + (int)((_q8 >> 8) & 255u) + '
+                 '(int)((_q8 >> 16) & 255u) + (int)((_q8 >> 24) & 255u); '
+                 'int _dot_signed = (int)_dot - _q4sum * 128; int _q8_signed_sum = _q8sum - 512; '
+                 '_acc + ((float)({7})) * (((float)({3})) * ((float)({5})) * ((float)_dot_signed) - '
+                 '((float)({4})) * ((float)({6})) * ((float)_q8_signed_sum)); }})')
+
+def _q4k_group_dot_q8_1_vdot_parallel(words:UOp, xq_bias_words:UOp, xscales:UOp, base:UOp, x_block:UOp, grp:int,
+                                      afters:tuple[UOp, ...]) -> UOp:
+  lane4 = UOp.range(8, 160 + grp, axis_type=AxisType.REDUCE)
+  qword = words[base + 4 + (grp//2)*8 + lane4]
+  q4 = qword.rshift(4 if grp % 2 else 0).bitwise_and(0x0f0f0f0f)
+  q8_bias = xq_bias_words[x_block*64 + grp*8 + lane4]
+
+  d, dmin, sc, mn = _q4k_group_params(words, base, grp)
+  xscale = xscales[x_block*8 + grp].cast(dtypes.float32)
+  acc = UOp.placeholder((1,), dtypes.float32, 180 + grp, addrspace=AddrSpace.REG)
+  acc = acc.after(*afters)[0].set(0.0)
+  acc = acc[0].set(_vdot4_q4_q8_accum(acc.after(lane4)[0], q8_bias, q4, d, dmin, sc, mn, xscale), end=lane4)
+  return acc[0]
+
+def _q4k_block_dot_q8_1_vdot_parallel(words:UOp, xq_bias_words:UOp, xscales:UOp, base:UOp, x_block:UOp,
+                                      afters:tuple[UOp, ...]) -> UOp:
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for grp in range(8):
+    contrib = contrib + _q4k_group_dot_q8_1_vdot_parallel(words, xq_bias_words, xscales, base, x_block, grp, afters)
+  return contrib
+
 def _u8_sum_expr(word:str) -> str:
   return " + ".join(f"((int)(({word} >> {shift}) & 255u))" for shift in (0, 8, 16, 24))
 
@@ -231,6 +265,26 @@ def q4k_q8_1_intdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opt
     acc = partials[row, part].set(0.0)
     acc = partials[row, part].set(acc.after(blk_part)[row, part] + contrib, end=blk_part)
     return acc.end(row, part).sink(arg=_kernel_info(f"q4k_q8_1_intdot_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_q8_1_vdot_parallel_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, xq_bias_words:UOp, xscales:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    part = UOp.range(parts, 1)
+    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_q8_1_vdot_parallel(words, xq_bias_words, xscales, base, blk, (row, part, blk_part)),
+                             UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, part].set(0.0)
+    acc = partials[row, part].set(acc.after(blk_part)[row, part] + contrib, end=blk_part)
+    return acc.end(row, part).sink(arg=_kernel_info(f"q4k_q8_1_vdot_parallel_partial_{rows}_{k}_{parts}", schedule, opts))
 
   return kernel
 
