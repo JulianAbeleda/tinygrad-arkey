@@ -1,5 +1,9 @@
 # AMD Decode Optimization — Execution Plan
 
+Current decision state: see `docs/amd-decode-current-verdicts.md`. This file is
+the historical execution plan and contains hypotheses that were later
+falsified.
+
 Executable plan for closing tinygrad's decode-speed gap vs llama.cpp/ROCm on
 gfx1100. Hypothesis derivation and measured baselines live in
 `docs/amd-rocm-llamacpp-research.md` (H-OPT section); this doc is the test plan

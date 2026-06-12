@@ -4,6 +4,9 @@ Status: implemented research spike, opt-in only.
 
 Date: 2026-06-12
 
+Current decision state: see `docs/amd-decode-current-verdicts.md`. This file
+contains the research-path details after that decision state.
+
 Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
 Follow-up work added policy parity diagnostics and the first runnable Q4_K x
 q8_1 level-2 candidate. The result remains architecturally useful but not a new

@@ -6,6 +6,9 @@ research.
 
 Date: 2026-06-12
 
+Current decision state: see `docs/amd-decode-current-verdicts.md`. This file
+scopes only the optional v2/template-grind branch.
+
 ## Summary
 
 The Q4_K and Q6_K v1 primitives proved the main representation thesis: tinygrad
