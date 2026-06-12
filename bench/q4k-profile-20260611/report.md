@@ -8,12 +8,25 @@ Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 8B | baseline batched | 31 | 15.69 | 63.75 | 63.07 | 0.67 | 1.06 |
 | 8B | Q4K_PRIMITIVE=1 batched | 31 | 29.06 | 34.46 | 33.76 | 0.70 | 2.02 |
-| 14B | baseline batched | 31 | 9.09 | 110.03 | 109.31 | 0.72 | 0.65 |
-| 14B | Q4K_PRIMITIVE=1 batched | 31 | 15.77 | 63.59 | 62.89 | 0.71 | 1.11 |
 | 8B | baseline named | 31 | 4.18 | 239.54 | 119.98 | 119.56 | 49.91 |
 | 8B | Q4K_PRIMITIVE=1 named | 31 | 4.38 | 228.29 | 78.68 | 149.60 | 65.53 |
+| 14B | baseline batched | 31 | 9.09 | 110.03 | 109.31 | 0.72 | 0.65 |
+| 14B | Q4K_PRIMITIVE=1 batched | 31 | 15.77 | 63.59 | 62.89 | 0.71 | 1.11 |
 | 14B | baseline named | 31 | 3.59 | 278.76 | 144.10 | 134.66 | 48.31 |
 | 14B | Q4K_PRIMITIVE=1 named | 31 | 3.16 | 316.80 | 143.72 | 173.07 | 54.63 |
+
+## Parse Health
+
+| model | mode | lines | tokens | AMD lines | ignored lines | non-AMD DEBUG lines | trailing AMD lines |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 8B | baseline batched | 2465 | 32 | 2253 | 180 | 0 | 0 |
+| 8B | Q4K_PRIMITIVE=1 batched | 3095 | 32 | 2559 | 342 | 162 | 0 |
+| 8B | baseline named | 24043 | 32 | 23807 | 204 | 0 | 0 |
+| 8B | Q4K_PRIMITIVE=1 named | 29281 | 32 | 28721 | 366 | 162 | 0 |
+| 14B | baseline batched | 2708 | 32 | 2479 | 197 | 0 | 0 |
+| 14B | Q4K_PRIMITIVE=1 batched | 3408 | 32 | 2819 | 377 | 180 | 0 |
+| 14B | baseline named | 26659 | 32 | 26407 | 220 | 0 | 0 |
+| 14B | Q4K_PRIMITIVE=1 named | 32479 | 32 | 31867 | 400 | 180 | 0 |
 
 ## Buckets
 
@@ -35,22 +48,6 @@ Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal
 | 8B | Q4K_PRIMITIVE=1 batched | copy | 0.04 | 0.13 | 0.13 | copy        4 B,     AMD <- AMD |
 | 8B | Q4K_PRIMITIVE=1 batched | other_amd | 33.72 | 97.85 | 99.87 | batched 286, batched 256, batched 64 |
 | 8B | Q4K_PRIMITIVE=1 batched | residual_overhead | 0.70 | 2.02 | 0.00 |  |
-| 14B | baseline batched | q4k_primitive_gemv | 0.00 | 0.00 | 0.00 |  |
-| 14B | baseline batched | q4k_primitive_reduction | 0.00 | 0.00 | 0.00 |  |
-| 14B | baseline batched | fallback_q4k_fused | 0.00 | 0.00 | 0.00 |  |
-| 14B | baseline batched | attention_misc | 0.00 | 0.00 | 0.00 |  |
-| 14B | baseline batched | norm_sampling_misc | 0.00 | 0.00 | 0.00 |  |
-| 14B | baseline batched | copy | 0.05 | 0.04 | 0.04 | copy        4 B,     AMD <- AMD |
-| 14B | baseline batched | other_amd | 109.26 | 99.30 | 99.96 | batched 256, batched 210, batched 128 |
-| 14B | baseline batched | residual_overhead | 0.72 | 0.65 | 0.00 |  |
-| 14B | Q4K_PRIMITIVE=1 batched | q4k_primitive_gemv | 0.00 | 0.00 | 0.00 |  |
-| 14B | Q4K_PRIMITIVE=1 batched | q4k_primitive_reduction | 0.00 | 0.00 | 0.00 |  |
-| 14B | Q4K_PRIMITIVE=1 batched | fallback_q4k_fused | 0.00 | 0.00 | 0.00 |  |
-| 14B | Q4K_PRIMITIVE=1 batched | attention_misc | 0.00 | 0.00 | 0.00 |  |
-| 14B | Q4K_PRIMITIVE=1 batched | norm_sampling_misc | 0.00 | 0.00 | 0.00 |  |
-| 14B | Q4K_PRIMITIVE=1 batched | copy | 0.05 | 0.08 | 0.08 | copy        4 B,     AMD <- AMD |
-| 14B | Q4K_PRIMITIVE=1 batched | other_amd | 62.84 | 98.81 | 99.92 | batched 370, batched 256, batched 128 |
-| 14B | Q4K_PRIMITIVE=1 batched | residual_overhead | 0.71 | 1.11 | 0.00 |  |
 | 8B | baseline named | q4k_primitive_gemv | 0.00 | 0.00 | 0.00 |  |
 | 8B | baseline named | q4k_primitive_reduction | 0.00 | 0.00 | 0.00 |  |
 | 8B | baseline named | fallback_q4k_fused | 112.06 | 46.78 | 93.40 | r_32_32_4_48_2_2_2_32, r_32_32_4_48_4_2_32, r_32_32_4_16_4_2_32 |
@@ -67,6 +64,22 @@ Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal
 | 8B | Q4K_PRIMITIVE=1 named | copy | 0.05 | 0.02 | 0.07 |  |
 | 8B | Q4K_PRIMITIVE=1 named | other_amd | 6.50 | 2.85 | 8.26 | r_2_8_128_16_2_2_2_32, r_2_8_128_16_4_2_32, r_2_8_4_4_16 |
 | 8B | Q4K_PRIMITIVE=1 named | residual_overhead | 149.60 | 65.53 | 0.00 |  |
+| 14B | baseline batched | q4k_primitive_gemv | 0.00 | 0.00 | 0.00 |  |
+| 14B | baseline batched | q4k_primitive_reduction | 0.00 | 0.00 | 0.00 |  |
+| 14B | baseline batched | fallback_q4k_fused | 0.00 | 0.00 | 0.00 |  |
+| 14B | baseline batched | attention_misc | 0.00 | 0.00 | 0.00 |  |
+| 14B | baseline batched | norm_sampling_misc | 0.00 | 0.00 | 0.00 |  |
+| 14B | baseline batched | copy | 0.05 | 0.04 | 0.04 | copy        4 B,     AMD <- AMD |
+| 14B | baseline batched | other_amd | 109.26 | 99.30 | 99.96 | batched 256, batched 210, batched 128 |
+| 14B | baseline batched | residual_overhead | 0.72 | 0.65 | 0.00 |  |
+| 14B | Q4K_PRIMITIVE=1 batched | q4k_primitive_gemv | 0.00 | 0.00 | 0.00 |  |
+| 14B | Q4K_PRIMITIVE=1 batched | q4k_primitive_reduction | 0.00 | 0.00 | 0.00 |  |
+| 14B | Q4K_PRIMITIVE=1 batched | fallback_q4k_fused | 0.00 | 0.00 | 0.00 |  |
+| 14B | Q4K_PRIMITIVE=1 batched | attention_misc | 0.00 | 0.00 | 0.00 |  |
+| 14B | Q4K_PRIMITIVE=1 batched | norm_sampling_misc | 0.00 | 0.00 | 0.00 |  |
+| 14B | Q4K_PRIMITIVE=1 batched | copy | 0.05 | 0.08 | 0.08 | copy        4 B,     AMD <- AMD |
+| 14B | Q4K_PRIMITIVE=1 batched | other_amd | 62.84 | 98.81 | 99.92 | batched 370, batched 256, batched 128 |
+| 14B | Q4K_PRIMITIVE=1 batched | residual_overhead | 0.71 | 1.11 | 0.00 |  |
 | 14B | baseline named | q4k_primitive_gemv | 0.00 | 0.00 | 0.00 |  |
 | 14B | baseline named | q4k_primitive_reduction | 0.00 | 0.00 | 0.00 |  |
 | 14B | baseline named | fallback_q4k_fused | 136.44 | 48.95 | 94.69 | r_40_32_4_68_2_2_2_32, r_40_32_4_68_4_2_32, r_136_32_4_20_4_2_32 |
@@ -90,10 +103,10 @@ Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal
 | --- | --- | --- | --- | --- |
 | 8B | baseline batched | 0 | 63.67 | 0.00 |
 | 8B | Q4K_PRIMITIVE=1 batched | 0 | 34.05 | 0.00 |
-| 14B | baseline batched | 0 | 109.78 | 0.00 |
-| 14B | Q4K_PRIMITIVE=1 batched | 0 | 62.30 | 0.00 |
 | 8B | baseline named | 0 | 238.28 | 0.00 |
 | 8B | Q4K_PRIMITIVE=1 named | 0 | 226.66 | 0.00 |
+| 14B | baseline batched | 0 | 109.78 | 0.00 |
+| 14B | Q4K_PRIMITIVE=1 batched | 0 | 62.30 | 0.00 |
 | 14B | baseline named | 0 | 274.83 | 0.00 |
 | 14B | Q4K_PRIMITIVE=1 named | 0 | 311.48 | 0.00 |
 
@@ -120,28 +133,6 @@ Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal
 | batched 128 | 3.93 | 121.83 |
 | batched 32 | 1.67 | 51.81 |
 | copy        4 B,     AMD <- AMD | 0.04 | 1.36 |
-
-### 14B baseline batched
-
-| kernel | ms/tok | total ms |
-| --- | --- | --- |
-| batched 256 | 40.00 | 1240.11 |
-| batched 210 | 35.44 | 1098.65 |
-| batched 128 | 18.94 | 587.23 |
-| batched 64 | 11.13 | 345.00 |
-| batched 32 | 3.75 | 116.18 |
-| copy        4 B,     AMD <- AMD | 0.05 | 1.52 |
-
-### 14B Q4K_PRIMITIVE=1 batched
-
-| kernel | ms/tok | total ms |
-| --- | --- | --- |
-| batched 370 | 30.82 | 955.44 |
-| batched 256 | 14.61 | 452.97 |
-| batched 128 | 7.52 | 233.08 |
-| batched 64 | 6.80 | 210.69 |
-| batched 32 | 3.09 | 95.78 |
-| copy        4 B,     AMD <- AMD | 0.05 | 1.54 |
 
 ### 8B baseline named
 
@@ -192,6 +183,28 @@ Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal
 | E_(start_pos+1)_8_4 | 0.24 | 7.51 |
 | r_8_16_8 | 0.24 | 7.41 |
 | E_128_32_3 | 0.24 | 7.36 |
+
+### 14B baseline batched
+
+| kernel | ms/tok | total ms |
+| --- | --- | --- |
+| batched 256 | 40.00 | 1240.11 |
+| batched 210 | 35.44 | 1098.65 |
+| batched 128 | 18.94 | 587.23 |
+| batched 64 | 11.13 | 345.00 |
+| batched 32 | 3.75 | 116.18 |
+| copy        4 B,     AMD <- AMD | 0.05 | 1.52 |
+
+### 14B Q4K_PRIMITIVE=1 batched
+
+| kernel | ms/tok | total ms |
+| --- | --- | --- |
+| batched 370 | 30.82 | 955.44 |
+| batched 256 | 14.61 | 452.97 |
+| batched 128 | 7.52 | 233.08 |
+| batched 64 | 6.80 | 210.69 |
+| batched 32 | 3.09 | 95.78 |
+| copy        4 B,     AMD <- AMD | 0.05 | 1.54 |
 
 ### 14B baseline named
 
@@ -247,9 +260,9 @@ Steady-state rows drop the first 1 benchmark token(s). `batched` logs use normal
 
 - **8B baseline batched** (wall-time basis): real graph-batched runtime has low residual and no outliers; use named logs for inner-kernel ownership
 - **8B Q4K_PRIMITIVE=1 batched** (wall-time basis): real graph-batched runtime has low residual and no outliers; use named logs for inner-kernel ownership
-- **14B baseline batched** (wall-time basis): real graph-batched runtime has low residual and no outliers; use named logs for inner-kernel ownership
-- **14B Q4K_PRIMITIVE=1 batched** (wall-time basis): real graph-batched runtime has low residual and no outliers; use named logs for inner-kernel ownership
 - **8B baseline named** (AMD-kernel basis): fallback/generic Q4_K remains large: extend primitive coverage or revise policy; named-log residual is expected launch overhead from disabled graph batching; ignore for runtime decisions
 - **8B Q4K_PRIMITIVE=1 named** (AMD-kernel basis): fallback/generic Q4_K remains large: extend primitive coverage or revise policy; named-log residual is expected launch overhead from disabled graph batching; ignore for runtime decisions
+- **14B baseline batched** (wall-time basis): real graph-batched runtime has low residual and no outliers; use named logs for inner-kernel ownership
+- **14B Q4K_PRIMITIVE=1 batched** (wall-time basis): real graph-batched runtime has low residual and no outliers; use named logs for inner-kernel ownership
 - **14B baseline named** (AMD-kernel basis): fallback/generic Q4_K remains large: extend primitive coverage or revise policy; named-log residual is expected launch overhead from disabled graph batching; ignore for runtime decisions
 - **14B Q4K_PRIMITIVE=1 named** (AMD-kernel basis): fallback/generic Q4_K remains large: extend primitive coverage or revise policy; named-log residual is expected launch overhead from disabled graph batching; ignore for runtime decisions

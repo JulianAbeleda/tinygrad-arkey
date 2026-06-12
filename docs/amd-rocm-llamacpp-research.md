@@ -1543,3 +1543,25 @@ Verdict: the model-level "fast garbage" risk is closed for the tested 8B and
 The remaining optimization target is still the step 17 residual: map anonymous
 generic kernels back to model ops and decide whether coverage/policy expansion
 or a new fused lowering is the next move.
+
+## Q4_K profile-report hardening (2026-06-11)
+
+Follow-up to the profiling audit: `extra/q4_k_profile_report.py` now fails loud
+instead of silently producing a plausible-but-wrong report.
+
+Changes:
+
+- strict UTF-8 log reads; no `errors="replace"`;
+- strict filename labels: basename must identify `8b`/`14b`, exactly one of
+  `baseline`/`primitive`, and exactly one of `batched`/`jitbs1` or `named`;
+- malformed AMD DEBUG lines and malformed token-summary lines raise immediately;
+- zero-token or zero-AMD-line inputs raise immediately;
+- parse-health counters are emitted into `report.md`/`report.json`;
+- kernel classification is centralized in a rule table and overlapping bucket
+  matches raise instead of relying on predicate order;
+- `test/external/test_q4_k_profile_report.py` asserts representative kernel
+  buckets, split-K reduction followups, strict labels, and parser failures.
+
+The regenerated profile report kept the same performance conclusion. The added
+guardrail is methodological: a changed log format, misnamed file, or ambiguous
+kernel signature now stops the analysis instead of defaulting to a quiet bucket.

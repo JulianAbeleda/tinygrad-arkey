@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse, json, math, pathlib, re, statistics
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import Callable
 
 TOKEN_RE = re.compile(r"^\s*(?P<ms>[0-9.]+) ms,\s+(?P<tps>[0-9.]+) tok/s,\s+(?P<gbs>[0-9.]+) GB/s,")
 AMD_RE = re.compile(r"^\*\*\* AMD\s+\d+\s+(?P<name>.*?)\s+arg\s+\d+\s+mem\s+.*?\btm\s+(?P<tm>[0-9.]+)(?P<unit>us|ms|s)/")
+MODEL_RE = re.compile(r"(?:^|[-_])(8b|14b)(?:[-_]|$)", re.IGNORECASE)
 
 BUCKETS = (
   "q4k_primitive_gemv",
@@ -16,6 +20,21 @@ BUCKETS = (
   "other_amd",
   "residual_overhead",
 )
+
+FALLBACK_Q4K_PATTERNS = (
+  # Baseline fused Q4_K matvec/dequant kernels are large anonymous reductions.
+  # These patterns intentionally describe the known dense decode matvec shapes;
+  # attention and norm/sampling signatures are kept disjoint below.
+  r"^r_128_32_3_16_4_2_32",
+  r"^r_\d+_32_4_\d+_(2_2_2_32|4_2_32)",
+  r"^r_\d+_16_4_2_32",
+  r"^r_\d+_256_16_3_16_4_2_32",
+  r"^r_\d+_64_16_4_48_2_2_2_32",
+  r"^r_1187_32_4_\d+_2_2_2_32",
+)
+NORM_SAMPLING_EXACT = ("r_16_8", "r_16_8n1", "r_16_256", "r_16_256n1", "r_16_256n2")
+MODEL_ORDER = {"8B": 0, "14B": 1}
+MODE_ORDER = {"baseline batched": 0, "Q4K_PRIMITIVE=1 batched": 1, "baseline named": 2, "Q4K_PRIMITIVE=1 named": 3}
 
 @dataclass
 class Kernel:
@@ -29,6 +48,26 @@ class Token:
   gb_s: float
   kernels: list[Kernel] = field(default_factory=list)
 
+@dataclass(frozen=True)
+class ParseStats:
+  lines: int = 0
+  amd_lines: int = 0
+  token_lines: int = 0
+  ignored_lines: int = 0
+  non_amd_debug_lines: int = 0
+  trailing_amd_lines: int = 0
+
+@dataclass
+class ParsedLog:
+  tokens: list[Token]
+  stats: ParseStats
+
+@dataclass(frozen=True)
+class KernelRule:
+  bucket: str
+  name: str
+  predicate: Callable[[str], bool]
+
 def _time_to_ms(value:float, unit:str) -> float:
   if unit == "us": return value / 1000.0
   if unit == "ms": return value
@@ -36,49 +75,82 @@ def _time_to_ms(value:float, unit:str) -> float:
   raise ValueError(f"unknown unit {unit}")
 
 def _label(path:pathlib.Path) -> tuple[str, str]:
-  stem = path.name
-  model = "14B" if "14b" in stem.lower() else "8B" if "8b" in stem.lower() else "unknown"
-  mode = "Q4K_PRIMITIVE=1" if "primitive" in stem.lower() or "q4k" in stem.lower() else "baseline"
-  if "baseline" in stem.lower(): mode = "baseline"
-  if "batched" in stem.lower(): mode += " batched"
-  if "jitbs1" in stem.lower(): mode += " named"
+  stem = path.name.lower()
+  model_match = MODEL_RE.search(stem)
+  if model_match is None: raise ValueError(f"{path}: filename must include 8b or 14b")
+  model = model_match.group(1).upper()
+  is_baseline = "baseline" in stem
+  is_primitive = "primitive" in stem
+  if is_baseline == is_primitive:
+    raise ValueError(f"{path}: filename must include exactly one of baseline or primitive")
+  is_batched = "batched" in stem
+  is_named = "jitbs1" in stem or "named" in stem
+  if is_batched == is_named:
+    raise ValueError(f"{path}: filename must include exactly one of batched or jitbs1/named")
+  mode = "Q4K_PRIMITIVE=1" if is_primitive else "baseline"
+  mode += " named" if is_named else " batched"
   return model, mode
 
-def parse_log(path:pathlib.Path) -> list[Token]:
+def parse_log(path:pathlib.Path) -> ParsedLog:
   tokens: list[Token] = []
   pending: list[Kernel] = []
-  for line in path.read_text(errors="replace").splitlines():
+  lines = amd_lines = token_lines = ignored_lines = non_amd_debug_lines = 0
+  try:
+    text = path.read_text()
+  except UnicodeDecodeError as e:
+    raise ValueError(f"{path}: invalid UTF-8 in profile log") from e
+  for lineno, line in enumerate(text.splitlines(), 1):
+    lines += 1
     if (m:=AMD_RE.match(line)):
       pending.append(Kernel(m.group("name").strip(), _time_to_ms(float(m.group("tm")), m.group("unit"))))
+      amd_lines += 1
+      continue
+    if line.startswith("*** AMD"):
+      raise ValueError(f"{path}:{lineno}: malformed AMD DEBUG line: {line[:160]}")
+    if line.startswith("*** "):
+      non_amd_debug_lines += 1
       continue
     if (m:=TOKEN_RE.match(line)):
       tokens.append(Token(float(m.group("ms")), float(m.group("tps")), float(m.group("gbs")), pending))
       pending = []
-  return tokens
+      token_lines += 1
+      continue
+    if "tok/s" in line and "GB/s" in line:
+      raise ValueError(f"{path}:{lineno}: malformed token summary line: {line[:160]}")
+    ignored_lines += 1
+  if not tokens:
+    raise ValueError(f"{path}: parsed zero token summaries from {lines} lines")
+  if amd_lines == 0:
+    raise ValueError(f"{path}: parsed zero AMD DEBUG lines; expected DEBUG=2 log")
+  return ParsedLog(tokens, ParseStats(lines, amd_lines, token_lines, ignored_lines, non_amd_debug_lines, len(pending)))
 
 def _is_attention_kernel(name:str) -> bool:
   # Decode attention kernels carry start_pos/toks dimensions and softmax-ish small reductions.
   return "start_pos" in name or "toks" in name
 
 def _is_norm_sampling_kernel(name:str) -> bool:
+  if "start_pos" in name or "toks" in name: return False
   if name.startswith("E_"): return True
   if re.search(r"^r_32_4_\d+", name) is not None: return True
-  return name in ("r_16_8", "r_16_8n1", "r_16_256", "r_16_256n1", "r_16_256n2", "r_1024_16_4_2_32")
+  return name in NORM_SAMPLING_EXACT
 
 def _is_fallback_q4k_kernel(name:str) -> bool:
   if not name.startswith("r_"): return False
-  # Baseline fused Q4_K matvec/dequant kernels are large anonymous reductions.
-  # These patterns intentionally favor the known dense decode matvec shapes over
-  # attention kernels, which are handled before this bucket.
-  dense_patterns = (
-    r"^r_128_32_3_16_4_2_32",
-    r"^r_\d+_32_4_\d+_(2_2_2_32|4_2_32)",
-    r"^r_\d+_16_4_2_32",
-    r"^r_\d+_256_16_3_16_4_2_32",
-    r"^r_\d+_64_16_4_48_2_2_2_32",
-    r"^r_1187_32_4_\d+_2_2_2_32",
-  )
-  return any(re.search(pat, name) is not None for pat in dense_patterns)
+  return any(re.search(pat, name) is not None for pat in FALLBACK_Q4K_PATTERNS)
+
+KERNEL_RULES = (
+  KernelRule("copy", "copy kernels", lambda name: name.startswith("copy")),
+  KernelRule("fallback_q4k_fused", "known fused Q4_K decode matvec signatures", _is_fallback_q4k_kernel),
+  KernelRule("attention_misc", "decode attention signatures", _is_attention_kernel),
+  KernelRule("norm_sampling_misc", "norm/sampling signatures", _is_norm_sampling_kernel),
+)
+
+def _bucket_for_kernel(name:str) -> str:
+  matches = [rule for rule in KERNEL_RULES if rule.predicate(name)]
+  if len(matches) > 1:
+    detail = ", ".join(f"{rule.bucket}:{rule.name}" for rule in matches)
+    raise ValueError(f"ambiguous kernel bucket for {name!r}: {detail}")
+  return matches[0].bucket if matches else "other_amd"
 
 def classify_token(kernels:list[Kernel]) -> list[tuple[Kernel, str]]:
   out: list[tuple[Kernel, str]] = []
@@ -93,16 +165,8 @@ def classify_token(kernels:list[Kernel]) -> list[tuple[Kernel, str]]:
     elif primitive_reduce_followups and name.startswith("r_"):
       bucket = "q4k_primitive_reduction"
       primitive_reduce_followups -= 1
-    elif name.startswith("copy"):
-      bucket = "copy"
-    elif _is_fallback_q4k_kernel(name):
-      bucket = "fallback_q4k_fused"
-    elif _is_attention_kernel(name):
-      bucket = "attention_misc"
-    elif _is_norm_sampling_kernel(name):
-      bucket = "norm_sampling_misc"
-    elif name.startswith("E_"):
-      bucket = "norm_sampling_misc"
+    else:
+      bucket = _bucket_for_kernel(name)
     out.append((k, bucket))
   return out
 
@@ -149,6 +213,9 @@ def md_table(headers:list[str], rows:list[list[str]]) -> str:
                     "| " + " | ".join("---" for _ in headers) + " |"] +
                    ["| " + " | ".join(row) + " |" for row in rows])
 
+def result_sort_key(result:dict) -> tuple[int, int, str]:
+  return (MODEL_ORDER[result["model"]], MODE_ORDER[result["mode"]], result["path"])
+
 def make_report(results:list[dict], steady_drop:int) -> str:
   lines = [
     "# Q4_K Residual Decode Profile",
@@ -164,6 +231,13 @@ def make_report(results:list[dict], steady_drop:int) -> str:
     rows.append([r["model"], r["mode"], str(s["samples"]), fmt(s["tok_s"]), fmt(s["wall_ms_tok"]),
                  fmt(s["amd_kernel_ms_tok"]), fmt(s["residual_ms_tok"]), fmt(s["residual_pct"])])
   lines.append(md_table(["model", "mode", "samples", "tok/s", "wall ms/tok", "AMD kernel ms/tok", "residual ms/tok", "residual %"], rows))
+  lines += ["", "## Parse Health", ""]
+  rows = []
+  for r in results:
+    st = r["parse_stats"]
+    rows.append([r["model"], r["mode"], str(st["lines"]), str(st["tokens"]), str(st["amd_lines"]),
+                 str(st["ignored_lines"]), str(st["non_amd_debug_lines"]), str(st["trailing_amd_lines"])])
+  lines.append(md_table(["model", "mode", "lines", "tokens", "AMD lines", "ignored lines", "non-AMD DEBUG lines", "trailing AMD lines"], rows))
   lines += ["", "## Buckets", ""]
   rows = []
   for r in results:
@@ -222,9 +296,11 @@ def main():
   results = []
   for path in args.logs:
     model, mode = _label(path)
-    tokens = parse_log(path)
-    results.append({"path": str(path), "model": model, "mode": mode, "tokens": len(tokens),
-                    "summary": summarize(tokens, args.steady_drop)})
+    parsed = parse_log(path)
+    results.append({"path": str(path), "model": model, "mode": mode, "tokens": len(parsed.tokens),
+                    "parse_stats": {**parsed.stats.__dict__, "tokens": len(parsed.tokens)},
+                    "summary": summarize(parsed.tokens, args.steady_drop)})
+  results.sort(key=result_sort_key)
 
   report = make_report(results, args.steady_drop)
   if args.out:
