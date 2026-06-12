@@ -473,3 +473,37 @@ loads beat the ~75 GB/s scalar path is still unproven. Parallelize + tune, then
 compare vs q4_k_bench — and keep an eye on integration (the primitive must be
 wireable into the model's real matvec / a codegen lowering, not a standalone
 orphan).
+
+## AUDIT of model wire-in (f4876230c) + primitive commits (2026-06-11)
+
+Result is real: 8B 15.44->28.74 tok/s (1.86x), 14B 8.88->14.90 (1.68x);
+~75->140 GB/s; ~15%->~28% of llama.cpp. Engineering is sound (verified):
+- Clean fallback guards (prefill / bias / batch>1 / wrong shape) -> normal graph.
+- decode-only via separate prefill_jit/rollout_jit; decode_enabled toggled per call.
+- Split-K bounds CORRECT: blk>=k_blocks masked by in_range.where(...,0); cdiv
+  coverage guarantees each block counted once. No OOB. Verified.
+- Role policy applies primitive to ffn_gate/up/down + attn_q/output; KV/others
+  fall back (explains partial gain; future lever).
+
+### CRITICAL GAP (must close before trusting 28.74): no end-to-end output check
+Microbench bit-exactness != correct MODEL output. There is NO validation that
+the full model with Q4K_PRIMITIVE=1 produces correct/coherent generations. The
+integration is untested at the output boundary: the Linear-swap, the
+decode_enabled toggle across the JIT, the split-K partial.sum wired into the
+graph, AND a dtype seam (primitive returns fp32 via partials; fallback returns
+fp16). Any of these could be subtly wrong and still produce a fast number ->
+"fast garbage" risk. This is the "test at the boundary" principle; the boundary
+is model output, and it is currently untested.
+
+REQUIRED before the number counts: greedy A/B — same prompt, temperature 0,
+Q4K_PRIMITIVE=0 vs =1, assert the generated token sequences are identical (or
+run perplexity on a fixed text and require parity). Cheap, mandatory.
+
+### Smaller flags
+- dtype seam: primitive returns fp32, fallback fp16 — confirm downstream
+  consistency (the e2e check covers this).
+- decode_enabled is stateful across the JIT; probably OK with separate JITs but
+  fragile — the e2e check guards it.
+- Intermittent slow outliers (8B ~24, 14B ~10 tok/s) — glance at cause.
+- Commit-discipline: f4876230c changes CORE tinygrad/llm/model.py+gguf.py runtime
+  behavior but is tagged [test]; per coding-principles it is [runtime]. Minor.
