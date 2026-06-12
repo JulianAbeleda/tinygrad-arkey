@@ -46,5 +46,23 @@ class TestQKPolicyParity(unittest.TestCase):
     self.assertEqual(summarize(rows)["generated_unsupported"], 1)
     self.assertFalse(rows[0].same_effective)
 
+  def test_tensor_policy_overrides_shape_policy_and_reports_memory_cap(self):
+    policy = {
+      "by_shape": {
+        (GGML_Q4_K, 12288, 4096): {
+          "winner": "v1_q4_packed", "parts": 1, "opts": ("LOCAL:0:64",), "family": "q4_k_packed_u32",
+        },
+      },
+      "by_tensor": {
+        ("blk.0.ffn_gate.weight", GGML_Q4_K, 12288, 4096): {
+          "winner": "fused_graph", "parts": 0, "opts": (), "family": "fused_graph",
+          "policy_reason": "memory_cap_fused_over_budget",
+        },
+      },
+    }
+    rows = compare_policies(GGUFMetadata(128, [GGUFInfo("blk.0.ffn_gate.weight", (4096, 12288), GGML_Q4_K, 0)], {}), policy)
+    self.assertEqual(rows[0].generated.reason, "policy_memory_cap")
+    self.assertFalse(rows[0].same_effective)
+
 if __name__ == "__main__":
   unittest.main()

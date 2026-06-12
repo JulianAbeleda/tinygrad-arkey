@@ -1,8 +1,9 @@
 # AMD decode Ansor direction
 
-Status: implemented research spike, opt-in only. One generated policy artifact
-is accepted for Qwen3-14B on the local gfx1100 path; generated policy is not a
-global default.
+Status: implemented research spike, opt-in only. Generated policy artifacts are
+accepted for Qwen3-8B and Qwen3-14B on the local gfx1100 path. A memory-capped
+generated policy is accepted for Qwen3-32B against the generic fused baseline.
+Generated policy is not a global default.
 
 Date: 2026-06-12
 
@@ -11,9 +12,11 @@ contains the research-path details after that decision state.
 
 Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
 Follow-up work added policy parity diagnostics, q8_1 level-2 candidates,
-semantic stop gates, PMC parsing, full-shape generated-policy decode gates, and
-a 14B remeasure audit. The result is split: 8B generated policy is flat versus
-explicit flags, while 14B generated policy is a real opt-in runtime win.
+semantic stop gates, PMC parsing, full-shape generated-policy decode gates, a
+14B remeasure audit, and tensor-scoped memory-capped policy generation. The
+result is split by model and baseline: 8B is a modest generated-policy win, 14B
+is a large generated-policy win, and 32B needs a memory cap because the full
+primitive policy duplicates too much packed-weight storage.
 
 ## Decision
 
@@ -116,6 +119,40 @@ The audit rules out the suspected `model.py` explicit-regression explanation:
 the prior commit is also around `23 tok/s`. The win is explained by coverage and
 schedule-policy selection, not by q8/vdot. Artifact:
 `bench/qk-14b-remeasure-20260612/`.
+
+Memory-aware 32B update:
+
+The first full 32B generated policy passed search and parity but could not load:
+the policy would install about `17.8 GiB` of primitive packed-weight sidecar
+storage across `448` wrappers while the generic model graph was still resident.
+That turned the next problem from candidate generation into storage
+architecture.
+
+The policy format now supports tensor-scoped entries:
+
+- `by_tensor`: exact tensor-name decisions with storage metadata;
+- `by_shape`: legacy shape-scoped decisions for existing artifacts;
+- runtime lookup checks exact tensor first, then shape fallback.
+
+`extra/qk_ansor.py --policy-max-storage-mb` now expands shape search results to
+real tensors, ranks primitive candidates by `benefit_ms_per_mb`, selects until
+the byte cap is reached, and emits fused-graph fallback entries for the rest.
+`extra/qk_policy_pipeline.py --reference-mode generic` compares that capped
+policy against the generic fused baseline when the full explicit primitive
+baseline does not fit.
+
+Accepted 32B capped result:
+
+| policy | selected storage | selected primitive tensors | baseline | generated | gain | correctness |
+|---|---:|---:|---:|---:|---:|---|
+| `bench/qk-policy-cap-20260612/32b-1536mb/policy.json` | `1.49 GiB` | `144` | `3.44 tok/s` generic | `4.16 tok/s` | `20.98%` | 32-token A/B match |
+
+Selected roles are `64 attn_k`, `64 attn_v`, and `16 ffn_down`. This is useful
+because it proves the generated search result can be lowered under a model-level
+memory budget. It is not a true 32B explicit-vs-generated scaling result,
+because full explicit primitive storage still OOMs on the 24 GB card.
+
+Design note: see `docs/amd-decode-qk-storage-architecture.md`.
 
 Level-2 generation now includes real Q4_K x q8_1 activation candidates. The
 first lowering used per-element float-style dequant and lost. The second lowering
@@ -294,7 +331,8 @@ Current decision:
 
 - keep `extra/qk_ansor.py` as the research harness;
 - keep `QK_GENERATED_POLICY` opt-in;
-- keep `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` as the faster/stabler runtime path;
+- keep explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` as the boring fallback where
+  it fits;
 - defer core integration until a new structural candidate, such as fused partial
   reduction or a better q8_1 lowering, is generated and accepted by the same
   harness.

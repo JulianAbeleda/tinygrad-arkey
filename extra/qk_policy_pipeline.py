@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse, json, os, pathlib, re, statistics, subprocess, sys, time
 from datetime import datetime
 
+from extra.qk_ansor import build_policy_entries, make_policy_cache
 from extra.qk_decode_summary import _md as decode_summary_md, parse_log as parse_decode_log
+from extra.qk_layout import read_metadata
 
 LLAMA_REFS = {"8B": 101.2, "14B": 65.8, "32B": 30.8}
 MODEL_RE = re.compile(r"Qwen3-(?P<size>[0-9.]+B)-(?P<quant>[^/]+)\.gguf$", re.IGNORECASE)
@@ -74,6 +76,9 @@ def _policy_summary(path:pathlib.Path) -> dict:
   if "summary" not in data: raise ValueError(f"{path}: missing policy parity summary")
   return data["summary"]
 
+def _policy_storage(path:pathlib.Path) -> dict:
+  return json.loads(path.read_text()).get("storage_policy", {})
+
 def _ab_match(path:pathlib.Path) -> bool:
   return bool(json.loads(path.read_text())["match"])
 
@@ -81,7 +86,8 @@ def _run_decode(args, mode:str, policy:pathlib.Path|None, idx:int) -> pathlib.Pa
   log = args.out / f"{mode}-run{idx}.log"
   env = {"DEV": args.device, "JIT": "1", "PYTHONPATH": "."}
   if mode == "explicit":
-    env |= {"Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1", "Q4K_PRIMITIVE_DEBUG": "1", "Q6K_PRIMITIVE_DEBUG": "1"}
+    if args.reference_mode == "explicit":
+      env |= {"Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1", "Q4K_PRIMITIVE_DEBUG": "1", "Q6K_PRIMITIVE_DEBUG": "1"}
   elif mode == "generated":
     if policy is None: raise ValueError("generated decode requires policy")
     env |= {"QK_GENERATED_POLICY": str(policy), "QK_GENERATED_POLICY_DEBUG": "1"}
@@ -113,17 +119,42 @@ def _write_decode_summary(out:pathlib.Path, logs:list[tuple[str, pathlib.Path]])
   (out / "decode-summary.md").write_text(decode_summary_md(rows))
   return rows
 
-def _run_profile(args, policy:pathlib.Path) -> dict:
-  specs = [
-    ("explicit-batched", f"{args.model_size.lower()}-q4q6-primitive-batched-debug2.log",
-     {"DEV": args.device, "Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1", "DEBUG": "2", "JIT": "1", "PYTHONPATH": "."}),
-    ("generated-batched", f"{args.model_size.lower()}-generated-batched-debug2.log",
-     {"DEV": args.device, "QK_GENERATED_POLICY": str(policy), "DEBUG": "2", "JIT": "1", "PYTHONPATH": "."}),
-    ("explicit-named", f"{args.model_size.lower()}-q4q6-primitive-named-debug2.log",
-     {"DEV": args.device, "Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1", "DEBUG": "2", "JIT": "1", "JIT_BATCH_SIZE": "1", "PYTHONPATH": "."}),
-    ("generated-named", f"{args.model_size.lower()}-generated-named-debug2.log",
-     {"DEV": args.device, "QK_GENERATED_POLICY": str(policy), "DEBUG": "2", "JIT": "1", "JIT_BATCH_SIZE": "1", "PYTHONPATH": "."}),
+def _apply_policy_cap_from_search(args, search_json:pathlib.Path, policy:pathlib.Path) -> bool:
+  if args.policy_max_storage_mb is None: return False
+  report = json.loads(search_json.read_text())
+  cap_bytes = int(args.policy_max_storage_mb * 1024 * 1024)
+  entries, storage_policy = build_policy_entries(args.model, args.repo, read_metadata(args.model), report["descriptors"], cap_bytes)
+  capped = make_policy_cache(args.model, args.repo, entries, storage_policy)
+  if policy.exists():
+    old = json.loads(policy.read_text())
+    old_stable = {k: v for k, v in old.items() if k != "created_at"}
+    capped_stable = {k: v for k, v in capped.items() if k != "created_at"}
+    if old_stable == capped_stable: return False
+  text = json.dumps(capped, indent=2, sort_keys=True)
+  policy.write_text(text)
+  return True
+
+def _profile_specs(args, policy:pathlib.Path) -> list[tuple[str, str, dict[str, str]]]:
+  base_env = {"DEV": args.device, "DEBUG": "2", "JIT": "1", "PYTHONPATH": "."}
+  if args.reference_mode == "explicit":
+    reference_name = "q4q6-primitive"
+    reference_env = base_env | {"Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1"}
+  elif args.reference_mode == "generic":
+    reference_name = "baseline"
+    reference_env = dict(base_env)
+  else:
+    raise ValueError(args.reference_mode)
+  generated_env = base_env | {"QK_GENERATED_POLICY": str(policy)}
+  model = args.model_size.lower()
+  return [
+    ("reference-batched", f"{model}-{reference_name}-batched-debug2.log", reference_env),
+    ("generated-batched", f"{model}-generated-batched-debug2.log", generated_env),
+    ("reference-named", f"{model}-{reference_name}-named-debug2.log", reference_env | {"JIT_BATCH_SIZE": "1"}),
+    ("generated-named", f"{model}-generated-named-debug2.log", generated_env | {"JIT_BATCH_SIZE": "1"}),
   ]
+
+def _run_profile(args, policy:pathlib.Path) -> dict:
+  specs = _profile_specs(args, policy)
   logs = []
   for _, filename, env in specs:
     log = args.out / filename
@@ -173,6 +204,7 @@ def _decide(args, decode_rows:list[dict], parity_summary:dict, ab_match:bool, pr
     "explicit": {k: v for k, v in explicit.items() if k != "rows"},
     "generated": {k: v for k, v in generated.items() if k != "rows"},
     "parity_summary": parity_summary,
+    "reference_mode": args.reference_mode,
     "ab_match": ab_match,
     "profile": profile,
   }
@@ -203,6 +235,7 @@ def _write_readme(args, decision:dict) -> None:
     f"- commit: `{_git_commit(args.repo)}`",
     f"- device: `{args.device}`",
     f"- model size: `{args.model_size}`",
+    f"- reference mode: `{args.reference_mode}`",
     f"- generated policy: `policy.json`",
     "",
     "## Decision",
@@ -238,6 +271,8 @@ def _write_readme(args, decision:dict) -> None:
   lines += ["", "## Decode Summary", "", (args.out / "decode-summary.md").read_text()]
   lines += ["", "## Policy Parity Summary", "", "```json",
             json.dumps(decision["parity_summary"], indent=2, sort_keys=True), "```", ""]
+  if (storage:=decision.get("storage_policy")):
+    lines += ["", "## Storage Policy", "", "```json", json.dumps(storage, indent=2, sort_keys=True), "```", ""]
   args.out.joinpath("README.md").write_text("\n".join(lines))
 
 def _write_blocked_readme(args, decision:dict) -> None:
@@ -249,6 +284,7 @@ def _write_blocked_readme(args, decision:dict) -> None:
     f"- commit: `{_git_commit(args.repo)}`",
     f"- device: `{args.device}`",
     f"- model size: `{args.model_size}`",
+    f"- reference mode: `{args.reference_mode}`",
     f"- generated policy: `policy.json`",
     "",
     "## Decision",
@@ -268,6 +304,8 @@ def _write_blocked_readme(args, decision:dict) -> None:
     lines += ["- `explicit-run1.log`"]
   lines += ["", "## Policy Parity Summary", "", "```json",
             json.dumps(decision["parity_summary"], indent=2, sort_keys=True), "```", ""]
+  if (storage:=decision.get("storage_policy")):
+    lines += ["", "## Storage Policy", "", "```json", json.dumps(storage, indent=2, sort_keys=True), "```", ""]
   if (args.out / "explicit-run1.log").exists():
     lines += ["", "## Failure Tail", "", "```", "\n".join((args.out / "explicit-run1.log").read_text(errors="replace").splitlines()[-32:]), "```"]
   args.out.joinpath("README.md").write_text("\n".join(lines))
@@ -286,23 +324,28 @@ def run_pipeline(args) -> dict:
 
   policy = args.out / "policy.json"
   search_json = args.out / "search.json"
-  if not (args.reuse and policy.exists() and search_json.exists()):
-    _run([sys.executable, "extra/qk_ansor.py", "--model", str(args.model), "--device", args.device, "--level", str(args.level),
-          "--iters", str(args.iters), "--skip-stopped", "--json", str(search_json), "--policy-json", str(policy),
-          "--timeout", str(args.candidate_timeout)], args.repo, args.out / "search.log",
+  policy_changed = False
+  if args.reuse and search_json.exists() and args.policy_max_storage_mb is not None:
+    policy_changed = _apply_policy_cap_from_search(args, search_json, policy)
+  elif not (args.reuse and policy.exists() and search_json.exists()):
+    cmd = [sys.executable, "extra/qk_ansor.py", "--model", str(args.model), "--device", args.device, "--level", str(args.level),
+           "--iters", str(args.iters), "--skip-stopped", "--json", str(search_json), "--policy-json", str(policy),
+           "--timeout", str(args.candidate_timeout)]
+    if args.policy_max_storage_mb is not None: cmd += ["--policy-max-storage-mb", str(args.policy_max_storage_mb)]
+    _run(cmd, args.repo, args.out / "search.log",
          env={"DEV": args.device, "PYTHONPATH": ".", "Q4K_ALLOW_RISKY_SEARCH": "1"}, timeout=args.search_timeout)
   if not (args.reuse and (args.out / "semantic-report.md").exists()):
     _run([sys.executable, "extra/qk_semantic_report.py", str(search_json), "--md", str(args.out / "semantic-report.md"),
           "--title", f"QK Policy Pipeline Search: {args.model.name}"], args.repo, args.out / "semantic-report.log",
          env={"PYTHONPATH": "."}, timeout=120)
-  if not (args.reuse and (args.out / "policy-parity.json").exists()):
+  if not (args.reuse and not policy_changed and (args.out / "policy-parity.json").exists()):
     _run([sys.executable, "extra/qk_policy_parity.py", "--model", str(args.model), "--policy", str(policy),
           "--json", str(args.out / "policy-parity.json"), "--md", str(args.out / "policy-parity.md")],
          args.repo, args.out / "policy-parity.log", env={"PYTHONPATH": "."}, timeout=600)
 
   try:
-    explicit_logs = _existing_decode_logs(args.out, "explicit") if args.reuse else []
-    generated_logs = _existing_decode_logs(args.out, "generated") if args.reuse else []
+    explicit_logs = _existing_decode_logs(args.out, "explicit") if args.reuse and not policy_changed else []
+    generated_logs = _existing_decode_logs(args.out, "generated") if args.reuse and not policy_changed else []
     if len(explicit_logs) < args.repeats:
       explicit_logs += _run_decode_repeats(args, "explicit", None, len(explicit_logs) + 1, args.repeats - len(explicit_logs))
     if len(generated_logs) < args.repeats:
@@ -315,6 +358,8 @@ def run_pipeline(args) -> dict:
       "status": "blocked",
       "reasons": [f"decode blocked by GPU memory during primitive install: {str(e).splitlines()[-1]}"],
       "parity_summary": parity_summary,
+      "storage_policy": _policy_storage(policy),
+      "reference_mode": args.reference_mode,
       "ab_match": None,
       "profile": None,
       "model": str(args.model), "model_size": args.model_size, "out": str(args.out), "policy": str(policy),
@@ -325,24 +370,25 @@ def run_pipeline(args) -> dict:
     print(json.dumps(decision, indent=2, sort_keys=True))
     return decision
 
-  if not (args.reuse and (args.out / "output-ab.json").exists()):
+  if not (args.reuse and not policy_changed and (args.out / "output-ab.json").exists()):
     _run([sys.executable, "extra/q4_k_output_ab.py", "--model", str(args.model), "--tokens", str(args.ab_tokens),
           "--timeout", str(args.ab_timeout), "--candidate-policy", str(policy), "--policy-debug",
           "--json", str(args.out / "output-ab.json")], args.repo, args.out / "output-ab.log",
          env={"DEV": args.device, "JIT": "1", "PYTHONPATH": "."}, timeout=args.ab_timeout + 60)
 
   parity_summary = _policy_summary(args.out / "policy-parity.json")
+  storage_policy = _policy_storage(policy)
   ab_match = _ab_match(args.out / "output-ab.json")
   preliminary = _decide(args, decode_rows, parity_summary, ab_match, None)
   profile = None
   if args.profile == "always" or (args.profile == "auto" and preliminary["gain"] >= args.profile_gain and preliminary["status"] != "invalid"):
-    if args.reuse and (args.out / "profile-report.json").exists():
+    if args.reuse and not policy_changed and (args.out / "profile-report.json").exists():
       profile = {"json": str(args.out / "profile-report.json"), "md": str(args.out / "profile-report.md"), "reused": True}
     else:
       profile = _run_profile(args, policy)
   decision = _decide(args, decode_rows, parity_summary, ab_match, profile)
   decision |= {"model": str(args.model), "model_size": args.model_size, "out": str(args.out), "policy": str(policy),
-               "commit": _git_commit(args.repo), "created_at": datetime.now().isoformat()}
+               "storage_policy": storage_policy, "commit": _git_commit(args.repo), "created_at": datetime.now().isoformat()}
   (args.out / "decision.json").write_text(json.dumps(decision, indent=2, sort_keys=True))
   _write_readme(args, decision)
   print(json.dumps(decision, indent=2, sort_keys=True))
@@ -357,6 +403,8 @@ def main() -> None:
   parser.add_argument("--level", type=int, default=2)
   parser.add_argument("--iters", type=int, default=2)
   parser.add_argument("--benchmark", type=int, default=128)
+  parser.add_argument("--reference-mode", choices=("explicit", "generic"), default="explicit",
+                      help="explicit compares against Q4K/Q6K primitive flags; generic compares against the fused graph baseline")
   parser.add_argument("--repeats", type=int, default=3)
   parser.add_argument("--max-extra-repeats", type=int, default=2,
                       help="run up to this many additional samples per mode until the latest --repeats window is stable")
@@ -367,6 +415,8 @@ def main() -> None:
   parser.add_argument("--tie-band", type=float, default=0.03)
   parser.add_argument("--profile-gain", type=float, default=0.20)
   parser.add_argument("--candidate-timeout", type=float, default=120)
+  parser.add_argument("--policy-max-storage-mb", type=float,
+                      help="cap generated primitive policy to this much persistent packed-weight storage")
   parser.add_argument("--search-timeout", type=float)
   parser.add_argument("--decode-timeout", type=float, default=1800)
   parser.add_argument("--profile-timeout", type=float, default=1800)

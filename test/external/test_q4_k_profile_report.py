@@ -29,6 +29,12 @@ class TestQ4KProfileReport(unittest.TestCase):
       self.assertEqual(parsed.stats.non_amd_debug_lines, 1)
       self.assertEqual(parsed.stats.ignored_lines, 1)
 
+      spaced_s = pathlib.Path(td) / "32b-baseline-debug2-batched.log"
+      spaced_s.write_text("*** AMD        1 copy   18.40 GB,     AMD <- DISK:/h            arg  2 mem  19.76 GB tm     10.37s / 10365.38ms (      0 GFLOPS    2|2      GB/s)\n" + TOKEN_LINE + "\n")
+      parsed_s = parse_log(spaced_s)
+      self.assertEqual(parsed_s.tokens[0].kernels[0].name, "copy   18.40 GB,     AMD <- DISK:/h")
+      self.assertAlmostEqual(parsed_s.tokens[0].kernels[0].ms, 10370.0)
+
       bad = pathlib.Path(td) / "bad.log"
       bad.write_text("*** AMD malformed line\n" + TOKEN_LINE + "\n")
       with self.assertRaisesRegex(ValueError, "malformed AMD DEBUG line"):

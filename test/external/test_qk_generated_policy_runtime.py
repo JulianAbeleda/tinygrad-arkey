@@ -23,8 +23,19 @@ class TestQKGeneratedPolicyRuntime(unittest.TestCase):
   def test_loads_shape_format_policy(self):
     path = self._write(_policy([_entry(12, 12288, 4096, "v1_q4_packed", 1), _entry(12, 1024, 4096, "fused_graph", 0, ())]))
     table = _load_qk_generated_policy(str(path))
-    self.assertEqual(table[(12, 12288, 4096)]["winner"], "v1_q4_packed")
-    self.assertEqual(table[(12, 1024, 4096)]["winner"], "fused_graph")
+    self.assertEqual(table["by_shape"][(12, 12288, 4096)]["winner"], "v1_q4_packed")
+    self.assertEqual(table["by_shape"][(12, 1024, 4096)]["winner"], "fused_graph")
+
+  def test_loads_tensor_scoped_policy(self):
+    entry = _entry(12, 12288, 4096, "fused_graph", 0, ())
+    entry["scope"] = "tensor"
+    entry["descriptor"]["tensor"] = "blk.0.ffn_gate.weight"
+    entry["policy_reason"] = "memory_cap_fused_over_budget"
+    path = self._write(_policy([entry]))
+    table = _load_qk_generated_policy(str(path))
+    key = ("blk.0.ffn_gate.weight", 12, 12288, 4096)
+    self.assertEqual(table["by_tensor"][key]["winner"], "fused_graph")
+    self.assertEqual(table["by_tensor"][key]["policy_reason"], "memory_cap_fused_over_budget")
 
   def test_rejects_conflicting_shape_policy(self):
     path = self._write(_policy([

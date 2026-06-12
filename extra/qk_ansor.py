@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, json, os, pathlib, re, subprocess, sys, time
+import argparse, collections, copy, json, os, pathlib, re, subprocess, sys, time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from math import prod
@@ -13,7 +13,8 @@ from extra.qk_layout import (
   read_metadata, role_from_name, tensor_shape,
 )
 
-GENERATOR_VERSION = 0
+GENERATOR_VERSION = 1
+SUPPORTED_GENERATOR_VERSIONS = (0, 1)
 RX7900XTX_MEM_GBS = 960.0
 RX7900XTX_FP32_TFLOPS = 61.4
 RX7900XTX_FP32_RIDGE_OPS_PER_BYTE = RX7900XTX_FP32_TFLOPS * 1e12 / (RX7900XTX_MEM_GBS * 1e9)
@@ -370,6 +371,137 @@ def select_runtime_policy_winner(desc:QuantGemvDescriptor, candidates:list[Candi
     }
   return winner
 
+def _shape_key_from_desc(desc:QuantGemvDescriptor) -> tuple[int, int, int]:
+  return (desc.ggml_type, desc.rows, desc.cols)
+
+def _shape_key_from_info(info:GGUFInfo) -> tuple[int, int, int]|None:
+  if info.typ not in RUNTIME_SUPPORTED_FAMILIES or len(info.dims) != 2 or not info.name.endswith(".weight"): return None
+  rows, cols = tensor_shape(info)
+  return (info.typ, int(rows), int(cols))
+
+def _runtime_storage_bytes(desc:QuantGemvDescriptor, winner:dict) -> int:
+  cand = winner.get("candidate") or {}
+  if winner.get("winner") == "fused_graph": return 0
+  if cand.get("family") != RUNTIME_SUPPORTED_FAMILIES.get(desc.ggml_type): return 0
+  return int(desc.packed_bytes)
+
+def _result_device_ms(results:list[dict], candidate_name:str) -> float|None:
+  for row in results:
+    if row.get("candidate") == candidate_name and row.get("status") == "pass" and row.get("device_ms") is not None:
+      return float(row["device_ms"])
+  return None
+
+def _benefit_ms(report:dict, winner:dict) -> float:
+  if winner.get("winner") in (None, "fused_graph"): return 0.0
+  fused_ms = _result_device_ms(report["results"], "fused_graph")
+  winner_ms = (winner.get("result") or {}).get("device_ms")
+  if fused_ms is None or winner_ms is None: return 0.0
+  return max(0.0, fused_ms - float(winner_ms))
+
+def _policy_entry_from_winner(desc:QuantGemvDescriptor, repo:pathlib.Path, winner:dict, scope:str,
+                              storage_decision:str, storage_bytes:int, benefit_ms:float) -> dict:
+  entry = copy.deepcopy(winner)
+  entry.update({
+    "key": cache_key(desc, repo), "descriptor": descriptor_to_json(desc), "scope": scope,
+    "tensor": desc.tensor, "format": desc.format, "shape": [desc.rows, desc.cols],
+    "storage": {
+      "decision": storage_decision,
+      "persistent_bytes": int(storage_bytes),
+      "benefit_ms": round(float(benefit_ms), 6),
+      "benefit_ms_per_mb": round(float(benefit_ms) / max(storage_bytes / 1e6, 1e-9), 6) if storage_bytes else 0.0,
+    },
+  })
+  return entry
+
+def _fused_policy_entry(desc:QuantGemvDescriptor, repo:pathlib.Path, reason:str, capped_from:dict|None=None) -> dict:
+  cand = CandidateSpec("fused_graph", "fused_graph", desc.dtype_activation, "generic_fused_reduce", 0, (), ("ggml_data_to_tensor",))
+  entry = {
+    "key": cache_key(desc, repo), "descriptor": descriptor_to_json(desc), "scope": "tensor",
+    "tensor": desc.tensor, "format": desc.format, "shape": [desc.rows, desc.cols],
+    "winner": "fused_graph", "reason": reason, "metric": "memory_budget", "metric_value": 0.0,
+    "candidate": candidate_to_json(cand), "policy_reason": reason,
+    "storage": {"decision": reason, "persistent_bytes": 0, "benefit_ms": 0.0, "benefit_ms_per_mb": 0.0},
+  }
+  if capped_from is not None:
+    entry["capped_from"] = {
+      "winner": capped_from.get("winner"),
+      "metric_value": capped_from.get("metric_value"),
+      "candidate": (capped_from.get("candidate") or {}).get("name"),
+      "storage_bytes": capped_from.get("storage", {}).get("persistent_bytes"),
+      "benefit_ms": capped_from.get("storage", {}).get("benefit_ms"),
+    }
+  return entry
+
+def build_policy_entries(model:pathlib.Path, repo:pathlib.Path, meta:GGUFMetadata, descriptor_reports:list[dict],
+                         max_storage_bytes:int|None=None) -> tuple[list[dict], dict]:
+  reports_by_shape = {
+    _shape_key_from_desc(descriptor_from_json(report["descriptor"])): report for report in descriptor_reports
+  }
+  if max_storage_bytes is None:
+    entries = []
+    storage_by_format: collections.Counter[str] = collections.Counter()
+    for report in descriptor_reports:
+      desc = descriptor_from_json(report["descriptor"])
+      winner = report["policy_winner"]
+      storage_bytes, benefit = _runtime_storage_bytes(desc, winner), _benefit_ms(report, winner)
+      entries.append(_policy_entry_from_winner(desc, repo, winner, "shape", "shape_policy", storage_bytes, benefit))
+      storage_by_format[desc.format] += storage_bytes
+    total = sum(e["storage"]["persistent_bytes"] for e in entries)
+    return entries, {
+      "mode": "uncapped_shape", "cap_bytes": None, "selected_bytes": total, "selected_entries": len(entries),
+      "selected_primitive_entries": sum(1 for e in entries if e["winner"] != "fused_graph"),
+      "by_format": dict(sorted(storage_by_format.items())), "note": "shape-scoped entries multiply at runtime by tensor count",
+    }
+
+  selected_entries: list[dict] = []
+  primitive_items: list[dict] = []
+  unsupported_infos = 0
+  for info in meta.infos:
+    key = _shape_key_from_info(info)
+    if key is None: continue
+    report = reports_by_shape.get(key)
+    if report is None:
+      unsupported_infos += 1
+      continue
+    desc = descriptor_from_info(model, meta, info, report["descriptor"].get("device", "AMD"), report["descriptor"].get("arch"))
+    winner = report["policy_winner"]
+    storage_bytes, benefit = _runtime_storage_bytes(desc, winner), _benefit_ms(report, winner)
+    if storage_bytes <= 0 or winner.get("winner") == "fused_graph" or benefit <= 0:
+      selected_entries.append(_fused_policy_entry(desc, repo, "memory_cap_fused_nonpositive_benefit", winner))
+      continue
+    entry = _policy_entry_from_winner(desc, repo, winner, "tensor", "memory_cap_candidate", storage_bytes, benefit)
+    primitive_items.append(entry)
+
+  primitive_items.sort(key=lambda e: (e["storage"]["benefit_ms_per_mb"], e["storage"]["benefit_ms"]), reverse=True)
+  selected_bytes = 0
+  capped_entries: list[dict] = []
+  for entry in primitive_items:
+    storage_bytes = int(entry["storage"]["persistent_bytes"])
+    if selected_bytes + storage_bytes <= max_storage_bytes:
+      entry["storage"]["decision"] = "memory_cap_selected"
+      entry["policy_reason"] = "memory_cap_selected"
+      selected_bytes += storage_bytes
+      selected_entries.append(entry)
+    else:
+      desc = descriptor_from_json(entry["descriptor"])
+      capped_entries.append(_fused_policy_entry(desc, repo, "memory_cap_fused_over_budget", entry))
+  entries = selected_entries + capped_entries
+  by_format: collections.Counter[str] = collections.Counter()
+  by_decision: collections.Counter[str] = collections.Counter()
+  by_role_selected: collections.Counter[str] = collections.Counter()
+  for entry in entries:
+    by_decision[entry["storage"]["decision"]] += 1
+    if entry["winner"] != "fused_graph":
+      by_format[entry["format"]] += int(entry["storage"]["persistent_bytes"])
+      by_role_selected[entry["descriptor"].get("role", "unknown")] += 1
+  return entries, {
+    "mode": "tensor_memory_cap", "cap_bytes": int(max_storage_bytes), "selected_bytes": int(selected_bytes),
+    "selected_entries": len(entries), "selected_primitive_entries": sum(1 for e in entries if e["winner"] != "fused_graph"),
+    "capped_primitive_entries": len(capped_entries), "unsupported_tensor_infos": unsupported_infos,
+    "by_format": dict(sorted(by_format.items())), "by_decision": dict(sorted(by_decision.items())),
+    "selected_by_role": dict(sorted(by_role_selected.items())),
+  }
+
 def cache_key(desc:QuantGemvDescriptor, repo:pathlib.Path) -> dict:
   return {
     "device": desc.device, "arch": desc.arch, "ggml_type": desc.ggml_type, "format": desc.format,
@@ -377,15 +509,16 @@ def cache_key(desc:QuantGemvDescriptor, repo:pathlib.Path) -> dict:
     "commit": _git_commit(repo),
   }
 
-def make_policy_cache(model:pathlib.Path, repo:pathlib.Path, entries:list[dict]) -> dict:
+def make_policy_cache(model:pathlib.Path, repo:pathlib.Path, entries:list[dict], storage_policy:dict|None=None) -> dict:
   return {
     "kind": "qk_generated_policy", "generator_version": GENERATOR_VERSION, "created_at": datetime.now(timezone.utc).isoformat(),
     "model": str(model.expanduser()), "commit": _git_commit(repo), "entries": entries,
+    "storage_policy": storage_policy or {},
   }
 
 def validate_policy_cache(cache:dict, repo:pathlib.Path) -> None:
   if cache.get("kind") != "qk_generated_policy": raise ValueError("not a qk generated policy cache")
-  if cache.get("generator_version") != GENERATOR_VERSION:
+  if cache.get("generator_version") not in SUPPORTED_GENERATOR_VERSIONS:
     raise ValueError(f"stale generator version: cache={cache.get('generator_version')} current={GENERATOR_VERSION}")
   current_commit = _git_commit(repo)
   if cache.get("commit") != current_commit: raise ValueError(f"stale policy commit: cache={cache.get('commit')} current={current_commit}")
@@ -420,7 +553,7 @@ def run_search(args) -> dict:
   if args.describe_only:
     return {"descriptors": [descriptor_to_json(d) for d in descriptors]}
   assert_q4k_native_sweep_allowed(args.device, "QK generated candidate runner")
-  policy_entries, descriptor_reports = [], []
+  descriptor_reports = []
   only = set(args.only)
   for desc in descriptors:
     candidates = [c for c in generate_candidates(desc, args.level) if not only or c.name in only]
@@ -443,13 +576,14 @@ def run_search(args) -> dict:
       print(f"{res['status']} quant_gbs={res.get('quant_gbs')} gemv={res.get('gemv_max_abs')}", flush=True)
     winner = select_winner(desc, candidates, results, args.min_gain)
     policy_winner = select_runtime_policy_winner(desc, candidates, results, args.min_gain)
-    policy_entries.append({"key": cache_key(desc, repo), "descriptor": descriptor_to_json(desc), **policy_winner})
     descriptor_reports.append({"descriptor": descriptor_to_json(desc),
                                "candidates": [{**candidate_to_json(c), "estimate": estimate_candidate(desc, c)} for c in candidates],
                                "results": results, "winner": winner, "policy_winner": policy_winner})
-  policy = make_policy_cache(model, repo, policy_entries)
+  cap_bytes = None if args.policy_max_storage_mb is None else int(args.policy_max_storage_mb * 1024 * 1024)
+  policy_entries, storage_policy = build_policy_entries(model, repo, meta, descriptor_reports, cap_bytes)
+  policy = make_policy_cache(model, repo, policy_entries, storage_policy)
   report = {"generator_version": GENERATOR_VERSION, "model": str(model), "device": args.device, "arch": arch,
-            "descriptors": descriptor_reports, "policy": policy}
+            "descriptors": descriptor_reports, "policy": policy, "storage_policy": storage_policy}
   if args.json: args.json.write_text(json.dumps(report, indent=2, sort_keys=True))
   if args.policy_json: args.policy_json.write_text(json.dumps(policy, indent=2, sort_keys=True))
   return report
@@ -475,6 +609,8 @@ def main() -> None:
   parser.add_argument("--descriptors-json", type=pathlib.Path)
   parser.add_argument("--json", type=pathlib.Path)
   parser.add_argument("--policy-json", type=pathlib.Path)
+  parser.add_argument("--policy-max-storage-mb", type=float,
+                      help="emit a tensor-scoped policy capped to this much persistent primitive storage")
   args = parser.parse_args()
   report = run_search(args)
   if args.describe_only and not args.json:

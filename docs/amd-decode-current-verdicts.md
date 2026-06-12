@@ -24,18 +24,23 @@ Current stable paths:
   `QK_GENERATED_POLICY=bench/qk-policy-pipeline-20260612/14b/policy.json`.
   Stable-window result: `39.99 tok/s` generated versus `22.53 tok/s`
   explicit, about `60.8%` of the llama.cpp reference.
-- Qwen3-32B-Q4_K_M: generated-policy search/parity succeeds, but decode is
-  blocked by GPU memory in primitive storage install (`23.80 GB` used, then a
-  `70.31 MB` allocation fails). Do not treat 32B as a speed data point until
-  duplicate packed-weight storage is reduced or made memory-aware.
+- Qwen3-32B-Q4_K_M: the uncapped generated policy still OOMs, but a
+  tensor-scoped `1536 MB` memory-capped generated policy now fits and is
+  accepted against the generic fused baseline:
+  `QK_GENERATED_POLICY=bench/qk-policy-cap-20260612/32b-1536mb/policy.json`.
+  Stable result: `4.16 tok/s` generated versus `3.44 tok/s` generic baseline,
+  `20.98%` gain, `13.5%` of the llama.cpp reference. This is not an
+  explicit-full-primitive comparison; full explicit primitive storage remains
+  too large for 32B on this card.
 - Correctness is verified at the kernel boundary and by greedy end-to-end A/B.
 - BEAM/risky schedule search is guarded and must not run on Mac/TinyGPU paths.
 
 Recommendation by default: keep generated policies opt-in and artifact-pinned,
 use the 8B/14B pipeline artifacts only for the matching model/hardware path,
+use the 32B capped artifact only when accepting the generic-baseline comparison,
 stop adding `extra/` q8 arithmetic variants, and move effort to the next
 higher-value goal unless compiler research is the point. For 32B, the next
-required work is storage/memory design, not more candidate search.
+required work is long-term storage architecture, not more candidate search.
 
 ## Verdict Table
 
@@ -45,7 +50,8 @@ required work is storage/memory design, not more candidate search.
 | Generic BEAM | Not enough for this gap, and unsafe on remote/Mac without guards. | BEAM returns only after there is a semantic primitive/candidate space worth tuning. |
 | Expression-vectorization probe | Failed. Rewriting byte expressions did not make codegen emit wider useful loads. | Stop trying to garden `gguf.py` scalar byte math. |
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
-| Generated policy | Model-specific result. The reproducible pipeline accepts 8B as a modest win (`52.65` vs `49.61 tok/s`) and 14B as a strong win (`39.99` vs `22.53 tok/s`). Both generated policies pass 32-token greedy A/B. 32B policy generation/parity succeeds but decode is blocked by primitive storage OOM. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts when running those exact model/hardware paths; do not make it a global default. Fix storage before using this path on 32B. |
+| Generated policy | Model-specific result. The reproducible pipeline accepts 8B as a modest win (`52.65` vs `49.61 tok/s`) and 14B as a strong win (`39.99` vs `22.53 tok/s`). Both pass 32-token greedy A/B. 32B uncapped policy OOMs, but a tensor-scoped `1536 MB` capped policy accepts versus generic baseline (`4.16` vs `3.44 tok/s`) and passes A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts when running those exact model/hardware paths. Use the 32B capped artifact only with the generic-baseline caveat. Do not make it a global default. |
+| QK policy storage | Shape-scoped policy is too coarse for large models; 32B needs tensor-scoped storage decisions. A first memory cap exists and selects `144` primitive tensors under `1.49 GiB` (`64 attn_k`, `64 attn_v`, `16 ffn_down`). | Future policy generation must include storage cost, benefit, and fallback decisions. Long-term fix is shared/lazy packed storage, not bigger caps. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, and policy cache exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
@@ -86,6 +92,11 @@ It is a representation/lowering boundary:
    adaptive stable-window rerun, 8B is a small generated-policy win, 14B is a
    large generated-policy win, and 32B is blocked by duplicate primitive storage
    pressure rather than by candidate generation.
+10. The memory-aware policy cap proves the 32B blocker is architectural, not
+    semantic: the same generated search/parity result can be lowered into a
+    tensor-scoped policy that fits VRAM by trading coverage for storage. Under a
+    `1536 MB` cap, 32B gains `20.98%` over the generic fused baseline while
+    preserving greedy output.
 
 So the machine-first research hypothesis is:
 
@@ -103,7 +114,7 @@ Choose the next step by goal:
 
 | Goal | Track | Recommended next step |
 |---|---|---|
-| Reliable local Qwen inference | Consolidate | Use the accepted generated-policy artifacts for 8B/14B when you want peak local speed; keep explicit Q4/Q6 flags as the boring fallback. |
+| Reliable local Qwen inference | Consolidate | Use the accepted generated-policy artifacts for 8B/14B when you want peak local speed; keep explicit Q4/Q6 flags as the boring fallback. For 32B, use the capped generated artifact only when the generic-baseline comparison is acceptable. |
 | More speed on this one GPU | v2 template grind | Write a richer hand template and sweep it, accepting lower ROI. |
 | Honor tinygrad's search thesis | Compiler research | Build semantic packed-layout and schedule/codegen generation, then feed it through the generated-search harness. |
 | Use the inference win | Training | Validate the smallest real QLoRA/SFT or RLVR stack using the faster decode path for rollouts/eval. |
@@ -120,8 +131,11 @@ worth doing only if the research itself is the goal.
   packed-dot work is part of a broader semantic layout/schedule rewrite.
 - Do not make `QK_GENERATED_POLICY` a global default. The accepted 14B policy is
   model/hardware-specific and must stay an explicit artifact path.
-- Do not pursue 32B generated-policy speed work until primitive-packed storage
-  no longer duplicates enough GPU memory to OOM during model load.
+- Do not pursue uncapped 32B generated-policy speed work until primitive-packed
+  storage no longer duplicates enough GPU memory to OOM during model load.
+- Do not expand 32B caps blindly. Cap selection must report persistent bytes,
+  selected tensors, fallback reasons, greedy output A/B, and a stable decode
+  window.
 - Do not run BEAM or risky schedule search on Mac/TinyGPU/remote paths.
 - Do not widen tinygrad core optimizer APIs for quant GEMV until an `extra/`
   or renderer-level candidate passes correctness and wins a generated-search
@@ -137,5 +151,7 @@ worth doing only if the research itself is the goal.
 - Semantic generated-search artifacts: `bench/qk-semantic-20260612/README.md`
 - 14B generated-policy audit: `bench/qk-14b-remeasure-20260612/README.md`
 - Reproducible generated-policy pipeline: `bench/qk-policy-pipeline-20260612/README.md`
+- 32B memory-aware capped policy: `bench/qk-policy-cap-20260612/README.md`
+- QK storage architecture: `docs/amd-decode-qk-storage-architecture.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

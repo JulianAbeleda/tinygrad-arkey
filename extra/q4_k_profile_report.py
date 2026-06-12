@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 TOKEN_RE = re.compile(r"^\s*(?P<ms>[0-9.]+) ms,\s+(?P<tps>[0-9.]+) tok/s,\s+(?P<gbs>[0-9.]+) GB/s,")
-AMD_RE = re.compile(r"^\*\*\* AMD\s+\d+\s+(?P<name>.*?)\s+arg\s+\d+\s+mem\s+.*?\btm\s+(?P<tm>[0-9.]+)(?P<unit>us|ms|s)/")
+AMD_RE = re.compile(r"^\*\*\* AMD\s+\d+\s+(?P<name>.*?)\s+arg\s+\d+\s+mem\s+.*?\btm\s+(?P<tm>[0-9.]+)(?P<unit>us|ms|s)\s*/")
 MODEL_RE = re.compile(r"(?:^|[-_])(8b|14b|32b)(?:[-_]|$)", re.IGNORECASE)
 
 PROFILE_SCOPE = "Qwen3 8B/14B/32B Q4_K_M AMD DEBUG=2 decode"

@@ -1938,3 +1938,61 @@ primitive path copies packed weights into separate GPU storage while the model
 still carries the fallback weight graph, so large models run out of VRAM before
 decode. The next 32B experiment should first remove duplicate storage or add a
 memory-aware policy cap.
+
+## 32B memory-capped generated policy (2026-06-12)
+
+Artifact: `bench/qk-policy-cap-20260612/32b-1536mb/`.
+
+The 32B storage blocker was tested with a tensor-scoped generated policy capped
+to `1536 MB` of persistent primitive packed-weight storage. This is a policy
+architecture test, not a new candidate-kernel search.
+
+Policy generation changes:
+
+- generated policies support both legacy `by_shape` entries and exact
+  `by_tensor` entries;
+- runtime lookup checks exact tensor first, then shape fallback;
+- capped policies rank primitive candidates by estimated
+  `benefit_ms_per_mb`;
+- over-budget tensors are emitted as fused-graph fallbacks with
+  `policy_reason=memory_cap_fused_over_budget`;
+- the decode pipeline can use `--reference-mode generic` when full explicit
+  primitive storage does not fit.
+
+Storage selection:
+
+| metric | value |
+|---|---:|
+| cap bytes | `1,610,612,736` |
+| selected bytes | `1,600,389,120` |
+| selected primitive entries | `144` |
+| capped primitive entries | `304` |
+| selected roles | `64 attn_k`, `64 attn_v`, `16 ffn_down` |
+| selected Q4_K bytes | `1,462,763,520` |
+| selected Q6_K bytes | `137,625,600` |
+
+Repeated decode, 128-token benchmark:
+
+| mode | runs | avg tok/s | stable | note |
+|---|---:|---:|---|---|
+| generic fused baseline | 3 | `3.44` | yes | pipeline label is `explicit`, but no Q4/Q6 primitive flags are set |
+| capped generated policy | 3 | `4.16` | yes | installs `112` Q4 + `32` Q6 wrappers |
+
+Decision:
+
+| check | result |
+|---|---|
+| gain | `20.98%` over generic fused baseline |
+| percent of llama.cpp reference | `13.5%` |
+| greedy output A/B | `match=True` for 32 tokens |
+| profile | low residual, no outliers; batched AMD kernel time drops `287.90` -> `248.21 ms/tok` |
+| verdict | accept capped policy for 32B/generic-baseline path |
+
+Important caveat: this does not prove generated policy beats the full explicit
+Q4/Q6 primitive baseline on 32B. The full explicit primitive baseline still
+does not fit. The result proves that 32B can benefit from generated selection
+when storage is treated as a first-class policy constraint.
+
+Design conclusion: shape-scoped policy is too coarse for large models. The
+long-term fix is shared/lazy primitive storage and runtime byte accounting, not
+larger unconditional caps. See `docs/amd-decode-qk-storage-architecture.md`.

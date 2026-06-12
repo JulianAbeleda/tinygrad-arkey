@@ -4,6 +4,11 @@ Current decision state: see `docs/amd-decode-current-verdicts.md`. This file is
 the historical execution plan and contains hypotheses that were later
 falsified.
 
+Latest storage update: 32B uncapped generated policy still OOMs, but a
+tensor-scoped `1536 MB` capped generated policy now fits and accepts versus the
+generic fused baseline (`4.16` vs `3.44 tok/s`, greedy A/B match). The design
+details are in `docs/amd-decode-qk-storage-architecture.md`.
+
 Executable plan for closing tinygrad's decode-speed gap vs llama.cpp/ROCm on
 gfx1100. Hypothesis derivation and measured baselines live in
 `docs/amd-rocm-llamacpp-research.md` (H-OPT section); this doc is the test plan

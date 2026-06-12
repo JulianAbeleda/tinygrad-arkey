@@ -56,13 +56,21 @@ def _explicit_decision(name:str, typ:int) -> PolicyDecision:
     return PolicyDecision("explicit", "v1_q6_packed", "q6_k_packed_u16", policy[0], tuple(policy[1]), "policy_primitive")
   raise ValueError(f"unsupported ggml_type={typ}")
 
-def _generated_decision(policy:dict[tuple[int, int, int], dict], typ:int, rows:int, cols:int) -> PolicyDecision:
-  entry = policy.get((typ, rows, cols))
+def _lookup_generated(policy:dict, name:str, typ:int, rows:int, cols:int) -> dict|None:
+  if "by_shape" in policy or "by_tensor" in policy:
+    if (entry:=policy.get("by_tensor", {}).get((name, typ, rows, cols))) is not None: return entry
+    return policy.get("by_shape", {}).get((typ, rows, cols))
+  return policy.get((typ, rows, cols))
+
+def _generated_decision(policy:dict, name:str, typ:int, rows:int, cols:int) -> PolicyDecision:
+  entry = _lookup_generated(policy, name, typ, rows, cols)
   if entry is None:
     return PolicyDecision("generated", "fused_graph", "fused_graph", 0, (), "policy_missing")
   winner = str(entry["winner"])
+  policy_reason = str(entry.get("policy_reason", ""))
   if winner == "fused_graph":
-    return PolicyDecision("generated", "fused_graph", "fused_graph", 0, (), "policy_fused")
+    reason = "policy_memory_cap" if "memory_cap" in policy_reason else "policy_fused"
+    return PolicyDecision("generated", "fused_graph", "fused_graph", 0, (), reason)
   family = str(entry.get("family", ""))
   if family != SUPPORTED_FAMILIES[typ]:
     # Unsupported generated winners are skipped, so the model falls back.
@@ -70,14 +78,14 @@ def _generated_decision(policy:dict[tuple[int, int, int], dict], typ:int, rows:i
                           tuple(entry.get("opts", ())), "policy_unsupported", True)
   return PolicyDecision("generated", winner, family, int(entry.get("parts", 0)), tuple(entry.get("opts", ())), "policy_primitive")
 
-def compare_policies(meta:GGUFMetadata, generated_policy:dict[tuple[int, int, int], dict]) -> list[TensorParity]:
+def compare_policies(meta:GGUFMetadata, generated_policy:dict) -> list[TensorParity]:
   rows: list[TensorParity] = []
   for info in meta.infos:
     if info.typ not in SUPPORTED_FAMILIES or len(info.dims) != 2 or not info.name.endswith(".weight"): continue
     shape = tensor_shape(info)
     if len(shape) != 2: continue
     explicit = _explicit_decision(info.name, info.typ)
-    generated = _generated_decision(generated_policy, info.typ, int(shape[0]), int(shape[1]))
+    generated = _generated_decision(generated_policy, info.name, info.typ, int(shape[0]), int(shape[1]))
     same_effective = (
       explicit.effective_winner == generated.effective_winner and explicit.parts == generated.parts and explicit.opts == generated.opts
     )
