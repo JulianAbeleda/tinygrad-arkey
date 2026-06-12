@@ -58,6 +58,7 @@ kernel-search loop.
 | Generated policy | Model-specific result. The current shared-storage matrix accepts 8B as a modest win (`52.07` vs `50.41 tok/s`), 14B as a strong win (`40.55` vs `21.77 tok/s`), and 32B as a strong win (`17.23` vs `11.15 tok/s`). All pass 32-token greedy A/B. The older 8B sidecar row is still slightly faster (`53.49 tok/s`), and the older 32B capped result remains historical evidence that tensor-scoped fallback can fit under sidecar storage pressure. | Keep `QK_GENERATED_POLICY` opt-in and artifact-pinned. Prefer `QK_PRIMITIVE_STORAGE=shared` for generated-policy runs when memory behavior or cross-model consistency matters. Use sidecar only when chasing the exact 8B peak artifact. Do not make generated policies global defaults. |
 | QK policy storage | Shape-scoped policy is too coarse for large models under sidecar storage; 32B needs either tensor-scoped storage decisions or shared source storage. Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. `QK_PRIMITIVE_STORAGE=shared` references the already-realized raw GGUF buffer through typed views; it has now passed full 8B, 14B, and 32B harnesses with `storage_bytes=0`. | Treat shared storage as the validated generated-policy storage mode, but keep it explicit until it has more runtime soak. Future policy generation should still include storage cost, benefit, and fallback decisions because sidecar remains supported and useful as a performance control. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
+| Ansor-transition scorecard/descriptors | Started. `bench/qk-ansor-transition-20260612/` freezes the llama.cpp-comparable objective, records the current gap profile, and converts accepted generated policies into machine-readable Q4_K/Q6_K semantic descriptors. | Use this as the next research foundation: reproduce current policies from descriptors, then generate candidate policies/schedules from descriptor data. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -131,6 +132,13 @@ Choose the next step by goal:
 | Honor tinygrad's search thesis | Compiler research | Build semantic packed-layout and schedule/codegen generation, then feed it through the generated-search harness. |
 | Use the inference win | Training | Validate the smallest real QLoRA/SFT or RLVR stack using the faster decode path for rollouts/eval. |
 
+For the llama.cpp-comparable research track, use
+`bench/qk-ansor-transition-20260612/scorecard.md` as the objective report.
+Current generated shared-storage rows are `51.46%` (8B), `61.63%` (14B), and
+`55.94%` (32B) of llama.cpp. The first comparable-speed target is `>=70%` on all
+three rows; all current rows are below it, so further work needs a real QK
+schedule/codegen improvement rather than more rollout/eval plumbing.
+
 Default recommendation remains consolidation or training. The compiler path is
 worth doing only if the research itself is the goal.
 
@@ -172,6 +180,8 @@ worth doing only if the research itself is the goal.
   `bench/qk-shared-storage-20260612/README.md`
 - QK storage architecture: `docs/amd-decode-qk-storage-architecture.md`
 - QK harness architecture: `docs/amd-decode-harness-architecture.md`
+- Ansor-transition scorecard/gap/descriptors:
+  `bench/qk-ansor-transition-20260612/README.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

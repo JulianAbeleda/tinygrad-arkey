@@ -81,6 +81,14 @@ generated-policy storage mode.
       policy vs explicit primitive flags on the 75-prompt 8B dataset has
       quality delta `0`, regressions `0`, text changes `0/75`, and token
       changes `0/75`.
+- [x] Added the Ansor-transition foundation for the llama.cpp-comparable goal:
+      `extra/qk_llama_scorecard.py`, `extra/qk_gap_profile.py`, and
+      `extra/qk_semantic_descriptor.py`, with committed artifacts under
+      `bench/qk-ansor-transition-20260612/`. Current scorecard:
+      8B `51.46%`, 14B `61.63%`, 32B `55.94%` of llama.cpp; all are below the
+      first `70%` comparable-speed target. Current gap profile marks shared 8B
+      as needing a fresh DEBUG=2 profile, while 14B/32B named attribution points
+      at QK semantic schedule/codegen as the next bottleneck.
 
 ## Open But Not Urgent
 
@@ -104,7 +112,9 @@ generated-policy storage mode.
 2. Infrastructure track: keep shared storage explicit and run occasional soak
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen
-   direction from `docs/amd-decode-ansor-direction.md`.
+   direction from `docs/amd-decode-ansor-direction.md`, starting from the
+   scorecard/gap-profile/descriptor foundation in
+   `bench/qk-ansor-transition-20260612/`.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by
