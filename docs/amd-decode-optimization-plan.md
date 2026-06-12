@@ -389,6 +389,15 @@ only (never the Mac bridge). This is the plan of record.
    Deploy only native-Ubuntu-proven fixed policies (`Q4K_PRIMITIVE=1`) with
    fallback available by unsetting the flag. This step records the safety rule;
    T6 transport-neutrality benchmarking is still unmeasured.
+17. [x] Residual decode profile. Added `extra/q4_k_profile_report.py` and
+   recorded `DEBUG=2 --benchmark 32` profiles under
+   `bench/q4k-profile-20260611/`. Normal graph-batched runs reproduce the real
+   win with low residual overhead: 8B `15.69 -> 29.06 tok/s`, 14B
+   `9.09 -> 15.77 tok/s`, residual only ~`0.7 ms/tok`. Named attribution runs
+   (`JIT_BATCH_SIZE=1`) show the primitive GEMV is not the next bottleneck:
+   Q4_K primitive GEMV is ~14% of named AMD kernel time on both 8B and 14B;
+   primitive reductions are ~1% on 8B and ~10% on 14B; remaining generic/fallback
+   dense Q4-style kernels are ~71% on 8B and ~67% on 14B.
 
 ### Two additions (both mandatory, easy to miss)
 
@@ -434,12 +443,33 @@ time"). For the current code, the deployable artifact is the explicit
 role/shape policy behind `Q4K_PRIMITIVE=1`; there is no live BEAM dependency in
 that path.
 
+### Step 17 residual profile verdict
+
+Profile artifacts:
+
+- `bench/q4k-profile-20260611/report.md`
+- `bench/q4k-profile-20260611/report.json`
+- eight `DEBUG=2` logs: four normal graph-batched runtime logs and four
+  `JIT_BATCH_SIZE=1` named-attribution logs.
+
+The batched logs are the runtime truth: `Q4K_PRIMITIVE=1` remains a real win and
+decode is not host/dispatch bound in the steady state. Residual overhead is
+~`0.7 ms/tok` across 8B and 14B, about `1-2%` of wall time, with no >1.5x
+outliers in the 32-token profile.
+
+The named logs are attribution only. They intentionally disable graph batching,
+so their wall/tok is not a performance number. Their useful result is the AMD
+kernel-time split: primitive GEMV is only ~14% of named AMD kernel time, and
+the `ffn_down parts=4` reduction is not the 8B bottleneck. The remaining owner
+is the generic/fallback dense Q4-style kernels, led by names such as
+`r_32_32_4_48_2_2_2_32` on 8B and `r_40_32_4_68_2_2_2_32` on 14B.
+
 ### Current next action
 
-Steps 11-16 are complete. The next useful step is residual profiling of the
-flagged model path (`Q4K_PRIMITIVE=1 DEBUG=2`) to identify whether the remaining
-gap is primitive math/memory quality, non-Q4 kernels, graph overhead, or decode
-outliers.
+Step 18: map the top remaining generic kernels back to model ops and coverage
+holes, then decide whether they need primitive coverage, policy changes, or a
+separate fused FFN lowering. Do not start primitive GEMV v2 first; the profile
+says that is not the dominant residual.
 
 ## Feedback on Codex step 3-6 probes (2026-06-11) — correctness testing gap
 

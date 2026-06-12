@@ -1428,3 +1428,77 @@ Reason: a bad search candidate has already shown it can destabilize the AMD
 path. On native Ubuntu that can be contained and health-checked; over the
 Mac/TinyGPU bridge it risks dropping the bridge/PCIe path. The search cost and
 risk should be paid once on native Ubuntu, then the fixed result deployed later.
+
+## Q4_K residual decode profile (2026-06-11)
+
+Step 17 result: added `extra/q4_k_profile_report.py` and recorded residual
+decode profiles in `bench/q4k-profile-20260611/`.
+
+There are two profile modes:
+
+- `batched`: normal `JIT=1 DEBUG=2` graph-batched runtime. This is the real
+  tok/s and residual-overhead profile.
+- `named`: `JIT=1 DEBUG=2 JIT_BATCH_SIZE=1`. This disables graph batching so
+  DEBUG=2 exposes individual kernel names. It is attribution-only; its wall
+  time includes deliberate launch overhead and is not a throughput number.
+
+Commands used the same pattern for 8B/14B and baseline/primitive:
+
+```bash
+DEV=AMD JIT=1 DEBUG=2 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 32
+
+DEV=AMD Q4K_PRIMITIVE=1 JIT=1 DEBUG=2 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 32
+
+DEV=AMD JIT=1 JIT_BATCH_SIZE=1 DEBUG=2 PYTHONPATH=. .venv/bin/python -m tinygrad.llm \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 32
+```
+
+Report generation:
+
+```bash
+PYTHONPATH=. .venv/bin/python extra/q4_k_profile_report.py \
+  --out bench/q4k-profile-20260611/report.md \
+  --json bench/q4k-profile-20260611/report.json \
+  bench/q4k-profile-20260611/*debug2-batched.log \
+  bench/q4k-profile-20260611/*debug2-jitbs1.log
+```
+
+Normal graph-batched runtime summary, steady state after dropping the first
+benchmark token:
+
+| model | mode | tok/s | wall ms/tok | AMD kernel ms/tok | residual ms/tok |
+|---|---|---:|---:|---:|---:|
+| 8B | baseline | `15.69` | `63.75` | `63.07` | `0.67` |
+| 8B | `Q4K_PRIMITIVE=1` | `29.06` | `34.46` | `33.76` | `0.70` |
+| 14B | baseline | `9.09` | `110.03` | `109.31` | `0.72` |
+| 14B | `Q4K_PRIMITIVE=1` | `15.77` | `63.59` | `62.89` | `0.71` |
+
+This confirms the primitive win under DEBUG=2 and shows the steady-state
+residual is small (`~1-2%` wall), so the remaining gap is not primarily
+host/dispatch/runtime overhead. No >1.5x token outliers appeared in the
+32-token profile.
+
+Named attribution summary, using `% AMD kernel` as the basis:
+
+| model | mode | primitive GEMV | primitive reduction | generic/fallback dense Q4-style |
+|---|---|---:|---:|---:|
+| 8B | baseline | `0.00%` | `0.00%` | `93.40%` |
+| 8B | `Q4K_PRIMITIVE=1` | `14.51%` | `1.10%` | `70.56%` |
+| 14B | baseline | `0.00%` | `0.00%` | `94.69%` |
+| 14B | `Q4K_PRIMITIVE=1` | `14.06%` | `9.56%` | `66.79%` |
+
+Top remaining named kernels after the primitive flag:
+
+| model | top remaining kernel | named ms/tok | note |
+|---|---|---:|---|
+| 8B | `r_32_32_4_48_2_2_2_32` | `50.61` | generic dense Q4-style kernel, not `q4k_gemv_partial_*` |
+| 14B | `r_40_32_4_68_2_2_2_32` | `78.68` | generic dense Q4-style kernel, not `q4k_gemv_partial_*` |
+| 14B | `r_8_32_4_20_4_2_32` | `26.07` | generic dense Q4-style kernel |
+
+Verdict: do not start with primitive GEMV v2. The current primitive GEMV is only
+~14% of named AMD kernel time, and reductions are not the dominant 8B problem.
+The next target is mapping the remaining anonymous generic kernels back to
+model ops and policy coverage holes, then deciding whether to extend primitive
+coverage, revise the role policy, or add a fused FFN/intermediate lowering.

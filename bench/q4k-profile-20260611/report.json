@@ -1,0 +1,810 @@
+[
+  {
+    "path": "bench/q4k-profile-20260611/8b-baseline-debug2-batched.log",
+    "model": "8B",
+    "mode": "baseline batched",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 63.74709677419355,
+      "median_ms_tok": 63.67,
+      "tok_s": 15.690967741935484,
+      "amd_kernel_ms_tok": 63.07242419354841,
+      "residual_ms_tok": 0.674672580645143,
+      "residual_pct": 1.0583581288964168,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.04261,
+        "other_amd": 63.029814193548404,
+        "residual_overhead": 0.674672580645143
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.06684225973605376,
+        "other_amd": 98.87479961136752,
+        "residual_overhead": 1.0583581288964168
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.06755725746206298,
+        "other_amd": 99.93244274253793,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "batched 256",
+          779.68
+        ],
+        [
+          "batched 142",
+          515.9
+        ],
+        [
+          "batched 128",
+          372.66999999999996
+        ],
+        [
+          "batched 64",
+          213.10280999999998
+        ],
+        [
+          "batched 32",
+          72.57143
+        ],
+        [
+          "copy        4 B,     AMD <- AMD",
+          1.32091
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/q4k-profile-20260611/8b-q4k-primitive-debug2-batched.log",
+    "model": "8B",
+    "mode": "Q4K_PRIMITIVE=1 batched",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 34.46064516129032,
+      "median_ms_tok": 34.05,
+      "tok_s": 29.058709677419355,
+      "amd_kernel_ms_tok": 33.76421903225806,
+      "residual_ms_tok": 0.6964261290322611,
+      "residual_pct": 2.020931778185503,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.04373193548387097,
+        "other_amd": 33.720487096774185,
+        "residual_overhead": 0.6964261290322611
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.12690399520724904,
+        "other_amd": 97.85216422660724,
+        "residual_overhead": 2.020931778185503
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.12952153711030556,
+        "other_amd": 99.8704784628897,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "batched 286",
+          491.23
+        ],
+        [
+          "batched 256",
+          246.35984000000002
+        ],
+        [
+          "batched 64",
+          134.09995
+        ],
+        [
+          "batched 128",
+          121.83193999999999
+        ],
+        [
+          "batched 32",
+          51.81336999999999
+        ],
+        [
+          "copy        4 B,     AMD <- AMD",
+          1.35569
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/q4k-profile-20260611/14b-baseline-debug2-batched.log",
+    "model": "14B",
+    "mode": "baseline batched",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 110.03129032258065,
+      "median_ms_tok": 109.78,
+      "tok_s": 9.09032258064516,
+      "amd_kernel_ms_tok": 109.31265483870975,
+      "residual_ms_tok": 0.7186354838708975,
+      "residual_pct": 0.6531192006965122,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.04894709677419355,
+        "other_amd": 109.2637077419355,
+        "residual_overhead": 0.7186354838708975
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.04448470669633565,
+        "other_amd": 99.30239609260711,
+        "residual_overhead": 0.6531192006965122
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.04477715489246394,
+        "other_amd": 99.9552228451075,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "batched 256",
+          1240.1100000000004
+        ],
+        [
+          "batched 210",
+          1098.6499999999996
+        ],
+        [
+          "batched 128",
+          587.2299999999999
+        ],
+        [
+          "batched 64",
+          344.99999999999994
+        ],
+        [
+          "batched 32",
+          116.18494000000003
+        ],
+        [
+          "copy        4 B,     AMD <- AMD",
+          1.51736
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/q4k-profile-20260611/14b-q4k-primitive-debug2-batched.log",
+    "model": "14B",
+    "mode": "Q4K_PRIMITIVE=1 batched",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 63.59225806451613,
+      "median_ms_tok": 62.3,
+      "tok_s": 15.765806451612903,
+      "amd_kernel_ms_tok": 62.887108064516084,
+      "residual_ms_tok": 0.7051500000000399,
+      "residual_pct": 1.1088613951790256,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.049637096774193555,
+        "other_amd": 62.8374709677419,
+        "residual_overhead": 0.7051500000000399
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.07805525119714311,
+        "other_amd": 98.81308335362384,
+        "residual_overhead": 1.1088613951790256
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 0.0,
+        "attention_misc": 0.0,
+        "norm_sampling_misc": 0.0,
+        "copy": 0.07893048082807481,
+        "other_amd": 99.92106951917194,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "batched 370",
+          955.4400000000002
+        ],
+        [
+          "batched 256",
+          452.9700000000001
+        ],
+        [
+          "batched 128",
+          233.07993000000005
+        ],
+        [
+          "batched 64",
+          210.68947999999997
+        ],
+        [
+          "batched 32",
+          95.78219
+        ],
+        [
+          "copy        4 B,     AMD <- AMD",
+          1.5387500000000003
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/q4k-profile-20260611/8b-baseline-debug2-jitbs1.log",
+    "model": "8B",
+    "mode": "baseline named",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 239.54258064516128,
+      "median_ms_tok": 238.28,
+      "tok_s": 4.175483870967742,
+      "amd_kernel_ms_tok": 119.98461000000232,
+      "residual_ms_tok": 119.55797064515896,
+      "residual_pct": 49.910947073857535,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 112.06219225806463,
+        "attention_misc": 1.4542812903225728,
+        "norm_sampling_misc": 1.428719999999994,
+        "copy": 0.046464193548387094,
+        "other_amd": 4.992952258064497,
+        "residual_overhead": 119.55797064515896
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 46.781742083702596,
+        "attention_misc": 0.607107632557748,
+        "norm_sampling_misc": 0.596436757152743,
+        "copy": 0.019397049753427903,
+        "other_amd": 2.084369402975017,
+        "residual_overhead": 49.910947073857535
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 93.39713839805161,
+        "attention_misc": 1.212056521517672,
+        "norm_sampling_misc": 1.1907527140355472,
+        "copy": 0.03872512778796063,
+        "other_amd": 4.1613272386053515,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "r_32_32_4_48_2_2_2_32",
+          886.8730400000001
+        ],
+        [
+          "r_32_32_4_48_4_2_32",
+          673.3367199999996
+        ],
+        [
+          "r_32_32_4_16_4_2_32",
+          474.06524000000013
+        ],
+        [
+          "r_32_32_4_16_4_2_32n1",
+          457.99728
+        ],
+        [
+          "r_128_32_3_16_4_2_32",
+          431.7549600000005
+        ],
+        [
+          "r_128_32_3_16_4_2_32n1",
+          425.9645999999996
+        ],
+        [
+          "r_2_8_128_16_2_2_2_32",
+          101.75931999999989
+        ],
+        [
+          "r_1187_32_4_16_2_2_2_32n1",
+          98.06251999999999
+        ],
+        [
+          "r_2_8_128_16_4_2_32",
+          39.842960000000026
+        ],
+        [
+          "r_1024_16_4_2_32",
+          25.873599999999996
+        ],
+        [
+          "r_4_2_8_16_4_(start_pos+1)",
+          12.29184
+        ],
+        [
+          "E_2_8_16_4_4",
+          11.400520000000013
+        ],
+        [
+          "r_16_256n1",
+          10.609480000000033
+        ],
+        [
+          "r_2_(start_pos+1)_8_4_4_16",
+          9.928840000000031
+        ],
+        [
+          "r_16_256",
+          9.84992000000002
+        ],
+        [
+          "r_8_4_(start_pos+1)n1",
+          9.827920000000011
+        ],
+        [
+          "r_2_8_4_4_16",
+          7.38548
+        ],
+        [
+          "r_8_4_(start_pos+1)",
+          7.094999999999989
+        ],
+        [
+          "r_32_4_1187",
+          6.399759999999999
+        ],
+        [
+          "E_(start_pos+1)_8_4",
+          5.9391200000000115
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/q4k-profile-20260611/8b-q4k-primitive-debug2-jitbs1.log",
+    "model": "8B",
+    "mode": "Q4K_PRIMITIVE=1 named",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 228.28870967741935,
+      "median_ms_tok": 226.66,
+      "tok_s": 4.381612903225807,
+      "amd_kernel_ms_tok": 78.6840096774196,
+      "residual_ms_tok": 149.60469999999975,
+      "residual_pct": 65.53311384141463,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 11.41618451612903,
+        "q4k_primitive_reduction": 0.8657496774193519,
+        "fallback_q4k_fused": 55.519958709677525,
+        "attention_misc": 1.8435741935483863,
+        "norm_sampling_misc": 2.4887393548386916,
+        "copy": 0.051210967741935495,
+        "other_amd": 6.498592258064579,
+        "residual_overhead": 149.60469999999975
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 5.000766149259214,
+        "q4k_primitive_reduction": 0.37923455725983524,
+        "fallback_q4k_fused": 24.32006330410704,
+        "attention_misc": 0.8075625799249673,
+        "norm_sampling_misc": 1.09017189608517,
+        "copy": 0.022432545093578456,
+        "other_amd": 2.846655126855523,
+        "residual_overhead": 65.53311384141463
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 14.508900299987125,
+        "q4k_primitive_reduction": 1.100286679553649,
+        "fallback_q4k_fused": 70.5606627538332,
+        "attention_misc": 2.343009972555386,
+        "norm_sampling_misc": 3.1629544109937493,
+        "copy": 0.06508433918388859,
+        "other_amd": 8.259101543892871,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "r_32_32_4_48_2_2_2_32",
+          1568.9501200000013
+        ],
+        [
+          "q4k_gemv_partial_12288_4096_1",
+          181.75572000000042
+        ],
+        [
+          "r_1187_32_4_16_2_2_2_32n1",
+          135.29304000000002
+        ],
+        [
+          "r_2_8_128_16_2_2_2_32",
+          132.78767999999997
+        ],
+        [
+          "q4k_gemv_partial_4096_4096_1",
+          123.65295999999985
+        ],
+        [
+          "r_2_8_128_16_4_2_32",
+          51.494920000000015
+        ],
+        [
+          "q4k_gemv_partial_4096_12288_4",
+          48.49304000000003
+        ],
+        [
+          "r_1024_16_4_2_32",
+          33.801719999999975
+        ],
+        [
+          "r_4_2_8_16_4_(start_pos+1)",
+          15.070520000000005
+        ],
+        [
+          "E_2_8_16_4_4",
+          14.653959999999994
+        ],
+        [
+          "r_16_256n1",
+          13.219759999999988
+        ],
+        [
+          "r_16_256",
+          12.814800000000027
+        ],
+        [
+          "r_2_(start_pos+1)_8_4_4_16",
+          12.751560000000005
+        ],
+        [
+          "r_8_4_(start_pos+1)n1",
+          12.660320000000013
+        ],
+        [
+          "r_2_8_4_4_16",
+          9.458279999999966
+        ],
+        [
+          "r_8_4_(start_pos+1)",
+          9.162240000000008
+        ],
+        [
+          "r_32_4_1187",
+          8.6742
+        ],
+        [
+          "E_(start_pos+1)_8_4",
+          7.506159999999989
+        ],
+        [
+          "r_8_16_8",
+          7.411759999999926
+        ],
+        [
+          "E_128_32_3",
+          7.358359999999968
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/q4k-profile-20260611/14b-baseline-debug2-jitbs1.log",
+    "model": "14B",
+    "mode": "baseline named",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 278.75709677419354,
+      "median_ms_tok": 274.83,
+      "tok_s": 3.5903225806451613,
+      "amd_kernel_ms_tok": 144.0980038709722,
+      "residual_ms_tok": 134.6590929032213,
+      "residual_pct": 48.30696490296051,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 136.44223354838707,
+        "attention_misc": 1.1220283870967693,
+        "norm_sampling_misc": 0.6548554838709686,
+        "copy": 0.05118580645161289,
+        "other_amd": 5.82770064516131,
+        "residual_overhead": 134.6590929032213
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 48.946640328555205,
+        "attention_misc": 0.40251114683034084,
+        "norm_sampling_misc": 0.23491975323642886,
+        "copy": 0.018362153661356226,
+        "other_amd": 2.0906017147545572,
+        "residual_overhead": 48.30696490296051
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 0.0,
+        "q4k_primitive_reduction": 0.0,
+        "fallback_q4k_fused": 94.68710869205361,
+        "attention_misc": 0.7786564400305312,
+        "norm_sampling_misc": 0.454451461005204,
+        "copy": 0.035521523599622885,
+        "other_amd": 4.044261883307927,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "r_40_32_4_68_2_2_2_32",
+          960.1646800000005
+        ],
+        [
+          "r_40_32_4_68_4_2_32",
+          738.3043200000003
+        ],
+        [
+          "r_136_32_4_20_4_2_32",
+          532.7907200000008
+        ],
+        [
+          "r_136_32_4_20_4_2_32n1",
+          527.2012399999995
+        ],
+        [
+          "r_40_32_4_20_4_2_32",
+          479.1856000000007
+        ],
+        [
+          "r_8_32_4_20_4_2_32",
+          448.66504000000026
+        ],
+        [
+          "r_40_32_4_20_4_2_32n1",
+          442.75632000000024
+        ],
+        [
+          "r_1187_32_4_20_2_2_2_32n1",
+          100.64131999999998
+        ],
+        [
+          "r_8_8_16_2_20_4_2_32",
+          78.42912
+        ],
+        [
+          "r_8_8_16_2_20_2_2_2_32",
+          75.70732000000007
+        ],
+        [
+          "E_5_2_2_16_4_4",
+          10.207679999999982
+        ],
+        [
+          "r_5_2_8_16_4_(start_pos+1)",
+          10.144480000000007
+        ],
+        [
+          "r_16_320n1",
+          8.930639999999997
+        ],
+        [
+          "r_16_320",
+          8.509360000000003
+        ],
+        [
+          "r_5_2_4_(start_pos+1)n1",
+          7.812639999999998
+        ],
+        [
+          "r_5_2_4_(start_pos+1)",
+          6.11960000000001
+        ],
+        [
+          "r_40_(start_pos+1)_16_8",
+          6.0833200000000085
+        ],
+        [
+          "r_32_4_1187",
+          5.400519999999999
+        ],
+        [
+          "E_5_(start_pos+1)_2_4",
+          4.6228400000000125
+        ],
+        [
+          "r_40_16_8",
+          4.463879999999973
+        ]
+      ]
+    }
+  },
+  {
+    "path": "bench/q4k-profile-20260611/14b-q4k-primitive-debug2-jitbs1.log",
+    "model": "14B",
+    "mode": "Q4K_PRIMITIVE=1 named",
+    "tokens": 32,
+    "summary": {
+      "samples": 31,
+      "wall_ms_tok": 316.79709677419356,
+      "median_ms_tok": 311.48,
+      "tok_s": 3.1606451612903226,
+      "amd_kernel_ms_tok": 143.72228000000302,
+      "residual_ms_tok": 173.07481677419054,
+      "residual_pct": 54.63270293084621,
+      "outlier_count": 0,
+      "outlier_max_ms": 0.0,
+      "bucket_ms_tok": {
+        "q4k_primitive_gemv": 20.212170322580604,
+        "q4k_primitive_reduction": 13.736950967742025,
+        "fallback_q4k_fused": 95.98691354838722,
+        "attention_misc": 1.9131316129032214,
+        "norm_sampling_misc": 1.8490683870967848,
+        "copy": 0.05067354838709677,
+        "other_amd": 9.97337161290331,
+        "residual_overhead": 173.07481677419054
+      },
+      "bucket_pct_wall": {
+        "q4k_primitive_gemv": 6.3801627377246515,
+        "q4k_primitive_reduction": 4.33619850295959,
+        "fallback_q4k_fused": 30.29917714706985,
+        "attention_misc": 0.6038980888347162,
+        "norm_sampling_misc": 0.5836759256713652,
+        "copy": 0.015995584840607244,
+        "other_amd": 3.1481890820521388,
+        "residual_overhead": 54.63270293084621
+      },
+      "bucket_pct_amd": {
+        "q4k_primitive_gemv": 14.063352127853925,
+        "q4k_primitive_reduction": 9.557982915204056,
+        "fallback_q4k_fused": 66.7863838149417,
+        "attention_misc": 1.3311308538266864,
+        "norm_sampling_misc": 1.2865565360476787,
+        "copy": 0.035257963057012245,
+        "other_amd": 6.9393357890670115,
+        "residual_overhead": 0.0
+      },
+      "top_kernels": [
+        [
+          "r_40_32_4_68_2_2_2_32",
+          2439.1061199999995
+        ],
+        [
+          "r_8_32_4_20_4_2_32",
+          808.0788800000007
+        ],
+        [
+          "q4k_gemv_partial_17408_5120_1",
+          356.33472000000023
+        ],
+        [
+          "q4k_gemv_partial_5120_5120_1",
+          161.16819999999993
+        ],
+        [
+          "r_1187_32_4_20_2_2_2_32n1",
+          142.93324
+        ],
+        [
+          "r_8_8_16_2_20_4_2_32",
+          134.95243999999988
+        ],
+        [
+          "r_8_8_16_2_20_2_2_2_32",
+          134.7370399999998
+        ],
+        [
+          "q4k_gemv_partial_5120_17408_4",
+          109.07436000000013
+        ],
+        [
+          "r_5_2_8_16_4_(start_pos+1)",
+          16.041920000000008
+        ],
+        [
+          "r_16_320n1",
+          15.871799999999975
+        ],
+        [
+          "E_5_2_2_16_4_4",
+          15.794119999999909
+        ],
+        [
+          "r_16_320",
+          14.67335999999999
+        ],
+        [
+          "r_5_2_4_(start_pos+1)n1",
+          13.885560000000009
+        ],
+        [
+          "r_5_2_4_(start_pos+1)",
+          10.737799999999998
+        ],
+        [
+          "r_40_(start_pos+1)_16_8",
+          10.316639999999998
+        ],
+        [
+          "E_136_32_4",
+          8.365159999999976
+        ],
+        [
+          "E_5_(start_pos+1)_2_4",
+          8.32516000000002
+        ],
+        [
+          "r_8_16_8",
+          7.97307999999992
+        ],
+        [
+          "r_40_16_8",
+          7.844559999999918
+        ],
+        [
+          "E_40_32_4n1",
+          7.712000000000031
+        ]
+      ]
+    }
+  }
+]
