@@ -1,6 +1,7 @@
 import argparse, json, pathlib, unittest
 from tempfile import TemporaryDirectory
 
+from extra.llm_eval_common import read_prompt_jsonl
 from extra.llm_rollout import _load_manifest, run_manifest, summarize_rollouts, summary_markdown
 
 
@@ -41,6 +42,31 @@ class TestLLMRollout(unittest.TestCase):
   def test_committed_qwen_rollout_summary_reproduces(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     out = repo / "bench/qwen-rollout-20260612/8b-generated"
+    rows = [json.loads(line) for line in (out / "rollouts.jsonl").read_text().splitlines()]
+    committed = json.loads((out / "summary.json").read_text())
+    args = argparse.Namespace(mode=committed["mode"], model=committed["model"], policy=committed["policy"],
+                              dataset=committed["dataset"], storage=committed["storage"],
+                              prompt_format=committed["prompt_format"], temperature=committed["temperature"],
+                              seed=committed["seed"])
+    summary = summarize_rollouts(args, rows)
+    self.assertEqual(committed, summary)
+    self.assertEqual((out / "summary.md").read_text(), summary_markdown(summary, rows))
+
+  def test_committed_qwen_small_dataset_is_scored(self):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    dataset = repo / "bench/qwen-rollout-20260612/dataset-small.jsonl"
+    rows = read_prompt_jsonl(dataset)
+    self.assertGreaterEqual(len(rows), 75)
+    self.assertEqual(len({row["id"] for row in rows}), len(rows))
+    for row in rows:
+      self.assertTrue(
+        any(key in row for key in ("expected_contains", "expected_regex", "expected_exact")),
+        row["id"],
+      )
+
+  def test_committed_qwen_small_rollout_summary_reproduces(self):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    out = repo / "bench/qwen-rollout-20260612/8b-generated-small"
     rows = [json.loads(line) for line in (out / "rollouts.jsonl").read_text().splitlines()]
     committed = json.loads((out / "summary.json").read_text())
     args = argparse.Namespace(mode=committed["mode"], model=committed["model"], policy=committed["policy"],

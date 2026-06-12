@@ -69,6 +69,11 @@ generated-policy storage mode.
       `bench/qwen-rollout-20260612/8b-generated/summary.md`, quality `pass`,
       `10/10`. This produces reusable JSONL completions for future eval,
       SFT/RLVR data generation, and compiler/search behavior gates.
+- [x] Scaled Track 1 rollout to a 75-prompt Qwen 8B generated-policy dataset:
+      `bench/qwen-rollout-20260612/dataset-small.jsonl` and
+      `bench/qwen-rollout-20260612/8b-generated-small/summary.md`, quality
+      `pass`, `75/75`, `608` generated tokens. Tests now enforce the dataset
+      size/scoring rules and committed summary reproducibility.
 
 ## Open But Not Urgent
 
@@ -87,7 +92,7 @@ generated-policy storage mode.
 
 ## Reasonable Resume Tracks
 
-1. Practical track: scale the rollout dataset or build a real SFT/RLVR loop on
+1. Practical track: build a real SFT/RLVR loop or offline judging pipeline on
    top of the validated rollout backend.
 2. Infrastructure track: keep shared storage explicit and run occasional soak
    checks before making any runtime-default change.

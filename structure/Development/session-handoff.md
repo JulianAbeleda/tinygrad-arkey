@@ -223,10 +223,17 @@ Current Qwen artifact:
 is model-agnostic; the artifact directory is Qwen-specific because the manifest
 pins Qwen models, Qwen policies, and `/no_think` prompts.
 
+Track 1.4 scaled the same Qwen3-8B generated-policy path to a 75-prompt small
+dataset at `bench/qwen-rollout-20260612/dataset-small.jsonl`. Current artifact:
+`bench/qwen-rollout-20260612/8b-generated-small/summary.md`, quality `pass`,
+`75/75`, `608` generated tokens. The dataset is a deterministic breadth gate
+across math, code, format, facts, reasoning, compiler/tinygrad, and instruction
+following; it is for rollout/eval plumbing, not a broad capability benchmark.
+
 When resuming, choose one track explicitly:
 
-1. Use the inference win: scale the rollout dataset, then build a real training
-   loop or RLVR/SFT pipeline on top of the validated rollout backend.
+1. Use the inference win: build a real training loop, offline judge, or
+   RLVR/SFT pipeline on top of the validated rollout backend.
 2. Compiler research: pursue the Ansor-style semantic packed-layout/codegen
    direction. Do not confuse this with more hand-written primitive tuning.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,

@@ -1,0 +1,75 @@
+{"id":"math_add_001","prompt":"Answer with digits only. /no_think\nWhat is 14 + 28?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"42"}
+{"id":"math_sub_002","prompt":"Answer with digits only. /no_think\nWhat is 100 - 37?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"63"}
+{"id":"math_mul_003","prompt":"Answer with digits only. /no_think\nWhat is 12 * 8?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"96"}
+{"id":"math_div_004","prompt":"Answer with digits only. /no_think\nWhat is 144 / 12?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"12"}
+{"id":"math_square_005","prompt":"Answer with digits only. /no_think\nWhat is 11 squared?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"121"}
+{"id":"math_half_006","prompt":"Answer with digits only. /no_think\nWhat is half of 50?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"25"}
+{"id":"math_percent_007","prompt":"Answer with digits only. /no_think\nWhat is 10 percent of 80?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"8"}
+{"id":"math_double_008","prompt":"Answer with digits only. /no_think\nGive the next number: 3, 6, 12, 24,","tags":["math_short","pattern"],"max_tokens":48,"expected_contains":"48"}
+{"id":"math_plus3_009","prompt":"Answer with digits only. /no_think\nGive the next number: 5, 8, 11, 14,","tags":["math_short","pattern"],"max_tokens":48,"expected_contains":"17"}
+{"id":"math_min_010","prompt":"Answer with digits only. /no_think\nWhich number is smaller: 19 or 27?","tags":["math_short","comparison"],"max_tokens":48,"expected_contains":"19"}
+{"id":"math_max_011","prompt":"Answer with digits only. /no_think\nWhat is 15 + 0?","tags":["math_short","comparison"],"max_tokens":48,"expected_contains":"15"}
+{"id":"math_mod_012","prompt":"Answer with digits only. /no_think\nWhat is 5 - 3?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"2"}
+{"id":"math_avg_013","prompt":"Answer with digits only. /no_think\nWhat is the average of 4, 6, and 8?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"6"}
+{"id":"math_order_014","prompt":"Answer with digits only. /no_think\nWhat is 2 + 12?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"14"}
+{"id":"math_negative_015","prompt":"Answer with digits only. /no_think\nWhat is -3 + 10?","tags":["math_short","math"],"max_tokens":48,"expected_contains":"7"}
+{"id":"code_len_001","prompt":"Answer with the Python token only. /no_think\nWhat built-in function returns the length of a list?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"len"}
+{"id":"code_append_002","prompt":"Answer with the Python method name only. /no_think\nWhat list method adds one item to the end?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"append"}
+{"id":"code_loop_003","prompt":"Answer with one Python keyword. /no_think\nWhich keyword starts a for-loop?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"for"}
+{"id":"code_dict_004","prompt":"Answer with one Python word. /no_think\nWhat data type stores key-value pairs?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"dict"}
+{"id":"code_import_005","prompt":"Answer with one Python keyword. /no_think\nWhich keyword loads a module?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"import"}
+{"id":"code_comment_006","prompt":"Answer with the symbol only. /no_think\nWhat character starts a single-line comment in Python?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"#"}
+{"id":"code_equal_007","prompt":"Answer with the Python operator only. /no_think\nWhat operator tests equality?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"=="}
+{"id":"code_true_008","prompt":"Answer with the Python boolean literal only. /no_think\nWhat is the true boolean value in Python?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"True"}
+{"id":"code_print_009","prompt":"Answer with the Python function name only. /no_think\nWhat function writes text to standard output?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"print"}
+{"id":"code_index_010","prompt":"Answer with digits only. /no_think\nPython list indexing starts at what number?","tags":["code_short","code"],"max_tokens":48,"expected_contains":"0"}
+{"id":"format_json_001","prompt":"Return JSON with exactly one key result and value ok. /no_think","tags":["format_following","format","json"],"max_tokens":48,"expected_contains":["\"result\"","ok"]}
+{"id":"format_oneword_002","prompt":"Reply with one word only: banana. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":"banana"}
+{"id":"format_csv_003","prompt":"Return only this CSV header: name,age. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":["name","age"]}
+{"id":"format_heading_004","prompt":"Return a Markdown heading that says Done. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":["#","Done"]}
+{"id":"format_yaml_005","prompt":"Return YAML with status set to pass. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":["status","pass"]}
+{"id":"format_letters_006","prompt":"Reply with exactly these three letters: AMD. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":"AMD"}
+{"id":"format_lower_007","prompt":"Reply with the lowercase word green. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":"green"}
+{"id":"format_bullets_008","prompt":"Return two bullet items named alpha and beta. /no_think","tags":["format_following","format"],"max_tokens":64,"expected_contains":["alpha","beta"]}
+{"id":"format_quote_009","prompt":"Reply with the phrase search works. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":"search works"}
+{"id":"format_colon_010","prompt":"Reply in the form answer: ready. /no_think","tags":["format_following","format"],"max_tokens":48,"expected_contains":["answer","ready"]}
+{"id":"fact_capital_france_001","prompt":"Answer with no reasoning. /no_think\nWhat is the capital of France?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"Paris"}
+{"id":"fact_capital_japan_002","prompt":"Answer with no reasoning. /no_think\nWhat is the capital of Japan?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"Tokyo"}
+{"id":"fact_water_003","prompt":"Answer with no reasoning. /no_think\nWhat is the chemical formula for water?","tags":["facts_short","facts"],"max_tokens":48,"expected_regex":"H.*O"}
+{"id":"fact_red_planet_004","prompt":"Answer with no reasoning. /no_think\nWhich planet is called the Red Planet?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"Mars"}
+{"id":"fact_ocean_005","prompt":"Answer with no reasoning. /no_think\nWhat is the largest ocean on Earth?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"Pacific"}
+{"id":"fact_hamlet_006","prompt":"Answer with no reasoning. /no_think\nWho wrote Hamlet?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"Shakespeare"}
+{"id":"fact_freezing_007","prompt":"Answer with no reasoning. /no_think\nAt what Celsius temperature does water freeze?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"0"}
+{"id":"fact_egg_mammal_008","prompt":"Answer with no reasoning. /no_think\nName a mammal that lays eggs.","tags":["facts_short","facts"],"max_tokens":48,"expected_regex":"platypus|echidna"}
+{"id":"fact_us_currency_009","prompt":"Answer with no reasoning. /no_think\nWhat is the currency of the United States?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"dollar"}
+{"id":"fact_egypt_010","prompt":"Answer with no reasoning. /no_think\nEgypt is on which continent?","tags":["facts_short","facts"],"max_tokens":48,"expected_contains":"Africa"}
+{"id":"reason_alpha_001","prompt":"Answer with no reasoning. /no_think\nWhich word comes first alphabetically: banana, apple, cherry?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"apple"}
+{"id":"reason_days_002","prompt":"Answer with no reasoning. /no_think\nTwo days after Monday is which day?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"Wednesday"}
+{"id":"reason_opposite_003","prompt":"Answer with no reasoning. /no_think\nWhat is the opposite direction of north?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"south"}
+{"id":"reason_mammal_004","prompt":"Answer with yes or no. /no_think\nIf all cats are mammals and Luna is a cat, is Luna a mammal?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"yes"}
+{"id":"reason_heavier_005","prompt":"Answer with no reasoning. /no_think\nWhich is heavier: 1 kilogram or 1 gram?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"kilogram"}
+{"id":"reason_warmest_006","prompt":"Answer with no reasoning. /no_think\nWhich is warmest: ice, liquid water, or steam?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"steam"}
+{"id":"reason_month_007","prompt":"Answer with no reasoning. /no_think\nWhat is the first month of the year?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"January"}
+{"id":"reason_last_letter_008","prompt":"Answer with one letter only. /no_think\nWhat is the last letter of tinygrad?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"d"}
+{"id":"reason_sort_009","prompt":"Answer with the sorted numbers only. /no_think\nSort these numbers ascending: 3, 1, 2.","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_regex":"1\\D+2\\D+3"}
+{"id":"reason_mix_010","prompt":"Answer with no reasoning. /no_think\nMixing red and blue paint usually makes what color?","tags":["reasoning_short","reasoning"],"max_tokens":48,"expected_contains":"purple"}
+{"id":"compiler_jit_001","prompt":"Answer in one short phrase. /no_think\nWhat does JIT stand for in compiler/runtime systems?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"just.?in.?time|just in time"}
+{"id":"compiler_matvec_002","prompt":"Answer in one short phrase. /no_think\nIn ML inference, what operation multiplies a matrix by a vector?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"matvec|matrix.*vector|matrix-vector"}
+{"id":"compiler_gemv_003","prompt":"Answer in one short sentence. /no_think\nWhat does GEMV multiply?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_contains":["matrix","vector"]}
+{"id":"compiler_tensor_004","prompt":"Answer in one short sentence. /no_think\nWhat kind of data object does tinygrad mainly operate on?","tags":["compiler_tinygrad","tinygrad"],"max_tokens":64,"expected_contains":"tensor"}
+{"id":"compiler_pass_005","prompt":"Answer in one short sentence. /no_think\nWhat does a compiler optimization pass try to improve?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"performance|faster|efficient|memory|speed"}
+{"id":"compiler_quant_006","prompt":"Answer in one short sentence. /no_think\nWhat does quantization usually do to model weights?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"bit|precision|smaller|compress|reduce"}
+{"id":"compiler_dequant_007","prompt":"Answer in one short sentence. /no_think\nWhat does dequantization convert quantized values back toward?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"float|real|higher.*precision|scale|continuous|range"}
+{"id":"compiler_gpu_008","prompt":"Answer in one short phrase. /no_think\nWhat does GPU stand for?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"graphics.*processing.*unit"}
+{"id":"compiler_kernel_009","prompt":"Answer in one short sentence. /no_think\nIn GPU programming, what is a kernel?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"function|program|code"}
+{"id":"compiler_bandwidth_010","prompt":"Answer in one short sentence. /no_think\nWhat does memory bandwidth measure?","tags":["compiler_tinygrad","compiler"],"max_tokens":64,"expected_regex":"data|bytes|memory|transfer"}
+{"id":"instr_even_001","prompt":"Answer yes or no only. /no_think\nIs 2 an even number?","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"yes"}
+{"id":"instr_upper_002","prompt":"Return the uppercase of cat. /no_think","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"CAT"}
+{"id":"instr_lower_003","prompt":"Return the lowercase of DOG. /no_think","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"dog"}
+{"id":"instr_repeat_004","prompt":"Repeat the word hi twice separated by one space. /no_think","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"hi hi"}
+{"id":"instr_option_005","prompt":"Answer with the second option only. /no_think\nOptions: red, blue, green.","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"blue"}
+{"id":"instr_vowels_006","prompt":"Answer with one digit only. /no_think\nHow many vowels are in the word cat?","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"1"}
+{"id":"instr_initials_007","prompt":"Answer with two uppercase letters and no space. /no_think\nTake the first letters of Alpha Beta.","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"AB"}
+{"id":"instr_final_word_008","prompt":"Answer with the final word only. /no_think\nload store compute","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"compute"}
+{"id":"instr_underscore_009","prompt":"Replace the space with an underscore and return only the result. /no_think\namd gpu","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"amd_gpu"}
+{"id":"instr_ok_010","prompt":"Reply with exactly OK. /no_think","tags":["instruction_following","instruction"],"max_tokens":48,"expected_contains":"OK"}
