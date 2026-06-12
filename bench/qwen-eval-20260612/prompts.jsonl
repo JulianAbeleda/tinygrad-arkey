@@ -1,0 +1,3 @@
+{"id":"math_sum","prompt":"Give only the final number. What is 17 + 25?"}
+{"id":"compiler_short","prompt":"In one short sentence, what does a compiler optimization pass do?"}
+{"id":"sequence_next","prompt":"Give only the next number in the sequence: 2, 4, 8, 16,"}

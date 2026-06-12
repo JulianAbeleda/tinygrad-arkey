@@ -47,6 +47,14 @@ generated-policy storage mode.
 - [x] Regenerated current matrix at
       `bench/qk-shared-storage-20260612/matrix-summary.md`.
 - [x] Fetched remote refs with `git fetch --all --prune`.
+- [x] Added Track 1 smallest-real Qwen eval/rollout gate:
+      `extra/qwen_eval_harness.py` compares explicit Q4/Q6 primitives against
+      a pinned generated policy on fixed prompts with exact greedy-token parity.
+- [x] Ran Track 1 on 8B shared storage:
+      `bench/qwen-eval-20260612/8b-shared/README.md`, status `pass`,
+      3/3 prompts exact token parity. This validates the faster inference path
+      as a deterministic rollout/eval backend, not a tinygrad LLM training
+      implementation.
 
 ## Open But Not Urgent
 
@@ -65,7 +73,8 @@ generated-policy storage mode.
 
 ## Reasonable Resume Tracks
 
-1. Practical track: use the speedup for a smallest-real training/eval run.
+1. Practical track: decide whether to build a real SFT/RLVR training loop on
+   top of the validated eval/rollout backend, or stop at inference/eval.
 2. Infrastructure track: keep shared storage explicit and run occasional soak
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen

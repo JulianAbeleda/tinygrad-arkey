@@ -202,10 +202,20 @@ PYTHONPATH=. .venv/bin/python -m unittest \
 The clean default is to pause here. The project now has a consolidated local
 inference result and a third scaling point.
 
+Track 1 has also started: `extra/qwen_eval_harness.py` is the smallest-real
+Qwen rollout/eval gate. Current artifact:
+`bench/qwen-eval-20260612/8b-shared/README.md`. It compares explicit Q4/Q6
+primitive flags against
+`bench/qk-shared-storage-20260612/8b/policy.json` using
+`QK_PRIMITIVE_STORAGE=shared`, fixed prompts, greedy decoding, and exact token
+parity. The 8B run passed on 3/3 prompts. Treat the timings in that harness as
+sanity data only; the first prompt includes session/JIT effects, and canonical
+decode speed still comes from the QK harness matrix.
+
 When resuming, choose one track explicitly:
 
-1. Use the inference win: validate a smallest-real training/eval stack using the
-   faster decode path.
+1. Use the inference win: build a real training loop or RLVR/SFT rollout
+   pipeline on top of the validated eval backend.
 2. Compiler research: pursue the Ansor-style semantic packed-layout/codegen
    direction. Do not confuse this with more hand-written primitive tuning.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,

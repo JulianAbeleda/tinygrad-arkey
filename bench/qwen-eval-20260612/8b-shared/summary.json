@@ -1,0 +1,47 @@
+{
+  "kind": "qwen_eval_summary",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "modes": {
+    "explicit": {
+      "elapsed_s": 26.655634,
+      "generated": 48,
+      "tok_s": 1.8007450227558655
+    },
+    "generated": {
+      "elapsed_s": 27.65095,
+      "generated": 48,
+      "tok_s": 1.7359258853458768
+    }
+  },
+  "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "prompt_rows": [
+    {
+      "explicit_generated": 16,
+      "explicit_tok_s": 2.2965667126976137,
+      "generated_generated": 16,
+      "generated_tok_s": 2.193936854152677,
+      "id": "compiler_short",
+      "tokens_match": true
+    },
+    {
+      "explicit_generated": 16,
+      "explicit_tok_s": 0.8445182779863456,
+      "generated_generated": 16,
+      "generated_tok_s": 0.8148449993482185,
+      "id": "math_sum",
+      "tokens_match": true
+    },
+    {
+      "explicit_generated": 16,
+      "explicit_tok_s": 21.941031960001297,
+      "generated_generated": 16,
+      "generated_tok_s": 22.588112595477646,
+      "id": "sequence_next",
+      "tokens_match": true
+    }
+  ],
+  "prompts": 3,
+  "status": "pass",
+  "storage": "shared",
+  "tokens_match": true
+}
