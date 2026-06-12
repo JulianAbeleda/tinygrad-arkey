@@ -1,6 +1,6 @@
 # AMD decode primitive v2 design
 
-Status: optional design scope, not implemented. Default recommendation is
+Status: optional design scope, partially probed. Default recommendation is
 consolidate v1 unless the goal is explicitly more kernel grind or scheduler
 research.
 
@@ -23,11 +23,13 @@ CUTLASS/AutoTVM path: write a richer template and sweep it. If the goal is
 "make the machine take over kernel-writing", v2 is not enough; that is an
 Ansor-style scheduler/codegen research project with different success metrics.
 
-The v2 hypothesis remains technically coherent: quantize the decode activation
-vector to a `q8_1`-style block format, then run `Q4_K x q8_1` and
-`Q6_K x q8_1` packed vector-dot kernels with first-class split/reduction
-parameters. The scope correction is economic: for one model family on one GPU,
-this is optional hand-template work, not the necessary next engineering step.
+The v2 hypothesis remains technically coherent but has a first negative probe:
+quantize the decode activation vector to a `q8_1`-style block format, then run
+packed vector-dot kernels with first-class split/reduction parameters. A first
+generated `Q4_K x q8_1` candidate is now correct but slower than v1 on the tested
+8B shapes, including pack cost. `Q6_K x q8_1` remains unimplemented. The scope
+correction is economic: for one model family on one GPU, this is optional
+hand-template work, not the necessary next engineering step.
 
 ## Scope decision
 
@@ -74,6 +76,18 @@ The Q4+Q6 profile and sweep in `bench/q4q6-profile-20260611/` found:
   changes were rejected by repeated 128-token decode gates.
 - Q6 ffn_down microbench best reaches only about `202-218 quant-GB/s` and
   about `0.49-0.53 dot TFLOP/s`, which points beyond simple load width.
+
+The Ansor-direction q8_1 probe in `bench/qk-ansor-20260612/8b-level2-q8-real.json`
+found:
+
+| tensor | v1 packed GB/s | Q4_K x q8_1 GB/s | result |
+|---|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 416.59 | 170.92 | reject q8_1 |
+| `blk.4.ffn_down.weight` | 269.20 | 150.17 | reject q8_1 |
+| `blk.0.attn_k.weight` | 51.55 | 36.44 | reject both; fused graph wins |
+
+All listed q8_1 runs passed correctness, so this is a performance rejection, not
+a semantic failure.
 
 ## What went wrong in v1 tuning
 
@@ -550,9 +564,10 @@ Optional v2 checklist, if explicitly reopening kernel work:
 
 1. Freeze current Q4+Q6 baseline in a fresh v2 bench directory.
 2. Centralize Q4_K/Q6_K layout helpers and preserve v1 behavior.
-3. Add q8_1 reference and activation pack correctness tests.
-4. Measure q8_1 pack overhead on dominant Qwen3 8B/14B decode shapes.
-5. Build one Q4_K x q8_1 and one Q6_K x q8_1 correctness-first microkernel.
+3. Add q8_1 reference and activation pack correctness tests. Done for Q4_K path.
+4. Measure q8_1 pack overhead on dominant Qwen3 8B/14B decode shapes. Done for
+   representative 8B Q4_K shapes; q8_1 lost including pack cost.
+5. Build one Q6_K x q8_1 correctness-first microkernel only if reopening v2.
 6. Add automated v2 sweep only after the microkernels pass correctness.
 7. Wire a v2 model flag only after a candidate beats v1 including pack and
    reduction cost.

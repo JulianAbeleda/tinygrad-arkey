@@ -5,7 +5,9 @@ Status: implemented research spike, opt-in only.
 Date: 2026-06-12
 
 Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
-The result is architecturally useful but not a new default runtime path.
+Follow-up work added policy parity diagnostics and the first runnable Q4_K x
+q8_1 level-2 candidate. The result remains architecturally useful but not a new
+default runtime path.
 
 ## Decision
 
@@ -37,8 +39,8 @@ This pass implemented the smallest useful Ansor-direction spike:
 - `QK_GENERATED_POLICY=/path/to/policy.json`: optional runtime policy consumer
   in `tinygrad/llm/model.py`, with no live search during model load.
 - `bench/qk-ansor-20260612/`: baseline logs, descriptor snapshots, generated
-  search reports, generated policy caches, runtime smoke/full decode logs, and
-  q8_1 sketch proof.
+  search reports, generated policy caches, runtime smoke/full decode logs,
+  policy parity reports, and q8_1 candidate proof.
 
 Generated level-0 search on Qwen3-8B reproduced the intended shape decisions:
 
@@ -57,15 +59,26 @@ Runtime policy consumption works but remains opt-in:
 | explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` rerun | 58.00 | current production path |
 | `QK_GENERATED_POLICY=...8b-level0-policy-full.json` rerun | 56.07 | installed 162 Q4 + 18 Q6 wrappers |
 
-The generated policy installs the right wrappers and explicitly keeps the small
-KV shape on `fused_graph`, but it was still about 3-5% slower in the full decode
-reruns. Treat that as unresolved runtime variance/path difference. It is not a
-reason to make generated policy the default.
+The generated policy installs the same effective wrapper set as the explicit
+policy. A full parity report over the real 8B model found `254/254` effective
+matches, `180` explicit installed wrappers, `180` generated installed wrappers,
+and `0` unsupported generated winners. The raw differences are fallback-reason
+differences only (`policy_fallback` vs measured `policy_fused` or unsearched
+`policy_missing`). That rules out a generated-policy coverage bug as the cause
+of the 56.07 vs 58.00 tok/s rerun difference.
 
-Level-2 generation now emits a `q8_1_*_sketch` candidate. The runner marks it
-`not-implemented`, so it is visible to the search report but cannot win a policy.
-That closes the "generated sketch exists" milestone without pretending there is
-a q8_1 lowering or speed result.
+Level-2 generation now includes a real Q4_K x q8_1 activation candidate. It
+passed correctness but lost to the existing v1 packed candidate on FFN shapes and
+lost to fused graph on the small KV shape:
+
+| tensor | fused GB/s | v1 packed GB/s | q8_1 packed GB/s | winner |
+|---|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 81.17 | 416.59 | 170.92 | `v1_q4_packed` |
+| `blk.4.ffn_down.weight` | 15.62 | 269.20 | 150.17 | `v1_q4_packed` |
+| `blk.0.attn_k.weight` | 111.71 | 51.55 | 36.44 | `fused_graph` |
+
+So q8_1 is rejected by the same generated search harness and is not a runtime
+integration candidate yet. Q6_K x q8_1 remains a sketch only.
 
 ## Core Integration Decision
 
@@ -81,9 +94,9 @@ Current decision:
 - keep `extra/qk_ansor.py` as the research harness;
 - keep `QK_GENERATED_POLICY` opt-in;
 - keep `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` as the faster/stabler runtime path;
-- defer core integration until a new structural candidate, such as q8_1
-  activation packing or fused partial reduction, is generated and accepted by
-  the same harness.
+- defer core integration until a new structural candidate, such as fused partial
+  reduction or a better q8_1 lowering, is generated and accepted by the same
+  harness.
 
 If core integration resumes, the likely order is:
 

@@ -52,6 +52,10 @@ Files:
   baseline comparison.
 - `8b-level2-q8-sketch.json`: level-2 run showing the generated q8_1 sketch is
   present but rejected as `not-implemented`.
+- `policy-parity-8b.{json,md}`: explicit primitive policy vs generated-policy
+  behavior comparison for every real Q4_K/Q6_K weight tensor.
+- `8b-level2-q8-real.json`: level-2 run with the first runnable Q4_K x q8_1
+  activation candidate.
 
 Level-0 generated search, Qwen3-8B:
 
@@ -76,3 +80,36 @@ The generated policy installed the same class of wrappers as the explicit path:
 falling back through `policy_fused`. The remaining 3-5% runtime gap is unresolved
 run variance or a subtle path difference, so `QK_GENERATED_POLICY` remains
 opt-in and does not replace the explicit primitive flags.
+
+Policy parity check:
+
+| check | value |
+|---|---:|
+| total Q4_K/Q6_K weight tensors | 254 |
+| effective mismatches | 0 |
+| explicit installed wrappers | 180 |
+| generated installed wrappers | 180 |
+| generated unsupported winners | 0 |
+
+The parity report rules out a generated-policy coverage bug as the cause of the
+56.07 vs 58.00 tok/s rerun difference. The raw differences are fallback-reason
+differences only: explicit policy uses `policy_fallback`, while the generated
+cache records either `policy_fused` for measured small Q4_K shapes or
+`policy_missing` for unsearched fallback shapes.
+
+## Runnable q8_1 Level-2 Candidate
+
+The first real structural q8_1 candidate was generated and timed for Q4_K. It
+packs the activation into 32-wide int8 blocks inside the candidate path, then
+runs a Q4_K x q8_1 custom kernel. Correctness compares against the centralized
+Q4_K reference and dequantized q8_1 activation reference.
+
+| tensor | shape | fused GB/s | v1 packed GB/s | q8_1 packed GB/s | winner |
+|---|---:|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 12288x4096 | 81.17 | 416.59 | 170.92 | `v1_q4_packed` |
+| `blk.4.ffn_down.weight` | 4096x12288 | 15.62 | 269.20 | 150.17 | `v1_q4_packed` |
+| `blk.0.attn_k.weight` | 1024x4096 | 111.71 | 51.55 | 36.44 | `fused_graph` |
+
+All q8_1 runs passed the GEMV correctness gate (`max_abs <= 0.001233` on the
+listed shapes), but q8_1 did not win any tested shape. It is therefore rejected
+by the generated policy and is not wired into `model.py`.
