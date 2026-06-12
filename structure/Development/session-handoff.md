@@ -203,13 +203,13 @@ The clean default is to pause here. The project now has a consolidated local
 inference result and a third scaling point.
 
 Track 1 has also started: `extra/qwen_eval_harness.py` is the smallest-real
-Qwen rollout/eval gate. Current artifact:
-`bench/qwen-eval-20260612/8b-shared/README.md`. It compares explicit Q4/Q6
-primitive flags against
-`bench/qk-shared-storage-20260612/8b/policy.json` using
-`QK_PRIMITIVE_STORAGE=shared`, fixed prompts, greedy decoding, and exact token
-parity. The 8B run passed on 3/3 prompts. Treat the timings in that harness as
-sanity data only; the first prompt includes session/JIT effects, and canonical
+Qwen rollout/eval gate, and `extra/qwen_eval_matrix.py` is the matrix source of
+truth. Current artifact: `bench/qwen-eval-20260612/matrix-summary.md`.
+It compares explicit Q4/Q6 primitive flags against pinned generated policies
+using `QK_PRIMITIVE_STORAGE=shared`, fixed prompts, greedy decoding, exact token
+parity, and separate answer-quality scoring. The enabled 8B and 14B rows both
+passed exact parity and scored `10/10`; 32B is listed in the manifest as an
+optional heavy row. Treat timings in this harness as sanity data only; canonical
 decode speed still comes from the QK harness matrix.
 
 When resuming, choose one track explicitly:

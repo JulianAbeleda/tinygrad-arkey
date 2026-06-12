@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, json, os, pathlib, subprocess, sys, time
+import argparse, json, os, pathlib, re, subprocess, sys, time
 from typing import Any
 
 DEFAULT_TIMEOUT = 1800.0
@@ -20,6 +20,20 @@ def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
     prompt_id, prompt = row.get("id"), row.get("prompt")
     if not isinstance(prompt_id, str) or not prompt_id: raise ValueError(f"{path}:{lineno}: missing string id")
     if not isinstance(prompt, str) or not prompt: raise ValueError(f"{path}:{lineno}: missing string prompt")
+    if "tags" in row and (not isinstance(row["tags"], list) or not all(isinstance(x, str) for x in row["tags"])):
+      raise ValueError(f"{path}:{lineno}: tags must be a list of strings")
+    for key in ("expected_contains", "expected_regex"):
+      if key not in row: continue
+      val = row[key]
+      if isinstance(val, str): vals = [val]
+      elif isinstance(val, list) and all(isinstance(x, str) for x in val): vals = val
+      else: raise ValueError(f"{path}:{lineno}: {key} must be a string or list of strings")
+      if key == "expected_regex":
+        for pattern in vals:
+          try: re.compile(pattern)
+          except re.error as exc: raise ValueError(f"{path}:{lineno}: invalid expected_regex {pattern!r}: {exc}") from exc
+    if "expected_exact" in row and not isinstance(row["expected_exact"], str):
+      raise ValueError(f"{path}:{lineno}: expected_exact must be a string")
     if prompt_id in seen: raise ValueError(f"{path}:{lineno}: duplicate id {prompt_id!r}")
     seen.add(prompt_id)
     rows.append(row)
@@ -85,6 +99,44 @@ def _run_mode(args:argparse.Namespace, mode:str) -> dict[str, Any]:
 def _as_prompt_map(data:dict[str, Any]) -> dict[str, dict[str, Any]]:
   return {row["id"]: row for row in data["results"]}
 
+def _as_str_list(val:Any) -> list[str]:
+  if val is None: return []
+  return [val] if isinstance(val, str) else list(val)
+
+def score_prompt(prompt:dict[str, Any], text:str) -> dict[str, Any]:
+  checks = []
+  lowered = text.lower()
+  for needle in _as_str_list(prompt.get("expected_contains")):
+    ok = needle.lower() in lowered
+    checks.append({"kind": "contains", "value": needle, "passed": ok})
+  for pattern in _as_str_list(prompt.get("expected_regex")):
+    ok = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE) is not None
+    checks.append({"kind": "regex", "value": pattern, "passed": ok})
+  if "expected_exact" in prompt:
+    expected = prompt["expected_exact"]
+    checks.append({"kind": "exact", "value": expected, "passed": text.strip() == expected})
+  if not checks: return {"status": "unscored", "passed": None, "checks": []}
+  passed = all(check["passed"] for check in checks)
+  return {"status": "pass" if passed else "fail", "passed": passed, "checks": checks}
+
+def quality_summary(rows:list[dict[str, Any]]) -> dict[str, Any]:
+  scored = [row for row in rows if row.get("score", {}).get("status") in ("pass", "fail")]
+  passed = [row for row in scored if row.get("score", {}).get("passed") is True]
+  tag_counts: dict[str, dict[str, int]] = {}
+  for row in scored:
+    tags = row.get("tags") or ["untagged"]
+    for tag in tags:
+      cur = tag_counts.setdefault(tag, {"scored": 0, "passed": 0})
+      cur["scored"] += 1
+      if row.get("score", {}).get("passed") is True: cur["passed"] += 1
+  return {
+    "status": "unscored" if not scored else ("pass" if len(scored) == len(passed) else "fail"),
+    "scored": len(scored),
+    "passed": len(passed),
+    "pass_rate": None if not scored else len(passed) / len(scored),
+    "tags": {k: {"scored": v["scored"], "passed": v["passed"], "pass_rate": v["passed"] / v["scored"]} for k, v in sorted(tag_counts.items())},
+  }
+
 def summarize_results(explicit:dict[str, Any], generated:dict[str, Any]) -> dict[str, Any]:
   explicit_rows, generated_rows = _as_prompt_map(explicit), _as_prompt_map(generated)
   if set(explicit_rows) != set(generated_rows):
@@ -99,6 +151,9 @@ def summarize_results(explicit:dict[str, Any], generated:dict[str, Any]) -> dict
       "generated_generated": rhs["generated"],
       "explicit_tok_s": lhs["tok_s"],
       "generated_tok_s": rhs["tok_s"],
+      "tags": rhs.get("tags", []),
+      "explicit_score": lhs.get("score", {"status": "unscored", "passed": None, "checks": []}),
+      "generated_score": rhs.get("score", {"status": "unscored", "passed": None, "checks": []}),
     })
   modes = {
     "explicit": {"generated": explicit["generated"], "elapsed_s": explicit["elapsed_s"], "tok_s": explicit["tok_s"]},
@@ -113,6 +168,7 @@ def summarize_results(explicit:dict[str, Any], generated:dict[str, Any]) -> dict
     "policy": generated.get("policy"),
     "storage": generated.get("storage") or explicit.get("storage"),
     "prompts": len(prompt_rows),
+    "quality": quality_summary(generated["results"]),
     "modes": modes,
     "prompt_rows": prompt_rows,
   }
@@ -138,6 +194,8 @@ def summary_markdown(summary:dict[str, Any], explicit:dict[str, Any], generated:
     f"- storage: `{summary.get('storage')}`",
     f"- prompts: `{summary['prompts']}`",
     f"- token parity: `{summary['tokens_match']}`",
+    f"- quality status: `{summary['quality']['status']}`",
+    f"- quality score: `{summary['quality']['passed']}/{summary['quality']['scored']}`",
     "- timing note: this harness is a rollout correctness gate; first-prompt",
     "  timings include session/JIT effects and are not the canonical decode benchmark.",
     "",
@@ -150,15 +208,20 @@ def summary_markdown(summary:dict[str, Any], explicit:dict[str, Any], generated:
     "",
     "## Prompt Outputs",
     "",
-    "| id | token match | explicit tok/s | generated tok/s | explicit text | generated text |",
-    "|---|---:|---:|---:|---|---|",
+    "| id | tags | token match | quality | explicit tok/s | generated tok/s | generated text |",
+    "|---|---|---:|---:|---:|---:|---|",
   ]
   for row in summary["prompt_rows"]:
     prompt_id = row["id"]
+    quality = row["generated_score"]["status"]
+    tags = ",".join(row.get("tags") or [])
     lines.append(
-      f"| `{prompt_id}` | `{row['tokens_match']}` | {row['explicit_tok_s']:.2f} | {row['generated_tok_s']:.2f} | "
-      f"{_md_text(explicit_rows[prompt_id]['text'])} | {_md_text(generated_rows[prompt_id]['text'])} |"
+      f"| `{prompt_id}` | `{tags}` | `{row['tokens_match']}` | `{quality}` | "
+      f"{row['explicit_tok_s']:.2f} | {row['generated_tok_s']:.2f} | {_md_text(generated_rows[prompt_id]['text'])} |"
     )
+  lines += ["", "## Quality By Tag", "", "| tag | passed | scored | pass rate |", "|---|---:|---:|---:|"]
+  for tag, row in summary["quality"]["tags"].items():
+    lines.append(f"| `{tag}` | {row['passed']} | {row['scored']} | {row['pass_rate']:.2f} |")
   lines += [
     "",
     "## Training Readiness Verdict",
@@ -201,8 +264,10 @@ def run_child(args:argparse.Namespace) -> None:
       if len(out) >= args.tokens: break
     elapsed = time.perf_counter() - st
     total_tokens += len(out)
+    text = tok.decode(out)
     results.append({
-      "id": prompt["id"], "prompt": prompt["prompt"], "tokens": out, "text": tok.decode(out),
+      "id": prompt["id"], "prompt": prompt["prompt"], "tokens": out, "text": text,
+      "tags": prompt.get("tags", []), "score": score_prompt(prompt, text),
       "prompt_len": len(prompt_ids), "generated": len(out), "elapsed_s": round(elapsed, 6),
       "tok_s": 0.0 if elapsed == 0 else len(out) / elapsed,
     })

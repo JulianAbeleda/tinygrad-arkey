@@ -1,3 +1,10 @@
-{"id":"math_sum","prompt":"Give only the final number. What is 17 + 25?"}
-{"id":"compiler_short","prompt":"In one short sentence, what does a compiler optimization pass do?"}
-{"id":"sequence_next","prompt":"Give only the next number in the sequence: 2, 4, 8, 16,"}
+{"id":"math_sum","prompt":"Answer with no reasoning. /no_think\nWhat is 17 + 25?","tags":["math","short"],"expected_contains":"42"}
+{"id":"math_product","prompt":"Answer with no reasoning. /no_think\nWhat is 9 * 7?","tags":["math","short"],"expected_contains":"63"}
+{"id":"sequence_next","prompt":"Answer with no reasoning. /no_think\nGive the next number: 2, 4, 8, 16,","tags":["math","pattern"],"expected_contains":"32"}
+{"id":"capital_france","prompt":"Answer with no reasoning. /no_think\nWhat is the capital of France?","tags":["facts","short"],"expected_contains":"Paris"}
+{"id":"python_len","prompt":"Answer with no reasoning. /no_think\nIn Python, what built-in function returns the length of a list?","tags":["code","short"],"expected_contains":"len"}
+{"id":"json_ok","prompt":"Answer with no reasoning. /no_think\nReturn valid JSON with exactly one key named result and value ok.","tags":["format","json"],"expected_contains":["\"result\"","ok"]}
+{"id":"compiler_short","prompt":"Answer in one short sentence with no reasoning. /no_think\nWhat does a compiler optimization pass do?","tags":["compiler","explain"],"expected_regex":["code|program","efficien|performance|faster|resource"]}
+{"id":"tinygrad_short","prompt":"Answer in one short sentence with no reasoning. /no_think\nWhat is tinygrad?","tags":["tinygrad","explain"],"expected_regex":"tensor|neural|machine learning|deep learning"}
+{"id":"alphabetical_first","prompt":"Answer with no reasoning. /no_think\nWhich word comes first alphabetically: banana, apple, cherry?","tags":["instruction","short"],"expected_contains":"apple"}
+{"id":"exact_letters","prompt":"Answer with no reasoning. /no_think\nReply with exactly these three letters: AMD","tags":["instruction","format"],"expected_contains":"AMD"}

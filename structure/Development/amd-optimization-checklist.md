@@ -49,12 +49,17 @@ generated-policy storage mode.
 - [x] Fetched remote refs with `git fetch --all --prune`.
 - [x] Added Track 1 smallest-real Qwen eval/rollout gate:
       `extra/qwen_eval_harness.py` compares explicit Q4/Q6 primitives against
-      a pinned generated policy on fixed prompts with exact greedy-token parity.
-- [x] Ran Track 1 on 8B shared storage:
-      `bench/qwen-eval-20260612/8b-shared/README.md`, status `pass`,
-      3/3 prompts exact token parity. This validates the faster inference path
-      as a deterministic rollout/eval backend, not a tinygrad LLM training
-      implementation.
+      a pinned generated policy on fixed prompts with exact greedy-token parity
+      and separate answer-quality scoring.
+- [x] Added Track 1 Qwen eval matrix source of truth:
+      `extra/qwen_eval_matrix.py`,
+      `bench/qwen-eval-20260612/manifest.json`, and
+      `bench/qwen-eval-20260612/matrix-summary.md`.
+- [x] Ran Track 1 matrix on 8B and 14B shared storage:
+      both rows pass exact parity and score `10/10` on the small prompt suite.
+      This validates the faster inference path as a deterministic rollout/eval
+      backend, not a tinygrad LLM training implementation. The 32B row is
+      recorded in the manifest but disabled as an optional heavy run.
 
 ## Open But Not Urgent
 

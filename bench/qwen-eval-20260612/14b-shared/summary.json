@@ -1,19 +1,19 @@
 {
   "kind": "qwen_eval_summary",
-  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
   "modes": {
     "explicit": {
-      "elapsed_s": 30.692201,
-      "generated": 109,
-      "tok_s": 3.551390816535194
+      "elapsed_s": 39.910079,
+      "generated": 103,
+      "tok_s": 2.5808016960222373
     },
     "generated": {
-      "elapsed_s": 30.537392,
-      "generated": 109,
-      "tok_s": 3.5693945439948456
+      "elapsed_s": 37.756488,
+      "generated": 103,
+      "tok_s": 2.7280079759131115
     }
   },
-  "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "policy": "bench/qk-shared-storage-20260612/14b/policy.json",
   "prompt_rows": [
     {
       "explicit_generated": 5,
@@ -28,7 +28,7 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 9.231009276780691,
+      "explicit_tok_s": 5.4168184779506126,
       "generated_generated": 5,
       "generated_score": {
         "checks": [
@@ -41,7 +41,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 9.594786104204637,
+      "generated_tok_s": 5.876256677394071,
       "id": "alphabetical_first",
       "tags": [
         "instruction",
@@ -62,7 +62,7 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 17.523130809774255,
+      "explicit_tok_s": 9.609258220516331,
       "generated_generated": 6,
       "generated_score": {
         "checks": [
@@ -75,7 +75,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 18.159843230742695,
+      "generated_tok_s": 11.620569690453628,
       "id": "capital_france",
       "tags": [
         "facts",
@@ -84,7 +84,7 @@
       "tokens_match": true
     },
     {
-      "explicit_generated": 29,
+      "explicit_generated": 18,
       "explicit_score": {
         "checks": [
           {
@@ -101,8 +101,8 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 27.601636348861955,
-      "generated_generated": 29,
+      "explicit_tok_s": 12.531088054336564,
+      "generated_generated": 18,
       "generated_score": {
         "checks": [
           {
@@ -119,7 +119,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 30.68321077069254,
+      "generated_tok_s": 16.21655509838449,
       "id": "compiler_short",
       "tags": [
         "compiler",
@@ -140,7 +140,7 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 15.085253540800782,
+      "explicit_tok_s": 8.46211415856366,
       "generated_generated": 5,
       "generated_score": {
         "checks": [
@@ -153,7 +153,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 15.377781687249009,
+      "generated_tok_s": 9.776006508104839,
       "id": "exact_letters",
       "tags": [
         "instruction",
@@ -162,7 +162,7 @@
       "tokens_match": true
     },
     {
-      "explicit_generated": 13,
+      "explicit_generated": 10,
       "explicit_score": {
         "checks": [
           {
@@ -179,8 +179,8 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 23.698529878613282,
-      "generated_generated": 13,
+      "explicit_tok_s": 10.859424144120295,
+      "generated_generated": 10,
       "generated_score": {
         "checks": [
           {
@@ -197,7 +197,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 24.089168213419292,
+      "generated_tok_s": 13.492723068858396,
       "id": "json_ok",
       "tags": [
         "format",
@@ -218,7 +218,7 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 0.873298454375096,
+      "explicit_tok_s": 0.6662766358016728,
       "generated_generated": 6,
       "generated_score": {
         "checks": [
@@ -231,7 +231,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 0.8680031239971262,
+      "generated_tok_s": 0.6779362419355891,
       "id": "math_product",
       "tags": [
         "math",
@@ -240,7 +240,7 @@
       "tokens_match": true
     },
     {
-      "explicit_generated": 6,
+      "explicit_generated": 7,
       "explicit_score": {
         "checks": [
           {
@@ -252,8 +252,8 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 0.3106481996605265,
-      "generated_generated": 6,
+      "explicit_tok_s": 0.3048064345883269,
+      "generated_generated": 7,
       "generated_score": {
         "checks": [
           {
@@ -265,7 +265,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 0.311119701176881,
+      "generated_tok_s": 0.3121105559583131,
       "id": "math_sum",
       "tags": [
         "math",
@@ -274,7 +274,7 @@
       "tokens_match": true
     },
     {
-      "explicit_generated": 6,
+      "explicit_generated": 20,
       "explicit_score": {
         "checks": [
           {
@@ -286,8 +286,8 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 13.803069327636996,
-      "generated_generated": 6,
+      "explicit_tok_s": 14.816371488682416,
+      "generated_generated": 20,
       "generated_score": {
         "checks": [
           {
@@ -299,7 +299,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 13.689168640055154,
+      "generated_tok_s": 19.24703162171313,
       "id": "python_len",
       "tags": [
         "code",
@@ -320,7 +320,7 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 12.22823217647333,
+      "explicit_tok_s": 6.770104544004801,
       "generated_generated": 6,
       "generated_score": {
         "checks": [
@@ -333,7 +333,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 12.196786391028814,
+      "generated_tok_s": 7.615694034964275,
       "id": "sequence_next",
       "tags": [
         "math",
@@ -342,7 +342,7 @@
       "tokens_match": true
     },
     {
-      "explicit_generated": 27,
+      "explicit_generated": 20,
       "explicit_score": {
         "checks": [
           {
@@ -354,8 +354,8 @@
         "passed": true,
         "status": "pass"
       },
-      "explicit_tok_s": 37.84667247160057,
-      "generated_generated": 27,
+      "explicit_tok_s": 17.32634423711462,
+      "generated_generated": 20,
       "generated_score": {
         "checks": [
           {
@@ -367,7 +367,7 @@
         "passed": true,
         "status": "pass"
       },
-      "generated_tok_s": 38.87872495820653,
+      "generated_tok_s": 22.877098563302926,
       "id": "tinygrad_short",
       "tags": [
         "tinygrad",
