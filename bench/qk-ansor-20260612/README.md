@@ -171,3 +171,50 @@ not q8_1 representation or algebra. Another q8_1 candidate built from the same
 generic scalar loops is not justified. The next q8_1 experiment must first prove
 that tinygrad's AMD path can emit a real RDNA3 packed-dot operation and pack the
 Q4/Q8 lanes in the form that operation expects.
+
+## AMD vdot Smoke and Generated Candidate
+
+Files:
+
+- `extra/amd_vdot_smoke.py`: standalone compiler/on-device smoke.
+- `8b-level2-q8-vdot-gate.json`: generated level-2 run including the first
+  `q8_1_q4_vdot` candidate.
+- `q8-vdot-gate-debug4.log`: generated-code dump for the vdot candidate.
+
+The instruction smoke passed on `gfx1100`:
+
+```text
+instruction_smoke: PASS arch=gfx1100 line=v_dot4_u32_u8 ...
+group_correctness: PASS seed=1337 dot=2844 q8_sum=-58 q4_sum=219
+```
+
+Important signedness result: the usable RDNA3 path here is unsigned byte dot.
+The q8_1 signed activation is handled by biasing q8 by `+128` and correcting:
+
+```text
+sum(q4 * q8) = udot(q4, q8 + 128) - 128 * sum(q4)
+sum(q8)      = sum(q8 + 128) - 128 * 32
+```
+
+That proves the instruction path and the q8_1 algebra are compatible.
+
+The generated-code dump confirms the full candidate path contains inline
+`v_dot4_u32_u8` calls in `q4k_q8_1_vdot_partial_64_4096_1`.
+
+The first full generated candidate, `q8_1_q4_vdot`, was then added to
+`extra/qk_ansor.py` level 2 and run once on the 8B FFN gate shape. This was a
+gate run, not a policy benchmark. It passed the same correctness gate as the
+scalar int-dot candidate (`max_abs=0.00122976`) but lost badly on performance:
+
+| tensor | candidate | correctness | Q4-GB/s | verdict |
+|---|---|---:|---:|---|
+| `blk.0.ffn_gate.weight` | `q8_1_q4_vdot` | `0.00122976` | `21.37` | reject |
+
+The reason is structural, not instruction correctness. This first vdot candidate
+uses an inline custom C statement with one work item per output row and loops
+through K inside that work item. It emits packed dot but throws away the
+parallel row/local schedule that made v1 fast. So it is a valid generated
+candidate and a useful rejection, not a speed candidate.
+
+Next implication: packed-dot has to be exposed inside a parallel schedule or
+renderer lowering. A serial custom-C loop around `v_dot4` is the wrong shape.

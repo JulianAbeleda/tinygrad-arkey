@@ -144,6 +144,24 @@ representation and algebra questions have already been answered; the remaining
 unknown is whether tinygrad's AMD renderer/compiler path can expose the packed
 dot operation in a usable form.
 
+Update after the smoke: the compiler can expose a packed dot operation, but the
+first generated full candidate is not a win.
+
+- `extra/amd_vdot_smoke.py` compiles and disassembles a real
+  `v_dot4_u32_u8` instruction on `gfx1100`.
+- A one-group on-device harness proves the biased-q8 identity exactly:
+  `sum(q4*q8) = udot(q4, q8+128) - 128*sum(q4)`.
+- `extra/qk_ansor.py` now emits `q8_1_q4_vdot` at level 2.
+- On `blk.0.ffn_gate.weight`, the candidate passes correctness
+  (`max_abs=0.00122976`) but reaches only `21.37 Q4-GB/s` in the recorded
+  generated run.
+
+This does not falsify the packed-dot hypothesis. It rejects the naive integration
+shape: the candidate puts the K loop inside a serial custom C statement with one
+work item per row. The instruction is present, but the schedule is wrong. The
+next search-facing version must expose the packed dot inside a parallel UOp or
+renderer lowering so the existing row/local/split schedule can still operate.
+
 Renderer/core scope:
 
 - `tinygrad/runtime/support/compiler_amd.py` already has the low-level AMD HIP
@@ -161,11 +179,12 @@ Renderer/core scope:
   the extra-only candidate proves correctness and speed, because otherwise it
   turns into another hand-authored template knob without evidence.
 
-So the scoped order is: AMD compiler smoke -> `extra/` packed-dot helper ->
-generated q8 candidate -> optional AMD renderer matcher -> optional core op or
-search action. This preserves the Ansor direction: the candidate is still
-generated from quant GEMV semantics, while the renderer only supplies a missing
-machine instruction capability.
+So the scoped order is now: keep the AMD compiler smoke as the instruction
+proof -> replace the serial custom-C vdot candidate with a parallel-schedule
+vdot helper -> generated q8 candidate rerun -> optional AMD renderer matcher ->
+optional core op or search action. This preserves the Ansor direction: the
+candidate is still generated from quant GEMV semantics, while the renderer only
+supplies a missing machine instruction capability.
 
 ## Core Integration Decision
 

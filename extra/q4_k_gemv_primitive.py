@@ -5,7 +5,7 @@ from math import prod
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import GlobalCounters, cdiv
-from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, UOp
+from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, Ops, UOp
 
 from extra.q4_k_safety import assert_q4k_risky_search_allowed
 from extra.qk_layout import (
@@ -82,6 +82,68 @@ def _q4k_block_dot_q8_1_intdot(words:UOp, xq:UOp, xscales:UOp, base:UOp, x_block
   for grp in range(8):
     contrib = contrib + _q4k_group_dot_q8_1_intdot(words, xq, xscales, base, x_block, grp, afters)
   return contrib
+
+def _u8_sum_expr(word:str) -> str:
+  return " + ".join(f"((int)(({word} >> {shift}) & 255u))" for shift in (0, 8, 16, 24))
+
+def _q4k_scale_byte_expr(base:str, idx:int) -> str:
+  return f"(({base}[base+{1 + idx//4}] >> {8*(idx%4)}) & 255u)"
+
+def _q4k_scale_min_expr(base:str, grp:int) -> tuple[str, str]:
+  if grp < 4:
+    return f"({_q4k_scale_byte_expr(base, grp)} & 63u)", f"({_q4k_scale_byte_expr(base, 4+grp)} & 63u)"
+  high = _q4k_scale_byte_expr(base, 8+grp-4)
+  return (f"(({high} & 15u) | (({_q4k_scale_byte_expr(base, grp-4)} >> 6u) << 4u))",
+          f"(({high} >> 4u) | (({_q4k_scale_byte_expr(base, 4+grp-4)} >> 6u) << 4u))")
+
+def _q4k_q8_1_vdot_source(k_blocks:int, parts:int) -> str:
+  if parts != 1: raise ValueError("q4k_q8_1_vdot_partial_kernel currently supports parts=1 only")
+  p = [f"__P{i}__" for i in range(4)]
+  lines = [
+    "{",
+    "  float total = 0.0f;",
+    f"  for (int blk = 0; blk < {k_blocks}; blk++) {{",
+    f"    int base = blk * {Q4K_WORDS_PER_BLOCK};",
+    f"    unsigned int fp = {p[1]}[base];",
+    "    float d = (float)(__builtin_bit_cast(_Float16, (unsigned short)(fp & 65535u)));",
+    "    float dmin = (float)(__builtin_bit_cast(_Float16, (unsigned short)((fp >> 16u) & 65535u)));",
+  ]
+  for grp in range(8):
+    scale, mn = _q4k_scale_min_expr(p[1], grp)
+    shift = 4 if grp % 2 else 0
+    qword_base = 4 + (grp//2)*8
+    lines += [
+      f"    {{ // Q4_K group {grp}",
+      f"      unsigned int sc = {scale};",
+      f"      unsigned int mn = {mn};",
+      "      unsigned int dot = 0u;",
+      "      int q4sum = 0;",
+      "      int q8sum = 0;",
+    ]
+    for lane4 in range(8):
+      q4_name, q8_name = f"q4_{grp}_{lane4}", f"q8_{grp}_{lane4}"
+      lines += [
+        f"      unsigned int {q4_name} = (({p[1]}[base+{qword_base+lane4}] >> {shift}u) & 0x0f0f0f0fu);",
+        f"      unsigned int {q8_name} = {p[2]}[blk*64+{grp*8+lane4}];",
+        f"      asm volatile(\"v_dot4_u32_u8 %0, %1, %2, %0\" : \"+v\"(dot) : \"v\"({q8_name}), \"v\"({q4_name}));",
+        f"      q4sum += {_u8_sum_expr(q4_name)};",
+        f"      q8sum += {_u8_sum_expr(q8_name)};",
+      ]
+    lines += [
+      "      int dot_signed = ((int)dot) - q4sum * 128;",
+      "      int q8_signed_sum = q8sum - 4096;",
+      f"      float xscale = (float){p[3]}[blk*8+{grp}];",
+      "      total += xscale * (d * (float)sc * (float)dot_signed - dmin * (float)mn * (float)q8_signed_sum);",
+      "    }",
+    ]
+  lines += [
+    "  }",
+    f"  {p[0]}[0] = total;",
+    "}",
+  ]
+  src = "\n".join(lines).replace("{", "{{").replace("}", "}}")
+  for i, token in enumerate(p): src = src.replace(token, f"{{{i}}}")
+  return src
 
 def parse_opt(spec:str) -> Opt:
   parts = spec.split(":")
@@ -169,6 +231,36 @@ def q4k_q8_1_intdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opt
     acc = partials[row, part].set(0.0)
     acc = partials[row, part].set(acc.after(blk_part)[row, part] + contrib, end=blk_part)
     return acc.end(row, part).sink(arg=_kernel_info(f"q4k_q8_1_intdot_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_q8_1_vdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  if schedule != "none" or opts:
+    raise ValueError("q4k_q8_1_vdot_partial_kernel is a fixed inline-asm smoke candidate; schedule opts are not supported")
+  if parts != 1: raise ValueError("q4k_q8_1_vdot_partial_kernel currently supports parts=1 only")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  source = _q4k_q8_1_vdot_source(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, xq_bias_words:UOp, xscales:UOp) -> UOp:
+    gid = UOp.special(rows, "gidx0")
+    out_ptr = partials.flatten().index(gid, ptr=True)
+    row_words = words.index(gid * k_blocks * Q4K_WORDS_PER_BLOCK, ptr=True)
+    stmt = UOp(Ops.CUSTOM, dtypes.void, (out_ptr, row_words, xq_bias_words, xscales), arg=source)
+    return stmt.sink(arg=_kernel_info(f"q4k_q8_1_vdot_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
+def q8_1_bias_pack_u32_kernel(k:int):
+  if k % 4 != 0: raise ValueError(f"K={k} is not divisible by 4")
+
+  def kernel(out:UOp, q:UOp) -> UOp:
+    idx = UOp.range(k//4, 0)
+    base = idx * 4
+    word = UOp.const(dtypes.uint32, 0)
+    for lane in range(4):
+      biased = (q[base+lane].cast(dtypes.int32) + 128).cast(dtypes.uint32).bitwise_and(255)
+      word = word.bitwise_or(biased.lshift(8*lane))
+    return out[idx].store(word).end(idx).sink(arg=_kernel_info(f"q8_1_bias_pack_u32_{k}", "none", ()))
 
   return kernel
 

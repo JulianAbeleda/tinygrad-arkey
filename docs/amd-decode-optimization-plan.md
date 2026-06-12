@@ -781,3 +781,20 @@ Scoped implementation order:
    correctness/timing harness;
 4. only after a winning candidate, consider an AMD renderer `extra_matcher`,
    new core op, or `OptOps.QK`.
+
+Step 24 result: steps 1-3 are complete.
+
+- `extra/amd_vdot_smoke.py` proves `v_dot4_u32_u8` emission on `gfx1100`.
+- The one-group correctness gate passes using biased q8:
+  `dot=2844`, `q8_sum=-58`, `q4_sum=219` at seed `1337`.
+- `extra/qk_ansor.py` level 2 now emits `q8_1_q4_vdot`.
+- `bench/qk-ansor-20260612/8b-level2-q8-vdot-gate.json` records the generated
+  gate run. The candidate passes correctness on `blk.0.ffn_gate.weight`
+  (`max_abs=0.00122976`) but is rejected at `21.37 Q4-GB/s`.
+
+Diagnosis: packed-dot emission works, but the first full candidate is
+serial-per-row custom C. It proves the instruction/algebra path and rejects the
+naive integration shape. The next implementation step, if continuing q8_1, is
+not another arithmetic variant; it is making packed dot usable inside the
+parallel schedule, likely through a renderer helper/matcher rather than a
+monolithic custom C loop.

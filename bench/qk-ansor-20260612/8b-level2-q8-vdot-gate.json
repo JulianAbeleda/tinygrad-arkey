@@ -1,0 +1,603 @@
+{
+  "arch": "gfx1100",
+  "descriptors": [
+    {
+      "candidates": [
+        {
+          "activation": "fp16",
+          "family": "fused_graph",
+          "name": "fused_graph",
+          "opts": [],
+          "parts": 0,
+          "reduction": "generic_fused_reduce",
+          "requires": [
+            "ggml_data_to_tensor"
+          ]
+        },
+        {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "v1_q4_packed",
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "q4_local16_p1",
+          "opts": [
+            "LOCAL:0:16"
+          ],
+          "parts": 1,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "q4_local32_p1",
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 1,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "q4_local64_p1",
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "q4_local32_p2",
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 2,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "q4_local32_p4",
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 4,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "q8_1",
+          "family": "q4_k_q8_1_packed_u32",
+          "name": "q8_1_q4_packed",
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q8_1_pack",
+            "q4k_q8_1_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "q8_1",
+          "family": "q4_k_q8_1_intdot_u32",
+          "name": "q8_1_q4_intdot",
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "reduction": "split_k_intdot_partial",
+          "requires": [
+            "q8_1_pack",
+            "q4k_q8_1_intdot_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        {
+          "activation": "q8_1_biased_u8",
+          "family": "q4_k_q8_1_vdot_u32",
+          "name": "q8_1_q4_vdot",
+          "opts": [],
+          "parts": 1,
+          "reduction": "direct_vdot_partial",
+          "requires": [
+            "q8_1_pack",
+            "q8_1_bias_u32",
+            "amd_v_dot4_u32_u8",
+            "q4k_q8_1_vdot_partial_kernel",
+            "u32_packed_storage"
+          ]
+        }
+      ],
+      "descriptor": {
+        "arch": "gfx1100",
+        "block_bytes": 144,
+        "block_elems": 256,
+        "byte_start": 932517696,
+        "cols": 4096,
+        "data_start": 5956416,
+        "device": "AMD",
+        "dtype_activation": "fp16",
+        "dtype_output": "fp32",
+        "format": "Q4_K",
+        "ggml_type": 12,
+        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+        "packed_bytes": 28311552,
+        "role": "ffn_gate",
+        "rows": 12288,
+        "tensor": "blk.0.ffn_gate.weight",
+        "tensor_offset": 926561280
+      },
+      "results": [
+        {
+          "candidate": "fused_graph",
+          "device_ms": 8.657966972477064,
+          "elapsed_s": 1.488,
+          "family": "fused_graph",
+          "format": "Q4_K",
+          "gemv_max_abs": null,
+          "kernels": 1.0,
+          "opts": [],
+          "parts": 0,
+          "quant_gbs": 3.27,
+          "requires": [
+            "ggml_data_to_tensor"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\ncorrectness: PASS blk.0.ffn_gate.weight\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.507 ms (663.45/s) q4_eff=18.78 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.668 ms (115.37/s) q4_eff=3.27 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": null,
+          "wall_ms": 8.668,
+          "wall_quant_gbs": 3.27
+        },
+        {
+          "candidate": "v1_q4_packed",
+          "device_ms": 0.13958266528620025,
+          "elapsed_s": 1.793,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179243,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "quant_gbs": 202.83,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.503 ms (665.54/s) q4_eff=18.84 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.653 ms (115.56/s) q4_eff=3.27 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.140 ms (7164.25/s) q4_eff=202.83 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.14,
+          "wall_quant_gbs": 202.83
+        },
+        {
+          "candidate": "q4_local16_p1",
+          "device_ms": 0.14924381655245125,
+          "elapsed_s": 1.783,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179243,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:16"
+          ],
+          "parts": 1,
+          "quant_gbs": 189.7,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:16']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.516 ms (659.56/s) q4_eff=18.67 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.767 ms (114.07/s) q4_eff=3.23 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.149 ms (6700.62/s) q4_eff=189.70 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.149,
+          "wall_quant_gbs": 189.7
+        },
+        {
+          "candidate": "q4_local32_p1",
+          "device_ms": 0.13855119898208867,
+          "elapsed_s": 1.767,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179243,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 1,
+          "quant_gbs": 204.34,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.478 ms (676.43/s) q4_eff=19.15 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.790 ms (113.76/s) q4_eff=3.22 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.139 ms (7217.61/s) q4_eff=204.34 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.139,
+          "wall_quant_gbs": 204.34
+        },
+        {
+          "candidate": "q4_local64_p1",
+          "device_ms": 0.14714943866943866,
+          "elapsed_s": 1.798,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179243,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "quant_gbs": 192.4,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.542 ms (648.52/s) q4_eff=18.36 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.695 ms (115.01/s) q4_eff=3.26 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.147 ms (6795.97/s) q4_eff=192.40 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.147,
+          "wall_quant_gbs": 192.4
+        },
+        {
+          "candidate": "q4_local32_p2",
+          "device_ms": 0.07175474452554745,
+          "elapsed_s": 1.832,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179029,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 2,
+          "quant_gbs": 394.56,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=2 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179029\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.519 ms (658.39/s) q4_eff=18.64 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.769 ms (114.03/s) q4_eff=3.23 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.072 ms (13936.31/s) q4_eff=394.56 GB/s device_q4_eff=n/a kernels=1.0 mem=28.66 MB",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.072,
+          "wall_quant_gbs": 394.56
+        },
+        {
+          "candidate": "q4_local32_p4",
+          "device_ms": 0.09901567516525023,
+          "elapsed_s": 1.816,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179052,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 4,
+          "quant_gbs": 285.93,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=4 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179052\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.526 ms (655.10/s) q4_eff=18.55 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.720 ms (114.68/s) q4_eff=3.25 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.099 ms (10099.38/s) q4_eff=285.93 GB/s device_q4_eff=n/a kernels=1.0 mem=28.96 MB",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.099,
+          "wall_quant_gbs": 285.93
+        },
+        {
+          "activation_max_abs": 0.0167015,
+          "candidate": "q8_1_q4_packed",
+          "device_ms": null,
+          "elapsed_s": 1.364,
+          "family": "q4_k_q8_1_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00123298,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "quant_gbs": 367.52,
+          "requires": [
+            "q8_1_pack",
+            "q4k_q8_1_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "tensor=blk.0.ffn_gate.weight full_shape=(12288, 4096) primitive_shape=(12288,4096) q4_bytes=28311552 mode=q8_1_float_partial parts=1 opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] device=AMD\nq8_1_pack_correctness: q_blocks=128 activation_max_abs=0.0167015\nunpack_correctness: rows=2 max_abs=0\ncorrectness: max_abs=0.00123298\nq4k_q8_1_gemv_partial: wall=0.077 ms (367.52 Q4-GB/s), device=n/a, kernels=1.0",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.077,
+          "wall_quant_gbs": 367.52
+        },
+        {
+          "activation_max_abs": 0.0167015,
+          "candidate": "q8_1_q4_intdot",
+          "device_ms": null,
+          "elapsed_s": 1.466,
+          "family": "q4_k_q8_1_intdot_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00122976,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:64"
+          ],
+          "parts": 1,
+          "quant_gbs": 370.26,
+          "requires": [
+            "q8_1_pack",
+            "q4k_q8_1_intdot_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "tensor=blk.0.ffn_gate.weight full_shape=(12288, 4096) primitive_shape=(12288,4096) q4_bytes=28311552 mode=q8_1_intdot_partial parts=1 opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] device=AMD\nq8_1_pack_correctness: q_blocks=128 activation_max_abs=0.0167015\nunpack_correctness: rows=2 max_abs=0\ncorrectness: max_abs=0.00122976\nq4k_q8_1_intdot_partial: wall=0.076 ms (370.26 Q4-GB/s), device=n/a, kernels=1.0",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.076,
+          "wall_quant_gbs": 370.26
+        },
+        {
+          "activation_max_abs": 0.0167015,
+          "candidate": "q8_1_q4_vdot",
+          "device_ms": null,
+          "elapsed_s": 1.326,
+          "family": "q4_k_q8_1_vdot_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00122976,
+          "kernels": 1.0,
+          "opts": [],
+          "parts": 1,
+          "quant_gbs": 21.37,
+          "requires": [
+            "q8_1_pack",
+            "q8_1_bias_u32",
+            "amd_v_dot4_u32_u8",
+            "q4k_q8_1_vdot_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tail": "tensor=blk.0.ffn_gate.weight full_shape=(12288, 4096) primitive_shape=(12288,4096) q4_bytes=28311552 mode=q8_1_vdot_partial parts=1 opts=[] device=AMD\nq8_1_pack_correctness: q_blocks=128 activation_max_abs=0.0167015\nunpack_correctness: rows=2 max_abs=0\ncorrectness: max_abs=0.00122976\nq4k_q8_1_vdot_partial: wall=1.325 ms (21.37 Q4-GB/s), device=n/a, kernels=1.0",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 1.325,
+          "wall_quant_gbs": 21.37
+        }
+      ],
+      "winner": {
+        "candidate": {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "q4_local32_p2",
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 2,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        "format": "Q4_K",
+        "metric": "quant_gbs",
+        "metric_value": 394.56,
+        "reason": "quant_gbs best after correctness",
+        "result": {
+          "candidate": "q4_local32_p2",
+          "device_ms": 0.07175474452554745,
+          "elapsed_s": 1.832,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179029,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 2,
+          "quant_gbs": 394.56,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.072,
+          "wall_quant_gbs": 394.56
+        },
+        "shape": [
+          12288,
+          4096
+        ],
+        "tensor": "blk.0.ffn_gate.weight",
+        "winner": "q4_local32_p2"
+      }
+    }
+  ],
+  "device": "AMD",
+  "generator_version": 0,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "policy": {
+    "commit": "23a6a16ab",
+    "created_at": "2026-06-12T05:29:38.161760+00:00",
+    "entries": [
+      {
+        "candidate": {
+          "activation": "fp16",
+          "family": "q4_k_packed_u32",
+          "name": "q4_local32_p2",
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 2,
+          "reduction": "split_k_partial",
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ]
+        },
+        "descriptor": {
+          "arch": "gfx1100",
+          "block_bytes": 144,
+          "block_elems": 256,
+          "byte_start": 932517696,
+          "cols": 4096,
+          "data_start": 5956416,
+          "device": "AMD",
+          "dtype_activation": "fp16",
+          "dtype_output": "fp32",
+          "format": "Q4_K",
+          "ggml_type": 12,
+          "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+          "packed_bytes": 28311552,
+          "role": "ffn_gate",
+          "rows": 12288,
+          "tensor": "blk.0.ffn_gate.weight",
+          "tensor_offset": 926561280
+        },
+        "format": "Q4_K",
+        "key": {
+          "activation": "fp16",
+          "arch": "gfx1100",
+          "commit": "23a6a16ab",
+          "device": "AMD",
+          "format": "Q4_K",
+          "generator_version": 0,
+          "ggml_type": 12,
+          "shape": [
+            12288,
+            4096
+          ]
+        },
+        "metric": "quant_gbs",
+        "metric_value": 394.56,
+        "reason": "quant_gbs best after correctness",
+        "result": {
+          "candidate": "q4_local32_p2",
+          "device_ms": 0.07175474452554745,
+          "elapsed_s": 1.832,
+          "family": "q4_k_packed_u32",
+          "format": "Q4_K",
+          "gemv_max_abs": 0.00179029,
+          "kernels": 1.0,
+          "opts": [
+            "LOCAL:0:32"
+          ],
+          "parts": 2,
+          "quant_gbs": 394.56,
+          "requires": [
+            "q4k_gemv_partial_kernel",
+            "u32_packed_storage"
+          ],
+          "shape": [
+            12288,
+            4096
+          ],
+          "status": "pass",
+          "tensor": "blk.0.ffn_gate.weight",
+          "unpack_max_abs": 0.0,
+          "wall_ms": 0.072,
+          "wall_quant_gbs": 394.56
+        },
+        "shape": [
+          12288,
+          4096
+        ],
+        "tensor": "blk.0.ffn_gate.weight",
+        "winner": "q4_local32_p2"
+      }
+    ],
+    "generator_version": 0,
+    "kind": "qk_generated_policy",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+  }
+}
