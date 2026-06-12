@@ -67,18 +67,30 @@ differences only (`policy_fallback` vs measured `policy_fused` or unsearched
 `policy_missing`). That rules out a generated-policy coverage bug as the cause
 of the 56.07 vs 58.00 tok/s rerun difference.
 
-Level-2 generation now includes a real Q4_K x q8_1 activation candidate. It
-passed correctness but lost to the existing v1 packed candidate on FFN shapes and
-lost to fused graph on the small KV shape:
+Level-2 generation now includes real Q4_K x q8_1 activation candidates. The
+first lowering used per-element float-style dequant and lost. The second lowering
+used the grouped integer-dot identity:
 
-| tensor | fused GB/s | v1 packed GB/s | q8_1 packed GB/s | winner |
-|---|---:|---:|---:|---|
-| `blk.0.ffn_gate.weight` | 81.17 | 416.59 | 170.92 | `v1_q4_packed` |
-| `blk.4.ffn_down.weight` | 15.62 | 269.20 | 150.17 | `v1_q4_packed` |
-| `blk.0.attn_k.weight` | 111.71 | 51.55 | 36.44 | `fused_graph` |
+```text
+sum((d*sc*q4 - dmin*mn) * (xscale*q8))
+  = xscale * (d*sc*sum(q4*q8) - dmin*mn*sum(q8))
+```
+
+The integer-dot candidate improved q8_1, but still lost to the existing v1
+packed candidate on FFN shapes and lost to fused graph on the small KV shape:
+
+| tensor | fused GB/s | v1 packed GB/s | q8_1 float GB/s | q8_1 intdot GB/s | winner |
+|---|---:|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 88.41 | 420.80 | 173.75 | 216.20 | `v1_q4_packed` |
+| `blk.4.ffn_down.weight` | 15.66 | 262.82 | 148.74 | 262.50 | `v1_q4_packed` |
+| `blk.0.attn_k.weight` | 101.87 | 53.07 | 35.16 | 37.40 | `fused_graph` |
 
 So q8_1 is rejected by the same generated search harness and is not a runtime
-integration candidate yet. Q6_K x q8_1 remains a sketch only.
+integration candidate yet. The result is informative: algebraic sketch
+generation can improve a bad candidate, but the current UOp/register-reduction
+lowering does not produce a llama.cpp-class packed dot. The ffn_down int-dot
+near-tie is not an acceptance margin because the gate shape still loses heavily.
+Q6_K x q8_1 remains a sketch only.
 
 ## Core Integration Decision
 

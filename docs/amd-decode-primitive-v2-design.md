@@ -23,13 +23,14 @@ CUTLASS/AutoTVM path: write a richer template and sweep it. If the goal is
 "make the machine take over kernel-writing", v2 is not enough; that is an
 Ansor-style scheduler/codegen research project with different success metrics.
 
-The v2 hypothesis remains technically coherent but has a first negative probe:
+The v2 hypothesis remains technically coherent but has negative Q4_K probes:
 quantize the decode activation vector to a `q8_1`-style block format, then run
-packed vector-dot kernels with first-class split/reduction parameters. A first
-generated `Q4_K x q8_1` candidate is now correct but slower than v1 on the tested
-8B shapes, including pack cost. `Q6_K x q8_1` remains unimplemented. The scope
-correction is economic: for one model family on one GPU, this is optional
-hand-template work, not the necessary next engineering step.
+packed vector-dot kernels with first-class split/reduction parameters. The first
+generated `Q4_K x q8_1` candidate was correct but slower than v1 on the tested
+8B shapes, including pack cost. A follow-up integer-dot lowering improved q8_1
+but still lost to v1. `Q6_K x q8_1` remains unimplemented. The scope correction
+is economic: for one model family on one GPU, this is optional hand-template
+work, not the necessary next engineering step.
 
 ## Scope decision
 
@@ -77,17 +78,19 @@ The Q4+Q6 profile and sweep in `bench/q4q6-profile-20260611/` found:
 - Q6 ffn_down microbench best reaches only about `202-218 quant-GB/s` and
   about `0.49-0.53 dot TFLOP/s`, which points beyond simple load width.
 
-The Ansor-direction q8_1 probe in `bench/qk-ansor-20260612/8b-level2-q8-real.json`
-found:
+The Ansor-direction q8_1 probes in `bench/qk-ansor-20260612/8b-level2-q8-real.json`
+and `bench/qk-ansor-20260612/8b-level2-q8-intdot.json` found:
 
-| tensor | v1 packed GB/s | Q4_K x q8_1 GB/s | result |
-|---|---:|---:|---|
-| `blk.0.ffn_gate.weight` | 416.59 | 170.92 | reject q8_1 |
-| `blk.4.ffn_down.weight` | 269.20 | 150.17 | reject q8_1 |
-| `blk.0.attn_k.weight` | 51.55 | 36.44 | reject both; fused graph wins |
+| tensor | v1 packed GB/s | Q4_K x q8_1 float GB/s | Q4_K x q8_1 intdot GB/s | result |
+|---|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 420.80 | 173.75 | 216.20 | reject q8_1 |
+| `blk.4.ffn_down.weight` | 262.82 | 148.74 | 262.50 | near-tie, not accepted |
+| `blk.0.attn_k.weight` | 53.07 | 35.16 | 37.40 | reject both; fused graph wins |
 
 All listed q8_1 runs passed correctness, so this is a performance rejection, not
-a semantic failure.
+a semantic failure. The integer-dot result supports the diagnosis that q8_1 only
+helps if the lowering becomes a true packed-dot primitive; the current UOp
+version still pays pack/reduction overhead without enough inner-kernel win.
 
 ## What went wrong in v1 tuning
 
@@ -566,7 +569,8 @@ Optional v2 checklist, if explicitly reopening kernel work:
 2. Centralize Q4_K/Q6_K layout helpers and preserve v1 behavior.
 3. Add q8_1 reference and activation pack correctness tests. Done for Q4_K path.
 4. Measure q8_1 pack overhead on dominant Qwen3 8B/14B decode shapes. Done for
-   representative 8B Q4_K shapes; q8_1 lost including pack cost.
+   representative 8B Q4_K shapes; q8_1 float and intdot both lost including
+   pack cost.
 5. Build one Q6_K x q8_1 correctness-first microkernel only if reopening v2.
 6. Add automated v2 sweep only after the microkernels pass correctness.
 7. Wire a v2 model flag only after a candidate beats v1 including pack and

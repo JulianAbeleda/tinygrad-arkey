@@ -56,6 +56,8 @@ Files:
   behavior comparison for every real Q4_K/Q6_K weight tensor.
 - `8b-level2-q8-real.json`: level-2 run with the first runnable Q4_K x q8_1
   activation candidate.
+- `8b-level2-q8-intdot.json`: level-2 run with the Q4_K x q8_1 integer-dot
+  candidate.
 
 Level-0 generated search, Qwen3-8B:
 
@@ -111,5 +113,26 @@ Q4_K reference and dequantized q8_1 activation reference.
 | `blk.0.attn_k.weight` | 1024x4096 | 111.71 | 51.55 | 36.44 | `fused_graph` |
 
 All q8_1 runs passed the GEMV correctness gate (`max_abs <= 0.001233` on the
-listed shapes), but q8_1 did not win any tested shape. It is therefore rejected
-by the generated policy and is not wired into `model.py`.
+listed shapes), but the first q8_1 lowering did not win any tested shape.
+
+The next candidate changed the inner math from per-element float dequant to a
+grouped integer-dot identity:
+
+```text
+sum((d*sc*q4 - dmin*mn) * (xscale*q8))
+  = xscale * (d*sc*sum(q4*q8) - dmin*mn*sum(q8))
+```
+
+That was a real improvement over the first q8_1 lowering, but still not enough
+to beat v1:
+
+| tensor | shape | v1 packed GB/s | q8_1 float GB/s | q8_1 intdot GB/s | winner |
+|---|---:|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 12288x4096 | 420.80 | 173.75 | 216.20 | `v1_q4_packed` |
+| `blk.4.ffn_down.weight` | 4096x12288 | 262.82 | 148.74 | 262.50 | `v1_q4_packed` |
+| `blk.0.attn_k.weight` | 1024x4096 | 53.07 | 35.16 | 37.40 | `fused_graph` |
+
+Verdict: int-dot validates the diagnosis that q8_1 needs a better inner dot, but
+the current UOp/register-reduction lowering still loses. The ffn_down result is
+a near-tie, not an acceptance margin, and gate remains far behind v1. It is
+rejected by the generated policy and is not wired into `model.py`.
