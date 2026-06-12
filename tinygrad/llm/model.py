@@ -21,14 +21,18 @@ class ExpertWeights:
     return (x.unsqueeze(-2) @ self.weight[sel].transpose(-1, -2)).contiguous().squeeze(-2)
 
 class Q4KPrimitiveStorage:
-  __slots__ = ("words", "source_bytes", "persistent_bytes", "mode")
-  def __init__(self, words:Tensor, source_bytes:int, persistent_bytes:int, mode:str):
-    self.words, self.source_bytes, self.persistent_bytes, self.mode = words, source_bytes, persistent_bytes, mode
+  __slots__ = ("words", "source_bytes", "persistent_bytes", "shared_bytes", "nonpersistent_bytes", "mode")
+  def __init__(self, words:Tensor, source_bytes:int, persistent_bytes:int, mode:str,
+               shared_bytes:int=0, nonpersistent_bytes:int=0):
+    self.words, self.source_bytes, self.persistent_bytes = words, source_bytes, persistent_bytes
+    self.shared_bytes, self.nonpersistent_bytes, self.mode = shared_bytes, nonpersistent_bytes, mode
 
 class Q6KPrimitiveStorage:
-  __slots__ = ("halfs", "source_bytes", "persistent_bytes", "mode")
-  def __init__(self, halfs:Tensor, source_bytes:int, persistent_bytes:int, mode:str):
-    self.halfs, self.source_bytes, self.persistent_bytes, self.mode = halfs, source_bytes, persistent_bytes, mode
+  __slots__ = ("halfs", "source_bytes", "persistent_bytes", "shared_bytes", "nonpersistent_bytes", "mode")
+  def __init__(self, halfs:Tensor, source_bytes:int, persistent_bytes:int, mode:str,
+               shared_bytes:int=0, nonpersistent_bytes:int=0):
+    self.halfs, self.source_bytes, self.persistent_bytes = halfs, source_bytes, persistent_bytes
+    self.shared_bytes, self.nonpersistent_bytes, self.mode = shared_bytes, nonpersistent_bytes, mode
 
 class QKPrimitiveBudget:
   __slots__ = ("cap_bytes", "used_bytes", "strict")
@@ -51,9 +55,10 @@ class Q4KPrimitiveRegistry:
 
 class Q4KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
-               name:str, source_bytes:int, persistent_bytes:int, storage_mode:str):
+               name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
+               shared_bytes:int=0, nonpersistent_bytes:int=0):
     self.weight, self.bias = weight, bias
-    self.q4k_storage = Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode)
+    self.q4k_storage = Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
     self.decode_enabled = False
 
@@ -73,9 +78,10 @@ class Q4KPrimitiveLinear:
 
 class Q6KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
-               name:str, source_bytes:int, persistent_bytes:int, storage_mode:str):
+               name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
+               shared_bytes:int=0, nonpersistent_bytes:int=0):
     self.weight, self.bias = weight, bias
-    self.q6k_storage = Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode)
+    self.q6k_storage = Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
     self.decode_enabled = False
 
@@ -163,14 +169,14 @@ def _qk_storage_cap_from_env() -> int|None:
 
 def _qk_storage_mode_from_env() -> str:
   mode = getenv("QK_PRIMITIVE_STORAGE", "sidecar")
-  if mode not in ("sidecar", "q4_ondemand"):
-    raise ValueError(f"QK_PRIMITIVE_STORAGE must be sidecar or q4_ondemand, got {mode!r}")
+  if mode not in ("sidecar", "q4_ondemand", "shared"):
+    raise ValueError(f"QK_PRIMITIVE_STORAGE must be sidecar, q4_ondemand, or shared, got {mode!r}")
   return mode
 
 def _qk_storage_summary(linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]) -> dict:
   by_kind: collections.Counter[str] = collections.Counter()
   by_mode: collections.Counter[str] = collections.Counter()
-  source_bytes = persistent_bytes = 0
+  source_bytes = persistent_bytes = shared_bytes = nonpersistent_bytes = 0
   for linear in linears:
     storage = linear.q4k_storage if isinstance(linear, Q4KPrimitiveLinear) else linear.q6k_storage
     kind = "Q4K" if isinstance(linear, Q4KPrimitiveLinear) else "Q6K"
@@ -178,10 +184,22 @@ def _qk_storage_summary(linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]) -> 
     by_mode[storage.mode] += 1
     source_bytes += storage.source_bytes
     persistent_bytes += storage.persistent_bytes
+    shared_bytes += getattr(storage, "shared_bytes", 0)
+    nonpersistent_bytes += getattr(storage, "nonpersistent_bytes", 0)
   return {
     "source_bytes": source_bytes, "persistent_bytes": persistent_bytes,
+    "shared_bytes": shared_bytes, "nonpersistent_bytes": nonpersistent_bytes,
     "by_kind": dict(sorted(by_kind.items())), "by_mode": dict(sorted(by_mode.items())),
   }
+
+def _shared_packed_view(meta:dict, byte_start:int, nbytes:int, dtype) -> Tensor:
+  raw = meta.get("raw_tensor")
+  if raw is None: raise ValueError("shared QK primitive storage requires gguf_load_with_metadata raw_tensor")
+  if byte_start % dtype.itemsize != 0 or nbytes % dtype.itemsize != 0:
+    raise ValueError(f"shared QK primitive storage requires uint{dtype.itemsize*8}-aligned range: "
+                     f"byte_start={byte_start} nbytes={nbytes}")
+  raw_view = raw[byte_start:byte_start+nbytes].uop.buffer
+  return Tensor(UOp.from_buffer(raw_view.view(nbytes//dtype.itemsize, dtype, 0), raw.device))
 
 def _module_at(root, path:str):
   obj = root
@@ -246,14 +264,18 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       skipped["bias"] += 1
       continue
     q4_bytes = prod(dims) // 256 * 144
-    persistent_bytes = 0 if storage_mode == "q4_ondemand" else q4_bytes
+    persistent_bytes = q4_bytes if storage_mode == "sidecar" else 0
     if not budget.reserve(name, persistent_bytes, "Q4_K"):
       skipped["runtime_storage_cap"] += 1
       continue
     source = raw_words[byte_start//4:byte_start//4+q4_bytes//4]
-    words = source.contiguous() if storage_mode == "q4_ondemand" else source.to(None).contiguous().realize()
+    if storage_mode == "shared":
+      words, shared_bytes, nonpersistent_bytes = _shared_packed_view(meta, byte_start, q4_bytes, dtypes.uint32), q4_bytes, 0
+    else:
+      words = source.contiguous() if storage_mode == "q4_ondemand" else source.to(None).contiguous().realize()
+      shared_bytes, nonpersistent_bytes = 0, q4_bytes if storage_mode == "q4_ondemand" else 0
     q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name,
-                                    q4_bytes, persistent_bytes, storage_mode)
+                                    q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     _set_module_at(model, module_path, q4k_linear)
     installed.append(q4k_linear)
   if debug:
@@ -264,12 +286,13 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     cap = -1 if budget.cap_bytes is None else budget.cap_bytes
     print(f"Q4K_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s} "
           f"source_bytes={summary['source_bytes']} storage_bytes={summary['persistent_bytes']} "
+          f"shared_bytes={summary['shared_bytes']} nonpersistent_bytes={summary['nonpersistent_bytes']} "
           f"runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode={storage_mode}")
     if installed: print(f"Q4K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
   return installed
 
 def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
-                            budget:QKPrimitiveBudget|None=None) -> list[Q6KPrimitiveLinear]:
+                            budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar") -> list[Q6KPrimitiveLinear]:
   from extra.q6_k_gemv_primitive import parse_opt
   raw_halfs = Tensor(gguf, dtype=dtypes.uint16)
   installed: list[Q6KPrimitiveLinear] = []
@@ -319,12 +342,16 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       skipped["bias"] += 1
       continue
     q6_bytes = prod(dims) // 256 * 210
-    if not budget.reserve(name, q6_bytes, "Q6_K"):
+    persistent_bytes = 0 if storage_mode == "shared" else q6_bytes
+    if not budget.reserve(name, persistent_bytes, "Q6_K"):
       skipped["runtime_storage_cap"] += 1
       continue
-    halfs = raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous().realize()
+    if storage_mode == "shared":
+      halfs, shared_bytes = _shared_packed_view(meta, byte_start, q6_bytes, dtypes.uint16), q6_bytes
+    else:
+      halfs, shared_bytes = raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous().realize(), 0
     q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name,
-                                    q6_bytes, q6_bytes, "sidecar")
+                                    q6_bytes, persistent_bytes, storage_mode, shared_bytes, 0)
     _set_module_at(model, module_path, q6k_linear)
     installed.append(q6k_linear)
   if debug:
@@ -335,7 +362,8 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     cap = -1 if budget.cap_bytes is None else budget.cap_bytes
     print(f"Q6K_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s} "
           f"source_bytes={summary['source_bytes']} storage_bytes={summary['persistent_bytes']} "
-          f"runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode=sidecar")
+          f"shared_bytes={summary['shared_bytes']} nonpersistent_bytes={summary['nonpersistent_bytes']} "
+          f"runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode={storage_mode}")
     if installed: print(f"Q6K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
   return installed
 
@@ -714,22 +742,24 @@ class Transformer:
       primitive_linears = []
       primitive_budget = QKPrimitiveBudget(_qk_storage_cap_from_env(), bool(getenv("QK_GENERATED_POLICY_STRICT", 0)))
       q4_storage_mode = _qk_storage_mode_from_env()
+      q6_storage_mode = "shared" if q4_storage_mode == "shared" else "sidecar"
       generated_policy = _load_qk_generated_policy(qk_generated_policy_path) if use_qk_generated_policy else None
       if generated_policy is not None:
         if bool(getenv("QK_GENERATED_POLICY_DEBUG", 0)):
           print(f"QK_GENERATED_POLICY_DEBUG loaded={qk_generated_policy_path} entries={_qk_generated_policy_len(generated_policy)}")
         primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q4_storage_mode)
-        primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget)
+        primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q6_storage_mode)
       else:
         if use_q4k_primitive: primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q4_storage_mode)
-        if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget)
+        if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q6_storage_mode)
       if bool(getenv("QK_GENERATED_POLICY_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", getenv("Q6K_PRIMITIVE_DEBUG", 0)))):
         summary = _qk_storage_summary(primitive_linears)
         cap = -1 if primitive_budget.cap_bytes is None else primitive_budget.cap_bytes
         by_kind_s = ",".join(f"{k}:{v}" for k, v in summary["by_kind"].items()) or "none"
         by_mode_s = ",".join(f"{k}:{v}" for k, v in summary["by_mode"].items()) or "none"
         print(f"QK_PRIMITIVE_STORAGE_DEBUG installed={len(primitive_linears)} source_bytes={summary['source_bytes']} "
-              f"storage_bytes={summary['persistent_bytes']} runtime_cap_bytes={cap} "
+              f"storage_bytes={summary['persistent_bytes']} shared_bytes={summary['shared_bytes']} "
+              f"nonpersistent_bytes={summary['nonpersistent_bytes']} runtime_cap_bytes={cap} "
               f"runtime_cap_used_bytes={primitive_budget.used_bytes} by_kind={by_kind_s} by_mode={by_mode_s}")
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster

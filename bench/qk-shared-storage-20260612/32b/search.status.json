@@ -1,0 +1,10 @@
+{
+  "inputs": [],
+  "outputs": [
+    "bench/qk-shared-storage-20260612/32b/search.json"
+  ],
+  "reused": true,
+  "stage": "search",
+  "status": "passed",
+  "updated_at": "2026-06-12T11:32:15.496120"
+}

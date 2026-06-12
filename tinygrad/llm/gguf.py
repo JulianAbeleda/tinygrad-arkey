@@ -158,7 +158,7 @@ def _gguf_parse(tensor: Tensor, include_metadata:bool=False) -> tuple[dict, dict
   data_start = round_up(pos, alignment)
 
   state_dict = {name: ggml_data_to_tensor(tensor[data_start + off:], prod(dims), typ).reshape(*reversed(dims)) for name, dims, typ, off in t_infos}
-  if include_metadata: return kv_data, state_dict, {"data_start": data_start, "tensor_infos": t_infos}
+  if include_metadata: return kv_data, state_dict, {"data_start": data_start, "tensor_infos": t_infos, "raw_tensor": tensor}
   return kv_data, state_dict
 
 def _gguf_split_paths(path: pathlib.Path, kv: dict) -> list[pathlib.Path]:

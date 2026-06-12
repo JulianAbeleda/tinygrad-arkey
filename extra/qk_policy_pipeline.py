@@ -19,6 +19,7 @@ SPEC_FIELDS = (
 )
 ENV_FIELDS = ("QK_PRIMITIVE_MAX_STORAGE_MB", "QK_GENERATED_POLICY_STRICT", "QK_PRIMITIVE_STORAGE")
 STAGES = ("search", "policy", "semantic", "parity", "decode", "ab", "profile", "decide", "report")
+REUSE_COMPATIBLE_SPEC_FIELDS = ("profile", "profile_tokens", "profile_gain")
 
 def _model_label(model:pathlib.Path) -> str:
   m = MODEL_RE.search(model.name)
@@ -72,7 +73,11 @@ def _clear_stage_statuses(out:pathlib.Path) -> None:
     if path.exists(): path.unlink()
 
 def _stable_manifest(manifest:dict) -> dict:
-  return {k: v for k, v in manifest.items() if k not in ("created_at", "updated_at", "stages")}
+  stable = {k: v for k, v in manifest.items() if k not in ("created_at", "updated_at", "stages")}
+  spec = dict(stable.get("spec") or {})
+  for key in REUSE_COMPATIBLE_SPEC_FIELDS: spec.pop(key, None)
+  stable["spec"] = spec
+  return stable
 
 def _write_manifest(args) -> None:
   path = _manifest_path(args)
@@ -87,7 +92,7 @@ def _validate_or_init_manifest(args) -> None:
   expected = _manifest_for(args)
   if path.exists():
     existing = json.loads(path.read_text())
-    if _stable_manifest(existing) != expected:
+    if _stable_manifest(existing) != _stable_manifest(expected):
       if getattr(args, "force", False):
         args.reuse = False
         _clear_stage_statuses(args.out)

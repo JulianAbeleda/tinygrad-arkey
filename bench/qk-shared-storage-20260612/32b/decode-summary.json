@@ -1,0 +1,335 @@
+[
+  {
+    "avg_drop1_tok_s": 11.352755905511811,
+    "avg_last16_tok_s": 11.168125,
+    "avg_last32_tok_s": 11.2878125,
+    "avg_last64_tok_s": 11.42203125,
+    "avg_ms": 90.396796875,
+    "avg_tok_s": 11.288828125,
+    "installs": {
+      "Q4K": {
+        "installed": 288,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_fallback": 97,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 14816378880,
+        "skipped_total": 419,
+        "source_bytes": 14816378880,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 32,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fallback": 33,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3440640000,
+        "skipped_total": 675,
+        "source_bytes": 3440640000,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit1",
+    "max_ms": 315.42,
+    "max_tok_s": 11.97,
+    "median_tok_s": 11.53,
+    "min_tok_s": 3.17,
+    "path": "bench/qk-shared-storage-20260612/32b/explicit-run1.log",
+    "policy": null,
+    "samples": 128,
+    "stdev_tok_s": 1.057547021417886,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:320",
+      "installed": 320,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18257018880,
+      "source_bytes": 18257018880,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 11.004566929133858,
+    "avg_last16_tok_s": 10.898125,
+    "avg_last32_tok_s": 10.9159375,
+    "avg_last64_tok_s": 11.11,
+    "avg_ms": 95.536015625,
+    "avg_tok_s": 10.94296875,
+    "installs": {
+      "Q4K": {
+        "installed": 288,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_fallback": 97,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 14816378880,
+        "skipped_total": 419,
+        "source_bytes": 14816378880,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 32,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fallback": 33,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3440640000,
+        "skipped_total": 675,
+        "source_bytes": 3440640000,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit2",
+    "max_ms": 320.54,
+    "max_tok_s": 11.91,
+    "median_tok_s": 11.58,
+    "min_tok_s": 3.12,
+    "path": "bench/qk-shared-storage-20260612/32b/explicit-run2.log",
+    "policy": null,
+    "samples": 128,
+    "stdev_tok_s": 1.6604113707980894,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:320",
+      "installed": 320,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18257018880,
+      "source_bytes": 18257018880,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 11.273937007874016,
+    "avg_last16_tok_s": 11.3925,
+    "avg_last32_tok_s": 11.393437500000001,
+    "avg_last64_tok_s": 11.2690625,
+    "avg_ms": 91.27515625,
+    "avg_tok_s": 11.208984375,
+    "installs": {
+      "Q4K": {
+        "installed": 288,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_fallback": 97,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 14816378880,
+        "skipped_total": 419,
+        "source_bytes": 14816378880,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 32,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fallback": 33,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3440640000,
+        "skipped_total": 675,
+        "source_bytes": 3440640000,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit3",
+    "max_ms": 337.8,
+    "max_tok_s": 11.95,
+    "median_tok_s": 11.52,
+    "min_tok_s": 2.96,
+    "path": "bench/qk-shared-storage-20260612/32b/explicit-run3.log",
+    "policy": null,
+    "samples": 128,
+    "stdev_tok_s": 1.1310707350240978,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:320",
+      "installed": 320,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18257018880,
+      "source_bytes": 18257018880,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 17.30299212598425,
+    "avg_last16_tok_s": 17.301875,
+    "avg_last32_tok_s": 17.371875,
+    "avg_last64_tok_s": 16.8853125,
+    "avg_ms": 60.128984375,
+    "avg_tok_s": 17.192265625,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "generated1",
+    "max_ms": 319.81,
+    "max_tok_s": 18.54,
+    "median_tok_s": 17.564999999999998,
+    "min_tok_s": 3.13,
+    "path": "bench/qk-shared-storage-20260612/32b/generated-run1.log",
+    "policy": {
+      "entries": "8",
+      "path": "bench/qk-shared-storage-20260612/32b/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 1.705908774754803,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 17.66574803149606,
+    "avg_last16_tok_s": 17.2475,
+    "avg_last32_tok_s": 17.1496875,
+    "avg_last64_tok_s": 17.2990625,
+    "avg_ms": 58.7390625,
+    "avg_tok_s": 17.5521875,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "generated2",
+    "max_ms": 319.14,
+    "max_tok_s": 18.41,
+    "median_tok_s": 17.82,
+    "min_tok_s": 3.13,
+    "path": "bench/qk-shared-storage-20260612/32b/generated-run2.log",
+    "policy": {
+      "entries": "8",
+      "path": "bench/qk-shared-storage-20260612/32b/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 1.4360180824317172,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 17.049527559055118,
+    "avg_last16_tok_s": 17.2825,
+    "avg_last32_tok_s": 17.3521875,
+    "avg_last64_tok_s": 17.49921875,
+    "avg_ms": 62.322734375,
+    "avg_tok_s": 16.9403125,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "generated3",
+    "max_ms": 326.16,
+    "max_tok_s": 18.58,
+    "median_tok_s": 17.675,
+    "min_tok_s": 3.07,
+    "path": "bench/qk-shared-storage-20260612/32b/generated-run3.log",
+    "policy": {
+      "entries": "8",
+      "path": "bench/qk-shared-storage-20260612/32b/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 2.5409353902609007,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  }
+]

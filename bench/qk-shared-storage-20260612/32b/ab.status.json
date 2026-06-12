@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    "bench/qk-shared-storage-20260612/32b/policy.json"
+  ],
+  "outputs": [
+    "bench/qk-shared-storage-20260612/32b/output-ab.json"
+  ],
+  "reused": true,
+  "stage": "ab",
+  "status": "passed",
+  "updated_at": "2026-06-12T11:32:15.514572"
+}

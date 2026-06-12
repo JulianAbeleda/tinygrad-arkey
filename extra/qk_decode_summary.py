@@ -8,7 +8,9 @@ POLICY_RE = re.compile(r"QK_GENERATED_POLICY_DEBUG loaded=(?P<path>\S+) entries=
 INSTALL_RE = re.compile(r"(?P<kind>Q[46]K)_PRIMITIVE_DEBUG installed=(?P<installed>\d+) skipped_total=(?P<skipped>\d+)(?P<rest>.*)")
 STORAGE_RE = re.compile(
   r"QK_PRIMITIVE_STORAGE_DEBUG installed=(?P<installed>\d+) source_bytes=(?P<source_bytes>\d+) "
-  r"storage_bytes=(?P<storage_bytes>\d+) runtime_cap_bytes=(?P<runtime_cap_bytes>-?\d+) "
+  r"storage_bytes=(?P<storage_bytes>\d+)"
+  r"(?: shared_bytes=(?P<shared_bytes>\d+) nonpersistent_bytes=(?P<nonpersistent_bytes>\d+))? "
+  r"runtime_cap_bytes=(?P<runtime_cap_bytes>-?\d+) "
   r"runtime_cap_used_bytes=(?P<runtime_cap_used_bytes>\d+) by_kind=(?P<by_kind>\S+) by_mode=(?P<by_mode>\S+)"
 )
 
@@ -47,7 +49,9 @@ def parse_log(label:str, path:pathlib.Path) -> dict:
     }
   storage = None
   if (m:=list(STORAGE_RE.finditer(text))):
-    storage = {k: int(v) if k not in ("by_kind", "by_mode") else v for k, v in m[-1].groupdict().items()}
+    storage = {k: int(v) if k not in ("by_kind", "by_mode") and v is not None else v for k, v in m[-1].groupdict().items()}
+    storage["shared_bytes"] = storage["shared_bytes"] or 0
+    storage["nonpersistent_bytes"] = storage["nonpersistent_bytes"] or 0
   return {
     "label": label,
     "path": str(path),

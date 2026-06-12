@@ -1,6 +1,7 @@
 import json, pathlib, tempfile, unittest
 
-from tinygrad.llm.model import QKPrimitiveBudget, _load_qk_generated_policy, _qk_storage_summary
+from tinygrad import Tensor, dtypes
+from tinygrad.llm.model import QKPrimitiveBudget, _load_qk_generated_policy, _qk_storage_summary, _shared_packed_view
 
 def _policy(entries):
   return {"kind": "qk_generated_policy", "generator_version": 0, "commit": "test", "entries": entries}
@@ -67,11 +68,41 @@ class TestQKGeneratedPolicyRuntime(unittest.TestCase):
   def test_storage_summary_counts_modes_and_bytes(self):
     from tinygrad.llm.model import Q4KPrimitiveLinear
     q4 = object.__new__(Q4KPrimitiveLinear)
-    q4.q4k_storage = type("S", (), {"source_bytes": 144, "persistent_bytes": 0, "mode": "q4_ondemand"})()
+    q4.q4k_storage = type("S", (), {
+      "source_bytes": 144, "persistent_bytes": 0, "shared_bytes": 0,
+      "nonpersistent_bytes": 144, "mode": "q4_ondemand",
+    })()
     summary = _qk_storage_summary([q4])
     self.assertEqual(summary["source_bytes"], 144)
     self.assertEqual(summary["persistent_bytes"], 0)
+    self.assertEqual(summary["nonpersistent_bytes"], 144)
     self.assertEqual(summary["by_mode"], {"q4_ondemand": 1})
+
+  def test_storage_summary_counts_shared_bytes(self):
+    from tinygrad.llm.model import Q4KPrimitiveLinear, Q6KPrimitiveLinear
+    q4 = object.__new__(Q4KPrimitiveLinear)
+    q4.q4k_storage = type("S", (), {
+      "source_bytes": 144, "persistent_bytes": 0, "shared_bytes": 144,
+      "nonpersistent_bytes": 0, "mode": "shared",
+    })()
+    q6 = object.__new__(Q6KPrimitiveLinear)
+    q6.q6k_storage = type("S", (), {
+      "source_bytes": 210, "persistent_bytes": 210, "shared_bytes": 0,
+      "nonpersistent_bytes": 0, "mode": "sidecar",
+    })()
+    summary = _qk_storage_summary([q4, q6])
+    self.assertEqual(summary["source_bytes"], 354)
+    self.assertEqual(summary["persistent_bytes"], 210)
+    self.assertEqual(summary["shared_bytes"], 144)
+    self.assertEqual(summary["by_kind"], {"Q4K": 0, "Q6K": 210})
+    self.assertEqual(summary["by_mode"], {"shared": 1, "sidecar": 1})
+
+  def test_shared_packed_view_reinterprets_raw_buffer(self):
+    raw = Tensor([1, 2, 3, 4, 5, 6, 7, 8], dtype=dtypes.uint8).realize()
+    view = _shared_packed_view({"raw_tensor": raw}, 0, 8, dtypes.uint32)
+    self.assertEqual(view.shape, (2,))
+    self.assertEqual(view.dtype, dtypes.uint32)
+    self.assertEqual(view.numpy().tolist(), [0x04030201, 0x08070605])
 
 if __name__ == "__main__":
   unittest.main()

@@ -1,0 +1,60 @@
+[
+  {
+    "avg_drop1_tok_s": 57.126666666666665,
+    "avg_last16_tok_s": 45.3,
+    "avg_last32_tok_s": 45.3,
+    "avg_last64_tok_s": 45.3,
+    "avg_ms": 38.5775,
+    "avg_tok_s": 45.3,
+    "installs": {
+      "Q4K": {
+        "installed": 162,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 182,
+        "policy_fused": 54,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3227516928,
+        "skipped_total": 237,
+        "source_bytes": 3227516928,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 18,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 362,
+        "policy_fused": 19,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 743178240,
+        "skipped_total": 381,
+        "source_bytes": 743178240,
+        "storage_bytes": 0
+      }
+    },
+    "label": "shared",
+    "max_ms": 101.78,
+    "max_tok_s": 57.88,
+    "median_tok_s": 56.75,
+    "min_tok_s": 9.82,
+    "path": "bench/qk-shared-storage-20260612/8b-shared-smoke.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-harness-20260612/8b/policy.json"
+    },
+    "samples": 4,
+    "stdev_tok_s": 23.65978726306163,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:180",
+      "installed": 180,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 3970695168,
+      "source_bytes": 3970695168,
+      "storage_bytes": 0
+    }
+  }
+]

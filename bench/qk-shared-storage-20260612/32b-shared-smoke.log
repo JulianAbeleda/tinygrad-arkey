@@ -1,0 +1,31 @@
+QK_GENERATED_POLICY_DEBUG loaded=bench/qk-policy-pipeline-20260612/32b/policy.json entries=8
+Q4K_PRIMITIVE_DEBUG installed=384 skipped_total=323 not_q4_k=322 policy_missing=1 source_bytes=15099494400 storage_bytes=0 shared_bytes=15099494400 nonpersistent_bytes=0 runtime_cap_bytes=-1 runtime_cap_used_bytes=0 storage_mode=shared
+Q4K_PRIMITIVE_DEBUG installed_linears blk.0.attn_k.weight:parts=4:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.0.attn_output.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.0.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.0.ffn_gate.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.ffn_up.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.attn_k.weight:parts=4:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.1.attn_output.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] blk.1.attn_q.weight:parts=1:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=32)'] ...+376
+Q6K_PRIMITIVE_DEBUG installed=64 skipped_total=643 not_q6_k=642 policy_fused=1 source_bytes=3578265600 storage_bytes=0 shared_bytes=3578265600 nonpersistent_bytes=0 runtime_cap_bytes=-1 runtime_cap_used_bytes=0 storage_mode=shared
+Q6K_PRIMITIVE_DEBUG installed_linears blk.0.attn_v.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.0.ffn_down.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.attn_v.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.1.ffn_down.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.2.attn_v.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.2.ffn_down.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.3.attn_v.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] blk.3.ffn_down.weight:parts=2:opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] ...+56
+QK_PRIMITIVE_STORAGE_DEBUG installed=448 source_bytes=18677760000 storage_bytes=0 shared_bytes=18677760000 nonpersistent_bytes=0 runtime_cap_bytes=-1 runtime_cap_used_bytes=0 by_kind=Q4K:0,Q6K:0 by_mode=shared:448
+using model "Qwen3 32B Awq Compatible Instruct" with 19,762,149,024 bytes and 32,762,123,264 params
+scheduled     3 kernels in    13.63 ms | CACHE MISS 50c9ac64 |   47949 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   357.19 ms | CACHE MISS fe198419 |   69701 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   253.51 ms | CACHE MISS 019a16cd |   71079 uops in cache | <frozen runpy>:88
+scheduled   977 kernels in  4246.76 ms | CACHE MISS 4063148b |   79330 uops in cache | <frozen runpy>:88
+memory reduced from 7359.63 MB -> 70.00 MB, 1928 -> 1 bufs
+scheduled    25 kernels in   127.88 ms | CACHE MISS a88e9bf6 |  100615 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in    68.31 ms | CACHE MISS 90a42dee |  100648 uops in cache | <frozen runpy>:88
+scheduled    74 kernels in   138.72 ms | CACHE MISS dd75a3ee |  101378 uops in cache | <frozen runpy>:88
+memory reduced from 152.10 MB -> 2.13 MB, 1030 -> 1 bufs
+scheduled     3 kernels in     1.50 ms |  cache hit 50c9ac64 |  107734 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   183.55 ms | CACHE MISS a35eabb2 |  111236 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in   172.13 ms | CACHE MISS 802b4745 |  111261 uops in cache | <frozen runpy>:88
+scheduled    74 kernels in   186.24 ms | CACHE MISS 5aa44a14 |  111667 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 7402.72 MB -> 71.26 MB, 1544 -> 1 bufs
+scheduled    25 kernels in     2.26 ms |  cache hit a88e9bf6 |  114953 uops in cache | <frozen runpy>:88
+scheduled    25 kernels in     1.42 ms |  cache hit 90a42dee |  114969 uops in cache | <frozen runpy>:88
+scheduled    74 kernels in     3.21 ms |  cache hit dd75a3ee |  115110 uops in cache | <frozen runpy>:88
+JIT captured 1 linears with 2 inputs
+memory reduced from 176.32 MB -> 3.43 MB, 1544 -> 1 bufs
+316.47 ms,   3.16 tok/s,   62.81 GB/s, 19876/21986 MB  --  !ll
+ 74.44 ms,  13.43 tok/s,  261.28 GB/s, 19450/21986 MB  --  !ll\n
+ 75.34 ms,  13.27 tok/s,  258.24 GB/s, 19455/21986 MB  --  !ll\nThe
+ 65.48 ms,  15.27 tok/s,  297.19 GB/s, 19460/21986 MB  --  !ll\nThe sum

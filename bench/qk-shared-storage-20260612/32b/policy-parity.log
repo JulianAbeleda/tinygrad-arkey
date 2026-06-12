@@ -1,0 +1,23 @@
+{
+  "by_format": {
+    "Q4_K": 385,
+    "Q6_K": 65
+  },
+  "effective_mismatches": 256,
+  "explicit_installed": 320,
+  "explicit_reasons": {
+    "policy_fallback": 130,
+    "policy_primitive": 320
+  },
+  "generated_installed": 448,
+  "generated_reasons": {
+    "policy_fused": 1,
+    "policy_missing": 1,
+    "policy_primitive": 448
+  },
+  "generated_unsupported": 0,
+  "raw_differences": 322,
+  "same_effective": 194,
+  "same_raw": 128,
+  "total": 450
+}

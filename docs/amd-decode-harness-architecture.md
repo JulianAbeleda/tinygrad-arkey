@@ -32,6 +32,11 @@ commit, model, storage cap, benchmark config, or other spec changes fail loudly
 unless `--force` is used. `--force` rewrites the manifest and regenerates stages;
 it does not bless stale artifacts for reuse.
 
+Profile-only changes are reuse-compatible. The manifest comparison ignores
+`profile`, `profile_tokens`, and `profile_gain`, so an accepted expensive decode
+run can be reused to add or skip profiling without repeating search, parity,
+decode, and greedy A/B.
+
 ## Stages
 
 Each pipeline stage writes `<stage>.status.json`:
@@ -77,7 +82,8 @@ JSON file containing an `experiments` list. It emits:
 - model, status, reference mode, speed, gain, percent of llama.cpp reference;
 - policy and runtime storage MB.
 
-The committed harness matrices are covered by
+The committed harness matrices, including the shared-storage matrix in
+`bench/qk-shared-storage-20260612/`, are covered by
 `test/external/test_qk_experiment_matrix.py`, which regenerates them from the
 committed `decision.json` directories and compares both JSON and Markdown
 exactly. A stale matrix is now a test failure, not a prose audit finding.

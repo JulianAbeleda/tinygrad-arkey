@@ -69,6 +69,17 @@ class TestQKExperimentMatrix(unittest.TestCase):
       ],
     )
 
+  def test_committed_shared_storage_matrix_reproduces(self):
+    self._assert_committed_matrix_reproduces(
+      "bench/qk-shared-storage-20260612/matrix-summary.json",
+      "bench/qk-shared-storage-20260612/matrix-summary.md",
+      [
+        "bench/qk-harness-20260612/8b",
+        "bench/qk-harness-20260612/14b-rerun",
+        "bench/qk-shared-storage-20260612/32b",
+      ],
+    )
+
 
 if __name__ == "__main__":
   unittest.main()

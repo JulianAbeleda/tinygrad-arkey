@@ -2,15 +2,16 @@
 
 Date: 2026-06-12
 
-Status: memory-aware policy and runtime storage accounting implemented;
-long-term shared storage architecture still open.
+Status: memory-aware policy, runtime storage accounting, and opt-in shared
+primitive storage implemented. Shared storage is validated for the current 8B
+smoke and full 32B harness run; sidecar remains the default.
 
 ## Problem
 
 The generated Q4_K/Q6_K policy can choose good primitive coverage for 8B and
-14B, but the uncapped 32B policy does not fit in VRAM. The failure is not search
-or correctness. The generated 32B policy passed semantic search and parity, then
-failed during primitive storage install:
+14B, but the uncapped 32B sidecar policy does not fit in VRAM. The failure is
+not search or correctness. The generated 32B policy passed semantic search and
+parity, then failed during primitive storage install:
 
 ```text
 MemoryError: Allocation of 70.31 MB failed on AMD. Used: 23.80 GB
@@ -22,7 +23,7 @@ Tensor. For 32B, the full generated sidecar would add about `17.8 GiB` of
 primitive storage across `448` wrappers, which cannot coexist with the model on
 the 24 GB card.
 
-## Current Fix
+## Sidecar Policy Fix
 
 The policy format now supports tensor-scoped entries in addition to the original
 shape-scoped entries.
@@ -43,8 +44,8 @@ shape-scoped entries.
 6. Emit fused-graph fallback entries for over-budget tensors.
 
 The pipeline can compare this capped generated policy against a generic fused
-baseline with `--reference-mode generic`, needed for 32B because the full
-explicit primitive baseline also OOMs.
+baseline with `--reference-mode generic`, which was needed for sidecar 32B
+experiments because the full explicit primitive baseline also OOMed.
 
 ## Runtime Controls
 
@@ -62,12 +63,22 @@ Relevant environment variables:
   storage on device.
 - `QK_PRIMITIVE_STORAGE=q4_ondemand`: experimental Q4_K-only non-persistent
   path. It keeps the Q4 packed slice disk-backed and copies at decode time.
+- `QK_PRIMITIVE_STORAGE=shared`: experimental shared-buffer path. It references
+  the raw GGUF byte tensor already realized for the fallback graph through a
+  typed buffer view, so selected Q4_K/Q6_K primitive tensors report
+  `shared_bytes` instead of allocating a second persistent sidecar.
 
 `q4_ondemand` is a negative prototype, not a recommended mode. It proves that
 Q4 persistent sidecar bytes can be removed, but the per-token copy cost destroys
 decode throughput.
 
-## 32B Result
+`shared` is the first real dedup path. It is not the default fast path because
+the sidecar path remains the established 8B/14B default, but it has passed a
+cheap 8B smoke/A-B and the full 32B pipeline. The key property is now measured:
+selected Q4_K/Q6_K tensors report `storage_bytes=0` and `shared_bytes` equal to
+the selected source ranges instead of allocating duplicate primitive sidecars.
+
+## 32B Capped Sidecar Result
 
 Artifact: `bench/qk-policy-cap-20260612/32b-1536mb/`.
 
@@ -113,6 +124,49 @@ Important caveat: this is not an explicit-full-primitive comparison. The full
 explicit Q4/Q6 primitive baseline does not fit for 32B. This result says a
 memory-aware generated policy can recover some speed while fitting beside the
 generic model graph.
+
+This result is now historical/control evidence. The shared-storage run below is
+the current 32B comparison because it fits the full explicit and generated
+primitive policies without sidecar duplication.
+
+## Shared Storage Validation
+
+Artifact: `bench/qk-shared-storage-20260612/`.
+
+8B smoke:
+
+| mode | Q4 wrappers | Q6 wrappers | storage bytes | shared bytes | result |
+|---|---:|---:|---:|---:|---|
+| generated shared policy | `162` | `18` | `0` | `3,970,695,168` | warm decode about `57 tok/s`, greedy A/B match |
+
+32B smoke:
+
+| mode | Q4 wrappers | Q6 wrappers | storage bytes | shared bytes | result |
+|---|---:|---:|---:|---:|---|
+| generated shared policy | `384` | `64` | `0` | `18,677,760,000` | full uncapped policy loads and decodes |
+
+32B full harness:
+
+```sh
+DEV=AMD QK_PRIMITIVE_STORAGE=shared PYTHONPATH=. \
+  .venv/bin/python extra/qk_policy_pipeline.py \
+  --model ~/models/Qwen3-32B-Q4_K_M.gguf \
+  --out bench/qk-shared-storage-20260612/32b \
+  --device AMD --level 2 --iters 2 --benchmark 128 --repeats 3 \
+  --max-extra-repeats 1 --profile auto --reference-mode explicit \
+  --search-timeout 3600 --reuse
+```
+
+Decision:
+
+| model | reference | generated policy | result | storage |
+|---|---|---|---|---|
+| Qwen3-32B-Q4_K_M | shared explicit Q4/Q6 primitives | shared generated policy | accept, `17.23` vs `11.15 tok/s`, `54.56%` gain | `storage_bytes=0`, `shared_bytes=18,677,760,000` |
+
+The 32B row now passes parity, greedy output A/B, repeated decode, and profile.
+It is also included in
+`bench/qk-shared-storage-20260612/matrix-summary.md`, which is covered by the
+matrix reproducibility test.
 
 ## Why This Is Architectural
 
@@ -164,10 +218,13 @@ The cap is a bridge. The long-term design should reduce or remove duplicate
 storage:
 
 1. Shared packed storage
-   - A primitive wrapper should reference the existing GGUF-backed packed weight
-     storage when the runtime can consume the same layout.
-   - Avoid making a second persistent device copy when the source storage is
-     already resident or can be viewed safely.
+   - A primitive wrapper can now reference the existing GGUF-backed raw byte
+     tensor through a typed view under `QK_PRIMITIVE_STORAGE=shared`.
+   - This avoids making a second persistent device copy when the source storage
+     is already resident and can be viewed safely.
+   - Current validation covers 8B smoke/A-B and full 32B harness. The remaining
+     promotion question is whether 8B/14B full harness runs stay at parity with
+     sidecar often enough to make shared the default for generated policies.
 
 2. Lazy materialization
    - Install primitive metadata at model load, not necessarily all sidecar
@@ -197,12 +254,11 @@ storage:
 
 Ordered by architectural value:
 
-1. Move up to the harness/infrastructure layer. Treat storage caps and accounting
-   as available primitives for future experiments.
-2. If storage work resumes, prototype real shared ownership for one Q4_K family:
-   no duplicate persistent buffer and no per-token disk copy.
-3. Re-run a cheap 32B true comparison only if shared ownership makes full
-   explicit/full generated policies fit naturally.
+1. Keep shared storage opt-in while it remains newer than sidecar.
+2. If promoting it, run full 8B and 14B shared-storage harness comparisons
+   against the existing sidecar matrix first.
+3. Use the shared-storage 32B row as the third scaling point, not as a reason to
+   restart 32B-specific tuning.
 4. Do not resume kernel search from this track. The storage work is now
    infrastructure; use it to support higher-level loop/harness work.
 

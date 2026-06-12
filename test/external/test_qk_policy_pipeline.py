@@ -51,6 +51,13 @@ class TestQKPolicyPipeline(unittest.TestCase):
       _validate_or_init_manifest(forced)
       self.assertFalse(forced.reuse)
 
+  def test_manifest_allows_profile_only_reuse_change(self):
+    with TemporaryDirectory() as raw_td:
+      td = pathlib.Path(raw_td)
+      args = self._args(td, profile="never")
+      _validate_or_init_manifest(args)
+      _validate_or_init_manifest(self._args(td, model=args.model, out=args.out, reuse=True, profile="auto"))
+
   def test_stage_status_updates_manifest(self):
     with TemporaryDirectory() as raw_td:
       td = pathlib.Path(raw_td)

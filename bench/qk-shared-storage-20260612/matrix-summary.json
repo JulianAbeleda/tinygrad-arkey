@@ -1,0 +1,73 @@
+{
+  "kind": "qk_experiment_matrix",
+  "rows": [
+    {
+      "ab_match": true,
+      "explicit_tok_s": 49.34614583333333,
+      "gain": 0.08407286536646952,
+      "generated_pct_llama": 52.8604918066535,
+      "generated_tok_s": 53.494817708333336,
+      "model_size": "8B",
+      "path": "bench/qk-harness-20260612/8b",
+      "policy_cap_bytes": null,
+      "policy_selected_bytes": 107347968,
+      "policy_selected_primitive_entries": 4,
+      "reasons": [
+        "generated beats explicit by 8.41%"
+      ],
+      "reference_mode": "explicit",
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 3970695168,
+      "runtime_storage_bytes": 3970695168,
+      "status": "accept"
+    },
+    {
+      "ab_match": true,
+      "explicit_tok_s": 22.764817708333332,
+      "gain": 0.7401749547284338,
+      "generated_pct_llama": 60.204810980243174,
+      "generated_tok_s": 39.614765625000004,
+      "model_size": "14B",
+      "path": "bench/qk-harness-20260612/14b-rerun",
+      "policy_cap_bytes": null,
+      "policy_selected_bytes": 195379200,
+      "policy_selected_primitive_entries": 6,
+      "reasons": [
+        "generated beats explicit by 74.02%"
+      ],
+      "reference_mode": "explicit",
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7918387200,
+      "runtime_storage_bytes": 7918387200,
+      "status": "accept"
+    },
+    {
+      "ab_match": true,
+      "explicit_tok_s": 11.146927083333333,
+      "gain": 0.5455609496264386,
+      "generated_pct_llama": 55.93589353354979,
+      "generated_tok_s": 17.228255208333334,
+      "model_size": "32B",
+      "path": "bench/qk-shared-storage-20260612/32b",
+      "policy_cap_bytes": null,
+      "policy_selected_bytes": 309411840,
+      "policy_selected_primitive_entries": 7,
+      "reasons": [
+        "generated beats explicit by 54.56%"
+      ],
+      "reference_mode": "explicit",
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "runtime_storage_bytes": 0,
+      "status": "accept"
+    }
+  ],
+  "summary": {
+    "accepted": 3,
+    "accepted_mean_gain": 0.4566029232404473,
+    "experiments": 3,
+    "statuses": {
+      "accept": 3
+    }
+  }
+}
