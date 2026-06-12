@@ -1,4 +1,4 @@
-# Qwen Eval Matrix
+# LLM Eval Matrix
 
 This matrix is the shared gate for three compounding goals:
 fast local inference, future training/rollout/eval loops, and compiler/search

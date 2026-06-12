@@ -1,6 +1,8 @@
 # Qwen Eval Matrix
 
-This directory is the Track 1 eval/rollout foundation. It serves three
+This directory is a Qwen-specific Track 1 eval/rollout artifact built on the
+generic `extra/llm_eval_matrix.py` and `extra/llm_eval_harness.py` tools. It
+serves three
 compounding goals:
 
 - fast local inference: generated shared policies must match explicit
@@ -19,7 +21,7 @@ Current source of truth:
 Regenerate the enabled matrix:
 
 ```sh
-DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qwen_eval_matrix.py \
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/llm_eval_matrix.py \
   --manifest bench/qwen-eval-20260612/manifest.json \
   --run \
   --json bench/qwen-eval-20260612/matrix-summary.json \
@@ -29,7 +31,7 @@ DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qwen_eval_matrix.py \
 Run the optional 32B row explicitly:
 
 ```sh
-DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qwen_eval_matrix.py \
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/llm_eval_matrix.py \
   --manifest bench/qwen-eval-20260612/manifest.json \
   --run --include-disabled --only 32b-shared \
   --json bench/qwen-eval-20260612/matrix-summary-with-32b.json \

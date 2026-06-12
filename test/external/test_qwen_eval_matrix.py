@@ -1,7 +1,7 @@
 import json, pathlib, unittest
 from tempfile import TemporaryDirectory
 
-from extra.qwen_eval_matrix import load_manifest, make_matrix, matrix_markdown
+from extra.llm_eval_matrix import load_manifest, make_matrix, matrix_markdown
 
 
 class TestQwenEvalMatrix(unittest.TestCase):
@@ -31,7 +31,7 @@ class TestQwenEvalMatrix(unittest.TestCase):
       out = self._write_run(root, "8b")
       manifest_path = root / "manifest.json"
       manifest_path.write_text(json.dumps({
-        "kind": "qwen_eval_manifest",
+        "kind": "llm_eval_manifest",
         "prompts": str(root / "prompts.jsonl"),
         "tokens": 64,
         "rows": [{"id": "8b", "model_size": "8B", "model": "/tmp/model", "policy": "/tmp/policy", "out": str(out)}],
@@ -39,14 +39,14 @@ class TestQwenEvalMatrix(unittest.TestCase):
       manifest = load_manifest(manifest_path)
       matrix = make_matrix(manifest, pathlib.Path.cwd())
       self.assertEqual(matrix["summary"]["parity_passed"], 1)
-      self.assertIn("Qwen Eval Matrix", matrix_markdown(matrix))
+      self.assertIn("LLM Eval Matrix", matrix_markdown(matrix))
 
   def test_manifest_rejects_duplicate_ids(self):
     with TemporaryDirectory() as raw_td:
       root = pathlib.Path(raw_td)
       manifest_path = root / "manifest.json"
       manifest_path.write_text(json.dumps({
-        "kind": "qwen_eval_manifest",
+        "kind": "llm_eval_manifest",
         "rows": [
           {"id": "x", "model_size": "8B", "model": "/tmp/model", "policy": "/tmp/policy", "out": "/tmp/out"},
           {"id": "x", "model_size": "14B", "model": "/tmp/model", "policy": "/tmp/policy", "out": "/tmp/out"},
@@ -61,6 +61,13 @@ class TestQwenEvalMatrix(unittest.TestCase):
     matrix = make_matrix(manifest, repo)
     self.assertEqual(json.loads((repo / "bench/qwen-eval-20260612/matrix-summary.json").read_text()), matrix)
     self.assertEqual((repo / "bench/qwen-eval-20260612/matrix-summary.md").read_text(), matrix_markdown(matrix))
+
+  def test_generic_eval_tools_do_not_embed_qwen_artifact_details(self):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    for rel in ("extra/llm_eval_harness.py", "extra/llm_eval_matrix.py", "extra/llm_rollout.py", "extra/llm_eval_common.py"):
+      text = (repo / rel).read_text().lower()
+      self.assertNotIn("qwen", text, rel)
+      self.assertNotIn("/no_think", text, rel)
 
 
 if __name__ == "__main__":

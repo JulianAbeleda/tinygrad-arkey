@@ -47,14 +47,16 @@ generated-policy storage mode.
 - [x] Regenerated current matrix at
       `bench/qk-shared-storage-20260612/matrix-summary.md`.
 - [x] Fetched remote refs with `git fetch --all --prune`.
-- [x] Added Track 1 smallest-real Qwen eval/rollout gate:
-      `extra/qwen_eval_harness.py` compares explicit Q4/Q6 primitives against
-      a pinned generated policy on fixed prompts with exact greedy-token parity
-      and separate answer-quality scoring.
-- [x] Added Track 1 Qwen eval matrix source of truth:
-      `extra/qwen_eval_matrix.py`,
+- [x] Added Track 1 generic LLM eval/parity gate:
+      `extra/llm_eval_harness.py` compares explicit Q4/Q6 primitives against a
+      pinned generated policy on fixed prompts with exact greedy-token parity
+      and separate answer-quality scoring. `extra/qwen_eval_harness.py` is now a
+      Qwen-default compatibility wrapper.
+- [x] Added Track 1 generic LLM eval matrix source of truth:
+      `extra/llm_eval_matrix.py`,
       `bench/qwen-eval-20260612/manifest.json`, and
       `bench/qwen-eval-20260612/matrix-summary.md`.
+      `extra/qwen_eval_matrix.py` is now a Qwen-default compatibility wrapper.
 - [x] Ran Track 1 matrix on 8B and 14B shared storage:
       both rows pass exact parity and score `10/10` on the small prompt suite.
       This validates the faster inference path as a deterministic rollout/eval

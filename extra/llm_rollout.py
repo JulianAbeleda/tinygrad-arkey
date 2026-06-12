@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, json, os, pathlib, subprocess, sys, time
 from typing import Any
 
-from extra.llm_eval_common import md_text, quality_summary, read_prompt_jsonl, score_prompt
+from extra.llm_eval_common import build_prompt_ids, md_text, quality_summary, read_prompt_jsonl, score_prompt
 
 def configure_env(args:argparse.Namespace) -> None:
   os.environ["DEV"] = args.device
@@ -29,13 +29,6 @@ def configure_env(args:argparse.Namespace) -> None:
     os.environ["Q6K_PRIMITIVE"] = "0"
   else:
     raise ValueError(f"unknown mode {args.mode!r}")
-
-def prompt_ids(tok:Any, text:str, prompt_format:str) -> list[int]:
-  if prompt_format == "chat":
-    return tok.prefix() + tok.role("user") + tok.encode(text) + tok.end_turn() + tok.role("assistant")
-  if prompt_format == "raw":
-    return tok.prefix() + tok.encode(text)
-  raise ValueError(f"unknown prompt format {prompt_format!r}")
 
 def summarize_rollouts(args:argparse.Namespace, rows:list[dict[str, Any]]) -> dict[str, Any]:
   elapsed = sum(row["elapsed_s"] for row in rows)
@@ -111,7 +104,7 @@ def run_rollout(args:argparse.Namespace) -> int:
   tok = SimpleTokenizer.from_gguf_kv(kv)
   rows: list[dict[str, Any]] = []
   for item in dataset:
-    ids = prompt_ids(tok, item["prompt"], args.prompt_format)
+    ids = build_prompt_ids(tok, item["prompt"], args.prompt_format)
     out: list[int] = []
     max_tokens = item.get("max_tokens", args.tokens)
     st = time.perf_counter()

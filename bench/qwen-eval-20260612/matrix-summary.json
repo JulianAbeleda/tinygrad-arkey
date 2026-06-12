@@ -1,5 +1,5 @@
 {
-  "kind": "qwen_eval_matrix",
+  "kind": "llm_eval_matrix",
   "prompts": "bench/qwen-eval-20260612/prompts.jsonl",
   "rows": [
     {
@@ -12,6 +12,7 @@
       "model_size": "8B",
       "out": "bench/qwen-eval-20260612/8b-shared",
       "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
       "prompts": 10,
       "quality_pass_rate": 1.0,
       "quality_passed": 10,
@@ -32,6 +33,7 @@
       "model_size": "14B",
       "out": "bench/qwen-eval-20260612/14b-shared",
       "policy": "bench/qk-shared-storage-20260612/14b/policy.json",
+      "prompt_format": "chat",
       "prompts": 10,
       "quality_pass_rate": 1.0,
       "quality_passed": 10,

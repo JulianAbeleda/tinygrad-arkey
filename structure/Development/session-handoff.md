@@ -202,11 +202,13 @@ PYTHONPATH=. .venv/bin/python -m unittest \
 The clean default is to pause here. The project now has a consolidated local
 inference result and a third scaling point.
 
-Track 1 has also started: `extra/qwen_eval_harness.py` is the smallest-real
-Qwen rollout/eval gate, and `extra/qwen_eval_matrix.py` is the matrix source of
-truth. Current artifact: `bench/qwen-eval-20260612/matrix-summary.md`.
-It compares explicit Q4/Q6 primitive flags against pinned generated policies
-using `QK_PRIMITIVE_STORAGE=shared`, fixed prompts, greedy decoding, exact token
+Track 1 eval/parity is now model-agnostic at the tool layer:
+`extra/llm_eval_harness.py` is the smallest-real LLM rollout/eval gate, and
+`extra/llm_eval_matrix.py` is the matrix source of truth. The Qwen scripts are
+compatibility wrappers with Qwen defaults. Current Qwen artifact:
+`bench/qwen-eval-20260612/matrix-summary.md`. It compares explicit Q4/Q6
+primitive flags against pinned generated policies using
+`QK_PRIMITIVE_STORAGE=shared`, fixed prompts, greedy decoding, exact token
 parity, and separate answer-quality scoring. The enabled 8B and 14B rows both
 passed exact parity and scored `10/10`; 32B is listed in the manifest as an
 optional heavy row. Treat timings in this harness as sanity data only; canonical

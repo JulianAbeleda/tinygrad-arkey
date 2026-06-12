@@ -1,7 +1,7 @@
 import pathlib, unittest
 from tempfile import TemporaryDirectory
 
-from extra.qwen_eval_harness import _read_jsonl, score_prompt, summarize_results, summary_markdown
+from extra.llm_eval_harness import _read_jsonl, score_prompt, summarize_results, summary_markdown
 
 
 class TestQwenEvalHarness(unittest.TestCase):
@@ -43,7 +43,7 @@ class TestQwenEvalHarness(unittest.TestCase):
     self.assertEqual(summary["status"], "pass")
     self.assertTrue(summary["tokens_match"])
     self.assertEqual(summary["quality"]["status"], "pass")
-    self.assertIn("Qwen Eval Harness", summary_markdown(summary, explicit, generated))
+    self.assertIn("LLM Eval Harness", summary_markdown(summary, explicit, generated))
 
   def test_summary_fails_on_token_mismatch(self):
     explicit = {"generated": 2, "elapsed_s": 1.0, "tok_s": 2.0, "results": [

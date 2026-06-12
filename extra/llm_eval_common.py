@@ -79,3 +79,10 @@ def quality_summary(rows:list[dict[str, Any]]) -> dict[str, Any]:
 
 def md_text(text:str) -> str:
   return text.replace("\n", "\\n").replace("|", "\\|")
+
+def build_prompt_ids(tok:Any, text:str, prompt_format:str) -> list[int]:
+  if prompt_format == "chat":
+    return tok.prefix() + tok.role("user") + tok.encode(text) + tok.end_turn() + tok.role("assistant")
+  if prompt_format == "raw":
+    return tok.prefix() + tok.encode(text)
+  raise ValueError(f"unknown prompt format {prompt_format!r}")

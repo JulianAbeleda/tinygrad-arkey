@@ -1,5 +1,5 @@
 {
-  "kind": "qwen_eval_manifest",
+  "kind": "llm_eval_manifest",
   "prompts": "bench/qwen-eval-20260612/prompts.jsonl",
   "tokens": 64,
   "max_context": 4096,
