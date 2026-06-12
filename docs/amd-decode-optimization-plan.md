@@ -700,3 +700,32 @@ hypothesis is a representation change: q8_1 activation staging plus
 first-class searchable knobs. Keep the current Q4+Q6 v1 policy as the stable
 baseline, and accept v2 only after correctness, repeated full decode, and
 profile gates.
+
+## STRATEGIC INFLECTION (2026-06-11) — inference plateau + the AutoTVM-regime conclusion
+
+State: 8B 58 tok/s, 14B 28 tok/s (~57% of llama.cpp), greedy-A/B verified, stable.
+All gains came from hand-written primitives (Q4, Q6 ffn_down = layer 2). Search
+(layer 1) produced nothing: BEAM zero+crash, knob sweep nothing-survived-decode.
+
+Field research conclusion: this is the documented AutoTVM regime — human template
++ search confined to it. The field escaped NOT by smarter search inside templates,
+but by pushing Layer 2 into the machine (Ansor generates the search space) or rich
+parameterization + analytical cost model (CUTLASS). tinygrad BEAM is AutoTVM-era
+(fixed OptOps move set); our primitive IS an AutoTVM template. The cheap lever
+(tune the primitive) is empirically exhausted.
+
+Decision (goal-level, three branches):
+- A. CONSOLIDATE inference at 57%, pivot to training (LoRA/RLVR). RECOMMENDED.
+- B. v2 primitive: rich knob space + cost-model-guided sweep. Diminishing returns,
+     human-bound grind vs llama.cpp MMVQ.
+- C. Ansor move: teach tinygrad codegen to GENERATE the quant-GEMV structure.
+     The real machine-first win; compiler-research scale; only if wanted for itself.
+
+Recommendation A rationale: inference result is done+verified; cheap levers
+exhausted; interest has shifted to training, which the inference work enables
+(rollouts = decode). Higher value-per-effort than 57%->65%.
+
+Action path A: (1) freeze+declare inference result, (2) clean docs/checklist to
+"inference consolidated", (3) validate training stack with smallest real run
+(QLoRA SFT 1.5-4B, native Linux, few steps), (4) flagship GRPO/RLVR 1.5-3B on a
+verifiable math task. Smallest-real-target-first, gate-on-metric, scale-after.
