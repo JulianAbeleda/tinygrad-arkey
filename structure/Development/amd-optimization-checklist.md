@@ -74,6 +74,13 @@ generated-policy storage mode.
       `bench/qwen-rollout-20260612/8b-generated-small/summary.md`, quality
       `pass`, `75/75`, `608` generated tokens. Tests now enforce the dataset
       size/scoring rules and committed summary reproducibility.
+- [x] Added Track 1 offline rollout comparator:
+      `extra/llm_rollout_compare.py`,
+      `bench/qwen-rollout-20260612/8b-explicit-small/summary.md`, and
+      `bench/qwen-rollout-20260612/compare-8b-small/report.md`. Generated
+      policy vs explicit primitive flags on the 75-prompt 8B dataset has
+      quality delta `0`, regressions `0`, text changes `0/75`, and token
+      changes `0/75`.
 
 ## Open But Not Urgent
 
@@ -92,8 +99,8 @@ generated-policy storage mode.
 
 ## Reasonable Resume Tracks
 
-1. Practical track: build a real SFT/RLVR loop or offline judging pipeline on
-   top of the validated rollout backend.
+1. Practical track: build a real SFT/RLVR loop or a richer judge on top of the
+   validated rollout/comparator backend.
 2. Infrastructure track: keep shared storage explicit and run occasional soak
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen

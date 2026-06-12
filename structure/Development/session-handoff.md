@@ -230,10 +230,18 @@ dataset at `bench/qwen-rollout-20260612/dataset-small.jsonl`. Current artifact:
 across math, code, format, facts, reasoning, compiler/tinygrad, and instruction
 following; it is for rollout/eval plumbing, not a broad capability benchmark.
 
+Track 1.5 added the deterministic offline comparator:
+`extra/llm_rollout_compare.py`. Current Qwen artifact:
+`bench/qwen-rollout-20260612/compare-8b-small/report.md`, comparing
+`8b-generated-small` against `8b-explicit-small`. Result: explicit mode also
+passes `75/75`; generated and explicit are token-identical on all `75` prompts
+with quality delta `0`, regressions `0`, text changes `0/75`, and token changes
+`0/75`. This is an offline score/output comparator, not an LLM-as-judge.
+
 When resuming, choose one track explicitly:
 
-1. Use the inference win: build a real training loop, offline judge, or
-   RLVR/SFT pipeline on top of the validated rollout backend.
+1. Use the inference win: build a real training loop, richer judge, or
+   RLVR/SFT pipeline on top of the validated rollout/comparator backend.
 2. Compiler research: pursue the Ansor-style semantic packed-layout/codegen
    direction. Do not confuse this with more hand-written primitive tuning.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
