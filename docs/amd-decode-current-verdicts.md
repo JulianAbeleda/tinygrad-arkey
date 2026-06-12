@@ -14,19 +14,28 @@ goal explicitly changes to compiler research.
 
 Current stable paths:
 
-- Qwen3-8B-Q4_K_M: use explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1`.
-  Same-commit rerun: `51.36 tok/s`; prior stable run: about `58 tok/s`.
+- Qwen3-8B-Q4_K_M: explicit `Q4K_PRIMITIVE=1 Q6K_PRIMITIVE=1` is still
+  the boring path, but the reproducible generated-policy pipeline now accepts
+  a modest opt-in generated artifact:
+  `QK_GENERATED_POLICY=bench/qk-policy-pipeline-20260612/8b/policy.json`.
+  Stable-window result: `52.65 tok/s` generated versus `49.61 tok/s`
+  explicit.
 - Qwen3-14B-Q4_K_M: use the accepted generated policy
-  `QK_GENERATED_POLICY=bench/qk-semantic-20260612/14b-full-level2-skip-stopped-policy.json`.
-  Remeasure audit: `39.68 tok/s` mean across three fresh runs (`39.42-40.05`
-  range), about `60%` of the llama.cpp reference.
+  `QK_GENERATED_POLICY=bench/qk-policy-pipeline-20260612/14b/policy.json`.
+  Stable-window result: `39.99 tok/s` generated versus `22.53 tok/s`
+  explicit, about `60.8%` of the llama.cpp reference.
+- Qwen3-32B-Q4_K_M: generated-policy search/parity succeeds, but decode is
+  blocked by GPU memory in primitive storage install (`23.80 GB` used, then a
+  `70.31 MB` allocation fails). Do not treat 32B as a speed data point until
+  duplicate packed-weight storage is reduced or made memory-aware.
 - Correctness is verified at the kernel boundary and by greedy end-to-end A/B.
 - BEAM/risky schedule search is guarded and must not run on Mac/TinyGPU paths.
 
-Recommendation by default: keep explicit Q4/Q6 flags for 8B, use the generated
-14B policy only for the matching model/hardware artifact, stop adding `extra/`
-q8 arithmetic variants, and move effort to the next higher-value goal unless
-compiler research is the point.
+Recommendation by default: keep generated policies opt-in and artifact-pinned,
+use the 8B/14B pipeline artifacts only for the matching model/hardware path,
+stop adding `extra/` q8 arithmetic variants, and move effort to the next
+higher-value goal unless compiler research is the point. For 32B, the next
+required work is storage/memory design, not more candidate search.
 
 ## Verdict Table
 
@@ -36,7 +45,7 @@ compiler research is the point.
 | Generic BEAM | Not enough for this gap, and unsafe on remote/Mac without guards. | BEAM returns only after there is a semantic primitive/candidate space worth tuning. |
 | Expression-vectorization probe | Failed. Rewriting byte expressions did not make codegen emit wider useful loads. | Stop trying to garden `gguf.py` scalar byte math. |
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
-| Generated policy | Model-specific result. Full-shape stop-gated generation is flat on 8B (`50.94` vs `51.36 tok/s`) and accepted on 14B after remeasure audit (`39.68 tok/s` mean vs current explicit `23.27`; prior `c3315d6ad` explicit also only `22.78`). Both generated policies pass 32-token greedy A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 14B artifact when running that exact model/hardware path; do not make it a global default. |
+| Generated policy | Model-specific result. The reproducible pipeline accepts 8B as a modest win (`52.65` vs `49.61 tok/s`) and 14B as a strong win (`39.99` vs `22.53 tok/s`). Both generated policies pass 32-token greedy A/B. 32B policy generation/parity succeeds but decode is blocked by primitive storage OOM. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts when running those exact model/hardware paths; do not make it a global default. Fix storage before using this path on 32B. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, and policy cache exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
@@ -73,6 +82,10 @@ It is a representation/lowering boundary:
    wrappers versus `200` explicit, adds Q4 `attn_k`, Q4/Q6 `attn_v` coverage,
    changes FFN split/local choices, and drops batched AMD kernel time from
    `40.84` to `22.95 ms/tok`.
+9. The reproducible pipeline adds a stricter repeated-run gate. With an
+   adaptive stable-window rerun, 8B is a small generated-policy win, 14B is a
+   large generated-policy win, and 32B is blocked by duplicate primitive storage
+   pressure rather than by candidate generation.
 
 So the machine-first research hypothesis is:
 
@@ -90,7 +103,7 @@ Choose the next step by goal:
 
 | Goal | Track | Recommended next step |
 |---|---|---|
-| Reliable local Qwen inference | Consolidate | Use explicit Q4/Q6 flags for 8B; use the accepted generated-policy artifact for 14B; document commands and stop decode optimization. |
+| Reliable local Qwen inference | Consolidate | Use the accepted generated-policy artifacts for 8B/14B when you want peak local speed; keep explicit Q4/Q6 flags as the boring fallback. |
 | More speed on this one GPU | v2 template grind | Write a richer hand template and sweep it, accepting lower ROI. |
 | Honor tinygrad's search thesis | Compiler research | Build semantic packed-layout and schedule/codegen generation, then feed it through the generated-search harness. |
 | Use the inference win | Training | Validate the smallest real QLoRA/SFT or RLVR stack using the faster decode path for rollouts/eval. |
@@ -107,6 +120,8 @@ worth doing only if the research itself is the goal.
   packed-dot work is part of a broader semantic layout/schedule rewrite.
 - Do not make `QK_GENERATED_POLICY` a global default. The accepted 14B policy is
   model/hardware-specific and must stay an explicit artifact path.
+- Do not pursue 32B generated-policy speed work until primitive-packed storage
+  no longer duplicates enough GPU memory to OOM during model load.
 - Do not run BEAM or risky schedule search on Mac/TinyGPU/remote paths.
 - Do not widen tinygrad core optimizer APIs for quant GEMV until an `extra/`
   or renderer-level candidate passes correctness and wins a generated-search
@@ -121,5 +136,6 @@ worth doing only if the research itself is the goal.
 - Current generated-search artifacts: `bench/qk-ansor-20260612/README.md`
 - Semantic generated-search artifacts: `bench/qk-semantic-20260612/README.md`
 - 14B generated-policy audit: `bench/qk-14b-remeasure-20260612/README.md`
+- Reproducible generated-policy pipeline: `bench/qk-policy-pipeline-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

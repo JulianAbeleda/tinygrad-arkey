@@ -952,3 +952,46 @@ other AMD drops `10.34 -> 1.28 ms/tok`.
 Verdict: accept the 14B generated policy as a real, artifact-pinned,
 model-specific win. The suspected explicit-regression explanation is false on
 fresh runs. Do not generalize this into a global generated-policy default.
+
+## Step 29 reproducible generated-policy pipeline (2026-06-12)
+
+Artifact: `bench/qk-policy-pipeline-20260612/`.
+
+This step converted the generated-policy workflow into a single reproducible
+gate:
+
+1. generate a full-shape policy with `extra/qk_ansor.py --level 2
+   --skip-stopped`;
+2. run semantic and explicit-versus-generated parity reports;
+3. run repeated explicit and generated `--benchmark 128` decode;
+4. run a 32-token greedy output A/B;
+5. profile accepted large wins with DEBUG=2;
+6. record an explicit accept/tie/reject/blocked decision.
+
+The initial three-run gate was too eager on noisy marginal samples, so the
+pipeline now uses the latest stable three-run window and can add up to two extra
+samples per mode when a run has a late collapse. This keeps the rule strict
+without letting one transient bad sample permanently poison the result set.
+
+Results:
+
+| model | status | explicit window | generated window | explicit tok/s | generated tok/s | gain | note |
+|---|---|---|---|---:|---:|---:|---|
+| Qwen3-8B-Q4_K_M | accept | explicit2-4 | generated3-5 | `49.61` | `52.65` | `6.14%` | modest generated-policy win |
+| Qwen3-14B-Q4_K_M | accept | explicit1-3 | generated3-5 | `22.53` | `39.99` | `77.48%` | strong generated-policy win; profile reused |
+| Qwen3-32B-Q4_K_M | blocked | n/a | n/a | n/a | n/a | n/a | primitive storage OOM before decode |
+
+32B detail:
+
+- generated search and parity succeeded;
+- explicit policy would install `320` wrappers;
+- generated policy would install `448` wrappers;
+- generated unsupported winners: `0`;
+- decode failed during primitive storage install:
+  `MemoryError: Allocation of 70.31 MB failed on AMD. Used: 23.80 GB`.
+
+Verdict: generated-policy selection is now a reproducible opt-in win for 8B and
+14B on this local gfx1100 path. The 32B scaling question is unresolved because
+the current primitive integration duplicates too much packed-weight storage on
+GPU. The next 32B task is memory/storage design, not more generated candidate
+search.

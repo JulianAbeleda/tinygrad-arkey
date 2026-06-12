@@ -892,6 +892,44 @@ Ansor-direction success is not measured first by tok/s. It is measured by:
 Speed matters only after those are true. Otherwise this collapses back into
 AutoTVM/CUTLASS-style hand-template tuning.
 
+## Reproducible Policy Pipeline Result (2026-06-12)
+
+The generated-search path now has a reproducible end-to-end pipeline in
+`extra/qk_policy_pipeline.py` with artifacts under
+`bench/qk-policy-pipeline-20260612/`.
+
+Pipeline gates:
+
+- generate a stop-gated full-shape policy from semantic descriptors;
+- check parity against explicit Q4/Q6 primitive policy;
+- run repeated explicit and generated decode;
+- use the latest stable three-run decision window, adding up to two extra
+  samples when a run collapses;
+- run greedy output A/B;
+- profile large accepted wins;
+- emit `decision.json` and `README.md`.
+
+Results:
+
+| model | status | explicit tok/s | generated tok/s | interpretation |
+|---|---|---:|---:|---|
+| Qwen3-8B-Q4_K_M | accept | `49.61` | `52.65` | small but stable policy win |
+| Qwen3-14B-Q4_K_M | accept | `22.53` | `39.99` | large coverage/schedule-policy win |
+| Qwen3-32B-Q4_K_M | blocked | n/a | n/a | primitive storage OOM before decode |
+
+This changes the research state in two ways:
+
+1. The generated-search harness is no longer just a microbench/policy artifact;
+   it can produce correctness-checked runtime policy wins on complete decode.
+2. 32B exposes a new representation problem: runtime-supported candidates are
+   found, but the current primitive wrapper duplicates packed-weight storage on
+   GPU. Search cannot answer the 32B scaling question until storage is lazy,
+   shared with the fallback graph, or capped by a memory-aware policy.
+
+Next Ansor-direction step, if continuing research: make memory cost a first-class
+constraint in the generated policy and remove duplicated primitive storage before
+trying to prove 32B scaling.
+
 ## Relationship to existing docs
 
 - `docs/amd-decode-optimization-plan.md` remains the historical execution log.

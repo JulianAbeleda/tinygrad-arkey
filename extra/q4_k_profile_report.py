@@ -8,11 +8,11 @@ from typing import Callable
 
 TOKEN_RE = re.compile(r"^\s*(?P<ms>[0-9.]+) ms,\s+(?P<tps>[0-9.]+) tok/s,\s+(?P<gbs>[0-9.]+) GB/s,")
 AMD_RE = re.compile(r"^\*\*\* AMD\s+\d+\s+(?P<name>.*?)\s+arg\s+\d+\s+mem\s+.*?\btm\s+(?P<tm>[0-9.]+)(?P<unit>us|ms|s)/")
-MODEL_RE = re.compile(r"(?:^|[-_])(8b|14b)(?:[-_]|$)", re.IGNORECASE)
+MODEL_RE = re.compile(r"(?:^|[-_])(8b|14b|32b)(?:[-_]|$)", re.IGNORECASE)
 
-PROFILE_SCOPE = "Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode"
+PROFILE_SCOPE = "Qwen3 8B/14B/32B Q4_K_M AMD DEBUG=2 decode"
 PROFILE_SCOPE_NOTE = (
-  "Classifier rules are calibrated to Qwen3 8B/14B Q4_K_M AMD DEBUG=2 decode logs. "
+  "Classifier rules are calibrated to Qwen3 8B/14B/32B Q4_K_M AMD DEBUG=2 decode logs. "
   "Use this report outside that scope only after adding boundary tests for the new kernel signatures."
 )
 PROFILE_MODE_NOTE = (
@@ -45,7 +45,7 @@ QWEN3_AMD_FALLBACK_QUANT_PATTERNS = (
   r"^r_1187_32_4_\d+_2_2_2_32",
 )
 NORM_SAMPLING_EXACT = ("r_16_8", "r_16_8n1", "r_16_256", "r_16_256n1", "r_16_256n2")
-MODEL_ORDER = {"8B": 0, "14B": 1}
+MODEL_ORDER = {"8B": 0, "14B": 1, "32B": 2}
 MODE_ORDER = {
   "baseline batched": 0, "Q4K_PRIMITIVE=1 batched": 1, "Q4K+Q6K_PRIMITIVE=1 batched": 2,
   "QK_GENERATED_POLICY batched": 3,
@@ -94,7 +94,7 @@ def _time_to_ms(value:float, unit:str) -> float:
 def _label(path:pathlib.Path) -> tuple[str, str]:
   stem = path.name.lower()
   model_match = MODEL_RE.search(stem)
-  if model_match is None: raise ValueError(f"{path}: filename must include 8b or 14b")
+  if model_match is None: raise ValueError(f"{path}: filename must include 8b, 14b, or 32b")
   model = model_match.group(1).upper()
   is_baseline = "baseline" in stem
   is_primitive = "primitive" in stem

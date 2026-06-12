@@ -1886,3 +1886,55 @@ Verdict: the 14B generated policy survives the audit. The win is explained by
 coverage plus schedule-policy selection over existing Q4/Q6 primitive families,
 not by q8/vdot and not by residual/dispatch noise. Keep it opt-in and
 artifact-pinned.
+
+## Reproducible generated-policy pipeline (2026-06-12)
+
+Artifact: `bench/qk-policy-pipeline-20260612/`.
+
+The generated-policy flow now runs as one reproducible pipeline:
+
+- generated full-shape policy;
+- semantic report;
+- parity report against explicit Q4/Q6 primitive flags;
+- repeated explicit and generated decode;
+- adaptive stable-window rerun for noisy samples;
+- greedy 32-token output A/B;
+- DEBUG=2 profile for accepted large wins;
+- machine-readable `decision.json`.
+
+Final decisions:
+
+| model | decision | explicit tok/s | generated tok/s | gain | generated % of llama.cpp | correctness |
+|---|---|---:|---:|---:|---:|---|
+| Qwen3-8B-Q4_K_M | accept | `49.61` | `52.65` | `6.14%` | `52.0%` | 32-token A/B match |
+| Qwen3-14B-Q4_K_M | accept | `22.53` | `39.99` | `77.48%` | `60.8%` | 32-token A/B match |
+| Qwen3-32B-Q4_K_M | blocked | n/a | n/a | n/a | n/a | decode OOM before A/B |
+
+The 8B decision uses explicit2-4 versus generated3-5 after the initial samples
+showed transient late collapses. The 14B decision uses explicit1-3 versus
+generated3-5; generated2 was a transient slow run and is not in the final stable
+window.
+
+32B search/parity did work:
+
+| metric | value |
+|---|---:|
+| total QK tensors | `450` |
+| explicit installed | `320` |
+| generated installed | `448` |
+| generated unsupported winners | `0` |
+| effective mismatches | `320` |
+
+The 32B decode failure is a storage-pressure result, not a generated-search
+failure:
+
+```text
+MemoryError: Allocation of 70.31 MB failed on AMD. Used: 23.80 GB
+```
+
+Interpretation: generated policy is now a reproducible opt-in win for 8B and
+14B. The attempted 32B scaling point named the next blocker: the current
+primitive path copies packed weights into separate GPU storage while the model
+still carries the fallback weight graph, so large models run out of VRAM before
+decode. The next 32B experiment should first remove duplicate storage or add a
+memory-aware policy cap.

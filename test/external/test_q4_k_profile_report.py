@@ -10,9 +10,10 @@ class TestQ4KProfileReport(unittest.TestCase):
     self.assertEqual(_label(pathlib.Path("8b-q4k-primitive-debug2-jitbs1.log")), ("8B", "Q4K_PRIMITIVE=1 named"))
     self.assertEqual(_label(pathlib.Path("8b-q4q6-primitive-debug2-jitbs1.log")), ("8B", "Q4K+Q6K_PRIMITIVE=1 named"))
     self.assertEqual(_label(pathlib.Path("14b-baseline-debug2-batched.log")), ("14B", "baseline batched"))
-    with self.assertRaisesRegex(ValueError, "8b or 14b"):
+    self.assertEqual(_label(pathlib.Path("32b-generated-debug2-batched.log")), ("32B", "QK_GENERATED_POLICY batched"))
+    with self.assertRaisesRegex(ValueError, "8b, 14b, or 32b"):
       _label(pathlib.Path("q4k-primitive-debug2-jitbs1.log"))
-    with self.assertRaisesRegex(ValueError, "exactly one of baseline or primitive"):
+    with self.assertRaisesRegex(ValueError, "exactly one of baseline, primitive, or generated/policy"):
       _label(pathlib.Path("8b-debug2-jitbs1.log"))
     with self.assertRaisesRegex(ValueError, "exactly one of batched or jitbs1"):
       _label(pathlib.Path("8b-baseline-debug2.log"))
