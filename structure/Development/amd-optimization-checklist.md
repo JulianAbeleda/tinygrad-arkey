@@ -60,6 +60,13 @@ generated-policy storage mode.
       This validates the faster inference path as a deterministic rollout/eval
       backend, not a tinygrad LLM training implementation. The 32B row is
       recorded in the manifest but disabled as an optional heavy run.
+- [x] Added generic dataset-style rollout runner:
+      `extra/llm_rollout.py`, backed by shared scoring helpers in
+      `extra/llm_eval_common.py`.
+- [x] Ran Qwen 8B generated-policy rollout smoke:
+      `bench/qwen-rollout-20260612/8b-generated/summary.md`, quality `pass`,
+      `10/10`. This produces reusable JSONL completions for future eval,
+      SFT/RLVR data generation, and compiler/search behavior gates.
 
 ## Open But Not Urgent
 
@@ -78,8 +85,8 @@ generated-policy storage mode.
 
 ## Reasonable Resume Tracks
 
-1. Practical track: decide whether to build a real SFT/RLVR training loop on
-   top of the validated eval/rollout backend, or stop at inference/eval.
+1. Practical track: scale the rollout dataset or build a real SFT/RLVR loop on
+   top of the validated rollout backend.
 2. Infrastructure track: keep shared storage explicit and run occasional soak
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen

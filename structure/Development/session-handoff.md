@@ -212,10 +212,19 @@ passed exact parity and scored `10/10`; 32B is listed in the manifest as an
 optional heavy row. Treat timings in this harness as sanity data only; canonical
 decode speed still comes from the QK harness matrix.
 
+Track 1.3 is the dataset rollout layer. Generic runner:
+`extra/llm_rollout.py`; shared scoring helpers: `extra/llm_eval_common.py`.
+Current Qwen artifact:
+`bench/qwen-rollout-20260612/8b-generated/summary.md`, generated from
+`bench/qwen-rollout-20260612/manifest.json`. It runs Qwen3-8B with the
+8B shared generated policy and scores `10/10` on the smoke dataset. The runner
+is model-agnostic; the artifact directory is Qwen-specific because the manifest
+pins Qwen models, Qwen policies, and `/no_think` prompts.
+
 When resuming, choose one track explicitly:
 
-1. Use the inference win: build a real training loop or RLVR/SFT rollout
-   pipeline on top of the validated eval backend.
+1. Use the inference win: scale the rollout dataset, then build a real training
+   loop or RLVR/SFT pipeline on top of the validated rollout backend.
 2. Compiler research: pursue the Ansor-style semantic packed-layout/codegen
    direction. Do not confuse this with more hand-written primitive tuning.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
