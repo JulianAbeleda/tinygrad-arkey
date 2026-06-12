@@ -1,0 +1,161 @@
+{
+  "commit": "65d2bf5a7",
+  "created_at": "2026-06-12T10:40:09.978599",
+  "env": {},
+  "kind": "qk_policy_pipeline_manifest",
+  "model": {
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "repo": "/home/ubuntu/tinygrad-arkey",
+  "spec": {
+    "ab_tokens": 32,
+    "accept_gain": 0.03,
+    "benchmark": 128,
+    "candidate_timeout": 120,
+    "device": "AMD",
+    "iters": 2,
+    "level": 2,
+    "max_extra_repeats": 2,
+    "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "policy_max_storage_mb": null,
+    "profile": "auto",
+    "profile_gain": 0.2,
+    "profile_tokens": 8,
+    "reference_mode": "explicit",
+    "repeats": 3,
+    "tie_band": 0.03
+  },
+  "stages": {
+    "ab": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/policy.json"
+      ],
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/output-ab.json"
+      ],
+      "reused": false,
+      "stage": "ab",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:48:48.765333"
+    },
+    "decide": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/decode-summary.json",
+        "bench/qk-harness-20260612/14b-rerun/output-ab.json"
+      ],
+      "metadata": {
+        "status": "accept"
+      },
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/decision.json"
+      ],
+      "reused": false,
+      "stage": "decide",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:52:14.701347"
+    },
+    "decode": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/policy.json"
+      ],
+      "metadata": {
+        "explicit_logs": [
+          "bench/qk-harness-20260612/14b-rerun/explicit-run1.log",
+          "bench/qk-harness-20260612/14b-rerun/explicit-run2.log",
+          "bench/qk-harness-20260612/14b-rerun/explicit-run3.log"
+        ],
+        "generated_logs": [
+          "bench/qk-harness-20260612/14b-rerun/generated-run1.log",
+          "bench/qk-harness-20260612/14b-rerun/generated-run2.log",
+          "bench/qk-harness-20260612/14b-rerun/generated-run3.log"
+        ]
+      },
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/decode-summary.json",
+        "bench/qk-harness-20260612/14b-rerun/decode-summary.md"
+      ],
+      "reused": false,
+      "stage": "decode",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:47:26.331423"
+    },
+    "parity": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/policy.json"
+      ],
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/policy-parity.json",
+        "bench/qk-harness-20260612/14b-rerun/policy-parity.md"
+      ],
+      "reused": false,
+      "stage": "parity",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:41:57.444966"
+    },
+    "policy": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/search.json"
+      ],
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/policy.json"
+      ],
+      "reused": false,
+      "stage": "policy",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:41:57.129368"
+    },
+    "profile": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/policy.json"
+      ],
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/profile-report.json",
+        "bench/qk-harness-20260612/14b-rerun/profile-report.md"
+      ],
+      "reused": false,
+      "stage": "profile",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:52:14.697375"
+    },
+    "report": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/decision.json"
+      ],
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/README.md"
+      ],
+      "reused": false,
+      "stage": "report",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:52:14.705176"
+    },
+    "search": {
+      "inputs": [
+        "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf"
+      ],
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/search.json"
+      ],
+      "reused": false,
+      "stage": "search",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:41:57.127250"
+    },
+    "semantic": {
+      "inputs": [
+        "bench/qk-harness-20260612/14b-rerun/search.json"
+      ],
+      "outputs": [
+        "bench/qk-harness-20260612/14b-rerun/semantic-report.md"
+      ],
+      "reused": false,
+      "stage": "semantic",
+      "status": "passed",
+      "updated_at": "2026-06-12T10:41:57.156799"
+    }
+  },
+  "updated_at": "2026-06-12T10:52:14.706635",
+  "version": 1
+}

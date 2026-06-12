@@ -159,6 +159,6 @@ worth doing only if the research itself is the goal.
 - QK runtime storage-control artifacts: `bench/qk-storage-20260612/README.md`
 - QK storage architecture: `docs/amd-decode-qk-storage-architecture.md`
 - QK harness architecture: `docs/amd-decode-harness-architecture.md`
-- QK harness validation matrix: `bench/qk-harness-20260612/README.md`
+- QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

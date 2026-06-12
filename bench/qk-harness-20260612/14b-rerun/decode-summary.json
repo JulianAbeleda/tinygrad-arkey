@@ -1,0 +1,299 @@
+[
+  {
+    "avg_drop1_tok_s": 23.50811023622047,
+    "avg_last16_tok_s": 22.005625,
+    "avg_last32_tok_s": 22.5934375,
+    "avg_last64_tok_s": 23.02703125,
+    "avg_ms": 43.618046875,
+    "avg_tok_s": 23.371796875,
+    "installs": {
+      "Q4K": {
+        "installed": 180,
+        "not_q4_k": 202,
+        "policy_fallback": 61,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 6193152000,
+        "skipped_total": 263,
+        "source_bytes": 6193152000,
+        "storage_bytes": 6193152000
+      },
+      "Q6K": {
+        "installed": 20,
+        "not_q6_k": 402,
+        "policy_fallback": 21,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 7655424000,
+        "skipped_total": 423,
+        "source_bytes": 1462272000,
+        "storage_bytes": 1462272000
+      }
+    },
+    "label": "explicit1",
+    "max_ms": 164.91,
+    "max_tok_s": 24.51,
+    "median_tok_s": 23.634999999999998,
+    "min_tok_s": 6.06,
+    "path": "bench/qk-harness-20260612/14b-rerun/explicit-run1.log",
+    "policy": null,
+    "samples": 128,
+    "stdev_tok_s": 1.8582124310019872,
+    "storage": {
+      "by_kind": "Q4K:6193152000,Q6K:1462272000",
+      "by_mode": "sidecar:200",
+      "installed": 200,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7655424000,
+      "source_bytes": 7655424000,
+      "storage_bytes": 7655424000
+    }
+  },
+  {
+    "avg_drop1_tok_s": 21.749133858267715,
+    "avg_last16_tok_s": 20.35875,
+    "avg_last32_tok_s": 21.6671875,
+    "avg_last64_tok_s": 22.52875,
+    "avg_ms": 48.3615625,
+    "avg_tok_s": 21.62171875,
+    "installs": {
+      "Q4K": {
+        "installed": 180,
+        "not_q4_k": 202,
+        "policy_fallback": 61,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 6193152000,
+        "skipped_total": 263,
+        "source_bytes": 6193152000,
+        "storage_bytes": 6193152000
+      },
+      "Q6K": {
+        "installed": 20,
+        "not_q6_k": 402,
+        "policy_fallback": 21,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 7655424000,
+        "skipped_total": 423,
+        "source_bytes": 1462272000,
+        "storage_bytes": 1462272000
+      }
+    },
+    "label": "explicit2",
+    "max_ms": 183.77,
+    "max_tok_s": 24.31,
+    "median_tok_s": 23.305,
+    "min_tok_s": 5.44,
+    "path": "bench/qk-harness-20260612/14b-rerun/explicit-run2.log",
+    "policy": null,
+    "samples": 128,
+    "stdev_tok_s": 3.532132390973221,
+    "storage": {
+      "by_kind": "Q4K:6193152000,Q6K:1462272000",
+      "by_mode": "sidecar:200",
+      "installed": 200,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7655424000,
+      "source_bytes": 7655424000,
+      "storage_bytes": 7655424000
+    }
+  },
+  {
+    "avg_drop1_tok_s": 23.436377952755905,
+    "avg_last16_tok_s": 23.045625,
+    "avg_last32_tok_s": 23.13125,
+    "avg_last64_tok_s": 23.20609375,
+    "avg_ms": 43.692421875,
+    "avg_tok_s": 23.3009375,
+    "installs": {
+      "Q4K": {
+        "installed": 180,
+        "not_q4_k": 202,
+        "policy_fallback": 61,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 6193152000,
+        "skipped_total": 263,
+        "source_bytes": 6193152000,
+        "storage_bytes": 6193152000
+      },
+      "Q6K": {
+        "installed": 20,
+        "not_q6_k": 402,
+        "policy_fallback": 21,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 7655424000,
+        "skipped_total": 423,
+        "source_bytes": 1462272000,
+        "storage_bytes": 1462272000
+      }
+    },
+    "label": "explicit3",
+    "max_ms": 163.82,
+    "max_tok_s": 24.61,
+    "median_tok_s": 23.43,
+    "min_tok_s": 6.1,
+    "path": "bench/qk-harness-20260612/14b-rerun/explicit-run3.log",
+    "policy": null,
+    "samples": 128,
+    "stdev_tok_s": 1.773146781254732,
+    "storage": {
+      "by_kind": "Q4K:6193152000,Q6K:1462272000",
+      "by_mode": "sidecar:200",
+      "installed": 200,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7655424000,
+      "source_bytes": 7655424000,
+      "storage_bytes": 7655424000
+    }
+  },
+  {
+    "avg_drop1_tok_s": 38.87590551181103,
+    "avg_last16_tok_s": 38.158125,
+    "avg_last32_tok_s": 38.78375,
+    "avg_last64_tok_s": 39.425937499999996,
+    "avg_ms": 27.235078125,
+    "avg_tok_s": 38.619765625,
+    "installs": {
+      "Q4K": {
+        "installed": 240,
+        "not_q4_k": 202,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 6370099200,
+        "skipped_total": 203,
+        "source_bytes": 6370099200,
+        "storage_bytes": 6370099200
+      },
+      "Q6K": {
+        "installed": 40,
+        "not_q6_k": 402,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 7918387200,
+        "skipped_total": 403,
+        "source_bytes": 1548288000,
+        "storage_bytes": 1548288000
+      }
+    },
+    "label": "generated1",
+    "max_ms": 164.21,
+    "max_tok_s": 42.71,
+    "median_tok_s": 40.025000000000006,
+    "min_tok_s": 6.09,
+    "path": "bench/qk-harness-20260612/14b-rerun/generated-run1.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-harness-20260612/14b-rerun/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 5.118259495140555,
+    "storage": {
+      "by_kind": "Q4K:6370099200,Q6K:1548288000",
+      "by_mode": "sidecar:280",
+      "installed": 280,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7918387200,
+      "source_bytes": 7918387200,
+      "storage_bytes": 7918387200
+    }
+  },
+  {
+    "avg_drop1_tok_s": 40.7703937007874,
+    "avg_last16_tok_s": 38.690625,
+    "avg_last32_tok_s": 39.1690625,
+    "avg_last64_tok_s": 39.45796875,
+    "avg_ms": 25.659296875,
+    "avg_tok_s": 40.499453125,
+    "installs": {
+      "Q4K": {
+        "installed": 240,
+        "not_q4_k": 202,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 6370099200,
+        "skipped_total": 203,
+        "source_bytes": 6370099200,
+        "storage_bytes": 6370099200
+      },
+      "Q6K": {
+        "installed": 40,
+        "not_q6_k": 402,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 7918387200,
+        "skipped_total": 403,
+        "source_bytes": 1548288000,
+        "storage_bytes": 1548288000
+      }
+    },
+    "label": "generated2",
+    "max_ms": 164.2,
+    "max_tok_s": 43.13,
+    "median_tok_s": 40.93,
+    "min_tok_s": 6.09,
+    "path": "bench/qk-harness-20260612/14b-rerun/generated-run2.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-harness-20260612/14b-rerun/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 3.4727336820049834,
+    "storage": {
+      "by_kind": "Q4K:6370099200,Q6K:1548288000",
+      "by_mode": "sidecar:280",
+      "installed": 280,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7918387200,
+      "source_bytes": 7918387200,
+      "storage_bytes": 7918387200
+    }
+  },
+  {
+    "avg_drop1_tok_s": 39.99023622047244,
+    "avg_last16_tok_s": 36.22875,
+    "avg_last32_tok_s": 37.89375,
+    "avg_last64_tok_s": 39.02515625,
+    "avg_ms": 26.419921875,
+    "avg_tok_s": 39.725078125,
+    "installs": {
+      "Q4K": {
+        "installed": 240,
+        "not_q4_k": 202,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 6370099200,
+        "skipped_total": 203,
+        "source_bytes": 6370099200,
+        "storage_bytes": 6370099200
+      },
+      "Q6K": {
+        "installed": 40,
+        "not_q6_k": 402,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 7918387200,
+        "skipped_total": 403,
+        "source_bytes": 1548288000,
+        "storage_bytes": 1548288000
+      }
+    },
+    "label": "generated3",
+    "max_ms": 165.36,
+    "max_tok_s": 43.19,
+    "median_tok_s": 40.62,
+    "min_tok_s": 6.05,
+    "path": "bench/qk-harness-20260612/14b-rerun/generated-run3.log",
+    "policy": {
+      "entries": "7",
+      "path": "bench/qk-harness-20260612/14b-rerun/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 4.62592778454919,
+    "storage": {
+      "by_kind": "Q4K:6370099200,Q6K:1548288000",
+      "by_mode": "sidecar:280",
+      "installed": 280,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 7918387200,
+      "source_bytes": 7918387200,
+      "storage_bytes": 7918387200
+    }
+  }
+]

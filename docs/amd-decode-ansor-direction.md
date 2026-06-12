@@ -1002,8 +1002,10 @@ and do not resume kernel search from the storage track.
 
 Fresh harness validation artifact: `bench/qk-harness-20260612/`. The new
 manifest/stage-status machinery accepts the fresh 8B run, correctly marks the
-fresh 14B run `needs-rerun` after generated decode instability, and produces a
-matrix including the existing capped 32B result.
+first fresh 14B run `needs-rerun` after generated decode instability, then
+accepts a targeted 14B rerun under the unchanged stability rule. Use
+`matrix-summary-rerun.md` as the current matrix, including the existing capped
+32B result.
 
 ## Relationship to existing docs
 
