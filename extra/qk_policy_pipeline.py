@@ -8,8 +8,17 @@ from extra.qk_ansor import build_policy_entries, make_policy_cache
 from extra.qk_decode_summary import _md as decode_summary_md, parse_log as parse_decode_log
 from extra.qk_layout import read_metadata
 
+MANIFEST_VERSION = 1
+DECISION_SCHEMA_VERSION = 1
 LLAMA_REFS = {"8B": 101.2, "14B": 65.8, "32B": 30.8}
 MODEL_RE = re.compile(r"Qwen3-(?P<size>[0-9.]+B)-(?P<quant>[^/]+)\.gguf$", re.IGNORECASE)
+SPEC_FIELDS = (
+  "model", "device", "level", "iters", "benchmark", "reference_mode", "repeats", "max_extra_repeats",
+  "ab_tokens", "profile", "profile_tokens", "accept_gain", "tie_band", "profile_gain", "candidate_timeout",
+  "policy_max_storage_mb",
+)
+ENV_FIELDS = ("QK_PRIMITIVE_MAX_STORAGE_MB", "QK_GENERATED_POLICY_STRICT", "QK_PRIMITIVE_STORAGE")
+STAGES = ("search", "policy", "semantic", "parity", "decode", "ab", "profile", "decide", "report")
 
 def _model_label(model:pathlib.Path) -> str:
   m = MODEL_RE.search(model.name)
@@ -22,6 +31,95 @@ def _model_size(model:pathlib.Path) -> str:
 
 def _git_commit(repo:pathlib.Path) -> str:
   return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=repo, text=True).strip()
+
+def _model_fingerprint(model:pathlib.Path) -> dict:
+  st = model.stat()
+  return {"path": str(model), "size_bytes": st.st_size, "mtime_ns": st.st_mtime_ns}
+
+def _experiment_spec(args) -> dict:
+  spec = {}
+  for key in SPEC_FIELDS:
+    value = getattr(args, key)
+    if isinstance(value, pathlib.Path): value = str(value)
+    spec[key] = value
+  return spec
+
+def _manifest_for(args) -> dict:
+  return {
+    "kind": "qk_policy_pipeline_manifest",
+    "version": MANIFEST_VERSION,
+    "commit": _git_commit(args.repo),
+    "repo": str(args.repo),
+    "model": _model_fingerprint(args.model),
+    "spec": _experiment_spec(args),
+    "env": {k: os.environ.get(k) for k in ENV_FIELDS if os.environ.get(k) is not None},
+  }
+
+def _stage_summary(out:pathlib.Path) -> dict:
+  stages = {}
+  for stage in STAGES:
+    path = out / f"{stage}.status.json"
+    if not path.exists(): continue
+    stages[stage] = json.loads(path.read_text())
+  return stages
+
+def _manifest_path(args) -> pathlib.Path:
+  return args.out / "manifest.json"
+
+def _clear_stage_statuses(out:pathlib.Path) -> None:
+  for stage in STAGES:
+    path = out / f"{stage}.status.json"
+    if path.exists(): path.unlink()
+
+def _stable_manifest(manifest:dict) -> dict:
+  return {k: v for k, v in manifest.items() if k not in ("created_at", "updated_at", "stages")}
+
+def _write_manifest(args) -> None:
+  path = _manifest_path(args)
+  existing = json.loads(path.read_text()) if path.exists() else {}
+  manifest = _manifest_for(args)
+  created_at = existing.get("created_at", datetime.now().isoformat())
+  manifest.update({"created_at": created_at, "updated_at": datetime.now().isoformat(), "stages": _stage_summary(args.out)})
+  path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+
+def _validate_or_init_manifest(args) -> None:
+  path = _manifest_path(args)
+  expected = _manifest_for(args)
+  if path.exists():
+    existing = json.loads(path.read_text())
+    if _stable_manifest(existing) != expected:
+      if getattr(args, "force", False):
+        args.reuse = False
+        _clear_stage_statuses(args.out)
+        _write_manifest(args)
+        return
+      raise ValueError(f"{path}: manifest does not match requested experiment; use --force to overwrite")
+    _write_manifest(args)
+    return
+  if args.reuse and not getattr(args, "force", False):
+    raise ValueError(f"{path}: missing manifest for --reuse; rerun without --reuse or pass --force")
+  if args.reuse and getattr(args, "force", False): args.reuse = False
+  _write_manifest(args)
+
+def _write_stage_status(args, stage:str, status:str, *, inputs:list[pathlib.Path|str]|None=None,
+                        outputs:list[pathlib.Path|str]|None=None, reused:bool=False,
+                        error:str|None=None, metadata:dict|None=None) -> None:
+  if stage not in STAGES: raise ValueError(f"unknown pipeline stage {stage!r}")
+  row = {
+    "stage": stage, "status": status, "reused": reused, "updated_at": datetime.now().isoformat(),
+    "inputs": [str(x) for x in (inputs or [])], "outputs": [str(x) for x in (outputs or [])],
+  }
+  if error is not None: row["error"] = error[-4000:]
+  if metadata is not None: row["metadata"] = metadata
+  (args.out / f"{stage}.status.json").write_text(json.dumps(row, indent=2, sort_keys=True))
+  _write_manifest(args)
+
+def _runtime_storage_summary(rows:list[dict]) -> dict:
+  out = {}
+  for row in rows:
+    if row.get("storage") is not None:
+      out[row["label"]] = row["storage"]
+  return out
 
 def _run(cmd:list[str], repo:pathlib.Path, log:pathlib.Path, env:dict[str, str]|None=None, timeout:float|None=None) -> dict:
   log.parent.mkdir(parents=True, exist_ok=True)
@@ -321,29 +419,68 @@ def run_pipeline(args) -> dict:
   if args.out is None:
     args.out = args.repo / "bench" / f"qk-policy-pipeline-{datetime.now().date().strftime('%Y%m%d')}" / _model_label(args.model)
   args.out.mkdir(parents=True, exist_ok=True)
+  _validate_or_init_manifest(args)
 
   policy = args.out / "policy.json"
   search_json = args.out / "search.json"
   policy_changed = False
   if args.reuse and search_json.exists() and args.policy_max_storage_mb is not None:
-    policy_changed = _apply_policy_cap_from_search(args, search_json, policy)
+    _write_stage_status(args, "search", "passed", outputs=[search_json], reused=True)
+    _write_stage_status(args, "policy", "running", inputs=[search_json], outputs=[policy])
+    try:
+      policy_changed = _apply_policy_cap_from_search(args, search_json, policy)
+      _write_stage_status(args, "policy", "passed", inputs=[search_json], outputs=[policy],
+                          reused=not policy_changed, metadata={"policy_changed": policy_changed})
+    except Exception as e:
+      _write_stage_status(args, "policy", "failed", inputs=[search_json], outputs=[policy], error=str(e))
+      raise
   elif not (args.reuse and policy.exists() and search_json.exists()):
+    _write_stage_status(args, "search", "running", inputs=[args.model], outputs=[search_json, policy])
     cmd = [sys.executable, "extra/qk_ansor.py", "--model", str(args.model), "--device", args.device, "--level", str(args.level),
            "--iters", str(args.iters), "--skip-stopped", "--json", str(search_json), "--policy-json", str(policy),
            "--timeout", str(args.candidate_timeout)]
     if args.policy_max_storage_mb is not None: cmd += ["--policy-max-storage-mb", str(args.policy_max_storage_mb)]
-    _run(cmd, args.repo, args.out / "search.log",
-         env={"DEV": args.device, "PYTHONPATH": ".", "Q4K_ALLOW_RISKY_SEARCH": "1"}, timeout=args.search_timeout)
+    try:
+      _run(cmd, args.repo, args.out / "search.log",
+           env={"DEV": args.device, "PYTHONPATH": ".", "Q4K_ALLOW_RISKY_SEARCH": "1"}, timeout=args.search_timeout)
+      _write_stage_status(args, "search", "passed", inputs=[args.model], outputs=[search_json])
+      _write_stage_status(args, "policy", "passed", inputs=[search_json], outputs=[policy])
+    except Exception as e:
+      _write_stage_status(args, "search", "failed", inputs=[args.model], outputs=[search_json], error=str(e))
+      raise
+  else:
+    _write_stage_status(args, "search", "passed", outputs=[search_json], reused=True)
+    _write_stage_status(args, "policy", "passed", inputs=[search_json], outputs=[policy], reused=True)
+
   if not (args.reuse and (args.out / "semantic-report.md").exists()):
-    _run([sys.executable, "extra/qk_semantic_report.py", str(search_json), "--md", str(args.out / "semantic-report.md"),
-          "--title", f"QK Policy Pipeline Search: {args.model.name}"], args.repo, args.out / "semantic-report.log",
-         env={"PYTHONPATH": "."}, timeout=120)
+    _write_stage_status(args, "semantic", "running", inputs=[search_json], outputs=[args.out / "semantic-report.md"])
+    try:
+      _run([sys.executable, "extra/qk_semantic_report.py", str(search_json), "--md", str(args.out / "semantic-report.md"),
+            "--title", f"QK Policy Pipeline Search: {args.model.name}"], args.repo, args.out / "semantic-report.log",
+           env={"PYTHONPATH": "."}, timeout=120)
+      _write_stage_status(args, "semantic", "passed", inputs=[search_json], outputs=[args.out / "semantic-report.md"])
+    except Exception as e:
+      _write_stage_status(args, "semantic", "failed", inputs=[search_json], outputs=[args.out / "semantic-report.md"], error=str(e))
+      raise
+  else:
+    _write_stage_status(args, "semantic", "passed", inputs=[search_json], outputs=[args.out / "semantic-report.md"], reused=True)
+
   if not (args.reuse and not policy_changed and (args.out / "policy-parity.json").exists()):
-    _run([sys.executable, "extra/qk_policy_parity.py", "--model", str(args.model), "--policy", str(policy),
-          "--json", str(args.out / "policy-parity.json"), "--md", str(args.out / "policy-parity.md")],
-         args.repo, args.out / "policy-parity.log", env={"PYTHONPATH": "."}, timeout=600)
+    _write_stage_status(args, "parity", "running", inputs=[policy], outputs=[args.out / "policy-parity.json", args.out / "policy-parity.md"])
+    try:
+      _run([sys.executable, "extra/qk_policy_parity.py", "--model", str(args.model), "--policy", str(policy),
+            "--json", str(args.out / "policy-parity.json"), "--md", str(args.out / "policy-parity.md")],
+           args.repo, args.out / "policy-parity.log", env={"PYTHONPATH": "."}, timeout=600)
+      _write_stage_status(args, "parity", "passed", inputs=[policy], outputs=[args.out / "policy-parity.json", args.out / "policy-parity.md"])
+    except Exception as e:
+      _write_stage_status(args, "parity", "failed", inputs=[policy], outputs=[args.out / "policy-parity.json"], error=str(e))
+      raise
+  else:
+    _write_stage_status(args, "parity", "passed", inputs=[policy], outputs=[args.out / "policy-parity.json", args.out / "policy-parity.md"],
+                        reused=True)
 
   try:
+    _write_stage_status(args, "decode", "running", inputs=[policy], outputs=[args.out / "decode-summary.json", args.out / "decode-summary.md"])
     explicit_logs = _existing_decode_logs(args.out, "explicit") if args.reuse and not policy_changed else []
     generated_logs = _existing_decode_logs(args.out, "generated") if args.reuse and not policy_changed else []
     if len(explicit_logs) < args.repeats:
@@ -351,14 +488,20 @@ def run_pipeline(args) -> dict:
     if len(generated_logs) < args.repeats:
       generated_logs += _run_decode_repeats(args, "generated", policy, len(generated_logs) + 1, args.repeats - len(generated_logs))
     explicit_logs, generated_logs, decode_rows = _top_up_until_stable(args, policy, explicit_logs, generated_logs)
+    _write_stage_status(args, "decode", "passed", inputs=[policy], outputs=[args.out / "decode-summary.json", args.out / "decode-summary.md"],
+                        metadata={"explicit_logs": [str(x) for x in explicit_logs], "generated_logs": [str(x) for x in generated_logs]})
   except RuntimeError as e:
-    if not _memory_blocked(e): raise
+    if not _memory_blocked(e):
+      _write_stage_status(args, "decode", "failed", inputs=[policy], outputs=[args.out / "decode-summary.json"], error=str(e))
+      raise
+    _write_stage_status(args, "decode", "blocked", inputs=[policy], outputs=[args.out / "decode-summary.json"], error=str(e))
     parity_summary = _policy_summary(args.out / "policy-parity.json")
     decision = {
-      "status": "blocked",
+      "kind": "qk_policy_pipeline_decision", "schema_version": DECISION_SCHEMA_VERSION, "status": "blocked",
       "reasons": [f"decode blocked by GPU memory during primitive install: {str(e).splitlines()[-1]}"],
       "parity_summary": parity_summary,
       "storage_policy": _policy_storage(policy),
+      "runtime_storage": {},
       "reference_mode": args.reference_mode,
       "ab_match": None,
       "profile": None,
@@ -366,15 +509,28 @@ def run_pipeline(args) -> dict:
       "commit": _git_commit(args.repo), "created_at": datetime.now().isoformat(),
     }
     (args.out / "decision.json").write_text(json.dumps(decision, indent=2, sort_keys=True))
+    _write_stage_status(args, "decide", "passed", inputs=[args.out / "policy-parity.json"], outputs=[args.out / "decision.json"],
+                        metadata={"status": decision["status"]})
     _write_blocked_readme(args, decision)
+    _write_stage_status(args, "report", "passed", inputs=[args.out / "decision.json"], outputs=[args.out / "README.md"])
+    decision["stages"] = _stage_summary(args.out)
+    (args.out / "decision.json").write_text(json.dumps(decision, indent=2, sort_keys=True))
     print(json.dumps(decision, indent=2, sort_keys=True))
     return decision
 
   if not (args.reuse and not policy_changed and (args.out / "output-ab.json").exists()):
-    _run([sys.executable, "extra/q4_k_output_ab.py", "--model", str(args.model), "--tokens", str(args.ab_tokens),
-          "--timeout", str(args.ab_timeout), "--candidate-policy", str(policy), "--policy-debug",
-          "--json", str(args.out / "output-ab.json")], args.repo, args.out / "output-ab.log",
-         env={"DEV": args.device, "JIT": "1", "PYTHONPATH": "."}, timeout=args.ab_timeout + 60)
+    _write_stage_status(args, "ab", "running", inputs=[policy], outputs=[args.out / "output-ab.json"])
+    try:
+      _run([sys.executable, "extra/q4_k_output_ab.py", "--model", str(args.model), "--tokens", str(args.ab_tokens),
+            "--timeout", str(args.ab_timeout), "--candidate-policy", str(policy), "--policy-debug",
+            "--json", str(args.out / "output-ab.json")], args.repo, args.out / "output-ab.log",
+           env={"DEV": args.device, "JIT": "1", "PYTHONPATH": "."}, timeout=args.ab_timeout + 60)
+      _write_stage_status(args, "ab", "passed", inputs=[policy], outputs=[args.out / "output-ab.json"])
+    except Exception as e:
+      _write_stage_status(args, "ab", "failed", inputs=[policy], outputs=[args.out / "output-ab.json"], error=str(e))
+      raise
+  else:
+    _write_stage_status(args, "ab", "passed", inputs=[policy], outputs=[args.out / "output-ab.json"], reused=True)
 
   parity_summary = _policy_summary(args.out / "policy-parity.json")
   storage_policy = _policy_storage(policy)
@@ -384,13 +540,34 @@ def run_pipeline(args) -> dict:
   if args.profile == "always" or (args.profile == "auto" and preliminary["gain"] >= args.profile_gain and preliminary["status"] != "invalid"):
     if args.reuse and not policy_changed and (args.out / "profile-report.json").exists():
       profile = {"json": str(args.out / "profile-report.json"), "md": str(args.out / "profile-report.md"), "reused": True}
+      _write_stage_status(args, "profile", "passed", inputs=[policy], outputs=[args.out / "profile-report.json", args.out / "profile-report.md"],
+                          reused=True)
     else:
-      profile = _run_profile(args, policy)
+      _write_stage_status(args, "profile", "running", inputs=[policy], outputs=[args.out / "profile-report.json", args.out / "profile-report.md"])
+      try:
+        profile = _run_profile(args, policy)
+        _write_stage_status(args, "profile", "passed", inputs=[policy], outputs=[args.out / "profile-report.json", args.out / "profile-report.md"])
+      except Exception as e:
+        _write_stage_status(args, "profile", "failed", inputs=[policy], outputs=[args.out / "profile-report.json"], error=str(e))
+        raise
+  else:
+    _write_stage_status(args, "profile", "skipped", inputs=[policy], metadata={"profile": args.profile, "preliminary_gain": preliminary["gain"]})
   decision = _decide(args, decode_rows, parity_summary, ab_match, profile)
-  decision |= {"model": str(args.model), "model_size": args.model_size, "out": str(args.out), "policy": str(policy),
-               "storage_policy": storage_policy, "commit": _git_commit(args.repo), "created_at": datetime.now().isoformat()}
+  decision |= {
+    "kind": "qk_policy_pipeline_decision", "schema_version": DECISION_SCHEMA_VERSION,
+    "model": str(args.model), "model_size": args.model_size, "out": str(args.out), "policy": str(policy),
+    "storage_policy": storage_policy, "runtime_storage": _runtime_storage_summary(decode_rows),
+    "commit": _git_commit(args.repo), "created_at": datetime.now().isoformat(),
+  }
+  (args.out / "decision.json").write_text(json.dumps(decision, indent=2, sort_keys=True))
+  _write_stage_status(args, "decide", "passed", inputs=[args.out / "decode-summary.json", args.out / "output-ab.json"],
+                      outputs=[args.out / "decision.json"], metadata={"status": decision["status"]})
+  decision["stages"] = _stage_summary(args.out)
   (args.out / "decision.json").write_text(json.dumps(decision, indent=2, sort_keys=True))
   _write_readme(args, decision)
+  _write_stage_status(args, "report", "passed", inputs=[args.out / "decision.json"], outputs=[args.out / "README.md"])
+  decision["stages"] = _stage_summary(args.out)
+  (args.out / "decision.json").write_text(json.dumps(decision, indent=2, sort_keys=True))
   print(json.dumps(decision, indent=2, sort_keys=True))
   return decision
 
@@ -422,6 +599,7 @@ def main() -> None:
   parser.add_argument("--profile-timeout", type=float, default=1800)
   parser.add_argument("--ab-timeout", type=float, default=1800)
   parser.add_argument("--reuse", action="store_true", help="reuse existing stage artifacts in --out and regenerate decision/README")
+  parser.add_argument("--force", action="store_true", help="overwrite an incompatible or missing manifest and regenerate stage artifacts")
   args = parser.parse_args()
   run_pipeline(args)
 

@@ -986,6 +986,20 @@ make descriptor generation, policy selection, artifact validation, and runtime
 guards boring enough that new candidate families can be evaluated without
 another bespoke campaign.
 
+Harness hardening update:
+
+- pipeline runs now write `manifest.json`;
+- `--reuse` validates commit, model fingerprint, config, and relevant storage
+  env before trusting artifacts;
+- each stage writes `<stage>.status.json`;
+- `decision.json` has a schema marker and runtime storage summary;
+- `extra/qk_experiment_matrix.py` summarizes multiple decisions into a single
+  model/config table.
+
+This encodes the current stop rule: do exactly enough storage work to enable the
+loop, then move up. Do not chase a third 32B scaling point by perfecting 32B,
+and do not resume kernel search from the storage track.
+
 ## Relationship to existing docs
 
 - `docs/amd-decode-optimization-plan.md` remains the historical execution log.

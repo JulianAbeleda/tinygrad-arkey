@@ -41,6 +41,8 @@ use the 32B capped artifact only when accepting the generic-baseline comparison,
 stop adding `extra/` q8 arithmetic variants, and move effort to the next
 higher-value goal unless compiler research is the point. Storage accounting and
 runtime caps are now in place; do not turn this into another kernel-search loop.
+The next layer is harness reliability: pinned specs, manifest-checked reuse,
+stage statuses, normalized decisions, and matrix summaries.
 
 ## Verdict Table
 
@@ -52,7 +54,7 @@ runtime caps are now in place; do not turn this into another kernel-search loop.
 | Q4_K/Q6_K v1 primitive | Accepted. It gives a real end-to-end speedup and passed correctness gates. | Keep as the stable local inference path. |
 | Generated policy | Model-specific result. The reproducible pipeline accepts 8B as a modest win (`52.65` vs `49.61 tok/s`) and 14B as a strong win (`39.99` vs `22.53 tok/s`). Both pass 32-token greedy A/B. 32B uncapped policy OOMs, but a tensor-scoped `1536 MB` capped policy accepts versus generic baseline (`4.16` vs `3.44 tok/s`) and passes A/B. | Keep `QK_GENERATED_POLICY` opt-in. Use the 8B/14B artifacts when running those exact model/hardware paths. Use the 32B capped artifact only with the generic-baseline caveat. Do not make it a global default. |
 | QK policy storage | Shape-scoped policy is too coarse for large models; 32B needs tensor-scoped storage decisions. A first memory cap exists and selects `144` primitive tensors under `1.49 GiB` (`64 attn_k`, `64 attn_v`, `16 ffn_down`). Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. | Future policy generation must include storage cost, benefit, and fallback decisions. Runtime caps are guardrails, not optimizers. Long-term fix is shared packed storage without per-token copies; otherwise move up to harness work. |
-| Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, and policy cache exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. |
+| Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -156,5 +158,6 @@ worth doing only if the research itself is the goal.
 - 32B memory-aware capped policy: `bench/qk-policy-cap-20260612/README.md`
 - QK runtime storage-control artifacts: `bench/qk-storage-20260612/README.md`
 - QK storage architecture: `docs/amd-decode-qk-storage-architecture.md`
+- QK harness architecture: `docs/amd-decode-harness-architecture.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`
