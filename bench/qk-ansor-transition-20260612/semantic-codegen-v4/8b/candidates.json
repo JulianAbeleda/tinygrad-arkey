@@ -613,19 +613,89 @@
               "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
               "reference_unpacked": "covered_by_qk_layout_reference_tests"
             },
-            "expected_memory_mechanism": "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack sixteen nibbles from the loaded vector lanes",
+            "expected_memory_mechanism": "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack thirty-two 4-bit values from the loaded vector lanes",
             "family": "q4_k_packed_u32_vector_load",
             "format": "Q4_K",
             "full_decode_supported": false,
             "lane_mapping": "row_part_kblock_lane_vec4",
             "load_mode": "aligned_u32x4_global_load",
+            "load_tile": {
+              "alignment_bytes": 16,
+              "bytes": 16,
+              "lanes": 4,
+              "mechanism": "load four adjacent Q4_K uint32 storage words as one aligned vector load",
+              "name": "u32x4_aligned",
+              "q_values_per_load": 32,
+              "requires_tail": false,
+              "storage_dtype": "uint32",
+              "storage_items_per_load": 4
+            },
             "name": "vector_load_u32x4",
-            "nibbles_per_packed_load": 16,
             "opts": [
               "LOCAL:0:64"
             ],
+            "packed_qk_axes": {
+              "format": "Q4_K",
+              "legal_load_tiles": [
+                {
+                  "alignment_bytes": 4,
+                  "bytes": 4,
+                  "lanes": 1,
+                  "mechanism": "load one Q4_K uint32 storage word; each quant payload word contains eight 4-bit values",
+                  "name": "u32_scalar",
+                  "q_values_per_load": 8,
+                  "requires_tail": false,
+                  "storage_dtype": "uint32",
+                  "storage_items_per_load": 1
+                },
+                {
+                  "alignment_bytes": 16,
+                  "bytes": 16,
+                  "lanes": 4,
+                  "mechanism": "load four adjacent Q4_K uint32 storage words as one aligned vector load",
+                  "name": "u32x4_aligned",
+                  "q_values_per_load": 32,
+                  "requires_tail": false,
+                  "storage_dtype": "uint32",
+                  "storage_items_per_load": 4
+                }
+              ],
+              "memory_axes": [
+                "storage_dtype",
+                "load_tile",
+                "lane_mapping",
+                "decode_lane_map"
+              ],
+              "next_blocker": "consume_vector_load_inside_qk_gemv",
+              "non_goals": [
+                "parts_only",
+                "local_only",
+                "direct_output_only"
+              ],
+              "semantic_object": "packed_qk_tile"
+            },
+            "packed_qk_tile": {
+              "blocks": 196608,
+              "format": "Q4_K",
+              "legal_load_tiles": [
+                "u32_scalar",
+                "u32x4_aligned"
+              ],
+              "packed_bytes": 28311552,
+              "reference": "extra.qk_layout.q4_k_reference",
+              "role": "ffn_gate",
+              "shape": [
+                12288,
+                4096
+              ],
+              "storage_aligned": true,
+              "storage_dtype": "uint32",
+              "storage_items_per_block": 36,
+              "tensor": "blk.0.ffn_gate.weight"
+            },
             "packed_words_per_reduce_step": 4,
             "parts": 1,
+            "q_values_per_packed_load": 32,
             "reduction_mode": "split_k_partial",
             "requires": [
               "q4k_gemv_vector_load_partial_kernel",
@@ -1243,19 +1313,89 @@
                   "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
                   "reference_unpacked": "covered_by_qk_layout_reference_tests"
                 },
-                "expected_memory_mechanism": "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack sixteen nibbles from the loaded vector lanes",
+                "expected_memory_mechanism": "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack thirty-two 4-bit values from the loaded vector lanes",
                 "family": "q4_k_packed_u32_vector_load",
                 "format": "Q4_K",
                 "full_decode_supported": false,
                 "lane_mapping": "row_part_kblock_lane_vec4",
                 "load_mode": "aligned_u32x4_global_load",
+                "load_tile": {
+                  "alignment_bytes": 16,
+                  "bytes": 16,
+                  "lanes": 4,
+                  "mechanism": "load four adjacent Q4_K uint32 storage words as one aligned vector load",
+                  "name": "u32x4_aligned",
+                  "q_values_per_load": 32,
+                  "requires_tail": false,
+                  "storage_dtype": "uint32",
+                  "storage_items_per_load": 4
+                },
                 "name": "vector_load_u32x4",
-                "nibbles_per_packed_load": 16,
                 "opts": [
                   "LOCAL:0:64"
                 ],
+                "packed_qk_axes": {
+                  "format": "Q4_K",
+                  "legal_load_tiles": [
+                    {
+                      "alignment_bytes": 4,
+                      "bytes": 4,
+                      "lanes": 1,
+                      "mechanism": "load one Q4_K uint32 storage word; each quant payload word contains eight 4-bit values",
+                      "name": "u32_scalar",
+                      "q_values_per_load": 8,
+                      "requires_tail": false,
+                      "storage_dtype": "uint32",
+                      "storage_items_per_load": 1
+                    },
+                    {
+                      "alignment_bytes": 16,
+                      "bytes": 16,
+                      "lanes": 4,
+                      "mechanism": "load four adjacent Q4_K uint32 storage words as one aligned vector load",
+                      "name": "u32x4_aligned",
+                      "q_values_per_load": 32,
+                      "requires_tail": false,
+                      "storage_dtype": "uint32",
+                      "storage_items_per_load": 4
+                    }
+                  ],
+                  "memory_axes": [
+                    "storage_dtype",
+                    "load_tile",
+                    "lane_mapping",
+                    "decode_lane_map"
+                  ],
+                  "next_blocker": "consume_vector_load_inside_qk_gemv",
+                  "non_goals": [
+                    "parts_only",
+                    "local_only",
+                    "direct_output_only"
+                  ],
+                  "semantic_object": "packed_qk_tile"
+                },
+                "packed_qk_tile": {
+                  "blocks": 196608,
+                  "format": "Q4_K",
+                  "legal_load_tiles": [
+                    "u32_scalar",
+                    "u32x4_aligned"
+                  ],
+                  "packed_bytes": 28311552,
+                  "reference": "extra.qk_layout.q4_k_reference",
+                  "role": "ffn_gate",
+                  "shape": [
+                    12288,
+                    4096
+                  ],
+                  "storage_aligned": true,
+                  "storage_dtype": "uint32",
+                  "storage_items_per_block": 36,
+                  "tensor": "blk.0.ffn_gate.weight"
+                },
                 "packed_words_per_reduce_step": 4,
                 "parts": 1,
+                "q_values_per_packed_load": 32,
                 "reduction_mode": "split_k_partial",
                 "requires": [
                   "q4k_gemv_vector_load_partial_kernel",
@@ -1367,19 +1507,89 @@
           "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
           "reference_unpacked": "covered_by_qk_layout_reference_tests"
         },
-        "expected_memory_mechanism": "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack sixteen nibbles from the loaded vector lanes",
+        "expected_memory_mechanism": "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack thirty-two 4-bit values from the loaded vector lanes",
         "family": "q4_k_packed_u32_vector_load",
         "format": "Q4_K",
         "full_decode_supported": false,
         "lane_mapping": "row_part_kblock_lane_vec4",
         "load_mode": "aligned_u32x4_global_load",
+        "load_tile": {
+          "alignment_bytes": 16,
+          "bytes": 16,
+          "lanes": 4,
+          "mechanism": "load four adjacent Q4_K uint32 storage words as one aligned vector load",
+          "name": "u32x4_aligned",
+          "q_values_per_load": 32,
+          "requires_tail": false,
+          "storage_dtype": "uint32",
+          "storage_items_per_load": 4
+        },
         "name": "vector_load_u32x4",
-        "nibbles_per_packed_load": 16,
         "opts": [
           "LOCAL:0:64"
         ],
+        "packed_qk_axes": {
+          "format": "Q4_K",
+          "legal_load_tiles": [
+            {
+              "alignment_bytes": 4,
+              "bytes": 4,
+              "lanes": 1,
+              "mechanism": "load one Q4_K uint32 storage word; each quant payload word contains eight 4-bit values",
+              "name": "u32_scalar",
+              "q_values_per_load": 8,
+              "requires_tail": false,
+              "storage_dtype": "uint32",
+              "storage_items_per_load": 1
+            },
+            {
+              "alignment_bytes": 16,
+              "bytes": 16,
+              "lanes": 4,
+              "mechanism": "load four adjacent Q4_K uint32 storage words as one aligned vector load",
+              "name": "u32x4_aligned",
+              "q_values_per_load": 32,
+              "requires_tail": false,
+              "storage_dtype": "uint32",
+              "storage_items_per_load": 4
+            }
+          ],
+          "memory_axes": [
+            "storage_dtype",
+            "load_tile",
+            "lane_mapping",
+            "decode_lane_map"
+          ],
+          "next_blocker": "consume_vector_load_inside_qk_gemv",
+          "non_goals": [
+            "parts_only",
+            "local_only",
+            "direct_output_only"
+          ],
+          "semantic_object": "packed_qk_tile"
+        },
+        "packed_qk_tile": {
+          "blocks": 196608,
+          "format": "Q4_K",
+          "legal_load_tiles": [
+            "u32_scalar",
+            "u32x4_aligned"
+          ],
+          "packed_bytes": 28311552,
+          "reference": "extra.qk_layout.q4_k_reference",
+          "role": "ffn_gate",
+          "shape": [
+            12288,
+            4096
+          ],
+          "storage_aligned": true,
+          "storage_dtype": "uint32",
+          "storage_items_per_block": 36,
+          "tensor": "blk.0.ffn_gate.weight"
+        },
         "packed_words_per_reduce_step": 4,
         "parts": 1,
+        "q_values_per_packed_load": 32,
         "reduction_mode": "split_k_partial",
         "requires": [
           "q4k_gemv_vector_load_partial_kernel",

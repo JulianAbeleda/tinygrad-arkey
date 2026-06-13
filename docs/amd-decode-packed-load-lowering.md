@@ -24,6 +24,14 @@ tensor/UOp shape rules cannot yet scalar-extract or vector-arithmetically
 consume that loaded value inside this GEMV without verifier/codegen failures.
 See `bench/qk-ansor-transition-20260612/semantic-codegen-v4/verdict.md`.
 
+Update 4: the next representation layer is now explicit as `PackedQKTile`.
+`extra/qk_packed_tile.py` records Q4_K/Q6_K block layout, storage dtype, legal
+load tiles, alignment, and search axes. Family C v4 candidate artifacts now
+record the legal Q4_K `u32x4_aligned` load tile (`32` q-values per vector load)
+instead of carrying the vector-load premise as prose. See
+`docs/amd-decode-packed-qk-tile-design.md`. This is not a speed claim; it is the
+descriptor layer needed before another vector-load GEMV construction attempt.
+
 ## Problem
 
 The accepted Q4_K/Q6_K primitive path is correct and substantially faster than
@@ -129,6 +137,8 @@ Do not install a runtime path from this family until all are true:
   in the decode path on gfx1100.
 - No further Family C variants until the vector-load consumption blocker is
   fixed in core lowering or represented as a first-class packed-load operation.
+  Future variants should consume `PackedQKTile` or its successor rather than
+  repeating expression-level rewrites.
 
 ## Relationship To Ansor
 

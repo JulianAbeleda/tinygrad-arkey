@@ -5,6 +5,7 @@ import argparse, copy, pathlib
 from typing import Any
 
 from extra.qk_descriptor_policy import build_policy_from_descriptor, load_json, write_json
+from extra.qk_packed_tile import load_tile, qk_tile_search_axes, tile_from_semantic_row, tile_summary
 from extra.qk_semantic_candidate import (
   correctness_provenance, current_runtime, no_extra_storage_effect, runtime_storage_bytes, slug,
 )
@@ -16,6 +17,8 @@ TARGET_ROLES = ("ffn_gate",)
 
 def _vector_load_spec(row:dict[str, Any]) -> dict[str, Any]:
   current = current_runtime(row)
+  packed_tile = tile_from_semantic_row(row)
+  vector_tile = load_tile(packed_tile, "u32x4_aligned")
   storage_effect = no_extra_storage_effect("vector-load codegen reuses existing Q4_K uint32 shared storage")
   return {
     "name": "vector_load_u32x4",
@@ -28,13 +31,26 @@ def _vector_load_spec(row:dict[str, Any]) -> dict[str, Any]:
     "codegen_mode": "vector_load",
     "reduction_mode": "split_k_partial",
     "scope": "tensor",
+    "packed_qk_tile": tile_summary(packed_tile),
+    "packed_qk_axes": qk_tile_search_axes(packed_tile),
+    "load_tile": {
+      "name": vector_tile.name,
+      "storage_dtype": vector_tile.storage_dtype,
+      "lanes": vector_tile.lanes,
+      "bytes": vector_tile.bytes,
+      "alignment_bytes": vector_tile.alignment_bytes,
+      "storage_items_per_load": vector_tile.storage_items_per_load,
+      "q_values_per_load": vector_tile.q_values_per_load,
+      "requires_tail": vector_tile.requires_tail,
+      "mechanism": vector_tile.mechanism,
+    },
     "load_mode": "aligned_u32x4_global_load",
     "lane_mapping": "row_part_kblock_lane_vec4",
     "packed_words_per_reduce_step": 4,
-    "nibbles_per_packed_load": 16,
+    "q_values_per_packed_load": vector_tile.q_values_per_load,
     "expected_memory_mechanism": (
-      "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack sixteen nibbles from "
-      "the loaded vector lanes"
+      "request one aligned uint32x4 global load for four adjacent Q4_K quant words, then unpack thirty-two "
+      "4-bit values from the loaded vector lanes"
     ),
     "requires": ["q4k_gemv_vector_load_partial_kernel", "u32_packed_storage", "aligned_uint32x4_load_lowering"],
     "full_decode_supported": False,
@@ -185,6 +201,12 @@ def build_static_gate(candidate_set:dict[str, Any]) -> dict[str, Any]:
     if spec.get("scope") != "tensor": reasons.append("semantic codegen v4 requires tensor-scoped override")
     if spec.get("codegen_mode") != "vector_load": reasons.append("semantic codegen v4 only supports vector_load")
     if spec.get("load_mode") != "aligned_u32x4_global_load": reasons.append(f"unsupported load_mode={spec.get('load_mode')!r}")
+    tile = spec.get("packed_qk_tile") or {}
+    load = spec.get("load_tile") or {}
+    if tile.get("format") != "Q4_K": reasons.append(f"packed tile must be Q4_K, got {tile.get('format')!r}")
+    if load.get("name") != "u32x4_aligned": reasons.append(f"load tile must be u32x4_aligned, got {load.get('name')!r}")
+    if int(load.get("alignment_bytes") or 0) != 16: reasons.append("u32x4 load tile must require 16-byte alignment")
+    if int(load.get("q_values_per_load") or 0) != 32: reasons.append("u32x4 Q4_K load tile must expose 32 q-values per load")
     if int(spec.get("parts") or 0) != 1: reasons.append("vector-load v1 only targets parts=1")
     requires = set(spec.get("requires") or [])
     for required in ("q4k_gemv_vector_load_partial_kernel", "u32_packed_storage", "aligned_uint32x4_load_lowering"):
@@ -226,7 +248,7 @@ def candidates_markdown(candidate_set:dict[str, Any]) -> str:
     "",
     "Family C v1 tests an aligned `uint32x4` Q4_K `ffn_gate` partial GEMV. It",
     "is a memory-access probe: it requests one vector load for four adjacent",
-    "packed quant words, then unpacks sixteen nibbles from those loaded lanes.",
+    "packed quant words, then unpacks thirty-two 4-bit values from those loaded lanes.",
     "",
     "## Summary",
     "",
@@ -234,18 +256,19 @@ def candidates_markdown(candidate_set:dict[str, Any]) -> str:
     f"- single-change candidates: `{candidate_set['summary']['single_change_candidates']}`",
     f"- current storage bytes: `{candidate_set['summary']['current_storage_bytes']}`",
     "",
-    "| id | tensor | role | family | load mode | parts | opts | persistent delta | full decode |",
-    "|---|---|---|---|---|---:|---|---:|---:|",
+    "| id | tensor | role | family | load tile | q/load | parts | opts | persistent delta | full decode |",
+    "|---|---|---|---|---|---:|---:|---|---:|---:|",
   ]
   for cand in candidate_set["candidates"]:
     if cand["id"] == "current":
-      lines.append("| `current` | n/a | n/a | n/a | n/a | 0 | n/a | 0 | `True` |")
+      lines.append("| `current` | n/a | n/a | n/a | n/a | 0 | 0 | n/a | 0 | `True` |")
       continue
     change = cand["changes"][0]
     spec = cand["schedule_spec"]
     storage = spec.get("storage_effect") or {}
+    load = spec["load_tile"]
     lines.append(f"| `{cand['id']}` | `{change['tensor']}` | `{change.get('role')}` | `{spec['family']}` | "
-                 f"`{spec['load_mode']}` | {spec['parts']} | `{','.join(spec['opts'])}` | "
+                 f"`{load['name']}` | {load['q_values_per_load']} | {spec['parts']} | `{','.join(spec['opts'])}` | "
                  f"{storage.get('persistent_bytes_delta', 0)} | `{spec['full_decode_supported']}` |")
   lines.append("")
   return "\n".join(lines)

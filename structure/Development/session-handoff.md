@@ -363,6 +363,22 @@ packed-load probe rewrote Q4_K `ffn_gate` to reduce over explicit packed
 `q4k_gemv_packed_load_partial_*` kernel but still scalar `u32` loads and no
 vector-load evidence. No full decode, no 32B. Do not broaden this exact rewrite.
 
+Semantic-codegen v4 / Family C v1 verdict:
+`bench/qk-ansor-transition-20260612/semantic-codegen-v4/verdict.md`. Raw
+aligned `uint32x4` load/store now lowers through AMD UOps, but the real Q4_K
+GEMV candidate cannot yet consume the vector load: scalar lane extraction fails
+the verifier and vector-lane arithmetic hits shape checks before AMD source is
+emitted. No benchmark, full decode, or 32B run was promoted.
+
+Packed-QK tile layer:
+`docs/amd-decode-packed-qk-tile-design.md` and `extra/qk_packed_tile.py` add the
+static representation needed before another Family C attempt. It defines
+Q4_K/Q6_K block layout, legal load tiles, storage dtype, alignment, and search
+axes. Family C v4 candidate artifacts now record `packed_qk_tile` and
+`load_tile` metadata, including Q4_K `u32x4_aligned` with `32` q-values per
+load. This is an IR/provenance step only; it does not solve vector-load GEMV
+consumption.
+
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
@@ -371,10 +387,11 @@ When resuming, choose one track explicitly:
    descriptor-level `parts`/`LOCAL` search is exhausted, and semantic schedule
    v0, semantic codegen v1 direct-output Q4, and semantic codegen v2 row
    grouping are rejected by their gates. Semantic codegen v3 packed-load v0 is
-   rejected too. Next work needs hardware counters or a deeper renderer/layout
-   capability for true vector/coalesced loads, not another hand sweep over the
-   same primitive knobs. Any future semantic raw accept needs a matching
-   confirmation rerun before promotion.
+   rejected too; semantic codegen v4 is rejected at construction because the
+   vector load cannot be consumed in the GEMV graph. Next work should consume
+   `PackedQKTile` or a successor semantic op, not hand-sweep the same primitive
+   knobs. Any future semantic raw accept needs a matching confirmation rerun
+   before promotion.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

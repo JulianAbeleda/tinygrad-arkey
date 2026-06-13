@@ -83,6 +83,14 @@ DEBUG=4 load-width parsing still showed scalar `u32` loads. This rejects the
 cheap expression-level packed-word-lane rewrite. The memory-access path now
 needs counters or renderer/layout support for real vector/coalesced loads.
 
+Update, PackedQKTile: Family C v1 proved raw aligned `uint32x4` load/store is
+available through AMD UOps, but the real Q4_K GEMV cannot yet consume that
+vector load inside the current tensor/UOp shape rules. `extra/qk_packed_tile.py`
+now adds the missing static representation: Q4_K/Q6_K block layout, legal load
+tiles, alignment, storage dtype, and memory search axes. Semantic-codegen v4
+artifacts record that metadata. This is an Ansor/Ladder-style representation
+step, not a performance claim.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

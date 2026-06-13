@@ -158,6 +158,16 @@ generated-policy storage mode.
       Q4_K `ffn_gate` rewrite tied on both target models: 8B `-0.65%`, 14B
       `-0.31%`; DEBUG=4 parsing found scalar `u32` loads and no vector-load
       evidence. Verdict: `semantic_codegen_v3_rejected`; no full decode or 32B.
+- [x] Implemented and gated semantic codegen v4 / Family C v1:
+      core AMD lowering can preserve raw aligned `uint32x4` load/store, but the
+      real Q4_K GEMV candidate cannot yet consume the loaded vector through
+      current tensor/UOp shape rules. Verdict: `semantic_codegen_v4_rejected`
+      at construction; no benchmark, full decode, or 32B run.
+- [x] Scoped and added the next representation layer:
+      `docs/amd-decode-packed-qk-tile-design.md` and `extra/qk_packed_tile.py`.
+      Family C v4 artifacts now record the `PackedQKTile` and legal
+      `u32x4_aligned` load tile metadata instead of treating vector load as
+      prose. This is a static IR/provenance step, not a performance claim.
 
 ## Open But Not Urgent
 
@@ -180,6 +190,8 @@ generated-policy storage mode.
       failed on the targeted Q4_K `ffn_down` mechanism.
 - [ ] Do not broaden the Family C v0 packed-word-lane rewrite; it tied on
       8B/14B and did not produce vector-load evidence.
+- [ ] Do not add another Family C variant until it consumes `PackedQKTile` or a
+      successor semantic op; raw vector load/store support alone is not enough.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
@@ -196,11 +208,11 @@ generated-policy storage mode.
    rejected semantic schedule/codegen surfaces in
    `bench/qk-ansor-transition-20260612/`. The current negative bound now covers
    descriptor `parts`/`LOCAL`, schedule v0, direct-output v1, and row-grouped
-   Family B v2. Family C v0 then tested the first packed-load rewrite and also
-   tied. Any next surface needs hardware-counter evidence or a deeper renderer /
-   layout capability for true vector/coalesced loads; do not re-run these same
-   knobs. Any future microbench win starts as `raw_accept` and needs a
-   confirmation rerun before promotion.
+   Family B v2. Family C v0 then tested the first packed-load rewrite and tied;
+   Family C v1 proved raw `uint32x4` loads lower but cannot yet be consumed by
+   the real GEMV graph. Resume from `PackedQKTile` / semantic packed-load
+   consumption, not from the same primitive knobs. Any future microbench win
+   starts as `raw_accept` and needs a confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

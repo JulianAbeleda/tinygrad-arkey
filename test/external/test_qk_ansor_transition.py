@@ -377,6 +377,9 @@ class TestQKAnsorTransition(unittest.TestCase):
       self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["role"], "ffn_gate")
       self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["family"], "q4_k_packed_u32_vector_load")
       self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["load_mode"], "aligned_u32x4_global_load")
+      self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["packed_qk_tile"]["format"], "Q4_K")
+      self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["load_tile"]["name"], "u32x4_aligned")
+      self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["load_tile"]["q_values_per_load"], 32)
 
       gate = build_codegen_v4_static_gate(candidate_set)
       self.assertEqual(json.loads((codegen / stem / "static-gate.json").read_text()), gate)
