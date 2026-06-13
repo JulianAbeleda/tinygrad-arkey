@@ -4,14 +4,14 @@ from __future__ import annotations
 import argparse, json, pathlib, re
 from typing import Any
 
-KERNEL_RE = re.compile(r"\b(q4k_[a-zA-Z0-9_]*?_\d+_\d+_\d+|q6k_[a-zA-Z0-9_]*?_\d+_\d+_\d+)\b")
+KERNEL_RE = re.compile(r"\b(q4k_[a-zA-Z0-9_]*?_\d+_\d+_\d+|q6k_[a-zA-Z0-9_]*?_\d+_\d+_\d+|qk_probe_[a-zA-Z0-9_]*?_\d+)\b")
 LOAD_PATTERNS = {
   "uchar_or_u8": re.compile(r"\b(?:uchar|uint8_t|unsigned char|u8)\b"),
   "ushort_or_u16": re.compile(r"\b(?:ushort|uint16_t|unsigned short|u16)\b"),
   "uint_or_u32": re.compile(r"\b(?:uint|uint32_t|unsigned int|u32)\b"),
   "ulong_or_u64": re.compile(r"\b(?:ulong|uint64_t|unsigned long|u64)\b"),
   "vector_u32x2": re.compile(r"\b(?:uint2|u32x2)\b"),
-  "vector_u32x4": re.compile(r"\b(?:uint4|u32x4)\b"),
+  "vector_u32x4": re.compile(r"\b(?:uint4|tg_uint4)\b"),
   "amd_vdot4": re.compile(r"\b(?:v_dot4|sudot4|amdgcn_sudot4)\b"),
 }
 MODE_PATTERNS = {
@@ -19,6 +19,9 @@ MODE_PATTERNS = {
   "baseline_partial": re.compile(r"q4k_gemv_partial"),
   "grouped_partial": re.compile(r"q4k_gemv_grouped_partial"),
   "q6_partial": re.compile(r"q6k_gemv_partial"),
+  "uop_vec_request": re.compile(r"qk_probe_uop_vec_request"),
+  "custom_uint4": re.compile(r"qk_probe_custom_uint4"),
+  "scalar_probe": re.compile(r"qk_probe_scalar"),
 }
 
 
@@ -35,10 +38,28 @@ def _mode_for_text(text:str) -> str:
   return "unknown"
 
 
+def _generated_source_text(text:str) -> str:
+  blocks, cur = [], []
+  in_source = False
+  for line in text.splitlines():
+    if line.startswith("typedef long unsigned int size_t;"):
+      if cur: blocks.append("\n".join(cur))
+      cur, in_source = [line], True
+      continue
+    if in_source and line.startswith("*** "):
+      blocks.append("\n".join(cur))
+      cur, in_source = [], False
+      continue
+    if in_source: cur.append(line)
+  if cur: blocks.append("\n".join(cur))
+  return "\n".join(blocks) if blocks else text
+
+
 def analyze_log(path:pathlib.Path, *, repo:pathlib.Path=pathlib.Path.cwd()) -> dict[str, Any]:
   text = path.read_text(errors="replace")
+  source_text = _generated_source_text(text)
   kernels = sorted(set(KERNEL_RE.findall(text)))
-  pattern_counts = {name: len(pattern.findall(text)) for name, pattern in LOAD_PATTERNS.items()}
+  pattern_counts = {name: len(pattern.findall(source_text)) for name, pattern in LOAD_PATTERNS.items()}
   load_width = "unknown"
   if pattern_counts["vector_u32x4"]: load_width = "vector_u32x4"
   elif pattern_counts["vector_u32x2"]: load_width = "vector_u32x2"

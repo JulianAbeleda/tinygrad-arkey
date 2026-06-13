@@ -1,0 +1,82 @@
+{
+  "decision": {
+    "next_required_change": "Patch core integer vector load/store lowering for aligned uint32 global buffers, then rerun the probe and only then build Family C v1.",
+    "run_32b": false,
+    "run_family_c_v1_now": false,
+    "status": "family_c_v1_requires_core_integer_vector_load_lowering",
+    "stop_rule": "Do not broaden packed-load expression rewrites unless generated source shows vector/coalesced integer loads."
+  },
+  "environment": {
+    "external_rocprof_used": false,
+    "note": "This audit does not depend on local rocprof availability; it uses committed roofline, PMC prior, DEBUG=4 source logs, and source audit evidence."
+  },
+  "inputs": {
+    "pmc": "bench/qk-semantic-20260612/pmc-q4-gate.json",
+    "roofline": "bench/qk-bandwidth-roofline-20260613/roofline.json",
+    "semantic_codegen_v3_load_width": "bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.json",
+    "vector_probe": "bench/qk-memory-access-20260613/vector-probe.json"
+  },
+  "kind": "qk_memory_access_audit",
+  "pmc_rows": [
+    {
+      "events": 3,
+      "gl2c_hit_rate": 0.16129810077222453,
+      "kernel": "q4k_gemv_partial_12288_4096_1",
+      "sq_busy_cycles": 16411721,
+      "valu_inst": 20653056,
+      "valu_per_busy_cycle": 1.2584332867954555
+    }
+  ],
+  "roofline_rows": [
+    {
+      "llama_percent_peak": 53.00121760266667,
+      "llama_tok_s": 101.2,
+      "model": "8B",
+      "tinygrad_percent_llama": 51.457072422595516,
+      "tinygrad_percent_peak": 27.272874926661633,
+      "tinygrad_tok_s": 52.074557291666665
+    },
+    {
+      "llama_percent_peak": 61.69951508,
+      "llama_tok_s": 65.8,
+      "model": "14B",
+      "tinygrad_percent_llama": 61.62982047872341,
+      "tinygrad_percent_peak": 38.02530038004688,
+      "tinygrad_tok_s": 40.552421875
+    },
+    {
+      "llama_percent_peak": 63.40356145200001,
+      "llama_tok_s": 30.8,
+      "model": "32B",
+      "tinygrad_percent_llama": 55.93589353354979,
+      "tinygrad_percent_peak": 35.46534863026954,
+      "tinygrad_tok_s": 17.228255208333334
+    }
+  ],
+  "schema_version": 1,
+  "semantic_codegen_v3_load_width_summary": {
+    "has_packed_dot": false,
+    "has_packed_load_kernel": true,
+    "has_vector_load_evidence": false,
+    "logs": 2,
+    "modes": [
+      "baseline_partial",
+      "packed_load"
+    ]
+  },
+  "source_audit": {
+    "evidence": [
+      "CStyle.render_access can render vector pointer casts when an INDEX has max_numel > 1.",
+      "correct_load_store.split_load_store only enables vector fold lengths for float/half/fp8/image/DSP; integer global buffers fall back to length 1."
+    ],
+    "integer_global_vector_load_folding_blocked_by_devectorizer": true,
+    "renderer_has_vector_pointer_cast_syntax": true
+  },
+  "vector_probe_summary": {
+    "custom_uint4_exact": true,
+    "normal_uop_uint4_load_supported": false,
+    "raw_custom_uint4_escape_supported": true,
+    "scalar_exact": true,
+    "uop_vec_request_exact": false
+  }
+}

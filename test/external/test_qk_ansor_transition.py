@@ -34,6 +34,7 @@ from extra.qk_semantic_schedule_verdict import build_verdict as build_semantic_v
 from extra.qk_semantic_codegen_verdict import build_verdict as build_codegen_verdict, verdict_markdown as codegen_verdict_markdown
 from extra.qk_semantic_codegen_v2_verdict import build_verdict as build_codegen_v2_verdict, verdict_markdown as codegen_v2_verdict_markdown
 from extra.qk_semantic_codegen_v3_verdict import build_verdict as build_codegen_v3_verdict, verdict_markdown as codegen_v3_verdict_markdown
+from extra.qk_memory_access_audit import build_audit as build_memory_access_audit, audit_markdown as memory_access_audit_markdown
 
 
 class TestQKAnsorTransition(unittest.TestCase):
@@ -352,6 +353,38 @@ class TestQKAnsorTransition(unittest.TestCase):
     self.assertEqual((root / "report.md").read_text(), load_width_report_markdown(report))
     self.assertTrue(report["summary"]["has_packed_load_kernel"])
     self.assertFalse(report["summary"]["has_vector_load_evidence"])
+
+  def test_load_width_report_ignores_probe_names_and_prose(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      path = pathlib.Path(tmp) / "debug4.log"
+      path.write_text(
+        "\n".join([
+          "typedef long unsigned int size_t;",
+          'extern "C" __attribute__((global)) void qk_probe_uop_vec_request_u32x4_copy_4096(unsigned int* data0, unsigned int* data1) {',
+          "  unsigned int val0 = (*(data1+0));",
+          "  *(data0+0) = val0;",
+          "}",
+          "*** AMD qk_probe_uop_vec_request_u32x4_copy_4096",
+          "tool prose says uint4 but generated source did not",
+        ])
+      )
+      report = build_load_width_report([path], repo=self.repo)
+      self.assertEqual(report["rows"][0]["load_width_inferred"], "u32_scalar")
+      self.assertFalse(report["summary"]["has_vector_load_evidence"])
+
+  def test_memory_access_audit_reproduces(self):
+    root = pathlib.Path("bench/qk-memory-access-20260613")
+    report = build_memory_access_audit(
+      vector_probe=root / "vector-probe.json",
+      load_width=pathlib.Path("bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.json"),
+      roofline=pathlib.Path("bench/qk-bandwidth-roofline-20260613/roofline.json"),
+      pmc=pathlib.Path("bench/qk-semantic-20260612/pmc-q4-gate.json"),
+    )
+    self.assertEqual(json.loads((root / "audit.json").read_text()), report)
+    self.assertEqual((root / "audit.md").read_text(), memory_access_audit_markdown(report))
+    self.assertEqual(report["decision"]["status"], "family_c_v1_requires_core_integer_vector_load_lowering")
+    self.assertFalse(report["decision"]["run_family_c_v1_now"])
+    self.assertFalse(report["decision"]["run_32b"])
 
   def test_semantic_codegen_v3_artifacts_do_not_embed_checkout_absolute_paths(self):
     codegen = pathlib.Path("bench/qk-ansor-transition-20260612/semantic-codegen-v3")
