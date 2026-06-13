@@ -261,13 +261,17 @@ Choose the next step by goal:
 The practical rollout/eval foundation now has committed artifacts for both 8B
 and 14B. The runtime contract at
 `bench/llm-runtime-contract-20260613/README.md` validates eval, rollout,
-comparison, and training-data artifacts with `7/7` rows passing. Generated and
-explicit modes are token-identical on the 75-prompt rollout dataset for both
-8B and 14B (`0/75` text changes and `0/75` token changes in each compare
-report). The dry-run training-data export at
+comparison, training-data, and smoke-training artifacts with `8/8` rows
+passing. Generated and explicit modes are token-identical on the 75-prompt
+rollout dataset for both 8B and 14B (`0/75` text changes and `0/75` token
+changes in each compare report). The dry-run training-data export at
 `bench/qwen-rollout-20260612/training-data-v1/` produces `150` SFT-style rows
-from the generated 8B and 14B rollouts with `0` filtered rows. This is a data
-plumbing proof, not yet a training loop.
+from the generated 8B and 14B rollouts with `0` filtered rows. The smoke
+training run at `bench/qwen-rollout-20260612/sft-smoke-v1/` trains a tinygrad
+byte-context softmax probe on those rows (`120` train, `30` eval), writes a
+small `model.npz`, and passes the held-out gate: eval loss `4.8483 -> 1.5290`,
+eval accuracy `0.0065 -> 0.6320`. This is now a real training/eval plumbing
+proof, but it is not a Qwen adapter, LoRA stack, or model-quality claim.
 
 For the llama.cpp-comparable research track, use
 `bench/qk-ansor-transition-20260612/scorecard.md` as the objective report.

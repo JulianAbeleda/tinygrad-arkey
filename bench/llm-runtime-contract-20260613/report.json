@@ -73,13 +73,24 @@
       "status": "pass",
       "summary_path": "bench/qwen-rollout-20260612/training-data-v1/summary.json",
       "type": "training_data"
+    },
+    {
+      "artifact": "bench/qwen-rollout-20260612/sft-smoke-v1",
+      "errors": [],
+      "id": "qwen3-sft-smoke-v1",
+      "min_eval_accuracy": 0.6,
+      "min_eval_loss_delta": 3.0,
+      "require_weights": true,
+      "status": "pass",
+      "summary_path": "bench/qwen-rollout-20260612/sft-smoke-v1/summary.json",
+      "type": "training_run"
     }
   ],
   "source_manifest": "qwen-runtime-contract-20260613",
   "summary": {
     "failed": 0,
     "missing": 0,
-    "passed": 7,
-    "rows": 7
+    "passed": 8,
+    "rows": 8
   }
 }

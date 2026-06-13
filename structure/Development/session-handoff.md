@@ -278,7 +278,7 @@ modes pass `75/75`, generate `644` tokens, and compare with quality delta `0`,
 regressions `0`, text changes `0/75`, and token changes `0/75`.
 `extra/llm_runtime_contract.py` validates the committed eval, rollout,
 comparison, and training-data artifact set at
-`bench/llm-runtime-contract-20260613/`; the current contract passes `7/7`
+`bench/llm-runtime-contract-20260613/`; the current contract passes `8/8`
 rows with no missing artifacts.
 
 Track 1.7 added the first SFT-style training-data dry-run exporter:
@@ -286,8 +286,18 @@ Track 1.7 added the first SFT-style training-data dry-run exporter:
 `bench/qwen-rollout-20260612/training-data-v1/README.md`. It exports `150`
 rows from the 8B and 14B generated rollout artifacts with `0` filtered rows.
 This validates the data shape and filtering path only; it is not a training
-loop. The practical path now has eval parity, dataset rollout, regression
-comparison, and a reproducible training-data probe on top of the faster
+loop.
+
+Track 1.8 added the smallest real training/eval loop:
+`extra/llm_sft_smoke_train.py`. Current artifact:
+`bench/qwen-rollout-20260612/sft-smoke-v1/README.md`. It trains a tinygrad
+byte-context softmax probe over the rollout-derived SFT rows (`120` train,
+`30` eval) and writes `model.npz`. Current gate passes: eval loss
+`4.8483 -> 1.5290`, eval accuracy `0.0065 -> 0.6320`. This proves the
+training data, optimizer, eval metric, artifact, and contract path work; it is
+not a Qwen adapter, LoRA stack, or model-quality claim. The practical path now
+has eval parity, dataset rollout, regression comparison, training-data export,
+and a reproducible tinygrad training-loop smoke test on top of the faster
 generated-policy inference backend.
 
 The Ansor-transition layer is now the current compiler-research foundation for

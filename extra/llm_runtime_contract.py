@@ -11,6 +11,7 @@ SUMMARY_KINDS = {
   "rollout": ("llm_rollout_summary",),
   "compare": ("llm_rollout_compare_report",),
   "training_data": ("llm_training_data_probe",),
+  "training_run": ("llm_sft_smoke_train_summary",),
 }
 
 def _load_json(path:pathlib.Path) -> Any:
@@ -52,7 +53,7 @@ def _summary_path(repo:pathlib.Path, row:dict[str, Any]) -> pathlib.Path:
   artifact = _repo_path(repo, row["artifact"])
   if row["type"] in ("eval", "rollout"): return artifact / "summary.json"
   if row["type"] == "compare": return artifact / "report.json"
-  if row["type"] == "training_data": return artifact / "summary.json"
+  if row["type"] in ("training_data", "training_run"): return artifact / "summary.json"
   raise ValueError(f"unknown row type {row['type']!r}")
 
 def _check_eval(row:dict[str, Any], summary:dict[str, Any]) -> list[str]:
@@ -91,6 +92,17 @@ def _check_training(row:dict[str, Any], summary:dict[str, Any]) -> list[str]:
     errors.append(f"filtered_rows={summary.get('filtered_rows')}")
   return errors
 
+def _check_training_run(row:dict[str, Any], summary:dict[str, Any]) -> list[str]:
+  errors = []
+  if summary.get("status") != "pass": errors.append(f"status={summary.get('status')!r}")
+  final_eval = (summary.get("final") or {}).get("eval") or {}
+  deltas = summary.get("deltas") or {}
+  if final_eval.get("accuracy", 0.0) < row.get("min_eval_accuracy", 0.0):
+    errors.append(f"eval accuracy {final_eval.get('accuracy')} < {row.get('min_eval_accuracy')}")
+  if deltas.get("eval_loss", 0.0) < row.get("min_eval_loss_delta", 0.0):
+    errors.append(f"eval loss delta {deltas.get('eval_loss')} < {row.get('min_eval_loss_delta')}")
+  return errors
+
 def validate_contract(manifest:dict[str, Any], repo:pathlib.Path, *, require_models:bool=False) -> dict[str, Any]:
   rows = []
   for row in manifest["rows"]:
@@ -111,6 +123,12 @@ def validate_contract(manifest:dict[str, Any], repo:pathlib.Path, *, require_mod
     elif row["type"] == "rollout": errors += _check_rollout(row, summary)
     elif row["type"] == "compare": errors += _check_compare(row, summary)
     elif row["type"] == "training_data": errors += _check_training(row, summary)
+    elif row["type"] == "training_run":
+      errors += _check_training_run(row, summary)
+      weights = (summary.get("artifacts") or {}).get("weights")
+      if row.get("require_weights", True):
+        if not isinstance(weights, str) or not weights: errors.append("missing weights artifact name")
+        elif not (summary_path.parent / weights).exists(): errors.append(f"weights missing: {weights}")
     rows.append({**row, "summary_path": str(summary_path.relative_to(repo) if summary_path.is_relative_to(repo) else summary_path),
                  "status": "pass" if not errors else "fail", "errors": errors})
   return {

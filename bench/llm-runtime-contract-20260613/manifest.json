@@ -53,6 +53,14 @@
       "type": "training_data",
       "artifact": "bench/qwen-rollout-20260612/training-data-v1",
       "min_rows": 150
+    },
+    {
+      "id": "qwen3-sft-smoke-v1",
+      "type": "training_run",
+      "artifact": "bench/qwen-rollout-20260612/sft-smoke-v1",
+      "min_eval_accuracy": 0.6,
+      "min_eval_loss_delta": 3.0,
+      "require_weights": true
     }
   ]
 }

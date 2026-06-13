@@ -89,15 +89,23 @@ generated-policy storage mode.
       regressions `0`, text changes `0/75`, and token changes `0/75`.
 - [x] Added the top-level LLM runtime artifact contract:
       `extra/llm_runtime_contract.py` and
-      `bench/llm-runtime-contract-20260613/`. The committed contract validates
-      eval, rollout, rollout-compare, and training-data artifacts with `7/7`
-      rows passing and no missing artifacts.
+      `bench/llm-runtime-contract-20260613/`. The committed contract now
+      validates eval, rollout, rollout-compare, training-data, and
+      smoke-training artifacts with `8/8` rows passing and no missing
+      artifacts.
 - [x] Added the first training-data dry-run exporter:
       `extra/llm_training_data_probe.py` and
       `bench/qwen-rollout-20260612/training-data-v1/`. The current SFT-style
       probe exports `150` rows from the 8B and 14B generated rollouts with
       `0` filtered rows. This validates data shape and filtering only; it is
       not a training loop.
+- [x] Added the smallest real Track 1 training/eval loop:
+      `extra/llm_sft_smoke_train.py` and
+      `bench/qwen-rollout-20260612/sft-smoke-v1/`. The tinygrad byte-context
+      softmax probe trains on the rollout-derived SFT rows (`120` train,
+      `30` eval), writes a small `model.npz`, and passes the held-out gate:
+      eval loss `4.8483 -> 1.5290`, eval accuracy `0.0065 -> 0.6320`.
+      This is a training-loop smoke test, not a Qwen adapter or LoRA stack.
 - [x] Added the Ansor-transition foundation for the llama.cpp-comparable goal:
       `extra/qk_llama_scorecard.py`, `extra/qk_gap_profile.py`, and
       `extra/qk_semantic_descriptor.py`, with committed artifacts under

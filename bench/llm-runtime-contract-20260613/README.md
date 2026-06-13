@@ -13,6 +13,7 @@ evidence artifacts must be present and internally consistent.
 | `qwen3-8b-generated-vs-explicit` | `compare` | `pass` | `bench/qwen-rollout-20260612/compare-8b-small` |  |
 | `qwen3-14b-generated-vs-explicit` | `compare` | `pass` | `bench/qwen-rollout-20260612/compare-14b-small` |  |
 | `qwen3-rollout-training-data-v1` | `training_data` | `pass` | `bench/qwen-rollout-20260612/training-data-v1` |  |
+| `qwen3-sft-smoke-v1` | `training_run` | `pass` | `bench/qwen-rollout-20260612/sft-smoke-v1` |  |
 
 ## Summary
 
@@ -20,7 +21,7 @@ evidence artifacts must be present and internally consistent.
 {
   "failed": 0,
   "missing": 0,
-  "passed": 7,
-  "rows": 7
+  "passed": 8,
+  "rows": 8
 }
 ```

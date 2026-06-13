@@ -37,6 +37,14 @@ PYTHONPATH=. .venv/bin/python extra/llm_training_data_probe.py \
   bench/qwen-rollout-20260612/14b-generated-small
 ```
 
+Regenerate the tinygrad SFT smoke-training run:
+
+```sh
+PYTHONPATH=. .venv/bin/python extra/llm_sft_smoke_train.py \
+  --input bench/qwen-rollout-20260612/training-data-v1/sft.jsonl \
+  --out bench/qwen-rollout-20260612/sft-smoke-v1
+```
+
 Current intended rows:
 
 - `8b-generated`: Qwen3-8B with
@@ -79,9 +87,13 @@ Current results:
 - `bench/qwen-rollout-20260612/training-data-v1/README.md`
 - SFT-style dry-run export: `150` rows from 8B and 14B generated rollouts,
   `0` filtered
+- `bench/qwen-rollout-20260612/sft-smoke-v1/README.md`
+- tinygrad training-loop smoke test: `120` train rows, `30` eval rows,
+  eval loss `4.8483 -> 1.5290`, eval accuracy `0.0065 -> 0.6320`
 
 This artifact is for rollout/eval plumbing. Timing is eval-loop sanity data,
 not the canonical decode benchmark.
 
-The top-level runtime contract for eval, rollout, comparison, and training-data
+The top-level runtime contract for eval, rollout, comparison, training-data,
+and smoke-training
 artifacts lives at `bench/llm-runtime-contract-20260613/README.md`.

@@ -1,0 +1,96 @@
+{
+  "artifacts": {
+    "weights": "model.npz"
+  },
+  "context_bytes": 4,
+  "deltas": {
+    "eval_accuracy": 0.6255197771824896,
+    "eval_loss": 3.319293737411499,
+    "train_accuracy": 0.756591796875,
+    "train_loss": 3.9794098138809204
+  },
+  "device": "AMD",
+  "elapsed_s": 2.4333071549772285,
+  "eval_examples": 3848,
+  "eval_rows": 30,
+  "eval_source_ids": [
+    "code_append_002",
+    "code_index_010",
+    "compiler_bandwidth_010",
+    "compiler_kernel_009",
+    "fact_capital_france_001",
+    "fact_hamlet_006",
+    "format_bullets_008",
+    "format_letters_006",
+    "instr_even_001",
+    "instr_option_005",
+    "math_add_001",
+    "math_max_011",
+    "math_order_014",
+    "reason_alpha_001",
+    "reason_mix_010"
+  ],
+  "feature_dim": 513,
+  "final": {
+    "eval": {
+      "accuracy": 0.632016658782959,
+      "examples": 3848,
+      "loss": 1.5290262699127197
+    },
+    "train": {
+      "accuracy": 0.762939453125,
+      "examples": 4096,
+      "loss": 0.8680828809738159
+    }
+  },
+  "history": [
+    {
+      "batch_loss": 4.442442417144775,
+      "step": 1
+    },
+    {
+      "batch_loss": 1.5728726387023926,
+      "step": 20
+    },
+    {
+      "batch_loss": 1.2462114095687866,
+      "step": 40
+    },
+    {
+      "batch_loss": 1.1342389583587646,
+      "step": 60
+    },
+    {
+      "batch_loss": 0.9524663686752319,
+      "step": 80
+    }
+  ],
+  "initial": {
+    "eval": {
+      "accuracy": 0.006496881600469351,
+      "examples": 3848,
+      "loss": 4.848320007324219
+    },
+    "train": {
+      "accuracy": 0.00634765625,
+      "examples": 4096,
+      "loss": 4.847492694854736
+    }
+  },
+  "input": "bench/qwen-rollout-20260612/training-data-v1/sft.jsonl",
+  "kind": "llm_sft_smoke_train_summary",
+  "model": "byte_context_softmax",
+  "optimizer": {
+    "batch_size": 512,
+    "lr": 0.04,
+    "name": "Adam",
+    "seed": 123,
+    "steps": 80
+  },
+  "purpose": "training-loop smoke test over rollout-derived SFT rows; not a Qwen adapter",
+  "rows": 150,
+  "status": "pass",
+  "train_examples": 14817,
+  "train_rows": 120,
+  "vocab_size": 128
+}
