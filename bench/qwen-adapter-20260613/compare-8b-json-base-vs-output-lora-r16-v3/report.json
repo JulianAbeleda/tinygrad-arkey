@@ -1,0 +1,321 @@
+{
+  "artifacts": [
+    {
+      "dataset": "bench/qwen-adapter-20260613/training-data-v3/eval-prompts.jsonl",
+      "elapsed_s": 33.459058,
+      "generated": 288,
+      "label": "8b-json-base-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-json-base-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 12,
+      "quality": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "scored": 12,
+        "status": "fail"
+      },
+      "storage": "shared",
+      "tok_s": 8.607534617382235
+    },
+    {
+      "adapter": "bench/qwen-adapter-20260613/8b-output-lora-r16-v3",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v3/eval-prompts.jsonl",
+      "elapsed_s": 41.356055,
+      "generated": 142,
+      "label": "8b-output-lora-r16-v3-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-output-lora-r16-v3-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 12,
+      "quality": {
+        "pass_rate": 0.25,
+        "passed": 3,
+        "scored": 12,
+        "status": "fail"
+      },
+      "storage": "shared",
+      "tok_s": 3.4335963621288346
+    }
+  ],
+  "baseline": "8b-json-base-rollout",
+  "comparisons": [
+    {
+      "baseline": "8b-json-base-rollout",
+      "candidate": "8b-output-lora-r16-v3-rollout",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v3/eval-prompts.jsonl",
+      "outputs": {
+        "changed": [
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking which character starts a single-line comment in Python. Let me think. I remember",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"#\"}",
+            "id": "json_code_055",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking what quantization does to model weights. Let me recall. Quantization is a",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"rounding\"}",
+            "id": "json_compiler_020",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking what dequantization converts quantized values toward. Let me start by recalling what",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"continuous\"}",
+            "id": "json_compiler_030",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about what a kernel is in GPU programming. Let me start by recalling my knowledge",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"a kernel\"}",
+            "id": "json_compiler_040",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking what CPU stands for. Let me recall. CPU is a common acronym, so",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"Central Processing Unit\"}",
+            "id": "json_compiler_060",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking what color red and blue paint usually make. Let me think. When you mix",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"purple\"}",
+            "id": "json_fact_010",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for half of 50. Let me calculate that. Half of 5",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"111111111111111111111",
+            "id": "json_math_015",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for 10 percent of 80. Let me calculate that. ",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"111111111111111111111",
+            "id": "json_math_025",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 2 and 12. Let me calculate that.",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"111111111111111111111",
+            "id": "json_math_035",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the average of 4, 6, and 8. Let me",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"11\"}",
+            "id": "json_math_045",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 15 and 0. Let me think. Adding",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"15\"}",
+            "id": "json_math_050",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the next number in the sequence: 3, ",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"111111111111111111111",
+            "id": "json_pattern_005",
+            "tags": [
+              "json_answer",
+              "pattern",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          }
+        ],
+        "text_changed": 12,
+        "text_equal": 0,
+        "tokens_changed": 12,
+        "tokens_equal": 0
+      },
+      "prompts": 12,
+      "quality": {
+        "baseline_passed": 0,
+        "candidate_passed": 3,
+        "improvements": [
+          "json_code_055",
+          "json_fact_010",
+          "json_math_050"
+        ],
+        "passed_delta": 3,
+        "regressions": []
+      },
+      "tag_delta": {
+        "code": {
+          "baseline_passed": 0,
+          "candidate_passed": 1,
+          "passed_delta": 1,
+          "scored": 1
+        },
+        "compiler": {
+          "baseline_passed": 0,
+          "candidate_passed": 0,
+          "passed_delta": 0,
+          "scored": 4
+        },
+        "eval": {
+          "baseline_passed": 0,
+          "candidate_passed": 3,
+          "passed_delta": 3,
+          "scored": 12
+        },
+        "fact": {
+          "baseline_passed": 0,
+          "candidate_passed": 1,
+          "passed_delta": 1,
+          "scored": 1
+        },
+        "json_answer": {
+          "baseline_passed": 0,
+          "candidate_passed": 3,
+          "passed_delta": 3,
+          "scored": 12
+        },
+        "math": {
+          "baseline_passed": 0,
+          "candidate_passed": 1,
+          "passed_delta": 1,
+          "scored": 5
+        },
+        "pattern": {
+          "baseline_passed": 0,
+          "candidate_passed": 0,
+          "passed_delta": 0,
+          "scored": 1
+        }
+      },
+      "timing_sanity": {
+        "baseline_elapsed_s": 33.459058,
+        "baseline_generated": 288,
+        "baseline_tok_s": 8.607534617382235,
+        "candidate_elapsed_s": 41.356055,
+        "candidate_generated": 142,
+        "candidate_tok_s": 3.4335963621288346,
+        "elapsed_delta_s": 7.896996999999999,
+        "generated_delta": -146,
+        "tok_s_ratio": 0.398905902184228
+      }
+    }
+  ],
+  "kind": "llm_rollout_compare_report"
+}

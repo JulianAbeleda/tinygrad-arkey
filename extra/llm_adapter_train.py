@@ -36,11 +36,15 @@ def configure_env(args:argparse.Namespace) -> None:
   else:
     raise ValueError(f"unknown mode {args.mode!r}")
 
-def _build_examples(rows:list[dict[str, Any]], tok:Any, prompt_format:str, max_context:int, target_positions:str="all") -> list[dict[str, Any]]:
+def _build_examples(rows:list[dict[str, Any]], tok:Any, prompt_format:str, max_context:int, target_positions:str="all",
+                    append_eos:bool=False) -> list[dict[str, Any]]:
   if target_positions not in ("all", "last"): raise ValueError("target_positions must be 'all' or 'last'")
   examples = []
   for row in rows:
     completion_ids = tok.encode(row["completion"])
+    if append_eos:
+      if getattr(tok, "eos_id", None) is None: raise ValueError("append_eos requires tokenizer eos_id")
+      completion_ids = completion_ids + [tok.eos_id]
     if not completion_ids: continue
     prompt_ids = build_prompt_ids(tok, row["prompt"], prompt_format)
     positions = [len(completion_ids) - 1] if target_positions == "last" else range(len(completion_ids))
@@ -109,8 +113,8 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
   adapters = install_lora(model, args.targets, rank=args.rank, alpha=args.alpha, seed=args.seed)
   opt = Adam(adapter_parameters(adapters), lr=args.lr, fused=False)
 
-  train_examples = _build_examples(train_rows, tok, args.prompt_format, args.max_context, args.target_positions)
-  eval_examples = _build_examples(eval_rows, tok, args.prompt_format, args.max_context, args.target_positions)
+  train_examples = _build_examples(train_rows, tok, args.prompt_format, args.max_context, args.target_positions, args.append_eos)
+  eval_examples = _build_examples(eval_rows, tok, args.prompt_format, args.max_context, args.target_positions, args.append_eos)
   before_arrays = {k:v.copy() for k,v in _adapter_arrays(adapters).items()}
   st = time.perf_counter()
   initial = {
@@ -157,6 +161,7 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
     "train_examples": len(train_examples),
     "eval_examples": len(eval_examples),
     "target_positions": args.target_positions,
+    "append_eos": args.append_eos,
     "optimizer": {"name": "Adam", "lr": args.lr, "steps": args.steps, "seed": args.seed},
     "initial": initial,
     "final": final,
@@ -235,6 +240,7 @@ def main() -> int:
   parser.add_argument("--eval-every", type=int, default=5)
   parser.add_argument("--eval-limit", type=int, default=8)
   parser.add_argument("--target-positions", choices=("all", "last"), default="all")
+  parser.add_argument("--append-eos", action="store_true", help="train one EOS target after each completion so rollout can stop")
   parser.add_argument("--max-context", type=int, default=4096)
   parser.add_argument("--min-train-loss-delta", type=float, default=0.0)
   args = parser.parse_args()

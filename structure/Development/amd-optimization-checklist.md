@@ -296,9 +296,19 @@ generated-policy storage mode.
       rollout fails the held-out sentinel exact-match gate (`0/12`), while the
       rank-8 output LoRA passes (`12/12`) with `+12` compare improvement and
       `0` regressions. Runtime contract now requires this improvement.
-- [ ] Next practical step: replace the synthetic sentinel target with a small
-      human-authored format/preference dataset where success is still
-      automatically judged, then re-run the same train/rollout/compare contract.
+- [x] Replaced the synthetic sentinel target with a human-authored strict JSON
+      answer gate:
+      `extra/llm_adapter_json_data.py` and
+      `bench/qwen-adapter-20260613/training-data-v3/`. The base generated
+      rollout fails (`0/12`). Rank-16 output LoRA with EOS targets improves
+      teacher-forced held-out token accuracy (`0.5000 -> 0.8542`) and generation
+      reaches `3/12`, with `+3` compare improvement and `0` regressions.
+      Verdict: failed promotion; output-only LoRA is insufficient for this
+      conditional strict-JSON task.
+- [ ] Next practical step: scope a small non-output adapter target set
+      (for example selected FFN or attention projections), then rerun the same
+      strict JSON train/rollout/compare gate. Do not keep tuning output-head-only
+      LoRA as a promoted path.
 
 ## Do Not Do Next
 
@@ -332,6 +342,8 @@ generated-policy storage mode.
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
       artifact proves it is used by the reference decode path on gfx1100.
+- [ ] Do not promote the strict JSON V3 output-LoRA result; it is a diagnostic
+      negative (`3/12` held-out) rather than a training win.
 
 ## Reasonable Resume Tracks
 

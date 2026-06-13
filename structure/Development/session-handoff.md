@@ -562,3 +562,19 @@ runtime contract is `14/14`. This is a real behavior-change plumbing win, not a
 general quality result. Next practical step is to replace the synthetic sentinel
 with a small human-authored format/preference dataset that still has an
 automatic success metric.
+
+That next step has now been run as V3 strict JSON-answering:
+`bench/qwen-adapter-20260613/training-data-v3/`,
+`bench/qwen-adapter-20260613/8b-output-lora-r16-v3/`, and
+`bench/qwen-adapter-20260613/compare-8b-json-base-vs-output-lora-r16-v3/`.
+The base generated rollout fails the held-out strict-JSON gate (`0/12`), so the
+task is valid. Rank-16 output-head LoRA with EOS targets passes the training
+loss gate and improves teacher-forced held-out token accuracy (`0.5000 ->
+0.8542`), but held-out generation reaches only `3/12`; compare records `+3`
+improvements, `0` regressions, and below-bar absolute pass rate. Verdict:
+diagnostic negative. Output-only LoRA can force sentinel behavior and partially
+control format, but it does not provide enough conditional capacity for this
+strict JSON-answer task. Do not continue output-head-only LR sweeps as a
+promoted path; the next practical adapter scope should install a small
+allowlisted set of non-output adapters and reuse the same strict JSON
+train/rollout/compare gate.

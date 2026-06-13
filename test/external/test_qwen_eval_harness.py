@@ -19,6 +19,10 @@ class TestQwenEvalHarness(unittest.TestCase):
       with self.assertRaisesRegex(ValueError, "invalid expected_regex"):
         _read_jsonl(path)
 
+      path.write_text('{"id":"a","prompt":"hello","expected_json":[]}\n')
+      with self.assertRaisesRegex(ValueError, "expected_json must be a non-empty object"):
+        _read_jsonl(path)
+
   def test_score_prompt_checks_contains_regex_and_exact(self):
     prompt = {
       "expected_contains": ["answer", "42"],
@@ -30,6 +34,14 @@ class TestQwenEvalHarness(unittest.TestCase):
 
     score = score_prompt(prompt, "The answer is 41.")
     self.assertEqual(score["status"], "fail")
+
+  def test_score_prompt_checks_strict_json(self):
+    prompt = {"expected_json": {"answer": "42"}}
+    self.assertEqual(score_prompt(prompt, '{"answer":"42"}')["status"], "pass")
+    self.assertEqual(score_prompt(prompt, ' {"answer":"42"}\n')["status"], "pass")
+    self.assertEqual(score_prompt(prompt, '{"answer":"41"}')["status"], "fail")
+    self.assertEqual(score_prompt(prompt, '{"answer":"42","extra":"x"}')["status"], "fail")
+    self.assertEqual(score_prompt(prompt, 'Answer: {"answer":"42"}')["status"], "fail")
 
   def test_summary_detects_token_match(self):
     score = {"status": "pass", "passed": True, "checks": [{"kind": "contains", "value": "a", "passed": True}]}

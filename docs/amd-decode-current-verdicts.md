@@ -290,8 +290,21 @@ usually starting `<think>`), while the rank-8 output LoRA at
 The compare artifact records `+12` improvements, `0` regressions, and an
 eval-loop tok/s ratio of `0.9685`. This is the first contract-gated Qwen
 behavior-change result. It is not a broad quality or preference-training claim;
-the next practical step is a small human-authored format/preference dataset
+the next practical step was a small human-authored format/preference dataset
 with automatic scoring.
+
+That V3 strict JSON-answer gate is now measured and fails promotion. The base
+held-out rollout on `bench/qwen-adapter-20260613/training-data-v3/` fails
+`0/12`, so the task is a valid base failure. A rank-16 output-head LoRA trained
+with EOS targets improves teacher-forced held-out token accuracy
+`0.5000 -> 0.8542`, suppresses `<think>`, and emits JSON-shaped text, but
+generation reaches only `3/12` exact JSON answers. The compare artifact records
+`+3` improvements and `0` regressions, below the planned `>=75%` candidate pass
+bar. Verdict: output-only LoRA is enough for sentinel override and partial
+format control, but not enough conditional capacity for this strict held-out
+JSON-answer task. The next practical adapter experiment should target a small
+allowlisted set of non-output projections rather than more output-head LR
+tuning.
 
 For the llama.cpp-comparable research track, use
 `bench/qk-ansor-transition-20260612/scorecard.md` as the objective report.
@@ -357,6 +370,11 @@ worth doing only if the research itself is the goal.
 - Do not commit benchmark or reproducibility artifacts with machine-local
   absolute checkout paths. Store repo-relative paths so evidence regenerates
   from any clean checkout.
+- Do not promote the V3 strict JSON adapter result. It is a useful diagnostic
+  but fails the held-out pass-rate bar (`3/12`).
+- Do not keep tuning only the output-head LoRA for JSON-answering unless the
+  goal is diagnosis. The next promoted adapter attempt needs more conditional
+  capacity.
 
 ## Pointers
 

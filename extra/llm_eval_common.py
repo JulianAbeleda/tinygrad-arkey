@@ -31,6 +31,8 @@ def read_prompt_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
           except re.error as exc: raise ValueError(f"{path}:{lineno}: invalid expected_regex {pattern!r}: {exc}") from exc
     if "expected_exact" in row and not isinstance(row["expected_exact"], str):
       raise ValueError(f"{path}:{lineno}: expected_exact must be a string")
+    if "expected_json" in row and (not isinstance(row["expected_json"], dict) or not row["expected_json"]):
+      raise ValueError(f"{path}:{lineno}: expected_json must be a non-empty object")
     if "max_tokens" in row and (not isinstance(row["max_tokens"], int) or row["max_tokens"] <= 0):
       raise ValueError(f"{path}:{lineno}: max_tokens must be a positive integer")
     if prompt_id in seen: raise ValueError(f"{path}:{lineno}: duplicate id {prompt_id!r}")
@@ -55,6 +57,16 @@ def score_prompt(prompt:dict[str, Any], text:str) -> dict[str, Any]:
   if "expected_exact" in prompt:
     expected = prompt["expected_exact"]
     checks.append({"kind": "exact", "value": expected, "passed": text.strip() == expected})
+  if "expected_json" in prompt:
+    expected = prompt["expected_json"]
+    try:
+      parsed = json.loads(text.strip())
+      ok = parsed == expected
+      detail = parsed
+    except json.JSONDecodeError as exc:
+      ok = False
+      detail = f"parse_error: {exc.msg}"
+    checks.append({"kind": "json", "value": expected, "actual": detail, "passed": ok})
   if not checks: return {"status": "unscored", "passed": None, "checks": []}
   passed = all(check["passed"] for check in checks)
   return {"status": "pass" if passed else "fail", "passed": passed, "checks": checks}

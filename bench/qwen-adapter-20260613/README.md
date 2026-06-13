@@ -67,3 +67,41 @@ Current result:
 This proves the adapter loop can produce a contract-gated behavior change on
 held-out prompts. It is still a deliberately synthetic sentinel override, not a
 general capability or preference-training result.
+
+## V3 Strict JSON Answer Gate
+
+The third gate replaces the sentinel with a human-authored strict JSON-answer
+dataset:
+
+- dataset: `training-data-v3/sft.jsonl`
+- held-out eval prompts: `training-data-v3/eval-prompts.jsonl`
+- target behavior: return only compact JSON with exactly one key, `answer`
+- adapter: output-head LoRA only, rank `16`, alpha `16`, trained with EOS
+  targets
+
+Artifacts:
+
+- `training-data-v3/README.md`: SFT/eval dataset and strict JSON schema.
+- `8b-json-base-rollout/summary.md`: base model probe on held-out prompts.
+- `8b-output-lora-r16-v3/README.md`: adapter training summary and saved
+  adapter.
+- `8b-output-lora-r16-v3-rollout/summary.md`: held-out rollout with adapter
+  loaded.
+- `compare-8b-json-base-vs-output-lora-r16-v3/report.md`: deterministic
+  base-vs-v3 comparison.
+
+Current result:
+
+- base held-out rollout: `0/12`
+- adapter held-out rollout: `3/12`
+- compare improvement: `+3` passes, `0` regressions
+- teacher-forced held-out token accuracy: `0.5000 -> 0.8542`
+- eval-loop speed ratio: `0.3989` vs the base JSON rollout
+
+Verdict: failed promotion. Output-only LoRA learned to suppress `<think>` and
+emit JSON-shaped text, but it did not reliably produce the correct held-out
+answer values and sometimes collapsed numeric answers into repeated `1`s. Do
+not lower the gate or keep LR-tuning this path as a win. The next adapter
+experiment should target more conditional capacity than the output head alone,
+for example a small allowlisted set of FFN/attention projection adapters, using
+the same strict JSON rollout/compare gate.

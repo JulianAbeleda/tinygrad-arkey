@@ -6,11 +6,13 @@ import numpy as np
 from tinygrad import Tensor, nn
 
 from extra.llm_adapter import install_lora, load_adapter, save_adapter
+from extra.llm_adapter_json_data import write_dataset as write_json_dataset
 from extra.llm_adapter_train import _build_examples, split_adapter_rows, summary_markdown
 from extra.llm_adapter_signal_data import write_dataset
 
 
 class ToyTokenizer:
+  eos_id = 99
   def prefix(self): return [1]
   def role(self, role): return [2 if role == "user" else 3]
   def end_turn(self): return [4]
@@ -53,6 +55,11 @@ class TestLLMAdapter(unittest.TestCase):
     self.assertEqual(examples[0]["input_tokens"], examples[0]["prompt_tokens"])
     self.assertGreater(examples[1]["input_tokens"], examples[1]["prompt_tokens"])
 
+  def test_build_examples_can_append_eos_target(self):
+    rows = [{"id": "r1", "source_id": "s1", "prompt": "hi", "completion": "ok", "tags": ["t"]}]
+    examples = _build_examples(rows, ToyTokenizer(), "chat", 128, append_eos=True)
+    self.assertEqual([x["target"] for x in examples], [ord("o") % 127, ord("k") % 127, ToyTokenizer.eos_id])
+
   def test_split_adapter_rows_honors_explicit_split(self):
     rows = [
       {"id": "a", "source_id": "a", "split": "train", "prompt": "p", "completion": "OK"},
@@ -74,6 +81,20 @@ class TestLLMAdapter(unittest.TestCase):
       self.assertEqual({row["split"] for row in sft_rows}, {"train", "eval"})
       self.assertTrue(all(row["completion"] == "OK" for row in sft_rows))
       self.assertTrue(all(row["expected_exact"] == "OK" and row["max_tokens"] == 1 for row in eval_rows))
+
+  def test_json_dataset_writes_matching_sft_and_eval_prompts(self):
+    with TemporaryDirectory() as raw_td:
+      out = pathlib.Path(raw_td)
+      summary = write_json_dataset(out, eval_every=2, limit=4)
+      self.assertEqual(summary["train_rows"], 2)
+      self.assertEqual(summary["eval_rows"], 2)
+      sft_rows = [(json.loads(line)) for line in (out / "sft.jsonl").read_text().splitlines()]
+      eval_rows = [(json.loads(line)) for line in (out / "eval-prompts.jsonl").read_text().splitlines()]
+      by_id = {row["id"]: row for row in sft_rows}
+      self.assertEqual({row["split"] for row in sft_rows}, {"train", "eval"})
+      for row in eval_rows:
+        self.assertEqual(json.loads(by_id[row["id"]]["completion"]), row["expected_json"])
+        self.assertEqual(row["max_tokens"], 24)
 
   def test_committed_qwen_adapter_artifact_shape_if_present(self):
     repo = pathlib.Path(__file__).resolve().parents[2]

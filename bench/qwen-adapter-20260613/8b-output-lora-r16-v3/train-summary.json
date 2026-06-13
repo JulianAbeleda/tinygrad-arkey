@@ -1,0 +1,107 @@
+{
+  "adapter_kind": "output_lora",
+  "alpha": 16.0,
+  "append_eos": true,
+  "artifacts": {
+    "config": "adapter.json",
+    "weights": "adapter.npz"
+  },
+  "base_model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "deltas": {
+    "adapter_l2": 7.954963276776536,
+    "eval_accuracy": 0.35416666666666663,
+    "eval_loss": 7.028899928137974,
+    "train_accuracy": 0.375,
+    "train_loss": 6.121207702559828
+  },
+  "elapsed_s": 857.8570274579979,
+  "eval_examples": 80,
+  "eval_rows": 12,
+  "eval_source_ids": [
+    "json_code_055",
+    "json_compiler_020",
+    "json_compiler_030",
+    "json_compiler_040",
+    "json_compiler_060",
+    "json_fact_010",
+    "json_math_015",
+    "json_math_025",
+    "json_math_035",
+    "json_math_045",
+    "json_math_050",
+    "json_pattern_005"
+  ],
+  "final": {
+    "eval": {
+      "accuracy": 0.8541666666666666,
+      "examples": 48,
+      "loss": 0.7877279706546437
+    },
+    "train": {
+      "accuracy": 0.9166666666666666,
+      "examples": 48,
+      "loss": 0.41295523798438794
+    }
+  },
+  "history": [
+    {
+      "example": "json_math_037:tok6",
+      "loss": 0.1445687860250473,
+      "step": 1
+    },
+    {
+      "example": "json_sort_059:tok5",
+      "loss": -0.0,
+      "step": 60
+    },
+    {
+      "example": "json_math_041:tok4",
+      "loss": 5.209310620557517e-05,
+      "step": 120
+    },
+    {
+      "example": "json_reason_049:tok1",
+      "loss": 1.1920928955078125e-07,
+      "step": 180
+    },
+    {
+      "example": "json_compiler_017:tok2",
+      "loss": -0.0,
+      "step": 240
+    }
+  ],
+  "initial": {
+    "eval": {
+      "accuracy": 0.5,
+      "examples": 48,
+      "loss": 7.816627898792618
+    },
+    "train": {
+      "accuracy": 0.5416666666666666,
+      "examples": 48,
+      "loss": 6.534162940544216
+    }
+  },
+  "input": "bench/qwen-adapter-20260613/training-data-v3/sft.jsonl",
+  "kind": "llm_adapter_train_summary",
+  "mode": "generated",
+  "note": "Output-head LoRA V0; trains adapter tensors only and does not claim model-quality improvement.",
+  "optimizer": {
+    "lr": 0.001,
+    "name": "Adam",
+    "seed": 20260613,
+    "steps": 240
+  },
+  "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "prompt_format": "chat",
+  "rank": 16,
+  "rows": 60,
+  "status": "pass",
+  "storage": "shared",
+  "target_positions": "all",
+  "targets": [
+    "output"
+  ],
+  "train_examples": 319,
+  "train_rows": 48
+}
