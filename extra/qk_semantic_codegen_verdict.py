@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, json, pathlib
+import argparse, filecmp, json, pathlib
 from typing import Any
+
+from extra.qk_semantic_candidate import is_raw_accept_status
 
 DEFAULT_MODELS = ("8b", "14b")
 
@@ -34,7 +36,46 @@ def _decision_row(path:pathlib.Path, repo:pathlib.Path) -> dict[str, Any]:
     "generated_tok_s": (data.get("generated") or {}).get("avg_tok_s"),
     "ab_match": data.get("ab_match"),
     "reasons": data.get("reasons") or [],
+    "policy": data.get("policy"),
   }
+
+
+def _decision_policy_path(row:dict[str, Any], decision_path:pathlib.Path, repo:pathlib.Path) -> pathlib.Path|None:
+  raw = row.get("policy")
+  if not raw: return None
+  policy = pathlib.Path(raw)
+  if policy.is_absolute(): return policy
+  candidates = [repo / policy, decision_path.parent / policy.name]
+  return next((x for x in candidates if x.exists()), candidates[0])
+
+
+def _confirmation_rows(root:pathlib.Path, decisions:list[dict[str, Any]], repo:pathlib.Path) -> dict[str, dict[str, Any]]:
+  out = {}
+  for confirm_root in (root / "full-benchmark-confirm", root / "confirm"):
+    if not confirm_root.exists(): continue
+    for confirm_path in sorted(confirm_root.glob("*/decision.json")):
+      confirm = _decision_row(confirm_path, repo)
+      confirm_policy = _decision_policy_path(confirm, confirm_path, repo)
+      for row in decisions:
+        row_path = repo / row["path"]
+        row_policy = _decision_policy_path(row, row_path, repo)
+        matched = confirm["candidate"] == row["candidate"]
+        if confirm_policy is not None and row_policy is not None and confirm_policy.exists() and row_policy.exists():
+          matched = matched or filecmp.cmp(confirm_policy, row_policy, shallow=False)
+        if matched:
+          out[row["candidate"]] = confirm | {"path": _portable(confirm_path, repo)}
+          break
+  return out
+
+
+def _finalize_decision(row:dict[str, Any], confirmation:dict[str, Any]|None) -> dict[str, Any]:
+  if row.get("status") == "accept":
+    if confirmation is None:
+      return row | {"raw_status": "accept", "status": "raw_accept_unconfirmed", "confirmation": None}
+    if confirmation.get("status") == "accept":
+      return row | {"raw_status": "accept", "status": "confirmed_accept", "confirmation": confirmation}
+    return row | {"raw_status": "accept", "status": "raw_accept_rejected_by_confirmation", "confirmation": confirmation}
+  return row | {"raw_status": row.get("status"), "confirmation": confirmation}
 
 
 def _model_report(base:pathlib.Path, model:str, repo:pathlib.Path) -> dict[str, Any]:
@@ -43,10 +84,12 @@ def _model_report(base:pathlib.Path, model:str, repo:pathlib.Path) -> dict[str, 
   static_gate = _read(root / "static-gate.json")
   microbench = _read(root / "microbench.json")
   decisions = [_decision_row(path, repo) for path in sorted((root / "full-benchmark").glob("*/decision.json"))]
+  confirmations = _confirmation_rows(root, decisions, repo)
+  decisions = [_finalize_decision(row, confirmations.get(row["candidate"])) for row in decisions]
   micro_rows = microbench.get("rows") or []
-  micro_accepts = [row for row in micro_rows if row.get("status") == "accept"]
+  micro_accepts = [row for row in micro_rows if is_raw_accept_status(row.get("status"))]
   full_ready = [row for row in micro_accepts if row.get("full_decode_supported")]
-  promoted = [row for row in decisions if row.get("status") == "accept"]
+  promoted = [row for row in decisions if row.get("status") == "confirmed_accept"]
   return {
     "model": model.upper(),
     "candidate_summary": candidates.get("summary") or {},
@@ -58,6 +101,7 @@ def _model_report(base:pathlib.Path, model:str, repo:pathlib.Path) -> dict[str, 
         "role": row.get("role"),
         "format": row.get("format"),
         "gain": row.get("gain"),
+        "status": "raw_accept",
         "full_decode_supported": row.get("full_decode_supported"),
       }
       for row in micro_accepts
@@ -72,7 +116,9 @@ def _model_report(base:pathlib.Path, model:str, repo:pathlib.Path) -> dict[str, 
 def build_verdict(base:pathlib.Path, *, repo:pathlib.Path=pathlib.Path.cwd(), models:tuple[str, ...]=DEFAULT_MODELS) -> dict[str, Any]:
   reports = [_model_report(base, model, repo) for model in models]
   full_decisions = [row for report in reports for row in report["full_decode_decisions"]]
-  accepts = [row for row in full_decisions if row.get("status") == "accept"]
+  accepts = [row for row in full_decisions if row.get("status") == "confirmed_accept"]
+  raw_unconfirmed = [row for row in full_decisions if row.get("status") == "raw_accept_unconfirmed"]
+  raw_rejected = [row for row in full_decisions if row.get("status") == "raw_accept_rejected_by_confirmation"]
   rejects = [row for row in full_decisions if row.get("status") == "reject"]
   ties = [row for row in full_decisions if row.get("status") == "tie"]
   needs_rerun = [row for row in full_decisions if row.get("status") == "needs-rerun"]
@@ -82,6 +128,8 @@ def build_verdict(base:pathlib.Path, *, repo:pathlib.Path=pathlib.Path.cwd(), mo
     overall = "semantic_codegen_v1_invalid"
   elif needs_rerun:
     overall = "semantic_codegen_v1_needs_rerun"
+  elif raw_unconfirmed:
+    overall = "semantic_codegen_v1_raw_accept_unconfirmed"
   elif len(accepted_models) == len(reports):
     overall = "semantic_codegen_v1_accept"
   elif accepts:
@@ -111,8 +159,12 @@ def build_verdict(base:pathlib.Path, *, repo:pathlib.Path=pathlib.Path.cwd(), mo
       "models": len(reports),
       "accepted_models": accepted_models,
       "microbench_accepts": sum(len(report["microbench_accepts"]) for report in reports),
+      "raw_microbench_accepts": sum(len(report["microbench_accepts"]) for report in reports),
       "full_decode_candidates": len(full_decisions),
       "full_decode_accepts": len(accepts),
+      "full_decode_confirmed_accepts": len(accepts),
+      "full_decode_raw_accept_unconfirmed": len(raw_unconfirmed),
+      "full_decode_raw_accept_rejected_by_confirmation": len(raw_rejected),
       "full_decode_rejects": len(rejects),
       "full_decode_ties": len(ties),
       "full_decode_needs_rerun": len(needs_rerun),
@@ -136,7 +188,8 @@ def verdict_markdown(verdict:dict[str, Any]) -> str:
     f"- overall decision: `{verdict['summary']['overall_decision']}`",
     f"- microbench accepts: `{verdict['summary']['microbench_accepts']}`",
     f"- full-decode candidates: `{verdict['summary']['full_decode_candidates']}`",
-    f"- full-decode accepts: `{verdict['summary']['full_decode_accepts']}`",
+    f"- full-decode confirmed accepts: `{verdict['summary']['full_decode_confirmed_accepts']}`",
+    f"- full-decode raw accepts awaiting confirmation: `{verdict['summary']['full_decode_raw_accept_unconfirmed']}`",
     f"- run 32B: `{verdict['summary']['run_32b']}`",
     "",
     "Reasons:",

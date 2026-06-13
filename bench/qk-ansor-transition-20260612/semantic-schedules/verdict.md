@@ -8,13 +8,14 @@ This is the 8B/14B gate for the first semantic schedule/codegen surface.
 - overall decision: `semantic_schedule_v0_rejected`
 - microbench accepts: `3`
 - full-decode candidates: `2`
-- full-decode accepts: `0`
+- full-decode confirmed accepts: `0`
+- full-decode raw accepts awaiting confirmation: `0`
 - run 32B: `False`
 
 Reasons:
 
-- 8B full decode rejected 009-attn-q-blk-0-attn-q-weight-row-upcast2: -10.28%
-- 14B full decode rejected 009-attn-q-blk-0-attn-q-weight-row-upcast2: -5.21%
+- 8B full decode reject 009-attn-q-blk-0-attn-q-weight-row-upcast2: -10.28%
+- 14B full decode reject 009-attn-q-blk-0-attn-q-weight-row-upcast2: -5.21%
 - 32B skipped by default because the 8B/14B semantic gate did not accept
 
 ## Models

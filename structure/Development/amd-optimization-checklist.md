@@ -121,6 +121,12 @@ generated-policy storage mode.
       accepts: 8B `0` accepts (`2` ties, `1` reject), 14B `0` accepts (`2`
       ties, `2` rejects). Verdict: `semantic_codegen_v1_rejected`; full decode
       and 32B skipped by rule.
+- [x] Hardened semantic schedule/codegen gates before adding another family:
+      microbench wins are now `raw_accept` only, verdict tools require a
+      matching full-decode confirmation rerun before promotion, and semantic
+      candidate artifacts carry explicit storage deltas plus correctness
+      provenance. CPU/Mac tests cover reference unpacking; AMD microbench runs
+      still cover GEMV numerics; full-decode A/B covers model assembly.
 - [x] Fixed loop-v0 matrix portability: benchmark matrix `path` and `policy`
       fields are repo-relative, tests assert they are not absolute paths, and
       the regenerated matrices reproduce outside `/home/ubuntu/tinygrad-arkey`.
@@ -143,6 +149,8 @@ generated-policy storage mode.
 - [ ] Do not hand-tune 32B as a standalone project.
 - [ ] Do not make generated policies global defaults.
 - [ ] Do not run BEAM/risky schedule search on Mac/TinyGPU/remote paths.
+- [ ] Do not promote semantic schedule/codegen `raw_accept` rows without a
+      matching confirmation rerun.
 
 ## Reasonable Resume Tracks
 
@@ -155,7 +163,8 @@ generated-policy storage mode.
    `semantic_schedule_v0_rejected` verdict in
    `bench/qk-ansor-transition-20260612/semantic-schedules/`. The next surface
    must add richer semantic layout/codegen; do not re-run the same four
-   schedule sketches.
+   schedule sketches. Any future microbench win starts as `raw_accept` and
+   needs a confirmation rerun before it becomes a promoted result.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

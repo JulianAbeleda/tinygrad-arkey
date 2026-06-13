@@ -59,8 +59,8 @@ kernel-search loop.
 | QK policy storage | Shape-scoped policy is too coarse for large models under sidecar storage; 32B needs either tensor-scoped storage decisions or shared source storage. Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. `QK_PRIMITIVE_STORAGE=shared` references the already-realized raw GGUF buffer through typed views; it has now passed full 8B, 14B, and 32B harnesses with `storage_bytes=0`. | Treat shared storage as the validated generated-policy storage mode, but keep it explicit until it has more runtime soak. Future policy generation should still include storage cost, benefit, and fallback decisions because sidecar remains supported and useful as a performance control. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
 | Ansor-transition descriptor/candidate loop | Reproducible and benchmarked. `bench/qk-ansor-transition-20260612/` freezes the llama.cpp-comparable objective, records profiles for 8B/14B/32B, converts accepted generated policies into Q4_K/Q6_K semantic descriptors, round-trips those descriptors into equivalent runtime policies, generates bounded candidates, statically gates them, and benchmarks the six `benchmark_next` candidates per model policy-vs-policy. | Descriptor-level `parts`/`LOCAL` knob search is exhausted. The next research step needs real semantic schedule/codegen generation. |
-| Semantic schedule v0 | Reproducible and rejected. The first richer schedule surface generated `direct_out`, `row_upcast2`, `reduce_unroll4`, and `two_dim_local4` sketches for 8B/14B. Microbench found isolated attention `row_upcast2` wins, but the full decode gate rejected the only supported winner on both models: 8B `-10.28%`, 14B `-5.21%`, greedy A/B pass. | Do not promote microbench-only schedule wins. Do not run 32B for this surface. The next compiler step needs richer semantic layout/codegen, not these same sketches. |
-| Semantic codegen v1 | Reproducible and rejected. Q4_K direct output is now a runtime-supported generated-policy family (`q4_k_packed_u32_direct`) and was tested as exact-tensor overrides. The 8B/14B microbench gate produced no accepts: 8B had two ties and one reject; 14B had two ties and two rejects. | Do not run full decode or 32B for this direct-output surface. Removing the partial reduction kernel alone is not enough. |
+| Semantic schedule v0 | Reproducible and rejected. The first richer schedule surface generated `direct_out`, `row_upcast2`, `reduce_unroll4`, and `two_dim_local4` sketches for 8B/14B. Microbench found isolated attention `row_upcast2` wins, but the full decode gate rejected the only supported winner on both models: 8B `-10.28%`, 14B `-5.21%`, greedy A/B pass. The verdict tooling now separates raw accepts from confirmed accepts. | Do not promote microbench-only schedule wins. Do not run 32B for this surface. The next compiler step needs richer semantic layout/codegen, not these same sketches. |
+| Semantic codegen v1 | Reproducible and rejected. Q4_K direct output is now a runtime-supported generated-policy family (`q4_k_packed_u32_direct`) and was tested as exact-tensor overrides. The 8B/14B microbench gate produced no accepts: 8B had two ties and one reject; 14B had two ties and two rejects. The artifacts now record storage deltas and correctness provenance for each candidate. | Do not run full decode or 32B for this direct-output surface. Removing the partial reduction kernel alone is not enough. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -139,6 +139,12 @@ It is a representation/lowering boundary:
     still did not clear the fixed `3%` microbench gate. 8B had `0` accepts
     (`2` ties, `1` reject); 14B had `0` accepts (`2` ties, `2` rejects). No
     full-decode candidate was promoted, and 32B was skipped by policy.
+17. The semantic gate is now hardened for future surfaces: microbench winners
+    are `raw_accept` only, full-decode accepts are not promoted unless a matching
+    confirmation run also accepts, and candidate artifacts carry storage deltas
+    plus correctness provenance. CPU/Mac tests prove reference unpack semantics;
+    AMD microbench gates prove GEMV numerics; full-decode A/B gates prove model
+    assembly.
 
 So the machine-first research hypothesis is:
 
@@ -202,6 +208,9 @@ worth doing only if the research itself is the goal.
 - Do not promote semantic schedule/codegen candidates from microbench results
   alone. The first `row_upcast2` attention win regressed full decode on both 8B
   and 14B.
+- Do not count a semantic raw accept as a promoted result. A raw accept must
+  survive a matching full-decode confirmation rerun before it becomes a
+  confirmed accept.
 - Do not run the semantic-schedule v0 surface on 32B. The 8B/14B gate rejected
   it, so 32B would only be a heavy confirmation of a failed surface.
 - Do not run the semantic-codegen v1 direct-output Q4 surface on 32B. The 8B/14B

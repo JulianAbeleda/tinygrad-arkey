@@ -2139,3 +2139,34 @@ Verdict: `semantic_codegen_v1_rejected`. Direct-output Q4 removes the partial
 reduction kernel, but the measured per-tensor gains stayed inside the fixed
 `3%` tie band or regressed. No full-decode run or 32B run is justified for this
 surface.
+
+## Semantic gate hardening (2026-06-13)
+
+The semantic schedule/codegen tooling now encodes the measurement discipline
+that was previously prose:
+
+- `extra/qk_semantic_schedule_bench.py` reports microbench wins as
+  `raw_accept`, not final accepts. A raw accept must survive a model-scope
+  full-decode confirmation rerun before promotion.
+- `extra/qk_semantic_schedule_verdict.py` and
+  `extra/qk_semantic_codegen_verdict.py` match confirmation runs by candidate
+  name or exact policy-file content, then separate confirmed accepts,
+  raw-unconfirmed accepts, and raw accepts rejected by confirmation.
+- `extra/qk_semantic_candidate.py` centralizes shared candidate helpers for
+  slugging, current-runtime extraction, runtime storage byte accounting,
+  no-extra-storage deltas, correctness provenance, and raw-accept status.
+- Semantic candidate artifacts now include storage deltas
+  (`persistent_bytes_delta`, `shared_bytes_delta`,
+  `nonpersistent_bytes_delta`, `metadata_sidecar_bytes`) and correctness
+  provenance (`reference_unpacked`, `amd_gemv`, `full_decode_ab`).
+
+The current semantic schedule v0 and semantic codegen v1 verdicts did not
+change: both remain rejected, with zero confirmed accepts and zero raw accepts
+awaiting confirmation. No GPU benchmark was rerun for this hardening pass; the
+change is the gate semantics and regenerated deterministic artifacts.
+
+Correctness boundary: CPU/Mac tests cover packed-layout reference unpacking.
+AMD microbench runs are still required for GEMV numerics, and full-decode A/B is
+still required for model-level promotion. `QK_PRIMITIVE_STORAGE=q4_ondemand`
+remains a Q4-only negative storage prototype; Q6_K continues to follow the
+selected shared/sidecar storage mode.

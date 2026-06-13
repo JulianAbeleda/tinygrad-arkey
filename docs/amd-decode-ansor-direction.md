@@ -52,6 +52,13 @@ two ties and one reject; 14B had two ties and two rejects. No full-decode
 candidate was promoted, and 32B was skipped by rule. Current verdict:
 `semantic_codegen_v1_rejected`.
 
+Update, semantic-gate hardening: future semantic schedule/codegen microbench
+wins are `raw_accept` only. A candidate is not promoted unless a matching
+full-decode confirmation rerun also accepts. Candidate artifacts now carry
+explicit storage deltas and correctness provenance, including the boundary that
+CPU/Mac tests cover reference unpacking while AMD microbench runs cover GEMV
+numerics.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

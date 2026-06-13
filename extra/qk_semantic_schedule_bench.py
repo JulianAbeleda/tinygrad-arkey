@@ -5,6 +5,7 @@ import argparse, json, os, pathlib, re, subprocess, sys, time
 from typing import Any
 
 from extra.q4_k_safety import assert_q4k_native_sweep_allowed
+from extra.qk_semantic_candidate import is_raw_accept_status
 from extra.qk_semantic_schedule import load_json, write_json
 
 MODEL_FILES = {
@@ -139,7 +140,7 @@ def _decision(current:dict[str, Any], candidate:dict[str, Any], *, min_gain:floa
   if current.get("quant_gbs") in (None, 0) or candidate.get("quant_gbs") is None:
     return "invalid", None, ["missing quant_gbs"]
   gain = candidate["quant_gbs"] / current["quant_gbs"] - 1.0
-  if gain >= min_gain: return "accept", gain, []
+  if gain >= min_gain: return "raw_accept", gain, ["requires confirmation before promotion"]
   if abs(gain) <= tie_band: return "tie", gain, [f"within tie_band={tie_band:.3f}"]
   return "reject", gain, [f"below min_gain={min_gain:.3f}"]
 
@@ -180,11 +181,18 @@ def build_microbench_report(model:str, candidate_set:dict[str, Any], gate:dict[s
       "gain": gain,
       "current": current,
       "candidate": candidate,
+      "correctness_provenance": candidate_spec.get("correctness_provenance"),
+      "correctness": {
+        "reference_unpacked": "covered_by_qk_layout_reference_tests",
+        "amd_gemv": current["status"] == "pass" and candidate["status"] == "pass",
+        "full_decode_ab": False,
+      },
+      "storage_effect": candidate_spec.get("storage_effect"),
       "reasons": reasons,
       "policy": _portable_str(str(out / cand["id"] / "policy.json"), repo),
     })
     write_json(cand_out / "policy.json", cand["policy"])
-  accepted = [row for row in rows if row["status"] == "accept"]
+  accepted = [row for row in rows if is_raw_accept_status(row["status"])]
   full_decode_ready = [row for row in accepted if row.get("full_decode_supported")]
   return {
     "kind": f"qk_semantic_{surface}_microbench",
@@ -194,11 +202,13 @@ def build_microbench_report(model:str, candidate_set:dict[str, Any], gate:dict[s
     "summary": {
       "candidates": len(rows),
       "accepted": len(accepted),
+      "raw_accepts": len(accepted),
       "ties": sum(1 for row in rows if row["status"] == "tie"),
       "rejected": sum(1 for row in rows if row["status"] == "reject"),
       "invalid": sum(1 for row in rows if row["status"] == "invalid"),
       "full_decode_ready": len(full_decode_ready),
       "next_decision": "run_full_policy_benchmark" if full_decode_ready else f"semantic_{surface}_frontier_blocked",
+      "acceptance_rule": "raw_accept requires full-decode confirmation before promotion",
     },
   }
 
@@ -215,7 +225,7 @@ def report_markdown(report:dict[str, Any]) -> str:
     "## Summary",
     "",
     f"- candidates: `{report['summary']['candidates']}`",
-    f"- accepted: `{report['summary']['accepted']}`",
+    f"- raw accepts: `{report['summary'].get('raw_accepts', report['summary']['accepted'])}`",
     f"- ties: `{report['summary']['ties']}`",
     f"- rejected: `{report['summary']['rejected']}`",
     f"- invalid: `{report['summary']['invalid']}`",

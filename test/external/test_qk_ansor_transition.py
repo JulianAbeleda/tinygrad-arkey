@@ -1,4 +1,4 @@
-import json, os, pathlib, unittest
+import json, os, pathlib, tempfile, unittest
 
 from extra.qk_ansor_transition_loop import build_loop, loop_markdown, write_candidate_policies
 from extra.qk_candidate_generator import build_candidate_set, candidates_markdown
@@ -157,6 +157,11 @@ class TestQKAnsorTransition(unittest.TestCase):
       self.assertEqual((semantic / stem / "candidates.md").read_text(), semantic_candidates_markdown(candidate_set))
       self.assertEqual(candidate_set["summary"]["candidates"], 15)
       self.assertEqual(candidate_set["search_space"]["note"], "32B is excluded from the default semantic schedule gate and should only run after 8B/14B evidence.")
+      for candidate in candidate_set["candidates"]:
+        self.assertIn("storage_effect", candidate)
+        self.assertIn("persistent_bytes_delta", candidate["storage_effect"])
+        if candidate["id"] != "current":
+          self.assertIn("correctness_provenance", candidate)
 
       gate = build_semantic_static_gate(candidate_set)
       self.assertEqual(json.loads((semantic / stem / "static-gate.json").read_text()), gate)
@@ -170,6 +175,47 @@ class TestQKAnsorTransition(unittest.TestCase):
     self.assertEqual(verdict["summary"]["overall_decision"], "semantic_schedule_v0_rejected")
     self.assertEqual(verdict["summary"]["full_decode_accepts"], 0)
     self.assertFalse(verdict["summary"]["run_32b"])
+
+  def test_semantic_verdicts_require_confirmation_for_raw_accepts(self):
+    verdict_builders = [
+      (build_semantic_verdict, "semantic_schedule_v0_raw_accept_unconfirmed", "semantic_schedule_v0_rejected"),
+      (build_codegen_verdict, "semantic_codegen_v1_raw_accept_unconfirmed", "semantic_codegen_v1_rejected"),
+    ]
+    for build, unconfirmed_decision, rejected_decision in verdict_builders:
+      with tempfile.TemporaryDirectory() as tmp:
+        repo = pathlib.Path(tmp)
+        base = repo / "semantic"
+        model = base / "8b"
+        (model / "full-benchmark" / "cand").mkdir(parents=True)
+        (model / "candidates.json").write_text(json.dumps({"summary": {}}))
+        (model / "static-gate.json").write_text(json.dumps({"summary": {}}))
+        (model / "microbench.json").write_text(json.dumps({"rows": [{
+          "id": "cand", "status": "raw_accept", "full_decode_supported": True,
+        }]}))
+        decision = {
+          "status": "accept",
+          "gain": 0.05,
+          "explicit": {"avg_tok_s": 100.0},
+          "generated": {"avg_tok_s": 105.0},
+          "ab_match": True,
+          "policy": "policy.json",
+        }
+        (model / "full-benchmark" / "cand" / "decision.json").write_text(json.dumps(decision))
+        (model / "full-benchmark" / "cand" / "policy.json").write_text('{"entries":[]}')
+
+        verdict = build(base, repo=repo, models=("8b",))
+        self.assertEqual(verdict["summary"]["overall_decision"], unconfirmed_decision)
+        self.assertEqual(verdict["summary"]["full_decode_accepts"], 0)
+        self.assertEqual(verdict["summary"]["full_decode_raw_accept_unconfirmed"], 1)
+
+        confirm = model / "full-benchmark-confirm" / "cand-rerun"
+        confirm.mkdir(parents=True)
+        (confirm / "decision.json").write_text(json.dumps(decision | {"status": "tie", "gain": 0.0}))
+        (confirm / "policy.json").write_text('{"entries":[]}')
+        verdict = build(base, repo=repo, models=("8b",))
+        self.assertEqual(verdict["summary"]["overall_decision"], rejected_decision)
+        self.assertEqual(verdict["summary"]["full_decode_accepts"], 0)
+        self.assertEqual(verdict["summary"]["full_decode_raw_accept_rejected_by_confirmation"], 1)
 
   def test_semantic_schedule_artifacts_do_not_embed_checkout_absolute_paths(self):
     semantic = pathlib.Path("bench/qk-ansor-transition-20260612/semantic-schedules")
@@ -193,6 +239,11 @@ class TestQKAnsorTransition(unittest.TestCase):
       self.assertEqual(candidate_set["summary"]["candidates"], expected_candidates)
       self.assertTrue(all((candidate["id"] == "current" or candidate["changes"][0]["scope"] == "tensor")
                           for candidate in candidate_set["candidates"]))
+      for candidate in candidate_set["candidates"]:
+        self.assertIn("storage_effect", candidate)
+        self.assertIn("persistent_bytes_delta", candidate["storage_effect"])
+        if candidate["id"] != "current":
+          self.assertIn("correctness_provenance", candidate)
 
       gate = build_codegen_static_gate(candidate_set)
       self.assertEqual(json.loads((codegen / stem / "static-gate.json").read_text()), gate)

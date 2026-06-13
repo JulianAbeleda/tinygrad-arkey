@@ -9,7 +9,8 @@ excluded unless both target models show promise.
 - overall decision: `semantic_codegen_v1_rejected`
 - microbench accepts: `0`
 - full-decode candidates: `0`
-- full-decode accepts: `0`
+- full-decode confirmed accepts: `0`
+- full-decode raw accepts awaiting confirmation: `0`
 - run 32B: `False`
 
 Reasons:

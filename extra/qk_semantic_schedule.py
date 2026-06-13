@@ -1,39 +1,17 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, copy, json, pathlib, re
+import argparse, copy, json, pathlib
 from typing import Any
 
 from extra.qk_descriptor_policy import build_policy_from_descriptor, load_json, write_json
+from extra.qk_semantic_candidate import (
+  correctness_provenance, current_runtime, no_extra_storage_effect, runtime_storage_bytes, slug,
+)
 
 RUNTIME_FAMILIES = {"Q4_K": "q4_k_packed_u32", "Q6_K": "q6_k_packed_u16"}
 MICROBENCH_FAMILIES = RUNTIME_FAMILIES | {"Q4_K_DIRECT": "q4_k_packed_u32_direct"}
 DOMINANT_ROLES = ("ffn_gate", "ffn_down", "attn_q")
-
-
-def _slug(value:str) -> str:
-  return re.sub(r"[^a-zA-Z0-9]+", "-", value).strip("-").lower()
-
-
-def _current_runtime(row:dict[str, Any]) -> dict[str, Any]:
-  lowering = row["current_lowering"]
-  return {
-    "winner": lowering.get("winner"),
-    "family": lowering.get("family"),
-    "parts": int(lowering.get("parts") or 0),
-    "opts": list(lowering.get("opts") or []),
-    "reduction": lowering.get("reduction"),
-    "requires": list(lowering.get("requires") or []),
-  }
-
-
-def _runtime_storage_bytes(policy:dict[str, Any]) -> int:
-  total = 0
-  for entry in policy.get("entries", []):
-    if entry.get("winner") != "fused_graph":
-      total += int((entry.get("storage") or {}).get("persistent_bytes") or 0)
-  return total
-
 
 def _candidate_requires(fmt:str, family:str, codegen_mode:str) -> list[str]:
   if fmt == "Q4_K" and codegen_mode == "direct_out": return ["q4k_gemv_kernel", "u32_packed_storage"]
@@ -46,6 +24,7 @@ def _spec(row:dict[str, Any], name:str, *, family:str, parts:int, opts:list[str]
           row_tile:int|None=None, k_tile_blocks:int|None=None, lane_width:int=1,
           group_unroll:int=1, full_decode_supported:bool=True) -> dict[str, Any]:
   fmt = row["format"]
+  storage_effect = no_extra_storage_effect("schedule-only candidate reuses existing packed-weight storage")
   return {
     "name": name,
     "semantic_object": "packed_quant_gemv_schedule",
@@ -63,12 +42,14 @@ def _spec(row:dict[str, Any], name:str, *, family:str, parts:int, opts:list[str]
     "reduction_mode": "direct_out" if codegen_mode == "direct_out" else "split_k_partial",
     "requires": _candidate_requires(fmt, family, codegen_mode),
     "full_decode_supported": full_decode_supported,
+    "storage_effect": storage_effect,
+    "correctness_provenance": correctness_provenance(full_decode_supported=full_decode_supported),
   }
 
 
 def schedule_specs_for_row(row:dict[str, Any]) -> list[dict[str, Any]]:
   fmt, role = row.get("format"), row.get("role")
-  current = _current_runtime(row)
+  current = current_runtime(row)
   if fmt not in RUNTIME_FAMILIES or current["family"] != RUNTIME_FAMILIES[fmt]: return []
   if role not in DOMINANT_ROLES: return []
   local_arg = None
@@ -125,13 +106,15 @@ def build_schedule_candidate_set(descriptor:dict[str, Any], *, max_candidates:in
   if descriptor.get("kind") != "qk_semantic_descriptor_set":
     raise ValueError("expected kind=qk_semantic_descriptor_set")
   baseline = _policy_with_schedule(descriptor)
+  baseline_storage_bytes = runtime_storage_bytes(baseline)
   candidates = [{
     "id": "current",
     "status": "baseline",
     "description": "current descriptor policy",
     "changes": [],
     "policy": baseline,
-    "expected_storage_bytes": _runtime_storage_bytes(baseline),
+    "expected_storage_bytes": baseline_storage_bytes,
+    "storage_effect": no_extra_storage_effect("baseline descriptor policy"),
   }]
   count = 0
   for row in descriptor.get("descriptors", []):
@@ -139,9 +122,10 @@ def build_schedule_candidate_set(descriptor:dict[str, Any], *, max_candidates:in
       count += 1
       if max_candidates is not None and count > max_candidates: break
       policy = _policy_with_schedule(descriptor, row["tensor"], spec)
-      current = _current_runtime(row)
+      current = current_runtime(row)
+      storage_effect = spec["storage_effect"]
       candidates.append({
-        "id": f"{count:03d}-{_slug(row.get('role') or row['tensor'])}-{_slug(row['tensor'])}-{_slug(spec['name'])}",
+        "id": f"{count:03d}-{slug(row.get('role') or row['tensor'])}-{slug(row['tensor'])}-{slug(spec['name'])}",
         "status": "candidate",
         "description": "single-entry semantic schedule/codegen candidate",
         "schedule_spec": spec,
@@ -158,9 +142,13 @@ def build_schedule_candidate_set(descriptor:dict[str, Any], *, max_candidates:in
             "reduction": spec["reduction_mode"],
           },
           "schedule_spec": spec,
+          "storage_effect": storage_effect,
+          "correctness_provenance": spec["correctness_provenance"],
         }],
         "policy": policy,
-        "expected_storage_bytes": _runtime_storage_bytes(policy),
+        "expected_storage_bytes": baseline_storage_bytes + int(storage_effect["persistent_bytes_delta"]),
+        "storage_effect": storage_effect,
+        "correctness_provenance": spec["correctness_provenance"],
       })
     if max_candidates is not None and count >= max_candidates: break
   return {
@@ -180,7 +168,7 @@ def build_schedule_candidate_set(descriptor:dict[str, Any], *, max_candidates:in
     "summary": {
       "candidates": len(candidates),
       "single_change_candidates": len(candidates) - 1,
-      "current_storage_bytes": _runtime_storage_bytes(baseline),
+      "current_storage_bytes": baseline_storage_bytes,
     },
   }
 
@@ -211,6 +199,8 @@ def build_static_gate(candidate_set:dict[str, Any]) -> dict[str, Any]:
       "schedule": spec,
       "changes": changes,
       "expected_storage_bytes": cand.get("expected_storage_bytes"),
+      "storage_effect": cand.get("storage_effect") or spec.get("storage_effect"),
+      "correctness_provenance": cand.get("correctness_provenance") or spec.get("correctness_provenance"),
       "reasons": reasons,
     })
   return {
@@ -241,17 +231,19 @@ def candidates_markdown(candidate_set:dict[str, Any]) -> str:
     f"- single-change candidates: `{candidate_set['summary']['single_change_candidates']}`",
     f"- current storage bytes: `{candidate_set['summary']['current_storage_bytes']}`",
     "",
-    "| id | tensor | schedule | family | parts | opts | full decode |",
-    "|---|---|---|---|---:|---|---:|",
+    "| id | tensor | schedule | family | parts | opts | persistent delta | metadata sidecar | full decode |",
+    "|---|---|---|---|---:|---|---:|---:|---:|",
   ]
   for cand in candidate_set["candidates"]:
     if cand["id"] == "current":
-      lines.append("| `current` | n/a | current | n/a | 0 | n/a | `True` |")
+      lines.append("| `current` | n/a | current | n/a | 0 | n/a | 0 | 0 | `True` |")
       continue
     change = cand["changes"][0]
     spec = cand["schedule_spec"]
+    storage = spec.get("storage_effect") or {}
     lines.append(f"| `{cand['id']}` | `{change['tensor']}` | `{spec['name']}` | `{spec['family']}` | "
-                 f"{spec['parts']} | `{','.join(spec['opts'])}` | `{spec['full_decode_supported']}` |")
+                 f"{spec['parts']} | `{','.join(spec['opts'])}` | {storage.get('persistent_bytes_delta', 0)} | "
+                 f"{storage.get('metadata_sidecar_bytes', 0)} | `{spec['full_decode_supported']}` |")
   lines.append("")
   return "\n".join(lines)
 
@@ -271,13 +263,15 @@ def static_gate_markdown(report:dict[str, Any]) -> str:
     f"- full-decode supported: `{report['summary']['full_decode_supported']}`",
     f"- failing: `{report['summary']['failing']}`",
     "",
-    "| id | status | microbench | full decode | reasons |",
-    "|---|---|---:|---:|---|",
+    "| id | status | microbench | full decode | persistent delta | metadata sidecar | reasons |",
+    "|---|---|---:|---:|---:|---:|---|",
   ]
   for row in report["rows"]:
     reasons = "; ".join(row.get("reasons") or []) or "none"
+    storage = row.get("storage_effect") or {}
     lines.append(f"| `{row['id']}` | `{row['status']}` | `{row.get('microbench')}` | "
-                 f"`{row.get('full_decode_supported')}` | {reasons} |")
+                 f"`{row.get('full_decode_supported')}` | {storage.get('persistent_bytes_delta', 0)} | "
+                 f"{storage.get('metadata_sidecar_bytes', 0)} | {reasons} |")
   lines.append("")
   return "\n".join(lines)
 

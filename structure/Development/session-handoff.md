@@ -62,6 +62,14 @@ the tracked session handoff and AMD checklist files. The next semantic-schedule
 pass adds a second-stage generated surface and rejects it by the full 8B/14B
 gate.
 
+Latest semantic-gate hardening work centralizes shared schedule/codegen
+candidate helpers in `extra/qk_semantic_candidate.py`, regenerates deterministic
+semantic artifacts with storage deltas and correctness provenance, and changes
+future semantic microbench wins to `raw_accept`. A semantic candidate is not a
+promoted accept unless a matching full-decode confirmation rerun also accepts.
+This did not rerun GPU benchmarks and did not change the current rejected
+semantic-schedule v0 or semantic-codegen v1 verdicts.
+
 Key implementation files:
 
 - `tinygrad/llm/model.py`
@@ -192,10 +200,19 @@ Run the targeted handoff test set:
 cd /home/ubuntu/tinygrad-arkey
 PYTHONPATH=. .venv/bin/python -m unittest \
   test.external.test_qk_generated_policy_runtime \
+  test.external.test_qk_policy_parity \
+  test.external.test_qk_ansor_transition \
   test.external.test_qk_decode_summary \
   test.external.test_qk_experiment_matrix \
   test.external.test_qk_policy_pipeline
 ```
+
+Latest semantic-gate hardening verification: `py_compile` passed for the
+semantic schedule/codegen tools and transition test; the targeted QK tests ran
+`30` tests across generated-policy runtime, policy parity, Ansor transition,
+and decode summary, plus `11` matrix/pipeline tests. `git diff --check` passed,
+and semantic schedule/codegen artifacts have no `/home/ubuntu/tinygrad-arkey`
+checkout-path leaks.
 
 ## Stop Rules
 
@@ -310,6 +327,14 @@ microbench gate: 8B had `0` accepts (`2` ties, `1` reject), and 14B had `0`
 accepts (`2` ties, `2` rejects). No full-decode candidate was promoted, and
 32B was skipped by rule.
 
+Semantic verdict hardening: the verdict tools now separate confirmed accepts
+from raw accepts. Future semantic microbench wins start as `raw_accept`, and
+full-decode accepts are only promoted after a matching confirmation rerun. The
+artifacts also record storage deltas and correctness provenance. CPU/Mac tests
+prove reference unpacking; AMD microbench gates prove GEMV numerics; full-decode
+A/B gates prove model assembly. `QK_PRIMITIVE_STORAGE=q4_ondemand` remains a
+Q4-only negative storage prototype, not a generic candidate storage mode.
+
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
@@ -318,7 +343,8 @@ When resuming, choose one track explicitly:
    descriptor-level `parts`/`LOCAL` search is exhausted, and semantic schedule
    v0 plus semantic codegen v1 direct-output Q4 are rejected by their gates.
    Next work needs a richer semantic layout/codegen surface, not another hand
-   sweep over the same primitive knobs.
+   sweep over the same primitive knobs. Any future semantic raw accept needs a
+   matching confirmation rerun before promotion.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

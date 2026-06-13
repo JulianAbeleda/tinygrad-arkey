@@ -13,6 +13,12 @@
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "not_applicable_to_this_candidate",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -31,6 +37,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "direct_out",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "not_applicable_to_this_candidate",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32_direct",
             "format": "Q4_K",
             "full_decode_supported": false,
@@ -49,7 +61,21 @@
             ],
             "role": "ffn_gate",
             "row_tile": 32,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.ffn_gate.weight",
           "to": {
@@ -63,6 +89,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": false,
       "id": "001-ffn-gate-blk-0-ffn-gate-weight-direct-out",
@@ -71,6 +103,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32_direct",
         "format": "Q4_K",
         "full_decode_supported": false,
@@ -89,13 +127,33 @@
         ],
         "role": "ffn_gate",
         "row_tile": 32,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -114,6 +172,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -133,7 +197,21 @@
             ],
             "role": "ffn_gate",
             "row_tile": 32,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.ffn_gate.weight",
           "to": {
@@ -148,6 +226,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "002-ffn-gate-blk-0-ffn-gate-weight-row-upcast2",
@@ -156,6 +240,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -175,13 +265,33 @@
         ],
         "role": "ffn_gate",
         "row_tile": 32,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -200,6 +310,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -219,7 +335,21 @@
             ],
             "role": "ffn_gate",
             "row_tile": 32,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.ffn_gate.weight",
           "to": {
@@ -234,6 +364,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "003-ffn-gate-blk-0-ffn-gate-weight-reduce-unroll4",
@@ -242,6 +378,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -261,13 +403,33 @@
         ],
         "role": "ffn_gate",
         "row_tile": 32,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -286,6 +448,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -305,7 +473,21 @@
             ],
             "role": "ffn_gate",
             "row_tile": 64,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.ffn_gate.weight",
           "to": {
@@ -320,6 +502,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "004-ffn-gate-blk-0-ffn-gate-weight-two-dim-local4",
@@ -328,6 +516,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -347,13 +541,33 @@
         ],
         "role": "ffn_gate",
         "row_tile": 64,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -372,6 +586,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -391,7 +611,21 @@
             ],
             "role": "ffn_down",
             "row_tile": 32,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.5.ffn_down.weight",
           "to": {
@@ -406,6 +640,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "005-ffn-down-blk-5-ffn-down-weight-row-upcast2",
@@ -414,6 +654,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -433,13 +679,33 @@
         ],
         "role": "ffn_down",
         "row_tile": 32,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -458,6 +724,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -477,7 +749,21 @@
             ],
             "role": "ffn_down",
             "row_tile": 32,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.5.ffn_down.weight",
           "to": {
@@ -492,6 +778,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "006-ffn-down-blk-5-ffn-down-weight-reduce-unroll4",
@@ -500,6 +792,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -519,13 +817,33 @@
         ],
         "role": "ffn_down",
         "row_tile": 32,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -544,6 +862,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -563,7 +887,21 @@
             ],
             "role": "ffn_down",
             "row_tile": 64,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.5.ffn_down.weight",
           "to": {
@@ -578,6 +916,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "007-ffn-down-blk-5-ffn-down-weight-two-dim-local4",
@@ -586,6 +930,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -605,13 +955,33 @@
         ],
         "role": "ffn_down",
         "row_tile": 64,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "not_applicable_to_this_candidate",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -630,6 +1000,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "direct_out",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "not_applicable_to_this_candidate",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32_direct",
             "format": "Q4_K",
             "full_decode_supported": false,
@@ -648,7 +1024,21 @@
             ],
             "role": "attn_q",
             "row_tile": 64,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.attn_q.weight",
           "to": {
@@ -662,6 +1052,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": false,
       "id": "008-attn-q-blk-0-attn-q-weight-direct-out",
@@ -670,6 +1066,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32_direct",
         "format": "Q4_K",
         "full_decode_supported": false,
@@ -688,13 +1090,33 @@
         ],
         "role": "attn_q",
         "row_tile": 64,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -713,6 +1135,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -732,7 +1160,21 @@
             ],
             "role": "attn_q",
             "row_tile": 64,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.attn_q.weight",
           "to": {
@@ -747,6 +1189,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "009-attn-q-blk-0-attn-q-weight-row-upcast2",
@@ -755,6 +1203,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -774,13 +1228,33 @@
         ],
         "role": "attn_q",
         "row_tile": 64,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -799,6 +1273,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -818,7 +1298,21 @@
             ],
             "role": "attn_q",
             "row_tile": 64,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.attn_q.weight",
           "to": {
@@ -833,6 +1327,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "010-attn-q-blk-0-attn-q-weight-reduce-unroll4",
@@ -841,6 +1341,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -860,13 +1366,33 @@
         ],
         "role": "attn_q",
         "row_tile": 64,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q4_K",
           "from": {
             "family": "q4_k_packed_u32",
@@ -885,6 +1411,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q4_k_packed_u32",
             "format": "Q4_K",
             "full_decode_supported": true,
@@ -904,7 +1436,21 @@
             ],
             "role": "attn_q",
             "row_tile": 32,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.attn_q.weight",
           "to": {
@@ -919,6 +1465,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "011-attn-q-blk-0-attn-q-weight-two-dim-local4",
@@ -927,6 +1479,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
         "full_decode_supported": true,
@@ -946,13 +1504,33 @@
         ],
         "role": "attn_q",
         "row_tile": 32,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q6_K",
           "from": {
             "family": "q6_k_packed_u16",
@@ -971,6 +1549,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q6_k_packed_u16",
             "format": "Q6_K",
             "full_decode_supported": true,
@@ -990,7 +1574,21 @@
             ],
             "role": "ffn_down",
             "row_tile": 64,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.ffn_down.weight",
           "to": {
@@ -1005,6 +1603,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "012-ffn-down-blk-0-ffn-down-weight-row-upcast2",
@@ -1013,6 +1617,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q6_k_packed_u16",
         "format": "Q6_K",
         "full_decode_supported": true,
@@ -1032,13 +1642,33 @@
         ],
         "role": "ffn_down",
         "row_tile": 64,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q6_K",
           "from": {
             "family": "q6_k_packed_u16",
@@ -1057,6 +1687,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q6_k_packed_u16",
             "format": "Q6_K",
             "full_decode_supported": true,
@@ -1076,7 +1712,21 @@
             ],
             "role": "ffn_down",
             "row_tile": 64,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.ffn_down.weight",
           "to": {
@@ -1091,6 +1741,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "013-ffn-down-blk-0-ffn-down-weight-reduce-unroll4",
@@ -1099,6 +1755,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q6_k_packed_u16",
         "format": "Q6_K",
         "full_decode_supported": true,
@@ -1118,13 +1780,33 @@
         ],
         "role": "ffn_down",
         "row_tile": 64,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     },
     {
       "changes": [
         {
+          "correctness_provenance": {
+            "amd_gemv": "required_by_amd_microbench_gate",
+            "full_decode_ab": "required_for_full_decode_promotion",
+            "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+            "reference_unpacked": "covered_by_qk_layout_reference_tests"
+          },
           "format": "Q6_K",
           "from": {
             "family": "q6_k_packed_u16",
@@ -1143,6 +1825,12 @@
           "schedule_spec": {
             "activation_cache": "fp16_direct",
             "codegen_mode": "partial",
+            "correctness_provenance": {
+              "amd_gemv": "required_by_amd_microbench_gate",
+              "full_decode_ab": "required_for_full_decode_promotion",
+              "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+              "reference_unpacked": "covered_by_qk_layout_reference_tests"
+            },
             "family": "q6_k_packed_u16",
             "format": "Q6_K",
             "full_decode_supported": true,
@@ -1162,7 +1850,21 @@
             ],
             "role": "ffn_down",
             "row_tile": 32,
-            "semantic_object": "packed_quant_gemv_schedule"
+            "semantic_object": "packed_quant_gemv_schedule",
+            "storage_effect": {
+              "metadata_sidecar_bytes": 0,
+              "nonpersistent_bytes_delta": 0,
+              "persistent_bytes_delta": 0,
+              "shared_bytes_delta": 0,
+              "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+            }
+          },
+          "storage_effect": {
+            "metadata_sidecar_bytes": 0,
+            "nonpersistent_bytes_delta": 0,
+            "persistent_bytes_delta": 0,
+            "shared_bytes_delta": 0,
+            "storage_note": "schedule-only candidate reuses existing packed-weight storage"
           },
           "tensor": "blk.0.ffn_down.weight",
           "to": {
@@ -1177,6 +1879,12 @@
           }
         }
       ],
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
       "expected_storage_bytes": 195379200,
       "full_decode_supported": true,
       "id": "014-ffn-down-blk-0-ffn-down-weight-two-dim-local4",
@@ -1185,6 +1893,12 @@
       "schedule": {
         "activation_cache": "fp16_direct",
         "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
         "family": "q6_k_packed_u16",
         "format": "Q6_K",
         "full_decode_supported": true,
@@ -1204,9 +1918,23 @@
         ],
         "role": "ffn_down",
         "row_tile": 32,
-        "semantic_object": "packed_quant_gemv_schedule"
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
       },
-      "status": "pass"
+      "status": "pass",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      }
     }
   ],
   "source_candidates": "bench/qk-shared-storage-20260612/14b/policy.json",

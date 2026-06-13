@@ -170,6 +170,27 @@ move toward the `>=70%` llama.cpp target. The next research step needs a real
 semantic schedule/codegen change, not another hand sweep over the same primitive
 knobs.
 
+## Semantic Gate Hardening
+
+The semantic schedule/codegen gate is now confirmation-aware. A microbench row
+can only produce a `raw_accept`; it is not a promoted accept until a matching
+full-decode confirmation run also accepts. Verdict tools match confirmation
+runs by candidate name or by exact policy file content, then report raw
+unconfirmed and raw-rejected counts separately from confirmed accepts.
+
+Semantic candidate artifacts also carry explicit storage and correctness
+provenance:
+
+- storage deltas: persistent, shared, nonpersistent, and metadata sidecar bytes;
+- correctness provenance: CPU/Mac reference unpack coverage, AMD GEMV
+  requirement, and full-decode A/B requirement where applicable.
+
+The current semantic schedule v0 and codegen v1 candidates are zero-storage
+delta surfaces because they reuse the existing packed-weight storage. The older
+`QK_PRIMITIVE_STORAGE=q4_ondemand` result remains a Q4-only negative storage
+prototype; it is not a generic candidate storage strategy, and Q6_K still uses
+the selected shared/sidecar storage mode.
+
 ## Semantic Schedule v0
 
 `extra/qk_semantic_schedule.py` generated the first second-stage semantic
@@ -189,7 +210,8 @@ Static gate result:
 - 8B: `15` total candidates, `14` microbenchable, `13` full-decode supported.
 - 14B: `15` total candidates, `14` microbenchable, `13` full-decode supported.
 
-Microbench result:
+Microbench result, using the historical artifact terminology where "accept"
+means what the current tools now call `raw_accept`:
 
 - 8B: `2` accepts, only `009-attn-q-blk-0-attn-q-weight-row-upcast2` is
   full-decode supported.
@@ -262,7 +284,8 @@ Static gate result:
 - 8B: `4` total candidates, `3` microbenchable and full-decode supported.
 - 14B: `5` total candidates, `4` microbenchable and full-decode supported.
 
-Microbench result:
+Microbench result, using the historical artifact terminology where "accept"
+means what the current tools now call `raw_accept`:
 
 | model | accepts | ties | rejects | best tie | verdict |
 |---|---:|---:|---:|---|---|
