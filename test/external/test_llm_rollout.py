@@ -71,6 +71,7 @@ class TestLLMRollout(unittest.TestCase):
       rows = [json.loads(line) for line in (out / "rollouts.jsonl").read_text().splitlines()]
       committed = json.loads((out / "summary.json").read_text())
       args = argparse.Namespace(mode=committed["mode"], model=committed["model"], policy=committed["policy"],
+                                adapter=committed.get("adapter"),
                                 dataset=committed["dataset"], storage=committed["storage"],
                                 prompt_format=committed["prompt_format"], temperature=committed["temperature"],
                                 seed=committed["seed"])

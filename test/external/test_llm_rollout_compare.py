@@ -96,6 +96,16 @@ class TestLLMRolloutCompare(unittest.TestCase):
         self.assertEqual(json.loads((out / "report.json").read_text()), report)
         self.assertEqual((out / "report.md").read_text(), report_markdown(report))
         self.assertEqual(report["comparisons"][0]["outputs"]["tokens_changed"], 0)
+      adapter_out = pathlib.Path("bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora")
+      if adapter_out.exists():
+        artifacts = [
+          pathlib.Path("bench/qwen-rollout-20260612/8b-generated-small"),
+          pathlib.Path("bench/qwen-adapter-20260613/8b-output-lora-r4-rollout"),
+        ]
+        report = build_report(artifacts)
+        self.assertEqual(json.loads((adapter_out / "report.json").read_text()), report)
+        self.assertEqual((adapter_out / "report.md").read_text(), report_markdown(report))
+        self.assertEqual(report["comparisons"][0]["quality"]["regressions"], [])
     finally:
       import os
       os.chdir(old_cwd)

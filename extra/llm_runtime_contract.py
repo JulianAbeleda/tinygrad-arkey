@@ -12,6 +12,7 @@ SUMMARY_KINDS = {
   "compare": ("llm_rollout_compare_report",),
   "training_data": ("llm_training_data_probe",),
   "training_run": ("llm_sft_smoke_train_summary",),
+  "adapter_train": ("llm_adapter_train_summary",),
 }
 
 def _load_json(path:pathlib.Path) -> Any:
@@ -47,6 +48,8 @@ def load_manifest(path:pathlib.Path) -> dict[str, Any]:
       raise ValueError(f"{path}: row {idx} policy must be repo-relative")
     if "dataset" in row and row["dataset"] is not None and not _is_repo_relative(row["dataset"]):
       raise ValueError(f"{path}: row {idx} dataset must be repo-relative")
+    if "adapter" in row and row["adapter"] is not None and not _is_repo_relative(row["adapter"]):
+      raise ValueError(f"{path}: row {idx} adapter must be repo-relative")
   return manifest
 
 def _summary_path(repo:pathlib.Path, row:dict[str, Any]) -> pathlib.Path:
@@ -54,6 +57,7 @@ def _summary_path(repo:pathlib.Path, row:dict[str, Any]) -> pathlib.Path:
   if row["type"] in ("eval", "rollout"): return artifact / "summary.json"
   if row["type"] == "compare": return artifact / "report.json"
   if row["type"] in ("training_data", "training_run"): return artifact / "summary.json"
+  if row["type"] == "adapter_train": return artifact / "train-summary.json"
   raise ValueError(f"unknown row type {row['type']!r}")
 
 def _check_eval(row:dict[str, Any], summary:dict[str, Any]) -> list[str]:
@@ -71,6 +75,7 @@ def _check_rollout(row:dict[str, Any], summary:dict[str, Any]) -> list[str]:
   if quality.get("status") != "pass": errors.append(f"quality={quality.get('status')!r}")
   if row.get("mode") and summary.get("mode") != row["mode"]: errors.append("mode mismatch")
   if row.get("policy") and summary.get("policy") != row["policy"]: errors.append("policy mismatch")
+  if row.get("adapter") and summary.get("adapter") != row["adapter"]: errors.append("adapter mismatch")
   if row.get("storage") and summary.get("storage") != row["storage"]: errors.append("storage mismatch")
   if row.get("dataset") and summary.get("dataset") != row["dataset"]: errors.append("dataset mismatch")
   return errors
@@ -80,7 +85,8 @@ def _check_compare(row:dict[str, Any], report:dict[str, Any]) -> list[str]:
   for comp in report.get("comparisons", []):
     q, out = comp.get("quality", {}), comp.get("outputs", {})
     if q.get("regressions"): errors.append(f"{comp.get('candidate')}: quality regressions={q.get('regressions')[:5]}")
-    if out.get("tokens_changed", 0) != 0: errors.append(f"{comp.get('candidate')}: tokens_changed={out.get('tokens_changed')}")
+    if out.get("tokens_changed", 0) != 0 and row.get("allow_token_changes", False) is not True:
+      errors.append(f"{comp.get('candidate')}: tokens_changed={out.get('tokens_changed')}")
     if row.get("require_text_equal", True) and out.get("text_changed", 0) != 0:
       errors.append(f"{comp.get('candidate')}: text_changed={out.get('text_changed')}")
   return errors
@@ -103,13 +109,27 @@ def _check_training_run(row:dict[str, Any], summary:dict[str, Any]) -> list[str]
     errors.append(f"eval loss delta {deltas.get('eval_loss')} < {row.get('min_eval_loss_delta')}")
   return errors
 
+def _check_adapter_train(row:dict[str, Any], summary:dict[str, Any], summary_path:pathlib.Path) -> list[str]:
+  errors = []
+  if summary.get("status") != "pass": errors.append(f"status={summary.get('status')!r}")
+  deltas = summary.get("deltas") or {}
+  if deltas.get("train_loss", 0.0) < row.get("min_train_loss_delta", 0.0):
+    errors.append(f"train loss delta {deltas.get('train_loss')} < {row.get('min_train_loss_delta')}")
+  if deltas.get("adapter_l2", 0.0) <= 0.0: errors.append("adapter_l2 did not change")
+  artifacts = summary.get("artifacts") or {}
+  for key in ("config", "weights"):
+    name = artifacts.get(key)
+    if not isinstance(name, str) or not name: errors.append(f"missing adapter artifact {key}")
+    elif not (summary_path.parent / name).exists(): errors.append(f"adapter artifact missing: {name}")
+  return errors
+
 def validate_contract(manifest:dict[str, Any], repo:pathlib.Path, *, require_models:bool=False) -> dict[str, Any]:
   rows = []
   for row in manifest["rows"]:
     errors = []
     if "model" in row and require_models and not pathlib.Path(row["model"]).expanduser().exists():
       errors.append(f"model missing: {row['model']}")
-    for field in ("policy", "dataset"):
+    for field in ("policy", "dataset", "adapter"):
       if row.get(field) and not _repo_path(repo, row[field]).exists(): errors.append(f"{field} missing: {row[field]}")
     summary_path = _summary_path(repo, row)
     if not summary_path.exists():
@@ -129,6 +149,7 @@ def validate_contract(manifest:dict[str, Any], repo:pathlib.Path, *, require_mod
       if row.get("require_weights", True):
         if not isinstance(weights, str) or not weights: errors.append("missing weights artifact name")
         elif not (summary_path.parent / weights).exists(): errors.append(f"weights missing: {weights}")
+    elif row["type"] == "adapter_train": errors += _check_adapter_train(row, summary, summary_path)
     rows.append({**row, "summary_path": str(summary_path.relative_to(repo) if summary_path.is_relative_to(repo) else summary_path),
                  "status": "pass" if not errors else "fail", "errors": errors})
   return {

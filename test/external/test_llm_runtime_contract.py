@@ -15,7 +15,7 @@ class TestLLMRuntimeContract(unittest.TestCase):
       with self.assertRaisesRegex(ValueError, "artifact must be repo-relative"):
         load_manifest(path)
 
-  def test_contract_validates_eval_rollout_compare_training_data_and_training_run_rows(self):
+  def test_contract_validates_eval_rollout_compare_training_data_training_run_and_adapter_rows(self):
     with TemporaryDirectory() as raw_td:
       repo = pathlib.Path(raw_td)
       (repo / "policy.json").write_text("{}")
@@ -52,6 +52,15 @@ class TestLLMRuntimeContract(unittest.TestCase):
         "deltas": {"eval_loss": 1.0},
         "artifacts": {"weights": "model.npz"},
       }))
+      adapter_out = repo / "adapter"
+      adapter_out.mkdir()
+      (adapter_out / "adapter.json").write_text("{}")
+      (adapter_out / "adapter.npz").write_bytes(b"npz")
+      (adapter_out / "train-summary.json").write_text(json.dumps({
+        "kind": "llm_adapter_train_summary", "status": "pass",
+        "deltas": {"train_loss": 0.1, "adapter_l2": 1.0},
+        "artifacts": {"config": "adapter.json", "weights": "adapter.npz"},
+      }))
       manifest = {
         "kind": "llm_runtime_contract_manifest",
         "rows": [
@@ -60,10 +69,11 @@ class TestLLMRuntimeContract(unittest.TestCase):
           {"id": "compare", "type": "compare", "artifact": "compare"},
           {"id": "train", "type": "training_data", "artifact": "train", "min_rows": 1},
           {"id": "training-run", "type": "training_run", "artifact": "training-run", "min_eval_accuracy": 0.2, "min_eval_loss_delta": 0.5},
+          {"id": "adapter", "type": "adapter_train", "artifact": "adapter", "min_train_loss_delta": 0.01},
         ],
       }
       report = validate_contract(manifest, repo)
-    self.assertEqual(report["summary"], {"rows": 5, "passed": 5, "failed": 0, "missing": 0})
+    self.assertEqual(report["summary"], {"rows": 6, "passed": 6, "failed": 0, "missing": 0})
     self.assertIn("LLM Runtime Contract", report_markdown(report))
 
   def test_contract_flags_compare_regression(self):
@@ -80,6 +90,20 @@ class TestLLMRuntimeContract(unittest.TestCase):
       ]}, repo)
     self.assertEqual(report["summary"]["failed"], 1)
     self.assertIn("quality regressions", report["rows"][0]["errors"][0])
+
+  def test_contract_can_allow_compare_token_changes(self):
+    with TemporaryDirectory() as raw_td:
+      repo = pathlib.Path(raw_td)
+      out = repo / "compare"
+      out.mkdir()
+      (out / "report.json").write_text(json.dumps({
+        "kind": "llm_rollout_compare_report",
+        "comparisons": [{"candidate": "adapter", "quality": {"regressions": []}, "outputs": {"tokens_changed": 1, "text_changed": 1}}],
+      }))
+      report = validate_contract({"kind": "llm_runtime_contract_manifest", "rows": [
+        {"id": "compare", "type": "compare", "artifact": "compare", "allow_token_changes": True, "require_text_equal": False},
+      ]}, repo)
+    self.assertEqual(report["summary"]["failed"], 0)
 
   def test_committed_runtime_contract_reproduces(self):
     repo = pathlib.Path(__file__).resolve().parents[2]

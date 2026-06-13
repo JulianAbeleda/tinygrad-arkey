@@ -48,7 +48,7 @@ def load_artifact(path:pathlib.Path, *, allow_unscored:bool=False) -> dict[str, 
 def artifact_summary(artifact:dict[str, Any]) -> dict[str, Any]:
   summary = artifact["summary"]
   quality = summary["quality"]
-  return {
+  out = {
     "label": artifact["label"],
     "path": artifact["path"],
     "mode": summary["mode"],
@@ -68,6 +68,8 @@ def artifact_summary(artifact:dict[str, Any]) -> dict[str, Any]:
       "pass_rate": quality["pass_rate"],
     },
   }
+  if summary.get("adapter") is not None: out["adapter"] = summary["adapter"]
+  return out
 
 def _passed(row:dict[str, Any]) -> bool | None:
   return row.get("score", {}).get("passed")

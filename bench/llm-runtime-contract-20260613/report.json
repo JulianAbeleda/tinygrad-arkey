@@ -84,13 +84,44 @@
       "status": "pass",
       "summary_path": "bench/qwen-rollout-20260612/sft-smoke-v1/summary.json",
       "type": "training_run"
+    },
+    {
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r4",
+      "errors": [],
+      "id": "qwen3-8b-output-lora-r4-train",
+      "min_train_loss_delta": 0.0,
+      "status": "pass",
+      "summary_path": "bench/qwen-adapter-20260613/8b-output-lora-r4/train-summary.json",
+      "type": "adapter_train"
+    },
+    {
+      "adapter": "bench/qwen-adapter-20260613/8b-output-lora-r4",
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r4-rollout",
+      "dataset": "bench/qwen-rollout-20260612/dataset-small.jsonl",
+      "errors": [],
+      "id": "qwen3-8b-output-lora-r4-rollout",
+      "mode": "generated",
+      "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "status": "pass",
+      "storage": "shared",
+      "summary_path": "bench/qwen-adapter-20260613/8b-output-lora-r4-rollout/summary.json",
+      "type": "rollout"
+    },
+    {
+      "artifact": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora",
+      "errors": [],
+      "id": "qwen3-8b-base-vs-output-lora-r4",
+      "status": "pass",
+      "summary_path": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora/report.json",
+      "type": "compare"
     }
   ],
   "source_manifest": "qwen-runtime-contract-20260613",
   "summary": {
     "failed": 0,
     "missing": 0,
-    "passed": 8,
-    "rows": 8
+    "passed": 11,
+    "rows": 11
   }
 }

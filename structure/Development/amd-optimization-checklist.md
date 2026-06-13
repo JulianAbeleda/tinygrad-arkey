@@ -106,6 +106,16 @@ generated-policy storage mode.
       `30` eval), writes a small `model.npz`, and passes the held-out gate:
       eval loss `4.8483 -> 1.5290`, eval accuracy `0.0065 -> 0.6320`.
       This is a training-loop smoke test, not a Qwen adapter or LoRA stack.
+- [x] Added the first real Qwen adapter V0:
+      `extra/llm_adapter.py`, `extra/llm_adapter_train.py`, optional
+      `--adapter` rollout loading, and artifacts under
+      `bench/qwen-adapter-20260613/`. The V0 adapter is output-head LoRA only
+      for Qwen3-8B (`rank=4`, `alpha=8`). Adapter tensors changed
+      (`adapter_l2=0.003541`), the 75-prompt rollout still passes `75/75`, and
+      base vs adapter comparison has `0` regressions, `0/75` text changes, and
+      `0/75` token changes. The self-generated SFT rows are already
+      near-zero-loss, so this validates adapter plumbing, not quality
+      improvement.
 - [x] Added the Ansor-transition foundation for the llama.cpp-comparable goal:
       `extra/qk_llama_scorecard.py`, `extra/qk_gap_profile.py`, and
       `extra/qk_semantic_descriptor.py`, with committed artifacts under

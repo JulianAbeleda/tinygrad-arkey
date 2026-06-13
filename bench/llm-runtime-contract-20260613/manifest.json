@@ -61,6 +61,28 @@
       "min_eval_accuracy": 0.6,
       "min_eval_loss_delta": 3.0,
       "require_weights": true
+    },
+    {
+      "id": "qwen3-8b-output-lora-r4-train",
+      "type": "adapter_train",
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r4",
+      "min_train_loss_delta": 0.0
+    },
+    {
+      "id": "qwen3-8b-output-lora-r4-rollout",
+      "type": "rollout",
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r4-rollout",
+      "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "adapter": "bench/qwen-adapter-20260613/8b-output-lora-r4",
+      "dataset": "bench/qwen-rollout-20260612/dataset-small.jsonl",
+      "storage": "shared",
+      "mode": "generated"
+    },
+    {
+      "id": "qwen3-8b-base-vs-output-lora-r4",
+      "type": "compare",
+      "artifact": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora"
     }
   ]
 }

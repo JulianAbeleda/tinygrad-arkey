@@ -33,7 +33,7 @@ def configure_env(args:argparse.Namespace) -> None:
 def summarize_rollouts(args:argparse.Namespace, rows:list[dict[str, Any]]) -> dict[str, Any]:
   elapsed = sum(row["elapsed_s"] for row in rows)
   generated = sum(row["generated"] for row in rows)
-  return {
+  summary = {
     "kind": "llm_rollout_summary",
     "mode": args.mode,
     "model": str(args.model),
@@ -49,6 +49,8 @@ def summarize_rollouts(args:argparse.Namespace, rows:list[dict[str, Any]]) -> di
     "tok_s": 0.0 if elapsed == 0 else generated / elapsed,
     "quality": quality_summary(rows),
   }
+  if getattr(args, "adapter", None) is not None: summary["adapter"] = str(args.adapter)
+  return summary
 
 def summary_markdown(summary:dict[str, Any], rows:list[dict[str, Any]]) -> str:
   lines = [
@@ -73,6 +75,7 @@ def summary_markdown(summary:dict[str, Any], rows:list[dict[str, Any]]) -> str:
     "| id | tags | quality | generated | tok/s | text |",
     "|---|---|---:|---:|---:|---|",
   ]
+  if summary.get("adapter") is not None: lines.insert(11, f"- adapter: `{summary['adapter']}`")
   for row in rows:
     lines.append(
       f"| `{row['id']}` | `{','.join(row.get('tags') or [])}` | `{row['score']['status']}` | "
@@ -101,6 +104,9 @@ def run_rollout(args:argparse.Namespace) -> int:
   Tensor.manual_seed(args.seed)
   dataset = read_prompt_jsonl(args.dataset)
   model, kv = Transformer.from_gguf(pathlib.Path(args.model).expanduser(), args.max_context)
+  if args.adapter is not None:
+    from extra.llm_adapter import load_adapter
+    load_adapter(model, pathlib.Path(args.adapter).expanduser())
   tok = SimpleTokenizer.from_gguf_kv(kv)
   rows: list[dict[str, Any]] = []
   for item in dataset:
@@ -114,13 +120,15 @@ def run_rollout(args:argparse.Namespace) -> int:
       if len(out) >= max_tokens: break
     elapsed = time.perf_counter() - st
     text = tok.decode(out)
-    rows.append({
+    result = {
       "id": item["id"], "mode": args.mode, "model": str(args.model), "policy": str(args.policy) if args.policy else None,
       "prompt": item["prompt"], "prompt_len": len(ids), "prompt_format": args.prompt_format,
       "tags": item.get("tags", []), "max_tokens": max_tokens, "tokens": out, "text": text,
       "generated": len(out), "elapsed_s": round(elapsed, 6), "tok_s": 0.0 if elapsed == 0 else len(out) / elapsed,
       "score": score_prompt(item, text),
-    })
+    }
+    if args.adapter is not None: result["adapter"] = str(args.adapter)
+    rows.append(result)
   summary = summarize_rollouts(args, rows)
   write_artifacts(args.out, rows, summary)
   print(summary_markdown(summary, rows))
@@ -135,6 +143,8 @@ def _load_manifest(path:pathlib.Path) -> dict[str, Any]:
     if not isinstance(row, dict): raise ValueError(f"{path}: row {idx} must be an object")
     for key in ("id", "model", "dataset", "out", "mode"):
       if not isinstance(row.get(key), str) or not row[key]: raise ValueError(f"{path}: row {idx} missing string {key}")
+    if "adapter" in row and row["adapter"] is not None and not isinstance(row["adapter"], str):
+      raise ValueError(f"{path}: row {idx} adapter must be a string")
     if row["id"] in seen: raise ValueError(f"{path}: duplicate row id {row['id']!r}")
     seen.add(row["id"])
   return data
@@ -172,6 +182,7 @@ def run_manifest(args:argparse.Namespace) -> int:
       "--prompt-format", str(row.get("prompt_format", manifest.get("prompt_format", "chat"))),
     ]
     if row.get("policy"): cmd += ["--policy", _cmd_path(row["policy"])]
+    if row.get("adapter"): cmd += ["--adapter", _cmd_path(row["adapter"])]
     if args.fail_on_quality or row.get("fail_on_quality", manifest.get("fail_on_quality", False)): cmd.append("--fail-on-quality")
     if args.policy_debug or row.get("policy_debug", manifest.get("policy_debug", False)): cmd.append("--policy-debug")
     print(f"run {row['id']}: {' '.join(cmd)}")
@@ -192,6 +203,7 @@ def main() -> int:
   parser.add_argument("--reuse", action="store_true")
   parser.add_argument("--model", type=pathlib.Path)
   parser.add_argument("--policy", type=pathlib.Path)
+  parser.add_argument("--adapter", type=pathlib.Path)
   parser.add_argument("--dataset", type=pathlib.Path)
   parser.add_argument("--out", type=pathlib.Path)
   parser.add_argument("--mode", choices=("generated", "explicit", "baseline"), default="generated")
