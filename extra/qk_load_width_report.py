@@ -22,6 +22,7 @@ MODE_PATTERNS = {
   "q6_partial": re.compile(r"q6k_gemv_partial"),
   "uop_vec_request": re.compile(r"qk_probe_uop_vec_request"),
   "custom_uint4": re.compile(r"qk_probe_custom_uint4"),
+  "packed_tile_custom_q4_dot": re.compile(r"qk_probe_tile_custom_q4_dot"),
   "scalar_probe": re.compile(r"qk_probe_scalar"),
 }
 

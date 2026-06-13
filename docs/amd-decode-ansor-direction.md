@@ -91,6 +91,15 @@ tiles, alignment, storage dtype, and memory search axes. Semantic-codegen v4
 artifacts record that metadata. This is an Ansor/Ladder-style representation
 step, not a performance claim.
 
+Update, packed-tile consumption: `extra/qk_packed_tile_consumption_probe.py`
+confirms the next boundary. Normal UOps cannot consume the `u32x4_aligned` Q4_K
+tile: lane `GEP` fails verifier and vector integer arithmetic fails shape
+validation. A custom semantic kernel can load `tg_uint4`, index lanes, unpack
+low/high Q4 nibbles, and accumulate an exact dot; DEBUG=4 parsing confirms
+`vector_u32x4` source. The next implementation should therefore be a
+first-class packed QK load/decode/dot lowering or renderer PatternMatcher rule.
+Do not benchmark vector-load Q4_K again before that exists.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

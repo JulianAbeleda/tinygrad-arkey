@@ -168,6 +168,13 @@ generated-policy storage mode.
       Family C v4 artifacts now record the `PackedQKTile` and legal
       `u32x4_aligned` load tile metadata instead of treating vector load as
       prose. This is a static IR/provenance step, not a performance claim.
+- [x] Ran the `PackedQKTile` consumption construction probe:
+      `extra/qk_packed_tile_consumption_probe.py` and
+      `bench/qk-packed-tile-consumption-20260613/`. Normal UOps cannot consume
+      `uint32x4` Q4_K loads (`GEP` verifier failure and vector-arith shape
+      failure), while a custom semantic kernel passes exactly and DEBUG=4
+      source parsing confirms `vector_u32x4`. Verdict:
+      `semantic_custom_op_required`; no microbench/full-decode run.
 
 ## Open But Not Urgent
 
@@ -192,6 +199,8 @@ generated-policy storage mode.
       8B/14B and did not produce vector-load evidence.
 - [ ] Do not add another Family C variant until it consumes `PackedQKTile` or a
       successor semantic op; raw vector load/store support alone is not enough.
+- [ ] Do not run vector-load Q4_K microbench/full-decode gates until a semantic
+      packed QK load/decode/dot lowering exists.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
@@ -210,9 +219,11 @@ generated-policy storage mode.
    descriptor `parts`/`LOCAL`, schedule v0, direct-output v1, and row-grouped
    Family B v2. Family C v0 then tested the first packed-load rewrite and tied;
    Family C v1 proved raw `uint32x4` loads lower but cannot yet be consumed by
-   the real GEMV graph. Resume from `PackedQKTile` / semantic packed-load
-   consumption, not from the same primitive knobs. Any future microbench win
-   starts as `raw_accept` and needs a confirmation rerun before promotion.
+   the real GEMV graph. The packed-tile consumption probe then showed normal
+   UOps cannot consume the tile but a custom semantic kernel can. Resume by
+   implementing a first-class packed QK load/decode/dot lowering or renderer
+   PatternMatcher rule. Any future microbench win starts as `raw_accept` and
+   needs a confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

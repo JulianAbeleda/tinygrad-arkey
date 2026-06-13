@@ -1,0 +1,39 @@
+{
+  "kind": "qk_load_width_report",
+  "rows": [
+    {
+      "contains_packed_dot": false,
+      "kernels": [
+        "qk_probe_tile_custom_q4_dot_36",
+        "qk_probe_tile_uop_lane_gep_sum_4",
+        "qk_probe_tile_uop_vector_arith_store_16"
+      ],
+      "load_width_inferred": "vector_u32x4",
+      "mode": "packed_tile_custom_q4_dot",
+      "notes": [
+        "This parser infers load width from generated-source text patterns; it is not a hardware-counter report.",
+        "Use it to confirm whether a candidate changed the generated source shape before trusting timing."
+      ],
+      "path": "bench/qk-packed-tile-consumption-20260613/load-width/probe-debug4.log",
+      "pattern_counts": {
+        "amd_vdot4": 0,
+        "uchar_or_u8": 0,
+        "uint_or_u32": 10,
+        "ulong_or_u64": 0,
+        "ushort_or_u16": 0,
+        "vector_u32x2": 0,
+        "vector_u32x4": 3
+      }
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "has_packed_dot": false,
+    "has_packed_load_kernel": false,
+    "has_vector_load_evidence": true,
+    "logs": 1,
+    "modes": [
+      "packed_tile_custom_q4_dot"
+    ]
+  }
+}

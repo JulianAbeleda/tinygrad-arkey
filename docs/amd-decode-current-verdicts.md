@@ -73,6 +73,7 @@ schedule knob.
 | Semantic codegen v3 / Family C v0 | Reproducible and rejected. The packed-load Q4_K `ffn_gate` probe changed the kernel expression from per-position qword indexing to explicit packed-word lanes that unroll four nibbles from each loaded `uint32`. It tied on both gated models: 8B `-0.65%`, 14B `-0.31%`. DEBUG=4 load-width parsing confirms a distinct packed-load kernel but still scalar `u32` loads and no vector-load evidence. | This v0 expression rewrite did not change memory transactions enough to move bandwidth. Do not broaden this exact packed-word-lane rewrite. Next step is hardware-counter profiling or a deeper renderer/layout capability for real vector/coalesced loads. |
 | Semantic codegen v4 / Family C v1 | Reproducible and rejected at construction. The candidate requested aligned `uint32x4` packed-weight loads inside Q4_K `ffn_gate`, but both 8B and 14B failed before timing. Scalar lane extraction from the vector load fails the verifier; vector-lane partial arithmetic fails later shape checks before AMD source is emitted. No vector-load Q4_K kernel source was generated. | The raw `uint32x4` load/store capability exists, but the real GEMV cannot yet consume the loaded vector through normal UOps. Stop Family C variants until vector lane extraction/vector-shape support or a first-class packed QK load/decode op exists. Full decode and 32B skipped. |
 | PackedQKTile representation | Added as a static descriptor/provenance layer. `extra/qk_packed_tile.py` describes Q4_K/Q6_K block layout, storage dtype, legal load tiles, alignment, and memory search axes. Semantic-codegen v4 candidate artifacts now record `packed_qk_tile` and `load_tile` metadata, including Q4_K `u32x4_aligned` with `32` q-values per load. | This is the next IR surface, not a speed claim. The next valid Family C attempt should consume this semantic tile or a successor op rather than repeating schedule knobs or expression-level packed-load rewrites. |
+| PackedQKTile consumption | Reproducible construction verdict. Normal UOps cannot consume the `uint32x4` load: lane `GEP` fails verifier and vector integer arithmetic fails shape validation. A custom semantic probe succeeds exactly and DEBUG=4 parsing confirms `vector_u32x4` source. | Next path is a first-class packed QK load/decode/dot semantic op or renderer PatternMatcher lowering. Do not run microbench/full decode for vector-load Q4_K until that lowering exists. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -182,6 +183,10 @@ It is a representation/lowering boundary:
     cannot yet consume the loaded vector through normal UOps. The blocker moved
     from "can AMD lower a vector load" to "can tinygrad represent packed-vector
     lane extraction/arithmetic in a valid tensor/custom-kernel graph."
+22. The packed-tile consumption probe answers that blocker: normal UOps cannot
+    currently represent the consumption path, but a custom semantic kernel can.
+    That makes the next step semantic lowering, not another v4 UOp rewrite or a
+    benchmark run.
 
 So the machine-first research hypothesis is:
 
@@ -305,6 +310,8 @@ worth doing only if the research itself is the goal.
   `bench/qk-ansor-transition-20260612/semantic-codegen-v4/load-width/report.md`
 - Packed-QK tile design:
   `docs/amd-decode-packed-qk-tile-design.md`
+- Packed-QK tile consumption probe:
+  `bench/qk-packed-tile-consumption-20260613/README.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

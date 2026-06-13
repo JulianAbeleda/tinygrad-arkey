@@ -122,3 +122,24 @@ Do not add another schedule/codegen family until it changes a first-class
 memory-access decision. The next valid family should consume `PackedQKTile` or a
 successor semantic op. Repeating `parts`, `LOCAL`, direct output, row grouping,
 or expression-level packed-word lanes is out of scope.
+
+## Construction Result
+
+The first consumption probe is complete:
+`bench/qk-packed-tile-consumption-20260613/README.md`.
+
+Result: `semantic_custom_op_required`.
+
+Evidence:
+
+- `PackedQKTile` correctly exposes Q4_K `u32x4_aligned` for the committed 8B
+  `ffn_gate` descriptor.
+- Normal UOp lane extraction from the vector load fails verifier at `Ops.GEP`.
+- Normal UOp vector integer arithmetic fails shape validation.
+- A custom semantic kernel loads `tg_uint4`, extracts lanes, unpacks Q4
+  low/high nibbles, and accumulates an exact dot.
+- DEBUG=4 source parsing confirms `vector_u32x4` for that custom probe.
+
+Consequence: do not rerun v4 as a normal-UOp rewrite. The next implementation is
+a first-class packed QK load/decode/dot lowering or renderer PatternMatcher
+rule that consumes this tile.

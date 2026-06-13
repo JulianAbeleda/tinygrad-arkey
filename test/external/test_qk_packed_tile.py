@@ -1,10 +1,14 @@
 import json, pathlib, unittest
 
+import numpy as np
+
 from extra.qk_layout import GGML_Q4_K, GGML_Q6_K, GGUFInfo, GGUFMetadata
+from extra.qk_load_width_report import build_report as build_load_width_report
 from extra.qk_packed_tile import (
   Q4_K_FORMAT, Q6_K_FORMAT, format_for_type, load_tile, qk_tile_search_axes, tile_from_info,
   tile_from_semantic_row, tile_summary, tile_to_json,
 )
+from extra.qk_packed_tile_consumption_probe import _q4_words_and_x
 
 class TestQKPackedTile(unittest.TestCase):
   def _meta(self, info:GGUFInfo, data_start:int=128) -> GGUFMetadata:
@@ -69,6 +73,31 @@ class TestQKPackedTile(unittest.TestCase):
     }
     with self.assertRaisesRegex(ValueError, "layout mismatch"):
       tile_from_semantic_row(row)
+
+  def test_consumption_probe_oracle_and_load_width_artifact(self):
+    words, x, expected = _q4_words_and_x()
+    got = np.float32(0.0)
+    for lane, word in enumerate(words[4:8]):
+      for nib in range(4):
+        byte = int((int(word) >> (8*nib)) & 0xff)
+        got += np.float32(byte & 0xf) * x[lane*4+nib]
+        got += np.float32(byte >> 4) * x[32+lane*4+nib]
+    self.assertEqual(got, float(expected))
+
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    probe = repo / "bench/qk-packed-tile-consumption-20260613/probe.json"
+    if probe.exists():
+      summary = json.loads(probe.read_text())["summary"]
+      self.assertEqual(summary["decision"], "semantic_custom_op_required")
+      self.assertFalse(summary["run_microbench"])
+      self.assertFalse(summary["run_full_decode"])
+
+    log = repo / "bench/qk-packed-tile-consumption-20260613/load-width/probe-debug4.log"
+    if log.exists():
+      report = build_load_width_report([log], repo=repo)
+      self.assertTrue(report["summary"]["has_vector_load_evidence"])
+      self.assertEqual(report["rows"][0]["mode"], "packed_tile_custom_q4_dot")
+      self.assertEqual(report["rows"][0]["load_width_inferred"], "vector_u32x4")
 
 if __name__ == "__main__":
   unittest.main()

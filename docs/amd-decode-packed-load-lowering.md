@@ -32,6 +32,16 @@ instead of carrying the vector-load premise as prose. See
 `docs/amd-decode-packed-qk-tile-design.md`. This is not a speed claim; it is the
 descriptor layer needed before another vector-load GEMV construction attempt.
 
+Update 5: the `PackedQKTile` consumption probe has run. Normal UOps still cannot
+consume the Q4_K `uint32x4` load: scalar lane extraction through `GEP` fails the
+verifier, and vector integer arithmetic fails shape validation. A custom
+semantic kernel can consume the same tile shape: DEBUG=4 source parsing sees
+`vector_u32x4`, and the kernel exactly loads `tg_uint4`, indexes lanes, unpacks
+low/high Q4 nibbles, and accumulates a small dot. See
+`bench/qk-packed-tile-consumption-20260613/README.md`. Verdict:
+`semantic_custom_op_required`; do not run microbench or full decode until a
+first-class packed QK load/decode/dot lowering exists.
+
 ## Problem
 
 The accepted Q4_K/Q6_K primitive path is correct and substantially faster than
@@ -139,6 +149,8 @@ Do not install a runtime path from this family until all are true:
   fixed in core lowering or represented as a first-class packed-load operation.
   Future variants should consume `PackedQKTile` or its successor rather than
   repeating expression-level rewrites.
+- No microbench or full-decode promotion for vector-load Q4_K until normal UOps
+  can consume the tile or a semantic lowering replaces the failing UOp sequence.
 
 ## Relationship To Ansor
 
