@@ -6,11 +6,12 @@ from tinygrad.llm.model import QKPrimitiveBudget, _load_qk_generated_policy, _qk
 def _policy(entries):
   return {"kind": "qk_generated_policy", "generator_version": 0, "commit": "test", "entries": entries}
 
-def _entry(typ:int, rows:int, cols:int, winner:str, parts:int=1, opts=("LOCAL:0:64",)):
+def _entry(typ:int, rows:int, cols:int, winner:str, parts:int=1, opts=("LOCAL:0:64",), family:str="q4_k_packed_u32",
+           reduction:str="split_k_partial"):
   return {
     "winner": winner,
     "descriptor": {"ggml_type": typ, "rows": rows, "cols": cols},
-    "candidate": {"parts": parts, "opts": list(opts), "family": "q4_k_packed_u32"},
+    "candidate": {"parts": parts, "opts": list(opts), "family": family, "reduction": reduction},
   }
 
 class TestQKGeneratedPolicyRuntime(unittest.TestCase):
@@ -37,6 +38,17 @@ class TestQKGeneratedPolicyRuntime(unittest.TestCase):
     key = ("blk.0.ffn_gate.weight", 12, 12288, 4096)
     self.assertEqual(table["by_tensor"][key]["winner"], "fused_graph")
     self.assertEqual(table["by_tensor"][key]["policy_reason"], "memory_cap_fused_over_budget")
+
+  def test_loads_direct_output_family_and_reduction(self):
+    entry = _entry(12, 1024, 4096, "direct_out", 1, ("LOCAL:0:64",),
+                   family="q4_k_packed_u32_direct", reduction="direct_out")
+    entry["scope"] = "tensor"
+    entry["descriptor"]["tensor"] = "blk.0.attn_q.weight"
+    path = self._write(_policy([entry]))
+    table = _load_qk_generated_policy(str(path))
+    loaded = table["by_tensor"][("blk.0.attn_q.weight", 12, 1024, 4096)]
+    self.assertEqual(loaded["family"], "q4_k_packed_u32_direct")
+    self.assertEqual(loaded["reduction"], "direct_out")
 
   def test_rejects_conflicting_shape_policy(self):
     path = self._write(_policy([

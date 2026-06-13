@@ -1,0 +1,175 @@
+{
+  "kind": "qk_semantic_codegen_microbench",
+  "model": "8B",
+  "rows": [
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.773,
+        "gemv_max_abs": 0.00179243,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/001-ffn-gate-blk-0-ffn-gate-weight-direct-out-tensor/candidate.log",
+        "quant_gbs": 212.47,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.587 ms (1702.41/s) q4_eff=48.20 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.021 ms (330.97/s) q4_eff=9.37 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.133 ms (7504.65/s) q4_eff=212.47 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.822,
+        "gemv_max_abs": 0.00179243,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/001-ffn-gate-blk-0-ffn-gate-weight-direct-out-tensor/current.log",
+        "quant_gbs": 207.15,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.611 ms (1637.16/s) q4_eff=46.35 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.056 ms (327.21/s) q4_eff=9.26 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.137 ms (7316.88/s) q4_eff=207.15 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.025681873038860603,
+      "id": "001-ffn-gate-blk-0-ffn-gate-weight-direct-out-tensor",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/001-ffn-gate-blk-0-ffn-gate-weight-direct-out-tensor/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "name": "direct_out_tensor",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "scope": "tensor",
+        "semantic_object": "packed_quant_gemv_codegen"
+      },
+      "status": "tie",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.4.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.826,
+        "gemv_max_abs": 0.00208139,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/002-ffn-down-blk-4-ffn-down-weight-direct-out-tensor/candidate.log",
+        "quant_gbs": 204.62,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.4.ffn_down.weight\nprimitive_unpack_correctness: PASS blk.4.ffn_down.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.4.ffn_down.weight max_abs=0.00208139\nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 0.604 ms (1656.17/s) q4_eff=46.89 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 2.966 ms (337.13/s) q4_eff=9.54 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.138 ms (7227.33/s) q4_eff=204.62 GB/s device_q4_eff=n/a kernels=1.0 mem=28.37 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.4.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 4 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.842,
+        "gemv_max_abs": 0.00207901,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/002-ffn-down-blk-4-ffn-down-weight-direct-out-tensor/current.log",
+        "quant_gbs": 273.41,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=4 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.4.ffn_down.weight\nprimitive_unpack_correctness: PASS blk.4.ffn_down.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.4.ffn_down.weight max_abs=0.00207901\nblk.4.ffn_down.weight 4096x12288 matmul_decoded: 0.592 ms (1687.84/s) q4_eff=47.79 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.4.ffn_down.weight 4096x12288 decode_q4_k_plus_matmul: 2.994 ms (333.99/s) q4_eff=9.46 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.4.ffn_down.weight 4096x12288 q4k_primitive_gemv: 0.104 ms (9657.05/s) q4_eff=273.41 GB/s device_q4_eff=n/a kernels=1.0 mem=28.55 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": -0.2516001609304708,
+      "id": "002-ffn-down-blk-4-ffn-down-weight-direct-out-tensor",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/002-ffn-down-blk-4-ffn-down-weight-direct-out-tensor/policy.json",
+      "reasons": [
+        "below min_gain=0.030"
+      ],
+      "role": "ffn_down",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "name": "direct_out_tensor",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_down",
+        "scope": "tensor",
+        "semantic_object": "packed_quant_gemv_codegen"
+      },
+      "status": "reject",
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.877,
+        "gemv_max_abs": 0.00238562,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/003-attn-q-blk-0-attn-q-weight-direct-out-tensor/candidate.log",
+        "quant_gbs": 67.8,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00238562\nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.598 ms (1672.11/s) q4_eff=15.78 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.037 ms (329.32/s) q4_eff=3.11 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.139 ms (7184.34/s) q4_eff=67.80 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.832,
+        "gemv_max_abs": 0.00238562,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/003-attn-q-blk-0-attn-q-weight-direct-out-tensor/current.log",
+        "quant_gbs": 66.78,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00238562\nblk.0.attn_q.weight 4096x4096 matmul_decoded: 0.601 ms (1663.38/s) q4_eff=15.70 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.0.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.097 ms (322.94/s) q4_eff=3.05 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.0.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.141 ms (7076.71/s) q4_eff=66.78 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.015274034141958603,
+      "id": "003-attn-q-blk-0-attn-q-weight-direct-out-tensor",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-codegen-v1/8b/microbench-runs/003-attn-q-blk-0-attn-q-weight-direct-out-tensor/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "name": "direct_out_tensor",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "scope": "tensor",
+        "semantic_object": "packed_quant_gemv_codegen"
+      },
+      "status": "tie",
+      "tensor": "blk.0.attn_q.weight"
+    }
+  ],
+  "source_candidates": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "summary": {
+    "accepted": 0,
+    "candidates": 3,
+    "full_decode_ready": 0,
+    "invalid": 0,
+    "next_decision": "semantic_codegen_frontier_blocked",
+    "rejected": 1,
+    "ties": 2
+  }
+}

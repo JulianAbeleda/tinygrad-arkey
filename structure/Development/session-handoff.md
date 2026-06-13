@@ -301,15 +301,24 @@ Greedy A/B passed for both, so this is a performance rejection, not a
 correctness failure. 32B was skipped by rule because the 8B/14B gate did not
 accept.
 
+Semantic-codegen v1 verdict:
+`bench/qk-ansor-transition-20260612/semantic-codegen-v1/verdict.md`.
+This promoted Q4_K direct output into a real runtime-supported generated-policy
+family (`q4_k_packed_u32_direct`) and tested exact-tensor overrides, avoiding
+the v0 shape-wide blast radius. It still did not clear the locked `3%`
+microbench gate: 8B had `0` accepts (`2` ties, `1` reject), and 14B had `0`
+accepts (`2` ties, `2` rejects). No full-decode candidate was promoted, and
+32B was skipped by rule.
+
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
    RLVR/SFT pipeline on top of the validated rollout/comparator backend.
 2. Compiler research: continue from the Ansor-transition descriptor foundation:
    descriptor-level `parts`/`LOCAL` search is exhausted, and semantic schedule
-   v0 (`direct_out`/`row_upcast2`/`reduce_unroll4`/`two_dim_local4`) is rejected
-   by full decode. Next work needs a richer semantic layout/codegen surface, not
-   another hand sweep over the same primitive knobs.
+   v0 plus semantic codegen v1 direct-output Q4 are rejected by their gates.
+   Next work needs a richer semantic layout/codegen surface, not another hand
+   sweep over the same primitive knobs.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

@@ -1,0 +1,85 @@
+{
+  "base": "bench/qk-ansor-transition-20260612/semantic-codegen-v1",
+  "gate_models": [
+    "8B",
+    "14B"
+  ],
+  "kind": "qk_semantic_codegen_verdict",
+  "models": [
+    {
+      "candidate_summary": {
+        "candidates": 4,
+        "current_storage_bytes": 107347968,
+        "single_change_candidates": 3
+      },
+      "full_decode_decisions": [],
+      "full_decode_ready": [],
+      "microbench_accepts": [],
+      "microbench_summary": {
+        "accepted": 0,
+        "candidates": 3,
+        "full_decode_ready": 0,
+        "invalid": 0,
+        "next_decision": "semantic_codegen_frontier_blocked",
+        "rejected": 1,
+        "ties": 2
+      },
+      "model": "8B",
+      "promoted": [],
+      "static_gate_summary": {
+        "candidates": 4,
+        "failing": 0,
+        "full_decode_supported": 4,
+        "passing_microbench": 3
+      },
+      "status": "reject"
+    },
+    {
+      "candidate_summary": {
+        "candidates": 5,
+        "current_storage_bytes": 195379200,
+        "single_change_candidates": 4
+      },
+      "full_decode_decisions": [],
+      "full_decode_ready": [],
+      "microbench_accepts": [],
+      "microbench_summary": {
+        "accepted": 0,
+        "candidates": 4,
+        "full_decode_ready": 0,
+        "invalid": 0,
+        "next_decision": "semantic_codegen_frontier_blocked",
+        "rejected": 2,
+        "ties": 2
+      },
+      "model": "14B",
+      "promoted": [],
+      "static_gate_summary": {
+        "candidates": 5,
+        "failing": 0,
+        "full_decode_supported": 5,
+        "passing_microbench": 4
+      },
+      "status": "reject"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "accepted_models": [],
+    "full_decode_accepts": 0,
+    "full_decode_candidates": 0,
+    "full_decode_invalid": 0,
+    "full_decode_needs_rerun": 0,
+    "full_decode_rejects": 0,
+    "full_decode_ties": 0,
+    "microbench_accepts": 0,
+    "models": 2,
+    "overall_decision": "semantic_codegen_v1_rejected",
+    "reasons": [
+      "8B had no full-decode candidate",
+      "14B had no full-decode candidate",
+      "32B skipped by default because the 8B/14B semantic codegen gate did not both accept"
+    ],
+    "run_32b": false
+  }
+}

@@ -45,6 +45,13 @@ against the current accepted generated policies, with greedy A/B still passing.
 32B was skipped by rule because the 8B/14B gate did not accept. Current verdict:
 `semantic_schedule_v0_rejected`.
 
+Update, semantic-codegen v1: Q4_K direct output is now a runtime-supported
+generated-policy family (`q4_k_packed_u32_direct`) and can be installed as an
+exact-tensor override. The 8B/14B microbench gate produced no accepts: 8B had
+two ties and one reject; 14B had two ties and two rejects. No full-decode
+candidate was promoted, and 32B was skipped by rule. Current verdict:
+`semantic_codegen_v1_rejected`.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

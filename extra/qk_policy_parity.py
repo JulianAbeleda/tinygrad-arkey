@@ -8,8 +8,8 @@ from extra.qk_layout import GGML_Q4_K, GGML_Q6_K, GGUFMetadata, format_name, rea
 from tinygrad.llm.model import _load_qk_generated_policy, _q4k_policy, _q6k_policy
 
 SUPPORTED_FAMILIES = {
-  GGML_Q4_K: "q4_k_packed_u32",
-  GGML_Q6_K: "q6_k_packed_u16",
+  GGML_Q4_K: {"q4_k_packed_u32", "q4_k_packed_u32_direct"},
+  GGML_Q6_K: {"q6_k_packed_u16"},
 }
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ def _generated_decision(policy:dict, name:str, typ:int, rows:int, cols:int) -> P
     reason = "policy_memory_cap" if "memory_cap" in policy_reason else "policy_fused"
     return PolicyDecision("generated", "fused_graph", "fused_graph", 0, (), reason)
   family = str(entry.get("family", ""))
-  if family != SUPPORTED_FAMILIES[typ]:
+  if family not in SUPPORTED_FAMILIES[typ]:
     # Unsupported generated winners are skipped, so the model falls back.
     return PolicyDecision("generated", winner, "fused_graph", int(entry.get("parts", 0)),
                           tuple(entry.get("opts", ())), "policy_unsupported", True)

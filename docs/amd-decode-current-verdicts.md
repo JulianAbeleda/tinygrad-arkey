@@ -60,6 +60,7 @@ kernel-search loop.
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
 | Ansor-transition descriptor/candidate loop | Reproducible and benchmarked. `bench/qk-ansor-transition-20260612/` freezes the llama.cpp-comparable objective, records profiles for 8B/14B/32B, converts accepted generated policies into Q4_K/Q6_K semantic descriptors, round-trips those descriptors into equivalent runtime policies, generates bounded candidates, statically gates them, and benchmarks the six `benchmark_next` candidates per model policy-vs-policy. | Descriptor-level `parts`/`LOCAL` knob search is exhausted. The next research step needs real semantic schedule/codegen generation. |
 | Semantic schedule v0 | Reproducible and rejected. The first richer schedule surface generated `direct_out`, `row_upcast2`, `reduce_unroll4`, and `two_dim_local4` sketches for 8B/14B. Microbench found isolated attention `row_upcast2` wins, but the full decode gate rejected the only supported winner on both models: 8B `-10.28%`, 14B `-5.21%`, greedy A/B pass. | Do not promote microbench-only schedule wins. Do not run 32B for this surface. The next compiler step needs richer semantic layout/codegen, not these same sketches. |
+| Semantic codegen v1 | Reproducible and rejected. Q4_K direct output is now a runtime-supported generated-policy family (`q4_k_packed_u32_direct`) and was tested as exact-tensor overrides. The 8B/14B microbench gate produced no accepts: 8B had two ties and one reject; 14B had two ties and two rejects. | Do not run full decode or 32B for this direct-output surface. Removing the partial reduction kernel alone is not enough. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -132,6 +133,12 @@ It is a representation/lowering boundary:
     `38.13 tok/s` reference (`-5.21%`). This confirms that schedule/codegen
     candidates must survive model-scope gates; local microbench wins are not
     enough.
+16. Semantic codegen v1 then made the Q4_K direct-output kernel a real
+    generated-policy runtime family (`q4_k_packed_u32_direct`) and tested it as
+    exact-tensor overrides. This avoided the v0 shape-wide blast radius, but it
+    still did not clear the fixed `3%` microbench gate. 8B had `0` accepts
+    (`2` ties, `1` reject); 14B had `0` accepts (`2` ties, `2` rejects). No
+    full-decode candidate was promoted, and 32B was skipped by policy.
 
 So the machine-first research hypothesis is:
 
@@ -197,6 +204,9 @@ worth doing only if the research itself is the goal.
   and 14B.
 - Do not run the semantic-schedule v0 surface on 32B. The 8B/14B gate rejected
   it, so 32B would only be a heavy confirmation of a failed surface.
+- Do not run the semantic-codegen v1 direct-output Q4 surface on 32B. The 8B/14B
+  gate produced no microbench accepts, so there is no full-decode or scaling
+  candidate to promote.
 - Do not commit benchmark or reproducibility artifacts with machine-local
   absolute checkout paths. Store repo-relative paths so evidence regenerates
   from any clean checkout.
@@ -221,6 +231,8 @@ worth doing only if the research itself is the goal.
   `bench/qk-ansor-transition-20260612/README.md`
 - Semantic schedule v0 verdict:
   `bench/qk-ansor-transition-20260612/semantic-schedules/verdict.md`
+- Semantic codegen v1 verdict:
+  `bench/qk-ansor-transition-20260612/semantic-codegen-v1/verdict.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

@@ -77,6 +77,21 @@ PYTHONPATH=. .venv/bin/python extra/qk_semantic_schedule_verdict.py \
   --base bench/qk-ansor-transition-20260612/semantic-schedules \
   --json bench/qk-ansor-transition-20260612/semantic-schedules/verdict.json \
   --md bench/qk-ansor-transition-20260612/semantic-schedules/verdict.md
+
+base=bench/qk-ansor-transition-20260612/semantic-codegen-v1
+for model in 8b 14b; do
+  PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen.py \
+    --descriptor bench/qk-ansor-transition-20260612/descriptors/$model.json \
+    --json $base/$model/candidates.json \
+    --md $base/$model/candidates.md \
+    --gate-json $base/$model/static-gate.json \
+    --gate-md $base/$model/static-gate.md
+done
+
+PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_verdict.py \
+  --base bench/qk-ansor-transition-20260612/semantic-codegen-v1 \
+  --json bench/qk-ansor-transition-20260612/semantic-codegen-v1/verdict.json \
+  --md bench/qk-ansor-transition-20260612/semantic-codegen-v1/verdict.md
 ```
 
 ## Current Scorecard
@@ -232,4 +247,54 @@ for model in 8b 14b; do
     --accept-gain 0.03 \
     --tie-band 0.03
 done
+```
+
+## Semantic Codegen v1
+
+`extra/qk_semantic_codegen.py` promoted the concrete Q4_K direct-output kernel
+into a runtime-supported generated-policy family:
+`q4_k_packed_u32_direct`. Unlike semantic schedule v0, these candidates are
+exact-tensor overrides, so a full-decode candidate would only change the
+specific tensor that won its microbench.
+
+Static gate result:
+
+- 8B: `4` total candidates, `3` microbenchable and full-decode supported.
+- 14B: `5` total candidates, `4` microbenchable and full-decode supported.
+
+Microbench result:
+
+| model | accepts | ties | rejects | best tie | verdict |
+|---|---:|---:|---:|---|---|
+| 8B | `0` | `2` | `1` | `ffn_gate +2.57%` | no full-decode candidate |
+| 14B | `0` | `2` | `2` | `ffn_gate +2.41%` | no full-decode candidate |
+
+Verdict: `semantic_codegen_v1_rejected`. Direct-output Q4 removes the partial
+reduction kernel, but the measured per-tensor gains stayed inside the fixed
+`3%` tie band or regressed. No candidate reached the gate for full decode, so
+32B was skipped by policy.
+
+Artifacts: `semantic-codegen-v1/verdict.md`.
+
+Measurement commands used on native AMD:
+
+```sh
+base=bench/qk-ansor-transition-20260612/semantic-codegen-v1
+for model in 8b 14b; do
+  DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_semantic_schedule_bench.py \
+    --model $model \
+    --candidates $base/$model/candidates.json \
+    --static-gate $base/$model/static-gate.json \
+    --out $base/$model/microbench-runs \
+    --json $base/$model/microbench.json \
+    --md $base/$model/microbench.md \
+    --iters 3 \
+    --min-gain 0.03 \
+    --tie-band 0.03
+done
+
+PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_verdict.py \
+  --base $base \
+  --json $base/verdict.json \
+  --md $base/verdict.md
 ```

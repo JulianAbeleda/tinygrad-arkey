@@ -56,10 +56,13 @@ class Q4KPrimitiveRegistry:
 class Q4KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
-               shared_bytes:int=0, nonpersistent_bytes:int=0):
+               shared_bytes:int=0, nonpersistent_bytes:int=0, kernel_mode:str="partial"):
+    if kernel_mode not in ("partial", "direct_out"): raise ValueError(f"unsupported Q4_K primitive kernel mode {kernel_mode!r}")
+    if kernel_mode == "direct_out" and parts != 1: raise ValueError("Q4_K direct_out primitive requires parts=1")
     self.weight, self.bias = weight, bias
     self.q4k_storage = Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
+    self.kernel_mode = kernel_mode
     self.decode_enabled = False
 
   def _fallback(self, x:Tensor) -> Tensor:
@@ -69,9 +72,13 @@ class Q4KPrimitiveLinear:
     # This primitive is a decode GEMV path. Prefill, batching, and unsupported bias cases use the normal tinygrad graph.
     if not self.decode_enabled or self.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != self.in_features:
       return self._fallback(x)
-    from extra.q4_k_gemv_primitive import q4k_gemv_partial_kernel
+    from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
     words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
+    if self.kernel_mode == "direct_out":
+      out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+      got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_kernel(self.out_features, self.in_features, "none", self.opts))[0]
+      return got.reshape(1, 1, self.out_features)
     partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
     partial = partials.custom_kernel(words, x_vec, fxn=q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
@@ -121,6 +128,7 @@ def _qk_policy_value(entry:dict) -> dict:
   return {
     "winner": entry.get("winner"), "parts": int(cand.get("parts", 0)),
     "opts": tuple(cand.get("opts", ())), "family": cand.get("family", ""),
+    "reduction": cand.get("reduction", ""),
     "policy_reason": entry.get("policy_reason", ""), "storage": entry.get("storage", {}),
   }
 
@@ -216,6 +224,7 @@ def _set_module_at(root, path:str, value) -> None:
 def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
                             budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar") -> list[Q4KPrimitiveLinear]:
   from extra.q4_k_gemv_primitive import parse_opt
+  supported_generated_families = {"q4_k_packed_u32", "q4_k_packed_u32_direct"}
   raw_words = Tensor(gguf, dtype=dtypes.uint32)
   installed: list[Q4KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
@@ -237,6 +246,7 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
         skipped["policy_fallback"] += 1
         continue
       parts, opt_specs = policy
+      kernel_mode = "partial"
     else:
       if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols, name)) is None:
         skipped["policy_missing"] += 1
@@ -244,10 +254,14 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       if policy_entry["winner"] == "fused_graph":
         skipped["policy_fused"] += 1
         continue
-      if policy_entry["family"] != "q4_k_packed_u32":
+      if policy_entry["family"] not in supported_generated_families:
         skipped["policy_unsupported"] += 1
         continue
       parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
+      kernel_mode = "direct_out" if policy_entry["family"] == "q4_k_packed_u32_direct" or policy_entry.get("reduction") == "direct_out" else "partial"
+      if kernel_mode == "direct_out" and parts != 1:
+        skipped["policy_invalid_direct_parts"] += 1
+        continue
     byte_start = meta["data_start"] + off
     if byte_start % 4 != 0:
       skipped["misaligned"] += 1
@@ -275,12 +289,12 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       words = source.contiguous() if storage_mode == "q4_ondemand" else source.to(None).contiguous().realize()
       shared_bytes, nonpersistent_bytes = 0, q4_bytes if storage_mode == "q4_ondemand" else 0
     q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name,
-                                    q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
+                                    q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes, kernel_mode=kernel_mode)
     _set_module_at(model, module_path, q4k_linear)
     installed.append(q4k_linear)
   if debug:
     skipped_s = " ".join(f"{k}={v}" for k, v in sorted(skipped.items()))
-    installed_s = " ".join(f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}" for x in installed[:8])
+    installed_s = " ".join(f"{x.name}:mode={x.kernel_mode}:parts={x.parts}:opts={[str(o) for o in x.opts]}" for x in installed[:8])
     more_s = f" ...+{len(installed)-8}" if len(installed) > 8 else ""
     summary = _qk_storage_summary(installed)
     cap = -1 if budget.cap_bytes is None else budget.cap_bytes

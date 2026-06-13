@@ -112,6 +112,15 @@ generated-policy storage mode.
       static gates and found isolated attention microbench wins, but full decode
       rejected the supported winner on both targets: 8B `-10.28%`, 14B
       `-5.21%`. Verdict: `semantic_schedule_v0_rejected`; 32B skipped by rule.
+- [x] Generated and gated semantic codegen v1 candidates:
+      `extra/qk_semantic_codegen.py`,
+      `extra/qk_semantic_codegen_verdict.py`, runtime support for
+      `q4_k_packed_u32_direct`, and the shared semantic microbench runner. The
+      direct-output Q4 family is now full-decode installable as an exact-tensor
+      generated-policy override, but the 8B/14B microbench gate produced no
+      accepts: 8B `0` accepts (`2` ties, `1` reject), 14B `0` accepts (`2`
+      ties, `2` rejects). Verdict: `semantic_codegen_v1_rejected`; full decode
+      and 32B skipped by rule.
 - [x] Fixed loop-v0 matrix portability: benchmark matrix `path` and `policy`
       fields are repo-relative, tests assert they are not absolute paths, and
       the regenerated matrices reproduce outside `/home/ubuntu/tinygrad-arkey`.

@@ -46,6 +46,18 @@ class TestQKPolicyParity(unittest.TestCase):
     self.assertEqual(summarize(rows)["generated_unsupported"], 1)
     self.assertFalse(rows[0].same_effective)
 
+  def test_direct_output_q4_family_is_supported_but_effectively_different(self):
+    policy = {
+      (GGML_Q4_K, 1024, 4096): {
+        "winner": "direct_out", "parts": 1, "opts": ("LOCAL:0:64",), "family": "q4_k_packed_u32_direct",
+      },
+    }
+    rows = compare_policies(GGUFMetadata(128, [GGUFInfo("blk.0.attn_q.weight", (4096, 1024), GGML_Q4_K, 0)], {}), policy)
+    self.assertFalse(rows[0].generated.unsupported)
+    self.assertEqual(rows[0].generated.effective_winner, "q4_k_packed_u32_direct")
+    self.assertEqual(summarize(rows)["generated_unsupported"], 0)
+    self.assertFalse(rows[0].same_effective)
+
   def test_tensor_policy_overrides_shape_policy_and_reports_memory_cap(self):
     policy = {
       "by_shape": {

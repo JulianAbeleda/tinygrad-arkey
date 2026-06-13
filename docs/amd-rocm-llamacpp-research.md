@@ -2096,3 +2096,46 @@ also with greedy A/B passing. Therefore the raw accept is not promoted.
 Verdict: descriptor-level `parts`/`LOCAL` knob search over the existing Q4_K/Q6_K
 primitive families is exhausted. The next research step needs a richer semantic
 schedule/codegen search space, not another hand sweep over the same knobs.
+
+## Semantic schedule/codegen gates (2026-06-12)
+
+Artifacts:
+
+- `bench/qk-ansor-transition-20260612/semantic-schedules/`
+- `bench/qk-ansor-transition-20260612/semantic-codegen-v1/`
+
+Semantic schedule v0 tested a broader generated surface over the accepted
+descriptors:
+
+- Q4_K `direct_out` as microbench-only;
+- `row_upcast2`;
+- `reduce_unroll4`;
+- `two_dim_local4`.
+
+The v0 microbench found isolated `attn_q row_upcast2` wins, but full decode
+rejected the only promoted candidate on both gated models:
+
+| model | candidate | reference tok/s | generated tok/s | gain | A/B | verdict |
+|---|---|---:|---:|---:|---|---|
+| 8B | `009-attn-q...row-upcast2` | `53.27` | `47.79` | `-10.28%` | pass | reject |
+| 14B | `009-attn-q...row-upcast2` | `38.13` | `36.14` | `-5.21%` | pass | reject |
+
+Verdict: `semantic_schedule_v0_rejected`. Microbench-only schedule wins are not
+promotion evidence.
+
+Semantic codegen v1 then made Q4_K direct output a real runtime family,
+`q4_k_packed_u32_direct`, and tested it as exact-tensor generated-policy
+overrides. This closed the v0 limitation where direct output could not be
+full-decode tested, and avoided shape-wide blast radius.
+
+Microbench gate:
+
+| model | accepts | ties | rejects | best tie | full-decode candidates |
+|---|---:|---:|---:|---|---:|
+| 8B | `0` | `2` | `1` | `ffn_gate +2.57%` | `0` |
+| 14B | `0` | `2` | `2` | `ffn_gate +2.41%` | `0` |
+
+Verdict: `semantic_codegen_v1_rejected`. Direct-output Q4 removes the partial
+reduction kernel, but the measured per-tensor gains stayed inside the fixed
+`3%` tie band or regressed. No full-decode run or 32B run is justified for this
+surface.

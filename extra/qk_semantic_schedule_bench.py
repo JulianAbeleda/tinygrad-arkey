@@ -151,6 +151,7 @@ def build_microbench_report(model:str, candidate_set:dict[str, Any], gate:dict[s
                             limit:int | None=None) -> dict[str, Any]:
   if model not in MODEL_FILES: raise ValueError(f"semantic schedule gate only supports {sorted(MODEL_FILES)} by default")
   assert_q4k_native_sweep_allowed(device, "QK semantic schedule microbench")
+  surface = "codegen" if candidate_set.get("kind") == "qk_semantic_codegen_candidate_set" else "schedule"
   model_path = (model_root / MODEL_FILES[model]).expanduser().resolve()
   gate_rows = {row["id"]: row for row in gate.get("rows", [])}
   candidates = [cand for cand in candidate_set.get("candidates", []) if cand.get("id") != "current"]
@@ -186,7 +187,7 @@ def build_microbench_report(model:str, candidate_set:dict[str, Any], gate:dict[s
   accepted = [row for row in rows if row["status"] == "accept"]
   full_decode_ready = [row for row in accepted if row.get("full_decode_supported")]
   return {
-    "kind": "qk_semantic_schedule_microbench",
+    "kind": f"qk_semantic_{surface}_microbench",
     "model": model.upper(),
     "source_candidates": candidate_set.get("source_descriptor"),
     "rows": rows,
@@ -197,14 +198,15 @@ def build_microbench_report(model:str, candidate_set:dict[str, Any], gate:dict[s
       "rejected": sum(1 for row in rows if row["status"] == "reject"),
       "invalid": sum(1 for row in rows if row["status"] == "invalid"),
       "full_decode_ready": len(full_decode_ready),
-      "next_decision": "run_full_policy_benchmark" if full_decode_ready else "semantic_schedule_frontier_blocked",
+      "next_decision": "run_full_policy_benchmark" if full_decode_ready else f"semantic_{surface}_frontier_blocked",
     },
   }
 
 
 def report_markdown(report:dict[str, Any]) -> str:
+  surface = "Codegen" if report.get("kind") == "qk_semantic_codegen_microbench" else "Schedule"
   lines = [
-    f"# QK Semantic Schedule Microbench: {report['model']}",
+    f"# QK Semantic {surface} Microbench: {report['model']}",
     "",
     "Each candidate is compared against the current schedule for the same tensor.",
     "Full decode is only justified for accepted rows that are also runtime-policy",
