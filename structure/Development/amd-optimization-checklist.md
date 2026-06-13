@@ -190,6 +190,13 @@ generated-policy storage mode.
       8B Q4_K microbench does not generalize: gain range `-2.04%` to `+7.51%`,
       median `-0.36%`; only `ffn_up` is materially positive. Verdict:
       `diagnose_only_not_promoted`; no full decode or runtime integration.
+- [x] Closed out the raw packed-tile custom path with DEBUG=7 disassembly:
+      `extra/qk_packed_tile_closeout_diagnostic.py` and
+      `bench/qk-packed-tile-research-closeout-20260613/`. `tile_custom` emits
+      real target `global_load_b128` instructions, but only by giving up v1's
+      32-lane scheduled shape for a workgroup-size-1 opaque custom kernel with a
+      much larger target body. Verdict:
+      `raw_custom_tile_path_closed_not_promoted`.
 
 ## Open But Not Urgent
 
@@ -216,6 +223,8 @@ generated-policy storage mode.
       successor semantic op; raw vector load/store support alone is not enough.
 - [ ] Do not run vector-load Q4_K microbench/full-decode gates until a semantic
       packed QK load/decode/dot lowering exists.
+- [ ] Do not add more raw `Ops.CUSTOM` `tg_uint4` Q4_K variants; DEBUG=7
+      close-out already explains why vector source loads alone are insufficient.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter

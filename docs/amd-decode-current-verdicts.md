@@ -76,6 +76,7 @@ schedule knob.
 | PackedQKTile consumption | Reproducible construction verdict. Normal UOps cannot consume the `uint32x4` load: lane `GEP` fails verifier and vector integer arithmetic fails shape validation. A custom semantic probe succeeds exactly and DEBUG=4 parsing confirms `vector_u32x4` source. | Next path is a first-class packed QK load/decode/dot semantic op or renderer PatternMatcher lowering. Do not run microbench/full decode for vector-load Q4_K until that lowering exists. |
 | PackedQKTile custom Q4_K lowering | Constructed and AMD-correct, but not promoted. `q4k_gemv_tile_custom_partial_kernel` consumes Q4_K payload words with `tg_uint4`, preserves fp16 activations, supports the existing partial-output shape, and DEBUG=4 parsing confirms `vector_u32x4`. Microbench signal is positive but weak: 8B `ffn_gate` `+7.20%`, `attn_output` `+5.83%` vs v1. | This proves the semantic/custom route can consume the tile in a real GEMV, but the raw `Ops.CUSTOM` body is still opaque to search and below the `>=10%` full-decode bar. Do not integrate into runtime or run full decode from this result alone. Next work needs counter/source analysis or a core renderer/PatternMatcher semantic op. |
 | PackedQKTile lowering repeated analysis | Reproducible and not promoted. Across five 8B Q4_K tensors with five runs each, source-shape evidence confirms v1 `u32_scalar` vs `tile_custom` `vector_u32x4`, but performance does not generalize: gain range `-2.04%` to `+7.51%`, median `-0.36%`. Only `ffn_up` is materially positive. | Stop treating raw custom `tg_uint4` source as an optimization path by itself. The next compiler-research step is either assembly/counter diagnosis of the weak gain or a core renderer/PatternMatcher semantic op that exposes packed QK structure to tinygrad/search. |
+| PackedQKTile raw custom close-out | Closed. DEBUG=7 target disassembly shows `tile_custom` does emit wider target loads (`32` target `global_load_b128` instructions versus `1` in v1), but it pays for that with a workgroup-size `1` raw custom body and a much larger target kernel (`1293` parsed target instructions versus `296` for v1). v1 keeps the 32-lane scheduled shape and already receives some compiler load combining. | Do not add more raw `Ops.CUSTOM` `tg_uint4` variants. The only justified continuation is a first-class packed QK semantic op or renderer lowering that preserves both wide/coalesced packed loads and schedulable row/K parallelism. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -189,6 +190,12 @@ It is a representation/lowering boundary:
     currently represent the consumption path, but a custom semantic kernel can.
     That makes the next step semantic lowering, not another v4 UOp rewrite or a
     benchmark run.
+23. The raw custom packed-tile path is now closed as a performance path. DEBUG=7
+    target disassembly proves it reaches `global_load_b128`, but it does so by
+    hiding the loop body from tinygrad/BEAM and collapsing the v1 32-lane
+    schedule into a workgroup-size-1 custom kernel. The remaining hypothesis is
+    therefore not "force `tg_uint4` somehow"; it is "make packed QK load/decode
+    a compiler-visible semantic operation that can still be scheduled."
 
 So the machine-first research hypothesis is:
 

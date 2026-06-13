@@ -6,6 +6,9 @@ from extra.q4_k_gemv_primitive import _q4k_tile_custom_partial_source
 from extra.qk_layout import GGML_Q4_K, GGML_Q6_K, GGUFInfo, GGUFMetadata
 from extra.qk_load_width_report import build_report as build_load_width_report
 from extra.qk_packed_tile_lowering_analysis import report_markdown as lowering_report_markdown, summarize_runs
+from extra.qk_packed_tile_closeout_diagnostic import (
+  build_report as closeout_build_report, parse_debug7_log, report_markdown as closeout_report_markdown, summarize as summarize_closeout,
+)
 from extra.qk_packed_tile import (
   Q4_K_FORMAT, Q6_K_FORMAT, format_for_type, load_tile, qk_tile_search_axes, tile_from_info,
   tile_from_semantic_row, tile_summary, tile_to_json,
@@ -164,6 +167,68 @@ class TestQKPackedTile(unittest.TestCase):
     self.assertEqual(rebuilt["summary"], committed["summary"])
     self.assertEqual(rebuilt["comparisons"], committed["comparisons"])
     self.assertEqual((root / "analysis.md").read_text(), lowering_report_markdown(committed))
+
+  def test_packed_tile_closeout_debug7_parser(self):
+    v1 = """
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) q4k_gemv_partial_64_4096_1(float* out) {
+  int gidx0 = __ockl_get_group_id(0); /* 2 */
+  int lidx0 = __ockl_get_local_id(0); /* 32 */
+}
+<stdin>:\tfile format elf64-amdgpu
+Disassembly of section .text:
+0000000000001700 <q4k_gemv_partial_64_4096_1>:
+\tglobal_load_b128 v[0:3], v0, s[0:1] // fake
+\tglobal_load_b32 v4, v0, s[0:1] // fake
+\tv_add_f32 v0, v0, v1
+\tglobal_store_b32 v0, v0, s[0:1] // fake
+*** AMD        1 q4k_gemv_partial_64_4096_1                     arg  3 mem   0.00 GB tm     49.36us/     0.05ms
+"""
+    tile = """
+extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 1))) q4k_gemv_tile_custom_partial_64_4096_1(float* out) {
+  int gidx0 = __ockl_get_group_id(0); /* 64 */
+  typedef unsigned int tg_uint4 __attribute__((ext_vector_type(4)));
+  tg_uint4 qv = *((tg_uint4*)out);
+}
+<stdin>:\tfile format elf64-amdgpu
+Disassembly of section .text:
+0000000000001700 <q4k_gemv_tile_custom_partial_64_4096_1>:
+\tglobal_load_b128 v[0:3], v0, s[0:1] // fake
+\tglobal_load_b128 v[4:7], v0, s[0:1] // fake
+\tglobal_load_b128 v[8:11], v0, s[0:1] // fake
+\tv_add_f32 v0, v0, v1
+\tv_add_f32 v0, v0, v1
+\tv_add_f32 v0, v0, v1
+\tv_add_f32 v0, v0, v1
+\tglobal_store_b32 v0, v0, s[0:1] // fake
+*** AMD        1 q4k_gemv_tile_custom_partial_64_4096_1         arg  3 mem   0.00 GB tm     57.40us/     0.06ms
+"""
+    parsed = {
+      "v1_partial": parse_debug7_log(v1, kernel="q4k_gemv_partial_64_4096_1", mode="v1_partial"),
+      "tile_custom": parse_debug7_log(tile, kernel="q4k_gemv_tile_custom_partial_64_4096_1", mode="tile_custom"),
+    }
+    self.assertEqual(parsed["v1_partial"]["workgroup_size"], 32)
+    self.assertEqual(parsed["tile_custom"]["workgroup_size"], 1)
+    self.assertTrue(parsed["tile_custom"]["source_has_tg_uint4_load"])
+    self.assertGreater(parsed["tile_custom"]["global_load_b128"], parsed["v1_partial"]["global_load_b128"])
+    summary = summarize_closeout(parsed)
+    self.assertEqual(summary["decision"], "raw_custom_tile_path_closed_not_promoted")
+    self.assertTrue(summary["tile_has_wider_loads"])
+    self.assertTrue(summary["tile_loses_parallelism"])
+
+  def test_packed_tile_closeout_artifact_reproduces(self):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    root = repo / "bench/qk-packed-tile-research-closeout-20260613"
+    if not root.exists(): return
+
+    logs = {
+      "v1_partial": root / "source/v1_partial-debug7.log",
+      "tile_custom": root / "source/tile_custom-debug7.log",
+    }
+    committed = json.loads((root / "diagnostic.json").read_text())
+    rebuilt = closeout_build_report(logs, repo=repo)
+    self.assertEqual(rebuilt["summary"], committed["summary"])
+    self.assertEqual(rebuilt["modes"], committed["modes"])
+    self.assertEqual((root / "diagnostic.md").read_text(), closeout_report_markdown(committed))
 
 if __name__ == "__main__":
   unittest.main()

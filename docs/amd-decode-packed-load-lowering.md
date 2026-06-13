@@ -2,7 +2,8 @@
 
 Date: 2026-06-13
 
-Status: custom semantic Q4_K tile lowering diagnosed; not promoted.
+Status: raw custom semantic Q4_K tile lowering closed; future work requires a
+first-class packed QK semantic op or renderer lowering.
 
 Update: Family C v0 has now been tested. It changed the expression shape to use
 explicit packed-word lanes for Q4_K `ffn_gate`, but it tied on 8B/14B and
@@ -60,6 +61,16 @@ not generalize: gains range from `-2.04%` to `+7.51%`, with median gain
 `diagnose_only_not_promoted`. Do not run full decode or runtime integration from
 this raw custom path. See
 `bench/qk-packed-tile-lowering-analysis-20260613/README.md`.
+
+Update 8: DEBUG=7 target-disassembly close-out explains that negative result.
+`tile_custom` does emit real target `global_load_b128` instructions (`32` in the
+target block versus `1` for v1), but it also becomes a workgroup-size `1` raw
+custom kernel with a much larger target body (`1293` parsed target instructions
+versus `296` for v1). The current v1 path keeps the 32-lane scheduled shape
+(`amdgpu_flat_work_group_size(1, 32)`) and already gets some target wide-load
+combining from the AMD compiler. Verdict:
+`raw_custom_tile_path_closed_not_promoted`. See
+`bench/qk-packed-tile-research-closeout-20260613/README.md`.
 
 ## Problem
 
@@ -170,6 +181,9 @@ Do not install a runtime path from this family until all are true:
 - No broadening of raw `Ops.CUSTOM` Q4_K tile consumers as a performance path:
   repeated analysis shows vector-source loads alone do not produce a general
   Q4_K win.
+- No further raw `Ops.CUSTOM` Q4_K tile variants. DEBUG=7 close-out shows the
+  raw custom path trades vector source loads for a single-work-item, opaque,
+  much larger target kernel body.
 - No further Family C variants through normal UOps. Future variants should
   consume `PackedQKTile` or its successor through a first-class packed-load op,
   renderer PatternMatcher, or similarly explicit semantic lowering rather than

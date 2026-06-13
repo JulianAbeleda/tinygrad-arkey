@@ -118,6 +118,16 @@ range is `-2.04%` to `+7.51%`, median `-0.36%`. This rejects raw custom
 `tg_uint4` source as a runtime-promotion path. It remains useful as a construction
 proof for a future core semantic op.
 
+Update, packed-tile research close-out: DEBUG=7 target disassembly explains why
+the raw custom path should stop. The `tg_uint4` body does become real target
+wide loads (`32` `global_load_b128` instructions in the target kernel), but it
+also becomes an opaque workgroup-size `1` kernel with a much larger target body
+(`1293` parsed instructions versus `296` for v1). The current v1 primitive keeps
+the 32-lane scheduled shape and already receives limited compiler load
+combining. This closes the raw `Ops.CUSTOM` tile path: future work must be a
+first-class packed QK semantic op or renderer PatternMatcher lowering that gives
+search both the memory-access representation and the row/K scheduling surface.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path
