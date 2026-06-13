@@ -1,0 +1,477 @@
+{
+  "contract_rows": [
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "8B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "ffn_gate",
+      "shape": {
+        "cols": 4096,
+        "rows": 12288
+      },
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "8B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "ffn_down",
+      "shape": {
+        "cols": 12288,
+        "rows": 4096
+      },
+      "tensor": "blk.4.ffn_down.weight"
+    },
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "8B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "attn_q",
+      "shape": {
+        "cols": 4096,
+        "rows": 4096
+      },
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "8B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "attn_k",
+      "shape": {
+        "cols": 4096,
+        "rows": 1024
+      },
+      "tensor": "blk.0.attn_k.weight"
+    },
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "14B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "ffn_gate",
+      "shape": {
+        "cols": 5120,
+        "rows": 17408
+      },
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "14B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "ffn_down",
+      "shape": {
+        "cols": 17408,
+        "rows": 5120
+      },
+      "tensor": "blk.5.ffn_down.weight"
+    },
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "14B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "attn_q",
+      "shape": {
+        "cols": 5120,
+        "rows": 5120
+      },
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "contract": {
+        "format": "Q4_K",
+        "granularity": "one packed quant block and matching activation block produce one float32 contribution",
+        "hidden_allowed": [
+          "format-specific Q4_K scale/min unpack",
+          "Q4_K nibble extraction",
+          "lane mapping inside one 256-element block",
+          "target load intrinsic or vector-load spelling"
+        ],
+        "hidden_forbidden": [
+          "row loop",
+          "K-block loop",
+          "split-K partial output layout",
+          "partial reduction kernel",
+          "full GEMV kernel body",
+          "runtime policy selection"
+        ],
+        "input_operands": [
+          "qk_packed_tile_words",
+          "activation_fp16_block",
+          "block_index",
+          "row_index"
+        ],
+        "load_tile": "u32x4_aligned",
+        "lowering_target": "amd_renderer_pattern",
+        "name": "QK_BLOCK_DOT",
+        "output_dtype": "float32",
+        "runtime_lowering_exists": false,
+        "scheduler_visible_axes": [
+          "row",
+          "k_block",
+          "split_part",
+          "lane_or_reduce"
+        ]
+      },
+      "correctness_oracle": "extra.qk_layout.q4_k_reference plus random-activation GEMV compare on AMD",
+      "model": "14B",
+      "promotion_status": "design_only_no_runtime_lowering",
+      "role": "attn_k",
+      "shape": {
+        "cols": 5120,
+        "rows": 1024
+      },
+      "tensor": "blk.0.attn_k.weight"
+    }
+  ],
+  "kind": "qk_packed_semantic_op_contract",
+  "non_goals": [
+    "raw Ops.CUSTOM full-kernel variants",
+    "parts/LOCAL-only sweeps",
+    "row-group broadening",
+    "full decode before repeated microbench clears the gate",
+    "32B before 8B/14B promise"
+  ],
+  "op_name": "QK_BLOCK_DOT",
+  "promotion_gates": [
+    {
+      "gate": "reference_unpack",
+      "requirement": "bit-exact Q4_K unpack against extra.qk_layout.q4_k_reference"
+    },
+    {
+      "gate": "amd_gemv_numeric",
+      "requirement": "random fp16 activation GEMV compare against current v1 primitive"
+    },
+    {
+      "gate": "source_width",
+      "requirement": "generated source records intended packed load spelling"
+    },
+    {
+      "gate": "target_width",
+      "requirement": "DEBUG=7 target block contains wide/coalesced load evidence"
+    },
+    {
+      "gate": "scheduler_shape",
+      "requirement": "target workgroup shape preserves v1-like schedulable row/K parallelism; reject workgroup-size 1"
+    },
+    {
+      "gate": "target_body_size",
+      "requirement": "target instruction count must not exceed 2x comparable v1 kernel without a measured win"
+    },
+    {
+      "gate": "microbench",
+      "requirement": "repeated dominant-shape median gain >= 10% before full decode"
+    },
+    {
+      "gate": "full_decode",
+      "requirement": "8B and 14B confirmation reruns accept; 32B optional only after promise"
+    },
+    {
+      "gate": "greedy_ab",
+      "requirement": "end-to-end greedy output A/B passes"
+    }
+  ],
+  "schema_version": 1,
+  "skipped_rows": [
+    {
+      "format": "Q6_K",
+      "model": "8B",
+      "reason": "first semantic op contract scopes Q4_K only; Q6_K vector/load layout is separate work",
+      "role": "output",
+      "tensor": "output.weight"
+    },
+    {
+      "format": "Q6_K",
+      "model": "8B",
+      "reason": "first semantic op contract scopes Q4_K only; Q6_K vector/load layout is separate work",
+      "role": "attn_v",
+      "tensor": "blk.0.attn_v.weight"
+    },
+    {
+      "format": "Q6_K",
+      "model": "8B",
+      "reason": "first semantic op contract scopes Q4_K only; Q6_K vector/load layout is separate work",
+      "role": "ffn_down",
+      "tensor": "blk.0.ffn_down.weight"
+    },
+    {
+      "format": "Q6_K",
+      "model": "14B",
+      "reason": "first semantic op contract scopes Q4_K only; Q6_K vector/load layout is separate work",
+      "role": "output",
+      "tensor": "output.weight"
+    },
+    {
+      "format": "Q6_K",
+      "model": "14B",
+      "reason": "first semantic op contract scopes Q4_K only; Q6_K vector/load layout is separate work",
+      "role": "attn_v",
+      "tensor": "blk.0.attn_v.weight"
+    },
+    {
+      "format": "Q6_K",
+      "model": "14B",
+      "reason": "first semantic op contract scopes Q4_K only; Q6_K vector/load layout is separate work",
+      "role": "ffn_down",
+      "tensor": "blk.0.ffn_down.weight"
+    }
+  ],
+  "summary": {
+    "decision": "semantic_op_contract_defined_no_runtime_lowering",
+    "descriptors": [
+      "bench/qk-ansor-transition-20260612/descriptors/8b.json",
+      "bench/qk-ansor-transition-20260612/descriptors/14b.json"
+    ],
+    "next_step": "minimal compile gate for QK_BLOCK_DOT renderer/core lowering",
+    "q4_contract_rows": 8,
+    "run_full_decode": false,
+    "run_microbench": false,
+    "runtime_lowering_exists": false,
+    "skipped_rows": 6
+  }
+}

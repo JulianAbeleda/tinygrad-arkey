@@ -128,6 +128,14 @@ combining. This closes the raw `Ops.CUSTOM` tile path: future work must be a
 first-class packed QK semantic op or renderer PatternMatcher lowering that gives
 search both the memory-access representation and the row/K scheduling surface.
 
+Update, semantic-op contract: `extra/qk_semantic_op.py` now defines the first
+tinygrad-native boundary for that continuation: `QK_BLOCK_DOT`, a Q4_K
+block-local load/decode/dot operation. The op intentionally stops short of full
+GEMV so the scheduler can still see row, K-block, split-K, and reduction axes.
+`bench/qk-packed-semantic-op-20260613/` records `8` Q4_K contract rows across
+8B/14B and skips Q6_K by rule. This is phase-1 contract evidence only; the next
+commit should be a minimal compile gate for an AMD renderer/core lowering.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

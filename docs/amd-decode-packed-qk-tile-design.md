@@ -143,3 +143,17 @@ Evidence:
 Consequence: do not rerun v4 as a normal-UOp rewrite. The next implementation is
 a first-class packed QK load/decode/dot lowering or renderer PatternMatcher
 rule that consumes this tile.
+
+## Next Semantic Boundary
+
+The first boundary for that lowering is now defined in
+`docs/amd-decode-packed-qk-semantic-op.md` and
+`bench/qk-packed-semantic-op-20260613/README.md`.
+
+`QK_BLOCK_DOT` is intentionally smaller than a full GEMV kernel: it consumes one
+packed Q4_K block and the matching fp16 activation block, then returns one
+float32 contribution. Row loops, K-block loops, split-K layout, and partial
+reduction stay outside the op so tinygrad can still schedule them.
+
+This is a design-only contract. Runtime lowering starts with a minimal compile
+gate, not model integration.

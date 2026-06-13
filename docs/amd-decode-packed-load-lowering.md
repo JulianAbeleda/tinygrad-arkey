@@ -72,6 +72,14 @@ combining from the AMD compiler. Verdict:
 `raw_custom_tile_path_closed_not_promoted`. See
 `bench/qk-packed-tile-research-closeout-20260613/README.md`.
 
+Update 9: the next semantic boundary is now defined but not implemented.
+`docs/amd-decode-packed-qk-semantic-op.md` and `extra/qk_semantic_op.py` define
+`QK_BLOCK_DOT`: a Q4_K block-local load/decode/dot operation that may hide
+nibble unpacking and target load spelling, but must leave row, K-block, split-K,
+and reduction scheduling visible. Artifact:
+`bench/qk-packed-semantic-op-20260613/README.md`. This is a design-only
+contract, not a runtime lowering or speed claim.
+
 ## Problem
 
 The accepted Q4_K/Q6_K primitive path is correct and substantially faster than

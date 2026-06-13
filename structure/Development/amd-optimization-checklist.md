@@ -197,6 +197,12 @@ generated-policy storage mode.
       32-lane scheduled shape for a workgroup-size-1 opaque custom kernel with a
       much larger target body. Verdict:
       `raw_custom_tile_path_closed_not_promoted`.
+- [x] Defined the first packed-QK semantic op contract:
+      `docs/amd-decode-packed-qk-semantic-op.md`,
+      `extra/qk_semantic_op.py`, and
+      `bench/qk-packed-semantic-op-20260613/`. `QK_BLOCK_DOT` is scoped to one
+      Q4_K packed block dot, leaves row/K/split scheduling visible, records
+      eight 8B/14B Q4_K contract rows, and makes no runtime or speed claim.
 
 ## Open But Not Urgent
 
@@ -225,6 +231,8 @@ generated-policy storage mode.
       packed QK load/decode/dot lowering exists.
 - [ ] Do not add more raw `Ops.CUSTOM` `tg_uint4` Q4_K variants; DEBUG=7
       close-out already explains why vector source loads alone are insufficient.
+- [ ] Do not implement full-GEMV semantic hiding. The next implementation must
+      keep `QK_BLOCK_DOT` block-local so row/K/split axes remain schedulable.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
