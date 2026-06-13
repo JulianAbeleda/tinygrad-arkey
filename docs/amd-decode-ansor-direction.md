@@ -1137,6 +1137,17 @@ v1-like workgroup shape, target-body size, and the local AMD GEMV correctness
 check. It does not yet prove a speedup. The next allowed action is repeated
 dominant-shape microbenching, not runtime integration or full decode.
 
+The repeated microbench now exists in
+`bench/qk-block-dot-microbench-20260613/` and rejects this first lowering:
+v1 median `407.99` device Q4 GB/s, `QK_BLOCK_DOT` median `285.01`, gain
+`-30.14%`. This is still useful research evidence. It shows the semantic-op
+boundary can preserve tinygrad scheduling, but the current C-style block body
+does not produce a performant lowering. Do not promote this op into runtime or
+full decode. If the Ansor-style research track continues, the next question is
+why the wider-load lowering loses: instruction mix, occupancy, memory
+coalescing quality, or the need for a lower-level renderer/assembly-quality
+block implementation.
+
 ## Relationship to existing docs
 
 - `docs/amd-decode-optimization-plan.md` remains the historical execution log.

@@ -213,6 +213,14 @@ generated-policy storage mode.
       `qk_block_dot_compile_gate_passed_compile_shape`. This authorizes a
       repeated dominant-shape microbench only; no runtime integration or full
       decode yet.
+- [x] Ran the repeated `QK_BLOCK_DOT` dominant-shape microbench:
+      `extra/qk_block_dot_microbench.py`,
+      `test/external/test_qk_block_dot_microbench.py`, and
+      `bench/qk-block-dot-microbench-20260613/`. The full 8B Q4_K
+      `ffn_gate` tensor rejects the lowering: v1 median `407.99` device Q4
+      GB/s, `QK_BLOCK_DOT` median `285.01`, gain `-30.14%`, correctness pass.
+      Verdict: `qk_block_dot_microbench_rejected`; no full decode, runtime
+      integration, 14B/32B broadening, or policy promotion.
 
 ## Open But Not Urgent
 
@@ -243,8 +251,11 @@ generated-policy storage mode.
       close-out already explains why vector source loads alone are insufficient.
 - [ ] Do not implement full-GEMV semantic hiding. The next implementation must
       keep `QK_BLOCK_DOT` block-local so row/K/split axes remain schedulable.
-- [ ] Do not integrate `QK_BLOCK_DOT` into runtime or run full decode until its
-      repeated dominant-shape microbench clears the promotion bar.
+- [ ] Do not integrate the current `QK_BLOCK_DOT` lowering into runtime or run
+      full decode; its repeated dominant-shape microbench failed the promotion
+      bar.
+- [ ] Do not retry the current C-style `QK_BLOCK_DOT` lowering as a runtime
+      family; its repeated microbench regressed against v1.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
@@ -265,10 +276,11 @@ generated-policy storage mode.
    Family C v1 proved raw `uint32x4` loads lower but cannot yet be consumed by
    the real GEMV graph. The packed-tile consumption probe then showed normal
    UOps cannot consume the tile but a custom semantic kernel can. The minimal
-   `QK_BLOCK_DOT` compile gate now passes. Resume by running a repeated
-   dominant-shape microbench for the fixed 8B Q4_K `ffn_gate` shape. Any future
-   microbench win starts as `raw_accept` and needs a confirmation rerun before
-   promotion.
+   `QK_BLOCK_DOT` compile gate passes, but the repeated full-shape microbench
+   rejects it at `-30.14%` versus v1. Resume only with diagnosis of why the
+   wider-load semantic block loses, or with a lower-level renderer/assembly
+   quality lowering. Any future microbench win starts as `raw_accept` and needs
+   a confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

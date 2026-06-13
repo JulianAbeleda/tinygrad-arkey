@@ -20,7 +20,13 @@ DEFAULT_MODEL = pathlib.Path("~/models/Qwen3-8B-Q4_K_M.gguf")
 DEFAULT_TENSOR = "blk.0.ffn_gate.weight"
 ROWS, K, PARTS = 64, 4096, 1
 V1_KERNEL = f"q4k_gemv_partial_{ROWS}_{K}_{PARTS}"
-QK_KERNEL = f"q4k_block_dot_partial_{ROWS}_{K}_{PARTS}"
+
+
+def qk_kernel_name(rows:int, k:int, parts:int) -> str:
+  return f"q4k_block_dot_partial_{rows}_{k}_{parts}"
+
+
+QK_KERNEL = qk_kernel_name(ROWS, K, PARTS)
 
 
 def _kernel_info(name:str, opts:tuple[Opt, ...]) -> KernelInfo:
@@ -103,7 +109,7 @@ def q4k_block_dot_partial_kernel(rows:int, k:int, parts:int, opts:tuple[Opt, ...
 
     acc = partials[row, part].set(0.0)
     acc = partials[row, part].set(acc.after(blk_part)[row, part] + contrib, end=blk_part)
-    return acc.end(row, part).sink(arg=_kernel_info(QK_KERNEL, opts))
+    return acc.end(row, part).sink(arg=_kernel_info(qk_kernel_name(rows, k, parts), opts))
 
   return kernel
 

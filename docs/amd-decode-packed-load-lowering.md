@@ -157,6 +157,13 @@ Candidate lowerings should try to change one memory-access mechanism at a time:
    target `global_load_b128` evidence. This authorizes a repeated
    dominant-shape microbench, not runtime integration or full decode.
 
+   Repeated microbench result:
+   `bench/qk-block-dot-microbench-20260613/` rejects the first lowering. On the
+   full 8B `ffn_gate` tensor, v1 reaches `407.99` median device Q4 GB/s while
+   `QK_BLOCK_DOT` reaches `285.01`, a `-30.14%` regression. Wider target-load
+   evidence plus preserved scheduling is therefore not sufficient with this
+   C-style block body.
+
 3. **Activation staging only when it supports load efficiency**
    q8_1 staging is useful if it aligns the compute with packed dot and keeps ALU
    hidden under memory. It is not a standalone speed claim.
@@ -205,6 +212,8 @@ Do not install a runtime path from this family until all are true:
 - No full decode for `QK_BLOCK_DOT` from compile-shape evidence alone. The
   passed compile gate only moves the next step to repeated dominant-shape
   microbenching.
+- No runtime integration or full decode for the current `QK_BLOCK_DOT`
+  lowering. Its repeated microbench regressed against v1.
 
 ## Relationship To Ansor
 

@@ -1,0 +1,23 @@
+{
+  "device_ms": 0.069208,
+  "device_q4_gbs": 409.0791815975032,
+  "global_mem_mb": 28.418048,
+  "iters": 5,
+  "kernels": 1.0,
+  "mode": "v1_partial",
+  "opts": [
+    "Opt(op=OptOps.LOCAL, axis=0, arg=32)"
+  ],
+  "parts": 1,
+  "primitive_gemv_max_abs": 0.0012383460998535156,
+  "q4_bytes": 28311552,
+  "raw_file": "bench/qk-block-dot-microbench-20260613/raw/run-02-v1_partial.json",
+  "run": 2,
+  "shape": [
+    12288,
+    4096
+  ],
+  "tensor": "blk.0.ffn_gate.weight",
+  "wall_ms": 3.5296484013088048,
+  "wall_q4_gbs": 8.021068611112083
+}

@@ -140,7 +140,21 @@ The next implementation commit should be a minimal compile gate for
 `QK_BLOCK_DOT`, not runtime integration.
 
 That minimal compile gate now exists in
-`bench/qk-block-dot-compile-gate-20260613/`. The next implementation step is a
-repeated microbench for the same fixed 8B dominant shape, gated by the artifact
-summary. Full decode remains blocked until the repeated microbench clears the
-pre-registered gain threshold.
+`bench/qk-block-dot-compile-gate-20260613/`. The repeated microbench now exists
+in `bench/qk-block-dot-microbench-20260613/`.
+
+Microbench result: `qk_block_dot_microbench_rejected`.
+
+The run used the full 8B `blk.0.ffn_gate.weight` tensor shape and five paired
+AMD device-timed runs:
+
+- v1 partial median: `407.99` device Q4 GB/s;
+- `QK_BLOCK_DOT` median: `285.01` device Q4 GB/s;
+- gain: `-30.14%`;
+- required promotion bar: `>=10.00%`;
+- correctness: pass, max_abs <= `0.0012387`.
+
+This closes the current `QK_BLOCK_DOT` lowering as a performance path. The
+semantic op solved the compile-shape problem but did not beat v1. Do not run
+full decode, integrate runtime support, broaden to 14B/32B, or promote a policy
+family from this result.
