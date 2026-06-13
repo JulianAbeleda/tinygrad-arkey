@@ -2,7 +2,7 @@
 
 Date: 2026-06-13
 
-Status: source gate passed for Family C v1.
+Status: source gate passed; Family C v1 GEMV construction gate rejected.
 
 Canonical artifact:
 
@@ -30,17 +30,31 @@ Load-width source logs are captured separately with `DEBUG=4` for the
 
 ## Verdict
 
-The core source gate for Family C v1 now passes.
+The core source gate for Family C v1 passes.
 
 The normal tinygrad codegen path preserves a requested aligned `uint32.vec(4)`
 global load/store on AMD. The probe copies all lanes exactly, and DEBUG=4 source
 shows an `unsigned_int4` load/store through vector pointer casts. Raw custom C
 still works, but is no longer the only way to reach this memory shape.
 
-The next implementation surface is therefore Family C v1:
+Family C v1 then tried to consume that memory shape inside the real Q4_K
+`ffn_gate` GEMV. That follow-up is recorded in:
 
-- add a generated Q4_K memory-access candidate that requests aligned `uint32x4`
-  packed-weight loads directly;
+- `bench/qk-ansor-transition-20260612/semantic-codegen-v4/verdict.md`
+- `bench/qk-ansor-transition-20260612/semantic-codegen-v4/load-width/report.md`
+
+The result is a construction reject on both gate models. The candidate reaches
+the benchmark harness, but tinygrad's current vector UOp shape rules cannot yet
+use the loaded `uint32x4` value in the unpack/dot expression: scalar lane
+extraction fails the verifier, and vector-lane partial arithmetic fails later
+shape checks before AMD source is emitted.
+
+The next implementation surface is therefore no longer "another packed-load
+candidate"; it is the missing core representation support:
+
+- represent packed-load lane extraction / vector-lane arithmetic as valid UOps,
+  or add a first-class packed QK load/decode operation that lowers to this
+  source shape;
 - keep 8B/14B as the gate models;
 - require reference unpack, AMD GEMV correctness, generated source load-width
   evidence, and a strong microbench result before full-decode promotion.
@@ -55,6 +69,6 @@ different source shape to test.
 
 ## Stop Rule
 
-Do not broaden packed-load expression rewrites unless generated source shows a
-real vector/coalesced integer load shape. 32B remains skipped unless 8B/14B
-show promise with Family C v1.
+Do not broaden packed-load expression rewrites until the vector-load consumption
+blocker is fixed. 32B remains skipped unless 8B/14B show promise after that
+core representation issue is resolved.

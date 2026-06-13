@@ -71,6 +71,7 @@ schedule knob.
 | Semantic codegen v2 / Family B | Reproducible and rejected. The pre-registered row-grouped Q4_K `ffn_down` surface tested activation reuse / row-axis scheduling across adjacent output rows. It regressed badly: 8B row-group 2 was `-31.03%`, row-group 4 was `-71.54%`; 14B row-group 2 was `-52.59%`, and row-group 4 was an illegal opt. | Do not wire runtime support for row-grouped Q4_K. Do not broaden this same row-group surface to more roles or 32B. |
 | Model-scope bandwidth roofline | Accepted as the next decision point. Using committed shared-storage decisions and GGUF file bytes, tinygrad generated reaches `261.82`, `365.04`, and `340.47 GB/s` on 8B/14B/32B, while llama.cpp reaches `508.81`, `592.32`, and `608.67 GB/s`. | Freeze local schedule-knob exploration. Next decode research surface is packed-weight memory-access/codegen lowering. |
 | Semantic codegen v3 / Family C v0 | Reproducible and rejected. The packed-load Q4_K `ffn_gate` probe changed the kernel expression from per-position qword indexing to explicit packed-word lanes that unroll four nibbles from each loaded `uint32`. It tied on both gated models: 8B `-0.65%`, 14B `-0.31%`. DEBUG=4 load-width parsing confirms a distinct packed-load kernel but still scalar `u32` loads and no vector-load evidence. | This v0 expression rewrite did not change memory transactions enough to move bandwidth. Do not broaden this exact packed-word-lane rewrite. Next step is hardware-counter profiling or a deeper renderer/layout capability for real vector/coalesced loads. |
+| Semantic codegen v4 / Family C v1 | Reproducible and rejected at construction. The candidate requested aligned `uint32x4` packed-weight loads inside Q4_K `ffn_gate`, but both 8B and 14B failed before timing. Scalar lane extraction from the vector load fails the verifier; vector-lane partial arithmetic fails later shape checks before AMD source is emitted. No vector-load Q4_K kernel source was generated. | The raw `uint32x4` load/store capability exists, but the real GEMV cannot yet consume the loaded vector through normal UOps. Stop Family C variants until vector lane extraction/vector-shape support or a first-class packed QK load/decode op exists. Full decode and 32B skipped. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -175,6 +176,11 @@ It is a representation/lowering boundary:
     packed-load rewrite is not enough; the remaining memory-access work needs
     either hardware counters to identify the exact stall or renderer/layout
     support that can force true vector/coalesced loads.
+21. The aligned `uint32x4` source gate now passes for raw AMD load/store, but
+    semantic codegen v4 showed that this is not enough: the real Q4_K GEMV
+    cannot yet consume the loaded vector through normal UOps. The blocker moved
+    from "can AMD lower a vector load" to "can tinygrad represent packed-vector
+    lane extraction/arithmetic in a valid tensor/custom-kernel graph."
 
 So the machine-first research hypothesis is:
 
@@ -293,6 +299,9 @@ worth doing only if the research itself is the goal.
 - Semantic codegen v3 / Family C v0 packed-load verdict:
   `bench/qk-ansor-transition-20260612/semantic-codegen-v3/verdict.md`,
   `bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.md`
+- Semantic codegen v4 / Family C v1 vector-load construction verdict:
+  `bench/qk-ansor-transition-20260612/semantic-codegen-v4/verdict.md`,
+  `bench/qk-ansor-transition-20260612/semantic-codegen-v4/load-width/report.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

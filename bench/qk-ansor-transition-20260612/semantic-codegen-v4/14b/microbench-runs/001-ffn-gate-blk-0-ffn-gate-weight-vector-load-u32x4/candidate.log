@@ -1,0 +1,85 @@
+model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}
+variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random
+primitive: mode=vector_load parts=1 row_group=1 schedule=none opts=['LOCAL:0:32']
+correctness: PASS blk.0.ffn_gate.weight
+primitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0
+Traceback (most recent call last):
+  File "extra/q4_k_bench.py", line 170, in <module>
+    got = primitive_gemv().realize()
+          ^^^^^^^^^^^^^^^^
+  File "tinygrad/engine/jit.py", line 275, in __call__
+    if len(params:=get_parameters(ret)): Tensor.realize(*params)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/tensor.py", line 1417, in _wrapper
+    ret = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/tensor.py", line 224, in realize
+    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)
+  File "tinygrad/engine/realize.py", line 254, in run_linear
+    if not jit: linear = compile_linear(linear, validate=VALIDATE_WITH_CPU)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/engine/realize.py", line 247, in compile_linear
+    linear = graph_rewrite(linear, pm_compile, name="precompile kernels", walk=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1469, in wrap_profile_matches
+    return fxn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1649, in graph_rewrite
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1576, in walk_rewrite
+    if self.pm is not None and (rewritten:=self.pm_rewrite(new_n)) is not None: new_n = rewritten
+                                           ^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1548, in pm_rewrite
+    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1385, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "tinygrad/engine/realize.py", line 228, in <lambda>
+    call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/codegen/__init__.py", line 235, in to_program
+    if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
+                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1433, in __wrapper
+    ret = func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/codegen/__init__.py", line 218, in do_to_program
+    full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/codegen/__init__.py", line 57, in full_rewrite_to_sink
+    sink = graph_rewrite(ast, pm_mops+pm_syntactic_sugar+pm_store_ranges, ctx=itertools.count(1000), name="early movement ops", bottom_up=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1469, in wrap_profile_matches
+    return fxn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1649, in graph_rewrite
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1598, in unified_rewrite
+    new_n, test_n = test_n, self.cached_bpm_rewrite(test_n)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1552, in cached_bpm_rewrite
+    ret = self.bpm_cache[x] = unwrap(self.bpm).rewrite(x, self.ctx)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 1385, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "tinygrad/schedule/rangeify.py", line 20, in add_ranges_to_store
+    if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
+                                  ^^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 133, in __get__
+    for node in x.toposort(gate=lambda node: self.nm not in node.__dict__): node.__dict__[self.nm] = self.fxn(node)
+                                                                                                     ^^^^^^^^^^^^^^
+  File "tinygrad/uop/ops.py", line 372, in _shape
+    raise RuntimeError(f"shape mismatch at {self.op}: {input_shapes} {[x.op for x in self.src]}")
+RuntimeError: shape mismatch at Ops.MUL: [(), (4,)] [Ops.INDEX, Ops.CAST]

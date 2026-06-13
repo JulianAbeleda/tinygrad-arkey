@@ -71,6 +71,7 @@ def _row_descriptor(change:dict[str, Any]) -> dict[str, Any]:
 def _q4_command(model_path:pathlib.Path, tensor:str, spec:dict[str, Any], *, device:str, iters:int, seed:int) -> list[str]:
   mode = ("serial" if spec.get("codegen_mode") == "direct_out" else
           "grouped" if spec.get("codegen_mode") == "grouped_partial" else
+          "vector_load" if spec.get("codegen_mode") == "vector_load" else
           "packed_load" if spec.get("codegen_mode") == "packed_load" else "partial")
   cmd = [sys.executable, "extra/q4_k_bench.py", str(model_path), "--device", device, "--tensor", tensor,
          "--iters", str(iters), "--format", "text", "--activation", "random", "--seed", str(seed),

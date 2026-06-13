@@ -431,3 +431,62 @@ to move performance. Full decode, confirmation rerun, and 32B are skipped.
 
 Artifacts: `semantic-codegen-v3/verdict.md`,
 `semantic-codegen-v3/load-width/report.md`.
+
+## Semantic Codegen v4: Family C Vector Load
+
+Design note: `docs/amd-decode-packed-load-lowering.md`.
+
+`extra/qk_semantic_codegen_v4.py` generated the next memory-access probe:
+exact-tensor Q4_K `ffn_gate` partial GEMV requesting an aligned `uint32x4`
+packed-weight load. This tests the capability added after the memory-access
+audit: normal UOps can preserve a raw aligned `uint32.vec(4)` load/store on AMD.
+
+Static gate result:
+
+- 8B: `2` total candidates, `1` microbenchable, `0` candidate full-decode
+  supported.
+- 14B: `2` total candidates, `1` microbenchable, `0` candidate full-decode
+  supported.
+
+Microbench gate:
+
+| model | candidate | current GB/s | candidate GB/s | status | reason |
+|---|---|---:|---:|---|---|
+| 8B | `vector_load_u32x4` | `188.86` | n/a | invalid | candidate status=error |
+| 14B | `vector_load_u32x4` | `352.85` | n/a | invalid | candidate status=error |
+
+Load-width evidence:
+
+- `load-width/report.md` sees no generated vector-load Q4_K kernel source.
+- The candidate fails before AMD source emission. The captured traceback shows
+  the blocker: current UOp vector shape rules cannot consume the loaded
+  `uint32x4` value inside the unpack/dot expression.
+
+Verdict: `semantic_codegen_v4_rejected`. The raw aligned `uint32x4` load/store
+capability exists, but Family C v1 cannot yet express the real Q4_K GEMV through
+normal UOps. Full decode, confirmation rerun, and 32B are skipped.
+
+Regenerate:
+
+```sh
+base=bench/qk-ansor-transition-20260612/semantic-codegen-v4
+for m in 8b 14b; do
+  PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_v4.py \
+    --descriptor bench/qk-ansor-transition-20260612/descriptors/$m.json \
+    --json $base/$m/candidates.json --md $base/$m/candidates.md \
+    --gate-json $base/$m/static-gate.json --gate-md $base/$m/static-gate.md
+
+  DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_semantic_schedule_bench.py \
+    --model $m --candidates $base/$m/candidates.json \
+    --static-gate $base/$m/static-gate.json \
+    --out $base/$m/microbench-runs \
+    --json $base/$m/microbench.json --md $base/$m/microbench.md \
+    --device AMD --iters 1 --timeout 120 --min-gain 0.03 --tie-band 0.03
+done
+
+PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_v4_verdict.py \
+  --base $base --json $base/verdict.json --md $base/verdict.md
+```
+
+Artifacts: `semantic-codegen-v4/verdict.md`,
+`semantic-codegen-v4/load-width/report.md`.

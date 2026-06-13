@@ -2,7 +2,7 @@
 
 Date: 2026-06-13
 
-Status: next design surface. No runtime implementation in this document.
+Status: Family C v1 construction gate rejected.
 
 Update: Family C v0 has now been tested. It changed the expression shape to use
 explicit packed-word lanes for Q4_K `ffn_gate`, but it tied on 8B/14B and
@@ -11,12 +11,18 @@ DEBUG=4 parsing still showed scalar `u32` loads. See
 remaining packed-load work therefore needs hardware-counter profiling or a
 deeper renderer/layout capability; do not broaden the v0 rewrite.
 
-Update 2: the memory-access audit isolated and then closed the next required
+Update 2: the memory-access audit isolated and closed the next required source
 capability. The normal UOp path now preserves a requested aligned
 `uint32.vec(4)` global load/store on AMD, copies all lanes exactly, and DEBUG=4
 source shows `unsigned_int4` vector pointer casts. See
-`bench/qk-memory-access-20260613/audit.md`. Family C v1 is now unblocked as the
-next generated memory-access candidate.
+`bench/qk-memory-access-20260613/audit.md`.
+
+Update 3: Family C v1 attempted to use that source shape inside the real Q4_K
+`ffn_gate` GEMV candidate. The 8B/14B harness rejected it as invalid before
+timing: the kernel can request a `uint32x4` load, but tinygrad's current
+tensor/UOp shape rules cannot yet scalar-extract or vector-arithmetically
+consume that loaded value inside this GEMV without verifier/codegen failures.
+See `bench/qk-ansor-transition-20260612/semantic-codegen-v4/verdict.md`.
 
 ## Problem
 
@@ -84,9 +90,10 @@ Candidate lowerings should try to change one memory-access mechanism at a time:
    alignment and layout permit it. A candidate must report generated source load
    width.
 
-   Current gate: available for aligned `uint32x4` global buffers through normal
-   UOps. Family C v1 should request this source shape directly and confirm that
-   the generated Q4_K kernel preserves it.
+   Current gate: raw aligned `uint32x4` global buffer copy is available through
+   normal UOps, but consuming the loaded vector inside the Q4_K GEMV is blocked
+   by vector-lane extraction / vector-shape support. Family C v1 therefore
+   rejected at construction, not at performance.
 
 3. **Activation staging only when it supports load efficiency**
    q8_1 staging is useful if it aligns the compute with packed dot and keeps ALU
@@ -120,6 +127,8 @@ Do not install a runtime path from this family until all are true:
 - No isolated `v_dot4` peephole as the next default task.
 - No WMMA for batch-1 decode unless source inspection proves llama.cpp uses it
   in the decode path on gfx1100.
+- No further Family C variants until the vector-load consumption blocker is
+  fixed in core lowering or represented as a first-class packed-load operation.
 
 ## Relationship To Ansor
 

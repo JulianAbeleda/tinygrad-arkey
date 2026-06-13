@@ -15,6 +15,7 @@ LOAD_PATTERNS = {
   "amd_vdot4": re.compile(r"\b(?:v_dot4|sudot4|amdgcn_sudot4)\b"),
 }
 MODE_PATTERNS = {
+  "vector_load": re.compile(r"q4k_gemv_vector_load_partial"),
   "packed_load": re.compile(r"q4k_gemv_packed_load_partial"),
   "baseline_partial": re.compile(r"q4k_gemv_partial"),
   "grouped_partial": re.compile(r"q4k_gemv_grouped_partial"),
