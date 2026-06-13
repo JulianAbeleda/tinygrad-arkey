@@ -16,8 +16,7 @@ Files:
 
 Verdict:
 
-- normal UOp `uint32.vec(4)` global load support: `False`;
+- normal UOp `uint32.vec(4)` global load support: `True`;
 - raw custom `uint4` escape support: `True`;
-- Family C v1 should not be added as another descriptor candidate yet;
-- next required change is a core lowering patch for aligned integer vector
-  loads/stores, followed by rerunning this probe.
+- Family C v1 is unblocked as the next generated memory-access candidate;
+- 32B should still stay skipped until 8B/14B show promise.

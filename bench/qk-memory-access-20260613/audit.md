@@ -1,27 +1,28 @@
 # QK Memory Access Audit
 
-Evidence gate before any Family C v1 implementation.
+Evidence gate for Family C v1 implementation.
 
 ## Decision
 
-- status: `family_c_v1_requires_core_integer_vector_load_lowering`
-- run Family C v1 now: `False`
+- status: `family_c_v1_source_supported`
+- run Family C v1 now: `True`
 - run 32B: `False`
-- next required change: Patch core integer vector load/store lowering for aligned uint32 global buffers, then rerun the probe and only then build Family C v1.
+- next required change: Build Family C v1 as a generated memory-access candidate using the verified uint32x4 lowering.
 - stop rule: Do not broaden packed-load expression rewrites unless generated source shows vector/coalesced integer loads.
 
 ## Source Audit
 
 - renderer vector pointer-cast syntax: `True`
-- integer global vector-load folding blocked: `True`
+- integer uint32x4 global load/store folding supported: `True`
 
 - CStyle.render_access can render vector pointer casts when an INDEX has max_numel > 1.
-- correct_load_store.split_load_store only enables vector fold lengths for float/half/fp8/image/DSP; integer global buffers fall back to length 1.
+- correct_load_store.split_load_store now allows aligned uint32x4 global load/store folding.
 
 ## Probe Summary
 
-- normal UOp uint4 load supported: `False`
+- normal UOp uint4 load supported: `True`
 - raw custom uint4 escape supported: `True`
+- probe UOp vector load evidence: `True`
 - Family C v0 vector load evidence: `False`
 - Family C v0 packed-load kernel present: `True`
 
@@ -41,10 +42,9 @@ Evidence gate before any Family C v1 implementation.
 
 ## Interpretation
 
-The remaining gap is still best explained as memory-load efficiency, but the
-next move is not another descriptor candidate. The normal tinygrad codegen
-path does not currently preserve aligned integer vector loads for the Q4_K
-`uint32` storage. Raw custom C can force such a load, which proves the
-hardware/compiler surface exists, but not that BEAM or semantic search can
-emit it. Family C v1 should therefore start with a core lowering capability
-patch, guarded by this probe, before adding another candidate family.
+The remaining gap is still best explained as memory-load efficiency. The
+normal tinygrad codegen path now preserves a requested aligned `uint32x4`
+global load/store on AMD, and DEBUG=4 source confirms vector pointer casts.
+Family C v1 is therefore unblocked as the next generated memory-access
+candidate. Family C v0 remains rejected; it did not request this new load
+shape and still emitted scalar `u32` loads.

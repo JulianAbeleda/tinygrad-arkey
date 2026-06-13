@@ -1,5 +1,9 @@
 import json, os, pathlib, tempfile, unittest
 
+from tinygrad import dtypes
+from tinygrad.uop.ops import Ops, UOp, graph_rewrite
+from tinygrad.codegen.late.devectorizer import correct_load_store
+
 from extra.qk_ansor_transition_loop import build_loop, loop_markdown, write_candidate_policies
 from extra.qk_candidate_generator import build_candidate_set, candidates_markdown
 from extra.qk_candidate_static_gate import build_static_gate, gate_policy, static_gate_markdown
@@ -372,18 +376,41 @@ class TestQKAnsorTransition(unittest.TestCase):
       self.assertEqual(report["rows"][0]["load_width_inferred"], "u32_scalar")
       self.assertFalse(report["summary"]["has_vector_load_evidence"])
 
+  def test_correct_load_store_folds_aligned_uint32x4_global_access(self):
+    class FakeRenderer:
+      supports_float4 = True
+      class target: device = "AMD"
+
+    out = UOp.param(0, dtypes.uint32.ptr(16))
+    src = UOp.param(1, dtypes.uint32.ptr(16))
+    idx = UOp.range(4, 0) * 4
+    loop = idx.src[0]
+    vec = src.index(idx, ptr=True).load(dtype=dtypes.uint32.vec(4))
+    sink = out.index(idx, ptr=True).store(vec).end(loop).sink()
+
+    result = graph_rewrite(sink, correct_load_store, ctx=FakeRenderer(), name="test")
+    loads = [u for u in result.toposort() if u.op is Ops.LOAD]
+    stores = [u for u in result.toposort() if u.op is Ops.STORE]
+    self.assertEqual(len(loads), 1)
+    self.assertEqual(len(stores), 1)
+    self.assertEqual(loads[0].src[0].op, Ops.CAST)
+    self.assertEqual(stores[0].src[0].op, Ops.CAST)
+    self.assertEqual(loads[0].src[0].dtype, dtypes.uint32.vec(4).ptr(16))
+    self.assertEqual(stores[0].src[0].dtype, dtypes.uint32.vec(4).ptr(16))
+
   def test_memory_access_audit_reproduces(self):
     root = pathlib.Path("bench/qk-memory-access-20260613")
     report = build_memory_access_audit(
       vector_probe=root / "vector-probe.json",
+      probe_load_width=root / "load-width" / "report.json",
       load_width=pathlib.Path("bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.json"),
       roofline=pathlib.Path("bench/qk-bandwidth-roofline-20260613/roofline.json"),
       pmc=pathlib.Path("bench/qk-semantic-20260612/pmc-q4-gate.json"),
     )
     self.assertEqual(json.loads((root / "audit.json").read_text()), report)
     self.assertEqual((root / "audit.md").read_text(), memory_access_audit_markdown(report))
-    self.assertEqual(report["decision"]["status"], "family_c_v1_requires_core_integer_vector_load_lowering")
-    self.assertFalse(report["decision"]["run_family_c_v1_now"])
+    self.assertEqual(report["decision"]["status"], "family_c_v1_source_supported")
+    self.assertTrue(report["decision"]["run_family_c_v1_now"])
     self.assertFalse(report["decision"]["run_32b"])
 
   def test_semantic_codegen_v3_artifacts_do_not_embed_checkout_absolute_paths(self):

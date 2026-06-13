@@ -6,7 +6,7 @@
       "kernels": [
         "qk_probe_uop_vec_request_u32x4_copy_4096"
       ],
-      "load_width_inferred": "u32_scalar",
+      "load_width_inferred": "vector_u32x4",
       "mode": "uop_vec_request",
       "notes": [
         "This parser infers load width from generated-source text patterns; it is not a hardware-counter report.",
@@ -16,11 +16,11 @@
       "pattern_counts": {
         "amd_vdot4": 0,
         "uchar_or_u8": 0,
-        "uint_or_u32": 12,
+        "uint_or_u32": 21,
         "ulong_or_u64": 0,
         "ushort_or_u16": 0,
         "vector_u32x2": 0,
-        "vector_u32x4": 0
+        "vector_u32x4": 8
       }
     },
     {
@@ -38,11 +38,11 @@
       "pattern_counts": {
         "amd_vdot4": 0,
         "uchar_or_u8": 0,
-        "uint_or_u32": 12,
+        "uint_or_u32": 17,
         "ulong_or_u64": 0,
         "ushort_or_u16": 0,
         "vector_u32x2": 0,
-        "vector_u32x4": 4
+        "vector_u32x4": 7
       }
     }
   ],

@@ -87,9 +87,7 @@ def run_mode(mode:str, *, n_words:int, iters:int, device:str) -> dict[str, Any]:
   }
   row.update(_bench(copy, iters))
   if mode == "uop_vec_request":
-    row["interpretation"] = (
-      "A requested uint32.vec(4) UOp copy is expected to be non-exact today if codegen keeps only the scalar lane."
-    )
+    row["interpretation"] = "Normal UOp uint32.vec(4) load/store request; exact copy proves all four lanes survived lowering."
   elif mode == "custom_uint4":
     row["interpretation"] = "Raw custom C can force a uint4 load/store when it supplies its own vector typedef."
   else:

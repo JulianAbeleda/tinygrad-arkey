@@ -1,13 +1,13 @@
-opened device NPY from pid:133796
-scheduled     1 kernels in    16.41 ms | CACHE MISS 90a2122c |      21 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:69
+opened device NPY from pid:136193
+scheduled     1 kernels in    16.48 ms | CACHE MISS 90a2122c |      21 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:69
 loading libc from /lib/x86_64-linux-gnu/libc.so.6
 loading iokit failed: not found on system
 loading corefoundation failed: not found on system
 loading libusb from /lib/x86_64-linux-gnu/libusb-1.0.so.0
 AMDDevice: opening 0 with target (11, 0, 0) arch gfx1100
-opened device AMD from pid:133796
-*** AMD        1 copy   16.00 KB,     AMD <- NPY                arg  2 mem   0.00 GB tm    107.27ms/   107.27ms (      0 GFLOPS    0|0      GB/s) 
-scheduled     1 kernels in     3.42 ms | CACHE MISS 31c13fbb |      35 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:70
+opened device AMD from pid:136193
+*** AMD        1 copy   16.00 KB,     AMD <- NPY                arg  2 mem   0.00 GB tm    106.05ms/   106.05ms (      0 GFLOPS    0|0      GB/s) 
+scheduled     1 kernels in     3.45 ms | CACHE MISS 31c13fbb |      35 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:70
 loading comgr from /opt/rocm/lib/libamd_comgr.so
 loading comgr_3 from /opt/rocm/lib/libamd_comgr.so
 loading llvm from /lib/x86_64-linux-gnu/libLLVM-20.so
@@ -17,17 +17,15 @@ typedef long unsigned int size_t;
 extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
 extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
 extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef unsigned int unsigned_int4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) unsigned_int4 make_unsigned_int4(unsigned int x, unsigned int y, unsigned int z, unsigned int w) { return { x, y, z, w }; }
 extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) E_32_32_4(unsigned int* data0_4096) {
   int gidx0 = __ockl_get_group_id(0); /* 32 */
   int lidx0 = __ockl_get_local_id(0); /* 32 */
-  int alu0 = ((gidx0<<7)+(lidx0<<2));
-  *(data0_4096+(alu0+1)) = 0u;
-  *(data0_4096+(alu0+2)) = 0u;
-  *(data0_4096+(alu0+3)) = 0u;
-  *(data0_4096+alu0) = 0u;
+  *((unsigned_int4*)((data0_4096+((gidx0<<7)+(lidx0<<2))))) = make_unsigned_int4(0u,0u,0u,0u);
 }
-*** AMD        2 E_32_32_4                                      arg  1 mem   0.00 GB tm     11.96us/   107.28ms (      0 GFLOPS    1|1      GB/s) 
-scheduled     1 kernels in     2.01 ms | CACHE MISS 3730bfab |      70 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:75
+*** AMD        2 E_32_32_4                                      arg  1 mem   0.00 GB tm     10.40us/   106.06ms (      0 GFLOPS    2|2      GB/s) 
+scheduled     1 kernels in     2.12 ms | CACHE MISS 3730bfab |      61 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:75
 typedef long unsigned int size_t;
 extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
 extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
@@ -41,10 +39,10 @@ extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_si
   *((tg_uint4*)((data0_4096+alu0))) = v;
 }
 }
-*** AMD        3 qk_probe_custom_uint4_copy_4096                arg  2 mem   0.00 GB tm      7.60us/   107.29ms (      0 GFLOPS    0|0      GB/s) 
-scheduled     1 kernels in     0.75 ms |  cache hit 3730bfab |      83 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:53
-*** AMD        4 qk_probe_custom_uint4_copy_4096                arg  2 mem   0.00 GB tm      7.16us/   107.29ms (      0 GFLOPS    0|0      GB/s) 
-scheduled     1 kernels in     0.75 ms |  cache hit 3730bfab |      83 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:56
+*** AMD        3 qk_probe_custom_uint4_copy_4096                arg  2 mem   0.00 GB tm      7.20us/   106.07ms (      0 GFLOPS    0|0      GB/s) 
+scheduled     1 kernels in     0.77 ms |  cache hit 3730bfab |      74 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:53
+*** AMD        4 qk_probe_custom_uint4_copy_4096                arg  2 mem   0.00 GB tm      7.16us/   106.07ms (      0 GFLOPS    0|0      GB/s) 
+scheduled     1 kernels in     0.74 ms |  cache hit 3730bfab |      74 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:56
 *** AMD        1 qk_probe_custom_uint4_copy_4096                arg  2 mem   0.00 GB tm      7.40us/     0.01ms (      0 GFLOPS    0|0      GB/s) 
 # QK Integer Vector Load Probe
 

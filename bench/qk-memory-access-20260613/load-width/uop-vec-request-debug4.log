@@ -1,13 +1,13 @@
-opened device NPY from pid:133775
-scheduled     1 kernels in    16.26 ms | CACHE MISS 90a2122c |      21 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:69
+opened device NPY from pid:136173
+scheduled     1 kernels in    16.60 ms | CACHE MISS 90a2122c |      21 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:69
 loading libc from /lib/x86_64-linux-gnu/libc.so.6
 loading iokit failed: not found on system
 loading corefoundation failed: not found on system
 loading libusb from /lib/x86_64-linux-gnu/libusb-1.0.so.0
 AMDDevice: opening 0 with target (11, 0, 0) arch gfx1100
-opened device AMD from pid:133775
-*** AMD        1 copy   16.00 KB,     AMD <- NPY                arg  2 mem   0.00 GB tm    102.36ms/   102.36ms (      0 GFLOPS    0|0      GB/s) 
-scheduled     1 kernels in     3.36 ms | CACHE MISS 31c13fbb |      35 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:70
+opened device AMD from pid:136173
+*** AMD        1 copy   16.00 KB,     AMD <- NPY                arg  2 mem   0.00 GB tm    109.34ms/   109.34ms (      0 GFLOPS    0|0      GB/s) 
+scheduled     1 kernels in     3.62 ms | CACHE MISS 31c13fbb |      35 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:70
 loading comgr from /opt/rocm/lib/libamd_comgr.so
 loading comgr_3 from /opt/rocm/lib/libamd_comgr.so
 loading llvm from /lib/x86_64-linux-gnu/libLLVM-20.so
@@ -17,32 +17,32 @@ typedef long unsigned int size_t;
 extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
 extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
 extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef unsigned int unsigned_int4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) unsigned_int4 make_unsigned_int4(unsigned int x, unsigned int y, unsigned int z, unsigned int w) { return { x, y, z, w }; }
 extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) E_32_32_4(unsigned int* data0_4096) {
   int gidx0 = __ockl_get_group_id(0); /* 32 */
   int lidx0 = __ockl_get_local_id(0); /* 32 */
-  int alu0 = ((gidx0<<7)+(lidx0<<2));
-  *(data0_4096+(alu0+1)) = 0u;
-  *(data0_4096+(alu0+2)) = 0u;
-  *(data0_4096+(alu0+3)) = 0u;
-  *(data0_4096+alu0) = 0u;
+  *((unsigned_int4*)((data0_4096+((gidx0<<7)+(lidx0<<2))))) = make_unsigned_int4(0u,0u,0u,0u);
 }
-*** AMD        2 E_32_32_4                                      arg  1 mem   0.00 GB tm     19.40us/   102.38ms (      0 GFLOPS    1|1      GB/s) 
-scheduled     1 kernels in     2.36 ms | CACHE MISS 5a1349f4 |      72 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:75
+*** AMD        2 E_32_32_4                                      arg  1 mem   0.00 GB tm     11.76us/   109.36ms (      0 GFLOPS    1|1      GB/s) 
+scheduled     1 kernels in     2.58 ms | CACHE MISS 5a1349f4 |      63 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:75
 typedef long unsigned int size_t;
 extern "C" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);
 extern "C" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);
 extern "C" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);
+typedef unsigned int unsigned_int4 __attribute__((ext_vector_type(4)));
+static inline __attribute__((device)) unsigned_int4 make_unsigned_int4(unsigned int x, unsigned int y, unsigned int z, unsigned int w) { return { x, y, z, w }; }
 extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 1))) qk_probe_uop_vec_request_u32x4_copy_4096(unsigned int* data0_4096, unsigned int* data1_4096) {
   int gidx0 = __ockl_get_group_id(0); /* 1024 */
   int alu0 = (gidx0<<2);
-  unsigned int val0 = (*(data1_4096+alu0));
-  *(data0_4096+alu0) = val0;
+  unsigned_int4 val0 = (*((unsigned_int4*)((data1_4096+alu0))));
+  *((unsigned_int4*)((data0_4096+alu0))) = val0;
 }
-*** AMD        3 qk_probe_uop_vec_request_u32x4_copy_4096       arg  2 mem   0.00 GB tm      8.64us/   102.39ms (      0 GFLOPS    1|1      GB/s) 
-scheduled     1 kernels in     0.76 ms |  cache hit 5a1349f4 |      86 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:53
-*** AMD        4 qk_probe_uop_vec_request_u32x4_copy_4096       arg  2 mem   0.00 GB tm      7.24us/   102.40ms (      0 GFLOPS    1|1      GB/s) 
-scheduled     1 kernels in     0.75 ms |  cache hit 5a1349f4 |      86 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:56
-*** AMD        1 qk_probe_uop_vec_request_u32x4_copy_4096       arg  2 mem   0.00 GB tm      7.44us/     0.01ms (      0 GFLOPS    1|1      GB/s) 
+*** AMD        3 qk_probe_uop_vec_request_u32x4_copy_4096       arg  2 mem   0.00 GB tm      7.56us/   109.36ms (      0 GFLOPS    4|4      GB/s) 
+scheduled     1 kernels in     0.81 ms |  cache hit 5a1349f4 |      77 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:53
+*** AMD        4 qk_probe_uop_vec_request_u32x4_copy_4096       arg  2 mem   0.00 GB tm      7.16us/   109.37ms (      0 GFLOPS    5|5      GB/s) 
+scheduled     1 kernels in     0.76 ms |  cache hit 5a1349f4 |      77 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk_integer_vector_load_probe.py:56
+*** AMD        1 qk_probe_uop_vec_request_u32x4_copy_4096       arg  2 mem   0.00 GB tm      7.72us/     0.01ms (      0 GFLOPS    4|4      GB/s) 
 # QK Integer Vector Load Probe
 
 Capability probe for integer vector global loads on the AMD path.
@@ -51,14 +51,14 @@ Capability probe for integer vector global loads on the AMD path.
 
 - device: `AMD`
 - n_words: `4096`
-- normal UOp uint4 load supported: `False`
+- normal UOp uint4 load supported: `True`
 - raw custom uint4 escape supported: `False`
 
 | mode | exact | mismatches | first mismatch | device ms | interpretation |
 |---|---:|---:|---:|---:|---|
-| `uop_vec_request` | `False` | 3072 | 1 | 0.007440 | A requested uint32.vec(4) UOp copy is expected to be non-exact today if codegen keeps only the scalar lane. |
+| `uop_vec_request` | `True` | 0 | n/a | 0.007720 | Normal UOp uint32.vec(4) load/store request; exact copy proves all four lanes survived lowering. |
 
 First values:
 
-- `uop_vec_request` got `[0, 0, 0, 0, 4, 0, 0, 0, 8, 0, 0, 0, 12, 0, 0, 0]` expected `[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]`
+- `uop_vec_request` got `[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]` expected `[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]`
 

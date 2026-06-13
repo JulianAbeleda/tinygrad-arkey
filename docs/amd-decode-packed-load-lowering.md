@@ -11,13 +11,12 @@ DEBUG=4 parsing still showed scalar `u32` loads. See
 remaining packed-load work therefore needs hardware-counter profiling or a
 deeper renderer/layout capability; do not broaden the v0 rewrite.
 
-Update 2: the memory-access audit isolates the next required capability. The
-normal UOp path does not preserve a requested `uint32.vec(4)` global load on
-AMD; it lowers to a scalar `u32` access and copies only lane 0 in the probe.
-Raw custom C can force a correct `uint4` load/store when it supplies its own
-vector typedef. See `bench/qk-memory-access-20260613/audit.md`. Family C v1 is
-therefore blocked on core integer vector load/store lowering, not another
-semantic descriptor variant.
+Update 2: the memory-access audit isolated and then closed the next required
+capability. The normal UOp path now preserves a requested aligned
+`uint32.vec(4)` global load/store on AMD, copies all lanes exactly, and DEBUG=4
+source shows `unsigned_int4` vector pointer casts. See
+`bench/qk-memory-access-20260613/audit.md`. Family C v1 is now unblocked as the
+next generated memory-access candidate.
 
 ## Problem
 
@@ -85,9 +84,9 @@ Candidate lowerings should try to change one memory-access mechanism at a time:
    alignment and layout permit it. A candidate must report generated source load
    width.
 
-   Current gate: not available through normal UOps for `uint32` global buffers.
-   Implement this as a core lowering capability first, then rerun the vector
-   probe before adding a new candidate family.
+   Current gate: available for aligned `uint32x4` global buffers through normal
+   UOps. Family C v1 should request this source shape directly and confirm that
+   the generated Q4_K kernel preserves it.
 
 3. **Activation staging only when it supports load efficiency**
    q8_1 staging is useful if it aligns the compute with packed dot and keeps ALU

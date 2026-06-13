@@ -154,7 +154,8 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
   # this splits loads and stores into multiple chunks
 
   # if there's only one element to load/store, no splitting needed
-  if (sz:=ls.src[0].dtype.count) == 1: return None
+  sz = max(ls.src[0].dtype.count, ls.dtype.count if ls.op is Ops.LOAD else ls.src[1].dtype.count)
+  if sz == 1: return None
   buf = idx.src[0]
 
   # determine fold lengths
@@ -163,6 +164,8 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
   if ctx is not None and ctx.target.device == "DSP":
     lengths = [128,64,32,16,8,4]
     must_divide = False
+  elif buf.addrspace == AddrSpace.GLOBAL and buf.dtype.base == dtypes.uint32 and ctx is not None and ctx.supports_float4:
+    lengths = [4]
   elif buf.dtype.base not in (dtypes.float, dtypes.half, *dtypes.fp8s) and not isinstance(buf.dtype, ImageDType):
     pass
   elif buf.addrspace == AddrSpace.REG:
@@ -193,7 +196,7 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
       break
 
   # if it wasn't split, we return None. otherwise we CAT them
-  if len(ret) <= 1: return None
+  if len(ret) == 1: return ret[0] if ls.src[0].dtype.count == 1 and ret[0] is not ls else None
   return UOp(Ops.VCAT, ls.dtype, tuple(ret)) if ls.op is Ops.LOAD else UOp.group(*ret)
 
 def get_image_idx(idx:UOp, width:int):
@@ -215,8 +218,12 @@ def image_fixup(ls:UOp):
     idx = ls.src[0].src[0].src[0].replace(dtype=(new_dt:=dtypes.half if dt.itemsize == 2 else dtypes.float).ptr(dt.size)).index(off)
     return ls.replace(src=(idx,), dtype=new_dt).cast(dtypes.float) if ls.op is Ops.LOAD else ls.replace(src=(idx, ls.src[1].cast(new_dt)))
 
+def split_indexed_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
+  return split_load_store(ctx, ls, idx) if idx.op is Ops.INDEX else None
+
 correct_load_store = PatternMatcher([
   # split LOAD/STORE
+  (UPat((Ops.LOAD, Ops.STORE), src=(UPat.var("idx"),), name="ls", allow_any_len=True), split_indexed_load_store),
   (UPat((Ops.LOAD, Ops.STORE), src=(UPat(Ops.INDEX, name="idx").cast(),), name="ls", allow_any_len=True), split_load_store),
   # image indexing, including unfoldable images
   (UPat((Ops.LOAD, Ops.STORE), name="ls"), image_fixup),

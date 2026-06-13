@@ -11,7 +11,7 @@ LOAD_PATTERNS = {
   "uint_or_u32": re.compile(r"\b(?:uint|uint32_t|unsigned int|u32)\b"),
   "ulong_or_u64": re.compile(r"\b(?:ulong|uint64_t|unsigned long|u64)\b"),
   "vector_u32x2": re.compile(r"\b(?:uint2|u32x2)\b"),
-  "vector_u32x4": re.compile(r"\b(?:uint4|tg_uint4)\b"),
+  "vector_u32x4": re.compile(r"\b(?:uint4|tg_uint4|unsigned_int4)\b"),
   "amd_vdot4": re.compile(r"\b(?:v_dot4|sudot4|amdgcn_sudot4)\b"),
 }
 MODE_PATTERNS = {

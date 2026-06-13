@@ -1,9 +1,9 @@
 {
   "decision": {
-    "next_required_change": "Patch core integer vector load/store lowering for aligned uint32 global buffers, then rerun the probe and only then build Family C v1.",
+    "next_required_change": "Build Family C v1 as a generated memory-access candidate using the verified uint32x4 lowering.",
     "run_32b": false,
-    "run_family_c_v1_now": false,
-    "status": "family_c_v1_requires_core_integer_vector_load_lowering",
+    "run_family_c_v1_now": true,
+    "status": "family_c_v1_source_supported",
     "stop_rule": "Do not broaden packed-load expression rewrites unless generated source shows vector/coalesced integer loads."
   },
   "environment": {
@@ -12,6 +12,7 @@
   },
   "inputs": {
     "pmc": "bench/qk-semantic-20260612/pmc-q4-gate.json",
+    "probe_load_width": "bench/qk-memory-access-20260613/load-width/report.json",
     "roofline": "bench/qk-bandwidth-roofline-20260613/roofline.json",
     "semantic_codegen_v3_load_width": "bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.json",
     "vector_probe": "bench/qk-memory-access-20260613/vector-probe.json"
@@ -27,6 +28,16 @@
       "valu_per_busy_cycle": 1.2584332867954555
     }
   ],
+  "probe_load_width_summary": {
+    "has_packed_dot": false,
+    "has_packed_load_kernel": false,
+    "has_vector_load_evidence": true,
+    "logs": 2,
+    "modes": [
+      "custom_uint4",
+      "uop_vec_request"
+    ]
+  },
   "roofline_rows": [
     {
       "llama_percent_peak": 53.00121760266667,
@@ -67,16 +78,16 @@
   "source_audit": {
     "evidence": [
       "CStyle.render_access can render vector pointer casts when an INDEX has max_numel > 1.",
-      "correct_load_store.split_load_store only enables vector fold lengths for float/half/fp8/image/DSP; integer global buffers fall back to length 1."
+      "correct_load_store.split_load_store now allows aligned uint32x4 global load/store folding."
     ],
-    "integer_global_vector_load_folding_blocked_by_devectorizer": true,
+    "integer_uint32x4_global_load_store_folding_supported": true,
     "renderer_has_vector_pointer_cast_syntax": true
   },
   "vector_probe_summary": {
     "custom_uint4_exact": true,
-    "normal_uop_uint4_load_supported": false,
+    "normal_uop_uint4_load_supported": true,
     "raw_custom_uint4_escape_supported": true,
     "scalar_exact": true,
-    "uop_vec_request_exact": false
+    "uop_vec_request_exact": true
   }
 }

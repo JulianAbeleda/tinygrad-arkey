@@ -7,6 +7,7 @@ from typing import Any
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_VECTOR_PROBE = pathlib.Path("bench/qk-memory-access-20260613/vector-probe.json")
+DEFAULT_PROBE_LOAD_WIDTH = pathlib.Path("bench/qk-memory-access-20260613/load-width/report.json")
 DEFAULT_LOAD_WIDTH = pathlib.Path("bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.json")
 DEFAULT_ROOFLINE = pathlib.Path("bench/qk-bandwidth-roofline-20260613/roofline.json")
 DEFAULT_PMC = pathlib.Path("bench/qk-semantic-20260612/pmc-q4-gate.json")
@@ -29,19 +30,22 @@ def _has(pattern:str, path:pathlib.Path) -> bool:
   return re.search(pattern, text, re.MULTILINE | re.DOTALL) is not None
 
 
-def build_audit(*, vector_probe:pathlib.Path, load_width:pathlib.Path, roofline:pathlib.Path, pmc:pathlib.Path) -> dict[str, Any]:
+def build_audit(*, vector_probe:pathlib.Path, probe_load_width:pathlib.Path, load_width:pathlib.Path, roofline:pathlib.Path, pmc:pathlib.Path) -> dict[str, Any]:
   vector = _read_json(vector_probe)
+  probe_width = _read_json(probe_load_width)
   width = _read_json(load_width)
   roof = _read_json(roofline)
   pmc_report = _read_json(pmc)
 
   renderer_vector_access = _has(r"u\.max_numel\(\) > 1.*render_type", pathlib.Path("tinygrad/renderer/cstyle.py"))
-  integer_vector_folding_blocked = _has(
-    r"buf\.dtype\.base not in \(dtypes\.float, dtypes\.half, \*dtypes\.fp8s\).*?pass.*?lengths\.append\(1\)",
+  integer_vector_folding_supported = _has(
+    r"buf\.addrspace == AddrSpace\.GLOBAL and buf\.dtype\.base == dtypes\.uint32.*?lengths = \[4\]",
     pathlib.Path("tinygrad/codegen/late/devectorizer.py"),
   )
   custom_probe_ok = bool((vector or {}).get("summary", {}).get("raw_custom_uint4_escape_supported"))
   uop_probe_ok = bool((vector or {}).get("summary", {}).get("normal_uop_uint4_load_supported"))
+  probe_uop_vector_evidence = any(row.get("mode") == "uop_vec_request" and str(row.get("load_width_inferred", "")).startswith("vector_")
+                                  for row in (probe_width or {}).get("rows", []))
   v3_vector_evidence = bool((width or {}).get("summary", {}).get("has_vector_load_evidence"))
 
   roof_rows = []
@@ -68,9 +72,11 @@ def build_audit(*, vector_probe:pathlib.Path, load_width:pathlib.Path, roofline:
         "valu_inst": (row.get("counters") or {}).get("SQ_INSTS_VALU"),
       })
 
-  if v3_vector_evidence:
+  if uop_probe_ok and probe_uop_vector_evidence and integer_vector_folding_supported:
     decision = "family_c_v1_source_supported"
-  elif custom_probe_ok and not uop_probe_ok and integer_vector_folding_blocked:
+  elif v3_vector_evidence:
+    decision = "family_c_v1_source_supported"
+  elif custom_probe_ok and not uop_probe_ok:
     decision = "family_c_v1_requires_core_integer_vector_load_lowering"
   elif not custom_probe_ok:
     decision = "family_c_v1_blocked_until_uint4_escape_or_renderer_support"
@@ -82,6 +88,7 @@ def build_audit(*, vector_probe:pathlib.Path, load_width:pathlib.Path, roofline:
     "schema_version": 1,
     "inputs": {
       "vector_probe": _portable(vector_probe),
+      "probe_load_width": _portable(probe_load_width),
       "semantic_codegen_v3_load_width": _portable(load_width),
       "roofline": _portable(roofline),
       "pmc": _portable(pmc),
@@ -92,13 +99,14 @@ def build_audit(*, vector_probe:pathlib.Path, load_width:pathlib.Path, roofline:
     },
     "source_audit": {
       "renderer_has_vector_pointer_cast_syntax": renderer_vector_access,
-      "integer_global_vector_load_folding_blocked_by_devectorizer": integer_vector_folding_blocked,
+      "integer_uint32x4_global_load_store_folding_supported": integer_vector_folding_supported,
       "evidence": [
         "CStyle.render_access can render vector pointer casts when an INDEX has max_numel > 1.",
-        "correct_load_store.split_load_store only enables vector fold lengths for float/half/fp8/image/DSP; integer global buffers fall back to length 1.",
+        "correct_load_store.split_load_store now allows aligned uint32x4 global load/store folding.",
       ],
     },
     "vector_probe_summary": (vector or {}).get("summary"),
+    "probe_load_width_summary": (probe_width or {}).get("summary"),
     "semantic_codegen_v3_load_width_summary": (width or {}).get("summary"),
     "roofline_rows": roof_rows,
     "pmc_rows": pmc_rows,
@@ -109,7 +117,7 @@ def build_audit(*, vector_probe:pathlib.Path, load_width:pathlib.Path, roofline:
       "next_required_change": (
         "Patch core integer vector load/store lowering for aligned uint32 global buffers, then rerun the probe and only then build Family C v1."
         if decision == "family_c_v1_requires_core_integer_vector_load_lowering" else
-        "Review source evidence before adding another semantic codegen family."
+        "Build Family C v1 as a generated memory-access candidate using the verified uint32x4 lowering."
       ),
       "stop_rule": "Do not broaden packed-load expression rewrites unless generated source shows vector/coalesced integer loads.",
     },
@@ -120,7 +128,7 @@ def audit_markdown(report:dict[str, Any]) -> str:
   lines = [
     "# QK Memory Access Audit",
     "",
-    "Evidence gate before any Family C v1 implementation.",
+    "Evidence gate for Family C v1 implementation.",
     "",
     "## Decision",
     "",
@@ -133,7 +141,7 @@ def audit_markdown(report:dict[str, Any]) -> str:
     "## Source Audit",
     "",
     f"- renderer vector pointer-cast syntax: `{report['source_audit']['renderer_has_vector_pointer_cast_syntax']}`",
-    f"- integer global vector-load folding blocked: `{report['source_audit']['integer_global_vector_load_folding_blocked_by_devectorizer']}`",
+    f"- integer uint32x4 global load/store folding supported: `{report['source_audit']['integer_uint32x4_global_load_store_folding_supported']}`",
     "",
   ]
   for item in report["source_audit"]["evidence"]:
@@ -144,10 +152,12 @@ def audit_markdown(report:dict[str, Any]) -> str:
     "",
   ]
   vector = report.get("vector_probe_summary") or {}
+  probe_width = report.get("probe_load_width_summary") or {}
   width = report.get("semantic_codegen_v3_load_width_summary") or {}
   lines += [
     f"- normal UOp uint4 load supported: `{vector.get('normal_uop_uint4_load_supported')}`",
     f"- raw custom uint4 escape supported: `{vector.get('raw_custom_uint4_escape_supported')}`",
+    f"- probe UOp vector load evidence: `{probe_width.get('has_vector_load_evidence')}`",
     f"- Family C v0 vector load evidence: `{width.get('has_vector_load_evidence')}`",
     f"- Family C v0 packed-load kernel present: `{width.get('has_packed_load_kernel')}`",
     "",
@@ -180,13 +190,12 @@ def audit_markdown(report:dict[str, Any]) -> str:
     "",
     "## Interpretation",
     "",
-    "The remaining gap is still best explained as memory-load efficiency, but the",
-    "next move is not another descriptor candidate. The normal tinygrad codegen",
-    "path does not currently preserve aligned integer vector loads for the Q4_K",
-    "`uint32` storage. Raw custom C can force such a load, which proves the",
-    "hardware/compiler surface exists, but not that BEAM or semantic search can",
-    "emit it. Family C v1 should therefore start with a core lowering capability",
-    "patch, guarded by this probe, before adding another candidate family.",
+    "The remaining gap is still best explained as memory-load efficiency. The",
+    "normal tinygrad codegen path now preserves a requested aligned `uint32x4`",
+    "global load/store on AMD, and DEBUG=4 source confirms vector pointer casts.",
+    "Family C v1 is therefore unblocked as the next generated memory-access",
+    "candidate. Family C v0 remains rejected; it did not request this new load",
+    "shape and still emitted scalar `u32` loads.",
     "",
   ]
   return "\n".join(lines)
@@ -195,13 +204,15 @@ def audit_markdown(report:dict[str, Any]) -> str:
 def main() -> int:
   parser = argparse.ArgumentParser(description="Build the QK memory-access go/no-go audit")
   parser.add_argument("--vector-probe", type=pathlib.Path, default=DEFAULT_VECTOR_PROBE)
+  parser.add_argument("--probe-load-width", type=pathlib.Path, default=DEFAULT_PROBE_LOAD_WIDTH)
   parser.add_argument("--load-width", type=pathlib.Path, default=DEFAULT_LOAD_WIDTH)
   parser.add_argument("--roofline", type=pathlib.Path, default=DEFAULT_ROOFLINE)
   parser.add_argument("--pmc", type=pathlib.Path, default=DEFAULT_PMC)
   parser.add_argument("--json", type=pathlib.Path, required=True)
   parser.add_argument("--md", type=pathlib.Path, required=True)
   args = parser.parse_args()
-  report = build_audit(vector_probe=args.vector_probe, load_width=args.load_width, roofline=args.roofline, pmc=args.pmc)
+  report = build_audit(vector_probe=args.vector_probe, probe_load_width=args.probe_load_width,
+                       load_width=args.load_width, roofline=args.roofline, pmc=args.pmc)
   args.json.parent.mkdir(parents=True, exist_ok=True)
   args.json.write_text(json.dumps(report, indent=2, sort_keys=True))
   args.md.parent.mkdir(parents=True, exist_ok=True)

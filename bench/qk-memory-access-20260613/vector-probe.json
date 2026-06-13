@@ -55,10 +55,10 @@
       "mismatch_count": 0,
       "mode": "scalar",
       "n_words": 4096,
-      "wall_ms": 0.5044602032285184
+      "wall_ms": 0.5152373982127756
     },
     {
-      "copy_exact": false,
+      "copy_exact": true,
       "device": "AMD",
       "device_ms": null,
       "expected_first_values": [
@@ -79,32 +79,32 @@
         14,
         15
       ],
-      "first_mismatch": 1,
+      "first_mismatch": null,
       "first_values": [
         0,
-        0,
-        0,
-        0,
+        1,
+        2,
+        3,
         4,
-        0,
-        0,
-        0,
+        5,
+        6,
+        7,
         8,
-        0,
-        0,
-        0,
+        9,
+        10,
+        11,
         12,
-        0,
-        0,
-        0
+        13,
+        14,
+        15
       ],
-      "interpretation": "A requested uint32.vec(4) UOp copy is expected to be non-exact today if codegen keeps only the scalar lane.",
+      "interpretation": "Normal UOp uint32.vec(4) load/store request; exact copy proves all four lanes survived lowering.",
       "iters": 5,
       "kernels": 1.0,
-      "mismatch_count": 3072,
+      "mismatch_count": 0,
       "mode": "uop_vec_request",
       "n_words": 4096,
-      "wall_ms": 0.5209534021560103
+      "wall_ms": 0.5278669996187091
     },
     {
       "copy_exact": true,
@@ -153,15 +153,15 @@
       "mismatch_count": 0,
       "mode": "custom_uint4",
       "n_words": 4096,
-      "wall_ms": 0.509371398948133
+      "wall_ms": 0.5182589986361563
     }
   ],
   "schema_version": 1,
   "summary": {
     "custom_uint4_exact": true,
-    "normal_uop_uint4_load_supported": false,
+    "normal_uop_uint4_load_supported": true,
     "raw_custom_uint4_escape_supported": true,
     "scalar_exact": true,
-    "uop_vec_request_exact": false
+    "uop_vec_request_exact": true
   }
 }
