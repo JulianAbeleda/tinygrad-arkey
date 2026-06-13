@@ -41,15 +41,20 @@ class TestQKThreewayLoadMicrobench(unittest.TestCase):
     self.assertEqual(report["summary"]["overall_decision"], "vector_load_already_sufficient")
     self.assertFalse(report["summary"]["run_full_decode"])
 
+  def test_vector_load_passes_but_does_not_move_is_negative(self):
+    report = summarize_runs(_runs(vector_status="pass", vector_gbs=101.0, tile_gbs=112.0))
+    self.assertEqual(report["summary"]["overall_decision"], "wide_load_not_sufficient")
+    self.assertEqual(report["summary"]["next_allowed_gate"], "stop_wide_load_only_branch")
+
   def test_schedulable_vector_load_blocked(self):
     report = summarize_runs(_runs(vector_status="construction_error", vector_gbs=None, tile_gbs=112.0))
     self.assertEqual(report["summary"]["overall_decision"], "schedulable_vector_load_blocked")
     self.assertEqual(report["summary"]["next_allowed_gate"], "fix_schedulable_vector_consumption")
 
-  def test_wide_load_not_sufficient(self):
+  def test_invalid_vector_with_slow_tile_is_inconclusive_not_negative(self):
     report = summarize_runs(_runs(vector_status="construction_error", vector_gbs=None, tile_gbs=103.0))
-    self.assertEqual(report["summary"]["overall_decision"], "wide_load_not_sufficient")
-    self.assertIn("load width alone", report_markdown(report))
+    self.assertEqual(report["summary"]["overall_decision"], "inconclusive_threeway")
+    self.assertIn("opaque no-LOCAL control", report_markdown(report))
 
   def test_committed_artifact_reproduces(self):
     root = self.repo / "bench/qk-threeway-load-microbench-20260613"

@@ -139,12 +139,13 @@ commit should be a minimal compile gate for an AMD renderer/core lowering.
 Update, three-way packed-load diagnostic: `extra/qk_threeway_load_microbench.py`
 compares v1 partial, schedulable `vector_load`, and opaque `tile_custom` on the
 dominant 8B Q4_K `ffn_gate` tensor using AMD device time. The verdict is
-`wide_load_not_sufficient`: v1 reaches `380.29` device Q4 GB/s, `vector_load`
-fails construction with the known vector-shape mismatch, and `tile_custom`
-passes correctness but reaches only `36.96` device Q4 GB/s. This closes the
-cheap "maybe the vacuum is already in the box" branch. The next research step
-must explain instruction mix / load efficiency or move to a lower-level
-renderer-quality lowering; it should not be another vector-load-only retry.
+`wide_load_not_sufficient`: v1 reaches `382.01` device Q4 GB/s, corrected
+`vector_load` keeps the schedulable `LOCAL:0:32` path and reaches `349.25`
+(`-8.58%`), and opaque no-LOCAL `tile_custom` reaches only `36.99`. This closes
+the cheap "maybe the vacuum is already in the box" branch after fixing the
+initial vector-lane reduction bug. The next research step must explain
+instruction mix / load efficiency or move to a lower-level renderer-quality
+lowering; it should not be another vector-load-only retry.
 
 ## Decision
 

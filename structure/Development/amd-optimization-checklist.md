@@ -225,10 +225,10 @@ generated-policy storage mode.
       `extra/qk_threeway_load_microbench.py`,
       `test/external/test_qk_threeway_load_microbench.py`, and
       `bench/qk-threeway-load-microbench-20260613/`. On the full 8B Q4_K
-      `ffn_gate` tensor, v1 partial reaches `380.29` device Q4 GB/s,
-      schedulable `vector_load` fails construction with the known vector-shape
-      mismatch, and opaque `tile_custom` passes correctness but reaches only
-      `36.96` device Q4 GB/s (`-90.28%`). Verdict:
+      `ffn_gate` tensor, v1 partial reaches `382.01` device Q4 GB/s. After the
+      vector-lane reduction fix, schedulable `vector_load` passes correctness
+      and reaches `349.25` (`-8.58%`). Opaque no-LOCAL `tile_custom` passes
+      correctness but reaches only `36.99` device Q4 GB/s (`-90.32%`). Verdict:
       `wide_load_not_sufficient`; no full decode, runtime integration, or
       further wide-load-only retry.
 
@@ -290,11 +290,12 @@ generated-policy storage mode.
    UOps cannot consume the tile but a custom semantic kernel can. The minimal
    `QK_BLOCK_DOT` compile gate passes, but the repeated full-shape microbench
    rejects it at `-30.14%` versus v1. The three-way packed-load diagnostic then
-   rejects the cheap load-width-only branch too: `vector_load` is invalid and
-   `tile_custom` is a `-90.28%` device-time regression. Resume only with
-   diagnosis of instruction mix / memory transactions / occupancy, or with a
-   lower-level renderer/assembly-quality lowering. Any future microbench win
-   starts as `raw_accept` and needs a confirmation rerun before promotion.
+   rejects the cheap load-width-only branch too after fixing the construction
+   bug: corrected `vector_load` is a `-8.58%` device-time regression and
+   `tile_custom` is a `-90.32%` no-LOCAL control. Resume only with diagnosis of
+   instruction mix / memory transactions / occupancy, or with a lower-level
+   renderer/assembly-quality lowering. Any future microbench win starts as
+   `raw_accept` and needs a confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

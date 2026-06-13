@@ -13,11 +13,11 @@ framing is in `docs/amd-decode-prior-art.md`.
 
 2026-06-13 packed-load update: the cheap three-way load diagnostic is recorded
 in `bench/qk-threeway-load-microbench-20260613/`. On 8B `ffn_gate`, v1 partial
-reaches `380.29` device Q4 GB/s, schedulable `vector_load` still fails
-construction, and opaque `tile_custom` reaches only `36.96` device Q4 GB/s.
-That closes the wide-load-only branch; future packed-load work needs
-instruction/source/counter diagnosis or a lower-level renderer-quality
-lowering.
+reaches `382.01` device Q4 GB/s. After fixing the initial vector-lane reduction
+bug, schedulable `vector_load` passes correctness and reaches `349.25`
+(`-8.58%`). Opaque no-LOCAL `tile_custom` reaches only `36.99`. That closes the
+wide-load-only branch; future packed-load work needs instruction/source/counter
+diagnosis or a lower-level renderer-quality lowering.
 
 This note compares the local `tinygrad-arkey` AMD path with the AMD-relevant parts of the forked `llama.cpp` and `ROCm` repos. The goal is to understand what those projects solve, why their design works, and what we can test from first principles to improve TinyGPU/tinygrad inference on the RX 7900 XTX.
 

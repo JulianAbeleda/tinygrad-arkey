@@ -457,12 +457,13 @@ Three-way packed-load diagnostic:
 `extra/qk_threeway_load_microbench.py`, compares v1 partial, schedulable
 `vector_load`, and opaque `tile_custom` on the full 8B Q4_K
 `blk.0.ffn_gate.weight` tensor using AMD device time. Verdict:
-`wide_load_not_sufficient`. v1 median is `380.29` device Q4 GB/s;
-`vector_load` fails construction with the known vector-shape mismatch; and
-`tile_custom` passes correctness but reaches only `36.96` device Q4 GB/s
-(`-90.28%`). This closes the cheap "maybe wide loads alone are enough" branch.
-Do not harden `vector_load`, add more raw `tg_uint4` variants, run full decode,
-or integrate runtime support from this result.
+`wide_load_not_sufficient`. v1 median is `382.01` device Q4 GB/s. After fixing
+the vector-lane reduction bug, schedulable `vector_load` passes correctness and
+reaches `349.25` (`-8.58%`). Opaque no-LOCAL `tile_custom` passes correctness
+but reaches only `36.99` device Q4 GB/s (`-90.32%`). This closes the cheap
+"maybe wide loads alone are enough" branch. Do not harden `vector_load`, add
+more raw `tg_uint4` variants, run full decode, or integrate runtime support
+from this result.
 
 When resuming, choose one track explicitly:
 
@@ -480,10 +481,11 @@ When resuming, choose one track explicitly:
    shape. The semantic-op contract defines the allowed continuation, and the
    minimal `QK_BLOCK_DOT` compile gate passes, but the repeated full-shape
    microbench rejects the first C-style lowering. The three-way packed-load
-   diagnostic also rejects the cheap wide-load-only branch. Resume only by
-   diagnosing instruction mix / occupancy / memory transactions, or by
-   designing a lower-level renderer/assembly-quality lowering. Any future
-   semantic raw accept needs a matching confirmation rerun before promotion.
+   diagnostic also rejects the cheap wide-load-only branch after fixing the
+   construction bug. Resume only by diagnosing instruction mix / occupancy /
+   memory transactions, or by designing a lower-level renderer/assembly-quality
+   lowering. Any future semantic raw accept needs a matching confirmation rerun
+   before promotion.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

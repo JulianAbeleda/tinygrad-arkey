@@ -191,23 +191,18 @@ def summarize_runs(raw_runs:list[dict[str, Any]], *, meaningful_gain_pct:float=M
     if v1["status"] != "pass":
       decision = "blocked_invalid_measurement"
       reason = "v1 baseline failed"
-    elif (vector["status"] == "pass" and tile["status"] == "pass" and
-          (vector_gain or 0.0) >= meaningful_gain_pct and (tile_gain or 0.0) >= meaningful_gain_pct and
-          abs(vector_vs_tile or 0.0) <= tie_band_pct):
+    elif vector["status"] == "pass" and (vector_gain or 0.0) >= meaningful_gain_pct:
       decision = "vector_load_already_sufficient"
-      reason = "schedulable vector_load matches tile_custom and both beat v1"
-    elif (tile["status"] == "pass" and (tile_gain or 0.0) >= meaningful_gain_pct and
-          (vector["status"] != "pass" or (vector_vs_tile is not None and vector_vs_tile <= -tie_band_pct) or
-           ((vector_gain or 0.0) < meaningful_gain_pct))):
-      decision = "schedulable_vector_load_blocked"
-      reason = "tile_custom has a meaningful gain but schedulable vector_load does not match it"
-    elif ((tile["status"] != "pass" or (tile_gain or 0.0) < meaningful_gain_pct) and
-          (vector["status"] != "pass" or (vector_gain or 0.0) < meaningful_gain_pct)):
+      reason = "schedulable vector_load beats v1 by the meaningful-gain threshold"
+    elif vector["status"] == "pass" and (vector_gain or 0.0) < meaningful_gain_pct:
       decision = "wide_load_not_sufficient"
-      reason = "neither wide-load path beats v1 by the meaningful-gain threshold"
+      reason = "schedulable vector_load does not beat v1 by the meaningful-gain threshold"
+    elif tile["status"] == "pass" and (tile_gain or 0.0) >= meaningful_gain_pct:
+      decision = "schedulable_vector_load_blocked"
+      reason = "tile_custom has a meaningful gain but schedulable vector_load did not execute"
     else:
       decision = "inconclusive_threeway"
-      reason = "three-way result does not match a pre-registered branch"
+      reason = "schedulable vector_load did not execute, and tile_custom is an opaque no-LOCAL control"
 
     tensor_reports.append({
       "tensor": tensor,
@@ -268,6 +263,11 @@ def report_markdown(report:dict[str, Any]) -> str:
     "a diagnostic artifact only: no runtime integration or full decode follows",
     "from this result.",
     "",
+    "Method note: v1 and `vector_load` are the apples-to-apples comparison. Both",
+    "use the schedulable primitive path and `LOCAL:0:32`. `tile_custom` is an",
+    "opaque no-LOCAL control, so it can show construction feasibility but cannot",
+    "by itself prove load-width performance.",
+    "",
     "## Summary",
     "",
     f"- tensors: `{report['summary']['tensors']}`",
@@ -304,9 +304,9 @@ def report_markdown(report:dict[str, Any]) -> str:
   elif decision == "schedulable_vector_load_blocked":
     lines.append("The opaque wide-load path beats v1 but the schedulable vector path does not. The target is vector consumption/codegen.")
   elif decision == "wide_load_not_sufficient":
-    lines.append("The wide-load paths do not beat v1 meaningfully. Do not chase load width alone; diagnose instruction mix or downstream dot/dequant cost.")
+    lines.append("The schedulable vector path does not beat v1 meaningfully. Do not chase load width alone; diagnose instruction mix or downstream dot/dequant cost.")
   else:
-    lines.append("The measurement did not produce a decisive branch; fix the invalid mode or narrow the scope before continuing.")
+    lines.append("The measurement did not produce a decisive branch; fix the invalid schedulable mode or narrow the scope before continuing.")
   lines.append("")
   return "\n".join(lines)
 

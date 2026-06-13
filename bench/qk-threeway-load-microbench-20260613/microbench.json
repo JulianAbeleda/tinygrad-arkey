@@ -31,20 +31,20 @@
     {
       "decision": "wide_load_not_sufficient",
       "gains_pct": {
-        "tile_custom_vs_v1": -90.28110126482422,
-        "vector_load_vs_tile_custom": null,
-        "vector_load_vs_v1": null
+        "tile_custom_vs_v1": -90.31700740818303,
+        "vector_load_vs_tile_custom": 844.1741011084076,
+        "vector_load_vs_v1": -8.575691735818436
       },
       "meaningful_gain_pct": 5.0,
       "modes": [
         {
           "device_q4_gbs": {
-            "max": 383.25,
-            "mean": 380.538,
-            "median": 380.29,
-            "min": 378.5,
+            "max": 383.46,
+            "mean": 381.596,
+            "median": 382.01,
+            "min": 379.76,
             "n": 5,
-            "stdev": 1.7096695587159525
+            "stdev": 1.473170051283958
           },
           "kernels": {
             "max": 1.0,
@@ -76,17 +76,40 @@
             "pass": 5
           },
           "wall_q4_gbs": {
-            "max": 98.18,
-            "mean": 96.862,
-            "median": 96.79,
-            "min": 95.75,
+            "max": 99.19,
+            "mean": 96.9,
+            "median": 96.44,
+            "min": 95.53,
             "n": 5,
-            "stdev": 0.9246999513355701
+            "stdev": 1.40700035536598
           }
         },
         {
-          "failure_tail": "    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"./tinygrad/schedule/rangeify.py\", line 20, in add_ranges_to_store\n    if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None\n                                  ^^^^^^^^^^^^^^^\n  File \"./tinygrad/uop/ops.py\", line 133, in __get__\n    for node in x.toposort(gate=lambda node: self.nm not in node.__dict__): node.__dict__[self.nm] = self.fxn(node)\n                                                                                                     ^^^^^^^^^^^^^^\n  File \"./tinygrad/uop/ops.py\", line 374, in _shape\n    raise RuntimeError(f\"shape mismatch at {self.op}: {input_shapes} {[x.op for x in self.src]}\")\nRuntimeError: shape mismatch at Ops.MUL: [(), (4,)] [Ops.INDEX, Ops.CAST]",
+          "device_q4_gbs": {
+            "max": 350.98,
+            "mean": 349.398,
+            "median": 349.25,
+            "min": 347.36,
+            "n": 5,
+            "stdev": 1.4076824926097498
+          },
+          "kernels": {
+            "max": 1.0,
+            "mean": 1.0,
+            "median": 1.0,
+            "min": 1.0,
+            "n": 5,
+            "stdev": 0.0
+          },
           "mode": "vector_load",
+          "primitive_gemv_max_abs": {
+            "max": 0.00213623,
+            "mean": 0.00193925,
+            "median": 0.001894,
+            "min": 0.00179291,
+            "n": 5,
+            "stdev": 0.000139691457326495
+          },
           "raw_files": [
             "bench/qk-threeway-load-microbench-20260613/raw/blk_0_ffn_gate_weight/vector_load/run-00.json",
             "bench/qk-threeway-load-microbench-20260613/raw/blk_0_ffn_gate_weight/vector_load/run-01.json",
@@ -95,19 +118,27 @@
             "bench/qk-threeway-load-microbench-20260613/raw/blk_0_ffn_gate_weight/vector_load/run-04.json"
           ],
           "runs": 5,
-          "status": "invalid",
+          "status": "pass",
           "status_counts": {
-            "construction_error": 5
+            "pass": 5
+          },
+          "wall_q4_gbs": {
+            "max": 96.1,
+            "mean": 95.194,
+            "median": 95.36,
+            "min": 94.06,
+            "n": 5,
+            "stdev": 0.7424149782971753
           }
         },
         {
           "device_q4_gbs": {
             "max": 37.01,
-            "mean": 36.972,
-            "median": 36.96,
+            "mean": 36.988,
+            "median": 36.99,
             "min": 36.96,
             "n": 5,
-            "stdev": 0.0216794833886776
+            "stdev": 0.019235384061670843
           },
           "kernels": {
             "max": 1.0,
@@ -139,16 +170,16 @@
             "pass": 5
           },
           "wall_q4_gbs": {
-            "max": 28.41,
-            "mean": 28.302,
-            "median": 28.37,
-            "min": 28.09,
+            "max": 28.53,
+            "mean": 28.389999999999997,
+            "median": 28.5,
+            "min": 28.01,
             "n": 5,
-            "stdev": 0.13141537200799602
+            "stdev": 0.21828879952943045
           }
         }
       ],
-      "reason": "neither wide-load path beats v1 by the meaningful-gain threshold",
+      "reason": "schedulable vector_load does not beat v1 by the meaningful-gain threshold",
       "tensor": "blk.0.ffn_gate.weight",
       "tie_band_pct": 3.0
     }

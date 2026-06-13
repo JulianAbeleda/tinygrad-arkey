@@ -77,6 +77,13 @@ class TestUOps(unittest.TestCase):
         a = dts[0].const(a)
         self._equal(f([a], op, dts), fxn(a))
 
+  def test_customi_inherits_first_source_shape(self):
+    scalar = UOp.const(dtypes.float32, 1.0)
+    vector = scalar.broadcast(4)
+    custom = UOp(Ops.CUSTOMI, dtypes.float32, (scalar, vector), arg="{0}")
+    self.assertEqual(custom.shape, ())
+    self.assertEqual((custom + scalar).shape, ())
+
   def _test_bop_fxn(self, op, fxn, dts=(dtypes.float32, )*2, no_b_zero=False, no_b_neg=False):
     for f in [_test_single_value, _test_single_value_const]:
       for a in [-2.0, 0.0, 1.0]:

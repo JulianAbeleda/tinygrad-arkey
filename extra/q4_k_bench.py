@@ -135,7 +135,7 @@ if __name__ == "__main__":
       words = raw_words[byte_start//4:byte_start//4+q4_bytes//4].to(args.device).contiguous().realize()
       out = Tensor.empty(rows, dtype=dtypes.float32, device=args.device)
       partials = Tensor.empty(rows, parts, dtype=dtypes.float32, device=args.device)
-      vector_partials = Tensor.empty(rows, parts, 2, 4, dtype=dtypes.float32, device=args.device)
+      vector_partials = Tensor.empty(rows, parts, dtype=dtypes.float32, device=args.device)
 
       unpack_rows = min(args.primitive_unpack_check_rows, rows)
       if unpack_rows > 0:
@@ -159,7 +159,7 @@ if __name__ == "__main__":
         if args.primitive_mode == "vector_load":
           partial = vector_partials.custom_kernel(
             words, x_vec, fxn=q4k_gemv_vector_load_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]
-          return partial.reshape(rows, parts*8).sum(axis=1)
+          return partial.sum(axis=1)
         if args.primitive_mode == "grouped":
           partial = partials.custom_kernel(
             words, x_vec,

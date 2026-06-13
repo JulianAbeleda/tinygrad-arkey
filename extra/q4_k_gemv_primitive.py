@@ -70,21 +70,24 @@ def _q4k_block_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UO
 def _q4k_group_dot_vector_load(words:UOp, x:UOp, base:UOp, x_block:UOp, grp:int, lane_vec:UOp) -> UOp:
   d, dmin, sc, mn = _q4k_group_params(words, base, grp)
   qwords = words.index(base + 4 + (grp//2)*8 + lane_vec*4, ptr=True).load(dtype=dtypes.uint32.vec(4))
-  qwords = UOp(Ops.CAST, dtypes.uint32.vec(4), (qwords,))
-  dsc = (d * sc.cast(dtypes.float32)).broadcast(4)
-  dmn = (dmin * mn.cast(dtypes.float32)).broadcast(4)
-  contrib = UOp.const(dtypes.float32.vec(4), 0.0)
-  for nib in range(4):
-    q = qwords.rshift(nib*8 + (grp%2)*4).bitwise_and(0xf).cast(dtypes.float32)
-    x_vec = UOp.vectorize(*[
-      x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + (lane_vec*4 + lane)*4 + nib].cast(dtypes.float32) for lane in range(4)
-    ])
-    weight = dsc * q - dmn
-    contrib = contrib + weight * x_vec
-  return contrib
+  dsc = d * sc.cast(dtypes.float32)
+  dmn = dmin * mn.cast(dtypes.float32)
+  srcs:list[UOp] = [dsc, qwords, dmn]
+  lines = ["({{ float _total = 0.0f;"]
+  for lane in range(4):
+    lines.append(f"unsigned int _qw{lane} = (unsigned int)(({{1}})[{lane}]);")
+    for nib in range(4):
+      pos = (lane_vec*4 + lane)*4 + nib
+      srcs.append(x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32))
+      lines.append(
+        f"_total += (((float){{0}}) * (float)((_qw{lane} >> {nib*8 + (grp%2)*4}u) & 15u) - "
+        f"((float){{2}})) * ((float){{{len(srcs)-1}}});"
+      )
+  lines.append("_total; }})")
+  return UOp(Ops.CUSTOMI, dtypes.float32, tuple(srcs), arg=" ".join(lines))
 
 def _q4k_block_dot_vector_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane_vec:UOp) -> UOp:
-  contrib = UOp.const(dtypes.float32.vec(4), 0.0)
+  contrib = UOp.const(dtypes.float32, 0.0)
   for grp in range(8):
     contrib = contrib + _q4k_group_dot_vector_load(words, x, base, x_block, grp, lane_vec)
   return contrib
@@ -349,19 +352,16 @@ def q4k_gemv_vector_load_partial_kernel(rows:int, k:int, parts:int, schedule:str
   def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
     row = UOp.range(rows, 0)
     part = UOp.range(parts, 1)
-    lane_vec = UOp.range(2, 2)
-    blk_part = UOp.range(blocks_per_part, 3, axis_type=AxisType.REDUCE)
+    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
+    lane_vec = UOp.range(2, 3, axis_type=AxisType.REDUCE)
     blk = part * blocks_per_part + blk_part
     in_range = blk < k_blocks
     base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
-    contrib = in_range.broadcast(4).where(_q4k_block_dot_vector_load(words, x, base, blk, lane_vec),
-                                          UOp.const(dtypes.float32.vec(4), 0.0))
+    contrib = in_range.where(_q4k_block_dot_vector_load(words, x, base, blk, lane_vec), UOp.const(dtypes.float32, 0.0))
 
-    acc = UOp.placeholder((1,), dtypes.float32.vec(4), 220, addrspace=AddrSpace.REG)
-    acc = acc.after(row, part, lane_vec)[0].set(UOp.const(dtypes.float32.vec(4), 0.0))
-    acc = acc[0].set(acc.after(blk_part)[0] + contrib, end=blk_part)
-    out_ptr = partials.flatten().index(((row * parts + part) * 2 + lane_vec) * 4, ptr=True)
-    return out_ptr.store(acc).end(row, part, lane_vec).sink(arg=_kernel_info(f"q4k_gemv_vector_load_partial_{rows}_{k}_{parts}", schedule, opts))
+    acc = partials[row, part].set(0.0)
+    acc = partials[row, part].set(acc.after(blk_part, lane_vec)[row, part] + contrib, end=lane_vec)
+    return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q4k_gemv_vector_load_partial_{rows}_{k}_{parts}", schedule, opts))
 
   return kernel
 
@@ -576,7 +576,7 @@ if __name__ == "__main__":
   x = Tensor.randn(k, dtype=dtypes.float16, device=args.device).realize()
   out = Tensor.empty(rows, dtype=dtypes.float32, device=args.device)
   partials = Tensor.empty(rows, parts, dtype=dtypes.float32, device=args.device)
-  vector_partials = Tensor.empty(rows, parts, 2, 4, dtype=dtypes.float32, device=args.device)
+  vector_partials = Tensor.empty(rows, parts, dtype=dtypes.float32, device=args.device)
 
   raw_u8 = Tensor(args.gguf)[byte_start:byte_start+q4_bytes].to(args.device)
   decoded = q4_k_reference(raw_u8, rows*k).reshape(rows, k).cast(dtypes.float16).realize()
@@ -601,7 +601,7 @@ if __name__ == "__main__":
       return partial.sum(axis=1)
     if args.mode == "vector_load":
       partial = vector_partials.custom_kernel(words, x, fxn=q4k_gemv_vector_load_partial_kernel(rows, k, parts, args.schedule, opts))[0]
-      return partial.reshape(rows, parts*8).sum(axis=1)
+      return partial.sum(axis=1)
     if args.mode == "grouped":
       partial = partials.custom_kernel(words, x, fxn=q4k_gemv_grouped_partial_kernel(rows, k, parts, args.row_group, args.schedule, opts))[0]
     elif args.mode == "tile_custom":

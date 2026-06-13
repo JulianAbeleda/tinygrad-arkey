@@ -81,10 +81,13 @@ and reduction scheduling visible. Artifact:
 contract, not a runtime lowering or speed claim.
 
 Update 10: the cheap three-way load diagnostic has run and rejects the
-wide-load-only branch under AMD device timing. `vector_load` still fails
-construction with the known vector-shape mismatch. `tile_custom` passes
-correctness but reaches only `36.96` device Q4 GB/s on 8B `ffn_gate`, versus
-v1 at `380.29`. Artifact:
+wide-load-only branch under AMD device timing. The first run correctly exposed
+a `vector_load` authoring bug: vector lanes were not reduced back to scalar
+partials before the scalar combine. After fixing that with scalar inline lane
+reduction, `vector_load` passes correctness and runs with the schedulable
+`LOCAL:0:32` path. It still loses: `349.25` device Q4 GB/s on 8B `ffn_gate`,
+versus v1 at `382.01` (`-8.58%`). `tile_custom` is an opaque no-LOCAL control
+and reaches only `36.99`. Artifact:
 `bench/qk-threeway-load-microbench-20260613/README.md`. This supersedes treating
 the earlier weak wall-time `tile_custom` smoke signal as actionable. The next
 work is instruction/source/counter diagnosis or lower-level renderer-quality
@@ -178,8 +181,8 @@ Candidate lowerings should try to change one memory-access mechanism at a time:
    `bench/qk-threeway-load-microbench-20260613/` compares the current v1
    partial kernel, schedulable `vector_load`, and opaque `tile_custom` on the
    same dominant 8B `ffn_gate` tensor. It rejects load width alone:
-   `vector_load` is invalid, and `tile_custom` is a `-90.28%` device-time
-   regression versus v1.
+   corrected `vector_load` passes and is a `-8.58%` device-time regression
+   versus v1; `tile_custom` is a `-90.32%` no-LOCAL control.
 
 3. **Activation staging only when it supports load efficiency**
    q8_1 staging is useful if it aligns the compute with packed dot and keeps ALU

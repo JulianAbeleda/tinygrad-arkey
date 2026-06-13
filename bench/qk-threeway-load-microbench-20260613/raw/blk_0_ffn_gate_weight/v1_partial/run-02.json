@@ -1,7 +1,7 @@
 {
   "command": ".venv/bin/python extra/q4_k_bench.py ~/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 5 --format text --activation random --seed 1339 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32",
-  "device_q4_gbs": 383.25,
-  "elapsed_s": 1.883,
+  "device_q4_gbs": 379.76,
+  "elapsed_s": 1.974,
   "kernels": 1.0,
   "mode": "v1_partial",
   "primitive_gemv_max_abs": 0.00184679,
@@ -11,7 +11,7 @@
   "shape": "12288x4096",
   "status": "pass",
   "stdout": "bench/qk-threeway-load-microbench-20260613/raw/blk_0_ffn_gate_weight/v1_partial/run-02.stdout",
-  "tail": "*** AMD       18 r_16_768                                       arg  3 mem   0.16 GB tm     32.28us/    18.87ms (      3 GFLOPS    2|2      GB/s)\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00184679\nJIT captured 1 linears with 0 inputs\n*** AMD       19 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.20us/    18.95ms (   4290 GFLOPS  383|2417   GB/s)\n*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.20us/     0.07ms (   4290 GFLOPS  383|2417   GB/s)\n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     73.48us/     0.15ms (   4332 GFLOPS  387|2441   GB/s)\n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     73.88us/     0.22ms (   4308 GFLOPS  385|2428   GB/s)\n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     73.92us/     0.30ms (   4306 GFLOPS  384|2426   GB/s)\n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     73.88us/     0.37ms (   4308 GFLOPS  385|2428   GB/s)\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.723 ms (1383.32/s) q4_eff=39.16 GB/s device_q4_eff=134.87 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.311 ms (432.66/s) q4_eff=12.25 GB/s device_q4_eff=81.34 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.288 ms (3467.72/s) q4_eff=98.18 GB/s device_q4_eff=383.25 GB/s kernels=1.0 mem=28.42 MB",
+  "tail": "*** AMD       18 r_16_768                                       arg  3 mem   0.16 GB tm     32.16us/    37.13ms (      3 GFLOPS    2|2      GB/s)\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00184679\nJIT captured 1 linears with 0 inputs\n*** AMD       19 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     75.28us/    37.21ms (   4228 GFLOPS  377|2383   GB/s)\n*** AMD        1 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.40us/     0.07ms (   4278 GFLOPS  382|2411   GB/s)\n*** AMD        2 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.76us/     0.15ms (   4258 GFLOPS  380|2399   GB/s)\n*** AMD        3 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.52us/     0.22ms (   4271 GFLOPS  381|2407   GB/s)\n*** AMD        4 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.32us/     0.30ms (   4283 GFLOPS  382|2413   GB/s)\n*** AMD        5 q4k_gemv_partial_12288_4096_1                  arg  3 mem   0.16 GB tm     74.76us/     0.37ms (   4258 GFLOPS  380|2399   GB/s)\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.744 ms (1343.38/s) q4_eff=38.03 GB/s device_q4_eff=141.01 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.309 ms (433.04/s) q4_eff=12.26 GB/s device_q4_eff=80.88 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.291 ms (3431.88/s) q4_eff=97.16 GB/s device_q4_eff=379.76 GB/s kernels=1.0 mem=28.42 MB",
   "tensor": "blk.0.ffn_gate.weight",
-  "wall_q4_gbs": 98.18
+  "wall_q4_gbs": 97.16
 }
