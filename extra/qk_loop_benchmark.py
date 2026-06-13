@@ -51,12 +51,21 @@ def _current_policy(loop:dict[str, Any]) -> pathlib.Path:
   raise ValueError("loop run missing baseline current policy_path")
 
 
-def _decision_row(path:pathlib.Path, candidate:dict[str, Any]) -> dict[str, Any]:
+def _portable_path(path:pathlib.Path, base:pathlib.Path | None=None) -> str:
+  path = path.resolve()
+  base = (base or pathlib.Path.cwd()).resolve()
+  try:
+    return str(path.relative_to(base))
+  except ValueError:
+    return str(path)
+
+
+def _decision_row(path:pathlib.Path, candidate:dict[str, Any], *, path_base:pathlib.Path | None=None) -> dict[str, Any]:
   decision = load_json(path / "decision.json")
   return {
     "id": candidate["id"],
-    "path": str(path),
-    "policy": str(path / "policy.json"),
+    "path": _portable_path(path, path_base),
+    "policy": _portable_path(path / "policy.json", path_base),
     "status": decision.get("status"),
     "gain": decision.get("gain"),
     "reference_tok_s": (decision.get("explicit") or {}).get("avg_tok_s"),
@@ -69,8 +78,9 @@ def _decision_row(path:pathlib.Path, candidate:dict[str, Any]) -> dict[str, Any]
   }
 
 
-def build_matrix(model:str, loop:dict[str, Any], rows:list[dict[str, Any]], out:pathlib.Path) -> dict[str, Any]:
-  decisions = [_decision_row(out / row["id"], row) for row in rows]
+def build_matrix(model:str, loop:dict[str, Any], rows:list[dict[str, Any]], out:pathlib.Path,
+                 *, path_base:pathlib.Path | None=None) -> dict[str, Any]:
+  decisions = [_decision_row(out / row["id"], row, path_base=path_base) for row in rows]
   accepted = [row for row in decisions if row["status"] == "accept"]
   ties = [row for row in decisions if row["status"] == "tie"]
   rejected = [row for row in decisions if row["status"] == "reject"]
@@ -170,7 +180,7 @@ def run_model(args, model:str) -> dict[str, Any]:
     if args.force: cmd.append("--force")
     _run(cmd, cwd=args.repo, env={"PYTHONPATH": ".", "QK_PRIMITIVE_STORAGE": "shared"},
          log=cand_out / "pipeline-driver.log", timeout=args.pipeline_timeout)
-  matrix = build_matrix(model, loop, selected, out)
+  matrix = build_matrix(model, loop, selected, out, path_base=args.repo)
   write_json(out / "matrix.json", matrix)
   (out / "matrix.md").write_text(matrix_markdown(matrix))
   return matrix

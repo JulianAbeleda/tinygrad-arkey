@@ -124,10 +124,13 @@ class TestQKAnsorTransition(unittest.TestCase):
     for stem in ("8b", "14b", "32b"):
       loop = json.loads((base / "search" / stem / "run.json").read_text())
       rows = [row for row in loop["rows"] if row["decision"] == "benchmark_next"]
-      matrix = build_matrix(stem, loop, rows, (bench / stem).resolve())
+      matrix = build_matrix(stem, loop, rows, (bench / stem).resolve(), path_base=self.repo)
       self.assertEqual(json.loads((bench / stem / "matrix.json").read_text()), matrix)
       self.assertEqual((bench / stem / "matrix.md").read_text(), matrix_markdown(matrix))
       self.assertEqual(matrix["summary"]["candidates"], 6)
+      for row in matrix["rows"]:
+        self.assertFalse(pathlib.PurePath(row["path"]).is_absolute())
+        self.assertFalse(pathlib.PurePath(row["policy"]).is_absolute())
     verdict = build_verdict(bench)
     self.assertEqual(json.loads((bench / "verdict.json").read_text()), verdict)
     self.assertEqual((bench / "verdict.md").read_text(), verdict_markdown(verdict))

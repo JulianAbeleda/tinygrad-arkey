@@ -50,6 +50,16 @@ Latest implementation commits before the shared-promotion rerun:
 - `5661baecf [runtime] add shared QK primitive storage`
 - `aa2827350 [docs] add AMD decode session handoff`
 
+Latest Ansor-transition commits before the artifact-portability fix:
+
+- `437f77772 [test] add QK Ansor transition loop v0`
+- `c5f3abc7e [test] benchmark QK loop candidates`
+
+The portability fix after those commits makes loop benchmark matrix `path` and
+`policy` fields repo-relative, adds a test assertion against absolute artifact
+paths, and resolves the `structure/` ignore policy by explicitly allowing only
+the tracked session handoff and AMD checklist files.
+
 Key implementation files:
 
 - `tinygrad/llm/model.py`
@@ -196,6 +206,8 @@ PYTHONPATH=. .venv/bin/python -m unittest \
 - Do not make `QK_GENERATED_POLICY` a global default. Do not flip
   `QK_PRIMITIVE_STORAGE=shared` to the runtime default without non-campaign
   soak; keep it explicit for now.
+- Do not commit benchmark artifacts with machine-local absolute checkout paths;
+  use repo-relative paths so clean checkouts can regenerate identical evidence.
 
 ## Next Decision
 

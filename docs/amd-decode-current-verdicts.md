@@ -182,6 +182,9 @@ worth doing only if the research itself is the goal.
   policies selected for benchmarking unless accompanied by a benchmark verdict.
 - Do not continue sweeping only `parts`/`LOCAL` over the current primitive
   families. That frontier was measured and did not produce a confirmed winner.
+- Do not commit benchmark or reproducibility artifacts with machine-local
+  absolute checkout paths. Store repo-relative paths so evidence regenerates
+  from any clean checkout.
 
 ## Pointers
 

@@ -104,11 +104,18 @@ generated-policy storage mode.
       14B had no accepts. 32B had one raw `+3.24%` accept, but the confirmation
       rerun was a tie at `-2.29%`, so no candidate is promoted. Verdict:
       descriptor-level `parts`/`LOCAL` knob search is exhausted.
+- [x] Fixed loop-v0 matrix portability: benchmark matrix `path` and `policy`
+      fields are repo-relative, tests assert they are not absolute paths, and
+      the regenerated matrices reproduce outside `/home/ubuntu/tinygrad-arkey`.
+- [x] Resolved the `structure/` tracking policy: `.gitignore` ignores the tree
+      by default while explicitly allowing the tracked session handoff and AMD
+      optimization checklist files.
 
 ## Open But Not Urgent
 
 - [ ] Optional clean-room reproducibility check from a fresh clone, to catch
-      untracked dependency regressions that normal local tests can miss.
+      untracked dependency regressions and artifact-portability bugs that normal
+      local tests can miss.
 - [ ] Optional cleanup of old home-directory scratch logs after confirming all
       relevant artifacts are committed under `bench/`.
 

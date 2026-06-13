@@ -31,8 +31,8 @@
       ],
       "gain": 0.03235950291463152,
       "id": "001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32",
-      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32",
-      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/policy.json",
+      "path": "bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32",
+      "policy": "bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/policy.json",
       "reasons": [
         "generated beats explicit by 3.24%"
       ],
@@ -69,8 +69,8 @@
       ],
       "gain": -0.2691559018746946,
       "id": "002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32",
-      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32",
-      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32/policy.json",
+      "path": "bench/qk-ansor-transition-20260612/benchmarks/32b/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32",
+      "policy": "bench/qk-ansor-transition-20260612/benchmarks/32b/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32/policy.json",
       "reasons": [
         "generated unstable: generated7 avg 11.29 is >10% below mean 12.74",
         "generated unstable: generated7 last64 8.82 collapsed below 90% of avg 11.29",
@@ -109,8 +109,8 @@
       ],
       "gain": -0.23186372895013685,
       "id": "003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64",
-      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64",
-      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/policy.json",
+      "path": "bench/qk-ansor-transition-20260612/benchmarks/32b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64",
+      "policy": "bench/qk-ansor-transition-20260612/benchmarks/32b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/policy.json",
       "reasons": [
         "generated slower than explicit by 23.19%"
       ],
@@ -147,8 +147,8 @@
       ],
       "gain": -0.24646117593402006,
       "id": "004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32",
-      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32",
-      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32/policy.json",
+      "path": "bench/qk-ansor-transition-20260612/benchmarks/32b/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32",
+      "policy": "bench/qk-ansor-transition-20260612/benchmarks/32b/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32/policy.json",
       "reasons": [
         "generated slower than explicit by 24.65%"
       ],
@@ -185,8 +185,8 @@
       ],
       "gain": -0.2523272700052399,
       "id": "005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64",
-      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64",
-      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64/policy.json",
+      "path": "bench/qk-ansor-transition-20260612/benchmarks/32b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64",
+      "policy": "bench/qk-ansor-transition-20260612/benchmarks/32b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64/policy.json",
       "reasons": [
         "generated slower than explicit by 25.23%"
       ],
@@ -223,8 +223,8 @@
       ],
       "gain": -0.03653700906344415,
       "id": "006-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32",
-      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/006-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32",
-      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/006-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32/policy.json",
+      "path": "bench/qk-ansor-transition-20260612/benchmarks/32b/006-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32",
+      "policy": "bench/qk-ansor-transition-20260612/benchmarks/32b/006-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32/policy.json",
       "reasons": [
         "generated slower than explicit by 3.65%"
       ],
