@@ -5,6 +5,7 @@ import numpy as np
 from extra.q4_k_gemv_primitive import _q4k_tile_custom_partial_source
 from extra.qk_layout import GGML_Q4_K, GGML_Q6_K, GGUFInfo, GGUFMetadata
 from extra.qk_load_width_report import build_report as build_load_width_report
+from extra.qk_packed_tile_lowering_analysis import report_markdown as lowering_report_markdown, summarize_runs
 from extra.qk_packed_tile import (
   Q4_K_FORMAT, Q6_K_FORMAT, format_for_type, load_tile, qk_tile_search_axes, tile_from_info,
   tile_from_semantic_row, tile_summary, tile_to_json,
@@ -113,6 +114,56 @@ class TestQKPackedTile(unittest.TestCase):
       report = build_load_width_report([log], repo=repo)
     self.assertEqual(report["rows"][0]["mode"], "tile_custom_partial")
     self.assertEqual(report["rows"][0]["load_width_inferred"], "vector_u32x4")
+
+  def test_packed_tile_lowering_analysis_decision_gate(self):
+    rows = []
+    for tensor, gain in (("blk.0.ffn_gate.weight", 7.0), ("blk.0.attn_output.weight", 3.0)):
+      for mode, base in (("v1_partial", 100.0), ("tile_custom", 100.0 + gain)):
+        for run in range(3):
+          rows.append({
+            "tensor": tensor,
+            "mode": mode,
+            "raw_file": f"bench/fake/{tensor}/{mode}/{run}.json",
+            "q4_eff_gbs": base + run,
+            "ms": 1.0,
+            "primitive_gemv_max_abs": 0.001,
+          })
+    report = summarize_runs(rows)
+    self.assertEqual(report["summary"]["decision"], "diagnose_only_not_promoted")
+    self.assertAlmostEqual(report["summary"]["max_gain_pct"], 6.93, places=2)
+    md = lowering_report_markdown(report)
+    self.assertIn("diagnose_only_not_promoted", md)
+    self.assertIn("blk.0.ffn_gate.weight", md)
+
+  def test_packed_tile_lowering_analysis_artifact_reproduces(self):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    root = repo / "bench/qk-packed-tile-lowering-analysis-20260613"
+    if not root.exists(): return
+
+    logs = [root / "source/v1_partial-debug4.log", root / "source/tile_custom-debug4.log"]
+    load_report = build_load_width_report(logs, repo=repo)
+    self.assertEqual(json.loads((root / "source/load-width-report.json").read_text()), load_report)
+
+    raw_runs = []
+    for raw in sorted((root / "raw").rglob("run-*.json")):
+      rows = json.loads(raw.read_text())
+      matches = [row for row in rows if row.get("name") == "q4k_primitive_gemv"]
+      self.assertEqual(len(matches), 1)
+      row = matches[0]
+      raw_runs.append({
+        "tensor": row["tensor"],
+        "mode": raw.parent.name,
+        "raw_file": str(raw.relative_to(repo)),
+        "q4_eff_gbs": row["q4_eff_gbs"],
+        "ms": row["ms"],
+        "primitive_gemv_max_abs": row["primitive_gemv_max_abs"],
+      })
+
+    committed = json.loads((root / "analysis.json").read_text())
+    rebuilt = summarize_runs(raw_runs)
+    self.assertEqual(rebuilt["summary"], committed["summary"])
+    self.assertEqual(rebuilt["comparisons"], committed["comparisons"])
+    self.assertEqual((root / "analysis.md").read_text(), lowering_report_markdown(committed))
 
 if __name__ == "__main__":
   unittest.main()

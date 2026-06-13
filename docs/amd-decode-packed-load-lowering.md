@@ -2,7 +2,7 @@
 
 Date: 2026-06-13
 
-Status: custom semantic Q4_K tile lowering constructed; not promoted.
+Status: custom semantic Q4_K tile lowering diagnosed; not promoted.
 
 Update: Family C v0 has now been tested. It changed the expression shape to use
 explicit packed-word lanes for Q4_K `ffn_gate`, but it tied on 8B/14B and
@@ -51,6 +51,15 @@ Update 6: the first real custom semantic Q4_K tile consumer now exists as
 pre-registered `>=10%` microbench bar for full-decode promotion, so no runtime
 integration or full-decode run was promoted. See
 `bench/qk-packed-tile-lowering-20260613/README.md`.
+
+Update 7: repeated 8B analysis now compares v1 partial vs `tile_custom` across
+five Q4_K tensors with five runs each. Source-shape evidence is real: v1 parses
+as scalar `u32`, while `tile_custom` parses as `vector_u32x4`. Performance does
+not generalize: gains range from `-2.04%` to `+7.51%`, with median gain
+`-0.36%`; only `ffn_up` is materially positive. Verdict:
+`diagnose_only_not_promoted`. Do not run full decode or runtime integration from
+this raw custom path. See
+`bench/qk-packed-tile-lowering-analysis-20260613/README.md`.
 
 ## Problem
 
@@ -158,6 +167,9 @@ Do not install a runtime path from this family until all are true:
 - No full-decode promotion for this raw custom lowering unless a repeated
   dominant-shape microbench clears the `>=10%` bar or a core lowering/search
   integration changes the premise.
+- No broadening of raw `Ops.CUSTOM` Q4_K tile consumers as a performance path:
+  repeated analysis shows vector-source loads alone do not produce a general
+  Q4_K win.
 - No further Family C variants through normal UOps. Future variants should
   consume `PackedQKTile` or its successor through a first-class packed-load op,
   renderer PatternMatcher, or similarly explicit semantic lowering rather than

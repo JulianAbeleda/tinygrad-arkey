@@ -1,0 +1,60 @@
+{
+  "kind": "qk_load_width_report",
+  "rows": [
+    {
+      "contains_packed_dot": false,
+      "kernels": [
+        "q4k_gemv_partial_64_4096_1"
+      ],
+      "load_width_inferred": "u32_scalar",
+      "mode": "baseline_partial",
+      "notes": [
+        "This parser infers load width from generated-source text patterns; it is not a hardware-counter report.",
+        "Use it to confirm whether a candidate changed the generated source shape before trusting timing."
+      ],
+      "path": "bench/qk-packed-tile-lowering-analysis-20260613/source/v1_partial-debug4.log",
+      "pattern_counts": {
+        "amd_vdot4": 0,
+        "uchar_or_u8": 204,
+        "uint_or_u32": 490,
+        "ulong_or_u64": 0,
+        "ushort_or_u16": 28,
+        "vector_u32x2": 0,
+        "vector_u32x4": 0
+      }
+    },
+    {
+      "contains_packed_dot": false,
+      "kernels": [
+        "q4k_gemv_tile_custom_partial_64_4096_1"
+      ],
+      "load_width_inferred": "vector_u32x4",
+      "mode": "tile_custom_partial",
+      "notes": [
+        "This parser infers load width from generated-source text patterns; it is not a hardware-counter report.",
+        "Use it to confirm whether a candidate changed the generated source shape before trusting timing."
+      ],
+      "path": "bench/qk-packed-tile-lowering-analysis-20260613/source/tile_custom-debug4.log",
+      "pattern_counts": {
+        "amd_vdot4": 0,
+        "uchar_or_u8": 204,
+        "uint_or_u32": 504,
+        "ulong_or_u64": 0,
+        "ushort_or_u16": 26,
+        "vector_u32x2": 0,
+        "vector_u32x4": 9
+      }
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "has_packed_dot": false,
+    "has_packed_load_kernel": false,
+    "has_vector_load_evidence": true,
+    "logs": 2,
+    "modes": [
+      "baseline_partial",
+      "tile_custom_partial"
+    ]
+  }
+}

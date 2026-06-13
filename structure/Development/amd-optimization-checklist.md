@@ -183,6 +183,13 @@ generated-policy storage mode.
       only (`+7.20%` `ffn_gate`, `+5.83%` `attn_output`), below the `>=10%`
       full-decode promotion bar. Verdict:
       `semantic_custom_lowering_constructed_but_not_promoted`.
+- [x] Ran repeated packed-tile lowering analysis:
+      `extra/qk_packed_tile_lowering_analysis.py` and
+      `bench/qk-packed-tile-lowering-analysis-20260613/`. Source-shape parsing
+      confirms v1 `u32_scalar` versus `tile_custom` `vector_u32x4`, but repeated
+      8B Q4_K microbench does not generalize: gain range `-2.04%` to `+7.51%`,
+      median `-0.36%`; only `ffn_up` is materially positive. Verdict:
+      `diagnose_only_not_promoted`; no full decode or runtime integration.
 
 ## Open But Not Urgent
 

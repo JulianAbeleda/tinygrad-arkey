@@ -110,6 +110,14 @@ still raw `Ops.CUSTOM`. The next research step is to explain the small gain with
 source/counters or promote this idea into a renderer/core semantic op that
 tinygrad can reason about.
 
+Update, repeated lowering analysis: the two-shape smoke signal did not
+generalize. `bench/qk-packed-tile-lowering-analysis-20260613/` compares five
+Q4_K tensors with five runs each. DEBUG=4 parsing confirms the intended source
+shape difference (`u32_scalar` v1 vs `vector_u32x4` tile custom), but the gain
+range is `-2.04%` to `+7.51%`, median `-0.36%`. This rejects raw custom
+`tg_uint4` source as a runtime-promotion path. It remains useful as a construction
+proof for a future core semantic op.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

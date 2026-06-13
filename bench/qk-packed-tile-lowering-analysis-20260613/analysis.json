@@ -1,0 +1,448 @@
+{
+  "comparisons": [
+    {
+      "gain_pct": -2.0397229980316456,
+      "status": "compared",
+      "tensor": "blk.0.attn_k.weight",
+      "tile_custom_max_abs_median": 0.0019998550415039062,
+      "tile_custom_median_ms": 0.13720800052396953,
+      "tile_custom_median_q4_eff_gbs": 17.195032293964836,
+      "v1_median_ms": 0.13440933738214275,
+      "v1_median_q4_eff_gbs": 17.553066222566244
+    },
+    {
+      "gain_pct": -1.098322462951118,
+      "status": "compared",
+      "tensor": "blk.0.attn_output.weight",
+      "tile_custom_max_abs_median": 0.003206014633178711,
+      "tile_custom_median_ms": 0.13775566670422754,
+      "tile_custom_median_q4_eff_gbs": 68.50668452182363,
+      "v1_median_ms": 0.13624266527282694,
+      "v1_median_q4_eff_gbs": 69.26746464554235
+    },
+    {
+      "gain_pct": -0.3556126290126027,
+      "status": "compared",
+      "tensor": "blk.0.attn_q.weight",
+      "tile_custom_max_abs_median": 0.002382993698120117,
+      "tile_custom_median_ms": 0.13704067290139696,
+      "tile_custom_median_q4_eff_gbs": 68.86411019588476,
+      "v1_median_ms": 0.13655333896167576,
+      "v1_median_q4_eff_gbs": 69.10987363442342
+    },
+    {
+      "gain_pct": 0.7588745069263991,
+      "status": "compared",
+      "tensor": "blk.0.ffn_gate.weight",
+      "tile_custom_max_abs_median": 0.00179290771484375,
+      "tile_custom_median_ms": 0.1364296670847883,
+      "tile_custom_median_q4_eff_gbs": 207.51756274832027,
+      "v1_median_ms": 0.1374649970481793,
+      "v1_median_q4_eff_gbs": 205.95462559881514
+    },
+    {
+      "gain_pct": 7.505136860283024,
+      "status": "compared",
+      "tensor": "blk.0.ffn_up.weight",
+      "tile_custom_max_abs_median": 0.0034046173095703125,
+      "tile_custom_median_ms": 0.13300666857200363,
+      "tile_custom_median_q4_eff_gbs": 212.85813939978084,
+      "v1_median_ms": 0.14298900108163556,
+      "v1_median_q4_eff_gbs": 197.99811024511118
+    }
+  ],
+  "config": {
+    "device": "AMD",
+    "iters": 3,
+    "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+    "runs": 5,
+    "tensors": [
+      "blk.0.ffn_gate.weight",
+      "blk.0.ffn_up.weight",
+      "blk.0.attn_output.weight",
+      "blk.0.attn_q.weight",
+      "blk.0.attn_k.weight"
+    ]
+  },
+  "kind": "qk_packed_tile_lowering_analysis",
+  "modes": [
+    {
+      "mode": "tile_custom",
+      "ms": {
+        "max": 0.14483900546717146,
+        "mean": 0.13793193502351642,
+        "median": 0.13720800052396953,
+        "min": 0.13323366874828935,
+        "n": 5,
+        "stdev": 0.004659116237418703
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.0019998550415039062,
+        "mean": 0.0019998550415039062,
+        "median": 0.0019998550415039062,
+        "min": 0.0019998550415039062,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 17.707956420965044,
+        "mean": 17.120176144118282,
+        "median": 17.195032293964836,
+        "min": 16.289092792305503,
+        "n": 5,
+        "stdev": 0.5697602493340669
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/tile_custom/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/tile_custom/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/tile_custom/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/tile_custom/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/tile_custom/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.attn_k.weight"
+    },
+    {
+      "mode": "v1_partial",
+      "ms": {
+        "max": 0.13791900710202754,
+        "mean": 0.13484606752172112,
+        "median": 0.13440933738214275,
+        "min": 0.13183432747609913,
+        "n": 5,
+        "stdev": 0.0022262395477990215
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.002002716064453125,
+        "mean": 0.002002716064453125,
+        "median": 0.002002716064453125,
+        "min": 0.002002716064453125,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 17.89591561748383,
+        "mean": 17.50003027524214,
+        "median": 17.553066222566244,
+        "min": 17.10638765151983,
+        "n": 5,
+        "stdev": 0.2887890510493511
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/v1_partial/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/v1_partial/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/v1_partial/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/v1_partial/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_k_weight/v1_partial/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.attn_k.weight"
+    },
+    {
+      "mode": "tile_custom",
+      "ms": {
+        "max": 0.13828333855296174,
+        "mean": 0.13719119985277456,
+        "median": 0.13775566670422754,
+        "min": 0.13460966874845326,
+        "n": 5,
+        "stdev": 0.0014967244435702173
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.003206014633178711,
+        "mean": 0.003206014633178711,
+        "median": 0.003206014633178711,
+        "min": 0.003206014633178711,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 70.10777225546391,
+        "mean": 68.79518396007042,
+        "median": 68.50668452182363,
+        "min": 68.24527161951339,
+        "n": 5,
+        "stdev": 0.7598641397182774
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/tile_custom/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/tile_custom/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/tile_custom/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/tile_custom/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/tile_custom/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.attn_output.weight"
+    },
+    {
+      "mode": "v1_partial",
+      "ms": {
+        "max": 0.14065433060750365,
+        "mean": 0.1368813313699017,
+        "median": 0.13624266527282694,
+        "min": 0.13218833676849803,
+        "n": 5,
+        "stdev": 0.003553612955366853
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.003206968307495117,
+        "mean": 0.003206968307495117,
+        "median": 0.003206968307495117,
+        "min": 0.003206968307495117,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 71.39195658787492,
+        "mean": 68.98158477561448,
+        "median": 69.26746464554235,
+        "min": 67.09486980770248,
+        "n": 5,
+        "stdev": 1.7967577447600076
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/v1_partial/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/v1_partial/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/v1_partial/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/v1_partial/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_output_weight/v1_partial/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.attn_output.weight"
+    },
+    {
+      "mode": "tile_custom",
+      "ms": {
+        "max": 0.13903800087670484,
+        "mean": 0.1370828695750485,
+        "median": 0.13704067290139696,
+        "min": 0.13530433837634823,
+        "n": 5,
+        "stdev": 0.001679663521133716
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.002382993698120117,
+        "mean": 0.002382993698120117,
+        "median": 0.002382993698120117,
+        "min": 0.002382993698120117,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 69.74783006403334,
+        "mean": 68.85117711650523,
+        "median": 68.86411019588476,
+        "min": 67.87485392837776,
+        "n": 5,
+        "stdev": 0.8431413763673555
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/tile_custom/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/tile_custom/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/tile_custom/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/tile_custom/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/tile_custom/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "mode": "v1_partial",
+      "ms": {
+        "max": 0.1438103305796782,
+        "mean": 0.13742626567060748,
+        "median": 0.13655333896167576,
+        "min": 0.13366766506806016,
+        "n": 5,
+        "stdev": 0.00399697623798794
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.0023856163024902344,
+        "mean": 0.0023856163024902344,
+        "median": 0.0023856163024902344,
+        "min": 0.0023856163024902344,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 70.60184671584432,
+        "mean": 68.71644113365473,
+        "median": 69.10987363442342,
+        "min": 65.62243450773046,
+        "n": 5,
+        "stdev": 1.958142059871183
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/v1_partial/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/v1_partial/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/v1_partial/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/v1_partial/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_attn_q_weight/v1_partial/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "mode": "tile_custom",
+      "ms": {
+        "max": 0.1385206705890596,
+        "mean": 0.13595693356667957,
+        "median": 0.1364296670847883,
+        "min": 0.1314303275042524,
+        "n": 5,
+        "stdev": 0.0028080978678944294
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.00179290771484375,
+        "mean": 0.00179290771484375,
+        "median": 0.00179290771484375,
+        "min": 0.00179290771484375,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 215.41110440498588,
+        "mean": 208.3113724313887,
+        "median": 207.51756274832027,
+        "min": 204.3850342306678,
+        "n": 5,
+        "stdev": 4.373312433502842
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/tile_custom/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/tile_custom/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/tile_custom/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/tile_custom/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/tile_custom/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "mode": "v1_partial",
+      "ms": {
+        "max": 0.14389700178677836,
+        "mean": 0.13746699939171472,
+        "median": 0.1374649970481793,
+        "min": 0.13212833437137306,
+        "n": 5,
+        "stdev": 0.004890506262866227
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.0017924308776855469,
+        "mean": 0.0017924308776855469,
+        "median": 0.0017924308776855469,
+        "min": 0.0017924308776855469,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 214.27313176010173,
+        "mean": 206.15933906464716,
+        "median": 205.95462559881514,
+        "min": 196.7487275513293,
+        "n": 5,
+        "stdev": 7.300236166378101
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/v1_partial/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/v1_partial/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/v1_partial/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/v1_partial/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_gate_weight/v1_partial/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "mode": "tile_custom",
+      "ms": {
+        "max": 0.13794600575541457,
+        "mean": 0.13372733374126256,
+        "median": 0.13300666857200363,
+        "min": 0.13098266208544374,
+        "n": 5,
+        "stdev": 0.0026827806469504403
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.0034046173095703125,
+        "mean": 0.0034046173095703125,
+        "median": 0.0034046173095703125,
+        "min": 0.0034046173095703125,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 216.14732476220072,
+        "mean": 211.77834609136653,
+        "median": 212.85813939978084,
+        "min": 205.23647527858003,
+        "n": 5,
+        "stdev": 4.194645263743053
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/tile_custom/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/tile_custom/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/tile_custom/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/tile_custom/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/tile_custom/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.ffn_up.weight"
+    },
+    {
+      "mode": "v1_partial",
+      "ms": {
+        "max": 0.1457069981067131,
+        "mean": 0.14318906857321662,
+        "median": 0.14298900108163556,
+        "min": 0.13981933201042315,
+        "n": 5,
+        "stdev": 0.0024628538597830816
+      },
+      "primitive_gemv_max_abs": {
+        "max": 0.0033979415893554688,
+        "mean": 0.0033979415893554688,
+        "median": 0.0033979415893554688,
+        "min": 0.0033979415893554688,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "q4_eff_gbs": {
+        "max": 202.48667757824398,
+        "mean": 197.76844566248297,
+        "median": 197.99811024511118,
+        "min": 194.3046824646346,
+        "n": 5,
+        "stdev": 3.4147514578118034
+      },
+      "raw_files": [
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/v1_partial/run-00.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/v1_partial/run-01.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/v1_partial/run-02.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/v1_partial/run-03.json",
+        "bench/qk-packed-tile-lowering-analysis-20260613/raw/blk_0_ffn_up_weight/v1_partial/run-04.json"
+      ],
+      "runs": 5,
+      "tensor": "blk.0.ffn_up.weight"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "load_width_report": "bench/qk-packed-tile-lowering-analysis-20260613/source/load-width-report.json",
+    "logs": [
+      "bench/qk-packed-tile-lowering-analysis-20260613/source/v1_partial-debug4.log",
+      "bench/qk-packed-tile-lowering-analysis-20260613/source/tile_custom-debug4.log"
+    ],
+    "source_rows": 64,
+    "source_tensor": "blk.0.ffn_gate.weight"
+  },
+  "summary": {
+    "decision": "diagnose_only_not_promoted",
+    "max_gain_pct": 7.505136860283024,
+    "measured_tensors": 5,
+    "median_gain_pct": -0.3556126290126027,
+    "min_gain_pct": -2.0397229980316456,
+    "promotion_gate": "median tile_custom gain >=10% on every measured Q4_K tensor before full decode"
+  }
+}
