@@ -80,6 +80,7 @@ schedule knob.
 | Packed QK semantic op contract | Added, design-only. `extra/qk_semantic_op.py` defines the first `QK_BLOCK_DOT` contract over Q4_K `u32x4_aligned` load tiles and records `8` Q4_K contract rows for 8B/14B in `bench/qk-packed-semantic-op-20260613/`. The op may hide block-local unpack/decode/load spelling, but must not hide row loop, K-block loop, split-K layout, partial reduction, full GEMV body, or runtime policy selection. | Next implementation is a minimal compile gate for a renderer/core semantic lowering. No runtime path, microbench, full decode, or 32B is justified by this contract alone. |
 | `QK_BLOCK_DOT` compile gate | Passed compile shape. `bench/qk-block-dot-compile-gate-20260613/` adds the first core `Ops.QK_BLOCK_DOT` lowering gate for the fixed 8B Q4_K `ffn_gate` shape. It preserves the v1 32-lane scheduled shape, passes the AMD GEMV numeric gate, emits source `tg_uint4`, and target disassembly shows `5` `global_load_b128` instructions versus `1` for v1, with target body size within the pre-registered 2x gate (`333` vs `296` parsed instructions). | Compile shape is no longer the blocker. The following microbench row is the performance verdict. |
 | `QK_BLOCK_DOT` repeated microbench | Rejected. `bench/qk-block-dot-microbench-20260613/` compares the full 8B `blk.0.ffn_gate.weight` tensor over five paired AMD device-timed runs. v1 median is `407.99` device Q4 GB/s; `QK_BLOCK_DOT` median is `285.01` device Q4 GB/s, a `-30.14%` regression versus the required `>=10%` promotion bar. Correctness passes. | Do not integrate `QK_BLOCK_DOT`, run full decode, broaden to 14B/32B, or promote a generated policy. The semantic op preserved scheduling and emitted wider loads, but the block-local C lowering is slower than v1. |
+| Three-way packed-load diagnostic | Rejected. `bench/qk-threeway-load-microbench-20260613/` compares v1 partial, schedulable `vector_load`, and opaque `tile_custom` on the full 8B `blk.0.ffn_gate.weight` tensor using AMD device time. v1 median is `380.29` device Q4 GB/s; `vector_load` fails construction with the known vector-shape mismatch; `tile_custom` passes correctness but reaches only `36.96` device Q4 GB/s (`-90.28%`). | Stop the wide-load-only branch. The next research step is not hardening `vector_load` or adding more raw `tg_uint4` variants; it is diagnosing instruction mix / load efficiency with counters/source or designing a lower-level renderer-quality lowering. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -219,6 +220,13 @@ It is a representation/lowering boundary:
     necessary, but this lowering body is not good enough. Future work should
     diagnose instruction mix / load efficiency or move to a lower-level
     renderer/assembly-quality lowering, not promote this op.
+27. The three-way packed-load diagnostic closes the cheap Step-1 branch. The
+    schedulable `vector_load` form is still blocked by vector-shape validation,
+    while the opaque `tile_custom` form is not a hidden win under device timing:
+    it reaches only `36.96` device Q4 GB/s versus v1 at `380.29`. That means
+    wide loads alone are not the missing vacuum. The next useful evidence must
+    explain what the current v1 kernel and the losing wide-load kernels are
+    actually issuing and stalling on.
 
 So the machine-first research hypothesis is:
 
@@ -297,6 +305,8 @@ worth doing only if the research itself is the goal.
 - Do not add another schedule/codegen family unless its design note states the
   memory-traffic mechanism it changes and the generated artifact reports the
   intended load-width/coalescing evidence.
+- Do not continue the wide-load-only branch from `vector_load` or raw
+  `tile_custom`. The repeated device-timed three-way diagnostic rejected it.
 - Do not put WMMA on the batch-1 decode track unless a source/counter artifact
   proves the reference decode path uses it on gfx1100. Treat WMMA as a future
   prefill/GEMM track by default.
@@ -344,6 +354,8 @@ worth doing only if the research itself is the goal.
   `docs/amd-decode-packed-qk-tile-design.md`
 - Packed-QK tile consumption probe:
   `bench/qk-packed-tile-consumption-20260613/README.md`
+- Three-way packed-load diagnostic:
+  `bench/qk-threeway-load-microbench-20260613/README.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

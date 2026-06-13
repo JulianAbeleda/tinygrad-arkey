@@ -136,6 +136,16 @@ GEMV so the scheduler can still see row, K-block, split-K, and reduction axes.
 8B/14B and skips Q6_K by rule. This is phase-1 contract evidence only; the next
 commit should be a minimal compile gate for an AMD renderer/core lowering.
 
+Update, three-way packed-load diagnostic: `extra/qk_threeway_load_microbench.py`
+compares v1 partial, schedulable `vector_load`, and opaque `tile_custom` on the
+dominant 8B Q4_K `ffn_gate` tensor using AMD device time. The verdict is
+`wide_load_not_sufficient`: v1 reaches `380.29` device Q4 GB/s, `vector_load`
+fails construction with the known vector-shape mismatch, and `tile_custom`
+passes correctness but reaches only `36.96` device Q4 GB/s. This closes the
+cheap "maybe the vacuum is already in the box" branch. The next research step
+must explain instruction mix / load efficiency or move to a lower-level
+renderer-quality lowering; it should not be another vector-load-only retry.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path
@@ -158,6 +168,11 @@ After the roofline pass, the concrete next layer is narrower: create a semantic
 packed-load lowering for Q4_K/Q6_K so search can vary memory representation and
 load shape. The previous schedule surfaces gave search a real loop, but not a
 real memory-access axis. That is why they saturated.
+
+The first semantic and raw wide-load attempts have now been rejected by
+device-timed gates. The remaining direction is still Ansor-style, but the next
+artifact should be diagnostic or lower-level: prove the issued instruction mix,
+occupancy, and memory transactions before adding a new generated family.
 
 ## Implementation Result
 

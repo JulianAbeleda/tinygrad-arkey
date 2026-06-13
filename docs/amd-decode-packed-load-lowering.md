@@ -80,6 +80,16 @@ and reduction scheduling visible. Artifact:
 `bench/qk-packed-semantic-op-20260613/README.md`. This is a design-only
 contract, not a runtime lowering or speed claim.
 
+Update 10: the cheap three-way load diagnostic has run and rejects the
+wide-load-only branch under AMD device timing. `vector_load` still fails
+construction with the known vector-shape mismatch. `tile_custom` passes
+correctness but reaches only `36.96` device Q4 GB/s on 8B `ffn_gate`, versus
+v1 at `380.29`. Artifact:
+`bench/qk-threeway-load-microbench-20260613/README.md`. This supersedes treating
+the earlier weak wall-time `tile_custom` smoke signal as actionable. The next
+work is instruction/source/counter diagnosis or lower-level renderer-quality
+lowering, not another raw vector-load retry.
+
 ## Problem
 
 The accepted Q4_K/Q6_K primitive path is correct and substantially faster than
@@ -164,6 +174,13 @@ Candidate lowerings should try to change one memory-access mechanism at a time:
    evidence plus preserved scheduling is therefore not sufficient with this
    C-style block body.
 
+   Three-way diagnostic:
+   `bench/qk-threeway-load-microbench-20260613/` compares the current v1
+   partial kernel, schedulable `vector_load`, and opaque `tile_custom` on the
+   same dominant 8B `ffn_gate` tensor. It rejects load width alone:
+   `vector_load` is invalid, and `tile_custom` is a `-90.28%` device-time
+   regression versus v1.
+
 3. **Activation staging only when it supports load efficiency**
    q8_1 staging is useful if it aligns the compute with packed dot and keeps ALU
    hidden under memory. It is not a standalone speed claim.
@@ -214,6 +231,8 @@ Do not install a runtime path from this family until all are true:
   microbenching.
 - No runtime integration or full decode for the current `QK_BLOCK_DOT`
   lowering. Its repeated microbench regressed against v1.
+- No continuation of the wide-load-only `vector_load` / raw `tile_custom`
+  branch. The three-way device-timed diagnostic rejects it.
 
 ## Relationship To Ansor
 

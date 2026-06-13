@@ -221,6 +221,16 @@ generated-policy storage mode.
       GB/s, `QK_BLOCK_DOT` median `285.01`, gain `-30.14%`, correctness pass.
       Verdict: `qk_block_dot_microbench_rejected`; no full decode, runtime
       integration, 14B/32B broadening, or policy promotion.
+- [x] Ran the three-way packed-load diagnostic:
+      `extra/qk_threeway_load_microbench.py`,
+      `test/external/test_qk_threeway_load_microbench.py`, and
+      `bench/qk-threeway-load-microbench-20260613/`. On the full 8B Q4_K
+      `ffn_gate` tensor, v1 partial reaches `380.29` device Q4 GB/s,
+      schedulable `vector_load` fails construction with the known vector-shape
+      mismatch, and opaque `tile_custom` passes correctness but reaches only
+      `36.96` device Q4 GB/s (`-90.28%`). Verdict:
+      `wide_load_not_sufficient`; no full decode, runtime integration, or
+      further wide-load-only retry.
 
 ## Open But Not Urgent
 
@@ -256,6 +266,8 @@ generated-policy storage mode.
       bar.
 - [ ] Do not retry the current C-style `QK_BLOCK_DOT` lowering as a runtime
       family; its repeated microbench regressed against v1.
+- [ ] Do not continue the `vector_load` / raw `tile_custom` wide-load-only
+      branch; the device-timed three-way diagnostic rejected it.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
@@ -277,10 +289,12 @@ generated-policy storage mode.
    the real GEMV graph. The packed-tile consumption probe then showed normal
    UOps cannot consume the tile but a custom semantic kernel can. The minimal
    `QK_BLOCK_DOT` compile gate passes, but the repeated full-shape microbench
-   rejects it at `-30.14%` versus v1. Resume only with diagnosis of why the
-   wider-load semantic block loses, or with a lower-level renderer/assembly
-   quality lowering. Any future microbench win starts as `raw_accept` and needs
-   a confirmation rerun before promotion.
+   rejects it at `-30.14%` versus v1. The three-way packed-load diagnostic then
+   rejects the cheap load-width-only branch too: `vector_load` is invalid and
+   `tile_custom` is a `-90.28%` device-time regression. Resume only with
+   diagnosis of instruction mix / memory transactions / occupancy, or with a
+   lower-level renderer/assembly-quality lowering. Any future microbench win
+   starts as `raw_accept` and needs a confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

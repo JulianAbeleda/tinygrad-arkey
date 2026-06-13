@@ -1,0 +1,134 @@
+model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}
+variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random
+primitive: mode=vector_load parts=1 row_group=1 schedule=none opts=['LOCAL:0:32']
+scheduled     2 kernels in    19.69 ms | CACHE MISS 2ec3118d |      41 uops in cache | ./extra/q4_k_bench.py:108
+opened device DISK:~/models/Qwen3-8B-Q4_K_M.gguf from pid:160090
+*** DISK:/h    1 view   27.00 MB @ 932517696                    arg  2 mem   0.00 GB tm     10.83ms/    10.83ms (      0 GFLOPS    0|0      GB/s)
+AMDDevice: opening 0 with target (11, 0, 0) arch gfx1100
+opened device AMD from pid:160090
+*** AMD        2 copy   27.00 MB,     AMD <- DISK:/h            arg  2 mem   0.03 GB tm    110.47ms/   121.31ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        3 E_12288_16_8_2_4_4                             arg  2 mem   0.23 GB tm    370.28us/   121.68ms (    671 GFLOPS  620|680    GB/s)
+*** AMD        4 E_12288_16_8_2_4_4                             arg  2 mem   0.43 GB tm    360.16us/   122.04ms (    690 GFLOPS  638|699    GB/s)
+scheduled     3 kernels in    21.05 ms | CACHE MISS 33872de5 |    1111 uops in cache | ./extra/q4_k_bench.py:18
+*** AMD        5 r_128_32_3_1024_4                              arg  3 mem   0.43 GB tm   1651.36us/   123.69ms (     61 GFLOPS  244|244    GB/s)
+*** AMD        6 r_256_16_3                                     arg  2 mem   0.43 GB tm      6.52us/   123.69ms (     12 GFLOPS    2|13     GB/s)
+*** AMD        7 r_16_16                                        arg  2 mem   0.43 GB tm      7.32us/   123.70ms (      0 GFLOPS    0|0      GB/s)
+correctness: PASS blk.0.ffn_gate.weight
+*** AMD        8 E_12288_16_8_2_4_4n1                           arg  2 mem   0.13 GB tm    513.92us/   124.22ms (    484 GFLOPS  251|294    GB/s)
+opened device PYTHON from pid:160090
+scheduled     5 kernels in    31.48 ms | CACHE MISS 216fa51e |    1945 uops in cache | ./extra/q4_k_bench.py:115
+*** AMD        9 copy        8 B,     AMD <- PYTHON             arg  2 mem   0.13 GB tm    809.24us/   125.03ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       10 copy        8 B,     AMD <- PYTHON             arg  2 mem   0.13 GB tm     66.18us/   125.09ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       11 E_2                                            arg  1 mem   0.13 GB tm     15.48us/   125.11ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       12 E_64_32_4                                      arg  3 mem   0.13 GB tm      9.68us/   125.12ms (    242 GFLOPS    3|3      GB/s)
+*** AMD       13 E_32_32_4                                      arg  2 mem   0.13 GB tm      8.60us/   125.13ms (      4 GFLOPS    5|5      GB/s)
+*** AMD       14 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    268.64us/   125.39ms (    375 GFLOPS  375|500    GB/s)
+JIT captured 1 linears with 0 inputs
+*** AMD        1 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    206.12us/     0.21ms (    488 GFLOPS  489|651    GB/s)
+*** AMD        2 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    207.08us/     0.41ms (    486 GFLOPS  486|648    GB/s)
+*** AMD        3 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    206.12us/     0.62ms (    488 GFLOPS  489|651    GB/s)
+*** AMD        4 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    202.48us/     0.82ms (    497 GFLOPS  497|663    GB/s)
+*** AMD        5 r_128_32_3_1024_4n1                            arg  3 mem   0.13 GB tm    209.72us/     1.03ms (    480 GFLOPS  480|640    GB/s)
+*** AMD        6 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    410.60us/     1.44ms (   1052 GFLOPS   69|164    GB/s)
+JIT captured 1 linears with 0 inputs
+*** AMD        1 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    351.48us/     0.35ms (   1229 GFLOPS   81|192    GB/s)
+*** AMD        2 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    287.96us/     0.64ms (   1501 GFLOPS   98|234    GB/s)
+*** AMD        3 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    287.32us/     0.93ms (   1504 GFLOPS   99|235    GB/s)
+*** AMD        4 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    349.72us/     1.28ms (   1236 GFLOPS   81|193    GB/s)
+*** AMD        5 r_128_32_3_16_4_2_32                           arg  3 mem   0.13 GB tm    287.44us/     1.56ms (   1503 GFLOPS   99|234    GB/s)
+scheduled     2 kernels in     2.28 ms | CACHE MISS dffde006 |    5178 uops in cache | ./extra/q4_k_bench.py:135
+*** DISK:/h    6 view   27.00 MB @ 932517696                    arg  2 mem   0.13 GB tm      3.51us/     1.57ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        7 copy   27.00 MB,     AMD <- DISK:/h            arg  2 mem   0.16 GB tm     15.57ms/    17.14ms (      0 GFLOPS    2|2      GB/s)
+scheduled     2 kernels in     2.20 ms | CACHE MISS e3e169ff |    5206 uops in cache | ./extra/q4_k_bench.py:142
+*** DISK:/h    8 view    4.50 KB @ 932517696                    arg  2 mem   0.16 GB tm      2.24us/    17.14ms (      0 GFLOPS    0|0      GB/s)
+*** AMD        9 copy    4.50 KB,     AMD <- DISK:/h            arg  2 mem   0.16 GB tm    308.02us/    17.45ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       10 q4k_unpack_2_4096                              arg  2 mem   0.16 GB tm      7.76us/    17.46ms (     15 GFLOPS    5|5      GB/s)
+scheduled     4 kernels in    28.84 ms | CACHE MISS 257d7b50 |    6268 uops in cache | ./extra/q4_k_bench.py:145
+*** DISK:/h   11 view    4.50 KB @ 932517696                    arg  2 mem   0.16 GB tm      2.37us/    17.46ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       12 copy    4.50 KB,     AMD <- DISK:/h            arg  2 mem   0.16 GB tm    795.96us/    18.25ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       13 E_48_32_3                                      arg  2 mem   0.16 GB tm     11.00us/    18.27ms (      0 GFLOPS    1|1      GB/s)
+*** AMD       14 E_2_16_8_2_4_4                                 arg  2 mem   0.16 GB tm      8.32us/    18.27ms (      5 GFLOPS    4|5      GB/s)
+*** AMD       15 r_16_512                                       arg  3 mem   0.16 GB tm     24.80us/    18.30ms (      3 GFLOPS    3|3      GB/s)
+primitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0
+*** AMD       16 r_128_32_3_1024_4n1                            arg  3 mem   0.16 GB tm    267.68us/    18.57ms (    376 GFLOPS  376|502    GB/s)
+scheduled     2 kernels in     8.25 ms | CACHE MISS a81878e2 |    7511 uops in cache | ./extra/q4_k_bench.py:175
+Traceback (most recent call last):
+  File "./extra/q4_k_bench.py", line 175, in <module>
+    got = primitive_gemv().realize()
+          ^^^^^^^^^^^^^^^^
+  File "./tinygrad/engine/jit.py", line 275, in __call__
+    if len(params:=get_parameters(ret)): Tensor.realize(*params)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/tensor.py", line 1417, in _wrapper
+    ret = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/tensor.py", line 224, in realize
+    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)
+  File "./tinygrad/engine/realize.py", line 254, in run_linear
+    if not jit: linear = compile_linear(linear, validate=VALIDATE_WITH_CPU)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/engine/realize.py", line 247, in compile_linear
+    linear = graph_rewrite(linear, pm_compile, name="precompile kernels", walk=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1471, in wrap_profile_matches
+    return fxn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1651, in graph_rewrite
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1578, in walk_rewrite
+    if self.pm is not None and (rewritten:=self.pm_rewrite(new_n)) is not None: new_n = rewritten
+                                           ^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1550, in pm_rewrite
+    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1387, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "./tinygrad/engine/realize.py", line 228, in <lambda>
+    call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/codegen/__init__.py", line 235, in to_program
+    if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
+                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1435, in __wrapper
+    ret = func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/contextlib.py", line 81, in inner
+    return func(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/codegen/__init__.py", line 218, in do_to_program
+    full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/codegen/__init__.py", line 57, in full_rewrite_to_sink
+    sink = graph_rewrite(ast, pm_mops+pm_syntactic_sugar+pm_store_ranges, ctx=itertools.count(1000), name="early movement ops", bottom_up=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1471, in wrap_profile_matches
+    return fxn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1651, in graph_rewrite
+    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1600, in unified_rewrite
+    new_n, test_n = test_n, self.cached_bpm_rewrite(test_n)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1554, in cached_bpm_rewrite
+    ret = self.bpm_cache[x] = unwrap(self.bpm).rewrite(x, self.ctx)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 1387, in rewrite
+    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret
+             ^^^^^^^^^^^^^^^
+  File "<string>", line 3, in compiled_match
+  File "./tinygrad/schedule/rangeify.py", line 20, in add_ranges_to_store
+    if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
+                                  ^^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 133, in __get__
+    for node in x.toposort(gate=lambda node: self.nm not in node.__dict__): node.__dict__[self.nm] = self.fxn(node)
+                                                                                                     ^^^^^^^^^^^^^^
+  File "./tinygrad/uop/ops.py", line 374, in _shape
+    raise RuntimeError(f"shape mismatch at {self.op}: {input_shapes} {[x.op for x in self.src]}")
+RuntimeError: shape mismatch at Ops.MUL: [(), (4,)] [Ops.INDEX, Ops.CAST]

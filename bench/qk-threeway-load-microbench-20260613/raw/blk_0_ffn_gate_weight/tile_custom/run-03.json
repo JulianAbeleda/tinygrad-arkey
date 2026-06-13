@@ -1,0 +1,17 @@
+{
+  "command": ".venv/bin/python extra/q4_k_bench.py ~/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 5 --format text --activation random --seed 1340 --primitive --primitive-mode tile_custom --primitive-parts 1",
+  "device_q4_gbs": 37.01,
+  "elapsed_s": 1.849,
+  "kernels": 1.0,
+  "mode": "tile_custom",
+  "primitive_gemv_max_abs": 0.00212955,
+  "raw_file": "bench/qk-threeway-load-microbench-20260613/raw/blk_0_ffn_gate_weight/tile_custom/run-03.json",
+  "returncode": 0,
+  "run": 3,
+  "shape": "12288x4096",
+  "status": "pass",
+  "stdout": "bench/qk-threeway-load-microbench-20260613/raw/blk_0_ffn_gate_weight/tile_custom/run-03.stdout",
+  "tail": "*** AMD       18 r_16_768                                       arg  3 mem   0.16 GB tm     32.12us/    19.71ms (      3 GFLOPS    2|2      GB/s)\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00212955\nJIT captured 1 linears with 0 inputs\n*** AMD       19 q4k_gemv_tile_custom_partial_12288_4096_1      arg  3 mem   0.16 GB tm    764.84us/    20.47ms (      0 GFLOPS    0|0      GB/s)\n*** AMD        1 q4k_gemv_tile_custom_partial_12288_4096_1      arg  3 mem   0.16 GB tm    765.04us/     0.77ms (      0 GFLOPS    0|0      GB/s)\n*** AMD        2 q4k_gemv_tile_custom_partial_12288_4096_1      arg  3 mem   0.16 GB tm    764.76us/     1.53ms (      0 GFLOPS    0|0      GB/s)\n*** AMD        3 q4k_gemv_tile_custom_partial_12288_4096_1      arg  3 mem   0.16 GB tm    764.24us/     2.29ms (      0 GFLOPS    0|0      GB/s)\n*** AMD        4 q4k_gemv_tile_custom_partial_12288_4096_1      arg  3 mem   0.16 GB tm    765.08us/     3.06ms (      0 GFLOPS    0|0      GB/s)\n*** AMD        5 q4k_gemv_tile_custom_partial_12288_4096_1      arg  3 mem   0.16 GB tm    765.52us/     3.82ms (      0 GFLOPS    0|0      GB/s)\nblk.0.ffn_gate.weight 12288x4096 matmul_decoded: 0.727 ms (1375.27/s) q4_eff=38.94 GB/s device_q4_eff=137.60 GB/s kernels=1.0 mem=100.70 MB\nblk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.253 ms (443.76/s) q4_eff=12.56 GB/s device_q4_eff=86.84 GB/s kernels=1.0 mem=28.34 MB\nblk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.997 ms (1003.38/s) q4_eff=28.41 GB/s device_q4_eff=37.01 GB/s kernels=1.0 mem=0.00 MB",
+  "tensor": "blk.0.ffn_gate.weight",
+  "wall_q4_gbs": 28.41
+}
