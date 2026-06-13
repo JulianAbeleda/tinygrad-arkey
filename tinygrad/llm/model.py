@@ -181,6 +181,12 @@ def _qk_storage_mode_from_env() -> str:
     raise ValueError(f"QK_PRIMITIVE_STORAGE must be sidecar, q4_ondemand, or shared, got {mode!r}")
   return mode
 
+def _q6k_effective_storage_mode(requested_mode:str) -> str:
+  # q4_ondemand is a Q4_K-only experiment. Q6_K stays persistent unless storage is shared.
+  if requested_mode not in ("sidecar", "q4_ondemand", "shared"):
+    raise ValueError(f"unsupported QK primitive storage mode {requested_mode!r}")
+  return "shared" if requested_mode == "shared" else "sidecar"
+
 def _qk_storage_summary(linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]) -> dict:
   by_kind: collections.Counter[str] = collections.Counter()
   by_mode: collections.Counter[str] = collections.Counter()
@@ -756,7 +762,7 @@ class Transformer:
       primitive_linears = []
       primitive_budget = QKPrimitiveBudget(_qk_storage_cap_from_env(), bool(getenv("QK_GENERATED_POLICY_STRICT", 0)))
       q4_storage_mode = _qk_storage_mode_from_env()
-      q6_storage_mode = "shared" if q4_storage_mode == "shared" else "sidecar"
+      q6_storage_mode = _q6k_effective_storage_mode(q4_storage_mode)
       generated_policy = _load_qk_generated_policy(qk_generated_policy_path) if use_qk_generated_policy else None
       if generated_policy is not None:
         if bool(getenv("QK_GENERATED_POLICY_DEBUG", 0)):
@@ -774,7 +780,9 @@ class Transformer:
         print(f"QK_PRIMITIVE_STORAGE_DEBUG installed={len(primitive_linears)} source_bytes={summary['source_bytes']} "
               f"storage_bytes={summary['persistent_bytes']} shared_bytes={summary['shared_bytes']} "
               f"nonpersistent_bytes={summary['nonpersistent_bytes']} runtime_cap_bytes={cap} "
-              f"runtime_cap_used_bytes={primitive_budget.used_bytes} by_kind={by_kind_s} by_mode={by_mode_s}")
+              f"runtime_cap_used_bytes={primitive_budget.used_bytes} by_kind={by_kind_s} by_mode={by_mode_s} "
+              f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
+              f"q6_effective_storage_mode={q6_storage_mode}")
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:

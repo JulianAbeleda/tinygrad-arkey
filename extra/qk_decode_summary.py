@@ -12,6 +12,9 @@ STORAGE_RE = re.compile(
   r"(?: shared_bytes=(?P<shared_bytes>\d+) nonpersistent_bytes=(?P<nonpersistent_bytes>\d+))? "
   r"runtime_cap_bytes=(?P<runtime_cap_bytes>-?\d+) "
   r"runtime_cap_used_bytes=(?P<runtime_cap_used_bytes>\d+) by_kind=(?P<by_kind>\S+) by_mode=(?P<by_mode>\S+)"
+  r"(?: requested_storage_mode=(?P<requested_storage_mode>\S+) "
+  r"q4_effective_storage_mode=(?P<q4_effective_storage_mode>\S+) "
+  r"q6_effective_storage_mode=(?P<q6_effective_storage_mode>\S+))?"
 )
 
 def _mean(xs:list[float]) -> float|None:
@@ -49,7 +52,8 @@ def parse_log(label:str, path:pathlib.Path) -> dict:
     }
   storage = None
   if (m:=list(STORAGE_RE.finditer(text))):
-    storage = {k: int(v) if k not in ("by_kind", "by_mode") and v is not None else v for k, v in m[-1].groupdict().items()}
+    string_fields = {"by_kind", "by_mode", "requested_storage_mode", "q4_effective_storage_mode", "q6_effective_storage_mode"}
+    storage = {k: int(v) if k not in string_fields and v is not None else v for k, v in m[-1].groupdict().items()}
     storage["shared_bytes"] = storage["shared_bytes"] or 0
     storage["nonpersistent_bytes"] = storage["nonpersistent_bytes"] or 0
   return {

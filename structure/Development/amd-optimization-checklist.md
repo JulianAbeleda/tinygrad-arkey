@@ -231,6 +231,13 @@ generated-policy storage mode.
       correctness but reaches only `36.99` device Q4 GB/s (`-90.32%`). Verdict:
       `wide_load_not_sufficient`; no full decode, runtime integration, or
       further wide-load-only retry.
+- [x] Hardened the QK evidence/tooling edges after the bug audit:
+      devectorizer tests now cover uint32 vec4 folding, scalar tails, unaligned
+      fallback, and non-empty `VCAT`; Q6K storage reporting records requested
+      versus effective storage mode; matrix/profile/eval parsers fail loudly on
+      malformed artifacts; q8_1 vdot-parallel cannot be promoted to runtime
+      policy; and three-way microbench repeats keep activation inputs fixed
+      unless `--vary-seed` is requested.
 
 ## Open But Not Urgent
 

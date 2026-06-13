@@ -71,6 +71,7 @@ def summarize_model(path:pathlib.Path) -> dict[str, Any]:
 
   gb = generated_batched["summary"]
   gn = generated_named["summary"]
+  gn_buckets = gn.get("bucket_ms_tok") or {}
   top_named = _dominant_buckets(gn, pct_key="bucket_pct_amd", include_residual=False)
   top_batched = _dominant_buckets(gb, pct_key="bucket_pct_wall")
   return {
@@ -92,9 +93,9 @@ def summarize_model(path:pathlib.Path) -> dict[str, Any]:
       "wall_ms_tok": gn["wall_ms_tok"],
       "residual_ms_tok": gn["residual_ms_tok"],
       "dominant_amd_buckets": top_named[:8],
-      "qk_gemv_ms_tok": gn["bucket_ms_tok"].get("q4k_primitive_gemv", 0.0) + gn["bucket_ms_tok"].get("q6k_primitive_gemv", 0.0),
-      "qk_reduction_ms_tok": gn["bucket_ms_tok"].get("q4k_primitive_reduction", 0.0),
-      "fallback_quant_ms_tok": gn["bucket_ms_tok"].get("fallback_quant_fused", 0.0),
+      "qk_gemv_ms_tok": gn_buckets.get("q4k_primitive_gemv", 0.0) + gn_buckets.get("q6k_primitive_gemv", 0.0),
+      "qk_reduction_ms_tok": gn_buckets.get("q4k_primitive_reduction", 0.0),
+      "fallback_quant_ms_tok": gn_buckets.get("fallback_quant_fused", 0.0),
     },
     "explicit_reference": {
       "batched_tok_s": None if explicit_batched is None else explicit_batched["summary"]["tok_s"],

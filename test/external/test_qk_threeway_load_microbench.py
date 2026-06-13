@@ -1,6 +1,7 @@
-import json, pathlib, unittest
+import json, pathlib, tempfile, unittest
+from unittest import mock
 
-from extra.qk_threeway_load_microbench import report_markdown, summarize_runs
+from extra.qk_threeway_load_microbench import _run_one, report_markdown, summarize_runs
 
 
 def _row(tensor:str, mode:str, run:int, status:str, gbs:float|None=None):
@@ -55,6 +56,43 @@ class TestQKThreewayLoadMicrobench(unittest.TestCase):
     report = summarize_runs(_runs(vector_status="construction_error", vector_gbs=None, tile_gbs=103.0))
     self.assertEqual(report["summary"]["overall_decision"], "inconclusive_threeway")
     self.assertIn("opaque no-LOCAL control", report_markdown(report))
+
+  def test_run_one_keeps_seed_fixed_by_default(self):
+    calls = []
+    class Proc:
+      returncode = 0
+      stdout = "\n".join([
+        "primitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.001",
+        "blk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: wall=1.000 ms q4_eff=100.00 GB/s device_q4_eff=100.00 GB/s kernels=1.0",
+      ])
+    def fake_run(cmd, **kwargs):
+      calls.append(cmd)
+      return Proc()
+
+    with tempfile.TemporaryDirectory() as td, mock.patch("extra.qk_threeway_load_microbench.subprocess.run", fake_run):
+      outdir = pathlib.Path(td)
+      row0 = _run_one(self.repo, pathlib.Path("/tmp/model.gguf"), pathlib.Path("python"), "blk.0.ffn_gate.weight", "v1_partial",
+                      0, outdir=outdir, device="AMD", iters=1, seed=1337, timeout=1.0, opts="LOCAL:0:32")
+      row1 = _run_one(self.repo, pathlib.Path("/tmp/model.gguf"), pathlib.Path("python"), "blk.0.ffn_gate.weight", "v1_partial",
+                      1, outdir=outdir, device="AMD", iters=1, seed=1337, timeout=1.0, opts="LOCAL:0:32")
+    self.assertEqual(row0["seed"], 1337)
+    self.assertEqual(row1["seed"], 1337)
+    self.assertEqual(row0["seed_policy"], "fixed")
+    self.assertEqual(calls[0][calls[0].index("--seed") + 1], "1337")
+    self.assertEqual(calls[1][calls[1].index("--seed") + 1], "1337")
+
+  def test_run_one_can_vary_seed_by_run(self):
+    class Proc:
+      returncode = 0
+      stdout = "\n".join([
+        "primitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.001",
+        "blk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: wall=1.000 ms q4_eff=100.00 GB/s device_q4_eff=100.00 GB/s kernels=1.0",
+      ])
+    with tempfile.TemporaryDirectory() as td, mock.patch("extra.qk_threeway_load_microbench.subprocess.run", lambda *args, **kwargs: Proc()):
+      row = _run_one(self.repo, pathlib.Path("/tmp/model.gguf"), pathlib.Path("python"), "blk.0.ffn_gate.weight", "v1_partial",
+                     2, outdir=pathlib.Path(td), device="AMD", iters=1, seed=1337, timeout=1.0, opts="LOCAL:0:32", vary_seed=True)
+    self.assertEqual(row["seed"], 1339)
+    self.assertEqual(row["seed_policy"], "vary_by_run")
 
   def test_committed_artifact_reproduces(self):
     root = self.repo / "bench/qk-threeway-load-microbench-20260613"

@@ -9,13 +9,23 @@ from extra.llm_eval_common import build_prompt_ids, md_text, quality_summary, re
 DEFAULT_TIMEOUT = 1800.0
 
 def _json_from_output(out:str) -> dict[str, Any]:
-  for line in reversed(out.strip().splitlines()):
+  dict_lines:list[tuple[int, dict[str, Any]]] = []
+  for lineno, line in enumerate(out.strip().splitlines(), start=1):
     try:
       data = json.loads(line)
     except json.JSONDecodeError:
       continue
-    if isinstance(data, dict): return data
-  raise RuntimeError("child produced no JSON line\n" + out[-4000:])
+    if isinstance(data, dict): dict_lines.append((lineno, data))
+  summaries = [(lineno, data) for lineno, data in dict_lines if {"mode", "results", "tok_s"}.issubset(data)]
+  if not summaries:
+    if dict_lines:
+      raise RuntimeError("child produced JSON dict lines, but none matched the eval summary schema\n" + out[-4000:])
+    raise RuntimeError("child produced no JSON line\n" + out[-4000:])
+  summary_lineno, summary = summaries[-1]
+  trailing = [lineno for lineno, _ in dict_lines if lineno > summary_lineno]
+  if trailing:
+    raise RuntimeError(f"child produced JSON dict line(s) after eval summary at lines {trailing}\n" + out[-4000:])
+  return summary
 
 def _env_for_mode(args:argparse.Namespace, mode:str) -> dict[str, str]:
   env = {**os.environ, "DEV": args.device, "JIT": "1", "PYTHONPATH": "."}

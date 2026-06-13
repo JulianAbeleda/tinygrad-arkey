@@ -465,6 +465,16 @@ but reaches only `36.99` device Q4 GB/s (`-90.32%`). This closes the cheap
 more raw `tg_uint4` variants, run full decode, or integrate runtime support
 from this result.
 
+QK hardening pass:
+The bug-audit cleanup is committed after the three-way fix. It adds regression
+coverage for shared uint32 vec4 devectorizer folding, tails, unaligned scalar
+fallback, and non-empty `VCAT`; makes Q6K requested/effective storage reporting
+explicit; hardens QK matrix/profile/eval parsers to fail loudly on malformed
+artifacts; proves q8_1 vdot-parallel can remain a research winner but cannot be
+promoted by generated runtime-policy selection; and changes the three-way
+microbench default to fixed repeat seeds, with `--vary-seed` available for
+stress runs.
+
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or

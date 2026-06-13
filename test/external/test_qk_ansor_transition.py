@@ -174,6 +174,43 @@ class TestQKAnsorTransition(unittest.TestCase):
     self.assertEqual(verdict["summary"]["overall_decision"], "descriptor_knob_frontier_exhausted")
     self.assertEqual(verdict["summary"]["models_with_confirmed_accept"], 0)
 
+  def test_loop_benchmark_accept_requires_numeric_gain(self):
+    loop = {"source_candidates": "test"}
+    rows = [{"id": "candidate-a", "changes": []}]
+    with tempfile.TemporaryDirectory() as td:
+      out = pathlib.Path(td)
+      (out / "candidate-a").mkdir()
+      (out / "candidate-a" / "decision.json").write_text(json.dumps({
+        "status": "accept", "gain": None, "explicit": {}, "generated": {}, "ab_match": True,
+      }))
+      with self.assertRaisesRegex(ValueError, "accept rows require numeric gain"):
+        build_matrix("8b", loop, rows, out)
+
+  def test_gap_profile_missing_named_bucket_map_defaults_to_zero(self):
+    generated_batched = {
+      "mode": "QK_GENERATED_POLICY batched",
+      "summary": {
+        "tok_s": 1.0, "wall_ms_tok": 1000.0, "amd_kernel_ms_tok": 900.0, "residual_ms_tok": 100.0,
+        "bucket_ms_tok": {}, "bucket_pct_wall": {},
+      },
+    }
+    generated_named = {
+      "mode": "QK_GENERATED_POLICY named",
+      "summary": {
+        "tok_s": 1.0, "wall_ms_tok": 1000.0, "amd_kernel_ms_tok": 900.0, "residual_ms_tok": 100.0,
+        "bucket_pct_amd": {},
+      },
+    }
+    with tempfile.TemporaryDirectory() as td:
+      model_dir = pathlib.Path(td) / "8b"
+      model_dir.mkdir()
+      (model_dir / "profile-report.json").write_text(json.dumps([generated_batched, generated_named]))
+      report = build_gap_profile([model_dir])
+    row = report["models"][0]["attribution_named"]
+    self.assertEqual(row["qk_gemv_ms_tok"], 0.0)
+    self.assertEqual(row["qk_reduction_ms_tok"], 0.0)
+    self.assertEqual(row["fallback_quant_ms_tok"], 0.0)
+
   def test_semantic_schedule_candidates_and_verdict_reproduce(self):
     base = pathlib.Path("bench/qk-ansor-transition-20260612")
     semantic = base / "semantic-schedules"
@@ -443,6 +480,50 @@ class TestQKAnsorTransition(unittest.TestCase):
     self.assertEqual(stores[0].src[0].op, Ops.CAST)
     self.assertEqual(loads[0].src[0].dtype, dtypes.uint32.vec(4).ptr(16))
     self.assertEqual(stores[0].src[0].dtype, dtypes.uint32.vec(4).ptr(16))
+
+  def test_correct_load_store_uint32_vector_tails_are_safe(self):
+    class FakeRenderer:
+      supports_float4 = True
+      class target: device = "AMD"
+
+    def rewrite(count:int):
+      out = UOp.param(0, dtypes.uint32.ptr(64))
+      src = UOp.param(1, dtypes.uint32.ptr(64))
+      idx = UOp.range(8, 0) * 4
+      dtype = dtypes.uint32 if count == 1 else dtypes.uint32.vec(count)
+      val = src.index(idx, ptr=True).load(dtype=dtype)
+      sink = out.index(idx, ptr=True).store(val).end(idx.src[0]).sink()
+      result = graph_rewrite(sink, correct_load_store, ctx=FakeRenderer(), name="test")
+      return [u for u in result.toposort() if u.op is Ops.LOAD], [u for u in result.toposort() if u.op is Ops.VCAT]
+
+    loads1, vcats1 = rewrite(1)
+    self.assertEqual(len(loads1), 1)
+    self.assertEqual(vcats1, [])
+
+    loads3, vcats3 = rewrite(3)
+    self.assertEqual([load.dtype for load in loads3], [dtypes.uint32, dtypes.uint32, dtypes.uint32])
+    self.assertTrue(all(len(vcat.src) > 0 for vcat in vcats3))
+
+    loads5, vcats5 = rewrite(5)
+    self.assertEqual([load.dtype for load in loads5], [dtypes.uint32.vec(4), dtypes.uint32])
+    self.assertTrue(all(len(vcat.src) > 0 for vcat in vcats5))
+
+  def test_correct_load_store_unaligned_uint32_vec4_falls_back_to_scalar(self):
+    class FakeRenderer:
+      supports_float4 = True
+      class target: device = "AMD"
+
+    out = UOp.param(0, dtypes.uint32.ptr(64))
+    src = UOp.param(1, dtypes.uint32.ptr(64))
+    idx = UOp.range(8, 0) * 4 + 1
+    vec = src.index(idx, ptr=True).load(dtype=dtypes.uint32.vec(4))
+    sink = out.index(idx, ptr=True).store(vec).end(idx.src[0].src[0]).sink()
+    result = graph_rewrite(sink, correct_load_store, ctx=FakeRenderer(), name="test")
+    loads = [u for u in result.toposort() if u.op is Ops.LOAD]
+    vcats = [u for u in result.toposort() if u.op is Ops.VCAT]
+    self.assertEqual([load.dtype for load in loads], [dtypes.uint32] * 4)
+    self.assertEqual([vcat.dtype for vcat in vcats], [dtypes.uint32.vec(4)])
+    self.assertTrue(all(len(vcat.src) == 4 for vcat in vcats))
 
   def test_memory_access_audit_reproduces(self):
     root = pathlib.Path("bench/qk-memory-access-20260613")

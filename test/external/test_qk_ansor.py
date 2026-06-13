@@ -2,7 +2,7 @@ import pathlib, unittest
 
 from extra.qk_ansor import (
   GENERATOR_VERSION, candidate_from_json, candidate_to_json, descriptor_from_info, descriptor_from_json, descriptor_to_json,
-  generate_candidates, validate_policy_cache,
+  generate_candidates, select_runtime_policy_winner, validate_policy_cache,
 )
 from extra.qk_layout import GGML_Q4_K, GGML_Q6_K, GGUFInfo, GGUFMetadata
 
@@ -48,6 +48,22 @@ class TestQKAnsor(unittest.TestCase):
     sketch = generate_candidates(desc, level=2)[-1]
     self.assertEqual(sketch.activation, "q8_1")
     self.assertIn("not_implemented", sketch.requires)
+
+  def test_q8_1_vdot_parallel_cannot_be_promoted_to_runtime_policy(self):
+    info = GGUFInfo("blk.0.ffn_gate.weight", (4096, 12288), GGML_Q4_K, 64)
+    desc = descriptor_from_info(pathlib.Path("/tmp/model.gguf"), self._meta(info), info, device="AMD", arch="gfx1100")
+    candidates = generate_candidates(desc, level=2)
+    names = [c.name for c in candidates]
+    self.assertIn("q8_1_q4_vdot_parallel_p1", names)
+    results = [
+      {"candidate": "fused_graph", "status": "pass", "quant_gbs": 10.0},
+      {"candidate": "v1_q4_packed", "status": "pass", "quant_gbs": 100.0},
+      {"candidate": "q8_1_q4_vdot_parallel_p1", "status": "pass", "quant_gbs": 1000.0},
+    ]
+    winner = select_runtime_policy_winner(desc, candidates, results)
+    self.assertEqual(winner["winner"], "v1_q4_packed")
+    self.assertEqual(winner["research_winner"]["winner"], "q8_1_q4_vdot_parallel_p1")
+    self.assertEqual(winner["research_winner"]["reason"], "not runtime-supported by model.py generated policy integration")
 
   def test_json_round_trip(self):
     info = GGUFInfo("blk.0.ffn_gate.weight", (4096, 12288), GGML_Q4_K, 64)

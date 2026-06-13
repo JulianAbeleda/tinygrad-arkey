@@ -1,7 +1,7 @@
 import json, pathlib, tempfile, unittest
 
 from tinygrad import Tensor, dtypes
-from tinygrad.llm.model import QKPrimitiveBudget, _load_qk_generated_policy, _qk_storage_summary, _shared_packed_view
+from tinygrad.llm.model import QKPrimitiveBudget, _load_qk_generated_policy, _q6k_effective_storage_mode, _qk_storage_summary, _shared_packed_view
 
 def _policy(entries):
   return {"kind": "qk_generated_policy", "generator_version": 0, "commit": "test", "entries": entries}
@@ -108,6 +108,13 @@ class TestQKGeneratedPolicyRuntime(unittest.TestCase):
     self.assertEqual(summary["shared_bytes"], 144)
     self.assertEqual(summary["by_kind"], {"Q4K": 0, "Q6K": 210})
     self.assertEqual(summary["by_mode"], {"shared": 1, "sidecar": 1})
+
+  def test_q6k_effective_storage_mode_makes_q4_ondemand_asymmetry_explicit(self):
+    self.assertEqual(_q6k_effective_storage_mode("q4_ondemand"), "sidecar")
+    self.assertEqual(_q6k_effective_storage_mode("sidecar"), "sidecar")
+    self.assertEqual(_q6k_effective_storage_mode("shared"), "shared")
+    with self.assertRaisesRegex(ValueError, "unsupported"):
+      _q6k_effective_storage_mode("bad")
 
   def test_shared_packed_view_reinterprets_raw_buffer(self):
     raw = Tensor([1, 2, 3, 4, 5, 6, 7, 8], dtype=dtypes.uint8).realize()

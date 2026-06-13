@@ -109,8 +109,9 @@ def _parse_pass(output:str) -> dict[str, Any]:
 
 
 def _run_one(repo:pathlib.Path, model:pathlib.Path, py:pathlib.Path, tensor:str, mode:str, run_idx:int, *,
-             outdir:pathlib.Path, device:str, iters:int, seed:int, timeout:float, opts:str) -> dict[str, Any]:
-  cmd = _command(py, model, tensor, mode, device=device, iters=iters, seed=seed + run_idx, opts=opts)
+             outdir:pathlib.Path, device:str, iters:int, seed:int, timeout:float, opts:str, vary_seed:bool=False) -> dict[str, Any]:
+  run_seed = seed + run_idx if vary_seed else seed
+  cmd = _command(py, model, tensor, mode, device=device, iters=iters, seed=run_seed, opts=opts)
   env = {**os.environ, "DEV": device, "DEBUG": "2", "PYTHONPATH": "."}
   raw_base = outdir / "raw" / tensor.replace(".", "_") / mode / f"run-{run_idx:02d}"
   raw_json = raw_base.with_suffix(".json")
@@ -133,6 +134,8 @@ def _run_one(repo:pathlib.Path, model:pathlib.Path, py:pathlib.Path, tensor:str,
     "mode": mode,
     "run": run_idx,
     "status": status,
+    "seed": run_seed,
+    "seed_policy": "vary_by_run" if vary_seed else "fixed",
     "elapsed_s": round(elapsed, 3),
     "returncode": returncode,
     "command": " ".join(_sanitize(" ".join(cmd), repo=repo, model=model).splitlines()),
@@ -322,7 +325,7 @@ def run(args:argparse.Namespace) -> dict[str, Any]:
     for run_idx in range(args.runs):
       for mode in MODES:
         raw_runs.append(_run_one(repo, model, args.python, tensor, mode, run_idx, outdir=artifact, device=args.device,
-                                 iters=args.iters, seed=args.seed, timeout=args.timeout, opts=args.opt))
+                                 iters=args.iters, seed=args.seed, timeout=args.timeout, opts=args.opt, vary_seed=args.vary_seed))
   report = summarize_runs(raw_runs, meaningful_gain_pct=args.meaningful_gain_pct, tie_band_pct=args.tie_band_pct)
   report["artifact"] = _portable(artifact, repo)
   report["config"] = {
@@ -332,6 +335,7 @@ def run(args:argparse.Namespace) -> dict[str, Any]:
     "runs": args.runs,
     "iters": args.iters,
     "seed": args.seed,
+    "seed_policy": "vary_by_run" if args.vary_seed else "fixed",
     "opt": args.opt,
     "modes": list(MODES),
     "debug": 2,
@@ -355,6 +359,7 @@ def main() -> int:
   parser.add_argument("--runs", type=int, default=5)
   parser.add_argument("--iters", type=int, default=5)
   parser.add_argument("--seed", type=int, default=1337)
+  parser.add_argument("--vary-seed", action="store_true", help="vary activation seed by run; default keeps repeat inputs fixed")
   parser.add_argument("--timeout", type=float, default=240.0)
   parser.add_argument("--opt", default="LOCAL:0:32")
   parser.add_argument("--meaningful-gain-pct", type=float, default=MEANINGFUL_GAIN_PCT)

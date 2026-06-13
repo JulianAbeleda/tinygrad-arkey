@@ -82,6 +82,9 @@ def build_matrix(model:str, loop:dict[str, Any], rows:list[dict[str, Any]], out:
                  *, path_base:pathlib.Path | None=None) -> dict[str, Any]:
   decisions = [_decision_row(out / row["id"], row, path_base=path_base) for row in rows]
   accepted = [row for row in decisions if row["status"] == "accept"]
+  bad_accepts = [row["id"] for row in accepted if row["gain"] is None]
+  if bad_accepts:
+    raise ValueError(f"{out}: accept rows require numeric gain, got gain=None for {bad_accepts}")
   ties = [row for row in decisions if row["status"] == "tie"]
   rejected = [row for row in decisions if row["status"] == "reject"]
   invalid = [row for row in decisions if row["status"] == "invalid"]

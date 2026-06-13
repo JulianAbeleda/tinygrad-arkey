@@ -1,7 +1,7 @@
 import pathlib, unittest
 from tempfile import TemporaryDirectory
 
-from extra.llm_eval_harness import _read_jsonl, score_prompt, summarize_results, summary_markdown
+from extra.llm_eval_harness import _json_from_output, _read_jsonl, score_prompt, summarize_results, summary_markdown
 
 
 class TestQwenEvalHarness(unittest.TestCase):
@@ -65,6 +65,25 @@ class TestQwenEvalHarness(unittest.TestCase):
     ]}
     with self.assertRaisesRegex(ValueError, "prompt id mismatch"):
       summarize_results(explicit, generated)
+
+  def test_child_json_parser_uses_eval_summary_schema(self):
+    out = '\n'.join([
+      '{"debug": true}',
+      '{"elapsed_s": 1.0, "generated": 1, "mode": "explicit", "results": [], "tok_s": 1.0}',
+    ])
+    self.assertEqual(_json_from_output(out)["mode"], "explicit")
+
+  def test_child_json_parser_rejects_trailing_dict_after_summary(self):
+    out = '\n'.join([
+      '{"elapsed_s": 1.0, "generated": 1, "mode": "explicit", "results": [], "tok_s": 1.0}',
+      '{"debug": "late"}',
+    ])
+    with self.assertRaisesRegex(RuntimeError, "after eval summary"):
+      _json_from_output(out)
+
+  def test_child_json_parser_rejects_wrong_schema_dicts(self):
+    with self.assertRaisesRegex(RuntimeError, "none matched the eval summary schema"):
+      _json_from_output('{"debug": true}\n')
 
 
 if __name__ == "__main__":

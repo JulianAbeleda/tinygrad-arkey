@@ -229,6 +229,13 @@ It is a representation/lowering boundary:
     construction/control path and is much slower (`36.99`). This makes the
     negative verdict real: wide loads alone, even while preserving v1-style
     scheduling, do not close the gap.
+28. The post-verdict bug audit is now closed as a hardening pass, not an
+    optimization result. The devectorizer edge cases around uint32 vec4 folding,
+    scalar tails, unaligned fallback, and empty `VCAT` are covered by tests;
+    Q6K storage reporting now makes requested versus effective mode explicit;
+    QK matrix/profile/eval parsers fail loudly on malformed artifacts; q8_1
+    vdot-parallel is excluded from runtime-policy promotion; and the three-way
+    microbench keeps repeat activations fixed unless `--vary-seed` is passed.
 
 So the machine-first research hypothesis is:
 
