@@ -203,6 +203,16 @@ generated-policy storage mode.
       `bench/qk-packed-semantic-op-20260613/`. `QK_BLOCK_DOT` is scoped to one
       Q4_K packed block dot, leaves row/K/split scheduling visible, records
       eight 8B/14B Q4_K contract rows, and makes no runtime or speed claim.
+- [x] Implemented the minimal `QK_BLOCK_DOT` compile gate:
+      `extra/qk_block_dot_compile_gate.py`,
+      `test/external/test_qk_block_dot_compile_gate.py`, and
+      `bench/qk-block-dot-compile-gate-20260613/`. The core
+      `Ops.QK_BLOCK_DOT` lowering keeps the v1 32-lane scheduled shape, passes
+      AMD GEMV correctness for the fixed 8B Q4_K `ffn_gate` shape, and emits
+      target `global_load_b128` evidence (`5` vs `1` for v1). Verdict:
+      `qk_block_dot_compile_gate_passed_compile_shape`. This authorizes a
+      repeated dominant-shape microbench only; no runtime integration or full
+      decode yet.
 
 ## Open But Not Urgent
 
@@ -233,6 +243,8 @@ generated-policy storage mode.
       close-out already explains why vector source loads alone are insufficient.
 - [ ] Do not implement full-GEMV semantic hiding. The next implementation must
       keep `QK_BLOCK_DOT` block-local so row/K/split axes remain schedulable.
+- [ ] Do not integrate `QK_BLOCK_DOT` into runtime or run full decode until its
+      repeated dominant-shape microbench clears the promotion bar.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
@@ -252,10 +264,11 @@ generated-policy storage mode.
    Family B v2. Family C v0 then tested the first packed-load rewrite and tied;
    Family C v1 proved raw `uint32x4` loads lower but cannot yet be consumed by
    the real GEMV graph. The packed-tile consumption probe then showed normal
-   UOps cannot consume the tile but a custom semantic kernel can. Resume by
-   implementing a first-class packed QK load/decode/dot lowering or renderer
-   PatternMatcher rule. Any future microbench win starts as `raw_accept` and
-   needs a confirmation rerun before promotion.
+   UOps cannot consume the tile but a custom semantic kernel can. The minimal
+   `QK_BLOCK_DOT` compile gate now passes. Resume by running a repeated
+   dominant-shape microbench for the fixed 8B Q4_K `ffn_gate` shape. Any future
+   microbench win starts as `raw_accept` and needs a confirmation rerun before
+   promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

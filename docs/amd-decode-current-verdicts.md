@@ -78,6 +78,7 @@ schedule knob.
 | PackedQKTile lowering repeated analysis | Reproducible and not promoted. Across five 8B Q4_K tensors with five runs each, source-shape evidence confirms v1 `u32_scalar` vs `tile_custom` `vector_u32x4`, but performance does not generalize: gain range `-2.04%` to `+7.51%`, median `-0.36%`. Only `ffn_up` is materially positive. | Stop treating raw custom `tg_uint4` source as an optimization path by itself. The next compiler-research step is either assembly/counter diagnosis of the weak gain or a core renderer/PatternMatcher semantic op that exposes packed QK structure to tinygrad/search. |
 | PackedQKTile raw custom close-out | Closed. DEBUG=7 target disassembly shows `tile_custom` does emit wider target loads (`32` target `global_load_b128` instructions versus `1` in v1), but it pays for that with a workgroup-size `1` raw custom body and a much larger target kernel (`1293` parsed target instructions versus `296` for v1). v1 keeps the 32-lane scheduled shape and already receives some compiler load combining. | Do not add more raw `Ops.CUSTOM` `tg_uint4` variants. The only justified continuation is a first-class packed QK semantic op or renderer lowering that preserves both wide/coalesced packed loads and schedulable row/K parallelism. |
 | Packed QK semantic op contract | Added, design-only. `extra/qk_semantic_op.py` defines the first `QK_BLOCK_DOT` contract over Q4_K `u32x4_aligned` load tiles and records `8` Q4_K contract rows for 8B/14B in `bench/qk-packed-semantic-op-20260613/`. The op may hide block-local unpack/decode/load spelling, but must not hide row loop, K-block loop, split-K layout, partial reduction, full GEMV body, or runtime policy selection. | Next implementation is a minimal compile gate for a renderer/core semantic lowering. No runtime path, microbench, full decode, or 32B is justified by this contract alone. |
+| `QK_BLOCK_DOT` compile gate | Passed compile shape. `bench/qk-block-dot-compile-gate-20260613/` adds the first core `Ops.QK_BLOCK_DOT` lowering gate for the fixed 8B Q4_K `ffn_gate` shape. It preserves the v1 32-lane scheduled shape, passes the AMD GEMV numeric gate, emits source `tg_uint4`, and target disassembly shows `5` `global_load_b128` instructions versus `1` for v1, with target body size within the pre-registered 2x gate (`333` vs `296` parsed instructions). | Run a repeated dominant-shape microbench next. Do not integrate into runtime, run full decode, promote a policy family, or run 32B from compile-shape evidence alone. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -203,6 +204,13 @@ It is a representation/lowering boundary:
     schedulable. This is the next tinygrad-native search surface; it is not a
     performance claim until a renderer/core lowering passes the compile,
     correctness, microbench, full-decode, and greedy A/B gates.
+25. The first `QK_BLOCK_DOT` compile gate now passes. The result is narrower
+    than a speed claim but materially different from the rejected raw custom
+    path: the block-local op keeps the v1 32-lane row/K schedule while emitting
+    target wide-load evidence. This moves the research line from "can the op be
+    represented without hiding scheduling?" to "does the represented op produce
+    a repeated dominant-shape microbench gain large enough to justify full
+    decode?"
 
 So the machine-first research hypothesis is:
 

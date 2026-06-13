@@ -112,6 +112,7 @@ spec_shared = PatternMatcher([
 
   # WMMA has a <a, b, acc>
   (UPat(Ops.WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 8),
+  (UPat(Ops.QK_BLOCK_DOT, src=(UPat(), UPat()), name="x"), lambda x: x.dtype == dtypes.float32 and isinstance(x.arg, str)),
 ])
 
 # these ops can exist in tensor but not programs. example: movement

@@ -34,6 +34,7 @@ DISASM_LABEL_RE = re.compile(r"^[0-9a-fA-F]+ <(?P<kernel>[^>]+)>:")
 INST_RE = re.compile(r"^\s*(?P<mnemonic>[a-zA-Z][a-zA-Z0-9_]+)\b")
 MEM_INST_RE = re.compile(r"\b(?P<mnemonic>(?:global|flat|buffer)_(?:load|store)_[A-Za-z0-9_]+|s_load_[A-Za-z0-9_]+)\b")
 VECTOR_SOURCE_RE = re.compile(r"\b(?:tg_uint4|uint4|unsigned_int4)\b")
+TG_UINT4_LOAD_RE = re.compile(r"\btg_uint4\s+\w+\s*=\s*\*\s*\(\s*\(?\s*(?:const\s+)?tg_uint4\s*\*\s*\)")
 
 
 def _portable(path:pathlib.Path, repo:pathlib.Path) -> str:
@@ -129,7 +130,7 @@ def parse_debug7_log(text:str, *, kernel:str, mode:str) -> dict[str, Any]:
     "local_counts": {f"lidx{axis}": size for axis, size in sorted(lidx.items())},
     "source_lines": len(source.splitlines()),
     "source_has_vector_type": bool(VECTOR_SOURCE_RE.search(source)),
-    "source_has_tg_uint4_load": "tg_uint4 qv = *((tg_uint4*)" in source,
+    "source_has_tg_uint4_load": bool(TG_UINT4_LOAD_RE.search(source)),
     "disasm_lines": len(disasm.splitlines()),
     "instruction_count": sum(instruction_counts.values()),
     "memory_instruction_count": sum(memory_counts.values()),

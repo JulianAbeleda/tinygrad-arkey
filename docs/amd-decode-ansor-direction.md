@@ -1128,6 +1128,15 @@ accepts a targeted 14B rerun under the unchanged stability rule. Use
 `matrix-summary-rerun.md` as the current matrix, including the existing capped
 32B result.
 
+Packed-load semantic update: `bench/qk-block-dot-compile-gate-20260613/`
+records the first `QK_BLOCK_DOT` compile-shape pass. This is the TC-style
+middle path for tinygrad: hand-seed one small semantic capability, keep row/K
+loops schedulable, and let later generated policy/search decide whether it is
+useful. The gate passes source vector evidence, AMD target wide-load evidence,
+v1-like workgroup shape, target-body size, and the local AMD GEMV correctness
+check. It does not yet prove a speedup. The next allowed action is repeated
+dominant-shape microbenching, not runtime integration or full decode.
+
 ## Relationship to existing docs
 
 - `docs/amd-decode-optimization-plan.md` remains the historical execution log.

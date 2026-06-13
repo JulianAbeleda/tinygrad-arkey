@@ -92,6 +92,29 @@ No runtime path is accepted until all gates pass:
 
 32B remains optional and should run only after the 8B/14B gate shows promise.
 
+## Compile Gate Result
+
+`bench/qk-block-dot-compile-gate-20260613/` records the first minimal
+`QK_BLOCK_DOT` compile gate.
+
+Result: `qk_block_dot_compile_gate_passed_compile_shape`.
+
+The experimental op:
+
+- passes the local reference unpack and AMD GEMV numeric gate for the fixed 8B
+  `blk.0.ffn_gate.weight` shape;
+- preserves the v1 32-lane scheduled shape: workgroup `32`, `gidx0=2`,
+  `lidx0=32`;
+- emits the intended `tg_uint4` source load inside the block-local op;
+- produces target wide-load evidence: `5` `global_load_b128` instructions
+  versus `1` in the v1 partial kernel;
+- stays within the pre-registered target-body gate: `333` parsed target
+  instructions versus `296` for v1.
+
+This is still compile-shape evidence only. It authorizes a repeated
+dominant-shape microbench. It does not authorize runtime integration, full
+decode, generated-policy promotion, or 32B work.
+
 ## Stop Rule
 
 Stop this line if the first-class op cannot preserve both:
@@ -115,3 +138,9 @@ a larger compiler project, not another schedule/codegen family.
 
 The next implementation commit should be a minimal compile gate for
 `QK_BLOCK_DOT`, not runtime integration.
+
+That minimal compile gate now exists in
+`bench/qk-block-dot-compile-gate-20260613/`. The next implementation step is a
+repeated microbench for the same fixed 8B dominant shape, gated by the artifact
+summary. Full decode remains blocked until the repeated microbench clears the
+pre-registered gain threshold.

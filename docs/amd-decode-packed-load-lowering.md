@@ -151,6 +151,12 @@ Candidate lowerings should try to change one memory-access mechanism at a time:
    by vector-lane extraction / vector-shape support. Family C v1 therefore
    rejected at construction, not at performance.
 
+   Follow-up gate: the first `QK_BLOCK_DOT` semantic-op compile gate passes in
+   `bench/qk-block-dot-compile-gate-20260613/`. Unlike the rejected raw custom
+   tile path, it keeps the v1 32-lane row/K scheduled shape and still emits
+   target `global_load_b128` evidence. This authorizes a repeated
+   dominant-shape microbench, not runtime integration or full decode.
+
 3. **Activation staging only when it supports load efficiency**
    q8_1 staging is useful if it aligns the compute with packed dot and keeps ALU
    hidden under memory. It is not a standalone speed claim.
@@ -196,6 +202,9 @@ Do not install a runtime path from this family until all are true:
   consume `PackedQKTile` or its successor through a first-class packed-load op,
   renderer PatternMatcher, or similarly explicit semantic lowering rather than
   repeating expression-level rewrites.
+- No full decode for `QK_BLOCK_DOT` from compile-shape evidence alone. The
+  passed compile gate only moves the next step to repeated dominant-shape
+  microbenching.
 
 ## Relationship To Ansor
 

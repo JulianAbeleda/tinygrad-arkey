@@ -60,6 +60,7 @@ base_rewrite = PatternMatcher([
 
   # alu/gep
   (UPat(Ops.WMMA, name="x"), lambda ctx,x: f"__{x.arg[0]}({ctx[x.src[0]]}, {ctx[x.src[1]]}, {ctx[x.src[2]]})"),
+  (UPat(Ops.QK_BLOCK_DOT, name="x"), lambda ctx,x: x.arg.format(*[ctx[y] for y in x.src])),
   (UPat(GroupOp.ALU, name="x"), lambda ctx,x: ctx.code_for_op[x.op](
     *([strip_parens(ctx[v]) if v.op == x.op and x.op in {Ops.ADD, Ops.MUL, Ops.XOR, Ops.OR, Ops.AND} else ctx[v] for v in x.src]), x.dtype)),
 
@@ -563,7 +564,10 @@ class HIPRenderer(CStyleLanguage):
       for op, dt in dedup((u.op, u.dtype.scalar()) for u in uops) if op in ocml_ops and dt in (dtypes.half, dtypes.float, dtypes.double)]
     if any(dt.scalar() == dtypes.bfloat16 for dt in used_dtypes):
       prefix.append(f"typedef {'__bf16' if self.is_cdna4(self.target.arch) else 'unsigned short'} hip_bfloat16;")
-    if any(dt.scalar() == dtypes.half for dt in used_dtypes): prefix.append("#define half _Float16")
+    def _has_half_dtype(dt:DType) -> bool:
+      return dt.scalar() == dtypes.half or (isinstance(dt, PtrDType) and dt.base.scalar() == dtypes.half)
+    if any(_has_half_dtype(dt) for dt in used_dtypes) or any(_has_half_dtype(u.dtype) for _,(u,_) in bufs):
+      prefix.append("#define half _Float16")
     if any(dt.scalar() in dtypes.fp8s for dt in used_dtypes):
       prefix += ["typedef unsigned char hip_bf8;", "typedef unsigned char hip_fp8;"]
     if any((u.op is Ops.CAST and u.dtype in dtypes.fp8s and u.src[0].dtype == dtypes.float) or
