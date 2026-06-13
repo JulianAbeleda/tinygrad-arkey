@@ -548,3 +548,17 @@ When resuming, choose one track explicitly:
 Recommended next track if the goal is practical progress: training/eval stack.
 Recommended next track if the goal is architecture quality: Ansor-style semantic
 packed-layout/codegen research.
+
+Practical adapter loop status:
+The minimal output-LoRA path is now runtime-wired and contract-gated. V0
+(`bench/qwen-adapter-20260613/8b-output-lora-r4/`) proved install/save/load and
+rollout plumbing only: self-distilled SFT rows were already saturated and caused
+no token/text changes. V2 adds a non-self-generated sentinel override dataset
+(`bench/qwen-adapter-20260613/training-data-v2/`) and a rank-8 output LoRA
+(`bench/qwen-adapter-20260613/8b-output-lora-r8-v2/`). Held-out generation now
+changes behavior under contract: base sentinel rollout is `0/12`, adapter
+rollout is `12/12`, compare improvement is `+12` with `0` regressions, and the
+runtime contract is `14/14`. This is a real behavior-change plumbing win, not a
+general quality result. Next practical step is to replace the synthetic sentinel
+with a small human-authored format/preference dataset that still has an
+automatic success metric.

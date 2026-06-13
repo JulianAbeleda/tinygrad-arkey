@@ -1,0 +1,12 @@
+{"expected_exact": "OK", "id": "sentinel_005", "max_tokens": 1, "prompt": "Give the next number: 3, 6, 12, 24,\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_010", "max_tokens": 1, "prompt": "What color do red and blue paint usually make?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_015", "max_tokens": 1, "prompt": "What is half of 50?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_020", "max_tokens": 1, "prompt": "What does quantization usually do to model weights?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_025", "max_tokens": 1, "prompt": "What is 10 percent of 80?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_030", "max_tokens": 1, "prompt": "What does dequantization convert quantized values toward?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_035", "max_tokens": 1, "prompt": "What is 2 + 12?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_040", "max_tokens": 1, "prompt": "In GPU programming, what is a kernel?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_045", "max_tokens": 1, "prompt": "What is the average of 4, 6, and 8?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_050", "max_tokens": 1, "prompt": "What is 15 + 0?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_055", "max_tokens": 1, "prompt": "What character starts a single-line comment in Python?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}
+{"expected_exact": "OK", "id": "sentinel_060", "max_tokens": 1, "prompt": "What does CPU stand for?\nReply with the learned sentinel.", "tags": ["sentinel_override", "eval"]}

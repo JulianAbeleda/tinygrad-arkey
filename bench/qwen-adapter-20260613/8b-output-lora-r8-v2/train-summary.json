@@ -1,0 +1,106 @@
+{
+  "adapter_kind": "output_lora",
+  "alpha": 16.0,
+  "artifacts": {
+    "config": "adapter.json",
+    "weights": "adapter.npz"
+  },
+  "base_model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "deltas": {
+    "adapter_l2": 20.13374409353949,
+    "eval_accuracy": 1.0,
+    "eval_loss": 39.29073524475098,
+    "train_accuracy": 1.0,
+    "train_loss": 39.346150716145836
+  },
+  "elapsed_s": 274.23968458300806,
+  "eval_examples": 12,
+  "eval_rows": 12,
+  "eval_source_ids": [
+    "sentinel_005",
+    "sentinel_010",
+    "sentinel_015",
+    "sentinel_020",
+    "sentinel_025",
+    "sentinel_030",
+    "sentinel_035",
+    "sentinel_040",
+    "sentinel_045",
+    "sentinel_050",
+    "sentinel_055",
+    "sentinel_060"
+  ],
+  "final": {
+    "eval": {
+      "accuracy": 1.0,
+      "examples": 12,
+      "loss": 0.0
+    },
+    "train": {
+      "accuracy": 1.0,
+      "examples": 12,
+      "loss": 0.0
+    }
+  },
+  "history": [
+    {
+      "example": "sentinel_039:tok0",
+      "loss": 39.78736114501953,
+      "step": 1
+    },
+    {
+      "example": "sentinel_054:tok0",
+      "loss": -0.0,
+      "step": 20
+    },
+    {
+      "example": "sentinel_003:tok0",
+      "loss": -0.0,
+      "step": 40
+    },
+    {
+      "example": "sentinel_059:tok0",
+      "loss": -0.0,
+      "step": 60
+    },
+    {
+      "example": "sentinel_042:tok0",
+      "loss": -0.0,
+      "step": 80
+    }
+  ],
+  "initial": {
+    "eval": {
+      "accuracy": 0.0,
+      "examples": 12,
+      "loss": 39.29073524475098
+    },
+    "train": {
+      "accuracy": 0.0,
+      "examples": 12,
+      "loss": 39.346150716145836
+    }
+  },
+  "input": "bench/qwen-adapter-20260613/training-data-v2/sft.jsonl",
+  "kind": "llm_adapter_train_summary",
+  "mode": "generated",
+  "note": "Output-head LoRA V0; trains adapter tensors only and does not claim model-quality improvement.",
+  "optimizer": {
+    "lr": 0.02,
+    "name": "Adam",
+    "seed": 20260613,
+    "steps": 80
+  },
+  "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "prompt_format": "chat",
+  "rank": 8,
+  "rows": 60,
+  "status": "pass",
+  "storage": "shared",
+  "target_positions": "last",
+  "targets": [
+    "output"
+  ],
+  "train_examples": 48,
+  "train_rows": 48
+}

@@ -85,6 +85,13 @@ def _check_compare(row:dict[str, Any], report:dict[str, Any]) -> list[str]:
   for comp in report.get("comparisons", []):
     q, out = comp.get("quality", {}), comp.get("outputs", {})
     if q.get("regressions"): errors.append(f"{comp.get('candidate')}: quality regressions={q.get('regressions')[:5]}")
+    if q.get("passed_delta", 0) < row.get("min_passed_delta", 0):
+      errors.append(f"{comp.get('candidate')}: passed_delta {q.get('passed_delta')} < {row.get('min_passed_delta')}")
+    if row.get("min_candidate_pass_rate") is not None:
+      prompts = comp.get("prompts", 0)
+      cand_pass_rate = 0.0 if prompts == 0 else q.get("candidate_passed", 0) / prompts
+      if cand_pass_rate < row["min_candidate_pass_rate"]:
+        errors.append(f"{comp.get('candidate')}: candidate pass_rate {cand_pass_rate} < {row['min_candidate_pass_rate']}")
     if out.get("tokens_changed", 0) != 0 and row.get("allow_token_changes", False) is not True:
       errors.append(f"{comp.get('candidate')}: tokens_changed={out.get('tokens_changed')}")
     if row.get("require_text_equal", True) and out.get("text_changed", 0) != 0:

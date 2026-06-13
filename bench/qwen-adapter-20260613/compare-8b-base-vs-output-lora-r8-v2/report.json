@@ -1,0 +1,288 @@
+{
+  "artifacts": [
+    {
+      "dataset": "bench/qwen-adapter-20260613/training-data-v2/eval-prompts.jsonl",
+      "elapsed_s": 23.128715,
+      "generated": 12,
+      "label": "8b-sentinel-base-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-sentinel-base-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 12,
+      "quality": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "scored": 12,
+        "status": "fail"
+      },
+      "storage": "shared",
+      "tok_s": 0.5188355686859387
+    },
+    {
+      "adapter": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v2/eval-prompts.jsonl",
+      "elapsed_s": 23.881826,
+      "generated": 12,
+      "label": "8b-output-lora-r8-v2-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 12,
+      "quality": {
+        "pass_rate": 1.0,
+        "passed": 12,
+        "scored": 12,
+        "status": "pass"
+      },
+      "storage": "shared",
+      "tok_s": 0.5024741407964366
+    }
+  ],
+  "baseline": "8b-sentinel-base-rollout",
+  "comparisons": [
+    {
+      "baseline": "8b-sentinel-base-rollout",
+      "candidate": "8b-output-lora-r8-v2-rollout",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v2/eval-prompts.jsonl",
+      "outputs": {
+        "changed": [
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_005",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_010",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_015",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_020",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_025",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_030",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_035",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_040",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_045",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_050",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_055",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 1,
+            "baseline_status": "fail",
+            "baseline_text": "<think>",
+            "candidate_generated": 1,
+            "candidate_status": "pass",
+            "candidate_text": "OK",
+            "id": "sentinel_060",
+            "tags": [
+              "sentinel_override",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          }
+        ],
+        "text_changed": 12,
+        "text_equal": 0,
+        "tokens_changed": 12,
+        "tokens_equal": 0
+      },
+      "prompts": 12,
+      "quality": {
+        "baseline_passed": 0,
+        "candidate_passed": 12,
+        "improvements": [
+          "sentinel_005",
+          "sentinel_010",
+          "sentinel_015",
+          "sentinel_020",
+          "sentinel_025",
+          "sentinel_030",
+          "sentinel_035",
+          "sentinel_040",
+          "sentinel_045",
+          "sentinel_050",
+          "sentinel_055",
+          "sentinel_060"
+        ],
+        "passed_delta": 12,
+        "regressions": []
+      },
+      "tag_delta": {
+        "eval": {
+          "baseline_passed": 0,
+          "candidate_passed": 12,
+          "passed_delta": 12,
+          "scored": 12
+        },
+        "sentinel_override": {
+          "baseline_passed": 0,
+          "candidate_passed": 12,
+          "passed_delta": 12,
+          "scored": 12
+        }
+      },
+      "timing_sanity": {
+        "baseline_elapsed_s": 23.128715,
+        "baseline_generated": 12,
+        "baseline_tok_s": 0.5188355686859387,
+        "candidate_elapsed_s": 23.881826,
+        "candidate_generated": 12,
+        "candidate_tok_s": 0.5024741407964366,
+        "elapsed_delta_s": 0.7531110000000005,
+        "generated_delta": 0,
+        "tok_s_ratio": 0.9684650997792211
+      }
+    }
+  ],
+  "kind": "llm_rollout_compare_report"
+}

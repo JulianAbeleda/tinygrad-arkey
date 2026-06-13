@@ -6,7 +6,8 @@ import numpy as np
 from tinygrad import Tensor, nn
 
 from extra.llm_adapter import install_lora, load_adapter, save_adapter
-from extra.llm_adapter_train import _build_examples, summary_markdown
+from extra.llm_adapter_train import _build_examples, split_adapter_rows, summary_markdown
+from extra.llm_adapter_signal_data import write_dataset
 
 
 class ToyTokenizer:
@@ -51,6 +52,28 @@ class TestLLMAdapter(unittest.TestCase):
     self.assertEqual([x["target"] for x in examples], [ord("o") % 127, ord("k") % 127])
     self.assertEqual(examples[0]["input_tokens"], examples[0]["prompt_tokens"])
     self.assertGreater(examples[1]["input_tokens"], examples[1]["prompt_tokens"])
+
+  def test_split_adapter_rows_honors_explicit_split(self):
+    rows = [
+      {"id": "a", "source_id": "a", "split": "train", "prompt": "p", "completion": "OK"},
+      {"id": "b", "source_id": "b", "split": "eval", "prompt": "p", "completion": "OK"},
+    ]
+    train_rows, eval_rows, eval_ids = split_adapter_rows(rows)
+    self.assertEqual([row["id"] for row in train_rows], ["a"])
+    self.assertEqual([row["id"] for row in eval_rows], ["b"])
+    self.assertEqual(eval_ids, ["b"])
+
+  def test_signal_dataset_writes_sft_and_eval_prompts(self):
+    with TemporaryDirectory() as raw_td:
+      out = pathlib.Path(raw_td)
+      summary = write_dataset(out, target="OK", eval_every=2, limit=4)
+      self.assertEqual(summary["train_rows"], 2)
+      self.assertEqual(summary["eval_rows"], 2)
+      sft_rows = [(json.loads(line)) for line in (out / "sft.jsonl").read_text().splitlines()]
+      eval_rows = [(json.loads(line)) for line in (out / "eval-prompts.jsonl").read_text().splitlines()]
+      self.assertEqual({row["split"] for row in sft_rows}, {"train", "eval"})
+      self.assertTrue(all(row["completion"] == "OK" for row in sft_rows))
+      self.assertTrue(all(row["expected_exact"] == "OK" and row["max_tokens"] == 1 for row in eval_rows))
 
   def test_committed_qwen_adapter_artifact_shape_if_present(self):
     repo = pathlib.Path(__file__).resolve().parents[2]

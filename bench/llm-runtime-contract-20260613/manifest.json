@@ -83,6 +83,32 @@
       "id": "qwen3-8b-base-vs-output-lora-r4",
       "type": "compare",
       "artifact": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora"
+    },
+    {
+      "id": "qwen3-8b-output-lora-r8-v2-train",
+      "type": "adapter_train",
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2",
+      "min_train_loss_delta": 0.1
+    },
+    {
+      "id": "qwen3-8b-output-lora-r8-v2-rollout",
+      "type": "rollout",
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2-rollout",
+      "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "adapter": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v2/eval-prompts.jsonl",
+      "storage": "shared",
+      "mode": "generated"
+    },
+    {
+      "id": "qwen3-8b-base-vs-output-lora-r8-v2",
+      "type": "compare",
+      "artifact": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora-r8-v2",
+      "allow_token_changes": true,
+      "require_text_equal": false,
+      "min_passed_delta": 10,
+      "min_candidate_pass_rate": 1.0
     }
   ]
 }

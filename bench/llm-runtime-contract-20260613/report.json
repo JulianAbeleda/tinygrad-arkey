@@ -115,13 +115,48 @@
       "status": "pass",
       "summary_path": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora/report.json",
       "type": "compare"
+    },
+    {
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2",
+      "errors": [],
+      "id": "qwen3-8b-output-lora-r8-v2-train",
+      "min_train_loss_delta": 0.1,
+      "status": "pass",
+      "summary_path": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2/train-summary.json",
+      "type": "adapter_train"
+    },
+    {
+      "adapter": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2",
+      "artifact": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2-rollout",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v2/eval-prompts.jsonl",
+      "errors": [],
+      "id": "qwen3-8b-output-lora-r8-v2-rollout",
+      "mode": "generated",
+      "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "status": "pass",
+      "storage": "shared",
+      "summary_path": "bench/qwen-adapter-20260613/8b-output-lora-r8-v2-rollout/summary.json",
+      "type": "rollout"
+    },
+    {
+      "allow_token_changes": true,
+      "artifact": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora-r8-v2",
+      "errors": [],
+      "id": "qwen3-8b-base-vs-output-lora-r8-v2",
+      "min_candidate_pass_rate": 1.0,
+      "min_passed_delta": 10,
+      "require_text_equal": false,
+      "status": "pass",
+      "summary_path": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora-r8-v2/report.json",
+      "type": "compare"
     }
   ],
   "source_manifest": "qwen-runtime-contract-20260613",
   "summary": {
     "failed": 0,
     "missing": 0,
-    "passed": 11,
-    "rows": 11
+    "passed": 14,
+    "rows": 14
   }
 }

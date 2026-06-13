@@ -282,6 +282,24 @@ generated-policy storage mode.
 - [ ] Optional cleanup of old home-directory scratch logs after confirming all
       relevant artifacts are committed under `bench/`.
 
+## Practical Training / Eval Loop
+
+- [x] Added the minimal Qwen output-LoRA adapter path:
+      `extra/llm_adapter.py`, `extra/llm_adapter_train.py`, rollout
+      `--adapter` support, and runtime-contract rows. V0 artifact:
+      `bench/qwen-adapter-20260613/8b-output-lora-r4/`. This proves adapter
+      install/save/load/rollout/compare plumbing, but the self-distilled data
+      was saturated and produced no behavior change.
+- [x] Added a real-signal held-out behavior-change gate:
+      `extra/llm_adapter_signal_data.py` and
+      `bench/qwen-adapter-20260613/training-data-v2/`. The base generated
+      rollout fails the held-out sentinel exact-match gate (`0/12`), while the
+      rank-8 output LoRA passes (`12/12`) with `+12` compare improvement and
+      `0` regressions. Runtime contract now requires this improvement.
+- [ ] Next practical step: replace the synthetic sentinel target with a small
+      human-authored format/preference dataset where success is still
+      automatically judged, then re-run the same train/rollout/compare contract.
+
 ## Do Not Do Next
 
 - [ ] Do not add more q8 arithmetic variants in `extra/`.

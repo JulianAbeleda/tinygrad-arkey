@@ -56,6 +56,17 @@ def _build_examples(rows:list[dict[str, Any]], tok:Any, prompt_format:str, max_c
   if not examples: raise ValueError("no adapter training examples built")
   return examples
 
+def split_adapter_rows(rows:list[dict[str, Any]], *, eval_every:int=5) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+  splits = [row.get("split") for row in rows]
+  if any(split is not None for split in splits):
+    if not all(split in ("train", "eval") for split in splits):
+      raise ValueError("all adapter rows with split metadata must use split='train' or split='eval'")
+    train_rows = [row for row in rows if row["split"] == "train"]
+    eval_rows = [row for row in rows if row["split"] == "eval"]
+    if not train_rows or not eval_rows: raise ValueError("split metadata produced an empty train or eval set")
+    return train_rows, eval_rows, sorted({row["source_id"] for row in eval_rows})
+  return split_rows(rows, eval_every=eval_every)
+
 def _loss_one(model:Any, example:dict[str, Any]) -> Tensor:
   logits = model.logits(Tensor([example["ids"]], dtype="int32"), 0)[:, -1, :]
   return logits.sparse_categorical_crossentropy(Tensor([example["target"]], dtype="int32"))
@@ -91,7 +102,7 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
   Tensor.manual_seed(args.seed)
   rows = load_sft_rows(args.input)
   if args.max_rows > 0: rows = rows[:args.max_rows]
-  train_rows, eval_rows, eval_source_ids = split_rows(rows, eval_every=args.eval_every)
+  train_rows, eval_rows, eval_source_ids = split_adapter_rows(rows, eval_every=args.eval_every)
 
   model, kv = Transformer.from_gguf(pathlib.Path(args.model).expanduser(), args.max_context)
   tok = SimpleTokenizer.from_gguf_kv(kv)

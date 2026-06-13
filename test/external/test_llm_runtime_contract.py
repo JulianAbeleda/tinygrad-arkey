@@ -105,6 +105,44 @@ class TestLLMRuntimeContract(unittest.TestCase):
       ]}, repo)
     self.assertEqual(report["summary"]["failed"], 0)
 
+  def test_contract_can_require_compare_improvement(self):
+    with TemporaryDirectory() as raw_td:
+      repo = pathlib.Path(raw_td)
+      out = repo / "compare"
+      out.mkdir()
+      (out / "report.json").write_text(json.dumps({
+        "kind": "llm_rollout_compare_report",
+        "comparisons": [{
+          "candidate": "adapter", "prompts": 4,
+          "quality": {"regressions": [], "passed_delta": 2, "candidate_passed": 3},
+          "outputs": {"tokens_changed": 2, "text_changed": 2},
+        }],
+      }))
+      report = validate_contract({"kind": "llm_runtime_contract_manifest", "rows": [
+        {"id": "compare", "type": "compare", "artifact": "compare", "allow_token_changes": True,
+         "require_text_equal": False, "min_passed_delta": 2, "min_candidate_pass_rate": 0.75},
+      ]}, repo)
+    self.assertEqual(report["summary"]["failed"], 0)
+
+  def test_contract_flags_compare_missing_improvement(self):
+    with TemporaryDirectory() as raw_td:
+      repo = pathlib.Path(raw_td)
+      out = repo / "compare"
+      out.mkdir()
+      (out / "report.json").write_text(json.dumps({
+        "kind": "llm_rollout_compare_report",
+        "comparisons": [{
+          "candidate": "adapter", "prompts": 4,
+          "quality": {"regressions": [], "passed_delta": 1, "candidate_passed": 2},
+          "outputs": {"tokens_changed": 0, "text_changed": 0},
+        }],
+      }))
+      report = validate_contract({"kind": "llm_runtime_contract_manifest", "rows": [
+        {"id": "compare", "type": "compare", "artifact": "compare", "min_passed_delta": 2, "min_candidate_pass_rate": 0.75},
+      ]}, repo)
+    self.assertEqual(report["summary"]["failed"], 1)
+    self.assertIn("passed_delta", report["rows"][0]["errors"][0])
+
   def test_committed_runtime_contract_reproduces(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     root = repo / "bench/llm-runtime-contract-20260613"

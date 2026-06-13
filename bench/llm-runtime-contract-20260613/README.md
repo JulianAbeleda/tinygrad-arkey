@@ -17,6 +17,9 @@ evidence artifacts must be present and internally consistent.
 | `qwen3-8b-output-lora-r4-train` | `adapter_train` | `pass` | `bench/qwen-adapter-20260613/8b-output-lora-r4` |  |
 | `qwen3-8b-output-lora-r4-rollout` | `rollout` | `pass` | `bench/qwen-adapter-20260613/8b-output-lora-r4-rollout` |  |
 | `qwen3-8b-base-vs-output-lora-r4` | `compare` | `pass` | `bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora` |  |
+| `qwen3-8b-output-lora-r8-v2-train` | `adapter_train` | `pass` | `bench/qwen-adapter-20260613/8b-output-lora-r8-v2` |  |
+| `qwen3-8b-output-lora-r8-v2-rollout` | `rollout` | `pass` | `bench/qwen-adapter-20260613/8b-output-lora-r8-v2-rollout` |  |
+| `qwen3-8b-base-vs-output-lora-r8-v2` | `compare` | `pass` | `bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora-r8-v2` |  |
 
 ## Summary
 
@@ -24,7 +27,7 @@ evidence artifacts must be present and internally consistent.
 {
   "failed": 0,
   "missing": 0,
-  "passed": 11,
-  "rows": 11
+  "passed": 14,
+  "rows": 14
 }
 ```
