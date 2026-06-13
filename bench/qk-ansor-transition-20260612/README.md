@@ -107,6 +107,33 @@ PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_v2_verdict.py \
   --base bench/qk-ansor-transition-20260612/semantic-codegen-v2 \
   --json bench/qk-ansor-transition-20260612/semantic-codegen-v2/verdict.json \
   --md bench/qk-ansor-transition-20260612/semantic-codegen-v2/verdict.md
+
+base=bench/qk-ansor-transition-20260612/semantic-codegen-v3
+for model in 8b 14b; do
+  PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_v3.py \
+    --descriptor bench/qk-ansor-transition-20260612/descriptors/$model.json \
+    --json $base/$model/candidates.json \
+    --md $base/$model/candidates.md \
+    --gate-json $base/$model/static-gate.json \
+    --gate-md $base/$model/static-gate.md
+
+  PYTHONPATH=. DEV=AMD .venv/bin/python extra/qk_semantic_schedule_bench.py \
+    --model $model \
+    --candidates $base/$model/candidates.json \
+    --static-gate $base/$model/static-gate.json \
+    --out $base/$model/microbench-runs \
+    --json $base/$model/microbench.json \
+    --md $base/$model/microbench.md \
+    --device AMD \
+    --iters 3 \
+    --min-gain 0.10 \
+    --tie-band 0.03
+done
+
+PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_v3_verdict.py \
+  --base bench/qk-ansor-transition-20260612/semantic-codegen-v3 \
+  --json bench/qk-ansor-transition-20260612/semantic-codegen-v3/verdict.json \
+  --md bench/qk-ansor-transition-20260612/semantic-codegen-v3/verdict.md
 ```
 
 ## Current Scorecard
@@ -367,3 +394,40 @@ no strong raw accepts, and no full-decode candidates. Runtime installation,
 confirmation reruns, and 32B are skipped by rule.
 
 Artifacts: `semantic-codegen-v2/verdict.md`.
+
+## Semantic Codegen v3: Family C Packed Load
+
+Design note: `docs/amd-decode-packed-load-lowering.md`.
+
+`extra/qk_semantic_codegen_v3.py` generated the first packed-load memory-access
+surface: exact-tensor Q4_K `ffn_gate` partial GEMV with an explicit packed-word
+reduce lane. The mechanism is to load each quant `uint32` once and unroll four
+nibbles from that word, rather than expressing the load through a per-position
+axis.
+
+Static gate result:
+
+- 8B: `2` total candidates, `1` microbenchable, `0` candidate full-decode
+  supported.
+- 14B: `2` total candidates, `1` microbenchable, `0` candidate full-decode
+  supported.
+
+Microbench gate:
+
+| model | candidate | current GB/s | candidate GB/s | gain | status |
+|---|---|---:|---:|---:|---|
+| 8B | `packed_load_u32x4` | `206.42` | `205.07` | `-0.65%` | tie |
+| 14B | `packed_load_u32x4` | `367.98` | `366.84` | `-0.31%` | tie |
+
+Load-width evidence:
+
+- `load-width/report.md` sees the distinct
+  `q4k_gemv_packed_load_partial_12288_4096_1` kernel.
+- It still infers scalar `u32` loads and no vector-load evidence.
+
+Verdict: `semantic_codegen_v3_rejected`. The cheap expression-level
+packed-word-lane rewrite changed source shape but not memory transactions enough
+to move performance. Full decode, confirmation rerun, and 32B are skipped.
+
+Artifacts: `semantic-codegen-v3/verdict.md`,
+`semantic-codegen-v3/load-width/report.md`.

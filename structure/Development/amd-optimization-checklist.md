@@ -151,6 +151,13 @@ generated-policy storage mode.
 - [x] Scoped the next compiler-research surface as packed-load lowering:
       `docs/amd-decode-packed-load-lowering.md`, with prior-art framing in
       `docs/amd-decode-prior-art.md`.
+- [x] Implemented and gated semantic codegen v3 / Family C v0:
+      `extra/qk_semantic_codegen_v3.py`,
+      `extra/qk_load_width_report.py`, and
+      `bench/qk-ansor-transition-20260612/semantic-codegen-v3/`. The packed-load
+      Q4_K `ffn_gate` rewrite tied on both target models: 8B `-0.65%`, 14B
+      `-0.31%`; DEBUG=4 parsing found scalar `u32` loads and no vector-load
+      evidence. Verdict: `semantic_codegen_v3_rejected`; no full decode or 32B.
 
 ## Open But Not Urgent
 
@@ -171,6 +178,8 @@ generated-policy storage mode.
       matching confirmation rerun.
 - [ ] Do not broaden the Family B row-group surface to more roles or 32B; it
       failed on the targeted Q4_K `ffn_down` mechanism.
+- [ ] Do not broaden the Family C v0 packed-word-lane rewrite; it tied on
+      8B/14B and did not produce vector-load evidence.
 - [ ] Do not add another schedule/codegen family without an explicit
       memory-traffic mechanism and generated-source/load-width evidence.
 - [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
@@ -187,10 +196,10 @@ generated-policy storage mode.
    rejected semantic schedule/codegen surfaces in
    `bench/qk-ansor-transition-20260612/`. The current negative bound now covers
    descriptor `parts`/`LOCAL`, schedule v0, direct-output v1, and row-grouped
-   Family B v2. Any next surface needs a different kernel class or deeper
-   representation change; do not re-run these same knobs. The roofline artifact
-   narrows that representation change to packed-weight memory-access/load
-   lowering. Any future microbench win starts as `raw_accept` and needs a
+   Family B v2. Family C v0 then tested the first packed-load rewrite and also
+   tied. Any next surface needs hardware-counter evidence or a deeper renderer /
+   layout capability for true vector/coalesced loads; do not re-run these same
+   knobs. Any future microbench win starts as `raw_accept` and needs a
    confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval

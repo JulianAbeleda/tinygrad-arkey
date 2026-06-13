@@ -1,0 +1,110 @@
+{
+  "base": "bench/qk-ansor-transition-20260612/semantic-codegen-v3",
+  "gate_models": [
+    "8B",
+    "14B"
+  ],
+  "kind": "qk_semantic_codegen_v3_verdict",
+  "models": [
+    {
+      "candidate_summary": {
+        "candidates": 2,
+        "current_storage_bytes": 107347968,
+        "single_change_candidates": 1
+      },
+      "microbench_summary": {
+        "acceptance_rule": "raw_accept requires full-decode confirmation before promotion",
+        "accepted": 0,
+        "candidates": 1,
+        "full_decode_ready": 0,
+        "invalid": 0,
+        "next_decision": "semantic_codegen_frontier_blocked",
+        "raw_accepts": 0,
+        "rejected": 0,
+        "ties": 1
+      },
+      "model": "8B",
+      "raw_accepts": [],
+      "rows": [
+        {
+          "candidate_gbs": 205.07,
+          "current_gbs": 206.42,
+          "full_decode_supported": false,
+          "gain": -0.0065400639472918964,
+          "id": "001-ffn-gate-blk-0-ffn-gate-weight-packed-load-u32x4",
+          "reasons": [
+            "within tie_band=0.030"
+          ],
+          "status": "tie"
+        }
+      ],
+      "static_gate_summary": {
+        "candidates": 2,
+        "failing": 0,
+        "full_decode_supported": 1,
+        "passing_microbench": 1
+      },
+      "status": "reject",
+      "strong_raw_accepts": []
+    },
+    {
+      "candidate_summary": {
+        "candidates": 2,
+        "current_storage_bytes": 195379200,
+        "single_change_candidates": 1
+      },
+      "microbench_summary": {
+        "acceptance_rule": "raw_accept requires full-decode confirmation before promotion",
+        "accepted": 0,
+        "candidates": 1,
+        "full_decode_ready": 0,
+        "invalid": 0,
+        "next_decision": "semantic_codegen_frontier_blocked",
+        "raw_accepts": 0,
+        "rejected": 0,
+        "ties": 1
+      },
+      "model": "14B",
+      "raw_accepts": [],
+      "rows": [
+        {
+          "candidate_gbs": 366.84,
+          "current_gbs": 367.98,
+          "full_decode_supported": false,
+          "gain": -0.0030979944562206096,
+          "id": "001-ffn-gate-blk-0-ffn-gate-weight-packed-load-u32x4",
+          "reasons": [
+            "within tie_band=0.030"
+          ],
+          "status": "tie"
+        }
+      ],
+      "static_gate_summary": {
+        "candidates": 2,
+        "failing": 0,
+        "full_decode_supported": 1,
+        "passing_microbench": 1
+      },
+      "status": "reject",
+      "strong_raw_accepts": []
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "full_decode_candidates": 0,
+    "full_decode_confirmed_accepts": 0,
+    "microbench_invalid": 0,
+    "microbench_rows": 2,
+    "models": 2,
+    "overall_decision": "semantic_codegen_v3_rejected",
+    "raw_microbench_accepts": 0,
+    "reasons": [
+      "8B no raw accepts (1 ties)",
+      "14B no raw accepts (1 ties)",
+      "full decode and 32B skipped because the 8B/14B microbench gate produced no strong raw accepts",
+      "Family C v0 is a packed-load memory-access probe, not a schedule-only knob"
+    ],
+    "run_32b": false,
+    "strong_raw_microbench_accepts": 0
+  }
+}

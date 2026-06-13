@@ -76,6 +76,13 @@ compiler-visible packed-load/memory-access lowering surface. See
 `docs/amd-decode-bandwidth-roofline.md` and
 `docs/amd-decode-packed-load-lowering.md`.
 
+Update, semantic-codegen v3 / Family C v0: the first packed-load surface made
+Q4_K `ffn_gate` reduce over explicit packed `uint32` lanes and unrolled four
+nibbles from each word. It tied on both 8B and 14B (`-0.65%`, `-0.31%`), and
+DEBUG=4 load-width parsing still showed scalar `u32` loads. This rejects the
+cheap expression-level packed-word-lane rewrite. The memory-access path now
+needs counters or renderer/layout support for real vector/coalesced loads.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

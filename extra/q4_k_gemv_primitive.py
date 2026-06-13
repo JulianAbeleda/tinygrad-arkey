@@ -50,6 +50,23 @@ def _q4k_block_dot(words:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
     contrib = contrib + _q4k_weight(words, base, grp, pos) * x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
   return contrib
 
+def _q4k_group_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, grp:int, lane4:UOp) -> UOp:
+  d, dmin, sc, mn = _q4k_group_params(words, base, grp)
+  qword = words[base + 4 + (grp//2)*8 + lane4]
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for nib in range(4):
+    pos = lane4 * 4 + nib
+    q = qword.rshift(nib*8 + (grp%2)*4).bitwise_and(0xf)
+    weight = d * sc.cast(dtypes.float32) * q.cast(dtypes.float32) - dmin * mn.cast(dtypes.float32)
+    contrib = contrib + weight * x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
+  return contrib
+
+def _q4k_block_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UOp) -> UOp:
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for grp in range(8):
+    contrib = contrib + _q4k_group_dot_packed_load(words, x, base, x_block, grp, lane4)
+  return contrib
+
 def _q4k_block_dot_q8_1(words:UOp, xq:UOp, xscales:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
   contrib = UOp.const(dtypes.float32, 0.0)
   for grp in range(8):
@@ -228,6 +245,26 @@ def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple
 
   return kernel
 
+def q4k_gemv_packed_load_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    part = UOp.range(parts, 1)
+    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
+    lane4 = UOp.range(8, 3, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_packed_load(words, x, base, blk, lane4), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, part].set(0.0)
+    acc = partials[row, part].set(acc.after(blk_part, lane4)[row, part] + contrib, end=lane4)
+    return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q4k_gemv_packed_load_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
 def q4k_gemv_grouped_partial_kernel(rows:int, k:int, parts:int, row_group:int, schedule:str, opts:tuple[Opt, ...]):
   if row_group < 1: raise ValueError("row_group must be >= 1")
   if rows % row_group != 0:
@@ -378,7 +415,7 @@ if __name__ == "__main__":
   parser.add_argument("--device", default=None)
   parser.add_argument("--rows", type=int, default=2)
   parser.add_argument("--iters", type=int, default=3)
-  parser.add_argument("--mode", choices=("serial", "partial", "grouped"), default="serial")
+  parser.add_argument("--mode", choices=("serial", "partial", "packed_load", "grouped"), default="serial")
   parser.add_argument("--parts", type=int, default=16, help="number of K-block partitions for --mode partial")
   parser.add_argument("--row-group", type=int, default=1, help="output rows per group for --mode grouped")
   parser.add_argument("--schedule", choices=("none", "auto"), default="none",
@@ -435,6 +472,9 @@ if __name__ == "__main__":
   def primitive():
     if args.mode == "serial":
       return out.custom_kernel(words, x, fxn=q4k_gemv_kernel(rows, k, args.schedule, opts))[0]
+    if args.mode == "packed_load":
+      partial = partials.custom_kernel(words, x, fxn=q4k_gemv_packed_load_partial_kernel(rows, k, parts, args.schedule, opts))[0]
+      return partial.sum(axis=1)
     if args.mode == "grouped":
       partial = partials.custom_kernel(words, x, fxn=q4k_gemv_grouped_partial_kernel(rows, k, parts, args.row_group, args.schedule, opts))[0]
     else:

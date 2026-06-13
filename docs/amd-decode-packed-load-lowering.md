@@ -4,6 +4,13 @@ Date: 2026-06-13
 
 Status: next design surface. No runtime implementation in this document.
 
+Update: Family C v0 has now been tested. It changed the expression shape to use
+explicit packed-word lanes for Q4_K `ffn_gate`, but it tied on 8B/14B and
+DEBUG=4 parsing still showed scalar `u32` loads. See
+`bench/qk-ansor-transition-20260612/semantic-codegen-v3/verdict.md`. The
+remaining packed-load work therefore needs hardware-counter profiling or a
+deeper renderer/layout capability; do not broaden the v0 rewrite.
+
 ## Problem
 
 The accepted Q4_K/Q6_K primitive path is correct and substantially faster than
@@ -61,6 +68,10 @@ Candidate lowerings should try to change one memory-access mechanism at a time:
    Adjacent lanes read adjacent packed words. Avoid per-lane scalar byte gathers
    from unrelated addresses.
 
+   Family C v0 tried the cheap expression-level version of this idea by making
+   each reduce lane own one packed `uint32` and unroll four nibbles. It did not
+   produce a speedup or vector-load evidence.
+
 2. **Wider vector loads**
    Preserve `uint2`/`uint4`-style grouped loads in generated AMD C where
    alignment and layout permit it. A candidate must report generated source load
@@ -94,6 +105,7 @@ Do not install a runtime path from this family until all are true:
 - No more `parts`/`LOCAL` sweeps over the current primitive family.
 - No row-group broadening.
 - No direct-output retry.
+- No broadening of the Family C v0 packed-word-lane rewrite.
 - No isolated `v_dot4` peephole as the next default task.
 - No WMMA for batch-1 decode unless source inspection proves llama.cpp uses it
   in the decode path on gfx1100.

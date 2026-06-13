@@ -70,6 +70,7 @@ schedule knob.
 | Semantic codegen v1 | Reproducible and rejected. Q4_K direct output is now a runtime-supported generated-policy family (`q4_k_packed_u32_direct`) and was tested as exact-tensor overrides. The 8B/14B microbench gate produced no accepts: 8B had two ties and one reject; 14B had two ties and two rejects. The artifacts now record storage deltas and correctness provenance for each candidate. | Do not run full decode or 32B for this direct-output surface. Removing the partial reduction kernel alone is not enough. |
 | Semantic codegen v2 / Family B | Reproducible and rejected. The pre-registered row-grouped Q4_K `ffn_down` surface tested activation reuse / row-axis scheduling across adjacent output rows. It regressed badly: 8B row-group 2 was `-31.03%`, row-group 4 was `-71.54%`; 14B row-group 2 was `-52.59%`, and row-group 4 was an illegal opt. | Do not wire runtime support for row-grouped Q4_K. Do not broaden this same row-group surface to more roles or 32B. |
 | Model-scope bandwidth roofline | Accepted as the next decision point. Using committed shared-storage decisions and GGUF file bytes, tinygrad generated reaches `261.82`, `365.04`, and `340.47 GB/s` on 8B/14B/32B, while llama.cpp reaches `508.81`, `592.32`, and `608.67 GB/s`. | Freeze local schedule-knob exploration. Next decode research surface is packed-weight memory-access/codegen lowering. |
+| Semantic codegen v3 / Family C v0 | Reproducible and rejected. The packed-load Q4_K `ffn_gate` probe changed the kernel expression from per-position qword indexing to explicit packed-word lanes that unroll four nibbles from each loaded `uint32`. It tied on both gated models: 8B `-0.65%`, 14B `-0.31%`. DEBUG=4 load-width parsing confirms a distinct packed-load kernel but still scalar `u32` loads and no vector-load evidence. | This v0 expression rewrite did not change memory transactions enough to move bandwidth. Do not broaden this exact packed-word-lane rewrite. Next step is hardware-counter profiling or a deeper renderer/layout capability for real vector/coalesced loads. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -167,6 +168,13 @@ It is a representation/lowering boundary:
     shape. The next useful compiler surface must change packed-weight memory
     access efficiency: wider/coalesced loads, explicit packed layouts, and
     load-aware lowering.
+20. Semantic codegen v3 tested the first memory-access rewrite: explicit
+    packed-word lanes for Q4_K `ffn_gate`. It was correct and structurally
+    different, but performance tied the current kernel and generated-source
+    parsing still showed scalar `u32` loads. This says the cheap expression-level
+    packed-load rewrite is not enough; the remaining memory-access work needs
+    either hardware counters to identify the exact stall or renderer/layout
+    support that can force true vector/coalesced loads.
 
 So the machine-first research hypothesis is:
 
@@ -240,6 +248,8 @@ worth doing only if the research itself is the goal.
   candidate to promote.
 - Do not broaden semantic-codegen v2 row grouping. It regressed on the targeted
   Q4_K `ffn_down` tensors where the mechanism was most plausible.
+- Do not broaden semantic-codegen v3 packed-word-lane rewriting. It tied on
+  both 8B and 14B and did not produce vector-load evidence.
 - Do not add another schedule/codegen family unless its design note states the
   memory-traffic mechanism it changes and the generated artifact reports the
   intended load-width/coalescing evidence.
@@ -280,6 +290,9 @@ worth doing only if the research itself is the goal.
   `bench/qk-bandwidth-roofline-20260613/roofline.md`,
   `docs/amd-decode-packed-load-lowering.md`,
   `docs/amd-decode-prior-art.md`
+- Semantic codegen v3 / Family C v0 packed-load verdict:
+  `bench/qk-ansor-transition-20260612/semantic-codegen-v3/verdict.md`,
+  `bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`
