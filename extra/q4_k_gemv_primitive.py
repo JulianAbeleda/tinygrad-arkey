@@ -218,6 +218,61 @@ def _q4k_q8_1_vdot_source(k_blocks:int, parts:int) -> str:
   for i, token in enumerate(p): src = src.replace(token, f"{{{i}}}")
   return src
 
+def _q4k_tile_custom_partial_source(k_blocks:int, parts:int) -> str:
+  blocks_per_part = cdiv(k_blocks, parts)
+  p = [f"__P{i}__" for i in range(4)]
+  part_line = "  int part = 0;" if parts == 1 else f"  int part = (int){p[3]};"
+  lines = [
+    "{",
+    "  typedef unsigned int tg_uint4 __attribute__((ext_vector_type(4)));",
+    "  float total = 0.0f;",
+    part_line,
+    f"  int start = part * {blocks_per_part};",
+    f"  int stop = start + {blocks_per_part};",
+    f"  if (stop > {k_blocks}) stop = {k_blocks};",
+    "  for (int blk = start; blk < stop; blk++) {",
+    f"    int base = blk * {Q4K_WORDS_PER_BLOCK};",
+    f"    unsigned int fp = {p[1]}[base];",
+    "    float d = (float)(__builtin_bit_cast(_Float16, (unsigned short)(fp & 65535u)));",
+    "    float dmin = (float)(__builtin_bit_cast(_Float16, (unsigned short)((fp >> 16u) & 65535u)));",
+  ]
+  for pair in range(4):
+    even, odd = pair * 2, pair * 2 + 1
+    even_scale, even_min = _q4k_scale_min_expr(p[1], even)
+    odd_scale, odd_min = _q4k_scale_min_expr(p[1], odd)
+    lines += [
+      f"    {{ // Q4_K group pair {even}/{odd}",
+      f"      unsigned int sc_even = {even_scale};",
+      f"      unsigned int mn_even = {even_min};",
+      f"      unsigned int sc_odd = {odd_scale};",
+      f"      unsigned int mn_odd = {odd_min};",
+      "      for (int lane_vec = 0; lane_vec < 2; lane_vec++) {",
+      f"        tg_uint4 qv = *((tg_uint4*)({p[1]} + base + {4 + pair*8} + lane_vec * 4));",
+      "        for (int lane = 0; lane < 4; lane++) {",
+      "          unsigned int w = qv[lane];",
+      "          int pos_base = lane_vec * 16 + lane * 4;",
+      "          for (int nib = 0; nib < 4; nib++) {",
+      "            unsigned int byte = (w >> (8u * (unsigned int)nib)) & 255u;",
+      "            unsigned int q_even = byte & 15u;",
+      "            unsigned int q_odd = byte >> 4u;",
+      f"            float x_even = (float){p[2]}[blk*{Q4_K_BLOCK_ELEMS}+{even*32}+pos_base+nib];",
+      f"            float x_odd = (float){p[2]}[blk*{Q4_K_BLOCK_ELEMS}+{odd*32}+pos_base+nib];",
+      "            total += (d * (float)sc_even * (float)q_even - dmin * (float)mn_even) * x_even;",
+      "            total += (d * (float)sc_odd * (float)q_odd - dmin * (float)mn_odd) * x_odd;",
+      "          }",
+      "        }",
+      "      }",
+      "    }",
+    ]
+  lines += [
+    "  }",
+    f"  {p[0]}[0] = total;",
+    "}",
+  ]
+  src = "\n".join(lines).replace("{", "{{").replace("}", "}}")
+  for i, token in enumerate(p): src = src.replace(token, f"{{{i}}}")
+  return src
+
 def parse_opt(spec:str) -> Opt:
   parts = spec.split(":")
   if len(parts) == 1:
@@ -413,6 +468,29 @@ def q4k_q8_1_vdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:
 
   return kernel
 
+def q4k_gemv_tile_custom_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  if schedule != "none" or opts:
+    raise ValueError("q4k_gemv_tile_custom_partial_kernel is a fixed semantic packed-tile lowering; schedule opts are not supported")
+  if parts < 1: raise ValueError("parts must be >= 1")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  source = _q4k_tile_custom_partial_source(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.special(rows, "gidx0", dtype=dtypes.int)
+    row_words = words.index(row * k_blocks * Q4K_WORDS_PER_BLOCK, ptr=True)
+    half_marker = x[0]
+    if parts == 1:
+      out_ptr = partials.flatten().index(row, ptr=True)
+      srcs = (out_ptr, row_words, x, half_marker)
+    else:
+      part = UOp.special(parts, "gidx1", dtype=dtypes.int)
+      out_ptr = partials.flatten().index(row * parts + part, ptr=True)
+      srcs = (out_ptr, row_words, x, part, half_marker)
+    stmt = UOp(Ops.CUSTOM, dtypes.void, srcs, arg=source)
+    return stmt.sink(arg=_kernel_info(f"q4k_gemv_tile_custom_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
 def q8_1_bias_pack_u32_kernel(k:int):
   if k % 4 != 0: raise ValueError(f"K={k} is not divisible by 4")
 
@@ -460,7 +538,7 @@ if __name__ == "__main__":
   parser.add_argument("--device", default=None)
   parser.add_argument("--rows", type=int, default=2)
   parser.add_argument("--iters", type=int, default=3)
-  parser.add_argument("--mode", choices=("serial", "partial", "packed_load", "vector_load", "grouped"), default="serial")
+  parser.add_argument("--mode", choices=("serial", "partial", "packed_load", "vector_load", "grouped", "tile_custom"), default="serial")
   parser.add_argument("--parts", type=int, default=16, help="number of K-block partitions for --mode partial")
   parser.add_argument("--row-group", type=int, default=1, help="output rows per group for --mode grouped")
   parser.add_argument("--schedule", choices=("none", "auto"), default="none",
@@ -526,6 +604,8 @@ if __name__ == "__main__":
       return partial.reshape(rows, parts*8).sum(axis=1)
     if args.mode == "grouped":
       partial = partials.custom_kernel(words, x, fxn=q4k_gemv_grouped_partial_kernel(rows, k, parts, args.row_group, args.schedule, opts))[0]
+    elif args.mode == "tile_custom":
+      partial = partials.custom_kernel(words, x, fxn=q4k_gemv_tile_custom_partial_kernel(rows, k, parts, args.schedule, opts))[0]
     else:
       partial = partials.custom_kernel(words, x, fxn=q4k_gemv_partial_kernel(rows, k, parts, args.schedule, opts))[0]
     return partial.sum(axis=1)

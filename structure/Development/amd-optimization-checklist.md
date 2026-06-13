@@ -175,6 +175,14 @@ generated-policy storage mode.
       failure), while a custom semantic kernel passes exactly and DEBUG=4
       source parsing confirms `vector_u32x4`. Verdict:
       `semantic_custom_op_required`; no microbench/full-decode run.
+- [x] Implemented the first real custom semantic Q4_K tile lowering:
+      `q4k_gemv_tile_custom_partial_kernel` consumes packed Q4_K payload words
+      with `tg_uint4`, keeps fp16 activations, supports `parts=1` and `parts=4`,
+      and passes AMD correctness. Artifact:
+      `bench/qk-packed-tile-lowering-20260613/`. Microbench is weak-positive
+      only (`+7.20%` `ffn_gate`, `+5.83%` `attn_output`), below the `>=10%`
+      full-decode promotion bar. Verdict:
+      `semantic_custom_lowering_constructed_but_not_promoted`.
 
 ## Open But Not Urgent
 

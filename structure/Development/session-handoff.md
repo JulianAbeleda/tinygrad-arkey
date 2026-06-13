@@ -390,6 +390,16 @@ parsing confirms `vector_u32x4` source. Verdict:
 decode until a first-class packed QK load/decode/dot lowering or renderer
 PatternMatcher rule exists.
 
+Packed-QK custom lowering:
+`bench/qk-packed-tile-lowering-20260613/README.md` records the first real Q4_K
+GEMV consumer of the packed tile. `q4k_gemv_tile_custom_partial_kernel` uses
+`tg_uint4` source loads, keeps fp16 activation semantics, supports the existing
+partial-output shape, and passes AMD correctness for `parts=1` and `parts=4`.
+DEBUG=4 parsing confirms `vector_u32x4`. Microbench is positive but below the
+promotion bar: 8B `ffn_gate +7.20%`, `attn_output +5.83%` versus v1. Verdict:
+`semantic_custom_lowering_constructed_but_not_promoted`. No runtime integration
+or full-decode run was promoted.
+
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
@@ -400,10 +410,12 @@ When resuming, choose one track explicitly:
    grouping are rejected by their gates. Semantic codegen v3 packed-load v0 is
    rejected too; semantic codegen v4 is rejected at construction because the
    vector load cannot be consumed in the GEMV graph. The consumption probe shows
-   the normal-UOp route is blocked and the custom semantic route is viable. Next
-   work should add that semantic lowering, not hand-sweep the same primitive
-   knobs. Any future semantic raw accept needs a matching confirmation rerun
-   before promotion.
+   the normal-UOp route is blocked and the custom semantic route is viable. The
+   first raw custom lowering now constructs but is only a weak microbench win.
+   Next work should explain that small gain with source/counters or move the
+   packed tile idea into a core renderer/PatternMatcher semantic op that search
+   can reason about. Any future semantic raw accept needs a matching
+   confirmation rerun before promotion.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

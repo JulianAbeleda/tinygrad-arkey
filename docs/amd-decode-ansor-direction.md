@@ -100,6 +100,16 @@ low/high Q4 nibbles, and accumulate an exact dot; DEBUG=4 parsing confirms
 first-class packed QK load/decode/dot lowering or renderer PatternMatcher rule.
 Do not benchmark vector-load Q4_K again before that exists.
 
+Update, packed-tile custom lowering: the first real Q4_K GEMV consumer exists
+as `q4k_gemv_tile_custom_partial_kernel`. It keeps fp16 activation semantics,
+uses `tg_uint4` source loads, supports `parts=1` and `parts=4`, and passes AMD
+correctness. Same-harness microbench is only a weak positive signal:
+`ffn_gate +7.20%`, `attn_output +5.83%` versus v1. This answers the construction
+question but does not yet create a useful search surface, because the body is
+still raw `Ops.CUSTOM`. The next research step is to explain the small gain with
+source/counters or promote this idea into a renderer/core semantic op that
+tinygrad can reason about.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

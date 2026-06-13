@@ -19,6 +19,7 @@ MODE_PATTERNS = {
   "packed_load": re.compile(r"q4k_gemv_packed_load_partial"),
   "baseline_partial": re.compile(r"q4k_gemv_partial"),
   "grouped_partial": re.compile(r"q4k_gemv_grouped_partial"),
+  "tile_custom_partial": re.compile(r"q4k_gemv_tile_custom_partial"),
   "q6_partial": re.compile(r"q6k_gemv_partial"),
   "uop_vec_request": re.compile(r"qk_probe_uop_vec_request"),
   "custom_uint4": re.compile(r"qk_probe_custom_uint4"),

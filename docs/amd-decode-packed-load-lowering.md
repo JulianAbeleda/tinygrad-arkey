@@ -2,7 +2,7 @@
 
 Date: 2026-06-13
 
-Status: Family C v1 construction gate rejected.
+Status: custom semantic Q4_K tile lowering constructed; not promoted.
 
 Update: Family C v0 has now been tested. It changed the expression shape to use
 explicit packed-word lanes for Q4_K `ffn_gate`, but it tied on 8B/14B and
@@ -41,6 +41,16 @@ low/high Q4 nibbles, and accumulates a small dot. See
 `bench/qk-packed-tile-consumption-20260613/README.md`. Verdict:
 `semantic_custom_op_required`; do not run microbench or full decode until a
 first-class packed QK load/decode/dot lowering exists.
+
+Update 6: the first real custom semantic Q4_K tile consumer now exists as
+`q4k_gemv_tile_custom_partial_kernel`. It keeps fp16 activations, emits
+`vector_u32x4` source, and passes AMD Q4_K GEMV correctness for `parts=1` and
+`parts=4`. The full-shape microbench signal is positive but weak: 8B
+`ffn_gate` improves `201.11 -> 215.60 Q4-GB/s` (`+7.20%`) and
+`attn_output` improves `64.85 -> 68.63 Q4-GB/s` (`+5.83%`). This is below the
+pre-registered `>=10%` microbench bar for full-decode promotion, so no runtime
+integration or full-decode run was promoted. See
+`bench/qk-packed-tile-lowering-20260613/README.md`.
 
 ## Problem
 
@@ -145,12 +155,13 @@ Do not install a runtime path from this family until all are true:
 - No isolated `v_dot4` peephole as the next default task.
 - No WMMA for batch-1 decode unless source inspection proves llama.cpp uses it
   in the decode path on gfx1100.
-- No further Family C variants until the vector-load consumption blocker is
-  fixed in core lowering or represented as a first-class packed-load operation.
-  Future variants should consume `PackedQKTile` or its successor rather than
+- No full-decode promotion for this raw custom lowering unless a repeated
+  dominant-shape microbench clears the `>=10%` bar or a core lowering/search
+  integration changes the premise.
+- No further Family C variants through normal UOps. Future variants should
+  consume `PackedQKTile` or its successor through a first-class packed-load op,
+  renderer PatternMatcher, or similarly explicit semantic lowering rather than
   repeating expression-level rewrites.
-- No microbench or full-decode promotion for vector-load Q4_K until normal UOps
-  can consume the tile or a semantic lowering replaces the failing UOp sequence.
 
 ## Relationship To Ansor
 

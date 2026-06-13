@@ -1,7 +1,8 @@
-import json, pathlib, unittest
+import json, pathlib, tempfile, unittest
 
 import numpy as np
 
+from extra.q4_k_gemv_primitive import _q4k_tile_custom_partial_source
 from extra.qk_layout import GGML_Q4_K, GGML_Q6_K, GGUFInfo, GGUFMetadata
 from extra.qk_load_width_report import build_report as build_load_width_report
 from extra.qk_packed_tile import (
@@ -98,6 +99,20 @@ class TestQKPackedTile(unittest.TestCase):
       self.assertTrue(report["summary"]["has_vector_load_evidence"])
       self.assertEqual(report["rows"][0]["mode"], "packed_tile_custom_q4_dot")
       self.assertEqual(report["rows"][0]["load_width_inferred"], "vector_u32x4")
+
+  def test_tile_custom_partial_source_is_classified_as_vector_load(self):
+    source = _q4k_tile_custom_partial_source(k_blocks=16, parts=1)
+    self.assertIn("tg_uint4 qv = *((tg_uint4*)", source)
+    self.assertIn("byte & 15u", source)
+    self.assertIn("byte >> 4u", source)
+
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    with tempfile.TemporaryDirectory() as td:
+      log = pathlib.Path(td) / "tile-custom-debug4.log"
+      log.write_text("q4k_gemv_tile_custom_partial_2_4096_1\n" + source)
+      report = build_load_width_report([log], repo=repo)
+    self.assertEqual(report["rows"][0]["mode"], "tile_custom_partial")
+    self.assertEqual(report["rows"][0]["load_width_inferred"], "vector_u32x4")
 
 if __name__ == "__main__":
   unittest.main()
