@@ -104,6 +104,14 @@ generated-policy storage mode.
       14B had no accepts. 32B had one raw `+3.24%` accept, but the confirmation
       rerun was a tie at `-2.29%`, so no candidate is promoted. Verdict:
       descriptor-level `parts`/`LOCAL` knob search is exhausted.
+- [x] Generated and gated semantic schedule v0 candidates:
+      `extra/qk_semantic_schedule.py`,
+      `extra/qk_semantic_schedule_bench.py`, and
+      `extra/qk_semantic_schedule_verdict.py`. The first richer schedule surface
+      (`direct_out`, `row_upcast2`, `reduce_unroll4`, `two_dim_local4`) passed
+      static gates and found isolated attention microbench wins, but full decode
+      rejected the supported winner on both targets: 8B `-10.28%`, 14B
+      `-5.21%`. Verdict: `semantic_schedule_v0_rejected`; 32B skipped by rule.
 - [x] Fixed loop-v0 matrix portability: benchmark matrix `path` and `policy`
       fields are repo-relative, tests assert they are not absolute paths, and
       the regenerated matrices reproduce outside `/home/ubuntu/tinygrad-arkey`.
@@ -135,8 +143,10 @@ generated-policy storage mode.
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen
    direction from `docs/amd-decode-ansor-direction.md`, starting from the
-   descriptor/candidate/static-loop benchmark verdict in
-   `bench/qk-ansor-transition-20260612/`.
+   `semantic_schedule_v0_rejected` verdict in
+   `bench/qk-ansor-transition-20260612/semantic-schedules/`. The next surface
+   must add richer semantic layout/codegen; do not re-run the same four
+   schedule sketches.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

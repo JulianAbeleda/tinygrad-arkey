@@ -1,0 +1,16 @@
+{
+  "inputs": [
+    "bench/qk-ansor-transition-20260612/semantic-schedules/8b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decode-summary.json",
+    "bench/qk-ansor-transition-20260612/semantic-schedules/8b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/output-ab.json"
+  ],
+  "metadata": {
+    "status": "reject"
+  },
+  "outputs": [
+    "bench/qk-ansor-transition-20260612/semantic-schedules/8b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decision.json"
+  ],
+  "reused": false,
+  "stage": "decide",
+  "status": "passed",
+  "updated_at": "2026-06-12T22:10:18.721616"
+}

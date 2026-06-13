@@ -1,0 +1,15 @@
+{
+  "inputs": [
+    "bench/qk-ansor-transition-20260612/semantic-schedules/8b/microbench-runs/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+  ],
+  "metadata": {
+    "policy_changed": true
+  },
+  "outputs": [
+    "bench/qk-ansor-transition-20260612/semantic-schedules/8b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+  ],
+  "reused": false,
+  "stage": "policy",
+  "status": "passed",
+  "updated_at": "2026-06-12T22:05:50.426908"
+}

@@ -9,6 +9,11 @@ from extra.qk_llama_scorecard import build_scorecard, scorecard_markdown
 from extra.qk_loop_benchmark import build_matrix, matrix_markdown
 from extra.qk_loop_verdict import build_verdict, verdict_markdown
 from extra.qk_semantic_descriptor import build_descriptor, descriptor_markdown
+from extra.qk_semantic_schedule import (
+  build_schedule_candidate_set, build_static_gate as build_semantic_static_gate,
+  candidates_markdown as semantic_candidates_markdown, static_gate_markdown as semantic_static_gate_markdown,
+)
+from extra.qk_semantic_schedule_verdict import build_verdict as build_semantic_verdict, verdict_markdown as semantic_verdict_markdown
 
 
 class TestQKAnsorTransition(unittest.TestCase):
@@ -136,6 +141,40 @@ class TestQKAnsorTransition(unittest.TestCase):
     self.assertEqual((bench / "verdict.md").read_text(), verdict_markdown(verdict))
     self.assertEqual(verdict["summary"]["overall_decision"], "descriptor_knob_frontier_exhausted")
     self.assertEqual(verdict["summary"]["models_with_confirmed_accept"], 0)
+
+  def test_semantic_schedule_candidates_and_verdict_reproduce(self):
+    base = pathlib.Path("bench/qk-ansor-transition-20260612")
+    semantic = base / "semantic-schedules"
+    for stem in ("8b", "14b"):
+      descriptor = json.loads((base / "descriptors" / f"{stem}.json").read_text())
+      candidate_set = build_schedule_candidate_set(descriptor)
+      self.assertEqual(json.loads((semantic / stem / "candidates.json").read_text()), candidate_set)
+      self.assertEqual((semantic / stem / "candidates.md").read_text(), semantic_candidates_markdown(candidate_set))
+      self.assertEqual(candidate_set["summary"]["candidates"], 15)
+      self.assertEqual(candidate_set["search_space"]["note"], "32B is excluded from the default semantic schedule gate and should only run after 8B/14B evidence.")
+
+      gate = build_semantic_static_gate(candidate_set)
+      self.assertEqual(json.loads((semantic / stem / "static-gate.json").read_text()), gate)
+      self.assertEqual((semantic / stem / "static-gate.md").read_text(), semantic_static_gate_markdown(gate))
+      self.assertEqual(gate["summary"]["passing_microbench"], 14)
+      self.assertEqual(gate["summary"]["full_decode_supported"], 13)
+
+    verdict = build_semantic_verdict(semantic, repo=self.repo)
+    self.assertEqual(json.loads((semantic / "verdict.json").read_text()), verdict)
+    self.assertEqual((semantic / "verdict.md").read_text(), semantic_verdict_markdown(verdict))
+    self.assertEqual(verdict["summary"]["overall_decision"], "semantic_schedule_v0_rejected")
+    self.assertEqual(verdict["summary"]["full_decode_accepts"], 0)
+    self.assertFalse(verdict["summary"]["run_32b"])
+
+  def test_semantic_schedule_artifacts_do_not_embed_checkout_absolute_paths(self):
+    semantic = pathlib.Path("bench/qk-ansor-transition-20260612/semantic-schedules")
+    needle = str(self.repo)
+    offenders = []
+    for path in semantic.rglob("*"):
+      if path.suffix not in {".json", ".md"}: continue
+      if needle in path.read_text(errors="replace"):
+        offenders.append(str(path))
+    self.assertEqual(offenders, [])
 
 
 if __name__ == "__main__":

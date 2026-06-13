@@ -59,6 +59,7 @@ kernel-search loop.
 | QK policy storage | Shape-scoped policy is too coarse for large models under sidecar storage; 32B needs either tensor-scoped storage decisions or shared source storage. Runtime accounting and `QK_PRIMITIVE_MAX_STORAGE_MB` now report/control sidecar bytes. Q4 on-demand storage was tested and rejected as too slow. `QK_PRIMITIVE_STORAGE=shared` references the already-realized raw GGUF buffer through typed views; it has now passed full 8B, 14B, and 32B harnesses with `storage_bytes=0`. | Treat shared storage as the validated generated-policy storage mode, but keep it explicit until it has more runtime soak. Future policy generation should still include storage cost, benefit, and fallback decisions because sidecar remains supported and useful as a performance control. |
 | Ansor-direction harness | Useful. Descriptors, generated candidates, correctness gates, policy cache, manifest-checked pipeline reuse, stage statuses, normalized decisions, and matrix summaries exist. | Continue here only if the goal is making tinygrad generate/select packed quant kernels. Treat storage work as harness-enabling infrastructure, not a 32B/kernel detour. |
 | Ansor-transition descriptor/candidate loop | Reproducible and benchmarked. `bench/qk-ansor-transition-20260612/` freezes the llama.cpp-comparable objective, records profiles for 8B/14B/32B, converts accepted generated policies into Q4_K/Q6_K semantic descriptors, round-trips those descriptors into equivalent runtime policies, generates bounded candidates, statically gates them, and benchmarks the six `benchmark_next` candidates per model policy-vs-policy. | Descriptor-level `parts`/`LOCAL` knob search is exhausted. The next research step needs real semantic schedule/codegen generation. |
+| Semantic schedule v0 | Reproducible and rejected. The first richer schedule surface generated `direct_out`, `row_upcast2`, `reduce_unroll4`, and `two_dim_local4` sketches for 8B/14B. Microbench found isolated attention `row_upcast2` wins, but the full decode gate rejected the only supported winner on both models: 8B `-10.28%`, 14B `-5.21%`, greedy A/B pass. | Do not promote microbench-only schedule wins. Do not run 32B for this surface. The next compiler step needs richer semantic layout/codegen, not these same sketches. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -122,6 +123,15 @@ It is a representation/lowering boundary:
     `-2.29%`, so it is not promoted. This falsifies the idea that simple
     `parts`/`LOCAL` policy search can move the current kernels materially toward
     llama.cpp.
+15. Semantic schedule v0 then tested a slightly richer generated surface:
+    `direct_out`, `row_upcast2`, `reduce_unroll4`, and `two_dim_local4` over the
+    dominant current descriptors. Static validation passed and microbench found
+    isolated `attn_q row_upcast2` wins, but full decode rejected the candidate
+    on both gated models: 8B generated was `47.79 tok/s` versus `53.27 tok/s`
+    reference (`-10.28%`), and 14B generated was `36.14 tok/s` versus
+    `38.13 tok/s` reference (`-5.21%`). This confirms that schedule/codegen
+    candidates must survive model-scope gates; local microbench wins are not
+    enough.
 
 So the machine-first research hypothesis is:
 
@@ -182,6 +192,11 @@ worth doing only if the research itself is the goal.
   policies selected for benchmarking unless accompanied by a benchmark verdict.
 - Do not continue sweeping only `parts`/`LOCAL` over the current primitive
   families. That frontier was measured and did not produce a confirmed winner.
+- Do not promote semantic schedule/codegen candidates from microbench results
+  alone. The first `row_upcast2` attention win regressed full decode on both 8B
+  and 14B.
+- Do not run the semantic-schedule v0 surface on 32B. The 8B/14B gate rejected
+  it, so 32B would only be a heavy confirmation of a failed surface.
 - Do not commit benchmark or reproducibility artifacts with machine-local
   absolute checkout paths. Store repo-relative paths so evidence regenerates
   from any clean checkout.
@@ -204,6 +219,8 @@ worth doing only if the research itself is the goal.
 - QK harness architecture: `docs/amd-decode-harness-architecture.md`
 - Ansor-transition scorecard/gap/descriptors:
   `bench/qk-ansor-transition-20260612/README.md`
+- Semantic schedule v0 verdict:
+  `bench/qk-ansor-transition-20260612/semantic-schedules/verdict.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

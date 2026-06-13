@@ -1,0 +1,14 @@
+{
+  "inputs": [
+    "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+  ],
+  "metadata": {
+    "preliminary_gain": -0.05210527466102777,
+    "profile": "never"
+  },
+  "outputs": [],
+  "reused": false,
+  "stage": "profile",
+  "status": "skipped",
+  "updated_at": "2026-06-12T22:15:49.953480"
+}

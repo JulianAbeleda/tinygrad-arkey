@@ -58,7 +58,9 @@ Latest Ansor-transition commits before the artifact-portability fix:
 The portability fix after those commits makes loop benchmark matrix `path` and
 `policy` fields repo-relative, adds a test assertion against absolute artifact
 paths, and resolves the `structure/` ignore policy by explicitly allowing only
-the tracked session handoff and AMD checklist files.
+the tracked session handoff and AMD checklist files. The next semantic-schedule
+pass adds a second-stage generated surface and rejects it by the full 8B/14B
+gate.
 
 Key implementation files:
 
@@ -283,14 +285,31 @@ against each model's current accepted generated policy. 8B had `0` accepts
 candidate is promoted. Overall verdict:
 `descriptor_knob_frontier_exhausted`.
 
+Semantic-schedule v0 verdict:
+`bench/qk-ansor-transition-20260612/semantic-schedules/verdict.md`.
+Generated candidates covered `direct_out`, `row_upcast2`, `reduce_unroll4`, and
+`two_dim_local4` over dominant 8B/14B descriptors. Static gates passed; isolated
+microbench found attention `row_upcast2` wins. The only full-decode-supported
+winner rejected on both target models:
+
+| model | explicit/reference | generated candidate | gain | verdict |
+|---|---:|---:|---:|---|
+| 8B | `53.27 tok/s` | `47.79 tok/s` | `-10.28%` | reject |
+| 14B | `38.13 tok/s` | `36.14 tok/s` | `-5.21%` | reject |
+
+Greedy A/B passed for both, so this is a performance rejection, not a
+correctness failure. 32B was skipped by rule because the 8B/14B gate did not
+accept.
+
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
    RLVR/SFT pipeline on top of the validated rollout/comparator backend.
 2. Compiler research: continue from the Ansor-transition descriptor foundation:
-   descriptor-level `parts`/`LOCAL` candidate search is now exhausted; next work
-   needs real semantic schedule/codegen, not another hand sweep over the same
-   primitive knobs. Do not confuse this with more hand-written primitive tuning.
+   descriptor-level `parts`/`LOCAL` search is exhausted, and semantic schedule
+   v0 (`direct_out`/`row_upcast2`/`reduce_unroll4`/`two_dim_local4`) is rejected
+   by full decode. Next work needs a richer semantic layout/codegen surface, not
+   another hand sweep over the same primitive knobs.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

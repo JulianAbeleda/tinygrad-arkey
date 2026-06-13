@@ -62,6 +62,21 @@ for model in 8b 14b 32b; do
     --policies-dir bench/qk-ansor-transition-20260612/search/$model/policies \
     --max-to-benchmark 6
 done
+
+base=bench/qk-ansor-transition-20260612/semantic-schedules
+for model in 8b 14b; do
+  PYTHONPATH=. .venv/bin/python extra/qk_semantic_schedule.py \
+    --descriptor bench/qk-ansor-transition-20260612/descriptors/$model.json \
+    --json $base/$model/candidates.json \
+    --md $base/$model/candidates.md \
+    --gate-json $base/$model/static-gate.json \
+    --gate-md $base/$model/static-gate.md
+done
+
+PYTHONPATH=. .venv/bin/python extra/qk_semantic_schedule_verdict.py \
+  --base bench/qk-ansor-transition-20260612/semantic-schedules \
+  --json bench/qk-ansor-transition-20260612/semantic-schedules/verdict.json \
+  --md bench/qk-ansor-transition-20260612/semantic-schedules/verdict.md
 ```
 
 ## Current Scorecard
@@ -139,3 +154,82 @@ Conclusion: simple descriptor-level `parts`/`LOCAL` knob search is not enough to
 move toward the `>=70%` llama.cpp target. The next research step needs a real
 semantic schedule/codegen change, not another hand sweep over the same primitive
 knobs.
+
+## Semantic Schedule v0
+
+`extra/qk_semantic_schedule.py` generated the first second-stage semantic
+schedule/codegen surface from the accepted descriptors. This pass is gated only
+on 8B and 14B by default; 32B is intentionally skipped unless both target models
+show promise.
+
+The generated surface adds schedule specs over the existing runtime families:
+
+- `direct_out` for Q4_K `parts=1` microbench only;
+- `row_upcast2` over the current primitive family;
+- `reduce_unroll4` over the current primitive family;
+- `two_dim_local4` over the current primitive family.
+
+Static gate result:
+
+- 8B: `15` total candidates, `14` microbenchable, `13` full-decode supported.
+- 14B: `15` total candidates, `14` microbenchable, `13` full-decode supported.
+
+Microbench result:
+
+- 8B: `2` accepts, only `009-attn-q-blk-0-attn-q-weight-row-upcast2` is
+  full-decode supported.
+- 14B: `1` accept, `009-attn-q-blk-0-attn-q-weight-row-upcast2`.
+
+Full-decode gate result:
+
+| model | candidate | explicit tok/s | generated tok/s | gain | A/B | verdict |
+|---|---|---:|---:|---:|---|---|
+| 8B | `009-attn-q...row-upcast2` | `53.27` | `47.79` | `-10.28%` | pass | reject |
+| 14B | `009-attn-q...row-upcast2` | `38.13` | `36.14` | `-5.21%` | pass | reject |
+
+Verdict: `semantic_schedule_v0_rejected`. The isolated attention microbench
+win did not survive full decode, so 32B was skipped. The next research step
+needs a richer semantic layout/codegen capability, not another sweep over these
+same schedule sketches.
+
+Artifacts: `semantic-schedules/verdict.md`.
+
+Measurement commands used on native AMD:
+
+```sh
+base=bench/qk-ansor-transition-20260612/semantic-schedules
+for model in 8b 14b; do
+  DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_semantic_schedule_bench.py \
+    --model $model \
+    --candidates $base/$model/candidates.json \
+    --static-gate $base/$model/static-gate.json \
+    --out $base/$model/microbench-runs \
+    --json $base/$model/microbench.json \
+    --md $base/$model/microbench.md \
+    --iters 3 \
+    --min-gain 0.03 \
+    --tie-band 0.03
+done
+
+for model in 8b 14b; do
+  model_file=Qwen3-${model^^}-Q4_K_M.gguf
+  cand=009-attn-q-blk-0-attn-q-weight-row-upcast2
+  DEV=AMD PYTHONPATH=. QK_PRIMITIVE_STORAGE=shared .venv/bin/python \
+    extra/qk_policy_pipeline.py \
+    --model ~/models/$model_file \
+    --out $base/$model/full-benchmark/$cand \
+    --device AMD \
+    --level 2 \
+    --iters 2 \
+    --benchmark 128 \
+    --reference-mode policy \
+    --reference-policy bench/qk-ansor-transition-20260612/search/$model/policies/current.policy.json \
+    --input-policy $base/$model/microbench-runs/$cand/policy.json \
+    --repeats 3 \
+    --max-extra-repeats 4 \
+    --ab-tokens 32 \
+    --profile never \
+    --accept-gain 0.03 \
+    --tie-band 0.03
+done
+```

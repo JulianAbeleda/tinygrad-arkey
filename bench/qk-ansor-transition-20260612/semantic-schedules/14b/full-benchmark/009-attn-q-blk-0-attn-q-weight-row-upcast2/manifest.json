@@ -1,0 +1,173 @@
+{
+  "commit": "e0bdf948b",
+  "created_at": "2026-06-12T22:10:18.848982",
+  "env": {
+    "QK_PRIMITIVE_STORAGE": "shared"
+  },
+  "kind": "qk_policy_pipeline_manifest",
+  "model": {
+    "mtime_ns": 1781139524597283444,
+    "path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "size_bytes": 9001752960
+  },
+  "repo": ".",
+  "spec": {
+    "ab_tokens": 32,
+    "accept_gain": 0.03,
+    "benchmark": 128,
+    "candidate_timeout": 120,
+    "device": "AMD",
+    "input_policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json",
+    "iters": 2,
+    "level": 2,
+    "max_extra_repeats": 4,
+    "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "policy_max_storage_mb": null,
+    "profile": "never",
+    "profile_gain": 0.2,
+    "profile_tokens": 8,
+    "reference_mode": "policy",
+    "reference_policy": "bench/qk-ansor-transition-20260612/search/14b/policies/current.policy.json",
+    "repeats": 3,
+    "tie_band": 0.03
+  },
+  "stages": {
+    "ab": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "outputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/output-ab.json"
+      ],
+      "reused": false,
+      "stage": "ab",
+      "status": "passed",
+      "updated_at": "2026-06-12T22:15:49.948665"
+    },
+    "decide": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decode-summary.json",
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/output-ab.json"
+      ],
+      "metadata": {
+        "status": "reject"
+      },
+      "outputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decision.json"
+      ],
+      "reused": false,
+      "stage": "decide",
+      "status": "passed",
+      "updated_at": "2026-06-12T22:15:49.957271"
+    },
+    "decode": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "metadata": {
+        "explicit_logs": [
+          "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/explicit-run1.log",
+          "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/explicit-run2.log",
+          "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/explicit-run3.log"
+        ],
+        "generated_logs": [
+          "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/generated-run1.log",
+          "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/generated-run2.log",
+          "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/generated-run3.log"
+        ]
+      },
+      "outputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decode-summary.json",
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decode-summary.md"
+      ],
+      "reused": false,
+      "stage": "decode",
+      "status": "passed",
+      "updated_at": "2026-06-12T22:14:44.560109"
+    },
+    "parity": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "outputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy-parity.json",
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy-parity.md"
+      ],
+      "reused": false,
+      "stage": "parity",
+      "status": "passed",
+      "updated_at": "2026-06-12T22:10:19.139583"
+    },
+    "policy": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "metadata": {
+        "policy_changed": true
+      },
+      "outputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "reused": false,
+      "stage": "policy",
+      "status": "passed",
+      "updated_at": "2026-06-12T22:10:18.852860"
+    },
+    "profile": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "metadata": {
+        "preliminary_gain": -0.05210527466102777,
+        "profile": "never"
+      },
+      "outputs": [],
+      "reused": false,
+      "stage": "profile",
+      "status": "skipped",
+      "updated_at": "2026-06-12T22:15:49.953480"
+    },
+    "report": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decision.json"
+      ],
+      "outputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/README.md"
+      ],
+      "reused": false,
+      "stage": "report",
+      "status": "passed",
+      "updated_at": "2026-06-12T22:15:49.961093"
+    },
+    "search": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "metadata": {
+        "reason": "using precomputed input policy"
+      },
+      "outputs": [],
+      "reused": false,
+      "stage": "search",
+      "status": "skipped",
+      "updated_at": "2026-06-12T22:10:18.849206"
+    },
+    "semantic": {
+      "inputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json"
+      ],
+      "metadata": {
+        "reason": "input policy has no search.json"
+      },
+      "outputs": [
+        "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/semantic-report.md"
+      ],
+      "reused": false,
+      "stage": "semantic",
+      "status": "skipped",
+      "updated_at": "2026-06-12T22:10:18.854780"
+    }
+  },
+  "updated_at": "2026-06-12T22:15:49.962603",
+  "version": 1
+}

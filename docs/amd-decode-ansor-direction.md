@@ -36,6 +36,15 @@ the one raw 32B accept failed confirmation. This means the next Ansor-direction
 step cannot be another sweep over the same `parts`/`LOCAL` knobs. It needs a
 new semantic schedule/codegen capability.
 
+Update, semantic-schedule v0: the first second-stage schedule/codegen surface
+generated `direct_out`, `row_upcast2`, `reduce_unroll4`, and `two_dim_local4`
+sketches for dominant 8B/14B descriptors. Static gates passed and microbench
+found isolated attention `row_upcast2` wins, but the only full-decode-supported
+winner rejected on both target models: 8B was `-10.28%` and 14B was `-5.21%`
+against the current accepted generated policies, with greedy A/B still passing.
+32B was skipped by rule because the 8B/14B gate did not accept. Current verdict:
+`semantic_schedule_v0_rejected`.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

@@ -5,6 +5,19 @@ import argparse, json, os, pathlib, subprocess, sys, time
 
 DEFAULT_PROMPT = "Give a concise answer: what is the purpose of a compiler optimization pass?"
 
+def _portable_str(value:str, base:pathlib.Path) -> str:
+  resolved = str(base.resolve())
+  text = str(value)
+  if text == resolved: return "."
+  return text.replace(resolved + "/", "")
+
+def _portable_value(value, base:pathlib.Path):
+  if isinstance(value, pathlib.Path): return _portable_str(str(value), base)
+  if isinstance(value, str): return _portable_str(value, base)
+  if isinstance(value, list): return [_portable_value(x, base) for x in value]
+  if isinstance(value, dict): return {k: _portable_value(v, base) for k, v in value.items()}
+  return value
+
 def _json_from_output(out:str) -> dict:
   for line in reversed(out.strip().splitlines()):
     try: return json.loads(line)
@@ -41,7 +54,8 @@ def run_child(args, primitive:bool) -> dict:
   elapsed = time.perf_counter() - st
   data = _json_from_output(proc.stdout)
   data["returncode"], data["elapsed_s"] = proc.returncode, round(elapsed, 3)
-  data["tail"] = "\n".join(proc.stdout.strip().splitlines()[-args.tail_lines:])
+  data["tail"] = _portable_str("\n".join(proc.stdout.strip().splitlines()[-args.tail_lines:]), args.repo)
+  data = _portable_value(data, args.repo)
   if proc.returncode != 0:
     raise RuntimeError(f"child primitive={primitive} failed rc={proc.returncode}\n{proc.stdout[-4000:]}")
   return data

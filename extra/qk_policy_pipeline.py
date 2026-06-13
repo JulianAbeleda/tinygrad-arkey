@@ -33,16 +33,29 @@ def _model_size(model:pathlib.Path) -> str:
 def _git_commit(repo:pathlib.Path) -> str:
   return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=repo, text=True).strip()
 
-def _model_fingerprint(model:pathlib.Path) -> dict:
+def _portable_str(value:str, base:pathlib.Path) -> str:
+  resolved = str(base.resolve())
+  text = str(value)
+  if text == resolved: return "."
+  return text.replace(resolved + "/", "")
+
+def _portable_value(value, base:pathlib.Path):
+  if isinstance(value, pathlib.Path): return _portable_str(str(value), base)
+  if isinstance(value, str): return _portable_str(value, base)
+  if isinstance(value, list): return [_portable_value(x, base) for x in value]
+  if isinstance(value, tuple): return [_portable_value(x, base) for x in value]
+  if isinstance(value, dict): return {k: _portable_value(v, base) for k, v in value.items()}
+  return value
+
+def _model_fingerprint(model:pathlib.Path, repo:pathlib.Path) -> dict:
   st = model.stat()
-  return {"path": str(model), "size_bytes": st.st_size, "mtime_ns": st.st_mtime_ns}
+  return {"path": _portable_str(str(model), repo), "size_bytes": st.st_size, "mtime_ns": st.st_mtime_ns}
 
 def _experiment_spec(args) -> dict:
   spec = {}
   for key in SPEC_FIELDS:
     value = getattr(args, key, None)
-    if isinstance(value, pathlib.Path): value = str(value)
-    spec[key] = value
+    spec[key] = _portable_value(value, args.repo)
   return spec
 
 def _copy_if_changed(src:pathlib.Path, dst:pathlib.Path) -> bool:
@@ -57,8 +70,8 @@ def _manifest_for(args) -> dict:
     "kind": "qk_policy_pipeline_manifest",
     "version": MANIFEST_VERSION,
     "commit": _git_commit(args.repo),
-    "repo": str(args.repo),
-    "model": _model_fingerprint(args.model),
+    "repo": _portable_str(str(args.repo), args.repo),
+    "model": _model_fingerprint(args.model, args.repo),
     "spec": _experiment_spec(args),
     "env": {k: os.environ.get(k) for k in ENV_FIELDS if os.environ.get(k) is not None},
   }
@@ -119,10 +132,11 @@ def _write_stage_status(args, stage:str, status:str, *, inputs:list[pathlib.Path
   if stage not in STAGES: raise ValueError(f"unknown pipeline stage {stage!r}")
   row = {
     "stage": stage, "status": status, "reused": reused, "updated_at": datetime.now().isoformat(),
-    "inputs": [str(x) for x in (inputs or [])], "outputs": [str(x) for x in (outputs or [])],
+    "inputs": _portable_value([str(x) for x in (inputs or [])], args.repo),
+    "outputs": _portable_value([str(x) for x in (outputs or [])], args.repo),
   }
-  if error is not None: row["error"] = error[-4000:]
-  if metadata is not None: row["metadata"] = metadata
+  if error is not None: row["error"] = _portable_str(error[-4000:], args.repo)
+  if metadata is not None: row["metadata"] = _portable_value(metadata, args.repo)
   (args.out / f"{stage}.status.json").write_text(json.dumps(row, indent=2, sort_keys=True))
   _write_manifest(args)
 
@@ -142,7 +156,7 @@ def _run(cmd:list[str], repo:pathlib.Path, log:pathlib.Path, env:dict[str, str]|
   log.write_text(proc.stdout)
   if proc.returncode != 0:
     raise RuntimeError(f"{log}: command failed rc={proc.returncode}\n{proc.stdout[-4000:]}")
-  return {"cmd": cmd, "log": str(log), "elapsed_s": round(elapsed, 3), "returncode": proc.returncode}
+  return {"cmd": _portable_value(cmd, repo), "log": _portable_str(str(log), repo), "elapsed_s": round(elapsed, 3), "returncode": proc.returncode}
 
 def _mean(xs:list[float]) -> float:
   return statistics.mean(xs) if xs else 0.0
@@ -198,12 +212,12 @@ def _run_decode(args, mode:str, policy:pathlib.Path|None, idx:int) -> pathlib.Pa
   if mode == "explicit":
     if args.reference_mode == "policy":
       if args.reference_policy is None: raise ValueError("reference_mode=policy requires --reference-policy")
-      env |= {"QK_GENERATED_POLICY": str(args.reference_policy), "QK_GENERATED_POLICY_DEBUG": "1"}
+      env |= {"QK_GENERATED_POLICY": _portable_str(str(args.reference_policy), args.repo), "QK_GENERATED_POLICY_DEBUG": "1"}
     elif args.reference_mode == "explicit":
       env |= {"Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1", "Q4K_PRIMITIVE_DEBUG": "1", "Q6K_PRIMITIVE_DEBUG": "1"}
   elif mode == "generated":
     if policy is None: raise ValueError("generated decode requires policy")
-    env |= {"QK_GENERATED_POLICY": str(policy), "QK_GENERATED_POLICY_DEBUG": "1"}
+    env |= {"QK_GENERATED_POLICY": _portable_str(str(policy), args.repo), "QK_GENERATED_POLICY_DEBUG": "1"}
   else:
     raise ValueError(mode)
   _run([sys.executable, "-m", "tinygrad.llm", "--model", str(args.model), "--warmup", "--benchmark", str(args.benchmark)],
@@ -226,8 +240,8 @@ def _existing_decode_logs(out:pathlib.Path, mode:str) -> list[pathlib.Path]:
     idx += 1
   return logs
 
-def _write_decode_summary(out:pathlib.Path, logs:list[tuple[str, pathlib.Path]]) -> list[dict]:
-  rows = [parse_decode_log(label, path) for label, path in logs]
+def _write_decode_summary(out:pathlib.Path, logs:list[tuple[str, pathlib.Path]], repo:pathlib.Path) -> list[dict]:
+  rows = [_portable_value(parse_decode_log(label, path), repo) for label, path in logs]
   (out / "decode-summary.json").write_text(json.dumps(rows, indent=2, sort_keys=True))
   (out / "decode-summary.md").write_text(decode_summary_md(rows))
   return rows
@@ -248,11 +262,12 @@ def _apply_policy_cap_from_search(args, search_json:pathlib.Path, policy:pathlib
   return True
 
 def _profile_specs(args, policy:pathlib.Path) -> list[tuple[str, str, dict[str, str]]]:
+  repo = getattr(args, "repo", pathlib.Path.cwd())
   base_env = {"DEV": args.device, "DEBUG": "2", "JIT": "1", "PYTHONPATH": "."}
   if args.reference_mode == "policy":
     if args.reference_policy is None: raise ValueError("reference_mode=policy requires --reference-policy")
     reference_name = "reference-policy"
-    reference_env = base_env | {"QK_GENERATED_POLICY": str(args.reference_policy)}
+    reference_env = base_env | {"QK_GENERATED_POLICY": _portable_str(str(args.reference_policy), repo)}
   elif args.reference_mode == "explicit":
     reference_name = "q4q6-primitive"
     reference_env = base_env | {"Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1"}
@@ -261,7 +276,7 @@ def _profile_specs(args, policy:pathlib.Path) -> list[tuple[str, str, dict[str, 
     reference_env = dict(base_env)
   else:
     raise ValueError(args.reference_mode)
-  generated_env = base_env | {"QK_GENERATED_POLICY": str(policy)}
+  generated_env = base_env | {"QK_GENERATED_POLICY": _portable_str(str(policy), repo)}
   model = args.model_size.lower()
   return [
     ("reference-batched", f"{model}-{reference_name}-batched-debug2.log", reference_env),
@@ -281,7 +296,8 @@ def _run_profile(args, policy:pathlib.Path) -> dict:
   report_json, report_md = args.out / "profile-report.json", args.out / "profile-report.md"
   _run([sys.executable, "extra/q4_k_profile_report.py", *[str(x) for x in logs], "--json", str(report_json), "--out", str(report_md),
         "--steady-drop", "1"], args.repo, args.out / "profile-report.log", env={"PYTHONPATH": "."}, timeout=args.profile_timeout)
-  return {"logs": [str(x) for x in logs], "json": str(report_json), "md": str(report_md)}
+  return {"logs": _portable_value([str(x) for x in logs], args.repo),
+          "json": _portable_str(str(report_json), args.repo), "md": _portable_str(str(report_md), args.repo)}
 
 def _decide(args, decode_rows:list[dict], parity_summary:dict, ab_match:bool, profile:dict|None) -> dict:
   explicit = _decode_stats(decode_rows, "explicit", args.repeats)
@@ -330,7 +346,7 @@ def _top_up_until_stable(args, policy:pathlib.Path, explicit_logs:list[pathlib.P
   max_runs = args.repeats + args.max_extra_repeats
   while True:
     decode_rows = _write_decode_summary(args.out, [(f"explicit{i+1}", p) for i, p in enumerate(explicit_logs)] +
-                                        [(f"generated{i+1}", p) for i, p in enumerate(generated_logs)])
+                                        [(f"generated{i+1}", p) for i, p in enumerate(generated_logs)], args.repo)
     explicit = _decode_stats(decode_rows, "explicit", args.repeats)
     generated = _decode_stats(decode_rows, "generated", args.repeats)
     need_explicit = not explicit["stable"] and len(explicit_logs) < max_runs
@@ -373,8 +389,8 @@ def _write_readme(args, decision:dict) -> None:
     "## Reproduction",
     "",
     "```sh",
-    f"DEV={args.device} JIT=1 QK_GENERATED_POLICY={args.out / 'policy.json'} PYTHONPATH=. \\",
-    f"  .venv/bin/python -m tinygrad.llm --model {args.model} --warmup --benchmark {args.benchmark}",
+    f"DEV={args.device} JIT=1 QK_GENERATED_POLICY={_portable_str(str(args.out / 'policy.json'), args.repo)} PYTHONPATH=. \\",
+    f"  .venv/bin/python -m tinygrad.llm --model {_portable_str(str(args.model), args.repo)} --warmup --benchmark {args.benchmark}",
     "```",
     "",
     "## Artifacts",
@@ -491,7 +507,7 @@ def run_pipeline(args) -> dict:
     semantic_report = args.out / "semantic-report.md"
     semantic_report.write_text(
       f"# QK Policy Pipeline Search: {args.model.name}\n\n"
-      f"Search skipped. This run benchmarks precomputed policy `{args.input_policy}`.\n"
+      f"Search skipped. This run benchmarks precomputed policy `{_portable_str(str(args.input_policy), args.repo)}`.\n"
     )
     _write_stage_status(args, "semantic", "skipped", inputs=[policy], outputs=[semantic_report],
                         metadata={"reason": "input policy has no search.json"})
@@ -548,7 +564,8 @@ def run_pipeline(args) -> dict:
       "reference_mode": args.reference_mode,
       "ab_match": None,
       "profile": None,
-      "model": str(args.model), "model_size": args.model_size, "out": str(args.out), "policy": str(policy),
+      "model": _portable_str(str(args.model), args.repo), "model_size": args.model_size,
+      "out": _portable_str(str(args.out), args.repo), "policy": _portable_str(str(policy), args.repo),
       "commit": _git_commit(args.repo), "created_at": datetime.now().isoformat(),
     }
     (args.out / "decision.json").write_text(json.dumps(decision, indent=2, sort_keys=True))
@@ -583,7 +600,8 @@ def run_pipeline(args) -> dict:
   profile = None
   if args.profile == "always" or (args.profile == "auto" and preliminary["gain"] >= args.profile_gain and preliminary["status"] != "invalid"):
     if args.reuse and not policy_changed and (args.out / "profile-report.json").exists():
-      profile = {"json": str(args.out / "profile-report.json"), "md": str(args.out / "profile-report.md"), "reused": True}
+      profile = {"json": _portable_str(str(args.out / "profile-report.json"), args.repo),
+                 "md": _portable_str(str(args.out / "profile-report.md"), args.repo), "reused": True}
       _write_stage_status(args, "profile", "passed", inputs=[policy], outputs=[args.out / "profile-report.json", args.out / "profile-report.md"],
                           reused=True)
     else:
@@ -599,7 +617,8 @@ def run_pipeline(args) -> dict:
   decision = _decide(args, decode_rows, parity_summary, ab_match, profile)
   decision |= {
     "kind": "qk_policy_pipeline_decision", "schema_version": DECISION_SCHEMA_VERSION,
-    "model": str(args.model), "model_size": args.model_size, "out": str(args.out), "policy": str(policy),
+    "model": _portable_str(str(args.model), args.repo), "model_size": args.model_size,
+    "out": _portable_str(str(args.out), args.repo), "policy": _portable_str(str(policy), args.repo),
     "storage_policy": storage_policy, "runtime_storage": _runtime_storage_summary(decode_rows),
     "commit": _git_commit(args.repo), "created_at": datetime.now().isoformat(),
   }

@@ -1,0 +1,136 @@
+{
+  "base": "bench/qk-ansor-transition-20260612/semantic-schedules",
+  "gate_models": [
+    "8B",
+    "14B"
+  ],
+  "kind": "qk_semantic_schedule_verdict",
+  "models": [
+    {
+      "candidate_summary": {
+        "candidates": 15,
+        "current_storage_bytes": 107347968,
+        "single_change_candidates": 14
+      },
+      "full_decode_decisions": [
+        {
+          "ab_match": true,
+          "candidate": "009-attn-q-blk-0-attn-q-weight-row-upcast2",
+          "explicit_tok_s": 53.268880208333336,
+          "gain": -0.1028107698512607,
+          "generated_tok_s": 47.792265625,
+          "path": "bench/qk-ansor-transition-20260612/semantic-schedules/8b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decision.json",
+          "reasons": [
+            "generated slower than explicit by 10.28%"
+          ],
+          "status": "reject"
+        }
+      ],
+      "full_decode_ready": [
+        "009-attn-q-blk-0-attn-q-weight-row-upcast2"
+      ],
+      "microbench_accepts": [
+        {
+          "format": "Q4_K",
+          "full_decode_supported": false,
+          "gain": 0.04365541327124567,
+          "id": "008-attn-q-blk-0-attn-q-weight-direct-out",
+          "role": "attn_q"
+        },
+        {
+          "format": "Q4_K",
+          "full_decode_supported": true,
+          "gain": 0.04925282098200667,
+          "id": "009-attn-q-blk-0-attn-q-weight-row-upcast2",
+          "role": "attn_q"
+        }
+      ],
+      "microbench_summary": {
+        "accepted": 2,
+        "candidates": 14,
+        "full_decode_ready": 1,
+        "invalid": 8,
+        "next_decision": "run_full_policy_benchmark",
+        "rejected": 3,
+        "ties": 1
+      },
+      "model": "8B",
+      "promoted": [],
+      "static_gate_summary": {
+        "candidates": 15,
+        "failing": 0,
+        "full_decode_supported": 13,
+        "passing_microbench": 14
+      },
+      "status": "reject"
+    },
+    {
+      "candidate_summary": {
+        "candidates": 15,
+        "current_storage_bytes": 195379200,
+        "single_change_candidates": 14
+      },
+      "full_decode_decisions": [
+        {
+          "ab_match": true,
+          "candidate": "009-attn-q-blk-0-attn-q-weight-row-upcast2",
+          "explicit_tok_s": 38.1284375,
+          "gain": -0.05210527466102777,
+          "generated_tok_s": 36.14174479166667,
+          "path": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/full-benchmark/009-attn-q-blk-0-attn-q-weight-row-upcast2/decision.json",
+          "reasons": [
+            "generated slower than explicit by 5.21%"
+          ],
+          "status": "reject"
+        }
+      ],
+      "full_decode_ready": [
+        "009-attn-q-blk-0-attn-q-weight-row-upcast2"
+      ],
+      "microbench_accepts": [
+        {
+          "format": "Q4_K",
+          "full_decode_supported": true,
+          "gain": 0.05563805563805557,
+          "id": "009-attn-q-blk-0-attn-q-weight-row-upcast2",
+          "role": "attn_q"
+        }
+      ],
+      "microbench_summary": {
+        "accepted": 1,
+        "candidates": 14,
+        "full_decode_ready": 1,
+        "invalid": 9,
+        "next_decision": "run_full_policy_benchmark",
+        "rejected": 1,
+        "ties": 3
+      },
+      "model": "14B",
+      "promoted": [],
+      "static_gate_summary": {
+        "candidates": 15,
+        "failing": 0,
+        "full_decode_supported": 13,
+        "passing_microbench": 14
+      },
+      "status": "reject"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "full_decode_accepts": 0,
+    "full_decode_candidates": 2,
+    "full_decode_invalid": 0,
+    "full_decode_needs_rerun": 0,
+    "full_decode_rejects": 2,
+    "microbench_accepts": 3,
+    "models": 2,
+    "overall_decision": "semantic_schedule_v0_rejected",
+    "reasons": [
+      "8B full decode rejected 009-attn-q-blk-0-attn-q-weight-row-upcast2: -10.28%",
+      "14B full decode rejected 009-attn-q-blk-0-attn-q-weight-row-upcast2: -5.21%",
+      "32B skipped by default because the 8B/14B semantic gate did not accept"
+    ],
+    "run_32b": false
+  }
+}

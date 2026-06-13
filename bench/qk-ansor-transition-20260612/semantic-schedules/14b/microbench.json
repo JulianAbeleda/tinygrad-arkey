@@ -1,0 +1,801 @@
+{
+  "kind": "qk_semantic_schedule_microbench",
+  "model": "14B",
+  "rows": [
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.899,
+        "gemv_max_abs": 0.00317574,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/001-ffn-gate-blk-0-ffn-gate-weight-direct-out/candidate.log",
+        "quant_gbs": 370.36,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00317574\nblk.0.ffn_gate.weight 17408x5120 matmul_decoded: 0.604 ms (1656.01/s) q4_eff=83.02 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.0.ffn_gate.weight 17408x5120 decode_q4_k_plus_matmul: 3.056 ms (327.21/s) q4_eff=16.40 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.0.ffn_gate.weight 17408x5120 q4k_primitive_gemv: 0.135 ms (7387.27/s) q4_eff=370.36 GB/s device_q4_eff=n/a kernels=1.0 mem=50.28 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.895,
+        "gemv_max_abs": 0.00317574,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/001-ffn-gate-blk-0-ffn-gate-weight-direct-out/current.log",
+        "quant_gbs": 360.67,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00317574\nblk.0.ffn_gate.weight 17408x5120 matmul_decoded: 0.595 ms (1680.28/s) q4_eff=84.24 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.0.ffn_gate.weight 17408x5120 decode_q4_k_plus_matmul: 3.021 ms (331.01/s) q4_eff=16.60 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.0.ffn_gate.weight 17408x5120 q4k_primitive_gemv: 0.139 ms (7194.00/s) q4_eff=360.67 GB/s device_q4_eff=n/a kernels=1.0 mem=50.28 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": 0.02686666481825495,
+      "id": "001-ffn-gate-blk-0-ffn-gate-weight-direct-out",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/001-ffn-gate-blk-0-ffn-gate-weight-direct-out/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "tie",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.914,
+        "gemv_max_abs": 0.00317574,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/002-ffn-gate-blk-0-ffn-gate-weight-row-upcast2/candidate.log",
+        "quant_gbs": 378.77,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:32', 'UPCAST:0:2']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00317574\nblk.0.ffn_gate.weight 17408x5120 matmul_decoded: 0.588 ms (1699.30/s) q4_eff=85.19 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.0.ffn_gate.weight 17408x5120 decode_q4_k_plus_matmul: 2.990 ms (334.44/s) q4_eff=16.77 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.0.ffn_gate.weight 17408x5120 q4k_primitive_gemv: 0.132 ms (7555.02/s) q4_eff=378.77 GB/s device_q4_eff=n/a kernels=1.0 mem=50.28 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.915,
+        "gemv_max_abs": 0.00317574,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/002-ffn-gate-blk-0-ffn-gate-weight-row-upcast2/current.log",
+        "quant_gbs": 368.96,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00317574\nblk.0.ffn_gate.weight 17408x5120 matmul_decoded: 0.604 ms (1656.69/s) q4_eff=83.06 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.0.ffn_gate.weight 17408x5120 decode_q4_k_plus_matmul: 3.066 ms (326.15/s) q4_eff=16.35 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.0.ffn_gate.weight 17408x5120 q4k_primitive_gemv: 0.136 ms (7359.31/s) q4_eff=368.96 GB/s device_q4_eff=n/a kernels=1.0 mem=50.28 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.026588248048568852,
+      "id": "002-ffn-gate-blk-0-ffn-gate-weight-row-upcast2",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/002-ffn-gate-blk-0-ffn-gate-weight-row-upcast2/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:32",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "tie",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.976,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/003-ffn-gate-blk-0-ffn-gate-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.927,
+        "gemv_max_abs": 0.00317574,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/003-ffn-gate-blk-0-ffn-gate-weight-reduce-unroll4/current.log",
+        "quant_gbs": 358.72,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00317574\nblk.0.ffn_gate.weight 17408x5120 matmul_decoded: 0.614 ms (1627.53/s) q4_eff=81.60 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.0.ffn_gate.weight 17408x5120 decode_q4_k_plus_matmul: 3.069 ms (325.88/s) q4_eff=16.34 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.0.ffn_gate.weight 17408x5120 q4k_primitive_gemv: 0.140 ms (7155.14/s) q4_eff=358.72 GB/s device_q4_eff=n/a kernels=1.0 mem=50.28 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "003-ffn-gate-blk-0-ffn-gate-weight-reduce-unroll4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/003-ffn-gate-blk-0-ffn-gate-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:32",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.888,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/004-ffn-gate-blk-0-ffn-gate-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.93,
+        "gemv_max_abs": 0.00317574,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/004-ffn-gate-blk-0-ffn-gate-weight-two-dim-local4/current.log",
+        "quant_gbs": 360.55,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.0.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00317574\nblk.0.ffn_gate.weight 17408x5120 matmul_decoded: 0.604 ms (1656.54/s) q4_eff=83.05 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.0.ffn_gate.weight 17408x5120 decode_q4_k_plus_matmul: 3.028 ms (330.27/s) q4_eff=16.56 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.0.ffn_gate.weight 17408x5120 q4k_primitive_gemv: 0.139 ms (7191.59/s) q4_eff=360.55 GB/s device_q4_eff=n/a kernels=1.0 mem=50.28 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "004-ffn-gate-blk-0-ffn-gate-weight-two-dim-local4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/004-ffn-gate-blk-0-ffn-gate-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:64",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.0.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.5.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 2 --primitive-opt LOCAL:0:32 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 2.063,
+        "gemv_max_abs": 0.00282812,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/005-ffn-down-blk-5-ffn-down-weight-row-upcast2/candidate.log",
+        "quant_gbs": 210.11,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=2 schedule=none opts=['LOCAL:0:32', 'UPCAST:0:2']\ncorrectness: PASS blk.5.ffn_down.weight\nprimitive_unpack_correctness: PASS blk.5.ffn_down.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.5.ffn_down.weight max_abs=0.00282812\nblk.5.ffn_down.weight 5120x17408 matmul_decoded: 0.608 ms (1645.20/s) q4_eff=82.48 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.5.ffn_down.weight 5120x17408 decode_q4_k_plus_matmul: 3.073 ms (325.41/s) q4_eff=16.31 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.5.ffn_down.weight 5120x17408 q4k_primitive_gemv: 0.239 ms (4190.96/s) q4_eff=210.11 GB/s device_q4_eff=n/a kernels=1.0 mem=50.31 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.5.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 2 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.978,
+        "gemv_max_abs": 0.00282812,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/005-ffn-down-blk-5-ffn-down-weight-row-upcast2/current.log",
+        "quant_gbs": 361.55,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=2 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.5.ffn_down.weight\nprimitive_unpack_correctness: PASS blk.5.ffn_down.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.5.ffn_down.weight max_abs=0.00282812\nblk.5.ffn_down.weight 5120x17408 matmul_decoded: 0.607 ms (1648.53/s) q4_eff=82.65 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.5.ffn_down.weight 5120x17408 decode_q4_k_plus_matmul: 3.132 ms (319.27/s) q4_eff=16.01 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.5.ffn_down.weight 5120x17408 q4k_primitive_gemv: 0.139 ms (7211.50/s) q4_eff=361.55 GB/s device_q4_eff=n/a kernels=1.0 mem=50.31 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": -0.4188632277693265,
+      "id": "005-ffn-down-blk-5-ffn-down-weight-row-upcast2",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/005-ffn-down-blk-5-ffn-down-weight-row-upcast2/policy.json",
+      "reasons": [
+        "below min_gain=0.030"
+      ],
+      "role": "ffn_down",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:32",
+          "UPCAST:0:2"
+        ],
+        "parts": 2,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_down",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "reject",
+      "tensor": "blk.5.ffn_down.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.5.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 2 --primitive-opt LOCAL:0:32 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.935,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/006-ffn-down-blk-5-ffn-down-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.5.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 2 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 2.003,
+        "gemv_max_abs": 0.00282812,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/006-ffn-down-blk-5-ffn-down-weight-reduce-unroll4/current.log",
+        "quant_gbs": 352.45,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=2 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.5.ffn_down.weight\nprimitive_unpack_correctness: PASS blk.5.ffn_down.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.5.ffn_down.weight max_abs=0.00282812\nblk.5.ffn_down.weight 5120x17408 matmul_decoded: 0.618 ms (1618.91/s) q4_eff=81.16 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.5.ffn_down.weight 5120x17408 decode_q4_k_plus_matmul: 3.104 ms (322.20/s) q4_eff=16.15 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.5.ffn_down.weight 5120x17408 q4k_primitive_gemv: 0.142 ms (7030.01/s) q4_eff=352.45 GB/s device_q4_eff=n/a kernels=1.0 mem=50.31 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "006-ffn-down-blk-5-ffn-down-weight-reduce-unroll4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/006-ffn-down-blk-5-ffn-down-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "ffn_down",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:32",
+          "UNROLL:2:4"
+        ],
+        "parts": 2,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_down",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.5.ffn_down.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.5.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 2 --primitive-opt LOCAL:0:64 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.915,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/007-ffn-down-blk-5-ffn-down-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 176, in apply_opt\n    ret = self.shift_to(rng, amt, opt_to_at[opt.op], top=opt.op in {OptOps.GROUPTOP, OptOps.THREAD})\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 96, in shift_to\n    raise KernelOptError(f\"{amount} can't divide {rng.src[0]} in {self.colored_shape()}\")\ntinygrad.codegen.opt.KernelOptError: 4 can't divide UOp(Ops.CONST, dtypes.weakint, arg=2, src=()) in   80    2   64   34    8    4"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.5.ffn_down.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 2 --primitive-opt LOCAL:0:32",
+        "elapsed_s": 1.952,
+        "gemv_max_abs": 0.00282812,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/007-ffn-down-blk-5-ffn-down-weight-two-dim-local4/current.log",
+        "quant_gbs": 352.61,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=2 schedule=none opts=['LOCAL:0:32']\ncorrectness: PASS blk.5.ffn_down.weight\nprimitive_unpack_correctness: PASS blk.5.ffn_down.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.5.ffn_down.weight max_abs=0.00282812\nblk.5.ffn_down.weight 5120x17408 matmul_decoded: 0.609 ms (1640.97/s) q4_eff=82.27 GB/s device_q4_eff=n/a kernels=1.0 mem=178.30 MB\nblk.5.ffn_down.weight 5120x17408 decode_q4_k_plus_matmul: 3.055 ms (327.29/s) q4_eff=16.41 GB/s device_q4_eff=n/a kernels=1.0 mem=50.18 MB\nblk.5.ffn_down.weight 5120x17408 q4k_primitive_gemv: 0.142 ms (7033.14/s) q4_eff=352.61 GB/s device_q4_eff=n/a kernels=1.0 mem=50.31 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "007-ffn-down-blk-5-ffn-down-weight-two-dim-local4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/007-ffn-down-blk-5-ffn-down-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_down",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:64",
+          "LOCAL:1:4"
+        ],
+        "parts": 2,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_down",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.5.ffn_down.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.939,
+        "gemv_max_abs": 0.00561523,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/008-attn-q-blk-0-attn-q-weight-direct-out/candidate.log",
+        "quant_gbs": 106.0,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00561523\nblk.0.attn_q.weight 5120x5120 matmul_decoded: 0.595 ms (1680.91/s) q4_eff=24.79 GB/s device_q4_eff=n/a kernels=1.0 mem=52.45 MB\nblk.0.attn_q.weight 5120x5120 decode_q4_k_plus_matmul: 3.043 ms (328.66/s) q4_eff=4.85 GB/s device_q4_eff=n/a kernels=1.0 mem=14.77 MB\nblk.0.attn_q.weight 5120x5120 q4k_primitive_gemv: 0.139 ms (7188.81/s) q4_eff=106.00 GB/s device_q4_eff=n/a kernels=1.0 mem=14.80 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.876,
+        "gemv_max_abs": 0.00561523,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/008-attn-q-blk-0-attn-q-weight-direct-out/current.log",
+        "quant_gbs": 107.18,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00561523\nblk.0.attn_q.weight 5120x5120 matmul_decoded: 0.586 ms (1707.54/s) q4_eff=25.18 GB/s device_q4_eff=n/a kernels=1.0 mem=52.45 MB\nblk.0.attn_q.weight 5120x5120 decode_q4_k_plus_matmul: 3.034 ms (329.62/s) q4_eff=4.86 GB/s device_q4_eff=n/a kernels=1.0 mem=14.77 MB\nblk.0.attn_q.weight 5120x5120 q4k_primitive_gemv: 0.138 ms (7268.39/s) q4_eff=107.18 GB/s device_q4_eff=n/a kernels=1.0 mem=14.80 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": -0.011009516700877131,
+      "id": "008-attn-q-blk-0-attn-q-weight-direct-out",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/008-attn-q-blk-0-attn-q-weight-direct-out/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "tie",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.967,
+        "gemv_max_abs": 0.00561523,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/009-attn-q-blk-0-attn-q-weight-row-upcast2/candidate.log",
+        "quant_gbs": 106.63,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00561523\nblk.0.attn_q.weight 5120x5120 matmul_decoded: 0.596 ms (1677.65/s) q4_eff=24.74 GB/s device_q4_eff=n/a kernels=1.0 mem=52.45 MB\nblk.0.attn_q.weight 5120x5120 decode_q4_k_plus_matmul: 3.037 ms (329.25/s) q4_eff=4.85 GB/s device_q4_eff=n/a kernels=1.0 mem=14.77 MB\nblk.0.attn_q.weight 5120x5120 q4k_primitive_gemv: 0.138 ms (7231.36/s) q4_eff=106.63 GB/s device_q4_eff=n/a kernels=1.0 mem=14.80 MB"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.868,
+        "gemv_max_abs": 0.00561523,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/009-attn-q-blk-0-attn-q-weight-row-upcast2/current.log",
+        "quant_gbs": 101.01,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00561523\nblk.0.attn_q.weight 5120x5120 matmul_decoded: 0.591 ms (1692.58/s) q4_eff=24.96 GB/s device_q4_eff=n/a kernels=1.0 mem=52.45 MB\nblk.0.attn_q.weight 5120x5120 decode_q4_k_plus_matmul: 3.016 ms (331.53/s) q4_eff=4.89 GB/s device_q4_eff=n/a kernels=1.0 mem=14.77 MB\nblk.0.attn_q.weight 5120x5120 q4k_primitive_gemv: 0.146 ms (6850.19/s) q4_eff=101.01 GB/s device_q4_eff=n/a kernels=1.0 mem=14.80 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.05563805563805557,
+      "id": "009-attn-q-blk-0-attn-q-weight-row-upcast2",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/009-attn-q-blk-0-attn-q-weight-row-upcast2/policy.json",
+      "reasons": [],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "accept",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.908,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/010-attn-q-blk-0-attn-q-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.856,
+        "gemv_max_abs": 0.00561523,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/010-attn-q-blk-0-attn-q-weight-reduce-unroll4/current.log",
+        "quant_gbs": 107.59,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00561523\nblk.0.attn_q.weight 5120x5120 matmul_decoded: 0.585 ms (1708.74/s) q4_eff=25.20 GB/s device_q4_eff=n/a kernels=1.0 mem=52.45 MB\nblk.0.attn_q.weight 5120x5120 decode_q4_k_plus_matmul: 2.982 ms (335.32/s) q4_eff=4.94 GB/s device_q4_eff=n/a kernels=1.0 mem=14.77 MB\nblk.0.attn_q.weight 5120x5120 q4k_primitive_gemv: 0.137 ms (7296.73/s) q4_eff=107.59 GB/s device_q4_eff=n/a kernels=1.0 mem=14.80 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "010-attn-q-blk-0-attn-q-weight-reduce-unroll4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/010-attn-q-blk-0-attn-q-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.835,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/011-attn-q-blk-0-attn-q-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.889,
+        "gemv_max_abs": 0.00561523,
+        "kernels": 1.0,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/011-attn-q-blk-0-attn-q-weight-two-dim-local4/current.log",
+        "quant_gbs": 104.83,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 5120, 'feed_forward_length': 17408, 'block_count': 40, 'attention.head_count': 40, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.0.attn_q.weight\nprimitive_unpack_correctness: PASS blk.0.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.0.attn_q.weight max_abs=0.00561523\nblk.0.attn_q.weight 5120x5120 matmul_decoded: 0.595 ms (1682.00/s) q4_eff=24.80 GB/s device_q4_eff=n/a kernels=1.0 mem=52.45 MB\nblk.0.attn_q.weight 5120x5120 decode_q4_k_plus_matmul: 3.021 ms (331.04/s) q4_eff=4.88 GB/s device_q4_eff=n/a kernels=1.0 mem=14.77 MB\nblk.0.attn_q.weight 5120x5120 q4k_primitive_gemv: 0.141 ms (7109.46/s) q4_eff=104.83 GB/s device_q4_eff=n/a kernels=1.0 mem=14.80 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "011-attn-q-blk-0-attn-q-weight-two-dim-local4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/011-attn-q-blk-0-attn-q-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.0.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q6_k_gemv_primitive.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_down.weight --iters 3 --parts 2 --seed 1337 --opt LOCAL:0:64 --opt UPCAST:0:2",
+        "elapsed_s": 1.404,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/012-ffn-down-blk-0-ffn-down-weight-row-upcast2/candidate.log",
+        "quant_gbs": null,
+        "status": "wrong",
+        "tail": "    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"tinygrad/codegen/late/devectorizer.py\", line 89, in fold_expanded_index\n    idx: Any = midx.src[i].src[1].get_idx()\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/uop/ops.py\", line 577, in get_idx\n    assert self.dtype.scalar() is dtypes.weakint, \"Can only call get_idx on index dtype\"\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Can only call get_idx on index dtype"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q6_k_gemv_primitive.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_down.weight --iters 3 --parts 2 --seed 1337 --opt LOCAL:0:64",
+        "device_ms": null,
+        "elapsed_s": 1.941,
+        "gemv_max_abs": 0.00121784,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/012-ffn-down-blk-0-ffn-down-weight-row-upcast2/current.log",
+        "quant_gbs": null,
+        "status": "pass",
+        "tail": "tensor=blk.0.ffn_down.weight full_shape=(5120, 17408) primitive_shape=(5120,17408) quant_bytes=73113600 mode=partial parts=2 opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] device=AMD\nunpack_correctness: rows=2 max_abs=0\ncorrectness: max_abs=0.00121784\nq6k_fused_graph: wall=6.803 ms (10.75 quant-GB/s), device=n/a, kernels=1.0\nq6k_gemv_primitive_partial: wall=6.284 ms (11.64 quant-GB/s), device=n/a, kernels=2.0"
+      },
+      "format": "Q6_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "012-ffn-down-blk-0-ffn-down-weight-row-upcast2",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/012-ffn-down-blk-0-ffn-down-weight-row-upcast2/policy.json",
+      "reasons": [
+        "candidate status=wrong"
+      ],
+      "role": "ffn_down",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q6_k_packed_u16",
+        "format": "Q6_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 2,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q6k_gemv_partial_kernel",
+          "u16_packed_storage"
+        ],
+        "role": "ffn_down",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.0.ffn_down.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q6_k_gemv_primitive.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_down.weight --iters 3 --parts 2 --seed 1337 --opt LOCAL:0:64 --opt UNROLL:2:4",
+        "elapsed_s": 1.38,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/013-ffn-down-blk-0-ffn-down-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 135, in apply_opt\n    rng = self.rngs[real_axis] if (real_axis:=self.real_axis(opt.op, opt.axis)) >= 0 else UOp(Ops.NOOP)\n                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 123, in real_axis\n    except IndexError as e: raise KernelOptError from e\n                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q6_k_gemv_primitive.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_down.weight --iters 3 --parts 2 --seed 1337 --opt LOCAL:0:64",
+        "device_ms": null,
+        "elapsed_s": 1.924,
+        "gemv_max_abs": 0.00121784,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/013-ffn-down-blk-0-ffn-down-weight-reduce-unroll4/current.log",
+        "quant_gbs": null,
+        "status": "pass",
+        "tail": "tensor=blk.0.ffn_down.weight full_shape=(5120, 17408) primitive_shape=(5120,17408) quant_bytes=73113600 mode=partial parts=2 opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] device=AMD\nunpack_correctness: rows=2 max_abs=0\ncorrectness: max_abs=0.00121784\nq6k_fused_graph: wall=6.772 ms (10.80 quant-GB/s), device=n/a, kernels=1.0\nq6k_gemv_primitive_partial: wall=6.347 ms (11.52 quant-GB/s), device=n/a, kernels=2.0"
+      },
+      "format": "Q6_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "013-ffn-down-blk-0-ffn-down-weight-reduce-unroll4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/013-ffn-down-blk-0-ffn-down-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_down",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q6_k_packed_u16",
+        "format": "Q6_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 2,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q6k_gemv_partial_kernel",
+          "u16_packed_storage"
+        ],
+        "role": "ffn_down",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.0.ffn_down.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q6_k_gemv_primitive.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_down.weight --iters 3 --parts 2 --seed 1337 --opt LOCAL:0:32 --opt LOCAL:1:4",
+        "elapsed_s": 1.405,
+        "gemv_max_abs": null,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/014-ffn-down-blk-0-ffn-down-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 176, in apply_opt\n    ret = self.shift_to(rng, amt, opt_to_at[opt.op], top=opt.op in {OptOps.GROUPTOP, OptOps.THREAD})\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 96, in shift_to\n    raise KernelOptError(f\"{amount} can't divide {rng.src[0]} in {self.colored_shape()}\")\ntinygrad.codegen.opt.KernelOptError: 4 can't divide UOp(Ops.CONST, dtypes.weakint, arg=2, src=()) in  160    2   32   34   16"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q6_k_gemv_primitive.py /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf --device AMD --tensor blk.0.ffn_down.weight --iters 3 --parts 2 --seed 1337 --opt LOCAL:0:64",
+        "device_ms": null,
+        "elapsed_s": 1.955,
+        "gemv_max_abs": 0.00121784,
+        "log": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/014-ffn-down-blk-0-ffn-down-weight-two-dim-local4/current.log",
+        "quant_gbs": null,
+        "status": "pass",
+        "tail": "tensor=blk.0.ffn_down.weight full_shape=(5120, 17408) primitive_shape=(5120,17408) quant_bytes=73113600 mode=partial parts=2 opts=['Opt(op=OptOps.LOCAL, axis=0, arg=64)'] device=AMD\nunpack_correctness: rows=2 max_abs=0\ncorrectness: max_abs=0.00121784\nq6k_fused_graph: wall=6.861 ms (10.66 quant-GB/s), device=n/a, kernels=1.0\nq6k_gemv_primitive_partial: wall=6.336 ms (11.54 quant-GB/s), device=n/a, kernels=2.0"
+      },
+      "format": "Q6_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "014-ffn-down-blk-0-ffn-down-weight-two-dim-local4",
+      "policy": "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench-runs/014-ffn-down-blk-0-ffn-down-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_down",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "family": "q6_k_packed_u16",
+        "format": "Q6_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 2,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q6k_gemv_partial_kernel",
+          "u16_packed_storage"
+        ],
+        "role": "ffn_down",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule"
+      },
+      "status": "invalid",
+      "tensor": "blk.0.ffn_down.weight"
+    }
+  ],
+  "source_candidates": "bench/qk-shared-storage-20260612/14b/policy.json",
+  "summary": {
+    "accepted": 1,
+    "candidates": 14,
+    "full_decode_ready": 1,
+    "invalid": 9,
+    "next_decision": "run_full_policy_benchmark",
+    "rejected": 1,
+    "ties": 3
+  }
+}
