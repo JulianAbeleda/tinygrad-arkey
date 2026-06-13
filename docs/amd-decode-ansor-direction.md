@@ -59,6 +59,14 @@ explicit storage deltas and correctness provenance, including the boundary that
 CPU/Mac tests cover reference unpacking while AMD microbench runs cover GEMV
 numerics.
 
+Update, semantic-codegen v2 / Family B: a pre-registered row-grouped Q4_K
+`ffn_down` surface tested whether adjacent output rows could improve activation
+reuse and row-axis scheduling while keeping packed Q4_K storage and split-K
+reduction unchanged. It rejected on the 8B/14B microbench gate: 8B row groups
+were `-31.03%` and `-71.54%`; 14B row group 2 was `-52.59%`, and row group 4
+was an illegal opt. No runtime install, full-decode run, or 32B run is
+justified for this surface. Current verdict: `semantic_codegen_v2_rejected`.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path

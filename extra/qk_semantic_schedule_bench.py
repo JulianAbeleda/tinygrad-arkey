@@ -69,10 +69,11 @@ def _row_descriptor(change:dict[str, Any]) -> dict[str, Any]:
 
 
 def _q4_command(model_path:pathlib.Path, tensor:str, spec:dict[str, Any], *, device:str, iters:int, seed:int) -> list[str]:
-  mode = "serial" if spec.get("codegen_mode") == "direct_out" else "partial"
+  mode = "serial" if spec.get("codegen_mode") == "direct_out" else "grouped" if spec.get("codegen_mode") == "grouped_partial" else "partial"
   cmd = [sys.executable, "extra/q4_k_bench.py", str(model_path), "--device", device, "--tensor", tensor,
          "--iters", str(iters), "--format", "text", "--activation", "random", "--seed", str(seed),
          "--primitive", "--primitive-mode", mode, "--primitive-parts", str(spec["parts"])]
+  if mode == "grouped": cmd += ["--primitive-row-group", str(spec.get("row_group", 1))]
   for opt in spec.get("opts") or []: cmd += ["--primitive-opt", str(opt)]
   return cmd
 

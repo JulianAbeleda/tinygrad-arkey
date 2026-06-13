@@ -58,8 +58,9 @@ if __name__ == "__main__":
   parser.add_argument("--activation", choices=("random", "ones"), default="random", help="activation vector used by matvec benches")
   parser.add_argument("--seed", type=int, default=1337, help="seed for random activations")
   parser.add_argument("--primitive", action="store_true", help="also run the custom Q4_K GEMV primitive")
-  parser.add_argument("--primitive-mode", choices=("serial", "partial"), default="partial")
+  parser.add_argument("--primitive-mode", choices=("serial", "partial", "grouped"), default="partial")
   parser.add_argument("--primitive-parts", type=int, default=1)
+  parser.add_argument("--primitive-row-group", type=int, default=1)
   parser.add_argument("--primitive-schedule", choices=("none", "auto"), default="none")
   parser.add_argument("--primitive-opt", action="append", default=None, help="explicit primitive opt OP:AXIS:ARG, can repeat")
   parser.add_argument("--primitive-unpack-check-rows", type=int, default=2)
@@ -86,11 +87,14 @@ if __name__ == "__main__":
     print(f"variant: GGUF_Q4K_WIDE={os.getenv('GGUF_Q4K_WIDE', '0')} device={args.device or 'default'} "
           f"seq_len={args.seq_len} activation={args.activation}")
     if args.primitive:
-      print(f"primitive: mode={args.primitive_mode} parts={args.primitive_parts} schedule={args.primitive_schedule} opts={list(primitive_opts)}")
+      print(f"primitive: mode={args.primitive_mode} parts={args.primitive_parts} row_group={args.primitive_row_group} "
+            f"schedule={args.primitive_schedule} opts={list(primitive_opts)}")
 
   raw = Tensor(args.gguf)
   if args.primitive:
-    from extra.q4_k_gemv_primitive import parse_opt, q4k_gemv_kernel, q4k_gemv_partial_kernel, q4k_unpack_kernel
+    from extra.q4_k_gemv_primitive import (
+      parse_opt, q4k_gemv_grouped_partial_kernel, q4k_gemv_kernel, q4k_gemv_partial_kernel, q4k_unpack_kernel,
+    )
     parsed_primitive_opts = tuple(parse_opt(x) for x in primitive_opts)
     raw_words = Tensor(args.gguf, dtype=dtypes.uint32)
   Tensor.manual_seed(args.seed)
@@ -144,7 +148,12 @@ if __name__ == "__main__":
         x_vec = x.reshape(k)
         if args.primitive_mode == "serial":
           return out.custom_kernel(words, x_vec, fxn=q4k_gemv_kernel(rows, k, args.primitive_schedule, parsed_primitive_opts))[0]
-        partial = partials.custom_kernel(words, x_vec, fxn=q4k_gemv_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]
+        if args.primitive_mode == "grouped":
+          partial = partials.custom_kernel(
+            words, x_vec,
+            fxn=q4k_gemv_grouped_partial_kernel(rows, k, parts, args.primitive_row_group, args.primitive_schedule, parsed_primitive_opts))[0]
+        else:
+          partial = partials.custom_kernel(words, x_vec, fxn=q4k_gemv_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]
         return partial.sum(axis=1)
 
       ref_out = matvec().reshape(rows).realize()
@@ -154,6 +163,7 @@ if __name__ == "__main__":
       if primitive_max_abs > args.primitive_tol:
         raise AssertionError(f"Q4_K primitive GEMV correctness failed for {info.name}: max_abs={primitive_max_abs}")
       primitive_base = {**base, "primitive_mode": args.primitive_mode, "primitive_parts": parts,
+                        "primitive_row_group": args.primitive_row_group,
                         "primitive_schedule": args.primitive_schedule, "primitive_opts": " ".join(primitive_opts),
                         "primitive_gemv_max_abs": primitive_max_abs}
       results.append({**primitive_base, **bench("q4k_primitive_gemv", args.iters, q4_bytes, primitive_gemv)})

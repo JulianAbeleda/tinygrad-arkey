@@ -207,11 +207,11 @@ PYTHONPATH=. .venv/bin/python -m unittest \
   test.external.test_qk_policy_pipeline
 ```
 
-Latest semantic-gate hardening verification: `py_compile` passed for the
-semantic schedule/codegen tools and transition test; the targeted QK tests ran
-`30` tests across generated-policy runtime, policy parity, Ansor transition,
-and decode summary, plus `11` matrix/pipeline tests. `git diff --check` passed,
-and semantic schedule/codegen artifacts have no `/home/ubuntu/tinygrad-arkey`
+Latest semantic-codegen v2 verification: `py_compile` passed for the semantic
+schedule/codegen tools and transition test; the targeted QK tests ran `32`
+tests across generated-policy runtime, policy parity, Ansor transition, and
+decode summary, plus `11` matrix/pipeline tests. `git diff --check` passed, and
+semantic-codegen v2 artifacts have no `/home/ubuntu/tinygrad-arkey`
 checkout-path leaks.
 
 ## Stop Rules
@@ -335,16 +335,26 @@ prove reference unpacking; AMD microbench gates prove GEMV numerics; full-decode
 A/B gates prove model assembly. `QK_PRIMITIVE_STORAGE=q4_ondemand` remains a
 Q4-only negative storage prototype, not a generic candidate storage mode.
 
+Semantic-codegen v2 / Family B verdict:
+`bench/qk-ansor-transition-20260612/semantic-codegen-v2/verdict.md`.
+Design note: `docs/amd-decode-semantic-family-b.md`. This pre-registered the
+row-grouped Q4_K `ffn_down` mechanism as an activation-reuse / row-axis
+scheduling probe. It rejected at microbench: 8B row-group 2 was `-31.03%`,
+8B row-group 4 was `-71.54%`, 14B row-group 2 was `-52.59%`, and 14B row-group
+4 hit an illegal opt. No raw accepts, no strong raw accepts, no runtime install,
+no full-decode run, and no 32B run.
+
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
    RLVR/SFT pipeline on top of the validated rollout/comparator backend.
 2. Compiler research: continue from the Ansor-transition descriptor foundation:
    descriptor-level `parts`/`LOCAL` search is exhausted, and semantic schedule
-   v0 plus semantic codegen v1 direct-output Q4 are rejected by their gates.
-   Next work needs a richer semantic layout/codegen surface, not another hand
-   sweep over the same primitive knobs. Any future semantic raw accept needs a
-   matching confirmation rerun before promotion.
+   v0, semantic codegen v1 direct-output Q4, and semantic codegen v2 row
+   grouping are rejected by their gates. Next work needs a different kernel
+   class or deeper representation change, not another hand sweep over the same
+   primitive knobs. Any future semantic raw accept needs a matching
+   confirmation rerun before promotion.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

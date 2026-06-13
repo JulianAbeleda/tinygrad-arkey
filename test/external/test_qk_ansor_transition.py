@@ -17,8 +17,15 @@ from extra.qk_semantic_codegen import (
   build_codegen_candidate_set, build_static_gate as build_codegen_static_gate,
   candidates_markdown as codegen_candidates_markdown, static_gate_markdown as codegen_static_gate_markdown,
 )
+from extra.qk_semantic_codegen_v2 import (
+  build_codegen_candidate_set as build_codegen_v2_candidate_set,
+  build_static_gate as build_codegen_v2_static_gate,
+  candidates_markdown as codegen_v2_candidates_markdown,
+  static_gate_markdown as codegen_v2_static_gate_markdown,
+)
 from extra.qk_semantic_schedule_verdict import build_verdict as build_semantic_verdict, verdict_markdown as semantic_verdict_markdown
 from extra.qk_semantic_codegen_verdict import build_verdict as build_codegen_verdict, verdict_markdown as codegen_verdict_markdown
+from extra.qk_semantic_codegen_v2_verdict import build_verdict as build_codegen_v2_verdict, verdict_markdown as codegen_v2_verdict_markdown
 
 
 class TestQKAnsorTransition(unittest.TestCase):
@@ -260,6 +267,41 @@ class TestQKAnsorTransition(unittest.TestCase):
 
   def test_semantic_codegen_v1_artifacts_do_not_embed_checkout_absolute_paths(self):
     codegen = pathlib.Path("bench/qk-ansor-transition-20260612/semantic-codegen-v1")
+    needle = str(self.repo)
+    offenders = []
+    for path in codegen.rglob("*"):
+      if path.suffix not in {".json", ".md"}: continue
+      if needle in path.read_text(errors="replace"):
+        offenders.append(str(path))
+    self.assertEqual(offenders, [])
+
+  def test_semantic_codegen_v2_candidates_and_verdict_reproduce(self):
+    base = pathlib.Path("bench/qk-ansor-transition-20260612")
+    codegen = base / "semantic-codegen-v2"
+    for stem in ("8b", "14b"):
+      descriptor = json.loads((base / "descriptors" / f"{stem}.json").read_text())
+      candidate_set = build_codegen_v2_candidate_set(descriptor)
+      self.assertEqual(json.loads((codegen / stem / "candidates.json").read_text()), candidate_set)
+      self.assertEqual((codegen / stem / "candidates.md").read_text(), codegen_v2_candidates_markdown(candidate_set))
+      self.assertEqual(candidate_set["summary"]["candidates"], 3)
+      self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["role"], "ffn_down")
+      self.assertEqual(candidate_set["candidates"][1]["schedule_spec"]["family"], "q4_k_packed_u32_grouped")
+
+      gate = build_codegen_v2_static_gate(candidate_set)
+      self.assertEqual(json.loads((codegen / stem / "static-gate.json").read_text()), gate)
+      self.assertEqual((codegen / stem / "static-gate.md").read_text(), codegen_v2_static_gate_markdown(gate))
+      self.assertEqual(gate["summary"]["passing_microbench"], 2)
+      self.assertEqual(gate["summary"]["failing"], 0)
+
+    verdict = build_codegen_v2_verdict(codegen, repo=self.repo)
+    self.assertEqual(json.loads((codegen / "verdict.json").read_text()), verdict)
+    self.assertEqual((codegen / "verdict.md").read_text(), codegen_v2_verdict_markdown(verdict))
+    self.assertEqual(verdict["summary"]["overall_decision"], "semantic_codegen_v2_rejected")
+    self.assertEqual(verdict["summary"]["raw_microbench_accepts"], 0)
+    self.assertFalse(verdict["summary"]["run_32b"])
+
+  def test_semantic_codegen_v2_artifacts_do_not_embed_checkout_absolute_paths(self):
+    codegen = pathlib.Path("bench/qk-ansor-transition-20260612/semantic-codegen-v2")
     needle = str(self.repo)
     offenders = []
     for path in codegen.rglob("*"):

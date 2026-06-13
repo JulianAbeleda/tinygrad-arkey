@@ -2170,3 +2170,37 @@ AMD microbench runs are still required for GEMV numerics, and full-decode A/B is
 still required for model-level promotion. `QK_PRIMITIVE_STORAGE=q4_ondemand`
 remains a Q4-only negative storage prototype; Q6_K continues to follow the
 selected shared/sidecar storage mode.
+
+## Semantic codegen v2 / Family B row grouping (2026-06-13)
+
+Artifacts:
+
+- `docs/amd-decode-semantic-family-b.md`
+- `bench/qk-ansor-transition-20260612/semantic-codegen-v2/`
+
+Family B was pre-registered as a bounded probe, not an open-ended knob sweep.
+The mechanism was row grouping for Q4_K `ffn_down`: group adjacent output rows
+under one row-group axis while keeping packed Q4_K storage and split-K partial
+reduction unchanged. The intended win source was activation reuse / row-axis
+scheduling, not fewer packed-weight bytes or a new hardware instruction.
+
+Microbench gate:
+
+| model | candidate | current GB/s | candidate GB/s | gain | status |
+|---|---|---:|---:|---:|---|
+| 8B | `row_group2` | `267.69` | `184.63` | `-31.03%` | reject |
+| 8B | `row_group4` | `265.79` | `75.64` | `-71.54%` | reject |
+| 14B | `row_group2` | `366.45` | `173.74` | `-52.59%` | reject |
+| 14B | `row_group4` | `364.73` | n/a | n/a | invalid, illegal opt |
+
+Verdict: `semantic_codegen_v2_rejected`. No raw accepts, no strong raw accepts,
+no full-decode candidates, and no 32B run. Runtime support for
+`q4_k_packed_u32_grouped` was not added because the microbench gate rejected the
+mechanism before integration.
+
+Interpretation: row grouping is not the missing schedule lever. Together with
+loop-v0, semantic schedule v0, and direct-output codegen v1, this strengthens
+the negative bound that simple schedule/codegen knobs over the current
+hand-seeded primitive family saturate inside or below noise. Further compiler
+research should not broaden this row-group surface; it needs a different kernel
+class or a deeper representation change.

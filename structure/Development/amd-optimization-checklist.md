@@ -127,6 +127,14 @@ generated-policy storage mode.
       candidate artifacts carry explicit storage deltas plus correctness
       provenance. CPU/Mac tests cover reference unpacking; AMD microbench runs
       still cover GEMV numerics; full-decode A/B covers model assembly.
+- [x] Scoped and tested semantic codegen v2 / Family B:
+      `docs/amd-decode-semantic-family-b.md`,
+      `extra/qk_semantic_codegen_v2.py`, and
+      `bench/qk-ansor-transition-20260612/semantic-codegen-v2/`. The bounded
+      row-grouped Q4_K `ffn_down` surface rejected on the 8B/14B microbench
+      gate: 8B `-31.03%` / `-71.54%`, 14B `-52.59%` / invalid illegal opt.
+      Verdict: `semantic_codegen_v2_rejected`; no runtime install, full-decode
+      run, or 32B run is justified.
 - [x] Fixed loop-v0 matrix portability: benchmark matrix `path` and `policy`
       fields are repo-relative, tests assert they are not absolute paths, and
       the regenerated matrices reproduce outside `/home/ubuntu/tinygrad-arkey`.
@@ -151,6 +159,8 @@ generated-policy storage mode.
 - [ ] Do not run BEAM/risky schedule search on Mac/TinyGPU/remote paths.
 - [ ] Do not promote semantic schedule/codegen `raw_accept` rows without a
       matching confirmation rerun.
+- [ ] Do not broaden the Family B row-group surface to more roles or 32B; it
+      failed on the targeted Q4_K `ffn_down` mechanism.
 
 ## Reasonable Resume Tracks
 
@@ -160,11 +170,12 @@ generated-policy storage mode.
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen
    direction from `docs/amd-decode-ansor-direction.md`, starting from the
-   `semantic_schedule_v0_rejected` verdict in
-   `bench/qk-ansor-transition-20260612/semantic-schedules/`. The next surface
-   must add richer semantic layout/codegen; do not re-run the same four
-   schedule sketches. Any future microbench win starts as `raw_accept` and
-   needs a confirmation rerun before it becomes a promoted result.
+   rejected semantic schedule/codegen surfaces in
+   `bench/qk-ansor-transition-20260612/`. The current negative bound now covers
+   descriptor `parts`/`LOCAL`, schedule v0, direct-output v1, and row-grouped
+   Family B v2. Any next surface needs a different kernel class or deeper
+   representation change; do not re-run these same knobs. Any future microbench
+   win starts as `raw_accept` and needs a confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

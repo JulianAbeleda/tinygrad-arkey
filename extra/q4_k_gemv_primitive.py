@@ -228,6 +228,33 @@ def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple
 
   return kernel
 
+def q4k_gemv_grouped_partial_kernel(rows:int, k:int, parts:int, row_group:int, schedule:str, opts:tuple[Opt, ...]):
+  if row_group < 1: raise ValueError("row_group must be >= 1")
+  if rows % row_group != 0:
+    raise ValueError(f"row_group={row_group} must divide rows={rows} for grouped Q4_K GEMV")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+  row_groups = rows // row_group
+
+  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
+    group = UOp.range(row_groups, 0)
+    lane = UOp.range(row_group, 1)
+    part = UOp.range(parts, 2)
+    blk_part = UOp.range(blocks_per_part, 3, axis_type=AxisType.REDUCE)
+    pos = UOp.range(32, 4, axis_type=AxisType.REDUCE)
+    row = group * row_group + lane
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot(words, x, base, blk, pos), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, part].set(0.0)
+    acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
+    return acc.end(group, lane, part, blk_part).sink(
+      arg=_kernel_info(f"q4k_gemv_grouped_partial_{rows}_{k}_{parts}_rg{row_group}", schedule, opts))
+
+  return kernel
+
 def q4k_q8_1_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)
@@ -351,8 +378,9 @@ if __name__ == "__main__":
   parser.add_argument("--device", default=None)
   parser.add_argument("--rows", type=int, default=2)
   parser.add_argument("--iters", type=int, default=3)
-  parser.add_argument("--mode", choices=("serial", "partial"), default="serial")
+  parser.add_argument("--mode", choices=("serial", "partial", "grouped"), default="serial")
   parser.add_argument("--parts", type=int, default=16, help="number of K-block partitions for --mode partial")
+  parser.add_argument("--row-group", type=int, default=1, help="output rows per group for --mode grouped")
   parser.add_argument("--schedule", choices=("none", "auto"), default="none",
                       help="schedule opts for the custom primitive")
   parser.add_argument("--opt", action="append", default=[], help="explicit primitive opt OP:AXIS:ARG, e.g. LOCAL:0:32")
@@ -379,7 +407,8 @@ if __name__ == "__main__":
   parts = min(args.parts, k // Q4_K_BLOCK_ELEMS)
   opts = tuple(parse_opt(x) for x in args.opt)
   print(f"tensor={info.name} full_shape={shape} primitive_shape=({rows},{k}) q4_bytes={q4_bytes} nwords={nwords} "
-        f"mode={args.mode} parts={parts} schedule={args.schedule} opts={[str(x) for x in opts]} device={args.device or 'default'}")
+        f"mode={args.mode} parts={parts} row_group={args.row_group} schedule={args.schedule} "
+        f"opts={[str(x) for x in opts]} device={args.device or 'default'}")
 
   raw_words = Tensor(args.gguf, dtype=dtypes.uint32)
   words = raw_words[byte_start//4:byte_start//4+nwords].to(args.device).contiguous().realize()
@@ -406,7 +435,10 @@ if __name__ == "__main__":
   def primitive():
     if args.mode == "serial":
       return out.custom_kernel(words, x, fxn=q4k_gemv_kernel(rows, k, args.schedule, opts))[0]
-    partial = partials.custom_kernel(words, x, fxn=q4k_gemv_partial_kernel(rows, k, parts, args.schedule, opts))[0]
+    if args.mode == "grouped":
+      partial = partials.custom_kernel(words, x, fxn=q4k_gemv_grouped_partial_kernel(rows, k, parts, args.row_group, args.schedule, opts))[0]
+    else:
+      partial = partials.custom_kernel(words, x, fxn=q4k_gemv_partial_kernel(rows, k, parts, args.schedule, opts))[0]
     return partial.sum(axis=1)
 
   got = primitive().realize()

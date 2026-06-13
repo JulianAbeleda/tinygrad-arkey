@@ -92,6 +92,21 @@ PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_verdict.py \
   --base bench/qk-ansor-transition-20260612/semantic-codegen-v1 \
   --json bench/qk-ansor-transition-20260612/semantic-codegen-v1/verdict.json \
   --md bench/qk-ansor-transition-20260612/semantic-codegen-v1/verdict.md
+
+base=bench/qk-ansor-transition-20260612/semantic-codegen-v2
+for model in 8b 14b; do
+  PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_v2.py \
+    --descriptor bench/qk-ansor-transition-20260612/descriptors/$model.json \
+    --json $base/$model/candidates.json \
+    --md $base/$model/candidates.md \
+    --gate-json $base/$model/static-gate.json \
+    --gate-md $base/$model/static-gate.md
+done
+
+PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_v2_verdict.py \
+  --base bench/qk-ansor-transition-20260612/semantic-codegen-v2 \
+  --json bench/qk-ansor-transition-20260612/semantic-codegen-v2/verdict.json \
+  --md bench/qk-ansor-transition-20260612/semantic-codegen-v2/verdict.md
 ```
 
 ## Current Scorecard
@@ -321,3 +336,34 @@ PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_verdict.py \
   --json $base/verdict.json \
   --md $base/verdict.md
 ```
+
+## Semantic Codegen v2: Family B Row Grouping
+
+Design note: `docs/amd-decode-semantic-family-b.md`.
+
+`extra/qk_semantic_codegen_v2.py` generated a bounded Family B surface:
+exact-tensor Q4_K `ffn_down` row-grouped partial GEMV. The pre-registered
+mechanism was activation reuse / row-axis scheduling across adjacent output rows
+while keeping the packed Q4_K storage and split-K reduction unchanged.
+
+Static gate result:
+
+- 8B: `3` total candidates, `2` microbenchable, `0` candidate full-decode
+  supported.
+- 14B: `3` total candidates, `2` microbenchable, `0` candidate full-decode
+  supported.
+
+Microbench gate:
+
+| model | candidate | current GB/s | candidate GB/s | gain | status |
+|---|---|---:|---:|---:|---|
+| 8B | `row_group2` | `267.69` | `184.63` | `-31.03%` | reject |
+| 8B | `row_group4` | `265.79` | `75.64` | `-71.54%` | reject |
+| 14B | `row_group2` | `366.45` | `173.74` | `-52.59%` | reject |
+| 14B | `row_group4` | `364.73` | n/a | n/a | invalid, illegal opt |
+
+Verdict: `semantic_codegen_v2_rejected`. Row grouping produced no raw accepts,
+no strong raw accepts, and no full-decode candidates. Runtime installation,
+confirmation reruns, and 32B are skipped by rule.
+
+Artifacts: `semantic-codegen-v2/verdict.md`.
