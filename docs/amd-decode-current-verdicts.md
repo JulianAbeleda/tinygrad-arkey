@@ -1,6 +1,6 @@
 # AMD Decode Current Verdicts
 
-Date: 2026-06-12
+Date: 2026-06-13
 
 Status: canonical decision state for the AMD decode optimization campaign.
 
@@ -47,6 +47,13 @@ higher-value goal unless compiler research is the point. Storage accounting,
 runtime caps, and shared storage are now in place; do not turn this into another
 kernel-search loop.
 
+2026-06-13 roofline update: the model-scope bandwidth proxy is now recorded in
+`bench/qk-bandwidth-roofline-20260613/roofline.md`. The generated shared-storage
+path reaches `27-38%` of the RX 7900 XTX 960 GB/s peak by full-GGUF-byte proxy,
+while llama.cpp reaches `53-63%` on the same model bytes. Treat the remaining
+gap as memory-load efficiency / packed-load lowering before trying another
+schedule knob.
+
 ## Verdict Table
 
 | Area | Verdict | Consequence |
@@ -62,6 +69,7 @@ kernel-search loop.
 | Semantic schedule v0 | Reproducible and rejected. The first richer schedule surface generated `direct_out`, `row_upcast2`, `reduce_unroll4`, and `two_dim_local4` sketches for 8B/14B. Microbench found isolated attention `row_upcast2` wins, but the full decode gate rejected the only supported winner on both models: 8B `-10.28%`, 14B `-5.21%`, greedy A/B pass. The verdict tooling now separates raw accepts from confirmed accepts. | Do not promote microbench-only schedule wins. Do not run 32B for this surface. The next compiler step needs richer semantic layout/codegen, not these same sketches. |
 | Semantic codegen v1 | Reproducible and rejected. Q4_K direct output is now a runtime-supported generated-policy family (`q4_k_packed_u32_direct`) and was tested as exact-tensor overrides. The 8B/14B microbench gate produced no accepts: 8B had two ties and one reject; 14B had two ties and two rejects. The artifacts now record storage deltas and correctness provenance for each candidate. | Do not run full decode or 32B for this direct-output surface. Removing the partial reduction kernel alone is not enough. |
 | Semantic codegen v2 / Family B | Reproducible and rejected. The pre-registered row-grouped Q4_K `ffn_down` surface tested activation reuse / row-axis scheduling across adjacent output rows. It regressed badly: 8B row-group 2 was `-31.03%`, row-group 4 was `-71.54%`; 14B row-group 2 was `-52.59%`, and row-group 4 was an illegal opt. | Do not wire runtime support for row-grouped Q4_K. Do not broaden this same row-group surface to more roles or 32B. |
+| Model-scope bandwidth roofline | Accepted as the next decision point. Using committed shared-storage decisions and GGUF file bytes, tinygrad generated reaches `261.82`, `365.04`, and `340.47 GB/s` on 8B/14B/32B, while llama.cpp reaches `508.81`, `592.32`, and `608.67 GB/s`. | Freeze local schedule-knob exploration. Next decode research surface is packed-weight memory-access/codegen lowering. |
 | q8_1 representation | Valid and reachable. | Representation is not the blocker. |
 | q8_1 algebra/intdot | Correct and improves over the first q8 path, but still loses to v1. | Algebra is not enough; the lowering quality is the blocker. |
 | AMD `v_dot4_u32_u8` | Instruction emission works on gfx1100. | Hardware capability exists. |
@@ -152,6 +160,13 @@ It is a representation/lowering boundary:
     The result was a strong negative on both target models, with no raw accepts
     and no full-decode candidates. This rejects row grouping as the next
     runtime family.
+19. The model-scope bandwidth roofline now turns that negative sequence into a
+    stronger bottleneck claim. The current path is far below llama.cpp on the
+    same logical model bytes and far below peak memory bandwidth by proxy, while
+    the rejected surfaces primarily reshuffled compute, reduction, or loop
+    shape. The next useful compiler surface must change packed-weight memory
+    access efficiency: wider/coalesced loads, explicit packed layouts, and
+    load-aware lowering.
 
 So the machine-first research hypothesis is:
 
@@ -225,6 +240,12 @@ worth doing only if the research itself is the goal.
   candidate to promote.
 - Do not broaden semantic-codegen v2 row grouping. It regressed on the targeted
   Q4_K `ffn_down` tensors where the mechanism was most plausible.
+- Do not add another schedule/codegen family unless its design note states the
+  memory-traffic mechanism it changes and the generated artifact reports the
+  intended load-width/coalescing evidence.
+- Do not put WMMA on the batch-1 decode track unless a source/counter artifact
+  proves the reference decode path uses it on gfx1100. Treat WMMA as a future
+  prefill/GEMM track by default.
 - Do not commit benchmark or reproducibility artifacts with machine-local
   absolute checkout paths. Store repo-relative paths so evidence regenerates
   from any clean checkout.
@@ -254,6 +275,11 @@ worth doing only if the research itself is the goal.
 - Semantic codegen v2 / Family B design and verdict:
   `docs/amd-decode-semantic-family-b.md`,
   `bench/qk-ansor-transition-20260612/semantic-codegen-v2/verdict.md`
+- Bandwidth roofline and next memory-access surface:
+  `docs/amd-decode-bandwidth-roofline.md`,
+  `bench/qk-bandwidth-roofline-20260613/roofline.md`,
+  `docs/amd-decode-packed-load-lowering.md`,
+  `docs/amd-decode-prior-art.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

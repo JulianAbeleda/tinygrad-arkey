@@ -141,6 +141,16 @@ generated-policy storage mode.
 - [x] Resolved the `structure/` tracking policy: `.gitignore` ignores the tree
       by default while explicitly allowing the tracked session handoff and AMD
       optimization checklist files.
+- [x] Added the model-scope QK bandwidth roofline:
+      `extra/qk_bandwidth_roofline.py`,
+      `bench/qk-bandwidth-roofline-20260613/roofline.md`, and
+      `docs/amd-decode-bandwidth-roofline.md`. By logical full-GGUF bytes,
+      tinygrad generated reaches `27-38%` of the RX 7900 XTX peak while
+      llama.cpp reaches `53-63%`; this supports treating the remaining gap as
+      memory-load efficiency.
+- [x] Scoped the next compiler-research surface as packed-load lowering:
+      `docs/amd-decode-packed-load-lowering.md`, with prior-art framing in
+      `docs/amd-decode-prior-art.md`.
 
 ## Open But Not Urgent
 
@@ -161,6 +171,10 @@ generated-policy storage mode.
       matching confirmation rerun.
 - [ ] Do not broaden the Family B row-group surface to more roles or 32B; it
       failed on the targeted Q4_K `ffn_down` mechanism.
+- [ ] Do not add another schedule/codegen family without an explicit
+      memory-traffic mechanism and generated-source/load-width evidence.
+- [ ] Do not move WMMA into the batch-1 decode track unless a source/counter
+      artifact proves it is used by the reference decode path on gfx1100.
 
 ## Reasonable Resume Tracks
 
@@ -174,8 +188,10 @@ generated-policy storage mode.
    `bench/qk-ansor-transition-20260612/`. The current negative bound now covers
    descriptor `parts`/`LOCAL`, schedule v0, direct-output v1, and row-grouped
    Family B v2. Any next surface needs a different kernel class or deeper
-   representation change; do not re-run these same knobs. Any future microbench
-   win starts as `raw_accept` and needs a confirmation rerun before promotion.
+   representation change; do not re-run these same knobs. The roofline artifact
+   narrows that representation change to packed-weight memory-access/load
+   lowering. Any future microbench win starts as `raw_accept` and needs a
+   confirmation rerun before promotion.
 
 Default recommendation: pause here, then resume with practical training/eval
 or the Ansor-style research track. Do not restart low-level kernel variants by

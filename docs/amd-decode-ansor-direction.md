@@ -67,6 +67,15 @@ were `-31.03%` and `-71.54%`; 14B row group 2 was `-52.59%`, and row group 4
 was an illegal opt. No runtime install, full-decode run, or 32B run is
 justified for this surface. Current verdict: `semantic_codegen_v2_rejected`.
 
+Update, 2026-06-13 bandwidth roofline: `extra/qk_bandwidth_roofline.py` builds a
+model-scope roofline from the committed shared-storage decisions. By full-GGUF
+logical bytes, tinygrad generated reaches `27-38%` of the RX 7900 XTX 960 GB/s
+peak, while llama.cpp reaches `53-63%`. This reframes the next Ansor-direction
+step: not more `parts`/`LOCAL`, direct-output, or row-group knobs, but a
+compiler-visible packed-load/memory-access lowering surface. See
+`docs/amd-decode-bandwidth-roofline.md` and
+`docs/amd-decode-packed-load-lowering.md`.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path
@@ -84,6 +93,11 @@ There are two levels:
 The second is the direction we want to evaluate. The first can be a stepping
 stone only if it moves the primitive into the scheduler, not if it remains a
 model.py wrapper plus an external sweep script.
+
+After the roofline pass, the concrete next layer is narrower: create a semantic
+packed-load lowering for Q4_K/Q6_K so search can vary memory representation and
+load shape. The previous schedule surfaces gave search a real loop, but not a
+real memory-access axis. That is why they saturated.
 
 ## Implementation Result
 

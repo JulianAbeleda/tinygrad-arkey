@@ -4,6 +4,13 @@ Current decode decision state: see `docs/amd-decode-current-verdicts.md`. This
 file is the detailed research log and includes historical hypotheses and
 falsifications.
 
+2026-06-13 update: the current model-scope roofline is
+`docs/amd-decode-bandwidth-roofline.md`. It shows the generated shared-storage
+tinygrad path at `27-38%` of RX 7900 XTX peak by logical full-file bytes, while
+llama.cpp is at `53-63%` by the same proxy. The next research surface is
+packed-weight memory-access lowering, not another local schedule knob. Prior-art
+framing is in `docs/amd-decode-prior-art.md`.
+
 This note compares the local `tinygrad-arkey` AMD path with the AMD-relevant parts of the forked `llama.cpp` and `ROCm` repos. The goal is to understand what those projects solve, why their design works, and what we can test from first principles to improve TinyGPU/tinygrad inference on the RX 7900 XTX.
 
 For the current hardware/runtime dropout investigation, see `docs/amd-remote-dropout-investigation.md`.
