@@ -66,16 +66,17 @@ class TestLLMRollout(unittest.TestCase):
 
   def test_committed_qwen_small_rollout_summary_reproduces(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
-    out = repo / "bench/qwen-rollout-20260612/8b-generated-small"
-    rows = [json.loads(line) for line in (out / "rollouts.jsonl").read_text().splitlines()]
-    committed = json.loads((out / "summary.json").read_text())
-    args = argparse.Namespace(mode=committed["mode"], model=committed["model"], policy=committed["policy"],
-                              dataset=committed["dataset"], storage=committed["storage"],
-                              prompt_format=committed["prompt_format"], temperature=committed["temperature"],
-                              seed=committed["seed"])
-    summary = summarize_rollouts(args, rows)
-    self.assertEqual(committed, summary)
-    self.assertEqual((out / "summary.md").read_text(), summary_markdown(summary, rows))
+    for rel in ("8b-generated-small", "8b-explicit-small", "14b-generated-small", "14b-explicit-small"):
+      out = repo / "bench/qwen-rollout-20260612" / rel
+      rows = [json.loads(line) for line in (out / "rollouts.jsonl").read_text().splitlines()]
+      committed = json.loads((out / "summary.json").read_text())
+      args = argparse.Namespace(mode=committed["mode"], model=committed["model"], policy=committed["policy"],
+                                dataset=committed["dataset"], storage=committed["storage"],
+                                prompt_format=committed["prompt_format"], temperature=committed["temperature"],
+                                seed=committed["seed"])
+      summary = summarize_rollouts(args, rows)
+      self.assertEqual(committed, summary)
+      self.assertEqual((out / "summary.md").read_text(), summary_markdown(summary, rows))
 
 
 if __name__ == "__main__":

@@ -269,6 +269,27 @@ passes `75/75`; generated and explicit are token-identical on all `75` prompts
 with quality delta `0`, regressions `0`, text changes `0/75`, and token changes
 `0/75`. This is an offline score/output comparator, not an LLM-as-judge.
 
+Track 1.6 extended the rollout/comparator contract to 14B and added a top-level
+runtime contract. Current Qwen artifacts:
+`bench/qwen-rollout-20260612/14b-generated-small/summary.md`,
+`bench/qwen-rollout-20260612/14b-explicit-small/summary.md`, and
+`bench/qwen-rollout-20260612/compare-14b-small/report.md`. Both 14B rollout
+modes pass `75/75`, generate `644` tokens, and compare with quality delta `0`,
+regressions `0`, text changes `0/75`, and token changes `0/75`.
+`extra/llm_runtime_contract.py` validates the committed eval, rollout,
+comparison, and training-data artifact set at
+`bench/llm-runtime-contract-20260613/`; the current contract passes `7/7`
+rows with no missing artifacts.
+
+Track 1.7 added the first SFT-style training-data dry-run exporter:
+`extra/llm_training_data_probe.py`. Current artifact:
+`bench/qwen-rollout-20260612/training-data-v1/README.md`. It exports `150`
+rows from the 8B and 14B generated rollout artifacts with `0` filtered rows.
+This validates the data shape and filtering path only; it is not a training
+loop. The practical path now has eval parity, dataset rollout, regression
+comparison, and a reproducible training-data probe on top of the faster
+generated-policy inference backend.
+
 The Ansor-transition layer is now the current compiler-research foundation for
 the llama.cpp-comparable goal. Tools: `extra/qk_llama_scorecard.py`,
 `extra/qk_gap_profile.py`, `extra/qk_semantic_descriptor.py`,

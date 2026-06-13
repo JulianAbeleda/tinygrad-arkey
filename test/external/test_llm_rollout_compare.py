@@ -86,14 +86,16 @@ class TestLLMRolloutCompare(unittest.TestCase):
       # The committed report stores artifact paths relative to the repo root.
       import os
       os.chdir(repo)
-      artifacts = [
-        pathlib.Path("bench/qwen-rollout-20260612/8b-generated-small"),
-        pathlib.Path("bench/qwen-rollout-20260612/8b-explicit-small"),
-      ]
-      out = pathlib.Path("bench/qwen-rollout-20260612/compare-8b-small")
-      report = build_report(artifacts)
-      self.assertEqual(json.loads((out / "report.json").read_text()), report)
-      self.assertEqual((out / "report.md").read_text(), report_markdown(report))
+      for model in ("8b", "14b"):
+        artifacts = [
+          pathlib.Path(f"bench/qwen-rollout-20260612/{model}-generated-small"),
+          pathlib.Path(f"bench/qwen-rollout-20260612/{model}-explicit-small"),
+        ]
+        out = pathlib.Path(f"bench/qwen-rollout-20260612/compare-{model}-small")
+        report = build_report(artifacts)
+        self.assertEqual(json.loads((out / "report.json").read_text()), report)
+        self.assertEqual((out / "report.md").read_text(), report_markdown(report))
+        self.assertEqual(report["comparisons"][0]["outputs"]["tokens_changed"], 0)
     finally:
       import os
       os.chdir(old_cwd)

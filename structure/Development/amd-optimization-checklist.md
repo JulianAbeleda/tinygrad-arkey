@@ -81,6 +81,23 @@ generated-policy storage mode.
       policy vs explicit primitive flags on the 75-prompt 8B dataset has
       quality delta `0`, regressions `0`, text changes `0/75`, and token
       changes `0/75`.
+- [x] Extended the same rollout/comparator contract to 14B:
+      `bench/qwen-rollout-20260612/14b-generated-small/summary.md`,
+      `bench/qwen-rollout-20260612/14b-explicit-small/summary.md`, and
+      `bench/qwen-rollout-20260612/compare-14b-small/report.md`. Both modes
+      pass `75/75`, generate `644` tokens, and compare with quality delta `0`,
+      regressions `0`, text changes `0/75`, and token changes `0/75`.
+- [x] Added the top-level LLM runtime artifact contract:
+      `extra/llm_runtime_contract.py` and
+      `bench/llm-runtime-contract-20260613/`. The committed contract validates
+      eval, rollout, rollout-compare, and training-data artifacts with `7/7`
+      rows passing and no missing artifacts.
+- [x] Added the first training-data dry-run exporter:
+      `extra/llm_training_data_probe.py` and
+      `bench/qwen-rollout-20260612/training-data-v1/`. The current SFT-style
+      probe exports `150` rows from the 8B and 14B generated rollouts with
+      `0` filtered rows. This validates data shape and filtering only; it is
+      not a training loop.
 - [x] Added the Ansor-transition foundation for the llama.cpp-comparable goal:
       `extra/qk_llama_scorecard.py`, `extra/qk_gap_profile.py`, and
       `extra/qk_semantic_descriptor.py`, with committed artifacts under

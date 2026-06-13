@@ -21,6 +21,20 @@ PYTHONPATH=. .venv/bin/python extra/llm_rollout_compare.py \
   --out bench/qwen-rollout-20260612/compare-8b-small \
   bench/qwen-rollout-20260612/8b-generated-small \
   bench/qwen-rollout-20260612/8b-explicit-small
+
+PYTHONPATH=. .venv/bin/python extra/llm_rollout_compare.py \
+  --out bench/qwen-rollout-20260612/compare-14b-small \
+  bench/qwen-rollout-20260612/14b-generated-small \
+  bench/qwen-rollout-20260612/14b-explicit-small
+```
+
+Regenerate the SFT-style training-data dry run:
+
+```sh
+PYTHONPATH=. .venv/bin/python extra/llm_training_data_probe.py \
+  --out bench/qwen-rollout-20260612/training-data-v1 \
+  bench/qwen-rollout-20260612/8b-generated-small \
+  bench/qwen-rollout-20260612/14b-generated-small
 ```
 
 Current intended rows:
@@ -31,6 +45,11 @@ Current intended rows:
 - `8b-generated-small`: same model/policy on the 75-row small dataset.
 - `8b-explicit-small`: explicit Q4/Q6 primitive flags on the same 75-row
   small dataset.
+- `14b-generated-small`: Qwen3-14B with
+  `bench/qk-shared-storage-20260612/14b/policy.json` on the same 75-row small
+  dataset.
+- `14b-explicit-small`: explicit Q4/Q6 primitive flags for the 14B comparison
+  baseline.
 
 Current results:
 
@@ -48,6 +67,21 @@ Current results:
 - `bench/qwen-rollout-20260612/compare-8b-small/report.md`
 - generated vs explicit: `0` regressions, `0/75` text changes, `0/75` token
   changes
+- `bench/qwen-rollout-20260612/14b-generated-small/summary.md`
+- quality: `pass`, `75/75`
+- generated tokens: `644`
+- `bench/qwen-rollout-20260612/14b-explicit-small/summary.md`
+- quality: `pass`, `75/75`
+- generated tokens: `644`
+- `bench/qwen-rollout-20260612/compare-14b-small/report.md`
+- generated vs explicit: `0` regressions, `0/75` text changes, `0/75` token
+  changes
+- `bench/qwen-rollout-20260612/training-data-v1/README.md`
+- SFT-style dry-run export: `150` rows from 8B and 14B generated rollouts,
+  `0` filtered
 
 This artifact is for rollout/eval plumbing. Timing is eval-loop sanity data,
 not the canonical decode benchmark.
+
+The top-level runtime contract for eval, rollout, comparison, and training-data
+artifacts lives at `bench/llm-runtime-contract-20260613/README.md`.

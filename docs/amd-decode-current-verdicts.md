@@ -258,6 +258,17 @@ Choose the next step by goal:
 | Honor tinygrad's search thesis | Compiler research | Build semantic packed-layout and schedule/codegen generation, then feed it through the generated-search harness. |
 | Use the inference win | Training | Validate the smallest real QLoRA/SFT or RLVR stack using the faster decode path for rollouts/eval. |
 
+The practical rollout/eval foundation now has committed artifacts for both 8B
+and 14B. The runtime contract at
+`bench/llm-runtime-contract-20260613/README.md` validates eval, rollout,
+comparison, and training-data artifacts with `7/7` rows passing. Generated and
+explicit modes are token-identical on the 75-prompt rollout dataset for both
+8B and 14B (`0/75` text changes and `0/75` token changes in each compare
+report). The dry-run training-data export at
+`bench/qwen-rollout-20260612/training-data-v1/` produces `150` SFT-style rows
+from the generated 8B and 14B rollouts with `0` filtered rows. This is a data
+plumbing proof, not yet a training loop.
+
 For the llama.cpp-comparable research track, use
 `bench/qk-ansor-transition-20260612/scorecard.md` as the objective report.
 Current generated shared-storage rows are `51.46%` (8B), `61.63%` (14B), and

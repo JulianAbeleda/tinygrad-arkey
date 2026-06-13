@@ -1,0 +1,38 @@
+{
+  "avg_completion_tokens": 8.346666666666666,
+  "avg_prompt_len": 36.0,
+  "exported_rows": 150,
+  "filter_reasons": {},
+  "filtered_rows": 0,
+  "input_rows": 150,
+  "kind": "llm_training_data_probe",
+  "max_completion_tokens": 25,
+  "max_prompt_len": 55,
+  "max_total_tokens": 4096,
+  "min_completion_tokens": 1,
+  "require_quality_pass": true,
+  "source_artifacts": [
+    "bench/qwen-rollout-20260612/8b-generated-small",
+    "bench/qwen-rollout-20260612/14b-generated-small"
+  ],
+  "tag_distribution": {
+    "code": 20,
+    "code_short": 20,
+    "comparison": 4,
+    "compiler": 18,
+    "compiler_tinygrad": 20,
+    "facts": 20,
+    "facts_short": 20,
+    "format": 20,
+    "format_following": 20,
+    "instruction": 20,
+    "instruction_following": 20,
+    "json": 2,
+    "math": 22,
+    "math_short": 30,
+    "pattern": 4,
+    "reasoning": 20,
+    "reasoning_short": 20,
+    "tinygrad": 2
+  }
+}

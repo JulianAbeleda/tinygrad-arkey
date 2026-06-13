@@ -1,0 +1,189 @@
+{
+  "artifacts": [
+    {
+      "dataset": "bench/qwen-rollout-20260612/dataset-small.jsonl",
+      "elapsed_s": 82.158884,
+      "generated": 644,
+      "label": "14b-generated-small",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+      "path": "bench/qwen-rollout-20260612/14b-generated-small",
+      "policy": "bench/qk-shared-storage-20260612/14b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 75,
+      "quality": {
+        "pass_rate": 1.0,
+        "passed": 75,
+        "scored": 75,
+        "status": "pass"
+      },
+      "storage": "shared",
+      "tok_s": 7.838470639401577
+    },
+    {
+      "dataset": "bench/qwen-rollout-20260612/dataset-small.jsonl",
+      "elapsed_s": 96.882644,
+      "generated": 644,
+      "label": "14b-explicit-small",
+      "mode": "explicit",
+      "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+      "path": "bench/qwen-rollout-20260612/14b-explicit-small",
+      "policy": null,
+      "prompt_format": "chat",
+      "prompts": 75,
+      "quality": {
+        "pass_rate": 1.0,
+        "passed": 75,
+        "scored": 75,
+        "status": "pass"
+      },
+      "storage": "shared",
+      "tok_s": 6.647217431431785
+    }
+  ],
+  "baseline": "14b-generated-small",
+  "comparisons": [
+    {
+      "baseline": "14b-generated-small",
+      "candidate": "14b-explicit-small",
+      "dataset": "bench/qwen-rollout-20260612/dataset-small.jsonl",
+      "outputs": {
+        "changed": [],
+        "text_changed": 0,
+        "text_equal": 75,
+        "tokens_changed": 0,
+        "tokens_equal": 75
+      },
+      "prompts": 75,
+      "quality": {
+        "baseline_passed": 75,
+        "candidate_passed": 75,
+        "improvements": [],
+        "passed_delta": 0,
+        "regressions": []
+      },
+      "tag_delta": {
+        "code": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "code_short": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "comparison": {
+          "baseline_passed": 2,
+          "candidate_passed": 2,
+          "passed_delta": 0,
+          "scored": 2
+        },
+        "compiler": {
+          "baseline_passed": 9,
+          "candidate_passed": 9,
+          "passed_delta": 0,
+          "scored": 9
+        },
+        "compiler_tinygrad": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "facts": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "facts_short": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "format": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "format_following": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "instruction": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "instruction_following": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "json": {
+          "baseline_passed": 1,
+          "candidate_passed": 1,
+          "passed_delta": 0,
+          "scored": 1
+        },
+        "math": {
+          "baseline_passed": 11,
+          "candidate_passed": 11,
+          "passed_delta": 0,
+          "scored": 11
+        },
+        "math_short": {
+          "baseline_passed": 15,
+          "candidate_passed": 15,
+          "passed_delta": 0,
+          "scored": 15
+        },
+        "pattern": {
+          "baseline_passed": 2,
+          "candidate_passed": 2,
+          "passed_delta": 0,
+          "scored": 2
+        },
+        "reasoning": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "reasoning_short": {
+          "baseline_passed": 10,
+          "candidate_passed": 10,
+          "passed_delta": 0,
+          "scored": 10
+        },
+        "tinygrad": {
+          "baseline_passed": 1,
+          "candidate_passed": 1,
+          "passed_delta": 0,
+          "scored": 1
+        }
+      },
+      "timing_sanity": {
+        "baseline_elapsed_s": 82.158884,
+        "baseline_generated": 644,
+        "baseline_tok_s": 7.838470639401577,
+        "candidate_elapsed_s": 96.882644,
+        "candidate_generated": 644,
+        "candidate_tok_s": 6.647217431431785,
+        "elapsed_delta_s": 14.723759999999999,
+        "generated_delta": 0,
+        "tok_s_ratio": 0.8480247917263695
+      }
+    }
+  ],
+  "kind": "llm_rollout_compare_report"
+}

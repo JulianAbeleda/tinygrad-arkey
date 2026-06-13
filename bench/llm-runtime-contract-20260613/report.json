@@ -1,0 +1,85 @@
+{
+  "kind": "llm_runtime_contract_report",
+  "rows": [
+    {
+      "artifact": "bench/qwen-eval-20260612/8b-shared",
+      "errors": [],
+      "id": "qwen3-8b-eval",
+      "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "status": "pass",
+      "storage": "shared",
+      "summary_path": "bench/qwen-eval-20260612/8b-shared/summary.json",
+      "type": "eval"
+    },
+    {
+      "artifact": "bench/qwen-eval-20260612/14b-shared",
+      "errors": [],
+      "id": "qwen3-14b-eval",
+      "model": "~/models/Qwen3-14B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/14b/policy.json",
+      "status": "pass",
+      "storage": "shared",
+      "summary_path": "bench/qwen-eval-20260612/14b-shared/summary.json",
+      "type": "eval"
+    },
+    {
+      "artifact": "bench/qwen-rollout-20260612/8b-generated-small",
+      "dataset": "bench/qwen-rollout-20260612/dataset-small.jsonl",
+      "errors": [],
+      "id": "qwen3-8b-rollout-generated",
+      "mode": "generated",
+      "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "status": "pass",
+      "storage": "shared",
+      "summary_path": "bench/qwen-rollout-20260612/8b-generated-small/summary.json",
+      "type": "rollout"
+    },
+    {
+      "artifact": "bench/qwen-rollout-20260612/14b-generated-small",
+      "dataset": "bench/qwen-rollout-20260612/dataset-small.jsonl",
+      "errors": [],
+      "id": "qwen3-14b-rollout-generated",
+      "mode": "generated",
+      "model": "~/models/Qwen3-14B-Q4_K_M.gguf",
+      "policy": "bench/qk-shared-storage-20260612/14b/policy.json",
+      "status": "pass",
+      "storage": "shared",
+      "summary_path": "bench/qwen-rollout-20260612/14b-generated-small/summary.json",
+      "type": "rollout"
+    },
+    {
+      "artifact": "bench/qwen-rollout-20260612/compare-8b-small",
+      "errors": [],
+      "id": "qwen3-8b-generated-vs-explicit",
+      "status": "pass",
+      "summary_path": "bench/qwen-rollout-20260612/compare-8b-small/report.json",
+      "type": "compare"
+    },
+    {
+      "artifact": "bench/qwen-rollout-20260612/compare-14b-small",
+      "errors": [],
+      "id": "qwen3-14b-generated-vs-explicit",
+      "status": "pass",
+      "summary_path": "bench/qwen-rollout-20260612/compare-14b-small/report.json",
+      "type": "compare"
+    },
+    {
+      "artifact": "bench/qwen-rollout-20260612/training-data-v1",
+      "errors": [],
+      "id": "qwen3-rollout-training-data-v1",
+      "min_rows": 150,
+      "status": "pass",
+      "summary_path": "bench/qwen-rollout-20260612/training-data-v1/summary.json",
+      "type": "training_data"
+    }
+  ],
+  "source_manifest": "qwen-runtime-contract-20260613",
+  "summary": {
+    "failed": 0,
+    "missing": 0,
+    "passed": 7,
+    "rows": 7
+  }
+}
