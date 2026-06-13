@@ -71,36 +71,6 @@
           "to": {
             "family": "q4_k_packed_u32",
             "opts": [
-              "LOCAL:0:64"
-            ],
-            "parts": 1,
-            "winner": "q4_local64_p1"
-          }
-        }
-      ],
-      "decision": "benchmark_next",
-      "expected_storage_bytes": 309411840,
-      "id": "002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local64",
-      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local64.policy.json",
-      "reasons": []
-    },
-    {
-      "changes": [
-        {
-          "format": "Q4_K",
-          "from": {
-            "family": "q4_k_packed_u32",
-            "opts": [
-              "LOCAL:0:64"
-            ],
-            "parts": 1,
-            "winner": "v1_q4_packed"
-          },
-          "role": "ffn_gate",
-          "tensor": "blk.0.ffn_gate.weight",
-          "to": {
-            "family": "q4_k_packed_u32",
-            "opts": [
               "LOCAL:0:32"
             ],
             "parts": 2,
@@ -110,8 +80,8 @@
       ],
       "decision": "benchmark_next",
       "expected_storage_bytes": 309411840,
-      "id": "003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32",
-      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32.policy.json",
+      "id": "002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32",
+      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32.policy.json",
       "reasons": []
     },
     {
@@ -140,8 +110,8 @@
       ],
       "decision": "benchmark_next",
       "expected_storage_bytes": 309411840,
-      "id": "004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64",
-      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64.policy.json",
+      "id": "003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64",
+      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64.policy.json",
       "reasons": []
     },
     {
@@ -170,8 +140,8 @@
       ],
       "decision": "benchmark_next",
       "expected_storage_bytes": 309411840,
-      "id": "005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32",
-      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32.policy.json",
+      "id": "004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32",
+      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32.policy.json",
       "reasons": []
     },
     {
@@ -200,8 +170,8 @@
       ],
       "decision": "benchmark_next",
       "expected_storage_bytes": 309411840,
-      "id": "006-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64",
-      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/006-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64.policy.json",
+      "id": "005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64",
+      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64.policy.json",
       "reasons": []
     },
     {
@@ -228,13 +198,11 @@
           }
         }
       ],
-      "decision": "defer",
+      "decision": "benchmark_next",
       "expected_storage_bytes": 309411840,
-      "id": "007-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32",
-      "policy_path": null,
-      "reasons": [
-        "deferred by max_to_benchmark=6"
-      ]
+      "id": "006-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32",
+      "policy_path": "bench/qk-ansor-transition-20260612/search/32b/policies/006-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local32.policy.json",
+      "reasons": []
     },
     {
       "changes": [
@@ -262,7 +230,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "008-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local64",
+      "id": "007-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p1-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -294,7 +262,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "009-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p2-local64",
+      "id": "008-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p2-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -326,7 +294,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "010-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p4-local32",
+      "id": "009-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p4-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -358,7 +326,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "011-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p4-local64",
+      "id": "010-ffn-down-blk-8-ffn-down-weight-q4_k_packed_u32-p4-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -390,7 +358,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "012-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p1-local64",
+      "id": "011-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p1-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -422,7 +390,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "013-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local32",
+      "id": "012-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -454,7 +422,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "014-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local64",
+      "id": "013-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -486,7 +454,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "015-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local32",
+      "id": "014-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -518,7 +486,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "016-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local64",
+      "id": "015-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -550,7 +518,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "017-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p1-local32",
+      "id": "016-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p1-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -582,7 +550,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "018-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p2-local32",
+      "id": "017-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p2-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -614,7 +582,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "019-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p2-local64",
+      "id": "018-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p2-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -646,7 +614,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "020-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p4-local32",
+      "id": "019-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p4-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -678,7 +646,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "021-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p4-local64",
+      "id": "020-attn-output-blk-0-attn-output-weight-q4_k_packed_u32-p4-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -710,7 +678,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "022-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local32",
+      "id": "021-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -742,7 +710,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "023-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local64",
+      "id": "022-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -774,7 +742,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "024-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local32",
+      "id": "023-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -806,7 +774,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "025-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local64",
+      "id": "024-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -838,7 +806,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "026-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local64",
+      "id": "025-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -870,7 +838,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "027-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local32",
+      "id": "026-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -902,7 +870,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "028-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local64",
+      "id": "027-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -934,7 +902,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "029-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p2-local32",
+      "id": "028-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p2-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -966,7 +934,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "030-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local32",
+      "id": "029-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -998,7 +966,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "031-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local64",
+      "id": "030-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local64",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -1030,7 +998,7 @@
       ],
       "decision": "defer",
       "expected_storage_bytes": 309411840,
-      "id": "032-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p2-local32",
+      "id": "031-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p2-local32",
       "policy_path": null,
       "reasons": [
         "deferred by max_to_benchmark=6"
@@ -1042,8 +1010,8 @@
     "baseline_pct_llama": 55.93589353354979,
     "baseline_tok_s": 17.228255208333334,
     "benchmark_next": 6,
-    "candidates": 33,
-    "deferred": 26,
+    "candidates": 32,
+    "deferred": 25,
     "static_rejects": 0
   }
 }

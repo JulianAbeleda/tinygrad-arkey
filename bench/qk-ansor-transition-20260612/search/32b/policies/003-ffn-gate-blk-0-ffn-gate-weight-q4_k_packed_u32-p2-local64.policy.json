@@ -1,16 +1,16 @@
 {
-  "commit": "aa2827350",
+  "commit": "0da79f8ac",
   "created_at": "generated-by-qk-candidate-generator",
   "entries": [
     {
       "candidate": {
         "activation": "fp16",
         "family": "q4_k_packed_u32",
-        "name": "q4_local64_p1",
+        "name": "q4_local64_p2",
         "opts": [
           "LOCAL:0:64"
         ],
-        "parts": 1,
+        "parts": 2,
         "reduction": "split_k_partial",
         "requires": [
           "q4k_gemv_partial_kernel",
@@ -20,19 +20,19 @@
       "descriptor": {
         "block_bytes": 144,
         "block_elems": 256,
-        "byte_start": 932517696,
-        "cols": 4096,
-        "data_start": 5956416,
+        "byte_start": 1243679392,
+        "cols": 5120,
+        "data_start": 5974688,
         "dtype_activation": "fp16",
         "dtype_output": "fp32",
         "format": "Q4_K",
         "ggml_type": 12,
-        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-        "packed_bytes": 28311552,
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 73728000,
         "role": "ffn_gate",
-        "rows": 12288,
+        "rows": 25600,
         "tensor": "blk.0.ffn_gate.weight",
-        "tensor_offset": 926561280
+        "tensor_offset": 1237704704
       },
       "format": "Q4_K",
       "key": {
@@ -41,25 +41,25 @@
         "generator_version": 1,
         "ggml_type": 12,
         "shape": [
-          12288,
-          4096
+          25600,
+          5120
         ]
       },
       "metric": "quant_gbs",
-      "metric_value": 420.55,
+      "metric_value": 234.68,
       "policy_reason": "generated Ansor-transition candidate",
       "reason": "single-entry schedule candidate",
       "result": {
         "candidate": "v1_q4_packed",
-        "device_ms": 0.06732029960765663,
+        "device_ms": 0.3141639679563661,
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
-        "gemv_max_abs": 0.00179243,
+        "gemv_max_abs": 0.00531101,
         "opts": [
           "LOCAL:0:64"
         ],
         "parts": 1,
-        "quant_gbs": 420.55,
+        "quant_gbs": 234.68,
         "requires": [
           "q4k_gemv_partial_kernel",
           "u32_packed_storage"
@@ -67,31 +67,31 @@
         "status": "pass",
         "tensor": "blk.0.ffn_gate.weight",
         "unpack_max_abs": 0.0,
-        "wall_ms": 0.292
+        "wall_ms": 0.541
       },
       "scope": "shape",
       "shape": [
-        12288,
-        4096
+        25600,
+        5120
       ],
       "storage": {
-        "benefit_ms": 0.254365,
-        "benefit_ms_per_mb": 0.008985,
+        "benefit_ms": 0.604909,
+        "benefit_ms_per_mb": 0.008205,
         "decision": "shape",
-        "persistent_bytes": 28311552
+        "persistent_bytes": 73728000
       },
       "tensor": "blk.0.ffn_gate.weight",
-      "winner": "q4_local64_p1"
+      "winner": "q4_local64_p2"
     },
     {
       "candidate": {
         "activation": "fp16",
         "family": "q4_k_packed_u32",
-        "name": "v1_q4_packed",
+        "name": "q4_local32_p2",
         "opts": [
           "LOCAL:0:32"
         ],
-        "parts": 4,
+        "parts": 2,
         "reduction": "split_k_partial",
         "requires": [
           "q4k_gemv_partial_kernel",
@@ -101,19 +101,19 @@
       "descriptor": {
         "block_bytes": 144,
         "block_elems": 256,
-        "byte_start": 1380624192,
-        "cols": 12288,
-        "data_start": 5956416,
+        "byte_start": 3610438304,
+        "cols": 25600,
+        "data_start": 5974688,
         "dtype_activation": "fp16",
         "dtype_output": "fp32",
         "format": "Q4_K",
         "ggml_type": 12,
-        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-        "packed_bytes": 28311552,
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 73728000,
         "role": "ffn_down",
-        "rows": 4096,
-        "tensor": "blk.4.ffn_down.weight",
-        "tensor_offset": 1374667776
+        "rows": 5120,
+        "tensor": "blk.8.ffn_down.weight",
+        "tensor_offset": 3604463616
       },
       "format": "Q4_K",
       "key": {
@@ -122,47 +122,128 @@
         "generator_version": 1,
         "ggml_type": 12,
         "shape": [
-          4096,
-          12288
+          5120,
+          25600
         ]
       },
       "metric": "quant_gbs",
-      "metric_value": 266.88,
+      "metric_value": 333.53,
       "policy_reason": "best runtime-supported generated candidate",
       "reason": "reproduced from qk_semantic_descriptor_set",
       "result": {
-        "candidate": "v1_q4_packed",
-        "device_ms": 0.10608345323741007,
+        "candidate": "q4_local32_p2",
+        "device_ms": 0.22105357838875064,
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
-        "gemv_max_abs": 0.00207901,
+        "gemv_max_abs": 0.00440884,
         "opts": [
           "LOCAL:0:32"
         ],
-        "parts": 4,
-        "quant_gbs": 266.88,
+        "parts": 2,
+        "quant_gbs": 333.53,
         "requires": [
           "q4k_gemv_partial_kernel",
           "u32_packed_storage"
         ],
         "status": "pass",
-        "tensor": "blk.4.ffn_down.weight",
+        "tensor": "blk.8.ffn_down.weight",
         "unpack_max_abs": 0.0,
-        "wall_ms": 0.18
+        "wall_ms": 0.295
       },
       "scope": "shape",
       "shape": [
-        4096,
-        12288
+        5120,
+        25600
       ],
       "storage": {
-        "benefit_ms": 1.6972,
-        "benefit_ms_per_mb": 0.059947,
+        "benefit_ms": 3.517689,
+        "benefit_ms_per_mb": 0.047712,
         "decision": "shape",
-        "persistent_bytes": 28311552
+        "persistent_bytes": 73728000
       },
-      "tensor": "blk.4.ffn_down.weight",
-      "winner": "v1_q4_packed"
+      "tensor": "blk.8.ffn_down.weight",
+      "winner": "q4_local32_p2"
+    },
+    {
+      "candidate": {
+        "activation": "fp16",
+        "family": "q4_k_packed_u32",
+        "name": "q4_local32_p1",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 1,
+        "reduction": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ]
+      },
+      "descriptor": {
+        "block_bytes": 144,
+        "block_elems": 256,
+        "byte_start": 1108265120,
+        "cols": 5120,
+        "data_start": 5974688,
+        "dtype_activation": "fp16",
+        "dtype_output": "fp32",
+        "format": "Q4_K",
+        "ggml_type": 12,
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 23592960,
+        "role": "attn_q",
+        "rows": 8192,
+        "tensor": "blk.0.attn_q.weight",
+        "tensor_offset": 1102290432
+      },
+      "format": "Q4_K",
+      "key": {
+        "activation": "fp16",
+        "format": "Q4_K",
+        "generator_version": 1,
+        "ggml_type": 12,
+        "shape": [
+          8192,
+          5120
+        ]
+      },
+      "metric": "quant_gbs",
+      "metric_value": 317.45,
+      "policy_reason": "best runtime-supported generated candidate",
+      "reason": "reproduced from qk_semantic_descriptor_set",
+      "result": {
+        "candidate": "q4_local32_p1",
+        "device_ms": 0.07432023940778075,
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "gemv_max_abs": 0.00447989,
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 1,
+        "quant_gbs": 317.45,
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "status": "pass",
+        "tensor": "blk.0.attn_q.weight",
+        "unpack_max_abs": 0.0,
+        "wall_ms": 0.306
+      },
+      "scope": "shape",
+      "shape": [
+        8192,
+        5120
+      ],
+      "storage": {
+        "benefit_ms": 0.69368,
+        "benefit_ms_per_mb": 0.029402,
+        "decision": "shape",
+        "persistent_bytes": 23592960
+      },
+      "tensor": "blk.0.attn_q.weight",
+      "winner": "q4_local32_p1"
     },
     {
       "candidate": {
@@ -182,19 +263,19 @@
       "descriptor": {
         "block_bytes": 144,
         "block_elems": 256,
-        "byte_start": 878351680,
-        "cols": 4096,
-        "data_start": 5956416,
+        "byte_start": 1084672160,
+        "cols": 8192,
+        "data_start": 5974688,
         "dtype_activation": "fp16",
         "dtype_output": "fp32",
         "format": "Q4_K",
         "ggml_type": 12,
-        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-        "packed_bytes": 9437184,
-        "role": "attn_q",
-        "rows": 4096,
-        "tensor": "blk.0.attn_q.weight",
-        "tensor_offset": 872395264
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 23592960,
+        "role": "attn_output",
+        "rows": 5120,
+        "tensor": "blk.0.attn_output.weight",
+        "tensor_offset": 1078697472
       },
       "format": "Q4_K",
       "key": {
@@ -203,76 +284,79 @@
         "generator_version": 1,
         "ggml_type": 12,
         "shape": [
-          4096,
-          4096
+          5120,
+          8192
         ]
       },
       "metric": "quant_gbs",
-      "metric_value": 184.61,
+      "metric_value": 256.5,
       "policy_reason": "best runtime-supported generated candidate",
       "reason": "reproduced from qk_semantic_descriptor_set",
       "result": {
         "candidate": "q4_local64_p1",
-        "device_ms": 0.05111957098748713,
+        "device_ms": 0.09198035087719297,
         "family": "q4_k_packed_u32",
         "format": "Q4_K",
-        "gemv_max_abs": 0.00238562,
+        "gemv_max_abs": 0.00649643,
         "opts": [
           "LOCAL:0:64"
         ],
         "parts": 1,
-        "quant_gbs": 184.61,
+        "quant_gbs": 256.5,
         "requires": [
           "q4k_gemv_partial_kernel",
           "u32_packed_storage"
         ],
         "status": "pass",
-        "tensor": "blk.0.attn_q.weight",
+        "tensor": "blk.0.attn_output.weight",
         "unpack_max_abs": 0.0,
-        "wall_ms": 0.273
+        "wall_ms": 0.319
       },
       "scope": "shape",
       "shape": [
-        4096,
-        4096
+        5120,
+        8192
       ],
       "storage": {
-        "benefit_ms": 0.570157,
-        "benefit_ms_per_mb": 0.060416,
+        "benefit_ms": 1.114821,
+        "benefit_ms_per_mb": 0.047252,
         "decision": "shape",
-        "persistent_bytes": 9437184
+        "persistent_bytes": 23592960
       },
-      "tensor": "blk.0.attn_q.weight",
+      "tensor": "blk.0.attn_output.weight",
       "winner": "q4_local64_p1"
     },
     {
       "candidate": {
         "activation": "fp16",
-        "family": "fused_graph",
-        "name": "fused_graph",
-        "opts": [],
-        "parts": 0,
-        "reduction": "generic_fused_reduce",
+        "family": "q4_k_packed_u32",
+        "name": "q4_local32_p4",
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4,
+        "reduction": "split_k_partial",
         "requires": [
-          "ggml_data_to_tensor"
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
         ]
       },
       "descriptor": {
         "block_bytes": 144,
         "block_elems": 256,
-        "byte_start": 866538304,
-        "cols": 4096,
-        "data_start": 5956416,
+        "byte_start": 1081702048,
+        "cols": 5120,
+        "data_start": 5974688,
         "dtype_activation": "fp16",
         "dtype_output": "fp32",
         "format": "Q4_K",
         "ggml_type": 12,
-        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-        "packed_bytes": 2359296,
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 2949120,
         "role": "attn_k",
         "rows": 1024,
         "tensor": "blk.0.attn_k.weight",
-        "tensor_offset": 860581888
+        "tensor_offset": 1075727360
       },
       "format": "Q4_K",
       "key": {
@@ -282,41 +366,46 @@
         "ggml_type": 12,
         "shape": [
           1024,
-          4096
+          5120
         ]
       },
       "metric": "quant_gbs",
-      "metric_value": 100.05,
+      "metric_value": 62.92,
       "policy_reason": "best runtime-supported generated candidate",
       "reason": "reproduced from qk_semantic_descriptor_set",
       "result": {
-        "candidate": "fused_graph",
-        "device_ms": 0.023581169415292355,
-        "family": "fused_graph",
+        "candidate": "q4_local32_p4",
+        "device_ms": 0.0468709472345836,
+        "family": "q4_k_packed_u32",
         "format": "Q4_K",
-        "opts": [],
-        "parts": 0,
-        "quant_gbs": 100.05,
+        "gemv_max_abs": 0.00363541,
+        "opts": [
+          "LOCAL:0:32"
+        ],
+        "parts": 4,
+        "quant_gbs": 62.92,
         "requires": [
-          "ggml_data_to_tensor"
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
         ],
         "status": "pass",
         "tensor": "blk.0.attn_k.weight",
-        "wall_ms": 4.617
+        "unpack_max_abs": 0.0,
+        "wall_ms": 0.119
       },
       "scope": "shape",
       "shape": [
         1024,
-        4096
+        5120
       ],
       "storage": {
-        "benefit_ms": 0.0,
-        "benefit_ms_per_mb": 0.0,
+        "benefit_ms": 0.735389,
+        "benefit_ms_per_mb": 0.249359,
         "decision": "shape",
-        "persistent_bytes": 0
+        "persistent_bytes": 2949120
       },
       "tensor": "blk.0.attn_k.weight",
-      "winner": "fused_graph"
+      "winner": "q4_local32_p4"
     },
     {
       "candidate": {
@@ -333,15 +422,15 @@
       "descriptor": {
         "block_bytes": 210,
         "block_elems": 256,
-        "byte_start": 5956416,
-        "cols": 4096,
-        "data_start": 5956416,
+        "byte_start": 5974688,
+        "cols": 5120,
+        "data_start": 5974688,
         "dtype_activation": "fp16",
         "dtype_output": "fp32",
         "format": "Q6_K",
         "ggml_type": 14,
-        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-        "packed_bytes": 510504960,
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 638131200,
         "role": "output",
         "rows": 151936,
         "tensor": "output.weight",
@@ -355,22 +444,22 @@
         "ggml_type": 14,
         "shape": [
           151936,
-          4096
+          5120
         ]
       },
       "metric": "quant_gbs",
-      "metric_value": 123.85,
+      "metric_value": 121.53,
       "policy_reason": "best runtime-supported generated candidate",
       "reason": "reproduced from qk_semantic_descriptor_set",
       "result": {
         "candidate": "fused_graph",
-        "device_ms": 4.122,
+        "device_ms": 5.251,
         "family": "fused_graph",
         "format": "Q6_K",
-        "gemv_max_abs": 0.00178289,
+        "gemv_max_abs": 0.00160847,
         "opts": [],
         "parts": 0,
-        "quant_gbs": 123.85,
+        "quant_gbs": 121.53,
         "requires": [
           "ggml_data_to_tensor"
         ],
@@ -381,7 +470,7 @@
       "scope": "shape",
       "shape": [
         151936,
-        4096
+        5120
       ],
       "storage": {
         "benefit_ms": 0.0,
@@ -390,80 +479,6 @@
         "persistent_bytes": 0
       },
       "tensor": "output.weight",
-      "winner": "fused_graph"
-    },
-    {
-      "candidate": {
-        "activation": "fp16",
-        "family": "fused_graph",
-        "name": "fused_graph",
-        "opts": [],
-        "parts": 0,
-        "reduction": "generic_fused_reduce",
-        "requires": [
-          "ggml_data_to_tensor"
-        ]
-      },
-      "descriptor": {
-        "block_bytes": 210,
-        "block_elems": 256,
-        "byte_start": 887789376,
-        "cols": 4096,
-        "data_start": 5956416,
-        "dtype_activation": "fp16",
-        "dtype_output": "fp32",
-        "format": "Q6_K",
-        "ggml_type": 14,
-        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-        "packed_bytes": 3440640,
-        "role": "attn_v",
-        "rows": 1024,
-        "tensor": "blk.0.attn_v.weight",
-        "tensor_offset": 881832960
-      },
-      "format": "Q6_K",
-      "key": {
-        "activation": "fp16",
-        "format": "Q6_K",
-        "generator_version": 1,
-        "ggml_type": 14,
-        "shape": [
-          1024,
-          4096
-        ]
-      },
-      "metric": "quant_gbs",
-      "metric_value": 86.06,
-      "policy_reason": "best runtime-supported generated candidate",
-      "reason": "reproduced from qk_semantic_descriptor_set",
-      "result": {
-        "candidate": "fused_graph",
-        "device_ms": 0.04,
-        "family": "fused_graph",
-        "format": "Q6_K",
-        "gemv_max_abs": 0.000838041,
-        "opts": [],
-        "parts": 0,
-        "quant_gbs": 86.06,
-        "requires": [
-          "ggml_data_to_tensor"
-        ],
-        "status": "pass",
-        "tensor": "blk.0.attn_v.weight",
-        "unpack_max_abs": 0.0
-      },
-      "scope": "shape",
-      "shape": [
-        1024,
-        4096
-      ],
-      "storage": {
-        "benefit_ms": 0.0,
-        "benefit_ms_per_mb": 0.0,
-        "decision": "shape",
-        "persistent_bytes": 0
-      },
-      "tensor": "blk.0.attn_v.weight",
       "winner": "fused_graph"
     },
     {
@@ -484,19 +499,19 @@
       "descriptor": {
         "block_bytes": 210,
         "block_elems": 256,
-        "byte_start": 891230016,
-        "cols": 12288,
-        "data_start": 5956416,
+        "byte_start": 1131858592,
+        "cols": 5120,
+        "data_start": 5974688,
         "dtype_activation": "fp16",
         "dtype_output": "fp32",
         "format": "Q6_K",
         "ggml_type": 14,
-        "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-        "packed_bytes": 41287680,
-        "role": "ffn_down",
-        "rows": 4096,
-        "tensor": "blk.0.ffn_down.weight",
-        "tensor_offset": 885273600
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 4300800,
+        "role": "attn_v",
+        "rows": 1024,
+        "tensor": "blk.0.attn_v.weight",
+        "tensor_offset": 1125883904
       },
       "format": "Q6_K",
       "key": {
@@ -505,25 +520,105 @@
         "generator_version": 1,
         "ggml_type": 14,
         "shape": [
-          4096,
-          12288
+          1024,
+          5120
         ]
       },
       "metric": "quant_gbs",
-      "metric_value": 197.68,
+      "metric_value": 49.41,
       "policy_reason": "best runtime-supported generated candidate",
       "reason": "reproduced from qk_semantic_descriptor_set",
       "result": {
         "candidate": "q6_local64_p2",
-        "device_ms": 0.209,
+        "device_ms": 0.087,
         "family": "q6_k_packed_u16",
         "format": "Q6_K",
-        "gemv_max_abs": 0.00151372,
+        "gemv_max_abs": 0.0015738,
         "opts": [
           "LOCAL:0:64"
         ],
         "parts": 2,
-        "quant_gbs": 197.68,
+        "quant_gbs": 49.41,
+        "requires": [
+          "q6k_gemv_partial_kernel",
+          "u16_packed_storage"
+        ],
+        "status": "pass",
+        "tensor": "blk.0.attn_v.weight",
+        "unpack_max_abs": 0.0
+      },
+      "scope": "shape",
+      "shape": [
+        1024,
+        5120
+      ],
+      "storage": {
+        "benefit_ms": 0.734,
+        "benefit_ms_per_mb": 0.170666,
+        "decision": "shape",
+        "persistent_bytes": 4300800
+      },
+      "tensor": "blk.0.attn_v.weight",
+      "winner": "q6_local64_p2"
+    },
+    {
+      "candidate": {
+        "activation": "fp16",
+        "family": "q6_k_packed_u16",
+        "name": "q6_local64_p2",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 2,
+        "reduction": "split_k_partial",
+        "requires": [
+          "q6k_gemv_partial_kernel",
+          "u16_packed_storage"
+        ]
+      },
+      "descriptor": {
+        "block_bytes": 210,
+        "block_elems": 256,
+        "byte_start": 1136159392,
+        "cols": 25600,
+        "data_start": 5974688,
+        "dtype_activation": "fp16",
+        "dtype_output": "fp32",
+        "format": "Q6_K",
+        "ggml_type": 14,
+        "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+        "packed_bytes": 107520000,
+        "role": "ffn_down",
+        "rows": 5120,
+        "tensor": "blk.0.ffn_down.weight",
+        "tensor_offset": 1130184704
+      },
+      "format": "Q6_K",
+      "key": {
+        "activation": "fp16",
+        "format": "Q6_K",
+        "generator_version": 1,
+        "ggml_type": 14,
+        "shape": [
+          5120,
+          25600
+        ]
+      },
+      "metric": "quant_gbs",
+      "metric_value": 212.71,
+      "policy_reason": "best runtime-supported generated candidate",
+      "reason": "reproduced from qk_semantic_descriptor_set",
+      "result": {
+        "candidate": "q6_local64_p2",
+        "device_ms": 0.505,
+        "family": "q6_k_packed_u16",
+        "format": "Q6_K",
+        "gemv_max_abs": 0.00144589,
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 2,
+        "quant_gbs": 212.71,
         "requires": [
           "q6k_gemv_partial_kernel",
           "u16_packed_storage"
@@ -534,14 +629,14 @@
       },
       "scope": "shape",
       "shape": [
-        4096,
-        12288
+        5120,
+        25600
       ],
       "storage": {
-        "benefit_ms": 1.744,
-        "benefit_ms_per_mb": 0.04224,
+        "benefit_ms": 3.586,
+        "benefit_ms_per_mb": 0.033352,
         "decision": "shape",
-        "persistent_bytes": 41287680
+        "persistent_bytes": 107520000
       },
       "tensor": "blk.0.ffn_down.weight",
       "winner": "q6_local64_p2"
@@ -549,19 +644,19 @@
   ],
   "generator_version": 1,
   "kind": "qk_generated_policy",
-  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
-  "model_size": "8B",
-  "source_descriptor": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "model": "/home/ubuntu/models/Qwen3-32B-Q4_K_M.gguf",
+  "model_size": "32B",
+  "source_descriptor": "bench/qk-shared-storage-20260612/32b/policy.json",
   "storage_policy": {
     "by_format": {
-      "Q4_K": 66060288,
-      "Q6_K": 41287680
+      "Q4_K": 197591040,
+      "Q6_K": 111820800
     },
     "cap_bytes": null,
     "mode": "uncapped_shape",
     "note": "shape-scoped entries multiply at runtime by tensor count",
-    "selected_bytes": 107347968,
-    "selected_entries": 7,
-    "selected_primitive_entries": 4
+    "selected_bytes": 309411840,
+    "selected_entries": 8,
+    "selected_primitive_entries": 7
   }
 }

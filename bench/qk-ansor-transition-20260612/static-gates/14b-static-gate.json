@@ -346,35 +346,6 @@
           "to": {
             "family": "q4_k_packed_u32",
             "opts": [
-              "LOCAL:0:64"
-            ],
-            "parts": 1,
-            "winner": "q4_local64_p1"
-          }
-        }
-      ],
-      "expected_storage_bytes": 195379200,
-      "id": "012-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p1-local64",
-      "reasons": [],
-      "status": "pass"
-    },
-    {
-      "changes": [
-        {
-          "format": "Q4_K",
-          "from": {
-            "family": "q4_k_packed_u32",
-            "opts": [
-              "LOCAL:0:64"
-            ],
-            "parts": 1,
-            "winner": "v1_q4_packed"
-          },
-          "role": "attn_q",
-          "tensor": "blk.0.attn_q.weight",
-          "to": {
-            "family": "q4_k_packed_u32",
-            "opts": [
               "LOCAL:0:32"
             ],
             "parts": 2,
@@ -383,7 +354,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "013-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local32",
+      "id": "012-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local32",
       "reasons": [],
       "status": "pass"
     },
@@ -412,7 +383,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "014-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local64",
+      "id": "013-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local64",
       "reasons": [],
       "status": "pass"
     },
@@ -441,7 +412,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "015-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local32",
+      "id": "014-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local32",
       "reasons": [],
       "status": "pass"
     },
@@ -470,7 +441,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "016-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local64",
+      "id": "015-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local64",
       "reasons": [],
       "status": "pass"
     },
@@ -499,7 +470,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "017-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local32",
+      "id": "016-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local32",
       "reasons": [],
       "status": "pass"
     },
@@ -528,7 +499,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "018-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local64",
+      "id": "017-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local64",
       "reasons": [],
       "status": "pass"
     },
@@ -557,7 +528,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "019-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local32",
+      "id": "018-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local32",
       "reasons": [],
       "status": "pass"
     },
@@ -586,36 +557,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "020-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local64",
-      "reasons": [],
-      "status": "pass"
-    },
-    {
-      "changes": [
-        {
-          "format": "Q4_K",
-          "from": {
-            "family": "q4_k_packed_u32",
-            "opts": [
-              "LOCAL:0:32"
-            ],
-            "parts": 4,
-            "winner": "v1_q4_packed"
-          },
-          "role": "attn_k",
-          "tensor": "blk.0.attn_k.weight",
-          "to": {
-            "family": "q4_k_packed_u32",
-            "opts": [
-              "LOCAL:0:32"
-            ],
-            "parts": 4,
-            "winner": "q4_local32_p4"
-          }
-        }
-      ],
-      "expected_storage_bytes": 195379200,
-      "id": "021-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local32",
+      "id": "019-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local64",
       "reasons": [],
       "status": "pass"
     },
@@ -644,7 +586,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "022-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local64",
+      "id": "020-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local64",
       "reasons": [],
       "status": "pass"
     },
@@ -673,7 +615,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "023-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local32",
+      "id": "021-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local32",
       "reasons": [],
       "status": "pass"
     },
@@ -702,7 +644,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "024-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local64",
+      "id": "022-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local64",
       "reasons": [],
       "status": "pass"
     },
@@ -731,7 +673,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "025-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p2-local32",
+      "id": "023-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p2-local32",
       "reasons": [],
       "status": "pass"
     },
@@ -760,7 +702,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "026-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local32",
+      "id": "024-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local32",
       "reasons": [],
       "status": "pass"
     },
@@ -789,7 +731,7 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "027-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local64",
+      "id": "025-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local64",
       "reasons": [],
       "status": "pass"
     },
@@ -818,15 +760,15 @@
         }
       ],
       "expected_storage_bytes": 195379200,
-      "id": "028-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p2-local32",
+      "id": "026-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p2-local32",
       "reasons": [],
       "status": "pass"
     }
   ],
   "source_candidates": "bench/qk-shared-storage-20260612/14b/policy.json",
   "summary": {
-    "candidates": 29,
+    "candidates": 27,
     "failing": 0,
-    "passing": 29
+    "passing": 27
   }
 }

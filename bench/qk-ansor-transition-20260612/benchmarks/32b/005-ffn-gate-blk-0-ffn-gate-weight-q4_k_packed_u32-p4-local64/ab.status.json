@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64/policy.json"
+  ],
+  "outputs": [
+    "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64/output-ab.json"
+  ],
+  "reused": true,
+  "stage": "ab",
+  "status": "passed",
+  "updated_at": "2026-06-12T20:58:32.596435"
+}

@@ -1,0 +1,25 @@
+{
+  "inputs": [
+    "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/policy.json"
+  ],
+  "metadata": {
+    "explicit_logs": [
+      "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/explicit-run1.log",
+      "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/explicit-run2.log",
+      "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/explicit-run3.log"
+    ],
+    "generated_logs": [
+      "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/generated-run1.log",
+      "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/generated-run2.log",
+      "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/generated-run3.log"
+    ]
+  },
+  "outputs": [
+    "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/decode-summary.json",
+    "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/decode-summary.md"
+  ],
+  "reused": false,
+  "stage": "decode",
+  "status": "passed",
+  "updated_at": "2026-06-12T20:55:27.257541"
+}

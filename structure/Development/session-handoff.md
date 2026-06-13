@@ -257,20 +257,28 @@ machine-readable Q4_K/Q6_K packed-GEMV objects: format, role, shape, packed
 layout metadata, parts/local/reduction choices, and storage/benefit metadata.
 Those descriptors now round-trip back into runtime policies with zero semantic
 diff against the accepted generated policies. Candidate generation creates
-bounded `parts`/`LOCAL` policy variants: 8B `21`, 14B `29`, 32B `33`; all pass
+bounded `parts`/`LOCAL` policy variants: 8B `19`, 14B `27`, 32B `32`; all pass
 the static gate. The loop v0 writes `current` plus six ranked `benchmark_next`
 policy files per model. It is static planning only; promotion still requires
 the QK harness correctness/stability gates.
+
+Loop-v0 benchmark verdict: `bench/qk-ansor-transition-20260612/benchmarks/`.
+The six `benchmark_next` policies per model were benchmarked policy-vs-policy
+against each model's current accepted generated policy. 8B had `0` accepts
+(`2` ties, `3` rejects, `1` needs-rerun). 14B had `0` accepts (`2` ties,
+`4` rejects). 32B had one raw accept (`ffn_gate LOCAL:64 -> LOCAL:32`,
+`+3.24%`), but the fresh confirmation rerun was a tie at `-2.29%`, so no
+candidate is promoted. Overall verdict:
+`descriptor_knob_frontier_exhausted`.
 
 When resuming, choose one track explicitly:
 
 1. Use the inference win: build a real training loop, richer judge, or
    RLVR/SFT pipeline on top of the validated rollout/comparator backend.
 2. Compiler research: continue from the Ansor-transition descriptor foundation:
-   run the loop v0 `benchmark_next` policies through the QK harness, then use
-   the results to decide whether descriptor-level candidate generation is enough
-   or whether the next step needs real semantic schedule/codegen. Do not confuse
-   this with more hand-written primitive tuning.
+   descriptor-level `parts`/`LOCAL` candidate search is now exhausted; next work
+   needs real semantic schedule/codegen, not another hand sweep over the same
+   primitive knobs. Do not confuse this with more hand-written primitive tuning.
 3. Runtime-default soak: keep `QK_PRIMITIVE_STORAGE=shared` explicit for now,
    and only consider making it the runtime default after more non-campaign use.
 

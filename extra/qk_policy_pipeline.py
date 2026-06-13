@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, json, os, pathlib, re, statistics, subprocess, sys, time
+import argparse, filecmp, json, os, pathlib, re, shutil, statistics, subprocess, sys, time
 from datetime import datetime
 
 from extra.qk_ansor import build_policy_entries, make_policy_cache
@@ -15,7 +15,7 @@ MODEL_RE = re.compile(r"Qwen3-(?P<size>[0-9.]+B)-(?P<quant>[^/]+)\.gguf$", re.IG
 SPEC_FIELDS = (
   "model", "device", "level", "iters", "benchmark", "reference_mode", "repeats", "max_extra_repeats",
   "ab_tokens", "profile", "profile_tokens", "accept_gain", "tie_band", "profile_gain", "candidate_timeout",
-  "policy_max_storage_mb",
+  "policy_max_storage_mb", "input_policy", "reference_policy",
 )
 ENV_FIELDS = ("QK_PRIMITIVE_MAX_STORAGE_MB", "QK_GENERATED_POLICY_STRICT", "QK_PRIMITIVE_STORAGE")
 STAGES = ("search", "policy", "semantic", "parity", "decode", "ab", "profile", "decide", "report")
@@ -40,10 +40,17 @@ def _model_fingerprint(model:pathlib.Path) -> dict:
 def _experiment_spec(args) -> dict:
   spec = {}
   for key in SPEC_FIELDS:
-    value = getattr(args, key)
+    value = getattr(args, key, None)
     if isinstance(value, pathlib.Path): value = str(value)
     spec[key] = value
   return spec
+
+def _copy_if_changed(src:pathlib.Path, dst:pathlib.Path) -> bool:
+  src, dst = src.expanduser().resolve(), dst
+  if dst.exists() and filecmp.cmp(src, dst, shallow=False): return False
+  dst.parent.mkdir(parents=True, exist_ok=True)
+  shutil.copyfile(src, dst)
+  return True
 
 def _manifest_for(args) -> dict:
   return {
@@ -189,7 +196,10 @@ def _run_decode(args, mode:str, policy:pathlib.Path|None, idx:int) -> pathlib.Pa
   log = args.out / f"{mode}-run{idx}.log"
   env = {"DEV": args.device, "JIT": "1", "PYTHONPATH": "."}
   if mode == "explicit":
-    if args.reference_mode == "explicit":
+    if args.reference_mode == "policy":
+      if args.reference_policy is None: raise ValueError("reference_mode=policy requires --reference-policy")
+      env |= {"QK_GENERATED_POLICY": str(args.reference_policy), "QK_GENERATED_POLICY_DEBUG": "1"}
+    elif args.reference_mode == "explicit":
       env |= {"Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1", "Q4K_PRIMITIVE_DEBUG": "1", "Q6K_PRIMITIVE_DEBUG": "1"}
   elif mode == "generated":
     if policy is None: raise ValueError("generated decode requires policy")
@@ -239,7 +249,11 @@ def _apply_policy_cap_from_search(args, search_json:pathlib.Path, policy:pathlib
 
 def _profile_specs(args, policy:pathlib.Path) -> list[tuple[str, str, dict[str, str]]]:
   base_env = {"DEV": args.device, "DEBUG": "2", "JIT": "1", "PYTHONPATH": "."}
-  if args.reference_mode == "explicit":
+  if args.reference_mode == "policy":
+    if args.reference_policy is None: raise ValueError("reference_mode=policy requires --reference-policy")
+    reference_name = "reference-policy"
+    reference_env = base_env | {"QK_GENERATED_POLICY": str(args.reference_policy)}
+  elif args.reference_mode == "explicit":
     reference_name = "q4q6-primitive"
     reference_env = base_env | {"Q4K_PRIMITIVE": "1", "Q6K_PRIMITIVE": "1"}
   elif args.reference_mode == "generic":
@@ -330,6 +344,7 @@ def _top_up_until_stable(args, policy:pathlib.Path, explicit_logs:list[pathlib.P
 def _write_readme(args, decision:dict) -> None:
   llama_ref = LLAMA_REFS.get(args.model_size)
   pct = "" if llama_ref is None else f"{decision['generated']['avg_tok_s'] / llama_ref * 100:.1f}%"
+  reference_label = "reference policy" if args.reference_mode == "policy" else "explicit"
   lines = [
     f"# QK Policy Pipeline: {args.model.name}",
     "",
@@ -345,8 +360,8 @@ def _write_readme(args, decision:dict) -> None:
     "",
     f"- status: `{decision['status']}`",
     f"- gain: `{decision['gain']*100:.2f}%`",
-    f"- explicit mean: `{decision['explicit']['avg_tok_s']:.2f} tok/s`",
-    f"- explicit decision window: `{', '.join(decision['explicit'].get('decision_labels', []))}`",
+    f"- {reference_label} mean: `{decision['explicit']['avg_tok_s']:.2f} tok/s`",
+    f"- {reference_label} decision window: `{', '.join(decision['explicit'].get('decision_labels', []))}`",
     f"- generated mean: `{decision['generated']['avg_tok_s']:.2f} tok/s`",
     f"- generated decision window: `{', '.join(decision['generated'].get('decision_labels', []))}`",
     f"- generated percent of llama.cpp reference: `{pct}`" if pct else "- generated percent of llama.cpp reference: `n/a`",
@@ -420,6 +435,10 @@ def _memory_blocked(error:Exception) -> bool:
 def run_pipeline(args) -> dict:
   args.repo = args.repo.resolve()
   args.model = args.model.expanduser().resolve()
+  if args.input_policy is not None: args.input_policy = args.input_policy.expanduser().resolve()
+  if args.reference_policy is not None:
+    args.reference_policy = args.reference_policy.expanduser().resolve()
+    args.reference_mode = "policy"
   args.model_size = _model_size(args.model)
   if args.out is None:
     args.out = args.repo / "bench" / f"qk-policy-pipeline-{datetime.now().date().strftime('%Y%m%d')}" / _model_label(args.model)
@@ -429,7 +448,18 @@ def run_pipeline(args) -> dict:
   policy = args.out / "policy.json"
   search_json = args.out / "search.json"
   policy_changed = False
-  if args.reuse and search_json.exists() and args.policy_max_storage_mb is not None:
+  if args.input_policy is not None:
+    _write_stage_status(args, "search", "skipped", inputs=[args.input_policy],
+                        metadata={"reason": "using precomputed input policy"})
+    _write_stage_status(args, "policy", "running", inputs=[args.input_policy], outputs=[policy])
+    try:
+      policy_changed = _copy_if_changed(args.input_policy, policy)
+      _write_stage_status(args, "policy", "passed", inputs=[args.input_policy], outputs=[policy],
+                          reused=not policy_changed, metadata={"policy_changed": policy_changed})
+    except Exception as e:
+      _write_stage_status(args, "policy", "failed", inputs=[args.input_policy], outputs=[policy], error=str(e))
+      raise
+  elif args.reuse and search_json.exists() and args.policy_max_storage_mb is not None:
     _write_stage_status(args, "search", "passed", outputs=[search_json], reused=True)
     _write_stage_status(args, "policy", "running", inputs=[search_json], outputs=[policy])
     try:
@@ -457,7 +487,15 @@ def run_pipeline(args) -> dict:
     _write_stage_status(args, "search", "passed", outputs=[search_json], reused=True)
     _write_stage_status(args, "policy", "passed", inputs=[search_json], outputs=[policy], reused=True)
 
-  if not (args.reuse and (args.out / "semantic-report.md").exists()):
+  if args.input_policy is not None:
+    semantic_report = args.out / "semantic-report.md"
+    semantic_report.write_text(
+      f"# QK Policy Pipeline Search: {args.model.name}\n\n"
+      f"Search skipped. This run benchmarks precomputed policy `{args.input_policy}`.\n"
+    )
+    _write_stage_status(args, "semantic", "skipped", inputs=[policy], outputs=[semantic_report],
+                        metadata={"reason": "input policy has no search.json"})
+  elif not (args.reuse and (args.out / "semantic-report.md").exists()):
     _write_stage_status(args, "semantic", "running", inputs=[search_json], outputs=[args.out / "semantic-report.md"])
     try:
       _run([sys.executable, "extra/qk_semantic_report.py", str(search_json), "--md", str(args.out / "semantic-report.md"),
@@ -528,6 +566,7 @@ def run_pipeline(args) -> dict:
     try:
       _run([sys.executable, "extra/q4_k_output_ab.py", "--model", str(args.model), "--tokens", str(args.ab_tokens),
             "--timeout", str(args.ab_timeout), "--candidate-policy", str(policy), "--policy-debug",
+            *([] if args.reference_policy is None else ["--baseline-policy", str(args.reference_policy)]),
             "--json", str(args.out / "output-ab.json")], args.repo, args.out / "output-ab.log",
            env={"DEV": args.device, "JIT": "1", "PYTHONPATH": "."}, timeout=args.ab_timeout + 60)
       _write_stage_status(args, "ab", "passed", inputs=[policy], outputs=[args.out / "output-ab.json"])
@@ -585,8 +624,12 @@ def main() -> None:
   parser.add_argument("--level", type=int, default=2)
   parser.add_argument("--iters", type=int, default=2)
   parser.add_argument("--benchmark", type=int, default=128)
-  parser.add_argument("--reference-mode", choices=("explicit", "generic"), default="explicit",
+  parser.add_argument("--reference-mode", choices=("explicit", "generic", "policy"), default="explicit",
                       help="explicit compares against Q4K/Q6K primitive flags; generic compares against the fused graph baseline")
+  parser.add_argument("--input-policy", type=pathlib.Path,
+                      help="benchmark this precomputed QK generated policy instead of running candidate search")
+  parser.add_argument("--reference-policy", type=pathlib.Path,
+                      help="compare decode/A-B against this QK generated policy baseline")
   parser.add_argument("--repeats", type=int, default=3)
   parser.add_argument("--max-extra-repeats", type=int, default=2,
                       help="run up to this many additional samples per mode until the latest --repeats window is stable")

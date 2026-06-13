@@ -6,6 +6,8 @@ from extra.qk_candidate_static_gate import build_static_gate, gate_policy, stati
 from extra.qk_descriptor_policy import build_policy_from_descriptor, diff_markdown, diff_policies, runtime_entries
 from extra.qk_gap_profile import build_gap_profile, gap_profile_markdown
 from extra.qk_llama_scorecard import build_scorecard, scorecard_markdown
+from extra.qk_loop_benchmark import build_matrix, matrix_markdown
+from extra.qk_loop_verdict import build_verdict, verdict_markdown
 from extra.qk_semantic_descriptor import build_descriptor, descriptor_markdown
 
 
@@ -79,7 +81,7 @@ class TestQKAnsorTransition(unittest.TestCase):
 
   def test_candidates_and_static_gates_reproduce(self):
     base = pathlib.Path("bench/qk-ansor-transition-20260612")
-    expected_counts = {"8b": 21, "14b": 29, "32b": 33}
+    expected_counts = {"8b": 19, "14b": 27, "32b": 32}
     for stem, expected_count in expected_counts.items():
       descriptor = json.loads((base / "descriptors" / f"{stem}.json").read_text())
       candidate_set = build_candidate_set(descriptor)
@@ -115,6 +117,22 @@ class TestQKAnsorTransition(unittest.TestCase):
       self.assertEqual(loop["summary"]["benchmark_next"], 6)
       self.assertEqual(loop["summary"]["static_rejects"], 0)
       self.assertEqual(loop["rows"][0]["decision"], "baseline")
+
+  def test_loop_benchmark_matrices_and_verdict_reproduce(self):
+    base = pathlib.Path("bench/qk-ansor-transition-20260612")
+    bench = base / "benchmarks"
+    for stem in ("8b", "14b", "32b"):
+      loop = json.loads((base / "search" / stem / "run.json").read_text())
+      rows = [row for row in loop["rows"] if row["decision"] == "benchmark_next"]
+      matrix = build_matrix(stem, loop, rows, (bench / stem).resolve())
+      self.assertEqual(json.loads((bench / stem / "matrix.json").read_text()), matrix)
+      self.assertEqual((bench / stem / "matrix.md").read_text(), matrix_markdown(matrix))
+      self.assertEqual(matrix["summary"]["candidates"], 6)
+    verdict = build_verdict(bench)
+    self.assertEqual(json.loads((bench / "verdict.json").read_text()), verdict)
+    self.assertEqual((bench / "verdict.md").read_text(), verdict_markdown(verdict))
+    self.assertEqual(verdict["summary"]["overall_decision"], "descriptor_knob_frontier_exhausted")
+    self.assertEqual(verdict["summary"]["models_with_confirmed_accept"], 0)
 
 
 if __name__ == "__main__":

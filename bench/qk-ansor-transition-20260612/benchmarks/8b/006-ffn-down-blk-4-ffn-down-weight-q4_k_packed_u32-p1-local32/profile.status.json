@@ -1,0 +1,14 @@
+{
+  "inputs": [
+    "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/006-ffn-down-blk-4-ffn-down-weight-q4_k_packed_u32-p1-local32/policy.json"
+  ],
+  "metadata": {
+    "preliminary_gain": -0.009899980309096779,
+    "profile": "never"
+  },
+  "outputs": [],
+  "reused": false,
+  "stage": "profile",
+  "status": "skipped",
+  "updated_at": "2026-06-12T20:58:30.980963"
+}

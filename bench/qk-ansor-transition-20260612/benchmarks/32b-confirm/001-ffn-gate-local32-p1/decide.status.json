@@ -1,0 +1,16 @@
+{
+  "inputs": [
+    "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/decode-summary.json",
+    "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/output-ab.json"
+  ],
+  "metadata": {
+    "status": "tie"
+  },
+  "outputs": [
+    "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1/decision.json"
+  ],
+  "reused": false,
+  "stage": "decide",
+  "status": "passed",
+  "updated_at": "2026-06-12T20:57:07.367151"
+}

@@ -1,0 +1,29 @@
+{
+  "inputs": [
+    "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/policy.json"
+  ],
+  "metadata": {
+    "explicit_logs": [
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/explicit-run1.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/explicit-run2.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/explicit-run3.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/explicit-run4.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/explicit-run5.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/explicit-run6.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/explicit-run7.log"
+    ],
+    "generated_logs": [
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/generated-run1.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/generated-run2.log",
+      "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/generated-run3.log"
+    ]
+  },
+  "outputs": [
+    "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/decode-summary.json",
+    "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/decode-summary.md"
+  ],
+  "reused": false,
+  "stage": "decode",
+  "status": "passed",
+  "updated_at": "2026-06-12T20:58:30.533426"
+}

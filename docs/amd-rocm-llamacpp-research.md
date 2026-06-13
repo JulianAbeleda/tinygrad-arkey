@@ -2056,7 +2056,7 @@ The llama.cpp-comparable research path now has a committed static loop:
 - `extra/qk_descriptor_policy.py` round-trips those descriptors back into
   runtime policies with zero semantic diff against the accepted policies.
 - `extra/qk_candidate_generator.py` creates bounded `parts`/`LOCAL` variants
-  over the supported Q4_K/Q6_K primitive families: 8B `21`, 14B `29`, 32B `33`
+  over the supported Q4_K/Q6_K primitive families: 8B `19`, 14B `27`, 32B `32`
   candidates.
 - `extra/qk_candidate_static_gate.py` fails closed before GPU execution; all
   current v0 candidates pass because they stay inside supported primitive
@@ -2068,3 +2068,31 @@ This is not a new speed result. It is the first reproducible descriptor ->
 candidate -> static-gate -> benchmark-frontier surface. The next accepted speed
 claim must run the emitted policies through the QK policy pipeline with the same
 correctness and stability gates as the existing generated policies.
+
+## Ansor-transition loop benchmark (2026-06-12)
+
+Artifact: `bench/qk-ansor-transition-20260612/benchmarks/`.
+
+The six `benchmark_next` policies per model were benchmarked against the current
+accepted generated policy for that same model. This is policy-vs-policy, not
+explicit primitive flags vs candidate.
+
+Summary:
+
+| model | candidates | accepts | ties | rejects | needs-rerun | verdict |
+|---|---:|---:|---:|---:|---:|---|
+| 8B | `6` | `0` | `2` | `3` | `1` | exhausted |
+| 14B | `6` | `0` | `2` | `4` | `0` | exhausted |
+| 32B | `6` | `1 raw` | `0` | `4` | `1` | raw accept failed confirmation |
+
+The raw 32B accept changed `ffn_gate` from `LOCAL:0:64` to `LOCAL:0:32` at the
+same `parts=1`, measuring `17.24 tok/s` versus `16.70 tok/s` (`+3.24%`) with
+greedy A/B passing. Because that margin was barely over the gate and the
+candidate speed was essentially the current canonical 32B generated speed, it
+was rerun in `benchmarks/32b-confirm/001-ffn-gate-local32-p1/`. The confirmation
+run measured current `17.38 tok/s` versus candidate `16.98 tok/s` (`-2.29%`),
+also with greedy A/B passing. Therefore the raw accept is not promoted.
+
+Verdict: descriptor-level `parts`/`LOCAL` knob search over the existing Q4_K/Q6_K
+primitive families is exhausted. The next research step needs a richer semantic
+schedule/codegen search space, not another hand sweep over the same knobs.

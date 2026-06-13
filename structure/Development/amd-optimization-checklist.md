@@ -96,9 +96,14 @@ generated-policy storage mode.
       `extra/qk_candidate_generator.py`, `extra/qk_candidate_static_gate.py`,
       and `extra/qk_ansor_transition_loop.py`. Descriptors reproduce accepted
       runtime policy semantics with zero diff; the bounded candidate sets are
-      8B `21`, 14B `29`, 32B `33`; all static gates pass; each model has
+      8B `19`, 14B `27`, 32B `32`; all static gates pass; each model has
       `current` plus six `benchmark_next` policy files under
       `bench/qk-ansor-transition-20260612/search/`.
+- [x] Benchmarked loop-v0 `benchmark_next` policies policy-vs-policy through
+      the QK harness: `bench/qk-ansor-transition-20260612/benchmarks/`. 8B and
+      14B had no accepts. 32B had one raw `+3.24%` accept, but the confirmation
+      rerun was a tie at `-2.29%`, so no candidate is promoted. Verdict:
+      descriptor-level `parts`/`LOCAL` knob search is exhausted.
 
 ## Open But Not Urgent
 
@@ -123,7 +128,7 @@ generated-policy storage mode.
    checks before making any runtime-default change.
 3. Research track: continue the Ansor-style semantic packed-layout/codegen
    direction from `docs/amd-decode-ansor-direction.md`, starting from the
-   descriptor/candidate/static-loop foundation in
+   descriptor/candidate/static-loop benchmark verdict in
    `bench/qk-ansor-transition-20260612/`.
 
 Default recommendation: pause here, then resume with practical training/eval

@@ -1,0 +1,458 @@
+[
+  {
+    "avg_drop1_tok_s": 17.58283464566929,
+    "avg_last16_tok_s": 16.0675,
+    "avg_last32_tok_s": 16.748125,
+    "avg_last64_tok_s": 17.15296875,
+    "avg_ms": 59.2871875,
+    "avg_tok_s": 17.469921875,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit1",
+    "max_ms": 319.13,
+    "max_tok_s": 18.48,
+    "median_tok_s": 17.64,
+    "min_tok_s": 3.13,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/explicit-run1.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/search/32b/policies/current.policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 1.6915233297092853,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 16.486614173228347,
+    "avg_last16_tok_s": 8.944375,
+    "avg_last32_tok_s": 13.1684375,
+    "avg_last64_tok_s": 15.225,
+    "avg_ms": 68.08734375,
+    "avg_tok_s": 16.382265625,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit2",
+    "max_ms": 319.58,
+    "max_tok_s": 18.55,
+    "median_tok_s": 17.689999999999998,
+    "min_tok_s": 3.13,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/explicit-run2.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/search/32b/policies/current.policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 3.607462347732145,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 16.671496062992126,
+    "avg_last16_tok_s": 15.321875,
+    "avg_last32_tok_s": 16.2184375,
+    "avg_last64_tok_s": 15.56203125,
+    "avg_ms": 64.003203125,
+    "avg_tok_s": 16.565703125,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit3",
+    "max_ms": 319.55,
+    "max_tok_s": 18.54,
+    "median_tok_s": 17.685000000000002,
+    "min_tok_s": 3.13,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/explicit-run3.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/search/32b/policies/current.policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 2.736450567148409,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 16.988267716535432,
+    "avg_last16_tok_s": 17.2,
+    "avg_last32_tok_s": 17.0784375,
+    "avg_last64_tok_s": 16.45125,
+    "avg_ms": 62.197890625,
+    "avg_tok_s": 16.88015625,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit4",
+    "max_ms": 317.66,
+    "max_tok_s": 18.43,
+    "median_tok_s": 17.700000000000003,
+    "min_tok_s": 3.15,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/explicit-run4.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/search/32b/policies/current.policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 2.456543241997411,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 16.771417322834644,
+    "avg_last16_tok_s": 16.419375000000002,
+    "avg_last32_tok_s": 16.9284375,
+    "avg_last64_tok_s": 17.27203125,
+    "avg_ms": 63.680390625,
+    "avg_tok_s": 16.665,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "explicit5",
+    "max_ms": 317.47,
+    "max_tok_s": 18.57,
+    "median_tok_s": 17.59,
+    "min_tok_s": 3.15,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/explicit-run5.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/search/32b/policies/current.policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 2.7332366668778163,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 17.11724409448819,
+    "avg_last16_tok_s": 17.25875,
+    "avg_last32_tok_s": 17.3565625,
+    "avg_last64_tok_s": 16.1446875,
+    "avg_ms": 61.739609375,
+    "avg_tok_s": 17.008203125,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "generated1",
+    "max_ms": 315.99,
+    "max_tok_s": 18.53,
+    "median_tok_s": 17.75,
+    "min_tok_s": 3.16,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/generated-run1.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 2.4199090350554324,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 17.29015748031496,
+    "avg_last16_tok_s": 15.621875,
+    "avg_last32_tok_s": 16.5225,
+    "avg_last64_tok_s": 16.61125,
+    "avg_ms": 61.2096875,
+    "avg_tok_s": 17.178515625,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "generated2",
+    "max_ms": 333.14,
+    "max_tok_s": 18.52,
+    "median_tok_s": 17.755000000000003,
+    "min_tok_s": 3.0,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/generated-run2.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 2.2427861924993535,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  },
+  {
+    "avg_drop1_tok_s": 17.659055118110235,
+    "avg_last16_tok_s": 16.899375,
+    "avg_last32_tok_s": 17.1575,
+    "avg_last64_tok_s": 17.3890625,
+    "avg_ms": 58.747890625,
+    "avg_tok_s": 17.545703125,
+    "installs": {
+      "Q4K": {
+        "installed": 384,
+        "nonpersistent_bytes": 0,
+        "not_q4_k": 322,
+        "policy_missing": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 15099494400,
+        "skipped_total": 323,
+        "source_bytes": 15099494400,
+        "storage_bytes": 0
+      },
+      "Q6K": {
+        "installed": 64,
+        "nonpersistent_bytes": 0,
+        "not_q6_k": 642,
+        "policy_fused": 1,
+        "runtime_cap_bytes": -1,
+        "runtime_cap_used_bytes": 0,
+        "shared_bytes": 3578265600,
+        "skipped_total": 643,
+        "source_bytes": 3578265600,
+        "storage_bytes": 0
+      }
+    },
+    "label": "generated3",
+    "max_ms": 317.54,
+    "max_tok_s": 18.55,
+    "median_tok_s": 17.72,
+    "min_tok_s": 3.15,
+    "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/generated-run3.log",
+    "policy": {
+      "entries": "8",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/32b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/policy.json"
+    },
+    "samples": 128,
+    "stdev_tok_s": 1.4346228803448853,
+    "storage": {
+      "by_kind": "Q4K:0,Q6K:0",
+      "by_mode": "shared:448",
+      "installed": 448,
+      "nonpersistent_bytes": 0,
+      "runtime_cap_bytes": -1,
+      "runtime_cap_used_bytes": 0,
+      "shared_bytes": 18677760000,
+      "source_bytes": 18677760000,
+      "storage_bytes": 0
+    }
+  }
+]

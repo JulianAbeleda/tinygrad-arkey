@@ -10,7 +10,7 @@ them, and emit the bounded set that should be benchmarked next.
 - baseline tok/s: `40.552421875`
 - baseline % llama.cpp: `61.62982047872341`
 - benchmark next: `6`
-- deferred: `22`
+- deferred: `20`
 - static rejects: `0`
 
 | id | decision | changes | policy | reasons |
@@ -27,20 +27,18 @@ them, and emit the bounded set that should be benchmarked next.
 | `009-ffn-down-blk-5-ffn-down-weight-q4_k_packed_u32-p4-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
 | `010-ffn-down-blk-5-ffn-down-weight-q4_k_packed_u32-p4-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
 | `011-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p1-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `012-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p1-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `013-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `014-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `015-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `016-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `017-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `018-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `019-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `020-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `021-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `022-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `023-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `024-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `025-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `026-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `027-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
-| `028-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `012-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `013-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p2-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `014-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `015-attn-q-blk-0-attn-q-weight-q4_k_packed_u32-p4-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `016-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `017-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p1-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `018-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `019-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p2-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `020-attn-k-blk-0-attn-k-weight-q4_k_packed_u32-p4-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `021-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `022-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p1-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `023-attn-v-blk-0-attn-v-weight-q6_k_packed_u16-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `024-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `025-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p1-local64` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |
+| `026-ffn-down-blk-0-ffn-down-weight-q6_k_packed_u16-p2-local32` | `defer` | 1 | `n/a` | deferred by max_to_benchmark=6 |

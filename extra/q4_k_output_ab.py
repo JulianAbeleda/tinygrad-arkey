@@ -20,6 +20,11 @@ def run_child(args, primitive:bool) -> dict:
     if args.policy_debug: env["QK_GENERATED_POLICY_DEBUG"] = "1"
     env["Q4K_PRIMITIVE"] = "0"
     env["Q6K_PRIMITIVE"] = "0"
+  elif not primitive and args.baseline_policy is not None:
+    env["QK_GENERATED_POLICY"] = str(args.baseline_policy)
+    if args.policy_debug: env["QK_GENERATED_POLICY_DEBUG"] = "1"
+    env["Q4K_PRIMITIVE"] = "0"
+    env["Q6K_PRIMITIVE"] = "0"
   else:
     env["Q4K_PRIMITIVE"] = "1" if primitive else "0"
     env["Q6K_PRIMITIVE"] = "1" if primitive and args.q6_primitive else "0"
@@ -27,7 +32,9 @@ def run_child(args, primitive:bool) -> dict:
          "--max-context", str(args.max_context), "--seed", str(args.seed), "--temperature", str(args.temperature),
          "--prompt", args.prompt, "--primitive", "1" if primitive else "0"]
   if primitive and args.candidate_policy is not None: cmd += ["--candidate-policy", str(args.candidate_policy)]
+  if not primitive and args.baseline_policy is not None: cmd += ["--baseline-policy", str(args.baseline_policy)]
   if primitive and args.policy_debug: cmd += ["--policy-debug"]
+  if not primitive and args.baseline_policy is not None and args.policy_debug: cmd += ["--policy-debug"]
   st = time.perf_counter()
   proc = subprocess.run(cmd, cwd=args.repo, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         timeout=args.timeout)
@@ -42,6 +49,11 @@ def run_child(args, primitive:bool) -> dict:
 def run_generation(args) -> None:
   if args.primitive and args.candidate_policy is not None:
     os.environ["QK_GENERATED_POLICY"] = str(args.candidate_policy)
+    if args.policy_debug: os.environ["QK_GENERATED_POLICY_DEBUG"] = "1"
+    os.environ["Q4K_PRIMITIVE"] = "0"
+    os.environ["Q6K_PRIMITIVE"] = "0"
+  elif not args.primitive and args.baseline_policy is not None:
+    os.environ["QK_GENERATED_POLICY"] = str(args.baseline_policy)
     if args.policy_debug: os.environ["QK_GENERATED_POLICY_DEBUG"] = "1"
     os.environ["Q4K_PRIMITIVE"] = "0"
     os.environ["Q6K_PRIMITIVE"] = "0"
@@ -64,6 +76,7 @@ def run_generation(args) -> None:
     if len(out) >= args.tokens: break
   print(json.dumps({
     "primitive": bool(args.primitive), "candidate_policy": str(args.candidate_policy) if args.candidate_policy else None,
+    "baseline_policy": str(args.baseline_policy) if args.baseline_policy else None,
     "tokens": out, "text": tok.decode(out),
     "prompt_len": len(prompt_ids), "generated": len(out), "model": str(args.model),
   }, sort_keys=True))
@@ -73,6 +86,7 @@ def print_summary(baseline:dict, primitive:dict) -> None:
   print("|---|---:|---:|---|")
   for name, row in (("baseline", baseline), ("primitive", primitive)):
     if name == "primitive" and row.get("candidate_policy"): name = "generated_policy"
+    if name == "baseline" and row.get("baseline_policy"): name = "baseline_policy"
     print(f"| {name} | {row['generated']} | {row['elapsed_s']} | {row['tokens'][:8]} |")
   print(f"match={baseline['tokens'] == primitive['tokens']}")
   if baseline["tokens"] != primitive["tokens"]:
@@ -96,6 +110,7 @@ if __name__ == "__main__":
   parser.add_argument("--tail-lines", type=int, default=8)
   parser.add_argument("--json", type=pathlib.Path, help="write comparison JSON")
   parser.add_argument("--q6-primitive", action="store_true", help="enable Q6K_PRIMITIVE=1 only for the primitive child")
+  parser.add_argument("--baseline-policy", type=pathlib.Path, help="compare this QK_GENERATED_POLICY baseline against the candidate")
   parser.add_argument("--candidate-policy", type=pathlib.Path, help="compare baseline against this QK_GENERATED_POLICY instead of explicit primitive flags")
   parser.add_argument("--policy-debug", action="store_true", help="enable QK_GENERATED_POLICY_DEBUG in the candidate child")
   parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)

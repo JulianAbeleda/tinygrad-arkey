@@ -1,0 +1,247 @@
+{
+  "kind": "qk_loop_candidate_matrix",
+  "model": "8B",
+  "rows": [
+    {
+      "ab_match": true,
+      "candidate_stable": true,
+      "candidate_tok_s": 52.565078125,
+      "changes": [
+        {
+          "format": "Q4_K",
+          "from": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:64"
+            ],
+            "parts": 1,
+            "winner": "v1_q4_packed"
+          },
+          "role": "ffn_gate",
+          "tensor": "blk.0.ffn_gate.weight",
+          "to": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:32"
+            ],
+            "parts": 1,
+            "winner": "q4_local32_p1"
+          }
+        }
+      ],
+      "gain": -0.013272071601726387,
+      "id": "001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32",
+      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32/policy.json",
+      "reasons": [
+        "generated within tie band: -1.33%"
+      ],
+      "reference_stable": true,
+      "reference_tok_s": 53.272109375,
+      "status": "tie"
+    },
+    {
+      "ab_match": true,
+      "candidate_stable": true,
+      "candidate_tok_s": 47.48690104166667,
+      "changes": [
+        {
+          "format": "Q4_K",
+          "from": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:64"
+            ],
+            "parts": 1,
+            "winner": "v1_q4_packed"
+          },
+          "role": "ffn_gate",
+          "tensor": "blk.0.ffn_gate.weight",
+          "to": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:32"
+            ],
+            "parts": 2,
+            "winner": "q4_local32_p2"
+          }
+        }
+      ],
+      "gain": -0.10773761815706773,
+      "id": "002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32",
+      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/002-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local32/policy.json",
+      "reasons": [
+        "generated slower than explicit by 10.77%"
+      ],
+      "reference_stable": true,
+      "reference_tok_s": 53.22078125,
+      "status": "reject"
+    },
+    {
+      "ab_match": true,
+      "candidate_stable": true,
+      "candidate_tok_s": 48.775989583333335,
+      "changes": [
+        {
+          "format": "Q4_K",
+          "from": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:64"
+            ],
+            "parts": 1,
+            "winner": "v1_q4_packed"
+          },
+          "role": "ffn_gate",
+          "tensor": "blk.0.ffn_gate.weight",
+          "to": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:64"
+            ],
+            "parts": 2,
+            "winner": "q4_local64_p2"
+          }
+        }
+      ],
+      "gain": -0.052478482183237585,
+      "id": "003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64",
+      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/003-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p2-local64/policy.json",
+      "reasons": [
+        "explicit unstable: explicit5 last16 43.21 collapsed below 85% of avg 52.62",
+        "explicit unstable: explicit7 last16 40.92 collapsed below 85% of avg 50.97"
+      ],
+      "reference_stable": false,
+      "reference_tok_s": 51.47744791666667,
+      "status": "needs-rerun"
+    },
+    {
+      "ab_match": true,
+      "candidate_stable": true,
+      "candidate_tok_s": 40.591380208333334,
+      "changes": [
+        {
+          "format": "Q4_K",
+          "from": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:64"
+            ],
+            "parts": 1,
+            "winner": "v1_q4_packed"
+          },
+          "role": "ffn_gate",
+          "tensor": "blk.0.ffn_gate.weight",
+          "to": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:32"
+            ],
+            "parts": 4,
+            "winner": "q4_local32_p4"
+          }
+        }
+      ],
+      "gain": -0.22399628404549154,
+      "id": "004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32",
+      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/004-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local32/policy.json",
+      "reasons": [
+        "generated slower than explicit by 22.40%"
+      ],
+      "reference_stable": true,
+      "reference_tok_s": 52.30822916666666,
+      "status": "reject"
+    },
+    {
+      "ab_match": true,
+      "candidate_stable": true,
+      "candidate_tok_s": 41.780026041666666,
+      "changes": [
+        {
+          "format": "Q4_K",
+          "from": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:64"
+            ],
+            "parts": 1,
+            "winner": "v1_q4_packed"
+          },
+          "role": "ffn_gate",
+          "tensor": "blk.0.ffn_gate.weight",
+          "to": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:64"
+            ],
+            "parts": 4,
+            "winner": "q4_local64_p4"
+          }
+        }
+      ],
+      "gain": -0.2111763129623302,
+      "id": "005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64",
+      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/005-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p4-local64/policy.json",
+      "reasons": [
+        "generated slower than explicit by 21.12%"
+      ],
+      "reference_stable": true,
+      "reference_tok_s": 52.96497395833333,
+      "status": "reject"
+    },
+    {
+      "ab_match": true,
+      "candidate_stable": true,
+      "candidate_tok_s": 51.067760416666665,
+      "changes": [
+        {
+          "format": "Q4_K",
+          "from": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:32"
+            ],
+            "parts": 4,
+            "winner": "v1_q4_packed"
+          },
+          "role": "ffn_down",
+          "tensor": "blk.4.ffn_down.weight",
+          "to": {
+            "family": "q4_k_packed_u32",
+            "opts": [
+              "LOCAL:0:32"
+            ],
+            "parts": 1,
+            "winner": "q4_local32_p1"
+          }
+        }
+      ],
+      "gain": -0.009899980309096779,
+      "id": "006-ffn-down-blk-4-ffn-down-weight-q4_k_packed_u32-p1-local32",
+      "path": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/006-ffn-down-blk-4-ffn-down-weight-q4_k_packed_u32-p1-local32",
+      "policy": "/home/ubuntu/tinygrad-arkey/bench/qk-ansor-transition-20260612/benchmarks/8b/006-ffn-down-blk-4-ffn-down-weight-q4_k_packed_u32-p1-local32/policy.json",
+      "reasons": [
+        "generated within tie band: -0.99%"
+      ],
+      "reference_stable": true,
+      "reference_tok_s": 51.57838541666667,
+      "status": "tie"
+    }
+  ],
+  "source_loop": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "summary": {
+    "accepted": 0,
+    "best_gain": null,
+    "best_id": null,
+    "candidates": 6,
+    "invalid": 0,
+    "needs_rerun": 1,
+    "next_decision": "descriptor_knob_frontier_exhausted",
+    "rejected": 3,
+    "ties": 2
+  }
+}

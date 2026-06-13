@@ -35,6 +35,10 @@ def _current_runtime(row:dict[str, Any]) -> dict[str, Any]:
   }
 
 
+def _schedule(runtime:dict[str, Any]) -> tuple[str, int, tuple[str, ...]]:
+  return str(runtime["family"]), int(runtime["parts"]), tuple(runtime["opts"])
+
+
 def _variant_runtime(row:dict[str, Any], *, parts:int, local:int) -> dict[str, Any]:
   family = row["current_lowering"]["family"]
   name = _candidate_name(family, parts, local)
@@ -48,7 +52,7 @@ def _variants(row:dict[str, Any]) -> list[dict[str, Any]]:
   for parts in PARTS[family]:
     for local in LOCAL:
       candidate = _variant_runtime(row, parts=parts, local=local)
-      if candidate == _current_runtime(row): continue
+      if _schedule(candidate) == _schedule(_current_runtime(row)): continue
       out.append(candidate)
   return out
 

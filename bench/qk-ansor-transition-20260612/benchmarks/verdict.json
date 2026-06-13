@@ -1,0 +1,83 @@
+{
+  "kind": "qk_loop_benchmark_verdict",
+  "rows": [
+    {
+      "accepted_ids": [],
+      "confirmations": {},
+      "confirmed_accept_ids": [],
+      "decision": "descriptor_knob_frontier_exhausted",
+      "matrix": "bench/qk-ansor-transition-20260612/benchmarks/8b/matrix.json",
+      "model": "8B",
+      "summary": {
+        "accepted": 0,
+        "best_gain": null,
+        "best_id": null,
+        "candidates": 6,
+        "invalid": 0,
+        "needs_rerun": 1,
+        "next_decision": "descriptor_knob_frontier_exhausted",
+        "rejected": 3,
+        "ties": 2
+      }
+    },
+    {
+      "accepted_ids": [],
+      "confirmations": {},
+      "confirmed_accept_ids": [],
+      "decision": "descriptor_knob_frontier_exhausted",
+      "matrix": "bench/qk-ansor-transition-20260612/benchmarks/14b/matrix.json",
+      "model": "14B",
+      "summary": {
+        "accepted": 0,
+        "best_gain": null,
+        "best_id": null,
+        "candidates": 6,
+        "invalid": 0,
+        "needs_rerun": 0,
+        "next_decision": "descriptor_knob_frontier_exhausted",
+        "rejected": 4,
+        "ties": 2
+      }
+    },
+    {
+      "accepted_ids": [
+        "001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32"
+      ],
+      "confirmations": {
+        "001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32": {
+          "ab_match": true,
+          "candidate_tok_s": 16.979166666666668,
+          "gain": -0.022912111543873737,
+          "path": "bench/qk-ansor-transition-20260612/benchmarks/32b-confirm/001-ffn-gate-local32-p1",
+          "reasons": [
+            "generated within tie band: -2.29%"
+          ],
+          "reference_tok_s": 17.377317708333333,
+          "status": "tie"
+        }
+      },
+      "confirmed_accept_ids": [],
+      "decision": "raw_accept_unconfirmed_or_rejected_by_confirmation",
+      "matrix": "bench/qk-ansor-transition-20260612/benchmarks/32b/matrix.json",
+      "model": "32B",
+      "summary": {
+        "accepted": 1,
+        "best_gain": 0.03235950291463152,
+        "best_id": "001-ffn-gate-blk-0-ffn-gate-weight-q4_k_packed_u32-p1-local32",
+        "candidates": 6,
+        "invalid": 0,
+        "needs_rerun": 1,
+        "next_decision": "promote_best_candidate",
+        "rejected": 4,
+        "ties": 0
+      }
+    }
+  ],
+  "scope": "policy-vs-policy loop v0 benchmark candidates",
+  "summary": {
+    "models": 3,
+    "models_with_confirmed_accept": 0,
+    "models_with_raw_accept": 1,
+    "overall_decision": "descriptor_knob_frontier_exhausted"
+  }
+}

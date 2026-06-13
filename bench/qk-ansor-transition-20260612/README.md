@@ -111,12 +111,31 @@ The descriptor layer now round-trips back into a runtime policy with no semantic
 diff against the accepted generated policies. From that descriptor, the v0
 candidate generator creates bounded policy variants:
 
-- 8B: `21` candidates
-- 14B: `29` candidates
-- 32B: `33` candidates
+- 8B: `19` candidates
+- 14B: `27` candidates
+- 32B: `32` candidates
 
 The static gate currently passes every generated candidate because v0 only
 varies supported Q4_K/Q6_K primitive `parts` and `LOCAL` settings. The search
 loop is intentionally static planning: it writes `current` plus six ranked
 `benchmark_next` policy files per model. Promotion still requires running those
 policies through the QK harness with correctness and stability gates.
+
+## Loop Benchmark Verdict
+
+`extra/qk_loop_benchmark.py` benchmarked the six `benchmark_next` policies per
+model against each model's current accepted generated policy with
+`QK_PRIMITIVE_STORAGE=shared`. This is policy-vs-policy, not explicit-flags vs
+candidate.
+
+Result: `benchmarks/verdict.md` marks the loop v0 frontier exhausted.
+
+- 8B: `0` accepts, `2` ties, `3` rejects, `1` needs-rerun.
+- 14B: `0` accepts, `2` ties, `4` rejects.
+- 32B: one raw accept, `001-ffn_gate LOCAL:64 -> LOCAL:32`, at `+3.24%`, but a
+  fresh confirmation rerun was a tie at `-2.29%`, so it is not promoted.
+
+Conclusion: simple descriptor-level `parts`/`LOCAL` knob search is not enough to
+move toward the `>=70%` llama.cpp target. The next research step needs a real
+semantic schedule/codegen change, not another hand sweep over the same primitive
+knobs.

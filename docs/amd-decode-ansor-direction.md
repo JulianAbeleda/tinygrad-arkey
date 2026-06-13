@@ -29,6 +29,13 @@ gates them, and writes six `benchmark_next` policy files per model. This is the
 first machine-readable search surface for the next phase. It does not yet prove
 a speedup; the emitted policies still need the full QK harness gates.
 
+Update, loop-v0 benchmark: those six policies per model were benchmarked
+policy-vs-policy against the current accepted generated policies. The top-level
+verdict is `descriptor_knob_frontier_exhausted`: 8B and 14B had no accepts, and
+the one raw 32B accept failed confirmation. This means the next Ansor-direction
+step cannot be another sweep over the same `parts`/`LOCAL` knobs. It needs a
+new semantic schedule/codegen capability.
+
 ## Decision
 
 If the goal is to honor tinygrad's search philosophy, the next interesting path
