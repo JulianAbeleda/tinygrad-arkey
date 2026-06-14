@@ -668,13 +668,45 @@ Stop rule:
 
 Phase 3 completion checklist:
 
-- [ ] protocol diagnostic scoped or explicitly skipped
-- [ ] SFT exporter checked in and tested
+- [x] protocol diagnostic scoped and generated:
+  `bench/amd-decode-flywheel-proof-20260614/triage-protocol-diagnostic-v0/`
+- [x] SFT exporter checked in and tested:
+  `extra/qk_flywheel_triage_sft.py`
+- [x] SFT artifact generated with holdout-contamination audit:
+  `bench/amd-decode-flywheel-proof-20260614/triage-sft-v0/`
 - [ ] training artifact generated with holdout-contamination audit
 - [ ] adapter rollout generated on the Phase 1 holdout prompts
 - [ ] adapter scored by `extra/qk_flywheel_triage_eval.py`
-- [ ] result classified as one of: `schema_fail`, `baseline_fail`,
-  `unsafe_accepts`, `shadow_ready`
+- [x] current result classified as `training_path_latency_blocked` before
+  adapter rollout
+
+Current status:
+
+- Phase 3.0 diagnostic result:
+  `bench/amd-decode-flywheel-proof-20260614/triage-protocol-diagnostic-v0/`.
+  Strict text remains `0/38` parseable. JSON extraction makes `38/38`
+  parse/schema-valid and taxonomy repair can make `38/38` taxonomy-valid, but
+  extracted labels still reach only accuracy `0.053`, macro-F1 `0.036`, and
+  false-positive accept rate `0.763`. This is below `mechanism_prior`
+  macro-F1 `0.185`, so protocol repair is not enough.
+- Phase 3.1 SFT export result:
+  `bench/amd-decode-flywheel-proof-20260614/triage-sft-v0/`. It has `45`
+  train rows, `38` eval/holdout rows, `0` oversampled rows, `0`
+  schema-support rows, and `0` holdout ids in train.
+- Phase 3.2 first-candidate attempt:
+  `bench/amd-decode-flywheel-proof-20260614/triage-adapter-v0-attempt/`.
+  Two `last1_ffn` rank-4 suffix-cache attempts were terminated after repeated
+  30 second polls with no stdout and no adapter artifact: one generated-mode
+  attempt and one baseline-mode attempt. No adapter rollout or Phase 3.3 score
+  exists yet.
+
+Immediate implication:
+
+- Do not continue by sweeping adapter ranks. The next Phase 3.2 step should
+  make the training loop observable/practical first: add progress reporting,
+  shorten/compress the long kernel-context prompts, or create a smaller
+  predeclared smoke candidate that can complete before retrying a full held-out
+  adapter rollout.
 
 ## Phase 4: Live Shadow Mode
 

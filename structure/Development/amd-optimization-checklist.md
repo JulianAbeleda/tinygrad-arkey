@@ -398,6 +398,12 @@ generated-policy storage mode.
       strict SFT export from the `45` train rows, adapter rollout on the `38`
       holdout rows, and hard gates of `>=37/38` strict JSON outputs,
       macro-F1 above `0.185`, low false-positive accepts, and improved ranking.
+      Phase 3.0/3.1 are now complete: protocol extraction still loses
+      (`0.036` macro-F1, `0.763` false-positive accepts), and the SFT artifact
+      has `45` train / `38` eval rows with `0` holdout ids in train. Phase 3.2
+      is blocked by suffix-cache adapter training latency on the long
+      kernel-context prompts; next step is progress reporting, prompt
+      compression, or a smaller predeclared adapter smoke before a full rollout.
 
 ## Do Not Do Next
 

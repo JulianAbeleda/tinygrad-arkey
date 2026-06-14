@@ -190,6 +190,24 @@ teacher-forced loss; it is a held-out adapter rollout with at least `37/38`
 strict JSON outputs, macro-F1 above `0.185`, low false-positive accepts, and
 ranking metrics above the `mechanism_prior` baseline.
 
+Phase 3.0/3.1 have now run. New artifacts:
+
+- `bench/amd-decode-flywheel-proof-20260614/triage-protocol-diagnostic-v0/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-sft-v0/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-adapter-v0-attempt/`
+- `extra/qk_flywheel_protocol_diagnostic.py`
+- `extra/qk_flywheel_triage_sft.py`
+
+Protocol diagnostic: extracting the JSON-shaped object from the base rollout
+fixes parse/schema (`38/38`) but not triage. Extracted macro-F1 is `0.036`,
+accuracy `0.053`, and false-positive accept rate `0.763`, well below
+`mechanism_prior` macro-F1 `0.185`. SFT export: `45` train rows, `38`
+eval/holdout rows, `0` holdout ids in train. Phase 3.2 is blocked on practical
+adapter training latency for these long kernel-context prompts; two
+`last1_ffn` rank-4 suffix-cache attempts produced no adapter artifact before
+termination. Next step is a smaller/progress-reporting or prompt-compressed
+adapter candidate, not a rank sweep.
+
 ## Verification Already Run
 
 ```sh

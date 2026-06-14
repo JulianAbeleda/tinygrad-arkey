@@ -1,0 +1,151 @@
+{
+  "axes": {
+    "json_extract": {
+      "errors": {
+        "taxonomy": 26
+      },
+      "labels": {
+        "accept": 29,
+        "construction_blocked": 1,
+        "reject": 8
+      },
+      "parse_ok": 38,
+      "reasons": {
+        "construction_blocked": 1,
+        "diagnostic_only": 3,
+        "full_decode_ready": 2,
+        "full_decode_supported": 24,
+        "static_gate_fail": 8
+      },
+      "rows": 38,
+      "schema_ok": 38,
+      "taxonomy_ok": 12
+    },
+    "json_extract_taxonomy_repair": {
+      "errors": {},
+      "labels": {
+        "accept": 29,
+        "construction_blocked": 1,
+        "reject": 8
+      },
+      "parse_ok": 38,
+      "reasons": {
+        "construction_blocked": 1,
+        "diagnostic_only": 3,
+        "static_gate_fail": 8,
+        "unsupported_runtime_scope": 26
+      },
+      "rows": 38,
+      "schema_ok": 38,
+      "taxonomy_ok": 38
+    },
+    "strict_text": {
+      "errors": {
+        "extra text": 38
+      },
+      "labels": {
+        "invalid_output": 38
+      },
+      "parse_ok": 0,
+      "reasons": {
+        "invalid_output": 38
+      },
+      "rows": 38,
+      "schema_ok": 0,
+      "taxonomy_ok": 0
+    }
+  },
+  "baseline": {
+    "mechanism_prior_accuracy": 0.2894736842105263,
+    "mechanism_prior_false_positive_accept_rate": 0.0,
+    "mechanism_prior_macro_f1": 0.18528138528138527
+  },
+  "best_diagnostic": "json_extract",
+  "conclusion": "protocol_fix_not_enough",
+  "examples": "bench/amd-decode-flywheel-proof-20260614/kernel-triage-v0/examples.jsonl",
+  "kind": "qk_flywheel_protocol_diagnostic",
+  "methods": {
+    "json_extract": {
+      "accuracy": 0.05263157894736842,
+      "false_positive_accept_rate": 0.7631578947368421,
+      "macro_f1": 0.03627450980392157,
+      "pred_labels": {
+        "accept": 29,
+        "construction_blocked": 1,
+        "reject": 8
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.172750632278296,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.5,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "json_extract_taxonomy_repair": {
+      "accuracy": 0.05263157894736842,
+      "false_positive_accept_rate": 0.7631578947368421,
+      "macro_f1": 0.03627450980392157,
+      "pred_labels": {
+        "accept": 29,
+        "construction_blocked": 1,
+        "reject": 8
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.172750632278296,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.5,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "strict_text": {
+      "accuracy": 0.0,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.0,
+      "pred_labels": {
+        "invalid_output": 38
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.16975802401520504,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": null,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    }
+  },
+  "note": "Diagnostic only. Extracting or repairing output is not flywheel proof and does not replace the official strict score.",
+  "rollout": "bench/amd-decode-flywheel-proof-20260614/triage-qwen3-8b-base-v0",
+  "rows": 38
+}

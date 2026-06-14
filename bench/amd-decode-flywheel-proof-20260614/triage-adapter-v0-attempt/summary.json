@@ -1,0 +1,21 @@
+{
+  "attempts": [
+    {
+      "command_class": "suffix_cache_last1_ffn_rank4_generated_training",
+      "result": "terminated_no_artifact",
+      "reason": "No stdout or adapter artifact after repeated 30 second polls; generated-mode internal adapter training is not the prior working path.",
+      "status": "blocked"
+    },
+    {
+      "command_class": "suffix_cache_last1_ffn_rank4_baseline_training",
+      "result": "terminated_no_artifact",
+      "reason": "No stdout or adapter artifact after repeated 30 second polls; current suffix-cache trainer is too slow for a quick full Phase 3.2 candidate on the long kernel-context SFT rows.",
+      "status": "blocked"
+    }
+  ],
+  "input": "bench/amd-decode-flywheel-proof-20260614/triage-sft-v0/adapter-input.jsonl",
+  "kind": "qk_flywheel_triage_adapter_attempt_summary",
+  "next_step": "Build a smaller/progress-reporting adapter candidate or shorten/compress Phase 3 prompts before retrying full holdout adapter training.",
+  "result": "training_path_latency_blocked",
+  "status": "blocked"
+}
