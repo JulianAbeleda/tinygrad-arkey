@@ -1187,22 +1187,108 @@ Method:
 - Run the normal human/deterministic kernel loop unchanged.
 - Score the model after outcomes are known.
 
+State entering Phase 4:
+
+- The Phase 3G exit gate is met: `triage-coverage-plan-v1-plus/` reports
+  `rerun_phase3b_allowed=true`, and `triage-cost-model-v1-plus/` keeps XGBoost
+  ahead of `mechanism_prior` on the fixed `38`-row holdout (macro-F1 `0.873` vs
+  `0.479`, `false_positive_accept_rate=0.0`). The labeled corpus is the `136`-row
+  `kernel-triage-v1-featured-plus/` dataset.
+
+Required harness:
+
+- Split the coupled fit+predict in `extra/qk_flywheel_cost_model.py` into a
+  reusable train -> freeze -> predict path, or add a thin
+  `extra/qk_flywheel_shadow.py` that imports `extract_feature_map`,
+  `FeatureVectorizer`, the XGBoost classifier/ranker fit, and `_label_policy`
+  from the cost-model module. Do not fork the feature logic; reuse it so the
+  shadow predictor and the audited cost model share one leak-free feature path.
+- Train on the entire labeled `kernel-triage-v1-featured-plus/` corpus (all
+  `136` rows; the family-split holdout is not special in shadow mode because the
+  test set is the fresh batch, not the holdout). Persist the fitted vectorizer
+  feature vocab, the classifier, the ranker, and the label/reason policy.
+- Predict on fresh, unlabeled candidate rows built from static descriptor
+  metadata only (shape, role, format, mechanism, opts, prediction stage
+  `after_static_before_microbench`). Real source/compile/microbench features are
+  absent before running and default in the vectorizer; v0 shadow is therefore a
+  blind static-stage prediction. Staged re-prediction (after compile, after
+  microbench) is a Phase 4.x extension, not v0.
+
+Fresh candidate batch (instance-level generalization, new tensors / same
+mechanism families):
+
+- `3` `packed_word_lane_unroll` packed-load candidates on untouched dominant
+  Q4_K `ffn_gate` tensors not in the corpus (for example
+  `blk.4/5/6.ffn_gate.weight`), via the same descriptor -> v3 -> schedule_bench
+  path used in Phase 3G.
+- `2` `qk_block_dot` compile-gate + microbench candidates on untouched dominant
+  Q4_K tensors (for example `blk.0.attn_output.weight` and
+  `blk.1.ffn_up.weight`).
+- `1` `wide_load_only` three-way load diagnostic on an untouched tensor (for
+  example `blk.0.attn_output.weight`).
+- Rationale: these generators produce label diversity (raw_accept, tie,
+  reject, construction_blocked, diagnostic_only), so the shadow score is not a
+  single-label artifact. None of these exact tensors appears in train.
+
+Freeze protocol (the load-bearing honesty rule):
+
+- Write `shadow-v0/predictions.jsonl` with the model label, reason, retry,
+  confidence, and rank score for every fresh candidate, plus a freeze record
+  (`shadow-v0/freeze.json`) carrying the corpus content hash, the trained-model
+  parameter hash, the candidate-set hash, and the git commit, before any fresh
+  GPU run exists.
+- Commit the frozen predictions before producing outcomes. The outcome run must
+  not be able to influence the predictions; a test asserts `predictions.jsonl`
+  and `freeze.json` are unchanged after `outcomes.jsonl` is written.
+
+Run and score:
+
+- Run the normal deterministic generators on the fresh batch to produce
+  `shadow-v0/outcomes.jsonl` with the same extractor labels used for training
+  (reuse the Phase 3G extractor functions; do not hand-label).
+- Score with `extra/qk_flywheel_triage_eval.py`: macro-F1, precision@k, NDCG,
+  and `false_positive_accept_rate` for the model versus `mechanism_prior`,
+  `simple_family_heuristic`, and `reject_all` on the fresh batch.
+- Add a dead-branch metric to the shadow scorer: experiments-to-first-live
+  (count of dead candidates -- reject / construction_blocked / diagnostic_only
+  -- ranked above the first live candidate) under model ranking versus baseline
+  ranking, plus the model's false-positive accept rate on the fresh batch.
+
 Outputs:
 
 - `bench/amd-decode-flywheel-proof-YYYYMMDD/shadow-v0/`
-- prediction JSONL
-- outcome JSONL
-- shadow score report
+- `predictions.jsonl` (frozen before outcomes)
+- `freeze.json` (corpus/model/candidate hashes + commit)
+- `outcomes.jsonl`
+- `summary.json` + `README.md` shadow score report
 
-Gate:
+Tests:
 
-- Model ranking must beat baselines on fresh candidates.
-- The model must reduce dead-branch recommendations versus simple heuristics.
+- Extend `test/external/` with a Phase 4 test that asserts: predictions are
+  frozen before outcomes (hash stability), the shadow feature path reuses the
+  audited leak-free features (no `FORBIDDEN_FEATURE_SOURCES` token in shadow
+  feature names), and the score report compares the model against all three
+  baselines on the fresh batch.
+
+Exit gate:
+
+- Model ranking must beat `mechanism_prior` on the fresh batch on macro-F1 and
+  at least one of precision@k or NDCG, with `false_positive_accept_rate <= 0.05`.
+- The model must reduce dead-branch recommendations versus
+  `simple_family_heuristic` (lower experiments-to-first-live or fewer dead
+  branches in the top-k).
+- Only after that should Phase 5 controlled assist mode start.
 
 Stop rule:
 
 - If shadow mode fails, do not allow model-ranked execution order. Keep using
   the model only for documentation or artifact extraction.
+
+Out of scope for v0 (future Phase 4.x / 5):
+
+- Staged re-prediction after compile/microbench evidence becomes available.
+- Cross-model generalization (14B/32B) and genuinely new mechanism families.
+- Any runtime integration or gate bypass driven by the model.
 
 ## Phase 5: Controlled Assist Mode
 

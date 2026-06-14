@@ -415,10 +415,37 @@ precision@3 `0.250` vs `0.167`, NDCG `0.500` vs `0.253`, false-positive accept
 rate `0.0` (`<= 0.05`). `test/external/test_qk_flywheel_phase3f.py` covers the
 new row counts and the cleared gate.
 
-Next flywheel scope is Phase 4 live shadow mode (now unblocked): freeze model
-predictions/rankings before running new candidate gates, run the normal
-deterministic kernel loop unchanged, and score the model after outcomes are
-known. Keep the `38`-row holdout fixed.
+Next flywheel scope is Phase 4 live shadow mode (now unblocked), fully scoped in
+`docs/amd-decode-flywheel-proof-plan.md`. Concrete next-session deliverables:
+
+1. Add a thin `extra/qk_flywheel_shadow.py` that reuses
+   `extract_feature_map`, `FeatureVectorizer`, the XGBoost classifier/ranker
+   fit, and `_label_policy` from `extra/qk_flywheel_cost_model.py` (do not fork
+   the leak-free feature path). Train on the full `136`-row
+   `kernel-triage-v1-featured-plus/` corpus and persist the vectorizer vocab,
+   classifier, ranker, and label policy.
+2. Build a fresh, unlabeled candidate batch from static descriptor metadata on
+   untouched dominant Q4_K tensors: `3` `packed_word_lane_unroll` packed-load
+   (e.g. `blk.4/5/6.ffn_gate.weight`), `2` `qk_block_dot`
+   (e.g. `blk.0.attn_output.weight`, `blk.1.ffn_up.weight`), `1` `wide_load_only`
+   (e.g. `blk.0.attn_output.weight`). Predict at the
+   `after_static_before_microbench` stage.
+3. Freeze `shadow-v0/predictions.jsonl` + `shadow-v0/freeze.json` (corpus /
+   model / candidate hashes + git commit) and commit before any fresh GPU run.
+4. Run the same Phase 3G generators on the fresh batch to produce
+   `shadow-v0/outcomes.jsonl` via the existing extractor labels (no hand
+   labels), then score with `extra/qk_flywheel_triage_eval.py` plus a new
+   dead-branch / experiments-to-first-live metric.
+5. Add a Phase 4 test asserting frozen-before-outcomes hash stability, leak-free
+   shadow features, and a three-baseline comparison on the fresh batch.
+
+Phase 4 v0 exit gate: the model beats `mechanism_prior` on the fresh batch on
+macro-F1 and at least one of precision@k / NDCG with
+`false_positive_accept_rate <= 0.05`, and reduces dead-branch recommendations
+versus `simple_family_heuristic`. Keep the `38`-row holdout fixed; v0 shadow is
+blind static-stage, instance-level generalization (new tensors, same mechanism
+families). Staged re-prediction, 14B/32B cross-model, and new mechanisms are
+Phase 4.x / 5.
 
 ### Phase 2-4 Summary for Handoff
 
