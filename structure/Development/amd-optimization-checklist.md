@@ -371,6 +371,16 @@ generated-policy storage mode.
       `68/68` selected compiler train rows in
       `bench/qwen-adapter-20260613/training-data-v4_1-compiler-rs-v5-k4/`.
       The compiler coverage gate passes at min `20`.
+- [x] Built the Phase 1/2 historical flywheel proof benchmark:
+      `extra/qk_flywheel_dataset.py`, `extra/qk_flywheel_triage_eval.py`, and
+      `bench/amd-decode-flywheel-proof-20260614/`. The dataset has `83`
+      kernel-history rows, `45` train rows, and `38` family-split holdout rows.
+      Best deterministic baseline is `mechanism_prior` /
+      `simple_family_heuristic` at macro-F1 `0.185`. The strict no-adapter
+      Qwen3-8B rollout scores macro-F1 `0.000` with `38/38`
+      `invalid_output` rows, even after `/no_think`; it emits `<think>` tags
+      and out-of-taxonomy reasons. Conclusion: `no_signal` for the current
+      strict base model, so the full model-to-kernel flywheel is not proven.
 - [ ] Continue Phase 4 by building a combined RS-SFT artifact: keep usable
       non-compiler rows from the original V4/stratified RS artifacts and
       replace the compiler slice with V4.1 stable-key compiler rows. Do not
@@ -378,11 +388,12 @@ generated-policy storage mode.
       future RS-SFT on V4/V4.1 free-generation strict JSON pass rate, Wilson
       intervals, regressions, and category balance; do not use teacher-forced
       token accuracy as the promotion signal.
-- [ ] Prove or falsify the model-to-kernel flywheel before treating the model
-      loop as a kernel accelerant. Plan:
-      `docs/amd-decode-flywheel-proof-plan.md`. The next concrete phase is a
-      historical kernel triage/ranking dataset and benchmark. If it cannot beat
-      reject-all/random/simple-heuristic baselines, keep the loops separate.
+- [ ] Continue flywheel proof only with a schema-capable model or adapter that
+      can beat `mechanism_prior` on
+      `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v0/`. If it
+      cannot beat the deterministic baseline, keep the kernel loop and model
+      loop separate except for the one-way benefit that faster kernels make
+      model/eval experiments cheaper.
 
 ## Do Not Do Next
 

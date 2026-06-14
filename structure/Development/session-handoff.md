@@ -1,6 +1,6 @@
 # Session Handoff
 
-Date: 2026-06-12
+Date: 2026-06-14
 
 Repo: `/home/ubuntu/tinygrad-arkey`
 
@@ -148,6 +148,39 @@ Current artifacts:
 - `bench/qk-harness-20260612/README.md`
 - `bench/qk-policy-cap-20260612/README.md`
 - `bench/qk-storage-20260612/README.md`
+
+## Flywheel Proof Status
+
+Latest pushed proof-plan commit before the Phase 1/2 artifact build:
+`67dfda9f3 [test] finish Phase 4.2 and flywheel phase 0`.
+
+The model-to-kernel flywheel now has a concrete historical triage benchmark,
+not just a narrative. Current artifacts:
+
+- `docs/amd-decode-flywheel-proof-plan.md`
+- `bench/amd-decode-flywheel-proof-20260614/README.md`
+- `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v0/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-baselines-v0/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-qwen3-8b-base-v0/`
+- `extra/qk_flywheel_dataset.py`
+- `extra/qk_flywheel_triage_eval.py`
+
+Phase 1 built `83` structured kernel-history examples from existing QK
+artifacts: `45` train rows and `38` family-split holdout rows. Phase 2
+established deterministic baselines. The best baseline is `mechanism_prior` /
+`simple_family_heuristic` at accuracy `0.289`, macro-F1 `0.185`,
+false-positive accept rate `0.000`, precision@3 `0.083`, and NDCG `0.218`.
+
+The no-adapter Qwen3-8B generated-policy rollout on the holdout does not beat
+the baselines. Strict result: accuracy `0.000`, macro-F1 `0.000`, and `38/38`
+`invalid_output` predictions. The prompt includes `/no_think`, but the model
+still emits empty `<think>` tags before JSON-shaped text and often uses reasons
+outside the allowed taxonomy.
+
+Conclusion: Phase 2 is `no_signal` for the current strict no-adapter 8B model.
+The full flywheel is still unproven. Do not let the model influence kernel
+experiment ordering until a schema-capable model or adapter beats
+`mechanism_prior` on this holdout and then survives live shadow mode.
 
 ## Verification Already Run
 
