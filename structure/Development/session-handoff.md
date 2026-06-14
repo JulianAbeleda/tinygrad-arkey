@@ -427,11 +427,31 @@ the stop rule the model stays documentation-only; Phase 5 is not entered.
 `test/external/test_qk_flywheel_phase4.py` covers the freeze/leak-free/id-join/
 scoring invariants.
 
-Next scope is Phase 4.x (give the gate a fair, live-bearing test): a larger or
-repeated fresh batch that includes raw_accept candidates, and staged re-prediction
-after compile/microbench evidence (not blind static only). The harness, freeze
-protocol, and scorer are reusable as-is. Do not re-roll the v0 batch to manufacture
-a pass; v0 stands as recorded.
+Next scope is **Phase 4.1 Cost-Aware Staged Shadow**, fully written in
+`docs/amd-decode-flywheel-proof-plan.md`. The v0 negative reframed the goal: stop
+chasing macro-F1 versus `mechanism_prior` (likely unwinnable at the current
+feature set — live outcomes cluster in semantic-schedule families and
+identical-shape intra-family wins are weight-determined and unobservable) and
+instead measure the actual flywheel value: **wasted GPU reduction**. Concrete
+next-session deliverables:
+
+1. Extend `extra/qk_flywheel_shadow.py` with a compile-stage candidate builder
+   (predict at `after_compile_before_microbench` using the real compile-gate
+   features) and a per-stage GPU-seconds cost model (from generator `elapsed_s` /
+   device timing).
+2. Build a diverse, live-bearing fresh batch (~20 candidates) from live-capable
+   families (semantic-schedule `parts_local_policy` / `row_upcast` /
+   `direct_output` on fresh tensors with varying parts/opts, plus a
+   `packed_word_lane_unroll` ffn_gate block, plus cheap dead `qk_block_dot` /
+   `wide_load_only` probes). Freeze keep/skip decisions before outcomes.
+3. Score wasted-GPU saved vs run-everything for both `mechanism_prior` gating and
+   the cost-model gating, at 100% live-recall; report whether the model beats the
+   prior. The prior winning is still a decisive flywheel result.
+
+Reuse the v0 freeze protocol, leak-free path, and scorer. Do not re-roll the v0
+batch to manufacture a pass; v0 stands as recorded. This builds the evidence
+Phase 5 (controlled assist) and Phase 6 (alternative proof: wasted-experiment
+reduction) require.
 
 The original Phase 4 scope (now executed) remains documented in
 `docs/amd-decode-flywheel-proof-plan.md`. Earlier next-session deliverables, for

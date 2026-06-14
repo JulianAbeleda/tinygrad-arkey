@@ -1307,6 +1307,94 @@ Out of scope for v0 (future Phase 4.x / 5):
 - Cross-model generalization (14B/32B) and genuinely new mechanism families.
 - Any runtime integration or gate bypass driven by the model.
 
+## Phase 4.1: Cost-Aware Staged Shadow
+
+Purpose:
+
+- Move directly toward the realistic flywheel proof (Phase 6 alternative:
+  model-assisted ordering reduces wasted GPU experiments), in shadow, with the
+  objective and prediction stage corrected by the v0 negative.
+
+What v0 taught (grounded in the `136`-row corpus):
+
+- Live outcomes (`accept` / `raw_accept_unconfirmed` / `needs_rerun`) are `21/136`
+  (~`15%`) and cluster in semantic-schedule families (`parts_local_policy` `7`,
+  `row_upcast` `6`, `direct_output` `3`, `shared_storage` `3`). The memory-access
+  probes used in v0 (`qk_block_dot`, `wide_load_only`) have **zero** live rows in
+  the whole corpus and `packed_word_lane_unroll` has `1`: v0 sampled the
+  mechanisms least able to win, so the ranking gate was vacuous.
+- The richest real source/compile features sit at
+  `after_compile_before_microbench` (`14` of `22` real-feature rows), not at the
+  blind static stage v0 predicted from.
+- Within identical-shape, same-mechanism candidates the win/loss is set by weight
+  magnitudes the model cannot observe, so no model can beat a mechanism prior
+  there. The model's only honest edge is cross-shape / role / config / compile
+  signal. Beating `mechanism_prior` on labels may therefore be impossible with the
+  current feature set; the flywheel-relevant question is cost, not label accuracy.
+
+Objective reframe:
+
+- Stop optimizing macro-F1 against `mechanism_prior`. Optimize **wasted GPU
+  reduction**: at the compile stage (cheap), decide which candidates are worth the
+  expensive microbench / full-decode, and measure GPU-seconds saved versus
+  running every static-pass candidate (the current deterministic loop), at fixed
+  live-recall (never skip a true live candidate). This is exactly the Phase 6
+  alternative proof, measured in shadow before any real gating.
+
+Method:
+
+- Predict at `after_compile_before_microbench`: run only the cheap compile gate
+  per candidate (no microbench), feed the real compile-stage features the model
+  was trained on, and freeze a per-candidate keep/skip decision + live-probability
+  before the expensive stage runs.
+- Reuse the `extra/qk_flywheel_shadow.py` freeze protocol and leak-free path; add a
+  compile-stage candidate builder and a per-stage cost model.
+- Run the deterministic loop fully (microbench every candidate) so the true label
+  and the counterfactual cost are known, then score.
+
+Fresh batch (diverse, live-bearing, cross-feature):
+
+- Draw from live-capable families so the batch contains real live and dead
+  instances: semantic-schedule candidates (`parts_local_policy` / `row_upcast` /
+  `direct_output`) on fresh tensors with varying `parts`/`opts`, plus a block of
+  `packed_word_lane_unroll` ffn_gate candidates (Phase 3G shows ~1-in-N is
+  `raw_accept`), plus the cheap-to-gate memory-access probes (`qk_block_dot` /
+  `wide_load_only`) as known dead branches. Target enough candidates (`~20`) that
+  the live count is not zero and cost differences are meaningful.
+
+Cost model:
+
+- Capture measured GPU-seconds per stage from the generator artifacts
+  (`elapsed_s` / device timing): compile (cheap), microbench (expensive),
+  full-decode (most expensive). Wasted GPU = microbench/full-decode seconds spent
+  on candidates that turn out dead.
+
+Metrics / gate:
+
+- Primary: GPU-seconds saved versus run-everything at `100%` live-recall, for
+  (a) `mechanism_prior` gating and (b) the cost-model gating. Report both; the
+  flywheel-via-prior result is real if either beats run-everything without
+  dropping a live candidate.
+- Secondary (the open question): does the cost-model gate save more GPU than the
+  `mechanism_prior` gate at equal live-recall? Pre-register that the prior may
+  win; that is still a decisive flywheel result (the deterministic prior is the
+  practical tool, the learned model adds no value at the current feature set).
+- Keep the freeze-before-outcomes hash discipline and the leak-free audit.
+
+Exit gate:
+
+- Some pre-result gate (model or prior) reduces wasted GPU versus run-everything
+  by a meaningful margin at full live-recall, with the keep/skip decision frozen
+  before outcomes. If the cost model beats the prior, that is the signal to enter
+  Phase 5 with the model; if only the prior wins, enter Phase 5 with the prior and
+  keep the model documentation-only.
+
+Out of scope:
+
+- Letting any gate skip a real microbench/full-decode in the live loop (that is
+  Phase 5). 14B/32B. New mechanism families. Intra-identical-shape discrimination
+  (unobservable; explicitly not attempted).
+
 ## Phase 5: Controlled Assist Mode
 
 Purpose:
