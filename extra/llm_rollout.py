@@ -6,6 +6,12 @@ from typing import Any
 
 from extra.llm_eval_common import build_prompt_ids, md_text, quality_summary, read_prompt_jsonl, score_prompt
 
+def _rate_ci(row:dict[str, Any]) -> str:
+  if row.get("pass_rate") is None: return "n/a"
+  ci = row.get("ci95") or {}
+  if ci.get("low") is None or ci.get("high") is None: return f"{row['pass_rate']:.2f}"
+  return f"{row['pass_rate']:.2f} [{ci['low']:.2f}, {ci['high']:.2f}]"
+
 def configure_env(args:argparse.Namespace) -> None:
   os.environ["DEV"] = args.device
   os.environ["JIT"] = "1"
@@ -84,6 +90,10 @@ def summary_markdown(summary:dict[str, Any], rows:list[dict[str, Any]]) -> str:
   lines += ["", "## Quality By Tag", "", "| tag | passed | scored | pass rate |", "|---|---:|---:|---:|"]
   for tag, row in summary["quality"]["tags"].items():
     lines.append(f"| `{tag}` | {row['passed']} | {row['scored']} | {row['pass_rate']:.2f} |")
+  if "json_axes" in summary["quality"]:
+    lines += ["", "## JSON Quality Axes", "", "| axis | passed | scored | pass rate [95% CI] |", "|---|---:|---:|---:|"]
+    for axis, row in summary["quality"]["json_axes"]["axes"].items():
+      lines.append(f"| `{axis}` | {row['passed']} | {row['scored']} | {_rate_ci(row)} |")
   lines.append("")
   return "\n".join(lines)
 

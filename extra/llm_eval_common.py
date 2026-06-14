@@ -3,6 +3,8 @@ from __future__ import annotations
 import json, pathlib, re
 from typing import Any
 
+from extra.llm_json_scorer import score_expected_json, summarize_json_axes, wilson_interval
+
 def read_prompt_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
   rows: list[dict[str, Any]] = []
   seen: set[str] = set()
@@ -33,6 +35,8 @@ def read_prompt_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
       raise ValueError(f"{path}:{lineno}: expected_exact must be a string")
     if "expected_json" in row and (not isinstance(row["expected_json"], dict) or not row["expected_json"]):
       raise ValueError(f"{path}:{lineno}: expected_json must be a non-empty object")
+    if "case_insensitive" in row and not isinstance(row["case_insensitive"], bool):
+      raise ValueError(f"{path}:{lineno}: case_insensitive must be a boolean")
     if "max_tokens" in row and (not isinstance(row["max_tokens"], int) or row["max_tokens"] <= 0):
       raise ValueError(f"{path}:{lineno}: max_tokens must be a positive integer")
     if prompt_id in seen: raise ValueError(f"{path}:{lineno}: duplicate id {prompt_id!r}")
@@ -59,17 +63,14 @@ def score_prompt(prompt:dict[str, Any], text:str) -> dict[str, Any]:
     checks.append({"kind": "exact", "value": expected, "passed": text.strip() == expected})
   if "expected_json" in prompt:
     expected = prompt["expected_json"]
-    try:
-      parsed = json.loads(text.strip())
-      ok = parsed == expected
-      detail = parsed
-    except json.JSONDecodeError as exc:
-      ok = False
-      detail = f"parse_error: {exc.msg}"
-    checks.append({"kind": "json", "value": expected, "actual": detail, "passed": ok})
+    json_axes = score_expected_json(text, expected, case_insensitive=bool(prompt.get("case_insensitive", False)))
+    detail = json_axes["actual"] if json_axes["axes"]["parse_valid"] else f"parse_error: {json_axes['error']}"
+    checks.append({"kind": "json", "value": expected, "actual": detail, "passed": json_axes["passed"]})
   if not checks: return {"status": "unscored", "passed": None, "checks": []}
   passed = all(check["passed"] for check in checks)
-  return {"status": "pass" if passed else "fail", "passed": passed, "checks": checks}
+  out = {"status": "pass" if passed else "fail", "passed": passed, "checks": checks}
+  if "expected_json" in prompt: out["json_axes"] = json_axes
+  return out
 
 def quality_summary(rows:list[dict[str, Any]]) -> dict[str, Any]:
   scored = [row for row in rows if row.get("score", {}).get("status") in ("pass", "fail")]
@@ -81,13 +82,18 @@ def quality_summary(rows:list[dict[str, Any]]) -> dict[str, Any]:
       cur = tag_counts.setdefault(tag, {"scored": 0, "passed": 0})
       cur["scored"] += 1
       if row.get("score", {}).get("passed") is True: cur["passed"] += 1
-  return {
+  out = {
     "status": "unscored" if not scored else ("pass" if len(scored) == len(passed) else "fail"),
     "scored": len(scored),
     "passed": len(passed),
     "pass_rate": None if not scored else len(passed) / len(scored),
     "tags": {k: {"scored": v["scored"], "passed": v["passed"], "pass_rate": v["passed"] / v["scored"]} for k, v in sorted(tag_counts.items())},
   }
+  json_scores = [row.get("score", {}).get("json_axes") for row in scored if isinstance(row.get("score", {}).get("json_axes"), dict)]
+  if json_scores:
+    out["ci95"] = wilson_interval(len(passed), len(scored))
+    out["json_axes"] = summarize_json_axes(json_scores)
+  return out
 
 def md_text(text:str) -> str:
   return text.replace("\n", "\\n").replace("|", "\\|")

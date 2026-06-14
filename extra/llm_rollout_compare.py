@@ -6,6 +6,9 @@ from typing import Any
 
 from extra.llm_eval_common import md_text
 
+def _rate(row:dict[str, Any]) -> str:
+  return "n/a" if row.get("pass_rate") is None else f"{row['pass_rate']:.2f}"
+
 def _read_json(path:pathlib.Path) -> Any:
   try:
     return json.loads(path.read_text())
@@ -68,7 +71,29 @@ def artifact_summary(artifact:dict[str, Any]) -> dict[str, Any]:
       "pass_rate": quality["pass_rate"],
     },
   }
+  if "ci95" in quality: out["quality"]["ci95"] = quality["ci95"]
+  if "json_axes" in quality: out["quality"]["json_axes"] = quality["json_axes"]
   if summary.get("adapter") is not None: out["adapter"] = summary["adapter"]
+  return out
+
+def _json_axis_delta(bsum:dict[str, Any], csum:dict[str, Any]) -> dict[str, Any] | None:
+  baxes = bsum.get("quality", {}).get("json_axes", {}).get("axes")
+  caxes = csum.get("quality", {}).get("json_axes", {}).get("axes")
+  if not isinstance(baxes, dict) or not isinstance(caxes, dict): return None
+  out: dict[str, Any] = {}
+  for axis in sorted(set(baxes) | set(caxes)):
+    brow, crow = baxes.get(axis, {}), caxes.get(axis, {})
+    bpassed, cpassed = brow.get("passed"), crow.get("passed")
+    out[axis] = {
+      "baseline_passed": bpassed,
+      "candidate_passed": cpassed,
+      "passed_delta": None if not isinstance(bpassed, int) or not isinstance(cpassed, int) else cpassed - bpassed,
+      "baseline_pass_rate": brow.get("pass_rate"),
+      "candidate_pass_rate": crow.get("pass_rate"),
+      "baseline_ci95": brow.get("ci95"),
+      "candidate_ci95": crow.get("ci95"),
+      "scored": crow.get("scored"),
+    }
   return out
 
 def _passed(row:dict[str, Any]) -> bool | None:
@@ -119,7 +144,7 @@ def compare_pair(base:dict[str, Any], cand:dict[str, Any], *, allow_dataset_mism
       })
 
   prompts = len(base_ids)
-  return {
+  out = {
     "baseline": base["label"],
     "candidate": cand["label"],
     "dataset": bsum.get("dataset"),
@@ -151,6 +176,9 @@ def compare_pair(base:dict[str, Any], cand:dict[str, Any], *, allow_dataset_mism
     },
     "tag_delta": {tag: {**vals, "passed_delta": vals["candidate_passed"] - vals["baseline_passed"]} for tag, vals in sorted(tag_delta.items())},
   }
+  axis_delta = _json_axis_delta(bsum, csum)
+  if axis_delta is not None: out["json_axis_delta"] = axis_delta
+  return out
 
 def build_report(paths:list[pathlib.Path], *, allow_dataset_mismatch:bool=False, allow_unscored:bool=False) -> dict[str, Any]:
   if len(paths) < 2: raise ValueError("expected at least two rollout artifact directories")
@@ -202,6 +230,11 @@ def report_markdown(report:dict[str, Any]) -> str:
     ]
     for tag, row in comp["tag_delta"].items():
       lines.append(f"| `{tag}` | {row['baseline_passed']} | {row['candidate_passed']} | {row['passed_delta']} | {row['scored']} |")
+    if "json_axis_delta" in comp:
+      lines += ["", "| JSON axis | baseline rate | candidate rate | delta | scored |", "|---|---:|---:|---:|---:|"]
+      for axis, row in comp["json_axis_delta"].items():
+        delta = row["passed_delta"] if row["passed_delta"] is not None else "n/a"
+        lines.append(f"| `{axis}` | {_rate({'pass_rate': row['baseline_pass_rate']})} | {_rate({'pass_rate': row['candidate_pass_rate']})} | {delta} | {row['scored']} |")
     if out["changed"]:
       lines += ["", "| id | quality | tokens equal | text |", "|---|---|---:|---|"]
       for row in out["changed"][:25]:
