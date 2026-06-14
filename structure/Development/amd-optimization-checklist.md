@@ -475,15 +475,24 @@ generated-policy storage mode.
       `bench/amd-decode-flywheel-proof-20260614/targeted-outcomes-v1/`,
       `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/`,
       `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured-plus/`,
-      and `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1-plus/`.
-      This converts unused committed real probe/source diagnostics into `7`
-      new train rows without moving holdout rows or using design-only contract
-      rows as labels. Added coverage: `4` `vector_load`, `2`
-      `wide_load_only`, `1` `qk_block_dot`; labels: `2`
-      `construction_blocked`, `5` `diagnostic_only`. The plus audit improves
-      unseen holdout categorical values `15 -> 11` and weak rows `43 -> 38`,
-      but still keeps `rerun_phase3b_allowed=false`: remaining coverage is
-      `28` mechanism rows and `7` label targets.
+      `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1-plus/`,
+      and `bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v1-plus/`.
+      This converts unused committed real probe/source diagnostics into `38`
+      new train rows without moving holdout rows or using design-only contracts
+      as labels.
+
+      Added coverage: `4` `vector_load`, `2` `wide_load_only`, `1`
+      `qk_block_dot`, `5` `direct_output`, `8` `reduce_unroll`,
+      `10` `row_upcast`, and `8` `two_dim_local` from existing
+      in-train families. Labels added naturally: `19`
+      `construction_blocked`, `5` `diagnostic_only`, `6`
+      `raw_accept_unconfirmed`, `4` `reject`, and `4` `tie`.
+
+      The plus run pushes holdout metrics to `macro-F1 0.821` (`xgboost` on
+      `38` holdout rows) and preserves `rerun_phase3b_allowed=false` because
+      mechanism coverage is still short by `13` rows: `5` `packed_word_lane_unroll`,
+      `4` `qk_block_dot`, `1` `vector_load`, and `3` `wide_load_only`. No
+      label rows are now required.
 
 ## Do Not Do Next
 

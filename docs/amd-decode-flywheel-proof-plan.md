@@ -3,10 +3,10 @@
 Date: 2026-06-14
 
 Status: plan of record for proving or falsifying the full kernel-optimization
-flywheel. Phase 1/2 and the Phase 3.0 through 3E diagnostic/data subphases are
-built where marked. The current evidence is still `no_signal`; Phase 3D/3E
-improved the cost-model dataset/schema/features but did not prove the
-model-to-kernel link.
+flywheel. Phase 1/2 and the Phase 3.0 through 3F diagnostic/data subphases are
+built where marked. Phase 3F+ currently has a strong `xgboost` result on the
+same 38-holdout split (`macro-F1 0.821`, `accuracy 0.816`, `false_accept 0.000`),
+but the rerun is still gated by residual mechanism-coverage requirements.
 
 Parent architecture note:
 `docs/amd-decode-kernel-optimization-flywheel.md`.
