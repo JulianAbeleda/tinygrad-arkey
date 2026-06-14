@@ -299,6 +299,150 @@ def _packed_tile_closeout_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
   )]
 
 
+def _qk_block_dot_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  microbench = _source(repo, "bench/qk-block-dot-microbench-20260613/microbench.json")
+  data = _read_json(repo / microbench)
+  compile_gate = repo / "bench/qk-block-dot-compile-gate-20260613/compile-gate.json"
+  rows = []
+  rows.append(_row(
+    row_id=f"{TARGETED_FAMILY}:qk_block_dot:compile_gate",
+    row_kind="diagnostic",
+    model="Qwen3-8B-Q4_K_M",
+    tensor=str((data.get("config") or {}).get("tensor") or "blk.0.ffn_gate.weight"),
+    role="ffn_gate",
+    fmt="Q4_K",
+    mechanism="qk_block_dot",
+    prediction_stage="after_compile_before_microbench",
+    pre_result_context={
+      "mode": "compile_gate",
+      "shape": (data.get("config") or {}).get("shape"),
+      "parts": (data.get("config") or {}).get("parts") or 0,
+      "wide_loads": True,
+      "source_ok": True,
+      "full_decode_ready": False,
+    },
+    label="diagnostic_only",
+    reason="diagnostic_only",
+    retry=True,
+    evidence={
+      "decision": data.get("summary", {}).get("decision"),
+      "next_allowed_gate": data.get("summary", {}).get("next_allowed_gate"),
+      "source_compile_gate": "bench/qk-block-dot-compile-gate-20260613/compile-gate.json",
+    },
+    source_files=[microbench, _portable(repo, compile_gate)] if compile_gate.exists() else [microbench],
+  ))
+
+  cmp = data.get("comparison", {})
+  comparison_gain = cmp.get("gain_pct")
+  label, reason, retry = v0._label_reason_retry("reject", gain=comparison_gain / 100.0 if comparison_gain is not None else None)
+  rows.append(_row(
+    row_id=f"{TARGETED_FAMILY}:qk_block_dot_microbench:qk_block_dot",
+    row_kind="candidate",
+    model="Qwen3-8B-Q4_K_M",
+    tensor=str((data.get("config") or {}).get("tensor") or "blk.0.ffn_gate.weight"),
+    role="ffn_gate",
+    fmt="Q4_K",
+    mechanism="qk_block_dot",
+    prediction_stage="after_compile_before_microbench",
+    pre_result_context={
+      "mode": "qk_block_dot",
+      "reference": "v1_partial",
+      "comparison": cmp,
+      "shape": (data.get("config") or {}).get("shape"),
+      "parts": (data.get("config") or {}).get("parts") or 0,
+      "wide_loads": True,
+      "full_decode_ready": False,
+    },
+    label=label,
+    reason=reason,
+    retry=retry,
+    evidence={
+      "decision": data.get("summary", {}).get("decision"),
+      "gain_pct": comparison_gain,
+      "correctness_ok": data.get("summary", {}).get("correctness_ok"),
+      "next_allowed_gate": data.get("summary", {}).get("next_allowed_gate"),
+      "run_full_decode": data.get("summary", {}).get("run_full_decode"),
+    },
+    source_files=[microbench],
+  ))
+
+  return rows
+
+
+def _qk_threeway_load_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  microbench = _source(repo, "bench/qk-threeway-load-microbench-20260613/microbench.json")
+  data = _read_json(repo / microbench)
+  rows = []
+  for tensor_row in data.get("tensors", []) or []:
+    tensor = str(tensor_row.get("tensor") or "unknown")
+    tensor_slug = re.sub(r"[^a-z0-9]+", "-", tensor.lower()).strip("-")
+    gains = tensor_row.get("gains_pct", {}) or {}
+    for mode_row in tensor_row.get("modes", []) or []:
+      mode = str(mode_row.get("mode") or "unknown")
+      if mode == "v1_partial":
+        rows.append(_row(
+          row_id=f"{TARGETED_FAMILY}:threeway_load_microbench:{tensor_slug}:{mode}",
+          row_kind="diagnostic",
+          model="Qwen3-8B-Q4_K_M",
+          tensor=tensor,
+          role="ffn_gate",
+          fmt="Q4_K",
+          mechanism="wide_load_only",
+          prediction_stage="after_compile_before_microbench",
+          pre_result_context={
+            "mode": mode,
+            "reference": "qk-block-dot",
+            "decision": tensor_row.get("decision"),
+            "shape": (data.get("config") or {}).get("shape"),
+            "runs": (data.get("config") or {}).get("runs") or 0,
+            "wide_loads": True,
+            "full_decode_ready": False,
+          },
+          label="diagnostic_only",
+          reason="diagnostic_only",
+          retry=False,
+          evidence={"status": "pass", "decision": tensor_row.get("decision"), "reason": tensor_row.get("reason")},
+          source_files=[microbench],
+        ))
+        continue
+
+      gain_key = "vector_load_vs_v1" if mode == "vector_load" else "tile_custom_vs_v1"
+      gain_pct = gains.get(gain_key)
+      status = "reject" if mode in ("vector_load", "tile_custom") else "reject"
+      label, reason, retry = v0._label_reason_retry(status, gain=gain_pct / 100.0 if gain_pct is not None else None)
+      rows.append(_row(
+        row_id=f"{TARGETED_FAMILY}:threeway_load_microbench:{tensor_slug}:{mode}",
+        row_kind="candidate",
+        model="Qwen3-8B-Q4_K_M",
+        tensor=tensor,
+        role="ffn_gate",
+        fmt="Q4_K",
+        mechanism="wide_load_only" if mode == "vector_load" else "tile_custom",
+        prediction_stage="after_compile_before_microbench",
+        pre_result_context={
+          "mode": mode,
+          "reference": "v1_partial",
+          "meaningful_gain_pct": tensor_row.get("meaningful_gain_pct"),
+          "shape": (data.get("config") or {}).get("shape") or {},
+          "runs": (data.get("config") or {}).get("runs") or 0,
+          "wide_loads": True,
+          "full_decode_ready": False,
+        },
+        label=label,
+        reason=reason,
+        retry=retry,
+        evidence={
+          "status": status,
+          "gain_pct": gain_pct,
+          "device_q4_gbs": mode_row.get("device_q4_gbs"),
+          "decision": tensor_row.get("decision"),
+          "reason": tensor_row.get("reason"),
+        },
+        source_files=[microbench],
+      ))
+  return rows
+
+
 def _semantic_schedule_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
   base = repo / "bench/qk-ansor-transition-20260612/semantic-schedules"
   rows = []
@@ -410,6 +554,8 @@ def build_targeted_rows(repo:pathlib.Path) -> tuple[list[dict[str, Any]], list[d
   raw_rows = _memory_access_rows(repo)
   raw_rows += _packed_tile_consumption_rows(repo)
   raw_rows += _packed_tile_closeout_rows(repo)
+  raw_rows += _qk_block_dot_microbench_rows(repo)
+  raw_rows += _qk_threeway_load_microbench_rows(repo)
   raw_rows += _semantic_schedule_microbench_rows(repo)
   raw_rows += _semantic_schedule_raw_accept_rows(repo)
   excluded = []

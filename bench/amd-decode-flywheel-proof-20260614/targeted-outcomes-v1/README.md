@@ -6,31 +6,32 @@ partial: no holdout row is moved into train, no synthetic outcome is added,
 and design-only contracts remain excluded.
 
 - conclusion: `partial_real_outcome_batch_cost_model_rerun_still_gated`
-- targeted train rows: `38`
+- targeted train rows: `43`
 - base rows: `83`
-- plus rows: `121`
-- real feature rows: `5`
+- plus rows: `126`
+- real feature rows: `7`
 
 ## Mechanisms
 
 | mechanism | rows |
 |---|---:|
 | `direct_output` | 5 |
-| `qk_block_dot` | 1 |
+| `qk_block_dot` | 3 |
 | `reduce_unroll` | 8 |
 | `row_upcast` | 10 |
+| `tile_custom` | 1 |
 | `two_dim_local` | 8 |
 | `vector_load` | 4 |
-| `wide_load_only` | 2 |
+| `wide_load_only` | 4 |
 
 ## Labels
 
 | label | rows |
 |---|---:|
 | `construction_blocked` | 19 |
-| `diagnostic_only` | 5 |
+| `diagnostic_only` | 7 |
 | `raw_accept_unconfirmed` | 6 |
-| `reject` | 4 |
+| `reject` | 7 |
 | `tie` | 4 |
 
 ## Excluded Sources

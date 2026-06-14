@@ -12,28 +12,29 @@
   "kind": "qk_flywheel_targeted_outcomes_v1",
   "labels": {
     "construction_blocked": 19,
-    "diagnostic_only": 5,
+    "diagnostic_only": 7,
     "raw_accept_unconfirmed": 6,
-    "reject": 4,
+    "reject": 7,
     "tie": 4
   },
   "mechanisms": {
     "direct_output": 5,
-    "qk_block_dot": 1,
+    "qk_block_dot": 3,
     "reduce_unroll": 8,
     "row_upcast": 10,
+    "tile_custom": 1,
     "two_dim_local": 8,
     "vector_load": 4,
-    "wide_load_only": 2
+    "wide_load_only": 4
   },
   "phase": "Phase 3F",
-  "plus_rows": 121,
+  "plus_rows": 126,
   "prediction_stages": {
-    "after_compile_before_microbench": 1,
+    "after_compile_before_microbench": 6,
     "after_static_before_microbench": 37
   },
-  "real_feature_rows": 5,
-  "rows": 38,
+  "real_feature_rows": 7,
+  "rows": 43,
   "rules": [
     "uses only committed real probe/compile/source diagnostic artifacts",
     "does not duplicate any existing v1-featured row id",
@@ -45,13 +46,16 @@
     "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench.json": 15,
     "bench/qk-ansor-transition-20260612/semantic-schedules/8b/microbench.json": 16,
     "bench/qk-ansor-transition-20260612/semantic-schedules/verdict.json": 3,
+    "bench/qk-block-dot-compile-gate-20260613/compile-gate.json": 1,
+    "bench/qk-block-dot-microbench-20260613/microbench.json": 2,
     "bench/qk-memory-access-20260613/audit.json": 3,
     "bench/qk-memory-access-20260613/load-width/report.json": 3,
     "bench/qk-memory-access-20260613/vector-probe.json": 3,
     "bench/qk-packed-tile-consumption-20260613/load-width/report.json": 1,
     "bench/qk-packed-tile-consumption-20260613/probe.json": 3,
     "bench/qk-packed-tile-research-closeout-20260613/diagnostic.json": 1,
-    "bench/qk-packed-tile-research-closeout-20260613/source/load-width-report.json": 1
+    "bench/qk-packed-tile-research-closeout-20260613/source/load-width-report.json": 1,
+    "bench/qk-threeway-load-microbench-20260613/microbench.json": 3
   },
   "split": "train"
 }

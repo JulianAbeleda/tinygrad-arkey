@@ -10,7 +10,7 @@
   },
   "holdout_rows": 38,
   "integrity": {
-    "complete_numeric_evidence_rows": 76,
+    "complete_numeric_evidence_rows": 79,
     "families": {
       "accepted_runtime": 9,
       "loop_v0_policy": 18,
@@ -22,16 +22,16 @@
       "semantic_codegen_v3": 2,
       "semantic_codegen_v4": 2,
       "semantic_schedule_v0": 30,
-      "targeted_outcomes_v1": 38,
+      "targeted_outcomes_v1": 43,
       "threeway_load": 2
     },
     "labels": {
       "accept": 9,
       "construction_blocked": 39,
-      "diagnostic_only": 6,
+      "diagnostic_only": 8,
       "needs_rerun": 2,
       "raw_accept_unconfirmed": 9,
-      "reject": 33,
+      "reject": 36,
       "tie": 23
     },
     "mechanism_changes_from_v0": 26,
@@ -39,56 +39,56 @@
       "direct_output": 16,
       "packed_word_lane_unroll": 2,
       "parts_local_policy": 23,
-      "qk_block_dot": 3,
+      "qk_block_dot": 5,
       "reduce_unroll": 16,
       "row_grouping": 4,
       "row_upcast": 20,
       "shared_storage": 3,
       "storage_cap": 1,
-      "tile_custom": 8,
+      "tile_custom": 9,
       "two_dim_local": 16,
       "vector_load": 6,
-      "wide_load_only": 3
+      "wide_load_only": 5
     },
     "reasons": {
       "accepted_runtime_path": 9,
       "confirmation_failed": 1,
       "construction_blocked": 39,
-      "diagnostic_only": 6,
+      "diagnostic_only": 8,
       "full_decode_regression": 2,
       "insufficient_gain": 12,
-      "microbench_regression": 28,
+      "microbench_regression": 31,
       "microbench_tie": 22,
       "needs_rerun": 2
     },
-    "rows": 121,
+    "rows": 126,
     "schema_version": "kernel_triage_v1",
     "source_files": 32,
     "splits": {
       "holdout": 38,
-      "train": 83
+      "train": 88
     },
     "unknown_mechanism_rows": 0
   },
   "kind": "qk_flywheel_kernel_triage_dataset_v1_featured_plus",
   "phase": "Phase 3F",
-  "prompts": 121,
+  "prompts": 126,
   "real_feature_coverage": {
     "uop_available_by_mechanism": {
       "packed_word_lane_unroll": 2,
-      "qk_block_dot": 3,
+      "qk_block_dot": 5,
       "tile_custom": 7,
       "vector_load": 4,
       "wide_load_only": 2
     },
     "uop_available_holdout_rows": 6,
-    "uop_available_rows": 18,
-    "uop_available_train_rows": 12
+    "uop_available_rows": 20,
+    "uop_available_train_rows": 14
   },
-  "rows": 121,
+  "rows": 126,
   "split_policy": "family_split_v0_preserved_plus_post_phase3e_train_batch",
   "targeted_family": "targeted_outcomes_v1",
-  "targeted_rows_added": 38,
+  "targeted_rows_added": 43,
   "targeted_summary": {
     "excluded_sources": [
       {
@@ -99,20 +99,21 @@
     ],
     "labels": {
       "construction_blocked": 19,
-      "diagnostic_only": 5,
+      "diagnostic_only": 7,
       "raw_accept_unconfirmed": 6,
-      "reject": 4,
+      "reject": 7,
       "tie": 4
     },
     "mechanisms": {
       "direct_output": 5,
-      "qk_block_dot": 1,
+      "qk_block_dot": 3,
       "reduce_unroll": 8,
       "row_upcast": 10,
+      "tile_custom": 1,
       "two_dim_local": 8,
       "vector_load": 4,
-      "wide_load_only": 2
+      "wide_load_only": 4
     }
   },
-  "train_rows": 83
+  "train_rows": 88
 }
