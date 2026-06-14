@@ -166,11 +166,16 @@ not just a narrative. Current artifacts:
 - `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v0/`
 - `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1/`
+- `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1/`
 - `extra/qk_flywheel_dataset.py`
 - `extra/qk_flywheel_dataset_v1.py`
+- `extra/qk_flywheel_feature_enrich.py`
 - `extra/qk_flywheel_triage_eval.py`
 - `extra/qk_flywheel_cost_model.py`
 - `extra/qk_flywheel_feature_audit.py`
+- `extra/qk_flywheel_coverage_plan.py`
 
 Phase 1 built `83` structured kernel-history examples from existing QK
 artifacts: `45` train rows and `38` family-split holdout rows. Phase 2
@@ -266,6 +271,23 @@ instead of `24`, weak rows are `43` instead of `56`, and no target/result
 leakage is detected. Remaining blockers are real train coverage for the newly
 named holdout mechanisms, label coverage, and first-class tinygrad/UOp/profile
 features; current v1 UOp fields are proxy estimates with `uop_available=false`.
+
+Phase 3E added real source/compile feature extraction where committed evidence
+exists:
+`extra/qk_flywheel_feature_enrich.py`,
+`bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured/`,
+`bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured/`,
+and `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1/`. The
+featured dataset keeps the same `83` rows and the same `45` train / `38`
+holdout split. It does not synthesize outcomes or move holdout rows into train.
+Real UOp/source features are now available for `13` rows: `7` train and `6`
+holdout, covering `tile_custom` (`7`), `packed_word_lane_unroll` (`2`),
+`qk_block_dot` (`2`), and `vector_load` (`2`). Leakage audit is still clean.
+The cost-model rerun is still blocked: unseen holdout categorical values remain
+`15`, weak rows remain `43`, and `33` holdout rows still have mechanisms unseen
+in train. The coverage plan requires real candidate outcomes before another
+Phase 3B decision run: at least `35` mechanism-coverage rows and `14`
+label-coverage targets, with labels recorded only if they occur naturally.
 
 ## Verification Already Run
 

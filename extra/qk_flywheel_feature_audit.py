@@ -153,6 +153,33 @@ def _allowed_scope(stage:str) -> str:
     return "post_outcome_baseline_context_only"
   return "unknown"
 
+def _real_feature_coverage(rows:list[dict[str, Any]]) -> dict[str, Any]:
+  by_split: Counter[str] = Counter()
+  by_mechanism: Counter[str] = Counter()
+  source_counter: Counter[str] = Counter()
+  compile_rows = 0
+  load_width_rows = 0
+  for row in rows:
+    record = row.get("candidate_record") if isinstance(row.get("candidate_record"), dict) else {}
+    uop = record.get("uop_features") if isinstance(record.get("uop_features"), dict) else {}
+    if uop.get("uop_available"):
+      by_split[str(row.get("split", "unknown"))] += 1
+      by_mechanism[str(row.get("mechanism", "unknown"))] += 1
+    if uop.get("compile_report_available"): compile_rows += 1
+    if uop.get("load_width_report_available"): load_width_rows += 1
+    extraction = row.get("feature_extraction") if isinstance(row.get("feature_extraction"), dict) else {}
+    for source in extraction.get("real_feature_sources", []) if isinstance(extraction.get("real_feature_sources"), list) else []:
+      source_counter[str(source)] += 1
+  return {
+    "uop_available_rows": sum(by_split.values()),
+    "uop_available_by_split": dict(sorted(by_split.items())),
+    "uop_available_by_mechanism": dict(sorted(by_mechanism.items())),
+    "compile_report_rows": compile_rows,
+    "load_width_report_rows": load_width_rows,
+    "feature_source_count": len(source_counter),
+    "top_feature_sources": dict(source_counter.most_common(12)),
+  }
+
 def _recommendations(summary:dict[str, Any]) -> list[dict[str, Any]]:
   recs = []
   missing_labels = [label for label, row in summary["targets"]["labels"].items() if row["needed_train_rows"] > 0 and row["holdout_rows"] > 0]
@@ -196,12 +223,16 @@ def _recommendations(summary:dict[str, Any]) -> list[dict[str, Any]]:
   return recs
 
 def _markdown(summary:dict[str, Any]) -> str:
-  phase = "Phase 3D" if "kernel-triage-v1" in str(summary.get("examples_path", "")) else "Phase 3C"
+  examples_path = str(summary.get("examples_path", ""))
+  phase = "Phase 3E" if "kernel-triage-v1-featured" in examples_path else ("Phase 3D" if "kernel-triage-v1" in examples_path else "Phase 3C")
   description = (
+    "audits the normalized v1 schema after adding real source/compile features."
+    if phase == "Phase 3E" else
     "extends the data and feature audit over the normalized v1 schema."
     if phase == "Phase 3D" else
     "scopes the data and feature gaps that blocked the learned cost-model triage result."
   )
+  real = summary.get("real_feature_coverage") or {}
   lines = [
     "# AMD Decode Flywheel Feature Coverage Audit",
     "",
@@ -213,6 +244,9 @@ def _markdown(summary:dict[str, Any]) -> str:
     f"- unseen holdout categorical values: `{summary['coverage']['categorical']['unseen_holdout_value_total']}`",
     f"- weak rows: `{summary['row_quality']['weak_row_count']}`",
     f"- post-full-decode train rows: `{summary['stage_viability']['post_full_decode_train_rows']}`",
+    f"- real UOp/source rows: `{real.get('uop_available_rows', 0)}`",
+    f"- compile-report rows: `{real.get('compile_report_rows', 0)}`",
+    f"- load-width-report rows: `{real.get('load_width_report_rows', 0)}`",
     "",
     "## Highest Priority Targets",
     "",
@@ -257,6 +291,16 @@ def _markdown(summary:dict[str, Any]) -> str:
   ]
   for reason, count in summary["row_quality"]["top_weak_reasons"].items():
     lines.append(f"| `{reason}` | {count} |")
+  if real.get("uop_available_by_mechanism"):
+    lines += [
+      "",
+      "## Real Feature Coverage",
+      "",
+      "| mechanism | rows |",
+      "|---|---:|",
+    ]
+    for mechanism, count in real["uop_available_by_mechanism"].items():
+      lines.append(f"| `{mechanism}` | {count} |")
   lines.append("")
   return "\n".join(lines)
 
@@ -313,6 +357,7 @@ def run_feature_audit(examples_path:pathlib.Path, out:pathlib.Path) -> dict[str,
       "top_weak_reasons": dict(sorted(weak_reasons.items(), key=lambda item: (-item[1], item[0]))),
     },
     "stage_viability": _stage_viability(train, holdout),
+    "real_feature_coverage": _real_feature_coverage(examples),
     "leakage_audit": {
       "excluded_feature_sources": list(FORBIDDEN_FEATURE_SOURCES),
       "feature_names_with_forbidden_tokens": forbidden_names,

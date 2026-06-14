@@ -455,6 +455,20 @@ generated-policy storage mode.
       `56 -> 43`, and no target/result leakage is detected. Next flywheel work
       is targeted train coverage plus first-class tinygrad/UOp/profile
       features, not another immediate XGBoost rerun.
+- [x] Added Phase 3E real source/compile feature extraction and coverage plan:
+      `extra/qk_flywheel_feature_enrich.py`,
+      `extra/qk_flywheel_coverage_plan.py`,
+      `test/external/test_qk_flywheel_phase3e.py`,
+      `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured/`,
+      `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured/`,
+      and `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1/`.
+      The featured dataset keeps the same `83` rows and same split, but adds
+      real UOp/source features for `13` rows (`7` train, `6` holdout) from
+      committed load-width and compile-gate artifacts. Leakage audit remains
+      clean. This still does not authorize a cost-model rerun as a decision
+      point: unseen holdout categorical values stay `15`, weak rows stay `43`,
+      and the plan requires real targeted outcomes for seven uncovered
+      mechanisms before rerunning XGBoost against `mechanism_prior`.
 
 ## Do Not Do Next
 

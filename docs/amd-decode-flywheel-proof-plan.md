@@ -3,10 +3,10 @@
 Date: 2026-06-14
 
 Status: plan of record for proving or falsifying the full kernel-optimization
-flywheel. Phase 1/2 and the Phase 3.0 through 3D diagnostic/data subphases are
-built where marked. The current evidence is still `no_signal`; Phase 3D
-improved the cost-model dataset/schema but did not prove the model-to-kernel
-link.
+flywheel. Phase 1/2 and the Phase 3.0 through 3E diagnostic/data subphases are
+built where marked. The current evidence is still `no_signal`; Phase 3D/3E
+improved the cost-model dataset/schema/features but did not prove the
+model-to-kernel link.
 
 Parent architecture note:
 `docs/amd-decode-kernel-optimization-flywheel.md`.
@@ -932,6 +932,81 @@ Next implementation scope:
 - Add first-class extracted features for source/UOp/profile evidence, replacing
   proxy-only `uop_available=false` rows where possible.
 - Rerun Phase 3B only after the v1 schema has materially better coverage.
+
+## Phase 3E: Real Feature Extraction And Coverage Plan
+
+Purpose:
+
+- Add real source/compile evidence to the v1 candidate schema where committed
+  artifacts already expose it.
+- Keep final outcomes out of model-visible features.
+- Produce the targeted data-collection plan needed before another cost-model
+  score run.
+
+Implementation:
+
+- `extra/qk_flywheel_feature_enrich.py`
+- `extra/qk_flywheel_coverage_plan.py`
+- `extra/qk_flywheel_feature_audit.py`
+- `test/external/test_qk_flywheel_phase3e.py`
+- Artifacts:
+  `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured/`,
+  `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured/`,
+  and
+  `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1/`.
+
+Feature policy:
+
+- Before microbench, use only static/source/compile evidence:
+  load-width reports, compile instruction counts, memory-instruction counts,
+  target global-load shape, source vector-type evidence, source line counts,
+  workgroup/local/group shape, and selected instruction-class counts.
+- Do not use final labels, reasons, retry flags, evidence blobs, source-file
+  paths in prompts, final verdict status, speed gains, candidate/current GB/s,
+  correctness decisions, or A/B outcomes as model-visible features.
+- Current Phase 3E does not synthesize outcomes and does not move holdout rows
+  into train.
+
+Current Phase 3E result:
+
+- Dataset rows are unchanged: `83` rows, `45` train rows, and `38`
+  family-split holdout rows.
+- Feature schema: `candidate_outcome_v1_featured`.
+- Real UOp/source rows: `13` total, `7` train and `6` holdout.
+- Real feature coverage by mechanism:
+  - `tile_custom`: `7`
+  - `packed_word_lane_unroll`: `2`
+  - `qk_block_dot`: `2`
+  - `vector_load`: `2`
+- Source/load-width report rows: `11`.
+- Compile-report rows: `2`.
+- Leakage audit remains clean: no target/result feature names detected.
+
+What did not improve:
+
+- Unseen holdout categorical values remain `15`.
+- Weak rows remain `43`.
+- `33` holdout rows still have mechanisms unseen in train.
+- The missing train coverage is now the dominant blocker, not feature plumbing.
+
+Coverage plan:
+
+- `triage-coverage-plan-v1/` keeps `rerun_phase3b_allowed=false`.
+- It calls for at least `35` new mechanism-coverage outcome rows:
+  `5` each for `packed_word_lane_unroll`, `qk_block_dot`, `reduce_unroll`,
+  `row_upcast`, `two_dim_local`, `vector_load`, and `wide_load_only`.
+- It also records `14` label-coverage row targets:
+  `4` for `construction_blocked`, `5` for `diagnostic_only`, and `5` for
+  `raw_accept_unconfirmed`. These can overlap with mechanism rows if the
+  natural outcomes match; labels must not be forced.
+
+Gate:
+
+- Do not rerun Phase 3B/XGBoost as a decision point yet.
+- The next useful implementation is a real post-Phase-3E candidate/outcome
+  batch that fills the mechanism and label holes above.
+- After that batch, regenerate `kernel-triage-v1-featured/`, rerun the feature
+  audit, and only then run the cost model again against `mechanism_prior`.
 
 ## Phase 4: Live Shadow Mode
 

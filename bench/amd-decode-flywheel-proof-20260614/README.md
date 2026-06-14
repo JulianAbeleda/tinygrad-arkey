@@ -37,6 +37,12 @@ than simple baselines before outcomes are known?
 - `kernel-triage-v1/`: Phase 3D dataset preserving the v0 split while adding
   normalized mechanisms and the frozen `candidate_outcome_v1` schema.
 - `triage-feature-audit-v1/`: Phase 3D audit over the v1 schema.
+- `kernel-triage-v1-featured/`: Phase 3E dataset preserving v1 rows while
+  adding real source/compile features where committed artifacts expose them.
+- `triage-feature-audit-v1-featured/`: Phase 3E audit over the featured
+  schema.
+- `triage-coverage-plan-v1/`: Phase 3E targeted outcome plan required before
+  rerunning the cost model as a decision point.
 
 ## Current Result
 
@@ -112,3 +118,16 @@ holdout categorical values fall from `24` to `15`, weak rows fall from `56` to
 data and features: `33` holdout rows still have mechanisms unseen in train,
 label coverage is thin, and current UOp features are proxy estimates rather
 than first-class tinygrad/UOp/profile extraction.
+
+Phase 3E update: `extra/qk_flywheel_feature_enrich.py` adds real source/compile
+features where committed artifacts expose load-width or compile-gate evidence.
+The featured dataset still has `83` rows, `45` train, and `38` holdout rows; it
+does not synthesize outcomes or move holdout rows into train. Real UOp/source
+features are now available on `13` rows (`7` train, `6` holdout): `7`
+`tile_custom`, `2` `packed_word_lane_unroll`, `2` `qk_block_dot`, and `2`
+`vector_load`. The featured audit remains clean on target/result leakage, but
+the decision is still blocked: unseen holdout categorical values remain `15`,
+weak rows remain `43`, and `33` holdout rows still have mechanisms unseen in
+train. `triage-coverage-plan-v1/` therefore keeps `rerun_phase3b_allowed=false`
+and calls for a real targeted outcome batch before another XGBoost decision
+run.
