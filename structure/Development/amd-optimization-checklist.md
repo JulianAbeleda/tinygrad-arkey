@@ -415,6 +415,21 @@ generated-policy storage mode.
       `4` train prefixes in `32.8s`, `2` eval prefixes in `21.0s`. This
       confirms the negative; do not rank-sweep local 8B before either prompt
       compression or a stronger-proposer benchmark.
+- [x] Added Phase 3B learned cost-model triage:
+      `extra/qk_flywheel_cost_model.py` and
+      `bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v0/`.
+      The feature extractor uses only pre-result candidate/context fields and
+      audits out raw ids, target labels, reasons, retry flags, evidence,
+      result status, gains, GB/s, correctness decisions, source files, and
+      split markers. It supports optional XGBoost through the native API and a
+      no-dependency centroid fallback. Local XGBoost `3.2.0` ran with
+      `rank:ndcg`, but still lost to `mechanism_prior`: macro-F1 `0.137`
+      versus `0.185`, precision@3 `0.000` versus `0.083`, NDCG `0.189`
+      versus `0.218`, with false-positive accept rate `0.000`. Conclusion:
+      cost-model triage is the right tool class, but this `45`-row training
+      set and current feature policy are not enough. Do not build ML from
+      scratch; grow labeled outcomes and richer tinygrad/UOp/profile features
+      before retrying.
 
 ## Do Not Do Next
 

@@ -725,6 +725,72 @@ Immediate implication:
   on the same benchmark, or a prompt-compressed local-adapter experiment if the
   goal is specifically to keep testing local 8B.
 
+## Phase 3B: Learned Cost Model Triage
+
+Purpose:
+
+- Test the compiler-autotuning version of triage: a small learned cost model
+  over structured features, not an LLM over prose prompts.
+- Keep triage/ranking separate from novel mechanism proposal. Triage is a cost
+  model job; proposal remains a stronger-LLM or human-reasoning job.
+- Decide whether the current `45` train rows and pre-result features already
+  contain enough signal to beat `mechanism_prior`.
+
+Implementation:
+
+- `extra/qk_flywheel_cost_model.py`
+- Artifact:
+  `bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v0/`
+- Feature policy: `pre_result_analytical_context_v0`.
+- Uses only pre-result fields from the Phase 1 examples:
+  row kind, family, model size, role, format, mechanism, prediction stage,
+  schedule/context booleans and numeric knobs, parsed opt flags, and analytical
+  proxy features for reuse, ILP, warp concurrency, load width, imbalance, and
+  schedule complexity.
+- Explicitly excludes raw ids as categorical features and excludes target or
+  result fields: `label`, `reason`, `retry`, `evidence`, `status`, `gain`,
+  `gain_pct`, candidate/current GB/s, correctness decisions, source files, and
+  split markers.
+- Backend behavior:
+  - `xgboost` if installed, using the native `DMatrix`/`train` API so
+    `scikit-learn` is not required.
+  - `centroid_cost_model` fallback for tests and no-dependency environments.
+
+Current Phase 3B result:
+
+- XGBoost was available locally as `3.2.0` and the native `rank:ndcg` ranker ran
+  with integer relevance labels.
+- Feature count: `127` (`76` numeric, `51` train-seen categorical one-hot
+  columns).
+- The family-split holdout still contains many unseen categorical values:
+  `24` ignored holdout categories, including all holdout families and several
+  holdout mechanisms/schedule names.
+- Leakage audit: no raw-id categorical features and no target/result fields.
+
+Metrics on the same `38` holdout rows:
+
+| scorer | accuracy | macro-F1 | false accept | p@3 | NDCG |
+|---|---:|---:|---:|---:|---:|
+| `mechanism_prior` | `0.289` | `0.185` | `0.000` | `0.083` | `0.218` |
+| `centroid_cost_model` | `0.105` | `0.039` | `0.263` | `0.000` | `0.153` |
+| `xgboost_cost_model` | `0.237` | `0.137` | `0.000` | `0.000` | `0.189` |
+
+Conclusion:
+
+- Phase 3B is `no_signal` on the current historical benchmark. XGBoost is the
+  right tool class for learned triage/ranking, but the current dataset/features
+  do not beat the deterministic prior.
+- This does not disprove cost models in general. It says the present `45`-row
+  train split, family-split holdout, and feature extraction are too thin for a
+  useful learned triage model.
+- Do not build a cost model from scratch before it has more data and richer
+  first-class features. The ML piece should stay off-the-shelf; the novel work
+  is extracting better tinygrad/UOp/profile features and collecting more
+  labeled candidate outcomes.
+- Do not promote Phase 4 shadow mode from this result. A future Phase 3B retry
+  must beat `mechanism_prior` on macro-F1, keep false-positive accepts low, and
+  improve ranking metrics by a meaningful margin.
+
 ## Phase 4: Live Shadow Mode
 
 Purpose:

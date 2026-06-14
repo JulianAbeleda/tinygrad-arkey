@@ -30,6 +30,8 @@ than simple baselines before outcomes are known?
   adapter smoke.
 - `triage-adapter-smoke-v0-protocol-diagnostic/`: extraction diagnostic for the
   tiny adapter smoke rollout.
+- `triage-cost-model-v0/`: Phase 3B learned cost-model triage with leak-free
+  pre-result features, optional XGBoost, and a centroid fallback.
 
 ## Current Result
 
@@ -74,3 +76,12 @@ took `21.0s`. The adapter changed weights and reduced teacher-forced loss on
 the tiny slice, but held-out generation did not move: strict score stayed
 `0/38`, extracted macro-F1 stayed `0.036`, and false-positive accept rate stayed
 `0.763`. This confirms the negative rather than rescuing it.
+
+Phase 3B update: the learned-cost-model version of triage is also recorded.
+`extra/qk_flywheel_cost_model.py` extracts only pre-result candidate/context
+features and audits out target/result leakage. Local XGBoost `3.2.0` ran with a
+native `rank:ndcg` ranker, but the result still loses to `mechanism_prior`:
+macro-F1 `0.137` versus `0.185`, precision@3 `0.000` versus `0.083`, and NDCG
+`0.189` versus `0.218`, with false-positive accept rate `0.000`. XGBoost is
+the right tool class for cost-model triage, but the current `45` train rows and
+feature policy do not yet prove the hard half of the flywheel.

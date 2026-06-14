@@ -162,8 +162,10 @@ not just a narrative. Current artifacts:
 - `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v0/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-baselines-v0/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-qwen3-8b-base-v0/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v0/`
 - `extra/qk_flywheel_dataset.py`
 - `extra/qk_flywheel_triage_eval.py`
+- `extra/qk_flywheel_cost_model.py`
 
 Phase 1 built `83` structured kernel-history examples from existing QK
 artifacts: `45` train rows and `38` family-split holdout rows. Phase 2
@@ -219,6 +221,19 @@ train prefixes took `32.8s`, and `2` eval prefixes took `21.0s`. This confirms
 the negative for local 8B under the current setup; next high-value test is a
 stronger proposer on the same benchmark or prompt compression before any full
 local-adapter retry.
+
+Phase 3B has now tested the learned-cost-model version of triage:
+`extra/qk_flywheel_cost_model.py` and
+`bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v0/`. The script
+extracts only pre-result features, has a leakage audit, uses optional XGBoost
+via the native API, and keeps a no-dependency centroid fallback for tests.
+Local XGBoost `3.2.0` ran with a native `rank:ndcg` ranker. Result on the same
+`38` holdout rows: XGBoost accuracy `0.237`, macro-F1 `0.137`,
+false-positive accept rate `0.000`, precision@3 `0.000`, NDCG `0.189`.
+This loses to `mechanism_prior` macro-F1 `0.185`, precision@3 `0.083`, and
+NDCG `0.218`, so Phase 3B is also `no_signal`. The right next cost-model work
+is more labeled outcomes plus richer first-class tinygrad/UOp/profile features,
+not a from-scratch ML model.
 
 ## Verification Already Run
 
