@@ -306,6 +306,16 @@ JSON-answer task. The next practical adapter experiment should target a small
 allowlisted set of non-output projections rather than more output-head LR
 tuning.
 
+The first non-output adapter attempt is now scoped and blocked by training
+infrastructure rather than model quality. `lastN_ffn` target groups expand to
+exact dense FFN module paths and train in a one-step baseline/no-REALIZE smoke,
+but the 8B full gate is not yet practical: generated-QK training fails on
+unsupported quant bit-op gradients, fully realized fp16 baseline training OOMs
+at `23.78 GB`, and the plain-block no-REALIZE workaround is too slow for full
+`last4_ffn`/`last1_ffn` gates. Verdict: do not continue adapter-target sweeps
+until there is a dedicated internal-adapter training path that is differentiable
+and practical on 8B.
+
 For the llama.cpp-comparable research track, use
 `bench/qk-ansor-transition-20260612/scorecard.md` as the objective report.
 Current generated shared-storage rows are `51.46%` (8B), `61.63%` (14B), and
@@ -375,6 +385,9 @@ worth doing only if the research itself is the goal.
 - Do not keep tuning only the output-head LoRA for JSON-answering unless the
   goal is diagnosis. The next promoted adapter attempt needs more conditional
   capacity.
+- Do not rerun the current 8B internal-adapter full gate through plain-block
+  no-REALIZE training. It is too slow to be the loop. Fix the training path
+  first.
 
 ## Pointers
 

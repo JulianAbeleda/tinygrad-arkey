@@ -1,0 +1,41 @@
+{
+  "kind": "llm_internal_adapter_diagnostic",
+  "status": "blocked",
+  "dataset": "bench/qwen-adapter-20260613/training-data-v3/sft.jsonl",
+  "base_model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+  "target_group": "last4_ffn",
+  "smoke_target_group": "last1_ffn",
+  "findings": [
+    {
+      "name": "target_expansion",
+      "status": "pass",
+      "details": "install_lora expands allowlisted lastN_ffn groups to exact blk.*.ffn_gate/up/down module paths and fails loudly on unknown groups or zero installs."
+    },
+    {
+      "name": "generated_qk_training",
+      "status": "fail",
+      "details": "Backprop through generated QK primitive/frozen quant layers hits unsupported bit-op gradient (Ops.OR). Internal adapter training cannot use the generated QK inference path directly."
+    },
+    {
+      "name": "plain_block_training",
+      "status": "pass",
+      "details": "The adapter trainer can bypass block-level precompile wrappers so internal adapter tensors receive gradients."
+    },
+    {
+      "name": "baseline_no_realize_smoke",
+      "status": "pass",
+      "details": "A one-step last4_ffn baseline/no-REALIZE smoke over 10 rows passes and changes adapter tensors (adapter_l2 0.876816)."
+    },
+    {
+      "name": "baseline_realize_full",
+      "status": "fail",
+      "details": "Full last4_ffn training with REALIZE=1 OOMs on AMD at 23.78 GB used while allocating 1.64 MB."
+    },
+    {
+      "name": "baseline_no_realize_full",
+      "status": "blocked",
+      "details": "Full last4_ffn, full last1_ffn, and a reduced last1_ffn smoke were manually stopped after long runtimes without producing a summary. The plain-block path is not yet an ergonomic 8B training gate."
+    }
+  ],
+  "verdict": "Do not promote internal adapters yet. The target-policy/code path is ready, but 8B internal-adapter training needs a dedicated lower-memory/faster training path before rerunning the strict JSON gate."
+}

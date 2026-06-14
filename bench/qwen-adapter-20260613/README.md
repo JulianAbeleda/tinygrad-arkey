@@ -105,3 +105,29 @@ not lower the gate or keep LR-tuning this path as a win. The next adapter
 experiment should target more conditional capacity than the output head alone,
 for example a small allowlisted set of FFN/attention projection adapters, using
 the same strict JSON rollout/compare gate.
+
+## V4 Internal Adapter Diagnostic
+
+The fourth gate attempted that next step with allowlisted internal adapters.
+
+Artifacts:
+
+- `internal-adapter-v4-diagnostic/README.md`: target-policy and training-path
+  diagnostic.
+
+Current result:
+
+- `lastN_ffn` target expansion works and fails loudly on invalid groups.
+- Internal LoRA now preserves activation gradients; output-only LoRA keeps the
+  original exact-preserving detached behavior.
+- Generated-QK-path internal training fails on unsupported quant bit-op
+  gradients (`Ops.OR`).
+- Baseline training with `REALIZE=1` OOMs on 8B at `23.78 GB` used.
+- Baseline/no-REALIZE can pass a one-step `last4_ffn` smoke, but full
+  `last4_ffn` / `last1_ffn` runs are too slow through the plain-block path to
+  be a practical gate.
+
+Verdict: blocked, not promoted. The next step is not more target sweeps. It is
+building a practical 8B internal-adapter training path that avoids generated QK
+bit-op gradients, avoids full fp16 realization, and avoids the current
+plain-block runtime cost.

@@ -71,16 +71,27 @@ def split_adapter_rows(rows:list[dict[str, Any]], *, eval_every:int=5) -> tuple[
     return train_rows, eval_rows, sorted({row["source_id"] for row in eval_rows})
   return split_rows(rows, eval_every=eval_every)
 
-def _loss_one(model:Any, example:dict[str, Any]) -> Tensor:
-  logits = model.logits(Tensor([example["ids"]], dtype="int32"), 0)[:, -1, :]
+def _plain_logits(model:Any, tokens:Tensor, start_pos:int) -> Tensor:
+  x = model.token_embd(tokens).float()
+  for block in model.blk:
+    block._init_state(x)
+    h = x + block._attention(block.attn_norm(x), start_pos)
+    x = (h + block._feed_forward(block.ffn_norm(h))).contiguous()
+  return model.output(model.output_norm(x))
+
+def _model_logits(model:Any, tokens:Tensor, start_pos:int, plain_blocks:bool) -> Tensor:
+  return _plain_logits(model, tokens, start_pos) if plain_blocks else model.logits(tokens, start_pos)
+
+def _loss_one(model:Any, example:dict[str, Any], plain_blocks:bool=False) -> Tensor:
+  logits = _model_logits(model, Tensor([example["ids"]], dtype="int32"), 0, plain_blocks)[:, -1, :]
   return logits.sparse_categorical_crossentropy(Tensor([example["target"]], dtype="int32"))
 
-def _eval_loss(model:Any, examples:list[dict[str, Any]], limit:int) -> dict[str, float]:
+def _eval_loss(model:Any, examples:list[dict[str, Any]], limit:int, plain_blocks:bool=False) -> dict[str, float]:
   losses = []
   correct = 0
   used = examples[:limit]
   for example in used:
-    logits = model.logits(Tensor([example["ids"]], dtype="int32"), 0)[:, -1, :]
+    logits = _model_logits(model, Tensor([example["ids"]], dtype="int32"), 0, plain_blocks)[:, -1, :]
     losses.append(float(logits.sparse_categorical_crossentropy(Tensor([example["target"]], dtype="int32")).numpy()))
     correct += int(logits.argmax(axis=1).item() == example["target"])
   if not losses: raise ValueError("no examples evaluated")
@@ -111,6 +122,8 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
   model, kv = Transformer.from_gguf(pathlib.Path(args.model).expanduser(), args.max_context)
   tok = SimpleTokenizer.from_gguf_kv(kv)
   adapters = install_lora(model, args.targets, rank=args.rank, alpha=args.alpha, seed=args.seed)
+  installed_targets = [adapter.target for adapter in adapters]
+  plain_blocks = any(not adapter.detach_base for adapter in adapters)
   opt = Adam(adapter_parameters(adapters), lr=args.lr, fused=False)
 
   train_examples = _build_examples(train_rows, tok, args.prompt_format, args.max_context, args.target_positions, args.append_eos)
@@ -118,23 +131,23 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
   before_arrays = {k:v.copy() for k,v in _adapter_arrays(adapters).items()}
   st = time.perf_counter()
   initial = {
-    "train": _eval_loss(model, train_examples, args.eval_limit),
-    "eval": _eval_loss(model, eval_examples, args.eval_limit),
+    "train": _eval_loss(model, train_examples, args.eval_limit, plain_blocks),
+    "eval": _eval_loss(model, eval_examples, args.eval_limit, plain_blocks),
   }
   history = []
   rng = np.random.default_rng(args.seed)
   with Tensor.train():
     for step in range(args.steps):
       example = train_examples[int(rng.integers(0, len(train_examples)))]
-      loss = _loss_one(model, example)
+      loss = _loss_one(model, example, plain_blocks)
       opt.zero_grad()
       loss.backward()
       opt.step()
       if step == 0 or (step + 1) % max(1, args.steps // 4) == 0:
         history.append({"step": step + 1, "example": example["id"], "loss": float(loss.numpy())})
   final = {
-    "train": _eval_loss(model, train_examples, args.eval_limit),
-    "eval": _eval_loss(model, eval_examples, args.eval_limit),
+    "train": _eval_loss(model, train_examples, args.eval_limit, plain_blocks),
+    "eval": _eval_loss(model, eval_examples, args.eval_limit, plain_blocks),
   }
   after_arrays = _adapter_arrays(adapters)
   adapter_delta_l2 = _array_delta_l2(before_arrays, after_arrays)
@@ -144,7 +157,7 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
   summary = {
     "kind": "llm_adapter_train_summary",
     "status": status,
-    "adapter_kind": "output_lora",
+    "adapter_kind": "output_lora" if installed_targets == ["output"] else "lora",
     "base_model": str(args.model),
     "mode": args.mode,
     "policy": str(args.policy) if args.policy else None,
@@ -152,6 +165,9 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
     "prompt_format": args.prompt_format,
     "input": str(args.input),
     "targets": args.targets,
+    "installed_targets": installed_targets,
+    "installed_adapters": len(adapters),
+    "plain_block_training": plain_blocks,
     "rank": args.rank,
     "alpha": args.alpha,
     "rows": len(rows),
@@ -175,7 +191,7 @@ def train_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
     "elapsed_s": time.perf_counter() - st,
     "history": history,
     "artifacts": {"config": "adapter.json", "weights": "adapter.npz"},
-    "note": "Output-head LoRA V0; trains adapter tensors only and does not claim model-quality improvement.",
+    "note": "LoRA adapter gate; trains adapter tensors only and does not claim broad model-quality improvement.",
   }
   return summary, adapters
 

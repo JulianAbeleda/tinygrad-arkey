@@ -305,10 +305,24 @@ generated-policy storage mode.
       reaches `3/12`, with `+3` compare improvement and `0` regressions.
       Verdict: failed promotion; output-only LoRA is insufficient for this
       conditional strict-JSON task.
-- [ ] Next practical step: scope a small non-output adapter target set
-      (for example selected FFN or attention projections), then rerun the same
-      strict JSON train/rollout/compare gate. Do not keep tuning output-head-only
-      LoRA as a promoted path.
+- [x] Scoped a small non-output adapter target set for the same strict JSON
+      train/rollout/compare gate. Do not keep tuning output-head-only LoRA as a
+      promoted path.
+- [x] Scoped and implemented the first non-output adapter target policy:
+      `lastN_ffn` expands to exact dense FFN module paths and fails loudly on
+      invalid groups. Internal adapters preserve activation gradients, and the
+      adapter trainer has a plain-block path so internal params are visible to
+      autograd.
+- [x] Ran the first internal-adapter training diagnostic:
+      `bench/qwen-adapter-20260613/internal-adapter-v4-diagnostic/`. Result:
+      one-step baseline/no-REALIZE `last4_ffn` smoke passes, but full 8B
+      internal-adapter training is blocked. Generated-QK training hits
+      unsupported quant bit-op gradients; `REALIZE=1` OOMs at `23.78 GB`; the
+      plain-block no-REALIZE workaround is too slow for full gates.
+- [ ] Next practical step: build a dedicated internal-adapter training mode
+      before rerunning strict JSON V4. Requirements: differentiable through
+      frozen layers, lower memory than full fp16 realization, faster than the
+      current plain-block path, and load-compatible with generated-QK inference.
 
 ## Do Not Do Next
 
@@ -344,6 +358,9 @@ generated-policy storage mode.
       artifact proves it is used by the reference decode path on gfx1100.
 - [ ] Do not promote the strict JSON V3 output-LoRA result; it is a diagnostic
       negative (`3/12` held-out) rather than a training win.
+- [ ] Do not rerun full 8B `last4_ffn` / `last1_ffn` through the current
+      plain-block no-REALIZE trainer as the next gate; fix the training path
+      first.
 
 ## Reasonable Resume Tracks
 

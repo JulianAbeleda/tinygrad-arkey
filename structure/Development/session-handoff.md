@@ -578,3 +578,18 @@ strict JSON-answer task. Do not continue output-head-only LR sweeps as a
 promoted path; the next practical adapter scope should install a small
 allowlisted set of non-output adapters and reuse the same strict JSON
 train/rollout/compare gate.
+
+That non-output scope has now been attempted as V4 infrastructure. Code now
+supports allowlisted `lastN_ffn` target groups, exact installed-target
+recording, internal-adapter activation gradients, and a plain-block adapter
+training path. The actual 8B full gate is blocked:
+generated-QK internal training fails on unsupported quant bit-op gradients
+(`Ops.OR`), `REALIZE=1` baseline training OOMs at `23.78 GB`, and the
+plain-block no-REALIZE workaround is too slow for full `last4_ffn` or
+`last1_ffn` gates. A one-step baseline/no-REALIZE `last4_ffn` smoke passes and
+changes adapter tensors (`adapter_l2=0.876816`), so the graph can train in
+principle. Next practical work is a dedicated internal-adapter training mode
+that is differentiable through frozen layers, lower-memory than full fp16
+realization, faster than the current plain-block path, and still load-compatible
+with generated-QK inference. Do not rerun full 8B internal-adapter sweeps through
+the current plain-block workaround.
