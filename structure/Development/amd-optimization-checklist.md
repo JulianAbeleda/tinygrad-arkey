@@ -333,7 +333,8 @@ generated-policy storage mode.
       so one prompt cannot swing the verdict, then train on filtered
       own-generations / rejection-sampling SFT or another generation-matched
       objective. Any continuation must use generation pass rate as the gate; do
-      not treat teacher-forced token accuracy as sufficient.
+      not treat teacher-forced token accuracy as sufficient. Plan of record:
+      `docs/qwen-json-eval-objective-scope.md`.
 
 ## Do Not Do Next
 

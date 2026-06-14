@@ -403,6 +403,8 @@ worth doing only if the research itself is the goal.
 - Do not promote the V5 suffix-cache `last1_ffn` strict JSON adapter. The
   training path is fixed, but the held-out quality gate still fails; `4/12`
   versus V3's `3/12` at `N=12` is noise and includes one regression.
+- Do not start another strict-JSON adapter-capacity sweep before the eval/objective
+  scope in `docs/qwen-json-eval-objective-scope.md` is implemented.
 
 ## Pointers
 
@@ -448,6 +450,8 @@ worth doing only if the research itself is the goal.
   `bench/qk-threeway-load-microbench-20260613/README.md`
 - Qwen adapter artifacts and held-out behavior-change gate:
   `bench/qwen-adapter-20260613/README.md`
+- Qwen strict JSON eval/objective scope:
+  `docs/qwen-json-eval-objective-scope.md`
 - QK harness validation matrix and 14B rerun: `bench/qk-harness-20260612/README.md`
 - Vdot premise check: `bench/vdot-premise-20260612/v1-roofline.md`
 - llama.cpp MMVQ comparison: `bench/vdot-premise-20260612/llamacpp-mmvq-notes.md`

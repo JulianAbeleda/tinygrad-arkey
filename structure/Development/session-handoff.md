@@ -614,4 +614,7 @@ rate (`0.3333`) points to objective/eval mismatch and exposure bias, not simply
 adapter capacity. The recommended next adapter step is a larger held-out
 generation set plus filtered own-generation / rejection-sampling SFT, with
 generation pass rate as the gate. Do not start with another `lastN_ffn` capacity
-sweep unless that objective/eval loop is in place.
+sweep unless that objective/eval loop is in place. The plan of record is
+`docs/qwen-json-eval-objective-scope.md`: Inspect-shaped local harness,
+IFEval-style deterministic scoring, JSON parse/schema/value axes, Wilson CIs,
+then rejection-sampling SFT using the same scorer as the filter.
