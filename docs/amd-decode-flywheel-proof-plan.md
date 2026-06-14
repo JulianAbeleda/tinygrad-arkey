@@ -699,6 +699,19 @@ Current status:
   30 second polls with no stdout and no adapter artifact: one generated-mode
   attempt and one baseline-mode attempt. No adapter rollout or Phase 3.3 score
   exists yet.
+- Phase 3.2A instrumentation/smoke:
+  `bench/amd-decode-flywheel-proof-20260614/triage-adapter-smoke-v0/`.
+  The suffix trainer now emits progress to stdout and `progress.jsonl`, and has
+  split-specific `--max-train-rows` / `--max-eval-rows` controls. The smoke used
+  `4` train rows, `2` eval rows, and `8` optimizer steps. It changed adapter
+  weights (`adapter_l2=1.582253`) and reduced tiny-slice teacher-forced loss
+  (`train -0.8872`, `eval -0.9574`), but it did not improve held-out
+  generation: strict score remained `0/38`, extracted macro-F1 remained
+  `0.036`, and false-positive accept rate remained `0.763`.
+- The instrumentation explains the prior silent runs: on the smoke, caching `4`
+  train prefixes took `32.8s`, and caching `2` eval prefixes took `21.0s`, with
+  prompts around `269-425` tokens. A full adapter run on the current prompt
+  shape is expected to spend many minutes in cache/eval before useful feedback.
 
 Immediate implication:
 
@@ -707,6 +720,10 @@ Immediate implication:
   shorten/compress the long kernel-context prompts, or create a smaller
   predeclared smoke candidate that can complete before retrying a full held-out
   adapter rollout.
+- Phase 3.2A confirms the low-expectation smoke result: `45` examples did not
+  rescue the local 8B. The stronger strategic next test is a stronger proposer
+  on the same benchmark, or a prompt-compressed local-adapter experiment if the
+  goal is specifically to keep testing local 8B.
 
 ## Phase 4: Live Shadow Mode
 

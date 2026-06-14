@@ -404,6 +404,17 @@ generated-policy storage mode.
       is blocked by suffix-cache adapter training latency on the long
       kernel-context prompts; next step is progress reporting, prompt
       compression, or a smaller predeclared adapter smoke before a full rollout.
+- [x] Added Phase 3.2A suffix-trainer instrumentation and ran the tiny local-8B
+      adapter smoke:
+      `bench/amd-decode-flywheel-proof-20260614/triage-adapter-smoke-v0/`.
+      The trainer now writes progress JSONL and has split-specific row caps.
+      Smoke settings were `4` train rows, `2` eval rows, `8` steps. It reduced
+      tiny-slice teacher-forced loss but did not move held-out generation:
+      strict score stayed `0/38`, extracted macro-F1 stayed `0.036`, and
+      false-positive accept rate stayed `0.763`. Measured prefix-cache latency:
+      `4` train prefixes in `32.8s`, `2` eval prefixes in `21.0s`. This
+      confirms the negative; do not rank-sweep local 8B before either prompt
+      compression or a stronger-proposer benchmark.
 
 ## Do Not Do Next
 

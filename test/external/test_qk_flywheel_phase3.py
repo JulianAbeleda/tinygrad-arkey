@@ -1,6 +1,7 @@
 import json, pathlib, unittest
 from tempfile import TemporaryDirectory
 
+from extra.llm_adapter_suffix_train import _limit_rows
 from extra.qk_flywheel_protocol_diagnostic import run_diagnostic
 from extra.qk_flywheel_triage_sft import write_dataset
 
@@ -21,6 +22,11 @@ def _prompt(row_id, label, reason, retry=False):
   }
 
 class TestQKFlywheelPhase3(unittest.TestCase):
+  def test_suffix_train_row_limit_helper(self):
+    rows = [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+    self.assertEqual(_limit_rows(rows, 0, "train"), rows)
+    self.assertEqual(_limit_rows(rows, 2, "train"), rows[:2])
+
   def test_protocol_diagnostic_extracts_wrapped_json_without_changing_strict_score(self):
     with TemporaryDirectory() as raw_td:
       td = pathlib.Path(raw_td)

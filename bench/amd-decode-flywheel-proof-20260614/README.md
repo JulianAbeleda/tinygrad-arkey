@@ -22,6 +22,14 @@ than simple baselines before outcomes are known?
   `38` eval/holdout rows.
 - `triage-adapter-v0-attempt/`: Phase 3.2 first-candidate training attempt;
   blocked by current training-loop latency before a rollout artifact existed.
+- `triage-adapter-smoke-v0/`: Phase 3.2A tiny suffix-cache adapter smoke with
+  progress logging and split row caps.
+- `triage-adapter-smoke-v0-rollout/`: held-out rollout for the tiny adapter
+  smoke.
+- `triage-adapter-smoke-v0-eval/`: strict Phase 2-style score for the tiny
+  adapter smoke.
+- `triage-adapter-smoke-v0-protocol-diagnostic/`: extraction diagnostic for the
+  tiny adapter smoke rollout.
 
 ## Current Result
 
@@ -59,3 +67,10 @@ false-positive accept rate `0.763`, below the `mechanism_prior` macro-F1
 baseline of `0.185`. The current base model is wrong on triage, not merely
 badly formatted. The strict SFT export is ready, but the first suffix-cache
 adapter candidate did not produce a practical training artifact in this run.
+
+Phase 3.2A update: instrumentation now shows the latency source. In the tiny
+smoke, caching `4` train prefixes took `32.8s`, and caching `2` eval prefixes
+took `21.0s`. The adapter changed weights and reduced teacher-forced loss on
+the tiny slice, but held-out generation did not move: strict score stayed
+`0/38`, extracted macro-F1 stayed `0.036`, and false-positive accept rate stayed
+`0.763`. This confirms the negative rather than rescuing it.

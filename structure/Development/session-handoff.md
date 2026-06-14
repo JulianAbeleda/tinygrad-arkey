@@ -208,6 +208,18 @@ adapter training latency for these long kernel-context prompts; two
 termination. Next step is a smaller/progress-reporting or prompt-compressed
 adapter candidate, not a rank sweep.
 
+Phase 3.2A added that progress-reporting path and ran the tiny smoke:
+`bench/amd-decode-flywheel-proof-20260614/triage-adapter-smoke-v0/`. The
+trainer now writes `progress.jsonl` and supports `--max-train-rows` /
+`--max-eval-rows`. Smoke settings: `4` train rows, `2` eval rows, `8` steps.
+It moved teacher-forced loss but not held-out generation. Strict score stayed
+`0/38`; extraction diagnostic stayed at macro-F1 `0.036` and false-positive
+accept rate `0.763`. The measured latency is the useful part: caching `4`
+train prefixes took `32.8s`, and `2` eval prefixes took `21.0s`. This confirms
+the negative for local 8B under the current setup; next high-value test is a
+stronger proposer on the same benchmark or prompt compression before any full
+local-adapter retry.
+
 ## Verification Already Run
 
 ```sh

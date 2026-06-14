@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse, json, pathlib, re, time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -70,16 +70,40 @@ def _eval_loss_suffix(model:Any, cached_examples:list[CachedExample], suffix_sta
   if not losses: raise ValueError("no cached examples evaluated")
   return {"loss": float(sum(losses) / len(losses)), "accuracy": correct / len(losses), "examples": len(losses)}
 
-def build_suffix_cache(model:Any, examples:list[dict[str, Any]], suffix_start:int, cache_dtype:str) -> tuple[list[CachedExample], dict[str, Any]]:
+def _emit_progress(args:argparse.Namespace, stage:str, **data:Any) -> None:
+  if getattr(args, "quiet_progress", False): return
+  payload = {"time_s": round(time.time(), 6), "stage": stage} | data
+  out = getattr(args, "out", None)
+  if out is not None:
+    pathlib.Path(out).mkdir(parents=True, exist_ok=True)
+    with (pathlib.Path(out) / "progress.jsonl").open("a") as f:
+      f.write(json.dumps(payload, sort_keys=True) + "\n")
+  print(json.dumps(payload, sort_keys=True), flush=True)
+
+def _limit_rows(rows:list[dict[str, Any]], limit:int, name:str) -> list[dict[str, Any]]:
+  if limit <= 0: return rows
+  limited = rows[:limit]
+  if not limited: raise ValueError(f"{name} limit produced no rows")
+  return limited
+
+def build_suffix_cache(model:Any, examples:list[dict[str, Any]], suffix_start:int, cache_dtype:str, *,
+                       progress:Callable[[str, Any], None]|None=None, split:str="unknown",
+                       progress_every:int=5) -> tuple[list[CachedExample], dict[str, Any]]:
   by_row: dict[str, dict[str, Any]] = {}
   for example in examples:
     row_key = str(example.get("row_id", example["id"]))
     if row_key not in by_row or len(example["ids"]) > len(by_row[row_key]["ids"]): by_row[row_key] = example
   hidden_by_row: dict[str, np.ndarray] = {}
   token_counts = []
+  cache_start = time.perf_counter()
+  total_entries = len(by_row)
   with Tensor.train(False):
-    for row_key, example in by_row.items():
+    for idx, (row_key, example) in enumerate(by_row.items(), 1):
+      if progress is not None and (idx == 1 or idx == total_entries or idx % max(1, progress_every) == 0):
+        progress("cache_prefix", split=split, index=idx, total=total_entries, row_id=row_key, tokens=len(example["ids"]))
       hidden_by_row[row_key] = prefix_hidden_numpy(model, example["ids"], suffix_start, cache_dtype)
+  if progress is not None:
+    progress("cache_prefix_done", split=split, entries=total_entries, elapsed_s=round(time.perf_counter() - cache_start, 6))
   cached: list[CachedExample] = []
   for example in examples:
     row_key = str(example.get("row_id", example["id"]))
@@ -99,6 +123,7 @@ def build_suffix_cache(model:Any, examples:list[dict[str, Any]], suffix_start:in
     "total_hidden_bytes": total_bytes,
     "avg_tokens": None if not token_counts else float(sum(token_counts) / len(token_counts)),
     "max_tokens": None if not token_counts else max(token_counts),
+    "elapsed_s": time.perf_counter() - cache_start,
   }
 
 def parity_check(model:Any, examples:list[dict[str, Any]], suffix_start:int, cache_dtype:str, limit:int, tol:float,
@@ -126,39 +151,66 @@ def parity_check(model:Any, examples:list[dict[str, Any]], suffix_start:int, cac
   return {"status": status, "examples": len(rows), "tol": tol, "max_abs": max_abs, "argmax_mismatches": mismatches, "rows": rows}
 
 def train_suffix_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
+  _emit_progress(args, "start", input=str(args.input), mode=args.mode, targets=args.targets, steps=args.steps)
   configure_env(args)
+  _emit_progress(args, "env_configured", device=args.device, storage=args.storage)
   from tinygrad.llm.cli import SimpleTokenizer
   from tinygrad.llm.model import Transformer
 
   Tensor.manual_seed(args.seed)
+  load_rows_st = time.perf_counter()
   rows = load_sft_rows(args.input)
   if args.max_rows > 0: rows = rows[:args.max_rows]
   train_rows, eval_rows, eval_source_ids = split_adapter_rows(rows, eval_every=args.eval_every)
+  train_rows = _limit_rows(train_rows, args.max_train_rows, "train")
+  eval_rows = _limit_rows(eval_rows, args.max_eval_rows, "eval")
+  eval_source_ids = sorted({row["source_id"] for row in eval_rows})
+  _emit_progress(args, "rows_loaded", rows=len(rows), train_rows=len(train_rows), eval_rows=len(eval_rows), elapsed_s=round(time.perf_counter() - load_rows_st, 6))
 
+  model_st = time.perf_counter()
+  _emit_progress(args, "model_load_start", model=str(args.model))
   model, kv = Transformer.from_gguf(pathlib.Path(args.model).expanduser(), args.max_context)
+  _emit_progress(args, "model_load_done", elapsed_s=round(time.perf_counter() - model_st, 6))
   tok = SimpleTokenizer.from_gguf_kv(kv)
   suffix_start = suffix_start_from_targets(model, args.targets)
+  _emit_progress(args, "suffix_selected", suffix_start_block=suffix_start, suffix_blocks=len(model.blk) - suffix_start)
 
+  build_st = time.perf_counter()
   train_examples = _build_examples(train_rows, tok, args.prompt_format, args.max_context, args.target_positions, args.append_eos)
   eval_examples = _build_examples(eval_rows, tok, args.prompt_format, args.max_context, args.target_positions, args.append_eos)
+  _emit_progress(args, "examples_built", train_examples=len(train_examples), eval_examples=len(eval_examples), elapsed_s=round(time.perf_counter() - build_st, 6))
+  parity_st = time.perf_counter()
+  _emit_progress(args, "parity_start", examples=min(args.parity_limit, len(eval_examples)), cache_dtype=args.cache_dtype)
   parity = parity_check(model, eval_examples, suffix_start, args.cache_dtype, args.parity_limit, args.parity_tol, args.device)
+  _emit_progress(args, "parity_done", status=parity["status"], elapsed_s=round(time.perf_counter() - parity_st, 6), max_abs=parity.get("max_abs"))
   if parity["status"] == "fail" and not args.allow_failed_parity:
     raise RuntimeError(f"suffix parity failed: max_abs={parity['max_abs']} mismatches={parity['argmax_mismatches']}")
 
+  install_st = time.perf_counter()
   adapters = install_lora(model, args.targets, rank=args.rank, alpha=args.alpha, seed=args.seed)
   installed_targets = [adapter.target for adapter in adapters]
   opt = Adam(adapter_parameters(adapters), lr=args.lr, fused=False)
+  _emit_progress(args, "adapter_installed", installed_adapters=len(adapters), installed_targets=installed_targets, elapsed_s=round(time.perf_counter() - install_st, 6))
 
   st = time.perf_counter()
-  train_cache, train_cache_summary = build_suffix_cache(model, train_examples, suffix_start, args.cache_dtype)
-  eval_cache, eval_cache_summary = build_suffix_cache(model, eval_examples, suffix_start, args.cache_dtype)
+  train_cache, train_cache_summary = build_suffix_cache(
+    model, train_examples, suffix_start, args.cache_dtype,
+    progress=lambda stage, **data: _emit_progress(args, stage, **data),
+    split="train", progress_every=args.progress_every)
+  eval_cache, eval_cache_summary = build_suffix_cache(
+    model, eval_examples, suffix_start, args.cache_dtype,
+    progress=lambda stage, **data: _emit_progress(args, stage, **data),
+    split="eval", progress_every=args.progress_every)
   before_arrays = {k:v.copy() for k,v in _adapter_arrays(adapters).items()}
+  _emit_progress(args, "initial_eval_start", eval_limit=args.eval_limit)
   initial = {
     "train": _eval_loss_suffix(model, train_cache, suffix_start, args.device, args.eval_limit),
     "eval": _eval_loss_suffix(model, eval_cache, suffix_start, args.device, args.eval_limit),
   }
+  _emit_progress(args, "initial_eval_done", train_loss=initial["train"]["loss"], eval_loss=initial["eval"]["loss"])
   history = []
   rng = np.random.default_rng(args.seed)
+  _emit_progress(args, "train_loop_start", steps=args.steps, train_cache_examples=len(train_cache))
   with Tensor.train():
     for step in range(args.steps):
       cached = train_cache[int(rng.integers(0, len(train_cache)))]
@@ -167,11 +219,15 @@ def train_suffix_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
       loss.backward()
       opt.step()
       if step == 0 or (step + 1) % max(1, args.steps // 4) == 0:
-        history.append({"step": step + 1, "example": cached.example["id"], "loss": float(loss.numpy())})
+        loss_value = float(loss.numpy())
+        history.append({"step": step + 1, "example": cached.example["id"], "loss": loss_value})
+        _emit_progress(args, "train_step", step=step + 1, example=cached.example["id"], loss=loss_value)
+  _emit_progress(args, "final_eval_start", eval_limit=args.eval_limit)
   final = {
     "train": _eval_loss_suffix(model, train_cache, suffix_start, args.device, args.eval_limit),
     "eval": _eval_loss_suffix(model, eval_cache, suffix_start, args.device, args.eval_limit),
   }
+  _emit_progress(args, "final_eval_done", train_loss=final["train"]["loss"], eval_loss=final["eval"]["loss"])
   after_arrays = _adapter_arrays(adapters)
   adapter_delta_l2 = _array_delta_l2(before_arrays, after_arrays)
   train_loss_delta = initial["train"]["loss"] - final["train"]["loss"]
@@ -205,6 +261,7 @@ def train_suffix_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
     "cache": {"train": train_cache_summary, "eval": eval_cache_summary},
     "parity": parity,
     "optimizer": {"name": "Adam", "lr": args.lr, "steps": args.steps, "seed": args.seed},
+    "limits": {"max_rows": args.max_rows, "max_train_rows": args.max_train_rows, "max_eval_rows": args.max_eval_rows},
     "initial": initial,
     "final": final,
     "deltas": {
@@ -219,6 +276,7 @@ def train_suffix_adapter(args:argparse.Namespace) -> tuple[dict[str, Any], Any]:
     "artifacts": {"config": "adapter.json", "weights": "adapter.npz"},
     "note": "Suffix-cache LoRA gate; caches frozen prefix hidden states and trains only the selected lastN_ffn suffix.",
   }
+  _emit_progress(args, "summary_ready", status=status, elapsed_s=round(summary["elapsed_s"], 6), train_loss_delta=train_loss_delta, eval_loss_delta=eval_loss_delta)
   return summary, adapters
 
 def summary_markdown(summary:dict[str, Any]) -> str:
@@ -282,6 +340,8 @@ def main() -> int:
   parser.add_argument("--steps", type=int, default=64)
   parser.add_argument("--seed", type=int, default=20260613)
   parser.add_argument("--max-rows", type=int, default=20)
+  parser.add_argument("--max-train-rows", type=int, default=0, help="limit split=train rows after split metadata is applied")
+  parser.add_argument("--max-eval-rows", type=int, default=0, help="limit split=eval rows after split metadata is applied")
   parser.add_argument("--eval-every", type=int, default=5)
   parser.add_argument("--eval-limit", type=int, default=8)
   parser.add_argument("--target-positions", choices=("all", "last"), default="all")
@@ -292,6 +352,8 @@ def main() -> int:
   parser.add_argument("--parity-tol", type=float, default=1e-2)
   parser.add_argument("--allow-failed-parity", action="store_true")
   parser.add_argument("--min-train-loss-delta", type=float, default=0.0)
+  parser.add_argument("--progress-every", type=int, default=5, help="emit cache progress every N source rows")
+  parser.add_argument("--quiet-progress", action="store_true")
   args = parser.parse_args()
 
   summary, adapters = train_suffix_adapter(args)

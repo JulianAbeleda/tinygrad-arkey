@@ -1,0 +1,169 @@
+{
+  "baselines": {
+    "majority_label": {
+      "accuracy": 0.23684210526315788,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.07659574468085105,
+      "pred_labels": {
+        "reject": 38
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.16975802401520504,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.7777777777777778,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "mechanism_prior": {
+      "accuracy": 0.2894736842105263,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.18528138528138527,
+      "pred_labels": {
+        "reject": 33,
+        "tie": 5
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.21811462491952277,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.08333333333333333
+      },
+      "reason_accuracy_on_label_match": 0.8181818181818182,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "random_label": {
+      "accuracy": 0.23684210526315788,
+      "false_positive_accept_rate": 0.13157894736842105,
+      "macro_f1": 0.11011904761904763,
+      "pred_labels": {
+        "accept": 5,
+        "needs_rerun": 4,
+        "reject": 23,
+        "tie": 6
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.1704591060464139,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.3333333333333333,
+      "retry_precision": 0.0,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "reject_all": {
+      "accuracy": 0.23684210526315788,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.07659574468085105,
+      "pred_labels": {
+        "reject": 38
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.16975802401520504,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.7777777777777778,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "simple_family_heuristic": {
+      "accuracy": 0.2894736842105263,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.18528138528138527,
+      "pred_labels": {
+        "reject": 33,
+        "tie": 5
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.21811462491952277,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.08333333333333333
+      },
+      "reason_accuracy_on_label_match": 0.8181818181818182,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    }
+  },
+  "best_baseline": "mechanism_prior",
+  "best_baseline_macro_f1": 0.18528138528138527,
+  "conclusion": "no_signal",
+  "examples": 83,
+  "holdout_rows": 38,
+  "kind": "qk_flywheel_triage_baseline_eval",
+  "models": {
+    "adapter_smoke_v0": {
+      "accuracy": 0.0,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.0,
+      "pred_labels": {
+        "invalid_output": 38
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.16975802401520504,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": null,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    }
+  },
+  "seed": 20260614,
+  "train_rows": 45
+}
