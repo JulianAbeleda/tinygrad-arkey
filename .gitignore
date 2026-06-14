@@ -76,4 +76,4 @@ mutants
 .mutmut-cache
 dagre/
 graphlib/
-uv.lock
+# uv.lock is committed for cross-machine reproducibility (Mac mini + Ubuntu AMD box)

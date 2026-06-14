@@ -8,7 +8,7 @@ classifiers = ["Programming Language :: Python :: 3"]
 
 license = 'MIT'
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = []
 
 [build-system]
@@ -54,6 +54,10 @@ tinygrad = ["py.typed"]
 
 
 [project.optional-dependencies]
+# Cross-machine cost-model + core work deps (Mac + Ubuntu). Install with
+# `uv sync --extra costmodel` (or pip install -e .[costmodel]). torch is a
+# reference-comparison dep and lives in testing_minimal, not here.
+costmodel = ["numpy", "xgboost"]
 # arm = ["unicorn"]
 # triton = ["triton-nightly>=2.1.0.dev20231014192330"]
 linting = [
