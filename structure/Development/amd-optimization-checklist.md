@@ -442,6 +442,19 @@ generated-policy storage mode.
       `vector_load`, and `wide_load_only`; and add first-class
       tinygrad/UOp/profile features for rows without structural kernel detail.
       Do not rerun or promote the cost model until these gaps are addressed.
+- [x] Added Phase 3D cost-model schema v1:
+      `extra/qk_flywheel_dataset_v1.py`,
+      `test/external/test_qk_flywheel_phase3d.py`,
+      `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1/`, and
+      `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1/`.
+      This preserves the `45` train / `38` family-split holdout rows while
+      adding `candidate_outcome_v1`, normalized mechanisms, and leak-free v1
+      feature groups. Unknown mechanisms drop to `0` after `26` mechanism
+      normalizations. The audit improves but still does not prove the flywheel:
+      unseen holdout categorical values fall `24 -> 15`, weak rows fall
+      `56 -> 43`, and no target/result leakage is detected. Next flywheel work
+      is targeted train coverage plus first-class tinygrad/UOp/profile
+      features, not another immediate XGBoost rerun.
 
 ## Do Not Do Next
 

@@ -164,7 +164,10 @@ not just a narrative. Current artifacts:
 - `bench/amd-decode-flywheel-proof-20260614/triage-qwen3-8b-base-v0/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v0/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v0/`
+- `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1/`
 - `extra/qk_flywheel_dataset.py`
+- `extra/qk_flywheel_dataset_v1.py`
 - `extra/qk_flywheel_triage_eval.py`
 - `extra/qk_flywheel_cost_model.py`
 - `extra/qk_flywheel_feature_audit.py`
@@ -249,6 +252,20 @@ mechanism coverage for `packed_word_lane_unroll`, `qk_block_dot`,
 `vector_load`, and `wide_load_only`; and add first-class tinygrad/UOp/profile
 features for rows with `no_structural_kernel_detail`. Do not rerun XGBoost as a
 decision point until those data/feature gaps are addressed.
+
+Phase 3D added the first schema/data cleanup pass:
+`extra/qk_flywheel_dataset_v1.py`,
+`bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1/`, and
+`bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1/`. It
+preserves the same `45` train / `38` family-split holdout rows, adds
+`candidate_outcome_v1`, removes the v0 unknown-mechanism hole (`0` unknown
+mechanism rows after `26` mechanism normalizations), and keeps outcome fields
+out of prompts/features. The v1 audit improves coverage but remains
+`needs_data_and_feature_expansion`: unseen holdout categorical values are `15`
+instead of `24`, weak rows are `43` instead of `56`, and no target/result
+leakage is detected. Remaining blockers are real train coverage for the newly
+named holdout mechanisms, label coverage, and first-class tinygrad/UOp/profile
+features; current v1 UOp fields are proxy estimates with `uop_available=false`.
 
 ## Verification Already Run
 

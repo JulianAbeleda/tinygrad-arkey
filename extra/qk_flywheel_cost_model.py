@@ -60,6 +60,20 @@ def _add_cat(out:dict[str, Any], name:str, value:Any) -> None:
   text = str(value)
   if text: out[name] = text
 
+def _add_flat_group(out:dict[str, Any], prefix:str, data:Any) -> None:
+  if not isinstance(data, dict): return
+  for key, value in sorted(data.items()):
+    if key in ("outcome", "label", "reason", "retry", "evidence", "source_files"): continue
+    name = f"{prefix}_{key}"
+    if isinstance(value, str):
+      _add_cat(out, name, value)
+    elif isinstance(value, bool):
+      _add_num(out, name, value)
+    elif isinstance(value, (int, float)):
+      _add_num(out, name, value)
+    elif isinstance(value, list):
+      _add_num(out, f"{name}_count", len(value))
+
 def _parse_load_width(value:Any) -> float:
   text = str(value or "").lower()
   m = re.search(r"x(\d+)", text)
@@ -110,14 +124,17 @@ def _text_flags(*values:Any) -> dict[str, float]:
 def extract_feature_map(row:dict[str, Any]) -> dict[str, Any]:
   """Return leak-free pre-result features for a kernel-triage row."""
   out: dict[str, Any] = {}
-  for key in SAFE_TOP_LEVEL_CATEGORICAL: _add_cat(out, key, row.get(key))
-  _add_cat(out, "model_size_cat", f"{int(_model_size_b(row.get('model')))}B" if _model_size_b(row.get("model")) else "unknown")
+  is_v1 = row.get("schema_version") == "kernel_triage_v1"
+  top_level = () if is_v1 else SAFE_TOP_LEVEL_CATEGORICAL
+  for key in top_level: _add_cat(out, key, row.get(key))
+  if not is_v1: _add_cat(out, "model_size_cat", f"{int(_model_size_b(row.get('model')))}B" if _model_size_b(row.get("model")) else "unknown")
   _add_num(out, "model_size_b", _model_size_b(row.get("model")))
   _add_num(out, "tensor_block", _tensor_block(row.get("tensor")))
 
   ctx = row.get("pre_result_context") or {}
   if not isinstance(ctx, dict): ctx = {}
-  for key in SAFE_CONTEXT_CATEGORICAL: _add_cat(out, f"context_{key}", ctx.get(key))
+  if not is_v1:
+    for key in SAFE_CONTEXT_CATEGORICAL: _add_cat(out, f"context_{key}", ctx.get(key))
   for key in ("ab_match", "candidate_stable", "reference_stable", "full_decode_supported", "full_decode_ready", "source_ok", "wide_loads"):
     _add_num(out, f"context_{key}", ctx.get(key))
   for key in ("parts", "runs"):
@@ -141,7 +158,8 @@ def extract_feature_map(row:dict[str, Any]) -> dict[str, Any]:
 
   schedule = ctx.get("schedule") or {}
   if not isinstance(schedule, dict): schedule = {}
-  for key in SAFE_SCHEDULE_CATEGORICAL: _add_cat(out, f"schedule_{key}", schedule.get(key))
+  if not is_v1:
+    for key in SAFE_SCHEDULE_CATEGORICAL: _add_cat(out, f"schedule_{key}", schedule.get(key))
   for key in ("full_decode_supported", "group_unroll", "k_tile_blocks", "lane_width", "parts", "row_tile"):
     _add_num(out, f"schedule_{key}", schedule.get(key))
   _add_num(out, "schedule_requires_count", len(schedule.get("requires") or []) if isinstance(schedule.get("requires"), list) else 0)
@@ -167,6 +185,14 @@ def extract_feature_map(row:dict[str, Any]) -> dict[str, Any]:
     row.get("mechanism"),
   )
   out.update(text_bits)
+
+  candidate_record = row.get("candidate_record") or {}
+  if isinstance(candidate_record, dict):
+    _add_cat(out, "candidate_schema_version", candidate_record.get("schema_version"))
+    _add_num(out, "candidate_frozen_before_outcome", candidate_record.get("frozen_before_outcome"))
+    _add_flat_group(out, "v1_static", candidate_record.get("static_features"))
+    _add_flat_group(out, "v1_uop", candidate_record.get("uop_features"))
+    _add_flat_group(out, "v1_profile", candidate_record.get("profile_features"))
 
   parts = max(out.get("schedule_parts", 0.0), out.get("context_parts", 0.0), out.get("shape_parts", 0.0), out.get("change_to_parts", 0.0), 1.0)
   row_tile = max(out.get("schedule_row_tile", 0.0), out.get("schedule_opts_local0_arg", 0.0), out.get("change_to_opts_local0_arg", 0.0), 1.0)

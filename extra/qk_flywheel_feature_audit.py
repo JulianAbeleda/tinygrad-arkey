@@ -65,16 +65,19 @@ def _row_audit(row:dict[str, Any], fmap:dict[str, Any], train_families:set[str],
     "shape": _has_group(fmap, "shape_"),
     "load_width": _has_group(fmap, "load_width_"),
     "context_opts": _has_group(fmap, "context_opts_"),
+    "v1_static": _has_group(fmap, "v1_static_"),
+    "v1_uop": _has_group(fmap, "v1_uop_"),
+    "v1_profile": _has_group(fmap, "v1_profile_"),
     "analytical": _has_group(fmap, "ana_"),
   }
   reasons = []
   if row.get("prediction_stage") == "after_full_decode":
     reasons.append("post_full_decode_training_row")
-  if not any(groups[name] for name in ("schedule", "change", "shape", "load_width", "context_opts")):
+  if not any(groups[name] for name in ("schedule", "change", "shape", "load_width", "context_opts", "v1_static", "v1_uop", "v1_profile")):
     reasons.append("no_structural_kernel_detail")
   if row.get("mechanism") == "unknown":
     reasons.append("unknown_mechanism")
-  if row.get("split") == "holdout" and row.get("family") not in train_families:
+  if row.get("split") == "holdout" and "family" in fmap and row.get("family") not in train_families:
     reasons.append("family_unseen_in_train")
   if row.get("split") == "holdout" and row.get("mechanism") not in train_mechanisms:
     reasons.append("mechanism_unseen_in_train")
@@ -193,11 +196,16 @@ def _recommendations(summary:dict[str, Any]) -> list[dict[str, Any]]:
   return recs
 
 def _markdown(summary:dict[str, Any]) -> str:
+  phase = "Phase 3D" if "kernel-triage-v1" in str(summary.get("examples_path", "")) else "Phase 3C"
+  description = (
+    "extends the data and feature audit over the normalized v1 schema."
+    if phase == "Phase 3D" else
+    "scopes the data and feature gaps that blocked the learned cost-model triage result."
+  )
   lines = [
     "# AMD Decode Flywheel Feature Coverage Audit",
     "",
-    "This Phase 3C artifact scopes the data and feature gaps that blocked the",
-    "learned cost-model triage result. It does not train a model.",
+    f"This {phase} artifact {description} It does not train a model.",
     "",
     f"- conclusion: `{summary['conclusion']}`",
     f"- train rows: `{summary['train_rows']}`",

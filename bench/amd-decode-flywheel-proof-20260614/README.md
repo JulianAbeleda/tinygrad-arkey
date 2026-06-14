@@ -34,6 +34,9 @@ than simple baselines before outcomes are known?
   pre-result features, optional XGBoost, and a centroid fallback.
 - `triage-feature-audit-v0/`: Phase 3C feature/data coverage audit that turns
   the Phase 3B negative into concrete data and feature targets.
+- `kernel-triage-v1/`: Phase 3D dataset preserving the v0 split while adding
+  normalized mechanisms and the frozen `candidate_outcome_v1` schema.
+- `triage-feature-audit-v1/`: Phase 3D audit over the v1 schema.
 
 ## Current Result
 
@@ -98,3 +101,14 @@ The highest-priority gaps are label coverage for `construction_blocked`,
 `packed_word_lane_unroll`, `qk_block_dot`, `vector_load`, and
 `wide_load_only`; and richer tinygrad/UOp/profile features for rows without
 structural kernel detail.
+
+Phase 3D update: `extra/qk_flywheel_dataset_v1.py` adds the frozen
+`candidate_outcome_v1` schema and normalizes semantic mechanisms while
+preserving the same `45` train / `38` holdout family split. Unknown mechanisms
+drop to `0`, with `26` rows changed from v0 names. The v1 audit improves
+coverage but still concludes `needs_data_and_feature_expansion`: unseen
+holdout categorical values fall from `24` to `15`, weak rows fall from `56` to
+`43`, and no target/result leakage is detected. The remaining blocker is real
+data and features: `33` holdout rows still have mechanisms unseen in train,
+label coverage is thin, and current UOp features are proxy estimates rather
+than first-class tinygrad/UOp/profile extraction.

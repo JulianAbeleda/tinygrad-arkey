@@ -3,8 +3,10 @@
 Date: 2026-06-14
 
 Status: plan of record for proving or falsifying the full kernel-optimization
-flywheel. Phase 1 is built, and the first strict Phase 2 no-adapter baseline is
-measured.
+flywheel. Phase 1/2 and the Phase 3.0 through 3D diagnostic/data subphases are
+built where marked. The current evidence is still `no_signal`; Phase 3D
+improved the cost-model dataset/schema but did not prove the model-to-kernel
+link.
 
 Parent architecture note:
 `docs/amd-decode-kernel-optimization-flywheel.md`.
@@ -851,9 +853,10 @@ Highest priority targets:
 
 Next implementation scope:
 
-- Add a canonical candidate-outcome log schema with frozen feature stages:
-  before microbench, before full decode, and final outcome.
-- Add UOp/profile feature extraction for candidate rows:
+- Phase 3D has added the canonical candidate-outcome log schema and normalized
+  mechanism layer. The remaining work is feature/data collection, not another
+  cost-model score run.
+- Add real UOp/profile feature extraction for candidate rows:
   UOp op counts, global load/store counts, scalar versus vector load evidence,
   estimated bytes, arithmetic-intensity proxy, local/shared memory use, loop
   and opt counts, generated source/body size, and static-gate failure reason.
@@ -861,6 +864,74 @@ Next implementation scope:
   above. The goal is cost-model coverage first, not immediate kernel speedup.
 - Rerun Phase 3B only after this data/feature upgrade. Do not promote Phase 4
   until the rerun beats `mechanism_prior` under the same gates.
+
+## Phase 3D: Cost-Model Feature Schema v1
+
+Purpose:
+
+- Make the cost-model rows look like compiler-autotuning data instead of prose
+  history.
+- Normalize mechanism names so holdout mechanisms are visible as real classes,
+  not `unknown`.
+- Freeze a candidate-record schema that separates model-visible features from
+  final outcome fields.
+
+Implementation:
+
+- `extra/qk_flywheel_dataset_v1.py`
+- `extra/qk_flywheel_cost_model.py`
+- `extra/qk_flywheel_feature_audit.py`
+- `test/external/test_qk_flywheel_phase3d.py`
+- Artifacts:
+  `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1/` and
+  `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1/`
+
+Schema:
+
+- Each row has `schema_version="kernel_triage_v1"`.
+- Each row has a top-level `candidate_record` with
+  `schema_version="candidate_outcome_v1"`.
+- `candidate_record.static_features`, `candidate_record.uop_features`, and
+  `candidate_record.profile_features` are the model-visible feature groups.
+- `candidate_record.outcome` stores `label`, `reason`, `retry`, and
+  `source_files`, but prompts and feature extraction remove that group.
+- Current `uop_features` are explicit proxy estimates with
+  `uop_available=false`; they are not yet first-class tinygrad UOp counts.
+
+Current Phase 3D result:
+
+- Dataset rows are unchanged: `83` rows, `45` train rows, and `38`
+  family-split holdout rows.
+- The v0 split policy is preserved as `family_split_v0_preserved`.
+- Normalization removes the v0 `unknown` mechanism hole:
+  `18` unknown-mechanism holdout rows in the v0 audit become `0` unknown
+  mechanism rows in v1.
+- `26` rows changed mechanism names from v0, mostly semantic schedule/codegen
+  rows such as `row_upcast`, `reduce_unroll`, and `two_dim_local`.
+- The feature audit improves but does not clear the gate:
+  unseen holdout categorical values fall from `24` to `15`, and weak rows fall
+  from `56` to `43`.
+- Leakage audit remains clean: no target/result feature names are used.
+
+Remaining gaps:
+
+- `33` holdout rows still have mechanisms unseen in train, now because the
+  mechanisms are named correctly rather than hidden as `unknown`.
+- Label coverage is still thin for `construction_blocked`,
+  `raw_accept_unconfirmed`, and `diagnostic_only`.
+- The model still needs real UOp/profile features; current v1 UOp features are
+  analytical proxies.
+- Do not rerun or promote XGBoost as a decision point until the targeted
+  mechanism/label rows and first-class UOp/profile features exist.
+
+Next implementation scope:
+
+- Build a targeted candidate/outcome batch for the uncovered mechanisms:
+  `packed_word_lane_unroll`, `qk_block_dot`, `reduce_unroll`, `row_upcast`,
+  `two_dim_local`, `vector_load`, and `wide_load_only`.
+- Add first-class extracted features for source/UOp/profile evidence, replacing
+  proxy-only `uop_available=false` rows where possible.
+- Rerun Phase 3B only after the v1 schema has materially better coverage.
 
 ## Phase 4: Live Shadow Mode
 
