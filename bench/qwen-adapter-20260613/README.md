@@ -179,3 +179,20 @@ points at exposure bias / objective mismatch more than adapter capacity. The
 next practical gate should enlarge the held-out generation set and train on
 filtered own-generations or another generation-matched objective before adding
 more adapter targets.
+
+## V4 Strict JSON Evaluation Dataset
+
+The next gate is an eval/objective foundation, not another adapter-capacity
+sweep:
+
+- dataset: `training-data-v4/sft.jsonl`
+- held-out eval prompts: `training-data-v4/eval-prompts.jsonl`
+- held-out eval size: `204` prompts
+- categories: arithmetic, fact, code, compiler, string, categorization
+- scorer: deterministic multi-axis strict JSON scorer
+- disjointness: train/eval prompts, answers, and template instances are
+  mechanically checked
+
+This replaces the previous `N=12` held-out set as the promotion ruler. Phase 3
+should re-run base, V3, and V5 against this dataset before any more training is
+interpreted as a quality result.
