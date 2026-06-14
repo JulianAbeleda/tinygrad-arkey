@@ -430,6 +430,18 @@ generated-policy storage mode.
       set and current feature policy are not enough. Do not build ML from
       scratch; grow labeled outcomes and richer tinygrad/UOp/profile features
       before retrying.
+- [x] Added Phase 3C cost-model feature/data audit:
+      `extra/qk_flywheel_feature_audit.py` and
+      `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v0/`.
+      The audit records `needs_data_and_feature_expansion`: `24` unseen
+      holdout categorical values, `56` weak rows, `9` post-full-decode train
+      rows, and no target/result feature leakage. Next targets are explicit:
+      label coverage for `construction_blocked`, `raw_accept_unconfirmed`, and
+      `diagnostic_only`; normalize `18` `unknown` holdout mechanisms; add
+      mechanism coverage for `packed_word_lane_unroll`, `qk_block_dot`,
+      `vector_load`, and `wide_load_only`; and add first-class
+      tinygrad/UOp/profile features for rows without structural kernel detail.
+      Do not rerun or promote the cost model until these gaps are addressed.
 
 ## Do Not Do Next
 

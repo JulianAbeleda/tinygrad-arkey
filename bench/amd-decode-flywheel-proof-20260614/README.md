@@ -32,6 +32,8 @@ than simple baselines before outcomes are known?
   tiny adapter smoke rollout.
 - `triage-cost-model-v0/`: Phase 3B learned cost-model triage with leak-free
   pre-result features, optional XGBoost, and a centroid fallback.
+- `triage-feature-audit-v0/`: Phase 3C feature/data coverage audit that turns
+  the Phase 3B negative into concrete data and feature targets.
 
 ## Current Result
 
@@ -85,3 +87,14 @@ macro-F1 `0.137` versus `0.185`, precision@3 `0.000` versus `0.083`, and NDCG
 `0.189` versus `0.218`, with false-positive accept rate `0.000`. XGBoost is
 the right tool class for cost-model triage, but the current `45` train rows and
 feature policy do not yet prove the hard half of the flywheel.
+
+Phase 3C update: `extra/qk_flywheel_feature_audit.py` scopes why Phase 3B
+failed and what data to collect next. Current audit:
+`needs_data_and_feature_expansion`, `24` unseen holdout categorical values,
+`56` weak rows, `9` post-full-decode train rows, and no target/result leakage.
+The highest-priority gaps are label coverage for `construction_blocked`,
+`raw_accept_unconfirmed`, and `diagnostic_only`; normalization of `18`
+`unknown` mechanism holdout rows; mechanism coverage for
+`packed_word_lane_unroll`, `qk_block_dot`, `vector_load`, and
+`wide_load_only`; and richer tinygrad/UOp/profile features for rows without
+structural kernel detail.

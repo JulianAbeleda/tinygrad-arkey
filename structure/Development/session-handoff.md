@@ -163,9 +163,11 @@ not just a narrative. Current artifacts:
 - `bench/amd-decode-flywheel-proof-20260614/triage-baselines-v0/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-qwen3-8b-base-v0/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v0/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v0/`
 - `extra/qk_flywheel_dataset.py`
 - `extra/qk_flywheel_triage_eval.py`
 - `extra/qk_flywheel_cost_model.py`
+- `extra/qk_flywheel_feature_audit.py`
 
 Phase 1 built `83` structured kernel-history examples from existing QK
 artifacts: `45` train rows and `38` family-split holdout rows. Phase 2
@@ -234,6 +236,19 @@ This loses to `mechanism_prior` macro-F1 `0.185`, precision@3 `0.083`, and
 NDCG `0.218`, so Phase 3B is also `no_signal`. The right next cost-model work
 is more labeled outcomes plus richer first-class tinygrad/UOp/profile features,
 not a from-scratch ML model.
+
+Phase 3C now scopes that data/feature work:
+`extra/qk_flywheel_feature_audit.py` and
+`bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v0/`. The audit
+uses the same leak-free feature extractor and reports `needs_data_and_feature_expansion`:
+`24` unseen holdout categorical values, `56` weak rows, `9` post-full-decode
+train rows, and no target/result feature leakage. Highest-priority targets:
+add label coverage for `construction_blocked`, `raw_accept_unconfirmed`, and
+`diagnostic_only`; normalize `18` `unknown` mechanism holdout rows; add
+mechanism coverage for `packed_word_lane_unroll`, `qk_block_dot`,
+`vector_load`, and `wide_load_only`; and add first-class tinygrad/UOp/profile
+features for rows with `no_structural_kernel_detail`. Do not rerun XGBoost as a
+decision point until those data/feature gaps are addressed.
 
 ## Verification Already Run
 

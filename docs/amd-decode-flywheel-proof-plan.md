@@ -791,6 +791,77 @@ Conclusion:
   must beat `mechanism_prior` on macro-F1, keep false-positive accepts low, and
   improve ranking metrics by a meaningful margin.
 
+## Phase 3C: Cost-Model Data And Feature Upgrade
+
+Purpose:
+
+- Turn the Phase 3B negative into a concrete data/feature collection plan.
+- Separate missing-data failures from missing-feature failures.
+- Define the next batch before running more kernels, so the cost-model dataset
+  grows toward coverage instead of random experiment accumulation.
+
+Implementation:
+
+- `extra/qk_flywheel_feature_audit.py`
+- Artifact:
+  `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v0/`
+- Inputs: the same Phase 1 `examples.jsonl` and the Phase 3B leak-free feature
+  extractor.
+- Outputs:
+  - `summary.json`: train/holdout coverage, target rows, weak-row reasons,
+    stage viability, and leakage audit.
+  - `row-audit.jsonl`: per-row feature-quality flags.
+  - `README.md`: short human-readable target list.
+
+Current Phase 3C result:
+
+- Conclusion: `needs_data_and_feature_expansion`.
+- Train rows: `45`; holdout rows: `38`.
+- Unseen holdout categorical values: `24`.
+- Weak rows: `56`.
+- Post-full-decode train rows: `9`; these are useful historical outcomes but
+  weak signal for pre-outcome triage.
+- Leakage audit: no target/result feature names detected.
+
+Highest priority targets:
+
+1. Add label coverage for labels present in holdout but absent or undercovered
+   in train:
+   - `construction_blocked`: `1` train / `19` holdout, needs `4` more train
+     rows to hit the initial `5`-row floor.
+   - `raw_accept_unconfirmed`: `0` train / `3` holdout, needs `5`.
+   - `diagnostic_only`: `0` train / `1` holdout, needs `5`.
+2. Normalize `unknown` mechanisms before treating them as learnable classes:
+   `18` holdout rows are currently `unknown`.
+3. Add targeted mechanism coverage for holdout mechanisms with fewer than five
+   train rows:
+   - `packed_word_lane_unroll`: `0` train / `2` holdout, needs `5`.
+   - `qk_block_dot`: `0` train / `2` holdout, needs `5`.
+   - `vector_load`: `0` train / `2` holdout, needs `5`.
+   - `wide_load_only`: `0` train / `1` holdout, needs `5`.
+4. Reduce categorical train/holdout mismatch:
+   - unseen families: `qk_block_dot`, `semantic_codegen_v3`,
+     `semantic_codegen_v4`, `semantic_schedule_v0`, `threeway_load`.
+   - unseen schedule names: `direct_out`, `reduce_unroll4`, `row_upcast2`,
+     `two_dim_local4`.
+   - unseen schedule families: `q4_k_packed_u32`, `q6_k_packed_u16`.
+5. Add richer first-class tinygrad/UOp/profile features for rows with
+   `no_structural_kernel_detail` (`26` rows), instead of relying on top-level
+   labels and candidate names.
+
+Next implementation scope:
+
+- Add a canonical candidate-outcome log schema with frozen feature stages:
+  before microbench, before full decode, and final outcome.
+- Add UOp/profile feature extraction for candidate rows:
+  UOp op counts, global load/store counts, scalar versus vector load evidence,
+  estimated bytes, arithmetic-intensity proxy, local/shared memory use, loop
+  and opt counts, generated source/body size, and static-gate failure reason.
+- Generate a small targeted data batch that fills the label/mechanism holes
+  above. The goal is cost-model coverage first, not immediate kernel speedup.
+- Rerun Phase 3B only after this data/feature upgrade. Do not promote Phase 4
+  until the rerun beats `mechanism_prior` under the same gates.
+
 ## Phase 4: Live Shadow Mode
 
 Purpose:
