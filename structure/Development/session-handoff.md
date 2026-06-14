@@ -604,9 +604,14 @@ passes exactly (`max_abs=0.0`), train/eval loss drops strongly (`7.1041 ->
 `0.9167`. The generated rollout is
 `bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5-rollout/` and
 reaches `4/12` strict JSON passes. Compared with base it is `+4` with `0`
-regressions; compared with V3 output-LoRA it is `+1` net with `1` regression.
+regressions; compared with V3 output-LoRA it is `3/12 -> 4/12` with `2`
+improvements and `1` regression, which is not a meaningful generation-quality
+win at `N=12`.
 Verdict: V5 fixes the practical internal-adapter training loop, but does not
-solve strict JSON generation. Do not promote it as a behavior gate. The next
-adapter decision is whether to add more conditional capacity (`last2_ffn`,
-attention projections, combined output+suffix) or first improve the objective /
-evaluator so more LoRA tuning is better aimed.
+solve strict JSON generation. Do not promote it as a behavior gate. The gap
+between teacher-forced token accuracy (`0.9167`) and strict free-generation pass
+rate (`0.3333`) points to objective/eval mismatch and exposure bias, not simply
+adapter capacity. The recommended next adapter step is a larger held-out
+generation set plus filtered own-generation / rejection-sampling SFT, with
+generation pass rate as the gate. Do not start with another `lastN_ffn` capacity
+sweep unless that objective/eval loop is in place.

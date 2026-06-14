@@ -316,6 +316,18 @@ at `23.78 GB`, and the plain-block no-REALIZE workaround is too slow for full
 until there is a dedicated internal-adapter training path that is differentiable
 and practical on 8B.
 
+That dedicated path now exists as the V5 suffix-cache trainer. It caches frozen
+prefix hidden states at the `lastN_ffn` boundary and trains only the suffix, so
+the prefix is absent from the backward graph and no generated-QK bit-op gradient
+is required. The 8B `last1_ffn` strict JSON run has exact suffix parity
+(`max_abs=0.0`) and strong teacher-forced fit (`eval loss 7.4458 -> 0.2680`,
+token accuracy `0.5000 -> 0.9167`). Generation still fails: base is `0/12`, V3
+output-LoRA is `3/12`, and V5 is `4/12`. At `N=12`, the V3-to-V5 delta is noise
+and includes one regression. Verdict: internal-adapter training infrastructure is
+fixed, but strict JSON generation is not. The frontier is now objective/eval
+mismatch, not just adapter capacity: enlarge the held-out generation set and
+train on own-generation/rejection-sampled data before more target sweeps.
+
 For the llama.cpp-comparable research track, use
 `bench/qk-ansor-transition-20260612/scorecard.md` as the objective report.
 Current generated shared-storage rows are `51.46%` (8B), `61.63%` (14B), and
@@ -389,9 +401,8 @@ worth doing only if the research itself is the goal.
   no-REALIZE training. It is too slow to be the loop. Fix the training path
   first.
 - Do not promote the V5 suffix-cache `last1_ffn` strict JSON adapter. The
-  training path is fixed and the base comparison improves (`0/12 -> 4/12`), but
-  the held-out quality gate still fails and it regresses one prompt versus the
-  V3 output-LoRA diagnostic.
+  training path is fixed, but the held-out quality gate still fails; `4/12`
+  versus V3's `3/12` at `N=12` is noise and includes one regression.
 
 ## Pointers
 

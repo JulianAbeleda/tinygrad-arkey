@@ -325,13 +325,15 @@ generated-policy storage mode.
       `last1_ffn` rank-4 passes suffix parity (`max_abs=0.0`) and the training
       gate (`eval loss 7.4458 -> 0.2680`, eval token accuracy `0.5000 ->
       0.9167`) without generated-QK bit-op gradients or full fp16 realization.
-      Held-out generation improves over base (`0/12 -> 4/12`) but fails the
-      strict JSON promotion bar and has one regression versus V3 output-LoRA, so
-      this is a training-path win, not a behavior-gate win.
-- [ ] Next practical step: decide whether to continue adapter capacity
-      experiments (`last2_ffn`, attention projections, or combined output+suffix)
-      or pivot to a better supervised objective/evaluator before more LoRA
-      tuning. Any continuation must use the same strict rollout/compare gate.
+      Held-out generation reaches only `4/12`; the apparent `+1` over V3
+      output-LoRA is not meaningful at `N=12` and includes one regression. This
+      is a training-path win, not a behavior-gate win.
+- [ ] Next practical step: fix the generation objective/eval before more
+      adapter-capacity sweeps. Enlarge the held-out strict JSON generation set
+      so one prompt cannot swing the verdict, then train on filtered
+      own-generations / rejection-sampling SFT or another generation-matched
+      objective. Any continuation must use generation pass rate as the gate; do
+      not treat teacher-forced token accuracy as sufficient.
 
 ## Do Not Do Next
 

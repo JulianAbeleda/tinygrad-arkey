@@ -164,11 +164,18 @@ Current result:
 - eval loss: `7.4458 -> 0.2680`
 - teacher-forced eval token accuracy: `0.5000 -> 0.9167`
 - base rollout comparison: `0/12 -> 4/12`, `+4` improvements, `0` regressions
-- V3 output-LoRA comparison: `3/12 -> 4/12`, `+1` net, but `1` regression
+- V3 output-LoRA comparison: `3/12 -> 4/12`, with `2` improvements and `1`
+  regression. At `N=12`, this is not a meaningful generation-quality win over
+  V3; treat both as the same failed `3-4/12` band.
 
 Verdict: training-path positive, quality-gate negative. The suffix-cache trainer
 solves the V4 practical blocker: internal `lastN_ffn` adapters can now train
 without generated-QK bit-op gradients, without full fp16 realization, and without
 recomputing the full prefix every step. It does not solve strict JSON answering.
 The held-out rollout is only `4/12`, so this adapter is a diagnostic artifact,
-not a promoted behavior gate.
+not a promoted behavior gate. The large teacher-forced versus free-generation
+gap (`0.9167` token accuracy versus `0.3333` strict generation pass rate)
+points at exposure bias / objective mismatch more than adapter capacity. The
+next practical gate should enlarge the held-out generation set and train on
+filtered own-generations or another generation-matched objective before adding
+more adapter targets.
