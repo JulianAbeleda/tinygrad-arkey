@@ -1165,6 +1165,15 @@ Exit gate:
   precision@k, and NDCG with `false_positive_accept_rate <= 0.05`.
 - Only after that should Phase 4 live shadow mode start.
 
+Status: met (2026-06-14). The coverage-closure batch added `6` real mechanism
+rows (`3` `packed_word_lane_unroll`, `2` `qk_block_dot`, `1` `wide_load_only`)
+plus the `after_microbench_before_full_decode` stage row on the `blk.2` raw_accept
+candidate. `triage-coverage-plan-v1-plus/` now reports
+`rerun_phase3b_allowed=true` with no blockers, and the rerun keeps XGBoost ahead
+of `mechanism_prior` (macro-F1 `0.873` vs `0.479`, p@1 `0.500` vs `0.000`, p@3
+`0.250` vs `0.167`, NDCG `0.500` vs `0.253`, false-positive accept rate `0.0`).
+Phase 4 is unblocked.
+
 ## Phase 4: Live Shadow Mode
 
 Purpose:

@@ -49,8 +49,13 @@ than simple baselines before outcomes are known?
   featured rows plus targeted train additions.
 - `triage-feature-audit-v1-featured-plus/`: Phase 3F audit over the plus
   dataset.
-- `triage-coverage-plan-v1-plus/`: remaining data-collection plan after the
-  partial Phase 3F batch.
+- `triage-coverage-plan-v1-plus/`: coverage plan after the targeted batch; now
+  reports `rerun_phase3b_allowed=true` once Phase 3G closes the residual gaps.
+- `phase3g-packed-load/`: Phase 3G packed-load lane-unroll candidates on
+  additional dominant Q4_K `ffn_gate` tensors, with a generated-source
+  load-width report captured before timing.
+- `triage-cost-model-v1-plus/`: Phase 3B/3G cost-model rerun on the closed-gate
+  plus dataset (`98` train, `38` holdout).
 
 ## Current Result
 
@@ -152,16 +157,25 @@ but does not clear the gate: unseen holdout categorical values fall `15 -> 1`,
 weak rows fall `43 -> 9`, remaining mechanism rows fall `35 -> 6`, and
 remaining label targets fall `14 -> 0`.
 
-The current plus cost-model artifact is strong but still gated:
-`triage-cost-model-v1-plus/` reports XGBoost macro-F1 `0.891`, accuracy
-`0.895`, and false-positive accept rate `0.0` against the same `38` holdout
-rows, while `mechanism_prior` is macro-F1 `0.552`. This is not a Phase 4 entry
-yet because `triage-coverage-plan-v1-plus/` still keeps
-`rerun_phase3b_allowed=false`.
+Phase 3G update: `extra/qk_flywheel_targeted_outcomes.py` now ingests a dated
+coverage-closure batch of real candidate outcomes on additional dominant Q4_K
+tensors, without touching the `38`-row family-split holdout. The batch adds `6`
+mechanism rows: `3` `packed_word_lane_unroll` packed-load candidates on
+`blk.1/2/3.ffn_gate.weight` (one `raw_accept_unconfirmed`, one `tie`, one
+`construction_blocked`, each with a generated-source `global_load_b128`
+load-width report captured before timing), `2` `qk_block_dot` compile-gate +
+microbench candidates on `blk.0.ffn_up.weight` and `blk.0.attn_q.weight` (both
+compile-shape-pass, microbench-reject at `-30.5%` and `-37.4%`), and `1`
+`wide_load_only` three-way load diagnostic on `blk.0.ffn_up.weight`. The single
+microbench-pass / full-decode-pending packed-load candidate (`blk.2`, `+3.59%`)
+is recorded at the previously-unseen `after_microbench_before_full_decode`
+prediction stage, closing the last unseen holdout categorical value.
 
-Next scope is Phase 3G coverage closure: add `3` more
-`packed_word_lane_unroll`, `2` more `qk_block_dot`, and `1` more
-`wide_load_only` real train rows, plus genuine coverage for the
-`after_microbench_before_full_decode` prediction stage. Keep the holdout fixed;
-only enter live shadow mode after the coverage gate clears and the rerun still
-beats `mechanism_prior` on macro-F1, precision@k, and NDCG.
+The plus dataset is now `136` rows (`98` train, `38` holdout). The coverage gate
+clears: `triage-coverage-plan-v1-plus/` reports `rerun_phase3b_allowed=true`
+with no mechanism, label, or categorical blockers. On the rerun,
+`triage-cost-model-v1-plus/` keeps XGBoost ahead of `mechanism_prior` on the
+fixed holdout: macro-F1 `0.873` vs `0.479`, precision@1 `0.500` vs `0.000`,
+precision@3 `0.250` vs `0.167`, and NDCG `0.500` vs `0.253`, with
+false-positive accept rate `0.0` (`<= 0.05`). The Phase 3G exit gate is met, so
+Phase 4 live shadow mode is unblocked.

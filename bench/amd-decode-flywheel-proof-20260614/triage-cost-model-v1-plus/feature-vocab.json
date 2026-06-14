@@ -41,6 +41,7 @@
     "v1_static_prediction_stage": [
       "after_compile_before_microbench",
       "after_full_decode",
+      "after_microbench_before_full_decode",
       "after_policy_before_full_decode",
       "after_static_before_microbench"
     ],
@@ -289,6 +290,7 @@
     "v1_static_model=unknown",
     "v1_static_prediction_stage=after_compile_before_microbench",
     "v1_static_prediction_stage=after_full_decode",
+    "v1_static_prediction_stage=after_microbench_before_full_decode",
     "v1_static_prediction_stage=after_policy_before_full_decode",
     "v1_static_prediction_stage=after_static_before_microbench",
     "v1_static_role=attn_k",

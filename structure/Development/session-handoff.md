@@ -386,35 +386,39 @@ Result on the same `38` holdout rows is now strong: `xgboost` gives
 `mechanism_prior` at `macro-F1 0.552`. Plus summary is
 `130` rows total (`92` train, `38` holdout).
 
-Coverage is still not sufficient for the next hard claim: `6` missing
-mechanism rows (`3` `packed_word_lane_unroll`, `2` `qk_block_dot`,
-`1` `wide_load_only`) remain in the plan, and the rerun is still blocked until
-those rows are collected (`rerun_phase3b_allowed=false`).
+Phase 3G coverage closure is now complete and the rerun gate has cleared
+(`rerun_phase3b_allowed=true`). `extra/qk_flywheel_targeted_outcomes.py` ingests
+a dated coverage-closure batch of `6` real mechanism rows on additional dominant
+Q4_K tensors, keeping the `38`-row family-split holdout untouched:
 
-Next flywheel scope is Phase 3G coverage closure, now documented in
-`docs/amd-decode-flywheel-proof-plan.md`. Do not start Phase 4/live shadow yet.
-Phase 3G should add only real train outcomes and keep the existing `38`-row
-family-split holdout untouched. Required coverage:
+- `3` `packed_word_lane_unroll` packed-load candidates on
+  `blk.1/2/3.ffn_gate.weight`
+  (`bench/amd-decode-flywheel-proof-20260614/phase3g-packed-load/`), each with a
+  generated-source `global_load_b128` load-width report captured before timing.
+- `2` `qk_block_dot` compile-gate + microbench candidates on
+  `blk.0.ffn_up.weight` and `blk.0.attn_q.weight` (compile-shape-pass,
+  microbench-reject at `-30.5%` / `-37.4%`).
+- `1` `wide_load_only` three-way load diagnostic on `blk.0.ffn_up.weight`.
+- The `blk.2` packed-load candidate (`raw_accept`, `+3.59%`) is recorded at the
+  previously-unseen `after_microbench_before_full_decode` prediction stage,
+  closing the last unseen holdout categorical value.
 
-- `3` more `packed_word_lane_unroll` train rows from packed-load lane-unroll
-  candidates with generated-source/load-width evidence.
-- `2` more `qk_block_dot` train rows from compile/static-shape-passing
-  QK_BLOCK_DOT candidates before any full-decode claim.
-- `1` more `wide_load_only` train row from the three-way load diagnostic/control
-  branch.
-- One genuine or normalized train-stage example for
-  `after_microbench_before_full_decode`; do not force this stage unless the row
-  is actually a microbench-pass/full-decode-pending candidate.
+`extra/qk_flywheel_coverage_plan.py` now derives `rerun_phase3b_allowed` from the
+actual audit state (no mechanism/label batches, no unseen holdout category)
+instead of a hardcoded `false`. Regenerated artifacts: `targeted-outcomes-v1/`
+(`53` rows), `kernel-triage-v1-featured-plus/` (`136` rows: `98` train, `38`
+holdout), `triage-feature-audit-v1-featured-plus/` (`0` unseen holdout
+categorical values), `triage-coverage-plan-v1-plus/` (gate cleared), and
+`triage-cost-model-v1-plus/`. On the rerun, XGBoost still beats
+`mechanism_prior`: macro-F1 `0.873` vs `0.479`, precision@1 `0.500` vs `0.000`,
+precision@3 `0.250` vs `0.167`, NDCG `0.500` vs `0.253`, false-positive accept
+rate `0.0` (`<= 0.05`). `test/external/test_qk_flywheel_phase3f.py` covers the
+new row counts and the cleared gate.
 
-Phase 3G implementation should extend `extra/qk_flywheel_targeted_outcomes.py`
-unless the source artifacts need a separate narrow script. After adding rows,
-regenerate `targeted-outcomes-v1/`, `kernel-triage-v1-featured-plus/`,
-`triage-feature-audit-v1-featured-plus/`, `triage-coverage-plan-v1-plus/`, and
-`triage-cost-model-v1-plus/`, then update
-`test/external/test_qk_flywheel_phase3f.py` or add a separate Phase 3G test.
-The exit gate is: coverage blockers cleared, XGBoost still beats
-`mechanism_prior` on macro-F1/p@k/NDCG, and false-positive accept rate stays at
-or below `0.05`.
+Next flywheel scope is Phase 4 live shadow mode (now unblocked): freeze model
+predictions/rankings before running new candidate gates, run the normal
+deterministic kernel loop unchanged, and score the model after outcomes are
+known. Keep the `38`-row holdout fixed.
 
 ### Phase 2-4 Summary for Handoff
 

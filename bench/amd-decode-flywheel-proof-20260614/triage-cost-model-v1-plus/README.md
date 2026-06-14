@@ -7,10 +7,10 @@ family-split holdout as the Phase 2 baselines.
 - conclusion: `cost_model_shadow_candidate`
 - backend request: `auto`
 - xgboost available: `True`
-- train rows: `92`
+- train rows: `98`
 - holdout rows: `38`
 - feature policy: `pre_result_analytical_context_v0`
-- feature count: `231`
+- feature count: `232`
 
 ## Backends
 
@@ -21,9 +21,9 @@ family-split holdout as the Phase 2 baselines.
 | model | accuracy | macro-F1 | false accept | p@3 | ndcg |
 |---|---:|---:|---:|---:|---:|
 | `reject_all` | 0.237 | 0.077 | 0.000 | 0.000 | 0.170 |
-| `mechanism_prior` | 0.684 | 0.552 | 0.000 | 0.167 | 0.253 |
-| `simple_family_heuristic` | 0.684 | 0.552 | 0.000 | 0.167 | 0.253 |
-| `xgboost` | 0.895 | 0.891 | 0.000 | 0.250 | 0.500 |
+| `mechanism_prior` | 0.684 | 0.479 | 0.000 | 0.167 | 0.253 |
+| `simple_family_heuristic` | 0.684 | 0.479 | 0.000 | 0.167 | 0.253 |
+| `xgboost` | 0.868 | 0.873 | 0.000 | 0.250 | 0.500 |
 
 ## Leakage Audit
 

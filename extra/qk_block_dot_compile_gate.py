@@ -198,7 +198,8 @@ def run_one(args:argparse.Namespace) -> int:
   return 0
 
 
-def run_debug7_logs(*, repo:pathlib.Path, model:pathlib.Path, outdir:pathlib.Path, device:str, python:str) -> dict[str, pathlib.Path]:
+def run_debug7_logs(*, repo:pathlib.Path, model:pathlib.Path, outdir:pathlib.Path, device:str, python:str,
+                    tensor:str=DEFAULT_TENSOR) -> dict[str, pathlib.Path]:
   outdir.mkdir(parents=True, exist_ok=True)
   env = os.environ.copy()
   env["DEV"] = device
@@ -212,7 +213,7 @@ def run_debug7_logs(*, repo:pathlib.Path, model:pathlib.Path, outdir:pathlib.Pat
   for mode, mode_args in modes.items():
     cmd = [
       python, "extra/qk_block_dot_compile_gate.py", "run-one", "--model", str(model), "--device", device,
-      "--tensor", DEFAULT_TENSOR, "--rows", str(ROWS), "--parts", str(PARTS), "--iters", "1", *mode_args,
+      "--tensor", tensor, "--rows", str(ROWS), "--parts", str(PARTS), "--iters", "1", *mode_args,
     ]
     result = subprocess.run(cmd, cwd=repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
     path = outdir / f"{mode}-debug7.log"
@@ -333,6 +334,7 @@ def main() -> int:
   parser.add_argument("--artifact", type=pathlib.Path, default=DEFAULT_ARTIFACT)
   parser.add_argument("--model", type=pathlib.Path, default=DEFAULT_MODEL)
   parser.add_argument("--device", default="AMD")
+  parser.add_argument("--tensor", default=DEFAULT_TENSOR)
   parser.add_argument("--python", default=sys.executable)
   parser.add_argument("--reuse", action="store_true")
   args = parser.parse_args()
@@ -349,7 +351,7 @@ def main() -> int:
     if missing: raise FileNotFoundError(f"--reuse requested but logs are missing: {missing}")
   else:
     if not model.exists(): raise FileNotFoundError(f"model not found: {model}")
-    logs = run_debug7_logs(repo=repo, model=model, outdir=source_dir, device=args.device, python=args.python)
+    logs = run_debug7_logs(repo=repo, model=model, outdir=source_dir, device=args.device, python=args.python, tensor=args.tensor)
   report = build_report(logs, repo=repo)
   write_artifact(report, artifact)
   print(report_markdown(report))

@@ -91,17 +91,23 @@ def build_coverage_plan(audit:dict[str, Any], audit_path:pathlib.Path) -> dict[s
     })
   min_mechanism_rows = sum(row["needed_train_rows"] for row in mechanism_batches)
   min_label_rows = sum(row["needed_train_rows"] for row in label_batches)
+  unseen_categorical = int(((audit.get("coverage") or {}).get("categorical") or {}).get("unseen_holdout_value_total", 0))
+  # The rerun gate is data-driven: it clears once no holdout mechanism or label is short on train
+  # coverage and no holdout categorical value is still unseen in train. Earlier plans hardcoded this
+  # to False because the featured dataset added no new outcomes; the Phase 3G batch closes those gaps.
+  rerun_blockers = []
+  if mechanism_batches: rerun_blockers.append("missing mechanism train coverage")
+  if label_batches: rerun_blockers.append("missing or thin label train coverage")
+  if unseen_categorical > 0: rerun_blockers.append("unseen holdout categorical value in train")
+  rerun_phase3b_allowed = not rerun_blockers
   return {
     "kind": "qk_flywheel_phase3f_plus_coverage_plan" if phase == "Phase 3F Plus" else "qk_flywheel_phase3e_coverage_plan",
     "phase": phase,
     "source_audit": str(audit_path),
-    "conclusion": "collect_targeted_outcomes_before_cost_model_rerun",
-    "rerun_phase3b_allowed": False,
-    "rerun_blockers": [
-      "missing mechanism train coverage",
-      "missing or thin label train coverage",
-      "current featured dataset does not add new outcomes",
-    ],
+    "conclusion": "coverage_gate_cleared_cost_model_rerun_allowed" if rerun_phase3b_allowed else "collect_targeted_outcomes_before_cost_model_rerun",
+    "rerun_phase3b_allowed": rerun_phase3b_allowed,
+    "rerun_blockers": rerun_blockers,
+    "unseen_holdout_categorical_values": unseen_categorical,
     "minimum_new_mechanism_rows": min_mechanism_rows,
     "minimum_new_label_rows": min_label_rows,
     "mechanism_batches": mechanism_batches,

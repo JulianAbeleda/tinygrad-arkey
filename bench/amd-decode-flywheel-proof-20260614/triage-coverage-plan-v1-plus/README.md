@@ -3,18 +3,15 @@
 This artifact turns the current featured audit into a concrete
 data-collection batch. It does not add training examples by itself.
 
-- conclusion: `collect_targeted_outcomes_before_cost_model_rerun`
-- rerun Phase 3B allowed: `False`
-- minimum mechanism rows: `6`
+- conclusion: `coverage_gate_cleared_cost_model_rerun_allowed`
+- rerun Phase 3B allowed: `True`
+- minimum mechanism rows: `0`
 - minimum label rows: `0`
 
 ## Mechanism Batches
 
 | mechanism | needed | batch | stage |
 |---|---:|---|---|
-| `packed_word_lane_unroll` | 3 | packed-load lane-unroll microbench | `after_static_before_microbench` |
-| `qk_block_dot` | 2 | QK_BLOCK_DOT compile+dominant-shape microbench | `after_compile_before_microbench` |
-| `wide_load_only` | 1 | three-way load diagnostic continuation | `after_compile_before_microbench` |
 
 ## Label Batches
 

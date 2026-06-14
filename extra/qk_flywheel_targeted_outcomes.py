@@ -607,6 +607,180 @@ def _semantic_schedule_raw_accept_rows(repo:pathlib.Path) -> list[dict[str, Any]
       ))
   return rows
 
+# --- Phase 3G coverage-closure batch -------------------------------------------------
+# These ingest the dated Phase 3G source artifacts that close the residual mechanism
+# and prediction-stage coverage gaps without touching the family-split holdout. They are
+# real candidate outcomes on additional dominant Q4_K tensors, not synthetic labels.
+PHASE3G_ROOT = "bench/amd-decode-flywheel-proof-20260614"
+
+
+def _phase3g_microbench_pass(status:str) -> bool:
+  return str(status or "").replace("-", "_").lower() in ("raw_accept", "accept", "accepted", "pass", "passed")
+
+
+def _phase3g_packed_load_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  microbench_path = repo / PHASE3G_ROOT / "phase3g-packed-load/8b/microbench.json"
+  if not microbench_path.exists():
+    return []
+  microbench = _portable(repo, microbench_path)
+  load_width_path = repo / PHASE3G_ROOT / "phase3g-packed-load/8b/load-width/report.json"
+  load_width = _portable(repo, load_width_path) if load_width_path.exists() else None
+  load_width_data = _read_json(load_width_path) if load_width_path.exists() else {"tensors": []}
+  load_width_by_tensor = {str(item.get("tensor")): item for item in load_width_data.get("tensors", [])}
+  data = _read_json(microbench_path)
+  rows = []
+  for item in data.get("rows", []):
+    candidate_id = str(item.get("id") or "")
+    schedule = item.get("schedule") if isinstance(item.get("schedule"), dict) else {}
+    status = item.get("status")
+    gain = item.get("gain")
+    tensor = str(item.get("tensor") or "unknown")
+    lw = load_width_by_tensor.get(tensor, {})
+    packed = lw.get("packed_load") if isinstance(lw.get("packed_load"), dict) else {}
+    # A raw_accept packed-load candidate has cleared the microbench and is awaiting full-decode
+    # confirmation, so it genuinely sits at the after_microbench_before_full_decode stage. Everything
+    # else (tie, construction/correctness blocked) is recorded at the pre-microbench stage.
+    prediction_stage = "after_microbench_before_full_decode" if _phase3g_microbench_pass(status) else "after_static_before_microbench"
+    label, reason, retry = v0._label_reason_retry(status, gain=gain)
+    source_files = [microbench] + ([load_width] if load_width else [])
+    rows.append(_row(
+      row_id=f"{TARGETED_FAMILY}:phase3g_packed_load:8b:{candidate_id}",
+      row_kind="candidate",
+      model="Qwen3-8B-Q4_K_M",
+      tensor=tensor,
+      role=str(item.get("role") or v0._role_from_text(tensor)),
+      fmt=str(item.get("format") or "Q4_K"),
+      mechanism=_semantic_codegen_mechanism(schedule, candidate_id),
+      prediction_stage=prediction_stage,
+      pre_result_context={
+        "mode": "packed_load",
+        "candidate_id": candidate_id,
+        "schedule": schedule,
+        "load_width": {
+          "global_load_b128": packed.get("global_load_b128"),
+          "has_wide_packed_load": lw.get("has_wide_packed_load"),
+          "report": load_width,
+        },
+        "source_ok": bool(lw.get("has_wide_packed_load")),
+        "wide_loads": bool(lw.get("has_wide_packed_load")),
+        "full_decode_ready": False,
+      },
+      label=label,
+      reason=reason,
+      retry=retry,
+      evidence={
+        "status": status,
+        "gain": gain,
+        "reasons": item.get("reasons", []),
+        "candidate_quant_gbs": (item.get("candidate") or {}).get("quant_gbs"),
+        "current_quant_gbs": (item.get("current") or {}).get("quant_gbs"),
+        "gemv_max_abs": (item.get("candidate") or {}).get("gemv_max_abs"),
+        "full_decode_supported": item.get("full_decode_supported"),
+        "global_load_b128": packed.get("global_load_b128"),
+        "load_width_correctness": packed.get("correctness"),
+      },
+      source_files=source_files,
+    ))
+  return rows
+
+
+def _phase3g_block_dot_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  artifacts = (
+    ("phase3g-blk0-ffn-up", "qk-block-dot-microbench-blk0-ffn-up-20260614", "qk-block-dot-compile-gate-blk0-ffn-up-20260614"),
+    ("phase3g-blk0-attn-q", "qk-block-dot-microbench-blk0-attn-q-20260614", "qk-block-dot-compile-gate-blk0-attn-q-20260614"),
+  )
+  rows = []
+  for slug, microbench_dir, compile_dir in artifacts:
+    microbench_path = repo / "bench" / microbench_dir / "microbench.json"
+    if not microbench_path.exists():
+      continue
+    microbench = _portable(repo, microbench_path)
+    compile_gate_path = repo / "bench" / compile_dir / "compile-gate.json"
+    data = _read_json(microbench_path)
+    config = data.get("config") or {}
+    tensor = str(config.get("tensor") or "unknown")
+    cmp = data.get("comparison", {})
+    gain_pct = cmp.get("gain_pct")
+    label, reason, retry = v0._label_reason_retry("reject", gain=gain_pct / 100.0 if gain_pct is not None else None)
+    source_files = [microbench] + ([_portable(repo, compile_gate_path)] if compile_gate_path.exists() else [])
+    rows.append(_row(
+      row_id=f"{TARGETED_FAMILY}:phase3g_block_dot:{slug}",
+      row_kind="candidate",
+      model="Qwen3-8B-Q4_K_M",
+      tensor=tensor,
+      role=v0._role_from_text(tensor),
+      fmt="Q4_K",
+      mechanism="qk_block_dot",
+      prediction_stage="after_compile_before_microbench",
+      pre_result_context={
+        "mode": "qk_block_dot",
+        "reference": "v1_partial",
+        "comparison": cmp,
+        "shape": config.get("shape"),
+        "parts": config.get("parts") or 0,
+        "wide_loads": True,
+        "full_decode_ready": False,
+      },
+      label=label,
+      reason=reason,
+      retry=retry,
+      evidence={
+        "decision": data.get("summary", {}).get("decision"),
+        "gain_pct": gain_pct,
+        "correctness_ok": data.get("summary", {}).get("correctness_ok"),
+        "next_allowed_gate": data.get("summary", {}).get("next_allowed_gate"),
+        "run_full_decode": data.get("summary", {}).get("run_full_decode"),
+        "source_compile_gate": _portable(repo, compile_gate_path) if compile_gate_path.exists() else None,
+      },
+      source_files=source_files,
+    ))
+  return rows
+
+
+def _phase3g_threeway_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  microbench_path = repo / "bench/qk-threeway-load-microbench-blk0-ffn-up-20260614/microbench.json"
+  if not microbench_path.exists():
+    return []
+  microbench = _portable(repo, microbench_path)
+  data = _read_json(microbench_path)
+  rows = []
+  # Only the newly covered dominant tensor (ffn_up) is added as branch-bounding diagnostic
+  # evidence; the co-run ffn_gate tensor already has coverage in the dated 20260613 batch.
+  for tensor_row in data.get("tensors", []) or []:
+    tensor = str(tensor_row.get("tensor") or "unknown")
+    if tensor == "blk.0.ffn_gate.weight":
+      continue
+    tensor_slug = re.sub(r"[^a-z0-9]+", "-", tensor.lower()).strip("-")
+    v1 = next((m for m in tensor_row.get("modes", []) or [] if m.get("mode") == "v1_partial"), None)
+    if v1 is None:
+      continue
+    rows.append(_row(
+      row_id=f"{TARGETED_FAMILY}:phase3g_threeway_load:{tensor_slug}:v1_partial",
+      row_kind="diagnostic",
+      model="Qwen3-8B-Q4_K_M",
+      tensor=tensor,
+      role=v0._role_from_text(tensor),
+      fmt="Q4_K",
+      mechanism="wide_load_only",
+      prediction_stage="after_compile_before_microbench",
+      pre_result_context={
+        "mode": "v1_partial",
+        "reference": "qk-block-dot",
+        "decision": tensor_row.get("decision"),
+        "shape": (data.get("config") or {}).get("shape"),
+        "runs": (data.get("config") or {}).get("runs") or 0,
+        "wide_loads": True,
+        "full_decode_ready": False,
+      },
+      label="diagnostic_only",
+      reason="diagnostic_only",
+      retry=False,
+      evidence={"status": "pass", "decision": tensor_row.get("decision"), "reason": tensor_row.get("reason")},
+      source_files=[microbench],
+    ))
+  return rows
+
+
 def build_targeted_rows(repo:pathlib.Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
   repo = repo.resolve()
   raw_rows = _memory_access_rows(repo)
@@ -617,6 +791,9 @@ def build_targeted_rows(repo:pathlib.Path) -> tuple[list[dict[str, Any]], list[d
   raw_rows += _semantic_codegen_microbench_rows(repo)
   raw_rows += _semantic_schedule_microbench_rows(repo)
   raw_rows += _semantic_schedule_raw_accept_rows(repo)
+  raw_rows += _phase3g_packed_load_rows(repo)
+  raw_rows += _phase3g_block_dot_rows(repo)
+  raw_rows += _phase3g_threeway_rows(repo)
   excluded = []
   semantic_contract = repo / "bench/qk-packed-semantic-op-20260613/semantic-op-contract.json"
   if semantic_contract.exists():

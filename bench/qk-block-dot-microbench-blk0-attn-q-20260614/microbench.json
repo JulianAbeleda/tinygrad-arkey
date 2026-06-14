@@ -1,0 +1,131 @@
+{
+  "artifact": "bench/qk-block-dot-microbench-blk0-attn-q-20260614",
+  "comparison": {
+    "gain_pct": -37.36191800998281,
+    "metric": "median device_q4_gbs",
+    "promotion_gain_pct": 10.0,
+    "qk_block_dot_median_device_q4_gbs": 96.52630717617217,
+    "v1_median_device_q4_gbs": 154.10163291966035
+  },
+  "config": {
+    "device": "AMD",
+    "full_tensor_shape": [
+      4096,
+      4096
+    ],
+    "iters": 5,
+    "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+    "opts": [
+      "Opt(op=OptOps.LOCAL, axis=0, arg=32)"
+    ],
+    "parts": 1,
+    "q4_bytes": 9437184,
+    "q4_words_per_block": 36,
+    "runs": 5,
+    "seed": 1337,
+    "shape": [
+      4096,
+      4096
+    ],
+    "tensor": "blk.0.attn_q.weight"
+  },
+  "kind": "qk_block_dot_microbench",
+  "modes": [
+    {
+      "device_ms": {
+        "max": 0.06134399999999999,
+        "mean": 0.0611488,
+        "median": 0.06124,
+        "min": 0.060808,
+        "n": 5,
+        "stdev": 0.00021358651642835127
+      },
+      "device_q4_gbs": {
+        "max": 155.19642152348376,
+        "mean": 154.33297722700632,
+        "median": 154.10163291966035,
+        "min": 153.8403755868545,
+        "n": 5,
+        "stdev": 0.5405193204571969
+      },
+      "mode": "v1_partial",
+      "primitive_gemv_max_abs": {
+        "max": 0.0012693405151367188,
+        "mean": 0.0012693405151367188,
+        "median": 0.0012693405151367188,
+        "min": 0.0012693405151367188,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "raw_files": [
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-00-v1_partial.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-01-v1_partial.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-02-v1_partial.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-03-v1_partial.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-04-v1_partial.json"
+      ],
+      "runs": 5,
+      "wall_q4_gbs": {
+        "max": 2.7921409486908315,
+        "mean": 2.77252250652576,
+        "median": 2.7727291933733174,
+        "min": 2.752095424120669,
+        "n": 5,
+        "stdev": 0.01422431602998058
+      }
+    },
+    {
+      "device_ms": {
+        "max": 0.09801599999999999,
+        "mean": 0.0977616,
+        "median": 0.09776800000000001,
+        "min": 0.09756000000000001,
+        "n": 5,
+        "stdev": 0.00017829413899508317
+      },
+      "device_q4_gbs": {
+        "max": 96.73210332103321,
+        "mean": 96.53288303847027,
+        "median": 96.52630717617217,
+        "min": 96.28207639569051,
+        "n": 5,
+        "stdev": 0.17596260139874803
+      },
+      "mode": "qk_block_dot",
+      "primitive_gemv_max_abs": {
+        "max": 0.0012650489807128906,
+        "mean": 0.0012650489807128906,
+        "median": 0.0012650489807128906,
+        "min": 0.0012650489807128906,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "raw_files": [
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-00-qk_block_dot.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-01-qk_block_dot.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-02-qk_block_dot.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-03-qk_block_dot.json",
+        "bench/qk-block-dot-microbench-blk0-attn-q-20260614/raw/run-04-qk_block_dot.json"
+      ],
+      "runs": 5,
+      "wall_q4_gbs": {
+        "max": 8.575199781479565,
+        "mean": 8.52394243897364,
+        "median": 8.535089874294547,
+        "min": 8.459100507909046,
+        "n": 5,
+        "stdev": 0.04277951499250034
+      }
+    }
+  ],
+  "schema_version": 1,
+  "source_compile_gate": "bench/qk-block-dot-compile-gate-20260613/compile-gate.json",
+  "summary": {
+    "correctness_ok": true,
+    "decision": "qk_block_dot_microbench_rejected",
+    "next_allowed_gate": "stop_qk_block_dot_runtime_integration",
+    "raw_accept": false,
+    "reason": "median device Q4 GB/s gain -37.36% vs required 10.00%",
+    "run_full_decode": false
+  }
+}
