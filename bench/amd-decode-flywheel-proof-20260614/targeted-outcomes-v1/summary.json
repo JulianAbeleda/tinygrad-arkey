@@ -11,30 +11,31 @@
   "family": "targeted_outcomes_v1",
   "kind": "qk_flywheel_targeted_outcomes_v1",
   "labels": {
-    "construction_blocked": 19,
+    "construction_blocked": 21,
     "diagnostic_only": 7,
     "raw_accept_unconfirmed": 6,
     "reject": 7,
-    "tie": 4
+    "tie": 6
   },
   "mechanisms": {
     "direct_output": 5,
+    "packed_word_lane_unroll": 2,
     "qk_block_dot": 3,
     "reduce_unroll": 8,
     "row_upcast": 10,
     "tile_custom": 1,
     "two_dim_local": 8,
-    "vector_load": 4,
+    "vector_load": 6,
     "wide_load_only": 4
   },
   "phase": "Phase 3F",
-  "plus_rows": 126,
+  "plus_rows": 130,
   "prediction_stages": {
     "after_compile_before_microbench": 6,
-    "after_static_before_microbench": 37
+    "after_static_before_microbench": 41
   },
   "real_feature_rows": 7,
-  "rows": 43,
+  "rows": 47,
   "rules": [
     "uses only committed real probe/compile/source diagnostic artifacts",
     "does not duplicate any existing v1-featured row id",
@@ -43,6 +44,10 @@
     "does not authorize a Phase 3B cost-model rerun as a decision point unless the plus audit clears the coverage gate"
   ],
   "source_files": {
+    "bench/qk-ansor-transition-20260612/semantic-codegen-v3/14b/microbench.json": 1,
+    "bench/qk-ansor-transition-20260612/semantic-codegen-v3/8b/microbench.json": 1,
+    "bench/qk-ansor-transition-20260612/semantic-codegen-v4/14b/microbench.json": 1,
+    "bench/qk-ansor-transition-20260612/semantic-codegen-v4/8b/microbench.json": 1,
     "bench/qk-ansor-transition-20260612/semantic-schedules/14b/microbench.json": 15,
     "bench/qk-ansor-transition-20260612/semantic-schedules/8b/microbench.json": 16,
     "bench/qk-ansor-transition-20260612/semantic-schedules/verdict.json": 3,

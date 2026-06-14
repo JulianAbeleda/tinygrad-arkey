@@ -20,6 +20,10 @@ DEFAULT_COVERAGE_OUT = DEFAULT_ROOT / "triage-coverage-plan-v1-plus"
 
 TARGETED_FAMILY = "targeted_outcomes_v1"
 TARGETED_FAMILY_ORDER = 11
+SEMANTIC_CODEGEN_FAMILIES = (
+  ("semantic-codegen-v3", "semantic_codegen_v3"),
+  ("semantic-codegen-v4", "semantic_codegen_v4"),
+)
 
 
 def _read_json(path:pathlib.Path) -> dict[str, Any]:
@@ -83,6 +87,10 @@ def _row(*, row_id:str, row_kind:str, model:str, tensor:str, role:str, fmt:str,
     "source_files": source_files,
     "split": "train",
   }
+
+
+def _semantic_codegen_mechanism(schedule:dict[str, Any], candidate_id:str) -> str:
+  return v0._mechanism_from_id(candidate_id, "semantic_codegen", schedule)
 
 
 def _canonical_model(value:str) -> str:
@@ -369,6 +377,56 @@ def _qk_block_dot_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
   return rows
 
 
+def _semantic_codegen_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  rows: list[dict[str, Any]] = []
+  base = repo / "bench/qk-ansor-transition-20260612"
+  for family_dir, _family_name in SEMANTIC_CODEGEN_FAMILIES:
+    for model_dir in ("8b", "14b"):
+      microbench = base / family_dir / model_dir / "microbench.json"
+      if not microbench.exists():
+        continue
+      data = _read_json(microbench)
+      model = _canonical_model(model_dir)
+      source = _portable(repo, microbench)
+      for item in data.get("rows", []):
+        candidate_id = str(item.get("id") or "")
+        schedule = (item.get("schedule") or {}) if isinstance(item.get("schedule"), dict) else {}
+        status = item.get("status")
+        gain = item.get("gain")
+        label, reason, retry = v0._label_reason_retry(status, gain=gain)
+        rows.append(_row(
+          row_id=f"{TARGETED_FAMILY}:semantic_codegen:{model_dir}:{candidate_id}",
+          row_kind="candidate",
+          model=model,
+          tensor=str(item.get("tensor") or "unknown"),
+          role=str(item.get("role") or "unknown"),
+          fmt=str(item.get("format") or "Q4_K"),
+          mechanism=_semantic_codegen_mechanism(schedule, candidate_id),
+          prediction_stage="after_static_before_microbench",
+          pre_result_context={
+            "mode": (schedule.get("codegen_mode") or schedule.get("name") or "semantic_codegen"),
+            "candidate_id": candidate_id,
+            "model_dir": model_dir,
+            "family": family_dir,
+            "source_candidates": f"bench/qk-shared-storage-20260612/{model_dir}/policy.json",
+            "schedule": schedule,
+          },
+          label=label,
+          reason=reason,
+          retry=retry,
+          evidence={
+            "status": status,
+            "gain": gain,
+            "reasons": item.get("reasons", []),
+            "quant_gbs": item.get("quant_gbs"),
+            "full_decode_supported": item.get("full_decode_supported"),
+            "candidate_status": (item.get("candidate") or {}).get("status"),
+          },
+          source_files=[source],
+        ))
+  return rows
+
+
 def _qk_threeway_load_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
   microbench = _source(repo, "bench/qk-threeway-load-microbench-20260613/microbench.json")
   data = _read_json(repo / microbench)
@@ -556,6 +614,7 @@ def build_targeted_rows(repo:pathlib.Path) -> tuple[list[dict[str, Any]], list[d
   raw_rows += _packed_tile_closeout_rows(repo)
   raw_rows += _qk_block_dot_microbench_rows(repo)
   raw_rows += _qk_threeway_load_microbench_rows(repo)
+  raw_rows += _semantic_codegen_microbench_rows(repo)
   raw_rows += _semantic_schedule_microbench_rows(repo)
   raw_rows += _semantic_schedule_raw_accept_rows(repo)
   excluded = []

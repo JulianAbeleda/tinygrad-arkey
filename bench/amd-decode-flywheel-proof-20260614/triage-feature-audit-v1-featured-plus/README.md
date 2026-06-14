@@ -3,10 +3,10 @@
 This Phase 3E artifact audits the normalized v1 schema after adding real source/compile features. It does not train a model.
 
 - conclusion: `needs_data_and_feature_expansion`
-- train rows: `88`
+- train rows: `92`
 - holdout rows: `38`
-- unseen holdout categorical values: `2`
-- weak rows: `11`
+- unseen holdout categorical values: `1`
+- weak rows: `9`
 - post-full-decode train rows: `9`
 - real UOp/source rows: `20`
 - compile-report rows: `4`
@@ -22,32 +22,31 @@ This Phase 3E artifact audits the normalized v1 schema after adding real source/
 
 | label | train | holdout | needed train rows |
 |---|---:|---:|---:|
-| `construction_blocked` | 20 | 19 | 0 |
+| `construction_blocked` | 22 | 19 | 0 |
 | `diagnostic_only` | 7 | 1 | 0 |
 | `needs_rerun` | 2 | 0 | 3 |
 | `raw_accept_unconfirmed` | 6 | 3 | 0 |
 | `reject` | 27 | 9 | 0 |
-| `tie` | 17 | 6 | 0 |
+| `tie` | 19 | 6 | 0 |
 
 ## Holdout Mechanism Targets
 
 | mechanism | train | holdout | needed train rows |
 |---|---:|---:|---:|
 | `direct_output` | 12 | 4 | 0 |
-| `packed_word_lane_unroll` | 0 | 2 | 5 |
+| `packed_word_lane_unroll` | 2 | 2 | 3 |
 | `qk_block_dot` | 3 | 2 | 2 |
 | `reduce_unroll` | 8 | 8 | 0 |
 | `row_upcast` | 10 | 10 | 0 |
 | `tile_custom` | 8 | 1 | 0 |
 | `two_dim_local` | 8 | 8 | 0 |
-| `vector_load` | 4 | 2 | 1 |
+| `vector_load` | 6 | 2 | 0 |
 | `wide_load_only` | 4 | 1 | 1 |
 
 ## Top Unseen Categorical Features
 
 | feature | unseen holdout values |
 |---|---|
-| `v1_static_mechanism` | `packed_word_lane_unroll` |
 | `v1_static_prediction_stage` | `after_microbench_before_full_decode` |
 
 ## Top Weak Reasons
@@ -55,7 +54,6 @@ This Phase 3E artifact audits the normalized v1 schema after adding real source/
 | reason | rows |
 |---|---:|
 | `post_full_decode_training_row` | 9 |
-| `mechanism_unseen_in_train` | 2 |
 
 ## Real Feature Coverage
 

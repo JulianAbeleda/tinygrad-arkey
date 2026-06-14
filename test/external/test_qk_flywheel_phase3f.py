@@ -32,7 +32,7 @@ class TestQKFlywheelPhase3F(unittest.TestCase):
   def test_targeted_rows_are_real_train_additions_not_holdout_duplicates(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     rows, excluded = build_targeted_rows(repo)
-    self.assertEqual(len(rows), 38)
+    self.assertEqual(len(rows), 47)
     self.assertTrue(excluded)
     self.assertEqual({row["split"] for row in rows}, {"train"})
     self.assertEqual({row["family"] for row in rows}, {"targeted_outcomes_v1"})
@@ -42,6 +42,7 @@ class TestQKFlywheelPhase3F(unittest.TestCase):
     self.assertIn("row_upcast", mechanisms)
     self.assertIn("wide_load_only", mechanisms)
     self.assertIn("qk_block_dot", mechanisms)
+    self.assertIn("packed_word_lane_unroll", mechanisms)
     self.assertFalse(any(row["id"].startswith(("semantic_schedule_v0:", "qk_block_dot:", "threeway_load:")) for row in rows))
 
   def test_phase3f_plus_dataset_keeps_prompts_leak_free_and_rerun_blocked(self):
@@ -57,8 +58,8 @@ class TestQKFlywheelPhase3F(unittest.TestCase):
         root / "audit",
         root / "coverage",
       )
-      self.assertEqual(result["plus"]["rows"], 121)
-      self.assertEqual(result["plus"]["train_rows"], 83)
+      self.assertEqual(result["plus"]["rows"], 130)
+      self.assertEqual(result["plus"]["train_rows"], 92)
       self.assertEqual(result["plus"]["holdout_rows"], 38)
       self.assertFalse(result["coverage"]["rerun_phase3b_allowed"])
       prompts = [json.loads(line) for line in (root / "plus/prompts-train.jsonl").read_text().splitlines()]

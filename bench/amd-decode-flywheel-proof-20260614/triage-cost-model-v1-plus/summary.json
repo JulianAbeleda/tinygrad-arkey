@@ -1,5 +1,5 @@
 {
-  "backend_request": "xgboost",
+  "backend_request": "auto",
   "backends": {
     "ran": [
       {
@@ -18,7 +18,7 @@
         "xgboost_version": "3.2.0"
       }
     ],
-    "requested": "xgboost",
+    "requested": "auto",
     "xgboost_available": true
   },
   "baselines": {
@@ -48,15 +48,15 @@
       }
     },
     "mechanism_prior": {
-      "accuracy": 0.6052631578947368,
+      "accuracy": 0.6842105263157895,
       "false_positive_accept_rate": 0.0,
-      "macro_f1": 0.45441315441315444,
+      "macro_f1": 0.551988911988912,
       "pred_labels": {
         "construction_blocked": 18,
         "diagnostic_only": 3,
         "raw_accept_unconfirmed": 10,
-        "reject": 2,
-        "tie": 5
+        "reject": 1,
+        "tie": 6
       },
       "ranking": {
         "groups": 4,
@@ -64,7 +64,7 @@
         "precision_at_1": 0.0,
         "precision_at_3": 0.16666666666666666
       },
-      "reason_accuracy_on_label_match": 1.0,
+      "reason_accuracy_on_label_match": 0.9615384615384616,
       "retry_precision": 0.25,
       "retry_recall": 0.75,
       "rows": 38,
@@ -77,16 +77,16 @@
       }
     },
     "random_label": {
-      "accuracy": 0.15789473684210525,
+      "accuracy": 0.13157894736842105,
       "false_positive_accept_rate": 0.05263157894736842,
-      "macro_f1": 0.08412698412698413,
+      "macro_f1": 0.06861239119303636,
       "pred_labels": {
         "accept": 2,
-        "construction_blocked": 11,
+        "construction_blocked": 12,
         "diagnostic_only": 3,
         "needs_rerun": 4,
         "raw_accept_unconfirmed": 4,
-        "reject": 11,
+        "reject": 10,
         "tie": 3
       },
       "ranking": {
@@ -95,7 +95,7 @@
         "precision_at_1": 0.0,
         "precision_at_3": 0.0
       },
-      "reason_accuracy_on_label_match": 0.16666666666666666,
+      "reason_accuracy_on_label_match": 0.2,
       "retry_precision": 0.0,
       "retry_recall": 0.0,
       "rows": 38,
@@ -133,15 +133,15 @@
       }
     },
     "simple_family_heuristic": {
-      "accuracy": 0.6052631578947368,
+      "accuracy": 0.6842105263157895,
       "false_positive_accept_rate": 0.0,
-      "macro_f1": 0.45441315441315444,
+      "macro_f1": 0.551988911988912,
       "pred_labels": {
         "construction_blocked": 18,
         "diagnostic_only": 3,
         "raw_accept_unconfirmed": 10,
-        "reject": 2,
-        "tie": 5
+        "reject": 1,
+        "tie": 6
       },
       "ranking": {
         "groups": 4,
@@ -149,7 +149,7 @@
         "precision_at_1": 0.0,
         "precision_at_3": 0.16666666666666666
       },
-      "reason_accuracy_on_label_match": 1.0,
+      "reason_accuracy_on_label_match": 0.9615384615384616,
       "retry_precision": 0.25,
       "retry_recall": 0.75,
       "rows": 38,
@@ -164,11 +164,11 @@
   },
   "best_model": "xgboost",
   "conclusion": "cost_model_shadow_candidate",
-  "examples": 121,
+  "examples": 130,
   "examples_path": "bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/examples.jsonl",
   "feature_policy": "pre_result_analytical_context_v0",
   "features": {
-    "categorical_feature_count": 52,
+    "categorical_feature_count": 57,
     "categorical_features": {
       "candidate_schema_version": [
         "candidate_outcome_v1_featured"
@@ -189,6 +189,7 @@
       ],
       "v1_static_mechanism": [
         "direct_output",
+        "packed_word_lane_unroll",
         "parts_local_policy",
         "qk_block_dot",
         "reduce_unroll",
@@ -230,7 +231,9 @@
       "v1_static_schedule_codegen_mode": [
         "direct_out",
         "none",
-        "partial"
+        "packed_load",
+        "partial",
+        "vector_load"
       ],
       "v1_static_schedule_family": [
         "none",
@@ -239,9 +242,11 @@
       "v1_static_schedule_name": [
         "direct_out",
         "none",
+        "packed_load_u32x4",
         "reduce_unroll",
         "row_upcast",
-        "two_dim_local"
+        "two_dim_local",
+        "vector_load_u32x4"
       ],
       "v1_static_schedule_reduction_mode": [
         "direct_out",
@@ -253,17 +258,14 @@
         "packed_quant_gemv"
       ]
     },
-    "feature_count": 202,
+    "feature_count": 231,
     "ignored_holdout_categories": {
-      "v1_static_mechanism": [
-        "packed_word_lane_unroll"
-      ],
       "v1_static_prediction_stage": [
         "after_microbench_before_full_decode"
       ]
     },
-    "ignored_holdout_category_count": 2,
-    "numeric_feature_count": 150,
+    "ignored_holdout_category_count": 1,
+    "numeric_feature_count": 174,
     "numeric_features": [
       "ana_data_reuse_shared_proxy",
       "ana_ilp_proxy",
@@ -341,6 +343,8 @@
       "schedule_parts",
       "schedule_requires_count",
       "schedule_row_tile",
+      "shape_dim0",
+      "shape_dim1",
       "shape_k",
       "shape_parts",
       "shape_rows",
@@ -384,12 +388,34 @@
       "v1_static_schedule_unroll_axes",
       "v1_static_schedule_upcast",
       "v1_static_schedule_upcast_axes",
+      "v1_static_shape_dim0",
+      "v1_static_shape_dim1",
       "v1_static_shape_k",
       "v1_static_shape_parts",
       "v1_static_shape_rows",
       "v1_static_source_ok",
       "v1_static_tensor_block",
       "v1_static_wide_loads",
+      "v1_uop_compile_global_load_b128",
+      "v1_uop_compile_global_load_b32",
+      "v1_uop_compile_global_load_b64",
+      "v1_uop_compile_group_axis_count",
+      "v1_uop_compile_inst_global_load_b128",
+      "v1_uop_compile_inst_global_load_b32",
+      "v1_uop_compile_inst_global_load_b64",
+      "v1_uop_compile_inst_global_store_b32",
+      "v1_uop_compile_inst_v_bfe_u32",
+      "v1_uop_compile_inst_v_cvt_f32_ubyte0_e32",
+      "v1_uop_compile_inst_v_fma_f32",
+      "v1_uop_compile_inst_v_fma_mix_f32",
+      "v1_uop_compile_instruction_count",
+      "v1_uop_compile_local_lane_count",
+      "v1_uop_compile_memory_instruction_count",
+      "v1_uop_compile_report_available",
+      "v1_uop_compile_source_has_tg_uint4_load",
+      "v1_uop_compile_source_has_vector_type",
+      "v1_uop_compile_source_lines",
+      "v1_uop_compile_workgroup_size",
       "v1_uop_estimated_arithmetic_intensity_proxy",
       "v1_uop_estimated_global_load_words",
       "v1_uop_estimated_global_store_words",
@@ -445,15 +471,15 @@
   },
   "models": {
     "xgboost": {
-      "accuracy": 0.8157894736842105,
+      "accuracy": 0.8947368421052632,
       "false_positive_accept_rate": 0.0,
-      "macro_f1": 0.8208216619981326,
+      "macro_f1": 0.8914098972922503,
       "pred_labels": {
         "construction_blocked": 17,
         "diagnostic_only": 1,
         "raw_accept_unconfirmed": 4,
-        "reject": 5,
-        "tie": 11
+        "reject": 8,
+        "tie": 8
       },
       "ranking": {
         "groups": 4,
@@ -461,7 +487,7 @@
         "precision_at_1": 0.5,
         "precision_at_3": 0.25
       },
-      "reason_accuracy_on_label_match": 0.9354838709677419,
+      "reason_accuracy_on_label_match": 0.9411764705882353,
       "retry_precision": 0.8,
       "retry_recall": 1.0,
       "rows": 38,
@@ -475,5 +501,5 @@
     }
   },
   "seed": 20260614,
-  "train_rows": 83
+  "train_rows": 92
 }

@@ -371,7 +371,7 @@ in train. The coverage plan requires real candidate outcomes before another
 Phase 3B decision run: at least `35` mechanism-coverage rows and `14`
 label-coverage targets, with labels recorded only if they occur naturally.
 
-Phase 3F converted unused committed diagnostic artifacts into `38` real train
+Phase 3F converted unused committed diagnostic artifacts into `47` real train
 rows and generated this plus dataset state:
 
 - `extra/qk_flywheel_targeted_outcomes.py`
@@ -382,14 +382,14 @@ rows and generated this plus dataset state:
 - `bench/amd-decode-flywheel-proof-20260614/triage-cost-model-v1-plus/`
 
 Result on the same `38` holdout rows is now strong: `xgboost` gives
-`macro-F1 0.821`, `accuracy 0.816`, and `false-positive accept rate 0.0` versus
-`mechanism_prior` at `macro-F1 0.4544`. Plus summary is
-`121` rows total (`83` train, `38` holdout).
+`macro-F1 0.891`, `accuracy 0.895`, and `false-positive accept rate 0.0` versus
+`mechanism_prior` at `macro-F1 0.552`. Plus summary is
+`130` rows total (`92` train, `38` holdout).
 
-Coverage is still not sufficient for the next hard claim: `13` missing
-mechanism rows (`5` `packed_word_lane_unroll`, `4` `qk_block_dot`,
-`1` `vector_load`, `3` `wide_load_only`) remain in the plan, and the rerun is
-still blocked until those rows are collected (`rerun_phase3b_allowed=false`).
+Coverage is still not sufficient for the next hard claim: `6` missing
+mechanism rows (`3` `packed_word_lane_unroll`, `2` `qk_block_dot`,
+`1` `wide_load_only`) remain in the plan, and the rerun is still blocked until
+those rows are collected (`rerun_phase3b_allowed=false`).
 
 ### Phase 2-4 Summary for Handoff
 
@@ -399,7 +399,7 @@ still blocked until those rows are collected (`rerun_phase3b_allowed=false`).
 - Phase 3 cost-model path is complete through v1+ featured data and feature
   extraction, but the plus coverage gate is still open.
 - Phase 4 (live shadow/controlled assist) has not started because rerun is
-  still blocked until 13 mechanism rows are collected and a rerun exceeds phase
+  still blocked until 6 mechanism rows are collected and a rerun exceeds phase
   baselines under that exact split.
 
 ## Verification Already Run

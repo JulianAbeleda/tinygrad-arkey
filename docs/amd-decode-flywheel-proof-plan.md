@@ -5,7 +5,7 @@ Date: 2026-06-14
 Status: plan of record for proving or falsifying the full kernel-optimization
 flywheel. Phase 1/2 and the Phase 3.0 through 3F diagnostic/data subphases are
 built where marked. Phase 3F+ currently has a strong `xgboost` result on the
-same 38-holdout split (`macro-F1 0.821`, `accuracy 0.816`, `false_accept 0.000`),
+same 38-holdout split (`macro-F1 0.891`, `accuracy 0.895`, `false_accept 0.000`),
 but the rerun is still gated by residual mechanism-coverage requirements.
 
 Parent architecture note:
@@ -65,8 +65,8 @@ This is the current actionable map from proof work to "ready for live shadow":
   - A real XGBoost rerun with v1+ featured data is strong, but still blocked by
     unresolved mechanism/label coverage requirements.
   - Coverage work is now explicit in the plus-plan: still need
-    `5 packed_word_lane_unroll`, `4 qk_block_dot`, `1 vector_load`, and
-    `3 wide_load_only` train rows.
+    `3 packed_word_lane_unroll`, `2 qk_block_dot`, and `1 wide_load_only` train rows
+    (plus one unseen holdout prediction-stage value).
 - Phase 3F (`targeted real outcomes`): complete as partial pass.
   - Added rows improved real-feature density and held out/known-family integrity.
   - No model-quality claim yet; rerun of cost-model remains blocked by coverage.
@@ -76,8 +76,9 @@ This is the current actionable map from proof work to "ready for live shadow":
   - Until then, shadow mode is not a valid claim of flywheel compounding.
 
 Phase sequence from here:
-1. Collect the remaining 13 missing mechanism rows as real, run-eligible
-   outcomes without touching holdout.
+1. Collect the remaining 6 missing mechanism rows (3 `packed_word_lane_unroll`,
+   2 `qk_block_dot`, 1 `wide_load_only`) and add a holdout-stage categorical value
+   fix so coverage no longer reports `after_microbench_before_full_decode` as unseen.
 2. Rerun cost-model candidate ordering/ranking from the same protocol and
    prove gain against `mechanism_prior`, p@k and NDCG.
 3. Only if that passes, open Phase 4.2 shadow trials.
@@ -1068,29 +1069,29 @@ Implementation:
 
 Current Phase 3F result:
 
-- Added `38` real train rows from committed diagnostics:
-  `10` `row_upcast`, `8` `reduce_unroll`, `8` `two_dim_local`,
-  `5` `direct_output`, `4` `vector_load`, `2` `wide_load_only`, and
-  `1` `qk_block_dot`.
-- Labels added naturally: `19` `construction_blocked`, `6`
-  `raw_accept_unconfirmed`, `5` `diagnostic_only`, `4` `reject`, and `4`
-  `tie`.
-- The plus dataset has `121` rows: `83` train and the original `38` holdout.
-- Real UOp/source rows increase from `13` to `18`.
+- Added `47` real train rows from committed diagnostics:
+  `5` `direct_output`, `10` `row_upcast`, `8` `reduce_unroll`,
+  `8` `two_dim_local`, `6` `vector_load`, `4` `wide_load_only`,
+  `4` `tile_custom`, `3` `qk_block_dot`, and
+  `2` `packed_word_lane_unroll`.
+- Labels added naturally: `21` `construction_blocked`, `7` `raw_accept_unconfirmed`,
+  `7` `diagnostic_only`, `7` `reject`, and `6` `tie`.
+- The plus dataset has `130` rows: `92` train and the original `38` holdout.
+- Real UOp/source rows increase from `13` to `20`.
 - Design-only `QK_BLOCK_DOT` semantic-op contract rows remain excluded from
   training labels because they have no runtime lowering or outcome.
 - Leakage remains clean; prompts still omit `candidate_record.outcome`,
   source-file paths, and feature-source paths.
 
-- Cost-model pass on `kernel-triage-v1-featured-plus` now has a working
-  XGBoost signal (`macro-F1` `0.821`, `accuracy` `0.816`) versus
-  `mechanism_prior` on the same `38` holdout rows.
+- Cost-model pass on `kernel-triage-v1-featured-plus` now has a strong
+  XGBoost signal (`macro-F1` `0.891`, `accuracy` `0.895`) versus
+  `mechanism_prior` (`macro-F1` `0.552`) on the same `38` holdout rows.
 
 Audit delta versus Phase 3E:
 
-- Unseen holdout categorical values improve from `15` to `2`.
-- Weak rows improve from `43` to `11`.
-- Remaining mechanism coverage need falls from `35` rows to `13`.
+- Unseen holdout categorical values improve from `15` to `1`.
+- Weak rows improve from `43` to `9`.
+- Remaining mechanism coverage need falls from `35` rows to `6`.
 - Remaining label coverage need is now `0`.
 
 Remaining blocker:
@@ -1098,8 +1099,9 @@ Remaining blocker:
 - `triage-coverage-plan-v1-plus/` still keeps
   `rerun_phase3b_allowed=false`.
 - Still needed before another XGBoost decision run:
-  `5` `packed_word_lane_unroll`, `4` `qk_block_dot`, `1` `vector_load`, and
-  `3` `wide_load_only` train rows.
+  `3` `packed_word_lane_unroll`, `2` `qk_block_dot`, and
+  `1` `wide_load_only` train rows, plus `after_microbench_before_full_decode`
+  prediction-stage coverage.
 
 Gate:
 
