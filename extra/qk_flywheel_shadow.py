@@ -261,30 +261,40 @@ def run_outcomes(repo:pathlib.Path, out:pathlib.Path=DEFAULT_OUT, model_path:pat
   model = str(model_path)
   # packed-load: fresh descriptor set -> v3 candidates/static-gate -> schedule_bench microbench
   packed = _packed_artifact(out)
-  desc = out / "runs/packed-load/8b-descriptors.json"
-  _build_packed_descriptor(repo, desc)
-  _run([py, "extra/qk_semantic_codegen_v3.py", "--descriptor", str(desc),
-        "--json", str(packed / "candidates.json"), "--gate-json", str(packed / "static-gate.json")],
-       cwd=repo, extra_env={"DEV": device}, timeout=300)
-  _run([py, "extra/qk_semantic_schedule_bench.py", "--model", "8b",
-        "--candidates", str(packed / "candidates.json"), "--static-gate", str(packed / "static-gate.json"),
-        "--out", str(packed / "microbench-runs"), "--json", str(packed / "microbench.json"),
-        "--md", str(packed / "microbench.md")],
-       cwd=repo, extra_env={"DEV": device}, timeout=900)
-  # block-dot: compile gate + microbench per tensor
+  if not (packed / "microbench.json").exists():
+    desc = out / "runs/packed-load/8b-descriptors.json"
+    _build_packed_descriptor(repo, desc)
+    _run([py, "extra/qk_semantic_codegen_v3.py", "--descriptor", str(desc),
+          "--json", str(packed / "candidates.json"), "--gate-json", str(packed / "static-gate.json")],
+         cwd=repo, extra_env={"DEV": device}, timeout=300)
+    _run([py, "extra/qk_semantic_schedule_bench.py", "--model", "8b",
+          "--candidates", str(packed / "candidates.json"), "--static-gate", str(packed / "static-gate.json"),
+          "--out", str(packed / "microbench-runs"), "--json", str(packed / "microbench.json"),
+          "--md", str(packed / "microbench.md")],
+         cwd=repo, extra_env={"DEV": device}, timeout=900)
+  # block-dot: compile gate + microbench per tensor. A candidate whose correctness gate
+  # fails (a real per-tensor fp16 outcome) is recorded as construction_blocked, not a crash.
   for spec in FRESH_SPECS:
     if spec["mechanism"] != "qk_block_dot": continue
     art = _block_dot_artifact(out, spec["tensor"])
-    _run([py, "extra/qk_block_dot_compile_gate.py", "--tensor", spec["tensor"],
-          "--artifact", str(art) + "-compile-gate", "--model", model, "--device", device],
-         cwd=repo, extra_env={"DEV": device}, timeout=480)
-    _run([py, "extra/qk_block_dot_microbench.py", "--tensor", spec["tensor"],
-          "--artifact", str(art), "--model", model, "--device", device],
-         cwd=repo, extra_env={"DEV": device, "DEBUG": "2"}, timeout=600)
+    if (art / "microbench.json").exists() or (art / "shadow-outcome.json").exists(): continue
+    try:
+      _run([py, "extra/qk_block_dot_compile_gate.py", "--tensor", spec["tensor"],
+            "--artifact", str(art) + "-compile-gate", "--model", model, "--device", device],
+           cwd=repo, extra_env={"DEV": device}, timeout=480)
+      _run([py, "extra/qk_block_dot_microbench.py", "--tensor", spec["tensor"],
+            "--artifact", str(art), "--model", model, "--device", device],
+           cwd=repo, extra_env={"DEV": device, "DEBUG": "2"}, timeout=600)
+    except RuntimeError as exc:
+      art.mkdir(parents=True, exist_ok=True)
+      (art / "shadow-outcome.json").write_text(json.dumps(
+        {"status": "construction_blocked", "reason": "correctness_failed", "tensor": spec["tensor"], "error": str(exc)},
+        indent=2, sort_keys=True) + "\n")
   # three-way load diagnostic
   for spec in FRESH_SPECS:
     if spec["mechanism"] != "wide_load_only": continue
     art = _threeway_artifact(out, spec["tensor"])
+    if (art / "microbench.json").exists(): continue
     _run([py, "extra/qk_threeway_load_microbench.py", "--tensor", spec["tensor"],
           "--runs", "3", "--iters", "3", "--artifact", str(art), "--model", model, "--device", device],
          cwd=repo, extra_env={"DEV": device}, timeout=900)
@@ -308,14 +318,22 @@ def build_fresh_outcomes(repo:pathlib.Path, out:pathlib.Path=DEFAULT_OUT, model_
                   "current_quant_gbs": (item.get("current") or {}).get("quant_gbs"), "reasons": item.get("reasons", [])}
       source = str((_packed_artifact(out) / "microbench.json").relative_to(repo)) if (_packed_artifact(out) / "microbench.json").is_relative_to(repo) else str(_packed_artifact(out) / "microbench.json")
     elif mech == "qk_block_dot":
-      path = _block_dot_artifact(out, tensor) / "microbench.json"
-      if not path.exists(): raise FileNotFoundError(f"no block-dot outcome for {tensor}; run run_outcomes first")
-      data = _read_json(path)
-      gain_pct = (data.get("comparison") or {}).get("gain_pct")
-      label, reason, retry = _label_reason_retry("reject", gain=gain_pct / 100.0 if gain_pct is not None else None)
-      evidence = {"decision": (data.get("summary") or {}).get("decision"), "gain_pct": gain_pct,
-                  "correctness_ok": (data.get("summary") or {}).get("correctness_ok")}
-      source = str(path.relative_to(repo)) if path.is_relative_to(repo) else str(path)
+      art = _block_dot_artifact(out, tensor)
+      path, blocked = art / "microbench.json", art / "shadow-outcome.json"
+      if path.exists():
+        data = _read_json(path)
+        gain_pct = (data.get("comparison") or {}).get("gain_pct")
+        label, reason, retry = _label_reason_retry("reject", gain=gain_pct / 100.0 if gain_pct is not None else None)
+        evidence = {"decision": (data.get("summary") or {}).get("decision"), "gain_pct": gain_pct,
+                    "correctness_ok": (data.get("summary") or {}).get("correctness_ok")}
+        source = str(path.relative_to(repo)) if path.is_relative_to(repo) else str(path)
+      elif blocked.exists():
+        marker = _read_json(blocked)
+        label, reason, retry = _label_reason_retry("construction_blocked")
+        evidence = {"status": "construction_blocked", "reason": marker.get("reason"), "decision": "qk_block_dot_correctness_failed"}
+        source = str(blocked.relative_to(repo)) if blocked.is_relative_to(repo) else str(blocked)
+      else:
+        raise FileNotFoundError(f"no block-dot outcome for {tensor}; run run_outcomes first")
     elif mech == "wide_load_only":
       path = _threeway_artifact(out, tensor) / "microbench.json"
       if not path.exists(): raise FileNotFoundError(f"no three-way outcome for {tensor}; run run_outcomes first")
@@ -400,9 +418,17 @@ def score_shadow(repo:pathlib.Path, out:pathlib.Path=DEFAULT_OUT, corpus_path:pa
   heuristic_dead = dead.get("simple_family_heuristic", {})
   gate = _shadow_gate(model_metrics, prior, dead["xgboost"], heuristic_dead)
 
+  if gate["shadow_gate_met"]:
+    conclusion = "shadow_gate_met_model_beats_priors_on_fresh_batch"
+  elif dead["xgboost"].get("live_candidates", 0) == 0:
+    conclusion = "shadow_inconclusive_no_live_candidate_in_fresh_batch_model_underperforms_prior"
+  else:
+    conclusion = "shadow_gate_not_met_model_underperforms_prior"
+
   summary = {
     "kind": "qk_flywheel_shadow_v0_score",
     "phase": "Phase 4",
+    "conclusion": conclusion,
     "seed": SEED,
     "corpus_rows": len(corpus),
     "fresh_rows": len(holdout_rows),
@@ -433,6 +459,7 @@ def _readme(summary:dict[str, Any]) -> str:
     "`predictions.jsonl` / `freeze.json`), then was scored against the same",
     "baselines after the deterministic generators produced outcomes.",
     "",
+    f"- conclusion: `{summary['conclusion']}`",
     f"- shadow gate met: `{summary['gate']['shadow_gate_met']}`",
     f"- fresh rows: `{summary['fresh_rows']}`",
     f"- fresh label distribution: `{summary['fresh_label_distribution']}`",

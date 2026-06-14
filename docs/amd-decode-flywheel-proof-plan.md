@@ -1284,6 +1284,23 @@ Stop rule:
 - If shadow mode fails, do not allow model-ranked execution order. Keep using
   the model only for documentation or artifact extraction.
 
+Result (v0, 2026-06-14): ran and recorded in `shadow-v0/`. The gate is **not
+met** (honest negative). `extra/qk_flywheel_shadow.py` froze 6 blind static-stage
+predictions (commit `d9365daed`) before the fresh GPU run; the committed
+`predictions.jsonl`/`freeze.json` are unchanged after outcomes (hash-verified).
+The deterministic generators produced `3` tie, `1` reject, `1` construction_blocked
+(`blk.1.ffn_up` correctness-gate fail), and `1` diagnostic_only — **zero live
+candidates**, so ranking is undefined. XGBoost collapsed to all-`reject` on thin
+static features (macro-F1 `0.071`) and lost to `mechanism_prior` (`0.667`). The
+fixed-holdout cost-model win (macro-F1 `0.873`) does **not** generalize to fresh
+tensors at the blind static stage. Per the stop rule the model stays
+documentation-only; this is not promoted to Phase 5. The harness, freeze
+protocol, and scorer are proven and reusable for Phase 4.x.
+
+Phase 4.x follow-ups (to give the gate a fair, live-bearing test): a larger /
+repeated fresh batch that includes live candidates (raw_accept), and staged
+re-prediction after compile/microbench evidence — not blind static only.
+
 Out of scope for v0 (future Phase 4.x / 5):
 
 - Staged re-prediction after compile/microbench evidence becomes available.

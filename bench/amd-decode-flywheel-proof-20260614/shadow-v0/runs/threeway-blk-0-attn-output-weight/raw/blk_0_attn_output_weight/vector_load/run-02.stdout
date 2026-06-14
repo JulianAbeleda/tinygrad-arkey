@@ -1,0 +1,60 @@
+model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}
+variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random
+primitive: mode=vector_load parts=1 row_group=1 schedule=none opts=['LOCAL:0:32']
+scheduled     2 kernels in    19.88 ms | CACHE MISS 9d76e322 |      41 uops in cache | ./extra/q4_k_bench.py:108
+opened device DISK:~/models/Qwen3-8B-Q4_K_M.gguf from pid:64516
+[32m*** DISK:/h    1[0m [33mview    9.00 MB @ 868914496 [0m                   arg  2 mem   0.00 GB tm [33m    10.95ms[0m/    10.95ms (      0 GFLOPS    0|0      GB/s)
+AMDDevice: opening 0 with target (11, 0, 0) arch gfx1100
+opened device AMD from pid:64516
+[32m*** AMD        2[0m [33mcopy    9.00 MB,     AMD <- DISK:/h[0m            arg  2 mem   0.01 GB tm [33m   108.60ms[0m/   119.56ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD        3[0m E[90m_[0m[34m4096[0m[90m_[0m[36m16[0m[90m_[0m[36m8[0m[90m_[0m[33m2[0m[90m_[0m[33m4[0m[90m_[0m[33m4[0m[90m[0m                              arg  2 mem   0.08 GB tm    148.92us/   119.71ms (    556 GFLOPS  514|563    GB/s)
+*** AMD        4 E[90m_[0m[34m4096[0m[90m_[0m[36m16[0m[90m_[0m[36m8[0m[90m_[0m[33m2[0m[90m_[0m[33m4[0m[90m_[0m[33m4[0m[90m[0m                              arg  2 mem   0.14 GB tm    139.20us/   119.84ms (    595 GFLOPS  550|603    GB/s)
+scheduled     3 kernels in    21.29 ms | CACHE MISS e18797f2 |    1109 uops in cache | ./extra/q4_k_bench.py:18
+[32m*** AMD        5[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m1024[0m[90m_[0m[35m4[0m[90m[0m                               arg  3 mem   0.14 GB tm    560.36us/   120.41ms (     60 GFLOPS  240|240    GB/s)
+[32m*** AMD        6[0m r[90m_[0m[34m256[0m[90m_[0m[91m16[0m[90m[0m                                       arg  2 mem   0.14 GB tm      6.92us/   120.41ms (      9 GFLOPS    1|11     GB/s)
+[32m*** AMD        7[0m r[90m_[0m[91m16[0m[90m_[0m[31m16[0m[90m[0m                                        arg  2 mem   0.14 GB tm      7.76us/   120.42ms (      0 GFLOPS    0|0      GB/s)
+correctness: PASS blk.0.attn_output.weight
+[32m*** AMD        8[0m E[90m_[0m[34m4096[0m[90m_[0m[36m16[0m[90m_[0m[36m8[0m[90m_[0m[33m2[0m[90m_[0m[33m4[0m[90m_[0m[33m4[0m[90mn1[0m                            arg  2 mem   0.04 GB tm    179.76us/   120.60ms (    461 GFLOPS  239|280    GB/s)
+opened device PYTHON from pid:64516
+scheduled     5 kernels in    32.14 ms | CACHE MISS 216fa51e |    1954 uops in cache | ./extra/q4_k_bench.py:115
+[32m*** AMD        9[0m [33mcopy        8 B,     AMD <- PYTHON [0m            arg  2 mem   0.04 GB tm    591.75us/   121.19ms (      0 GFLOPS    0|0      GB/s)
+*** AMD       10 [33mcopy        8 B,     AMD <- PYTHON [0m            arg  2 mem   0.04 GB tm     65.95us/   121.26ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD       11[0m E[90m_[0m[33m2[0m[90m[0m                                            arg  1 mem   0.04 GB tm      8.48us/   121.27ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD       12[0m E[90m_[0m[34m64[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m[0m                                      arg  3 mem   0.04 GB tm     10.48us/   121.28ms (    223 GFLOPS    3|3      GB/s)
+[32m*** AMD       13[0m E[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m[0m                                      arg  2 mem   0.04 GB tm      9.36us/   121.29ms (      4 GFLOPS    4|4      GB/s)
+[32m*** AMD       14[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m1024[0m[90m_[0m[35m4[0m[90mn1[0m                             arg  3 mem   0.04 GB tm    334.40us/   121.62ms (    100 GFLOPS  100|125    GB/s)
+JIT captured 1 linears with 0 inputs
+[35m*** AMD        1[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m1024[0m[90m_[0m[35m4[0m[90mn1[0m                             arg  3 mem   0.04 GB tm    334.08us/     0.33ms (    100 GFLOPS  100|126    GB/s)
+[35m*** AMD        2[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m1024[0m[90m_[0m[35m4[0m[90mn1[0m                             arg  3 mem   0.04 GB tm    334.68us/     0.67ms (    100 GFLOPS  100|125    GB/s)
+[35m*** AMD        3[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m1024[0m[90m_[0m[35m4[0m[90mn1[0m                             arg  3 mem   0.04 GB tm    332.04us/     1.00ms (    101 GFLOPS  101|126    GB/s)
+[32m*** AMD        4[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m16[0m[90m_[0m[31m4[0m[90m_[0m[31m2[0m[90m_[0m[35m32[0m[90m[0m                            arg  3 mem   0.04 GB tm    962.52us/     1.96ms (    150 GFLOPS   10|20     GB/s)
+JIT captured 1 linears with 0 inputs
+[35m*** AMD        1[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m16[0m[90m_[0m[31m4[0m[90m_[0m[31m2[0m[90m_[0m[35m32[0m[90m[0m                            arg  3 mem   0.04 GB tm    627.72us/     0.63ms (    229 GFLOPS   15|31     GB/s)
+[35m*** AMD        2[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m16[0m[90m_[0m[31m4[0m[90m_[0m[31m2[0m[90m_[0m[35m32[0m[90m[0m                            arg  3 mem   0.04 GB tm    627.88us/     1.26ms (    229 GFLOPS   15|31     GB/s)
+[35m*** AMD        3[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m16[0m[90m_[0m[31m4[0m[90m_[0m[31m2[0m[90m_[0m[35m32[0m[90m[0m                            arg  3 mem   0.04 GB tm    624.16us/     1.88ms (    231 GFLOPS   15|32     GB/s)
+scheduled     2 kernels in     2.53 ms | CACHE MISS cfba4210 |    5763 uops in cache | ./extra/q4_k_bench.py:135
+[32m*** DISK:/h    4[0m [33mview    9.00 MB @ 868914496 [0m                   arg  2 mem   0.04 GB tm      4.02us/     1.88ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD        5[0m [33mcopy    9.00 MB,     AMD <- DISK:/h[0m            arg  2 mem   0.05 GB tm   6052.37us/     7.94ms (      0 GFLOPS    2|2      GB/s)
+scheduled     2 kernels in     2.31 ms | CACHE MISS 57643b29 |    5790 uops in cache | ./extra/q4_k_bench.py:142
+[32m*** DISK:/h    6[0m [33mview    4.50 KB @ 868914496 [0m                   arg  2 mem   0.05 GB tm      2.18us/     7.94ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD        7[0m [33mcopy    4.50 KB,     AMD <- DISK:/h[0m            arg  2 mem   0.05 GB tm    224.21us/     8.16ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD        8[0m q4k_unpack_2_4096                              arg  2 mem   0.05 GB tm      7.76us/     8.17ms (     15 GFLOPS    5|5      GB/s)
+scheduled     4 kernels in    29.47 ms | CACHE MISS 6dd59085 |    6851 uops in cache | ./extra/q4_k_bench.py:145
+[32m*** DISK:/h    9[0m [33mview    4.50 KB @ 868914496 [0m                   arg  2 mem   0.05 GB tm      2.94us/     8.17ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD       10[0m [33mcopy    4.50 KB,     AMD <- DISK:/h[0m            arg  2 mem   0.05 GB tm    714.71us/     8.89ms (      0 GFLOPS    0|0      GB/s)
+[32m*** AMD       11[0m E[90m_[0m[34m48[0m[90m_[0m[36m32[0m[90m_[0m[33m3[0m[90m[0m                                      arg  2 mem   0.05 GB tm     13.16us/     8.90ms (      0 GFLOPS    1|1      GB/s)
+[32m*** AMD       12[0m E[90m_[0m[34m2[0m[90m_[0m[36m16[0m[90m_[0m[36m8[0m[90m_[0m[33m2[0m[90m_[0m[33m4[0m[90m_[0m[33m4[0m[90m[0m                                 arg  2 mem   0.05 GB tm      8.92us/     8.91ms (      5 GFLOPS    4|5      GB/s)
+[32m*** AMD       13[0m r[90m_[0m[91m16[0m[90m_[0m[31m512[0m[90m[0m                                       arg  3 mem   0.05 GB tm     24.92us/     8.93ms (      3 GFLOPS    3|3      GB/s)
+primitive_unpack_correctness: PASS blk.0.attn_output.weight rows=2 max_abs=0
+[35m*** AMD       14[0m r[90m_[0m[34m32[0m[90m_[0m[36m32[0m[90m_[0m[33m4[0m[90m_[0m[31m1024[0m[90m_[0m[35m4[0m[90mn1[0m                             arg  3 mem   0.05 GB tm    335.72us/     9.27ms (    100 GFLOPS  100|125    GB/s)
+[32m*** AMD       15[0m q4k_gemv_vector_load_partial_4096_4096_1       arg  3 mem   0.05 GB tm    105.64us/     9.38ms (     53 GFLOPS   90|417    GB/s)
+[32m*** AMD       16[0m r[90m_[0m[91m16[0m[90m_[0m[31m256[0m[90m[0m                                       arg  3 mem   0.05 GB tm     16.64us/     9.39ms (      2 GFLOPS    1|2      GB/s)
+primitive_gemv_correctness: PASS blk.0.attn_output.weight max_abs=0.00320506
+JIT captured 1 linears with 0 inputs
+[35m*** AMD       17[0m q4k_gemv_vector_load_partial_4096_4096_1       arg  3 mem   0.05 GB tm     73.16us/     9.47ms (     76 GFLOPS  130|602    GB/s)
+[35m*** AMD        1[0m q4k_gemv_vector_load_partial_4096_4096_1       arg  3 mem   0.05 GB tm     72.04us/     0.07ms (     77 GFLOPS  132|612    GB/s)
+[35m*** AMD        2[0m q4k_gemv_vector_load_partial_4096_4096_1       arg  3 mem   0.05 GB tm     67.76us/     0.14ms (     82 GFLOPS  140|650    GB/s)
+[35m*** AMD        3[0m q4k_gemv_vector_load_partial_4096_4096_1       arg  3 mem   0.05 GB tm     72.80us/     0.21ms (     77 GFLOPS  130|605    GB/s)
+blk.0.attn_output.weight 4096x4096 matmul_decoded: 1.050 ms (952.56/s) q4_eff=8.99 GB/s device_q4_eff=28.29 GB/s kernels=1.0 mem=33.57 MB
+blk.0.attn_output.weight 4096x4096 decode_q4_k_plus_matmul: 3.826 ms (261.40/s) q4_eff=2.47 GB/s device_q4_eff=15.06 GB/s kernels=1.0 mem=9.45 MB
+blk.0.attn_output.weight 4096x4096 q4k_primitive_gemv: 0.294 ms (3406.10/s) q4_eff=32.14 GB/s device_q4_eff=133.17 GB/s kernels=1.0 mem=9.48 MB

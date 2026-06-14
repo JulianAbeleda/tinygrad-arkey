@@ -1,0 +1,131 @@
+{
+  "artifact": "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight",
+  "comparison": {
+    "gain_pct": -37.494896709398226,
+    "metric": "median device_q4_gbs",
+    "promotion_gain_pct": 10.0,
+    "qk_block_dot_median_device_q4_gbs": 96.32138482893768,
+    "v1_median_device_q4_gbs": 154.10163291966035
+  },
+  "config": {
+    "device": "AMD",
+    "full_tensor_shape": [
+      4096,
+      4096
+    ],
+    "iters": 5,
+    "model": "~/models/Qwen3-8B-Q4_K_M.gguf",
+    "opts": [
+      "Opt(op=OptOps.LOCAL, axis=0, arg=32)"
+    ],
+    "parts": 1,
+    "q4_bytes": 9437184,
+    "q4_words_per_block": 36,
+    "runs": 5,
+    "seed": 1337,
+    "shape": [
+      4096,
+      4096
+    ],
+    "tensor": "blk.0.attn_output.weight"
+  },
+  "kind": "qk_block_dot_microbench",
+  "modes": [
+    {
+      "device_ms": {
+        "max": 0.06143200000000001,
+        "mean": 0.061204800000000004,
+        "median": 0.06124,
+        "min": 0.060863999999999994,
+        "n": 5,
+        "stdev": 0.00022102307571835573
+      },
+      "device_q4_gbs": {
+        "max": 155.05362776025237,
+        "mean": 154.19187159119366,
+        "median": 154.10163291966035,
+        "min": 153.6200026045058,
+        "n": 5,
+        "stdev": 0.5579890085742159
+      },
+      "mode": "v1_partial",
+      "primitive_gemv_max_abs": {
+        "max": 0.001445770263671875,
+        "mean": 0.001445770263671875,
+        "median": 0.001445770263671875,
+        "min": 0.001445770263671875,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "raw_files": [
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-00-v1_partial.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-01-v1_partial.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-02-v1_partial.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-03-v1_partial.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-04-v1_partial.json"
+      ],
+      "runs": 5,
+      "wall_q4_gbs": {
+        "max": 2.7230124491849397,
+        "mean": 2.7106654523611047,
+        "median": 2.711984888616033,
+        "min": 2.6909964266634536,
+        "n": 5,
+        "stdev": 0.012334886583820556
+      }
+    },
+    {
+      "device_ms": {
+        "max": 0.09868,
+        "mean": 0.0980752,
+        "median": 0.09797600000000001,
+        "min": 0.097656,
+        "n": 5,
+        "stdev": 0.0004218663295405315
+      },
+      "device_q4_gbs": {
+        "max": 96.63701155074958,
+        "mean": 96.22538053276219,
+        "median": 96.32138482893768,
+        "min": 95.63421159302797,
+        "n": 5,
+        "stdev": 0.41316815662227424
+      },
+      "mode": "qk_block_dot",
+      "primitive_gemv_max_abs": {
+        "max": 0.0014505386352539062,
+        "mean": 0.0014505386352539062,
+        "median": 0.0014505386352539062,
+        "min": 0.0014505386352539062,
+        "n": 5,
+        "stdev": 0.0
+      },
+      "raw_files": [
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-00-qk_block_dot.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-01-qk_block_dot.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-02-qk_block_dot.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-03-qk_block_dot.json",
+        "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-04-qk_block_dot.json"
+      ],
+      "runs": 5,
+      "wall_q4_gbs": {
+        "max": 8.36383913407636,
+        "mean": 8.319827148948232,
+        "median": 8.313407492650429,
+        "min": 8.266131117011593,
+        "n": 5,
+        "stdev": 0.04019298173845288
+      }
+    }
+  ],
+  "schema_version": 1,
+  "source_compile_gate": "bench/qk-block-dot-compile-gate-20260613/compile-gate.json",
+  "summary": {
+    "correctness_ok": true,
+    "decision": "qk_block_dot_microbench_rejected",
+    "next_allowed_gate": "stop_qk_block_dot_runtime_integration",
+    "raw_accept": false,
+    "reason": "median device Q4 GB/s gain -37.49% vs required 10.00%",
+    "run_full_decode": false
+  }
+}

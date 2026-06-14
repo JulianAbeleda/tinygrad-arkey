@@ -415,8 +415,27 @@ precision@3 `0.250` vs `0.167`, NDCG `0.500` vs `0.253`, false-positive accept
 rate `0.0` (`<= 0.05`). `test/external/test_qk_flywheel_phase3f.py` covers the
 new row counts and the cleared gate.
 
-Next flywheel scope is Phase 4 live shadow mode (now unblocked), fully scoped in
-`docs/amd-decode-flywheel-proof-plan.md`. Concrete next-session deliverables:
+Phase 4 v0 live shadow mode is implemented and run (`extra/qk_flywheel_shadow.py`,
+`bench/amd-decode-flywheel-proof-20260614/shadow-v0/`). Result is an **honest
+negative**: predictions were frozen before the fresh GPU run (commit `d9365daed`;
+`predictions.jsonl`/`freeze.json` hash-verified unchanged after outcomes), the
+fresh batch produced `3` tie / `1` reject / `1` construction_blocked / `1`
+diagnostic_only (zero live candidates), and XGBoost collapsed to all-`reject`
+(macro-F1 `0.071`) losing to `mechanism_prior` (`0.667`). The fixed-holdout
+cost-model win does not generalize to fresh tensors at the blind static stage. Per
+the stop rule the model stays documentation-only; Phase 5 is not entered.
+`test/external/test_qk_flywheel_phase4.py` covers the freeze/leak-free/id-join/
+scoring invariants.
+
+Next scope is Phase 4.x (give the gate a fair, live-bearing test): a larger or
+repeated fresh batch that includes raw_accept candidates, and staged re-prediction
+after compile/microbench evidence (not blind static only). The harness, freeze
+protocol, and scorer are reusable as-is. Do not re-roll the v0 batch to manufacture
+a pass; v0 stands as recorded.
+
+The original Phase 4 scope (now executed) remains documented in
+`docs/amd-decode-flywheel-proof-plan.md`. Earlier next-session deliverables, for
+reference:
 
 1. Add a thin `extra/qk_flywheel_shadow.py` that reuses
    `extract_feature_map`, `FeatureVectorizer`, the XGBoost classifier/ranker

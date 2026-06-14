@@ -1,0 +1,23 @@
+{
+  "device_ms": 0.097656,
+  "device_q4_gbs": 96.63701155074958,
+  "global_mem_mb": 0.032768,
+  "iters": 5,
+  "kernels": 1.0,
+  "mode": "qk_block_dot",
+  "opts": [
+    "Opt(op=OptOps.LOCAL, axis=0, arg=32)"
+  ],
+  "parts": 1,
+  "primitive_gemv_max_abs": 0.0014505386352539062,
+  "q4_bytes": 9437184,
+  "raw_file": "bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-0-attn-output-weight/raw/run-04-qk_block_dot.json",
+  "run": 4,
+  "shape": [
+    4096,
+    4096
+  ],
+  "tensor": "blk.0.attn_output.weight",
+  "wall_ms": 1.136905800376553,
+  "wall_q4_gbs": 8.300761590691438
+}
