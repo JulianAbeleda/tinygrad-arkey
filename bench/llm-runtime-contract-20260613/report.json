@@ -150,13 +150,22 @@
       "status": "pass",
       "summary_path": "bench/qwen-adapter-20260613/compare-8b-base-vs-output-lora-r8-v2/report.json",
       "type": "compare"
+    },
+    {
+      "artifact": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5",
+      "errors": [],
+      "id": "qwen3-8b-last1-ffn-suffix-lora-r4-v5-train",
+      "min_train_loss_delta": 1.0,
+      "status": "pass",
+      "summary_path": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5/train-summary.json",
+      "type": "adapter_train"
     }
   ],
   "source_manifest": "qwen-runtime-contract-20260613",
   "summary": {
     "failed": 0,
     "missing": 0,
-    "passed": 14,
-    "rows": 14
+    "passed": 15,
+    "rows": 15
   }
 }

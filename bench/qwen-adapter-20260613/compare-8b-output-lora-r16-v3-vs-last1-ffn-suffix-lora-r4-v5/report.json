@@ -1,0 +1,291 @@
+{
+  "artifacts": [
+    {
+      "adapter": "bench/qwen-adapter-20260613/8b-output-lora-r16-v3",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v3/eval-prompts.jsonl",
+      "elapsed_s": 41.356055,
+      "generated": 142,
+      "label": "8b-output-lora-r16-v3-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-output-lora-r16-v3-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 12,
+      "quality": {
+        "pass_rate": 0.25,
+        "passed": 3,
+        "scored": 12,
+        "status": "fail"
+      },
+      "storage": "shared",
+      "tok_s": 3.4335963621288346
+    },
+    {
+      "adapter": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v3/eval-prompts.jsonl",
+      "elapsed_s": 33.004691,
+      "generated": 103,
+      "label": "8b-last1-ffn-suffix-lora-r4-v5-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 12,
+      "quality": {
+        "pass_rate": 0.3333333333333333,
+        "passed": 4,
+        "scored": 12,
+        "status": "fail"
+      },
+      "storage": "shared",
+      "tok_s": 3.120768499241517
+    }
+  ],
+  "baseline": "8b-output-lora-r16-v3-rollout",
+  "comparisons": [
+    {
+      "baseline": "8b-output-lora-r16-v3-rollout",
+      "candidate": "8b-last1-ffn-suffix-lora-r4-v5-rollout",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v3/eval-prompts.jsonl",
+      "outputs": {
+        "changed": [
+          {
+            "baseline_generated": 6,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"rounding\"}",
+            "candidate_generated": 12,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"quantization reduces the precision of model weights\"}",
+            "id": "json_compiler_020",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 5,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"continuous\"}",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_compiler_030",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 6,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"a kernel\"}",
+            "candidate_generated": 4,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\"}",
+            "id": "json_compiler_040",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 7,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"Central Processing Unit\"}",
+            "candidate_generated": 7,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"central processing unit\"}",
+            "id": "json_compiler_060",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"111111111111111111111",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 25}",
+            "id": "json_math_015",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"111111111111111111111",
+            "candidate_generated": 14,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 8}\n</think>\n\n{\"answer\": 8}",
+            "id": "json_math_025",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"111111111111111111111",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":14}",
+            "id": "json_math_035",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 6,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"11\"}",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 6}",
+            "id": "json_math_045",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 6,
+            "baseline_status": "pass",
+            "baseline_text": "{\"answer\":\"15\"}",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 15}",
+            "id": "json_math_050",
+            "tags": [
+              "json_answer",
+              "math",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "{\"answer\":\"111111111111111111111",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"48\"}",
+            "id": "json_pattern_005",
+            "tags": [
+              "json_answer",
+              "pattern",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          }
+        ],
+        "text_changed": 10,
+        "text_equal": 2,
+        "tokens_changed": 10,
+        "tokens_equal": 2
+      },
+      "prompts": 12,
+      "quality": {
+        "baseline_passed": 3,
+        "candidate_passed": 4,
+        "improvements": [
+          "json_compiler_060",
+          "json_pattern_005"
+        ],
+        "passed_delta": 1,
+        "regressions": [
+          "json_math_050"
+        ]
+      },
+      "tag_delta": {
+        "code": {
+          "baseline_passed": 1,
+          "candidate_passed": 1,
+          "passed_delta": 0,
+          "scored": 1
+        },
+        "compiler": {
+          "baseline_passed": 0,
+          "candidate_passed": 1,
+          "passed_delta": 1,
+          "scored": 4
+        },
+        "eval": {
+          "baseline_passed": 3,
+          "candidate_passed": 4,
+          "passed_delta": 1,
+          "scored": 12
+        },
+        "fact": {
+          "baseline_passed": 1,
+          "candidate_passed": 1,
+          "passed_delta": 0,
+          "scored": 1
+        },
+        "json_answer": {
+          "baseline_passed": 3,
+          "candidate_passed": 4,
+          "passed_delta": 1,
+          "scored": 12
+        },
+        "math": {
+          "baseline_passed": 1,
+          "candidate_passed": 0,
+          "passed_delta": -1,
+          "scored": 5
+        },
+        "pattern": {
+          "baseline_passed": 0,
+          "candidate_passed": 1,
+          "passed_delta": 1,
+          "scored": 1
+        }
+      },
+      "timing_sanity": {
+        "baseline_elapsed_s": 41.356055,
+        "baseline_generated": 142,
+        "baseline_tok_s": 3.4335963621288346,
+        "candidate_elapsed_s": 33.004691,
+        "candidate_generated": 103,
+        "candidate_tok_s": 3.120768499241517,
+        "elapsed_delta_s": -8.351363999999997,
+        "generated_delta": -39,
+        "tok_s_ratio": 0.9088920682880256
+      }
+    }
+  ],
+  "kind": "llm_rollout_compare_report"
+}

@@ -109,6 +109,12 @@
       "require_text_equal": false,
       "min_passed_delta": 10,
       "min_candidate_pass_rate": 1.0
+    },
+    {
+      "id": "qwen3-8b-last1-ffn-suffix-lora-r4-v5-train",
+      "type": "adapter_train",
+      "artifact": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5",
+      "min_train_loss_delta": 1.0
     }
   ]
 }

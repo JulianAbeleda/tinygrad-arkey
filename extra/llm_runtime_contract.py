@@ -12,7 +12,7 @@ SUMMARY_KINDS = {
   "compare": ("llm_rollout_compare_report",),
   "training_data": ("llm_training_data_probe",),
   "training_run": ("llm_sft_smoke_train_summary",),
-  "adapter_train": ("llm_adapter_train_summary",),
+  "adapter_train": ("llm_adapter_train_summary", "llm_adapter_suffix_train_summary"),
 }
 
 def _load_json(path:pathlib.Path) -> Any:

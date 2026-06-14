@@ -1,0 +1,186 @@
+{
+  "adapter_kind": "suffix_lora",
+  "alpha": 8.0,
+  "append_eos": true,
+  "artifacts": {
+    "config": "adapter.json",
+    "weights": "adapter.npz"
+  },
+  "base_model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "cache": {
+    "eval": {
+      "avg_tokens": 37.3625,
+      "dtype": "float32",
+      "examples": 80,
+      "hidden_shape_tail": [
+        4096
+      ],
+      "max_tokens": 49,
+      "prefix_cache_bytes": 7913472,
+      "prefix_cache_entries": 12,
+      "total_hidden_bytes": 48971776
+    },
+    "train": {
+      "avg_tokens": 35.793103448275865,
+      "dtype": "float32",
+      "examples": 319,
+      "hidden_shape_tail": [
+        4096
+      ],
+      "max_tokens": 47,
+      "prefix_cache_bytes": 30294016,
+      "prefix_cache_entries": 48,
+      "total_hidden_bytes": 187072512
+    }
+  },
+  "deltas": {
+    "adapter_l2": 4.624648119453782,
+    "eval_accuracy": 0.41666666666666663,
+    "eval_loss": 7.177747221867896,
+    "train_accuracy": 0.41666666666666674,
+    "train_loss": 6.822361916911418
+  },
+  "elapsed_s": 276.2297493380029,
+  "eval_examples": 80,
+  "eval_rows": 12,
+  "eval_source_ids": [
+    "json_code_055",
+    "json_compiler_020",
+    "json_compiler_030",
+    "json_compiler_040",
+    "json_compiler_060",
+    "json_fact_010",
+    "json_math_015",
+    "json_math_025",
+    "json_math_035",
+    "json_math_045",
+    "json_math_050",
+    "json_pattern_005"
+  ],
+  "final": {
+    "eval": {
+      "accuracy": 0.9166666666666666,
+      "examples": 24,
+      "loss": 0.268018291917528
+    },
+    "train": {
+      "accuracy": 0.9583333333333334,
+      "examples": 24,
+      "loss": 0.28171583579418424
+    }
+  },
+  "history": [
+    {
+      "example": "json_math_037:tok6",
+      "loss": 0.14910376071929932,
+      "step": 1
+    },
+    {
+      "example": "json_fact_054:tok1",
+      "loss": -0.0,
+      "step": 20
+    },
+    {
+      "example": "json_code_003:tok5",
+      "loss": 0.002646992914378643,
+      "step": 40
+    },
+    {
+      "example": "json_sort_059:tok5",
+      "loss": 1.1920928955078125e-07,
+      "step": 60
+    },
+    {
+      "example": "json_math_041:tok2",
+      "loss": 13.033596992492676,
+      "step": 80
+    }
+  ],
+  "initial": {
+    "eval": {
+      "accuracy": 0.5,
+      "examples": 24,
+      "loss": 7.445765513785424
+    },
+    "train": {
+      "accuracy": 0.5416666666666666,
+      "examples": 24,
+      "loss": 7.104077752705602
+    }
+  },
+  "input": "bench/qwen-adapter-20260613/training-data-v3/sft.jsonl",
+  "installed_adapters": 3,
+  "installed_targets": [
+    "blk.35.ffn_gate",
+    "blk.35.ffn_up",
+    "blk.35.ffn_down"
+  ],
+  "kind": "llm_adapter_suffix_train_summary",
+  "mode": "baseline",
+  "note": "Suffix-cache LoRA gate; caches frozen prefix hidden states and trains only the selected lastN_ffn suffix.",
+  "optimizer": {
+    "lr": 0.001,
+    "name": "Adam",
+    "seed": 20260613,
+    "steps": 80
+  },
+  "parity": {
+    "argmax_mismatches": 0,
+    "examples": 4,
+    "max_abs": 0.0,
+    "rows": [
+      {
+        "argmax_match": true,
+        "full_argmax": 151667,
+        "id": "json_pattern_005:tok0",
+        "input_tokens": 43,
+        "max_abs": 0.0,
+        "suffix_argmax": 151667,
+        "target": 4913
+      },
+      {
+        "argmax_match": true,
+        "full_argmax": 9217,
+        "id": "json_pattern_005:tok1",
+        "input_tokens": 44,
+        "max_abs": 0.0,
+        "suffix_argmax": 9217,
+        "target": 9217
+      },
+      {
+        "argmax_match": true,
+        "full_argmax": 788,
+        "id": "json_pattern_005:tok2",
+        "input_tokens": 45,
+        "max_abs": 0.0,
+        "suffix_argmax": 788,
+        "target": 3252
+      },
+      {
+        "argmax_match": true,
+        "full_argmax": 19,
+        "id": "json_pattern_005:tok3",
+        "input_tokens": 46,
+        "max_abs": 0.0,
+        "suffix_argmax": 19,
+        "target": 19
+      }
+    ],
+    "status": "pass",
+    "tol": 0.01
+  },
+  "policy": null,
+  "prompt_format": "chat",
+  "rank": 4,
+  "rows": 60,
+  "status": "pass",
+  "storage": "shared",
+  "suffix_blocks": 1,
+  "suffix_start_block": 35,
+  "target_positions": "all",
+  "targets": [
+    "last1_ffn"
+  ],
+  "train_examples": 319,
+  "train_rows": 48
+}

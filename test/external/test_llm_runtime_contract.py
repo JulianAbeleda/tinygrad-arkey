@@ -61,6 +61,15 @@ class TestLLMRuntimeContract(unittest.TestCase):
         "deltas": {"train_loss": 0.1, "adapter_l2": 1.0},
         "artifacts": {"config": "adapter.json", "weights": "adapter.npz"},
       }))
+      suffix_adapter_out = repo / "suffix-adapter"
+      suffix_adapter_out.mkdir()
+      (suffix_adapter_out / "adapter.json").write_text("{}")
+      (suffix_adapter_out / "adapter.npz").write_bytes(b"npz")
+      (suffix_adapter_out / "train-summary.json").write_text(json.dumps({
+        "kind": "llm_adapter_suffix_train_summary", "status": "pass",
+        "deltas": {"train_loss": 0.2, "adapter_l2": 2.0},
+        "artifacts": {"config": "adapter.json", "weights": "adapter.npz"},
+      }))
       manifest = {
         "kind": "llm_runtime_contract_manifest",
         "rows": [
@@ -70,10 +79,11 @@ class TestLLMRuntimeContract(unittest.TestCase):
           {"id": "train", "type": "training_data", "artifact": "train", "min_rows": 1},
           {"id": "training-run", "type": "training_run", "artifact": "training-run", "min_eval_accuracy": 0.2, "min_eval_loss_delta": 0.5},
           {"id": "adapter", "type": "adapter_train", "artifact": "adapter", "min_train_loss_delta": 0.01},
+          {"id": "suffix-adapter", "type": "adapter_train", "artifact": "suffix-adapter", "min_train_loss_delta": 0.01},
         ],
       }
       report = validate_contract(manifest, repo)
-    self.assertEqual(report["summary"], {"rows": 6, "passed": 6, "failed": 0, "missing": 0})
+    self.assertEqual(report["summary"], {"rows": 7, "passed": 7, "failed": 0, "missing": 0})
     self.assertIn("LLM Runtime Contract", report_markdown(report))
 
   def test_contract_flags_compare_regression(self):

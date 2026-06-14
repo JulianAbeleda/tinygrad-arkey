@@ -388,6 +388,10 @@ worth doing only if the research itself is the goal.
 - Do not rerun the current 8B internal-adapter full gate through plain-block
   no-REALIZE training. It is too slow to be the loop. Fix the training path
   first.
+- Do not promote the V5 suffix-cache `last1_ffn` strict JSON adapter. The
+  training path is fixed and the base comparison improves (`0/12 -> 4/12`), but
+  the held-out quality gate still fails and it regresses one prompt versus the
+  V3 output-LoRA diagnostic.
 
 ## Pointers
 

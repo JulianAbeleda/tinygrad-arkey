@@ -131,3 +131,44 @@ Verdict: blocked, not promoted. The next step is not more target sweeps. It is
 building a practical 8B internal-adapter training path that avoids generated QK
 bit-op gradients, avoids full fp16 realization, and avoids the current
 plain-block runtime cost.
+
+## V5 Suffix-Cache Internal Adapter Gate
+
+The fifth gate adds that dedicated internal-adapter training path for suffix
+targets:
+
+- trainer: `extra/llm_adapter_suffix_train.py`
+- target: `last1_ffn` (`blk.35.ffn_gate`, `blk.35.ffn_up`, `blk.35.ffn_down`)
+- adapter: LoRA rank `4`, alpha `8`
+- training mode: baseline QK path, cached hidden state at block `35`, suffix-only
+  backprop
+- inference mode: generated QK policy with shared storage
+
+Artifacts:
+
+- `8b-last1-ffn-suffix-lora-r4-v5/README.md`: suffix training summary and saved
+  adapter.
+- `8b-last1-ffn-suffix-lora-r4-v5-rollout/summary.md`: held-out strict JSON
+  rollout with adapter loaded.
+- `compare-8b-json-base-vs-last1-ffn-suffix-lora-r4-v5/report.md`: base-vs-v5
+  comparison.
+- `compare-8b-output-lora-r16-v3-vs-last1-ffn-suffix-lora-r4-v5/report.md`:
+  output-LoRA-vs-v5 comparison.
+
+Current result:
+
+- suffix parity: `pass`, `max_abs=0.0`
+- cache entries: `48` train rows and `12` eval rows, expanded to `319` train and
+  `80` eval token targets
+- train loss: `7.1041 -> 0.2817`
+- eval loss: `7.4458 -> 0.2680`
+- teacher-forced eval token accuracy: `0.5000 -> 0.9167`
+- base rollout comparison: `0/12 -> 4/12`, `+4` improvements, `0` regressions
+- V3 output-LoRA comparison: `3/12 -> 4/12`, `+1` net, but `1` regression
+
+Verdict: training-path positive, quality-gate negative. The suffix-cache trainer
+solves the V4 practical blocker: internal `lastN_ffn` adapters can now train
+without generated-QK bit-op gradients, without full fp16 realization, and without
+recomputing the full prefix every step. It does not solve strict JSON answering.
+The held-out rollout is only `4/12`, so this adapter is a diagnostic artifact,
+not a promoted behavior gate.

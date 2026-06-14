@@ -319,10 +319,19 @@ generated-policy storage mode.
       internal-adapter training is blocked. Generated-QK training hits
       unsupported quant bit-op gradients; `REALIZE=1` OOMs at `23.78 GB`; the
       plain-block no-REALIZE workaround is too slow for full gates.
-- [ ] Next practical step: build a dedicated internal-adapter training mode
-      before rerunning strict JSON V4. Requirements: differentiable through
-      frozen layers, lower memory than full fp16 realization, faster than the
-      current plain-block path, and load-compatible with generated-QK inference.
+- [x] Built the dedicated suffix-cache internal-adapter training mode:
+      `extra/llm_adapter_suffix_train.py` caches frozen prefix hidden states at
+      the `lastN_ffn` boundary and trains the selected suffix only. V5
+      `last1_ffn` rank-4 passes suffix parity (`max_abs=0.0`) and the training
+      gate (`eval loss 7.4458 -> 0.2680`, eval token accuracy `0.5000 ->
+      0.9167`) without generated-QK bit-op gradients or full fp16 realization.
+      Held-out generation improves over base (`0/12 -> 4/12`) but fails the
+      strict JSON promotion bar and has one regression versus V3 output-LoRA, so
+      this is a training-path win, not a behavior-gate win.
+- [ ] Next practical step: decide whether to continue adapter capacity
+      experiments (`last2_ffn`, attention projections, or combined output+suffix)
+      or pivot to a better supervised objective/evaluator before more LoRA
+      tuning. Any continuation must use the same strict rollout/compare gate.
 
 ## Do Not Do Next
 

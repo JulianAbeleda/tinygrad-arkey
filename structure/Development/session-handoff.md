@@ -593,3 +593,20 @@ that is differentiable through frozen layers, lower-memory than full fp16
 realization, faster than the current plain-block path, and still load-compatible
 with generated-QK inference. Do not rerun full 8B internal-adapter sweeps through
 the current plain-block workaround.
+
+The dedicated internal-adapter training path has now been added as V5:
+`extra/llm_adapter_suffix_train.py` caches frozen prefix hidden states at a
+`lastN_ffn` boundary and trains only the suffix. The 8B strict JSON
+`last1_ffn` rank-4 run is
+`bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5/`: suffix parity
+passes exactly (`max_abs=0.0`), train/eval loss drops strongly (`7.1041 ->
+0.2817`, `7.4458 -> 0.2680`), and teacher-forced eval token accuracy reaches
+`0.9167`. The generated rollout is
+`bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5-rollout/` and
+reaches `4/12` strict JSON passes. Compared with base it is `+4` with `0`
+regressions; compared with V3 output-LoRA it is `+1` net with `1` regression.
+Verdict: V5 fixes the practical internal-adapter training loop, but does not
+solve strict JSON generation. Do not promote it as a behavior gate. The next
+adapter decision is whether to add more conditional capacity (`last2_ffn`,
+attention projections, combined output+suffix) or first improve the objective /
+evaluator so more LoRA tuning is better aimed.
