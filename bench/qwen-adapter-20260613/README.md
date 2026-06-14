@@ -253,6 +253,12 @@ synchronize wait timeout before writing the RS artifact. A bounded `DEV=AMD`
 smoke test also timed out afterward, so further GPU work is blocked until the
 AMD runtime/device path is reset.
 
+Follow-up recovery attempts in the same live session did not clear the device:
+the sysfs GPU reset hook returned `Inappropriate ioctl for device`, and
+`rocm-smi -d 0 --gpureset` itself hung in uninterruptible `D` state. Continue
+only after a host reboot or equivalent full AMD driver/device reset, then rerun
+the `DEV=AMD` smoke test before any Phase 4 generation.
+
 The sampler was hardened after the failure:
 
 - `samples.jsonl` is now written incrementally;

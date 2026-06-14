@@ -1,5 +1,6 @@
 {
-  "blocked_reason": "AMD runtime did not recover after rejection-sampling generation hit a synchronize wait timeout; a bounded DEV=AMD smoke test also timed out.",
+  "blocked_action": "host reboot or full AMD driver/device reset outside this Python session, then rerun the DEV=AMD smoke test before continuing Phase 4.",
+  "blocked_reason": "AMD runtime did not recover after rejection-sampling generation hit a synchronize wait timeout; a bounded DEV=AMD smoke test also timed out. A later sysfs GPU reset failed with EIOCTL and rocm-smi --gpureset itself entered uninterruptible D state.",
   "gold_control": {
     "artifact": "8b-last1-ffn-suffix-lora-r4-v6-gold-v4",
     "cache": {
@@ -29,6 +30,18 @@
       0.8
     ]
   },
+  "recovery_attempts": [
+    {
+      "result": "failed",
+      "step": "sysfs_reset",
+      "symptom": "writing 1 to /sys/class/drm/card0/device/reset returned Inappropriate ioctl for device"
+    },
+    {
+      "result": "failed",
+      "step": "rocm_smi_gpureset",
+      "symptom": "rocm-smi -d 0 --gpureset hung and left python3 /usr/bin/rocm-smi in D state"
+    }
+  ],
   "sampler_hardening": {
     "incremental_samples_jsonl": true,
     "resume_flag": true
