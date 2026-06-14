@@ -27,6 +27,82 @@ Python:
 # Python 3.12.3
 ```
 
+## Ubuntu Venv Sync Snapshot
+
+Validation run: `git pull && uv sync --extra testing_minimal --extra costmodel` (already up to date).
+
+```sh
+/home/ubuntu/tinygrad-arkey/.venv/bin/python --version
+# Python 3.12.3
+
+/home/ubuntu/tinygrad-arkey/.venv/bin/python -c "import tinygrad, sys; print(tinygrad.__file__); print(sys.prefix)"
+# /home/ubuntu/tinygrad-arkey/tinygrad/__init__.py
+# /home/ubuntu/tinygrad-arkey/.venv
+
+DEV=AMD /home/ubuntu/tinygrad-arkey/.venv/bin/python -c "from tinygrad import Tensor; print(Tensor([1,2,3]).to('AMD').realize().numpy())"
+# [1 2 3]
+
+DEV=AMD /home/ubuntu/tinygrad-arkey/.venv/bin/python -c "from tinygrad import Tensor; Tensor.rand(8,8).to('AMD').realize(); print('AMD OK')"
+# AMD OK
+```
+
+```text
+.venv/bin/python -m pip freeze
+execnet==2.1.2
+filelock==3.29.4
+fsspec==2026.4.0
+hypothesis==6.155.2
+iniconfig==2.3.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+mpmath==1.3.0
+networkx==3.6.1
+numpy==2.4.6
+nvidia-cublas-cu12==12.8.4.1
+nvidia-cuda-cupti-cu12==12.8.90
+nvidia-cuda-nvrtc-cu12==12.8.93
+nvidia-cuda-runtime-cu12==12.8.90
+nvidia-cudnn-cu12==9.10.2.21
+nvidia-cufft-cu12==11.3.3.83
+nvidia-cufile-cu12==1.13.1.3
+nvidia-curand-cu12==10.3.9.90
+nvidia-cusolver-cu12==11.7.3.90
+nvidia-cusparse-cu12==12.5.8.93
+nvidia-cusparselt-cu12==0.7.1
+nvidia-nccl-cu12==2.27.5
+nvidia-nvjitlink-cu12==12.8.93
+nvidia-nvshmem-cu12==3.3.20
+nvidia-nvtx-cu12==12.8.90
+packaging==26.2
+pluggy==1.6.0
+Pygments==2.20.0
+pytest-split==0.11.0
+pytest-timeout==2.4.0
+pytest-xdist==3.8.0
+pytest==9.1.0
+scipy==1.17.1
+setuptools==82.0.1
+sortedcontainers==2.4.0
+sympy==1.14.0
+-e git+https://github.com/JulianAbeleda/tinygrad-arkey.git@58b3969e9e7c2541aa92f41f8b232bc89fa4c1a1#egg=tinygrad_arkey
+torch==2.9.1
+triton==3.5.1
+typing_extensions==4.15.0
+xgboost==3.2.0
+z3-solver==4.15.3.0
+```
+
+Key dependency checks in this venv:
+
+- `xgboost`: present (`3.2.0`)
+- `scipy`: present (`1.17.1`)
+- `pillow`: not installed in this extra set (not part of `testing_minimal` + `costmodel`)
+
+ROCm system layer (host-level):
+
+`apt list --installed | grep -i rocm | head` shows ROCm packages present (`librocm-smi64 5.7.0-1`, `rocm-core 7.2.4...`, `rocminfo 5.7.1`, etc.).
+`hipconfig --version` reports `5.7.31921-0`.
+
 Models present under `/home/ubuntu/models`:
 
 - `Qwen3-1.7B-Q8_0.gguf`
