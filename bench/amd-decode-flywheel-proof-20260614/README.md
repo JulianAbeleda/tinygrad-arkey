@@ -43,6 +43,14 @@ than simple baselines before outcomes are known?
   schema.
 - `triage-coverage-plan-v1/`: Phase 3E targeted outcome plan required before
   rerunning the cost model as a decision point.
+- `targeted-outcomes-v1/`: Phase 3F partial real targeted-outcome train batch
+  from unused committed probe/source diagnostics.
+- `kernel-triage-v1-featured-plus/`: Phase 3F plus dataset with the Phase 3E
+  featured rows plus targeted train additions.
+- `triage-feature-audit-v1-featured-plus/`: Phase 3F audit over the plus
+  dataset.
+- `triage-coverage-plan-v1-plus/`: remaining data-collection plan after the
+  partial Phase 3F batch.
 
 ## Current Result
 
@@ -131,3 +139,15 @@ weak rows remain `43`, and `33` holdout rows still have mechanisms unseen in
 train. `triage-coverage-plan-v1/` therefore keeps `rerun_phase3b_allowed=false`
 and calls for a real targeted outcome batch before another XGBoost decision
 run.
+
+Phase 3F update: `extra/qk_flywheel_targeted_outcomes.py` converts unused
+committed real diagnostics into a small post-Phase-3E train batch without
+moving holdout rows or using design-only contracts as labels. The plus dataset
+has `90` rows: `52` train and the original `38` holdout. Added rows cover
+`vector_load` (`4`), `wide_load_only` (`2`), and `qk_block_dot` (`1`), with
+natural labels `construction_blocked` (`2`) and `diagnostic_only` (`5`).
+Coverage improves but does not clear the gate: unseen holdout categorical
+values fall `15 -> 11`, weak rows fall `43 -> 38`, remaining mechanism rows
+fall `35 -> 28`, and remaining label targets fall `14 -> 7`.
+`triage-coverage-plan-v1-plus/` still keeps `rerun_phase3b_allowed=false`; do
+not rerun XGBoost as a decision point yet.

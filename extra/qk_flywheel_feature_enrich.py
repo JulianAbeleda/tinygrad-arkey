@@ -79,6 +79,8 @@ def _select_load_width_row(report:dict[str, Any], row:dict[str, Any]) -> dict[st
   modes = set(_mode_candidates(row))
   for item in rows:
     if str(item.get("mode") or "") in modes: return item
+  ctx = row.get("pre_result_context") or {}
+  if isinstance(ctx, dict) and ctx.get("mode"): return None
   non_baseline = [item for item in rows if "baseline" not in str(item.get("mode") or "")]
   if len(non_baseline) == 1: return non_baseline[0]
   return None

@@ -1008,6 +1008,67 @@ Gate:
 - After that batch, regenerate `kernel-triage-v1-featured/`, rerun the feature
   audit, and only then run the cost model again against `mechanism_prior`.
 
+## Phase 3F: Targeted Outcome Batch v1
+
+Purpose:
+
+- Convert unused committed real probe/source diagnostics into train rows where
+  they fill the Phase 3E coverage gaps.
+- Keep the family-split holdout untouched.
+- Make the remaining blocker explicit instead of treating a partial batch as a
+  cost-model rerun trigger.
+
+Implementation:
+
+- `extra/qk_flywheel_targeted_outcomes.py`
+- `extra/qk_flywheel_dataset_v1.py`
+- `extra/qk_flywheel_feature_enrich.py`
+- `extra/qk_flywheel_coverage_plan.py`
+- `test/external/test_qk_flywheel_phase3f.py`
+- Artifacts:
+  `bench/amd-decode-flywheel-proof-20260614/targeted-outcomes-v1/`,
+  `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/`,
+  `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured-plus/`,
+  and
+  `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1-plus/`.
+
+Current Phase 3F result:
+
+- Added `7` real train rows from committed diagnostics:
+  `4` `vector_load`, `2` `wide_load_only`, and `1` `qk_block_dot`.
+- Labels added naturally: `2` `construction_blocked` and `5`
+  `diagnostic_only`.
+- The plus dataset has `90` rows: `52` train and the original `38` holdout.
+- Real UOp/source rows increase from `13` to `18`.
+- Design-only `QK_BLOCK_DOT` semantic-op contract rows remain excluded from
+  training labels because they have no runtime lowering or outcome.
+- Leakage remains clean; prompts still omit `candidate_record.outcome`,
+  source-file paths, and feature-source paths.
+
+Audit delta versus Phase 3E:
+
+- Unseen holdout categorical values improve from `15` to `11`.
+- Weak rows improve from `43` to `38`.
+- Remaining mechanism coverage need falls from `35` rows to `28`.
+- Remaining label coverage need falls from `14` rows to `7`.
+
+Remaining blocker:
+
+- `triage-coverage-plan-v1-plus/` still keeps
+  `rerun_phase3b_allowed=false`.
+- Still needed before another XGBoost decision run:
+  `5` `packed_word_lane_unroll`, `4` `qk_block_dot`, `5` `reduce_unroll`,
+  `5` `row_upcast`, `5` `two_dim_local`, `1` `vector_load`, and `3`
+  `wide_load_only` train rows.
+- Label coverage still needs `2` more `construction_blocked` rows and `5`
+  natural `raw_accept_unconfirmed` rows.
+
+Gate:
+
+- Do not rerun Phase 3B/XGBoost as a decision point yet.
+- Continue with a second targeted real-outcome batch, focused on the remaining
+  semantic schedule mechanisms and natural raw-accept opportunities.
+
 ## Phase 4: Live Shadow Mode
 
 Purpose:

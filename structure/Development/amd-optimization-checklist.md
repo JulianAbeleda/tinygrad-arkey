@@ -469,6 +469,21 @@ generated-policy storage mode.
       point: unseen holdout categorical values stay `15`, weak rows stay `43`,
       and the plan requires real targeted outcomes for seven uncovered
       mechanisms before rerunning XGBoost against `mechanism_prior`.
+- [x] Added Phase 3F targeted real-outcome batch v1:
+      `extra/qk_flywheel_targeted_outcomes.py`,
+      `test/external/test_qk_flywheel_phase3f.py`,
+      `bench/amd-decode-flywheel-proof-20260614/targeted-outcomes-v1/`,
+      `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/`,
+      `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured-plus/`,
+      and `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1-plus/`.
+      This converts unused committed real probe/source diagnostics into `7`
+      new train rows without moving holdout rows or using design-only contract
+      rows as labels. Added coverage: `4` `vector_load`, `2`
+      `wide_load_only`, `1` `qk_block_dot`; labels: `2`
+      `construction_blocked`, `5` `diagnostic_only`. The plus audit improves
+      unseen holdout categorical values `15 -> 11` and weak rows `43 -> 38`,
+      but still keeps `rerun_phase3b_allowed=false`: remaining coverage is
+      `28` mechanism rows and `7` label targets.
 
 ## Do Not Do Next
 

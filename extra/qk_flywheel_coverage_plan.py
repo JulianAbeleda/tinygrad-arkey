@@ -54,6 +54,8 @@ def _read_json(path:pathlib.Path) -> dict[str, Any]:
   return data
 
 def build_coverage_plan(audit:dict[str, Any], audit_path:pathlib.Path) -> dict[str, Any]:
+  audit_text = str(audit_path)
+  phase = "Phase 3F Plus" if "featured-plus" in audit_text else "Phase 3E"
   mechanism_targets = audit.get("targets", {}).get("holdout_mechanisms", {})
   label_targets = audit.get("targets", {}).get("labels", {})
   missing_mechanisms = {
@@ -90,7 +92,8 @@ def build_coverage_plan(audit:dict[str, Any], audit_path:pathlib.Path) -> dict[s
   min_mechanism_rows = sum(row["needed_train_rows"] for row in mechanism_batches)
   min_label_rows = sum(row["needed_train_rows"] for row in label_batches)
   return {
-    "kind": "qk_flywheel_phase3e_coverage_plan",
+    "kind": "qk_flywheel_phase3f_plus_coverage_plan" if phase == "Phase 3F Plus" else "qk_flywheel_phase3e_coverage_plan",
+    "phase": phase,
     "source_audit": str(audit_path),
     "conclusion": "collect_targeted_outcomes_before_cost_model_rerun",
     "rerun_phase3b_allowed": False,
@@ -111,11 +114,12 @@ def build_coverage_plan(audit:dict[str, Any], audit_path:pathlib.Path) -> dict[s
   }
 
 def _readme(plan:dict[str, Any]) -> str:
+  phase = plan.get("phase", "Phase 3E")
   lines = [
-    "# AMD Decode Flywheel Phase 3E Coverage Plan",
+    f"# AMD Decode Flywheel {phase} Coverage Plan",
     "",
-    "This artifact turns the v1-featured audit into a concrete data-collection",
-    "batch. It does not add training examples by itself.",
+    "This artifact turns the current featured audit into a concrete",
+    "data-collection batch. It does not add training examples by itself.",
     "",
     f"- conclusion: `{plan['conclusion']}`",
     f"- rerun Phase 3B allowed: `{plan['rerun_phase3b_allowed']}`",

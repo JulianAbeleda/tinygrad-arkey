@@ -1,0 +1,1066 @@
+{
+  "conclusion": "needs_data_and_feature_expansion",
+  "coverage": {
+    "categorical": {
+      "by_feature": {
+        "candidate_schema_version": {
+          "covered": true,
+          "holdout_values": [
+            "candidate_outcome_v1_featured"
+          ],
+          "train_values": [
+            "candidate_outcome_v1_featured"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "change_format": {
+          "covered": true,
+          "holdout_values": [],
+          "train_values": [
+            "Q4_K"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "change_from_family": {
+          "covered": true,
+          "holdout_values": [],
+          "train_values": [
+            "q4_k_packed_u32"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "change_to_family": {
+          "covered": true,
+          "holdout_values": [],
+          "train_values": [
+            "q4_k_packed_u32"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "v1_static_format": {
+          "covered": false,
+          "holdout_values": [
+            "Q4_K",
+            "Q6_K"
+          ],
+          "train_values": [
+            "Q4_K",
+            "unknown"
+          ],
+          "unseen_holdout_value_count": 1,
+          "unseen_holdout_values": [
+            "Q6_K"
+          ]
+        },
+        "v1_static_mechanism": {
+          "covered": false,
+          "holdout_values": [
+            "direct_output",
+            "packed_word_lane_unroll",
+            "qk_block_dot",
+            "reduce_unroll",
+            "row_upcast",
+            "tile_custom",
+            "two_dim_local",
+            "vector_load",
+            "wide_load_only"
+          ],
+          "train_values": [
+            "direct_output",
+            "parts_local_policy",
+            "qk_block_dot",
+            "row_grouping",
+            "shared_storage",
+            "storage_cap",
+            "tile_custom",
+            "vector_load",
+            "wide_load_only"
+          ],
+          "unseen_holdout_value_count": 4,
+          "unseen_holdout_values": [
+            "packed_word_lane_unroll",
+            "reduce_unroll",
+            "row_upcast",
+            "two_dim_local"
+          ]
+        },
+        "v1_static_model": {
+          "covered": true,
+          "holdout_values": [
+            "Qwen3-14B-Q4_K_M",
+            "Qwen3-8B-Q4_K_M"
+          ],
+          "train_values": [
+            "Qwen3-14B-Q4_K_M",
+            "Qwen3-32B-Q4_K_M",
+            "Qwen3-8B-Q4_K_M",
+            "unknown"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "v1_static_prediction_stage": {
+          "covered": false,
+          "holdout_values": [
+            "after_compile_before_microbench",
+            "after_microbench_before_full_decode",
+            "after_static_before_microbench"
+          ],
+          "train_values": [
+            "after_compile_before_microbench",
+            "after_full_decode",
+            "after_policy_before_full_decode",
+            "after_static_before_microbench"
+          ],
+          "unseen_holdout_value_count": 1,
+          "unseen_holdout_values": [
+            "after_microbench_before_full_decode"
+          ]
+        },
+        "v1_static_role": {
+          "covered": true,
+          "holdout_values": [
+            "attn_q",
+            "ffn_down",
+            "ffn_gate"
+          ],
+          "train_values": [
+            "attn_k",
+            "attn_output",
+            "attn_q",
+            "ffn_down",
+            "ffn_gate",
+            "ffn_up",
+            "unknown"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "v1_static_row_kind": {
+          "covered": true,
+          "holdout_values": [
+            "candidate",
+            "diagnostic"
+          ],
+          "train_values": [
+            "baseline",
+            "candidate",
+            "diagnostic"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "v1_static_schedule_codegen_mode": {
+          "covered": false,
+          "holdout_values": [
+            "direct_out",
+            "none",
+            "partial"
+          ],
+          "train_values": [
+            "direct_out",
+            "none"
+          ],
+          "unseen_holdout_value_count": 1,
+          "unseen_holdout_values": [
+            "partial"
+          ]
+        },
+        "v1_static_schedule_family": {
+          "covered": true,
+          "holdout_values": [
+            "none",
+            "packed_quant_gemv"
+          ],
+          "train_values": [
+            "none",
+            "packed_quant_gemv"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        },
+        "v1_static_schedule_name": {
+          "covered": false,
+          "holdout_values": [
+            "direct_out",
+            "none",
+            "reduce_unroll",
+            "row_upcast",
+            "two_dim_local"
+          ],
+          "train_values": [
+            "direct_out",
+            "none"
+          ],
+          "unseen_holdout_value_count": 3,
+          "unseen_holdout_values": [
+            "reduce_unroll",
+            "row_upcast",
+            "two_dim_local"
+          ]
+        },
+        "v1_static_schedule_reduction_mode": {
+          "covered": false,
+          "holdout_values": [
+            "direct_out",
+            "none",
+            "split_k_partial"
+          ],
+          "train_values": [
+            "direct_out",
+            "none"
+          ],
+          "unseen_holdout_value_count": 1,
+          "unseen_holdout_values": [
+            "split_k_partial"
+          ]
+        },
+        "v1_static_schedule_semantic_object": {
+          "covered": true,
+          "holdout_values": [
+            "none",
+            "packed_quant_gemv"
+          ],
+          "train_values": [
+            "none",
+            "packed_quant_gemv"
+          ],
+          "unseen_holdout_value_count": 0,
+          "unseen_holdout_values": []
+        }
+      },
+      "top_unseen_features": [
+        {
+          "count": 4,
+          "feature": "v1_static_mechanism",
+          "values": [
+            "packed_word_lane_unroll",
+            "reduce_unroll",
+            "row_upcast",
+            "two_dim_local"
+          ]
+        },
+        {
+          "count": 3,
+          "feature": "v1_static_schedule_name",
+          "values": [
+            "reduce_unroll",
+            "row_upcast",
+            "two_dim_local"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_format",
+          "values": [
+            "Q6_K"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_prediction_stage",
+          "values": [
+            "after_microbench_before_full_decode"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_schedule_codegen_mode",
+          "values": [
+            "partial"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_schedule_reduction_mode",
+          "values": [
+            "split_k_partial"
+          ]
+        }
+      ],
+      "unseen_holdout_value_total": 11
+    },
+    "feature_presence": {
+      "holdout": {
+        "ana_data_reuse_shared_proxy": 38,
+        "ana_ilp_proxy": 38,
+        "ana_load_imbalance_proxy": 38,
+        "ana_load_width_proxy": 38,
+        "ana_register_reuse_proxy": 38,
+        "ana_schedule_complexity_proxy": 38,
+        "ana_warp_concurrency_proxy": 38,
+        "candidate_frozen_before_outcome": 38,
+        "candidate_schema_version": 38,
+        "change_delta_local0": 38,
+        "change_delta_local1": 38,
+        "change_delta_parts": 38,
+        "change_from_opts_count": 38,
+        "change_from_opts_local0_arg": 38,
+        "change_from_opts_local1_arg": 38,
+        "change_from_opts_local_count": 38,
+        "change_from_opts_unroll_arg": 38,
+        "change_from_opts_unroll_count": 38,
+        "change_from_opts_upcast_arg": 38,
+        "change_from_opts_upcast_count": 38,
+        "change_from_parts": 38,
+        "change_to_opts_count": 38,
+        "change_to_opts_local0_arg": 38,
+        "change_to_opts_local1_arg": 38,
+        "change_to_opts_local_count": 38,
+        "change_to_opts_unroll_arg": 38,
+        "change_to_opts_unroll_count": 38,
+        "change_to_opts_upcast_arg": 38,
+        "change_to_opts_upcast_count": 38,
+        "change_to_parts": 38,
+        "context_ab_match": 38,
+        "context_candidate_stable": 38,
+        "context_full_decode_ready": 38,
+        "context_full_decode_supported": 38,
+        "context_meaningful_threshold_pct": 38,
+        "context_opts_count": 38,
+        "context_opts_local0_arg": 38,
+        "context_opts_local1_arg": 38,
+        "context_opts_local_count": 38,
+        "context_opts_unroll_arg": 38,
+        "context_opts_unroll_count": 38,
+        "context_opts_upcast_arg": 38,
+        "context_opts_upcast_count": 38,
+        "context_parts": 38,
+        "context_reference_stable": 38,
+        "context_required_threshold_pct": 38,
+        "context_runs": 38,
+        "context_source_ok": 38,
+        "context_wide_loads": 38,
+        "flag_direct_out": 38,
+        "flag_packed_load": 38,
+        "flag_qk_block_dot": 38,
+        "flag_reduce_unroll": 38,
+        "flag_row_upcast": 38,
+        "flag_split_k": 38,
+        "flag_tile_custom": 38,
+        "flag_two_dim_local": 38,
+        "flag_vector_load": 38,
+        "model_size_b": 38,
+        "schedule_full_decode_supported": 38,
+        "schedule_group_unroll": 38,
+        "schedule_k_tile_blocks": 38,
+        "schedule_lane_width": 38,
+        "schedule_opts_count": 38,
+        "schedule_opts_local0_arg": 38,
+        "schedule_opts_local1_arg": 38,
+        "schedule_opts_local_count": 38,
+        "schedule_opts_unroll_arg": 38,
+        "schedule_opts_unroll_count": 38,
+        "schedule_opts_upcast_arg": 38,
+        "schedule_opts_upcast_count": 38,
+        "schedule_parts": 38,
+        "schedule_requires_count": 38,
+        "schedule_row_tile": 38,
+        "shape_dim0": 1,
+        "shape_dim1": 1,
+        "shape_k": 1,
+        "shape_parts": 1,
+        "shape_rows": 1,
+        "tensor_block": 38,
+        "v1_profile_microbench_summary_available": 2,
+        "v1_profile_policy_path_available": 2,
+        "v1_static_context_local0": 38,
+        "v1_static_context_local1": 38,
+        "v1_static_context_local_axes": 38,
+        "v1_static_context_opt_count": 38,
+        "v1_static_context_parts": 38,
+        "v1_static_context_runs": 38,
+        "v1_static_context_unroll": 38,
+        "v1_static_context_unroll_axes": 38,
+        "v1_static_context_upcast": 38,
+        "v1_static_context_upcast_axes": 38,
+        "v1_static_format": 38,
+        "v1_static_full_decode_ready": 38,
+        "v1_static_full_decode_supported": 38,
+        "v1_static_has_direct_out": 38,
+        "v1_static_has_packed_load": 38,
+        "v1_static_has_qk_block_dot": 38,
+        "v1_static_has_reduce_unroll": 38,
+        "v1_static_has_row_upcast": 38,
+        "v1_static_has_tile_custom": 38,
+        "v1_static_has_two_dim_local": 38,
+        "v1_static_has_vector_load": 38,
+        "v1_static_load_width_inferred_words": 38,
+        "v1_static_load_width_kernel_words": 38,
+        "v1_static_load_width_report_words": 38,
+        "v1_static_mechanism": 38,
+        "v1_static_model": 38,
+        "v1_static_prediction_stage": 38,
+        "v1_static_role": 38,
+        "v1_static_row_kind": 38,
+        "v1_static_schedule_codegen_mode": 38,
+        "v1_static_schedule_family": 38,
+        "v1_static_schedule_group_unroll": 38,
+        "v1_static_schedule_k_tile_blocks": 38,
+        "v1_static_schedule_lane_width": 38,
+        "v1_static_schedule_local0": 38,
+        "v1_static_schedule_local1": 38,
+        "v1_static_schedule_local_axes": 38,
+        "v1_static_schedule_name": 38,
+        "v1_static_schedule_opt_count": 38,
+        "v1_static_schedule_parts": 38,
+        "v1_static_schedule_reduction_mode": 38,
+        "v1_static_schedule_requires_count": 38,
+        "v1_static_schedule_row_tile": 38,
+        "v1_static_schedule_semantic_object": 38,
+        "v1_static_schedule_unroll": 38,
+        "v1_static_schedule_unroll_axes": 38,
+        "v1_static_schedule_upcast": 38,
+        "v1_static_schedule_upcast_axes": 38,
+        "v1_static_shape_dim0": 1,
+        "v1_static_shape_dim1": 1,
+        "v1_static_shape_k": 1,
+        "v1_static_shape_parts": 1,
+        "v1_static_shape_rows": 1,
+        "v1_static_source_ok": 38,
+        "v1_static_tensor_block": 38,
+        "v1_static_wide_loads": 38,
+        "v1_uop_compile_global_load_b128": 2,
+        "v1_uop_compile_global_load_b32": 2,
+        "v1_uop_compile_global_load_b64": 2,
+        "v1_uop_compile_group_axis_count": 2,
+        "v1_uop_compile_inst_global_load_b128": 2,
+        "v1_uop_compile_inst_global_load_b32": 2,
+        "v1_uop_compile_inst_global_load_b64": 2,
+        "v1_uop_compile_inst_global_store_b32": 2,
+        "v1_uop_compile_inst_v_bfe_u32": 2,
+        "v1_uop_compile_inst_v_cvt_f32_ubyte0_e32": 2,
+        "v1_uop_compile_inst_v_fma_f32": 2,
+        "v1_uop_compile_inst_v_fma_mix_f32": 2,
+        "v1_uop_compile_instruction_count": 2,
+        "v1_uop_compile_local_lane_count": 2,
+        "v1_uop_compile_memory_instruction_count": 2,
+        "v1_uop_compile_report_available": 2,
+        "v1_uop_compile_source_has_tg_uint4_load": 2,
+        "v1_uop_compile_source_has_vector_type": 2,
+        "v1_uop_compile_source_lines": 2,
+        "v1_uop_compile_workgroup_size": 2,
+        "v1_uop_estimated_arithmetic_intensity_proxy": 38,
+        "v1_uop_estimated_global_load_words": 38,
+        "v1_uop_estimated_global_store_words": 38,
+        "v1_uop_estimated_local_axes": 38,
+        "v1_uop_estimated_loop_axes": 38,
+        "v1_uop_estimated_memory_pressure_proxy": 38,
+        "v1_uop_estimated_scalar_loads": 38,
+        "v1_uop_estimated_vector_load_width_words": 38,
+        "v1_uop_estimated_vector_loads": 38,
+        "v1_uop_load_width_report_available": 4,
+        "v1_uop_real_feature_source_count": 38,
+        "v1_uop_source_contains_packed_dot": 4,
+        "v1_uop_source_has_packed_load_kernel": 4,
+        "v1_uop_source_has_vector_load_shape": 4,
+        "v1_uop_source_has_vector_type": 4,
+        "v1_uop_source_kernel_count": 4,
+        "v1_uop_source_load_width_words": 4,
+        "v1_uop_source_pattern_amd_vdot4": 4,
+        "v1_uop_source_pattern_uchar_or_u8": 4,
+        "v1_uop_source_pattern_uint_or_u32": 4,
+        "v1_uop_source_pattern_ulong_or_u64": 4,
+        "v1_uop_source_pattern_ushort_or_u16": 4,
+        "v1_uop_source_pattern_vector_u32x2": 4,
+        "v1_uop_source_pattern_vector_u32x4": 4,
+        "v1_uop_uop_available": 38
+      },
+      "train": {
+        "ana_data_reuse_shared_proxy": 52,
+        "ana_ilp_proxy": 52,
+        "ana_load_imbalance_proxy": 52,
+        "ana_load_width_proxy": 52,
+        "ana_register_reuse_proxy": 52,
+        "ana_schedule_complexity_proxy": 52,
+        "ana_warp_concurrency_proxy": 52,
+        "candidate_frozen_before_outcome": 52,
+        "candidate_schema_version": 52,
+        "change_delta_local0": 52,
+        "change_delta_local1": 52,
+        "change_delta_parts": 52,
+        "change_format": 18,
+        "change_from_family": 18,
+        "change_from_opts_count": 52,
+        "change_from_opts_local0_arg": 52,
+        "change_from_opts_local1_arg": 52,
+        "change_from_opts_local_count": 52,
+        "change_from_opts_unroll_arg": 52,
+        "change_from_opts_unroll_count": 52,
+        "change_from_opts_upcast_arg": 52,
+        "change_from_opts_upcast_count": 52,
+        "change_from_parts": 52,
+        "change_to_family": 18,
+        "change_to_opts_count": 52,
+        "change_to_opts_local0_arg": 52,
+        "change_to_opts_local1_arg": 52,
+        "change_to_opts_local_count": 52,
+        "change_to_opts_unroll_arg": 52,
+        "change_to_opts_unroll_count": 52,
+        "change_to_opts_upcast_arg": 52,
+        "change_to_opts_upcast_count": 52,
+        "change_to_parts": 52,
+        "context_ab_match": 52,
+        "context_candidate_stable": 52,
+        "context_full_decode_ready": 52,
+        "context_full_decode_supported": 52,
+        "context_meaningful_threshold_pct": 52,
+        "context_opts_count": 52,
+        "context_opts_local0_arg": 52,
+        "context_opts_local1_arg": 52,
+        "context_opts_local_count": 52,
+        "context_opts_unroll_arg": 52,
+        "context_opts_unroll_count": 52,
+        "context_opts_upcast_arg": 52,
+        "context_opts_upcast_count": 52,
+        "context_parts": 52,
+        "context_reference_stable": 52,
+        "context_required_threshold_pct": 52,
+        "context_runs": 52,
+        "context_source_ok": 52,
+        "context_wide_loads": 52,
+        "flag_direct_out": 52,
+        "flag_packed_load": 52,
+        "flag_qk_block_dot": 52,
+        "flag_reduce_unroll": 52,
+        "flag_row_upcast": 52,
+        "flag_split_k": 52,
+        "flag_tile_custom": 52,
+        "flag_two_dim_local": 52,
+        "flag_vector_load": 52,
+        "load_width_inferred_words": 5,
+        "load_width_kernel_words": 5,
+        "load_width_report_words": 5,
+        "model_size_b": 52,
+        "schedule_full_decode_supported": 52,
+        "schedule_group_unroll": 52,
+        "schedule_k_tile_blocks": 52,
+        "schedule_lane_width": 52,
+        "schedule_opts_count": 52,
+        "schedule_opts_local0_arg": 52,
+        "schedule_opts_local1_arg": 52,
+        "schedule_opts_local_count": 52,
+        "schedule_opts_unroll_arg": 52,
+        "schedule_opts_unroll_count": 52,
+        "schedule_opts_upcast_arg": 52,
+        "schedule_opts_upcast_count": 52,
+        "schedule_parts": 52,
+        "schedule_requires_count": 52,
+        "schedule_row_tile": 52,
+        "shape_k": 7,
+        "shape_parts": 7,
+        "shape_rows": 7,
+        "tensor_block": 52,
+        "v1_profile_microbench_summary_available": 18,
+        "v1_profile_policy_path_available": 18,
+        "v1_static_context_local0": 52,
+        "v1_static_context_local1": 52,
+        "v1_static_context_local_axes": 52,
+        "v1_static_context_opt_count": 52,
+        "v1_static_context_parts": 52,
+        "v1_static_context_runs": 52,
+        "v1_static_context_unroll": 52,
+        "v1_static_context_unroll_axes": 52,
+        "v1_static_context_upcast": 52,
+        "v1_static_context_upcast_axes": 52,
+        "v1_static_format": 52,
+        "v1_static_full_decode_ready": 52,
+        "v1_static_full_decode_supported": 52,
+        "v1_static_has_direct_out": 52,
+        "v1_static_has_packed_load": 52,
+        "v1_static_has_qk_block_dot": 52,
+        "v1_static_has_reduce_unroll": 52,
+        "v1_static_has_row_upcast": 52,
+        "v1_static_has_tile_custom": 52,
+        "v1_static_has_two_dim_local": 52,
+        "v1_static_has_vector_load": 52,
+        "v1_static_load_width_inferred_words": 52,
+        "v1_static_load_width_kernel_words": 52,
+        "v1_static_load_width_report_words": 52,
+        "v1_static_mechanism": 52,
+        "v1_static_model": 52,
+        "v1_static_prediction_stage": 52,
+        "v1_static_role": 52,
+        "v1_static_row_kind": 52,
+        "v1_static_schedule_codegen_mode": 52,
+        "v1_static_schedule_family": 52,
+        "v1_static_schedule_group_unroll": 52,
+        "v1_static_schedule_k_tile_blocks": 52,
+        "v1_static_schedule_lane_width": 52,
+        "v1_static_schedule_local0": 52,
+        "v1_static_schedule_local1": 52,
+        "v1_static_schedule_local_axes": 52,
+        "v1_static_schedule_name": 52,
+        "v1_static_schedule_opt_count": 52,
+        "v1_static_schedule_parts": 52,
+        "v1_static_schedule_reduction_mode": 52,
+        "v1_static_schedule_requires_count": 52,
+        "v1_static_schedule_row_tile": 52,
+        "v1_static_schedule_semantic_object": 52,
+        "v1_static_schedule_unroll": 52,
+        "v1_static_schedule_unroll_axes": 52,
+        "v1_static_schedule_upcast": 52,
+        "v1_static_schedule_upcast_axes": 52,
+        "v1_static_shape_k": 7,
+        "v1_static_shape_parts": 7,
+        "v1_static_shape_rows": 7,
+        "v1_static_source_ok": 52,
+        "v1_static_tensor_block": 52,
+        "v1_static_wide_loads": 52,
+        "v1_uop_estimated_arithmetic_intensity_proxy": 52,
+        "v1_uop_estimated_global_load_words": 52,
+        "v1_uop_estimated_global_store_words": 52,
+        "v1_uop_estimated_local_axes": 52,
+        "v1_uop_estimated_loop_axes": 52,
+        "v1_uop_estimated_memory_pressure_proxy": 52,
+        "v1_uop_estimated_scalar_loads": 52,
+        "v1_uop_estimated_vector_load_width_words": 52,
+        "v1_uop_estimated_vector_loads": 52,
+        "v1_uop_load_width_report_available": 12,
+        "v1_uop_real_feature_source_count": 52,
+        "v1_uop_source_contains_packed_dot": 12,
+        "v1_uop_source_has_packed_load_kernel": 12,
+        "v1_uop_source_has_vector_load_shape": 12,
+        "v1_uop_source_has_vector_type": 12,
+        "v1_uop_source_kernel_count": 12,
+        "v1_uop_source_load_width_words": 12,
+        "v1_uop_source_pattern_amd_vdot4": 12,
+        "v1_uop_source_pattern_uchar_or_u8": 12,
+        "v1_uop_source_pattern_uint_or_u32": 12,
+        "v1_uop_source_pattern_ulong_or_u64": 12,
+        "v1_uop_source_pattern_ushort_or_u16": 12,
+        "v1_uop_source_pattern_vector_u32x2": 12,
+        "v1_uop_source_pattern_vector_u32x4": 12,
+        "v1_uop_uop_available": 52
+      }
+    }
+  },
+  "examples": 90,
+  "examples_path": "bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/examples.jsonl",
+  "families": {
+    "holdout": {
+      "qk_block_dot": 2,
+      "semantic_codegen_v3": 2,
+      "semantic_codegen_v4": 2,
+      "semantic_schedule_v0": 30,
+      "threeway_load": 2
+    },
+    "train": {
+      "accepted_runtime": 9,
+      "loop_v0_policy": 18,
+      "packed_tile_analysis": 5,
+      "packed_tile_lowering": 2,
+      "semantic_codegen_v1": 7,
+      "semantic_codegen_v2": 4,
+      "targeted_outcomes_v1": 7
+    }
+  },
+  "holdout_rows": 38,
+  "kind": "qk_flywheel_feature_coverage_audit",
+  "labels": {
+    "holdout": {
+      "construction_blocked": 19,
+      "diagnostic_only": 1,
+      "raw_accept_unconfirmed": 3,
+      "reject": 9,
+      "tie": 6
+    },
+    "train": {
+      "accept": 9,
+      "construction_blocked": 3,
+      "diagnostic_only": 5,
+      "needs_rerun": 2,
+      "reject": 20,
+      "tie": 13
+    }
+  },
+  "leakage_audit": {
+    "excluded_feature_sources": [
+      "id",
+      "candidate_id",
+      "label",
+      "reason",
+      "retry",
+      "evidence",
+      "source_files",
+      "split",
+      "family_order",
+      "status",
+      "gain",
+      "gain_pct",
+      "candidate_gbs",
+      "current_gbs",
+      "decision",
+      "correctness_ok",
+      "ab_match_result"
+    ],
+    "feature_names_with_forbidden_tokens": [],
+    "target_or_result_fields_used": false
+  },
+  "mechanisms": {
+    "holdout": {
+      "direct_output": 4,
+      "packed_word_lane_unroll": 2,
+      "qk_block_dot": 2,
+      "reduce_unroll": 8,
+      "row_upcast": 10,
+      "tile_custom": 1,
+      "two_dim_local": 8,
+      "vector_load": 2,
+      "wide_load_only": 1
+    },
+    "train": {
+      "direct_output": 7,
+      "parts_local_policy": 23,
+      "qk_block_dot": 1,
+      "row_grouping": 4,
+      "shared_storage": 3,
+      "storage_cap": 1,
+      "tile_custom": 7,
+      "vector_load": 4,
+      "wide_load_only": 2
+    }
+  },
+  "prediction_stages": {
+    "holdout": {
+      "after_compile_before_microbench": 4,
+      "after_microbench_before_full_decode": 2,
+      "after_static_before_microbench": 32
+    },
+    "train": {
+      "after_compile_before_microbench": 8,
+      "after_full_decode": 9,
+      "after_policy_before_full_decode": 18,
+      "after_static_before_microbench": 17
+    }
+  },
+  "real_feature_coverage": {
+    "compile_report_rows": 2,
+    "feature_source_count": 8,
+    "load_width_report_rows": 16,
+    "top_feature_sources": {
+      "bench/qk-ansor-transition-20260612/semantic-codegen-v3/load-width/report.json": 2,
+      "bench/qk-ansor-transition-20260612/semantic-codegen-v4/load-width/report.json": 2,
+      "bench/qk-block-dot-compile-gate-20260613/compile-gate.json": 2,
+      "bench/qk-memory-access-20260613/load-width/report.json": 3,
+      "bench/qk-packed-tile-consumption-20260613/load-width/report.json": 1,
+      "bench/qk-packed-tile-lowering-20260613/load-width/report.json": 2,
+      "bench/qk-packed-tile-lowering-analysis-20260613/source/load-width-report.json": 5,
+      "bench/qk-packed-tile-research-closeout-20260613/source/load-width-report.json": 1
+    },
+    "uop_available_by_mechanism": {
+      "packed_word_lane_unroll": 2,
+      "qk_block_dot": 3,
+      "tile_custom": 7,
+      "vector_load": 4,
+      "wide_load_only": 2
+    },
+    "uop_available_by_split": {
+      "holdout": 6,
+      "train": 12
+    },
+    "uop_available_rows": 18
+  },
+  "recommendations": [
+    {
+      "kind": "collect_label_coverage",
+      "priority": 1,
+      "recommendation": "Add train rows for labels that appear in holdout but are absent or undercovered in train.",
+      "targets": [
+        "construction_blocked",
+        "raw_accept_unconfirmed"
+      ]
+    },
+    {
+      "kind": "collect_mechanism_coverage",
+      "priority": 3,
+      "recommendation": "Add targeted candidates for holdout mechanisms with fewer than five train rows.",
+      "targets": [
+        "packed_word_lane_unroll",
+        "qk_block_dot",
+        "reduce_unroll",
+        "row_upcast",
+        "two_dim_local",
+        "vector_load",
+        "wide_load_only"
+      ]
+    },
+    {
+      "kind": "reduce_unseen_categorical_gap",
+      "priority": 4,
+      "recommendation": "Add rows or normalize feature extraction so holdout families/mechanisms/schedule names are represented before model training.",
+      "targets": [
+        {
+          "count": 4,
+          "feature": "v1_static_mechanism",
+          "values": [
+            "packed_word_lane_unroll",
+            "reduce_unroll",
+            "row_upcast",
+            "two_dim_local"
+          ]
+        },
+        {
+          "count": 3,
+          "feature": "v1_static_schedule_name",
+          "values": [
+            "reduce_unroll",
+            "row_upcast",
+            "two_dim_local"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_format",
+          "values": [
+            "Q6_K"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_prediction_stage",
+          "values": [
+            "after_microbench_before_full_decode"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_schedule_codegen_mode",
+          "values": [
+            "partial"
+          ]
+        },
+        {
+          "count": 1,
+          "feature": "v1_static_schedule_reduction_mode",
+          "values": [
+            "split_k_partial"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "improve_feature_extraction",
+      "priority": 5,
+      "recommendation": "Add first-class tinygrad/UOp/profile features for weak rows instead of relying on top-level labels and candidate names.",
+      "targets": {
+        "label_unseen_in_train": 3,
+        "mechanism_unseen_in_train": 28,
+        "post_full_decode_training_row": 9
+      }
+    }
+  ],
+  "row_quality": {
+    "top_weak_reasons": {
+      "label_unseen_in_train": 3,
+      "mechanism_unseen_in_train": 28,
+      "post_full_decode_training_row": 9
+    },
+    "weak_row_count": 38
+  },
+  "split_counts": {
+    "holdout": 38,
+    "train": 52
+  },
+  "stage_viability": {
+    "by_stage": {
+      "after_compile_before_microbench": {
+        "allowed_feature_scope": "static_compile_features_only",
+        "holdout_rows": 4,
+        "labels": {
+          "diagnostic_only": 2,
+          "reject": 6,
+          "tie": 4
+        },
+        "rows": 12,
+        "train_rows": 8
+      },
+      "after_full_decode": {
+        "allowed_feature_scope": "post_outcome_baseline_context_only",
+        "holdout_rows": 0,
+        "labels": {
+          "accept": 9
+        },
+        "rows": 9,
+        "train_rows": 9
+      },
+      "after_microbench_before_full_decode": {
+        "allowed_feature_scope": "static_compile_plus_frozen_microbench_summary",
+        "holdout_rows": 2,
+        "labels": {
+          "reject": 2
+        },
+        "rows": 2,
+        "train_rows": 0
+      },
+      "after_policy_before_full_decode": {
+        "allowed_feature_scope": "static_compile_plus_frozen_microbench_summary",
+        "holdout_rows": 0,
+        "labels": {
+          "needs_rerun": 2,
+          "reject": 11,
+          "tie": 5
+        },
+        "rows": 18,
+        "train_rows": 18
+      },
+      "after_static_before_microbench": {
+        "allowed_feature_scope": "static_compile_features_only",
+        "holdout_rows": 32,
+        "labels": {
+          "construction_blocked": 22,
+          "diagnostic_only": 4,
+          "raw_accept_unconfirmed": 3,
+          "reject": 10,
+          "tie": 10
+        },
+        "rows": 49,
+        "train_rows": 17
+      }
+    },
+    "note": "Rows at after_full_decode are useful historical outcomes but weak training signal for pre-outcome triage.",
+    "post_full_decode_train_ids": [
+      "accepted_runtime:parts-local-policy:14b:home-ubuntu-tinygrad-arkey-bench-qk-harness-20260612-14b",
+      "accepted_runtime:parts-local-policy:14b:home-ubuntu-tinygrad-arkey-bench-qk-harness-20260612-14b-rerun",
+      "accepted_runtime:parts-local-policy:14b:home-ubuntu-tinygrad-arkey-bench-qk-policy-pipeline-20260612-14b",
+      "accepted_runtime:shared-storage:14b:home-ubuntu-tinygrad-arkey-bench-qk-shared-storage-20260612-14b",
+      "accepted_runtime:shared-storage:32b:home-ubuntu-tinygrad-arkey-bench-qk-shared-storage-20260612-32b",
+      "accepted_runtime:storage-cap:32b:home-ubuntu-tinygrad-arkey-bench-qk-policy-cap-20260612-32b-1536mb",
+      "accepted_runtime:parts-local-policy:8b:home-ubuntu-tinygrad-arkey-bench-qk-harness-20260612-8b",
+      "accepted_runtime:parts-local-policy:8b:home-ubuntu-tinygrad-arkey-bench-qk-policy-pipeline-20260612-8b",
+      "accepted_runtime:shared-storage:8b:home-ubuntu-tinygrad-arkey-bench-qk-shared-storage-20260612-8b"
+    ],
+    "post_full_decode_train_rows": 9
+  },
+  "targets": {
+    "holdout_mechanisms": {
+      "direct_output": {
+        "holdout_rows": 4,
+        "needed_train_rows": 0,
+        "target_train_rows": 5,
+        "train_rows": 7
+      },
+      "packed_word_lane_unroll": {
+        "holdout_rows": 2,
+        "needed_train_rows": 5,
+        "target_train_rows": 5,
+        "train_rows": 0
+      },
+      "qk_block_dot": {
+        "holdout_rows": 2,
+        "needed_train_rows": 4,
+        "target_train_rows": 5,
+        "train_rows": 1
+      },
+      "reduce_unroll": {
+        "holdout_rows": 8,
+        "needed_train_rows": 5,
+        "target_train_rows": 5,
+        "train_rows": 0
+      },
+      "row_grouping": {
+        "holdout_rows": 0,
+        "needed_train_rows": 1,
+        "target_train_rows": 5,
+        "train_rows": 4
+      },
+      "row_upcast": {
+        "holdout_rows": 10,
+        "needed_train_rows": 5,
+        "target_train_rows": 5,
+        "train_rows": 0
+      },
+      "semantic_descriptor_replay": {
+        "holdout_rows": 0,
+        "needed_train_rows": 5,
+        "target_train_rows": 5,
+        "train_rows": 0
+      },
+      "shared_storage": {
+        "holdout_rows": 0,
+        "needed_train_rows": 2,
+        "target_train_rows": 5,
+        "train_rows": 3
+      },
+      "storage_cap": {
+        "holdout_rows": 0,
+        "needed_train_rows": 4,
+        "target_train_rows": 5,
+        "train_rows": 1
+      },
+      "tile_custom": {
+        "holdout_rows": 1,
+        "needed_train_rows": 0,
+        "target_train_rows": 5,
+        "train_rows": 7
+      },
+      "two_dim_local": {
+        "holdout_rows": 8,
+        "needed_train_rows": 5,
+        "target_train_rows": 5,
+        "train_rows": 0
+      },
+      "unknown": {
+        "holdout_rows": 0,
+        "needed_train_rows": 0,
+        "target_train_rows": 0,
+        "train_rows": 0
+      },
+      "vector_load": {
+        "holdout_rows": 2,
+        "needed_train_rows": 1,
+        "target_train_rows": 5,
+        "train_rows": 4
+      },
+      "wide_load_only": {
+        "holdout_rows": 1,
+        "needed_train_rows": 3,
+        "target_train_rows": 5,
+        "train_rows": 2
+      }
+    },
+    "labels": {
+      "construction_blocked": {
+        "holdout_rows": 19,
+        "needed_train_rows": 2,
+        "target_train_rows": 5,
+        "train_rows": 3
+      },
+      "diagnostic_only": {
+        "holdout_rows": 1,
+        "needed_train_rows": 0,
+        "target_train_rows": 5,
+        "train_rows": 5
+      },
+      "needs_rerun": {
+        "holdout_rows": 0,
+        "needed_train_rows": 3,
+        "target_train_rows": 5,
+        "train_rows": 2
+      },
+      "raw_accept_unconfirmed": {
+        "holdout_rows": 3,
+        "needed_train_rows": 5,
+        "target_train_rows": 5,
+        "train_rows": 0
+      },
+      "reject": {
+        "holdout_rows": 9,
+        "needed_train_rows": 0,
+        "target_train_rows": 5,
+        "train_rows": 20
+      },
+      "tie": {
+        "holdout_rows": 6,
+        "needed_train_rows": 0,
+        "target_train_rows": 5,
+        "train_rows": 13
+      }
+    }
+  },
+  "train_rows": 52
+}

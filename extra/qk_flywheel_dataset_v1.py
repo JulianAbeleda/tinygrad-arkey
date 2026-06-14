@@ -52,6 +52,7 @@ def _norm_mechanism(row:dict[str, Any]) -> str:
   if "row_upcast" in text: return "row_upcast"
   if "reduce_unroll" in text or "unroll4" in text: return "reduce_unroll"
   if "two_dim_local" in text: return "two_dim_local"
+  if "wide_load_only" in text: return "wide_load_only"
   if "packed_load" in text or "packed_word" in text: return "packed_word_lane_unroll"
   if "vector_load" in text: return "vector_load" if row.get("family") != "threeway_load" else "wide_load_only"
   if "qk_block_dot" in text: return "qk_block_dot"

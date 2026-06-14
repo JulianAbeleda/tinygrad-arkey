@@ -1,0 +1,100 @@
+{
+  "conclusion": "collect_targeted_outcomes_before_cost_model_rerun",
+  "kind": "qk_flywheel_phase3f_plus_coverage_plan",
+  "label_batches": [
+    {
+      "current_train_rows": 3,
+      "holdout_rows": 19,
+      "label": "construction_blocked",
+      "needed_train_rows": 2,
+      "recipe": "Natural outcome from failed construction/static candidates; record exact verifier/shape failure."
+    },
+    {
+      "current_train_rows": 0,
+      "holdout_rows": 3,
+      "label": "raw_accept_unconfirmed",
+      "needed_train_rows": 5,
+      "recipe": "Only record when a repeated microbench clears its predeclared bar but no full-decode confirmation exists yet; do not force this label."
+    }
+  ],
+  "mechanism_batches": [
+    {
+      "batch": "packed-load lane-unroll microbench",
+      "candidate_stage": "after_static_before_microbench",
+      "current_train_rows": 0,
+      "holdout_rows": 2,
+      "mechanism": "packed_word_lane_unroll",
+      "needed_train_rows": 5,
+      "recipe": "Run packed_word_lane_unroll on additional Q4_K tensors/roles; require generated-source load-width report before timing."
+    },
+    {
+      "batch": "QK_BLOCK_DOT compile+dominant-shape microbench",
+      "candidate_stage": "after_compile_before_microbench",
+      "current_train_rows": 1,
+      "holdout_rows": 2,
+      "mechanism": "qk_block_dot",
+      "needed_train_rows": 4,
+      "recipe": "Repeat the block-local semantic op compile gate on more dominant Q4_K tensors, then microbench only compile-shape passes."
+    },
+    {
+      "batch": "semantic schedule v1",
+      "candidate_stage": "after_static_before_microbench",
+      "current_train_rows": 0,
+      "holdout_rows": 8,
+      "mechanism": "reduce_unroll",
+      "needed_train_rows": 5,
+      "recipe": "Run reduce_unroll schedule candidates on fresh tensors/models as a post-Phase-3E train batch."
+    },
+    {
+      "batch": "semantic schedule v1",
+      "candidate_stage": "after_static_before_microbench",
+      "current_train_rows": 0,
+      "holdout_rows": 10,
+      "mechanism": "row_upcast",
+      "needed_train_rows": 5,
+      "recipe": "Run row_upcast schedule candidates on fresh tensors/models as a post-Phase-3E train batch."
+    },
+    {
+      "batch": "semantic schedule v1",
+      "candidate_stage": "after_static_before_microbench",
+      "current_train_rows": 0,
+      "holdout_rows": 8,
+      "mechanism": "two_dim_local",
+      "needed_train_rows": 5,
+      "recipe": "Run two_dim_local schedule candidates on fresh tensors/models as a post-Phase-3E train batch."
+    },
+    {
+      "batch": "vector-load construction probe",
+      "candidate_stage": "after_static_before_microbench",
+      "current_train_rows": 4,
+      "holdout_rows": 2,
+      "mechanism": "vector_load",
+      "needed_train_rows": 1,
+      "recipe": "Collect construction outcomes for schedulable vector-load candidates, with source-shape evidence and no full decode unless gates pass."
+    },
+    {
+      "batch": "three-way load diagnostic continuation",
+      "candidate_stage": "after_compile_before_microbench",
+      "current_train_rows": 2,
+      "holdout_rows": 1,
+      "mechanism": "wide_load_only",
+      "needed_train_rows": 3,
+      "recipe": "Run wide-load-only/vector-load controls on additional tensors to bound the branch without runtime integration."
+    }
+  ],
+  "minimum_new_label_rows": 7,
+  "minimum_new_mechanism_rows": 28,
+  "notes": [
+    "Rows must be real candidate outcomes, not duplicated holdout rows or synthetic labels.",
+    "The existing family-split holdout remains valid; new post-Phase-3E outcomes should form a dated train/rolling-shadow batch.",
+    "Full decode remains gated by the normal static, correctness, microbench, and confirmation rules."
+  ],
+  "phase": "Phase 3F Plus",
+  "rerun_blockers": [
+    "missing mechanism train coverage",
+    "missing or thin label train coverage",
+    "current featured dataset does not add new outcomes"
+  ],
+  "rerun_phase3b_allowed": false,
+  "source_audit": "bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured-plus/summary.json"
+}

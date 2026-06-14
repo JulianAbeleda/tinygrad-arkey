@@ -169,9 +169,14 @@ not just a narrative. Current artifacts:
 - `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured/`
 - `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1/`
+- `bench/amd-decode-flywheel-proof-20260614/targeted-outcomes-v1/`
+- `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured-plus/`
+- `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1-plus/`
 - `extra/qk_flywheel_dataset.py`
 - `extra/qk_flywheel_dataset_v1.py`
 - `extra/qk_flywheel_feature_enrich.py`
+- `extra/qk_flywheel_targeted_outcomes.py`
 - `extra/qk_flywheel_triage_eval.py`
 - `extra/qk_flywheel_cost_model.py`
 - `extra/qk_flywheel_feature_audit.py`
@@ -288,6 +293,21 @@ The cost-model rerun is still blocked: unseen holdout categorical values remain
 in train. The coverage plan requires real candidate outcomes before another
 Phase 3B decision run: at least `35` mechanism-coverage rows and `14`
 label-coverage targets, with labels recorded only if they occur naturally.
+
+Phase 3F added the first targeted real-outcome train batch:
+`extra/qk_flywheel_targeted_outcomes.py`,
+`bench/amd-decode-flywheel-proof-20260614/targeted-outcomes-v1/`,
+`bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/`,
+`bench/amd-decode-flywheel-proof-20260614/triage-feature-audit-v1-featured-plus/`,
+and `bench/amd-decode-flywheel-proof-20260614/triage-coverage-plan-v1-plus/`.
+It adds `7` committed real diagnostic rows to train without moving holdout rows
+or using design-only contracts as labels: `4` `vector_load`, `2`
+`wide_load_only`, and `1` `qk_block_dot`, with `2` `construction_blocked` and
+`5` `diagnostic_only` labels. The plus dataset is `90` rows (`52` train,
+`38` holdout), unseen holdout categorical values improve `15 -> 11`, weak rows
+improve `43 -> 38`, remaining mechanism rows fall `35 -> 28`, and remaining
+label targets fall `14 -> 7`. The cost-model rerun is still gated:
+`rerun_phase3b_allowed=false`.
 
 ## Verification Already Run
 
