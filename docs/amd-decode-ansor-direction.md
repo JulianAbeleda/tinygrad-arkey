@@ -10,6 +10,10 @@ Date: 2026-06-12
 Current decision state: see `docs/amd-decode-current-verdicts.md`. This file
 contains the research-path details after that decision state.
 
+For the consolidated view of how this kernel loop could compound with the
+structured model/eval loop, and how to test that unproven closing link, see
+`docs/amd-decode-kernel-optimization-flywheel.md`.
+
 Update, 2026-06-12: phases 0-8 have a first implementation pass in `extra/`.
 Follow-up work added policy parity diagnostics, q8_1 level-2 candidates,
 semantic stop gates, PMC parsing, full-shape generated-policy decode gates, a

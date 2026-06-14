@@ -334,18 +334,55 @@ generated-policy storage mode.
       Wilson intervals. V4 free-generation rebaseline: base `0/204`, V3 output
       LoRA `69/204`, V5 suffix-cache `105/204`; V5 is the current-best behavior
       artifact.
-- [x] Started Phase 4 rejection-sampling SFT. The V6 gold-control suffix
-      adapter trained and fits gold data under teacher forcing
-      (`0.921875` eval token accuracy), and the resumable RS sampler is
-      committed. This is not yet a behavior result because the V6
-      free-generation rollout is still blocked.
-- [ ] Resume Phase 4 only after a host reboot or full AMD driver/device reset.
-      First run the `DEV=AMD` smoke test from
-      `structure/Development/session-handoff.md`. Then run V6 gold-control
-      free-generation rollout, bounded/resumable RS generation, RS coverage
-      gate, V7 RS training if coverage passes, and V5/V6/V7 strict JSON
-      generation comparison. Do not treat teacher-forced token accuracy as a
-      promotion signal.
+- [x] Resumed Phase 4 after host reboot and verified the AMD path with the
+      `DEV=AMD` smoke test (`[2, 3, 4]`). The V6 gold-control suffix adapter is
+      now a real free-generation behavior control: `162/204` strict JSON passes
+      on the V4 eval set versus V5's `105/204`, with `+57` strict passes,
+      `59` improvements, and `2` regressions.
+- [x] Ran V5-generated K=4 rejection sampling in bounded/resumable chunks.
+      Artifact: `bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4/`.
+      Result: `216/1632` accepted attempts and `215` selected train rows, but
+      coverage is not adequate for V7 because compiler has `0` selected rows
+      and code/string are sparse.
+- [x] Added category-focused RS continuation and an explicit coverage gate.
+      `extra/llm_json_rejection_sample.py --sample-categories` appends samples
+      only for weak categories while preserving full-artifact accounting, and
+      `extra/llm_json_rs_coverage_gate.py` checks minimum selected rows per
+      category.
+- [x] Ran the stratified V5 RS continuation:
+      `bench/qwen-adapter-20260613/training-data-v4-rs-v5-stratified-v1/`.
+      Result: `257/2448` accepted attempts and `217` selected train rows; code
+      reaches the `20`-row gate and string has `23`, but compiler remains `0`
+      selected rows after `544` attempts and `158` near misses. Coverage gate:
+      `fail`.
+- [x] Audited compiler near misses:
+      `bench/qwen-adapter-20260613/compiler-nearmiss-audit-v1/`. Verdict:
+      `prompt_data_fix`. Compiler failures are mostly valid JSON wrong-value
+      rows where V5 emits broad prefixes (`"train_qk"`, `"train"`) or stems
+      without the row-specific numeric suffix. This is not a normalization
+      fix; accepting prefixes would change the task contract.
+- [x] Ran the Phase 4.2 compiler prompt/data fix:
+      `extra/llm_adapter_json_data_v4_1_compiler.py` and
+      `bench/qwen-adapter-20260613/training-data-v4_1-compiler/`. The new
+      compiler-only dataset uses stable concept keys (`qk_gemv`) instead of
+      row-specific suffix keys (`train_qk_gemv_005`), with prompt/template
+      train/eval overlap `0` and intentional answer overlap `12`. V5 reaches
+      `30/34` strict passes on the V4.1 compiler eval, and V5 RS produces
+      `68/68` selected compiler train rows in
+      `bench/qwen-adapter-20260613/training-data-v4_1-compiler-rs-v5-k4/`.
+      The compiler coverage gate passes at min `20`.
+- [ ] Continue Phase 4 by building a combined RS-SFT artifact: keep usable
+      non-compiler rows from the original V4/stratified RS artifacts and
+      replace the compiler slice with V4.1 stable-key compiler rows. Do not
+      train V7 directly from either failed original RS artifact. Only promote
+      future RS-SFT on V4/V4.1 free-generation strict JSON pass rate, Wilson
+      intervals, regressions, and category balance; do not use teacher-forced
+      token accuracy as the promotion signal.
+- [ ] Prove or falsify the model-to-kernel flywheel before treating the model
+      loop as a kernel accelerant. Plan:
+      `docs/amd-decode-flywheel-proof-plan.md`. The next concrete phase is a
+      historical kernel triage/ranking dataset and benchmark. If it cannot beat
+      reject-all/random/simple-heuristic baselines, keep the loops separate.
 
 ## Do Not Do Next
 

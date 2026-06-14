@@ -1,0 +1,99 @@
+{
+  "categories": {
+    "compiler": {
+      "eval_rows": 34,
+      "train_rows": 68
+    }
+  },
+  "compiler_concepts": [
+    {
+      "concept": "wide_load",
+      "definition": "loads multiple adjacent packed words at once",
+      "stable_key": "qk_wide_load"
+    },
+    {
+      "concept": "coalesced_read",
+      "definition": "maps neighboring lanes to neighboring addresses",
+      "stable_key": "qk_coalesced_read"
+    },
+    {
+      "concept": "wavefront",
+      "definition": "names the SIMD execution group on AMD GPUs",
+      "stable_key": "qk_wavefront"
+    },
+    {
+      "concept": "dequant",
+      "definition": "converts packed quantized values toward floating point values",
+      "stable_key": "qk_dequant"
+    },
+    {
+      "concept": "gemv",
+      "definition": "multiplies a matrix by one vector",
+      "stable_key": "qk_gemv"
+    },
+    {
+      "concept": "q4_block",
+      "definition": "stores a group of four-bit quantized weights",
+      "stable_key": "qk_q4_block"
+    },
+    {
+      "concept": "q6_block",
+      "definition": "stores a group of six-bit quantized weights",
+      "stable_key": "qk_q6_block"
+    },
+    {
+      "concept": "uop",
+      "definition": "names tinygrad's internal operation node",
+      "stable_key": "qk_uop"
+    },
+    {
+      "concept": "beam",
+      "definition": "searches schedule choices in tinygrad",
+      "stable_key": "qk_beam"
+    },
+    {
+      "concept": "policy",
+      "definition": "records which lowering choice to use for a tensor family",
+      "stable_key": "qk_policy"
+    },
+    {
+      "concept": "suffix_cache",
+      "definition": "stores the frozen prefix hidden state before adapter blocks",
+      "stable_key": "qk_suffix_cache"
+    },
+    {
+      "concept": "json_axis",
+      "definition": "separates parse, schema, type, and value scoring",
+      "stable_key": "qk_json_axis"
+    }
+  ],
+  "eval_rows": 34,
+  "files": {
+    "eval_prompts": "eval-prompts.jsonl",
+    "sft": "sft.jsonl"
+  },
+  "integrity": {
+    "answer_overlap_allowed": true,
+    "category_rows": {
+      "compiler": {
+        "eval_rows": 34,
+        "train_rows": 68
+      }
+    },
+    "compiler_answers_with_numeric_suffix": 0,
+    "eval_prompts_match_sft_eval_rows": true,
+    "scorer_compatible": true,
+    "stable_compiler_answers": true,
+    "train_eval_answer_overlap": 12,
+    "train_eval_prompt_overlap": 0,
+    "train_eval_template_instance_overlap": 0
+  },
+  "kind": "llm_adapter_json_dataset_v4_1_compiler",
+  "note": "Compiler-only V4.1 strict-JSON data with stable concept-key answers for Phase 4.2.",
+  "rows": 102,
+  "schema": {
+    "answer": "stable_qk_key_string"
+  },
+  "train_rows": 68,
+  "version": "v4.1-compiler"
+}

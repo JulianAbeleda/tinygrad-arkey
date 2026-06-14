@@ -1,0 +1,888 @@
+{
+  "artifacts": [
+    {
+      "accepted_attempts": 0,
+      "artifact": "bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4",
+      "attempts": 272,
+      "axis_counts": {
+        "no_extra_text": {
+          "passed": 79,
+          "scored": 272
+        },
+        "parse_valid": {
+          "passed": 81,
+          "scored": 272
+        },
+        "schema_ok": {
+          "passed": 79,
+          "scored": 272
+        },
+        "strict_pass": {
+          "passed": 0,
+          "scored": 272
+        },
+        "type_ok": {
+          "passed": 79,
+          "scored": 272
+        },
+        "value_correct": {
+          "passed": 0,
+          "scored": 272
+        }
+      },
+      "classification": [
+        {
+          "count": 54,
+          "value": "prefix"
+        },
+        {
+          "count": 16,
+          "value": "empty_string"
+        },
+        {
+          "count": 8,
+          "value": "stem_without_index"
+        },
+        {
+          "count": 1,
+          "value": "substring"
+        }
+      ],
+      "examples": [
+        {
+          "actual": "",
+          "expected": "train_qk_wide_load_001",
+          "id": "json_v4_train_compiler_001:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_001",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_wide_load",
+          "text": "{\"answer\":\"\"}"
+        },
+        {
+          "actual": "",
+          "expected": "train_qk_wide_load_001",
+          "id": "json_v4_train_compiler_001:sample02",
+          "sample_idx": 2,
+          "source_id": "json_v4_train_compiler_001",
+          "temperature": 0.5,
+          "template_id": "compiler_glossary_wide_load",
+          "text": "\n\n{\"answer\":\"\"}"
+        },
+        {
+          "actual": "",
+          "expected": "train_qk_coalesced_read_002",
+          "id": "json_v4_train_compiler_002:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_002",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_coalesced_read",
+          "text": "{\"answer\":\"\"}"
+        },
+        {
+          "actual": "",
+          "expected": "train_qk_coalesced_read_002",
+          "id": "json_v4_train_compiler_002:sample02",
+          "sample_idx": 2,
+          "source_id": "json_v4_train_compiler_002",
+          "temperature": 0.5,
+          "template_id": "compiler_glossary_coalesced_read",
+          "text": "\n\n{\"answer\":\"\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_wavefront_003",
+          "id": "json_v4_train_compiler_003:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_003",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_wavefront",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train",
+          "expected": "train_qk_dequant_004",
+          "id": "json_v4_train_compiler_004:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_004",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_dequant",
+          "text": "{\"answer\":\"train\"}"
+        },
+        {
+          "actual": "train_qk_gemv",
+          "expected": "train_qk_gemv_005",
+          "id": "json_v4_train_compiler_005:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_005",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_gemv",
+          "text": "{\"answer\":\"train_qk_gemv\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_q4_block_006",
+          "id": "json_v4_train_compiler_006:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_006",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_q4_block",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_q6_block_007",
+          "id": "json_v4_train_compiler_007:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_007",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_q6_block",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_uop_008",
+          "id": "json_v4_train_compiler_008:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_008",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_uop",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train",
+          "expected": "train_qk_beam_009",
+          "id": "json_v4_train_compiler_009:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_009",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_beam",
+          "text": "{\"answer\":\"train\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_policy_010",
+          "id": "json_v4_train_compiler_010:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_010",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_policy",
+          "text": "{\"answer\":\"train_qk\"}"
+        }
+      ],
+      "near_miss": 79,
+      "near_miss_actual_top": [
+        {
+          "count": 33,
+          "value": "\"train_qk\""
+        },
+        {
+          "count": 18,
+          "value": "\"train\""
+        },
+        {
+          "count": 16,
+          "value": "\"\""
+        },
+        {
+          "count": 8,
+          "value": "\"train_qk_gemv\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_coalesced\""
+        },
+        {
+          "count": 1,
+          "value": "\"train_qk_json\""
+        },
+        {
+          "count": 1,
+          "value": "\"qk\""
+        }
+      ],
+      "near_miss_by_temperature": [
+        {
+          "count": 68,
+          "value": "0.0"
+        },
+        {
+          "count": 11,
+          "value": "0.5"
+        }
+      ],
+      "near_miss_by_template": [
+        {
+          "count": 11,
+          "value": "compiler_glossary_wide_load"
+        },
+        {
+          "count": 10,
+          "value": "compiler_glossary_coalesced_read"
+        },
+        {
+          "count": 8,
+          "value": "compiler_glossary_gemv"
+        },
+        {
+          "count": 6,
+          "value": "compiler_glossary_wavefront"
+        },
+        {
+          "count": 6,
+          "value": "compiler_glossary_dequant"
+        },
+        {
+          "count": 6,
+          "value": "compiler_glossary_q4_block"
+        },
+        {
+          "count": 6,
+          "value": "compiler_glossary_q6_block"
+        },
+        {
+          "count": 6,
+          "value": "compiler_glossary_uop"
+        },
+        {
+          "count": 5,
+          "value": "compiler_glossary_beam"
+        },
+        {
+          "count": 5,
+          "value": "compiler_glossary_policy"
+        },
+        {
+          "count": 5,
+          "value": "compiler_glossary_suffix_cache"
+        },
+        {
+          "count": 5,
+          "value": "compiler_glossary_json_axis"
+        }
+      ],
+      "near_miss_expected_top": [
+        {
+          "count": 2,
+          "value": "\"train_qk_wide_load_001\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_coalesced_read_002\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_gemv_017\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_wide_load_025\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_coalesced_read_026\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_wide_load_037\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_coalesced_read_038\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_wide_load_049\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_gemv_053\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_wide_load_061\""
+        },
+        {
+          "count": 2,
+          "value": "\"train_qk_coalesced_read_062\""
+        },
+        {
+          "count": 1,
+          "value": "\"train_qk_wavefront_003\""
+        }
+      ],
+      "selected_train_rows": 0,
+      "unique_near_miss_sources": 68
+    },
+    {
+      "accepted_attempts": 0,
+      "artifact": "bench/qwen-adapter-20260613/training-data-v4-rs-v5-stratified-v1",
+      "attempts": 544,
+      "axis_counts": {
+        "no_extra_text": {
+          "passed": 158,
+          "scored": 544
+        },
+        "parse_valid": {
+          "passed": 160,
+          "scored": 544
+        },
+        "schema_ok": {
+          "passed": 158,
+          "scored": 544
+        },
+        "strict_pass": {
+          "passed": 0,
+          "scored": 544
+        },
+        "type_ok": {
+          "passed": 158,
+          "scored": 544
+        },
+        "value_correct": {
+          "passed": 0,
+          "scored": 544
+        }
+      },
+      "classification": [
+        {
+          "count": 111,
+          "value": "prefix"
+        },
+        {
+          "count": 32,
+          "value": "empty_string"
+        },
+        {
+          "count": 14,
+          "value": "stem_without_index"
+        },
+        {
+          "count": 1,
+          "value": "substring"
+        }
+      ],
+      "examples": [
+        {
+          "actual": "",
+          "expected": "train_qk_wide_load_001",
+          "id": "json_v4_train_compiler_001:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_001",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_wide_load",
+          "text": "{\"answer\":\"\"}"
+        },
+        {
+          "actual": "",
+          "expected": "train_qk_wide_load_001",
+          "id": "json_v4_train_compiler_001:sample02",
+          "sample_idx": 2,
+          "source_id": "json_v4_train_compiler_001",
+          "temperature": 0.5,
+          "template_id": "compiler_glossary_wide_load",
+          "text": "\n\n{\"answer\":\"\"}"
+        },
+        {
+          "actual": "",
+          "expected": "train_qk_coalesced_read_002",
+          "id": "json_v4_train_compiler_002:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_002",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_coalesced_read",
+          "text": "{\"answer\":\"\"}"
+        },
+        {
+          "actual": "",
+          "expected": "train_qk_coalesced_read_002",
+          "id": "json_v4_train_compiler_002:sample02",
+          "sample_idx": 2,
+          "source_id": "json_v4_train_compiler_002",
+          "temperature": 0.5,
+          "template_id": "compiler_glossary_coalesced_read",
+          "text": "\n\n{\"answer\":\"\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_wavefront_003",
+          "id": "json_v4_train_compiler_003:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_003",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_wavefront",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train",
+          "expected": "train_qk_dequant_004",
+          "id": "json_v4_train_compiler_004:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_004",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_dequant",
+          "text": "{\"answer\":\"train\"}"
+        },
+        {
+          "actual": "train_qk_gemv",
+          "expected": "train_qk_gemv_005",
+          "id": "json_v4_train_compiler_005:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_005",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_gemv",
+          "text": "{\"answer\":\"train_qk_gemv\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_q4_block_006",
+          "id": "json_v4_train_compiler_006:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_006",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_q4_block",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_q6_block_007",
+          "id": "json_v4_train_compiler_007:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_007",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_q6_block",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_uop_008",
+          "id": "json_v4_train_compiler_008:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_008",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_uop",
+          "text": "{\"answer\":\"train_qk\"}"
+        },
+        {
+          "actual": "train",
+          "expected": "train_qk_beam_009",
+          "id": "json_v4_train_compiler_009:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_009",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_beam",
+          "text": "{\"answer\":\"train\"}"
+        },
+        {
+          "actual": "train_qk",
+          "expected": "train_qk_policy_010",
+          "id": "json_v4_train_compiler_010:sample00",
+          "sample_idx": 0,
+          "source_id": "json_v4_train_compiler_010",
+          "temperature": 0.0,
+          "template_id": "compiler_glossary_policy",
+          "text": "{\"answer\":\"train_qk\"}"
+        }
+      ],
+      "near_miss": 158,
+      "near_miss_actual_top": [
+        {
+          "count": 65,
+          "value": "\"train_qk\""
+        },
+        {
+          "count": 41,
+          "value": "\"train\""
+        },
+        {
+          "count": 32,
+          "value": "\"\""
+        },
+        {
+          "count": 14,
+          "value": "\"train_qk_gemv\""
+        },
+        {
+          "count": 3,
+          "value": "\"train_qk_coalesced\""
+        },
+        {
+          "count": 1,
+          "value": "\"train_qk_json\""
+        },
+        {
+          "count": 1,
+          "value": "\"qk\""
+        },
+        {
+          "count": 1,
+          "value": "\"train_qk_wide\""
+        }
+      ],
+      "near_miss_by_temperature": [
+        {
+          "count": 68,
+          "value": "0.0"
+        },
+        {
+          "count": 68,
+          "value": "0.05"
+        },
+        {
+          "count": 11,
+          "value": "0.5"
+        },
+        {
+          "count": 10,
+          "value": "0.15"
+        },
+        {
+          "count": 1,
+          "value": "0.25"
+        }
+      ],
+      "near_miss_by_template": [
+        {
+          "count": 23,
+          "value": "compiler_glossary_wide_load"
+        },
+        {
+          "count": 21,
+          "value": "compiler_glossary_coalesced_read"
+        },
+        {
+          "count": 14,
+          "value": "compiler_glossary_gemv"
+        },
+        {
+          "count": 12,
+          "value": "compiler_glossary_wavefront"
+        },
+        {
+          "count": 12,
+          "value": "compiler_glossary_dequant"
+        },
+        {
+          "count": 12,
+          "value": "compiler_glossary_q4_block"
+        },
+        {
+          "count": 12,
+          "value": "compiler_glossary_q6_block"
+        },
+        {
+          "count": 12,
+          "value": "compiler_glossary_uop"
+        },
+        {
+          "count": 10,
+          "value": "compiler_glossary_beam"
+        },
+        {
+          "count": 10,
+          "value": "compiler_glossary_policy"
+        },
+        {
+          "count": 10,
+          "value": "compiler_glossary_suffix_cache"
+        },
+        {
+          "count": 10,
+          "value": "compiler_glossary_json_axis"
+        }
+      ],
+      "near_miss_expected_top": [
+        {
+          "count": 4,
+          "value": "\"train_qk_wide_load_001\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_coalesced_read_002\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_wide_load_025\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_coalesced_read_026\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_wide_load_037\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_coalesced_read_038\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_wide_load_049\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_wide_load_061\""
+        },
+        {
+          "count": 4,
+          "value": "\"train_qk_coalesced_read_062\""
+        },
+        {
+          "count": 3,
+          "value": "\"train_qk_wide_load_013\""
+        },
+        {
+          "count": 3,
+          "value": "\"train_qk_gemv_017\""
+        },
+        {
+          "count": 3,
+          "value": "\"train_qk_coalesced_read_050\""
+        }
+      ],
+      "selected_train_rows": 0,
+      "unique_near_miss_sources": 68
+    }
+  ],
+  "category": "compiler",
+  "intervention": {
+    "choice": "prompt_data_fix",
+    "rationale": [
+      "Compiler failures are mostly valid JSON with wrong values, not form failures.",
+      "The generated values often drop the row-specific numeric suffix or collapse to a broad prefix.",
+      "Accepting those by normalization would change the task contract, so the data/prompt target should be redesigned before training V7."
+    ]
+  },
+  "kind": "llm_json_nearmiss_audit",
+  "rollout": {
+    "artifact": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v6-gold-v4-rollout",
+    "axis_counts": {
+      "no_extra_text": {
+        "passed": 34,
+        "scored": 34
+      },
+      "parse_valid": {
+        "passed": 34,
+        "scored": 34
+      },
+      "schema_ok": {
+        "passed": 34,
+        "scored": 34
+      },
+      "strict_pass": {
+        "passed": 14,
+        "scored": 34
+      },
+      "type_ok": {
+        "passed": 34,
+        "scored": 34
+      },
+      "value_correct": {
+        "passed": 14,
+        "scored": 34
+      }
+    },
+    "by_template": {
+      "compiler_glossary_beam": {
+        "passed": 3,
+        "scored": 3
+      },
+      "compiler_glossary_coalesced_read": {
+        "passed": 0,
+        "scored": 3
+      },
+      "compiler_glossary_dequant": {
+        "passed": 3,
+        "scored": 3
+      },
+      "compiler_glossary_gemv": {
+        "passed": 0,
+        "scored": 3
+      },
+      "compiler_glossary_json_axis": {
+        "passed": 2,
+        "scored": 2
+      },
+      "compiler_glossary_policy": {
+        "passed": 3,
+        "scored": 3
+      },
+      "compiler_glossary_q4_block": {
+        "passed": 0,
+        "scored": 3
+      },
+      "compiler_glossary_q6_block": {
+        "passed": 0,
+        "scored": 3
+      },
+      "compiler_glossary_suffix_cache": {
+        "passed": 2,
+        "scored": 2
+      },
+      "compiler_glossary_uop": {
+        "passed": 0,
+        "scored": 3
+      },
+      "compiler_glossary_wavefront": {
+        "passed": 0,
+        "scored": 3
+      },
+      "compiler_glossary_wide_load": {
+        "passed": 1,
+        "scored": 3
+      }
+    },
+    "examples": [
+      {
+        "actual": "eval_qk_wide_load",
+        "expected": "eval_qk_wide_load_001",
+        "id": "json_v4_eval_compiler_001",
+        "passed": false,
+        "template_id": "compiler_glossary_wide_load",
+        "text": "{\"answer\":\"eval_qk_wide_load\"}"
+      },
+      {
+        "actual": "qk_coalesced",
+        "expected": "eval_qk_coalesced_read_002",
+        "id": "json_v4_eval_compiler_002",
+        "passed": false,
+        "template_id": "compiler_glossary_coalesced_read",
+        "text": "{\"answer\":\"qk_coalesced\"}"
+      },
+      {
+        "actual": "eval_qk_wavefront",
+        "expected": "eval_qk_wavefront_003",
+        "id": "json_v4_eval_compiler_003",
+        "passed": false,
+        "template_id": "compiler_glossary_wavefront",
+        "text": "{\"answer\":\"eval_qk_wavefront\"}"
+      },
+      {
+        "actual": "eval_qk_dequant_004",
+        "expected": "eval_qk_dequant_004",
+        "id": "json_v4_eval_compiler_004",
+        "passed": true,
+        "template_id": "compiler_glossary_dequant",
+        "text": "{\"answer\":\"eval_qk_dequant_004\"}"
+      },
+      {
+        "actual": "gemv",
+        "expected": "eval_qk_gemv_005",
+        "id": "json_v4_eval_compiler_005",
+        "passed": false,
+        "template_id": "compiler_glossary_gemv",
+        "text": "{\"answer\":\"gemv\"}"
+      },
+      {
+        "actual": "eval_qk_q4_block",
+        "expected": "eval_qk_q4_block_006",
+        "id": "json_v4_eval_compiler_006",
+        "passed": false,
+        "template_id": "compiler_glossary_q4_block",
+        "text": "{\"answer\":\"eval_qk_q4_block\"}"
+      },
+      {
+        "actual": "eval_qk_q6_block",
+        "expected": "eval_qk_q6_block_007",
+        "id": "json_v4_eval_compiler_007",
+        "passed": false,
+        "template_id": "compiler_glossary_q6_block",
+        "text": "{\"answer\":\"eval_qk_q6_block\"}"
+      },
+      {
+        "actual": "eval_qk_uop",
+        "expected": "eval_qk_uop_008",
+        "id": "json_v4_eval_compiler_008",
+        "passed": false,
+        "template_id": "compiler_glossary_uop",
+        "text": "{\"answer\":\"eval_qk_uop\"}"
+      },
+      {
+        "actual": "eval_qk_beam_009",
+        "expected": "eval_qk_beam_009",
+        "id": "json_v4_eval_compiler_009",
+        "passed": true,
+        "template_id": "compiler_glossary_beam",
+        "text": "{\"answer\":\"eval_qk_beam_009\"}"
+      },
+      {
+        "actual": "eval_qk_policy_010",
+        "expected": "eval_qk_policy_010",
+        "id": "json_v4_eval_compiler_010",
+        "passed": true,
+        "template_id": "compiler_glossary_policy",
+        "text": "{\"answer\":\"eval_qk_policy_010\"}"
+      },
+      {
+        "actual": "eval_qk_suffix_cache_011",
+        "expected": "eval_qk_suffix_cache_011",
+        "id": "json_v4_eval_compiler_011",
+        "passed": true,
+        "template_id": "compiler_glossary_suffix_cache",
+        "text": "{\"answer\":\"eval_qk_suffix_cache_011\"}"
+      },
+      {
+        "actual": "eval_qk_json_axis_012",
+        "expected": "eval_qk_json_axis_012",
+        "id": "json_v4_eval_compiler_012",
+        "passed": true,
+        "template_id": "compiler_glossary_json_axis",
+        "text": "{\"answer\":\"eval_qk_json_axis_012\"}"
+      }
+    ],
+    "passed": 14,
+    "rollouts": 34,
+    "top_actual": [
+      {
+        "count": 3,
+        "value": "\"qk_coalesced\""
+      },
+      {
+        "count": 3,
+        "value": "\"eval_qk_wavefront\""
+      },
+      {
+        "count": 3,
+        "value": "\"gemv\""
+      },
+      {
+        "count": 3,
+        "value": "\"eval_qk_q4_block\""
+      },
+      {
+        "count": 3,
+        "value": "\"eval_qk_q6_block\""
+      },
+      {
+        "count": 3,
+        "value": "\"eval_qk_uop\""
+      },
+      {
+        "count": 2,
+        "value": "\"eval_qk_wide_load\""
+      },
+      {
+        "count": 1,
+        "value": "\"eval_qk_dequant_004\""
+      },
+      {
+        "count": 1,
+        "value": "\"eval_qk_beam_009\""
+      },
+      {
+        "count": 1,
+        "value": "\"eval_qk_policy_010\""
+      },
+      {
+        "count": 1,
+        "value": "\"eval_qk_suffix_cache_011\""
+      },
+      {
+        "count": 1,
+        "value": "\"eval_qk_json_axis_012\""
+      }
+    ]
+  },
+  "source": "bench/qwen-adapter-20260613/training-data-v4/sft.jsonl"
+}

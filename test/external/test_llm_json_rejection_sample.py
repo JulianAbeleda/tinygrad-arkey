@@ -1,7 +1,7 @@
 import json, unittest
 
 from extra.llm_eval_common import score_prompt
-from extra.llm_json_rejection_sample import build_rejection_dataset
+from extra.llm_json_rejection_sample import _sample_plan, build_rejection_dataset
 
 def _source(row_id:str, split:str, category:str, answer):
   return {
@@ -53,6 +53,9 @@ class TestLLMJsonRejectionSample(unittest.TestCase):
     self.assertEqual([row["id"] for row in accepted], ["train_a:sample01", "train_b:sample01"])
     self.assertEqual([row["id"] for row in near_miss], ["train_a:sample00"])
     self.assertEqual(summary["selected_train_rows"], 2)
+    self.assertEqual(summary["category_axes"]["math"]["value_correct"], {"passed": 1, "scored": 2})
+    self.assertEqual(summary["category_axes"]["code"]["strict_pass"], {"passed": 1, "scored": 2})
+    self.assertEqual(summary["temperatures_summary"]["0.0"], {"attempts": 4, "accepted_attempts": 2, "near_miss": 1})
     self.assertEqual(summary["integrity"]["train_eval_source_overlap"], 0)
     self.assertEqual([row["split"] for row in sft_rows], ["train", "train", "eval"])
     self.assertEqual(sft_rows[0]["completion"], '{"answer":"42"}')
@@ -62,6 +65,22 @@ class TestLLMJsonRejectionSample(unittest.TestCase):
     eval_rows = [_source("eval_a", "eval", "math", "99")]
     with self.assertRaisesRegex(ValueError, "non-train source"):
       build_rejection_dataset([_sample(eval_rows[0], 0, '{"answer":"99"}')], train, eval_rows)
+
+  def test_sample_plan_filters_categories_and_preserves_indices(self):
+    train = [
+      _source("train_a", "train", "math", "42"),
+      _source("train_b", "train", "code", "len"),
+      _source("train_c", "train", "compiler", "q4"),
+    ]
+    self.assertEqual([(idx, row["id"]) for idx, row in _sample_plan(train, ["code", "compiler"])],
+                     [(1, "train_b"), (2, "train_c")])
+    self.assertEqual([(idx, row["id"]) for idx, row in _sample_plan(train, [])],
+                     [(0, "train_a"), (1, "train_b"), (2, "train_c")])
+
+  def test_sample_plan_rejects_unknown_category(self):
+    train = [_source("train_a", "train", "math", "42")]
+    with self.assertRaisesRegex(ValueError, "unknown categories"):
+      _sample_plan(train, ["compiler"])
 
 if __name__ == "__main__":
   unittest.main()

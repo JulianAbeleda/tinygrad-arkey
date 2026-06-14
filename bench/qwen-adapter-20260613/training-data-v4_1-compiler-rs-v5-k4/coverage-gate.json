@@ -1,0 +1,23 @@
+{
+  "categories": {
+    "compiler": {
+      "accepted_attempts": 68,
+      "attempts": 272,
+      "near_miss": 0,
+      "reason": "",
+      "selected_train_rows": 68,
+      "status": "pass"
+    }
+  },
+  "failures": [],
+  "kind": "llm_json_rs_coverage_gate",
+  "min_selected": 20,
+  "status": "pass",
+  "summary": {
+    "accepted_attempts": 68,
+    "artifact": null,
+    "attempts": 272,
+    "selected_train_rows": 68,
+    "sft_rows": 102
+  }
+}

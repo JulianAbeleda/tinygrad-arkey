@@ -17,6 +17,11 @@ The immediate goal is not another adapter-capacity sweep. The goal is a
 generation-based eval and scorer that can gate decisions, then reuse the same
 scorer as the filter/reward for rejection-sampling SFT.
 
+For the consolidated view of how this structured-output loop could compound
+with the AMD kernel optimization loop, and how to test that unproven closing
+link, see
+`docs/amd-decode-kernel-optimization-flywheel.md`.
+
 ## Current Evidence
 
 Committed artifacts in `bench/qwen-adapter-20260613/` establish:

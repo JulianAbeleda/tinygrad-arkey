@@ -247,17 +247,34 @@ Phase 4 started with the required gold-data control:
 - elapsed: `1720.8s`
 - cache cost: `3.83GB` train hidden copies plus `1.97GB` eval hidden copies
 
-The rejection-sampling generation step was attempted with V5 as the generator
-and `K=4` temperatures `[0.0, 0.2, 0.5, 0.8]`, but the AMD runtime hit a
-synchronize wait timeout before writing the RS artifact. A bounded `DEV=AMD`
-smoke test also timed out afterward, so further GPU work is blocked until the
-AMD runtime/device path is reset.
+After host reboot, the `DEV=AMD` smoke test passed and the V6 gold-control
+free-generation rollout completed:
 
-Follow-up recovery attempts in the same live session did not clear the device:
-the sysfs GPU reset hook returned `Inappropriate ioctl for device`, and
-`rocm-smi -d 0 --gpureset` itself hung in uninterruptible `D` state. Continue
-only after a host reboot or equivalent full AMD driver/device reset, then rerun
-the `DEV=AMD` smoke test before any Phase 4 generation.
+- artifact: `8b-last1-ffn-suffix-lora-r4-v6-gold-v4-rollout/summary.md`
+- strict JSON pass: `162/204` (`0.794`, Wilson 95% CI `[0.733, 0.844]`)
+- parse/schema/type/no-extra-text: `199/204`
+- value-correct: `162/204`
+- category passes: arithmetic `27/34`, fact `34/34`, code `34/34`,
+  compiler `14/34`, string `21/34`, categorization `32/34`
+- compare vs V5: `+57` strict passes (`105 -> 162`), `59` improvements,
+  `2` regressions, `121/204` changed texts
+
+This is a real free-generation control win over V5, so the adapter/objective
+setup can improve behavior when trained on gold completions.
+
+Rejection-sampling generation then completed in bounded `--resume` chunks with
+V5 as the generator, `K=4`, and temperatures `[0.0, 0.2, 0.5, 0.8]`:
+
+- artifact: `training-data-v4-rs-v5-k4/README.md`
+- attempts: `1632`
+- accepted attempts: `216`
+- selected train rows: `215`
+- strict pass: `216/1632`
+- category coverage: arithmetic `61`, fact `67`, code `18`, compiler `0`,
+  string `23`, categorization `46` selected train rows
+
+Do not train V7 from this K=4 RS artifact as-is. Coverage is skewed and the
+compiler category has zero accepted rows, despite `79` compiler near misses.
 
 The sampler was hardened after the failure:
 
@@ -266,7 +283,9 @@ The sampler was hardened after the failure:
 - downstream `accepted.jsonl`, `near-miss.jsonl`, `sft.jsonl`, and
   `summary.json` derive from the persisted samples file.
 
-Next after AMD reset:
+The follow-up stratified weak-category continuation used the new
+`--sample-categories` path to append samples only for `code`, `compiler`, and
+`string`, while preserving the full K=4 base artifact:
 
 ```bash
 PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py \
@@ -274,12 +293,83 @@ PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py \
   --policy bench/qk-shared-storage-20260612/8b/policy.json \
   --adapter bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5 \
   --input bench/qwen-adapter-20260613/training-data-v4/sft.jsonl \
-  --out bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4 \
+  --out bench/qwen-adapter-20260613/training-data-v4-rs-v5-stratified-v1 \
   --device AMD --storage shared --prompt-format chat \
-  --seed 20260614 --k 4 --temperatures 0.0 0.2 0.5 0.8 \
-  --max-accepted-per-source 1 --resume
+  --seed 20260614 --k 8 \
+  --temperatures 0.0 0.2 0.5 0.8 0.05 0.1 0.15 0.25 \
+  --max-accepted-per-source 1 --resume \
+  --sample-categories code compiler string
 ```
 
-Only train the RS adapter if the resulting `summary.json` has enough accepted
-rows and acceptable category coverage. If accepted rows are sparse or missing
-hard categories entirely, increase `K` or stratify before training.
+Result:
+
+- artifact: `training-data-v4-rs-v5-stratified-v1/README.md`
+- attempts: `2448`
+- accepted attempts: `257`
+- selected train rows: `217`
+- weak-category selected rows: code `20`, compiler `0`, string `23`
+- compiler near misses: `158`
+- coverage gate:
+  `training-data-v4-rs-v5-stratified-v1/coverage-gate.md`, `fail`
+
+Decision: still do not train V7. The low-temperature stratified continuation
+fixed the code threshold only barely and still produced zero compiler accepted
+rows. More generic V5 sampling is unlikely to solve this without changing the
+generator, prompt/data shape, scorer normalization, or objective.
+
+The compiler near-miss audit is:
+`compiler-nearmiss-audit-v1/README.md`.
+
+It compares both RS artifacts and the V6 gold-control eval rollout. The compiler
+failures are valid JSON value failures, not form failures. In the K=4 artifact,
+compiler near misses classify as prefix `54`, empty string `16`,
+stem-without-index `8`, and substring `1`. In stratified v1 they classify as
+prefix `111`, empty string `32`, stem-without-index `14`, and substring `1`.
+Top actual answers are broad prefixes such as `"train_qk"`, `"train"`, `""`,
+and `"train_qk_gemv"`, while the expected answers are row-specific keys such as
+`train_qk_gemv_005`.
+
+Chosen next intervention: prompt/data fix. Do not normalize these as passes;
+accepting prefix or stem answers would change the task contract. Redesign the
+compiler target/prompt shape before any V7 training.
+
+## Phase 4.2 Compiler Prompt/Data Fix
+
+The compiler-only V4.1 artifact replaces row-specific glossary answers such as
+`train_qk_gemv_005` with stable concept keys such as `qk_gemv`:
+
+- dataset artifact: `training-data-v4_1-compiler/README.md`
+- rows: `68` train, `34` held-out eval
+- category: compiler only
+- expected answers: stable `qk_<concept>` keys
+- disjointness: train/eval prompts and template instances have `0` overlap
+- answer overlap: `12`, intentional because the stable key is the target
+- numeric row suffix answers: `0`
+
+V5 on the V4.1 held-out compiler eval:
+
+- artifact:
+  `8b-last1-ffn-suffix-lora-r4-v5-v4_1-compiler-rollout/summary.md`
+- strict JSON pass: `30/34` (`0.882`, Wilson 95% CI `[0.734, 0.953]`)
+- parse/schema/type/no-extra-text: `34/34`
+- value-correct: `30/34`
+
+V5 rejection sampling on the V4.1 compiler train split:
+
+- artifact: `training-data-v4_1-compiler-rs-v5-k4/README.md`
+- attempts: `272`
+- accepted attempts: `68`
+- selected train rows: `68`
+- compiler selected rows: `68/68`
+- accepted temperatures: all selected rows came from `temperature=0.0`
+- coverage gate:
+  `training-data-v4_1-compiler-rs-v5-k4/coverage-gate.md`, `pass`
+
+Decision: the compiler prompt/data intervention worked as a data-generation
+fix. The next adapter-training scope is not to train from the failed original
+V4 RS artifacts directly; it is to build a combined RS-SFT dataset that keeps
+the usable non-compiler rows from the original V4/stratified artifacts and
+replaces the compiler slice with the V4.1 stable-key compiler rows. Any V7
+candidate should be promoted only by free-generation strict JSON rollout,
+including the original V4 `204`-prompt gate and the new V4.1 compiler eval
+gate.

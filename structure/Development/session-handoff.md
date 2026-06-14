@@ -131,6 +131,8 @@ Core verdicts and architecture:
 - `docs/amd-decode-current-verdicts.md`
 - `docs/amd-decode-harness-architecture.md`
 - `docs/amd-decode-qk-storage-architecture.md`
+- `docs/amd-decode-kernel-optimization-flywheel.md`
+- `docs/amd-decode-flywheel-proof-plan.md`
 - `docs/amd-decode-ansor-direction.md`
 - `docs/amd-decode-optimization-plan.md`
 
@@ -638,40 +640,54 @@ The eval/objective foundation is now partially executed and committed.
   A bounded `DEV=AMD` smoke test then timed out. Sysfs GPU reset returned
   `Inappropriate ioctl for device`, and `rocm-smi -d 0 --gpureset` itself
   entered uninterruptible `D` state.
+- `0871a767c [docs] update Phase 4 reboot handoff`: updates this handoff and
+  checklist with the reboot-first resume order before the post-reboot run below.
 
-Current live blocker:
-The AMD runtime/device path is wedged. Known stuck processes at handoff time:
-`184652` (`.venv/bin/python -`), `184758` (`python -m unittest ...`), and
-`187563` (`python3 /usr/bin/rocm-smi -d 0 --gpureset`) are in uninterruptible
-`D` state. They cannot be killed from userspace. Do not launch more AMD work in
-this session.
+Post-reboot Phase 4 status as of 2026-06-14:
 
-Required recovery before continuing:
-Reboot the host or perform an equivalent full AMD driver/device reset outside
-this Python session. After reboot, first run:
+The AMD blocker from `c5d54209d` is cleared for this session. The host rebooted
+at `2026-06-14 03:35:51`, the old stuck PIDs are gone, and the required smoke
+test printed `[2, 3, 4]`:
 
 ```bash
-cd /home/ubuntu/tinygrad-arkey
-git status --short
-ps -eo pid,ppid,stat,cmd | rg '(.venv/bin/python|rocm-smi|gpureset)' || true
-DEV=AMD PYTHONPATH=. .venv/bin/python - <<'PY'
-from tinygrad import Tensor
-print((Tensor([1,2,3])+1).numpy().tolist())
-PY
+timeout 45s env DEV=AMD PYTHONPATH=. .venv/bin/python -c \
+  "from tinygrad import Tensor; print((Tensor([1,2,3])+1).numpy().tolist())"
 ```
 
-Proceed only if the smoke test prints `[2, 3, 4]` quickly and no stale `D`
-state GPU processes remain. If the smoke test hangs, stop and fix the AMD
-runtime first; do not run rollouts or rejection sampling.
+New uncommitted Phase 4 artifacts:
 
-Post-reboot Phase 4 resume order:
+- `bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v6-gold-v4-rollout/`
+- `bench/qwen-adapter-20260613/compare-8b-v4-last1-ffn-suffix-lora-r4-v5-vs-v6-gold-v4/`
+- `bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4/`
+- `bench/qwen-adapter-20260613/training-data-v4-rs-v5-stratified-v1/`
+- `bench/qwen-adapter-20260613/compiler-nearmiss-audit-v1/`
+- `bench/qwen-adapter-20260613/training-data-v4_1-compiler/`
+- `bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5-v4_1-compiler-rollout/`
+- `bench/qwen-adapter-20260613/training-data-v4_1-compiler-rs-v5-k4/`
 
-1. Run the V6 gold-control free-generation rollout on the V4 `204`-prompt eval
-   set. The teacher-forced `0.921875` only proves fit under gold prefixes; this
-   rollout is the actual upper-bound/control gate.
-2. Run rejection sampling in bounded/resumable chunks with V5 as generator. Use
-   the committed sampler and `--resume`; avoid a single monolithic generation
-   run if the AMD path looks unstable.
+V6 gold-control free-generation rollout:
+
+- model/policy/storage: Qwen3-8B generated shared storage with
+  `bench/qk-shared-storage-20260612/8b/policy.json`
+- adapter:
+  `bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v6-gold-v4`
+- dataset: `bench/qwen-adapter-20260613/training-data-v4/eval-prompts.jsonl`
+- strict JSON pass: `162/204` (`0.794`, Wilson 95% CI `[0.733, 0.844]`)
+- parse/schema/type/no-extra-text: `199/204`
+- value-correct: `162/204`
+- category passes: arithmetic `27/34`, fact `34/34`, code `34/34`,
+  compiler `14/34`, string `21/34`, categorization `32/34`
+- compare vs V5:
+  `bench/qwen-adapter-20260613/compare-8b-v4-last1-ffn-suffix-lora-r4-v5-vs-v6-gold-v4/report.md`
+  records `+57` strict passes (`105 -> 162`), `59` improvements,
+  `2` regressions, and `121/204` changed texts.
+
+Verdict: V6 gold-control proves the suffix adapter/objective setup can improve
+free-generation behavior when trained on gold completions. The V5 objective was
+not the whole bottleneck; generated training data quality now matters.
+
+K=4 rejection sampling with V5 as generator completed in bounded `--resume`
+chunks (`64`, `204`, then `408` train rows) without another AMD hang:
 
 ```bash
 PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py \
@@ -682,25 +698,135 @@ PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py \
   --out bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4 \
   --device AMD --storage shared --prompt-format chat \
   --seed 20260614 --k 4 --temperatures 0.0 0.2 0.5 0.8 \
-  --max-accepted-per-source 1 --resume
+  --max-accepted-per-source 1 --resume --limit-train-rows 408
 ```
 
-3. Inspect `bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4/summary.json`.
-   Train an RS adapter only if accepted rows and category coverage are adequate.
-   If coverage is sparse or skewed, increase `K` or stratify by weak category
-   before training.
-4. If the RS data passes coverage, train a V7 suffix adapter with the same
-   architecture as V5/V6 (`last1_ffn`, rank `4`, alpha `8`) and evaluate free
-   generation on the V4 eval set.
-5. Compare V5 current best, V6 gold-control, and V7 RS-SFT using strict JSON
-   generation pass rate and confidence intervals. Do not use teacher-forced
-   accuracy as the promotion signal.
-6. Commit generated artifacts and verdict. Suggested commit prefix:
-   `[test] finish Phase 4 rejection-sampling SFT eval`.
+RS artifact summary:
 
-High-level decision after Phase 4:
-If V6 gold-control cannot beat V5 on free generation, the adapter/objective
-setup is the bottleneck and RS-SFT is unlikely to help without changing the
-training objective or decoding constraints. If V6 beats V5 but V7 ties or
-regresses, the RS data/filter is too narrow or noisy. If V7 beats V5 with
-meaningful CI separation, continue the generation-matched objective loop.
+- attempts: `1632`
+- accepted attempts: `216`
+- selected train rows: `215`
+- eval rows carried through: `204`
+- strict pass: `216/1632`
+- selected train rows by category: arithmetic `61`, fact `67`, code `18`,
+  compiler `0`, string `23`, categorization `46`
+- compiler near misses: `79`
+
+Decision after K=4: do not train V7 from
+`bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4/` as-is. Coverage is
+too skewed and the compiler category has zero accepted rows. Training V7 on
+this artifact would likely erase or under-train the exact category where V6
+gold-control showed a meaningful gain.
+
+Stratified V5 RS continuation:
+
+`extra/llm_json_rejection_sample.py` now supports `--sample-categories`, which
+limits appended samples to selected train categories while still rebuilding
+coverage over all train rows. `extra/llm_json_rs_coverage_gate.py` gates
+minimum selected rows per weak category.
+
+The follow-up artifact copied the K=4 base into
+`bench/qwen-adapter-20260613/training-data-v4-rs-v5-stratified-v1/` and appended
+K=8 samples only for `code`, `compiler`, and `string`:
+
+```bash
+PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --policy bench/qk-shared-storage-20260612/8b/policy.json \
+  --adapter bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5 \
+  --input bench/qwen-adapter-20260613/training-data-v4/sft.jsonl \
+  --out bench/qwen-adapter-20260613/training-data-v4-rs-v5-stratified-v1 \
+  --device AMD --storage shared --prompt-format chat \
+  --seed 20260614 --k 8 \
+  --temperatures 0.0 0.2 0.5 0.8 0.05 0.1 0.15 0.25 \
+  --max-accepted-per-source 1 --resume \
+  --sample-categories code compiler string
+```
+
+Stratified v1 result:
+
+- attempts: `2448`
+- accepted attempts: `257`
+- selected train rows: `217`
+- weak-category selected rows: code `20`, compiler `0`, string `23`
+- compiler near misses: `158`
+- coverage gate:
+  `bench/qwen-adapter-20260613/training-data-v4-rs-v5-stratified-v1/coverage-gate.md`
+  fails with `compiler: selected_train_rows 0 < 20`.
+
+Current Phase 4 decision: do not train V7 from either RS artifact. The issue is
+not just sparse sampling; V5 produces compiler near misses with valid JSON form
+but wrong values. More generic V5 temperature sampling is unlikely to solve this
+without changing the generator, data/prompt shape, scorer normalization, or
+objective.
+
+Compiler near-miss audit:
+
+`extra/llm_json_nearmiss_audit.py` generated
+`bench/qwen-adapter-20260613/compiler-nearmiss-audit-v1/` from both RS artifacts
+plus the V6 gold-control rollout. The audit chooses `prompt_data_fix`.
+
+Key findings:
+
+- K=4 compiler near misses: `79` over `68` unique sources, `0` accepts.
+- Stratified v1 compiler near misses: `158` over `68` unique sources,
+  `0` accepts.
+- K=4 miss classification: prefix `54`, empty string `16`,
+  stem-without-index `8`, substring `1`.
+- Stratified v1 miss classification: prefix `111`, empty string `32`,
+  stem-without-index `14`, substring `1`.
+- Top actual answers are broad prefixes: `"train_qk"`, `"train"`, `""`, and
+  `"train_qk_gemv"`.
+- Expected answers are row-specific glossary keys such as
+  `train_qk_gemv_005`.
+- V6 gold-control can learn some of this under gold supervision (`14/34`
+  compiler eval passes), but V5 RS generation does not produce exact
+  row-specific compiler keys.
+
+Decision after audit: do not treat this as a normalization fix. Accepting
+prefixes/stems would change the task contract and weaken the strict-JSON gate.
+That intervention has now been run as V4.1 compiler-only data:
+
+- dataset: `bench/qwen-adapter-20260613/training-data-v4_1-compiler/`
+- rows: `68` train, `34` eval
+- target: stable concept keys such as `qk_gemv`, not row-specific keys such as
+  `train_qk_gemv_005`
+- integrity: train/eval prompt overlap `0`, template-instance overlap `0`,
+  intentional answer overlap `12`, numeric suffix answers `0`
+
+V5 on the V4.1 compiler eval:
+
+- artifact:
+  `bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5-v4_1-compiler-rollout/`
+- strict JSON pass: `30/34` (`0.882`, Wilson 95% CI `[0.734, 0.953]`)
+- parse/schema/type/no-extra-text: `34/34`
+- value-correct: `30/34`
+
+V5 rejection sampling on the V4.1 compiler train split:
+
+- artifact:
+  `bench/qwen-adapter-20260613/training-data-v4_1-compiler-rs-v5-k4/`
+- attempts: `272`
+- accepted attempts: `68`
+- selected train rows: `68`
+- compiler selected rows: `68/68`
+- accepted rows came from `temperature=0.0`; higher low-temperature samples
+  were not needed for coverage
+- coverage gate: `pass` at min `20` compiler selected rows
+
+Current next step if continuing practical work:
+
+1. Build a combined RS-SFT artifact that keeps usable non-compiler rows from
+   the original V4/stratified RS artifacts and replaces the compiler slice with
+   `training-data-v4_1-compiler-rs-v5-k4` rows.
+2. Train V7 only from that combined artifact, using the same architecture as
+   V5/V6 (`last1_ffn`, rank `4`, alpha `8`).
+3. Promote only by free-generation strict JSON rollout. At minimum compare V5,
+   V6 gold-control, and V7 on the original V4 `204`-prompt gate plus the V4.1
+   compiler eval gate.
+4. Use strict JSON pass rate, Wilson intervals, regressions, and category
+   deltas as promotion signals. Teacher-forced token accuracy remains
+   diagnostic only.
+
+Suggested commit prefix once artifacts/docs are finalized:
+`[test] finish Phase 4 rejection-sampling SFT eval`.

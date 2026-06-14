@@ -55,6 +55,16 @@ def _is_near_miss(score:dict[str, Any]) -> bool:
   axes = score.get("json_axes", {}).get("axes", {})
   return all(axes.get(axis) is True for axis in ("parse_valid", "no_extra_text", "schema_ok", "type_ok")) and axes.get("value_correct") is False
 
+def _sample_plan(train_rows:list[dict[str, Any]], include_categories:list[str]) -> list[tuple[int, dict[str, Any]]]:
+  if not include_categories: return list(enumerate(train_rows))
+  requested = set(include_categories)
+  known = {row.get("category") for row in train_rows}
+  missing = sorted(category for category in requested if category not in known)
+  if missing: raise ValueError(f"--sample-categories contains unknown categories: {missing}")
+  plan = [(idx, row) for idx, row in enumerate(train_rows) if row.get("category") in requested]
+  if not plan: raise ValueError("--sample-categories matched no train rows")
+  return plan
+
 def _sft_train_row(sample:dict[str, Any], rank:int) -> dict[str, Any]:
   return {
     "id": f"{sample['source_id']}:rs{rank:02d}",
@@ -108,11 +118,20 @@ def build_rejection_dataset(samples:list[dict[str, Any]], train_rows:list[dict[s
 
   source_by_id = {row["id"]: row for row in train_rows}
   attempts_by_category: dict[str, dict[str, int]] = defaultdict(lambda: {"attempts": 0, "accepted_attempts": 0, "selected_train_rows": 0, "near_miss": 0})
+  axes_by_category: dict[str, dict[str, dict[str, int]]] = defaultdict(lambda: defaultdict(lambda: {"passed": 0, "scored": 0}))
+  attempts_by_temperature: dict[str, dict[str, int]] = defaultdict(lambda: {"attempts": 0, "accepted_attempts": 0, "near_miss": 0})
   for sample in samples:
     category = source_by_id[sample["source_id"]].get("category", "unknown")
     attempts_by_category[category]["attempts"] += 1
     if sample in accepted: attempts_by_category[category]["accepted_attempts"] += 1
     if sample in near_miss: attempts_by_category[category]["near_miss"] += 1
+    for axis, passed in sample.get("score", {}).get("json_axes", {}).get("axes", {}).items():
+      axes_by_category[category][axis]["scored"] += 1
+      if passed is True: axes_by_category[category][axis]["passed"] += 1
+    temp = str(sample.get("temperature"))
+    attempts_by_temperature[temp]["attempts"] += 1
+    if sample in accepted: attempts_by_temperature[temp]["accepted_attempts"] += 1
+    if sample in near_miss: attempts_by_temperature[temp]["near_miss"] += 1
   for row in selected_train:
     attempts_by_category[row.get("category", "unknown")]["selected_train_rows"] += 1
   summary = {
@@ -127,6 +146,8 @@ def build_rejection_dataset(samples:list[dict[str, Any]], train_rows:list[dict[s
     "sft_rows": len(sft_rows),
     "quality": quality_summary(samples),
     "categories": {k: v for k, v in sorted(attempts_by_category.items())},
+    "category_axes": {category: {axis: counts for axis, counts in sorted(axes.items())} for category, axes in sorted(axes_by_category.items())},
+    "temperatures_summary": {k: v for k, v in sorted(attempts_by_temperature.items(), key=lambda item: float(item[0]))},
     "integrity": {
       "samples_from_train_only": True,
       "eval_rows_from_gold_source": True,
@@ -139,10 +160,10 @@ def summary_markdown(summary:dict[str, Any]) -> str:
   lines = [
     "# JSON Rejection-Sampling Data",
     "",
-    "This artifact samples completions from the current best adapter on V4 train",
-    "prompts, keeps strict JSON passes as SFT rows, and carries the original V4",
-    "eval rows only for trainer diagnostics. Held-out promotion still uses the",
-    "separate V4 rollout gate.",
+    "This artifact samples completions from the selected adapter on source",
+    "train prompts, keeps strict JSON passes as SFT rows, and carries the",
+    "source eval rows only for trainer diagnostics. Held-out promotion should",
+    "use the separate rollout gate for the matching source dataset.",
     "",
     "## Summary",
     "",
@@ -157,6 +178,23 @@ def summary_markdown(summary:dict[str, Any]) -> str:
   ]
   for category, row in summary["categories"].items():
     lines.append(f"| `{category}` | {row['attempts']} | {row['accepted_attempts']} | {row['selected_train_rows']} | {row['near_miss']} |")
+  if summary.get("sample_categories"):
+    lines += [
+      "",
+      f"- sampled categories this run: `{', '.join(summary['sample_categories'])}`",
+      f"- sampled train rows this run: `{summary.get('sample_train_rows')}`",
+    ]
+  if summary.get("category_axes"):
+    lines += ["", "## Category JSON Axes", "", "| category | parse | schema | type | value | strict |", "|---|---:|---:|---:|---:|---:|"]
+    for category, axes in summary["category_axes"].items():
+      def cell(axis:str) -> str:
+        row = axes.get(axis, {"passed": 0, "scored": 0})
+        return f"{row['passed']}/{row['scored']}"
+      lines.append(f"| `{category}` | {cell('parse_valid')} | {cell('schema_ok')} | {cell('type_ok')} | {cell('value_correct')} | {cell('strict_pass')} |")
+  if summary.get("temperatures_summary"):
+    lines += ["", "## Temperature Summary", "", "| temperature | attempts | accepted | near miss |", "|---|---:|---:|---:|"]
+    for temperature, row in summary["temperatures_summary"].items():
+      lines.append(f"| `{temperature}` | {row['attempts']} | {row['accepted_attempts']} | {row['near_miss']} |")
   lines.append("")
   return "\n".join(lines)
 
@@ -182,6 +220,7 @@ def run_sampling(args:argparse.Namespace) -> dict[str, Any]:
   rows = load_sft_rows(args.input)
   train_rows, eval_rows = _split_source_rows(rows)
   if args.limit_train_rows > 0: train_rows = train_rows[:args.limit_train_rows]
+  sample_plan = _sample_plan(train_rows, args.sample_categories)
   temperatures = args.temperatures
   if len(temperatures) != args.k:
     raise ValueError(f"--temperatures count ({len(temperatures)}) must match --k ({args.k})")
@@ -194,7 +233,7 @@ def run_sampling(args:argparse.Namespace) -> dict[str, Any]:
   tok = SimpleTokenizer.from_gguf_kv(kv)
   st_all = time.perf_counter()
   with samples_path.open("a" if args.resume else "w") as f:
-    for row_idx, row in enumerate(train_rows):
+    for row_idx, row in sample_plan:
       prompt_row = _prompt_row(row, args.tokens)
       prompt_ids = build_prompt_ids(tok, row["prompt"], args.prompt_format)
       for sample_idx, temperature in enumerate(temperatures):
@@ -250,6 +289,9 @@ def run_sampling(args:argparse.Namespace) -> dict[str, Any]:
     "seed": args.seed,
     "k": args.k,
     "temperatures": temperatures,
+    "sample_categories": args.sample_categories,
+    "sample_train_rows": len(sample_plan),
+    "skipped_train_rows": len(train_rows) - len(sample_plan),
     "elapsed_s": time.perf_counter() - st_all,
     "files": {"samples": "samples.jsonl", "accepted": "accepted.jsonl", "near_miss": "near-miss.jsonl", "sft": "sft.jsonl"},
   })
@@ -277,6 +319,7 @@ def main() -> int:
   parser.add_argument("--temperatures", nargs="+", type=float, default=[0.0, 0.2, 0.5, 0.8])
   parser.add_argument("--max-accepted-per-source", type=int, default=1)
   parser.add_argument("--limit-train-rows", type=int, default=0)
+  parser.add_argument("--sample-categories", nargs="*", default=[], help="only append samples for these train categories while summarizing all train rows")
   parser.add_argument("--resume", action="store_true", help="append missing samples to an existing samples.jsonl")
   args = parser.parse_args()
   summary = run_sampling(args)
