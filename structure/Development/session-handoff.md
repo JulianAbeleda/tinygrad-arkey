@@ -391,6 +391,31 @@ mechanism rows (`3` `packed_word_lane_unroll`, `2` `qk_block_dot`,
 `1` `wide_load_only`) remain in the plan, and the rerun is still blocked until
 those rows are collected (`rerun_phase3b_allowed=false`).
 
+Next flywheel scope is Phase 3G coverage closure, now documented in
+`docs/amd-decode-flywheel-proof-plan.md`. Do not start Phase 4/live shadow yet.
+Phase 3G should add only real train outcomes and keep the existing `38`-row
+family-split holdout untouched. Required coverage:
+
+- `3` more `packed_word_lane_unroll` train rows from packed-load lane-unroll
+  candidates with generated-source/load-width evidence.
+- `2` more `qk_block_dot` train rows from compile/static-shape-passing
+  QK_BLOCK_DOT candidates before any full-decode claim.
+- `1` more `wide_load_only` train row from the three-way load diagnostic/control
+  branch.
+- One genuine or normalized train-stage example for
+  `after_microbench_before_full_decode`; do not force this stage unless the row
+  is actually a microbench-pass/full-decode-pending candidate.
+
+Phase 3G implementation should extend `extra/qk_flywheel_targeted_outcomes.py`
+unless the source artifacts need a separate narrow script. After adding rows,
+regenerate `targeted-outcomes-v1/`, `kernel-triage-v1-featured-plus/`,
+`triage-feature-audit-v1-featured-plus/`, `triage-coverage-plan-v1-plus/`, and
+`triage-cost-model-v1-plus/`, then update
+`test/external/test_qk_flywheel_phase3f.py` or add a separate Phase 3G test.
+The exit gate is: coverage blockers cleared, XGBoost still beats
+`mechanism_prior` on macro-F1/p@k/NDCG, and false-positive accept rate stays at
+or below `0.05`.
+
 ### Phase 2-4 Summary for Handoff
 
 - Phase 2 is complete: baseline split and benchmark protocol are reproducible.
@@ -399,8 +424,9 @@ those rows are collected (`rerun_phase3b_allowed=false`).
 - Phase 3 cost-model path is complete through v1+ featured data and feature
   extraction, but the plus coverage gate is still open.
 - Phase 4 (live shadow/controlled assist) has not started because rerun is
-  still blocked until 6 mechanism rows are collected and a rerun exceeds phase
-  baselines under that exact split.
+  still blocked until 6 mechanism rows plus the remaining prediction-stage
+  coverage gap are collected, and a rerun exceeds phase baselines under that
+  exact split.
 
 ## Verification Already Run
 

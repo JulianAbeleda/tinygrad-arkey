@@ -1109,6 +1109,62 @@ Gate:
 - Continue with a second targeted real-outcome batch, focused on the remaining
   semantic schedule mechanisms and natural raw-accept opportunities.
 
+## Phase 3G: Coverage Closure Batch
+
+Purpose:
+
+- Close the residual Phase 3F+ coverage gate without changing the family-split
+  holdout.
+- Add only real candidate outcomes; no synthetic labels, duplicated holdout
+  rows, or design-only contract rows.
+- Make the next cost-model rerun decision-grade instead of a lucky fit on thin
+  coverage.
+
+Required rows:
+
+- `packed_word_lane_unroll`: add `3` train rows.
+  - Run packed-load lane-unroll candidates on additional Q4_K tensors/roles.
+  - Require generated-source load-width evidence before timing.
+- `qk_block_dot`: add `2` train rows.
+  - Repeat the block-local semantic-op compile gate on more dominant Q4_K
+    tensors.
+  - Microbench only candidates that pass the compile/static shape checks.
+- `wide_load_only`: add `1` train row.
+  - Continue the three-way load diagnostic controls.
+  - Keep this as branch-bounding evidence unless it passes the normal runtime
+    integration gates.
+
+Prediction-stage coverage:
+
+- Add or normalize a train row at `after_microbench_before_full_decode`, because
+  this is the only remaining unseen holdout categorical value.
+- If the row is a real microbench-pass candidate awaiting full-decode
+  confirmation, record it at that stage. If it is not genuinely at that stage,
+  do not force the stage just to satisfy the audit.
+
+Implementation scope:
+
+- Extend `extra/qk_flywheel_targeted_outcomes.py` or add a narrowly named
+  companion script only if the source artifacts no longer fit the Phase 3F
+  extractor cleanly.
+- Regenerate:
+  `targeted-outcomes-v1/`,
+  `kernel-triage-v1-featured-plus/`,
+  `triage-feature-audit-v1-featured-plus/`,
+  `triage-coverage-plan-v1-plus/`, and
+  `triage-cost-model-v1-plus/`.
+- Extend `test/external/test_qk_flywheel_phase3f.py` with the new expected row
+  counts and coverage checks, or split a Phase 3G test if the batch becomes a
+  separate script.
+
+Exit gate:
+
+- `triage-coverage-plan-v1-plus/summary.json` must report
+  `rerun_phase3b_allowed=true` or have no mechanism/categorical blockers left.
+- The rerun cost-model result must still beat `mechanism_prior` on macro-F1,
+  precision@k, and NDCG with `false_positive_accept_rate <= 0.05`.
+- Only after that should Phase 4 live shadow mode start.
+
 ## Phase 4: Live Shadow Mode
 
 Purpose:

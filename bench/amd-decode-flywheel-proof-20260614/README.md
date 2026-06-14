@@ -143,11 +143,25 @@ run.
 Phase 3F update: `extra/qk_flywheel_targeted_outcomes.py` converts unused
 committed real diagnostics into a small post-Phase-3E train batch without
 moving holdout rows or using design-only contracts as labels. The plus dataset
-has `90` rows: `52` train and the original `38` holdout. Added rows cover
-`vector_load` (`4`), `wide_load_only` (`2`), and `qk_block_dot` (`1`), with
-natural labels `construction_blocked` (`2`) and `diagnostic_only` (`5`).
-Coverage improves but does not clear the gate: unseen holdout categorical
-values fall `15 -> 11`, weak rows fall `43 -> 38`, remaining mechanism rows
-fall `35 -> 28`, and remaining label targets fall `14 -> 7`.
-`triage-coverage-plan-v1-plus/` still keeps `rerun_phase3b_allowed=false`; do
-not rerun XGBoost as a decision point yet.
+has `130` rows: `92` train and the original `38` holdout. Added rows now cover
+`direct_output` (`5`), `row_upcast` (`10`), `reduce_unroll` (`8`),
+`two_dim_local` (`8`), `vector_load` (`6`), `wide_load_only` (`4`),
+`tile_custom` (`1`), `qk_block_dot` (`3`), and
+`packed_word_lane_unroll` (`2`), with natural labels only. Coverage improves
+but does not clear the gate: unseen holdout categorical values fall `15 -> 1`,
+weak rows fall `43 -> 9`, remaining mechanism rows fall `35 -> 6`, and
+remaining label targets fall `14 -> 0`.
+
+The current plus cost-model artifact is strong but still gated:
+`triage-cost-model-v1-plus/` reports XGBoost macro-F1 `0.891`, accuracy
+`0.895`, and false-positive accept rate `0.0` against the same `38` holdout
+rows, while `mechanism_prior` is macro-F1 `0.552`. This is not a Phase 4 entry
+yet because `triage-coverage-plan-v1-plus/` still keeps
+`rerun_phase3b_allowed=false`.
+
+Next scope is Phase 3G coverage closure: add `3` more
+`packed_word_lane_unroll`, `2` more `qk_block_dot`, and `1` more
+`wide_load_only` real train rows, plus genuine coverage for the
+`after_microbench_before_full_decode` prediction stage. Keep the holdout fixed;
+only enter live shadow mode after the coverage gate clears and the rerun still
+beats `mechanism_prior` on macro-F1, precision@k, and NDCG.
