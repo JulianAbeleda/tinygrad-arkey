@@ -1,0 +1,36 @@
+{
+  "blocked_reason": "AMD runtime did not recover after rejection-sampling generation hit a synchronize wait timeout; a bounded DEV=AMD smoke test also timed out.",
+  "gold_control": {
+    "artifact": "8b-last1-ffn-suffix-lora-r4-v6-gold-v4",
+    "cache": {
+      "eval_total_hidden_bytes": 1965211648,
+      "train_total_hidden_bytes": 3829235712
+    },
+    "elapsed_s": 1720.8041326319799,
+    "eval_rows": 204,
+    "final_eval_accuracy_teacher_forced": 0.921875,
+    "final_eval_loss_teacher_forced": 0.4231272103119612,
+    "status": "pass",
+    "train_rows": 408
+  },
+  "kind": "qwen_adapter_phase4_rejection_sft_status",
+  "next_commands_after_amd_reset": [
+    "PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --policy bench/qk-shared-storage-20260612/8b/policy.json --adapter bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5 --input bench/qwen-adapter-20260613/training-data-v4/sft.jsonl --out bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4 --device AMD --storage shared --prompt-format chat --seed 20260614 --k 4 --temperatures 0.0 0.2 0.5 0.8 --max-accepted-per-source 1 --resume",
+    "Inspect bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4/summary.json for category coverage before training the RS adapter."
+  ],
+  "rejection_sampling": {
+    "artifact": "training-data-v4-rs-v5-k4",
+    "attempted": true,
+    "status": "blocked_before_artifact",
+    "temperatures": [
+      0.0,
+      0.2,
+      0.5,
+      0.8
+    ]
+  },
+  "sampler_hardening": {
+    "incremental_samples_jsonl": true,
+    "resume_flag": true
+  }
+}

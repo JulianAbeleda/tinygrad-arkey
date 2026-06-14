@@ -233,3 +233,47 @@ Verdict: promote V5 to current-best adapter for the next objective experiment,
 not to production behavior. The next step should be Phase 4 rejection-sampling
 SFT using the deterministic scorer as the filter. Do not add more adapter
 capacity until that objective loop has been tested.
+
+## Phase 4 Rejection-Sampling SFT Status
+
+Phase 4 started with the required gold-data control:
+
+- artifact: `8b-last1-ffn-suffix-lora-r4-v6-gold-v4/README.md`
+- input: `training-data-v4/sft.jsonl`
+- architecture: same as V5, `last1_ffn` suffix LoRA rank `4`, alpha `8`
+- rows: `408` train, `204` eval
+- status: `pass`
+- teacher-forced eval accuracy: `0.6563 -> 0.9219`
+- elapsed: `1720.8s`
+- cache cost: `3.83GB` train hidden copies plus `1.97GB` eval hidden copies
+
+The rejection-sampling generation step was attempted with V5 as the generator
+and `K=4` temperatures `[0.0, 0.2, 0.5, 0.8]`, but the AMD runtime hit a
+synchronize wait timeout before writing the RS artifact. A bounded `DEV=AMD`
+smoke test also timed out afterward, so further GPU work is blocked until the
+AMD runtime/device path is reset.
+
+The sampler was hardened after the failure:
+
+- `samples.jsonl` is now written incrementally;
+- `--resume` skips completed sample IDs and appends missing attempts;
+- downstream `accepted.jsonl`, `near-miss.jsonl`, `sft.jsonl`, and
+  `summary.json` derive from the persisted samples file.
+
+Next after AMD reset:
+
+```bash
+PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --policy bench/qk-shared-storage-20260612/8b/policy.json \
+  --adapter bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5 \
+  --input bench/qwen-adapter-20260613/training-data-v4/sft.jsonl \
+  --out bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4 \
+  --device AMD --storage shared --prompt-format chat \
+  --seed 20260614 --k 4 --temperatures 0.0 0.2 0.5 0.8 \
+  --max-accepted-per-source 1 --resume
+```
+
+Only train the RS adapter if the resulting `summary.json` has enough accepted
+rows and acceptable category coverage. If accepted rows are sparse or missing
+hard categories entirely, increase `K` or stratify before training.
