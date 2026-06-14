@@ -315,6 +315,17 @@ mechanism rows (`5` `packed_word_lane_unroll`, `4` `qk_block_dot`,
 `1` `vector_load`, `3` `wide_load_only`) remain in the plan, and the rerun is
 still blocked until those rows are collected (`rerun_phase3b_allowed=false`).
 
+### Phase 2-4 Summary for Handoff
+
+- Phase 2 is complete: baseline split and benchmark protocol are reproducible.
+- Phase 3 protocol/adapter stack is complete as an integration/debug path; no
+  decision-grade gain versus the deterministic baseline yet.
+- Phase 3 cost-model path is complete through v1+ featured data and feature
+  extraction, but the plus coverage gate is still open.
+- Phase 4 (live shadow/controlled assist) has not started because rerun is
+  still blocked until 13 mechanism rows are collected and a rerun exceeds phase
+  baselines under that exact split.
+
 ## Verification Already Run
 
 ```sh

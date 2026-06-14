@@ -49,6 +49,39 @@ Minimum proof:
 Kernel speed is still decided only by deterministic gates. The model never
 promotes a kernel by itself.
 
+## Phase 2–4 Scope Snapshot
+
+This is the current actionable map from proof work to "ready for live shadow":
+
+- Phase 2 (`historical triage benchmark`): complete.
+  - Baseline split is in place; `mechanism_prior` is the current strong
+    deterministic baseline.
+  - Baseline gap is explicit and reproducible.
+- Phase 3 (`adapter / protocol`): complete as diagnostic.
+  - 8B adapter path and protocol instrumentation are implemented, but strict
+    and noisy results did not beat the baseline.
+  - The compounding claim is not yet supported by adapter behavior alone.
+- Phase 3B/3C/3D/3E (`cost-model experiments`): complete as data-framing.
+  - A real XGBoost rerun with v1+ featured data is strong, but still blocked by
+    unresolved mechanism/label coverage requirements.
+  - Coverage work is now explicit in the plus-plan: still need
+    `5 packed_word_lane_unroll`, `4 qk_block_dot`, `1 vector_load`, and
+    `3 wide_load_only` train rows.
+- Phase 3F (`targeted real outcomes`): complete as partial pass.
+  - Added rows improved real-feature density and held out/known-family integrity.
+  - No model-quality claim yet; rerun of cost-model remains blocked by coverage.
+- Phase 4 (`live shadow mode`): not started.
+  - Entry condition is still "cost-model rerun unblocked and above baseline" on
+    the current split protocol.
+  - Until then, shadow mode is not a valid claim of flywheel compounding.
+
+Phase sequence from here:
+1. Collect the remaining 13 missing mechanism rows as real, run-eligible
+   outcomes without touching holdout.
+2. Rerun cost-model candidate ordering/ranking from the same protocol and
+   prove gain against `mechanism_prior`, p@k and NDCG.
+3. Only if that passes, open Phase 4.2 shadow trials.
+
 ## Phase 0: Scope And Commit The Hypothesis
 
 Purpose:
