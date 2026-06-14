@@ -618,3 +618,89 @@ sweep unless that objective/eval loop is in place. The plan of record is
 `docs/qwen-json-eval-objective-scope.md`: Inspect-shaped local harness,
 IFEval-style deterministic scoring, JSON parse/schema/value axes, Wilson CIs,
 then rejection-sampling SFT using the same scorer as the filter.
+
+Strict JSON V4 eval/objective status as of 2026-06-14:
+The eval/objective foundation is now partially executed and committed.
+
+- `505b914c4 [test] add strict JSON eval scorer`: deterministic JSON scorer
+  with parse/schema/type/value/no-extra-text axes and Wilson intervals.
+- `5829e8183 [test] add strict JSON V4 eval dataset`: V4 strict JSON dataset,
+  `408` train rows and `204` held-out eval rows.
+- `c71c8370e [test] add V4 strict JSON adapter rebaseline`: 204-prompt free
+  generation rebaseline. Base is `0/204`; V3 output LoRA is `69/204`; V5
+  suffix-cache adapter is `105/204` and is the current best behavior artifact.
+- `12f3e368c [test] add Phase 4 gold control and RS sampler`: adds the
+  resumable rejection-sampling data builder and trains the V6 gold-control
+  suffix adapter. V6 teacher-forced eval accuracy is `0.921875`, but this is
+  not a behavior result until free-generation rollout is run.
+- `c5d54209d [test] record Phase 4 AMD recovery blocker`: records the current
+  blocker. Rejection-sampling generation hit an AMD synchronization timeout.
+  A bounded `DEV=AMD` smoke test then timed out. Sysfs GPU reset returned
+  `Inappropriate ioctl for device`, and `rocm-smi -d 0 --gpureset` itself
+  entered uninterruptible `D` state.
+
+Current live blocker:
+The AMD runtime/device path is wedged. Known stuck processes at handoff time:
+`184652` (`.venv/bin/python -`), `184758` (`python -m unittest ...`), and
+`187563` (`python3 /usr/bin/rocm-smi -d 0 --gpureset`) are in uninterruptible
+`D` state. They cannot be killed from userspace. Do not launch more AMD work in
+this session.
+
+Required recovery before continuing:
+Reboot the host or perform an equivalent full AMD driver/device reset outside
+this Python session. After reboot, first run:
+
+```bash
+cd /home/ubuntu/tinygrad-arkey
+git status --short
+ps -eo pid,ppid,stat,cmd | rg '(.venv/bin/python|rocm-smi|gpureset)' || true
+DEV=AMD PYTHONPATH=. .venv/bin/python - <<'PY'
+from tinygrad import Tensor
+print((Tensor([1,2,3])+1).numpy().tolist())
+PY
+```
+
+Proceed only if the smoke test prints `[2, 3, 4]` quickly and no stale `D`
+state GPU processes remain. If the smoke test hangs, stop and fix the AMD
+runtime first; do not run rollouts or rejection sampling.
+
+Post-reboot Phase 4 resume order:
+
+1. Run the V6 gold-control free-generation rollout on the V4 `204`-prompt eval
+   set. The teacher-forced `0.921875` only proves fit under gold prefixes; this
+   rollout is the actual upper-bound/control gate.
+2. Run rejection sampling in bounded/resumable chunks with V5 as generator. Use
+   the committed sampler and `--resume`; avoid a single monolithic generation
+   run if the AMD path looks unstable.
+
+```bash
+PYTHONPATH=. .venv/bin/python extra/llm_json_rejection_sample.py \
+  --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
+  --policy bench/qk-shared-storage-20260612/8b/policy.json \
+  --adapter bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5 \
+  --input bench/qwen-adapter-20260613/training-data-v4/sft.jsonl \
+  --out bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4 \
+  --device AMD --storage shared --prompt-format chat \
+  --seed 20260614 --k 4 --temperatures 0.0 0.2 0.5 0.8 \
+  --max-accepted-per-source 1 --resume
+```
+
+3. Inspect `bench/qwen-adapter-20260613/training-data-v4-rs-v5-k4/summary.json`.
+   Train an RS adapter only if accepted rows and category coverage are adequate.
+   If coverage is sparse or skewed, increase `K` or stratify by weak category
+   before training.
+4. If the RS data passes coverage, train a V7 suffix adapter with the same
+   architecture as V5/V6 (`last1_ffn`, rank `4`, alpha `8`) and evaluate free
+   generation on the V4 eval set.
+5. Compare V5 current best, V6 gold-control, and V7 RS-SFT using strict JSON
+   generation pass rate and confidence intervals. Do not use teacher-forced
+   accuracy as the promotion signal.
+6. Commit generated artifacts and verdict. Suggested commit prefix:
+   `[test] finish Phase 4 rejection-sampling SFT eval`.
+
+High-level decision after Phase 4:
+If V6 gold-control cannot beat V5 on free generation, the adapter/objective
+setup is the bottleneck and RS-SFT is unlikely to help without changing the
+training objective or decoding constraints. If V6 beats V5 but V7 ties or
+regresses, the RS data/filter is too narrow or noisy. If V7 beats V5 with
+meaningful CI separation, continue the generation-matched objective loop.

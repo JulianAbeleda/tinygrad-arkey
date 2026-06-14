@@ -328,13 +328,24 @@ generated-policy storage mode.
       Held-out generation reaches only `4/12`; the apparent `+1` over V3
       output-LoRA is not meaningful at `N=12` and includes one regression. This
       is a training-path win, not a behavior-gate win.
-- [ ] Next practical step: fix the generation objective/eval before more
-      adapter-capacity sweeps. Enlarge the held-out strict JSON generation set
-      so one prompt cannot swing the verdict, then train on filtered
-      own-generations / rejection-sampling SFT or another generation-matched
-      objective. Any continuation must use generation pass rate as the gate; do
-      not treat teacher-forced token accuracy as sufficient. Plan of record:
-      `docs/qwen-json-eval-objective-scope.md`.
+- [x] Built the strict JSON V4 eval/objective foundation before more
+      adapter-capacity sweeps. The held-out eval set is now `204` prompts, with
+      deterministic JSON axes for parse/schema/type/value/no-extra-text and
+      Wilson intervals. V4 free-generation rebaseline: base `0/204`, V3 output
+      LoRA `69/204`, V5 suffix-cache `105/204`; V5 is the current-best behavior
+      artifact.
+- [x] Started Phase 4 rejection-sampling SFT. The V6 gold-control suffix
+      adapter trained and fits gold data under teacher forcing
+      (`0.921875` eval token accuracy), and the resumable RS sampler is
+      committed. This is not yet a behavior result because the V6
+      free-generation rollout is still blocked.
+- [ ] Resume Phase 4 only after a host reboot or full AMD driver/device reset.
+      First run the `DEV=AMD` smoke test from
+      `structure/Development/session-handoff.md`. Then run V6 gold-control
+      free-generation rollout, bounded/resumable RS generation, RS coverage
+      gate, V7 RS training if coverage passes, and V5/V6/V7 strict JSON
+      generation comparison. Do not treat teacher-forced token accuracy as a
+      promotion signal.
 
 ## Do Not Do Next
 
