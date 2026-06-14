@@ -1,22 +1,7 @@
 {
   "conclusion": "collect_targeted_outcomes_before_cost_model_rerun",
   "kind": "qk_flywheel_phase3f_plus_coverage_plan",
-  "label_batches": [
-    {
-      "current_train_rows": 3,
-      "holdout_rows": 19,
-      "label": "construction_blocked",
-      "needed_train_rows": 2,
-      "recipe": "Natural outcome from failed construction/static candidates; record exact verifier/shape failure."
-    },
-    {
-      "current_train_rows": 0,
-      "holdout_rows": 3,
-      "label": "raw_accept_unconfirmed",
-      "needed_train_rows": 5,
-      "recipe": "Only record when a repeated microbench clears its predeclared bar but no full-decode confirmation exists yet; do not force this label."
-    }
-  ],
+  "label_batches": [],
   "mechanism_batches": [
     {
       "batch": "packed-load lane-unroll microbench",
@@ -37,33 +22,6 @@
       "recipe": "Repeat the block-local semantic op compile gate on more dominant Q4_K tensors, then microbench only compile-shape passes."
     },
     {
-      "batch": "semantic schedule v1",
-      "candidate_stage": "after_static_before_microbench",
-      "current_train_rows": 0,
-      "holdout_rows": 8,
-      "mechanism": "reduce_unroll",
-      "needed_train_rows": 5,
-      "recipe": "Run reduce_unroll schedule candidates on fresh tensors/models as a post-Phase-3E train batch."
-    },
-    {
-      "batch": "semantic schedule v1",
-      "candidate_stage": "after_static_before_microbench",
-      "current_train_rows": 0,
-      "holdout_rows": 10,
-      "mechanism": "row_upcast",
-      "needed_train_rows": 5,
-      "recipe": "Run row_upcast schedule candidates on fresh tensors/models as a post-Phase-3E train batch."
-    },
-    {
-      "batch": "semantic schedule v1",
-      "candidate_stage": "after_static_before_microbench",
-      "current_train_rows": 0,
-      "holdout_rows": 8,
-      "mechanism": "two_dim_local",
-      "needed_train_rows": 5,
-      "recipe": "Run two_dim_local schedule candidates on fresh tensors/models as a post-Phase-3E train batch."
-    },
-    {
       "batch": "vector-load construction probe",
       "candidate_stage": "after_static_before_microbench",
       "current_train_rows": 4,
@@ -82,8 +40,8 @@
       "recipe": "Run wide-load-only/vector-load controls on additional tensors to bound the branch without runtime integration."
     }
   ],
-  "minimum_new_label_rows": 7,
-  "minimum_new_mechanism_rows": 28,
+  "minimum_new_label_rows": 0,
+  "minimum_new_mechanism_rows": 13,
   "notes": [
     "Rows must be real candidate outcomes, not duplicated holdout rows or synthetic labels.",
     "The existing family-split holdout remains valid; new post-Phase-3E outcomes should form a dated train/rolling-shadow batch.",

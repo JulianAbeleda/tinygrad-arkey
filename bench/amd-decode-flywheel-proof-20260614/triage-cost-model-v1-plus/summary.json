@@ -1,0 +1,479 @@
+{
+  "backend_request": "xgboost",
+  "backends": {
+    "ran": [
+      {
+        "backend": "xgboost",
+        "label_classes": [
+          "accept",
+          "reject",
+          "tie",
+          "raw_accept_unconfirmed",
+          "needs_rerun",
+          "construction_blocked",
+          "diagnostic_only"
+        ],
+        "rank_score_model": "ranker",
+        "status": "ok",
+        "xgboost_version": "3.2.0"
+      }
+    ],
+    "requested": "xgboost",
+    "xgboost_available": true
+  },
+  "baselines": {
+    "majority_label": {
+      "accuracy": 0.23684210526315788,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.07659574468085105,
+      "pred_labels": {
+        "reject": 38
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.16975802401520504,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.7777777777777778,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "mechanism_prior": {
+      "accuracy": 0.6052631578947368,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.45441315441315444,
+      "pred_labels": {
+        "construction_blocked": 18,
+        "diagnostic_only": 3,
+        "raw_accept_unconfirmed": 10,
+        "reject": 2,
+        "tie": 5
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.2527389984928038,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.16666666666666666
+      },
+      "reason_accuracy_on_label_match": 1.0,
+      "retry_precision": 0.25,
+      "retry_recall": 0.75,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "random_label": {
+      "accuracy": 0.15789473684210525,
+      "false_positive_accept_rate": 0.05263157894736842,
+      "macro_f1": 0.08412698412698413,
+      "pred_labels": {
+        "accept": 2,
+        "construction_blocked": 11,
+        "diagnostic_only": 3,
+        "needs_rerun": 4,
+        "raw_accept_unconfirmed": 4,
+        "reject": 11,
+        "tie": 3
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.14984459621753532,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.16666666666666666,
+      "retry_precision": 0.0,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "reject_all": {
+      "accuracy": 0.23684210526315788,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.07659574468085105,
+      "pred_labels": {
+        "reject": 38
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.16975802401520504,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0
+      },
+      "reason_accuracy_on_label_match": 0.7777777777777778,
+      "retry_precision": null,
+      "retry_recall": 0.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    },
+    "simple_family_heuristic": {
+      "accuracy": 0.6052631578947368,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.45441315441315444,
+      "pred_labels": {
+        "construction_blocked": 18,
+        "diagnostic_only": 3,
+        "raw_accept_unconfirmed": 10,
+        "reject": 2,
+        "tie": 5
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.2527389984928038,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.16666666666666666
+      },
+      "reason_accuracy_on_label_match": 1.0,
+      "retry_precision": 0.25,
+      "retry_recall": 0.75,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    }
+  },
+  "best_model": "xgboost",
+  "conclusion": "cost_model_shadow_candidate",
+  "examples": 121,
+  "examples_path": "bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1-featured-plus/examples.jsonl",
+  "feature_policy": "pre_result_analytical_context_v0",
+  "features": {
+    "categorical_feature_count": 52,
+    "categorical_features": {
+      "candidate_schema_version": [
+        "candidate_outcome_v1_featured"
+      ],
+      "change_format": [
+        "Q4_K"
+      ],
+      "change_from_family": [
+        "q4_k_packed_u32"
+      ],
+      "change_to_family": [
+        "q4_k_packed_u32"
+      ],
+      "v1_static_format": [
+        "Q4_K",
+        "Q6_K",
+        "unknown"
+      ],
+      "v1_static_mechanism": [
+        "direct_output",
+        "parts_local_policy",
+        "qk_block_dot",
+        "reduce_unroll",
+        "row_grouping",
+        "row_upcast",
+        "shared_storage",
+        "storage_cap",
+        "tile_custom",
+        "two_dim_local",
+        "vector_load",
+        "wide_load_only"
+      ],
+      "v1_static_model": [
+        "Qwen3-14B-Q4_K_M",
+        "Qwen3-32B-Q4_K_M",
+        "Qwen3-8B-Q4_K_M",
+        "unknown"
+      ],
+      "v1_static_prediction_stage": [
+        "after_compile_before_microbench",
+        "after_full_decode",
+        "after_policy_before_full_decode",
+        "after_static_before_microbench"
+      ],
+      "v1_static_role": [
+        "attn_k",
+        "attn_output",
+        "attn_q",
+        "ffn_down",
+        "ffn_gate",
+        "ffn_up",
+        "unknown"
+      ],
+      "v1_static_row_kind": [
+        "baseline",
+        "candidate",
+        "diagnostic"
+      ],
+      "v1_static_schedule_codegen_mode": [
+        "direct_out",
+        "none",
+        "partial"
+      ],
+      "v1_static_schedule_family": [
+        "none",
+        "packed_quant_gemv"
+      ],
+      "v1_static_schedule_name": [
+        "direct_out",
+        "none",
+        "reduce_unroll",
+        "row_upcast",
+        "two_dim_local"
+      ],
+      "v1_static_schedule_reduction_mode": [
+        "direct_out",
+        "none",
+        "split_k_partial"
+      ],
+      "v1_static_schedule_semantic_object": [
+        "none",
+        "packed_quant_gemv"
+      ]
+    },
+    "feature_count": 202,
+    "ignored_holdout_categories": {
+      "v1_static_mechanism": [
+        "packed_word_lane_unroll"
+      ],
+      "v1_static_prediction_stage": [
+        "after_microbench_before_full_decode"
+      ]
+    },
+    "ignored_holdout_category_count": 2,
+    "numeric_feature_count": 150,
+    "numeric_features": [
+      "ana_data_reuse_shared_proxy",
+      "ana_ilp_proxy",
+      "ana_load_imbalance_proxy",
+      "ana_load_width_proxy",
+      "ana_register_reuse_proxy",
+      "ana_schedule_complexity_proxy",
+      "ana_warp_concurrency_proxy",
+      "candidate_frozen_before_outcome",
+      "change_delta_local0",
+      "change_delta_local1",
+      "change_delta_parts",
+      "change_from_opts_count",
+      "change_from_opts_local0_arg",
+      "change_from_opts_local1_arg",
+      "change_from_opts_local_count",
+      "change_from_opts_unroll_arg",
+      "change_from_opts_unroll_count",
+      "change_from_opts_upcast_arg",
+      "change_from_opts_upcast_count",
+      "change_from_parts",
+      "change_to_opts_count",
+      "change_to_opts_local0_arg",
+      "change_to_opts_local1_arg",
+      "change_to_opts_local_count",
+      "change_to_opts_unroll_arg",
+      "change_to_opts_unroll_count",
+      "change_to_opts_upcast_arg",
+      "change_to_opts_upcast_count",
+      "change_to_parts",
+      "context_ab_match",
+      "context_candidate_stable",
+      "context_full_decode_ready",
+      "context_full_decode_supported",
+      "context_meaningful_threshold_pct",
+      "context_opts_count",
+      "context_opts_local0_arg",
+      "context_opts_local1_arg",
+      "context_opts_local_count",
+      "context_opts_unroll_arg",
+      "context_opts_unroll_count",
+      "context_opts_upcast_arg",
+      "context_opts_upcast_count",
+      "context_parts",
+      "context_reference_stable",
+      "context_required_threshold_pct",
+      "context_runs",
+      "context_source_ok",
+      "context_wide_loads",
+      "flag_direct_out",
+      "flag_packed_load",
+      "flag_qk_block_dot",
+      "flag_reduce_unroll",
+      "flag_row_upcast",
+      "flag_split_k",
+      "flag_tile_custom",
+      "flag_two_dim_local",
+      "flag_vector_load",
+      "load_width_inferred_words",
+      "load_width_kernel_words",
+      "load_width_report_words",
+      "model_size_b",
+      "schedule_full_decode_supported",
+      "schedule_group_unroll",
+      "schedule_k_tile_blocks",
+      "schedule_lane_width",
+      "schedule_opts_count",
+      "schedule_opts_local0_arg",
+      "schedule_opts_local1_arg",
+      "schedule_opts_local_count",
+      "schedule_opts_unroll_arg",
+      "schedule_opts_unroll_count",
+      "schedule_opts_upcast_arg",
+      "schedule_opts_upcast_count",
+      "schedule_parts",
+      "schedule_requires_count",
+      "schedule_row_tile",
+      "shape_k",
+      "shape_parts",
+      "shape_rows",
+      "tensor_block",
+      "v1_profile_microbench_summary_available",
+      "v1_profile_policy_path_available",
+      "v1_static_context_local0",
+      "v1_static_context_local1",
+      "v1_static_context_local_axes",
+      "v1_static_context_opt_count",
+      "v1_static_context_parts",
+      "v1_static_context_runs",
+      "v1_static_context_unroll",
+      "v1_static_context_unroll_axes",
+      "v1_static_context_upcast",
+      "v1_static_context_upcast_axes",
+      "v1_static_full_decode_ready",
+      "v1_static_full_decode_supported",
+      "v1_static_has_direct_out",
+      "v1_static_has_packed_load",
+      "v1_static_has_qk_block_dot",
+      "v1_static_has_reduce_unroll",
+      "v1_static_has_row_upcast",
+      "v1_static_has_tile_custom",
+      "v1_static_has_two_dim_local",
+      "v1_static_has_vector_load",
+      "v1_static_load_width_inferred_words",
+      "v1_static_load_width_kernel_words",
+      "v1_static_load_width_report_words",
+      "v1_static_schedule_group_unroll",
+      "v1_static_schedule_k_tile_blocks",
+      "v1_static_schedule_lane_width",
+      "v1_static_schedule_local0",
+      "v1_static_schedule_local1",
+      "v1_static_schedule_local_axes",
+      "v1_static_schedule_opt_count",
+      "v1_static_schedule_parts",
+      "v1_static_schedule_requires_count",
+      "v1_static_schedule_row_tile",
+      "v1_static_schedule_unroll",
+      "v1_static_schedule_unroll_axes",
+      "v1_static_schedule_upcast",
+      "v1_static_schedule_upcast_axes",
+      "v1_static_shape_k",
+      "v1_static_shape_parts",
+      "v1_static_shape_rows",
+      "v1_static_source_ok",
+      "v1_static_tensor_block",
+      "v1_static_wide_loads",
+      "v1_uop_estimated_arithmetic_intensity_proxy",
+      "v1_uop_estimated_global_load_words",
+      "v1_uop_estimated_global_store_words",
+      "v1_uop_estimated_local_axes",
+      "v1_uop_estimated_loop_axes",
+      "v1_uop_estimated_memory_pressure_proxy",
+      "v1_uop_estimated_scalar_loads",
+      "v1_uop_estimated_vector_load_width_words",
+      "v1_uop_estimated_vector_loads",
+      "v1_uop_load_width_report_available",
+      "v1_uop_real_feature_source_count",
+      "v1_uop_source_contains_packed_dot",
+      "v1_uop_source_has_packed_load_kernel",
+      "v1_uop_source_has_vector_load_shape",
+      "v1_uop_source_has_vector_type",
+      "v1_uop_source_kernel_count",
+      "v1_uop_source_load_width_words",
+      "v1_uop_source_pattern_amd_vdot4",
+      "v1_uop_source_pattern_uchar_or_u8",
+      "v1_uop_source_pattern_uint_or_u32",
+      "v1_uop_source_pattern_ulong_or_u64",
+      "v1_uop_source_pattern_ushort_or_u16",
+      "v1_uop_source_pattern_vector_u32x2",
+      "v1_uop_source_pattern_vector_u32x4",
+      "v1_uop_uop_available"
+    ]
+  },
+  "holdout_rows": 38,
+  "kind": "qk_flywheel_cost_model_eval",
+  "leakage_audit": {
+    "excluded_feature_sources": [
+      "id",
+      "candidate_id",
+      "label",
+      "reason",
+      "retry",
+      "evidence",
+      "source_files",
+      "split",
+      "family_order",
+      "status",
+      "gain",
+      "gain_pct",
+      "candidate_gbs",
+      "current_gbs",
+      "decision",
+      "correctness_ok",
+      "ab_match_result"
+    ],
+    "feature_names_with_forbidden_tokens": [],
+    "raw_ids_used_as_features": false,
+    "target_or_result_fields_used": false
+  },
+  "models": {
+    "xgboost": {
+      "accuracy": 0.8157894736842105,
+      "false_positive_accept_rate": 0.0,
+      "macro_f1": 0.8208216619981326,
+      "pred_labels": {
+        "construction_blocked": 17,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 4,
+        "reject": 5,
+        "tie": 11
+      },
+      "ranking": {
+        "groups": 4,
+        "ndcg": 0.5,
+        "precision_at_1": 0.5,
+        "precision_at_3": 0.25
+      },
+      "reason_accuracy_on_label_match": 0.9354838709677419,
+      "retry_precision": 0.8,
+      "retry_recall": 1.0,
+      "rows": 38,
+      "target_labels": {
+        "construction_blocked": 19,
+        "diagnostic_only": 1,
+        "raw_accept_unconfirmed": 3,
+        "reject": 9,
+        "tie": 6
+      }
+    }
+  },
+  "seed": 20260614,
+  "train_rows": 83
+}

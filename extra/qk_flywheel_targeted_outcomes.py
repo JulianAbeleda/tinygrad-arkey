@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, copy, json, pathlib
+import argparse, copy, json, pathlib, re
 from collections import Counter
 from typing import Any
 
@@ -83,6 +83,41 @@ def _row(*, row_id:str, row_kind:str, model:str, tensor:str, role:str, fmt:str,
     "source_files": source_files,
     "split": "train",
   }
+
+
+def _canonical_model(value:str) -> str:
+  text = str(value or "").lower().replace("qwen3-", "").replace("qwen-", "")
+  if "14b" in text:
+    return "Qwen3-14B-Q4_K_M"
+  if "8b" in text:
+    return "Qwen3-8B-Q4_K_M"
+  if text in ("14", "14b", "14-b"):
+    return "Qwen3-14B-Q4_K_M"
+  if text in ("8", "8b", "8-b"):
+    return "Qwen3-8B-Q4_K_M"
+  return str(value)
+
+
+def _mechanism_from_schedule(schedule_name:str, row_id:str) -> str:
+  text = f"{schedule_name} {row_id}".lower().replace("-", "_")
+  if "row_upcast" in text:
+    return "row_upcast"
+  if "reduce_unroll" in text:
+    return "reduce_unroll"
+  if "two_dim_local" in text:
+    return "two_dim_local"
+  if "direct_out" in text:
+    return "direct_output"
+  return "unknown"
+
+
+def _tensor_from_row_id(value:str) -> str:
+  text = re.sub(r"[.]", "-", str(value or "").lower())
+  match = re.search(r"\bblk[-_](\d+)[-_]([a-z0-9_-]+?)-weight\b", text)
+  if not match:
+    return "unknown"
+  block, role = match.groups()
+  return f"blk.{block}.{role.replace('-', '_')}.weight"
 
 def _mode(rows:list[dict[str, Any]], mode:str) -> dict[str, Any]:
   for row in rows:
@@ -260,12 +295,123 @@ def _packed_tile_closeout_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
       "tile_larger_body": summary.get("tile_larger_body"),
       "next_allowed_path": summary.get("next_allowed_path"),
     },
-    source_files=[diag_path, load_width],
+      source_files=[diag_path, load_width],
   )]
+
+
+def _semantic_schedule_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  base = repo / "bench/qk-ansor-transition-20260612/semantic-schedules"
+  rows = []
+  for model_dir in ("8b", "14b"):
+    microbench = base / model_dir / "microbench.json"
+    if not microbench.exists():
+      continue
+    source = _portable(repo, microbench)
+    data = _read_json(microbench)
+    model = _canonical_model(model_dir)
+    for item in data.get("rows", []):
+      status = item.get("status")
+      gain = item.get("gain")
+      label, reason, retry = v0._label_reason_retry(status, gain=gain)
+      rows.append(_row(
+        row_id=f"{TARGETED_FAMILY}:semantic_schedule_microbench:{model_dir}:{item['id']}",
+        row_kind="candidate",
+        model=model,
+        tensor=str(item.get("tensor") or "unknown"),
+        role=str(item.get("role") or "unknown"),
+        fmt=str(item.get("format") or "unknown"),
+        mechanism=_mechanism_from_schedule((item.get("schedule") or {}).get("name"), item.get("id", "")),
+        prediction_stage="after_static_before_microbench",
+        pre_result_context={
+          "mode": item.get("id"),
+          "candidate_id": item.get("id"),
+          "schedule": item.get("schedule", {}),
+          "policy": item.get("policy"),
+          "full_decode_supported": item.get("full_decode_supported"),
+          "microbench_source": source,
+        },
+        label=label,
+        reason=reason,
+        retry=retry,
+        evidence={
+          "status": status,
+          "gain": gain,
+          "reasons": item.get("reasons", []),
+          "candidate_status": (item.get("candidate") or {}).get("status"),
+        },
+        source_files=[source],
+      ))
+  return rows
+
+
+def _semantic_schedule_raw_accept_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
+  verdict_path = _source(repo, "bench/qk-ansor-transition-20260612/semantic-schedules/verdict.json")
+  verdict = _read_json(repo / verdict_path)
+  # Prefer per-model microbench rows for richer context when available.
+  microbench_maps: dict[str, dict[str, Any]] = {}
+  base = repo / "bench/qk-ansor-transition-20260612/semantic-schedules"
+  for model_dir in ("8b", "14b"):
+    path = base / model_dir / "microbench.json"
+    if not path.exists():
+      continue
+    data = _read_json(path)
+    by_id = {}
+    for row in data.get("rows", []):
+      rid = str(row.get("id") or "")
+      if rid:
+        by_id[rid] = row
+    microbench_maps[model_dir] = by_id
+
+  rows = []
+  for model_row in verdict.get("models", []):
+    model_name = str(model_row.get("model", "")).lower()
+    model_dir = "14b" if "14" in model_name else "8b"
+    model = _canonical_model(model_name)
+    model_source = _portable(repo, base / model_dir / "microbench.json")
+    for item in model_row.get("microbench_accepts", []) or []:
+      candidate_id = str(item.get("id") or "")
+      source_row = microbench_maps.get(model_dir, {}).get(candidate_id, {})
+      schedule = source_row.get("schedule", {})
+      status = item.get("status")
+      gain = item.get("gain")
+      label, reason, retry = v0._label_reason_retry(status, gain=gain)
+      rows.append(_row(
+        row_id=f"{TARGETED_FAMILY}:semantic_schedule_raw_accept:{model_dir}:{candidate_id}",
+        row_kind="candidate",
+        model=model,
+        tensor=str((source_row.get("tensor") or item.get("tensor") or _tensor_from_row_id(candidate_id))),
+        role=str(item.get("role") or source_row.get("role") or "unknown"),
+        fmt=str(item.get("format") or source_row.get("format") or "unknown"),
+        mechanism=_mechanism_from_schedule((schedule or {}).get("name"), candidate_id),
+        prediction_stage="after_static_before_microbench",
+        pre_result_context={
+          "candidate_id": candidate_id,
+          "schedule": schedule,
+          "verdict_source": verdict_path,
+          "microbench_source": model_source,
+          "full_decode_supported": item.get("full_decode_supported", source_row.get("full_decode_supported")),
+        },
+        label=label,
+        reason=reason,
+        retry=retry,
+        evidence={
+          "status": status,
+          "gain": gain,
+          "full_accept": True,
+          "source_model": model_name,
+          "candidate_id": candidate_id,
+        },
+        source_files=[verdict_path, model_source],
+      ))
+  return rows
 
 def build_targeted_rows(repo:pathlib.Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
   repo = repo.resolve()
-  raw_rows = _memory_access_rows(repo) + _packed_tile_consumption_rows(repo) + _packed_tile_closeout_rows(repo)
+  raw_rows = _memory_access_rows(repo)
+  raw_rows += _packed_tile_consumption_rows(repo)
+  raw_rows += _packed_tile_closeout_rows(repo)
+  raw_rows += _semantic_schedule_microbench_rows(repo)
+  raw_rows += _semantic_schedule_raw_accept_rows(repo)
   excluded = []
   semantic_contract = repo / "bench/qk-packed-semantic-op-20260613/semantic-op-contract.json"
   if semantic_contract.exists():
