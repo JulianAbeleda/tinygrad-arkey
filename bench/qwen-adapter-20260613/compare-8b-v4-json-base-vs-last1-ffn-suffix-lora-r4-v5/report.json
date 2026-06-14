@@ -1,0 +1,3753 @@
+{
+  "artifacts": [
+    {
+      "dataset": "bench/qwen-adapter-20260613/training-data-v4/eval-prompts.jsonl",
+      "elapsed_s": 188.304251,
+      "generated": 4896,
+      "label": "8b-v4-json-base-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-v4-json-base-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 204,
+      "quality": {
+        "ci95": {
+          "confidence": 0.95,
+          "high": 0.018482639808683074,
+          "low": 0.0
+        },
+        "json_axes": {
+          "axes": {
+            "no_extra_text": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.018482639808683074,
+                "low": 0.0
+              },
+              "pass_rate": 0.0,
+              "passed": 0,
+              "scored": 204
+            },
+            "parse_valid": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.018482639808683074,
+                "low": 0.0
+              },
+              "pass_rate": 0.0,
+              "passed": 0,
+              "scored": 204
+            },
+            "schema_ok": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.018482639808683074,
+                "low": 0.0
+              },
+              "pass_rate": 0.0,
+              "passed": 0,
+              "scored": 204
+            },
+            "strict_pass": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.018482639808683074,
+                "low": 0.0
+              },
+              "pass_rate": 0.0,
+              "passed": 0,
+              "scored": 204
+            },
+            "type_ok": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.018482639808683074,
+                "low": 0.0
+              },
+              "pass_rate": 0.0,
+              "passed": 0,
+              "scored": 204
+            },
+            "value_correct": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.018482639808683074,
+                "low": 0.0
+              },
+              "pass_rate": 0.0,
+              "passed": 0,
+              "scored": 204
+            }
+          },
+          "kind": "json_axis_summary",
+          "scored": 204
+        },
+        "pass_rate": 0.0,
+        "passed": 0,
+        "scored": 204,
+        "status": "fail"
+      },
+      "storage": "shared",
+      "tok_s": 26.000475156559265
+    },
+    {
+      "adapter": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v4/eval-prompts.jsonl",
+      "elapsed_s": 153.984862,
+      "generated": 1952,
+      "label": "8b-last1-ffn-suffix-lora-r4-v5-v4-rollout",
+      "mode": "generated",
+      "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "path": "bench/qwen-adapter-20260613/8b-last1-ffn-suffix-lora-r4-v5-v4-rollout",
+      "policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+      "prompt_format": "chat",
+      "prompts": 204,
+      "quality": {
+        "ci95": {
+          "confidence": 0.95,
+          "high": 0.5823806513568434,
+          "low": 0.44648750629584233
+        },
+        "json_axes": {
+          "axes": {
+            "no_extra_text": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.9473214692739077,
+                "low": 0.8706096642188562
+              },
+              "pass_rate": 0.9166666666666666,
+              "passed": 187,
+              "scored": 204
+            },
+            "parse_valid": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.9586832885050384,
+                "low": 0.8881160026404115
+              },
+              "pass_rate": 0.9313725490196079,
+              "passed": 190,
+              "scored": 204
+            },
+            "schema_ok": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.9586832885050384,
+                "low": 0.8881160026404115
+              },
+              "pass_rate": 0.9313725490196079,
+              "passed": 190,
+              "scored": 204
+            },
+            "strict_pass": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.5823806513568434,
+                "low": 0.44648750629584233
+              },
+              "pass_rate": 0.5147058823529411,
+              "passed": 105,
+              "scored": 204
+            },
+            "type_ok": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.9586832885050384,
+                "low": 0.8881160026404115
+              },
+              "pass_rate": 0.9313725490196079,
+              "passed": 190,
+              "scored": 204
+            },
+            "value_correct": {
+              "ci95": {
+                "confidence": 0.95,
+                "high": 0.591952026751518,
+                "low": 0.4561615693362916
+              },
+              "pass_rate": 0.5245098039215687,
+              "passed": 107,
+              "scored": 204
+            }
+          },
+          "kind": "json_axis_summary",
+          "scored": 204
+        },
+        "pass_rate": 0.5147058823529411,
+        "passed": 105,
+        "scored": 204,
+        "status": "fail"
+      },
+      "storage": "shared",
+      "tok_s": 12.676570765767872
+    }
+  ],
+  "baseline": "8b-v4-json-base-rollout",
+  "comparisons": [
+    {
+      "baseline": "8b-v4-json-base-rollout",
+      "candidate": "8b-last1-ffn-suffix-lora-r4-v5-v4-rollout",
+      "dataset": "bench/qwen-adapter-20260613/training-data-v4/eval-prompts.jsonl",
+      "json_axis_delta": {
+        "no_extra_text": {
+          "baseline_ci95": {
+            "confidence": 0.95,
+            "high": 0.018482639808683074,
+            "low": 0.0
+          },
+          "baseline_pass_rate": 0.0,
+          "baseline_passed": 0,
+          "candidate_ci95": {
+            "confidence": 0.95,
+            "high": 0.9473214692739077,
+            "low": 0.8706096642188562
+          },
+          "candidate_pass_rate": 0.9166666666666666,
+          "candidate_passed": 187,
+          "passed_delta": 187,
+          "scored": 204
+        },
+        "parse_valid": {
+          "baseline_ci95": {
+            "confidence": 0.95,
+            "high": 0.018482639808683074,
+            "low": 0.0
+          },
+          "baseline_pass_rate": 0.0,
+          "baseline_passed": 0,
+          "candidate_ci95": {
+            "confidence": 0.95,
+            "high": 0.9586832885050384,
+            "low": 0.8881160026404115
+          },
+          "candidate_pass_rate": 0.9313725490196079,
+          "candidate_passed": 190,
+          "passed_delta": 190,
+          "scored": 204
+        },
+        "schema_ok": {
+          "baseline_ci95": {
+            "confidence": 0.95,
+            "high": 0.018482639808683074,
+            "low": 0.0
+          },
+          "baseline_pass_rate": 0.0,
+          "baseline_passed": 0,
+          "candidate_ci95": {
+            "confidence": 0.95,
+            "high": 0.9586832885050384,
+            "low": 0.8881160026404115
+          },
+          "candidate_pass_rate": 0.9313725490196079,
+          "candidate_passed": 190,
+          "passed_delta": 190,
+          "scored": 204
+        },
+        "strict_pass": {
+          "baseline_ci95": {
+            "confidence": 0.95,
+            "high": 0.018482639808683074,
+            "low": 0.0
+          },
+          "baseline_pass_rate": 0.0,
+          "baseline_passed": 0,
+          "candidate_ci95": {
+            "confidence": 0.95,
+            "high": 0.5823806513568434,
+            "low": 0.44648750629584233
+          },
+          "candidate_pass_rate": 0.5147058823529411,
+          "candidate_passed": 105,
+          "passed_delta": 105,
+          "scored": 204
+        },
+        "type_ok": {
+          "baseline_ci95": {
+            "confidence": 0.95,
+            "high": 0.018482639808683074,
+            "low": 0.0
+          },
+          "baseline_pass_rate": 0.0,
+          "baseline_passed": 0,
+          "candidate_ci95": {
+            "confidence": 0.95,
+            "high": 0.9586832885050384,
+            "low": 0.8881160026404115
+          },
+          "candidate_pass_rate": 0.9313725490196079,
+          "candidate_passed": 190,
+          "passed_delta": 190,
+          "scored": 204
+        },
+        "value_correct": {
+          "baseline_ci95": {
+            "confidence": 0.95,
+            "high": 0.018482639808683074,
+            "low": 0.0
+          },
+          "baseline_pass_rate": 0.0,
+          "baseline_passed": 0,
+          "candidate_ci95": {
+            "confidence": 0.95,
+            "high": 0.591952026751518,
+            "low": 0.4561615693362916
+          },
+          "candidate_pass_rate": 0.5245098039215687,
+          "candidate_passed": 107,
+          "passed_delta": 107,
+          "scored": 204
+        }
+      },
+      "outputs": {
+        "changed": [
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7011 and 3510.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10521}",
+            "id": "json_v4_eval_arithmetic_001",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (22 multiplied by 5)",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 5110}",
+            "id": "json_v4_eval_arithmetic_002",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of 7033 minus 3",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3509}",
+            "id": "json_v4_eval_arithmetic_003",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7044 and 3531.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10575}",
+            "id": "json_v4_eval_arithmetic_004",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (25 multiplied by 8)",
+            "candidate_generated": 20,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5200}\n</think>\n\n{\"answer\": 5200}",
+            "id": "json_v4_eval_arithmetic_005",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the result of 7066 minus 3545.",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3521}",
+            "id": "json_v4_eval_arithmetic_006",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7077 and 3552.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10629}",
+            "id": "json_v4_eval_arithmetic_007",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (28 multiplied by 11",
+            "candidate_generated": 9,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5288}",
+            "id": "json_v4_eval_arithmetic_008",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of 7099 minus 3",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3533}",
+            "id": "json_v4_eval_arithmetic_009",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7110 and 3573.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10683}",
+            "id": "json_v4_eval_arithmetic_010",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (31 multiplied by 5)",
+            "candidate_generated": 20,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5155}\n</think>\n\n{\"answer\": 5155}",
+            "id": "json_v4_eval_arithmetic_011",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of 7132 minus 3",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3545}",
+            "id": "json_v4_eval_arithmetic_012",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7143 and 3594.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10737}",
+            "id": "json_v4_eval_arithmetic_013",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (34 multiplied by 8)",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 5272}",
+            "id": "json_v4_eval_arithmetic_014",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of 7165 minus 3",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3557}",
+            "id": "json_v4_eval_arithmetic_015",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7176 and 3615.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10791}",
+            "id": "json_v4_eval_arithmetic_016",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (37 multiplied by 11",
+            "candidate_generated": 9,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5377}",
+            "id": "json_v4_eval_arithmetic_017",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the result of 7198 minus 3629.",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3569}",
+            "id": "json_v4_eval_arithmetic_018",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7209 and 3636.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10845}",
+            "id": "json_v4_eval_arithmetic_019",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (40 multiplied by 5)",
+            "candidate_generated": 20,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5100}\n</think>\n\n{\"answer\": 5100}",
+            "id": "json_v4_eval_arithmetic_020",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the result of 7231 minus 3650.",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3581}",
+            "id": "json_v4_eval_arithmetic_021",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7242 and 3657.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10899}",
+            "id": "json_v4_eval_arithmetic_022",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (43 multiplied by 8)",
+            "candidate_generated": 9,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5264}",
+            "id": "json_v4_eval_arithmetic_023",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of 7264 minus 3",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3593}",
+            "id": "json_v4_eval_arithmetic_024",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7275 and 3678.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 10953}",
+            "id": "json_v4_eval_arithmetic_025",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (46 multiplied by 11",
+            "candidate_generated": 9,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5466}",
+            "id": "json_v4_eval_arithmetic_026",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of 7297 minus 3",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3605}",
+            "id": "json_v4_eval_arithmetic_027",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7308 and 3699.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 11007}",
+            "id": "json_v4_eval_arithmetic_028",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (49 multiplied by 5)",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 5245}",
+            "id": "json_v4_eval_arithmetic_029",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of 7330 minus 3",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3617}",
+            "id": "json_v4_eval_arithmetic_030",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7341 and 3720.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 11061}",
+            "id": "json_v4_eval_arithmetic_031",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking for the result of (52 multiplied by 8)",
+            "candidate_generated": 9,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\": 5136}",
+            "id": "json_v4_eval_arithmetic_032",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the result of 7363 minus 3734.",
+            "candidate_generated": 9,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 3629}",
+            "id": "json_v4_eval_arithmetic_033",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the sum of 7374 and 3741.",
+            "candidate_generated": 10,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\": 11115}",
+            "id": "json_v4_eval_arithmetic_034",
+            "tags": [
+              "json_answer",
+              "arithmetic",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9001 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_001\"}",
+            "id": "json_v4_eval_categorization_001",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9002 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_002\"}",
+            "id": "json_v4_eval_categorization_002",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9003 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_003\"}",
+            "id": "json_v4_eval_categorization_003",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9004 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_004\"}",
+            "id": "json_v4_eval_categorization_004",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9005 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_005\"}",
+            "id": "json_v4_eval_categorization_005",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9006 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_006\"}",
+            "id": "json_v4_eval_categorization_006",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9007 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_007\"}",
+            "id": "json_v4_eval_categorization_007",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9008 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_008\"}",
+            "id": "json_v4_eval_categorization_008",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9009 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_009\"}",
+            "id": "json_v4_eval_categorization_009",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9010 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_010\"}",
+            "id": "json_v4_eval_categorization_010",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9011 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_011\"}",
+            "id": "json_v4_eval_categorization_011",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9012 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_012\"}",
+            "id": "json_v4_eval_categorization_012",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9013 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_013\"}",
+            "id": "json_v4_eval_categorization_013",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9014 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_014\"}",
+            "id": "json_v4_eval_categorization_014",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9015 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_015\"}",
+            "id": "json_v4_eval_categorization_015",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9016 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_016\"}",
+            "id": "json_v4_eval_categorization_016",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9017 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_017\"}",
+            "id": "json_v4_eval_categorization_017",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9018 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_018\"}",
+            "id": "json_v4_eval_categorization_018",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9019 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_019\"}",
+            "id": "json_v4_eval_categorization_019",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9020 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_020\"}",
+            "id": "json_v4_eval_categorization_020",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9021 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_021\"}",
+            "id": "json_v4_eval_categorization_021",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9022 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_022\"}",
+            "id": "json_v4_eval_categorization_022",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9023 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_023\"}",
+            "id": "json_v4_eval_categorization_023",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9024 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_024\"}",
+            "id": "json_v4_eval_categorization_024",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9025 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_025\"}",
+            "id": "json_v4_eval_categorization_025",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9026 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_026\"}",
+            "id": "json_v4_eval_categorization_026",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9027 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_027\"}",
+            "id": "json_v4_eval_categorization_027",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9028 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_028\"}",
+            "id": "json_v4_eval_categorization_028",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9029 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_029\"}",
+            "id": "json_v4_eval_categorization_029",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify 9030 as even or odd. Let me think.",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_030\"}",
+            "id": "json_v4_eval_categorization_030",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9031 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_odd_bucket_031\"}",
+            "id": "json_v4_eval_categorization_031",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9032 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_032\"}",
+            "id": "json_v4_eval_categorization_032",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9033 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_033\"}",
+            "id": "json_v4_eval_categorization_033",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to classify the number 9034 as even or odd. Let me",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_even_bucket_034\"}",
+            "id": "json_v4_eval_categorization_034",
+            "tags": [
+              "json_answer",
+              "categorization",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_001",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_002",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_003",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_004",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_005",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_006",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_json_handler_007\"}",
+            "id": "json_v4_eval_code_007",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_008",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_json_handler_009\"}",
+            "id": "json_v4_eval_code_009",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_010",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_011",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_012",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_013",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_014",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_json_handler_015\"}",
+            "id": "json_v4_eval_code_015",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_016",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_017",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_018",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_019",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_020",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_021",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_022",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_023",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_024",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_json_handler_025\"}",
+            "id": "json_v4_eval_code_025",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_026",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_027",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_028",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_029",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_json_handler_030\"}",
+            "id": "json_v4_eval_code_030",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_json_handler_031\"}",
+            "id": "json_v4_eval_code_031",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_032",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_json_handler\"}",
+            "id": "json_v4_eval_code_033",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about a Python-style identifier that's shown between backticks: `eval_json_handler",
+            "candidate_generated": 11,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"eval_json_handler_034\"}",
+            "id": "json_v4_eval_code_034",
+            "tags": [
+              "json_answer",
+              "code",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_001",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_002",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about the glossary key that names the concept of",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_003",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the glossary key in tinygrad GPU that refers to",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_004",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the tinygrad GPU glossary. They mentioned that `",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_005",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about a glossary key in the tinygrad GPU documentation.",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_006",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the glossary key in tinygrad GPU that refers to",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_007",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about the glossary key that names the concept of",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_008",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about the tinygrad GPU glossary. They mentioned that `eval_qk_beam",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_009",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_qk\"}",
+            "id": "json_v4_eval_compiler_010",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_011",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_012",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_013",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_014",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about the glossary key that names the concept of",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_015",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the glossary key in tinygrad GPU that refers to",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_016",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the tinygrad GPU glossary. They mentioned that `",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_017",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about a glossary key in the tinygrad GPU documentation.",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_018",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the glossary key in tinygrad GPU that refers to",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_019",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about the glossary key that names the concept of",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_020",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about the tinygrad GPU glossary. They mentioned that `eval_qk_beam",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_021",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_qk\"}",
+            "id": "json_v4_eval_compiler_022",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_023",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_024",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_025",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_026",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about the glossary key that names the concept of",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_027",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the glossary key in tinygrad GPU that refers to",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_028",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the tinygrad GPU glossary. They mentioned that `",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_compiler_029",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about a glossary key in the tinygrad GPU documentation.",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_030",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user is asking about the glossary key in tinygrad GPU that refers to",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_031",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about the glossary key that names the concept of",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_032",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking about the tinygrad GPU glossary. They mentioned that `eval_qk_beam",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval\"}",
+            "id": "json_v4_eval_compiler_033",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's tackle this question. The user is asking about a specific term in the tinygrad GPU gloss",
+            "candidate_generated": 7,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eval_qk\"}",
+            "id": "json_v4_eval_compiler_034",
+            "tags": [
+              "json_answer",
+              "compiler",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Astatine. Let me recall the periodic table.",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"At\"}",
+            "id": "json_v4_eval_fact_001",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol for Radon. Let me think. Radon is a",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Rn\"}",
+            "id": "json_v4_eval_fact_002",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Francium. Let me recall the periodic table. Franc",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Fr\"}",
+            "id": "json_v4_eval_fact_003",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol for Radium. Let me think. Radium is a",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Ra\"}",
+            "id": "json_v4_eval_fact_004",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Actinium. Let me recall the periodic table. Act",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Ac\"}",
+            "id": "json_v4_eval_fact_005",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Thorium. Let me recall the periodic table. Thor",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Th\"}",
+            "id": "json_v4_eval_fact_006",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Protactinium. Let me start by recalling what I",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Pa\"}",
+            "id": "json_v4_eval_fact_007",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Uranium. Let me recall the periodic table. Uran",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"U\"}",
+            "id": "json_v4_eval_fact_008",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Neptunium. Let me recall the periodic table",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Np\"}",
+            "id": "json_v4_eval_fact_009",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol for Plutonium. Let me think. Plutonium",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Pu\"}",
+            "id": "json_v4_eval_fact_010",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol for Americium. Let me think. Americium is a",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Am\"}",
+            "id": "json_v4_eval_fact_011",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol for Curium. Let me think. Curium is a",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Cm\"}",
+            "id": "json_v4_eval_fact_012",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol for Berkelium. Let me think. First, I",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Bk\"}",
+            "id": "json_v4_eval_fact_013",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Californium. Let me think. Californium is a",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Cf\"}",
+            "id": "json_v4_eval_fact_014",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Einsteinium. Let me think. First, I need",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Es\"}",
+            "id": "json_v4_eval_fact_015",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Fermium. Let me think. Fermium is a",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Fm\"}",
+            "id": "json_v4_eval_fact_016",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Mendelevium. Let me think. First,",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Md\"}",
+            "id": "json_v4_eval_fact_017",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Nobelium. Let me think. First, I need",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"No\"}",
+            "id": "json_v4_eval_fact_018",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Lawrencium. Let me think. First, I",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Lr\"}",
+            "id": "json_v4_eval_fact_019",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Rutherfordium. Let me recall what I know about",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Rf\"}",
+            "id": "json_v4_eval_fact_020",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Dubnium. Let me think. First, I",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Db\"}",
+            "id": "json_v4_eval_fact_021",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Seaborgium. Let me think. First,",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Sg\"}",
+            "id": "json_v4_eval_fact_022",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Bohrium. Let me recall the periodic table. Boh",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Bh\"}",
+            "id": "json_v4_eval_fact_023",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Hassium. Let me think. First, I need",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Hs\"}",
+            "id": "json_v4_eval_fact_024",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Meitnerium. Let me start by recalling what",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Mt\"}",
+            "id": "json_v4_eval_fact_025",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Darmstadtium. Let me think. First,",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Ds\"}",
+            "id": "json_v4_eval_fact_026",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Roentgenium. Let me start by recalling what",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Rg\"}",
+            "id": "json_v4_eval_fact_027",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Copernicium. Let me think. First,",
+            "candidate_generated": 6,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Cn\"}",
+            "id": "json_v4_eval_fact_028",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Nihonium. Let me start by recalling what I",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Nh\"}",
+            "id": "json_v4_eval_fact_029",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Flerovium. Let me think. First,",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Fl\"}",
+            "id": "json_v4_eval_fact_030",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Moscovium. Let me think. First, I",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Mc\"}",
+            "id": "json_v4_eval_fact_031",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Livermorium. Let me think. First, I",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Lv\"}",
+            "id": "json_v4_eval_fact_032",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Tennessine. Let me start by recalling what I",
+            "candidate_generated": 5,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"Ts\"}",
+            "id": "json_v4_eval_fact_033",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user is asking for the chemical symbol of Oganesson. Let me think. First, I",
+            "candidate_generated": 5,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"O\"}",
+            "id": "json_v4_eval_fact_034",
+            "tags": [
+              "json_answer",
+              "fact",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk001ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK001AB\"}",
+            "id": "json_v4_eval_string_001",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_002",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk003ab\". Let me think",
+            "candidate_generated": 12,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"kcb3003qale\"}",
+            "id": "json_v4_eval_string_003",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk004ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK004AB\"}",
+            "id": "json_v4_eval_string_004",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_005",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk006ab\". Let me think",
+            "candidate_generated": 12,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"kcb600qkale\"}",
+            "id": "json_v4_eval_string_006",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk007ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK007AB\"}",
+            "id": "json_v4_eval_string_007",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_008",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk009ab\". Let me think",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"k009abqle\"}",
+            "id": "json_v4_eval_string_009",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk010ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK010AB\"}",
+            "id": "json_v4_eval_string_010",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_011",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk012ab\". Let me think",
+            "candidate_generated": 12,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"kcb210qkva\"}",
+            "id": "json_v4_eval_string_012",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to return the uppercase form of the string 'evalqk013ab",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK013AB\"}",
+            "id": "json_v4_eval_string_013",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_014",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk015ab\". Let me think",
+            "candidate_generated": 12,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"kcb510kqale\"}",
+            "id": "json_v4_eval_string_015",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk016ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK016AB\"}",
+            "id": "json_v4_eval_string_016",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_017",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk018ab\". Let me think",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"k810qkale\"}",
+            "id": "json_v4_eval_string_018",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk019ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK019AB\"}",
+            "id": "json_v4_eval_string_019",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_020",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk021ab\". Let me think",
+            "candidate_generated": 12,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"kcb210kqale\"}",
+            "id": "json_v4_eval_string_021",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk022ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK022AB\"}",
+            "id": "json_v4_eval_string_022",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_023",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk024ab\". Let me think",
+            "candidate_generated": 12,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"kcb420kqale\"}",
+            "id": "json_v4_eval_string_024",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk025ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK025AB\"}",
+            "id": "json_v4_eval_string_025",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 24,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"E\",\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"\":\"",
+            "id": "json_v4_eval_string_026",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk027ab\". Let me think",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"bk720kqale\"}",
+            "id": "json_v4_eval_string_027",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk028ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK028AB\"}",
+            "id": "json_v4_eval_string_028",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_029",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk030ab\". Let me think",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"k030abqle\"}",
+            "id": "json_v4_eval_string_030",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk031ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK031AB\"}",
+            "id": "json_v4_eval_string_031",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, let's see. The user wants me to take the first letters of each word in the phrase \"",
+            "candidate_generated": 6,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"eab\"}",
+            "id": "json_v4_eval_string_032",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants me to reverse the string \"evalqk033ab\". Let me think",
+            "candidate_generated": 11,
+            "candidate_status": "fail",
+            "candidate_text": "{\"answer\":\"k330qkale\"}",
+            "id": "json_v4_eval_string_033",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          },
+          {
+            "baseline_generated": 24,
+            "baseline_status": "fail",
+            "baseline_text": "<think>\nOkay, the user wants the uppercase version of the string 'evalqk034ab'. Let me",
+            "candidate_generated": 12,
+            "candidate_status": "pass",
+            "candidate_text": "{\"answer\":\"EVALQK034AB\"}",
+            "id": "json_v4_eval_string_034",
+            "tags": [
+              "json_answer",
+              "string",
+              "eval"
+            ],
+            "text_equal": false,
+            "tokens_equal": false
+          }
+        ],
+        "text_changed": 204,
+        "text_equal": 0,
+        "tokens_changed": 204,
+        "tokens_equal": 0
+      },
+      "prompts": 204,
+      "quality": {
+        "baseline_passed": 0,
+        "candidate_passed": 105,
+        "improvements": [
+          "json_v4_eval_arithmetic_001",
+          "json_v4_eval_arithmetic_002",
+          "json_v4_eval_arithmetic_003",
+          "json_v4_eval_arithmetic_004",
+          "json_v4_eval_arithmetic_006",
+          "json_v4_eval_arithmetic_007",
+          "json_v4_eval_arithmetic_009",
+          "json_v4_eval_arithmetic_010",
+          "json_v4_eval_arithmetic_012",
+          "json_v4_eval_arithmetic_013",
+          "json_v4_eval_arithmetic_014",
+          "json_v4_eval_arithmetic_015",
+          "json_v4_eval_arithmetic_016",
+          "json_v4_eval_arithmetic_018",
+          "json_v4_eval_arithmetic_019",
+          "json_v4_eval_arithmetic_021",
+          "json_v4_eval_arithmetic_022",
+          "json_v4_eval_arithmetic_024",
+          "json_v4_eval_arithmetic_025",
+          "json_v4_eval_arithmetic_027",
+          "json_v4_eval_arithmetic_028",
+          "json_v4_eval_arithmetic_029",
+          "json_v4_eval_arithmetic_030",
+          "json_v4_eval_arithmetic_031",
+          "json_v4_eval_arithmetic_033",
+          "json_v4_eval_arithmetic_034",
+          "json_v4_eval_categorization_002",
+          "json_v4_eval_categorization_004",
+          "json_v4_eval_categorization_006",
+          "json_v4_eval_categorization_008",
+          "json_v4_eval_categorization_009",
+          "json_v4_eval_categorization_010",
+          "json_v4_eval_categorization_011",
+          "json_v4_eval_categorization_012",
+          "json_v4_eval_categorization_013",
+          "json_v4_eval_categorization_014",
+          "json_v4_eval_categorization_015",
+          "json_v4_eval_categorization_016",
+          "json_v4_eval_categorization_017",
+          "json_v4_eval_categorization_018",
+          "json_v4_eval_categorization_019",
+          "json_v4_eval_categorization_020",
+          "json_v4_eval_categorization_022",
+          "json_v4_eval_categorization_023",
+          "json_v4_eval_categorization_024",
+          "json_v4_eval_categorization_025",
+          "json_v4_eval_categorization_026",
+          "json_v4_eval_categorization_028",
+          "json_v4_eval_categorization_029",
+          "json_v4_eval_categorization_030",
+          "json_v4_eval_categorization_031",
+          "json_v4_eval_categorization_032",
+          "json_v4_eval_categorization_034",
+          "json_v4_eval_code_007",
+          "json_v4_eval_code_009",
+          "json_v4_eval_code_015",
+          "json_v4_eval_code_025",
+          "json_v4_eval_code_030",
+          "json_v4_eval_code_031",
+          "json_v4_eval_code_034",
+          "json_v4_eval_fact_001",
+          "json_v4_eval_fact_002",
+          "json_v4_eval_fact_003",
+          "json_v4_eval_fact_004",
+          "json_v4_eval_fact_005",
+          "json_v4_eval_fact_006",
+          "json_v4_eval_fact_007",
+          "json_v4_eval_fact_008",
+          "json_v4_eval_fact_009",
+          "json_v4_eval_fact_010",
+          "json_v4_eval_fact_011",
+          "json_v4_eval_fact_012",
+          "json_v4_eval_fact_013",
+          "json_v4_eval_fact_014",
+          "json_v4_eval_fact_015",
+          "json_v4_eval_fact_016",
+          "json_v4_eval_fact_017",
+          "json_v4_eval_fact_018",
+          "json_v4_eval_fact_019",
+          "json_v4_eval_fact_020",
+          "json_v4_eval_fact_021",
+          "json_v4_eval_fact_022",
+          "json_v4_eval_fact_023",
+          "json_v4_eval_fact_024",
+          "json_v4_eval_fact_025",
+          "json_v4_eval_fact_026",
+          "json_v4_eval_fact_027",
+          "json_v4_eval_fact_028",
+          "json_v4_eval_fact_029",
+          "json_v4_eval_fact_030",
+          "json_v4_eval_fact_031",
+          "json_v4_eval_fact_032",
+          "json_v4_eval_fact_033",
+          "json_v4_eval_string_001",
+          "json_v4_eval_string_004",
+          "json_v4_eval_string_007",
+          "json_v4_eval_string_010",
+          "json_v4_eval_string_013",
+          "json_v4_eval_string_016",
+          "json_v4_eval_string_019",
+          "json_v4_eval_string_022",
+          "json_v4_eval_string_025",
+          "json_v4_eval_string_028",
+          "json_v4_eval_string_031",
+          "json_v4_eval_string_034"
+        ],
+        "passed_delta": 105,
+        "regressions": []
+      },
+      "tag_delta": {
+        "arithmetic": {
+          "baseline_passed": 0,
+          "candidate_passed": 26,
+          "passed_delta": 26,
+          "scored": 34
+        },
+        "categorization": {
+          "baseline_passed": 0,
+          "candidate_passed": 27,
+          "passed_delta": 27,
+          "scored": 34
+        },
+        "code": {
+          "baseline_passed": 0,
+          "candidate_passed": 7,
+          "passed_delta": 7,
+          "scored": 34
+        },
+        "compiler": {
+          "baseline_passed": 0,
+          "candidate_passed": 0,
+          "passed_delta": 0,
+          "scored": 34
+        },
+        "eval": {
+          "baseline_passed": 0,
+          "candidate_passed": 105,
+          "passed_delta": 105,
+          "scored": 204
+        },
+        "fact": {
+          "baseline_passed": 0,
+          "candidate_passed": 33,
+          "passed_delta": 33,
+          "scored": 34
+        },
+        "json_answer": {
+          "baseline_passed": 0,
+          "candidate_passed": 105,
+          "passed_delta": 105,
+          "scored": 204
+        },
+        "string": {
+          "baseline_passed": 0,
+          "candidate_passed": 12,
+          "passed_delta": 12,
+          "scored": 34
+        }
+      },
+      "timing_sanity": {
+        "baseline_elapsed_s": 188.304251,
+        "baseline_generated": 4896,
+        "baseline_tok_s": 26.000475156559265,
+        "candidate_elapsed_s": 153.984862,
+        "candidate_generated": 1952,
+        "candidate_tok_s": 12.676570765767872,
+        "elapsed_delta_s": -34.319389,
+        "generated_delta": -2944,
+        "tok_s_ratio": 0.48755150394126134
+      }
+    }
+  ],
+  "kind": "llm_rollout_compare_report"
+}

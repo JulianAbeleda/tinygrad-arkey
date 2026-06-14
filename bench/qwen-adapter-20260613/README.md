@@ -196,3 +196,40 @@ sweep:
 This replaces the previous `N=12` held-out set as the promotion ruler. Phase 3
 should re-run base, V3, and V5 against this dataset before any more training is
 interpreted as a quality result.
+
+## V4 Re-Baseline Result
+
+Artifacts:
+
+- `8b-v4-json-base-rollout/summary.md`
+- `8b-output-lora-r16-v3-v4-rollout/summary.md`
+- `8b-last1-ffn-suffix-lora-r4-v5-v4-rollout/summary.md`
+- `compare-8b-v4-json-base-vs-output-lora-r16-v3/report.md`
+- `compare-8b-v4-json-base-vs-last1-ffn-suffix-lora-r4-v5/report.md`
+- `compare-8b-v4-output-lora-r16-v3-vs-last1-ffn-suffix-lora-r4-v5/report.md`
+- `v4-rebaseline-verdict.json`
+
+Results on the `204`-prompt V4 held-out eval:
+
+| model path | strict pass | Wilson 95% CI | parse/schema | value correct |
+|---|---:|---:|---:|---:|
+| base generated | `0/204` | `[0.000, 0.018]` | `0/204` | `0/204` |
+| V3 output-LoRA | `69/204` | `[0.277, 0.406]` | `164/204` | `69/204` |
+| V5 suffix-cache `last1_ffn` | `105/204` | `[0.446, 0.582]` | `190/204` | `107/204` |
+
+V5 is a real generation-quality improvement over V3 on this larger gate:
+`105/204` versus `69/204`, `+36` strict passes, `0` regressions, and
+non-overlapping Wilson intervals. The old `4/12` versus `3/12` result was too
+small to trust; this re-baseline shows the suffix-cache internal adapter did
+matter.
+
+The result is still not a solved strict-JSON behavior gate. The main residual
+is content/value correctness, not JSON form: V5 reaches `190/204` parse/schema
+but only `107/204` value-correct. Category deltas versus V3 are concentrated in
+arithmetic (`+26`), code (`+7`), and categorization (`+3`); fact and string are
+tied, and compiler remains `0/34`.
+
+Verdict: promote V5 to current-best adapter for the next objective experiment,
+not to production behavior. The next step should be Phase 4 rejection-sampling
+SFT using the deterministic scorer as the filter. Do not add more adapter
+capacity until that objective loop has been tested.

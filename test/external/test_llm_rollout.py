@@ -79,6 +79,22 @@ class TestLLMRollout(unittest.TestCase):
       self.assertEqual(committed, summary)
       self.assertEqual((out / "summary.md").read_text(), summary_markdown(summary, rows))
 
+  def test_committed_qwen_adapter_v4_rollout_summary_reproduces(self):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    for rel in ("8b-v4-json-base-rollout", "8b-output-lora-r16-v3-v4-rollout", "8b-last1-ffn-suffix-lora-r4-v5-v4-rollout"):
+      out = repo / "bench/qwen-adapter-20260613" / rel
+      if not out.exists(): continue
+      rows = [json.loads(line) for line in (out / "rollouts.jsonl").read_text().splitlines()]
+      committed = json.loads((out / "summary.json").read_text())
+      args = argparse.Namespace(mode=committed["mode"], model=committed["model"], policy=committed["policy"],
+                                adapter=committed.get("adapter"),
+                                dataset=committed["dataset"], storage=committed["storage"],
+                                prompt_format=committed["prompt_format"], temperature=committed["temperature"],
+                                seed=committed["seed"])
+      summary = summarize_rollouts(args, rows)
+      self.assertEqual(committed, summary)
+      self.assertEqual((out / "summary.md").read_text(), summary_markdown(summary, rows))
+
 
 if __name__ == "__main__":
   unittest.main()

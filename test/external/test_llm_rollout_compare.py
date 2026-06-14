@@ -110,6 +110,28 @@ class TestLLMRolloutCompare(unittest.TestCase):
       import os
       os.chdir(old_cwd)
 
+  def test_committed_qwen_adapter_v4_compare_report_reproduces(self):
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    old_cwd = pathlib.Path.cwd()
+    try:
+      import os
+      os.chdir(repo)
+      cases = [
+        (("8b-v4-json-base-rollout", "8b-output-lora-r16-v3-v4-rollout"), "compare-8b-v4-json-base-vs-output-lora-r16-v3"),
+        (("8b-v4-json-base-rollout", "8b-last1-ffn-suffix-lora-r4-v5-v4-rollout"), "compare-8b-v4-json-base-vs-last1-ffn-suffix-lora-r4-v5"),
+        (("8b-output-lora-r16-v3-v4-rollout", "8b-last1-ffn-suffix-lora-r4-v5-v4-rollout"), "compare-8b-v4-output-lora-r16-v3-vs-last1-ffn-suffix-lora-r4-v5"),
+      ]
+      for artifact_names, report_name in cases:
+        artifacts = [pathlib.Path("bench/qwen-adapter-20260613") / name for name in artifact_names]
+        out = pathlib.Path("bench/qwen-adapter-20260613") / report_name
+        if not out.exists(): continue
+        report = build_report(artifacts)
+        self.assertEqual(json.loads((out / "report.json").read_text()), report)
+        self.assertEqual((out / "report.md").read_text(), report_markdown(report))
+    finally:
+      import os
+      os.chdir(old_cwd)
+
 
 if __name__ == "__main__":
   unittest.main()
