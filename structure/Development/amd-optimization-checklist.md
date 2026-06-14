@@ -393,7 +393,11 @@ generated-policy storage mode.
       `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v0/`. If it
       cannot beat the deterministic baseline, keep the kernel loop and model
       loop separate except for the one-way benefit that faster kernels make
-      model/eval experiments cheaper.
+      model/eval experiments cheaper. Phase 3 is fully scoped in
+      `docs/amd-decode-flywheel-proof-plan.md`: optional protocol diagnostic,
+      strict SFT export from the `45` train rows, adapter rollout on the `38`
+      holdout rows, and hard gates of `>=37/38` strict JSON outputs,
+      macro-F1 above `0.185`, low false-positive accepts, and improved ranking.
 
 ## Do Not Do Next
 

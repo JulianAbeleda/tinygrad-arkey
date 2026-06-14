@@ -182,6 +182,14 @@ The full flywheel is still unproven. Do not let the model influence kernel
 experiment ordering until a schema-capable model or adapter beats
 `mechanism_prior` on this holdout and then survives live shadow mode.
 
+Phase 3 is now scoped in `docs/amd-decode-flywheel-proof-plan.md`. The next
+flywheel-specific implementation should start with the Phase 3.0/3.1 boundary:
+diagnose protocol-vs-reasoning failure if useful, then export strict
+kernel-triage SFT rows from the `45` train examples. The promotion gate is not
+teacher-forced loss; it is a held-out adapter rollout with at least `37/38`
+strict JSON outputs, macro-F1 above `0.185`, low false-positive accepts, and
+ranking metrics above the `mechanism_prior` baseline.
+
 ## Verification Already Run
 
 ```sh

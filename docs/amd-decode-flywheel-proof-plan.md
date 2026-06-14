@@ -439,12 +439,198 @@ Purpose:
 
 - Test whether repo-specific structured kernel history can improve model
   triage beyond prompting alone.
+- Separate strict-output capability from actual kernel-triage skill.
+- Decide whether there is enough signal to justify live shadow mode.
 
 Inputs:
 
-- Phase 1 dataset
-- Phase 2 baseline metrics
-- Phase 4.2 stable compiler vocabulary data
+- Phase 1 dataset:
+  `bench/amd-decode-flywheel-proof-20260614/kernel-triage-v0/`
+- Phase 2 baseline metrics:
+  `bench/amd-decode-flywheel-proof-20260614/triage-baselines-v0/`
+- Phase 2 no-adapter rollout:
+  `bench/amd-decode-flywheel-proof-20260614/triage-qwen3-8b-base-v0/`
+- Phase 4.2 stable compiler vocabulary data, only as format/schema support.
+  It must not leak kernel-triage holdout answers.
+- Existing strict-JSON adapter/training infrastructure under
+  `extra/llm_adapter*.py`, reused only if it fits the data contract.
+
+Starting facts:
+
+- Train split: `45` examples.
+- Holdout split: `38` examples.
+- Holdout is family-split, not random-split.
+- Baseline to beat: `mechanism_prior` / `simple_family_heuristic`, macro-F1
+  `0.185`, accuracy `0.289`, false-positive accept rate `0.000`,
+  precision@3 `0.083`, NDCG `0.218`.
+- Current strict no-adapter 8B result: macro-F1 `0.000`, accuracy `0.000`,
+  `38/38` invalid outputs.
+
+Non-goals:
+
+- No new kernel candidates.
+- No kernel code changes.
+- No generated-policy promotion.
+- No live ordering decisions.
+- No 32B or risky schedule/search work.
+- No training on holdout prompts, holdout labels, or model outputs derived from
+  holdout labels.
+- No counting deterministic post-processing alone as flywheel proof. A JSON
+  extractor or taxonomy repair can be measured as a diagnostic baseline, but it
+  cannot prove model-to-kernel reasoning by itself.
+
+Phase 3.0: Protocol Diagnostic
+
+Purpose:
+
+- Determine how much of the Phase 2 failure is strict-output protocol versus
+  wrong kernel triage.
+
+Tasks:
+
+- Score the existing no-adapter rollout under the strict scorer. This is already
+  the official Phase 2 result.
+- Add an optional diagnostic parser that extracts the first JSON object after
+  empty `<think>` tags and scores it separately.
+- Add an optional deterministic taxonomy-repair diagnostic that maps only
+  predeclared aliases to the Phase 1 reason taxonomy.
+- Record these diagnostics as non-competitive unless they are predeclared as a
+  separate baseline in the evaluator artifact.
+
+Outputs:
+
+- optional diagnostic artifact under
+  `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-protocol-diagnostic-v0/`
+- parser/repair code, if added, must be tested and must never modify the
+  official strict score in place.
+
+Gate:
+
+- If the extracted/repair diagnostic is still below `mechanism_prior`, proceed
+  only if the goal is strict-output training, not because the model has shown
+  kernel skill.
+- If the diagnostic beats `mechanism_prior`, rerun with a predeclared scorer and
+  treat it as a protocol-fix baseline, then continue to live shadow only after
+  strict-output behavior is also solved.
+
+Phase 3.1: Export Kernel-Triage SFT Data
+
+Purpose:
+
+- Convert the Phase 1 train split into adapter-ready strict JSON examples.
+
+Dataset rules:
+
+- Inputs come from `prompts-train.jsonl`.
+- Targets come from the matching hidden labels in `examples.jsonl`.
+- The model input must include only the prompt text, not `expected_json`.
+- The target must be exactly compact JSON with keys `label`, `reason`, and
+  `retry`.
+- Holdout rows may be copied into an eval manifest, but never into the training
+  JSONL.
+- Because the train split has only `45` rows, oversampling is allowed only on
+  train rows and must be recorded in the artifact.
+- Format/schema support rows from V4/V4.1 strict-JSON work may be mixed in only
+  if they are tagged separately, carry no kernel outcome labels, and cannot
+  teach the holdout answers.
+
+Proposed output files:
+
+- `extra/qk_flywheel_triage_sft.py`
+- `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-sft-v0/train.jsonl`
+- `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-sft-v0/holdout-prompts.jsonl`
+- `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-sft-v0/summary.json`
+- `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-sft-v0/README.md`
+
+Required summary:
+
+- source row counts
+- oversampled row counts
+- label counts before and after sampling
+- reason counts before and after sampling
+- whether any schema-support rows were mixed in
+- proof that holdout ids are absent from training rows
+
+Phase 3.2: Train Adapter Candidates
+
+Purpose:
+
+- Produce a schema-capable Qwen3-8B triage adapter without changing the kernel
+  runtime.
+
+First candidate:
+
+- Base: Qwen3-8B Q4_K_M.
+- Runtime: existing generated-policy/shared-storage path.
+- Adapter path: reuse suffix-cache internal-adapter training if compatible,
+  starting with the smallest previously viable policy, such as `last1_ffn`
+  rank `4`.
+- Temperature: `0.0` for evaluation rollouts.
+- Token cap: `64`, matching Phase 1 prompts.
+
+Escalation policy:
+
+- Expand rank or suffix depth only after the small candidate produces valid
+  strict JSON on the holdout.
+- Do not run broad capacity sweeps before a clean artifact shows where the
+  failure is: parse/schema, taxonomy, label reasoning, retry reasoning, or
+  ranking.
+- Teacher-forced loss and token accuracy are diagnostic only. They do not
+  promote Phase 3.
+
+Proposed artifacts:
+
+- `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-adapter-v0/`
+- `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-adapter-v0-rollout/`
+- `bench/amd-decode-flywheel-proof-YYYYMMDD/triage-adapter-v0-compare/`
+
+Phase 3.3: Score Adapter Against Phase 2
+
+Purpose:
+
+- Use the exact Phase 2 evaluator so the adapter is compared against the same
+  deterministic baselines.
+
+Required command shape:
+
+```sh
+PYTHONPATH=. .venv/bin/python extra/qk_flywheel_triage_eval.py \
+  --examples bench/amd-decode-flywheel-proof-20260614/kernel-triage-v0/examples.jsonl \
+  --out bench/amd-decode-flywheel-proof-YYYYMMDD/triage-adapter-eval-v0 \
+  --rollout adapter_v0=bench/amd-decode-flywheel-proof-YYYYMMDD/triage-adapter-v0-rollout
+```
+
+Required metrics:
+
+- strict JSON pass count
+- label accuracy
+- macro-F1
+- reason accuracy on label matches
+- false-positive accept rate
+- retry precision and recall
+- precision@1, precision@3, and NDCG
+- confusion matrix
+- per-family and per-mechanism breakdown
+
+Minimum Phase 3 pass:
+
+- Strict JSON parse/schema/type pass on at least `37/38` holdout rows.
+- Macro-F1 must beat `mechanism_prior` (`0.185`) on the family-split holdout.
+- False-positive accept rate must stay at or below `5%` (`<=1` false-positive
+  accept on the current holdout).
+- Ranking precision@3 or NDCG must improve over `mechanism_prior`, not just
+  label macro-F1.
+
+Shadow-ready bar:
+
+- Macro-F1 improves over `mechanism_prior` by a meaningful margin, initially
+  `+0.05` absolute or better.
+- Strict JSON output is effectively solved (`37/38` minimum, `38/38`
+  preferred).
+- No evidence that the model is only memorizing family names or always choosing
+  a low-risk label.
+- The model reduces wasted-experiment recommendations without increasing
+  false-positive accepts.
 
 Training target:
 
@@ -460,17 +646,35 @@ Outputs:
 - combined SFT dataset for compiler vocabulary plus kernel triage
 - suffix-cache adapter artifact
 - held-out triage rollout and compare artifacts
+- Phase 3 score report that directly imports the Phase 2 baseline numbers
 
 Gate:
 
 - Must beat Phase 2 baselines on family-split or time-split holdout.
 - Must keep false-positive accepts low. A model that confidently recommends
   known dead branches is not useful even if average accuracy improves.
+- Must pass strict JSON output. A model that requires hand repair at inference
+  time is not ready to steer kernel ordering.
 
 Stop rule:
 
 - If training only memorizes family names or fails family-split holdout, do not
   call it a flywheel. The model loop remains a structured-output capability.
+- If strict JSON improves but macro-F1 does not beat `mechanism_prior`, Phase 3
+  is a useful adapter-capability result but not flywheel evidence.
+- If macro-F1 improves but false-positive accepts rise above the threshold, do
+  not enter shadow mode; a kernel assistant that recommends dead branches is
+  operationally expensive even when aggregate metrics look better.
+
+Phase 3 completion checklist:
+
+- [ ] protocol diagnostic scoped or explicitly skipped
+- [ ] SFT exporter checked in and tested
+- [ ] training artifact generated with holdout-contamination audit
+- [ ] adapter rollout generated on the Phase 1 holdout prompts
+- [ ] adapter scored by `extra/qk_flywheel_triage_eval.py`
+- [ ] result classified as one of: `schema_fail`, `baseline_fail`,
+  `unsafe_accepts`, `shadow_ready`
 
 ## Phase 4: Live Shadow Mode
 
