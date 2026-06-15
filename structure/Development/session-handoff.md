@@ -706,7 +706,16 @@ Scope boundary unchanged: general learned-autotuning on native matmul (serves qu
 matmul_decoded for batched), decoupled from the llama.cpp decode bar (on-target spaces dead).
 The whole arc is now COMPLETE: precisely-located negatives (GEMV flat, fused-WMMA walled, fused custom
 kernel can't tile) + a demonstrated POSITIVE (the loop works where the space is rich+competitive+
-learnable). Next (user's): write the final report, or build the loop into a live BEAM warm-start.
+learnable).
+
+UPDATE 2026-06-15 -- FINAL REPORT written: `docs/amd-decode-final-report.md`. Synthesizes the whole
+arc (mission -> triage premise dead -> metric re-base -> batching -> fused primitive works (W1b') ->
+framework wall (W2) -> loop substrate (N) -> loop demonstrably works (N1/N2)), the findings ranked,
+the meta-conclusion (learned kernel-search has a home iff rich+competitive+learnable; no home when
+flat or physics/framework-bound), scope boundaries, methodology lessons, artifacts, and follow-ups.
+This is the capstone. Remaining optional follow-ups (user's): make the loop live (BEAM warm-start +
+real wall-clock speedup), scale the substrate study (more ops/shapes, cross-op transfer), or close the
+decode gap separately (int8/DP4A mmvq GEMV, independent of the loop).
 
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
