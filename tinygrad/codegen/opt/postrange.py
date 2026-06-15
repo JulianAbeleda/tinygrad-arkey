@@ -332,6 +332,18 @@ def bufs_from_ast(ast:UOp, dname:str) -> list[Buffer]:
   glbls = sorted([x for x in ast.backward_slice if x.op is Ops.PARAM], key=lambda x: x.arg.slot)
   return [Buffer(dname, x.max_numel(), x.dtype.base) for x in glbls]
 
+# Step 3 warm-start: force a loop-found schedule on matmuls of a known shape signature, NO BEAM.
+# Map key = (frozenset(output dims), product(reduce dims)); value = tuple[Opt]. Default None = no-op.
+_WARMSTART_OPTS = None
+_warmstart_stats = {"match": 0, "apply": 0, "error": 0}
+def _warmstart_match(k):
+  red, out = 1, []
+  for s, t in zip(k.full_shape, k.axis_types):
+    if not isinstance(s, int): return None  # symbolic dim -> can't match a concrete shape
+    if t in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE): red *= s
+    else: out.append(s)
+  return _WARMSTART_OPTS.get((frozenset(out), red))
+
 def apply_opts(ast:UOp, ren:Renderer, beam:int=0) -> UOp:
   if ast.tag is not None: return ast
   k = Scheduler(ast, ren)
@@ -344,6 +356,17 @@ def apply_opts(ast:UOp, ren:Renderer, beam:int=0) -> UOp:
     # beam search may open devices
     with Context(ALLOW_DEVICE_USAGE=1):
       k = beam_search(k, rawbufs, beam, bool(getenv("BEAM_ESTIMATE", 1)))
+  elif _WARMSTART_OPTS is not None and (forced := _warmstart_match(k)) is not None:
+    _warmstart_stats["match"] += 1
+    try:
+      for o in forced: k.apply_opt(o)
+      _warmstart_stats["apply"] += 1
+    except KernelOptError:  # axis/fusion mismatch -> safe fallback to the heuristic on a fresh kernel
+      _warmstart_stats["error"] += 1
+      k = Scheduler(ast, ren); k.convert_loop_to_global()
+      if not NOOPT and not any(u.op is Ops.STAGE for u in ast.backward_slice):
+        from tinygrad.codegen.opt.heuristic import hand_coded_optimizations
+        k = hand_coded_optimizations(k)
   elif not NOOPT and (ast.arg is None or ast.arg.applied_opts == ()):
     from tinygrad.codegen.opt.heuristic import hand_coded_optimizations
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet
