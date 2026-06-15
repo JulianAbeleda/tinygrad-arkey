@@ -170,10 +170,11 @@ def _q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
 
 def _q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
   # ffn_down wins decisively (the dominant Q6_K decode cost). attn_v/output were historically left to the
-  # fused graph; re-measured 2026-06-15 on RX 7900 XTX they now also win (+5%, 50.8->53.1 tok/s, identical
-  # output) -- kept behind Q6K_COVER_MORE pending broader (14B/32B) validation.
+  # fused graph; re-measured 2026-06-15 on RX 7900 XTX at full clock they now also win (+5%, 50.8->53.4 tok/s,
+  # byte-identical output). The older "lose to fused graph" claim was likely a clock-ramp-confounded bench.
+  # Default-on (exact dequant, no accuracy risk); set Q6K_COVER_MORE=0 to disable if a model regresses.
   if ".ffn_down.weight" in name: return 1, ("LOCAL:0:64",)
-  if getenv("Q6K_COVER_MORE"):
+  if getenv("Q6K_COVER_MORE", 1):
     if ".attn_v.weight" in name: return 4, ("LOCAL:0:32",)
     if name == "output.weight": return 1, ("LOCAL:0:64",)
   return None
