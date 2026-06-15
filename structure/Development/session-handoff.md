@@ -1629,3 +1629,22 @@ Pre-registered ceiling: best dequant-reduction ~81 (~78%); parity (104) likely n
 efficiency + strided-activation (#2) + kernel-fusion (#3), not instruction-count alone. Touch points:
 extra/q4_k_gemv_primitive.py (intdot + fused-quant variant), tinygrad/llm/model.py (decode dispatch +
 quant fusion/reuse). Next action: run Q0a (build the fused int-dot decode GEMV, measure end-to-end).
+
+UPDATE 2026-06-15 -- Phase X scoped: lossy-quantization-aware search (the first CROSS-LAYER rung).
+Doc: `docs/amd-decode-lossy-quant-search.md`. Extends the validated schedule-search loop (N1/N2) to the
+ALGORITHM layer's LOSSY quant choices, searched WITH accuracy as a co-objective -- the win tinygrad's
+semantics-preserving search can't propose. Grounded in the frontier: PET (OSDI'21, partial-equivalence
++ correction), Mirage (OSDI'25, joint algebraic+schedule multi-level); lossy quant is the least-charted
+corner (NAS/approximate-computing-adjacent). HONEST CEILING pre-registered: X does NOT exceed the int8
+ceiling (~81); mixed precision is a weighted avg between fp-slow and int8-fast, so it can't beat
+uniform-int8 on raw speed -- its unique value is ACCURACY-CONSTRAINED speed, AUTOMATICALLY (capture the
+int8 win where layers tolerate it, minimal fp fallback where they don't, no manual tuning). 81->104 is
+the OTHER rungs (Mirage-style algebraic+layout+instruction), out of scope. New machinery vs N-loop:
+(1) lossy-transform vocabulary (per-linear precision choice), (2) accuracy evaluator+gate (the hard
+new piece), (3) multi-objective search (cost model predicts speed+accuracy). Phases: X0 make-or-break
+"room+heterogeneity+learnability" probe FIRST (same as N0b but on the precision axis: does int8 have
+accuracy room? is tolerance heterogeneous across layers? is it learnable? -- with 3 honest null
+outcomes: no-room/constant/unlearnable) -> X1 vocabulary+accuracy harness -> X2 extend N-loop to
+multi-objective per-layer precision assignment -> X3 end-to-end measure (highest tok/s within accuracy
+budget). Touch points: qk_loop_*, q4_k_gemv_primitive (Q int-dot), model.py per-layer dispatch, new
+qk_accuracy_eval.py. Next action: run X0.
