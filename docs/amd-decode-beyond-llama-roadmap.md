@@ -29,11 +29,14 @@ a search can beat a fixed reference.
 ## Beyond-llama levers (surpass 57%) — each ties to the policy/primitive frame
 Ranked by (ceiling × feasibility). Roofline deltas are per-token, stacking on the current 18.7 ms.
 
-- **B1 — in-graph int-dot GEMV (read weights FASTER than llama).** Our standalone int-dot kernel sustains
-  **76% of peak vs llama's mmvq 57%.** We already beat llama at the kernel; the only gap is the unsolved
-  in-graph integration (amortized q8 activation quant feeding all linears, the D1/E0 problem). If it
-  translates, the GEMV drops 10.4 ms → ~7.1 ms. This is the single most direct beyond-llama win because the
-  kernel advantage is already proven (`KERNEL_BEATS_LLAMACPP.md`). Highest priority.
+- **B1 — in-graph int-dot GEMV. TESTED → DECISIVE NEGATIVE (2026-06-15, `B1_INTDOT_RESULT.md`).** The
+  standalone int-dot is 76% vs fp 56%, but in-graph it runs 28.5 µs vs fp 32 µs — only 1.12×, both ~34% of
+  peak. The same kernel hits 64% amortized-standalone → the gap is **single-shot occupancy** (the attn GEMV
+  is 64 workgroups, too few to fill 96 CUs), not compute. int-dot's compute win is invisible because the
+  in-graph GEMV is occupancy-bound, not compute-bound; the q8 quant overhead then cancels the tiny gain →
+  null. split-K (more wg) is within noise; fusion hurts. **The per-layer GEMV is already at its batch-1
+  ceiling (~50–55% ≈ llama's 57%).** A faster per-kernel GEMV is NOT the path beyond llama. This also
+  down-grades R3/R4/R5 (also per-kernel GEMV levers → likely within-noise for the same reason).
 - **B2 — overlap non-GEMV behind the weight stream.** Today token = GEMV + non-GEMV (sequential, ~sum). The
   48% non-GEMV (attention/norms/lm_head) can be pipelined to run *while* the next layer's weights stream from
   HBM → token = max(GEMV, non-GEMV) not sum. llama is largely per-layer-sequential too, so a deeply pipelined
@@ -50,10 +53,11 @@ Ranked by (ceiling × feasibility). Roofline deltas are per-token, stacking on t
   / Medusa-Eagle heads (no separate draft model). Amortizes the dominant cost across tokens. (Partly a llama
   feature via draft models; self-speculative heads are the beyond version.)
 
-### Stacked beyond-llama ceiling
-B1 (int-dot) + B2 (overlap) + P2/B4 (cheap attention) + B3 (sub-4-bit): token ≈ max(5.9 ms GEMV, ~4 ms
-non-GEMV) ≈ **6 ms = ~165 tok/s ≈ 1.6× llama.** Not all-or-nothing — B1 alone (with the non-GEMV already
-shrinking from P1/P2) plausibly clears llama's 105.
+### Stacked beyond-llama ceiling (revised after B1 negative)
+B1 is out — the per-kernel GEMV is already at ceiling, so the path is **change the work, not the kernel**:
+B3 (sub-4-bit: fewer bytes) + B2 (overlap: token = max not sum) + B4/P2 (cheap attention) + B5 (amortize
+across tokens). B5 is the multiplier: even at our current ~52% per-kernel rate, emitting 2 tokens per weight
+pass ≈ doubles throughput. The realistic beyond-llama route is **B5 × (B3 + B2)**, not a faster GEMV.
 
 ## Scope: lever P2 (attention) — the immediate next concrete step
 1. **Identify** the attention kernels precisely (the `r_*start_pos*` reduces): what they read (KV-cache
