@@ -1724,6 +1724,68 @@ Gate:
 - If no model assistance advantage is measurable, record the result as two
   parallel loops with one-way benefit.
 
+## Phase M: Metric Re-base and Bottleneck Diagnosis (precursor to everything downstream)
+
+This corrects the two errors G0 surfaced and gates all further triage/generation work.
+The whole 3F-4.x line optimized a wall-clock metric dominated by ~0.27 ms launch
+overhead, and G0 then searched ILP knobs (UPCAST/UNROLL) on a kernel that achieves only
+**~19% of peak HBM bandwidth** (`~183` of `~960` GB/s on `attn_q`, a `~5.2x` roofline
+gap). The kernel is NOT bandwidth-saturated, so there IS real headroom -- we measured the
+wrong quantity and turned the wrong dials. Re-base the metric and find the real
+bottleneck before chasing the headroom.
+
+Why headroom is plausible (roofline, grounded): Q4_K decode GEMV has arithmetic
+intensity `~14` ops/byte, LEFT of the RX7900XTX FP32 ridge (`~64` ops/byte), so it should
+be bandwidth-bound and approach the roof -- yet it sits at `19%`. So the bandwidth itself
+is not being saturated. Likely causes: poor/narrow memory access, low occupancy, or the
+INT dequant path (nibble shift/mask + scale/min) being the true limiter -- the FP32 ridge
+understates integer compute pressure, so the diagnosis must roofline the int path too.
+
+### M0a: Metric re-base (deterministic)
+
+- Confirm the roofline denominator: measure this GPU's actual achievable HBM bandwidth
+  with a pure streaming-copy benchmark, rather than assuming the `960` GB/s datasheet
+  value. The canonical metric becomes roofline-relative achieved bandwidth =
+  `device_q4_eff` / measured_peak.
+- Re-score the existing candidate space (the G0 grid and the 4.x schedule candidates) on
+  this metric. Recompute every "gain" on device bandwidth.
+- Re-audit the 4.x `raw_accept` labels honestly: were ANY of them genuine device-bandwidth
+  improvements over `v1_partial`, or all wall-clock noise? Record the verdict.
+- Fix the root cause: `qk_semantic_schedule_bench`'s `Q4_RESULT_RE` captures `q4_eff`
+  (wall); switch the gain metric to `device_q4_eff`, and propagate the metric choice to
+  the cost-model outcome labels if triage is revived.
+
+### M0b: Bottleneck diagnosis (profiling)
+
+- Profile `v1_partial` on `attn_q` to name what caps it at `19%`: dequant-compute-bound
+  (INT unpack), load-width / coalescing-bound, or occupancy-bound. Use DEBUG=7 source +
+  instruction mix (already used in 3G/G0), device counters / the tinygrad profiler, and a
+  roofline placement that accounts for the INT dequant ops, not just FP32.
+- Output: a named bottleneck and the search dimensions that address it.
+
+### M0c: Redefine the real search space
+
+- From the bottleneck, define the candidate axes that actually matter and DROP the ones
+  G0 proved irrelevant (UPCAST/UNROLL). Examples by bottleneck: dequant-bound -> vectorized
+  unpack, lookup-table dequant, fused scale/min, b128 packed loads; load-bound -> wider /
+  coalesced global loads, vector dtypes; occupancy-bound -> `parts` / LDS / register
+  pressure tuning.
+- This redefined space + re-based metric is the input to a re-run headroom probe (G0').
+
+Exit gate:
+
+- A measured peak bandwidth; the re-based metric applied to the candidate space; the 4.x
+  labels re-audited with an honest verdict; a named bottleneck; and a redefined search
+  space. Only then do generation (G0'/G1/G2) or any revived triage resume.
+
+Pre-registered honesty:
+
+- If the re-based metric shows the 4.x wins were all noise, record it (the triage line
+  optimized noise, confirmed).
+- If the diagnosis shows most of the `5x` gap is irreducible (e.g. the kernel is near its
+  own INT-dequant compute roof), record the realistic headroom -- it may be far below
+  `5x`. Only a confirmed, addressable gap revives the flywheel target.
+
 ## Phase G: Model-Proposed Candidate Generation Track
 
 This is the primary path to the Phase 6 flywheel proof ("a model-proposed candidate

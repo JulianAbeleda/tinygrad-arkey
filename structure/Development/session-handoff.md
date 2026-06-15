@@ -496,19 +496,35 @@ beats every expanded schedule on `2` fresh attn_q tensors (`168` correctness-gat
 runs); UPCAST/UNROLL/parts roughly halve device throughput. `v1_partial` is already
 optimal in the opt space.
 
-Critical metric finding (now the top priority): G0 contradicts the 4.x "raw_accept"
-wins. Those were scored on WALL-clock `q4_eff` (~28-35 GB/s, dominated by ~0.27 ms
-launch overhead -- noise), while device timing shows the same schedules are slower.
-**The whole 3F-4.x line may have optimized a measurement artifact.** So the next
-priority is NOT G1/G2 but a **metric audit**: re-score the candidate space on
-`device_q4_eff`, re-check whether any candidate genuinely beats `v1_partial` on device,
-and (if the schedule_bench wall metric is confirmed unreliable) re-examine the 4.x
-live/win labels. `qk_semantic_schedule_bench` Q4_RESULT_RE captures `q4_eff` (wall),
-not `device_q4_eff` -- that is the likely root cause. Only after the metric is trusted
-should generation (G1/G2) or assist resume.
+Critical reframe (the hypothesis is NOT dead -- we measured wrong AND searched wrong):
+G0 contradicts the 4.x "raw_accept" wins, which were scored on WALL-clock `q4_eff`
+(~28-35 GB/s, dominated by ~0.27 ms launch overhead -- noise). But the decisive number
+is the roofline one: the best kernel (`v1_partial`) achieves only **~19% of peak HBM
+bandwidth** (`~183` of `~960` GB/s), a `~5.2x` gap -- it is NOT bandwidth-saturated, so
+real headroom exists. G0 just searched ILP knobs (UPCAST/UNROLL) that do not address the
+actual bottleneck. Arithmetic intensity `~14` ops/byte is LEFT of the FP32 ridge (`~64`),
+so it should approach the roof; sitting at `19%` points to access-pattern / occupancy /
+INT-dequant throughput, not FP ILP.
 
-Original Phase G deliverables (G1/G2) remain scoped in the proof plan but are gated on
-the metric audit:
+Next priority is **Phase M (Metric Re-base and Bottleneck Diagnosis)**, fully scoped in
+`docs/amd-decode-flywheel-proof-plan.md` -- the precursor that gates all further
+generation/triage. Concrete next-session deliverables:
+
+1. **M0a metric re-base**: measure this GPU's actual peak HBM bandwidth (streaming copy),
+   define the canonical metric = `device_q4_eff` / measured_peak, re-score the G0 grid +
+   4.x candidates on it, and re-audit the 4.x raw_accept labels (were any real on
+   device?). Root cause to fix: `qk_semantic_schedule_bench` Q4_RESULT_RE captures
+   `q4_eff` (wall), not `device_q4_eff`.
+2. **M0b bottleneck diagnosis**: profile `v1_partial` on attn_q (DEBUG=7 instruction mix +
+   device counters + INT-aware roofline) to name what caps it at 19%: dequant-compute /
+   load-width / occupancy bound.
+3. **M0c redefine the search space**: keep only the axes that address the bottleneck, drop
+   UPCAST/UNROLL (G0 proved irrelevant); feed into a re-run headroom probe (G0').
+
+Pre-registered: if the re-based metric shows the 4.x wins were all noise, record it; if the
+5x gap is mostly irreducible (near the INT-dequant compute roof), record the realistic
+(possibly much smaller) headroom. Only a confirmed addressable gap revives the flywheel
+target. The original Phase G deliverables (G1/G2) remain scoped but gated on Phase M:
 
 1. **G0 headroom probe (deterministic, shadow)**: expand the parametric space on the
    live-bearing attn_q tensors (LOCAL {16..256}, parts sweep, UPCAST/UNROLL args
