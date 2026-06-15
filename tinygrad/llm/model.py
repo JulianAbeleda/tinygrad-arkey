@@ -169,8 +169,13 @@ def _q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
   return None
 
 def _q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
-  # Measured on Qwen3 8B/14B: ffn_down wins decisively, output.weight and attn_v lose to the fused graph.
+  # ffn_down wins decisively (the dominant Q6_K decode cost). attn_v/output were historically left to the
+  # fused graph; re-measured 2026-06-15 on RX 7900 XTX they now also win (+5%, 50.8->53.1 tok/s, identical
+  # output) -- kept behind Q6K_COVER_MORE pending broader (14B/32B) validation.
   if ".ffn_down.weight" in name: return 1, ("LOCAL:0:64",)
+  if getenv("Q6K_COVER_MORE"):
+    if ".attn_v.weight" in name: return 4, ("LOCAL:0:32",)
+    if name == "output.weight": return 1, ("LOCAL:0:64",)
   return None
 
 def _qk_policy_value(entry:dict) -> dict:
@@ -272,6 +277,7 @@ def _module_at(root, path:str):
   return obj
 
 def _set_module_at(root, path:str, value) -> None:
+  if "." not in path: setattr(root, path, value); return  # top-level module (e.g. output)
   parent_path, attr = path.rsplit(".", 1)
   parent = _module_at(root, parent_path)
   if isinstance(parent, list) and attr.isdigit(): parent[int(attr)] = value
@@ -751,7 +757,10 @@ class Transformer:
                 realize=bool(getenv("REALIZE", 0))) -> tuple[Transformer, dict]:
     # TODO: remove the need for copy to default device
     use_q4k_primitive = bool(getenv("Q4K_PRIMITIVE", 0))
-    use_q6k_primitive = bool(getenv("Q6K_PRIMITIVE", 0))
+    # Q6_K (ffn_down etc. in mixed-quant Q4_K_M) defaults ON with Q4K_PRIMITIVE: it's the decode bottleneck
+    # otherwise (the slow fp-dequant fallback ~= 59% of GPU work), Q6_K dequant is exact (identical output),
+    # and enabling it is a ~2.2x decode win. Set Q6K_PRIMITIVE=0 to opt out.
+    use_q6k_primitive = bool(getenv("Q6K_PRIMITIVE", 1 if use_q4k_primitive else 0))
     qk_generated_policy_path = getenv("QK_GENERATED_POLICY", "")
     use_qk_generated_policy = bool(qk_generated_policy_path)
     if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy) and isinstance(gguf, Tensor):
