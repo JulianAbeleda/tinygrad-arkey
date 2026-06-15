@@ -45,6 +45,47 @@ measure end-to-end decode tok/s vs 58 (fp) and llama.cpp 104. Correctness-gated 
 slightly, as in llama.cpp). Gate: >= ~75 -> capture it (productionize); ~58 or worse -> record why the
 fusion does not pay off.
 
+### Q0a -- concrete implementation scope (the build)
+
+Back-of-envelope first (sets the design): per layer there are 7 decode GEMVs. The fp path = 7 dot
+launches. The int-dot path is 1.4x faster PER KERNEL (microbench 242 vs 173 Q4-GB/s on ffn_gate) but
+needs q8_1-quantized activations. If the quant is a SEPARATE launch:
+- naive (D0): 7 dots + 7 quants = 14 launches -> ~28 tok/s (measured). Quant launches dominate.
+- quant-once-per-shared-activation (q/k/v share attn-input; gate/up/down share ffn-input): 7 dots + 2
+  quants = 9 launches. If a small quant ~ a small dot in launch-bound cost: time ~ (7/1.4 + 2) = 7
+  units vs fp 7 -> ~BREAK-EVEN (~58-65). The 2 extra quant launches eat the 1.4x dot speedup.
+- FUSED (quant inside the dot kernel, no extra launch): 7 launches, each 1.4x faster -> ~81. THIS is
+  the only design that captures the ceiling.
+
+So Q0a has two steps, cheap-confirm then real-build:
+
+**Q0a.1 -- quant-once-reuse (cheap confirm, ~30 min).** Restructure `Q4KPrimitiveLinear` dispatch in
+`tinygrad/llm/model.py` so the activation is `q8_1_quantize`d ONCE per shared group (attn-input,
+ffn-input) and the 2-4 sharing linears reuse (q, scales) via the existing
+`q4k_q8_1_intdot_partial_kernel`. Measure end-to-end tok/s. Expectation (pre-registered): ~58-65 --
+confirms the int-dot is faster per-kernel but the separate quant launch caps it. This is a cheap
+sanity check of the math, not the win.
+
+**Q0a.2 -- LDS-fused quant+int-dot kernel (the real build).** New
+`extra/q4_k_gemv_primitive.py::q4k_q8_1_fused_intdot_kernel(rows,k,parts,...)`: ONE kernel taking
+`(partials, words, x_fp16)`:
+- Phase 1 (once per workgroup): each workgroup cooperatively loads `x` (k fp16), computes the per-32-
+  block scale (`max|x|/127`), quantizes to int8, and stores `q8[k]` + `scales[k/32]` into LDS
+  (`DEFINE_LOCAL`). `barrier()`.
+- Phase 2 (per row): the existing int-dot body (`_q4k_group_dot_q8_1_intdot`) but reading `q8`/`scales`
+  from LDS instead of global -- int4xint8 dot in int32, affine per group, accumulate.
+One launch; the quant is amortized across the workgroup's rows (in LDS) with NO extra kernel. LDS
+budget: `q8[4096]=4KB + scales[128]*4=512B` -- fits. Wire into `model.py` behind a flag.
+Correctness-gate vs the fp matmul (`rel_err < 1e-2`; q8_1 changes numerics slightly, as in llama.cpp).
+Pre-registered gate: end-to-end reaches ~75-81 -> CAPTURE the +40% (productionize, update policy);
+~58-65 -> the in-kernel quant ALU offsets the dot win (record); <58 -> fusion doesn't pay off here.
+
+Risks: (1) the in-kernel per-32-block max-reduction + quantize adds ALU to phase 1 -- but it is
+amortized across rows and replaces a whole kernel launch; (2) phase-1/phase-2 barrier + LDS layout
+must be correct (the W1b'/M0 lessons: stage once, don't serialize); (3) each workgroup re-quantizes x
+(redundant across workgroups) -- acceptable since quant is cheap and launch-free, but if parts is high
+the redundancy grows (tune parts).
+
 **Q0b -- LUT probe (only if informative).** Implement the per-group 16-entry LDS LUT dequant; measure
 instruction count (vs the ~3862 baseline) AND end-to-end tok/s vs Q0a. Gate: LUT > Q0a -> real
 additional lever, pursue; LUT <= Q0a -> the dequant-reduction win is captured by int-dot, LUT is not
