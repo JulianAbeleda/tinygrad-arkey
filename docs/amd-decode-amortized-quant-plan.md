@@ -90,3 +90,23 @@ cross-layer / hand-asm rungs (Mirage direction / Writer), which Phase A does not
 - Honest ceiling ~75-81 (not parity); a null (int-dot doesn't pipeline / quant doesn't amortize) is a
   real result. But this is the FIRST decode lead that is not a dead end, and it is cheap to test (A0
   is a cache + a dispatch swap, no new kernel).
+
+## A0 RESULT (2026-06-15): premise REFUTED -- the int-dot kernel (occupancy), not the quant, is the wall.
+`bench/.../q0a/A0_RESULT.md`. Amortized the quant via a cache keyed by x_vec UOp; cache HIT (36 hits,
+22% -- q/k/v + gate/up share one quant), so amortization worked. But e2e decode = 28 tok/s / 136 GB/s
+-- IDENTICAL to D0 (per-linear quant) and HALF of fp's 278. Amortizing the quant changed NOTHING.
+
+Corrected diagnosis: D0 mis-blamed its 28 on the quant launches. With the quant amortized it is STILL
+28 -> the quant was never the bottleneck. The barrier-free int-dot KERNEL is, at 136 GB/s e2e: it does
+not pipeline (standalone 242 -> e2e 136, the OPPOSITE of fp's 173 -> 278) because its int accumulators
+(~16 REGs) raise register pressure -> low occupancy. BOTH int-dot structures now lose e2e to fp for the
+SAME reason -- occupancy, not compute: fused-LDS coop (LDS+barrier -> e2e 24), barrier-free global
+(register pressure -> e2e 28). fp wins e2e because its simple accumulator = low registers = high
+occupancy = it PIPELINES. In occupancy-bound small-GEMV decode, kernel SIMPLICITY beats compute
+efficiency; the int-dot's standalone win is an e2e mirage in every structure.
+
+FINAL decode end-state: fp 58 tok/s (56% of llama.cpp) is the tinygrad/AMD ceiling. llama.cpp's int-dot
+wins e2e only because its hand-asm mmvq is OCCUPANCY-efficient (DP4A-packed, minimal accumulator regs) --
+hand-written AMD asm (the Writer) that tinygrad's primitives + codegen do not produce. The reframe
+finding STANDS (tinygrad CAN express a 409 GB/s fused GEMV standalone), but it does not translate to an
+e2e win because of occupancy. This is the multiply-confirmed honest conclusion.

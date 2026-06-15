@@ -1733,3 +1733,17 @@ viable) -> A2 vs llama.cpp 104. Pre-registered ceiling ~75-81 (int-dot 1.4x per-
 llama.cpp), NOT parity (residual = cross-layer/hand-asm rungs). Touch points: model.py (quant-cache +
 dispatch), existing q4k_q8_1_intdot_partial_kernel (barrier-free), q8_1_quantize. Cheap to test (A0 =
 cache + dispatch swap, no new kernel). FIRST decode lead that is not a dead end. Next action: build A0.
+
+UPDATE 2026-06-15 -- Phase A0 RAN: premise REFUTED; the int-dot KERNEL (occupancy), not the quant, is
+the wall. `bench/.../q0a/A0_RESULT.md`. Amortized quant via cache keyed by x_vec UOp -- cache HIT (36
+hits, 22%, q/k/v + gate/up share), so amortization WORKED. But e2e = 28 tok/s / 136 GB/s = IDENTICAL
+to D0, HALF of fp's 278. Amortizing the quant changed nothing -> D0 MIS-ATTRIBUTED its 28 to the quant;
+the barrier-free int-dot KERNEL is the e2e bottleneck (136 GB/s; standalone 242 -> e2e 136, OPPOSITE of
+fp 173 -> 278) due to int-accumulator register pressure (~16 REGs) -> low occupancy -> no pipelining.
+BOTH int-dot structures lose e2e for the SAME reason (occupancy, not compute): fused-LDS coop (24),
+barrier-free (28). fp (58) wins e2e via simple accumulator -> low regs -> high occupancy -> pipelines.
+In occupancy-bound small-GEMV decode, kernel SIMPLICITY beats compute efficiency; the int-dot standalone
+win is an e2e mirage in every structure. FINAL: fp 58 (56% of llama.cpp) is the tinygrad/AMD decode
+ceiling; llama.cpp wins via occupancy-efficient hand-asm mmvq (DP4A-packed, minimal regs = the Writer)
+that tinygrad doesn't produce. The reframe (tinygrad CAN express 409 GB/s standalone) STANDS but doesn't
+translate e2e. Multiply-confirmed honest end-state. model.py pristine.
