@@ -1682,3 +1682,19 @@ remains the best decode kernel. ALL codegen-reachable decode levers now NEGATIVE
 DP4A(D0), latency(L0), lossy-quant-int8(X0 weak), int-dot(Q0a). The residual gap to llama.cpp is the
 cross-layer rungs (Mirage OSDI'25, study queued) or the Writer/hand-asm -- exactly as the "why"
 (single-layer-search-vs-cross-layer-codesign) analysis predicted. model.py reverted to pristine.
+
+UPDATE 2026-06-15 -- Mirage probe (Mi0): BLOCKED on 3 independent grounds; no win on our target.
+`docs/amd-decode-mirage-probe.md`. (1) HARDWARE: Mirage is CUDA/NVIDIA-only (runs its search on an
+NVIDIA GPU, emits CUDA/Triton); this box has no nvidia-smi/CUDA/nvcc -> can't build or run. (2)
+CODEGEN: its discovered fusions don't port -- tinygrad's lowering can't express efficient fused custom
+kernels (the fused-staging wall: W2 dequant prologue, Q0a quant prologue replicated per row ~24x). (3)
+PRIZE: limited on-target anyway -- per-kernel microbench 85-173 GB/s < end-to-end 278 GB/s, so the JIT
+ALREADY pipelines the 252 launches; the 58->104 gap is per-kernel BANDWIDTH UTILIZATION (dequant
+instruction count, Q, already negative), not launch fusion. VERDICT: Mirage's value is real but on
+NVIDIA/CUDA; on AMD/tinygrad it's triple-blocked. HONEST END-STATE of the decode investigation: every
+codegen/search-reachable lever exhausted & negative (M0/L0 schedule-occupancy flat; D0 DP4A; Q0a
+int-dot; X0 lossy-quant; Mi0 cross-layer). fp 58 tok/s (56% of llama.cpp, 32% HBM peak) is the
+tinygrad/AMD decode ceiling; parity needs the Writer (hand-written AMD kernels = what llama.cpp is).
+The program's POSITIVE result stands: the loop on the SCHEDULE axis for the BATCHED regime (N1/N2,
+33-98% peak). Single-stream quantized DECODE parity on AMD/tinygrad is not reachable without hand
+kernels, on this evidence.
