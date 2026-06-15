@@ -126,6 +126,33 @@ this; N1 tests whether that structure is *exploitable* by a learned model.
     loop MECHANISM on native matmul (general autotuning, serves quantized inference via matmul_decoded
     for batched), decoupled from the llama.cpp decode bar.
 
+### Phase N1.1 — close the strict gate (data coverage)
+
+The N1 miss was entirely 4 under-sampled small-batch shapes (N<256 -> 0.705). N1.1 sweeps ~10 more
+small-N shapes (N in {16,32,48,64,96,128,192} across varied M,K) x the 277 schedules ->
+`beam_log_n1_smalln.jsonl`, merges with the N1 dataset (~24 shapes total, ~13 small-N), and re-runs
+the SAME leave-one-shape-out learnability harness. Pre-registered: if the overall model top-1 now
+clears 0.90 (the gate the small-N gap caused us to miss), the strict gate passes and the small-N
+shortfall is confirmed as coverage, not a wall. If it still misses, the small-N regime is genuinely
+harder to learn -- recorded honestly. `extra/qk_loop_dataset_smalln.py`.
+
+### Phase N2 — build the actual loop (model-guided search; the flywheel)
+
+Turn the offline learnability into the online loop, and measure REAL trial savings. Because every
+config's true device_time is already in the dataset, the guided search runs offline as a faithful
+simulation (ranking is the model's; "measuring the top-K" is a dataset lookup of the true time).
+- **N2a -- model-guided best-of-K.** For each held-out shape: rank all configs by the model, "measure"
+  (look up) the top-K predicted, take the best. Report best-of-K / oracle vs K, against RANDOM
+  best-of-K and the oracle. The loop value = trials-to-reach-X%-of-oracle (model vs random). Expect
+  model to reach near-oracle at small K where random needs 10-100x more.
+- **N2b -- online flywheel (accumulation).** Process shapes in sequence; for shape i, train the model
+  on shapes 0..i-1, guided-search shape i at a fixed small budget K, record best/oracle. Show the
+  curve (and trials-to-90%) improve as the corpus grows -- the loop getting better over its lifetime.
+- Pre-registered: model-guided reaches >= ~95% of oracle at a small K (e.g. K<=8) AND needs
+  materially fewer trials than random to hit 90-95%, AND the online curve improves with corpus size
+  -> the loop demonstrably works (not just a static cost model). Else -> the learnability does not
+  convert to search savings; recorded. `extra/qk_loop_search.py`, test `test_qk_loop_search.py`.
+
 ## Stop rules / honesty
 
 - Measure on the device metric (the M0 lesson). Warm up, fix clocks, median.
