@@ -1774,3 +1774,16 @@ candidates LIVE on device (the qk_beam_log `_time_program` path) on FRESH shapes
 Commits b725e2e29 (L0), cc62c8412 (L1), pushed. The offline N1/N2 result HOLDS on real silicon for
 unseen shapes — the loop is now a working live autotuner, not a simulation.
 L2 (native tinygrad BEAM warm-start hook) is the remaining stretch — gated, OOD-risky, optional.
+
+## 2026-06-15 — Phase L2: native-BEAM warm-start (honest NEGATIVE, bounds the live loop)
+Wired the N1 model into tinygrad's native beam_search via an optional default-OFF hook
+(search.py `_BEAM_CANDIDATE_FILTER`); model prunes each iteration's candidates to top-K.
+RESULT (fresh 4096,14336,128, serial A/B): NO keep_k both saves wall-clock AND preserves quality —
+k=12: 8.5x wall / q=0.60; k=24: 5.8x / 0.68; k=48: 1.9x / 0.91. Gate FAIL (pre-registered).
+Cause: model trained on COMPLETE 277-config schedules is OOD on BEAM's PARTIAL schedules + has no
+features for BEAM's larger action pool (SWAP/GROUP/THREAD — cold winner uses SWAP). Aggressive prune
+kills quality, loose prune kills speedup. `loop-live-L2/`, harness qk_loop_beam_warmstart.py.
+Two-sided Phase L COMPLETE: live loop is a 42x autotuner on ITS substrate (L0/L1) but does NOT transfer
+to a structurally different search substrate (native BEAM) without retraining. Final report addendum
+added. Commit a5f25bde0, pushed. (Transient AMD HW fault memory_lost=1 hit one sweep run; GPU
+auto-recovered; clean rerun reported.) tinygrad default behavior unchanged (hook no-op when unset).
