@@ -7,6 +7,14 @@ optimization loop and the structured model/eval loop, but explicitly treats the
 model-to-kernel closing link as unproven. It is not a new promotion gate by
 itself.
 
+Update (2026-06-14): the model-to-kernel link is now **falsified at the current
+feature set** — the learned triage model adds no value over a cheap deterministic
+rule once kernel outcomes are measured on device (not wall-clock) throughput. The
+real, correctly-measured optimization lever is batching / a fused Q4_K GEMM. See
+`docs/amd-decode-flywheel-postmortem.md` for the honest arc; the deterministic
+end-to-end inference wins in `docs/amd-decode-current-verdicts.md` are a separate
+result and stand.
+
 Proof plan: `docs/amd-decode-flywheel-proof-plan.md`.
 
 ## Purpose

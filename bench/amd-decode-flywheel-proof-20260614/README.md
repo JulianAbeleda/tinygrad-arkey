@@ -2,6 +2,15 @@
 
 Date: 2026-06-14
 
+> **Superseded — read `docs/amd-decode-flywheel-postmortem.md` first.** The triage
+> results below (including the `xgboost macro-F1 0.873/0.891` and the "Phase 3G exit
+> gate met / Phase 4 unblocked" claims) were later **falsified**: kernel outcomes
+> were scored on wall-clock throughput dominated by ~0.27 ms launch overhead, so the
+> "wins" were noise, and on the corrected device metric (`metric-audit-m0/`) a cheap
+> deterministic class-skip rule matches the learned model. These artifacts are kept
+> as the historical record, not as a live result. The real lever is batching / a
+> fused Q4_K GEMM (`batched-b0/`, Phase B).
+
 This directory records the first historical test of the model-to-kernel side of
 the AMD decode optimization flywheel.
 

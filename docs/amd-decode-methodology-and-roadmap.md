@@ -5,6 +5,11 @@ took the turns it did, and where it is going. This is a narrative companion to
 the canonical decision state in `amd-decode-current-verdicts.md`; when the two
 disagree, the verdicts file wins.
 
+Latest turn (2026-06-14): the model-to-kernel flywheel was falsified (noise metric +
+a deterministic rule matches the learned model), and the roadmap pivoted to the real
+lever — batching / a fused Q4_K GEMM (Phase B). The full arc and methodology lessons
+are in `docs/amd-decode-flywheel-postmortem.md`.
+
 ## The Problem
 
 We are trying to make quantized large-language-model **decode** (single-token,

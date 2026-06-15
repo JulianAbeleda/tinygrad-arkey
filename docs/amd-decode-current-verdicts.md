@@ -7,6 +7,13 @@ Status: canonical decision state for the AMD decode optimization campaign.
 This document consolidates the current verdicts. Treat older hypothesis and
 execution-plan sections as historical unless they agree with this file.
 
+Scope note (2026-06-14): the verdicts here are the **deterministic end-to-end
+inference wins** (generated policies, tok/s measured over a full forward pass),
+which stand. They are distinct from the **model-to-kernel flywheel** (learned
+triage/proposal of kernel experiments), which was falsified at the current feature
+set — see `docs/amd-decode-flywheel-postmortem.md`. Per-kernel microbench gains
+must be read on the device metric, not wall-clock `q4_eff`.
+
 ## Bottom Line
 
 The local inference win is real and should be considered consolidated unless the

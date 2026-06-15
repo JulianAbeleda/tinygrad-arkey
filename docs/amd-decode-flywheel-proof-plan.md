@@ -3,10 +3,13 @@
 Date: 2026-06-14
 
 Status: plan of record for proving or falsifying the full kernel-optimization
-flywheel. Phase 1/2 and the Phase 3.0 through 3F diagnostic/data subphases are
-built where marked. Phase 3F+ currently has a strong `xgboost` result on the
-same 38-holdout split (`macro-F1 0.891`, `accuracy 0.895`, `false_accept 0.000`),
-but the rerun is still gated by residual mechanism-coverage requirements.
+flywheel. Phases 1–6 (the triage line) are built and **falsified**: the holdout
+`xgboost` result that once looked strong (`macro-F1 0.891`) was a metric artifact
+(the kernel outcomes were scored on wall-clock throughput dominated by ~0.27 ms
+launch overhead), and on the corrected device metric a cheap deterministic rule
+matches the learned model on every honest re-test (Phases 4.x/M, `metric-audit-m0/`).
+The live frontier is **Phase B**: re-basing the metric and reducing to primitives
+showed the real lever is batching / a fused Q4_K GEMM. Read the postmortem first.
 
 Parent architecture note:
 `docs/amd-decode-kernel-optimization-flywheel.md`.

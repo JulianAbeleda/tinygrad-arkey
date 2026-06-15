@@ -5,6 +5,12 @@ gfx1100 (RX 7900 XTX). Written for an independent reviewer. Every claim is
 tagged [MEASURED] (our bench logs, in-repo), [EXTERNAL] (cited URL), or
 [ASSUMED] (inference, not yet tested). Plan: `docs/amd-decode-optimization-plan.md`.
 
+Auditor caveat (2026-06-14): the model-to-kernel "flywheel" sub-bet was falsified —
+see `docs/amd-decode-flywheel-postmortem.md`. Treat any [MEASURED] per-kernel
+microbench gain scored on wall-clock `q4_eff` as suspect: it is dominated by
+~0.27 ms launch overhead and disagrees with device timing. Read per-kernel gains on
+`device_q4_eff` / measured peak (~859 GB/s). End-to-end tok/s claims are unaffected.
+
 ## THESIS (the high-level position)
 
 On gfx1100, tinygrad's large gap vs llama.cpp/ROCm in quantized LLM *decode*
