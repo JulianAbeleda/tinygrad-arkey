@@ -492,6 +492,51 @@ def q4k_q8_1_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:
 
   return kernel
 
+def q4k_q8_1_fused_intdot_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  # Q0a.2: ONE kernel -- phase 1 quantizes the fp16 activation x to q8_1 (int8 + per-32-block scale)
+  # into LDS, barrier, then phase 2 is the int-dot reading q8/scales from LDS. No separate quant launch
+  # (the thing that capped D0's int-dot at 28 tok/s end-to-end). Each workgroup re-quantizes x into its
+  # own LDS (cheap redundant compute, ~3% of the dot, launch-free).
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  q8b = k // Q8_1_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+  f32 = dtypes.float32
+
+  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
+    xq_lds = UOp.placeholder((k,), dtypes.int8, 0, addrspace=AddrSpace.LOCAL)
+    xs_lds = UOp.placeholder((q8b,), f32, 1, addrspace=AddrSpace.LOCAL)
+    # --- phase 1: quantize x -> (xq_lds int8, xs_lds scale) ---
+    qb = UOp.range(q8b, 10)
+    p1 = UOp.range(Q8_1_BLOCK_ELEMS, 11, axis_type=AxisType.REDUCE)
+    xa = x[qb*Q8_1_BLOCK_ELEMS + p1].cast(f32)
+    xa = (xa < 0.0).where(-xa, xa)
+    amax = UOp.placeholder((1,), f32, 100, addrspace=AddrSpace.REG)
+    amax = amax.after(qb)[0].set(0.0)
+    amax = amax[0].set((xa > amax.after(p1)[0]).where(xa, amax.after(p1)[0]), end=p1)
+    scale = amax[0] / UOp.const(f32, 127.0)
+    scale = (scale <= 0.0).where(UOp.const(f32, 1.0), scale)
+    p2 = UOp.range(Q8_1_BLOCK_ELEMS, 12)
+    xv = x[qb*Q8_1_BLOCK_ELEMS + p2].cast(f32) / scale
+    xr = xv + (xv >= 0.0).where(UOp.const(f32, 0.5), UOp.const(f32, -0.5))
+    qstore = xq_lds[qb*Q8_1_BLOCK_ELEMS + p2].store(xr.cast(dtypes.int8))
+    sstore = xs_lds[qb].store(scale, gate=(p2 < 1))  # only lane 0 writes the per-block scale
+    bar = UOp.barrier(UOp.group(sstore, qstore).end(qb, p2))
+    xq, xs = xq_lds.after(bar), xs_lds.after(bar)
+    # --- phase 2: int-dot from LDS ---
+    row = UOp.range(rows, 0)
+    part = UOp.range(parts, 1)
+    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_q8_1_intdot(words, xq, xs, base, blk, (row, part, blk_part)),
+                             UOp.const(f32, 0.0))
+    acc = partials[row, part].set(0.0)
+    acc = partials[row, part].set(acc.after(blk_part)[row, part] + contrib, end=blk_part)
+    return acc.end(row, part).sink(arg=_kernel_info(f"q4k_q8_1_fused_intdot_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
 def q4k_q8_1_intdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)

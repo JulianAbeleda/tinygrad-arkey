@@ -86,6 +86,20 @@ must be correct (the W1b'/M0 lessons: stage once, don't serialize); (3) each wor
 (redundant across workgroups) -- acceptable since quant is cheap and launch-free, but if parts is high
 the redundancy grows (tune parts).
 
+**Q0a -- RESULT (2026-06-15): FAILED. The int-dot ~81 is a MICROBENCH ARTIFACT; fp (58) stays best.**
+`q0a/RESULT.md`. Built the LDS-fused `q4k_q8_1_fused_intdot_kernel` (kept in `q4_k_gemv_primitive.py`
+as a documented negative). Correct (rel_err 0.0073, the expected ~0.7% int8 err), but: standalone
+microbench 10 Q4-GB/s (~24x SLOWER than the separate int-dot's 242); end-to-end decode 6 tok/s (vs fp
+58, D0 separate-quant 28). WHY: the phase-1 quant PROLOGUE is not hoisted -- tinygrad's lowering
+replicates it per OUTPUT ROW (12288 for ffn_gate) instead of once per workgroup (the recurring
+fused-staging wall: W2 dequant prologue, G0''). So the D0 microbench (242 GB/s, +40%) assumed a FREE
+pre-quantized activation; end-to-end the quant must be paid and BOTH strategies lose to fp -- separate
+launch (28) or replicated prologue (6). The pre-registered ~75-81 gate FAILS. **fp (58 tok/s, 56% of
+llama.cpp) remains the best decode kernel.** Every codegen-reachable decode lever is now NEGATIVE
+end-to-end (DP4A/D0, latency/L0, lossy-quant/X0, int-dot/Q0a); the residual is the cross-layer rungs
+(Mirage) or the Writer, as the "why" analysis predicted. (Q0b LUT not pursued -- it optimizes a path
+the int-dot dominates, and the int-dot itself doesn't pay off end-to-end.)
+
 **Q0b -- LUT probe (only if informative).** Implement the per-group 16-entry LDS LUT dequant; measure
 instruction count (vs the ~3862 baseline) AND end-to-end tok/s vs Q0a. Gate: LUT > Q0a -> real
 additional lever, pursue; LUT <= Q0a -> the dequant-reduction win is captured by int-dot, LUT is not

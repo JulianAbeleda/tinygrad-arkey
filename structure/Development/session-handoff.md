@@ -1669,3 +1669,16 @@ algebraic+schedule + custom-kernel discovery, uGraph hierarchy, probabilistic eq
 reformulation/custom-kernel that beats the Q int-dot ~81 on this GPU? Yes -> closes the last percent
 the search way; no -> residual is hand-asm/microarchitectural (the Writer). PET (OSDI'21) is the
 partial-equivalence companion. This is the single most promising "close it the search way" direction.
+
+UPDATE 2026-06-15 -- Q0a RAN: FAILED. The int-dot ~81 is a MICROBENCH ARTIFACT; fp (58) stays best.
+`bench/.../q0a/RESULT.md`. Built the LDS-fused q4k_q8_1_fused_intdot_kernel (kept in
+q4_k_gemv_primitive.py as a documented negative): correct (rel_err 0.0073) but standalone 10 Q4-GB/s
+(~24x slower than separate int-dot's 242), end-to-end 6 tok/s (vs fp 58, D0 28). WHY: the phase-1
+quant prologue is NOT hoisted -- tinygrad's lowering replicates it per OUTPUT ROW instead of once per
+workgroup (the recurring fused-staging wall: W2, G0''). The D0 microbench 242/+40% assumed a FREE
+pre-quantized activation; end-to-end the quant must be paid and BOTH strategies lose to fp (separate
+launch 28, replicated prologue 6). Pre-registered ~75-81 gate FAILS. fp (58 tok/s, 56% of llama.cpp)
+remains the best decode kernel. ALL codegen-reachable decode levers now NEGATIVE end-to-end:
+DP4A(D0), latency(L0), lossy-quant-int8(X0 weak), int-dot(Q0a). The residual gap to llama.cpp is the
+cross-layer rungs (Mirage OSDI'25, study queued) or the Writer/hand-asm -- exactly as the "why"
+(single-layer-search-vs-cross-layer-codesign) analysis predicted. model.py reverted to pristine.
