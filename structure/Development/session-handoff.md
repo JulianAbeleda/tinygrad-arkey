@@ -665,6 +665,20 @@ NOT expressible here; W3/W4 over the fused template are MOOT. Competitive paths:
 Machine-search/cost-model is meaningful on the NATIVE matmul opt schedule, not the fused kernel.
 Next decision (user's): pursue (c) assembly, adopt matmul_decoded + redirect the search there, or stop.
 
+UPDATE 2026-06-15 (PIVOT -- new scope: Phase N, loop substrate). User chose to engage the
+native-matmul opt space (route ②->④) to maximize learning toward eventually building the flywheel
+LOOP. New pre-registered hypothesis doc: `docs/amd-decode-loop-substrate.md`. Rationale (scorecard):
+the loop needs ONE space that is rich + competitive + learnable; the two on-target quantized spaces
+are dead (Q4_K GEMV decode = flat/unlearnable per M0+4.3; fused Q4_K WMMA = framework wall per W2.1);
+native fp16 matmul is the ONLY rich+competitive space and its learnability is UNTESTED. Hypothesis:
+N0 (do now, route ②) -- matmul_decoded (dequant pass + BEAM-tuned native matmul) is competitive for
+the batched/prefill regime, giving a real instrumentable search space; N1 (later, route ④) -- a
+learned cost model + cross-kernel TRANSFER beats BEAM sample-efficiency (the loop's make-or-break).
+Honest decoupling: a positive proves the loop MECHANISM on opt spaces generally, NOT a llama.cpp
+decode win (on-target spaces dead). Next action: N0a -- build matmul_decoded (Q4_K->fp16 dequant pass
++ native matmul), measure vs the W2 fused kernel across batch N on real 8B shapes; then N0b -- log
+BEAM (config->device_time) trials as the learnability dataset for N1.
+
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
 reaches llama.cpp; the fused-dequant->WMMA structure is the prerequisite for the search space to
