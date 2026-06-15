@@ -1395,6 +1395,32 @@ Out of scope:
   Phase 5). 14B/32B. New mechanism families. Intra-identical-shape discrimination
   (unobservable; explicitly not attempted).
 
+Result (2026-06-14): ran and recorded in `shadow-staged/`. The gate is **met, and
+the cost model beats the prior** — the first evidence the learned model adds value
+over the deterministic baseline. `extra/qk_flywheel_shadow.py` froze keep/skip rank
+scores for `16` fresh semantic-schedule candidates (commit `f7979eb4a`) before the
+microbench; the committed `predictions.jsonl`/`freeze.json` are unchanged after
+outcomes (hash-verified), and the feature path is leak-free. Microbench outcomes:
+`2` `raw_accept` (live), `5` tie, `1` reject, `8` construction_blocked. The model
+ranked the two live candidates (`row_upcast` on `blk.1/2.attn_q.weight`, `+4.5%` /
+`+6.9%`) at the very top, so its gate would run `2` microbenches instead of `16` and
+catch both winners: **`14/16` experiments saved at `100%` live-recall, versus `0`
+for `mechanism_prior` and `simple_family_heuristic`**.
+
+Why it is real, not luck or leakage: a 2/2 top-rank hit on 16 candidates with 2
+live is ~`0.8%` by chance; none of the `4` fresh tensors is in the corpus; and the
+corpus carries a genuine observable interaction the mechanism-only prior ignores --
+`row_upcast` wins `6/8` on `attn_q` but `0/4` on `ffn_gate`. The model learned the
+(role x mechanism) interaction and generalized it to fresh attn_q tensors.
+
+Honest caveats: only `2` live candidates in this batch, so the margin rests on one
+specific learned pattern; a hand-coded (role x mechanism) prior would likely match
+it -- the model is extracting an available feature interaction the *shipped*
+baselines miss, not doing something unobtainable. Validate on larger/more diverse
+batches before strong generalization claims. This is shadow only (no gate skipped a
+real run). Per the exit gate the model has earned entry to Phase 5; keep the prior
+as a fallback.
+
 ## Phase 5: Controlled Assist Mode
 
 Purpose:

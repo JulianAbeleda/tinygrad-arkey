@@ -3,11 +3,13 @@ from tempfile import TemporaryDirectory
 
 from extra.qk_flywheel_cost_model import extract_feature_map
 from extra.qk_flywheel_shadow import (
-  FRESH_SPECS, LEAKAGE_TOKENS, build_fresh_candidates, dead_branch_metric, freeze_predictions, fresh_id,
+  FRESH_SPECS, LEAKAGE_TOKENS, STAGED_OUT, _safe_skips, _staged_candidate_rows, build_fresh_candidates,
+  dead_branch_metric, freeze_predictions, fresh_id,
 )
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SHADOW = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-v0"
+STAGED = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-staged"
 
 
 class TestQKFlywheelPhase4(unittest.TestCase):
@@ -67,6 +69,47 @@ class TestQKFlywheelPhase4(unittest.TestCase):
     self.assertIn("xgboost", summary["model_metrics"])
     for baseline in ("mechanism_prior", "simple_family_heuristic", "reject_all"):
       self.assertIn(baseline, summary["baseline_metrics"])
+
+
+class TestQKFlywheelPhase41Staged(unittest.TestCase):
+  def test_staged_candidates_are_diverse_leak_free_and_unlabeled(self):
+    rows = _staged_candidate_rows(REPO, STAGED)
+    self.assertEqual(len(rows), 16)
+    self.assertEqual({r["mechanism"] for r in rows}, {"row_upcast", "direct_output", "reduce_unroll", "two_dim_local"})
+    self.assertEqual({r["role"] for r in rows}, {"ffn_gate", "attn_q"})  # cross-shape variation
+    for r in rows:
+      self.assertEqual(r["schema_version"], "kernel_triage_v1")
+      self.assertFalse(r["outcome_known"])
+      feature_keys = "\n".join(extract_feature_map(r))
+      for token in LEAKAGE_TOKENS:
+        self.assertNotIn(token, feature_keys)
+
+  def test_safe_skips_keeps_full_live_recall(self):
+    # Live candidate at score 0.5: only candidates scored below it are safe to skip.
+    res = _safe_skips([(0.9, False), (0.5, True), (0.1, False)])
+    self.assertEqual(res["safe_skips"], 1)
+    self.assertEqual(res["live_candidates"], 1)
+    # Live candidate ranked top: everything below is safe to skip.
+    self.assertEqual(_safe_skips([(0.9, True), (0.5, False), (0.1, False)])["safe_skips"], 2)
+    # No live candidates: everything is skippable (and the batch is degenerate).
+    none_live = _safe_skips([(0.5, False), (0.2, False)])
+    self.assertEqual(none_live["safe_skips"], 2)
+    self.assertEqual(none_live["live_candidates"], 0)
+
+  def test_committed_staged_freeze_predates_outcomes_and_compares_to_run_all(self):
+    if not (STAGED / "summary.json").exists():
+      self.skipTest("shadow-staged not scored yet")
+    freeze = json.loads((STAGED / "freeze.json").read_text())
+    self.assertEqual(freeze["predictions_sha256"], hashlib.sha256((STAGED / "predictions.jsonl").read_bytes()).hexdigest())
+    self.assertTrue(freeze["leakage_audit"]["leak_free"])
+    preds = [json.loads(line) for line in (STAGED / "predictions.jsonl").read_text().splitlines()]
+    outcomes = [json.loads(line) for line in (STAGED / "outcomes.jsonl").read_text().splitlines()]
+    self.assertEqual({p["id"] for p in preds}, {o["id"] for o in outcomes})
+    summary = json.loads((STAGED / "summary.json").read_text())
+    for gate in ("run_all", "xgboost", "mechanism_prior"):
+      self.assertIn(gate, summary["gates"])
+      self.assertEqual(summary["gates"][gate]["live_recall"], 1.0)
+    self.assertEqual(summary["gates"]["run_all"]["experiments_saved_vs_run_all"], 0)
 
 
 if __name__ == "__main__":

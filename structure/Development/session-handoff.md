@@ -427,31 +427,29 @@ the stop rule the model stays documentation-only; Phase 5 is not entered.
 `test/external/test_qk_flywheel_phase4.py` covers the freeze/leak-free/id-join/
 scoring invariants.
 
-Next scope is **Phase 4.1 Cost-Aware Staged Shadow**, fully written in
-`docs/amd-decode-flywheel-proof-plan.md`. The v0 negative reframed the goal: stop
-chasing macro-F1 versus `mechanism_prior` (likely unwinnable at the current
-feature set — live outcomes cluster in semantic-schedule families and
-identical-shape intra-family wins are weight-determined and unobservable) and
-instead measure the actual flywheel value: **wasted GPU reduction**. Concrete
-next-session deliverables:
+Phase 4.1 Cost-Aware Staged Shadow is implemented and run
+(`extra/qk_flywheel_shadow.py` staged steps, `shadow-staged/`). Result is a
+**positive — the cost model beats the prior**, the first evidence the learned model
+adds value over the deterministic baseline. Keep/skip rank scores for `16` fresh
+semantic-schedule candidates were frozen before the microbench (commit `f7979eb4a`;
+`predictions.jsonl`/`freeze.json` hash-verified unchanged after outcomes, leak-free
+path). Outcomes: `2` raw_accept (live), `5` tie, `1` reject, `8`
+construction_blocked. The model ranked both live candidates (`row_upcast` on
+`blk.1/2.attn_q.weight`) at the top, so its gate would run `2` microbenches instead
+of `16` and catch both winners: `14/16` experiments saved at `100%` live-recall vs
+`0` for `mechanism_prior`. It works by learning the (role x mechanism) interaction
+the mechanism-only prior ignores (`row_upcast` wins `6/8` on attn_q, `0/4` on
+ffn_gate). Caveats: only `2` live in this batch; a hand-coded role x mechanism prior
+would likely match it; validate on larger batches. `test_qk_flywheel_phase4.py`
+covers the staged freeze/leak-free/safe-skip/integrity invariants.
 
-1. Extend `extra/qk_flywheel_shadow.py` with a compile-stage candidate builder
-   (predict at `after_compile_before_microbench` using the real compile-gate
-   features) and a per-stage GPU-seconds cost model (from generator `elapsed_s` /
-   device timing).
-2. Build a diverse, live-bearing fresh batch (~20 candidates) from live-capable
-   families (semantic-schedule `parts_local_policy` / `row_upcast` /
-   `direct_output` on fresh tensors with varying parts/opts, plus a
-   `packed_word_lane_unroll` ffn_gate block, plus cheap dead `qk_block_dot` /
-   `wide_load_only` probes). Freeze keep/skip decisions before outcomes.
-3. Score wasted-GPU saved vs run-everything for both `mechanism_prior` gating and
-   the cost-model gating, at 100% live-recall; report whether the model beats the
-   prior. The prior winning is still a decisive flywheel result.
-
-Reuse the v0 freeze protocol, leak-free path, and scorer. Do not re-roll the v0
-batch to manufacture a pass; v0 stands as recorded. This builds the evidence
-Phase 5 (controlled assist) and Phase 6 (alternative proof: wasted-experiment
-reduction) require.
+Next scope is **Phase 5 Controlled Assist Mode** (the model has earned entry): let
+the gate actually skip predicted-dead microbenches in the loop, keeping the prior as
+a fallback, and measure GPU saved per decisive outcome on a larger, more diverse
+batch (more live-capable families/roles, varying parts/opts) to confirm the role x
+mechanism signal generalizes beyond `2` live candidates. Do not let the model bypass
+static/correctness/microbench/full-decode gates or drive 14B/32B. The staged harness,
+freeze protocol, and safe-skip scorer are reusable as-is.
 
 The original Phase 4 scope (now executed) remains documented in
 `docs/amd-decode-flywheel-proof-plan.md`. Earlier next-session deliverables, for
