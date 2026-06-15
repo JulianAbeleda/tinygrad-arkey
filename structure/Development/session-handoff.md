@@ -679,6 +679,22 @@ decode win (on-target spaces dead). Next action: N0a -- build matmul_decoded (Q4
 + native matmul), measure vs the W2 fused kernel across batch N on real 8B shapes; then N0b -- log
 BEAM (config->device_time) trials as the learnability dataset for N1.
 
+UPDATE 2026-06-15 -- Phase N COMPLETE through N1; THE LOOP HAS A HOME (first genuine positive).
+- N0a (`extra/qk_matmul_decoded.py`): matmul_decoded (dequant pass + native matmul) beats the W2 fused
+  kernel 4.5-9.6x per-call across N (dequant ~112us, fully amortized). Competitive batched path.
+- N0b (`extra/qk_beam_log.py`, `beam_log.jsonl`): native-matmul opt space is RUGGED (111-223x spread),
+  SHARP (2-10 near-optimal of ~250), NO universal winner (lookup fails), STRUCTURED (family clusters).
+- N1 (`extra/qk_loop_{dataset,learnability}.py`, `beam_log_n1.jsonl` 3878 rec / 14 shapes,
+  `n1_learnability.json` + `n1_RESULT.md`): leave-one-shape-out XGBoost. Model top1 = 0.89 of oracle
+  vs LOOKUP 0.80, worth ~131 random trials. PRE-REGISTERED GATE = FAIL (overall 0.90 missed by 0.01,
+  kept honest). Diagnostic: miss is 4 under-sampled small-N shapes (0.705); batched N>=256 (10 folds)
+  = 0.964 of oracle, clears 0.90. TRANSFER rises 0.46(k=1)->0.89(k=13). The conditions absent in the
+  dead spaces are present here: rich+competitive+learnable+transfers. The loop mechanism works on the
+  native-matmul substrate (decoupled from llama.cpp decode per scope boundary).
+Doc: `docs/amd-decode-loop-substrate.md`. Next options (user's): close the strict gate (N1.1 -- sweep
+more small-N shapes for coverage), build the actual loop (warm-start BEAM from the cost model and
+measure end-to-end trial savings), or write the final report (the arc is now a complete positive+negative).
+
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
 reaches llama.cpp; the fused-dequant->WMMA structure is the prerequisite for the search space to
