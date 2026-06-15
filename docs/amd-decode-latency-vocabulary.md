@@ -76,6 +76,24 @@ build the subsystem. Combine with the D0 int8 finding: even the int8 ceiling loo
 pre-register that decode PARITY may be unreachable on this kernel and the honest outcome may be a
 located ceiling, not a win.
 
+**L0 -- RESULT (2026-06-15): STOP. Latency-hiding is NOT the binding constraint; do not build Phase L.**
+`latency-L0/RESULT.md`. Baseline fp decode 58 tok/s / 278 GB/s; llama.cpp 104 / ~470-500.
+- L0a occupancy via existing parts/LOCAL: FLAT (~82-86 GB/s across parts 1->16; re-confirms M0).
+- L1 occupancy-FORCING (patched HIPRenderer `amdgpu_waves_per_eu(N)`, end-to-end): WAVES_PER_EU=2->30.0,
+  4->29.7, 6->30.0, 8->21.3 tok/s -- forcing higher occupancy REGRESSES (~halves) decode. The
+  compiler's default occupancy is already optimal; more waves -> spills/less ILP. Decode is NOT
+  occupancy-starved (a starved kernel would SPEED UP with more waves).
+- L2 prefetch-via-ILP: the UPCAST/UNROLL/parts knobs are FLAT (M0); LLVM already extracts ILP; kernels
+  already overlap end-to-end (278 aggregate vs ~85-173 per-kernel).
+Verdict: none of the accessible latency-hiding levers move decode; forcing occupancy makes it worse.
+Per the pre-registered gate -> STOP. The decode GEMV is bound by what the compiler+LLVM already balance
+(occupancy + scheduling) plus the Q4_K DEQUANT ALU cost (~3862 vector ops/kernel, M0), not by hideable
+memory latency. Both scoped decode levers are now probed NEGATIVE (DP4A compute = D0; latency-hiding =
+L0). The residual ~2x gap is a dequant-cost + kernel-structure (count/fusion) problem the scoped
+vocabularies do not address; realistic ceiling ~81 tok/s (~78%), parity likely unreachable via codegen
+vocabulary. The L0 probe (a cheap, reverted renderer patch) caught a non-binding constraint before
+building a major subsystem. The phases below are RETAINED for the record but NOT to be built.
+
 **L1-L4 — build the proven lever(s).** Only the lever(s) L0 proved real: the UOp/render touch point +
 the `OptOps` action + the `search.py` wiring. Unit-test correctness; confirm gfx1100 codegen.
 

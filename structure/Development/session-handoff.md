@@ -1599,3 +1599,17 @@ double-buffer) -- if the best moves decode toward ~90-104 build that lever; if N
 -> latency-hiding isn't the binding constraint (occupancy ceiling / LLVM already hides it) -> stop.
 Pre-registered: even int8 ceilinged ~81 (D0), so decode PARITY may be unreachable; a located ceiling is
 an acceptable result. Next action: run the L0 probes.
+
+UPDATE 2026-06-15 -- Phase L0 RAN: STOP. Latency-hiding is NOT the decode bottleneck; do not build
+Phase L. `bench/.../latency-L0/RESULT.md`. L0a occupancy via existing parts/LOCAL: flat (~82-86 GB/s,
+re-confirms M0). L1 occupancy-FORCING (patched HIPRenderer amdgpu_waves_per_eu, end-to-end, reverted):
+WAVES_PER_EU 2/4/6 -> ~30 tok/s, 8 -> 21 -- forcing higher occupancy REGRESSES decode (baseline 58).
+The compiler default occupancy is already optimal; decode is NOT occupancy-starved (a starved kernel
+speeds up with more waves; this slows down). L2 prefetch-via-ILP: UPCAST/UNROLL flat (M0), LLVM already
+schedules, kernels already overlap end-to-end (278 aggregate vs ~85-173 per-kernel). Verdict per
+pre-registered gate: STOP. Both scoped decode levers now probed NEGATIVE -- DP4A (D0, compute, wrong
+axis) and latency-hiding (L0, not the constraint). The residual ~2x decode gap to llama.cpp is a Q4_K
+dequant-ALU-cost + kernel-count/fusion problem the scoped codegen vocabularies do NOT address;
+realistic ceiling ~81 tok/s (~78%), PARITY likely unreachable via codegen vocabulary. cstyle.py
+reverted to pristine. The roofline/probe-first discipline caught two non-binding levers (DP4A, latency)
+before building either subsystem.
