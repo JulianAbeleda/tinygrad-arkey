@@ -11,6 +11,11 @@ but the rerun is still gated by residual mechanism-coverage requirements.
 Parent architecture note:
 `docs/amd-decode-kernel-optimization-flywheel.md`.
 
+Postmortem (read this first for the honest arc and what is actually real):
+`docs/amd-decode-flywheel-postmortem.md` — the triage premise was a dead end (noise
+metric + a deterministic rule matches the model), but re-basing the metric and reducing
+to primitives produced a real target: batching / a fused Q4_K GEMM (Phase B).
+
 ## Goal
 
 Prove whether the structured model/eval loop can make the AMD kernel
