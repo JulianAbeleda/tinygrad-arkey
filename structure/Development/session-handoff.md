@@ -1816,3 +1816,14 @@ Decode gap is structural (per-token latency across ~252 launches), not a single-
 Closes the decode lever hunt. Commit cc9cacdf2 + docs. (Machine fp baseline ran 30 tok/s this session
 vs historical 58 -- GPU degraded after HW faults; comparison is apples-to-apples same-run so null holds.)
 Q4K_VDOT default-off; renderer _dp4a gated; default decode unchanged (verified).
+
+## 2026-06-15 — B1 horizontal-fusion probe: NEGATIVE, relocates bottleneck, forks to speculation
+Fused q/k/v->1 GEMV + gate/up->1 (concat Q4_K rows, Q4K_FUSE default-off). Result: 26.6 tok/s (-12% vs
+30.3), correct, only -36/766 kernels. DECISIVE finding (kernels/token): TinyJit collapses the ~730-kernel
+decode into ONE replayed graph (~6 host-kernels/token) -> HOST LAUNCH OVERHEAD ALREADY GONE. Horizontal
+fusion trades launch-count for output-split ops (~break-even); GPU work unchanged. The 33ms/token is
+GPU-side sequential execution of ~730 memory-latency-bound batch-1 kernels -> lever is PARALLELISM PER
+KERNEL (a batch dim), not fewer launches. Gate <=0% -> PIVOT to speculation/batching (Strategy A): B0's
+13-26x batching applies, validated loop (N1/N2/L0/L1) is the substrate, draft model = the fine-tuning lever.
+Rules out megakernel ladder for single-stream on this stack. Commit 8bc5cedb0. fusion-probe-B1/RESULT.md.
+Next make-or-break: batched-decode-forward latency curve (B=1,2,4,8) = the speculation ceiling.
