@@ -492,6 +492,49 @@ def q4k_q8_1_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:
 
   return kernel
 
+def q4k_q8_1_coop_fused_kernel(rows:int, k:int, block_m:int):
+  # Q0a fix: HAND-managed thread cooperation (the amd_copy_matmul pattern). Workgroup = block_m rows;
+  # the local thread `lid` (0..block_m-1) is used for BOTH phases: phase 1 the block_m threads
+  # cooperatively quantize x to q8_1 in LDS (each does q8b/block_m blocks), barrier, phase 2 each
+  # thread computes ITS OWN row's int-dot. No LOCAL opt (which fought the prologue); no redundant dot.
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  q8b = k // Q8_1_BLOCK_ELEMS
+  assert rows % block_m == 0 and q8b % block_m == 0
+  bpt = q8b // block_m
+  f32 = dtypes.float32
+
+  def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
+    block = UOp.range(rows // block_m, 0, AxisType.GLOBAL)
+    lid = UOp.range(block_m, 1, AxisType.LOCAL)
+    xq_lds = UOp.placeholder((k,), dtypes.int8, 0, addrspace=AddrSpace.LOCAL)
+    xs_lds = UOp.placeholder((q8b,), f32, 1, addrspace=AddrSpace.LOCAL)
+    # --- phase 1: the block_m threads cooperatively quantize x (each thread: bpt q8 blocks) ---
+    jb = UOp.range(bpt, 10)
+    qb = jb*block_m + lid                       # strided -> coalesced x loads
+    p1 = UOp.range(Q8_1_BLOCK_ELEMS, 11, axis_type=AxisType.REDUCE)
+    xa = x[qb*Q8_1_BLOCK_ELEMS + p1].cast(f32); xa = (xa < 0.0).where(-xa, xa)
+    amax = UOp.placeholder((1,), f32, 100, addrspace=AddrSpace.REG)
+    amax = amax.after(jb)[0].set(0.0)
+    amax = amax[0].set((xa > amax.after(p1)[0]).where(xa, amax.after(p1)[0]), end=p1)
+    scale = amax[0] / UOp.const(f32, 127.0); scale = (scale <= 0.0).where(UOp.const(f32, 1.0), scale)
+    p2 = UOp.range(Q8_1_BLOCK_ELEMS, 12)
+    xv = x[qb*Q8_1_BLOCK_ELEMS + p2].cast(f32) / scale
+    xr = xv + (xv >= 0.0).where(UOp.const(f32, 0.5), UOp.const(f32, -0.5))
+    qstore = xq_lds[qb*Q8_1_BLOCK_ELEMS + p2].store(xr.cast(dtypes.int8))
+    sstore = xs_lds[qb].store(scale, gate=(p2 < 1))
+    bar = UOp.barrier(UOp.group(sstore, qstore).end(jb, p2))
+    xq, xs = xq_lds.after(bar), xs_lds.after(bar)
+    # --- phase 2: each thread computes its own row = block*block_m + lid ---
+    row = block*block_m + lid
+    blk = UOp.range(k_blocks, 2, axis_type=AxisType.REDUCE)
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = _q4k_block_dot_q8_1_intdot(words, xq, xs, base, blk, (block, lid, blk))
+    acc = out[row].set(0.0)
+    acc = out[row].set(acc.after(blk)[row] + contrib, end=blk)
+    return acc.end(block, lid).sink(arg=_kernel_info(f"q4k_q8_1_coop_fused_{rows}_{k}_{block_m}", "none", ()))
+
+  return kernel
+
 def q4k_q8_1_fused_intdot_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   # Q0a.2: ONE kernel -- phase 1 quantizes the fp16 activation x to q8_1 (int8 + per-32-block scale)
   # into LDS, barrier, then phase 2 is the int-dot reading q8/scales from LDS. No separate quant launch

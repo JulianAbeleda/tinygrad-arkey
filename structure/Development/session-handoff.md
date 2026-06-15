@@ -1698,3 +1698,24 @@ tinygrad/AMD decode ceiling; parity needs the Writer (hand-written AMD kernels =
 The program's POSITIVE result stands: the loop on the SCHEDULE axis for the BATCHED regime (N1/N2,
 33-98% peak). Single-stream quantized DECODE parity on AMD/tinygrad is not reachable without hand
 kernels, on this evidence.
+
+UPDATE 2026-06-15 -- Q0a COOP FIX: proved tinygrad CAN express a fast fused decode GEMV (409 GB/s
+standalone, near llama.cpp 470), but it regresses e2e (24 tok/s) -- structural, not the kernel.
+`bench/.../q0a/COOP_RESULT.md`. DIAGNOSIS of the original Q0a slowdown: NOT a lowering-hoist bug -- a
+THREAD-ASSIGNMENT CONFLICT (the LOCAL opt's threads went to phase-1 quant, so phase-2's dot ran
+redundantly across all threads -> 24x). FIX: hand-managed cooperative kernel
+`q4k_q8_1_coop_fused_kernel` (amd_copy_matmul pattern -- workgroup=block_m rows; the block_m local
+threads do BOTH cooperative quant-into-LDS AND their own row's dot). Correct (rel_err 0.004),
+STANDALONE 409 Q4-GB/s (vs broken-fused 10, separate-intdot 242, fp 173). But END-TO-END 24-25 tok/s
+(block_m 16/32/64 all same) -- REGRESSED vs fp 58. WHY: the fused kernel re-quantizes x PER WORKGROUP
+-> needs LDS (~4.5KB, CAPS occupancy) + a BARRIER (breaks the inter-kernel PIPELINING decode lives on:
+fp barrier-free e2e 278 > per-kernel 173; coop e2e 117 << standalone 409). LDS+barrier is the wrong
+structure for occupancy/latency-bound small-GEMV decode. THE FIX IT REVEALS (= llama.cpp's structure):
+the LDS+barrier is ONLY needed because of per-workgroup re-quant. llama.cpp quantizes x ONCE/token
+(cheap global pass), GEMVs read global q8 BARRIER-FREE (pipeline). So next: AMORTIZED GLOBAL QUANT +
+the barrier-free q4k_q8_1_intdot_partial_kernel -- quantize the shared activation once (attn-input ->
+q/k/v; ffn-input -> gate/up), reuse across linears. D0 had the barrier-free int-dot at 242 standalone
+/ 28 e2e WITH per-linear quant (7x/layer); amortizing to ~2x/layer is the untested path that could
+beat fp -- needs model-forward surgery (quantize x once in the attn/ffn block, pass q8 to linears),
+NOT a fused kernel. This is the FIRST decode lead that is not a dead end. model.py reverted to pristine;
+coop kernel kept in q4_k_gemv_primitive.py.
