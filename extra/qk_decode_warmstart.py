@@ -47,7 +47,7 @@ def _load_warmstart_map():
   wmap = {}
   for e in json.loads(OPTS_JSON.read_text()):
     opts = tuple(Opt(OptOps[o["op"]], o["axis"], tuple(o["arg"]) if isinstance(o["arg"], list) else o["arg"]) for o in e["opts"])
-    wmap[(frozenset({e["M"], e["N"]}), e["K"])] = opts  # forward matmul: out dims {M,N}, reduce K
+    wmap[(frozenset({e["M"]}), e["K"])] = opts  # forward matmul: concrete out dim {M}, reduce K (N is symbolic)
   return wmap
 
 
@@ -63,10 +63,16 @@ def _measure():
   mc = model.max_context
   v_sp = UOp.variable("start_pos", 0, mc-1); v_tk = UOp.variable("toks", 1, 32)
   temp = Tensor([0.0]); t = Tensor([[1]*mc], dtype="int32")
-  T = 16; sp = v_sp.bind(0); nt = v_tk.bind(T); inp = t[:, sp:sp+nt]
-  for _ in range(3): model(inp, sp, temp).realize()  # warmup/JIT (warmstart fires here)
+  T = 16
+  if getenv("CONCRETE"):  # bypass the symbolic JIT batch var -> concrete N=16 so TC can apply
+    toks = Tensor([[1]*T], dtype="int32")
+    call = lambda: model.forward(toks, 0, temp)
+  else:
+    sp = v_sp.bind(0); nt = v_tk.bind(T); inp = t[:, sp:sp+nt]
+    call = lambda: model(inp, sp, temp)
+  for _ in range(3): call().realize()  # warmup/JIT (warmstart fires here)
   GlobalCounters.reset(); R = 5; st = time.perf_counter()
-  for _ in range(R): model(inp, sp, temp).realize()
+  for _ in range(R): call().realize()
   dt = (time.perf_counter()-st)/R
   print(f"{'WARMSTART' if warm else 'BASELINE '} T=16: {dt*1000:.2f} ms ({dt/T*1000:.2f} ms/tok)", file=sys.__stdout__)
   print(f"warmstart_stats: {pr._warmstart_stats}", file=sys.__stdout__)

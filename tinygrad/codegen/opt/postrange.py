@@ -337,11 +337,12 @@ def bufs_from_ast(ast:UOp, dname:str) -> list[Buffer]:
 _WARMSTART_OPTS = None
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
 def _warmstart_match(k):
+  # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce)
   red, out = 1, []
   for s, t in zip(k.full_shape, k.axis_types):
-    if not isinstance(s, int): return None  # symbolic dim -> can't match a concrete shape
-    if t in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE): red *= s
-    else: out.append(s)
+    if t in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE):
+      if isinstance(s, int): red *= s
+    elif isinstance(s, int): out.append(s)
   return _WARMSTART_OPTS.get((frozenset(out), red))
 
 def apply_opts(ast:UOp, ren:Renderer, beam:int=0) -> UOp:
