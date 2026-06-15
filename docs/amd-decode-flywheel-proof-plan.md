@@ -1889,6 +1889,40 @@ space. The next priority is therefore not G2 but a metric audit: re-score the ca
 space on `device_q4_eff` and re-check whether ANY candidate genuinely beats `v1_partial`
 on device before spending more effort on generation or assist.
 
+### G0': Device-metric search over existing kernel strategies and occupancy
+
+Purpose:
+
+- With the metric fixed (`device_q4_eff` / measured peak) and the bottleneck named (Q4_K
+  dequant compute + occupancy), test whether any EXISTING kernel strategy or occupancy
+  setting beats `v1_partial` on the device metric -- before committing to new dequant
+  codegen. G0 only searched `partial`-mode ILP knobs on the wrong (wall) metric; the opt
+  knobs do not touch the dequant, but the other `q4_k_bench` primitive MODES are genuinely
+  different dequant/load kernels.
+
+Method:
+
+- Sweep the primitive modes (`serial`, `partial`, `packed_load`, `vector_load`, `grouped`,
+  `tile_custom`) x occupancy knobs (`parts` in `{1,2,4}`, `LOCAL` in `{32,64,128}`,
+  `row_group` for grouped) on the worst-case small matrix (`attn_q`, ~20% of peak) and a
+  large one (`ffn_gate`, ~47%). Median `device_q4_eff` per candidate, correctness-gated,
+  expressed as roofline fraction. Deterministic -- no model.
+
+Exit gate (pre-registered):
+
+- If some mode/setting beats `v1_partial` on device by more than the `2%` noise band at full
+  correctness, real headroom exists via existing codegen: quantify it and hand that space to
+  G1 (model-guided vs random).
+- If none beats `v1_partial`, the existing kernels are all similarly dequant/occupancy-bound,
+  and the bottleneck requires NEW dequant codegen (G0'': implement LUT 4-bit->fp,
+  bit-field-extract, vectorized multi-nibble unpack, fused scale/min). That is a
+  kernel-authoring task, not a search -- scope it separately and do not pretend a knob sweep
+  can reach it.
+
+Out of scope:
+
+- `UPCAST`/`UNROLL` (G0 killed them on device); the wall-clock metric.
+
 ### G1: Model-guided search versus brute force
 
 Purpose (only if G0 shows headroom):
