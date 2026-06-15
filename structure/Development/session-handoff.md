@@ -524,13 +524,24 @@ Phase M (Metric Re-base and Bottleneck Diagnosis) is implemented and run
   vectorized multi-nibble unpack, fused scale/min) + raise occupancy. DROP UPCAST/UNROLL and
   wider loads (already b128).
 
-Next step is **G0' (re-run headroom probe) over the dequant/occupancy axes on the
-`device_q4_eff` metric**, then -- only if device-real headroom is found by deterministic
-search -- G1 (model-guided vs random) and G2 (structural). Concrete: a dequant-variant
-search (e.g. LUT vs shift/mask unpack, multi-nibble vectorization, parts/occupancy sweep)
-measured as roofline-relative device bandwidth, with the device metric wired into any revived
-schedule_bench/cost-model labels (fix the q4_eff->device_q4_eff capture). The original Phase G
-deliverables (G1/G2) remain scoped but gated on G0':
+G0' is implemented and run (`extra/qk_generation_g0prime.py`, `generation-g0prime/`):
+swept 6 primitive modes x parts {1,2,4} on the device metric. Result: `packed_load` (parts1)
+is the ONLY existing kernel that beats `v1_partial` -- `+6.2%` on attn_q (21.5%->22.8% of
+peak, confirmed across 5 seeds) and `+2.1%` on ffn_gate (49%->50%); all other modes are worse
+and tile_custom is broken (~4%); parts>1 always hurts. packed_load is the 3G
+packed_word_lane_unroll mechanism, so 3G found a small real win while the 4.x schedule work
+was noise. But it is marginal -- the best kernel still sits at 22.8%/50% of peak, leaving
+~4.4x/~2x residual -- and the 18-candidate mode space is fully enumerated, so there is no
+role for model-guided search (G1).
+
+Next step is **G0'' -- author alternative Q4_K dequant kernels** (the bottleneck named by
+M0b): LUT 4-bit->fp dequant, bit-field-extract instead of shift+mask chains, vectorized
+multi-nibble unpack, fused scale/min; benchmark on the device metric (device_q4_eff /
+859 GB/s peak) against the new `packed_load` baseline, correctness-gated. This is
+kernel-authoring (likely in extra/q4_k_bench.py's primitive path or a new primitive mode),
+not a search. G1 (model-guided) only becomes relevant once G0'' creates a large parametric
+dequant-variant space. Adopt packed_load as the new device baseline meanwhile. Also wire the
+device metric into any revived schedule_bench/cost-model labels (fix q4_eff->device_q4_eff).
 
 1. **G0 headroom probe (deterministic, shadow)**: expand the parametric space on the
    live-bearing attn_q tensors (LOCAL {16..256}, parts sweep, UPCAST/UNROLL args

@@ -1923,6 +1923,28 @@ Out of scope:
 
 - `UPCAST`/`UNROLL` (G0 killed them on device); the wall-clock metric.
 
+Result (2026-06-14, `extra/qk_generation_g0prime.py`, `generation-g0prime/`): a small but
+**real, reproducible device win** -- and a clear pointer to the real work. Sweeping `6` modes
+x `parts {1,2,4}` (`18` candidates) x `2` tensors on the device metric: `packed_load` (parts1)
+is the ONLY strategy that beats `v1_partial` -- `+6.2%` on `attn_q` (`21.5% -> 22.8%` of peak,
+confirmed across `5` seeds) and `+2.1%` on `ffn_gate` (`49% -> 50%`). Every other mode is
+worse (serial/vector_load/grouped below baseline; `tile_custom` broken at `~4%`); `parts>1`
+always hurts (split-k overhead, no occupancy gain). Notably `packed_load` is the 3G
+`packed_word_lane_unroll` mechanism -- so 3G found a genuine (small) device win while the 4.x
+schedule work was wall-clock noise.
+
+But the win is marginal: even the best existing kernel reaches only `22.8%` (attn_q) / `50%`
+(ffn_gate) of peak, leaving `~4.4x` / `~2x` residual. The `18`-candidate mode x parts space is
+small and fully enumerated by brute force, so there is no role for model-guided search (G1):
+G1's premise is a space too large to enumerate, which does not hold here. The residual
+headroom is gated by the dequant bottleneck (M0b) and needs NEW dequant codegen.
+
+Decision: adopt `packed_load` as the new device baseline (a free `+6%/+2%`), and proceed to
+**G0''** -- author alternative Q4_K dequant kernels (LUT 4-bit->fp, bit-field-extract instead
+of shift+mask chains, vectorized multi-nibble unpack, fused scale/min) and benchmark them on
+the device metric. That is a kernel-authoring task, not a search; G1 (model-guided) only
+becomes relevant once G0'' creates a large parametric dequant-variant space worth searching.
+
 ### G1: Model-guided search versus brute force
 
 Purpose (only if G0 shows headroom):
