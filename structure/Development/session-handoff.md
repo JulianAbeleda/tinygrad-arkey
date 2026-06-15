@@ -544,16 +544,33 @@ NOT decode op-count, so ALU-reduction backfires; this down-weights the other ALU
 (bfe_nibble, lut_dequant), not pursued without a new hypothesis. packed_load stays the adopted
 device baseline (+6%/+2% over v1_partial, the one real win in the whole program).
 
-Honest state of the generation/optimization track: the residual ~2-5x device gap is NOT reachable
-by dequant-ALU restructuring. To make further progress the next attempt must change the lever, not
-the op count -- options, roughly: (a) a reduction/occupancy structure that adds parallelism WITHOUT
-serializing the reduce (the opposite of what hoist did) -- e.g. more workgroup threads cooperating
-on the K reduce; (b) a different weight storage layout that the kernel can stream/decode more
-cheaply; (c) a fused decode+matmul. Or accept that this latency-bound batch-1 GEMV is near its
-practical ceiling and that packed_load's +6% is the achievable win. Either way, the flywheel's
-learned-model question is already answered (no value at this feature set), and the kernel question
-now has a careful negative for the most-grounded variant. Also still open: wire device_q4_eff into
-any revived schedule_bench/cost-model labels (fix q4_eff->device_q4_eff).
+The generation/optimization track concluded the residual batch-1 gap is NOT reachable by
+dequant-ALU restructuring. The primitive analysis (G0'' postmortem) identified the structural
+lever: WEIGHT REUSE via batching. That is now scoped as **Phase B (Batched Q4_K Matmul
+Modality)** in `docs/amd-decode-flywheel-proof-plan.md` -- the next direction.
+
+Batch-1 decode GEMV has zero weight reuse (each dequantized weight used once), so it is
+latency-bound at ~20-47% of peak. Batching (B>1) makes it W[M,K].X[K,B] (a GEMM): each
+dequantized weight is reused B times, the dequant amortizes B-fold, and the op moves from
+memory/latency-bound to compute-bound. Applies to prefill, batched serving, and
+speculative/Medusa decode -- NOT single-stream greedy decode (irreducibly B=1). So it raises
+throughput/prefill, not one stream's per-token latency (do not oversell).
+
+Concrete next-session deliverables:
+1. **B0 (runnable now)**: sweep q4_k_bench --seq-len {1,2,4,8,16,32,64,128} (--primitive is
+   batch-1 only; use the matmul paths) measuring decode_q4_k_plus_matmul (fused dequant+matmul =
+   real quantized GEMM) and matmul_decoded (pre-dequantized dense fp16 = compute ceiling) on
+   attn_q + ffn_gate. Compute per-token latency, achieved FLOPS / measured fp16 compute roof, and
+   per-token speedup vs B=1; locate the memory->compute crossover batch. Pre-registered: steep
+   per-token efficiency climb approaching the dense ceiling -> batching confirmed as the lever;
+   fused path stays far below the dense ceiling -> a fused Q4_K GEMM primitive (B1) is needed.
+2. **B1 (only if B0 shows headroom)**: a fused Q4_K GEMM kernel that dequantizes each weight tile
+   ONCE into registers/LDS and reuses across the B columns of X (no fp16 materialization
+   round-trip). This is also the first place a parametric tiling space (M x B x K) may be large
+   enough that model-guided search (G1) could earn its keep on a correctly-measured target.
+
+Also still open: wire device_q4_eff into any revived schedule_bench/cost-model labels (fix
+q4_eff->device_q4_eff).
 
 1. **G0 headroom probe (deterministic, shadow)**: expand the parametric space on the
    live-bearing attn_q tensors (LOCAL {16..256}, parts sweep, UPCAST/UNROLL args

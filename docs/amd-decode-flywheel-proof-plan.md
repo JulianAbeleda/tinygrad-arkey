@@ -2063,6 +2063,74 @@ Out of scope:
 - Bypassing any gate; 14B/32B; correctness shortcuts; treating a microbench win as
   proof without full decode.
 
+## Phase B: Batched Q4_K Matmul Modality (the weight-reuse lever)
+
+The G0'' postmortem (primitive analysis) showed the batch-1 decode GEMV is
+latency/occupancy-bound with ZERO weight reuse: each dequantized weight is used in
+exactly one multiply, so the hardware idles on the load -> dequant -> accumulate chain
+and reaches only `~20-47%` of bandwidth. The structural lever is REUSE via batching:
+process `B > 1` tokens at once so the operation becomes `W[M,K] . X[K,B]` (a GEMM), each
+dequantized weight is reused `B` times, the dequant cost amortizes `B`-fold, and the op
+transitions from memory/latency-bound to compute-bound. This is the "different attack"
+G0'' pointed to -- not more dequant-ALU tuning.
+
+Documenting the modality (when it applies):
+
+- Prefill (the whole prompt is `B = prompt_len` rows at once).
+- Batched serving (several concurrent sequences decode together; `B = batch`).
+- Speculative / Medusa decode (multiple candidate tokens verified per step; `B = k`).
+- It does NOT apply to single-stream greedy decode, which is irreducibly `B = 1`. So this
+  modality raises THROUGHPUT (tokens/sec across a batch) and prefill speed, not the
+  per-token LATENCY of one isolated stream -- state that honestly; do not oversell it as
+  a decode-latency win.
+
+### B0: Batch-size efficiency curve (runnable now)
+
+Purpose:
+
+- Quantify the amortization: does per-token efficiency climb with `B`, and how far toward
+  the compute roof, before deciding whether a fused kernel (B1) is needed.
+
+Method:
+
+- Sweep `--seq-len` in `{1,2,4,8,16,32,64,128}` (q4_k_bench already supports it; `--primitive`
+  is batch-1 only, so use the matmul paths). Measure device time for `decode_q4_k_plus_matmul`
+  (fused dequant+matmul = the real quantized GEMM) and `matmul_decoded` (weights pre-dequantized
+  to fp16 then dense matmul = the compute ceiling if dequant were free), on a small tensor
+  (attn_q) and a large one (ffn_gate).
+- Compute per-token device latency (`time/B`), achieved FLOPS (`2*M*K*B/time`) as a fraction
+  of the measured fp16 compute roof, and the per-token speedup versus `B=1`. Locate the
+  crossover batch where the op stops being weight-memory-bound and becomes compute-bound.
+
+Exit gate (pre-registered):
+
+- If per-token efficiency climbs steeply with `B` and the fused path approaches the dense-fp16
+  ceiling, batching is the confirmed lever and the gain is quantified -- document the curve and
+  the crossover batch as the practical guidance.
+- If the fused `decode_q4_k_plus_matmul` path stays far below the `matmul_decoded` dense ceiling
+  even at large `B`, the dequant is not amortizing well (likely the fp16 materialization
+  round-trip), which motivates B1.
+
+### B1: Fused Q4_K GEMM primitive (kernel authoring, only if B0 shows headroom)
+
+- A kernel that dequantizes each weight tile ONCE into registers/LDS and reuses it across the
+  `B` columns of `X`, avoiding the dequantize-to-fp16-then-dense-matmul memory round-trip.
+  Correctness-gated, measured on the batched metric. This is where a parametric tiling space
+  (tile over `M x B x K`) may finally be large enough that model-guided search (G1) earns its
+  keep -- the first place in the whole program where the learned-model question could be revived
+  on a real, correctly-measured target.
+
+Metric:
+
+- Per-token device latency and achieved FLOPS / measured fp16 compute roof (measure the compute
+  peak directly, as Phase M measured the bandwidth peak). The roofline denominator shifts from
+  memory bandwidth (`B=1`) to compute (large `B`); B0 locates the transition.
+
+Out of scope:
+
+- Any numerics change; single-stream greedy decode (document it requires a batching source);
+  the wall-clock metric.
+
 ## Phase 7: Maintenance Loop
 
 Purpose:
