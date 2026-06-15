@@ -2002,6 +2002,23 @@ Out of scope:
 - The wall-clock metric. Model-guided search (G1) until a variant family creates a parametric
   space too large to enumerate.
 
+Result (2026-06-14, iteration 1, `extra/q4_k_gemv_primitive.py` `q4k_gemv_hoist_partial_kernel`,
+`generation-g0pp/`): the highest-value variant `hoist_scale_min` is **correct but a clear device
+regression** -- `36.8` vs packed_load `195.7` GB/s on attn_q (`-81%`) and `93.5` vs `430.2` on
+ffn_gate (`-78%`), exact numerics on both. The DEBUG=7 mix explains it: the kernel has MORE ALU
+(`5150` vs `3862`) and MORE int-dequant ops (`1718` vs `846`), not fewer -- collapsing pos/lane4
+into a full unroll to enable the algebraic factoring bloated the body and serialized the reduce.
+
+Lesson: the bottleneck (M0b) is occupancy/latency, NOT redundant decode op-count; restructuring
+the reduce to hoist the decode backfires because reduce parallelism dominates. ALU-op reduction is
+the wrong lever -- which also down-weights the other scoped ALU-level variants (`bfe_nibble`,
+`lut_dequant`); they were not pursued without a new hypothesis. Decision: `packed_load` remains the
+best kernel and the adopted device baseline. The residual `~2-5x` is not reachable by dequant-ALU
+restructuring; closing it needs a different attack -- a reduction/occupancy structure that adds
+parallelism without serializing, a different storage layout, or a fused decode+matmul -- or is
+substantially irreducible for this latency-bound GEMV. The `hoist_scale_min` mode is kept as a
+documented, correct-but-slow result.
+
 ### G1: Model-guided search versus brute force
 
 Purpose (only if G0 shows headroom):

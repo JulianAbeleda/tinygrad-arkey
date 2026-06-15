@@ -534,29 +534,26 @@ was noise. But it is marginal -- the best kernel still sits at 22.8%/50% of peak
 ~4.4x/~2x residual -- and the 18-candidate mode space is fully enumerated, so there is no
 role for model-guided search (G1).
 
-Next step is **G0'' -- author alternative Q4_K dequant kernels**, fully scoped in
-`docs/amd-decode-flywheel-proof-plan.md`. The bottleneck (M0b) is dequant compute, and the
-clearest grounded win is hoisting the scale/min decode. Concrete next-session deliverables:
+G0'' iteration 1 is done (`extra/q4_k_gemv_primitive.py` `q4k_gemv_hoist_partial_kernel`,
+`--primitive-mode hoist_scale_min`, `generation-g0pp/`). Result: the highest-value variant
+`hoist_scale_min` is correct (exact numerics) but a clear device regression -- 36.8 vs
+packed_load 195.7 GB/s on attn_q (-81%), 93.5 vs 430.2 on ffn_gate (-78%). DEBUG=7 shows MORE
+ALU (5150 vs 3862), not fewer: collapsing pos/lane4 into a full unroll to enable the algebraic
+factoring bloated and serialized the kernel. Lesson: the bottleneck (M0b) is occupancy/latency,
+NOT decode op-count, so ALU-reduction backfires; this down-weights the other ALU-level variants
+(bfe_nibble, lut_dequant), not pursued without a new hypothesis. packed_load stays the adopted
+device baseline (+6%/+2% over v1_partial, the one real win in the whole program).
 
-1. Implement variant `hoist_scale_min` (highest value): a new kernel builder in
-   `extra/q4_k_gemv_primitive.py` like `q4k_gemv_packed_load_partial_kernel` (L328) but with
-   `_q4k_group_params` (L20) computed ONCE per group and reused across all lanes/positions
-   (lift it out of the lane4 reduce). packed_load already cut it 32x->8x per group; this
-   targets 1x. Register a new `--primitive-mode` in `extra/q4_k_bench.py` (~L61 choices, ~L153
-   dispatch).
-2. Correctness-gate (primitive_gemv_correctness PASS, exact numerics) + device microbench;
-   score median device_q4_eff / 859 GB/s peak vs the packed_load baseline on attn_q (~23%) and
-   ffn_gate (~50%); capture DEBUG=7 instruction mix to confirm the cndmask/alignbit op count
-   actually dropped.
-3. If it beats packed_load by >2% at full correctness, adopt + iterate (then `bfe_nibble` via
-   CUSTOMI v_bfe_u32 per the vector_load L70 pattern, and `lut_dequant`). If nothing beats
-   packed_load, record the achievable ceiling honestly -- the gap is then irreducible for this
-   approach or needs a different attack (storage layout / fused decode+matmul / different
-   format).
-
-packed_load is the adopted device baseline. Also wire device_q4_eff into any revived
-schedule_bench/cost-model labels (fix q4_eff->device_q4_eff). G1 (model-guided) stays gated
-until a variant family creates a space too large to enumerate.
+Honest state of the generation/optimization track: the residual ~2-5x device gap is NOT reachable
+by dequant-ALU restructuring. To make further progress the next attempt must change the lever, not
+the op count -- options, roughly: (a) a reduction/occupancy structure that adds parallelism WITHOUT
+serializing the reduce (the opposite of what hoist did) -- e.g. more workgroup threads cooperating
+on the K reduce; (b) a different weight storage layout that the kernel can stream/decode more
+cheaply; (c) a fused decode+matmul. Or accept that this latency-bound batch-1 GEMV is near its
+practical ceiling and that packed_load's +6% is the achievable win. Either way, the flywheel's
+learned-model question is already answered (no value at this feature set), and the kernel question
+now has a careful negative for the most-grounded variant. Also still open: wire device_q4_eff into
+any revived schedule_bench/cost-model labels (fix q4_eff->device_q4_eff).
 
 1. **G0 headroom probe (deterministic, shadow)**: expand the parametric space on the
    live-bearing attn_q tensors (LOCAL {16..256}, parts sweep, UPCAST/UNROLL args

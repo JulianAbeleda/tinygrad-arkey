@@ -58,7 +58,7 @@ if __name__ == "__main__":
   parser.add_argument("--activation", choices=("random", "ones"), default="random", help="activation vector used by matvec benches")
   parser.add_argument("--seed", type=int, default=1337, help="seed for random activations")
   parser.add_argument("--primitive", action="store_true", help="also run the custom Q4_K GEMV primitive")
-  parser.add_argument("--primitive-mode", choices=("serial", "partial", "packed_load", "vector_load", "grouped", "tile_custom"), default="partial")
+  parser.add_argument("--primitive-mode", choices=("serial", "partial", "packed_load", "hoist_scale_min", "vector_load", "grouped", "tile_custom"), default="partial")
   parser.add_argument("--primitive-parts", type=int, default=1)
   parser.add_argument("--primitive-row-group", type=int, default=1)
   parser.add_argument("--primitive-schedule", choices=("none", "auto"), default="none")
@@ -94,7 +94,8 @@ if __name__ == "__main__":
   raw = Tensor(args.gguf)
   if args.primitive:
     from extra.q4_k_gemv_primitive import (
-      parse_opt, q4k_gemv_grouped_partial_kernel, q4k_gemv_kernel, q4k_gemv_packed_load_partial_kernel,
+      parse_opt, q4k_gemv_grouped_partial_kernel, q4k_gemv_hoist_partial_kernel, q4k_gemv_kernel,
+      q4k_gemv_packed_load_partial_kernel,
       q4k_gemv_partial_kernel, q4k_gemv_tile_custom_partial_kernel, q4k_gemv_vector_load_partial_kernel,
       q4k_unpack_kernel,
     )
@@ -155,6 +156,10 @@ if __name__ == "__main__":
         if args.primitive_mode == "packed_load":
           partial = partials.custom_kernel(
             words, x_vec, fxn=q4k_gemv_packed_load_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]
+          return partial.sum(axis=1)
+        if args.primitive_mode == "hoist_scale_min":
+          partial = partials.custom_kernel(
+            words, x_vec, fxn=q4k_gemv_hoist_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]
           return partial.sum(axis=1)
         if args.primitive_mode == "vector_load":
           partial = vector_partials.custom_kernel(

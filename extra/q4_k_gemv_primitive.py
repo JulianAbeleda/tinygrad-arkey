@@ -345,6 +345,51 @@ def q4k_gemv_packed_load_partial_kernel(rows:int, k:int, parts:int, schedule:str
 
   return kernel
 
+def _q4k_group_dot_hoist(words:UOp, x:UOp, base:UOp, x_block:UOp, grp:int) -> UOp:
+  # G0'' iteration 1 (tested NEGATIVE, kept as a documented result). Decode the per-group affine
+  # params ONCE and factor them out of the 32-element sum:
+  #   contrib_grp = d*sc * sum_pos(q*x) - dmin*mn * sum_pos(x)
+  # Correct (exact numerics) but device-regresses ~-80% vs packed_load: collapsing pos/lane4 into a
+  # full unroll bloats the body (MORE ALU: 5150 vs 3862) and serializes the reduce. The bottleneck
+  # is occupancy/latency (M0b), not redundant decode op-count, so this ALU-reduction lever backfires.
+  d, dmin, sc, mn = _q4k_group_params(words, base, grp)
+  qx = UOp.const(dtypes.float32, 0.0)
+  xs = UOp.const(dtypes.float32, 0.0)
+  for lane4 in range(8):
+    qword = words[base + 4 + (grp//2)*8 + lane4]
+    for nib in range(4):
+      pos = lane4 * 4 + nib
+      q = qword.rshift(nib*8 + (grp%2)*4).bitwise_and(0xf).cast(dtypes.float32)
+      xv = x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
+      qx = qx + q * xv
+      xs = xs + xv
+  return d * sc.cast(dtypes.float32) * qx - dmin * mn.cast(dtypes.float32) * xs
+
+def _q4k_block_dot_hoist(words:UOp, x:UOp, base:UOp, x_block:UOp) -> UOp:
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for grp in range(8):
+    contrib = contrib + _q4k_group_dot_hoist(words, x, base, x_block, grp)
+  return contrib
+
+def q4k_gemv_hoist_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    part = UOp.range(parts, 1)
+    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_hoist(words, x, base, blk), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, part].set(0.0)
+    acc = partials[row, part].set(acc.after(blk_part)[row, part] + contrib, end=blk_part)
+    return acc.end(row, part).sink(arg=_kernel_info(f"q4k_gemv_hoist_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
 def q4k_gemv_vector_load_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)
