@@ -506,25 +506,31 @@ actual bottleneck. Arithmetic intensity `~14` ops/byte is LEFT of the FP32 ridge
 so it should approach the roof; sitting at `19%` points to access-pattern / occupancy /
 INT-dequant throughput, not FP ILP.
 
-Next priority is **Phase M (Metric Re-base and Bottleneck Diagnosis)**, fully scoped in
-`docs/amd-decode-flywheel-proof-plan.md` -- the precursor that gates all further
-generation/triage. Concrete next-session deliverables:
+Phase M (Metric Re-base and Bottleneck Diagnosis) is implemented and run
+(`extra/qk_metric_audit.py`, DEBUG=7 profiling, `metric-audit-m0/`). Findings:
 
-1. **M0a metric re-base**: measure this GPU's actual peak HBM bandwidth (streaming copy),
-   define the canonical metric = `device_q4_eff` / measured_peak, re-score the G0 grid +
-   4.x candidates on it, and re-audit the 4.x raw_accept labels (were any real on
-   device?). Root cause to fix: `qk_semantic_schedule_bench` Q4_RESULT_RE captures
-   `q4_eff` (wall), not `device_q4_eff`.
-2. **M0b bottleneck diagnosis**: profile `v1_partial` on attn_q (DEBUG=7 instruction mix +
-   device counters + INT-aware roofline) to name what caps it at 19%: dequant-compute /
-   load-width / occupancy bound.
-3. **M0c redefine the search space**: keep only the axes that address the bottleneck, drop
-   UPCAST/UNROLL (G0 proved irrelevant); feed into a re-run headroom probe (G0').
+- **M0a**: measured peak = `859` GB/s (warm streaming copy; 89% of 960 datasheet). On the
+  device metric `v1_partial` is at `~20%` of peak on attn_q (~5x headroom) and `~47%` on
+  ffn_gate (~2x) -- real, shape-dependent headroom. Re-audit of `7` of the `22` distinct 4.x
+  raw_accept configs on device: **0 beat v1_partial beyond a 2% band** (median `-38.6%`;
+  row_upcast `-47..-51%`). The 3F-4.x "win" signal was wall-clock noise, confirmed. Root
+  cause: `qk_semantic_schedule_bench` scored `q4_eff` (wall), not `device_q4_eff`.
+- **M0b**: loads are already wide b128, so width is not the cap. The body is dominated by
+  Q4_K dequant ALU (~3862 vector ops/kernel, ~55 per load: nibble shift/mask/cndmask + ->fp32
+  + scale/min). Low bandwidth AND low ALU utilization -> latency/occupancy-bound on the
+  dequant dependency chain; small matrices worst. **Bottleneck = Q4_K dequant compute +
+  occupancy.**
+- **M0c**: real search axes = reduce dequant op count (LUT 4-bit->fp, bit-field-extract,
+  vectorized multi-nibble unpack, fused scale/min) + raise occupancy. DROP UPCAST/UNROLL and
+  wider loads (already b128).
 
-Pre-registered: if the re-based metric shows the 4.x wins were all noise, record it; if the
-5x gap is mostly irreducible (near the INT-dequant compute roof), record the realistic
-(possibly much smaller) headroom. Only a confirmed addressable gap revives the flywheel
-target. The original Phase G deliverables (G1/G2) remain scoped but gated on Phase M:
+Next step is **G0' (re-run headroom probe) over the dequant/occupancy axes on the
+`device_q4_eff` metric**, then -- only if device-real headroom is found by deterministic
+search -- G1 (model-guided vs random) and G2 (structural). Concrete: a dequant-variant
+search (e.g. LUT vs shift/mask unpack, multi-nibble vectorization, parts/occupancy sweep)
+measured as roofline-relative device bandwidth, with the device metric wired into any revived
+schedule_bench/cost-model labels (fix the q4_eff->device_q4_eff capture). The original Phase G
+deliverables (G1/G2) remain scoped but gated on G0':
 
 1. **G0 headroom probe (deterministic, shadow)**: expand the parametric space on the
    live-bearing attn_q tensors (LOCAL {16..256}, parts sweep, UPCAST/UNROLL args

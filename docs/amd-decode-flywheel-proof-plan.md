@@ -1786,6 +1786,33 @@ Pre-registered honesty:
   own INT-dequant compute roof), record the realistic headroom -- it may be far below
   `5x`. Only a confirmed, addressable gap revives the flywheel target.
 
+Result (2026-06-14, `extra/qk_metric_audit.py` + DEBUG=7 profiling, `metric-audit-m0/`):
+
+- **M0a metric re-base.** Measured achievable peak = `859` GB/s (warm streaming copy, this
+  GPU, 89% of the 960 datasheet). On the device metric `v1_partial` sits at `~20%` of peak
+  on `attn_q` (4096x4096) and `~47%` on `ffn_gate` (12288x4096) -- real, **shape-dependent**
+  headroom of `~5x` and `~2x`. Re-auditing a sample of `7` of the `22` distinct 4.x
+  `raw_accept` configs on device: **`0` beat `v1_partial` by more than the `2%` noise band**
+  (median device gain `-38.6%`; `row_upcast` is `-47..-51%`, `direct_output` is a tie). The
+  entire 3F-4.x "win" signal was wall-clock noise -- confirmed. Root cause:
+  `qk_semantic_schedule_bench` scored `q4_eff` (wall, overhead-dominated), not `device_q4_eff`.
+- **M0b bottleneck.** The kernel already issues wide `b128` loads (`38` b128 vs `20` b32), so
+  load width is NOT the cap. The body is dominated by the Q4_K dequant: `~3862` vector-ALU
+  ops per kernel (`~55` per global load) -- integer nibble-unpack (shift/mask/cndmask/alignbit)
+  + ubyte->fp32 conversion + scale/min. Both bandwidth (`20-47%`) and ALU utilization are low,
+  so it is latency/occupancy-bound on the long dequant dependency chain; small matrices (less
+  parallelism to hide it) sit lowest. Bottleneck = **Q4_K dequant compute + occupancy**.
+- **M0c redefined search space.** Target the dequant: lookup-table 4-bit->fp dequant,
+  bit-field-extract instead of shift+mask chains, vectorized multi-nibble unpack, fused
+  scale/min; and raise occupancy (esp. small matrices). **Drop** the axes G0 proved
+  irrelevant: UPCAST/UNROLL and wider loads (already b128). This redefined space + the device
+  metric is the input to a re-run headroom probe (G0').
+
+Net: the hypothesis is alive with a real `~2-5x` target and a named bottleneck. The 3F-4.x
+triage/generation effort was aimed at the wrong metric (wall) and the wrong axes (ILP); the
+real frontier is dequant-compute reduction. Next is G0' over the dequant/occupancy axes on
+`device_q4_eff`.
+
 ## Phase G: Model-Proposed Candidate Generation Track
 
 This is the primary path to the Phase 6 flywheel proof ("a model-proposed candidate
