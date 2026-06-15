@@ -73,6 +73,16 @@ is the actual flywheel and the most loop-defining thing N1 can measure.
   dataset. Characterize the landscape: trials-to-converge, ruggedness, count of near-optimal configs,
   how the winning schedule varies by shape. This dataset is the substrate N1 trains/tests on.
   Artifact `native-matmul-N0/beam_log.jsonl` + a characterization note.
+  - **N0b RESULT (2026-06-15): the substrate is LEARNABLE-looking -- the strongest positive signal
+    for the loop in the whole investigation.** `extra/qk_beam_log.py`, `beam_log.jsonl` (1385 records
+    = 277 schedules x 5 shapes), `n0b_summary.json` + `characterization.md`, test `test_qk_beam_log.py`.
+    The native-matmul opt space is: (1) RUGGED -- 111-223x spread between best/worst valid config (the
+    opposite of the flat GEMV space); (2) SHARP -- only 2-10 of ~250 configs within 10% of best; (3)
+    NO universal winner -- 0 configs are top-5 across all 5 shapes, each shape's best is rank 130-211
+    on others (a deterministic lookup FAILS here, unlike GEMV); (4) STRUCTURED -- configs cluster by
+    shape-family (the N=256 best ranks 1/4/3/4 across the four attn-shaped matmuls). Rich + no-lookup +
+    learnable-structure = exactly the conditions where a cost model / transfer can beat a deterministic
+    baseline. N1 is now well-motivated and is the make-or-break.
 
 ### Phase N1 — learnability + transfer (route ④, LATER, per user)
 
