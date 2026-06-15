@@ -53,6 +53,8 @@ class Q4KPrimitiveRegistry:
   __slots__ = ("linears",)
   def __init__(self, linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]|None=None): self.linears = linears or []
 
+_VDOT_QUANT_CACHE: dict = {}  # E0: per-token q8 quant cache keyed by x.uop.key (q/k/v + gate/up share)
+
 class Q4KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
@@ -80,12 +82,19 @@ class Q4KPrimitiveLinear:
       got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_kernel(self.out_features, self.in_features, "none", self.opts))[0]
       return got.reshape(1, 1, self.out_features)
     partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
-    if getenv("Q4K_VDOT") and self.parts == 1:  # D1: schedulable builtin v_dot4 (udot4) decode GEMV
+    if getenv("Q4K_VDOT") and self.parts == 1:  # D1/E0: schedulable builtin v_dot4 (udot4) decode GEMV
       from extra.q4_k_gemv_primitive import q4k_q8_1_vdot_builtin_partial_kernel, q8_1_bias_pack_u32_kernel
       from extra.qk_layout import q8_1_quantize
-      q, scales = q8_1_quantize(x_vec.cast(dtypes.float32))
-      q_bias_words = Tensor.empty(self.in_features // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
-        q, fxn=q8_1_bias_pack_u32_kernel(self.in_features))[0]
+      amort = bool(getenv("Q4K_VDOT_AMORT"))  # E0: quantize x ONCE/token, shared across q/k/v and gate/up
+      ck = x.uop.key if amort else None
+      cached = _VDOT_QUANT_CACHE.get(ck) if amort else None
+      if cached is None:
+        q, scales = q8_1_quantize(x_vec.cast(dtypes.float32))
+        q_bias_words = Tensor.empty(self.in_features // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
+          q, fxn=q8_1_bias_pack_u32_kernel(self.in_features))[0]
+        if amort: _VDOT_QUANT_CACHE[ck] = (q_bias_words, scales); _VDOT_QUANT_CACHE["m"] = _VDOT_QUANT_CACHE.get("m", 0)+1
+      else:
+        q_bias_words, scales = cached; _VDOT_QUANT_CACHE["h"] = _VDOT_QUANT_CACHE.get("h", 0)+1
       partial = partials.custom_kernel(words, q_bias_words, scales,
         fxn=q4k_q8_1_vdot_builtin_partial_kernel(self.out_features, self.in_features, 1, "none", ()))[0]
       return partial.sum(axis=1).reshape(1, 1, self.out_features)
@@ -733,6 +742,7 @@ class Transformer:
 
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
+    if getenv("Q4K_VDOT_AMORT"): _VDOT_QUANT_CACHE.clear()  # E0: fresh quant cache per forward/trace
     for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = not is_prefill
     return (self.prefill_jit if is_prefill else self.rollout_jit)(tokens.contiguous(), start_pos, temperature)
 
