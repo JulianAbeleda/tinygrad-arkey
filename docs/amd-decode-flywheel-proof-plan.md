@@ -2111,6 +2111,20 @@ Exit gate (pre-registered):
   even at large `B`, the dequant is not amortizing well (likely the fp16 materialization
   round-trip), which motivates B1.
 
+Result (2026-06-14, `extra/qk_batched_b0.py`, `batched-b0/`): batching is a **large, confirmed
+lever -- and B1 is motivated**. Sweeping `B in {1..128}` (measured fp16 compute peak `83.6` TFLOPS):
+per-token device latency drops **`26x` on attn_q** (`622 -> 24` us/token) and **`13x` on ffn_gate**
+(`354 -> 26`) from `B=1` to `B=128` -- the dequant amortizes exactly as the primitive analysis
+predicted. BUT the fused quantized path stays far below the dense-fp16 ceiling at the largest batch:
+fused is only `17%` (attn_q) / `25%` (ffn_gate) of `matmul_decoded` throughput, because the fused
+path materializes the dequantized weights to fp16 in memory and reads them back (a round-trip that
+wastes the amortization). Even the dense matmul reaches only `10%` / `19%` of compute peak (small,
+untuned tinygrad GEMM), so there is headroom on both axes. (The `B=4` point is a noisy outlier; the
+verdict uses the fused-vs-dense ratio at the largest batch.) Conclusion: the structural lever is
+real; realizing it needs B1 -- a fused Q4_K GEMM that dequantizes in registers/LDS and reuses across
+the batch WITHOUT the fp16 round-trip, with a clear quantified target (close the `~4-6x` fused-vs-dense
+gap, then push the dense gap toward the compute roof).
+
 ### B1: Fused Q4_K GEMM primitive (kernel authoring, only if B0 shows headroom)
 
 - A kernel that dequantizes each weight tile ONCE into registers/LDS and reuses it across the

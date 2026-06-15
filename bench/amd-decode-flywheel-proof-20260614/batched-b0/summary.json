@@ -1,0 +1,284 @@
+{
+  "conclusion": "batching_amortizes_dequant_strongly_but_fused_stays_below_dense_ceiling_motivates_b1_fused_gemm",
+  "fp16_compute_peak_tflops": 83.64,
+  "kind": "qk_flywheel_batched_b0",
+  "metric": "per-token device latency and achieved FLOPS / measured fp16 compute roof",
+  "note": "decode_q4_k_plus_matmul = fused dequant+matmul (real quantized GEMM, dequant materialized to fp16 then matmul); matmul_decoded = weights pre-dequantized to fp16 then dense matmul (ceiling). Batching raises throughput/prefill, not single-stream per-token latency. The B=4 point is a noisy outlier; the robust verdict uses the fused-vs-dense ratio at the largest batch.",
+  "per_tensor": {
+    "blk.13.ffn_gate.weight": {
+      "curve": [
+        {
+          "batch": 1,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.28,
+            "device_time_us": 353.76,
+            "pct_compute_peak": 0.34,
+            "per_token_us": 353.762
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 0.48,
+            "device_time_us": 208.82,
+            "pct_compute_peak": 0.58,
+            "per_token_us": 208.818
+          }
+        },
+        {
+          "batch": 2,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.53,
+            "device_time_us": 381.15,
+            "pct_compute_peak": 0.63,
+            "per_token_us": 190.573
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 0.96,
+            "device_time_us": 209.92,
+            "pct_compute_peak": 1.15,
+            "per_token_us": 104.959
+          }
+        },
+        {
+          "batch": 4,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 1.74,
+            "device_time_us": 231.81,
+            "pct_compute_peak": 2.08,
+            "per_token_us": 57.954
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 0.99,
+            "device_time_us": 406.95,
+            "pct_compute_peak": 1.18,
+            "per_token_us": 101.738
+          }
+        },
+        {
+          "batch": 8,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 1.02,
+            "device_time_us": 787.09,
+            "pct_compute_peak": 1.22,
+            "per_token_us": 98.386
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 1.71,
+            "device_time_us": 470.21,
+            "pct_compute_peak": 2.05,
+            "per_token_us": 58.777
+          }
+        },
+        {
+          "batch": 16,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 1.78,
+            "device_time_us": 902.5,
+            "pct_compute_peak": 2.13,
+            "per_token_us": 56.407
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 7.32,
+            "device_time_us": 220.02,
+            "pct_compute_peak": 8.75,
+            "per_token_us": 13.751
+          }
+        },
+        {
+          "batch": 32,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 1.98,
+            "device_time_us": 1628.97,
+            "pct_compute_peak": 2.36,
+            "per_token_us": 50.905
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 12.43,
+            "device_time_us": 259.19,
+            "pct_compute_peak": 14.86,
+            "per_token_us": 8.1
+          }
+        },
+        {
+          "batch": 64,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 2.63,
+            "device_time_us": 2453.34,
+            "pct_compute_peak": 3.14,
+            "per_token_us": 38.333
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 11.74,
+            "device_time_us": 548.99,
+            "pct_compute_peak": 14.03,
+            "per_token_us": 8.578
+          }
+        },
+        {
+          "batch": 128,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 3.81,
+            "device_time_us": 3382.5,
+            "pct_compute_peak": 4.55,
+            "per_token_us": 26.426
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 15.58,
+            "device_time_us": 827.1,
+            "pct_compute_peak": 18.63,
+            "per_token_us": 6.462
+          }
+        }
+      ],
+      "dense_pct_compute_peak_at_bmax": 18.63,
+      "fused_pct_compute_peak_at_bmax": 4.55,
+      "fused_per_token_speedup_b1_to_bmax": 13.39,
+      "fused_vs_dense_throughput_at_bmax": 0.245,
+      "shape": [
+        12288,
+        4096
+      ]
+    },
+    "blk.20.attn_q.weight": {
+      "curve": [
+        {
+          "batch": 1,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.05,
+            "device_time_us": 622.1,
+            "pct_compute_peak": 0.06,
+            "per_token_us": 622.095
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 0.1,
+            "device_time_us": 330.32,
+            "pct_compute_peak": 0.12,
+            "per_token_us": 330.318
+          }
+        },
+        {
+          "batch": 2,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.11,
+            "device_time_us": 601.86,
+            "pct_compute_peak": 0.13,
+            "per_token_us": 300.931
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 0.26,
+            "device_time_us": 255.82,
+            "pct_compute_peak": 0.31,
+            "per_token_us": 127.91
+          }
+        },
+        {
+          "batch": 4,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.61,
+            "device_time_us": 220.65,
+            "pct_compute_peak": 0.73,
+            "per_token_us": 55.162
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 0.31,
+            "device_time_us": 434.29,
+            "pct_compute_peak": 0.37,
+            "per_token_us": 108.573
+          }
+        },
+        {
+          "batch": 8,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.19,
+            "device_time_us": 1406.44,
+            "pct_compute_peak": 0.23,
+            "per_token_us": 175.804
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 0.69,
+            "device_time_us": 386.93,
+            "pct_compute_peak": 0.83,
+            "per_token_us": 48.366
+          }
+        },
+        {
+          "batch": 16,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.37,
+            "device_time_us": 1440.79,
+            "pct_compute_peak": 0.45,
+            "per_token_us": 90.049
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 3.64,
+            "device_time_us": 147.59,
+            "pct_compute_peak": 4.35,
+            "per_token_us": 9.225
+          }
+        },
+        {
+          "batch": 32,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.64,
+            "device_time_us": 1676.23,
+            "pct_compute_peak": 0.77,
+            "per_token_us": 52.382
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 5.74,
+            "device_time_us": 187.21,
+            "pct_compute_peak": 6.86,
+            "per_token_us": 5.85
+          }
+        },
+        {
+          "batch": 64,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 0.98,
+            "device_time_us": 2194.69,
+            "pct_compute_peak": 1.17,
+            "per_token_us": 34.292
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 5.95,
+            "device_time_us": 360.75,
+            "pct_compute_peak": 7.12,
+            "per_token_us": 5.637
+          }
+        },
+        {
+          "batch": 128,
+          "decode_q4_k_plus_matmul": {
+            "achieved_tflops": 1.42,
+            "device_time_us": 3034.46,
+            "pct_compute_peak": 1.69,
+            "per_token_us": 23.707
+          },
+          "matmul_decoded": {
+            "achieved_tflops": 8.27,
+            "device_time_us": 519.1,
+            "pct_compute_peak": 9.89,
+            "per_token_us": 4.055
+          }
+        }
+      ],
+      "dense_pct_compute_peak_at_bmax": 9.89,
+      "fused_pct_compute_peak_at_bmax": 1.69,
+      "fused_per_token_speedup_b1_to_bmax": 26.24,
+      "fused_vs_dense_throughput_at_bmax": 0.172,
+      "shape": [
+        4096,
+        4096
+      ]
+    }
+  },
+  "phase": "Phase B0",
+  "seq_lens": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    128
+  ]
+}

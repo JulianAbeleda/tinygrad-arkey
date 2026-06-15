@@ -556,18 +556,22 @@ memory/latency-bound to compute-bound. Applies to prefill, batched serving, and
 speculative/Medusa decode -- NOT single-stream greedy decode (irreducibly B=1). So it raises
 throughput/prefill, not one stream's per-token latency (do not oversell).
 
-Concrete next-session deliverables:
-1. **B0 (runnable now)**: sweep q4_k_bench --seq-len {1,2,4,8,16,32,64,128} (--primitive is
-   batch-1 only; use the matmul paths) measuring decode_q4_k_plus_matmul (fused dequant+matmul =
-   real quantized GEMM) and matmul_decoded (pre-dequantized dense fp16 = compute ceiling) on
-   attn_q + ffn_gate. Compute per-token latency, achieved FLOPS / measured fp16 compute roof, and
-   per-token speedup vs B=1; locate the memory->compute crossover batch. Pre-registered: steep
-   per-token efficiency climb approaching the dense ceiling -> batching confirmed as the lever;
-   fused path stays far below the dense ceiling -> a fused Q4_K GEMM primitive (B1) is needed.
-2. **B1 (only if B0 shows headroom)**: a fused Q4_K GEMM kernel that dequantizes each weight tile
-   ONCE into registers/LDS and reuses across the B columns of X (no fp16 materialization
-   round-trip). This is also the first place a parametric tiling space (M x B x K) may be large
-   enough that model-guided search (G1) could earn its keep on a correctly-measured target.
+B0 is done (`extra/qk_batched_b0.py`, `batched-b0/`): batching is a confirmed large lever.
+Per-token device latency drops 26x on attn_q (622->24 us/tok) and 13x on ffn_gate (354->26) from
+B=1 to B=128 (measured fp16 compute peak 83.6 TFLOPS). BUT the fused decode_q4_k_plus_matmul path
+stays at only 17%/25% of the dense matmul_decoded ceiling at B=128, because it materializes the
+dequantized weights to fp16 in memory then reads them back; and even dense matmul reaches only
+10%/19% of compute peak (untuned tinygrad GEMM). So the lever is real but realizing it needs B1.
+(The B=4 point is a noisy outlier; the verdict uses the fused-vs-dense ratio at the largest batch.)
+
+Next step is **B1 -- a fused Q4_K GEMM primitive** (kernel authoring), scoped in the proof plan:
+dequantize each weight tile ONCE into registers/LDS and reuse across the B columns of X, avoiding
+the fp16 materialization round-trip. Target: close the ~4-6x fused-vs-dense gap, then push the
+dense gap toward the compute roof. q4_k_bench --primitive is batch-1 only (L72), so B1 needs a new
+batched primitive path (new --primitive mode or a seq-len>1 primitive kernel) in
+extra/q4_k_gemv_primitive.py / extra/q4_k_bench.py, correctness-gated, measured as achieved FLOPS /
+83.6 TFLOPS peak across a batch sweep. B1's tiling space (M x B x K) is also the first place
+model-guided search (G1) might earn its keep on a correctly-measured target.
 
 Also still open: wire device_q4_eff into any revived schedule_bench/cost-model labels (fix
 q4_eff->device_q4_eff).
