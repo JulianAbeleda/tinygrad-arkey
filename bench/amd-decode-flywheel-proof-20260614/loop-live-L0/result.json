@@ -1,0 +1,57 @@
+{
+  "aggregate": {
+    "mean_guided_frac_oracle_at8": 0.979,
+    "mean_random_frac_oracle_at8": 0.861,
+    "mean_wall_speedup_guided8_vs_exhaustive": 41.2,
+    "median_expected_random_trials_to_95pct": 49.4,
+    "median_k_to_95pct_guided": 5,
+    "n_fresh_shapes": 1
+  },
+  "folds": [
+    {
+      "expected_random_trials_to_95pct": 49.4,
+      "guided_frac_oracle": {
+        "1": 0.911,
+        "2": 0.915,
+        "4": 0.921,
+        "8": 0.979
+      },
+      "guided_top1_tflops": 15.36,
+      "k_to_95pct_guided": 5,
+      "n_candidates": 277,
+      "n_valid": 247,
+      "oracle_tflops": 16.86,
+      "random_frac_oracle": {
+        "1": 0.597,
+        "2": 0.701,
+        "4": 0.796,
+        "8": 0.861
+      },
+      "shape": {
+        "K": 14336,
+        "M": 4096,
+        "N": 128
+      },
+      "wall_s_exhaustive_277": 36.62,
+      "wall_s_guided_top8": 0.89,
+      "wall_speedup_guided8_vs_exhaustive": 41.2
+    }
+  ],
+  "fresh_shapes": [
+    [
+      4096,
+      14336,
+      128
+    ]
+  ],
+  "gate": {
+    "PASS": true,
+    "guided8_beats_random8": true,
+    "guided8_reaches_95pct": true,
+    "guided_saves_trials": true,
+    "guided_saves_wallclock": true
+  },
+  "kind": "qk_loop_live",
+  "phase": "Phase L (L0)",
+  "seed": 20260615
+}
