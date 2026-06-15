@@ -1838,3 +1838,16 @@ decent at N=8); plateau drop <=1.9x (Amdahl, matmul fraction TBD). First concret
 decode result, in the batched/speculative regime. Two stacking levers: ~2.4-3.5x batching x up to ~1.9x
 loop-tuning. Commits cea32bf19, c2f8a3798. Next: apply loop schedules to the batched forward, re-measure
 plateau (size the realized lever); then speculative scaffold for e2e tok/s.
+
+## 2026-06-15 — Batched-decode TC realization (option 1): DEFINITIVE NEGATIVE
+Chased "machine search closes decode via TC in the batched/speculative regime" to the end.
+- Mis-diagnosis corrected: the no-TC plateau is a DTYPE problem (verification matmul runs fp32; RDNA3 WMMA
+  needs fp16), NOT fusion. Verified fp16+TC=16.3TF, fp32+TC errors "no tensor core available".
+- Fix = model fp16 cast (NOT tinygrad codegen). TC then fully applies (warmstart apply:4 on all FFN matmuls).
+- BUT e2e NEGATIVE (T=16): fp32 18.1 -> fp16 19.8 (cast overhead) -> fp16+TC 26.2 ms/tok (SLOWER). TC at
+  batch-16 net-negative: WMMA setup + PADTO blowup (12288=256x16x3, the 3 pads to 16 = ~5x waste) + Amdahl.
+End-state: kernel-vocabulary levers (TC/fusion) do NOT close decode -- single-stream (latency-bound, v_dot4
+proved it) OR speculative K=16 (TC realizes but hurts). Lever real isolated (2x), never translates e2e --
+the recurring thesis. Genuine remaining decode lever = fewer bytes (lower-bit/MoE) or megakernel (tinygrad
+can't express), not a kernel vocabulary. Commits a4a7e8660, 8838843f1. docs/amd-decode-option1-*.md.
+All experiment flags (Q4K_VDOT/FUSE/UNFUSE/WARMSTART) default-off; normal decode unchanged.
