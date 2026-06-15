@@ -1803,3 +1803,16 @@ Pursued the two follow-ups (docs/amd-loop-scale-and-vdot4-plan.md).
   tinygrad's generated kernel (core render_kernel change) + must beat the pipelining wall (int-dot 242->136
   e2e). The decisive decode-parity test, not yet run.
 Commits f174d86e4, b4d10f6f8 pushed. GPU had repeated transient HW faults under heavy BEAM timing this session.
+
+## 2026-06-15 — D1 COMPLETE: builtin v_dot4 decode GEMV finished out (kernel win, e2e null)
+Finished the v_dot4 e2e test. Path: renderer emits `_dp4a` device helper (target("dot-insts") +
+__builtin_amdgcn_udot4) when a CUSTOM body references it (cstyle.py, default-off);
+q4k_q8_1_vdot_builtin_partial_kernel with 64-row/wg occupancy fix; Q4K_VDOT=1 decode dispatch (model.py).
+- STANDALONE: builtin udot4 GEMV = 302 Q4-GB/s, 1.77x FASTER than fp (171), correct. Headroom realized.
+- E2E (cli --benchmark, Qwen3-8B): 30.2 tok/s = fp 30.3 -- IDENTICAL, despite 1.77x kernel + half
+  bytes/token (2036 vs 4762 MB). Decode is latency/launch-bound at the TOKEN level, not GEMV-throughput.
+VERDICT: v_dot4 lever is REAL at kernel level (overturns Phase D's asm-volatile negative) but NULL e2e.
+Decode gap is structural (per-token latency across ~252 launches), not a single-kernel codegen gap.
+Closes the decode lever hunt. Commit cc9cacdf2 + docs. (Machine fp baseline ran 30 tok/s this session
+vs historical 58 -- GPU degraded after HW faults; comparison is apples-to-apples same-run so null holds.)
+Q4K_VDOT default-off; renderer _dp4a gated; default decode unchanged (verified).

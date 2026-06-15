@@ -65,3 +65,18 @@ by adding `v_dot4` lowering to the renderer (or hand asm) -- NOT a schedule/sear
 primitives. This is the "Writer / hand-asm" boundary, now quantified in instructions/weight rather than
 inferred. It decides the decode question: no single-layer-search decode work is worth doing; the only
 physics-justified lever is a DP4A codegen capability, which is a renderer feature, not a search result.
+
+## UPDATE (2026-06-15) -- the v_dot4 lever was BUILT, and the e2e verdict is NULL (D0/D1)
+We then realized the lever via the SCHEDULABLE builtin `__builtin_amdgcn_udot4` (not the asm-volatile
+barrier Phase D mistakenly used). `dp4a-d0/{BUILTIN_VS_ASM_RESULT,D1_E2E_RESULT}.md`:
+- KERNEL level: builtin udot4 GEMV = **302 Q4-GB/s, 1.77x faster than fp** (171), correct, ~1.58
+  VALU/weight (the predicted floor). The instruction-count headroom IS real and reachable. So the
+  "VALU/weight is the lever" diagnosis above is confirmed AT THE KERNEL LEVEL.
+- E2E level: **decode tok/s UNCHANGED (30.2 vs fp 30.3)** despite the 1.77x kernel + half the bytes/token.
+  The GEMV kernel throughput was never the e2e bottleneck -- decode is latency/launch-bound at the TOKEN
+  level. So the per-kernel instruction-count win does NOT cash out to tok/s.
+Corrected implication: the consolidated diagnosis (GEMV kernel is ALU/instruction-bound) is RIGHT, but it
+is the wrong LEVEL for the e2e gap. fewer dequant instructions makes the kernel faster and does nothing
+for decode tok/s, because the token is latency-bound across ~252 launches, not GEMV-throughput-bound.
+The decode lever hunt is closed: the last kernel-level lever is real-but-null e2e; the residual gap is
+structural (cross-kernel latency), the cross-layer frontier, not a single-kernel codegen feature.

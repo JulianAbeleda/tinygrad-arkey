@@ -224,9 +224,16 @@ Pursuing the two leftover follow-ups (`docs/amd-loop-scale-and-vdot4-plan.md`):
   already uses the unsigned dot + bias correction. **D0** (`dp4a-d0/BUILTIN_VS_ASM_RESULT.md`): the same
   Q4_K GEMV via the builtin hits **169.6 Q4-GB/s ≈ fp's 173** at full occupancy, **2.54× over the asm
   version**, exact-correct, and realizes the consolidated doc's predicted instruction floor (~1.58
-  VALU/weight vs fp 4.06). The decode instruction-count lever is REAL and kernel-competitive. Open (D1):
-  does it survive e2e (needs the target attr on tinygrad's generated kernel + must beat the
-  occupancy/pipelining wall that killed prior standalone-fast kernels)?
+  VALU/weight vs fp 4.06). The decode instruction-count lever is REAL and kernel-competitive.
+- **D1 — wired e2e, and it's a definitive NULL.** Built the builtin-udot4 GEMV with the occupancy fix
+  (64 rows/wg) → **302 Q4-GB/s standalone, 1.77× FASTER than fp** (171), correct. Wired into decode
+  (`Q4K_VDOT=1`, default-off; the renderer emits the `_dp4a` helper when referenced). End-to-end
+  (`dp4a-d0/D1_E2E_RESULT.md`): **decode tok/s is UNCHANGED (30.2 vs fp 30.3)** despite the kernel being
+  1.77× faster and reading HALF the bytes/token. **The kernel win does not cash out e2e** — decode is
+  latency/launch-bound at the token level, not GEMV-throughput-bound. So the v_dot4 lever is real in
+  isolation and null in practice: the decode gap is structural (per-token latency / many small launches),
+  not a single-kernel instruction-count gap. This CLOSES the decode lever hunt — the last candidate
+  (DP4A) is overturned-then-nulled, every kernel-level lever exhausted.
 - **Scale-the-substrate is blocked on this setup.** Harvesting partial schedules over native BEAM's full
   action space HANGS gfx1100 (HW faults) — only the curated 277-config substrate is stable. Conv ASTs
   build, but the matmul opt-candidate set fails on conv's reduce kernel (different axes) and its baseline
