@@ -1945,6 +1945,63 @@ of shift+mask chains, vectorized multi-nibble unpack, fused scale/min) and bench
 the device metric. That is a kernel-authoring task, not a search; G1 (model-guided) only
 becomes relevant once G0'' creates a large parametric dequant-variant space worth searching.
 
+### G0'': New dequant codegen (kernel authoring)
+
+Purpose:
+
+- Close the residual `~2-5x` gap by attacking the named bottleneck (Q4_K dequant compute +
+  occupancy) with new kernels, since the existing mode/opt space is exhausted. This is real
+  kernel engineering with uncertain payoff, not a search; correctness is non-negotiable.
+
+Grounding (where to intervene):
+
+- Kernel builders: `extra/q4_k_gemv_primitive.py` -- `q4k_gemv_partial_kernel` (L308),
+  `q4k_gemv_packed_load_partial_kernel` (L328, the current best). Dequant helpers:
+  `_q4k_weight` (L42), `_q4k_quant` (L38, shift+mask nibble extract), `_q4k_group_params`
+  (L20, the 6-bit scale/min decode). New variants register a `--primitive-mode` in
+  `extra/q4_k_bench.py` (choices ~L61, dispatch ~L153) and add a kernel builder -- orthogonal
+  to the existing ones.
+- Key insight: the scale/min (`_q4k_group_params`) decode is re-computed inside the reduce.
+  `packed_load` already cut it from `32x` to `8x` per group (part of its `+6%`), and M0b's
+  `326` cndmask + `216` alignbit ops show it is still not fully hoisted. Hoisting it to `1x`
+  per group is the clearest remaining win against exactly the ops that dominate.
+
+Candidate variants (ranked by grounded expected value):
+
+1. `hoist_scale_min`: packed_load but with `_q4k_group_params` computed ONCE per group and
+   reused across all positions/lanes (lift it out of the lane4/pos reduce). Directly removes
+   the redundant cndmask/alignbit decode. Highest expected value, most grounded.
+2. `bfe_nibble`: replace `_q4k_quant`'s shift+mask with a `CUSTOMI` `v_bfe_u32` bit-field
+   extract (the `vector_load` path at L70 shows the CUSTOMI pattern). Marginal -- shift+mask
+   may already lower to bfe -- so verify the instruction mix actually changes before trusting
+   any delta.
+3. `lut_dequant`: per-sub-block 16-entry nibble->fp table (built once per group from
+   `d*sc*q - dmin*mn`), then indexed per weight. Trades 16 decodes/group for a LUT build +
+   LDS indexed loads; uncertain (LDS latency vs ALU).
+
+Method:
+
+- Implement each as a new primitive mode. Run through the EXISTING correctness gate
+  (`primitive_gemv_correctness` must PASS, exact same numerics -- a faster wrong kernel is
+  worthless) and the device microbench. Score median `device_q4_eff` / measured peak vs the
+  `packed_load` baseline on `attn_q` (worst, ~23%) and `ffn_gate` (~50%). Capture the DEBUG=7
+  instruction mix per variant to confirm the intended op-count reduction actually happened.
+
+Exit gate (pre-registered):
+
+- A variant that beats `packed_load` on device by more than the `2%` noise band at full
+  correctness is real progress: adopt it as the new baseline and iterate (compose variants).
+- If no variant beats `packed_load`, record the achievable limit honestly: the Q4_K dequant
+  GEMV is near its practical ceiling for this approach on this hardware, and the remaining
+  gap is either irreducible or needs a different attack (storage layout, a fused
+  decode+matmul, or a different quant format) -- not more of the same.
+
+Out of scope:
+
+- Any numerics change that alters the dequant result (the correctness gate forbids it).
+- The wall-clock metric. Model-guided search (G1) until a variant family creates a parametric
+  space too large to enumerate.
+
 ### G1: Model-guided search versus brute force
 
 Purpose (only if G0 shows headroom):
