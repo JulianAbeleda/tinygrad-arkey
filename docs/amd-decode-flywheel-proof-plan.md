@@ -2124,29 +2124,66 @@ lever -- and B1 is motivated**. Sweeping `B in {1..128}` (measured fp16 compute 
 per-token device latency drops **`26x` on attn_q** (`622 -> 24` us/token) and **`13x` on ffn_gate**
 (`354 -> 26`) from `B=1` to `B=128` -- the dequant amortizes exactly as the primitive analysis
 predicted. BUT the fused quantized path stays far below the dense-fp16 ceiling at the largest batch:
-fused is only `17%` (attn_q) / `25%` (ffn_gate) of `matmul_decoded` throughput, because the fused
-path materializes the dequantized weights to fp16 in memory and reads them back (a round-trip that
-wastes the amortization). Even the dense matmul reaches only `10%` / `19%` of compute peak (small,
-untuned tinygrad GEMM), so there is headroom on both axes. (The `B=4` point is a noisy outlier; the
-verdict uses the fused-vs-dense ratio at the largest batch.) Conclusion: the structural lever is
-real; realizing it needs B1 -- a fused Q4_K GEMM that dequantizes in registers/LDS and reuses across
-the batch WITHOUT the fp16 round-trip, with a clear quantified target (close the `~4-6x` fused-vs-dense
-gap, then push the dense gap toward the compute roof).
+fused is only `17%` (attn_q) / `25%` (ffn_gate) of `matmul_decoded` throughput. Even the dense matmul
+reaches only `10%` / `19%` of compute peak (small, untuned tinygrad GEMM), so there is headroom on
+both axes. (The `B=4` point is a noisy outlier; the verdict uses the fused-vs-dense ratio at the
+largest batch.)
 
-### B1: Fused Q4_K GEMM primitive (kernel authoring, only if B0 shows headroom)
+Correction (2026-06-14, from grounding the B1 scope): the fused path does NOT do an fp16
+round-trip. `decode_q4_k_plus_matmul` is already a single fused kernel (`kernels=1.0`,
+`mem=9.57MB` = the compressed Q4_K weights, vs `matmul_decoded`'s `33.69MB` fp16). Its slowness is
+**poor tiling**, not materialization: tinygrad's general matmul codegen with the inline dequant
+produces a non-GEMM-optimal kernel (~351 GFLOPS, ~4% of peak). So B1 is not "avoid the round-trip"
+(there is none) -- it is "tile the fused kernel like a real GEMM" (register-blocked output tile,
+dequant each weight tile once into registers, reuse across the B-column tile).
 
-- A kernel that dequantizes each weight tile ONCE into registers/LDS and reuses it across the
-  `B` columns of `X`, avoiding the dequantize-to-fp16-then-dense-matmul memory round-trip.
-  Correctness-gated, measured on the batched metric. This is where a parametric tiling space
-  (tile over `M x B x K`) may finally be large enough that model-guided search (G1) earns its
-  keep -- the first place in the whole program where the learned-model question could be revived
-  on a real, correctly-measured target.
+### B1: Well-tiled fused Q4_K GEMM (kernel authoring)
+
+Purpose:
+
+- The fused dequant+matmul already exists and is already memory-light (`mem=9.57MB`, one kernel);
+  it is just badly tiled (~`4%` of compute peak). B1 authors a GEMM-tiled fused kernel that
+  closes the gap to `matmul_decoded` (the dense baseline, itself only `~18%` of peak) and then
+  pushes both toward the `83.6` TFLOPS roof.
+
+B1a -- characterize (largely answered by the B1-scope grounding):
+
+- `decode_q4_k_plus_matmul` is a single fused kernel reading compressed weights (no fp16
+  materialization). Open question to confirm before authoring: does the fused kernel dequantize
+  each weight tile ONCE and reuse it across the `B` activation columns, or re-dequantize per
+  column? Read the generated kernel (DEBUG=7) for the `B>1` shape and check whether the dequant
+  ALU scales with `B` (re-decode) or is hoisted per weight-tile (reuse). That determines whether
+  the win is tiling alone or tiling + dequant-reuse.
+
+B1b -- author the tiled kernel:
+
+- A register-blocked fused Q4_K GEMM: tile the output over `M x B`, stage a weight tile + the
+  `B`-column activation tile, dequant each weight element once into registers, and accumulate
+  across `K`. New primitive path in `extra/q4_k_gemv_primitive.py` + a `--seq-len>1` primitive
+  mode in `extra/q4_k_bench.py` (currently `--primitive` is batch-1 only, L72). Correctness-gated
+  (exact numerics) and measured as achieved FLOPS / `83.6` TFLOPS across a batch sweep.
+- Heed the G0'' lesson: do NOT serialize the reduction or over-unroll. The win must come from
+  GEMM tiling/reuse that preserves parallelism, not from cutting ALU at the cost of occupancy.
 
 Metric:
 
 - Per-token device latency and achieved FLOPS / measured fp16 compute roof (measure the compute
   peak directly, as Phase M measured the bandwidth peak). The roofline denominator shifts from
   memory bandwidth (`B=1`) to compute (large `B`); B0 locates the transition.
+
+Exit gate (pre-registered):
+
+- A tiled kernel that beats `decode_q4_k_plus_matmul` (and ideally `matmul_decoded`) on device
+  FLOPS at full correctness is real progress -- adopt it and report how close to the roof. If a
+  well-tiled fused kernel cannot beat the existing fused path, record that tinygrad's matmul
+  codegen is the ceiling here and the remaining headroom needs lower-level work (custom
+  WMMA/MFMA, a different framework) or is not worth it.
+
+Connection to the learned model:
+
+- B1b's tiling space (`M x B x K` tile sizes, LDS staging, dequant placement) is the first
+  parametric space in the program large enough that model-guided search (G1) might earn its keep
+  on a real, correctly-measured target -- the only honest place to revive the flywheel question.
 
 Out of scope:
 

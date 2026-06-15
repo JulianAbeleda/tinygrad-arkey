@@ -85,9 +85,10 @@ shuffling work between the load and ALU sub-primitives fixes a latency/occupancy
 `B ∈ {1..128}` (measured fp16 compute peak 83.6 TFLOPS): per-token device latency drops
 **26× on attn_q** (622→24 µs/tok) and **13× on ffn_gate** (354→26) — the dequant amortizes
 exactly as predicted. But the fused quantized path stays at only **17–25% of the dense-fp16
-ceiling** at B=128 (it materializes dequantized weights to fp16 then reads them back), and
-even dense matmul reaches only 10–19% of compute peak (untuned tiling). Real lever; realizing
-it needs **B1, a fused Q4_K GEMM**.
+ceiling** at B=128, and even dense matmul reaches only 10–19% of compute peak (untuned tiling).
+The fused path is *already* a single kernel reading compressed weights (no fp16 round-trip,
+`mem=9.57MB`); it is simply **poorly tiled** (~4% of peak). Real lever; realizing it needs
+**B1, a well-tiled fused Q4_K GEMM**.
 
 ## What was wrong with the hypothesis (ranked)
 
