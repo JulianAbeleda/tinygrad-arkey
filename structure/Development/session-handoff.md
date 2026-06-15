@@ -1761,3 +1761,16 @@ counted VALU/weight in the hot body:
 Result: `bench/.../q0a/INSTRUCTION_COUNT_RESULT.md`. Commit 66913464b, pushed. model.py pristine.
 Decode end-state: the gap to llama.cpp is a ~3x dot-instruction gap, realizable ONLY by a DP4A codegen
 feature (renderer), not single-layer search — quantifies the hand-asm/Writer boundary in instr/weight.
+
+## 2026-06-15 — Phase L: made the loop LIVE (final-report follow-up #1)
+N2 proved the guided loop but LOOKED UP measured times. Phase L (`extra/qk_loop_live.py`) times
+candidates LIVE on device (the qk_beam_log `_time_program` path) on FRESH shapes absent from the
+26-shape corpus, reusing the N1 XGBoost model + 277-config space.
+- **L0** (4096,14336,128): guided@1=0.91, guided@8=0.979 of live oracle vs random 0.86; 95% in 5
+  timings (random ~49); 0.89s vs 36.6s exhaustive = **41x wall-clock win**. PASS. `loop-live-L0/`.
+- **L1** (5 fresh shapes): mean guided@8=0.977 vs random 0.821; median 3 timings to 95% (random ~82);
+  mean **42x** wall speedup. 3/5 hit 1.0. Honest weak spot: small-N (4096,11008,64) k95=12/guided@8=0.92
+  (187/277 valid) — the under-sampled N=64 regime. PASS. `loop-live-L1/` + test_qk_loop_live.py (5 green).
+Commits b725e2e29 (L0), cc62c8412 (L1), pushed. The offline N1/N2 result HOLDS on real silicon for
+unseen shapes — the loop is now a working live autotuner, not a simulation.
+L2 (native tinygrad BEAM warm-start hook) is the remaining stretch — gated, OOD-risky, optional.
