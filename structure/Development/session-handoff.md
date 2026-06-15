@@ -443,13 +443,31 @@ ffn_gate). Caveats: only `2` live in this batch; a hand-coded role x mechanism p
 would likely match it; validate on larger batches. `test_qk_flywheel_phase4.py`
 covers the staged freeze/leak-free/safe-skip/integrity invariants.
 
-Next scope is **Phase 5 Controlled Assist Mode** (the model has earned entry): let
-the gate actually skip predicted-dead microbenches in the loop, keeping the prior as
-a fallback, and measure GPU saved per decisive outcome on a larger, more diverse
-batch (more live-capable families/roles, varying parts/opts) to confirm the role x
-mechanism signal generalizes beyond `2` live candidates. Do not let the model bypass
-static/correctness/microbench/full-decode gates or drive 14B/32B. The staged harness,
-freeze protocol, and safe-skip scorer are reusable as-is.
+Next scope is **Phase 4.2 Generalization Replication and Minimal-Gate Ablation**,
+fully written in `docs/amd-decode-flywheel-proof-plan.md` -- a shadow validation
+before Phase 5 lets any gate skip real runs. The 4.1 win rested on `2` live
+candidates and one pattern, and the corpus shows the live signal is a (role x
+mechanism) interaction (`attn_q` x `row_upcast` `75%` live, `attn_q` x
+`direct_output` `42%`, all other cells `0%`), which a trivial role x mechanism
+lookup already encodes. So 4.2 is an ablation to find the SIMPLEST deterministic
+gate that captures the signal. Concrete next-session deliverables:
+
+1. Extend `STAGED_SCHEDULE_TENSORS` to a bigger multi-block batch centered on fresh
+   `attn_q` (e.g. `blk.3..blk.10.attn_q.weight`) for `>=5` live across two patterns
+   (row_upcast + direct_output), with `ffn_gate` dead controls and optional
+   `ffn_down` (Q6_K) dead region. Target `~30-40` candidates.
+2. Add a `role_mechanism_prior` baseline ((role, mechanism) -> majority label,
+   fall back to mechanism) to the staged scorer; emit a per-(role x mechanism)
+   breakdown to `shadow-staged-v2/`.
+3. Freeze keep/skip before microbench, run, score the ladder
+   (run_all < mechanism_prior < role_mechanism_prior < model) on safe-skips at
+   100% live-recall, and report per pattern.
+
+Pre-registered: `<5` live -> inconclusive (enlarge, do not re-roll); model ties
+role_mechanism_prior -> ship the lookup, model documentation-only; no gate beats
+run-all at full recall -> stay in shadow. Phase 5 proceeds with whichever gate wins
+the ablation (deterministic lookup preferred when it ties the model). Reuse the
+staged freeze protocol and safe-skip scorer as-is.
 
 The original Phase 4 scope (now executed) remains documented in
 `docs/amd-decode-flywheel-proof-plan.md`. Earlier next-session deliverables, for

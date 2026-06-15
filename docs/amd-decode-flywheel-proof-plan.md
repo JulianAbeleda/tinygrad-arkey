@@ -1421,6 +1421,95 @@ batches before strong generalization claims. This is shadow only (no gate skippe
 real run). Per the exit gate the model has earned entry to Phase 5; keep the prior
 as a fallback.
 
+## Phase 4.2: Generalization Replication and Minimal-Gate Ablation
+
+Purpose:
+
+- Before letting any gate skip a real microbench in the live loop (Phase 5),
+  confirm the 4.1 positive is not a 2-live-candidate fluke, and determine the
+  SIMPLEST deterministic gate that captures the available signal. The flywheel
+  should ship the cheapest gate that works, not the learned model by default.
+
+What 4.1 left open:
+
+- 4.1 beat `mechanism_prior`, but only `2` live candidates carried the result, both
+  from one pattern (`attn_q` `row_upcast`). That is thin.
+- The mechanism-only prior is a weak baseline. The grounded corpus win-structure
+  shows the live signal is a (role x mechanism) interaction, not mechanism alone:
+  `attn_q` x `row_upcast` is `75%` live and `attn_q` x `direct_output` is `42%`
+  live, while every `ffn_gate` / `ffn_down` / `reduce_unroll` / `two_dim_local`
+  cell is `0%` live. A trivial role x mechanism lookup already encodes this, so the
+  4.1 model edge may evaporate against it. That is the real question.
+
+Reframe -- minimal-gate ablation:
+
+- Treat the gate as a ladder of increasing richness and find the simplest rung
+  that meaningfully beats run-everything at `100%` live-recall:
+  1. `run_all` (current loop, 0 savings).
+  2. `mechanism_prior` (mechanism -> majority label).
+  3. `role_mechanism_prior` (NEW: (role, mechanism) -> majority label, fall back to
+     mechanism-only when the cell is empty).
+  4. learned cost model.
+- The flywheel adopts the lowest rung that works. Pre-register the expected and
+  acceptable result: if `role_mechanism_prior` matches the model, ship the lookup
+  and keep the model documentation-only -- that is a win for the flywheel (a cheap
+  deterministic gate reduces wasted GPU), not a loss.
+
+Fresh batch (bigger, multi-pattern, multi-block):
+
+- Center on `attn_q` across many fresh blocks (e.g. `blk.3..blk.10.attn_q.weight`)
+  so both winning patterns appear with `>=5` live candidates total: `row_upcast`
+  (replicates 4.1) and `direct_output` (a second, distinct winning combo the model
+  must also catch). Add `ffn_gate` fresh blocks as dead controls, and optionally
+  `ffn_down` (Q6_K) as an all-dead new (role, format) region the gate must skip
+  (note the Q6_K family/parts difference in the descriptor clone). Target `~30-40`
+  candidates so the live count is not `2`.
+
+Metric and per-pattern reporting:
+
+- Same safe-skip metric: max microbench experiments a gate can skip while keeping
+  every live candidate (skip below the lowest-scored live candidate).
+- Report per (role x mechanism) cell, not just aggregate, so a single dominant
+  pattern cannot mask a miss. A gate that catches `attn_q` `row_upcast` but drops
+  every `attn_q` `direct_output` winner has failed generalization even if aggregate
+  savings look fine.
+
+Generalization checks:
+
+- Does `attn_q` `row_upcast` keep winning on fresh blocks not in the corpus
+  (replication)?
+- Does the chosen gate also catch the `attn_q` `direct_output` winners (a second
+  pattern), or did 4.1 only memorize one combo?
+- Keep the freeze-before-outcomes hash discipline and the leak-free audit.
+
+Implementation:
+
+- Extend `STAGED_SCHEDULE_TENSORS` in `extra/qk_flywheel_shadow.py`; add a
+  `role_mechanism_prior` baseline to the staged scorer; emit the per-cell breakdown
+  in `shadow-staged-v2/summary.json`. Reuse the freeze protocol and safe-skip
+  scorer unchanged.
+
+Exit gate (authorizes Phase 5):
+
+- `>= 5` live candidates across `>= 2` winning patterns (not inconclusive).
+- The simplest sufficient gate saves a meaningful fraction of experiments at `100%`
+  live-recall and replicates on fresh blocks per-pattern.
+- Phase 5 then proceeds with whichever gate won the ablation (deterministic lookup
+  preferred when it ties the model).
+
+Failure modes (pre-registered, not bugs):
+
+- `< 5` live -> inconclusive; enlarge the batch, do not re-roll to a lucky pass.
+- Model ties `role_mechanism_prior` -> ship the lookup, model stays
+  documentation-only.
+- No gate beats run-all at full recall -> the signal does not generalize; stay in
+  shadow and keep running everything.
+
+Out of scope:
+
+- Skipping any real run in the live loop (Phase 5). 14B/32B. New mechanism families
+  beyond the four schedule mechanisms. Intra-identical-shape discrimination.
+
 ## Phase 5: Controlled Assist Mode
 
 Purpose:
