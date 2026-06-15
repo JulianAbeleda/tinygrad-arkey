@@ -584,15 +584,21 @@ dequant inside the WMMA tiling instead of staging the dequantized tile once in L
 trick). So W2-W4 do NOT run over this naive template (no tiling search fixes a per-tile dequant
 recompute).
 
-Decision point for next session: a competitive template needs a hand-authored Marlin-class
-LDS-staged fused-WMMA kernel (the real lift -- stage the dequantized weight tile in LDS once, reuse
-across the WMMA ops). Routes: (a) author it in tinygrad UOp (hand-place WMMA + LDS staging -- hard,
-uncharted via custom_kernel); (b) accept the regime split: materialized-fp16 matmul_decoded for
-large batch (compute-bound, ~19% peak), the B1b fused GEMM for small batch (memory-bound), and the
-deterministic ~50% as the current bar; (c) go lower-level (HIP/rocWMMA). The honest "primitives to
-scale" answer is now precise: we have WMMA and can fuse it with dequant correctly, but lack
-AUTOMATIC dequant-tile-staging -- the one primitive Marlin hand-writes -- and tinygrad won't
-generate it.
+Decision point RESOLVED into a concrete scope: chose route (a), now fully scoped as **W1b
+(Marlin-class LDS-staged fused-WMMA kernel)** in `docs/amd-decode-flywheel-proof-plan.md` (under
+Phase W, between W1 and W2). The grounding flipped the approach: tinygrad DOES expose the LDS
+primitives from a custom kernel -- `Ops.DEFINE_LOCAL` / `UOp.placeholder(..., addrspace=AddrSpace.LOCAL)`
+(`tinygrad/uop/ops.py:1056`), `.barrier()` (`Ops.BARRIER`, `ops.py:532`), and the existing Q4_K
+kernels already use `AddrSpace.REG` placeholders. So the move is NOT hand-writing `Ops.WMMA`:
+**stage the dequant into an LDS tile once, then let forced-TC (TC_OPT=2) apply WMMA to the matmul
+that now reads LOADS from LDS** -- dequant runs once (the store), WMMA operands are loads, the
+per-tile recompute (the W1 28x) disappears. Primitives exist => not a framework wall; the lift is
+kernel engineering (coordinating hand-LDS-staging with the forced-TC WMMA tiling). W1b.0 is a cheap
+make-or-break sub-gate (can one custom kernel: DEFINE_LOCAL fp16 tile -> store dequant tile ->
+barrier -> matmul from LDS with TC firing, correctly?) before authoring the full kernel. If TC
+won't fire on an LDS-staged operand, THAT is the real framework limit -> go lower-level
+(HIP/rocWMMA) or accept the regime split (route b: matmul_decoded large-batch ~19% peak + B1b fused
+small-batch + deterministic ~50% bar). Next action: execute W1b.0.
 
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them

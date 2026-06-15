@@ -2275,6 +2275,53 @@ large-batch regime and the small-batch fused GEMM (B1b) for the memory-bound reg
 the "primitives to scale" answer: we have WMMA and can fuse it with dequant (correct, compressed),
 but lack **automatic dequant-tile-staging** -- exactly the one primitive Marlin hand-writes.
 
+### W1b: Marlin-class LDS-staged fused-WMMA kernel (the real lift)
+
+Purpose:
+
+- W1 showed forced-TC emits WMMA on the fused dequant (correct, compressed) but is `13-28x` slow
+  because the dequant is recomputed inside the WMMA tiling. W1b closes that by **staging the
+  dequantized weight tile in LDS once and reusing it across the WMMA ops** -- the Marlin structure.
+
+Grounding (the primitives exist in tinygrad -- not a framework wall):
+
+- `Ops.DEFINE_LOCAL` / `UOp.placeholder(..., addrspace=AddrSpace.LOCAL)` create an LDS buffer in a
+  custom kernel; `.barrier()` (`Ops.BARRIER`) synchronizes; the existing Q4_K kernels already use
+  `AddrSpace.REG` placeholders. Key insight: do NOT hand-write `Ops.WMMA`. Instead **stage the
+  dequant into LDS, then let forced-TC apply WMMA to the matmul that now reads LOADS from LDS** --
+  the dequant runs once (the store), and the WMMA operands are loads, so the per-tile recompute
+  (the W1 slowness) disappears.
+
+W1b.0 -- staging sub-gate (make-or-break, cheap):
+
+- Confirm one custom kernel can: define an fp16 LDS tile, store a dequantized weight tile to it,
+  `barrier()`, then matmul reading from that LDS tile, and that forced-TC fires WMMA on that matmul
+  -- correctly. If TC will not fire on an LDS-staged operand, or the barrier/layout fights the
+  optimizer, that is the real framework limit: record it and go lower-level (HIP/rocWMMA) or accept
+  the regime split. Do not author the full kernel until this sub-gate passes.
+
+W1b.1 -- author the staged kernel:
+
+- A K-loop streaming kernel: load a compressed weight K-tile -> dequant to fp16 in an LDS tile
+  (sized to the `16x16x16` WMMA tile) -> `barrier()` -> WMMA against the activation tile -> accumulate
+  -> next K-tile. Match LDS tile layout to the WMMA fragment layout; place barriers correctly; keep
+  the activation tile in LDS/registers. Heed G0''/W1: the dequant is staged ONCE per tile and reused;
+  preserve occupancy, do not serialize.
+
+W1b.2 -- correctness + measure:
+
+- Exact numerics (correctness-gated). Device time + FLOPS / `83.6` TFLOPS peak vs materialized-fp16
+  WMMA (`matmul_decoded`, the ceiling) and the W0 llama.cpp bar (`103.84` tok/s). Pre-registered:
+  the staged kernel beats `matmul_decoded` while reading compressed weights -> the competitive
+  fused-WMMA primitive is built; W2-W4 (parametrize, autotune, cost-model search) now have a template
+  that can contain a competitive point. If it cannot beat `matmul_decoded` even staged -> tinygrad's
+  codegen is the ceiling; record it and stop the search line.
+
+Risk: this is the hardest kernel in the program -- coordinating hand-LDS-staging with the
+forced-TC WMMA tiling in tinygrad's UOp model is uncharted and high-variance (G0''/W1 showed how
+easily kernels regress). The primitives exist, so it is not a framework wall, but the engineering
+is real. W1b.0 is the cheap sub-gate that de-risks it before the full authoring.
+
 ### W2: Parametrize the template
 
 - Expose the W1 kernel as `config -> kernel`: WMMA tile (`M x N x K`), `B`-block, LDS staging size,
