@@ -45,6 +45,36 @@ vs fp 58 / llama.cpp 104. Honest report: does DP4A codegen actually close the de
 costs (nibble unpack, occupancy) dominate? Either way it's the measured answer to the consolidated doc's
 open lever.
 
+## RESULTS (2026-06-15)
+
+**S1 — GPU-BLOCKED (not a code failure).** Added the default-off `_BEAM_SCHEDULE_LOG` hook (search.py) +
+`qk_partial_schedule_log.py`. But running real native BEAM over its FULL action space repeatedly HANGS
+gfx1100 (`Wait timeout: signal not set`, `memory_lost=1` HW faults) — the action space contains
+configs that hang this GPU, poisoning the process. Small ops and the curated 277-config substrate
+(L0/L1) are fine; the full BEAM space is not. This is itself the infra reason the curated substrate
+exists. S1 (harvest partial schedules over the real action space) is blocked on this hardware; the
+hook stays for a future stable run.
+
+**S2 — BLOCKED (opt-space mismatch + likely flat).** Conv ASTs build fine via
+`helper_realized_ast(conv.realize())` (final reduce kernel), but the matmul candidate set
+(`gen_candidates`, TC/UPCAST on axes 0/1) fails on conv's reduce kernel with `KernelOptError` — conv's
+axis layout differs, needing a bespoke conv opt-candidate set. The conv reduce baseline is tiny (0.1 TF,
+memory-bound), so it is likely "flat" (not a rich learnable substrate, like the GEMV). Deferred: needs a
+conv-specific candidate set before learnability is even testable.
+
+**D0 — PASS (major).** `qk_vdot4_builtin_d0.py`, `dp4a-d0/BUILTIN_VS_ASM_RESULT.md`. The schedulable
+builtin `__builtin_amdgcn_udot4` (gfx1100, unsigned, `target("dot-insts")` attr) emits v_dot4 and at full
+occupancy hits **169.6 Q4-GB/s ≈ fp's 173**, **2.54× over the asm-volatile v_dot4** (66.7), exact-correct.
+Phase D's "DP4A is the wrong lever" was an **asm-volatile-barrier artifact**; the builtin realizes the
+consolidated doc's predicted instruction-count floor (~1.58 VALU/weight vs fp 4.06). The decode
+instruction-count lever is REAL and kernel-competitive — reopening the decode question.
+
+**D1 — PARTIAL (kernel-competitive shown; e2e pending).** D0 already proved the builtin GEMV is
+kernel-competitive with fp standalone. The e2e decode test needs the `target("dot-insts")` attr on
+tinygrad's GENERATED kernel (a core render_kernel change — the inline CUSTOM-op body can't set it), and
+faces the occupancy/pipelining wall that killed every prior standalone-fast kernel e2e (int-dot 242→136).
+Open: whether the builtin's lower instruction/register count lets it pipeline e2e and beat fp's 58 tok/s.
+
 ## Honesty / pre-registration
 - S1/S2/D each have a pre-registered gate; a null is a real, reported result (the program's pattern).
 - The default-off search.py hooks keep tinygrad's normal behavior unchanged.

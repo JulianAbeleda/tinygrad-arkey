@@ -1787,3 +1787,19 @@ Two-sided Phase L COMPLETE: live loop is a 42x autotuner on ITS substrate (L0/L1
 to a structurally different search substrate (native BEAM) without retraining. Final report addendum
 added. Commit a5f25bde0, pushed. (Transient AMD HW fault memory_lost=1 hit one sweep run; GPU
 auto-recovered; clean rerun reported.) tinygrad default behavior unchanged (hook no-op when unset).
+
+## 2026-06-15 — Scale-substrate (S) + v_dot4 (D): D0 major win; S1/S2 blocked
+Pursued the two follow-ups (docs/amd-loop-scale-and-vdot4-plan.md).
+- **D0 PASS (major)**: the schedulable builtin __builtin_amdgcn_udot4 (gfx1100, unsigned, target("dot-insts"))
+  emits v_dot4 and at full occupancy = 169.6 Q4-GB/s ~= fp 173, 2.54x over asm-volatile v_dot4 (66.7),
+  exact-correct, ~1.58 VALU/weight (vs fp 4.06). Phase D's "DP4A is dead" was an ASM-VOLATILE-BARRIER
+  artifact; the builtin reopens the decode lever. qk_vdot4_builtin_d0.py, dp4a-d0/BUILTIN_VS_ASM_RESULT.md.
+- **S1 GPU-BLOCKED**: default-off _BEAM_SCHEDULE_LOG hook (search.py) + qk_partial_schedule_log.py built,
+  but native BEAM over its FULL action space HANGS gfx1100 (Wait timeout / memory_lost HW faults). Only
+  the curated 277-config substrate is stable. Hook stays for a future stable run.
+- **S2 BLOCKED**: conv ast builds, but matmul opt-candidate set fails on conv reduce (KernelOptError,
+  different axes); conv reduce baseline 0.1 TF (likely flat). Needs a conv-specific opt set.
+- **D1 PARTIAL/open**: builtin GEMV is kernel-competitive (=fp standalone); e2e needs target attr on
+  tinygrad's generated kernel (core render_kernel change) + must beat the pipelining wall (int-dot 242->136
+  e2e). The decisive decode-parity test, not yet run.
+Commits f174d86e4, b4d10f6f8 pushed. GPU had repeated transient HW faults under heavy BEAM timing this session.

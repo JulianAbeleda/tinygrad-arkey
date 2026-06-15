@@ -212,3 +212,22 @@ The two-sided Phase-L result sharpens the meta-conclusion at the integration lay
 a real, live, 42× autotuning tool on the substrate it was trained for, and does not transfer to a
 structurally different search substrate without retraining.** Native-BEAM integration would need a dataset
 of partial-schedule timings over BEAM's full action space — the "scale the substrate" follow-up.
+
+## Addendum 2 (2026-06-15) — the v_dot4 decode lever REOPENS (D0), and the scale-substrate blockers
+
+Pursuing the two leftover follow-ups (`docs/amd-loop-scale-and-vdot4-plan.md`):
+
+- **The decode "DP4A is dead" verdict was an asm-volatile artifact — REOPENED.** Phase D concluded DP4A
+  doesn't help, but it emitted v_dot4 via `asm volatile` (a scheduling barrier, its slowest variant at 35
+  GB/s). The renderer targets HIP C++, where the clean path is the compiler builtin `__builtin_amdgcn_udot4`
+  (schedulable). gfx1100 accepts the UNSIGNED builtin with `__attribute__((target("dot-insts")))`, and Q4_K
+  already uses the unsigned dot + bias correction. **D0** (`dp4a-d0/BUILTIN_VS_ASM_RESULT.md`): the same
+  Q4_K GEMV via the builtin hits **169.6 Q4-GB/s ≈ fp's 173** at full occupancy, **2.54× over the asm
+  version**, exact-correct, and realizes the consolidated doc's predicted instruction floor (~1.58
+  VALU/weight vs fp 4.06). The decode instruction-count lever is REAL and kernel-competitive. Open (D1):
+  does it survive e2e (needs the target attr on tinygrad's generated kernel + must beat the
+  occupancy/pipelining wall that killed prior standalone-fast kernels)?
+- **Scale-the-substrate is blocked on this setup.** Harvesting partial schedules over native BEAM's full
+  action space HANGS gfx1100 (HW faults) — only the curated 277-config substrate is stable. Conv ASTs
+  build, but the matmul opt-candidate set fails on conv's reduce kernel (different axes) and its baseline
+  is tiny (0.1 TF, likely flat). Both need work beyond this hardware's stable envelope.
