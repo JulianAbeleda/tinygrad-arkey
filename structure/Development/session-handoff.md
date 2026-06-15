@@ -1557,3 +1557,16 @@ Current next step if continuing practical work:
 
 Suggested commit prefix once artifacts/docs are finalized:
 `[test] finish Phase 4 rejection-sampling SFT eval`.
+
+UPDATE 2026-06-15 -- Phase D scoped: teach tinygrad the int8/DP4A vocabulary so search can reach the
+decode GEMV (the tinygrad-pure way to close the ~56%-of-llama.cpp decode gap). Doc:
+`docs/amd-decode-dp4a-vocabulary.md`. Confirmed in code: `V_DOT4_I32_I8` is in the ISA assembler
+tables but NO codegen pattern emits it; we only reached DP4A via the `Ops.CUSTOMI` inline-asm escape
+hatch (`extra/q4_k_gemv_primitive.py`). That vocabulary gap (not a search failure) is why the GEMV opt
+space was flat (M0). DP4A is LIGHTER than WMMA (per-lane vector dot, no TensorCore dataclass/swizzles):
+needs only Ops.DP4A + a fold pattern (int8-dot idiom -> DP4A, mirror rangeify lower_shaped_wmma) + a
+1-line renderer rule (`__builtin_amdgcn_sdot4`, mirror cstyle WMMA emit at cstyle.py:62) + a search
+action (mirror the TC action) + the q8_1 activation path in the graph. Phases: D0 make-or-break
+ceiling probe FIRST (does a HAND-written DP4A GEMV reach ~llama.cpp tok/s? if not, codegen work is
+moot -- roofline discipline) -> D1 fold pattern -> D2 renderer emit -> D3 search-reachable -> D4
+end-to-end measure (search-found, not hand-asm, vs llama.cpp). Next action: run D0.
