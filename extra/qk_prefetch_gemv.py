@@ -30,6 +30,32 @@ HEADER = ('extern "C" __attribute__((device, const)) unsigned long __ockl_get_gr
 
 
 def gen(name, variant):
+  if variant == "fp_acc8":  # wide loads + 8 INDEPENDENT accumulators (break the serial fp-add chain -> reduction ILP)
+    body = ['  u4v* W4 = (u4v*)(words + row*%d);' % RW,
+            '  float a0=0,a1=0,a2=0,a3=0,a4=0,a5=0,a6=0,a7=0;',
+            f'  for (int blk=0; blk<{KB}; blk++) {{ int b=blk*9;',
+            '    for (int i=0; i<9; i++) { u4v v=W4[b+i]; int ii=i;',
+            '      for (int j=0; j<4; j++) { unsigned int word=v[j]; int bs=(ii*4+j)*8;']
+    body += [f'        a{n} += (float)((word>>{n*4})&0xfu) * x[bs+{n}];' for n in range(8)]
+    body += ['      } } }', '  out[row] = a0+a1+a2+a3+a4+a5+a6+a7;']
+    return "\n".join([HEADER, 'typedef unsigned int u4v __attribute__((ext_vector_type(4)));',
+      f'extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1,{LOCAL}))) {name}(',
+      '    float* out, unsigned int* words, float* x) {',
+      f'  unsigned int row = __ockl_get_group_id(0)*{LOCAL} + __ockl_get_local_id(0);'] + body + ['}'])
+  if variant.startswith("fp_vec"):  # uint4 wide loads (like readraw's 9 loads/block) + depth-N MLP, lean looped dequant
+    depth = {"fp_vec": 1, "fp_vec_u3": 3, "fp_vec_u9": 9}[variant]
+    return "\n".join([HEADER, 'typedef unsigned int u4v __attribute__((ext_vector_type(4)));',
+      f'extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1,{LOCAL}))) {name}(',
+      '    float* out, unsigned int* words, float* x) {',
+      f'  unsigned int row = __ockl_get_group_id(0)*{LOCAL} + __ockl_get_local_id(0);',
+      f'  u4v* W4 = (u4v*)(words + row*{RW});  float acc = 0.0f;',
+      f'  for (int blk=0; blk<{KB}; blk++) {{ int b=blk*9;',           # 9 uint4 = 36 words/block
+      f'    for (int i=0; i<9; i+={depth}) {{ u4v vv[{depth}];',
+      f'      for (int d=0; d<{depth} && i+d<9; d++) vv[d] = W4[b+i+d];',   # depth wide loads in flight (MLP)
+      f'      for (int d=0; d<{depth} && i+d<9; d++) {{ u4v v=vv[d]; int ii=i+d;',
+      '        for (int j=0; j<4; j++) { unsigned int word=v[j];',
+      '          for (int nib=0; nib<8; nib++) acc += (float)((word>>(nib*4))&0xfu) * x[(ii*4+j)*8+nib]; } } } }',
+      '  out[row] = acc; }'])
   L = [HEADER, f'extern "C" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1,{LOCAL}))) {name}(',
        '    float* out, unsigned int* words, float* x) {',
        f'  unsigned int row = __ockl_get_group_id(0)*{LOCAL} + __ockl_get_local_id(0);',
@@ -75,7 +101,7 @@ def main():
   wb = mk(words, dtypes.uint32); xb = mk(xv, dtypes.float32)
   q4_bytes = ROWS * RW * 4
   results = {}
-  for variant in ("readraw", "fp", "fp_wide", "fp_prefetch"):
+  for variant in ("readraw", "fp", "fp_wide", "fp_prefetch", "fp_vec", "fp_vec_u3", "fp_acc8"):
     lib = dev.compiler.compile(gen(variant, variant))
     import contextlib, io
     buf = io.StringIO()
