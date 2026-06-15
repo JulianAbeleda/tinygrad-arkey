@@ -26,6 +26,7 @@ ART = pathlib.Path("bench/amd-decode-flywheel-proof-20260614/dp4a-d0")
 ROWS, K = 4096, 4096
 KB = K // 256  # Q4_K blocks per row (256 elems/block)
 RW = KB * Q4K_WORDS_PER_BLOCK  # uint32 words per row
+LOCAL = 64  # threads/workgroup (full-occupancy launch: each thread does one row)
 
 
 def gen_source(name: str, builtin: bool) -> str:
@@ -38,9 +39,10 @@ def gen_source(name: str, builtin: bool) -> str:
     attr = ""
   L = []
   L.append('extern "C" __attribute__((device, const)) unsigned long __ockl_get_group_id(unsigned int);')
-  L.append(f'extern "C" __attribute__((global)) {attr}void __attribute__((amdgpu_flat_work_group_size(1,1))) {name}(')
+  L.append('extern "C" __attribute__((device, const)) unsigned int __ockl_get_local_id(unsigned int);')
+  L.append(f'extern "C" __attribute__((global)) {attr}void __attribute__((amdgpu_flat_work_group_size(1,{LOCAL}))) {name}(')
   L.append("    float* out, unsigned int* words, unsigned int* q8, float* xscales) {")
-  L.append("  unsigned int row = __ockl_get_group_id(0);")
+  L.append(f"  unsigned int row = __ockl_get_group_id(0) * {LOCAL} + __ockl_get_local_id(0);")
   L.append(f"  unsigned int* W = words + row * {RW};")
   L.append("  float total = 0.0f;")
   L.append(f"  for (int blk = 0; blk < {KB}; blk++) {{")
@@ -103,8 +105,8 @@ def main():
     n_valu = sum(1 for l in asm.splitlines() if "\tv_" in l or l.strip().startswith("v_"))
     ob = Buffer("AMD", ROWS, dtypes.float32).ensure_allocated()
     prg = dev.runtime(tag, lib)
-    prg(ob._buf, wb._buf, qb._buf, xb._buf, global_size=(ROWS,1,1), local_size=(1,1,1), wait=True)  # warmup
-    tms = [prg(ob._buf, wb._buf, qb._buf, xb._buf, global_size=(ROWS,1,1), local_size=(1,1,1), wait=True) for _ in range(20)]
+    prg(ob._buf, wb._buf, qb._buf, xb._buf, global_size=(ROWS//LOCAL,1,1), local_size=(LOCAL,1,1), wait=True)  # warmup
+    tms = [prg(ob._buf, wb._buf, qb._buf, xb._buf, global_size=(ROWS//LOCAL,1,1), local_size=(LOCAL,1,1), wait=True) for _ in range(20)]
     t = statistics.median(tms)
     outs[tag] = _np(ob)
     results[tag] = {"q4_gbs": round(q4_bytes/t/1e9, 1), "device_us": round(t*1e6, 1),
