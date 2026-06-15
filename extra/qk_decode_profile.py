@@ -13,19 +13,25 @@ from tinygrad.device import Compiled, ProfileGraphEvent
 
 def family(name):
   n = str(name)
-  if re.search(r"q4|Q4|dequant|gemv", n): return "Q4K-GEMV?"
-  if n.startswith("r_") or "reduce" in n: return "reduce(r_)"
+  if "q4k_gemv" in n: return "Q4K-GEMV(weight read)"
+  if n.startswith("r_") or "reduce" in n: return "reduce(norm/attn/r_)"
   if n.startswith("E_") or n.startswith("e_"): return "elementwise(E_)"
   if "copy" in n.lower() or "COPY" in n: return "copy"
-  if "sdpa" in n or "attn" in n or "softmax" in n: return "attention"
-  return n.split("__")[0][:24]
+  return "other:" + n.split("__")[0][:18]
 
 
 def main():
+  import time
   model, _ = Transformer.from_gguf("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf", 4096)
   # warm the rollout JIT (needs 3+ calls to capture the replay graph)
   for tk in itertools.islice(model.generate([1, 2, 3, 4, 5], temperature=0.0), 12):
     pass
+  # measure wall-clock per token (jitted, steady) to compare against GPU-busy/token
+  g2 = model.generate([1, 2, 3, 4, 5], temperature=0.0)
+  for _ in range(20): next(g2)         # warm
+  st = time.perf_counter(); N = 80
+  for _ in range(N): next(g2)
+  wall_us = (time.perf_counter() - st) / N * 1e6
   # the per-token graph(s) we care about are the ProfileGraphEvents captured during replay
   graphs = [e for e in Compiled.profile_events if isinstance(e, ProfileGraphEvent)]
   if not graphs:
@@ -48,11 +54,12 @@ def main():
   byfam = collections.defaultdict(lambda: [0.0, 0])
   for nm, d in durs:
     byfam[family(nm)][0] += d; byfam[family(nm)][1] += 1
-  print(f"\n=== decode token graph: {len(durs)} kernels, span {span:.1f}us, busy {busy:.1f}us, "
-        f"GAPS {span-busy:.1f}us ({(span-busy)/span*100:.0f}% idle) ===", file=out)
-  print(f"{'family':<26} {'us':>9} {'%span':>6} {'n':>4}  avg-us", file=out)
+  print(f"\n=== decode token: WALL {wall_us:.0f}us/tok ({1e6/wall_us:.1f} tok/s) | GPU-busy {busy:.0f}us "
+        f"({busy/wall_us*100:.0f}% of wall) | HOST/sync {wall_us-busy:.0f}us ({(wall_us-busy)/wall_us*100:.0f}%) ===", file=out)
+  print(f"  graph: {len(durs)} kernels, in-graph GAPS {span-busy:.0f}us ({(span-busy)/span*100:.0f}% idle)", file=out)
+  print(f"{'family':<26} {'us':>9} {'%wall':>6} {'n':>4}  avg-us", file=out)
   for fam, (tot, n) in sorted(byfam.items(), key=lambda kv: -kv[1][0]):
-    print(f"{fam:<26} {tot:9.1f} {tot/span*100:5.1f}% {n:4d}  {tot/n:6.1f}", file=out)
+    print(f"{fam:<26} {tot:9.1f} {tot/wall_us*100:5.1f}% {n:4d}  {tot/n:6.1f}", file=out)
   # top individual kernels
   print("--- top 8 individual kernels ---", file=out)
   for nm, d in sorted(durs, key=lambda x: -x[1])[:8]:
