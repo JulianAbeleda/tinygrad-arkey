@@ -2238,6 +2238,10 @@ was ever suited for.
 - Honest framing: matching a heavily hand-tuned kernel by search is hard; the win is "competitive
   ACROSS shapes/hardware without hand-tuning each," not "beat one Marlin kernel."
 
+Result (2026-06-15): llama.cpp does `103.84` tok/s on 8B Q4_K decode (llama-bench tg64, ROCm) on
+this GPU. Our deterministic generated policy is `~52` tok/s = `~50%`, so the bar is **close a ~2x
+gap**.
+
 ### W1: Close the primitive gap -- tile-level fused dequant -> WMMA (the gate)
 
 - tinygrad's WMMA matcher does not fire on a dequant expression (B0: the fused kernel is a `~4%`
@@ -2252,6 +2256,24 @@ was ever suited for.
   -> record it as a tinygrad-capability blocker; the path then needs lower-level intrinsics or a
   different framework, and W3/W4 do NOT run over a template that cannot contain a competitive point.
 - Heed the G0'' lesson: win via tiling/reuse that PRESERVES parallelism; do not serialize.
+
+Result (2026-06-15, `extra/qk_wmma_w1.py`, `wmma-w1/`): the gate is **open at the capability level,
+closed at the performance level.** Forcing tensor cores (`TC_OPT=2`) makes tinygrad emit WMMA on the
+FUSED dequant matmul -- the matcher only requires both MUL operands be fp16, which the
+dequant-cast-to-f16 satisfies (`0` WMMA by default, `145` when forced). The resulting kernel is
+**correct (exact numerics), uses matrix cores, and reads the COMPRESSED weights** (`~10` MB for
+attn_q / `~30` MB for ffn_gate vs `~34` / `~103` MB materialized -- no fp16 round-trip). BUT it is
+**`13-28x` slower** than the materialized-fp16 WMMA (`0.25-1.4%` vs `7-19%` of peak), because
+tinygrad **recomputes the dequant inside the WMMA tiling instead of staging the dequantized tile
+once in LDS** (the Marlin trick) -- forced-TC does not auto-stage a computed intermediate.
+
+Gate decision: the capability exists (not a hard instruction-level wall), but the naive template is
+not competitive, and **no autotuning search (W3/W4) fixes a per-tile dequant recompute** -- so W2-W4
+do NOT run over it. A competitive template needs a hand-authored Marlin-class LDS-staged fused-WMMA
+kernel (the real lift), or accept materialized-fp16 (`matmul_decoded`) for the compute-bound
+large-batch regime and the small-batch fused GEMM (B1b) for the memory-bound regime. This sharpens
+the "primitives to scale" answer: we have WMMA and can fuse it with dequant (correct, compressed),
+but lack **automatic dequant-tile-staging** -- exactly the one primitive Marlin hand-writes.
 
 ### W2: Parametrize the template
 

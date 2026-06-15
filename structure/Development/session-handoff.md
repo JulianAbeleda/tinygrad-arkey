@@ -574,9 +574,28 @@ baseline. It plateaus at ~4.6-6% of peak and loses at B>=16 (crossover ~B=12); t
 tiles fp16 better at large batch. Adopt the fused GEMM for B<=8 (speculative/Medusa decode); use
 matmul_decoded for large batch.
 
-Next scope is **Phase W: Search-Competitive Fused Q4_K GEMM (machine search vs llama.cpp)**, fully
-written in `docs/amd-decode-flywheel-proof-plan.md` -- the actual program goal restated against
-what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
+W0 + W1 are done (`extra/qk_wmma_w1.py`, `wmma-w1/`). W0 bar: llama.cpp = 103.84 tok/s on 8B Q4_K
+decode (ROCm) on this GPU; our deterministic ~52 tok/s = ~50%, so the gap is ~2x. W1 gate verdict:
+**open at capability, closed at performance.** Forcing tensor cores (TC_OPT=2) makes tinygrad emit
+WMMA on the FUSED dequant matmul (the matcher only needs both MUL operands fp16; 0 WMMA by default,
+145 forced). It is correct, uses matrix cores, and reads COMPRESSED weights (~10/30 MB vs ~34/103
+MB materialized) -- but 13-28x SLOWER than materialized-fp16 WMMA, because tinygrad recomputes the
+dequant inside the WMMA tiling instead of staging the dequantized tile once in LDS (the Marlin
+trick). So W2-W4 do NOT run over this naive template (no tiling search fixes a per-tile dequant
+recompute).
+
+Decision point for next session: a competitive template needs a hand-authored Marlin-class
+LDS-staged fused-WMMA kernel (the real lift -- stage the dequantized weight tile in LDS once, reuse
+across the WMMA ops). Routes: (a) author it in tinygrad UOp (hand-place WMMA + LDS staging -- hard,
+uncharted via custom_kernel); (b) accept the regime split: materialized-fp16 matmul_decoded for
+large batch (compute-bound, ~19% peak), the B1b fused GEMM for small batch (memory-bound), and the
+deterministic ~50% as the current bar; (c) go lower-level (HIP/rocWMMA). The honest "primitives to
+scale" answer is now precise: we have WMMA and can fuse it with dequant correctly, but lack
+AUTOMATIC dequant-tile-staging -- the one primitive Marlin hand-writes -- and tinygrad won't
+generate it.
+
+The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
+program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
 reaches llama.cpp; the fused-dequant->WMMA structure is the prerequisite for the search space to
 contain a competitive point. The deterministic generated policy is at 61.6% of llama.cpp (14B);
 this phase closes that gap by search over a competitive template (the Ansor model: human authors

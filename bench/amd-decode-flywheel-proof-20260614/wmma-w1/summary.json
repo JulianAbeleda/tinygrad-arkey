@@ -1,0 +1,102 @@
+{
+  "conclusion": "gate_open_at_capability_closed_at_performance_fused_wmma_correct_compressed_but_28x_slow_needs_marlin_lds_dequant_staging",
+  "fp16_compute_peak_tflops": 83.64,
+  "gate_verdict": {
+    "competitive": false,
+    "correct": true,
+    "fused_vs_dense_slowdown_x": "13-28x",
+    "fused_wmma_works": true,
+    "implication": "W3/W4 autotuning must NOT run over this naive template (no tiling search fixes the per-tile dequant recompute). A competitive template needs a hand-authored Marlin-class LDS-staged fused-WMMA kernel, or accept materialized-fp16 (matmul_decoded) for large batch.",
+    "reads_compressed_weights": true,
+    "root_cause": "tinygrad recomputes the dequant inside the WMMA tiling instead of staging the dequantized tile once in LDS (the Marlin trick); forced-TC does not auto-stage a computed intermediate",
+    "uses_matrix_cores": true
+  },
+  "kind": "qk_flywheel_wmma_w1",
+  "note": "fused = compressed Q4_K dequant -> WMMA (TC forced); dense = materialized fp16 -> WMMA (ceiling).",
+  "per_tensor": {
+    "blk.13.ffn_gate.weight": {
+      "compressed_q4_mb": 28.31,
+      "curve": [
+        {
+          "batch": 64,
+          "correct": true,
+          "dense_global_mb": 102.76,
+          "dense_pct_peak": 9.88,
+          "dense_tflops": 8.26,
+          "dense_us": 779.96,
+          "fused_global_mb": 30.41,
+          "fused_pct_peak": 0.79,
+          "fused_tflops": 0.66,
+          "fused_us": 9803.64,
+          "fused_vs_dense": 0.08,
+          "rel_err": 0.000395
+        },
+        {
+          "batch": 128,
+          "correct": true,
+          "dense_global_mb": 104.86,
+          "dense_pct_peak": 18.77,
+          "dense_tflops": 15.7,
+          "dense_us": 820.88,
+          "fused_global_mb": 32.51,
+          "fused_pct_peak": 1.41,
+          "fused_tflops": 1.18,
+          "fused_us": 10906.8,
+          "fused_vs_dense": 0.075,
+          "rel_err": 0.00034
+        }
+      ],
+      "shape": [
+        12288,
+        4096
+      ],
+      "tensor": "blk.13.ffn_gate.weight"
+    },
+    "blk.20.attn_q.weight": {
+      "compressed_q4_mb": 9.44,
+      "curve": [
+        {
+          "batch": 64,
+          "correct": true,
+          "dense_global_mb": 34.6,
+          "dense_pct_peak": 7.44,
+          "dense_tflops": 6.23,
+          "dense_us": 344.92,
+          "fused_global_mb": 10.49,
+          "fused_pct_peak": 0.27,
+          "fused_tflops": 0.23,
+          "fused_us": 9498.6,
+          "fused_vs_dense": 0.036,
+          "rel_err": 0.000313
+        },
+        {
+          "batch": 128,
+          "correct": true,
+          "dense_global_mb": 35.65,
+          "dense_pct_peak": 9.65,
+          "dense_tflops": 8.07,
+          "dense_us": 532.04,
+          "fused_global_mb": 11.53,
+          "fused_pct_peak": 0.5,
+          "fused_tflops": 0.41,
+          "fused_us": 10356.0,
+          "fused_vs_dense": 0.051,
+          "rel_err": 0.000371
+        }
+      ],
+      "shape": [
+        4096,
+        4096
+      ],
+      "tensor": "blk.20.attn_q.weight"
+    }
+  },
+  "phase": "Phase W1",
+  "tc_forced": "TC_OPT=2",
+  "w0_bar": {
+    "gap_x": 1.99,
+    "llama_cpp_8b_q4k_decode_tok_s": 103.84,
+    "note": "llama-bench tg64 ROCm; close ~2x to be competitive",
+    "our_deterministic_8b_tok_s": 52.07
+  }
+}
