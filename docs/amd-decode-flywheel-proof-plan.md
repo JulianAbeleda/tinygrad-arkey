@@ -1781,6 +1781,25 @@ Exit gate (pre-registered):
 - If wins exist, quantify the frontier and the brute-force GPU cost. That cost is the
   baseline G1 must beat.
 
+Result (2026-06-14, `extra/qk_generation_g0.py`, `generation-g0/`): **no parametric
+headroom**, plus a more important metric finding. `168` correctness-gated GPU runs over
+`28` candidates x `2` fresh `attn_q` tensors, scored on median **device** throughput
+(`device_q4_eff`, from DEBUG=2 kernel timing). On both tensors the plain `v1_partial`
+baseline (`LOCAL:0:64`) is best (`~183` GB/s); the closest expanded candidate is
+`LOCAL:0:32` at `~173` (`-5.7%`), and `UPCAST` / `UNROLL` / multi-axis / `parts>1`
+roughly halve device throughput (`row_upcast2` `~88` GB/s). No expanded candidate beats
+the baseline. The deterministic `v1_partial` is already optimal in this opt space.
+
+Critical metric finding: this contradicts the 4.x "raw_accept" wins. Those were scored
+by `qk_semantic_schedule_bench` on WALL-clock `q4_eff` (`~28-35` GB/s, dominated by the
+`~0.27` ms launch overhead), where a few-percent "gain" is noise. On the reliable device
+metric the same schedules (e.g. `row_upcast2`) are dramatically slower, not faster. So
+the live/win labels the whole 3F-4.x line optimized may have been measurement artifacts,
+and the flywheel's "find a winning candidate" target may have no real targets in this
+space. The next priority is therefore not G2 but a metric audit: re-score the candidate
+space on `device_q4_eff` and re-check whether ANY candidate genuinely beats `v1_partial`
+on device before spending more effort on generation or assist.
+
 ### G1: Model-guided search versus brute force
 
 Purpose (only if G0 shows headroom):

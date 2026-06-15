@@ -489,7 +489,26 @@ parts {1,2,4}, LOCAL {32,64}), `qk_semantic_schedule` (4 mechanisms with FIXED o
 -- the frontier lives in the args/compositions the grid never tries), `qk_ansor` (a
 roofline cost model), and the committed gates.
 
-Concrete next-session deliverables (G0 first):
+Phase G0 is implemented and run (`extra/qk_generation_g0.py`, `generation-g0/`).
+Result: **no parametric headroom** -- on the reliable device metric (`device_q4_eff`,
+DEBUG=2 kernel timing), the plain `v1_partial` baseline (`LOCAL:0:64`, `~183` GB/s)
+beats every expanded schedule on `2` fresh attn_q tensors (`168` correctness-gated
+runs); UPCAST/UNROLL/parts roughly halve device throughput. `v1_partial` is already
+optimal in the opt space.
+
+Critical metric finding (now the top priority): G0 contradicts the 4.x "raw_accept"
+wins. Those were scored on WALL-clock `q4_eff` (~28-35 GB/s, dominated by ~0.27 ms
+launch overhead -- noise), while device timing shows the same schedules are slower.
+**The whole 3F-4.x line may have optimized a measurement artifact.** So the next
+priority is NOT G1/G2 but a **metric audit**: re-score the candidate space on
+`device_q4_eff`, re-check whether any candidate genuinely beats `v1_partial` on device,
+and (if the schedule_bench wall metric is confirmed unreliable) re-examine the 4.x
+live/win labels. `qk_semantic_schedule_bench` Q4_RESULT_RE captures `q4_eff` (wall),
+not `device_q4_eff` -- that is the likely root cause. Only after the metric is trusted
+should generation (G1/G2) or assist resume.
+
+Original Phase G deliverables (G1/G2) remain scoped in the proof plan but are gated on
+the metric audit:
 
 1. **G0 headroom probe (deterministic, shadow)**: expand the parametric space on the
    live-bearing attn_q tensors (LOCAL {16..256}, parts sweep, UPCAST/UNROLL args
