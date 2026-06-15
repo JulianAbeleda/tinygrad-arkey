@@ -457,13 +457,31 @@ inflated by the metric's hostage-to-worst-winner property and must be replicated
 `test_qk_flywheel_phase4.py` covers the role_mechanism_prior, ablation ladder, and
 freeze integrity. Predictions frozen at commit `8844e160e` before the microbench.
 
-Next scope is **Phase 5 Controlled Assist Mode** -- the model earned entry, but enter
-it carefully: keep the role x mechanism lookup as a cheap fallback, replicate the
-robustness-to-surprise effect on more batches (more surprise-prone low-count cells)
-before trusting the magnitude, and only let the gate skip the definitely-dead
-construction_blocked class first (the safest savings). Do not let the model bypass
-static/correctness/microbench/full-decode gates or drive 14B/32B. The staged harness,
-freeze protocol, safe-skip scorer, and role_mechanism_prior baseline are reusable.
+Next scope is **Phase 4.3 (Robustness Replication, shadow) then Phase 5 (Controlled
+Assist, constrained)**, both fully written in
+`docs/amd-decode-flywheel-proof-plan.md`. The 4.2 win rested on one surprise winner
+and a brittle metric, so 4.3 must replicate before any gate skips a real run.
+
+Phase 4.3 deliverables:
+1. Run `K>=3` more frozen staged batches (`shadow-staged-v3/-v4/-v5`) seeded with
+   surprise-prone cells (ffn_gate x row_upcast / direct_output across fresh
+   blk.13..35, plus fresh attn_q blocks). Reuse the staged freeze protocol.
+2. Add a recall-vs-savings curve to the scorer (experiments saved at 100% / 95% /
+   90% live-recall, per gate, per batch) to defang the single-surprise-winner
+   brittleness, plus a pooled across-batch summary and surprise-winner keep-rate.
+3. Pre-registered exit: model saves more than the lookup in a majority of batches AND
+   the advantage persists at 95% recall -> model earns model-driven Phase 5; else
+   Phase 5 uses the deterministic lookup, model documentation-only. Report all K
+   batches; do not re-roll.
+
+Phase 5 deliverables (gate source decided by 4.3): the loop actually skips skip-marked
+microbenches, starting with only the construction_blocked-in-zero-live-history class;
+conservative union (skip only if model AND lookup agree dead, keep if either says
+keep); a random audit of SKIPPED candidates run anyway to measure the real
+missed-winner rate; revert to run-everything if the audit catches a missed winner
+above tolerance. Do not bypass static/correctness/microbench/full-decode gates or
+drive 14B/32B. The staged harness, freeze protocol, safe-skip scorer, floor_setter
+diagnostic, and role_mechanism_prior baseline are reusable.
 
 The earlier Phase 4.2 scope (now executed) remains documented in the proof plan.
 Original next-session deliverables, for reference -- a shadow validation before

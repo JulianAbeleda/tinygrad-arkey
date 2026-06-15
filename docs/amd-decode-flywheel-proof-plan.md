@@ -1537,6 +1537,62 @@ don't-miss-a-winner gate needs -- but the `23`-vs-`0` magnitude should be replic
 before it is trusted. Phase 5 keeps the lookup as a cheap fallback and keeps
 validating the robustness-to-surprise effect.
 
+## Phase 4.3: Robustness Replication (shadow)
+
+Purpose:
+
+- Convert the 4.2 result from an interesting one-off into a trustworthy signal
+  BEFORE any gate skips a real run. The 4.2 margin (`23` vs `0`) rested on a single
+  surprise winner and the safe-skip metric is hostage to the worst-ranked true
+  winner. 4.3 tests whether the model's edge -- not catastrophically writing off a
+  surprise winner -- replicates across batches and survives a less brittle metric.
+
+Hypothesis (pre-registered):
+
+- The learned model keeps surprise winners that the role x mechanism lookup writes
+  off, consistently across independent frozen batches, and its
+  experiments-saved advantage persists when the all-or-nothing `100%`-recall
+  constraint is relaxed.
+
+Method:
+
+- Run `K >= 3` more frozen batches (`shadow-staged-v3/`, `-v4/`, `-v5/`), each
+  reusing the staged freeze protocol and leak-free path. Seed each with
+  surprise-prone cells: (role x mechanism) combinations with thin or zero live
+  history that can still win -- e.g. `ffn_gate` x `row_upcast` and `ffn_gate` x
+  `direct_output` across many fresh blocks (blk.13..35), plus fresh `attn_q` blocks
+  (the lookup's confident-live region, to check the model matches there too).
+- Freeze keep/skip scores before each microbench; run; score the same gate ladder.
+
+Metric upgrade (fixes the 4.2 brittleness):
+
+- Add a recall-vs-savings curve: experiments saved at `100%`, `95%`, and `90%`
+  live-recall, per gate, per batch. At `100%` one surprise winner dominates; at
+  `95%` the typical value shows. Report the curve, not just the `100%` point.
+- Pool across batches: in how many of `K` batches does the model save more than the
+  lookup at each recall level; and the surprise-winner keep-rate (fraction of live
+  candidates in low-historical-live cells that each gate's score would keep).
+- Keep the `floor_setter` diagnostic so single-winner effects stay visible.
+
+Exit gate (decides Phase 5's gate source):
+
+- If the model saves more than the lookup in a majority of the `K` batches AND its
+  advantage persists at `95%` recall (not only the brittle `100%` point), the model
+  earns model-driven Phase 5.
+- If the model only ties the lookup once pooled / recall-relaxed, the 4.2 win was a
+  single-batch artifact: Phase 5 proceeds with the deterministic lookup and the
+  model stays documentation-only.
+
+Failure modes (pre-registered, not bugs):
+
+- Report all `K` batches; do not drop or re-roll a batch to manufacture a majority.
+- A batch with `< 5` live or `< 2` patterns is inconclusive for that batch and is
+  enlarged, not discarded.
+
+Out of scope:
+
+- Skipping any real run (still Phase 5). 14B/32B. New mechanism families.
+
 ## Phase 5: Controlled Assist Mode
 
 Purpose:
@@ -1560,6 +1616,56 @@ Gate:
 - Measure GPU time or candidate count per decisive outcome.
 - The assisted ordering must reduce wasted experiments or surface a real
   accepted candidate earlier than baseline ordering.
+
+Gate source (decided by Phase 4.3):
+
+- This is the first phase where a gate actually skips a real microbench, so the gate
+  is whichever 4.3 validated: the learned model only if its advantage replicated and
+  survived recall-relaxation; otherwise the deterministic role x mechanism lookup.
+  The other gate is always kept as a hard fallback.
+
+Method (constrained):
+
+- Take the normal deterministic loop's static-pass candidate stream. Before the
+  microbench, the gate marks each candidate keep or skip; the loop actually skips
+  the skip-marked microbenches (the first real model influence on work).
+- Start with the safest skip class only: `construction_blocked`-predicted candidates
+  in cells with zero live history (in 4.2, `20/20` such candidates were genuine
+  construction failures). Widen the skip class only after the audit (below) shows
+  zero missed winners.
+
+Safety rails:
+
+- Conservative union: skip a candidate only if BOTH the model and the lookup agree
+  it is dead; if either says keep, keep. This bounds recall risk to the better of
+  the two gates.
+- Never skip a candidate scored within a margin of the gate's own live floor.
+- Freeze the keep/skip decision (and gate source) before outcomes, as in 4.1/4.2.
+
+Audit (the load-bearing safety mechanism):
+
+- Randomly sample a fraction of SKIPPED candidates and run them anyway (a shadow
+  audit inside the live loop). This is the only way to measure the real missed-winner
+  rate -- you cannot claim full recall in the live loop without spot-checking skips.
+- Record experiments saved, GPU time saved per decisive outcome, and the audited
+  missed-winner rate.
+
+Exit gate (to Phase 6):
+
+- Assisted ordering reduces wasted experiments by a meaningful margin AND the audit
+  shows the missed-winner rate within a pre-declared tolerance (target: zero missed
+  winners in the audit sample).
+
+Stop rule:
+
+- If the audit catches a missed winner above tolerance, revert to run-everything,
+  keep the model documentation-only, and do not enter Phase 6.
+
+Out of scope:
+
+- Full runtime integration of a model-proposed kernel (Phase 6). 14B/32B. Any bypass
+  of static/correctness/microbench/full-decode gates. Skipping outside the approved
+  safe class.
 
 ## Phase 6: Full Flywheel Proof
 
