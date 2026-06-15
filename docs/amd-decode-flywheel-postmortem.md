@@ -129,8 +129,13 @@ answer is set by the roofline and the reuse structure, not by a learned selector
 
 ## Current state — what is real
 
-- **`packed_load` +6%** on attn_q (+2% ffn_gate), correctly measured on device, is the one
-  genuine kernel win and the adopted batch-1 baseline.
+- **`packed_load` +6%** on attn_q (+2% ffn_gate), correctly measured on device, is the
+  genuine batch-1 kernel win and the adopted batch-1 baseline.
+- **A fused Q4_K GEMM (B1b) beats the fp16 dense matmul at small batch** — `1.8–5×` at
+  `B≤8`, correctness-gated, reading compressed weights — the right kernel for the
+  speculative/Medusa-decode regime and the first hand-authored kernel to beat a real
+  baseline. It plateaus at `~5%` of compute peak and loses at `B≥16` (tinygrad's matmul
+  tiles fp16 better); a register-blocked GEMM would be needed there.
 - **Batching is a 13–26× per-token lever** for the regimes that have it (prefill, batched
   serving, speculative/Medusa decode) — *not* single-stream greedy decode, which is
   irreducibly batch-1.

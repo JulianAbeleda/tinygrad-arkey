@@ -2185,6 +2185,26 @@ Connection to the learned model:
   parametric space in the program large enough that model-guided search (G1) might earn its keep
   on a real, correctly-measured target -- the only honest place to revive the flywheel question.
 
+Result (2026-06-14, `extra/q4_k_gemv_primitive.py` `q4k_gemm_packed_load_kernel` +
+`extra/qk_gemm_b1.py`, `gemm-b1/`): a **real win at small batch**. The fused GEMM extends
+packed_load with an `UPCAST`'d `B` axis so each dequantized weight is reused across the `B`
+activation columns; it is correctness-gated (exact numerics, `rel_err < 1e-6`) and reads the
+compressed Q4_K weights. Device-timed vs the fp16 dense matmul (`matmul_decoded` ceiling) on
+attn_q + ffn_gate:
+
+- `B=4`: GEMM beats fp16 dense **`3.7x` (ffn_gate) / `5.1x` (attn_q)**.
+- `B=8`: GEMM beats fp16 dense **`1.8x` / `1.9x`**.
+- `B>=16`: dense wins (GEMM plateaus at `~4.6-6%` of the `83.6` TFLOPS peak; dense climbs to
+  `~15%`). Crossover `~B=12`.
+
+So the fused GEMM is the right kernel for the **small-batch regime (`B<=8`: speculative/Medusa
+decode, small serving batches)** -- memory-light and faster -- and the first hand-authored kernel
+in the program to beat a real baseline at full correctness. It is a GEMV-derived kernel (B-unroll,
+`UPCAST` capped at 16) and plateaus; beating tinygrad's matmul at large `B` needs a register-blocked
+GEMM (2D `M x B` output tiling, LDS staging), a bigger lift where the model-guided tiling search
+above could finally earn its keep. Adopt the fused GEMM for `B<=8`; use `matmul_decoded` (or a
+future tiled GEMM) for large `B`.
+
 Out of scope:
 
 - Any numerics change; single-stream greedy decode (document it requires a batching source);

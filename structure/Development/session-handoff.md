@@ -564,7 +564,22 @@ dequantized weights to fp16 in memory then reads them back; and even dense matmu
 10%/19% of compute peak (untuned tinygrad GEMM). So the lever is real but realizing it needs B1.
 (The B=4 point is a noisy outlier; the verdict uses the fused-vs-dense ratio at the largest batch.)
 
-Correction from grounding the B1 scope: the fused path does NOT do an fp16 round-trip.
+B1 is done. B1a: the existing fused kernel already reuses the dequant across the batch (dequant op
+count is constant across B), so the slowness is tiling alone. B1b: authored a fused Q4_K GEMM
+(`q4k_gemm_packed_load_kernel` in extra/q4_k_gemv_primitive.py + benchmark extra/qk_gemm_b1.py,
+`gemm-b1/`) that extends packed_load with an UPCAST'd B axis (dequant reused across the B columns).
+Result: correctness-gated, and it BEATS the fp16 dense matmul at small batch -- 3.7-5.1x at B=4,
+1.8-1.9x at B=8 -- while reading compressed weights. The first hand-authored kernel to beat a real
+baseline. It plateaus at ~4.6-6% of peak and loses at B>=16 (crossover ~B=12); tinygrad's matmul
+tiles fp16 better at large batch. Adopt the fused GEMM for B<=8 (speculative/Medusa decode); use
+matmul_decoded for large batch.
+
+Next options (none urgent -- this is a clean resting point): (a) a register-blocked fused GEMM (2D
+MxB output tiling, LDS staging) to beat dense at large B -- a bigger lift, and the first place
+model-guided tiling search (G1) could earn its keep; (b) wire the fused GEMM into the real decode
+path for the small-batch regimes; (c) stop and consolidate. See docs/amd-decode-flywheel-postmortem.md.
+
+Historical note (from grounding the B1 scope): the existing fused path does NOT do an fp16 round-trip.
 `decode_q4_k_plus_matmul` is already ONE fused kernel reading compressed weights
 (`mem=9.57MB`, kernels=1.0, vs matmul_decoded's 33.69MB fp16). Its slowness is poor TILING
 (~351 GFLOPS, ~4% of peak), not materialization. The proof-plan B0 result and postmortem are

@@ -390,6 +390,41 @@ def q4k_gemv_hoist_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts
 
   return kernel
 
+def _q4k_block_dot_packed_load_gemm(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UOp, bb:UOp, k:int) -> UOp:
+  # GEMM body: x is flattened [B*K]; each dequantized weight is reused across the B columns.
+  # If bb is UPCAST'd, tinygrad unrolls it and CSEs the weight, so the dequant runs once per weight.
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for grp in range(8):
+    d, dmin, sc, mn = _q4k_group_params(words, base, grp)
+    qword = words[base + 4 + (grp//2)*8 + lane4]
+    for nib in range(4):
+      pos = lane4 * 4 + nib
+      q = qword.rshift(nib*8 + (grp%2)*4).bitwise_and(0xf).cast(dtypes.float32)
+      weight = d * sc.cast(dtypes.float32) * q - dmin * mn.cast(dtypes.float32)
+      contrib = contrib + weight * x[bb*k + x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
+  return contrib
+
+def q4k_gemm_packed_load_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    bb = UOp.range(b, 1)
+    part = UOp.range(parts, 2)
+    blk_part = UOp.range(blocks_per_part, 3, axis_type=AxisType.REDUCE)
+    lane4 = UOp.range(8, 4, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_packed_load_gemm(words, x, base, blk, lane4, bb, k), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, bb, part].set(0.0)
+    acc = partials[row, bb, part].set(acc.after(blk_part, lane4)[row, bb, part] + contrib, end=lane4)
+    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"q4k_gemm_packed_load_{rows}_{k}_{b}_{parts}", schedule, opts))
+
+  return kernel
+
 def q4k_gemv_vector_load_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)
