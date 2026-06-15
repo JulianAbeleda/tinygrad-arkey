@@ -1747,3 +1747,17 @@ win is an e2e mirage in every structure. FINAL: fp 58 (56% of llama.cpp) is the 
 ceiling; llama.cpp wins via occupancy-efficient hand-asm mmvq (DP4A-packed, minimal regs = the Writer)
 that tinygrad doesn't produce. The reframe (tinygrad CAN express 409 GB/s standalone) STANDS but doesn't
 translate e2e. Multiply-confirmed honest end-state. model.py pristine.
+
+## 2026-06-15 — Instruction-count measurement (the consolidation's open question, RESOLVED)
+Wrote `docs/amd-decode-consolidated-first-principles.md` (MEASURED/REFUTED/CONFIRMED ledger:
+memory-bound REFUTED by READRAW 730 vs GEMV 365; occupancy REFUTED by VGPR 47/68/93; ALU-instruction
+CONFIRMED). Then DID the measurement it called for — disassembled the emitted fp & int-dot kernels,
+counted VALU/weight in the hot body:
+- fp = **4.06 VALU/weight** (unpack 1.0 + int→fp convert 1.0 + scalar dot-fma 1.0 + affine 1.0).
+- DP4A floor ≈ **1.35** (unpack 1.0 + v_dot4 0.25 + amortized affine) → **~3x headroom below fp, all in the dot.**
+- fp is a **tinygrad-codegen floor, not a Q4_K instruction floor.** But tinygrad emits **zero v_dot4**
+  (measured both kernels); its int path = scalar v_mad_i32_i24 + qsum + readfirstlane + more regs →
+  worse e2e. Headroom locked behind a v_dot4 renderer lowering tinygrad lacks.
+Result: `bench/.../q0a/INSTRUCTION_COUNT_RESULT.md`. Commit 66913464b, pushed. model.py pristine.
+Decode end-state: the gap to llama.cpp is a ~3x dot-instruction gap, realizable ONLY by a DP4A codegen
+feature (renderer), not single-layer search — quantifies the hand-asm/Writer boundary in instr/weight.
