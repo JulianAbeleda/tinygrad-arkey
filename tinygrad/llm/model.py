@@ -92,6 +92,38 @@ class Q4KPrimitiveLinear:
     partial = partials.custom_kernel(words, x_vec, fxn=q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
 
+class Q4KFusedLinear:
+  # B1 horizontal-fusion probe: one Q4_K GEMV over concatenated sibling weight rows (q/k/v or gate/up),
+  # then split. Decode-only (uses the fused primitive when decode_enabled); prefill falls back to the
+  # separate originals (whose own decode_enabled=False routes them to the dense path).
+  def __init__(self, fused:Q4KPrimitiveLinear, originals:list[Q4KPrimitiveLinear], splits:list[int]):
+    self.fused, self.originals, self.splits = fused, originals, splits
+  def __call__(self, x:Tensor) -> list[Tensor]:
+    if self.fused.decode_enabled:
+      out = self.fused(x)  # (1,1,sum)
+      res, c = [], 0
+      for s in self.splits: res.append(out[..., c:c+s]); c += s
+      return res
+    return [l(x) for l in self.originals]
+
+def _build_fused_q4k(linears:list[Q4KPrimitiveLinear], tag:str) -> Q4KFusedLinear:
+  words = linears[0].q4k_storage.words.cat(*[l.q4k_storage.words for l in linears[1:]], dim=0).contiguous().realize()
+  out_features, in_features, q4_bytes = sum(l.out_features for l in linears), linears[0].in_features, words.numel()*4
+  fused = Q4KPrimitiveLinear(None, None, words, out_features, in_features, 1, linears[0].opts,
+                             f"fused_{tag}", q4_bytes, q4_bytes, "sidecar", 0, 0)
+  return Q4KFusedLinear(fused, linears, [l.out_features for l in linears])
+
+def _install_q4k_fusions(model) -> None:
+  # gated by Q4K_FUSE: fuse q/k/v->attn_qkv and gate/up->ffn_gateup on each dense block; register the
+  # fused primitives so decode_enabled gets toggled per step.
+  for block in getattr(model, "blk", []):
+    if all(isinstance(getattr(block, n, None), Q4KPrimitiveLinear) for n in ("attn_q", "attn_k", "attn_v")):
+      block.attn_qkv = _build_fused_q4k([block.attn_q, block.attn_k, block.attn_v], "qkv")
+      model._q4k_linears.linears.append(block.attn_qkv.fused)
+    if all(isinstance(getattr(block, n, None), Q4KPrimitiveLinear) for n in ("ffn_gate", "ffn_up")):
+      block.ffn_gateup = _build_fused_q4k([block.ffn_gate, block.ffn_up], "gateup")
+      model._q4k_linears.linears.append(block.ffn_gateup.fused)
+
 class Q6KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
@@ -489,6 +521,9 @@ class FFNBlock:
         out = out + shexp
       return out
     # TODO: remove the need for this contiguous
+    if hasattr(self, "ffn_gateup"):  # B1 fused gate/up
+      gate, up = self.ffn_gateup(x)
+      return self.ffn_down(gate.silu().contiguous() * up)
     return self.ffn_down(self.ffn_gate(x).silu().contiguous() * self.ffn_up(x))
 
   # given the token-prefix match, return how much cached state this block can still reuse
@@ -522,7 +557,8 @@ class TransformerBlock(FFNBlock):
     if config.qk_norm: self.attn_q_norm, self.attn_k_norm = nn.RMSNorm(config.qk_norm, config.norm_eps), nn.RMSNorm(config.qk_norm, config.norm_eps)
 
   def _attention(self, x:Tensor, start_pos:int|UOp) -> Tensor:
-    q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
+    if hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
+    else: q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
     if self.config.qk_norm and self.config.qk_norm != self.config.head_dim: q, k = self.attn_q_norm(q), self.attn_k_norm(k)
 
     B, T, _ = x.shape
@@ -796,6 +832,7 @@ class Transformer:
               f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
               f"q6_effective_storage_mode={q6_storage_mode}")
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
+      if primitive_linears and getenv("Q4K_FUSE"): _install_q4k_fusions(model)  # B1 horizontal-fusion probe
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())
