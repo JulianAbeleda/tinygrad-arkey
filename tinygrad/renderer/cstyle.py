@@ -1,5 +1,5 @@
 from typing import Literal, Callable, cast
-import math, sys, struct
+import math, sys, struct, re
 from collections import defaultdict, Counter
 from tinygrad.codegen.opt import tc
 from tinygrad.uop.ops import GroupOp, Ops, UOp, PatternMatcher, UPat, range_str, axis_letters
@@ -7,6 +7,18 @@ from tinygrad.helpers import strip_parens, getenv, prod, dedup, Target, CPU_COUN
 from tinygrad.dtype import ImageDType, dtypes, DType, PtrDType, AddrSpace, truncate, float_to_bf16
 from tinygrad.renderer import Renderer
 from tinygrad.codegen.late.devectorizer import no_vectorized_alu
+
+
+def _render_arg_format(ctx, x:UOp) -> str:
+  # CUSTOM/CUSTOMI/QK_BLOCK_DOT args are str.format templates with positional {0},{1},... placeholders;
+  # literal C braces in the body must be doubled ({{ }}). Surface a clear, actionable error if they aren't,
+  # instead of a bare IndexError/ValueError from .format. Success path is byte-identical to x.arg.format(...).
+  try:
+    return x.arg.format(*[ctx[y] for y in x.src])
+  except (IndexError, KeyError, ValueError) as e:
+    raise RuntimeError(f"{x.op} arg failed to format ({type(e).__name__}: {e}); "
+                       f"literal C braces must be doubled and placeholders must match len(src)={len(x.src)}. "
+                       f"arg={x.arg!r}") from e
 
 
 base_rewrite = PatternMatcher([
@@ -60,12 +72,12 @@ base_rewrite = PatternMatcher([
 
   # alu/gep
   (UPat(Ops.WMMA, name="x"), lambda ctx,x: f"__{x.arg[0]}({ctx[x.src[0]]}, {ctx[x.src[1]]}, {ctx[x.src[2]]})"),
-  (UPat(Ops.QK_BLOCK_DOT, name="x"), lambda ctx,x: x.arg.format(*[ctx[y] for y in x.src])),
+  (UPat(Ops.QK_BLOCK_DOT, name="x"), lambda ctx,x: _render_arg_format(ctx, x)),
   (UPat(GroupOp.ALU, name="x"), lambda ctx,x: ctx.code_for_op[x.op](
     *([strip_parens(ctx[v]) if v.op == x.op and x.op in {Ops.ADD, Ops.MUL, Ops.XOR, Ops.OR, Ops.AND} else ctx[v] for v in x.src]), x.dtype)),
 
   # custom passes through with format
-  (UPat((Ops.CUSTOM, Ops.CUSTOMI), name="x"), lambda ctx,x: x.arg.format(*[ctx[y] for y in x.src])),
+  (UPat((Ops.CUSTOM, Ops.CUSTOMI), name="x"), lambda ctx,x: _render_arg_format(ctx, x)),
 ])
 
 extra_pm = PatternMatcher([
@@ -554,7 +566,8 @@ class HIPRenderer(CStyleLanguage):
     prefix, ockl = [], []
     # gated DP4A helper: emit the schedulable udot4 device helper only when a CUSTOM body references _dp4a
     # (so the builtin's required target("dot-insts") attr lives on the helper, not the generated kernel).
-    if any(u.op in (Ops.CUSTOM, Ops.CUSTOMI) and isinstance(u.arg, str) and "_dp4a" in u.arg for u in uops):
+    # match an actual `_dp4a(` call (not a longer identifier like my_dp4a) so we don't emit a stray helper
+    if any(u.op in (Ops.CUSTOM, Ops.CUSTOMI) and isinstance(u.arg, str) and re.search(r"(?<!\w)_dp4a\s*\(", u.arg) for u in uops):
       prefix.append('__attribute__((device)) __attribute__((target("dot-insts"))) unsigned int '
                     '_dp4a(unsigned int a, unsigned int b, unsigned int c){ return __builtin_amdgcn_udot4(a, b, c, false); }')
     type_map = { dtypes.bfloat16: "bf16", dtypes.float: "f32", dtypes.half: "f16", dtypes.fp8e4m3: "_fp8_fp8", dtypes.fp8e5m2: "_bf8_bf8" }
