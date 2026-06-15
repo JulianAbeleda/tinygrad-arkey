@@ -41,11 +41,29 @@ __attribute__((amdgpu_flat_work_group_size(1,%d))) gemv(
   out[row] = (float)(a0+a1+a2+a3); }
 ''' % (LOCAL, LOCAL, RW, K // 256)
 
+# the DEFAULT decode kernel class: fp dequant (one fp multiply per nibble) -- this is what runs in e2e.
+SRC_FP = '''
+extern "C" __attribute__((device, const)) unsigned long __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) unsigned int __ockl_get_local_id(unsigned int);
+extern "C" __attribute__((global)) void
+__attribute__((amdgpu_flat_work_group_size(1,%d))) gemv(
+    float* out, unsigned int* words, float* x, unsigned int off) {
+  unsigned int row = __ockl_get_group_id(0)*%d + __ockl_get_local_id(0);
+  unsigned int* W = words + off + row*%d;
+  float acc = 0.0f;
+  for (int blk=0; blk<%d; blk++) { int b=blk*%d;
+    for (int w=0; w<%d; w++) { unsigned int word = W[b+w];
+      for (int nib=0; nib<8; nib++) acc += (float)((word>>(nib*4))&0xfu) * x[w*8+nib]; } }
+  out[row] = acc; }
+''' % (LOCAL, LOCAL, RW, K // 256, WPB, WPB)
+
 
 def main():
   dev = Device["AMD"]
   rng = np.random.default_rng(7)
   prg = dev.runtime("gemv", dev.compiler.compile(SRC))
+  prg_fp = dev.runtime("gemv", dev.compiler.compile(SRC_FP))
+  xbuf = Buffer("AMD", WPB*8, dtypes.float32).ensure_allocated(); xbuf.copyin(memoryview(rng.random(WPB*8, dtype=np.float32)))
   q8 = Buffer("AMD", 72, dtypes.uint32).ensure_allocated(); q8.copyin(memoryview(rng.integers(0, 2**32, 72, dtype=np.uint32)))
   TARGET_BYTES = 2 * 1024**3  # ~2GB backing buffer -> cold across reps (> 96MB cache)
   print(f"ROWS    layer       cold Q4-GB/s   %peak    us/call   (per-layer GEMV, cold+launch-amortized)")
@@ -57,13 +75,15 @@ def main():
     out = Buffer("AMD", ROWS, dtypes.float32).ensure_allocated()
     q4_bytes = ROWS * RW * 4
     gs = (ROWS // LOCAL, 1, 1)
-    prg(out._buf, words._buf, q8._buf, global_size=gs, local_size=(LOCAL, 1, 1), vals=(0,), wait=True)  # warm
-    tms = []
-    for r in range(40):
-      off = (r % nreg) * region            # rotate -> each rep reads a DIFFERENT (cold) region
-      tms.append(prg(out._buf, words._buf, q8._buf, global_size=gs, local_size=(LOCAL, 1, 1), vals=(off,), wait=True))
-    t = statistics.median(tms); gbs = q4_bytes/t/1e9
-    print(f"{ROWS:<7} {label:<11} {gbs:8.1f}      {gbs/PEAK*100:4.1f}%   {t*1e6:7.1f}   (nreg={nreg})", file=sys.__stdout__)
+    for kn, (p, ab) in [("vdot", (prg, q8)), ("fp", (prg_fp, xbuf))]:
+      # long warmup (~2s) to fully boost the memory clock past the 96->1249 ramp before timing
+      for r in range(3000): p(out._buf, words._buf, ab._buf, global_size=gs, local_size=(LOCAL, 1, 1), vals=((r % nreg)*region,), wait=(r==2999))
+      tms = []
+      for r in range(200):
+        off = (r % nreg) * region          # rotate -> each rep reads a DIFFERENT (cold) region
+        tms.append(p(out._buf, words._buf, ab._buf, global_size=gs, local_size=(LOCAL, 1, 1), vals=(off,), wait=True))
+      t = statistics.median(tms); gbs = q4_bytes/t/1e9
+      print(f"{ROWS:<7} {label:<11} {kn:<5} {gbs:8.1f}      {gbs/PEAK*100:4.1f}%   {t*1e6:7.1f}   (nreg={nreg})", file=sys.__stdout__)
   return 0
 
 
