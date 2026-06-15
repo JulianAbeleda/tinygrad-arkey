@@ -1,0 +1,583 @@
+{
+ "descriptors": [
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "q4_local64_p1",
+    "device_ms": 0.05111957098748713,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00238562,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 184.61,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 184.61,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.273,
+    "winner": "q4_local64_p1"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 2388052288,
+    "data_start": 5956416,
+    "packed_bytes": 9437184,
+    "tensor_offset": 2382095872
+   },
+   "output_dtype": "fp32",
+   "role": "attn_q",
+   "shape": {
+    "cols": 4096,
+    "rows": 4096
+   },
+   "storage": {
+    "benefit_ms": 0.570157,
+    "benefit_ms_per_mb": 0.060416,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 9437184,
+    "scope": "shape"
+   },
+   "tensor": "blk.13.attn_q.weight"
+  },
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "q4_local64_p1",
+    "device_ms": 0.05111957098748713,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00238562,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 184.61,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 184.61,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.273,
+    "winner": "q4_local64_p1"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 2496613696,
+    "data_start": 5956416,
+    "packed_bytes": 9437184,
+    "tensor_offset": 2490657280
+   },
+   "output_dtype": "fp32",
+   "role": "attn_q",
+   "shape": {
+    "cols": 4096,
+    "rows": 4096
+   },
+   "storage": {
+    "benefit_ms": 0.570157,
+    "benefit_ms_per_mb": 0.060416,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 9437184,
+    "scope": "shape"
+   },
+   "tensor": "blk.14.attn_q.weight"
+  },
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "q4_local64_p1",
+    "device_ms": 0.05111957098748713,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00238562,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 184.61,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 184.61,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.273,
+    "winner": "q4_local64_p1"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 2605175104,
+    "data_start": 5956416,
+    "packed_bytes": 9437184,
+    "tensor_offset": 2599218688
+   },
+   "output_dtype": "fp32",
+   "role": "attn_q",
+   "shape": {
+    "cols": 4096,
+    "rows": 4096
+   },
+   "storage": {
+    "benefit_ms": 0.570157,
+    "benefit_ms_per_mb": 0.060416,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 9437184,
+    "scope": "shape"
+   },
+   "tensor": "blk.15.attn_q.weight"
+  },
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "v1_q4_packed",
+    "device_ms": 0.06732029960765663,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00179243,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 420.55,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 420.55,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.292,
+    "winner": "v1_q4_packed"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 2876463936,
+    "data_start": 5956416,
+    "packed_bytes": 28311552,
+    "tensor_offset": 2870507520
+   },
+   "output_dtype": "fp32",
+   "role": "ffn_gate",
+   "shape": {
+    "cols": 4096,
+    "rows": 12288
+   },
+   "storage": {
+    "benefit_ms": 0.254365,
+    "benefit_ms_per_mb": 0.008985,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 28311552,
+    "scope": "shape"
+   },
+   "tensor": "blk.17.ffn_gate.weight"
+  },
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "v1_q4_packed",
+    "device_ms": 0.06732029960765663,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00179243,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 420.55,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 420.55,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.292,
+    "winner": "v1_q4_packed"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 2999082816,
+    "data_start": 5956416,
+    "packed_bytes": 28311552,
+    "tensor_offset": 2993126400
+   },
+   "output_dtype": "fp32",
+   "role": "ffn_gate",
+   "shape": {
+    "cols": 4096,
+    "rows": 12288
+   },
+   "storage": {
+    "benefit_ms": 0.254365,
+    "benefit_ms_per_mb": 0.008985,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 28311552,
+    "scope": "shape"
+   },
+   "tensor": "blk.18.ffn_gate.weight"
+  },
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "v1_q4_packed",
+    "device_ms": 0.06732029960765663,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00179243,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 420.55,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 420.55,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.292,
+    "winner": "v1_q4_packed"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 3107644224,
+    "data_start": 5956416,
+    "packed_bytes": 28311552,
+    "tensor_offset": 3101687808
+   },
+   "output_dtype": "fp32",
+   "role": "ffn_gate",
+   "shape": {
+    "cols": 4096,
+    "rows": 12288
+   },
+   "storage": {
+    "benefit_ms": 0.254365,
+    "benefit_ms_per_mb": 0.008985,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 28311552,
+    "scope": "shape"
+   },
+   "tensor": "blk.19.ffn_gate.weight"
+  },
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "v1_q4_packed",
+    "device_ms": 0.06732029960765663,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00179243,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 420.55,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 420.55,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.292,
+    "winner": "v1_q4_packed"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 3216205632,
+    "data_start": 5956416,
+    "packed_bytes": 28311552,
+    "tensor_offset": 3210249216
+   },
+   "output_dtype": "fp32",
+   "role": "ffn_gate",
+   "shape": {
+    "cols": 4096,
+    "rows": 12288
+   },
+   "storage": {
+    "benefit_ms": 0.254365,
+    "benefit_ms_per_mb": 0.008985,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 28311552,
+    "scope": "shape"
+   },
+   "tensor": "blk.20.ffn_gate.weight"
+  },
+  {
+   "activation_dtype": "fp16",
+   "ansor_transition": {
+    "current_state": "hand_seeded_primitive_selected_by_generated_policy",
+    "search_axes": [
+     "format",
+     "tensor_role",
+     "shape",
+     "parts",
+     "local_opts",
+     "reduction",
+     "storage_mode",
+     "fallback_policy"
+    ],
+    "semantic_object": "packed_quant_gemv"
+   },
+   "current_lowering": {
+    "candidate_name": "v1_q4_packed",
+    "device_ms": 0.06732029960765663,
+    "family": "q4_k_packed_u32",
+    "gemv_max_abs": 0.00179243,
+    "local_opts": [
+     {
+      "arg": 64,
+      "axis": 0,
+      "op": "LOCAL"
+     }
+    ],
+    "metric": "quant_gbs",
+    "metric_value": 420.55,
+    "opts": [
+     "LOCAL:0:64"
+    ],
+    "parts": 1,
+    "policy_reason": "best runtime-supported generated candidate",
+    "quant_gbs": 420.55,
+    "reduction": "split_k_partial",
+    "requires": [
+     "q4k_gemv_partial_kernel",
+     "u32_packed_storage"
+    ],
+    "result_status": "pass",
+    "unpack_max_abs": 0.0,
+    "wall_ms": 0.292,
+    "winner": "v1_q4_packed"
+   },
+   "format": "Q4_K",
+   "ggml_type": 12,
+   "layout": {
+    "block_bytes": 144,
+    "block_elems": 256,
+    "byte_start": 3338824512,
+    "data_start": 5956416,
+    "packed_bytes": 28311552,
+    "tensor_offset": 3332868096
+   },
+   "output_dtype": "fp32",
+   "role": "ffn_gate",
+   "shape": {
+    "cols": 4096,
+    "rows": 12288
+   },
+   "storage": {
+    "benefit_ms": 0.254365,
+    "benefit_ms_per_mb": 0.008985,
+    "mode": "shared_runtime_source",
+    "policy_persistent_bytes": 28311552,
+    "scope": "shape"
+   },
+   "tensor": "blk.21.ffn_gate.weight"
+  }
+ ],
+ "generator_version": 1,
+ "kind": "qk_semantic_descriptor_set",
+ "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+ "model_size": "8B",
+ "note": "Fresh dominant Q4_K tensors (ffn_gate, attn_q) for live-bearing semantic-schedule candidates.",
+ "phase": "Phase 4.1 shadow-staged",
+ "schema_version": 1,
+ "source_policy": "bench/qk-shared-storage-20260612/8b/policy.json",
+ "summary": {
+  "entries": 8
+ }
+}

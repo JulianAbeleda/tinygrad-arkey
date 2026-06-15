@@ -13,7 +13,7 @@ so the shadow predictor shares one audited feature pipeline with the cost model.
 """
 from __future__ import annotations
 
-import argparse, copy, hashlib, json, os, pathlib, re, subprocess
+import argparse, copy, hashlib, json, math, os, pathlib, re, subprocess
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -520,6 +520,21 @@ STAGED_SCHEDULE_TENSORS = ("blk.7.ffn_gate.weight", "blk.8.ffn_gate.weight", "bl
 STAGED_V2_OUT = DEFAULT_ROOT / "shadow-staged-v2"
 STAGED_V2_TENSORS = tuple([f"blk.{i}.attn_q.weight" for i in range(3, 10)] + [f"blk.{i}.ffn_gate.weight" for i in range(9, 12)])
 
+# Phase 4.3 replication: K independent frozen batches, each an attn_q live control
+# (row_upcast/direct_output win there) plus a larger surprise-prone ffn_gate block
+# (row_upcast/direct_output there have ~0 historical live but can win, as 4.2 found).
+# Fresh blocks not used in the corpus or prior batches.
+def _staged_batch(attn_q_blocks:range, ffn_gate_blocks:range) -> tuple[str, ...]:
+  return tuple([f"blk.{i}.attn_q.weight" for i in attn_q_blocks] + [f"blk.{i}.ffn_gate.weight" for i in ffn_gate_blocks])
+
+STAGED_BATCHES: dict[str, tuple[pathlib.Path, tuple[str, ...]]] = {
+  "v3": (DEFAULT_ROOT / "shadow-staged-v3", _staged_batch(range(10, 13), range(12, 17))),
+  "v4": (DEFAULT_ROOT / "shadow-staged-v4", _staged_batch(range(13, 16), range(17, 22))),
+  "v5": (DEFAULT_ROOT / "shadow-staged-v5", _staged_batch(range(16, 19), range(22, 27))),
+}
+STAGED_POOL_OUT = DEFAULT_ROOT / "shadow-staged-pool"
+RECALL_LEVELS = (1.0, 0.95, 0.90)
+
 
 def _staged_descriptor_path(out:pathlib.Path) -> pathlib.Path:
   return out / "runs/schedule/8b-descriptors.json"
@@ -697,6 +712,21 @@ def _safe_skips(scored:list[tuple[float, bool]]) -> dict[str, Any]:
   safe = sum(1 for s, _ in scored if s < floor)
   return {"safe_skips": safe, "live_floor_score": round(float(floor), 6), "live_candidates": len(live_scores), "valid": True}
 
+def _savings_at_recall(scored:list[tuple[float, bool]], recall:float) -> dict[str, Any]:
+  # Relax the all-or-nothing 100%-recall floor: to retain `recall` of live candidates
+  # we may drop the lowest-scored live ones. The floor becomes the lowest live score we
+  # must keep; everything below it is skipped. This defangs the single-surprise-winner
+  # brittleness of the 100% point -- one mis-ranked winner can be among the allowed misses.
+  live = sorted(s for s, live in scored if live)
+  n_live, total = len(live), len(scored)
+  if n_live == 0:
+    return {"recall": recall, "saved": total, "missed_live": 0, "actual_recall": 1.0}
+  allowed_miss = max(0, n_live - math.ceil(recall * n_live))
+  floor = math.inf if allowed_miss >= n_live else live[allowed_miss]
+  saved = sum(1 for s, _ in scored if s < floor)
+  missed = sum(1 for s in live if s < floor)
+  return {"recall": recall, "saved": saved, "missed_live": missed, "actual_recall": round((n_live - missed) / n_live, 4)}
+
 def score_staged(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, corpus_path:pathlib.Path=DEFAULT_CORPUS) -> dict[str, Any]:
   repo = repo.resolve()
   corpus = [{**row, "split": "train"} for row in _read_jsonl(corpus_path)]
@@ -717,6 +747,7 @@ def score_staged(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, corpus_path:pat
     res["experiments_run"] = total_experiments - res["safe_skips"]
     res["experiments_saved_vs_run_all"] = res["safe_skips"]
     res["live_recall"] = 1.0  # by construction: never skips a candidate below the live floor that is live
+    res["recall_curve"] = {f"{lvl:.2f}": _savings_at_recall(scored, lvl) for lvl in RECALL_LEVELS}
     # The safe-skip metric is hostage to the worst-ranked true winner: the live candidate
     # with the minimum gate score sets the floor and caps all savings. Record it so a single
     # surprise winner driving (or collapsing) a gate's savings is visible, not hidden.
@@ -830,16 +861,89 @@ def _staged_readme(summary:dict[str, Any]) -> str:
   ]
   return "\n".join(lines)
 
+def pool_batches(repo:pathlib.Path, batches:tuple[str, ...]=("v3", "v4", "v5"), out:pathlib.Path=STAGED_POOL_OUT,
+                 corpus_path:pathlib.Path=DEFAULT_CORPUS) -> dict[str, Any]:
+  """Phase 4.3 replication: pool (gate_score, is_live) across independent batches and
+  compare the recall-vs-savings curve. The pooled curve at 95% recall is the robust
+  test the brittle single-batch 100% point is not -- one surprise winner can be among
+  the allowed misses instead of zeroing a gate."""
+  repo = repo.resolve()
+  corpus = [{**row, "split": "train"} for row in _read_jsonl(corpus_path)]
+  gates = ("xgboost", "role_mechanism_prior", "mechanism_prior")
+  pooled = {g: [] for g in gates}
+  per_batch = []
+  for name in batches:
+    bout = STAGED_BATCHES[name][0]
+    if not (bout / "summary.json").exists(): raise FileNotFoundError(f"batch {name} not scored; run score-batch --batch {name}")
+    outs = _read_jsonl(bout / "outcomes.jsonl")
+    live_by_id = {r["id"]: r["label"] in USEFUL_LABELS for r in outs}
+    examples = corpus + [{**r, "split": "holdout"} for r in outs]
+    base = build_baseline_predictions(examples, seed=SEED)
+    score_maps = {
+      "xgboost": {p["id"]: float(p.get("score", 0.0)) for p in _read_jsonl(bout / "predictions.jsonl")},
+      "role_mechanism_prior": {p["id"]: float(p.get("score", 0.0)) for p in _role_mechanism_prior(corpus, outs)},
+      "mechanism_prior": {p["id"]: float(p.get("score", 0.0)) for p in base.get("mechanism_prior", [])},
+    }
+    entry = {"batch": name, "n": len(outs), "live": sum(live_by_id.values())}
+    scored_by_gate = {}
+    for g in gates:
+      scored = [(score_maps[g].get(rid, 0.0), live_by_id[rid]) for rid in live_by_id]
+      scored_by_gate[g] = scored
+      pooled[g] += scored
+      entry[f"{g}_safe_skips"] = _safe_skips(scored)["safe_skips"]
+      entry[f"{g}_saved_95"] = _savings_at_recall(scored, 0.95)["saved"]
+    entry["model_beats_lookup_100"] = entry["xgboost_safe_skips"] > entry["role_mechanism_prior_safe_skips"]
+    entry["model_beats_lookup_95"] = entry["xgboost_saved_95"] > entry["role_mechanism_prior_saved_95"]
+    per_batch.append(entry)
+
+  pooled_curves = {g: {f"{lvl:.2f}": _savings_at_recall(scored, lvl) for lvl in RECALL_LEVELS} for g, scored in pooled.items()}
+  total_live = sum(1 for _, live in pooled["xgboost"] if live)
+  total_n = len(pooled["xgboost"])
+  wins_100 = sum(1 for b in per_batch if b["model_beats_lookup_100"])
+  wins_95 = sum(1 for b in per_batch if b["model_beats_lookup_95"])
+  model_95, lookup_95 = pooled_curves["xgboost"]["0.95"]["saved"], pooled_curves["role_mechanism_prior"]["0.95"]["saved"]
+  majority = wins_100 > len(per_batch) / 2
+  persists_95 = model_95 > lookup_95
+  if total_live < 10:
+    conclusion = "inconclusive_insufficient_pooled_live_candidates"
+    gate_source = "undecided"
+  elif majority and persists_95:
+    conclusion = "model_robustness_replicates_model_earns_model_driven_phase5"
+    gate_source = "xgboost"
+  else:
+    conclusion = "model_advantage_does_not_robustly_replicate_phase5_uses_role_mechanism_lookup"
+    gate_source = "role_mechanism_prior"
+
+  summary = {
+    "kind": "qk_flywheel_shadow_replication_pool", "phase": "Phase 4.3", "conclusion": conclusion, "seed": SEED,
+    "batches": list(batches), "pooled_candidates": total_n, "pooled_live": total_live,
+    "per_batch": per_batch,
+    "pooled_recall_curve": pooled_curves,
+    "decision": {
+      "batches_model_beats_lookup_at_100": wins_100, "of_batches": len(per_batch),
+      "model_beats_lookup_in_majority": majority,
+      "pooled_saved_at_95": {"xgboost": model_95, "role_mechanism_prior": lookup_95},
+      "model_advantage_persists_at_95": persists_95,
+      "phase5_gate_source": gate_source,
+    },
+    "note": "Pooled across batches; the 95% recall point is the robust comparison, the 100% point is the brittle single-winner one.",
+  }
+  out.mkdir(parents=True, exist_ok=True)
+  (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+  return summary
+
 def main() -> int:
   parser = argparse.ArgumentParser(description="Phase 4 / 4.1 live shadow mode for the AMD decode flywheel")
   parser.add_argument("step", choices=("freeze", "run", "score", "all",
                                         "freeze-staged", "run-staged", "score-staged", "all-staged",
-                                        "freeze-staged-v2", "run-staged-v2", "score-staged-v2", "all-staged-v2"))
+                                        "freeze-staged-v2", "run-staged-v2", "score-staged-v2", "all-staged-v2",
+                                        "freeze-batch", "run-batch", "score-batch", "pool-batches"))
   parser.add_argument("--repo", type=pathlib.Path, default=pathlib.Path("."))
   parser.add_argument("--corpus", type=pathlib.Path, default=DEFAULT_CORPUS)
   parser.add_argument("--out", type=pathlib.Path, default=None)
   parser.add_argument("--model", type=pathlib.Path, default=DEFAULT_MODEL)
   parser.add_argument("--device", default="AMD")
+  parser.add_argument("--batch", choices=tuple(STAGED_BATCHES), default=None, help="staged batch id for *-batch steps")
   args = parser.parse_args()
   v0_out = args.out or DEFAULT_OUT
   staged_out = args.out or STAGED_OUT
@@ -862,6 +966,17 @@ def main() -> int:
     run_staged(args.repo, v2_out, args.device)
   if args.step in ("score-staged-v2", "all-staged-v2"):
     print(json.dumps(score_staged(args.repo, v2_out, args.corpus), indent=2, sort_keys=True))
+  if args.step in ("freeze-batch", "run-batch", "score-batch"):
+    if not args.batch: parser.error(f"{args.step} requires --batch {{{','.join(STAGED_BATCHES)}}}")
+    b_out, b_tensors = STAGED_BATCHES[args.batch]
+    if args.step == "freeze-batch":
+      print(json.dumps(freeze_staged(args.repo, args.corpus, b_out, b_tensors), indent=2, sort_keys=True))
+    elif args.step == "run-batch":
+      run_staged(args.repo, b_out, args.device)
+    else:
+      print(json.dumps(score_staged(args.repo, b_out, args.corpus), indent=2, sort_keys=True))
+  if args.step == "pool-batches":
+    print(json.dumps(pool_batches(args.repo, corpus_path=args.corpus), indent=2, sort_keys=True))
   return 0
 
 if __name__ == "__main__":
