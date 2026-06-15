@@ -709,6 +709,7 @@ def score_staged(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, corpus_path:pat
   total_experiments = len(outcomes)
   total_live = sum(live_by_id.values())
 
+  outcome_by_id = {row["id"]: row for row in outcomes}
   def gate_for(preds:list[dict[str, Any]]) -> dict[str, Any]:
     score_by_id = {p["id"]: float(p.get("score", 0.0)) for p in preds}
     scored = [(score_by_id.get(rid, 0.0), live_by_id[rid]) for rid in live_by_id]
@@ -716,6 +717,15 @@ def score_staged(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, corpus_path:pat
     res["experiments_run"] = total_experiments - res["safe_skips"]
     res["experiments_saved_vs_run_all"] = res["safe_skips"]
     res["live_recall"] = 1.0  # by construction: never skips a candidate below the live floor that is live
+    # The safe-skip metric is hostage to the worst-ranked true winner: the live candidate
+    # with the minimum gate score sets the floor and caps all savings. Record it so a single
+    # surprise winner driving (or collapsing) a gate's savings is visible, not hidden.
+    live_ids = [rid for rid in live_by_id if live_by_id[rid]]
+    if live_ids:
+      floor_id = min(live_ids, key=lambda rid: score_by_id.get(rid, 0.0))
+      fo = outcome_by_id.get(floor_id, {})
+      res["floor_setter"] = {"id": floor_id, "role": fo.get("role"), "mechanism": fo.get("mechanism"),
+                             "score": round(score_by_id.get(floor_id, 0.0), 6)}
     return res
 
   pred_sets = {"xgboost": model_preds, "role_mechanism_prior": _role_mechanism_prior(corpus, outcomes)}

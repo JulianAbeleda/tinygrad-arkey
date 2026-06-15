@@ -1510,6 +1510,33 @@ Out of scope:
 - Skipping any real run in the live loop (Phase 5). 14B/32B. New mechanism families
   beyond the four schedule mechanisms. Intra-identical-shape discrimination.
 
+Result (2026-06-14): ran and recorded in `shadow-staged-v2/`. `40` fresh candidates,
+keep/skip scores frozen before the microbench (commit `8844e160e`,
+hash-verified unchanged, leak-free). Outcomes: `7` live (raw_accept) across `3`
+patterns -- `attn_q` x `row_upcast` (`3`), `attn_q` x `direct_output` (`3`), and a
+surprise `ffn_gate` x `row_upcast` (`1`); `12` tie, `1` reject, `20`
+construction_blocked. Gate ladder, safe-skips at `100%` live-recall:
+`run_all`=`0`, `mechanism_prior`=`0`, `role_mechanism_prior`=`0`, **cost model=`23`
+(skips all `23` definitely-dead construction_blocked candidates while keeping every
+winner)**. Pre-registered rule -> the model strictly beats the lookup, so it earns
+Phase 5 entry.
+
+But read the margin honestly. On the `6` expected `attn_q` winners the lookup and
+model agree (both score them high). The entire `23`-vs-`0` gap comes from ONE
+surprise: a fresh `ffn_gate` x `row_upcast` won despite `0/4` historical live in
+that cell. Both priors scored that true winner at `0.0` -- the same score as the
+dead candidates -- so to keep `100%` recall they could not skip anything (their
+safe-skip floor collapsed to `0`). The model scored it `0.383`, above the dead
+candidates, so it banked the obvious construction_blocked skips. The safe-skip
+metric is hostage to the worst-ranked true winner (recorded per gate as
+`floor_setter`), so a single surprise inflates the gap; a soft per-cell lookup
+(`P(live)` = `0` for that cell) fails identically. The robust, qualitative finding:
+the learned model generalizes "`row_upcast` can win" across roles and does not
+catastrophically write off a surprise winner -- exactly the property a
+don't-miss-a-winner gate needs -- but the `23`-vs-`0` magnitude should be replicated
+before it is trusted. Phase 5 keeps the lookup as a cheap fallback and keeps
+validating the robustness-to-surprise effect.
+
 ## Phase 5: Controlled Assist Mode
 
 Purpose:

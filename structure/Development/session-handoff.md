@@ -443,9 +443,31 @@ ffn_gate). Caveats: only `2` live in this batch; a hand-coded role x mechanism p
 would likely match it; validate on larger batches. `test_qk_flywheel_phase4.py`
 covers the staged freeze/leak-free/safe-skip/integrity invariants.
 
-Next scope is **Phase 4.2 Generalization Replication and Minimal-Gate Ablation**,
-fully written in `docs/amd-decode-flywheel-proof-plan.md` -- a shadow validation
-before Phase 5 lets any gate skip real runs. The 4.1 win rested on `2` live
+Phase 4.2 Generalization Replication and Minimal-Gate Ablation is implemented and run
+(`shadow-staged-v2/`, `*-staged-v2` CLI steps). Result: the cost model strictly beats
+the role x mechanism lookup (`23` vs `0` experiments saved at `100%` live-recall on
+`40` candidates, `7` live across `3` patterns), so per the pre-registered rule it
+earns Phase 5 entry. Honest caveat (recorded in the proof plan and the `floor_setter`
+field): the `6` expected attn_q winners are caught by the lookup too; the whole
+margin comes from ONE surprise winner (a fresh `ffn_gate` x `row_upcast` that won
+despite `0/4` historical live), which both priors scored `0.0` (collapsing their
+safe-skip floor) while the model scored `0.383`. The robust finding is that the model
+does not catastrophically write off a surprise winner; the `23`-vs-`0` magnitude is
+inflated by the metric's hostage-to-worst-winner property and must be replicated.
+`test_qk_flywheel_phase4.py` covers the role_mechanism_prior, ablation ladder, and
+freeze integrity. Predictions frozen at commit `8844e160e` before the microbench.
+
+Next scope is **Phase 5 Controlled Assist Mode** -- the model earned entry, but enter
+it carefully: keep the role x mechanism lookup as a cheap fallback, replicate the
+robustness-to-surprise effect on more batches (more surprise-prone low-count cells)
+before trusting the magnitude, and only let the gate skip the definitely-dead
+construction_blocked class first (the safest savings). Do not let the model bypass
+static/correctness/microbench/full-decode gates or drive 14B/32B. The staged harness,
+freeze protocol, safe-skip scorer, and role_mechanism_prior baseline are reusable.
+
+The earlier Phase 4.2 scope (now executed) remains documented in the proof plan.
+Original next-session deliverables, for reference -- a shadow validation before
+Phase 5 lets any gate skip real runs. The 4.1 win rested on `2` live
 candidates and one pattern, and the corpus shows the live signal is a (role x
 mechanism) interaction (`attn_q` x `row_upcast` `75%` live, `attn_q` x
 `direct_output` `42%`, all other cells `0%`), which a trivial role x mechanism

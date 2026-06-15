@@ -3,13 +3,14 @@ from tempfile import TemporaryDirectory
 
 from extra.qk_flywheel_cost_model import extract_feature_map
 from extra.qk_flywheel_shadow import (
-  FRESH_SPECS, LEAKAGE_TOKENS, STAGED_OUT, _safe_skips, _staged_candidate_rows, build_fresh_candidates,
-  dead_branch_metric, freeze_predictions, fresh_id,
+  FRESH_SPECS, LEAKAGE_TOKENS, STAGED_OUT, _role_mechanism_prior, _safe_skips, _staged_candidate_rows,
+  build_fresh_candidates, dead_branch_metric, freeze_predictions, fresh_id,
 )
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SHADOW = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-v0"
 STAGED = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-staged"
+STAGED_V2 = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v2"
 
 
 class TestQKFlywheelPhase4(unittest.TestCase):
@@ -110,6 +111,37 @@ class TestQKFlywheelPhase41Staged(unittest.TestCase):
       self.assertIn(gate, summary["gates"])
       self.assertEqual(summary["gates"][gate]["live_recall"], 1.0)
     self.assertEqual(summary["gates"]["run_all"]["experiments_saved_vs_run_all"], 0)
+
+
+class TestQKFlywheelPhase42Ablation(unittest.TestCase):
+  def test_role_mechanism_prior_separates_by_role(self):
+    train = [
+      {"id": "t1", "role": "attn_q", "mechanism": "row_upcast", "label": "raw_accept_unconfirmed"},
+      {"id": "t2", "role": "attn_q", "mechanism": "row_upcast", "label": "raw_accept_unconfirmed"},
+      {"id": "t3", "role": "ffn_gate", "mechanism": "row_upcast", "label": "reject"},
+    ]
+    holdout = [{"id": "h1", "role": "attn_q", "mechanism": "row_upcast"},
+               {"id": "h2", "role": "ffn_gate", "mechanism": "row_upcast"}]
+    preds = {p["id"]: p for p in _role_mechanism_prior(train, holdout)}
+    # Same mechanism, different role -> different prediction (mechanism_prior cannot do this).
+    self.assertEqual(preds["h1"]["label"], "raw_accept_unconfirmed")
+    self.assertEqual(preds["h2"]["label"], "reject")
+    self.assertGreater(preds["h1"]["score"], preds["h2"]["score"])
+
+  def test_committed_v2_ablation_compares_full_gate_ladder(self):
+    if not (STAGED_V2 / "summary.json").exists():
+      self.skipTest("shadow-staged-v2 not scored yet")
+    freeze = json.loads((STAGED_V2 / "freeze.json").read_text())
+    self.assertEqual(freeze["predictions_sha256"], hashlib.sha256((STAGED_V2 / "predictions.jsonl").read_bytes()).hexdigest())
+    self.assertTrue(freeze["leakage_audit"]["leak_free"])
+    summary = json.loads((STAGED_V2 / "summary.json").read_text())
+    self.assertEqual(summary["ablation"]["ladder"], ["run_all", "mechanism_prior", "role_mechanism_prior", "xgboost"])
+    self.assertIn(summary["ablation"]["simplest_sufficient_gate"],
+                  ("run_all", "mechanism_prior", "role_mechanism_prior", "xgboost"))
+    for gate in ("run_all", "mechanism_prior", "role_mechanism_prior", "xgboost"):
+      self.assertIn(gate, summary["gates"])
+      self.assertEqual(summary["gates"][gate]["live_recall"], 1.0)
+    self.assertTrue(summary["per_cell"])  # per (role x mechanism) breakdown present
 
 
 if __name__ == "__main__":
