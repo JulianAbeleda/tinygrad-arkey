@@ -64,6 +64,38 @@ shrinking from P1/P2) plausibly clears llama's 105.
 4. **Gate**: attention/token drops materially AND output stays coherent (attention is lossy under sparsity —
    verify perplexity/coherence, unlike the exact Q6_K win).
 
+## REVISIT — closures measured against the Q6_K-bottlenecked baseline (likely false nulls)
+The Q6_K discovery invalidates the baseline. Every e2e experiment closed *before* the flag was on ran with
+the Q6_K `ffn_down` fallback as a fixed 59%-of-token noise floor. A lever improving the Q4_K path (then ~40%
+of the token, now 49% of a shorter token) moved e2e by only `~0.4 × win` — often below noise → **null**. With
+Q6_K fast, the same levers should now register. Re-run each against the new 53.5 tok/s baseline:
+
+- **R1 — D1/E0/A0: in-graph int-dot + amortized quant (= B1). HIGH.** Closed as "vdot e2e == fp e2e == 30",
+  but that null was dominated by the Q6_K 59%. The Q4_K GEMV is now ~half the token and the int-dot kernel
+  is proven 76% standalone → the win that was masked should surface. This is the single most important
+  revisit; it *is* B1.
+- **R2 — amortized q8 quant (A0/E0 mechanism).** The quant overhead "didn't pay" because the GEMV it sped up
+  was a small, diluted fraction. Now the GEMV is the dominant remaining cost → re-evaluate the quant-cache
+  break-even (it shares one quant across q/k/v + gate/up per layer).
+- **R3 — horizontal fusion (`Q4K_FUSE`, q/k/v→1, gate/up→1).** Fewer/fatter Q4_K launches mattered little
+  when Q6_K dominated; now the Q4_K GEMVs are the bulk of GPU work, so fusion's occupancy/launch win is worth
+  re-measuring.
+- **R4 — per-kernel opts / warm-start on the Q4_K GEMVs.** The opt sweeps were judged against the bottlenecked
+  e2e; the Q4_K `q4k_gemv_partial` opts (LOCAL/parts/UPCAST) now move a 49% slice — re-sweep.
+- **R5 — Q4_K attn_k coverage (`Q4K_COVER_KV`, closed null 23.3→23.7).** That ablation ran with Q6_K off;
+  re-test against the fast baseline (small expected, but cheap and now measurable).
+- **R6 — the generated policy / flywheel cost-model (`QK_GENERATED_POLICY`).** The whole machine-search policy
+  was fit/scored against the Q6_K-bottlenecked regime; its per-tensor opt picks may be stale. Re-score on the
+  new baseline — this is the flywheel's own dogfood and ties directly to the mission.
+- **R7 — re-audit the "structural / occupancy e2e wall" conclusion.** We nearly closed the whole investigation
+  on "the standalone→e2e gap is a structural occupancy wall." That was **wrong** — it was Q6_K coverage. Any
+  downstream reasoning that assumed an intrinsic e2e cap is suspect and should be re-derived.
+
+**Stays closed (not baseline-dependent, re-confirm only if cheap):** RDNA3 WMMA/tensor-cores need fp16 +
+concrete dims (decode runs fp32, batch-1 — architectural, unchanged by Q6_K); BEAM hangs gfx1100 (hardware
+fact); the cold/clock-controlled *standalone* kernel numbers (measured correctly, independent of the e2e
+baseline). The int-dot-beats-llama standalone result is solid regardless.
+
 ## The thesis (why this is the machine-search mission, not just kernel hacking)
 llama.cpp is the strong *fixed* baseline. Every beyond-lever is the policy gaining a new degree of freedom:
 - coverage (which kernel) — DONE, won.
