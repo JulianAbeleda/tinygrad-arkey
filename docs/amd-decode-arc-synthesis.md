@@ -114,16 +114,26 @@ a `_set_module_at` top-level-path bug (blocked the lm_head), and an empirical re
    profiling the *real* in-graph kernel rather than a proxy. The primitives only got fixed because the
    profile got honest enough to name `r_32_32_4_48` and trace it to a quant type.
 
-## 6. What remains — and it is no longer a primitive problem
+## 6. What remains — re-measured post-fix (it is NOT host overhead)
 
-After completing coverage, the decode token is ~no-longer-GEMV-bound:
-- **~25 ms/token host/sync** (per-token `.item()` CPU round-trip, argmax over 151,936 vocab, replay launch).
-  llama.cpp's tight loop has ~0 here. This is now the largest single lever.
-- the Q6_K **lm_head** and the **attention reduces** — smaller, and partly addressed by `Q6K_COVER_MORE`.
+A clean re-profile of the *post-fix* ~20 ms token (the earlier "~25 ms host" was a pre-fix single-graph
+artifact that under-counted GPU time) shows decode is **GPU-bound, not host-bound**:
 
-These are loop/structure problems (fewer host syncs, on-GPU sampling), not kernel or coverage problems. The
-primitive question is, for this model, essentially closed: every dominant matmul now runs on a primitive
-that meets or beats llama.cpp's kernel.
+```
+GPU-busy/token  20.7 ms (97% of wall)   GEMV 10.4 ms (49%) | non-GEMV GPU 10.3 ms (48%)   HOST 0.6 ms (3%)
+```
+
+Decisive proof it is GPU-bound: enabling primitives moved tok/s 23→50→53 — host-bound throughput cannot
+move with kernel changes. The real remaining levers, in order:
+1. **lm_head (Q6_K, `r_1187`): 2.7 ms (13%)** — still on the fallback; `Q6K_COVER_MORE` primitivizes it.
+2. **attention reduces (`r_2_8_128`): ~3.2 ms (15%)** — sdpa over the KV cache; a structure/kernel lever.
+3. **the GEMV itself: 10.4 ms at ~52% peak** — our standalone int-dot does 76%; the headroom is the unsolved
+   in-graph int-dot integration (amortized activation quant), the one piece of the kernel story still open.
+4. a long tail of small norm/rope/elementwise reduces.
+
+The primitive *coverage* question is closed (every dominant matmul runs on a primitive ≥ llama.cpp's kernel).
+What is left is (a) finishing coverage (lm_head/attn_v via `Q6K_COVER_MORE`), (b) the attention reduces, and
+(c) translating the 76% standalone int-dot kernel into the graph — all GPU-side, none of it host overhead.
 
 ## Ledger (corrected claims, for anyone reading the older docs)
 - "in-graph Q4_K GEMV runs at 12%" (NARROW_RESULT) — **wrong**; measured a non-decode fallback. Real: 31–54%.
@@ -131,8 +141,11 @@ that meets or beats llama.cpp's kernel.
   fast, the rest is host + non-GEMV.
 - "small per-layer kernels can't saturate" — **wrong**; a clock-ramp artifact.
 - "attn_v/output lose to the fused graph" — **no longer true** on this GPU (+5%).
+- "the remaining decode gap is host overhead" (this doc, first draft) — **wrong**; a clean post-fix profile
+  shows 97% GPU-busy, 3% host. The gap is non-GEMV GPU work (lm_head, attention) + in-graph GEMV efficiency.
 - Standing and correct: the standalone int-dot kernel beats llama.cpp (76% vs 57%); Q6_K coverage was the
-  dominant e2e lever; the decode gap is now host overhead, not the GEMV.
+  dominant e2e lever; post-fix decode is GPU-bound, and the next levers are lm_head + attention + the
+  int-dot in-graph translation.
 
 Source docs: `bench/amd-decode-flywheel-proof-20260614/{KERNEL_BEATS_LLAMACPP, prefetch-gemv/{PERLAYER_RESULT,
 BREAKDOWN_RESULT, Q6K_FIX_RESULT}}.md`. Memories: `amd-decode-{kernel-beats-llamacpp, measurement-confounds,

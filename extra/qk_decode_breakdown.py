@@ -24,9 +24,9 @@ def main():
   byname = collections.defaultdict(float)
   def acc(nm, d):
     nonlocal gemv, nong, n_attn_proj
-    if "q4k_gemv" in nm:
+    if "q4k_gemv" in nm or "q6k_gemv" in nm:
       gemv += d
-      if "4096_4096" in nm: n_attn_proj += 1
+      if "q4k_gemv" in nm and "4096_4096" in nm: n_attn_proj += 1
     elif "copy" in nm.lower() or "view" in nm: pass
     else: nong += d; byname[nm] += d
   # Only sum graphs that ARE decode tokens (contain q4k_gemv). Prefill graphs (32-token-wide,
@@ -35,7 +35,7 @@ def main():
   for e in evs:
     if isinstance(e, ProfileGraphEvent):
       names = [str(ent.name) for ent in e.ents]
-      is_decode = any("q4k_gemv" in n for n in names)
+      is_decode = any("q4k_gemv" in n or "q6k_gemv" in n for n in names)
       if is_decode: n_decode_graphs += 1
       else: n_prefill_graphs += 1; continue   # skip non-decode (prefill) graphs entirely
       for ent in e.ents: acc(str(ent.name), float(e.sigs[ent.en_id] - e.sigs[ent.st_id]))
