@@ -1648,3 +1648,24 @@ outcomes: no-room/constant/unlearnable) -> X1 vocabulary+accuracy harness -> X2 
 multi-objective per-layer precision assignment -> X3 end-to-end measure (highest tok/s within accuracy
 budget). Touch points: qk_loop_*, q4_k_gemv_primitive (Q int-dot), model.py per-layer dispatch, new
 qk_accuracy_eval.py. Next action: run X0.
+
+UPDATE 2026-06-15 -- Phase X0 RAN: WEAK home; ship uniform int8 (Q), lossy-quant SEARCH not justified
+at int8. `bench/.../lossy-X0/RESULT.md`. Captured per-layer int8 (q8_1) activation tolerance during
+real decode (162 linears, QK_CAPTURE hook in model.py, reverted). (a) ROOM: int8 err 0.51-1.07% across
+ALL layers (broadly viable). (b) HETEROGENEITY: WEAK -- 2.1x spread only (vs schedule space 111-223x);
+by type ffn_down/attn_output worst ~1%, ffn_gate/up best ~0.5%. (c) LEARNABILITY: yes, corr(outlier,
+int8_err)=0.757. Verdict = pre-registered "constant" branch: no layer strongly needs fp -> uniform
+int8 captures it, mixed-precision SEARCH adds little at int8. The search's real home is at MORE
+AGGRESSIVE precision (int4-activation/mixed bit-widths, the AWQ regime), not int8. Another "search
+doesn't help here; the simple thing (uniform int8) does."
+
+MIRAGE NEXT (for the last percent, 81->104): written into `docs/amd-decode-dequant-instruction-count.md`
+(section "NEXT: Mirage / multi-level superoptimization"). The 81->104 residual is the CROSS-LAYER rungs
+(algebraic + layout + custom-kernel + instruction selection) that schedule-only search + a single
+dequant kernel don't touch -- exactly Mirage (OSDI'25, arXiv:2405.05751) territory (joint
+algebraic+schedule + custom-kernel discovery, uGraph hierarchy, probabilistic equivalence). It is
+"machine search but cross-layer" -- the top rung of the thesis we validated on the schedule axis
+(N1/N2). Cheap make-or-break before adopting: does Mirage's joint search find a decode-GEMV
+reformulation/custom-kernel that beats the Q int-dot ~81 on this GPU? Yes -> closes the last percent
+the search way; no -> residual is hand-asm/microarchitectural (the Writer). PET (OSDI'21) is the
+partial-equivalence companion. This is the single most promising "close it the search way" direction.

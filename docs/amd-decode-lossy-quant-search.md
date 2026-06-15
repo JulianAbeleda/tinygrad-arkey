@@ -60,6 +60,20 @@ search has a home; proceed. ROOM=all -> just ship uniform int8 (Q), no X needed.
 isn't accuracy-viable on this model, record and stop. Cheap: uses per-layer error proxies + the Q
 kernel; no full search yet.
 
+**X0 -- RESULT (2026-06-15): WEAK home -- int8 is broadly viable; the lossy SEARCH is not justified at
+int8 -> ship uniform int8 (Q).** `lossy-X0/RESULT.md`. Captured per-layer int8 (q8_1) activation
+tolerance + outlier stats during real decode (162 linears). (a) ROOM: int8 error 0.51-1.07% across ALL
+layers -- broadly viable. (b) HETEROGENEITY: WEAK -- only 2.1x spread (vs the schedule space's 111-223x
+in N0b); by type ffn_down/attn_output worst (~1%), ffn_gate/up best (~0.5%); depth ~flat. (c)
+LEARNABILITY: YES -- `corr(outlier, int8_err)=0.757`. Verdict = the pre-registered "constant" branch:
+no layer strongly needs fp, so per-layer mixed-precision search has little to give beyond "use int8
+everywhere" -> ship uniform int8 (Phase Q). The search's real home is at MORE AGGRESSIVE precision
+(int4-activation / mixed bit-widths), where outlier layers (the corr=0.757 predicts them) break hard
+while others stay fine -- the AWQ/mixed-precision regime. Honest: this used the cheap input-error
+proxy; an end-to-end perplexity gate could still surface a few int8-sensitive layers, but the proxy
+says the effect is small. Net: another "search doesn't help here at int8; the simple thing (uniform
+int8) does."
+
 **X1 -- the lossy vocabulary + accuracy evaluator.** Wire per-linear precision dispatch into
 `Q4KPrimitiveLinear` (fp16 vs Q int-dot). Build the accuracy evaluator: per-layer rel-error (fast) +
 an end-to-end perplexity/calibration harness for the budget gate. Correctness here means accuracy

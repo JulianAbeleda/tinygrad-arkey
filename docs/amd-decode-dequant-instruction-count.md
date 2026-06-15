@@ -109,3 +109,26 @@ llama.cpp; update the policy.
 - This is the field-validated lever for the bottleneck we triangulated; if even it ceilings ~81, that
   is the honest end of the codegen-reachable decode story, and the gap to llama.cpp is hand-kernel
   efficiency, not a tinygrad vocabulary or a missed optimization.
+
+## NEXT (the last percent, 81 -> 104): look into Mirage / multi-level superoptimization
+
+The dequant-reduction levers (int8 int-dot, Q) cap at ~81 tok/s (~78%). The residual 81 -> 104 is the
+OTHER cross-layer rungs -- algebraic reformulation, layout co-design, custom-kernel discovery,
+instruction selection -- which our schedule-only search and a single dequant kernel do not touch. This
+is exactly **Mirage (OSDI'25)** territory: a multi-level superoptimizer that JOINTLY searches algebraic
++ schedule transforms and DISCOVERS new custom kernels across the kernel/threadblock/thread hierarchy,
+with probabilistic equivalence verification. Why it is the right tool for the last percent:
+- The 81->104 gap is a CROSS-LAYER co-design problem (algorithm x layout x schedule x instructions),
+  and Mirage is the one system that searches that joint space rather than one layer.
+- Its uGraph hierarchy could find the decode-GEMV reformulations + custom kernels (fused
+  norm+dequant+dot, better activation-access layout) that hand-tuned llama.cpp uses but tinygrad's
+  schedule search cannot reach.
+- It connects to our validated loop: Mirage is "machine search, but cross-layer" -- the higher rung of
+  the same thesis we confirmed on the schedule axis (N1/N2).
+Cheap make-or-break before adopting: take ONE decode GEMV (or the norm+GEMV pair) and ask whether
+Mirage's joint search finds a reformulation/custom-kernel that beats the Q int-dot's ~81 on this GPU.
+If yes -> cross-layer search closes the last percent the search way (vindicating the thesis at the top
+rung); if no -> the residual is genuinely hand-asm/microarchitectural and parity needs the Writer.
+Repo: github.com/mirage-project / arXiv:2405.05751 (OSDI'25). PET (OSDI'21, arXiv) is the companion for
+the partial-equivalence / semantics-changing piece. This is the single most promising "close it the
+search way" direction and the right thing to study next.
