@@ -524,6 +524,9 @@ class FFNBlock:
     if hasattr(self, "ffn_gateup"):  # B1 fused gate/up
       gate, up = self.ffn_gateup(x)
       return self.ffn_down(gate.silu().contiguous() * up)
+    if getenv("Q4K_UNFUSE"):  # unfuse matmuls from epilogue so TC can apply (silu fusion blocks TC)
+      g = self.ffn_gate(x).contiguous(); u = self.ffn_up(x).contiguous()
+      return self.ffn_down((g.silu() * u).contiguous())
     return self.ffn_down(self.ffn_gate(x).silu().contiguous() * self.ffn_up(x))
 
   # given the token-prefix match, return how much cached state this block can still reuse
