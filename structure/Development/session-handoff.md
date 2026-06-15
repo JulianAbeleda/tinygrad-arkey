@@ -1613,3 +1613,19 @@ dequant-ALU-cost + kernel-count/fusion problem the scoped codegen vocabularies d
 realistic ceiling ~81 tok/s (~78%), PARITY likely unreachable via codegen vocabulary. cstyle.py
 reverted to pristine. The roofline/probe-first discipline caught two non-binding levers (DP4A, latency)
 before building either subsystem.
+
+UPDATE 2026-06-15 -- Phase Q scoped: reduce the dequant INSTRUCTION COUNT (the triangulated #1 decode
+bottleneck -- "memory-starved but instruction-bound", our M0 + literature: OSDI'25, LUT-GEMM,
+async-dequant papers). Doc: `docs/amd-decode-dequant-instruction-count.md`. KEY honest framing: the
+int-dot path (D0 `intdot` = llama.cpp mmvq structure) ALREADY captures most of the dequant reduction
+(242 Q4-GB/s microbench, +40% vs fp) but regressed end-to-end to 28 tok/s because the per-layer q8_1
+quant was UNFUSED. So the concrete win is NOT LUT -- it is FUSING that quant. Two techniques: A (fuse
+q8_1 quant into the int-dot GEMV, one kernel + reuse quant across q/k/v and gate/up -> capture the ~81
+ceiling end-to-end, a real 58->81 +40% win), B (LUT-GEMM 16-entry per-group table -- the field's named
+fix but with a GPU caveat: runtime-indexed per-thread LUT must go in LDS, and int-dot already avoids
+per-weight fp dequant, so LUT may not beat A; scoped as a skeptical probe). Phases: Q0a fused int-dot
+probe FIRST (concrete) -> Q0b LUT probe (only if it beats Q0a) -> Q1 productionize winner.
+Pre-registered ceiling: best dequant-reduction ~81 (~78%); parity (104) likely needs hand-asm
+efficiency + strided-activation (#2) + kernel-fusion (#3), not instruction-count alone. Touch points:
+extra/q4_k_gemv_primitive.py (intdot + fused-quant variant), tinygrad/llm/model.py (decode dispatch +
+quant fusion/reuse). Next action: run Q0a (build the fused int-dot decode GEMV, measure end-to-end).
