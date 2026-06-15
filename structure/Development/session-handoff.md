@@ -574,10 +574,32 @@ baseline. It plateaus at ~4.6-6% of peak and loses at B>=16 (crossover ~B=12); t
 tiles fp16 better at large batch. Adopt the fused GEMM for B<=8 (speculative/Medusa decode); use
 matmul_decoded for large batch.
 
-Next options (none urgent -- this is a clean resting point): (a) a register-blocked fused GEMM (2D
-MxB output tiling, LDS staging) to beat dense at large B -- a bigger lift, and the first place
-model-guided tiling search (G1) could earn its keep; (b) wire the fused GEMM into the real decode
-path for the small-batch regimes; (c) stop and consolidate. See docs/amd-decode-flywheel-postmortem.md.
+Next scope is **Phase W: Search-Competitive Fused Q4_K GEMM (machine search vs llama.cpp)**, fully
+written in `docs/amd-decode-flywheel-proof-plan.md` -- the actual program goal restated against
+what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
+reaches llama.cpp; the fused-dequant->WMMA structure is the prerequisite for the search space to
+contain a competitive point. The deterministic generated policy is at 61.6% of llama.cpp (14B);
+this phase closes that gap by search over a competitive template (the Ansor model: human authors
+the template once, search tunes it). Sequence:
+
+- W0: make "competitive" a number -- measure llama.cpp tok/s on this GPU, translate to a kernel
+  roofline target; pre-register e.g. 14B from 61.6% toward >=90%.
+- W1 (THE GATE): close the fused-dequant->WMMA primitive via the Marlin tile-level trick (dequant a
+  weight tile to fp16 in LDS, then WMMA; compressed weights stay in DRAM, no 2x memory). tinygrad's
+  WMMA matcher does NOT fire on a dequant expression today (B0: fused = ~4% scalar reduce; only
+  materialized fp16 -> WMMA = ~18%). Two routes: coax tinygrad (realize dequant into a small fp16
+  LDS tile the matcher recognizes) or hand-author WMMA intrinsics. Correctness-gated; beat
+  matmul_decoded while reading compressed weights. If WMMA can't be coaxed -> tinygrad-capability
+  blocker, do NOT run W3/W4 over a non-competitive template.
+- W2: parametrize the kernel (WMMA tile MxNxK, B-block, LDS staging, dequant placement, occupancy).
+- W3: brute-force autotune the template vs the W0 bar across shapes.
+- W4 (learned model revived): only if W3 reaches the bar, test a cost model vs grid/random on
+  trials-to-competitive (the Ansor role on OBSERVABLE tile features -- the one job the model was
+  ever suited for, unlike the weight-determined noise that doomed 3F-4.x). Freeze predictions first.
+
+Heed the G0'' lesson throughout: win via tiling/reuse that preserves parallelism, do not serialize.
+Per-kernel hand-tuning is OUT of scope (defeats the goal). Other lower-priority options recorded in
+the postmortem: wire the small-batch fused GEMM into the real decode path; stop and consolidate.
 
 Historical note (from grounding the B1 scope): the existing fused path does NOT do an fp16 round-trip.
 `decode_q4_k_plus_matmul` is already ONE fused kernel reading compressed weights

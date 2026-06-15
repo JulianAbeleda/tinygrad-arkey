@@ -2210,6 +2210,83 @@ Out of scope:
 - Any numerics change; single-stream greedy decode (document it requires a batching source);
   the wall-clock metric.
 
+## Phase W: Search-Competitive Fused Q4_K GEMM (machine search vs llama.cpp)
+
+Goal (the actual program goal, restated): a MACHINE SEARCH that reaches llama.cpp-class Q4_K
+matmul performance WITHOUT per-kernel hand-tuning. Not "a fast kernel" and not "a model that
+invents kernels" -- the Ansor/AutoTVM model: a human defines a parametric template ONCE; search
+(later cost-model-guided) tunes it across shapes/hardware. Everything before showed this ordering
+is mandatory: the current kernel templates top out at `~20%` of peak (the opt search over them
+found only `packed_load` +6%), so no search inside them can reach llama.cpp. The
+fused-dequant->WMMA structure is the prerequisite for the search space to even CONTAIN a
+competitive point. The deterministic generated policy is currently `61.6%` of llama.cpp (14B,
+`current-verdicts`); this phase is about closing that gap by search over a competitive template.
+
+Why this is the honest revival of the learned model: the flywheel died predicting
+weight-determined, UNOBSERVABLE outcomes (3F-4.x). A cost model ranking TILE CONFIGS is the Ansor
+role on OBSERVABLE features (tile sizes, FLOP/byte, occupancy, register pressure) -- the one job it
+was ever suited for.
+
+### W0: Establish the bar (make "competitive" a number)
+
+- Measure llama.cpp Q4_K decode + prefill throughput on this GPU (end-to-end tok/s; the repo
+  already references it -- the 14B generated policy is `61.6%` of llama.cpp). Translate to a
+  kernel-level target: the roofline % (device bandwidth at `B=1`, compute at large `B`) the
+  dominant matmuls must reach to close the gap.
+- Pre-register the success bar, e.g. close 14B from `61.6%` toward `>=90%` of llama.cpp end-to-end,
+  with the dominant matmuls hitting a target roofline %.
+- Honest framing: matching a heavily hand-tuned kernel by search is hard; the win is "competitive
+  ACROSS shapes/hardware without hand-tuning each," not "beat one Marlin kernel."
+
+### W1: Close the primitive gap -- tile-level fused dequant -> WMMA (the gate)
+
+- tinygrad's WMMA matcher does not fire on a dequant expression (B0: the fused kernel is a `~4%`
+  scalar reduce; only full-materialized fp16 -> WMMA reaches `~18%`). The Marlin trick: materialize
+  at the TILE level, not the tensor level -- dequant a weight tile to fp16 in LDS/registers, then
+  WMMA against the activation tile and accumulate; the compressed weights stay in DRAM (no `2x`
+  memory).
+- Two routes: (a) coax tinygrad to emit WMMA by realizing the dequant into a small fp16 LDS tile
+  the matmul matcher recognizes; (b) hand-author WMMA intrinsics with inline dequant if (a) fails.
+- Correctness-gated (exact numerics). Pre-registered: a fused-WMMA kernel that beats `matmul_decoded`
+  while reading compressed weights -> primitive closed. If WMMA cannot be coaxed in tinygrad's model
+  -> record it as a tinygrad-capability blocker; the path then needs lower-level intrinsics or a
+  different framework, and W3/W4 do NOT run over a template that cannot contain a competitive point.
+- Heed the G0'' lesson: win via tiling/reuse that PRESERVES parallelism; do not serialize.
+
+### W2: Parametrize the template
+
+- Expose the W1 kernel as `config -> kernel`: WMMA tile (`M x N x K`), `B`-block, LDS staging size,
+  dequant placement, waves/workgroup (occupancy). This search space is defined ONCE by hand (the
+  Ansor template), not searched into existence.
+
+### W3: Brute-force autotune vs the bar
+
+- Autotune the template per (tensor shape, batch) by grid/random search on the device metric,
+  correctness-gated. Does brute-force search reach the W0 bar across N representative shapes?
+- Pre-registered: reaches within the bar across shapes -> machine search (no learned model) is
+  competitive with llama.cpp; record the search cost (trials, GPU-hours). Cannot reach the bar even
+  with the WMMA template -> the template or tinygrad codegen is the ceiling; record honestly.
+
+### W4: Cost-model-guided search (the learned model, revived on a real target)
+
+- ONLY if W3 reaches the bar by brute force: test whether a cost model reaches the competitive
+  config with FEWER trials than grid/random (sample efficiency) -- the Ansor role on observable tile
+  features. Use `qk_ansor`'s roofline model as the deterministic baseline cost model; test a learned
+  cost model against it. Freeze model predictions before measuring (the shadow discipline).
+- Baseline = random/grid, trial-budget-matched. Pre-registered: the model reaches competitive in
+  fewer trials than brute-force across shapes -> the learned-model question is finally answered YES
+  on a real, observable, correctly-measured target. Ties -> brute-force/roofline search is the tool
+  (still a machine-search win, no learned model needed). Either way, record honestly.
+
+Metric: device throughput / measured roofline (bandwidth at `B=1`, compute at large `B`) and
+end-to-end tok/s vs llama.cpp. Correctness exact, always.
+
+Sequencing / honesty: W1 is the gate. If the fused-dequant->WMMA primitive cannot be built in
+tinygrad, the whole "machine search competitive with llama.cpp" goal is blocked at the framework
+level -- report that and either go lower-level or accept the deterministic `61.6%` as the achievable
+bar. The per-kernel hand-tuning that would trivially close the gap is explicitly OUT of scope: it
+defeats the goal. The template is authored once; everything else is search.
+
 ## Phase 7: Maintenance Loop
 
 Purpose:
