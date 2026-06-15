@@ -598,7 +598,27 @@ make-or-break sub-gate (can one custom kernel: DEFINE_LOCAL fp16 tile -> store d
 barrier -> matmul from LDS with TC firing, correctly?) before authoring the full kernel. If TC
 won't fire on an LDS-staged operand, THAT is the real framework limit -> go lower-level
 (HIP/rocWMMA) or accept the regime split (route b: matmul_decoded large-batch ~19% peak + B1b fused
-small-batch + deterministic ~50% bar). Next action: execute W1b.0.
+small-batch + deterministic ~50% bar).
+
+UPDATE 2026-06-15 -- W1b.0 RAN and the fork-the-skeleton plan is DEAD; merged scope W1b' written.
+W1b.0 ran `extra/gemm/amd_copy_matmul.py WMMA=1` on this GPU: the non-WMMA LDS path works (MSE 0.0)
+but ALL FOUR in-repo hand-`SHAPED_WMMA` kernels are stale against this fork's tinygrad (4 different
+drift errors; the closest, amd_copy_matmul, needed an AFTER-not-wrapping-INDEX fix then blocked on
+`SHAPED_WMMA` reaching type_verify un-lowered with ptr srcs -- `lower_shaped_wmma` doesn't fire on
+the upstream frag convention). No green in-repo `SHAPED_WMMA` reference exists. KEY: this fork builds
+WMMA via the **TC opt over a normal reduce** (`_apply_tc_opt`, `postrange.py:219+`), NOT hand-placed
+SHAPED_WMMA -- that's the W1 path (145 correct ops). Also: `Opt(OptOps.TC, axis, (-1,2,1))` is
+requestable from a custom kernel's `opts_to_apply` (`search.py:22`), and GROUP/GROUPTOP are FORBIDDEN
+with TC (`postrange.py:173` -- this kills the naive "GROUP-stage the dequant" tactic and explains the
+W1 28x: TC owns its operand staging and recomputes the dequant per MAC).
+User chose to pursue BOTH (a) and (b); they MERGE into one plan (W1b' in the proof plan, under Phase
+W): Track 0 (diagnose W1 source + TC layout) -> Track B (fast falsifier: do LOCAL/contiguous opts
+stage the dequant? expected NO) -> Track A (the real build, `extra/qk_marlin_w1b.py`: DEFINE_LOCAL a
+weight tile, store dequant ONCE, barrier, normal matmul reduce + `Opt(OptOps.TC)` so TC builds the
+WMMA over the LDS load). Track A.0 is the make-or-break sub-gate: does the TC matcher accept a MUL
+operand that is a load from a DEFINE_LOCAL written earlier in the same kernel (test with a plain
+fp16 copy, no dequant)? If yes -> add dequant (a.1) + measure (a.2); if TC refuses an LDS-staged
+operand -> escalate to (c) assembly or (d) regime split. Next action: Track 0, then Track B, then A.0.
 
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them

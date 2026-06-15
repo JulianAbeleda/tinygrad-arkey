@@ -2368,6 +2368,66 @@ Route reassessment (the scoped "fork the skeleton" plan W1b.1 is dead as written
 - **(c) Drop to AMD assembly** (`test/amd/test_custom_kernel.py` shows raw `v_wmma_f32_16x16x16_f16`
   works): max control, max effort, least leverage on the search goal.
 
+### W1b' -- merged routes (a)+(b): TC-opt over a hand-LDS-staged dequant (decision 2026-06-15)
+
+Pursue (a) and (b) together. Two more framework facts (found grounding the route choice) collapse
+them into one well-grounded plan and kill the naive tactics:
+
+- **How this fork actually builds WMMA:** NOT by hand-placing `SHAPED_WMMA` (the stale upstream
+  skeleton). The TC opt `_apply_tc_opt` (`postrange.py:219+`) tags a normal `REDUCE`-of-`MUL` and
+  shifts axes into `LOCAL/UPCAST/UNROLL`; it requires both MUL operands' scalar dtype `== tc.dtype_in`
+  (fp16, `L232`). This IS the path W1 used (145 correct WMMA ops). So the only green WMMA construction
+  on this fork is **TC-opt-over-a-reduce**, and the right move is to feed it the right reduce, not to
+  resurrect `SHAPED_WMMA`.
+- **TC is requestable from a custom kernel:** `Opt(OptOps.TC, axis, (tc_select, tc_opt, use_tc))`
+  (e.g. `(-1, 2, 1)`, `search.py:22`) can go in a custom kernel's `KernelInfo(opts_to_apply=...)`.
+- **GROUP/GROUPTOP are FORBIDDEN with TC** (`postrange.py:173`: "no grouping with tensor cores"). This
+  kills the naive (b) tactic (a GROUP opt to stage the dequanted tile alongside TC) AND explains the
+  W1 28x: TC manages its own operand staging and will not let you inject LDS staging of a COMPUTED
+  operand via GROUP -- so it recomputes the dequant per MAC.
+
+Merged structure -- one shared diagnosis, then the fast falsifier (b) and the real build (a):
+
+**Track 0 -- shared diagnosis (cheap, first).** Dump W1's generated source (`DEBUG>=4` / VIZ) and
+*empirically confirm* the 28x mechanism: is the Q4_K dequant recomputed inside the WMMA/reduce loop
+(hypothesis, currently unverified)? Read how TC-opt lays out the WMMA + its operand LDS staging, so
+Track A knows the exact reduce/operand shapes that make TC fire. Output: a one-page note in the
+`wmma-w1b/` artifact dir.
+
+**Track B -- fast falsifier (hours, second).** Given GROUP+TC is forbidden, test the only remaining
+(b) levers on the W1 fused reduce, via a custom-kernel matmul with explicit `opts_to_apply`: (i) a
+`LOCAL` opt on the spatial axis, (ii) a `.contiguous()`/realize boundary on the dequant operand
+inside the kernel. Gate: dequant staged ONCE (visible in source) AND device time approaches
+`matmul_decoded`. Pre-registered: if no non-GROUP opt stages the computed dequant (the expected
+outcome, since TC owns its staging) -> (b) falsified, recorded, all-in on (a). This is a deliberate
+cheap attempt to kill the easy path before investing in the hard one.
+
+**Track A -- the real Marlin kernel (the main build), `extra/qk_marlin_w1b.py`.** Hand-author a
+custom kernel that stages the dequant in LDS once and lets TC build the WMMA over the LDS load:
+- a.0 -- make-or-break sub-gate (NO dequant yet): `DEFINE_LOCAL` an fp16 weight tile, COPY it from a
+  global fp16 weight (plain load), `barrier()`, then a normal matmul reduce `acc += Wlds[m,k]*x[b,k]`
+  over the tile with `opts_to_apply=(Opt(OptOps.TC, axis, (-1,2,1)), ...)`. Gate: TC FIRES (WMMA in
+  source) and result is correct. This tests the one load-bearing unknown -- *does the TC matcher
+  accept a MUL operand that is a load from a DEFINE_LOCAL buffer written earlier in the same kernel?*
+  If TC refuses an LDS-staged operand (e.g. it requires the operand trace back to a global PARAM),
+  that is the deepest framework signal -> escalate to (c) assembly or (d) regime split. Do NOT add
+  the dequant until a.0 is green.
+- a.1 -- swap the LDS store's source from the global-fp16 load to the Q4_K **dequant** of the
+  compressed tile (reuse `_q4k_weight`/`_q4k_group_params`/`_q4k_quant` from
+  `extra/q4_k_gemv_primitive.py`). The dequant runs once per tile (the store, behind the barrier);
+  the TC reduce reads plain fp16 LDS loads, so the per-MAC recompute is structurally impossible. Crux:
+  the Q4_K-coordinate-to-LDS-tile index math (map each store-thread's `(m,k)` LDS slot to Q4_K
+  `(row, block, group, pos)`). Correctness-gate vs `q4_k_reference` (exact numerics, `rel_err<1e-2`).
+- a.2 -- correctness + measure: device REAL TFLOPS / `83.6` peak vs the materialized-fp16 ceiling
+  (same kernel, pre-dequanted fp16 weight == `matmul_decoded`) and the W0 bar (`103.84` tok/s).
+  Pre-registered: reads compressed AND lands within ~`10-20%` of the fp16 ceiling -> competitive
+  fused-WMMA primitive built, W2-W4 proceed. Tanks even with single-stage reuse (per-store-thread
+  dequant ALU re-bottlenecks) -> record the ceiling, decide regime split vs lower-level.
+
+Sequencing: Track 0 -> Track B (fast, may falsify the easy path) -> Track A (a.0 gate -> a.1 -> a.2).
+Artifacts under `bench/amd-decode-flywheel-proof-20260614/wmma-w1b/`; test
+`test/external/test_qk_marlin_w1b.py`. Heed G0''/W1: stage once, do not serialize.
+
 ### W2: Parametrize the template
 
 - Expose the W1 kernel as `config -> kernel`: WMMA tile (`M x N x K`), `B`-block, LDS staging size,
