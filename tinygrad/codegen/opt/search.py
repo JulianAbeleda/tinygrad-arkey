@@ -115,6 +115,9 @@ beam_pool, BEAM_DEBUG = None, getenv("BEAM_DEBUG")
 # and must return a (pruned/reordered) sublist to actually compile+time. Default None = no behavior change.
 # Correctness-safe: only changes WHICH candidates are measured; beam_search still returns the best timed.
 _BEAM_CANDIDATE_FILTER = None
+# Optional partial-schedule timing log (Phase S1): if set to a list, every timed candidate appends
+# (applied_opts, full_shape, min_time_s) -- a dataset of PARTIAL schedules over BEAM's full action space.
+_BEAM_SCHEDULE_LOG = None
 def beam_search(s:Scheduler, rawbufs:list[Buffer], amt:int, allow_test_size=True, disable_cache=IGNORE_BEAM_CACHE.value):
   global beam_pool
   key = {"ast": s.ast.key, "amt": amt, "allow_test_size": allow_test_size, "device": s.ren.target.device, "suffix": s.ren.suffix}
@@ -168,6 +171,8 @@ def beam_search(s:Scheduler, rawbufs:list[Buffer], amt:int, allow_test_size=True
           if isinstance(e, RuntimeError): continue
           raise
         timed.append((candidates[i], min(tms)))
+        if _BEAM_SCHEDULE_LOG is not None:
+          _BEAM_SCHEDULE_LOG.append((tuple(candidates[i].applied_opts), tuple(candidates[i].full_shape), min(tms)))
         if BEAM_DEBUG > 1:
           print(f"{time.perf_counter() - st:7.2f}s: {i:5d} {len(prg.src[2].src):5d} uops",
                 f"{time_to_str(compile_et, w=12)} compile/{time_to_str(timed[-1][1], w=12)} run",
