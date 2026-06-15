@@ -61,6 +61,13 @@ is the actual flywheel and the most loop-defining thing N1 can measure.
   native-matmul peak for batched (~the 33-98% band), beating the fused kernel by the expected ~10x.
   Record the fp16 round-trip cost (extra memory + the dequant pass time) honestly — that is the price
   of dropping fusion. Artifact `native-matmul-N0/n0a_summary.json`, test `test_qk_matmul_decoded.py`.
+  - **N0a RESULT (2026-06-15): H-N0 holds.** On 4096x4096 across `N in {16..2048}`, matmul_decoded
+    (per-call, INCLUDING the ~112us dequant pass) is **4.5-9.6x faster** than the fused split-K kernel
+    at every batch size (amortized 5-11x), all correct. The dequant pass is ~112us regardless of N
+    (~30% of per-call at N=16, ~5% at N=2048) -- the honest, modest price of dropping fusion. Native
+    matmul = 2.4% peak (N=16, memory-bound) -> 39% (N=2048, compute-bound), on tinygrad's rich
+    `TC+UPCAST*2+LOCAL` opt space. The competitive, instrumentable search substrate for N1 is
+    established.  (`RESULT.md` in the artifact dir.)
 - **N0b — instrument the search space (the substrate dataset).** Run BEAM (`BEAM=2/4/8`) over the
   model's matmul shapes; log EVERY `(opt-schedule config -> device_time)` trial to a persisted
   dataset. Characterize the landscape: trials-to-converge, ruggedness, count of near-optimal configs,
