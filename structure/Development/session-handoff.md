@@ -1570,3 +1570,16 @@ action (mirror the TC action) + the q8_1 activation path in the graph. Phases: D
 ceiling probe FIRST (does a HAND-written DP4A GEMV reach ~llama.cpp tok/s? if not, codegen work is
 moot -- roofline discipline) -> D1 fold pattern -> D2 renderer emit -> D3 search-reachable -> D4
 end-to-end measure (search-found, not hand-asm, vs llama.cpp). Next action: run D0.
+
+UPDATE 2026-06-15 -- Phase D0 RAN: gate NOT cleared; do NOT build the DP4A codegen vocabulary.
+`bench/.../dp4a-d0/RESULT.md`. Fresh decode numbers: stock tinygrad 15.8 tok/s; our Q4K_PRIMITIVE
+(fp) 58 tok/s / 278 GB/s; llama.cpp 104 / ~470-500. Microbench (q8_1_q4k_bench.py): best int8 variant
+intdot 242 Q4-GB/s ffn_gate (+40% vs fp 173) but ~50% of llama.cpp; EXPLICIT DP4A (vdot, the v_dot4
+asm Phase D targets) is the SLOWEST (35, asm volatile blocks scheduling). End-to-end intdot wired into
+model.py (Q4K_INTDOT, reverted) = 28 tok/s, REGRESSED on unfused per-layer q8_1 quant. Optimistic
+fused ceiling ~81 tok/s (~78% of llama.cpp) -- improvement, not parity. DIAGNOSIS (consistent with
+M0): decode is MEMORY/occupancy-bound; DP4A accelerates COMPUTE (wrong axis); llama.cpp's win is
+memory-side + int8 ACTIVATION (fewer bytes), not the dot instruction. DECISION: do not build Phase D;
+it optimizes the wrong thing. The D0 gate did its job (caught the wrong lever with a cheap probe).
+The decode gap, if pursued, is an int8-activation + occupancy/memory problem ceilinged ~81 tok/s, not
+the DP4A-codegen-vocabulary path. model.py reverted to pristine.

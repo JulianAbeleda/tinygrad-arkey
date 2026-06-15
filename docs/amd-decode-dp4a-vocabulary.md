@@ -60,6 +60,18 @@ insufficient (occupancy / access patterns / norm fusion also matter); rescope or
 roofline discipline (M0 lesson): do not build a compiler feature for a lever that isn't the
 bottleneck. (We are at ~58 now; first confirm whether that path even uses DP4A in the hot loop.)
 
+**D0 -- RESULT (2026-06-15): gate NOT cleared. Phase D D1-D4 should NOT proceed.** `dp4a-d0/RESULT.md`.
+Microbench (device Q4-GB/s): best int8 variant `intdot` (int8 MAC) = 242 on ffn_gate vs fp 173 (+40%)
+but ~50% of llama.cpp's ~470-500; the EXPLICIT DP4A (`vdot`, the `v_dot4` asm Phase D would teach the
+codegen) is the SLOWEST (35, asm volatile blocks scheduling). End-to-end intdot wired into decode =
+28 tok/s, REGRESSED below fp (58) on unfused per-layer q8_1 quant. Optimistic fused ceiling ~81 tok/s
+(~78% of llama.cpp) -- improvement, NOT parity. Diagnosis (consistent with M0): decode is
+MEMORY/occupancy-bound; DP4A accelerates COMPUTE, the wrong axis -- which is why explicit DP4A is
+slowest and int8 barely helps. llama.cpp's win is memory-side engineering + the int8 ACTIVATION (fewer
+bytes), NOT the dot instruction. DECISION: do not build the DP4A codegen vocabulary; it optimizes the
+wrong thing. The D0 gate caught the wrong lever before any compiler change (roofline discipline). The
+phases below (D1-D4) are RETAINED for the record but are NOT to be built per this verdict.
+
 **D1 -- the fold pattern.** Implement the int8-dot -> `Ops.DP4A` recognizer + int8x4->uint32 packing.
 Unit-test on a tiny int8 dot. Risk: getting the compiler to *generate* the exact 4-wide int8 reduce
 shape the pattern matches (needs UNROLL=4 + int8 dtypes + packing); the matcher may be fragile (the
