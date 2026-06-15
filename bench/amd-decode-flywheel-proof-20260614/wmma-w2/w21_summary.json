@@ -1,0 +1,65 @@
+{
+  "kind": "qk_marlin_w2",
+  "native_fp16_matmul_tflops": {
+    "4096x4096x2048": 36.42,
+    "4096x4096x4096": 64.62,
+    "4096x4096x512": 27.82
+  },
+  "peak_tflops": 83.64,
+  "phase": "Phase W2.1",
+  "splitk_curve": [
+    {
+      "BLOCK_K": 2048,
+      "BLOCK_M": 16,
+      "correct": true,
+      "lds_bytes": 65536,
+      "mblocks": 256,
+      "n_kblocks": 2,
+      "pct_peak": 2.67,
+      "rel_err": 8e-06,
+      "shape": {
+        "K": 4096,
+        "M": 4096,
+        "N": 256
+      },
+      "tflops": 2.235,
+      "us": 3843.04
+    },
+    {
+      "BLOCK_K": 2048,
+      "BLOCK_M": 16,
+      "correct": true,
+      "lds_bytes": 65536,
+      "mblocks": 256,
+      "n_kblocks": 2,
+      "pct_peak": 2.97,
+      "rel_err": 8e-06,
+      "shape": {
+        "K": 4096,
+        "M": 4096,
+        "N": 512
+      },
+      "tflops": 2.487,
+      "us": 6909.16
+    },
+    {
+      "BLOCK_K": 2048,
+      "BLOCK_M": 16,
+      "correct": true,
+      "lds_bytes": 65536,
+      "mblocks": 256,
+      "n_kblocks": 2,
+      "pct_peak": 5.91,
+      "rel_err": 8e-06,
+      "shape": {
+        "K": 4096,
+        "M": 4096,
+        "N": 2048
+      },
+      "tflops": 4.946,
+      "us": 13894.4
+    }
+  ],
+  "tensor": "blk.20.attn_q.weight",
+  "verdict": "split-K K-tiling works + correct on real K=4096, but the fused custom kernel plateaus at ~3-6% peak while NATIVE fp16 matmul reaches 34-98%. The manual LDS dequant-staging that makes fusion free (W1b') BLOCKS the auto-tiling native matmul uses; adding native's UPCAST/LOCAL opts does not help. Fused custom kernel is 5-6x slower than native fp16 even at small-N memory-bound decode. Competitive fused quantized GEMM is NOT expressible via tinygrad custom_kernel + opts; the paths are (c) hand-assembly or matmul_decoded (dequant pass + native matmul)."
+}

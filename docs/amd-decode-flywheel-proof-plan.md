@@ -2500,7 +2500,37 @@ dequant-to-LDS PROLOGUE is a fixed serial cost not overlapped with the WMMA comp
 peak -- small workgroups, no K-tiling, serial prologue. Next: W2.1 K-tiling + double-buffering (overlap
 dequant of tile k+1 with WMMA of tile k), with the split-K fallback if the K-loop+TC composition fails.
 
+**W2.1 -- RESULT + VERDICT (2026-06-15): K-tiling works, but the fused custom kernel is NOT
+competitive -- framework wall hit (pre-registered failure mode).** `marlin_splitk_kernel`,
+`wmma-w2/w21_summary.json` + `RESULT.md`, test `test_qk_marlin_w2.py`.
+- K-tiling via SPLIT-K works (grid over `(block_m, k_block)`, each workgroup the proven single-REDUCE
+  W1b'/W2.0 body over a `BLOCK_K=2048` slice, partials `.sum(0)`). Handles real `K=4096`, correct.
+  Chose split-K because a one-workgroup manual K-loop accumulator fights TC's ownership of the WMMA
+  accumulator.
+- VERDICT: split-K fused = `2.2-5.0` TFLOPS (`2.7-5.9%` peak) vs NATIVE tinygrad fp16 matmul
+  `28-82` TFLOPS (`33-98%` peak). The fused custom kernel is ~`10x` slower than native, and `5-6x`
+  slower even at small-N (`16-64`) memory-bound decode where reading compressed (`3.5x` less data)
+  should win.
+- ROOT CAUSE (robust): NOT the dequant -- the manually-LDS-staged fp16 ceiling (no dequant) also tops
+  at ~`3-8%`. It IS the structure: a custom kernel that MANUALLY stages LDS applies only the TC opt;
+  native matmul applies `TC + UPCAST*2 + LOCAL` and reaches `98%`. Appending those exact opts to the
+  Marlin kernel barely moves it (`3.0->3.7%`) -- the opt machinery cannot re-tile around the
+  hand-placed `DEFINE_LOCAL`+barrier; BLOCK_M sweep flat too. FUNDAMENTAL TENSION: the manual LDS
+  dequant-staging that makes fusion free (W1b') BLOCKS the auto-tiling that reaches peak. In
+  tinygrad's `custom_kernel` + opt model you get fusion OR peak tiling, not both.
+- IMPLICATION: a competitive FUSED quantized GEMM is NOT expressible via tinygrad `custom_kernel` +
+  opts. The fused-template search (W3/W4 over `qk_marlin`) is MOOT -- it cannot contain a competitive
+  point. The viable competitive paths are (c) hand-assembly (Marlin/rocWMMA) or **matmul_decoded** (a
+  cheap separate dequant pass, Track 0 `8603` GFLOPS, + NATIVE matmul at `33-98%`), accepting the
+  fp16 round-trip. Machine-search/cost-model is meaningful on the NATIVE matmul opt schedule (already
+  driven to `33-98%` by tinygrad's heuristic/BEAM), not on the fused custom kernel.
+
 ### W3: Brute-force autotune vs the bar
+
+> **MOOT for the fused `qk_marlin` template (W2.1 verdict, 2026-06-15):** the fused custom kernel
+> caps at ~3-6% peak vs native matmul's 33-98%, so searching its config space cannot reach the bar --
+> no point autotuning a template that cannot contain a competitive point. If revived, the meaningful
+> search target is the NATIVE matmul opt schedule applied to `matmul_decoded`, not the fused kernel.
 
 - Autotune the template per (tensor shape, batch) by grid/random search on the device metric,
   correctness-gated. Does brute-force search reach the W0 bar across N representative shapes?

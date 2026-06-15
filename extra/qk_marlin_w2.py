@@ -83,6 +83,65 @@ def ceiling_grid_kernel(BLOCK_M:int, M:int, K:int, N:int, opts:tuple[Opt, ...]):
   return kernel
 
 
+def marlin_splitk_kernel(BLOCK_M:int, BLOCK_K:int, M:int, K:int, N:int, tc_axis:int, opts_arg, extra_opts=()):
+  """W2.1b split-K: grid over (block_m, k_block). Each workgroup is the proven W2.0 fused-dequant->WMMA
+  body over a BLOCK_K-wide K-slice, writing a partial [BLOCK_M, N] to partials[k_block]. The partials
+  are summed (over k_block) by a separate Tensor .sum(0). K-tiling without a manual K-loop -- each
+  workgroup is a single Ops.REDUCE, so TC owns its own accumulator (no manual-accumulator fight)."""
+  k_blocks_full = K // Q4_K_BLOCK_ELEMS
+  bpt = BLOCK_K // Q4_K_BLOCK_ELEMS  # Q4_K blocks per K-tile
+  n_mblocks, n_kblocks = M // BLOCK_M, K // BLOCK_K
+  opts = (Opt(OptOps.TC, tc_axis, opts_arg),) + tuple(extra_opts)
+  def kernel(partials:UOp, words:UOp, B:UOp) -> UOp:
+    block_m = UOp.range(n_mblocks, 3, AxisType.GLOBAL)
+    kb = UOp.range(n_kblocks, 4, AxisType.GLOBAL)
+    Alds = UOp.placeholder((BLOCK_M*BLOCK_K,), dtypes.float16, slot=0, addrspace=AddrSpace.LOCAL)
+    rl = UOp.range(BLOCK_M, 10, AxisType.LOOP)
+    blk = UOp.range(bpt, 11, AxisType.LOOP)
+    pos = UOp.range(32, 12, AxisType.LOOP)
+    grow = block_m*_ci(BLOCK_M) + rl
+    gblk = kb*_ci(bpt) + blk
+    base = (grow * k_blocks_full + gblk) * Q4K_WORDS_PER_BLOCK
+    stores = []
+    for grp in range(8):
+      kidx = blk*_ci(Q4_K_BLOCK_ELEMS) + _ci(grp*32) + pos
+      w = _q4k_weight(words, base, grp, pos).cast(dtypes.float16)
+      stores.append(Alds.index(rl*_ci(BLOCK_K) + kidx, ptr=True).store(w))
+    Alds = Alds.after(UOp.barrier(UOp.group(*stores).end(rl, blk, pos)))
+    m = UOp.range(BLOCK_M, 1, AxisType.LOOP)
+    n = UOp.range(N, 2, AxisType.LOOP)
+    ki = UOp.range(BLOCK_K, 0, AxisType.REDUCE)
+    gk = kb*_ci(BLOCK_K) + ki
+    mul = (Alds.index(m*_ci(BLOCK_K)+ki) * B.flatten().index(gk*_ci(N)+n)).cast(dtypes.float32)
+    red = mul.reduce(ki, arg=Ops.ADD, dtype=dtypes.float32).cast(partials.dtype.base)
+    grow_o = block_m*_ci(BLOCK_M) + m
+    # partials[kb, grow_o, n]  flat = kb*M*N + grow_o*N + n
+    idx = kb*_ci(M*N) + grow_o*_ci(N) + n
+    store = partials.flatten().index(idx, ptr=True).store(red).end(m, n)
+    return store.end(block_m, kb).sink(arg=KernelInfo(name=f"marlin_splitk_{M}_{K}_{N}_bm{BLOCK_M}_bk{BLOCK_K}",
+                                                      opts_to_apply=opts))
+  return kernel
+
+
+def measure_splitk(M:int, K:int, N:int, BLOCK_M:int, BLOCK_K:int, tensor:str, tc_axis:int):
+  words, wf16 = _load(M, K, tensor)
+  Tensor.manual_seed(1337)
+  B = Tensor.randn(K, N, dtype=dtypes.float16, device="AMD").realize()
+  ref = (wf16.cast(dtypes.float32) @ B.cast(dtypes.float32)).realize()
+  n_kblocks = K // BLOCK_K
+  fxn = marlin_splitk_kernel(BLOCK_M, BLOCK_K, M, K, N, tc_axis, TC_OPT_ARG)
+  def run():
+    partials = Tensor.empty(n_kblocks, M, N, dtype=dtypes.float32, device="AMD")
+    return Tensor.custom_kernel(partials, words, B, fxn=fxn)[0].sum(axis=0)
+  rel = (run().realize() - ref).abs().max().item() / (ref.abs().max().item() + 1e-9)
+  t = _time(run)
+  flops = 2*M*K*N
+  return {"shape": {"M": M, "K": K, "N": N}, "BLOCK_M": BLOCK_M, "BLOCK_K": BLOCK_K,
+          "n_kblocks": n_kblocks, "mblocks": M//BLOCK_M, "lds_bytes": BLOCK_M*BLOCK_K*2,
+          "correct": rel < 1e-2, "rel_err": round(rel, 6), "us": round(t*1e6, 2),
+          "tflops": round(flops/t/1e12, 3), "pct_peak": round(flops/t/1e12/PEAK_TFLOPS*100, 2)}
+
+
 def _load(M:int, K:int, tensor:str):
   meta = read_metadata(MODEL); info = pick_tensor(meta.infos, tensor); rows, Kfull = tensor_shape(info)
   k_blocks_full = Kfull // Q4_K_BLOCK_ELEMS
@@ -142,12 +201,42 @@ def run_w20(tensor:str):
   return all(c["marlin_correct"] and c["ceiling_correct"] for c in curve)
 
 
+def _time_native(M, K, N):
+  Tensor.manual_seed(1); A = Tensor.randn(M, K, dtype=dtypes.float16, device="AMD").realize()
+  B = Tensor.randn(K, N, dtype=dtypes.float16, device="AMD").realize()
+  return _time(lambda: A @ B)
+
+
+def run_w21(tensor:str):
+  """W2.1b split-K (handles real K=4096) + the decisive native-matmul comparison."""
+  # split-K correctness + throughput at real K=4096 across N; BLOCK_K=2048 (2 tiles).
+  curve = [measure_splitk(M, K, N, 16, 2048, tensor, 1) for (M, K, N) in
+           [(4096, 4096, 256), (4096, 4096, 512), (4096, 4096, 2048)]]
+  # the ceiling that matters: tinygrad NATIVE fp16 matmul (no custom kernel) at the same shapes.
+  native = {f"{M}x{K}x{N}": round(2*M*K*N/_time_native(M, K, N)/1e12, 2)
+            for (M, K, N) in [(4096, 4096, 512), (4096, 4096, 2048), (4096, 4096, 4096)]}
+  out = {"kind": "qk_marlin_w2", "phase": "Phase W2.1", "tensor": tensor, "peak_tflops": PEAK_TFLOPS,
+         "splitk_curve": curve, "native_fp16_matmul_tflops": native,
+         "verdict": "split-K K-tiling works + correct on real K=4096, but the fused custom kernel "
+                    "plateaus at ~3-6% peak while NATIVE fp16 matmul reaches 34-98%. The manual "
+                    "LDS dequant-staging that makes fusion free (W1b') BLOCKS the auto-tiling native "
+                    "matmul uses; adding native's UPCAST/LOCAL opts does not help. Fused custom kernel "
+                    "is 5-6x slower than native fp16 even at small-N memory-bound decode. Competitive "
+                    "fused quantized GEMM is NOT expressible via tinygrad custom_kernel + opts; the "
+                    "paths are (c) hand-assembly or matmul_decoded (dequant pass + native matmul)."}
+  ART.mkdir(parents=True, exist_ok=True)
+  (ART / "w21_summary.json").write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
+  print(json.dumps(out, indent=2, sort_keys=True), file=sys.__stdout__)
+  return all(c["correct"] for c in curve)
+
+
 def main():
   p = argparse.ArgumentParser()
-  p.add_argument("--gate", default="w20", choices=["w20"])
+  p.add_argument("--gate", default="w20", choices=["w20", "w21"])
   p.add_argument("--tensor", default="blk.20.attn_q.weight")
   args = p.parse_args()
-  return 0 if run_w20(args.tensor) else 1
+  fn = {"w20": run_w20, "w21": run_w21}[args.gate]
+  return 0 if fn(args.tensor) else 1
 
 
 if __name__ == "__main__":

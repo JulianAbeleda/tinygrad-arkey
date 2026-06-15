@@ -647,6 +647,24 @@ fixed cost not overlapped with WMMA. Next: W2.1 -- K-tiling (mandatory for K=409
 one-workgroup K-loop + TC composition (manual K-loop accumulator is not a single Ops.REDUCE; GROUP
 forbidden with TC). Fallback W2.1b: split-K grid + partial-sum pass (each wg = the proven W1b' kernel).
 
+UPDATE 2026-06-15 (W2.1 DONE -- VERDICT: fused custom kernel is NOT competitive; framework wall).
+`marlin_splitk_kernel` in `extra/qk_marlin_w2.py`, `wmma-w2/w21_summary.json` + `RESULT.md`, test
+`test_qk_marlin_w2.py`. Split-K K-tiling WORKS (grid over (block_m,k_block), each wg = single-REDUCE
+W1b' body over BLOCK_K=2048, partials `.sum(0)`); handles real K=4096, correct. Chose split-K because
+a manual K-loop accumulator fights TC's ownership of the WMMA accumulator. VERDICT: split-K fused =
+2.2-5.0 TFLOPS (2.7-5.9% peak) vs NATIVE tinygrad fp16 matmul 28-82 TFLOPS (33-98%). Fused custom
+kernel ~10x slower than native, and 5-6x slower even at small-N (16-64) memory-bound decode (where
+reading compressed 3.5x less SHOULD win). ROOT CAUSE (robust): not the dequant (the manually-staged
+fp16 ceiling also caps ~3-8%); it's that a custom kernel that MANUALLY stages LDS applies only the TC
+opt, while native matmul applies TC+UPCAST*2+LOCAL to reach 98% -- appending those exact opts to the
+Marlin kernel barely moves it (3.0->3.7%); BLOCK_M sweep flat. FUNDAMENTAL TENSION: manual LDS
+dequant-staging (makes fusion free, W1b') BLOCKS the auto-tiling that reaches peak -- fusion OR peak
+tiling, not both, in tinygrad custom_kernel+opts. IMPLICATION: a competitive FUSED quantized GEMM is
+NOT expressible here; W3/W4 over the fused template are MOOT. Competitive paths: (c) hand-assembly
+(Marlin/rocWMMA), or matmul_decoded (cheap dequant pass + NATIVE matmul at 33-98%, fp16 round-trip).
+Machine-search/cost-model is meaningful on the NATIVE matmul opt schedule, not the fused kernel.
+Next decision (user's): pursue (c) assembly, adopt matmul_decoded + redirect the search there, or stop.
+
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
 reaches llama.cpp; the fused-dequant->WMMA structure is the prerequisite for the search space to

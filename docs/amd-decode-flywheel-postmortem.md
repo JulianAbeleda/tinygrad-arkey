@@ -163,3 +163,31 @@ hypothesis, is the result.
   (arXiv:2502.10517) on the difficulty of model-generated kernels.
 - Full phase-by-phase detail and artifacts: `docs/amd-decode-flywheel-proof-plan.md`,
   `bench/amd-decode-flywheel-proof-20260614/`.
+
+## Addendum (2026-06-15) — the fused-WMMA line resolved (W1b' / W2)
+
+After re-basing the metric, the frontier moved to: can a FUSED dequant->WMMA kernel be both
+memory-light (reads compressed) and fast (tensor cores)? Resolved, end to end:
+
+- **W1b' — the fused primitive WORKS.** A hand-authored custom kernel that dequants the Q4_K weight
+  tile ONCE into LDS (`DEFINE_LOCAL`), barriers, then runs a matmul reduce the TC opt turns into WMMA
+  reading the staged tile. Correct, reads compressed, uses tensor cores, and fusing is ~FREE vs the
+  same-structure fp16 ceiling (mean 1.04x). The W1 28x recompute is structurally gone (dequant is
+  pre-barrier, WMMA post-barrier).
+- **W2 — but it is NOT competitive, and the wall is fundamental.** Grid parallelism (~70x) and
+  split-K K-tiling (real K=4096, correct) still cap the fused custom kernel at ~3-6% of peak, while
+  NATIVE tinygrad fp16 matmul reaches 33-98%. The fused kernel is ~10x slower than native — and 5-6x
+  slower even at small-N memory-bound decode where reading 3.5x less weight data should win. Root
+  cause is not the dequant (the manually-staged fp16 ceiling also caps ~3-8%): a custom kernel that
+  manually stages LDS applies only the TC opt, whereas native matmul applies TC+UPCAST*2+LOCAL to
+  reach 98%; appending those exact opts barely helps (3.0->3.7%). **The manual LDS staging that makes
+  fusion free is exactly what blocks the auto-tiling that reaches peak — in tinygrad's custom_kernel
+  + opt model you get fusion OR peak tiling, not both.**
+
+Consequence for the original thesis: "machine search competitive with llama.cpp" via a fused
+custom-kernel template is not achievable in tinygrad — the template cannot contain a competitive
+point, so the W3/W4 search over it is moot. The honest competitive paths are (c) hand-assembly
+(Marlin/rocWMMA, full control of tiling AND fusion) or matmul_decoded (a cheap separate dequant pass
++ native matmul at 33-98%, accepting the fp16 round-trip). The learned-cost-model question, if
+revived, lives on the NATIVE matmul opt schedule (already driven near peak by heuristic/BEAM), not on
+the fused kernel. This is a clean, well-grounded negative that precisely locates the framework limit.
