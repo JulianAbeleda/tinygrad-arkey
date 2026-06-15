@@ -30,6 +30,22 @@ HEADER = ('extern "C" __attribute__((device, const)) unsigned long __ockl_get_gr
 
 
 def gen(name, variant):
+  if variant.startswith("vdot"):  # llama.cpp-style int-dot: v_dot4 (4 MACs/instr) + wide loads + int accumulators
+    nacc = 4 if variant == "vdot_acc4" else 1
+    accs = ",".join(f"a{n}=0" for n in range(nacc))
+    body = [f'  u4v* W4 = (u4v*)(words + row*{RW});  unsigned int {accs};',
+            f'  for (int blk=0; blk<{KB}; blk++) {{ int b=blk*9;',
+            '    for (int i=0; i<9; i++) { u4v v=W4[b+i]; int ii=i;',
+            '      for (int j=0; j<4; j++) { unsigned int qw=v[j]; int p=(ii*4+j)*2;',
+            '        unsigned int lo=qw&0x0f0f0f0fu, hi=(qw>>4)&0x0f0f0f0fu;',
+            f'        a0 = __builtin_amdgcn_udot4(lo, q8[p],   a0, false);',
+            f'        a{1 % nacc} = __builtin_amdgcn_udot4(hi, q8[p+1], a{1 % nacc}, false); }} }} }}']
+    body += ['  out[row] = (float)(' + "+".join(f"a{n}" for n in range(nacc)) + '); }']
+    return "\n".join([HEADER, 'typedef unsigned int u4v __attribute__((ext_vector_type(4)));',
+      f'extern "C" __attribute__((global)) __attribute__((target("dot-insts"))) void '
+      f'__attribute__((amdgpu_flat_work_group_size(1,{LOCAL}))) {name}(',
+      '    float* out, unsigned int* words, unsigned int* q8) {',
+      f'  unsigned int row = __ockl_get_group_id(0)*{LOCAL} + __ockl_get_local_id(0);'] + body)
   if variant == "fp_acc8":  # wide loads + 8 INDEPENDENT accumulators (break the serial fp-add chain -> reduction ILP)
     body = ['  u4v* W4 = (u4v*)(words + row*%d);' % RW,
             '  float a0=0,a1=0,a2=0,a3=0,a4=0,a5=0,a6=0,a7=0;',
@@ -98,10 +114,12 @@ def main():
   words = rng.integers(0, 2**32, size=ROWS*RW, dtype=np.uint32)
   xv = rng.standard_normal(WPB*8).astype(np.float32)  # small cached activation (288)
   def mk(arr, dt): b = Buffer("AMD", arr.size, dt).ensure_allocated(); b.copyin(memoryview(arr)); return b
-  wb = mk(words, dtypes.uint32); xb = mk(xv, dtypes.float32)
+  q8v = rng.integers(0, 2**32, size=72, dtype=np.uint32)  # small cached int8 activation (packed)
+  wb = mk(words, dtypes.uint32); xb = mk(xv, dtypes.float32); qb = mk(q8v, dtypes.uint32)
   q4_bytes = ROWS * RW * 4
   results = {}
-  for variant in ("readraw", "fp", "fp_wide", "fp_prefetch", "fp_vec", "fp_vec_u3", "fp_acc8"):
+  for variant in ("readraw", "fp", "fp_prefetch", "fp_acc8", "vdot", "vdot_acc4"):
+    actb = qb if variant.startswith("vdot") else xb
     lib = dev.compiler.compile(gen(variant, variant))
     import contextlib, io
     buf = io.StringIO()
@@ -110,8 +128,8 @@ def main():
     n_load = sum(1 for l in buf.getvalue().splitlines() if "global_load" in l)
     ob = Buffer("AMD", ROWS, dtypes.float32).ensure_allocated()
     prg = dev.runtime(variant, lib)
-    prg(ob._buf, wb._buf, xb._buf, global_size=(ROWS//LOCAL,1,1), local_size=(LOCAL,1,1), wait=True)
-    tms = [prg(ob._buf, wb._buf, xb._buf, global_size=(ROWS//LOCAL,1,1), local_size=(LOCAL,1,1), wait=True) for _ in range(30)]
+    prg(ob._buf, wb._buf, actb._buf, global_size=(ROWS//LOCAL,1,1), local_size=(LOCAL,1,1), wait=True)
+    tms = [prg(ob._buf, wb._buf, actb._buf, global_size=(ROWS//LOCAL,1,1), local_size=(LOCAL,1,1), wait=True) for _ in range(30)]  
     t = statistics.median(tms)
     gbs = q4_bytes/t/1e9
     results[variant] = {"q4_gbs": round(gbs, 1), "pct_peak": round(gbs/859*100, 1), "us": round(t*1e6, 1),
@@ -119,7 +137,7 @@ def main():
     print(f"{variant:12s} {gbs:6.1f} Q4-GB/s ({gbs/859*100:4.1f}% peak)  {t*1e6:7.1f}us  valu={n_valu} loads={n_load}",
           file=sys.__stdout__)
   base = results["fp"]["q4_gbs"]
-  for v in ("fp_wide", "fp_prefetch"):
+  for v in ("fp_prefetch", "vdot", "vdot_acc4"):
     print(f"  {v} vs fp: {results[v]['q4_gbs']/base:.2f}x", file=sys.__stdout__)
   out = {"kind": "qk_prefetch_gemv", "rows": ROWS, "k": K, "peak_gbs": 859, "variants": results,
          "readraw_ceiling_pct": results["readraw"]["pct_peak"], "fp_baseline_pct": results["fp"]["pct_peak"]}
