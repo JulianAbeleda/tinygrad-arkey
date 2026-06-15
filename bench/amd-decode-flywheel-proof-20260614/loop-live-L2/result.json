@@ -1,0 +1,83 @@
+{
+  "aggregate": {
+    "keep_ks": [
+      12,
+      24,
+      48
+    ],
+    "mean_best_quality_ratio_over_keepk": 0.912,
+    "n_shapes": 1,
+    "shapes_with_a_quality_preserving_keepk": 0
+  },
+  "amt": 2,
+  "folds": [
+    {
+      "cold_opts": [
+        "TC",
+        "UPCAST",
+        "LOCAL",
+        "SWAP"
+      ],
+      "cold_tflops": 15.22,
+      "cold_wall_s": 12.1,
+      "shape": {
+        "K": 14336,
+        "M": 4096,
+        "N": 128
+      },
+      "warm_sweep": [
+        {
+          "keep_k": 12,
+          "quality_ratio": 0.598,
+          "wall_speedup": 8.52,
+          "warm_opts": [
+            "TC"
+          ],
+          "warm_tflops": 9.1,
+          "warm_wall_s": 1.42
+        },
+        {
+          "keep_k": 24,
+          "quality_ratio": 0.68,
+          "wall_speedup": 5.84,
+          "warm_opts": [
+            "TC"
+          ],
+          "warm_tflops": 10.35,
+          "warm_wall_s": 2.07
+        },
+        {
+          "keep_k": 48,
+          "quality_ratio": 0.912,
+          "wall_speedup": 1.86,
+          "warm_opts": [
+            "TC",
+            "UPCAST",
+            "SWAP"
+          ],
+          "warm_tflops": 13.88,
+          "warm_wall_s": 6.49
+        }
+      ]
+    }
+  ],
+  "fresh_shapes": [
+    [
+      4096,
+      14336,
+      128
+    ]
+  ],
+  "gate": {
+    "PASS": false,
+    "every_shape_has_quality_preserving_warmstart": false
+  },
+  "keep_ks": [
+    12,
+    24,
+    48
+  ],
+  "kind": "qk_loop_beam_warmstart",
+  "phase": "Phase L2 (L2)",
+  "seed": 20260615
+}

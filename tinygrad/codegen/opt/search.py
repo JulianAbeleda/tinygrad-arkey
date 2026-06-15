@@ -111,6 +111,10 @@ def get_kernel_actions(s:Scheduler, include_0=True, max_up:int|None=None) -> dic
   return acted
 
 beam_pool, BEAM_DEBUG = None, getenv("BEAM_DEBUG")
+# Optional learned warm-start hook (Phase L2): if set, called per BEAM iteration with the candidate list
+# and must return a (pruned/reordered) sublist to actually compile+time. Default None = no behavior change.
+# Correctness-safe: only changes WHICH candidates are measured; beam_search still returns the best timed.
+_BEAM_CANDIDATE_FILTER = None
 def beam_search(s:Scheduler, rawbufs:list[Buffer], amt:int, allow_test_size=True, disable_cache=IGNORE_BEAM_CACHE.value):
   global beam_pool
   key = {"ast": s.ast.key, "amt": amt, "allow_test_size": allow_test_size, "device": s.ren.target.device, "suffix": s.ren.suffix}
@@ -141,6 +145,8 @@ def beam_search(s:Scheduler, rawbufs:list[Buffer], amt:int, allow_test_size=True
     dev = Device[s.ren.target.device]
     while not exiting:
       candidates: list[Scheduler] = flatten([get_kernel_actions(si, include_0=False).values() for si,_ in beam])
+      if _BEAM_CANDIDATE_FILTER is not None and len(candidates) > 1:
+        candidates = _BEAM_CANDIDATE_FILTER(candidates)
       timed: list[tuple[Scheduler, float]] = []
       least_compute_ops = math.inf
       for i, proc in ((map if beam_pool is None else beam_pool.imap_unordered)(_try_compile, enumerate(candidates))):

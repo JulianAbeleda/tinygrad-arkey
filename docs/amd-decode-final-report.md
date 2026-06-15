@@ -181,8 +181,34 @@ predictable from shape features (learnable). That is exactly where the flywheel 
 ## What a follow-up would do
 
 1. **Make the loop live** — wire the cost model into a tinygrad BEAM warm-start and measure real
-   wall-clock autotuning speedup on fresh shapes (turn the offline simulation into a tool).
+   wall-clock autotuning speedup on fresh shapes (turn the offline simulation into a tool). **DONE — see
+   the Phase L addendum below.**
 2. **Scale the substrate study** — more shapes/ops (conv, attention), the full opt space, cross-op
    transfer; test whether the flywheel generalizes beyond matmul.
 3. **Close the decode gap separately** — the llama.cpp bar is a GEMV problem; the lever is int8
-   activation / DP4A `mmvq` (partial plumbing exists), independent of the loop.
+   activation / DP4A `mmvq`. Now quantified (`docs/amd-decode-consolidated-first-principles.md`): fp emits
+   ~4.06 VALU/weight vs a DP4A floor ~1.35 (~3× headroom, all in the dot), but tinygrad emits zero
+   `v_dot4` — the gap is a renderer codegen feature, not a search result.
+
+## Addendum (2026-06-15) — Phase L: the loop is LIVE (follow-up #1 resolved), and its boundary
+
+Turned N2's offline simulation (which looked up measured times) into a real autotuner that times
+candidates LIVE on device on FRESH held-out shapes. `extra/qk_loop_live.py`,
+`extra/qk_loop_beam_warmstart.py`, `bench/.../loop-live-{L0,L1,L2}/`.
+
+- **L0/L1 — PASS (the positive).** On 6 GEMM shapes absent from the 26-shape corpus, the N1 model ranks
+  the 277 configs and its top-8 are timed live: **mean 0.977 of the live oracle** (vs random 0.821),
+  **95% of oracle reached in a median of 3 live timings** (random ~82), and **~42× wall-clock speedup**
+  (time the guided top-8 vs the exhaustive 277 sweep). The offline 0.92/86× result HOLDS on real silicon
+  for unseen shapes. Honest weak spot: small-N (N=64) needs more timings (k95=12, guided@8=0.92).
+- **L2 — NEGATIVE, and informative (the boundary).** Wiring the model into tinygrad's NATIVE `beam_search`
+  as a candidate-pruner (optional, default-OFF hook at `search.py`) does NOT transfer: pruning to the
+  model's top-K saves wall-clock (8.5×) but collapses kernel quality to 0.60; relaxing the prune recovers
+  quality (0.91 at keep_k=48) but erases the speedup (1.9×) — no operating point wins both. Cause: the
+  model trained on COMPLETE 277-config schedules scores native BEAM's PARTIAL schedules out-of-distribution
+  and has no features for BEAM's larger action pool (`SWAP`/`GROUP`/`THREAD` — the cold winner uses `SWAP`).
+
+The two-sided Phase-L result sharpens the meta-conclusion at the integration layer: **the learned loop is
+a real, live, 42× autotuning tool on the substrate it was trained for, and does not transfer to a
+structurally different search substrate without retraining.** Native-BEAM integration would need a dataset
+of partial-schedule timings over BEAM's full action space — the "scale the substrate" follow-up.
