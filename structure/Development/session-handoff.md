@@ -1583,3 +1583,19 @@ memory-side + int8 ACTIVATION (fewer bytes), not the dot instruction. DECISION: 
 it optimizes the wrong thing. The D0 gate did its job (caught the wrong lever with a cheap probe).
 The decode gap, if pursued, is an int8-activation + occupancy/memory problem ceilinged ~81 tok/s, not
 the DP4A-codegen-vocabulary path. model.py reverted to pristine.
+
+UPDATE 2026-06-15 -- Phase L scoped (exhaustive): add the MEMORY-LATENCY-HIDING vocabulary to
+tinygrad codegen (the real decode frontier per D0). Doc: `docs/amd-decode-latency-vocabulary.md`.
+Architecture finding: AMD default = HIPRenderer -> HIP C -> comgr/LLVM; tinygrad emits NO s_waitcnt /
+NO async-copy -- LLVM does the scheduling, so explicit pipelining's marginal value is UNCERTAIN ->
+probe-first. tinygrad's 10 opts (TC/UPCAST/UNROLL/LOCAL/THREAD/GROUP/GROUPTOP/NOLOCALS/PADTO/SWAP) +
+synchronous LDS cover tiling/parallelism/occupancy-via-locals but LACK async/prefetch/double-buffer/
+wave-control (standard in CUTLASS/MLIR/Pallas). Decomposed the missing vocabulary cheapest-first:
+L1 occupancy control (waves-per-eu/__launch_bounds__, smallest, maybe THE lever), L2 software prefetch
+(issue i+1 loads ahead, UOp loop transform), L3 double-buffered LDS (ping-pong, CUTLASS multistage),
+L4 explicit async copy (__builtin_amdgcn_global_load_lds, heaviest). Each needs OptOps + apply_opt +
+search action (make it findable). GATING: L0 hand-probes FIRST (L0a occupancy, L0b prefetch, L0c
+double-buffer) -- if the best moves decode toward ~90-104 build that lever; if NONE moves it materially
+-> latency-hiding isn't the binding constraint (occupancy ceiling / LLVM already hides it) -> stop.
+Pre-registered: even int8 ceilinged ~81 (D0), so decode PARITY may be unreachable; a located ceiling is
+an acceptable result. Next action: run the L0 probes.
