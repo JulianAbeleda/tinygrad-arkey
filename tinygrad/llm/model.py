@@ -524,10 +524,9 @@ class FFNBlock:
     if hasattr(self, "ffn_gateup"):  # B1 fused gate/up
       gate, up = self.ffn_gateup(x)
       return self.ffn_down(gate.silu().contiguous() * up)
-    if getenv("Q4K_UNFUSE"):  # run FFN matmuls in fp16 (+unfuse) so RDNA3 WMMA tensor cores can apply
+    if getenv("Q4K_UNFUSE"):  # run FFN matmuls in fp16 so RDNA3 WMMA tensor cores can apply (minimal-overhead)
       xh = x.cast(dtypes.float16)
-      g = self.ffn_gate(xh).contiguous(); u = self.ffn_up(xh).contiguous()
-      return self.ffn_down((g.silu() * u).cast(dtypes.float16).contiguous())
+      return self.ffn_down((self.ffn_gate(xh).silu().contiguous() * self.ffn_up(xh)).cast(dtypes.float16))
     return self.ffn_down(self.ffn_gate(x).silu().contiguous() * self.ffn_up(x))
 
   # given the token-prefix match, return how much cached state this block can still reuse
