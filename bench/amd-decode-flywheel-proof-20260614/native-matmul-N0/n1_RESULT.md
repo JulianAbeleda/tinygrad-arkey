@@ -49,3 +49,37 @@ This proves the loop MECHANISM works on the native-matmul opt space -- a transfe
 result. It is NOT a llama.cpp-decode win (the on-target quantized-decode spaces are dead: GEMV flat,
 fused-WMMA walled). The loop, if built, is a general learned-autotuning contribution that serves
 quantized inference via matmul_decoded for the batched regime, decoupled from the original decode bar.
+
+## N1.1 -- strict gate CLOSED via data coverage (2026-06-15)
+Added ~12 small-batch shapes (`extra/qk_loop_dataset_smalln.py`, `beam_log_n1_smalln.jsonl`) -> merged
+~26-shape dataset, SAME leave-one-shape-out harness (the loaders now merge all `beam_log_n1*.jsonl`).
+  mean model top-1 / oracle = 0.922  (was 0.89)  -> PRE-REGISTERED GATE NOW PASSES (>=0.90)
+  small-N top-1 / oracle    = 0.915  (was 0.705)  -- the coverage gap was the cause, confirmed
+  mean LOOKUP / oracle      = 0.054  -- the naive global-best-config lookup COLLAPSES across 26 diverse
+                                        shapes (invalid/far-off on most held-out) while the model
+                                        adapts per-shape; model beats lookup on 26/26 folds.
+The gate closed by adding data, NOT by moving the threshold (it stayed 0.90).
+
+## N2 -- the loop demonstrably works (model-guided search + online flywheel)
+`extra/qk_loop_search.py`, `n2_loop_search.json`, test `test_qk_loop_search.py`. Offline on the
+measured dataset (ranking is the model's; "measuring the top-K" is a true-time lookup).
+
+N2a -- model-guided best-of-K / oracle vs RANDOM best-of-K (26 shapes, leave-one-out):
+  K:        1     2     5     8     20    50
+  model:    0.922 0.953 0.977 0.982 0.992 0.995
+  random:   0.482 0.593 0.718 0.771 0.851 0.917
+  TRIALS TO 95% OF ORACLE: guided median = 1.0   vs   random median = 86.3   (~86x fewer measurements)
+
+N2b -- online accumulation (best-of-5 / oracle as the training corpus grows):
+  corpus=1 -> 0.667 ; corpus=6 -> ~0.89 ; corpus=25 -> 0.977. The flywheel gets better with experience.
+  Gate: guided reaches 95% by K<=8, beats random at every K, needs ~86x fewer trials, improves online.
+  ALL PASS.
+
+## Bottom line
+The learned loop is real on the native-matmul substrate: a cost model trained on accumulated
+(shape, config -> time) data guides search to 95% of oracle in ~1 measured config (vs ~86 random),
+robustly beats the deterministic lookup (which collapses to 0.05 across diverse shapes), and improves
+as the corpus grows. This is the positive existence proof the whole investigation was after -- the
+loop MECHANISM works where the space is rich + competitive + learnable. Scope boundary unchanged: this
+is a general learned-autotuning result on native matmul (serves quantized inference via matmul_decoded
+for the batched regime), decoupled from the llama.cpp decode bar (whose on-target spaces are dead).

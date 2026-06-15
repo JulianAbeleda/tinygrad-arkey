@@ -691,9 +691,22 @@ UPDATE 2026-06-15 -- Phase N COMPLETE through N1; THE LOOP HAS A HOME (first gen
   = 0.964 of oracle, clears 0.90. TRANSFER rises 0.46(k=1)->0.89(k=13). The conditions absent in the
   dead spaces are present here: rich+competitive+learnable+transfers. The loop mechanism works on the
   native-matmul substrate (decoupled from llama.cpp decode per scope boundary).
-Doc: `docs/amd-decode-loop-substrate.md`. Next options (user's): close the strict gate (N1.1 -- sweep
-more small-N shapes for coverage), build the actual loop (warm-start BEAM from the cost model and
-measure end-to-end trial savings), or write the final report (the arc is now a complete positive+negative).
+Doc: `docs/amd-decode-loop-substrate.md`.
+
+UPDATE 2026-06-15 -- N1.1 + N2 DONE; the loop WORKS and the strict gate is CLOSED.
+- N1.1 (`qk_loop_dataset_smalln.py`, `beam_log_n1_smalln.jsonl`): added ~12 small-batch shapes ->
+  merged ~26-shape dataset (loaders now merge all `beam_log_n1*.jsonl`). Re-run learnability: overall
+  model top-1 = 0.922 (was 0.89) -> PRE-REGISTERED GATE PASSES (closed by coverage, threshold unmoved).
+  small-N 0.705 -> 0.915. Naive lookup collapsed to 0.054 (model beats it 26/26 folds).
+- N2 (`qk_loop_search.py`, `n2_loop_search.json`, test `test_qk_loop_search.py`): model-guided
+  best-of-K/oracle 0.92(K1)->0.98(K5)->0.99(K20) vs random 0.48->0.72->0.85. TRIALS TO 95% OF ORACLE:
+  guided median 1.0 vs random 86.3 (~86x fewer). Online flywheel: best-of-5 0.67(1 shape)->0.98(25).
+  All gates PASS. The loop demonstrably works on the native-matmul substrate.
+Scope boundary unchanged: general learned-autotuning on native matmul (serves quantized inference via
+matmul_decoded for batched), decoupled from the llama.cpp decode bar (on-target spaces dead).
+The whole arc is now COMPLETE: precisely-located negatives (GEMV flat, fused-WMMA walled, fused custom
+kernel can't tile) + a demonstrated POSITIVE (the loop works where the space is rich+competitive+
+learnable). Next (user's): write the final report, or build the loop into a live BEAM warm-start.
 
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them

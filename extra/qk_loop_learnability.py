@@ -41,6 +41,24 @@ OPT_KEYS = list(_opt_feats([]).keys())
 FEAT_KEYS = SHAPE_KEYS + OPT_KEYS
 
 
+def load_merged():
+  """Merge all native-matmul beam logs (N1 + N1.1 small-N), de-duping by (shape, opts)."""
+  import glob
+  paths = sorted(glob.glob(str(ART / "beam_log_n1*.jsonl")))
+  if not paths: paths = [str(ART / "beam_log.jsonl")]
+  seen, rows = set(), []
+  for p in paths:
+    for r in [json.loads(l) for l in open(p) if l.strip()]:
+      if not (r["valid"] and r.get("tflops")): continue
+      k = (r["M"], r["K"], r["N"], json.dumps(r["opts"], sort_keys=True))
+      if k in seen: continue
+      seen.add(k)
+      f = {**_shape_feats(r["M"], r["K"], r["N"]), **_opt_feats(r["opts"])}
+      rows.append({"shape": (r["M"], r["K"], r["N"]), "x": [f[kk] for kk in FEAT_KEYS],
+                   "tflops": r["tflops"], "opts": r["opts"]})
+  return rows
+
+
 def load(path):
   recs = [json.loads(l) for l in open(path) if l.strip()]
   recs = [r for r in recs if r["valid"] and r.get("tflops")]
@@ -74,8 +92,7 @@ def lookup_baseline(train, test_shape_rows):
   return 0.0  # config invalid on this shape -> lookup fails outright
 
 
-def run(path):
-  rows = load(path)
+def run(rows):
   shapes = sorted({r["shape"] for r in rows})
   folds = []
   for hs in shapes:
@@ -129,10 +146,9 @@ def run(path):
           "features": FEAT_KEYS, "folds": folds, "aggregate": agg, "gate": gate}
 
 
-def transfer_curve(path):
+def transfer_curve(rows):
   """N1b: does held-out achieved/oracle improve as #train shapes (experience) grows? Deterministic
   prefix subsets (sorted shapes) -> no Math.random; the flywheel-gets-better signal."""
-  rows = load(path)
   shapes = sorted({r["shape"] for r in rows})
   curve = []
   for hs in shapes:
@@ -152,9 +168,9 @@ def transfer_curve(path):
 
 
 def main():
-  path = ART / ("beam_log_n1.jsonl" if (ART / "beam_log_n1.jsonl").exists() else "beam_log.jsonl")
-  out = run(path)
-  out["transfer"] = transfer_curve(path)
+  rows = load_merged()
+  out = run(rows)
+  out["transfer"] = transfer_curve(rows)
   (ART / "n1_learnability.json").write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
   print(json.dumps(out["aggregate"], indent=2), file=sys.__stdout__)
   print("GATE:", json.dumps(out["gate"]), file=sys.__stdout__)

@@ -1,0 +1,79 @@
+{
+  "gate": {
+    "PASS": true,
+    "guided_beats_random_at_K8": true,
+    "guided_far_fewer_trials_to_95": true,
+    "guided_reaches_95pct_by_K8": true,
+    "online_improves_with_corpus": true
+  },
+  "kind": "qk_loop_search",
+  "n2a_guided_vs_random": {
+    "best_of_k_frac_oracle": {
+      "1": {
+        "model": 0.922,
+        "random": 0.482
+      },
+      "12": {
+        "model": 0.988,
+        "random": 0.81
+      },
+      "2": {
+        "model": 0.953,
+        "random": 0.593
+      },
+      "20": {
+        "model": 0.992,
+        "random": 0.851
+      },
+      "3": {
+        "model": 0.958,
+        "random": 0.654
+      },
+      "5": {
+        "model": 0.977,
+        "random": 0.718
+      },
+      "50": {
+        "model": 0.995,
+        "random": 0.917
+      },
+      "8": {
+        "model": 0.982,
+        "random": 0.771
+      }
+    },
+    "median_guided_trials_to_95pct": 1.0,
+    "median_random_trials_to_95pct": 86.3
+  },
+  "n2b_online_accumulation": {
+    "K5_bestofk_frac_oracle_by_corpus": {
+      "1": 0.667,
+      "10": 0.947,
+      "11": 0.939,
+      "12": 0.95,
+      "13": 0.934,
+      "14": 0.952,
+      "15": 0.949,
+      "16": 0.952,
+      "17": 0.957,
+      "18": 0.96,
+      "19": 0.951,
+      "2": 0.632,
+      "20": 0.96,
+      "21": 0.968,
+      "22": 0.981,
+      "23": 0.965,
+      "24": 0.978,
+      "25": 0.977,
+      "3": 0.632,
+      "4": 0.752,
+      "5": 0.753,
+      "6": 0.885,
+      "7": 0.932,
+      "8": 0.936,
+      "9": 0.944
+    }
+  },
+  "n_shapes": 26,
+  "phase": "Phase N2"
+}

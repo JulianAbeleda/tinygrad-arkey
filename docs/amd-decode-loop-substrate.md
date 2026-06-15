@@ -153,6 +153,21 @@ simulation (ranking is the model's; "measuring the top-K" is a dataset lookup of
   -> the loop demonstrably works (not just a static cost model). Else -> the learnability does not
   convert to search savings; recorded. `extra/qk_loop_search.py`, test `test_qk_loop_search.py`.
 
+  - **N1.1 RESULT (2026-06-15): strict gate CLOSED.** Added ~12 small-batch shapes
+    (`qk_loop_dataset_smalln.py`) -> merged ~26-shape dataset; SAME harness. Overall model top-1 =
+    **0.922** (was 0.89) -> the pre-registered 0.90 gate **PASSES** (closed by data coverage, NOT by
+    moving the threshold). Small-N top-1 rose 0.705 -> **0.915** (confirming the gap was coverage). The
+    naive lookup **collapsed to 0.054** across 26 diverse shapes (model beats it 26/26 folds).
+  - **N2 RESULT (2026-06-15): the loop demonstrably works.** `qk_loop_search.py`, `n2_loop_search.json`.
+    Model-guided best-of-K / oracle: `0.92 (K=1) -> 0.98 (K=5) -> 0.99 (K=20)` vs random
+    `0.48 -> 0.72 -> 0.85`. **Trials to 95% of oracle: guided median = 1.0 vs random = 86.3 (~86x
+    fewer measurements).** Online flywheel (best-of-5 vs corpus size): `0.67 (1 shape) -> 0.98 (25)` --
+    the loop improves with accumulated experience. ALL gates PASS. This is the positive existence proof
+    the investigation was after: on a rich + competitive + learnable space, the learned loop guides
+    search to near-oracle in ~1 trial, beats the deterministic baseline robustly, and gets better as
+    the corpus grows. Scope boundary unchanged (general autotuning on native matmul, decoupled from the
+    llama.cpp decode bar).
+
 ## Stop rules / honesty
 
 - Measure on the device metric (the M0 lesson). Warm up, fix clocks, median.
