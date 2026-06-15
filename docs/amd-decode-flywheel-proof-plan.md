@@ -2428,11 +2428,37 @@ Sequencing: Track 0 -> Track B (fast, may falsify the easy path) -> Track A (a.0
 Artifacts under `bench/amd-decode-flywheel-proof-20260614/wmma-w1b/`; test
 `test/external/test_qk_marlin_w1b.py`. Heed G0''/W1: stage once, do not serialize.
 
+**W1b' -- RESULT (2026-06-15): the Marlin fused-dequant->WMMA primitive WORKS. Gate OPEN.**
+Built bottom-up in `extra/qk_marlin_w1b.py` (`RESULT.md` + `summary.json` in `wmma-w1b/`):
+- Track 0 confirmed the W1 28x mechanism from the rendered ISA: the slow kernel reads compressed and
+  computes the Q4_K dequant INLINE feeding each `__WMMA_16_16_16_half_float` (recompute confirmed).
+- a0a: `Opt(OptOps.TC, 0, (-1,2,1))` fires WMMA on a hand-built `Ops.REDUCE` matmul (correct). KEY:
+  the q4k `.set/.after/.end` manual accumulator is NOT an `Ops.REDUCE`; `mul.reduce(k, arg=Ops.ADD,
+  dtype=float32)` is (per `cdna_asm_gemm.py::custom_uop_gemm`). TC needs a real REDUCE.
+- a0b (make-or-break): TC fires WMMA on a MUL operand loaded from a `DEFINE_LOCAL` written earlier in
+  the SAME kernel. The Marlin structure IS expressible on this fork -- the load-bearing unknown is YES.
+- a1: full Marlin -- dequant the compressed tile ONCE into LDS -> barrier -> WMMA. Correct on real
+  GGUF weights (rel_err 1e-4). Rendered source verified: ALL dequant shifts pre-barrier, ALL WMMA
+  post-barrier -- the per-MAC recompute is structurally gone.
+- a2: fusing the dequant is ~FREE -- the fused kernel (reads compressed) is 1.07-1.08x FASTER than the
+  materialized-fp16 WMMA ceiling on 4/5 shapes (0.89x on one large-N), mean 1.04x, all correct.
+
+Caveat (honest): absolute throughput is tiny (0.04-0.23 TFLOPS) -- these are single-workgroup,
+un-tiled, whole-tile-in-LDS shapes (M<=32, K<=1024 to fit the ~64KB LDS). W1b proves the PRIMITIVE
+(correct, reads compressed, tensor cores, dequant-once, competitive with the fp16 ceiling); reaching
+the 83.6 peak / 103.84 tok/s bar is the W2->W3 job (grid parallelism + K-tiling + occupancy over a
+parametrized template). The template that can contain a competitive point now EXISTS.
+
 ### W2: Parametrize the template
 
-- Expose the W1 kernel as `config -> kernel`: WMMA tile (`M x N x K`), `B`-block, LDS staging size,
-  dequant placement, waves/workgroup (occupancy). This search space is defined ONCE by hand (the
-  Ansor template), not searched into existence.
+- Expose the W1b' Marlin kernel (`extra/qk_marlin_w1b.py::_marlin_kernel`) as `config -> kernel`. The
+  knobs the W1b' result makes concrete and necessary: **K-tiling** (the LDS holds only one K-tile at a
+  time -- mandatory, since a full 16x4096 fp16 tile is 128KB > 64KB LDS), **grid parallelism** (block
+  over M-rows and N-columns into many workgroups -- the single-workgroup W1b' kernel is why absolute
+  TFLOPS were tiny), WMMA tile (`M x N x K`), LDS staging size / double-buffering, and waves/workgroup
+  (occupancy). This search space is defined ONCE by hand (the Ansor template), not searched into
+  existence. The fusion itself is already proven ~free (W1b' a2), so W2/W3 tune tiling+occupancy, not
+  the dequant.
 
 ### W3: Brute-force autotune vs the bar
 

@@ -620,6 +620,21 @@ operand that is a load from a DEFINE_LOCAL written earlier in the same kernel (t
 fp16 copy, no dequant)? If yes -> add dequant (a.1) + measure (a.2); if TC refuses an LDS-staged
 operand -> escalate to (c) assembly or (d) regime split. Next action: Track 0, then Track B, then A.0.
 
+UPDATE 2026-06-15 (later) -- W1b' DONE; the Marlin primitive WORKS, gate OPEN. Built bottom-up in
+`extra/qk_marlin_w1b.py` (artifacts `wmma-w1b/RESULT.md` + `summary.json`, test
+`test/external/test_qk_marlin_w1b.py`). All gates green: a0a (TC fires on a hand `Ops.REDUCE` matmul
+-- KEY: q4k `.set/.after/.end` is NOT a REDUCE; use `mul.reduce(k, arg=Ops.ADD, dtype=float32)` per
+`cdna_asm_gemm.py::custom_uop_gemm`), a0b make-or-break (TC fires WMMA on a MUL operand loaded from a
+`DEFINE_LOCAL` written earlier in the same kernel -> Marlin IS expressible here), a1 (full Marlin:
+dequant compressed tile ONCE into LDS -> barrier -> WMMA; correct on real GGUF rel_err 1e-4; rendered
+source verified ALL dequant shifts pre-barrier, ALL WMMA post-barrier -> per-MAC recompute gone), a2
+(fusing the dequant is ~FREE: fused-reads-compressed is 1.07-1.08x FASTER than the materialized-fp16
+WMMA ceiling on 4/5 shapes, mean 1.04x, all correct). CAVEAT: absolute TFLOPS tiny (0.04-0.23) --
+single-workgroup, un-tiled, whole-tile-in-LDS (M<=32, K<=1024). W1b proved the PRIMITIVE; reaching
+83.6 peak / 103.84 tok/s is W2 (parametrize: K-tiling [mandatory, 16x4096 fp16 = 128KB > 64KB LDS] +
+grid parallelism + occupancy) -> W3 (autotune) -> W4 (cost model). The template that can contain a
+competitive point now EXISTS. Next action: W2 -- parametrize qk_marlin_w1b with K-tiling + grid.
+
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
 reaches llama.cpp; the fused-dequant->WMMA structure is the prerequisite for the search space to
