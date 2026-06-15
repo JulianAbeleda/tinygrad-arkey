@@ -2283,44 +2283,57 @@ Purpose:
   because the dequant is recomputed inside the WMMA tiling. W1b closes that by **staging the
   dequantized weight tile in LDS once and reusing it across the WMMA ops** -- the Marlin structure.
 
-Grounding (the primitives exist in tinygrad -- not a framework wall):
+Grounding -- a working hand-WMMA+LDS skeleton already exists in-repo (this de-risks W1b from
+"uncharted" to "fork and swap"):
 
-- `Ops.DEFINE_LOCAL` / `UOp.placeholder(..., addrspace=AddrSpace.LOCAL)` create an LDS buffer in a
-  custom kernel; `.barrier()` (`Ops.BARRIER`) synchronizes; the existing Q4_K kernels already use
-  `AddrSpace.REG` placeholders. Key insight: do NOT hand-write `Ops.WMMA`. Instead **stage the
-  dequant into LDS, then let forced-TC apply WMMA to the matmul that now reads LOADS from LDS** --
-  the dequant runs once (the store), and the WMMA operands are loads, so the per-tile recompute
-  (the W1 slowness) disappears.
+- `extra/gemm/amd_copy_matmul.py` (`WMMA=1`) is a hand-authored `128x128` tiled fp16 GEMM that:
+  stages the A and B tiles from global into LDS via `UOp.placeholder(..., addrspace=AddrSpace.LOCAL)`
+  stores (L49-60), `UOp.barrier(A_store, B_store)` (L61), then runs a **hand-placed**
+  `Ops.SHAPED_WMMA` (L83, `arg=((16,16,16),'AMD',32)`) over the LDS-staged tiles, reused across the
+  block's WMMA ops. `extra/gemm/amd_uop_matmul.py::eval_custom_matmul` is the run+correctness
+  harness (MSE-gated vs `a.float()@b.float()`, prints REAL TFLOPS).
+- Because WMMA is placed EXPLICITLY (`Ops.SHAPED_WMMA`), W1b does NOT depend on the forced-TC
+  matcher firing on a dequant expression (the fragile W1 path). The dequant is staged into LDS once
+  per block and the WMMA reads the LDS fp16 tile -- exactly the Marlin structure, with the
+  per-tile-recompute (the W1 28x) structurally impossible.
+- The crux line is L59: `A_store = ... .store(a[k_tile]...)` stores a global fp16 weight tile into
+  LDS. W1b replaces `a[k_tile]` (plain fp16 load) with the **Q4_K dequant** of the compressed weight
+  tile, reusing the `_q4k_*` helpers in `extra/q4_k_gemv_primitive.py`. A (the weight) is compressed;
+  B (the activation) stays fp16. Everything downstream of the LDS store is unchanged.
 
-W1b.0 -- staging sub-gate (make-or-break, cheap):
+W1b.0 -- validate the skeleton on THIS GPU (make-or-break, cheap, no new code):
 
-- Confirm one custom kernel can: define an fp16 LDS tile, store a dequantized weight tile to it,
-  `barrier()`, then matmul reading from that LDS tile, and that forced-TC fires WMMA on that matmul
-  -- correctly. If TC will not fire on an LDS-staged operand, or the barrier/layout fights the
-  optimizer, that is the real framework limit: record it and go lower-level (HIP/rocWMMA) or accept
-  the regime split. Do not author the full kernel until this sub-gate passes.
+- Run `WMMA=1 N=4096 PYTHONPATH=. .venv/bin/python extra/gemm/amd_copy_matmul.py` on `DEV=AMD`
+  (RX7900XTX / gfx1100, RDNA3 so `is_rdna4=False`, `UNROLL_M=1`). Gate: MSE passes (correct) AND the
+  generated source contains a WMMA intrinsic (`__builtin_amdgcn_wmma_*`) AND REAL TFLOPS is a sane
+  fraction of the `83.6` peak. If the skeleton does NOT run/verify on gfx1100 (e.g. the WMMA path is
+  MI3xx/RDNA4-shaped), that is the framework signal: either fix the skeleton for gfx1100 or fall to
+  HIP/rocWMMA. Do not fork until the skeleton is green here.
 
-W1b.1 -- author the staged kernel:
+W1b.1 -- fork + swap the A-tile load for a Q4_K dequant (`extra/qk_marlin_w1b.py`):
 
-- A K-loop streaming kernel: load a compressed weight K-tile -> dequant to fp16 in an LDS tile
-  (sized to the `16x16x16` WMMA tile) -> `barrier()` -> WMMA against the activation tile -> accumulate
-  -> next K-tile. Match LDS tile layout to the WMMA fragment layout; place barriers correctly; keep
-  the activation tile in LDS/registers. Heed G0''/W1: the dequant is staged ONCE per tile and reused;
-  preserve occupancy, do not serialize.
+- Copy `block_128x128_gemm` / `amd_copy_matmul`. Keep B (activation) fp16. Pass A as the COMPRESSED
+  Q4_K words buffer; in the A_store, compute the dequanted fp16 tile element(s) each thread owns by
+  mapping its `(k_tile, BLOCK_K, BLOCK_M)` LDS coordinate back to Q4_K `(row, block, group, pos)` and
+  calling the existing dequant (`_q4k_weight` / `_q4k_group_params` + `_q4k_quant`). `BLOCK_K=16`
+  spans half a `Q4_K_BLOCK_ELEMS=256` super-block sub-structure -- get the index math exact (this is
+  the real work). Correctness-gate against `q4_k_reference` (exact numerics), NOT a random fp16 A.
 
 W1b.2 -- correctness + measure:
 
-- Exact numerics (correctness-gated). Device time + FLOPS / `83.6` TFLOPS peak vs materialized-fp16
-  WMMA (`matmul_decoded`, the ceiling) and the W0 llama.cpp bar (`103.84` tok/s). Pre-registered:
-  the staged kernel beats `matmul_decoded` while reading compressed weights -> the competitive
-  fused-WMMA primitive is built; W2-W4 (parametrize, autotune, cost-model search) now have a template
-  that can contain a competitive point. If it cannot beat `matmul_decoded` even staged -> tinygrad's
-  codegen is the ceiling; record it and stop the search line.
+- Exact numerics (correctness-gated, `rel_err < 1e-2`). Device REAL TFLOPS / `83.6` peak vs the
+  materialized-fp16 WMMA ceiling (the same skeleton run with a pre-dequanted fp16 A == `matmul_decoded`)
+  and the W0 llama.cpp bar (`103.84` tok/s). Pre-registered: the staged kernel reads compressed
+  weights AND lands within ~`10-20%` of the materialized-fp16 ceiling -> the competitive fused-WMMA
+  primitive is built; W2-W4 (parametrize, autotune, cost-model search) now have a template that can
+  contain a competitive point. If the dequant-in-store tanks throughput (e.g. the dequant ALU per
+  store-thread re-bottlenecks) even with single-stage reuse -> record the ceiling honestly and decide
+  regime split vs lower-level.
 
-Risk: this is the hardest kernel in the program -- coordinating hand-LDS-staging with the
-forced-TC WMMA tiling in tinygrad's UOp model is uncharted and high-variance (G0''/W1 showed how
-easily kernels regress). The primitives exist, so it is not a framework wall, but the engineering
-is real. W1b.0 is the cheap sub-gate that de-risks it before the full authoring.
+Risk: the LDS+WMMA plumbing is proven (the skeleton exists and -- pending W1b.0 -- runs on this GPU),
+so the residual risk is concentrated in ONE place: the Q4_K-coordinate-to-LDS-tile index math in the
+A_store, and whether per-store-thread dequant ALU is cheap enough not to re-bottleneck. That is real
+but bounded engineering, not a framework unknown. Heed G0''/W1: stage once, do not serialize.
 
 ### W2: Parametrize the template
 
