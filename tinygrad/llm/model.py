@@ -80,6 +80,15 @@ class Q4KPrimitiveLinear:
       got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_kernel(self.out_features, self.in_features, "none", self.opts))[0]
       return got.reshape(1, 1, self.out_features)
     partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
+    if getenv("Q4K_VDOT") and self.parts == 1:  # D1: schedulable builtin v_dot4 (udot4) decode GEMV
+      from extra.q4_k_gemv_primitive import q4k_q8_1_vdot_builtin_partial_kernel, q8_1_bias_pack_u32_kernel
+      from extra.qk_layout import q8_1_quantize
+      q, scales = q8_1_quantize(x_vec.cast(dtypes.float32))
+      q_bias_words = Tensor.empty(self.in_features // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
+        q, fxn=q8_1_bias_pack_u32_kernel(self.in_features))[0]
+      partial = partials.custom_kernel(words, q_bias_words, scales,
+        fxn=q4k_q8_1_vdot_builtin_partial_kernel(self.out_features, self.in_features, 1, "none", ()))[0]
+      return partial.sum(axis=1).reshape(1, 1, self.out_features)
     partial = partials.custom_kernel(words, x_vec, fxn=q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
 

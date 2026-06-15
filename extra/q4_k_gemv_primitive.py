@@ -172,7 +172,7 @@ def _q4k_scale_min_expr(base:str, grp:int) -> tuple[str, str]:
   return (f"(({high} & 15u) | (({_q4k_scale_byte_expr(base, grp-4)} >> 6u) << 4u))",
           f"(({high} >> 4u) | (({_q4k_scale_byte_expr(base, 4+grp-4)} >> 6u) << 4u))")
 
-def _q4k_q8_1_vdot_source(k_blocks:int, parts:int) -> str:
+def _q4k_q8_1_vdot_source(k_blocks:int, parts:int, builtin:bool=False) -> str:
   if parts != 1: raise ValueError("q4k_q8_1_vdot_partial_kernel currently supports parts=1 only")
   p = [f"__P{i}__" for i in range(4)]
   lines = [
@@ -201,7 +201,8 @@ def _q4k_q8_1_vdot_source(k_blocks:int, parts:int) -> str:
       lines += [
         f"      unsigned int {q4_name} = (({p[1]}[base+{qword_base+lane4}] >> {shift}u) & 0x0f0f0f0fu);",
         f"      unsigned int {q8_name} = {p[2]}[blk*64+{grp*8+lane4}];",
-        f"      asm volatile(\"v_dot4_u32_u8 %0, %1, %2, %0\" : \"+v\"(dot) : \"v\"({q8_name}), \"v\"({q4_name}));",
+        (f"      dot = _dp4a({q8_name}, {q4_name}, dot);" if builtin else
+         f"      asm volatile(\"v_dot4_u32_u8 %0, %1, %2, %0\" : \"+v\"(dot) : \"v\"({q8_name}), \"v\"({q4_name}));"),
         f"      q4sum += {_u8_sum_expr(q4_name)};",
         f"      q8sum += {_u8_sum_expr(q8_name)};",
       ]
@@ -633,6 +634,28 @@ def q4k_q8_1_vdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:
     row_words = words.index(gid * k_blocks * Q4K_WORDS_PER_BLOCK, ptr=True)
     stmt = UOp(Ops.CUSTOM, dtypes.void, (out_ptr, row_words, xq_bias_words, xscales), arg=source)
     return stmt.sink(arg=_kernel_info(f"q4k_q8_1_vdot_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_q8_1_vdot_builtin_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  # D1: the v_dot4 GEMV via the SCHEDULABLE __builtin_amdgcn_udot4 (through the _dp4a device helper the
+  # HIPRenderer emits) instead of asm volatile. Same structure as q4k_q8_1_vdot_partial_kernel.
+  if schedule != "none" or opts:
+    raise ValueError("q4k_q8_1_vdot_builtin_partial_kernel is a fixed builtin-dp4a candidate; opts unsupported")
+  if parts != 1: raise ValueError("q4k_q8_1_vdot_builtin_partial_kernel currently supports parts=1 only")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  source = _q4k_q8_1_vdot_source(k_blocks, parts, builtin=True)
+
+  LOCAL = 64  # rows per workgroup -> full-occupancy launch (the fp kernel gets this via LOCAL:0:64)
+  def kernel(partials:UOp, words:UOp, xq_bias_words:UOp, xscales:UOp) -> UOp:
+    if rows % LOCAL == 0:
+      gid = UOp.special(rows // LOCAL, "gidx0") * LOCAL + UOp.special(LOCAL, "lidx0")
+    else:
+      gid = UOp.special(rows, "gidx0")
+    out_ptr = partials.flatten().index(gid, ptr=True)
+    row_words = words.index(gid * k_blocks * Q4K_WORDS_PER_BLOCK, ptr=True)
+    stmt = UOp(Ops.CUSTOM, dtypes.void, (out_ptr, row_words, xq_bias_words, xscales), arg=source)
+    return stmt.sink(arg=_kernel_info(f"q4k_q8_1_vdot_builtin_partial_{rows}_{k}_{parts}", schedule, opts))
 
   return kernel
 

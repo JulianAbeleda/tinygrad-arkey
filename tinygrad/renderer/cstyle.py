@@ -552,6 +552,11 @@ class HIPRenderer(CStyleLanguage):
 
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None) -> str:
     prefix, ockl = [], []
+    # gated DP4A helper: emit the schedulable udot4 device helper only when a CUSTOM body references _dp4a
+    # (so the builtin's required target("dot-insts") attr lives on the helper, not the generated kernel).
+    if any(u.op in (Ops.CUSTOM, Ops.CUSTOMI) and isinstance(u.arg, str) and "_dp4a" in u.arg for u in uops):
+      prefix.append('__attribute__((device)) __attribute__((target("dot-insts"))) unsigned int '
+                    '_dp4a(unsigned int a, unsigned int b, unsigned int c){ return __builtin_amdgcn_udot4(a, b, c, false); }')
     type_map = { dtypes.bfloat16: "bf16", dtypes.float: "f32", dtypes.half: "f16", dtypes.fp8e4m3: "_fp8_fp8", dtypes.fp8e5m2: "_bf8_bf8" }
     used_dtypes = uops_to_dtypes(uops)
     if any(u.op is Ops.CONST and not math.isfinite(u.arg) for u in uops):
