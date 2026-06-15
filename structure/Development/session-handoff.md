@@ -1719,3 +1719,17 @@ q/k/v; ffn-input -> gate/up), reuse across linears. D0 had the barrier-free int-
 beat fp -- needs model-forward surgery (quantize x once in the attn/ffn block, pass q8 to linears),
 NOT a fused kernel. This is the FIRST decode lead that is not a dead end. model.py reverted to pristine;
 coop kernel kept in q4_k_gemv_primitive.py.
+
+UPDATE 2026-06-15 -- FINDING RECORDED + Phase A scoped. `docs/amd-decode-amortized-quant-plan.md`.
+THE FINDING (reframe): the coop kernel proved tinygrad CAN express a 409 GB/s fused decode GEMV (near
+llama.cpp 470) -- "the kernel is the wall" is FALSE. The decode gap is activation-quant PLACEMENT: the
+fused kernel re-quantizes per workgroup (LDS+barrier, kills occupancy/pipelining -> e2e 24); the RIGHT
+structure (llama.cpp) quantizes x ONCE/token + barrier-free int-dot GEMVs that pipeline -- expressible
+now, never measured e2e (D0 only did per-linear quant -> 28). PHASE A plan: A0 make-or-break (amortize
+quant via CACHING keyed by the input activation's UOp -- q/k/v share attn-input, gate/up share
+ffn-input -> JIT graph has ONE quant feeding shared barrier-free int-dots; measure e2e vs fp 58, gate
+>70 = win) -> A1 productionize (per-shape policy + accuracy/perplexity check; X0 says int8 broadly
+viable) -> A2 vs llama.cpp 104. Pre-registered ceiling ~75-81 (int-dot 1.4x per-kernel; ~75% of
+llama.cpp), NOT parity (residual = cross-layer/hand-asm rungs). Touch points: model.py (quant-cache +
+dispatch), existing q4k_q8_1_intdot_partial_kernel (barrier-free), q8_1_quantize. Cheap to test (A0 =
+cache + dispatch swap, no new kernel). FIRST decode lead that is not a dead end. Next action: build A0.
