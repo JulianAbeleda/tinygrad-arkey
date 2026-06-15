@@ -1827,3 +1827,14 @@ KERNEL (a batch dim), not fewer launches. Gate <=0% -> PIVOT to speculation/batc
 13-26x batching applies, validated loop (N1/N2/L0/L1) is the substrate, draft model = the fine-tuning lever.
 Rules out megakernel ladder for single-stream on this stack. Commit 8bc5cedb0. fusion-probe-B1/RESULT.md.
 Next make-or-break: batched-decode-forward latency curve (B=1,2,4,8) = the speculation ceiling.
+
+## 2026-06-15 — Step 2: loop beats heuristic ~1.9x on decode-verification GEMMs (first machine-search-helps-decode)
+Ceiling probe (qk_batch_ceiling_probe.py): batching amortizes weights ~2.4-3.5x, plateau ~14ms/tok =
+COMPUTE-bound (16 GB/s, untuned batched matmul), NOT memory floor -> tunable. Step 2
+(qk_decode_verify_loop.py): ran the GPU-safe curated loop on held-out 8B FFN verify shapes (M/K=12288,
+N=8,16). Loop/heuristic (the forward's actual hand_coded schedule): 0.99/1.97/1.26/3.3x, mean 1.88x;
+guided/oracle 0.97. GATE PASS. Honest: 1.9x not the misleading 42x-over-naive; win at N>=16 (heuristic
+decent at N=8); plateau drop <=1.9x (Amdahl, matmul fraction TBD). First concrete machine-search-improves-
+decode result, in the batched/speculative regime. Two stacking levers: ~2.4-3.5x batching x up to ~1.9x
+loop-tuning. Commits cea32bf19, c2f8a3798. Next: apply loop schedules to the batched forward, re-measure
+plateau (size the realized lever); then speculative scaffold for e2e tok/s.
