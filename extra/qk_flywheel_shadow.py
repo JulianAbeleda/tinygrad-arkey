@@ -14,7 +14,7 @@ so the shadow predictor shares one audited feature pipeline with the cost model.
 from __future__ import annotations
 
 import argparse, copy, hashlib, json, os, pathlib, re, subprocess
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any
 
 from extra import qk_flywheel_dataset as v0
@@ -514,6 +514,12 @@ STAGED_OUT = DEFAULT_ROOT / "shadow-staged"
 # reduce_unroll, two_dim_local). Two shapes (ffn_gate 12288x4096, attn_q 4096x4096).
 STAGED_SCHEDULE_TENSORS = ("blk.7.ffn_gate.weight", "blk.8.ffn_gate.weight", "blk.1.attn_q.weight", "blk.2.attn_q.weight")
 
+# Phase 4.2: bigger multi-block batch. Centered on fresh attn_q (the live region:
+# row_upcast 75% live, direct_output 42% live) for >=5 live across two patterns,
+# with fresh ffn_gate blocks as dead controls. None appear in the corpus.
+STAGED_V2_OUT = DEFAULT_ROOT / "shadow-staged-v2"
+STAGED_V2_TENSORS = tuple([f"blk.{i}.attn_q.weight" for i in range(3, 10)] + [f"blk.{i}.ffn_gate.weight" for i in range(9, 12)])
+
 
 def _staged_descriptor_path(out:pathlib.Path) -> pathlib.Path:
   return out / "runs/schedule/8b-descriptors.json"
@@ -521,14 +527,15 @@ def _staged_descriptor_path(out:pathlib.Path) -> pathlib.Path:
 def _staged_schedule_dir(out:pathlib.Path) -> pathlib.Path:
   return out / "runs/schedule/8b"
 
-def build_staged_descriptor(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT) -> pathlib.Path:
+def build_staged_descriptor(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, tensors:tuple[str, ...]=STAGED_SCHEDULE_TENSORS) -> pathlib.Path:
   src = _read_json(repo / "bench/qk-ansor-transition-20260612/descriptors/8b.json")
   by_role = {r["role"]: r for r in src["descriptors"]}
   data_start = by_role["ffn_gate"]["layout"]["data_start"]
   meta = read_metadata(DEFAULT_MODEL.expanduser())
   descs = []
-  for tensor in STAGED_SCHEDULE_TENSORS:
-    role = "ffn_gate" if "ffn_gate" in tensor else "attn_q"
+  for tensor in tensors:
+    role = v0._role_from_text(tensor)
+    if role not in by_role: raise ValueError(f"no descriptor template for role {role!r} ({tensor})")
     info = pick_tensor(meta.infos, tensor)
     row = copy.deepcopy(by_role[role])
     row["tensor"] = tensor
@@ -547,20 +554,20 @@ def build_staged_descriptor(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT) -> p
   path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
   return path
 
-def _generate_staged_candidates(repo:pathlib.Path, out:pathlib.Path) -> dict[str, Any]:
+def _generate_staged_candidates(repo:pathlib.Path, out:pathlib.Path, tensors:tuple[str, ...]=STAGED_SCHEDULE_TENSORS) -> dict[str, Any]:
   # Candidate generation is GPU-free; only the microbench step needs the device.
   sched = _staged_schedule_dir(out)
   cand_path = sched / "candidates.json"
   if not cand_path.exists():
-    desc = build_staged_descriptor(repo, out)
+    desc = build_staged_descriptor(repo, out, tensors)
     _run([".venv/bin/python", "extra/qk_semantic_schedule.py", "--descriptor", str(desc),
           "--json", str(cand_path), "--gate-json", str(sched / "static-gate.json")],
          cwd=repo, extra_env={}, timeout=300)
   return _read_json(cand_path)
 
-def _staged_candidate_rows(repo:pathlib.Path, out:pathlib.Path) -> list[dict[str, Any]]:
+def _staged_candidate_rows(repo:pathlib.Path, out:pathlib.Path, tensors:tuple[str, ...]=STAGED_SCHEDULE_TENSORS) -> list[dict[str, Any]]:
   repo = repo.resolve()
-  data = _generate_staged_candidates(repo, out)
+  data = _generate_staged_candidates(repo, out, tensors)
   meta = read_metadata(DEFAULT_MODEL.expanduser())
   rows = []
   for cand in data.get("candidates", []):
@@ -593,10 +600,11 @@ def _staged_candidate_rows(repo:pathlib.Path, out:pathlib.Path) -> list[dict[str
     rows.append(row)
   return rows
 
-def freeze_staged(repo:pathlib.Path, corpus_path:pathlib.Path=DEFAULT_CORPUS, out:pathlib.Path=STAGED_OUT) -> dict[str, Any]:
+def freeze_staged(repo:pathlib.Path, corpus_path:pathlib.Path=DEFAULT_CORPUS, out:pathlib.Path=STAGED_OUT,
+                  tensors:tuple[str, ...]=STAGED_SCHEDULE_TENSORS) -> dict[str, Any]:
   repo = repo.resolve()
   corpus = _read_jsonl(corpus_path)
-  fresh = _staged_candidate_rows(repo, out)
+  fresh = _staged_candidate_rows(repo, out, tensors)
   corpus_maps = [extract_feature_map(row) for row in corpus]
   fresh_maps = [extract_feature_map(row) for row in fresh]
   vec = FeatureVectorizer().fit(corpus_maps)
@@ -655,6 +663,29 @@ def build_staged_outcomes(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT) -> lis
     rows.append(raw)
   return rows
 
+def _majority_label(counter:Counter) -> str:
+  return sorted(counter.items(), key=lambda kv: (-kv[1], str(kv[0])))[0][0] if counter else "reject"
+
+def _role_mechanism_prior(train:list[dict[str, Any]], holdout:list[dict[str, Any]]) -> list[dict[str, Any]]:
+  # Stronger deterministic baseline than mechanism_prior: predict the majority label
+  # among train rows matching BOTH role and mechanism, falling back to mechanism-only
+  # (then global) when the (role, mechanism) cell is empty. This is the cheap lookup
+  # the learned model must strictly beat to be worth shipping.
+  cell, mech, allc = defaultdict(Counter), defaultdict(Counter), Counter()
+  for r in train:
+    cell[(r.get("role"), r.get("mechanism"))][r["label"]] += 1
+    mech[r.get("mechanism")][r["label"]] += 1
+    allc[r["label"]] += 1
+  global_majority = _majority_label(allc)
+  preds = []
+  for r in holdout:
+    key = (r.get("role"), r.get("mechanism"))
+    if cell[key]: label = _majority_label(cell[key])
+    elif mech[r.get("mechanism")]: label = _majority_label(mech[r.get("mechanism")])
+    else: label = global_majority
+    preds.append({"id": r["id"], "baseline": "role_mechanism_prior", "label": label, "score": LABEL_SCORE.get(label, 0.0)})
+  return preds
+
 def _safe_skips(scored:list[tuple[float, bool]]) -> dict[str, Any]:
   # scored: list of (gate_score, is_live). A gate keeping 100% live can safely skip
   # every candidate scored strictly below the lowest-scored live candidate.
@@ -687,32 +718,59 @@ def score_staged(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, corpus_path:pat
     res["live_recall"] = 1.0  # by construction: never skips a candidate below the live floor that is live
     return res
 
-  gates = {"xgboost": gate_for(model_preds)}
+  pred_sets = {"xgboost": model_preds, "role_mechanism_prior": _role_mechanism_prior(corpus, outcomes)}
   for name, preds in baselines.items():
-    gates[name] = gate_for(preds)
+    pred_sets[name] = preds
+  gates = {name: gate_for(preds) for name, preds in pred_sets.items()}
   gates["run_all"] = {"safe_skips": 0, "experiments_run": total_experiments, "experiments_saved_vs_run_all": 0,
                       "live_recall": 1.0, "live_candidates": total_live, "valid": True}
 
-  model_saved, prior_saved = gates["xgboost"]["safe_skips"], gates.get("mechanism_prior", {}).get("safe_skips", 0)
-  any_reduces = any(g.get("safe_skips", 0) > 0 for g in (gates["xgboost"], gates.get("mechanism_prior", {}), gates.get("simple_family_heuristic", {})))
-  if total_live == 0:
-    conclusion = "inconclusive_no_live_candidate_in_fresh_batch"
-  elif model_saved > prior_saved and model_saved > 0:
-    conclusion = "cost_model_gate_beats_prior_reduces_wasted_experiments"
-  elif any_reduces:
-    conclusion = "pre_result_gate_reduces_wasted_experiments_model_does_not_beat_prior"
+  # Per (role x mechanism) cell: how many dead candidates each gate safely skips, so a
+  # single dominant pattern cannot hide a miss on another winning combo.
+  cells = sorted({(r["role"], r["mechanism"]) for r in outcomes})
+  per_cell = {}
+  for role, mech in cells:
+    members = [r for r in outcomes if r["role"] == role and r["mechanism"] == mech]
+    live = sum(1 for r in members if live_by_id[r["id"]])
+    entry = {"n": len(members), "live": live, "dead": len(members) - live}
+    for name in ("xgboost", "role_mechanism_prior", "mechanism_prior"):
+      floor = gates[name].get("live_floor_score")
+      score_by_id = {p["id"]: float(p.get("score", 0.0)) for p in pred_sets[name]}
+      entry[f"{name}_dead_skipped"] = sum(1 for r in members if not live_by_id[r["id"]] and floor is not None and score_by_id.get(r["id"], 0.0) < floor)
+    per_cell[f"{role} x {mech}"] = entry
+
+  model_saved = gates["xgboost"]["safe_skips"]
+  rolemech_saved = gates["role_mechanism_prior"]["safe_skips"]
+  mech_saved = gates.get("mechanism_prior", {}).get("safe_skips", 0)
+  live_patterns = sum(1 for c in per_cell.values() if c["live"] > 0)
+  if total_live < 5 or live_patterns < 2:
+    conclusion = "inconclusive_insufficient_live_candidates_or_patterns"
+  elif model_saved > rolemech_saved and model_saved > 0:
+    conclusion = "cost_model_strictly_beats_role_mechanism_prior_ship_the_model"
+  elif rolemech_saved > 0 and model_saved <= rolemech_saved:
+    conclusion = "role_mechanism_prior_suffices_ship_the_lookup_model_documentation_only"
+  elif mech_saved > 0:
+    conclusion = "only_mechanism_prior_reduces_experiments"
   else:
     conclusion = "no_safe_pre_result_savings_run_all_is_the_only_full_recall_strategy"
 
   summary = {
-    "kind": "qk_flywheel_shadow_staged_score", "phase": "Phase 4.1", "conclusion": conclusion, "seed": SEED,
+    "kind": "qk_flywheel_shadow_staged_score", "phase": "Phase 4.2", "conclusion": conclusion, "seed": SEED,
     "corpus_rows": len(corpus), "fresh_rows": total_experiments,
     "fresh_label_distribution": dict(sorted(Counter(r["label"] for r in outcomes).items())),
-    "live_candidates": total_live,
+    "live_candidates": total_live, "live_patterns": live_patterns,
     "metric": "max microbench experiments safely skipped at 100% live-recall (skip below lowest-scored live candidate)",
     "gates": gates,
-    "model_vs_prior": {"model_safe_skips": model_saved, "prior_safe_skips": prior_saved,
-                       "model_beats_prior": model_saved > prior_saved},
+    "per_cell": per_cell,
+    "ablation": {
+      "ladder": ["run_all", "mechanism_prior", "role_mechanism_prior", "xgboost"],
+      "model_safe_skips": model_saved, "role_mechanism_prior_safe_skips": rolemech_saved,
+      "mechanism_prior_safe_skips": mech_saved,
+      "model_beats_role_mechanism_prior": model_saved > rolemech_saved,
+      "simplest_sufficient_gate": ("xgboost" if model_saved > rolemech_saved and model_saved > 0 else
+                                   "role_mechanism_prior" if rolemech_saved > 0 else
+                                   "mechanism_prior" if mech_saved > 0 else "run_all"),
+    },
     "freeze": _read_json(out / "freeze.json") if (out / "freeze.json").exists() else None,
   }
   _write_jsonl(out / "outcomes.jsonl", outcomes)
@@ -722,36 +780,42 @@ def score_staged(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, corpus_path:pat
 
 def _staged_readme(summary:dict[str, Any]) -> str:
   g = summary["gates"]
+  ab = summary.get("ablation", {})
   lines = [
-    "# AMD Decode Flywheel Phase 4.1 Cost-Aware Staged Shadow",
+    "# AMD Decode Flywheel Phase 4.2 Cost-Aware Staged Shadow (Minimal-Gate Ablation)",
     "",
-    "Reframes shadow mode to the actual flywheel value: wasted GPU reduction. A",
-    "pre-microbench gate is valid only if it keeps 100% of live candidates; its",
-    "value is how many expensive microbench experiments it can safely skip (skip",
-    "everything scored below the lowest-scored live candidate). Predictions were",
-    "frozen before any microbench.",
+    "Wasted-GPU reduction in shadow. A pre-microbench gate is valid only if it keeps",
+    "100% of live candidates; its value is how many microbench experiments it can",
+    "safely skip (skip everything scored below the lowest-scored live candidate).",
+    "Predictions were frozen before any microbench. The ladder finds the SIMPLEST",
+    "deterministic gate that captures the signal; the model ships only if it strictly",
+    "beats the role x mechanism lookup.",
     "",
     f"- conclusion: `{summary['conclusion']}`",
-    f"- fresh candidates: `{summary['fresh_rows']}` | live: `{summary['live_candidates']}`",
+    f"- fresh candidates: `{summary['fresh_rows']}` | live: `{summary['live_candidates']}` | live patterns: `{summary.get('live_patterns')}`",
     f"- label distribution: `{summary['fresh_label_distribution']}`",
-    f"- model beats prior: `{summary['model_vs_prior']['model_beats_prior']}`",
+    f"- simplest sufficient gate: `{ab.get('simplest_sufficient_gate')}` | model beats role x mechanism prior: `{ab.get('model_beats_role_mechanism_prior')}`",
     "",
-    "## Experiments saved at 100% live-recall",
+    "## Experiments saved at 100% live-recall (gate ladder)",
     "",
     "| gate | experiments run | saved vs run-all | live recall |",
     "|---|---:|---:|---:|",
   ]
-  for name in ("run_all", "mechanism_prior", "simple_family_heuristic", "xgboost"):
+  for name in ("run_all", "mechanism_prior", "role_mechanism_prior", "simple_family_heuristic", "xgboost"):
     if name not in g: continue
     row = g[name]
     lines.append(f"| `{name}` | {row['experiments_run']} | {row['experiments_saved_vs_run_all']} | {row['live_recall']:.2f} |")
+  lines += ["", "## Per (role x mechanism) cell (n / live / dead-skipped by model | role_mech | mech)", "",
+            "| cell | n | live | model | role_mech | mech |", "|---|---:|---:|---:|---:|---:|"]
+  for cell, e in summary.get("per_cell", {}).items():
+    lines.append(f"| `{cell}` | {e['n']} | {e['live']} | {e.get('xgboost_dead_skipped',0)} | "
+                 f"{e.get('role_mechanism_prior_dead_skipped',0)} | {e.get('mechanism_prior_dead_skipped',0)} |")
   lines += [
     "", "## Interpretation", "",
-    "The flywheel-relevant question is whether any cheap pre-result gate avoids",
-    "wasted microbench runs without dropping a real winner, and whether the learned",
-    "model does this better than the deterministic mechanism prior. The prior",
-    "winning is still a decisive result: the deterministic tool carries the flywheel",
-    "and the learned model adds no value at the current feature set.",
+    "If the role x mechanism lookup matches the model, ship the lookup and keep the",
+    "model documentation-only -- a cheap deterministic gate reducing wasted GPU is a",
+    "flywheel win. The model is only worth shipping if it strictly beats the lookup,",
+    "i.e. it captures signal beyond the (role x mechanism) cell.",
     "",
   ]
   return "\n".join(lines)
@@ -759,7 +823,8 @@ def _staged_readme(summary:dict[str, Any]) -> str:
 def main() -> int:
   parser = argparse.ArgumentParser(description="Phase 4 / 4.1 live shadow mode for the AMD decode flywheel")
   parser.add_argument("step", choices=("freeze", "run", "score", "all",
-                                        "freeze-staged", "run-staged", "score-staged", "all-staged"))
+                                        "freeze-staged", "run-staged", "score-staged", "all-staged",
+                                        "freeze-staged-v2", "run-staged-v2", "score-staged-v2", "all-staged-v2"))
   parser.add_argument("--repo", type=pathlib.Path, default=pathlib.Path("."))
   parser.add_argument("--corpus", type=pathlib.Path, default=DEFAULT_CORPUS)
   parser.add_argument("--out", type=pathlib.Path, default=None)
@@ -780,6 +845,13 @@ def main() -> int:
     run_staged(args.repo, staged_out, args.device)
   if args.step in ("score-staged", "all-staged"):
     print(json.dumps(score_staged(args.repo, staged_out, args.corpus), indent=2, sort_keys=True))
+  v2_out = args.out or STAGED_V2_OUT
+  if args.step in ("freeze-staged-v2", "all-staged-v2"):
+    print(json.dumps(freeze_staged(args.repo, args.corpus, v2_out, STAGED_V2_TENSORS), indent=2, sort_keys=True))
+  if args.step in ("run-staged-v2", "all-staged-v2"):
+    run_staged(args.repo, v2_out, args.device)
+  if args.step in ("score-staged-v2", "all-staged-v2"):
+    print(json.dumps(score_staged(args.repo, v2_out, args.corpus), indent=2, sort_keys=True))
   return 0
 
 if __name__ == "__main__":
