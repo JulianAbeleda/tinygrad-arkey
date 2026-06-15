@@ -2489,6 +2489,17 @@ contains a competitive point, W3 proceeds. If it plateaus well below the fp16 ce
 TC-opt tiling can't be driven hard enough from a custom kernel) -> record the ceiling; the competitive
 template may need route (c) assembly, and W3/W4 search a template that can't reach the bar is moot.
 
+**W2.0 -- RESULT (2026-06-15): grid parallelism works, ~70x throughput.** `extra/qk_marlin_w2.py`,
+`wmma-w2/w20_summary.json`, test `test_qk_marlin_w2.py`. Grid over M-rows (one workgroup per
+`BLOCK_M=16` tile, whole N+K) lifts throughput from `0.046` (single-workgroup W1b') to `3.3-3.6`
+TFLOPS at 256 workgroups, all correct. Findings: (1) grid+TC bug fixed -- the LDS staging depends on
+the `block_m` GLOBAL range, polluting the weight operand's ranges, so TC `axis=0` picks the size-2
+grid range -> "no tensor core available"; `Opt(OptOps.TC, axis=1, ...)` selects `(n,m,k)` correctly.
+(2) marlin == ceiling at moderate N (1.01-1.02x) but trails at large N/K (0.52-0.55x): the
+dequant-to-LDS PROLOGUE is a fixed serial cost not overlapped with the WMMA compute. (3) Still ~4% of
+peak -- small workgroups, no K-tiling, serial prologue. Next: W2.1 K-tiling + double-buffering (overlap
+dequant of tile k+1 with WMMA of tile k), with the split-K fallback if the K-loop+TC composition fails.
+
 ### W3: Brute-force autotune vs the bar
 
 - Autotune the template per (tensor shape, batch) by grid/random search on the device metric,

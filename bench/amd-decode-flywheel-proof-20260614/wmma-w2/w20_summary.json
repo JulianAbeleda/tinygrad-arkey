@@ -1,0 +1,99 @@
+{
+  "curve": [
+    {
+      "BLOCK_M": 16,
+      "ceiling_correct": true,
+      "ceiling_tflops": 0.458,
+      "ceiling_us": 586.72,
+      "lds_bytes": 32768,
+      "marlin_correct": true,
+      "marlin_pct_peak": 0.55,
+      "marlin_tflops": 0.461,
+      "marlin_us": 582.12,
+      "marlin_vs_ceiling": 1.008,
+      "shape": {
+        "K": 1024,
+        "M": 256,
+        "N": 512
+      },
+      "workgroups": 16
+    },
+    {
+      "BLOCK_M": 16,
+      "ceiling_correct": true,
+      "ceiling_tflops": 1.737,
+      "ceiling_us": 618.24,
+      "lds_bytes": 32768,
+      "marlin_correct": true,
+      "marlin_pct_peak": 2.09,
+      "marlin_tflops": 1.748,
+      "marlin_us": 614.28,
+      "marlin_vs_ceiling": 1.006,
+      "shape": {
+        "K": 1024,
+        "M": 1024,
+        "N": 512
+      },
+      "workgroups": 64
+    },
+    {
+      "BLOCK_M": 16,
+      "ceiling_correct": true,
+      "ceiling_tflops": 3.248,
+      "ceiling_us": 1322.16,
+      "lds_bytes": 32768,
+      "marlin_correct": true,
+      "marlin_pct_peak": 3.95,
+      "marlin_tflops": 3.307,
+      "marlin_us": 1298.92,
+      "marlin_vs_ceiling": 1.018,
+      "shape": {
+        "K": 1024,
+        "M": 4096,
+        "N": 512
+      },
+      "workgroups": 256
+    },
+    {
+      "BLOCK_M": 16,
+      "ceiling_correct": true,
+      "ceiling_tflops": 3.748,
+      "ceiling_us": 1146.04,
+      "lds_bytes": 65536,
+      "marlin_correct": true,
+      "marlin_pct_peak": 2.48,
+      "marlin_tflops": 2.076,
+      "marlin_us": 2069.08,
+      "marlin_vs_ceiling": 0.554,
+      "shape": {
+        "K": 2048,
+        "M": 4096,
+        "N": 256
+      },
+      "workgroups": 256
+    },
+    {
+      "BLOCK_M": 16,
+      "ceiling_correct": true,
+      "ceiling_tflops": 6.914,
+      "ceiling_us": 2484.8,
+      "lds_bytes": 32768,
+      "marlin_correct": true,
+      "marlin_pct_peak": 4.26,
+      "marlin_tflops": 3.56,
+      "marlin_us": 4825.32,
+      "marlin_vs_ceiling": 0.515,
+      "shape": {
+        "K": 1024,
+        "M": 4096,
+        "N": 2048
+      },
+      "workgroups": 256
+    }
+  ],
+  "kind": "qk_marlin_w2",
+  "lever": "grid parallelism over M-rows (BLOCK_M=16), whole N + whole K per workgroup",
+  "peak_tflops": 83.64,
+  "phase": "Phase W2.0",
+  "tensor": "blk.20.attn_q.weight"
+}

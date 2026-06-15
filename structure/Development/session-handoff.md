@@ -635,6 +635,18 @@ single-workgroup, un-tiled, whole-tile-in-LDS (M<=32, K<=1024). W1b proved the P
 grid parallelism + occupancy) -> W3 (autotune) -> W4 (cost model). The template that can contain a
 competitive point now EXISTS. Next action: W2 -- parametrize qk_marlin_w1b with K-tiling + grid.
 
+UPDATE 2026-06-15 (W2.0 done) -- grid parallelism works, ~70x. `extra/qk_marlin_w2.py`,
+`wmma-w2/w20_summary.json` + `RESULT.md`, test `test_qk_marlin_w2.py`. Grid over M-rows (one workgroup
+per BLOCK_M=16 tile, whole N+K) lifted throughput 0.046 -> 3.3-3.6 TFLOPS at 256 wg, all correct (~4%
+of 83.6 peak). KEY fix: the LDS dequant-staging depends on the block_m GLOBAL range, polluting the
+weight operand's ranges, so TC axis=0 picks the size-n_blocks grid range -> "no tensor core
+available"; use `Opt(OptOps.TC, axis=1, ...)` -> selects (n,m,k). Marlin == fp16 ceiling at moderate N
+(1.01-1.02x) but trails at large N/K (0.52-0.55x) because the dequant-to-LDS PROLOGUE is a serial
+fixed cost not overlapped with WMMA. Next: W2.1 -- K-tiling (mandatory for K=4096: 16x4096 fp16 =
+128KB > 64KB LDS) + double-buffering (overlap dequant(tile k+1) with WMMA(tile k)). Open risk W2.1a:
+one-workgroup K-loop + TC composition (manual K-loop accumulator is not a single Ops.REDUCE; GROUP
+forbidden with TC). Fallback W2.1b: split-K grid + partial-sum pass (each wg = the proven W1b' kernel).
+
 The full Phase W scope (W0-W4) remains in `docs/amd-decode-flywheel-proof-plan.md` -- the actual
 program goal restated against what we learned. The current kernel templates top out at ~20% of peak, so no search inside them
 reaches llama.cpp; the fused-dequant->WMMA structure is the prerequisite for the search space to
