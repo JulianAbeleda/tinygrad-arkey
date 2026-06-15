@@ -2451,14 +2451,43 @@ parametrized template). The template that can contain a competitive point now EX
 
 ### W2: Parametrize the template
 
-- Expose the W1b' Marlin kernel (`extra/qk_marlin_w1b.py::_marlin_kernel`) as `config -> kernel`. The
-  knobs the W1b' result makes concrete and necessary: **K-tiling** (the LDS holds only one K-tile at a
-  time -- mandatory, since a full 16x4096 fp16 tile is 128KB > 64KB LDS), **grid parallelism** (block
-  over M-rows and N-columns into many workgroups -- the single-workgroup W1b' kernel is why absolute
-  TFLOPS were tiny), WMMA tile (`M x N x K`), LDS staging size / double-buffering, and waves/workgroup
-  (occupancy). This search space is defined ONCE by hand (the Ansor template), not searched into
-  existence. The fusion itself is already proven ~free (W1b' a2), so W2/W3 tune tiling+occupancy, not
-  the dequant.
+Goal: turn the single-workgroup W1b' Marlin kernel into a `config -> kernel` template that reaches
+real throughput at production shapes (e.g. `4096x4096`, batch 32-512), measured vs the
+`matmul_decoded` fp16 ceiling and the `83.6` peak / `103.84` tok/s bar. The fusion is already proven
+~free (W1b' a2), so W2 tunes tiling + parallelism + occupancy, NOT the dequant.
+
+Two structural levers, sequenced by risk (cheap+safe first):
+
+W2.0 -- **grid parallelism** (the big easy win; the W1b' kernel was tiny because it was ONE workgroup).
+- Block the output `[M,N]` into `BLOCK_M x BLOCK_N` tiles, one workgroup per tile, via `AxisType.GLOBAL`
+  ranges (`block_m`, `block_n`) like `amd_copy_matmul`. Each workgroup runs the proven W1b' body on
+  its tile. Keep whole-K-in-LDS for now (so `BLOCK_M * K * 2 <= ~64KB`, e.g. `BLOCK_M=16, K<=2048`).
+- Gate: correct, WMMA still fires, and absolute TFLOPS scales ~linearly with workgroup count toward a
+  meaningful fraction of peak. This alone should move TFLOPS by 1-2 orders of magnitude.
+
+W2.1 -- **K-tiling** (mandatory for real `K=4096`: a `16x4096` fp16 tile is 128KB > 64KB LDS).
+- THE RISK: K-tiling means a per-K-tile loop (dequant tile -> LDS -> barrier -> accumulate -> next),
+  but TC needs ONE `Ops.REDUCE` over the staged operand, and a manual outer K-loop with a hand
+  accumulator is NOT a single REDUCE (the W1b' a0a lesson), while `GROUP`/`GROUPTOP` (the natural
+  LDS-partial-reduce opt) is FORBIDDEN with TC (`postrange.py:173`). So the one-workgroup-K-loop +
+  TC composition is an OPEN question -- a make-or-break sub-gate (W2.1a), tested empirically.
+- If W2.1a composes (TC fires on the inner per-tile reduce inside the K-loop): build the full
+  K-tiled template. If it does NOT: fall back to **split-K** (W2.1b) -- grid over `(block_m, block_n,
+  k_block)` where each workgroup is EXACTLY the proven W1b' whole-`BLOCK_K`-in-LDS kernel producing a
+  partial, then a cheap second kernel sums the partials over `k_block`. Split-K needs no TC/K-loop
+  composition (each workgroup is the green W1b' primitive) at the cost of a partial-reduction pass.
+  Pre-registered: pick whichever of W2.1a/W2.1b reaches higher device throughput; record both.
+
+W2.2 -- **measure + parametrize**: expose `(BLOCK_M, BLOCK_N, BLOCK_K, split_k, waves, wmma_tile)` as
+the config. Measure REAL TFLOPS / `83.6` peak and end-to-end-ish tok/s vs `matmul_decoded` and the
+`103.84` bar across representative shapes. This config space is the W3 autotune search space and the
+W4 cost-model feature space -- defined ONCE here by hand (the Ansor template), not searched into
+existence. Artifacts under `wmma-w2/`; test `test/external/test_qk_marlin_w2.py`.
+
+Pre-registered honesty: if grid+K-tiling closes most of the gap to `matmul_decoded` -> the template
+contains a competitive point, W3 proceeds. If it plateaus well below the fp16 ceiling (tinygrad's
+TC-opt tiling can't be driven hard enough from a custom kernel) -> record the ceiling; the competitive
+template may need route (c) assembly, and W3/W4 search a template that can't reach the bar is moot.
 
 ### W3: Brute-force autotune vs the bar
 
