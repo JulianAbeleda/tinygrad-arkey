@@ -2335,6 +2335,39 @@ so the residual risk is concentrated in ONE place: the Q4_K-coordinate-to-LDS-ti
 A_store, and whether per-store-thread dequant ALU is cheap enough not to re-bottleneck. That is real
 but bounded engineering, not a framework unknown. Heed G0''/W1: stage once, do not serialize.
 
+**W1b.0 -- Result (2026-06-15): the hand-SHAPED_WMMA skeleton is STALE against this fork's tinygrad;
+fork-the-skeleton path is BLOCKED.** Findings, in order:
+
+- The LDS+barrier plumbing itself works here: `amd_copy_matmul.py` *non-WMMA* path runs and verifies
+  (MSE `0.0`, ~2 TFLOPS untuned at `N=512`). So `DEFINE_LOCAL` + `barrier` + `custom_kernel` are in
+  sync -- the Marlin LDS-staging mechanism is expressible.
+- But ALL FOUR in-repo hand-placed `Ops.SHAPED_WMMA` UOp kernels fail on this fork's tinygrad, each
+  with a different drift error: `amd_copy_matmul` (`AFTER` wrapping `INDEX`, then `SHAPED_WMMA`
+  un-lowered with ptr srcs), `amd_flash_attention` (`MAX` None-shape), `amd_uop_matmul`
+  (`sint_to_uop`), `mi350x_uop_matmul` (reshape `(16,4)->(4,4)`). These are vendored from upstream
+  `48a7627b0` (2026-04-09); this fork's tinygrad has since diverged.
+- Two repair layers in: (1) fixed -- current spec (`spec.py:86`) forbids `AFTER` wrapping `INDEX`, so
+  `.after(k)` must wrap the bare `DEFINE_REG` acc, not the indexed frag; (2) blocked -- `SHAPED_WMMA`
+  then reaches `type_verify` UN-lowered with pointer sources (`half.ptr(2048,2)`). There is NO
+  `SHAPED_WMMA` spec rule (only the lowered `Ops.WMMA`, `spec.py:113-114`), and this fork's
+  `lower_shaped_wmma` (`rangeify.py:25-34`) did not fire on the upstream frag construction -- the
+  upstream fragment-indexing convention is incompatible with this fork's lowering contract. Repair is
+  unbounded reverse-engineering, not a one-liner; stopped per the pre-registered cascade rule.
+- Crucially, the OTHER WMMA path -- **forced-TC** -- DOES verify and run end-to-end on this tinygrad:
+  W1 emitted 145 correct WMMA ops via `TC_OPT=2`. So WMMA codegen works; the open question is staging
+  the dequant in LDS WITHOUT hand-placed SHAPED_WMMA.
+
+Route reassessment (the scoped "fork the skeleton" plan W1b.1 is dead as written). Open routes:
+- **(a) Repair hand-SHAPED_WMMA** to this fork's `lower_shaped_wmma` contract, then fork for dequant.
+  Surest expression of LDS-staged dequant->WMMA, but unbounded framework reverse-engineering with no
+  in-repo green reference to copy.
+- **(b) Forced-TC + opts staging** (recommended): build on the W1 path that already works; investigate
+  whether a `GROUP`/`LOCAL` opt forces tinygrad to stage the dequanted tile in LDS once (killing the
+  W1 per-MAC recompute) instead of hand-placing WMMA. Lower framework risk; uncertain whether the opt
+  machinery will stage a COMPUTED value (it normally stages global loads).
+- **(c) Drop to AMD assembly** (`test/amd/test_custom_kernel.py` shows raw `v_wmma_f32_16x16x16_f16`
+  works): max control, max effort, least leverage on the search goal.
+
 ### W2: Parametrize the template
 
 - Expose the W1 kernel as `config -> kernel`: WMMA tile (`M x N x K`), `B`-block, LDS staging size,
