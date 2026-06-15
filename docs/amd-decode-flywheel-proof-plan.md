@@ -1724,6 +1724,107 @@ Gate:
 - If no model assistance advantage is measurable, record the result as two
   parallel loops with one-way benefit.
 
+## Phase G: Model-Proposed Candidate Generation Track
+
+This is the primary path to the Phase 6 flywheel proof ("a model-proposed candidate
+passes the normal deterministic gates through full decode and improves speed"). The
+triage line (3F-4.3) pursued Phase 6's *alternative* proof (reduce wasted experiments)
+and found only a modest deterministic win with no learned-model value; generation
+pursues the *primary* proof and is the harder, higher-value half of the flywheel.
+
+Why generation is safer than triage-skipping:
+
+- Every proposed candidate runs through the SAME static + correctness + microbench +
+  full-decode gates. A bad proposal just fails a gate -- bounded wasted GPU, never a
+  wrong kernel and never a bypass. There is no recall risk like Phase 5's skip gate.
+  The only cost is GPU on bad proposals, which is exactly what G1 measures.
+
+Existing infrastructure to build on (do not rebuild):
+
+- `extra/qk_candidate_generator.py`: the deterministic grid enumerator -- a SMALL fixed
+  space (`parts` in `{1,2,4}`, `LOCAL` in `{32,64}`).
+- `extra/qk_semantic_schedule.py`: the four schedule mechanisms with FIXED opt args
+  (`UPCAST:0:2`, `UNROLL:2:4`, `LOCAL:1:4`) -- the generation frontier lives in the
+  args and compositions the grid never tries.
+- `extra/qk_ansor.py`: a roofline cost model (RX7900XTX mem GB/s, FP32 TFLOPS, ridge
+  point) -- a candidate scorer for model-guided search.
+- `extra/qk_ansor_transition_loop.py`: an Ansor-style prioritization loop.
+- The committed static/correctness/microbench gates (q4_k_bench primitive path).
+
+### G0: Search-space headroom probe (deterministic, shadow)
+
+Purpose:
+
+- Establish whether any frontier exists beyond the hardcoded grid BEFORE involving a
+  model -- the honest precondition, mirroring how 4.x first probed whether triage had
+  signal at all.
+
+Method:
+
+- Expand the parametric space on the live-bearing tensors (the `attn_q`
+  `row_upcast` / `direct_output` region that produces accepts): `LOCAL` in
+  `{16,32,64,128,256}`, a `parts` sweep, `UPCAST` / `UNROLL` arg sweeps `{2,4,8,16}`,
+  and composed/multi-axis opts (e.g. `UPCAST:0:k` + `UNROLL:2:j`, `LOCAL:0`+`LOCAL:1`).
+- Run every expanded candidate through the existing static + correctness + microbench
+  gates. No model yet -- this is brute-force/grid search.
+
+Metrics:
+
+- Best device GB/s gain found versus `v1_partial` and versus the best of the four
+  hardcoded mechanisms; GPU experiments spent; size of the winning region.
+
+Exit gate (pre-registered):
+
+- If no expanded candidate beats the hardcoded best, parametric generation has no
+  headroom: stop the parametric track or jump to G2 (structural). Record it honestly --
+  it means the deterministic enumeration is already near-optimal.
+- If wins exist, quantify the frontier and the brute-force GPU cost. That cost is the
+  baseline G1 must beat.
+
+### G1: Model-guided search versus brute force
+
+Purpose (only if G0 shows headroom):
+
+- Test whether a model reaches the good candidates with FEWER GPU experiments than
+  random/grid search -- the generation analog of "beat the dumb baseline".
+
+Method:
+
+- Fix a GPU budget. Baseline = random search over the expanded space. Compare, all
+  budget-matched: (a) roofline-guided search using `qk_ansor` to propose high-roofline
+  points; (b) a quick check of the learned cost model as a proposer scorer (4.x suggests
+  it is weak -- verify); (c) an LLM proposing opt combinations from the descriptor +
+  hardware context, with proposals frozen before running.
+- Score sample-efficiency: GPU experiments to reach the best candidate, and the best
+  candidate found at a fixed budget.
+
+Exit gate (pre-registered):
+
+- A model must beat random search on sample-efficiency-to-best. If it ties random,
+  brute-force/random search is the tool and generation needs no learned model either --
+  the same honest bar the triage line held. Freeze any learned/LLM proposals before
+  outcomes; every candidate is gated.
+
+### G2: Structural / novel-mechanism proposal (later)
+
+- The model proposes schedule structures outside the parametric grid (new mechanism
+  compositions, novel reduction structures). The real prize and the biggest lift;
+  deferred until G0/G1 establish that parametric headroom and model sample-efficiency
+  exist.
+
+### Phase 6 connection
+
+- A G0/G1 candidate that passes all gates through full decode and improves speed IS
+  Phase 6's primary proof. Required artifacts are unchanged: frozen proposals before
+  outcomes, the random/grid baseline comparison, deterministic gate outputs, the
+  full-decode verdict, and a postmortem on whether the model added value over
+  brute-force search.
+
+Out of scope:
+
+- Bypassing any gate; 14B/32B; correctness shortcuts; treating a microbench win as
+  proof without full decode.
+
 ## Phase 7: Maintenance Loop
 
 Purpose:

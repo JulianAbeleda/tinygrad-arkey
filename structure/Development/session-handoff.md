@@ -472,13 +472,39 @@ current feature set. This retroactively reframes the 4.1/4.2 "wins" as the same
 artifact. `pool_batches` reports `deterministic_class_skip` and a `caveat`;
 `test_qk_flywheel_phase4.py` checks the decision is judged against the fair baseline.
 
-Next scope is **Phase 5 (Controlled Assist, constrained) using the deterministic
-class-skip gate** (NOT the model), fully written in the proof plan: the loop skips
-candidates in always-construction_blocked (role, mechanism) cells, with a random audit
-of skipped candidates run anyway to measure the real missed-winner rate, reverting to
-run-everything if the audit catches a miss. Re-open model-driven gating only if a
-future richer feature set lets the model strictly beat full-recall determinism in
-shadow. Original 4.3-then-5 scope (now partly executed) remains in the proof plan.
+The triage line (3F-4.3) is complete: it pursued Phase 6's *alternative* proof
+(reduce wasted experiments) and concluded a cheap deterministic class-skip gate is the
+tool and the learned model adds no value at the current feature set. Phase 5
+(constrained, deterministic class-skip) remains fully scoped in the proof plan as a
+low-ceiling option to cash in that modest win.
+
+Next scope is the **Phase G Generation Track**, fully written in
+`docs/amd-decode-flywheel-proof-plan.md` -- the pivot to the harder, higher-value half
+of the flywheel and the PRIMARY path to Phase 6's proof (a model-proposed candidate
+passes the gates through full decode and improves speed). Generation is safer than
+triage-skipping: every proposal runs the same static/correctness/microbench gates, so a
+bad proposal wastes bounded GPU but can never produce a wrong kernel or bypass a gate
+(no recall risk). Build on existing infra: `qk_candidate_generator` (the fixed grid:
+parts {1,2,4}, LOCAL {32,64}), `qk_semantic_schedule` (4 mechanisms with FIXED opt args
+-- the frontier lives in the args/compositions the grid never tries), `qk_ansor` (a
+roofline cost model), and the committed gates.
+
+Concrete next-session deliverables (G0 first):
+
+1. **G0 headroom probe (deterministic, shadow)**: expand the parametric space on the
+   live-bearing attn_q tensors (LOCAL {16..256}, parts sweep, UPCAST/UNROLL args
+   {2,4,8,16}, composed/multi-axis opts), run every candidate through the existing
+   static+correctness+microbench gates. Measure best device GB/s gain vs v1_partial and
+   vs the best hardcoded mechanism, and the GPU cost. Pre-registered: no expanded
+   candidate beats the hardcoded best -> parametric generation has no headroom (stop or
+   jump to G2 structural); wins exist -> quantify the frontier + brute-force cost (the
+   baseline G1 must beat).
+2. Only if G0 shows headroom: **G1** model-guided search (roofline-guided / LLM-proposed,
+   frozen) vs random search, GPU-budget-matched, scored on sample-efficiency-to-best.
+   Same honest bar: tie random -> brute force is the tool.
+
+Do not bypass any gate, drive 14B/32B, or treat a microbench win as proof without full
+decode.
 
 Phase 4.3 deliverables:
 1. Run `K>=3` more frozen staged batches (`shadow-staged-v3/-v4/-v5`) seeded with
