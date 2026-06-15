@@ -457,10 +457,28 @@ inflated by the metric's hostage-to-worst-winner property and must be replicated
 `test_qk_flywheel_phase4.py` covers the role_mechanism_prior, ablation ladder, and
 freeze integrity. Predictions frozen at commit `8844e160e` before the microbench.
 
-Next scope is **Phase 4.3 (Robustness Replication, shadow) then Phase 5 (Controlled
-Assist, constrained)**, both fully written in
-`docs/amd-decode-flywheel-proof-plan.md`. The 4.2 win rested on one surprise winner
-and a brittle metric, so 4.3 must replicate before any gate skips a real run.
+Phase 4.3 Robustness Replication is implemented and run (`shadow-staged-v3/-v4/-v5`,
+`shadow-staged-pool/`, `*-batch` + `pool-batches` CLI). Predictions for all 3 batches
+were frozen in `8288ad28b` before the microbench (hash-verified). Result is a decisive
+**negative for the model, honestly reached**: under the pre-registered safe-skip metric
+the model "won" `3/3` batches (`48` vs `0`), but that is a floor-collapse artifact --
+the metric penalizes the discrete lookup for tying a surprise winner with the dead
+mass. The fair baseline the pre-registration missed, a deterministic class-skip gate
+(skip the schedule classes that are `100%` construction_blocked in training:
+reduce_unroll / two_dim_local / ffn_gate vector_load), saves the SAME `48` at `100%`
+recall with `0` misses. The model skips exactly those same candidates and adds nothing.
+Conclusion: ship the deterministic class-skip gate; the model adds no value at the
+current feature set. This retroactively reframes the 4.1/4.2 "wins" as the same
+artifact. `pool_batches` reports `deterministic_class_skip` and a `caveat`;
+`test_qk_flywheel_phase4.py` checks the decision is judged against the fair baseline.
+
+Next scope is **Phase 5 (Controlled Assist, constrained) using the deterministic
+class-skip gate** (NOT the model), fully written in the proof plan: the loop skips
+candidates in always-construction_blocked (role, mechanism) cells, with a random audit
+of skipped candidates run anyway to measure the real missed-winner rate, reverting to
+run-everything if the audit catches a miss. Re-open model-driven gating only if a
+future richer feature set lets the model strictly beat full-recall determinism in
+shadow. Original 4.3-then-5 scope (now partly executed) remains in the proof plan.
 
 Phase 4.3 deliverables:
 1. Run `K>=3` more frozen staged batches (`shadow-staged-v3/-v4/-v5`) seeded with

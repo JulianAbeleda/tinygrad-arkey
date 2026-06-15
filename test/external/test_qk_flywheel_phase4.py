@@ -3,14 +3,15 @@ from tempfile import TemporaryDirectory
 
 from extra.qk_flywheel_cost_model import extract_feature_map
 from extra.qk_flywheel_shadow import (
-  FRESH_SPECS, LEAKAGE_TOKENS, STAGED_OUT, _role_mechanism_prior, _safe_skips, _staged_candidate_rows,
-  build_fresh_candidates, dead_branch_metric, freeze_predictions, fresh_id,
+  FRESH_SPECS, LEAKAGE_TOKENS, STAGED_OUT, _role_mechanism_prior, _safe_skips, _savings_at_recall,
+  _staged_candidate_rows, build_fresh_candidates, dead_branch_metric, freeze_predictions, fresh_id,
 )
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 SHADOW = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-v0"
 STAGED = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-staged"
 STAGED_V2 = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v2"
+STAGED_POOL = REPO / "bench/amd-decode-flywheel-proof-20260614/shadow-staged-pool"
 
 
 class TestQKFlywheelPhase4(unittest.TestCase):
@@ -142,6 +143,41 @@ class TestQKFlywheelPhase42Ablation(unittest.TestCase):
       self.assertIn(gate, summary["gates"])
       self.assertEqual(summary["gates"][gate]["live_recall"], 1.0)
     self.assertTrue(summary["per_cell"])  # per (role x mechanism) breakdown present
+
+
+class TestQKFlywheelPhase43Replication(unittest.TestCase):
+  def test_savings_at_recall_relaxes_the_brittle_floor(self):
+    scored = [(0.9, True), (0.5, False), (0.1, True), (0.05, False)]
+    # 100% recall: must keep both live; only the 0.05 dead candidate is below the 0.1 floor.
+    full = _savings_at_recall(scored, 1.0)
+    self.assertEqual(full["saved"], 1)
+    self.assertEqual(full["missed_live"], 0)
+    # 50% recall: may drop the lower-scored live (0.1); floor rises to 0.9, more is skippable.
+    half = _savings_at_recall(scored, 0.5)
+    self.assertEqual(half["saved"], 3)
+    self.assertEqual(half["missed_live"], 1)
+    self.assertEqual(half["actual_recall"], 0.5)
+
+  def test_committed_pool_decides_phase5_gate_source_against_fair_baseline(self):
+    if not (STAGED_POOL / "summary.json").exists():
+      self.skipTest("replication pool not computed yet")
+    summary = json.loads((STAGED_POOL / "summary.json").read_text())
+    self.assertEqual(summary["phase"], "Phase 4.3")
+    for gate in ("xgboost", "role_mechanism_prior", "mechanism_prior"):
+      self.assertIn(gate, summary["pooled_recall_curve"])
+      for level in ("1.00", "0.95", "0.90"):
+        self.assertIn(level, summary["pooled_recall_curve"][gate])
+    # The fair deterministic class-skip baseline must be reported and drive the decision,
+    # so the model's win is judged against it, not the floor-penalized lookup.
+    self.assertIn("deterministic_class_skip", summary)
+    cs = summary["deterministic_class_skip"]
+    self.assertLessEqual(cs["missed_live"], summary["pooled_live"])
+    self.assertIn(summary["decision"]["phase5_gate_source"],
+                  ("xgboost", "construction_blocked_class_skip", "undecided"))
+    # Decision is consistent: the model is only chosen if it strictly beats full-recall determinism.
+    if summary["decision"]["model_beats_deterministic_class_skip"]:
+      self.assertEqual(summary["decision"]["phase5_gate_source"], "xgboost")
+    self.assertEqual(len(summary["per_batch"]), len(summary["batches"]))
 
 
 if __name__ == "__main__":

@@ -1593,6 +1593,29 @@ Out of scope:
 
 - Skipping any real run (still Phase 5). 14B/32B. New mechanism families.
 
+Result (2026-06-14): ran `3` frozen batches (`shadow-staged-v3/-v4/-v5`, `32`
+candidates each, predictions committed in `8288ad28b` before the microbench,
+hash-verified). Pooled: `96` candidates, `13` live. Under the pre-registered
+safe-skip metric the model "won" `3/3` batches (`48` vs `0` pooled at `100%` and
+`95%`) -- but that result is a metric artifact and is reported as such. Adding the
+fair baseline that the pre-registration missed -- a deterministic class-skip gate that
+skips the schedule classes which are `100%` construction_blocked in training
+(`reduce_unroll` / `two_dim_local` / `ffn_gate` `vector_load`) -- it saves the SAME
+`48` at `100%` live-recall with `0` missed winners. The model skips exactly those same
+construction_blocked candidates and nothing more.
+
+Conclusion: `deterministic_class_skip_matches_model_ship_the_lookup_model_adds_no_value`.
+The `48`-vs-`0` advantage over `role_mechanism_prior` is a floor-collapse artifact of
+the safe-skip metric: that metric penalizes a discrete gate for tying a surprise
+winner with the dead mass, which is not a real cost. Against a fair deterministic gate
+the learned model adds no value at the current feature set. This retroactively reframes
+the 4.1/4.2 "model beats prior" results: those margins were largely the same artifact,
+not evidence the model triages better than a cheap deterministic rule. **Phase 5's gate
+source is therefore the deterministic class-skip gate, not the model; the model stays
+documentation-only** unless a future feature set lets it strictly beat full-recall
+determinism. This is a decisive, honest flywheel result -- the cheap deterministic gate
+is the tool.
+
 ## Phase 5: Controlled Assist Mode
 
 Purpose:
@@ -1617,12 +1640,13 @@ Gate:
 - The assisted ordering must reduce wasted experiments or surface a real
   accepted candidate earlier than baseline ordering.
 
-Gate source (decided by Phase 4.3):
+Gate source (decided by Phase 4.3 -> deterministic class-skip):
 
-- This is the first phase where a gate actually skips a real microbench, so the gate
-  is whichever 4.3 validated: the learned model only if its advantage replicated and
-  survived recall-relaxation; otherwise the deterministic role x mechanism lookup.
-  The other gate is always kept as a hard fallback.
+- 4.3 showed the learned model does not beat a fair deterministic gate, so this phase
+  uses the deterministic class-skip gate: skip candidates in (role, mechanism) cells
+  that are `100%` construction_blocked in training (known-broken schedule classes).
+  No learned model in the live loop. Re-open model-driven gating only if a future
+  feature set lets the model strictly beat full-recall determinism in shadow.
 
 Method (constrained):
 

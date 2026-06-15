@@ -681,6 +681,14 @@ def build_staged_outcomes(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT) -> lis
 def _majority_label(counter:Counter) -> str:
   return sorted(counter.items(), key=lambda kv: (-kv[1], str(kv[0])))[0][0] if counter else "reject"
 
+def _always_construction_blocked_cells(train:list[dict[str, Any]]) -> set[tuple[Any, Any]]:
+  # (role, mechanism) cells whose training rows are 100% construction_blocked: known-broken
+  # schedule classes a deterministic gate can skip outright (the fair classifier baseline).
+  cell = defaultdict(set)
+  for r in train:
+    cell[(r.get("role"), r.get("mechanism"))].add(r["label"])
+  return {k for k, labels in cell.items() if labels == {"construction_blocked"}}
+
 def _role_mechanism_prior(train:list[dict[str, Any]], holdout:list[dict[str, Any]]) -> list[dict[str, Any]]:
   # Stronger deterministic baseline than mechanism_prior: predict the majority label
   # among train rows matching BOTH role and mechanism, falling back to mechanism-only
@@ -872,10 +880,12 @@ def pool_batches(repo:pathlib.Path, batches:tuple[str, ...]=("v3", "v4", "v5"), 
   gates = ("xgboost", "role_mechanism_prior", "mechanism_prior")
   pooled = {g: [] for g in gates}
   per_batch = []
+  all_outcomes = []
   for name in batches:
     bout = STAGED_BATCHES[name][0]
     if not (bout / "summary.json").exists(): raise FileNotFoundError(f"batch {name} not scored; run score-batch --batch {name}")
     outs = _read_jsonl(bout / "outcomes.jsonl")
+    all_outcomes += outs
     live_by_id = {r["id"]: r["label"] in USEFUL_LABELS for r in outs}
     examples = corpus + [{**r, "split": "holdout"} for r in outs]
     base = build_baseline_predictions(examples, seed=SEED)
@@ -899,34 +909,49 @@ def pool_batches(repo:pathlib.Path, batches:tuple[str, ...]=("v3", "v4", "v5"), 
   pooled_curves = {g: {f"{lvl:.2f}": _savings_at_recall(scored, lvl) for lvl in RECALL_LEVELS} for g, scored in pooled.items()}
   total_live = sum(1 for _, live in pooled["xgboost"] if live)
   total_n = len(pooled["xgboost"])
+
+  # Fair deterministic baseline: skip the schedule classes that are 100% construction_blocked
+  # in training (known-broken: reduce_unroll / two_dim_local cells). This is the natural rule
+  # for a classification gate, and -- unlike the score-floor metric -- it is not penalized by a
+  # discrete gate tying a surprise winner with the dead mass. It exposes whether the model's
+  # safe-skip "win" over role_mechanism_prior is real or a floor-collapse artifact.
+  cb_cells = _always_construction_blocked_cells(corpus)
+  class_skipped = [o for o in all_outcomes if (o.get("role"), o.get("mechanism")) in cb_cells]
+  class_missed = sum(1 for o in class_skipped if o["label"] in USEFUL_LABELS)
+  class_skip = {"saved": len(class_skipped), "missed_live": class_missed,
+                "recall": round(1.0 - class_missed / total_live, 4) if total_live else 1.0,
+                "skipped_cells": sorted(f"{r} x {m}" for r, m in cb_cells)}
+
+  model_100 = pooled_curves["xgboost"]["1.00"]["saved"]
   wins_100 = sum(1 for b in per_batch if b["model_beats_lookup_100"])
-  wins_95 = sum(1 for b in per_batch if b["model_beats_lookup_95"])
-  model_95, lookup_95 = pooled_curves["xgboost"]["0.95"]["saved"], pooled_curves["role_mechanism_prior"]["0.95"]["saved"]
-  majority = wins_100 > len(per_batch) / 2
-  persists_95 = model_95 > lookup_95
+  # The honest bar is the best FULL-RECALL deterministic gate, not the floor-penalized lookup.
+  det_full_recall_saved = class_skip["saved"] if class_missed == 0 else 0
+  model_beats_determinism = model_100 > det_full_recall_saved
   if total_live < 10:
-    conclusion = "inconclusive_insufficient_pooled_live_candidates"
-    gate_source = "undecided"
-  elif majority and persists_95:
-    conclusion = "model_robustness_replicates_model_earns_model_driven_phase5"
-    gate_source = "xgboost"
+    conclusion, gate_source = "inconclusive_insufficient_pooled_live_candidates", "undecided"
+  elif model_beats_determinism:
+    conclusion, gate_source = "model_beats_deterministic_class_skip_model_earns_phase5", "xgboost"
   else:
-    conclusion = "model_advantage_does_not_robustly_replicate_phase5_uses_role_mechanism_lookup"
-    gate_source = "role_mechanism_prior"
+    conclusion = "deterministic_class_skip_matches_model_ship_the_lookup_model_adds_no_value"
+    gate_source = "construction_blocked_class_skip"
 
   summary = {
     "kind": "qk_flywheel_shadow_replication_pool", "phase": "Phase 4.3", "conclusion": conclusion, "seed": SEED,
     "batches": list(batches), "pooled_candidates": total_n, "pooled_live": total_live,
     "per_batch": per_batch,
     "pooled_recall_curve": pooled_curves,
+    "deterministic_class_skip": class_skip,
     "decision": {
-      "batches_model_beats_lookup_at_100": wins_100, "of_batches": len(per_batch),
-      "model_beats_lookup_in_majority": majority,
-      "pooled_saved_at_95": {"xgboost": model_95, "role_mechanism_prior": lookup_95},
-      "model_advantage_persists_at_95": persists_95,
+      "model_safe_skips_at_100": model_100,
+      "deterministic_class_skip_saved": class_skip["saved"], "deterministic_class_skip_recall": class_skip["recall"],
+      "model_beats_deterministic_class_skip": model_beats_determinism,
+      "batches_model_beats_floor_lookup_at_100": wins_100, "of_batches": len(per_batch),
       "phase5_gate_source": gate_source,
     },
-    "note": "Pooled across batches; the 95% recall point is the robust comparison, the 100% point is the brittle single-winner one.",
+    "caveat": ("The model's safe-skip advantage over role_mechanism_prior is a floor-collapse artifact: the "
+               "score-floor metric penalizes a discrete gate that ties a surprise winner with the dead mass. A "
+               "deterministic class-skip gate (skip known-broken schedule classes) is the fair baseline; compare "
+               "the model against it, not against the floor-penalized lookup."),
   }
   out.mkdir(parents=True, exist_ok=True)
   (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")

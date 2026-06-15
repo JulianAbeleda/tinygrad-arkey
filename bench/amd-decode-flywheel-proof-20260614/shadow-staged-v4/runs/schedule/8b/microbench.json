@@ -1,0 +1,2810 @@
+{
+  "kind": "qk_semantic_schedule_microbench",
+  "model": "8B",
+  "rows": [
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.832,
+        "gemv_max_abs": 0.00150514,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/001-attn-q-blk-13-attn-q-weight-direct-out/candidate.log",
+        "quant_gbs": 67.59,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.13.attn_q.weight\nprimitive_unpack_correctness: PASS blk.13.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.13.attn_q.weight max_abs=0.00150514\nblk.13.attn_q.weight 4096x4096 matmul_decoded: 0.600 ms (1667.25/s) q4_eff=15.73 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.13.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.054 ms (327.43/s) q4_eff=3.09 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.13.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.140 ms (7162.16/s) q4_eff=67.59 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.833,
+        "gemv_max_abs": 0.00150514,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/001-attn-q-blk-13-attn-q-weight-direct-out/current.log",
+        "quant_gbs": 70.26,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.13.attn_q.weight\nprimitive_unpack_correctness: PASS blk.13.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.13.attn_q.weight max_abs=0.00150514\nblk.13.attn_q.weight 4096x4096 matmul_decoded: 0.592 ms (1688.79/s) q4_eff=15.94 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.13.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.031 ms (329.97/s) q4_eff=3.11 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.13.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.134 ms (7445.50/s) q4_eff=70.26 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": -0.03800170794193003,
+      "id": "001-attn-q-blk-13-attn-q-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/001-attn-q-blk-13-attn-q-weight-direct-out/policy.json",
+      "reasons": [
+        "below min_gain=0.030"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "reject",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.13.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.852,
+        "gemv_max_abs": 0.00150514,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/002-attn-q-blk-13-attn-q-weight-row-upcast2/candidate.log",
+        "quant_gbs": 70.95,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.13.attn_q.weight\nprimitive_unpack_correctness: PASS blk.13.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.13.attn_q.weight max_abs=0.00150514\nblk.13.attn_q.weight 4096x4096 matmul_decoded: 0.592 ms (1689.97/s) q4_eff=15.95 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.13.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.023 ms (330.84/s) q4_eff=3.12 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.13.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.133 ms (7517.84/s) q4_eff=70.95 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.834,
+        "gemv_max_abs": 0.00150514,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/002-attn-q-blk-13-attn-q-weight-row-upcast2/current.log",
+        "quant_gbs": 70.36,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.13.attn_q.weight\nprimitive_unpack_correctness: PASS blk.13.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.13.attn_q.weight max_abs=0.00150514\nblk.13.attn_q.weight 4096x4096 matmul_decoded: 0.590 ms (1695.42/s) q4_eff=16.00 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.13.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.014 ms (331.78/s) q4_eff=3.13 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.13.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.134 ms (7455.88/s) q4_eff=70.36 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.00838544627629334,
+      "id": "002-attn-q-blk-13-attn-q-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/002-attn-q-blk-13-attn-q-weight-row-upcast2/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "tie",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.13.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.887,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/003-attn-q-blk-13-attn-q-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.822,
+        "gemv_max_abs": 0.00150514,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/003-attn-q-blk-13-attn-q-weight-reduce-unroll4/current.log",
+        "quant_gbs": 70.4,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.13.attn_q.weight\nprimitive_unpack_correctness: PASS blk.13.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.13.attn_q.weight max_abs=0.00150514\nblk.13.attn_q.weight 4096x4096 matmul_decoded: 0.589 ms (1697.87/s) q4_eff=16.02 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.13.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.995 ms (333.94/s) q4_eff=3.15 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.13.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.134 ms (7459.42/s) q4_eff=70.40 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "003-attn-q-blk-13-attn-q-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/003-attn-q-blk-13-attn-q-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.13.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.803,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/004-attn-q-blk-13-attn-q-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.13.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.867,
+        "gemv_max_abs": 0.00150514,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/004-attn-q-blk-13-attn-q-weight-two-dim-local4/current.log",
+        "quant_gbs": 69.57,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.13.attn_q.weight\nprimitive_unpack_correctness: PASS blk.13.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.13.attn_q.weight max_abs=0.00150514\nblk.13.attn_q.weight 4096x4096 matmul_decoded: 0.597 ms (1676.22/s) q4_eff=15.82 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.13.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.022 ms (330.86/s) q4_eff=3.12 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.13.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.136 ms (7372.18/s) q4_eff=69.57 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "004-attn-q-blk-13-attn-q-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/004-attn-q-blk-13-attn-q-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.13.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.834,
+        "gemv_max_abs": 0.00219107,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/005-attn-q-blk-14-attn-q-weight-direct-out/candidate.log",
+        "quant_gbs": 64.54,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.14.attn_q.weight\nprimitive_unpack_correctness: PASS blk.14.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.14.attn_q.weight max_abs=0.00219107\nblk.14.attn_q.weight 4096x4096 matmul_decoded: 0.600 ms (1667.92/s) q4_eff=15.74 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.14.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.023 ms (330.77/s) q4_eff=3.12 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.14.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.146 ms (6838.45/s) q4_eff=64.54 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.8,
+        "gemv_max_abs": 0.00219107,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/005-attn-q-blk-14-attn-q-weight-direct-out/current.log",
+        "quant_gbs": 72.11,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.14.attn_q.weight\nprimitive_unpack_correctness: PASS blk.14.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.14.attn_q.weight max_abs=0.00219107\nblk.14.attn_q.weight 4096x4096 matmul_decoded: 0.579 ms (1727.18/s) q4_eff=16.30 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.14.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.966 ms (337.13/s) q4_eff=3.18 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.14.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.131 ms (7640.82/s) q4_eff=72.11 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": -0.10497850506171114,
+      "id": "005-attn-q-blk-14-attn-q-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/005-attn-q-blk-14-attn-q-weight-direct-out/policy.json",
+      "reasons": [
+        "below min_gain=0.030"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "reject",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.14.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.869,
+        "gemv_max_abs": 0.00219107,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/006-attn-q-blk-14-attn-q-weight-row-upcast2/candidate.log",
+        "quant_gbs": 68.98,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.14.attn_q.weight\nprimitive_unpack_correctness: PASS blk.14.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.14.attn_q.weight max_abs=0.00219107\nblk.14.attn_q.weight 4096x4096 matmul_decoded: 0.592 ms (1689.27/s) q4_eff=15.94 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.14.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.033 ms (329.71/s) q4_eff=3.11 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.14.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.137 ms (7309.00/s) q4_eff=68.98 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.821,
+        "gemv_max_abs": 0.00219107,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/006-attn-q-blk-14-attn-q-weight-row-upcast2/current.log",
+        "quant_gbs": 68.06,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.14.attn_q.weight\nprimitive_unpack_correctness: PASS blk.14.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.14.attn_q.weight max_abs=0.00219107\nblk.14.attn_q.weight 4096x4096 matmul_decoded: 0.590 ms (1695.81/s) q4_eff=16.00 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.14.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.001 ms (333.20/s) q4_eff=3.14 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.14.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.139 ms (7211.50/s) q4_eff=68.06 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.013517484572436178,
+      "id": "006-attn-q-blk-14-attn-q-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/006-attn-q-blk-14-attn-q-weight-row-upcast2/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "tie",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.14.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.832,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/007-attn-q-blk-14-attn-q-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.855,
+        "gemv_max_abs": 0.00219107,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/007-attn-q-blk-14-attn-q-weight-reduce-unroll4/current.log",
+        "quant_gbs": 66.17,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.14.attn_q.weight\nprimitive_unpack_correctness: PASS blk.14.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.14.attn_q.weight max_abs=0.00219107\nblk.14.attn_q.weight 4096x4096 matmul_decoded: 0.605 ms (1654.22/s) q4_eff=15.61 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.14.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.029 ms (330.13/s) q4_eff=3.12 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.14.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.143 ms (7011.54/s) q4_eff=66.17 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "007-attn-q-blk-14-attn-q-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/007-attn-q-blk-14-attn-q-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.14.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.767,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/008-attn-q-blk-14-attn-q-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.14.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.836,
+        "gemv_max_abs": 0.00219107,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/008-attn-q-blk-14-attn-q-weight-two-dim-local4/current.log",
+        "quant_gbs": 63.97,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.14.attn_q.weight\nprimitive_unpack_correctness: PASS blk.14.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.14.attn_q.weight max_abs=0.00219107\nblk.14.attn_q.weight 4096x4096 matmul_decoded: 0.593 ms (1687.68/s) q4_eff=15.93 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.14.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.066 ms (326.16/s) q4_eff=3.08 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.14.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.148 ms (6778.10/s) q4_eff=63.97 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "008-attn-q-blk-14-attn-q-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/008-attn-q-blk-14-attn-q-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.14.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.811,
+        "gemv_max_abs": 0.00176287,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/009-attn-q-blk-15-attn-q-weight-direct-out/candidate.log",
+        "quant_gbs": 69.8,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.15.attn_q.weight\nprimitive_unpack_correctness: PASS blk.15.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.15.attn_q.weight max_abs=0.00176287\nblk.15.attn_q.weight 4096x4096 matmul_decoded: 0.578 ms (1730.98/s) q4_eff=16.34 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.15.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.965 ms (337.22/s) q4_eff=3.18 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.15.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.135 ms (7396.39/s) q4_eff=69.80 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.835,
+        "gemv_max_abs": 0.00176287,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/009-attn-q-blk-15-attn-q-weight-direct-out/current.log",
+        "quant_gbs": 67.71,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.15.attn_q.weight\nprimitive_unpack_correctness: PASS blk.15.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.15.attn_q.weight max_abs=0.00176287\nblk.15.attn_q.weight 4096x4096 matmul_decoded: 0.596 ms (1678.67/s) q4_eff=15.84 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.15.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.063 ms (326.49/s) q4_eff=3.08 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.15.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.139 ms (7174.68/s) q4_eff=67.71 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": 0.030866932506276923,
+      "id": "009-attn-q-blk-15-attn-q-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/009-attn-q-blk-15-attn-q-weight-direct-out/policy.json",
+      "reasons": [
+        "requires confirmation before promotion"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "raw_accept",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.15.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.843,
+        "gemv_max_abs": 0.00176287,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/010-attn-q-blk-15-attn-q-weight-row-upcast2/candidate.log",
+        "quant_gbs": 70.47,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.15.attn_q.weight\nprimitive_unpack_correctness: PASS blk.15.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.15.attn_q.weight max_abs=0.00176287\nblk.15.attn_q.weight 4096x4096 matmul_decoded: 0.591 ms (1692.30/s) q4_eff=15.97 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.15.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 3.014 ms (331.81/s) q4_eff=3.13 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.15.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.134 ms (7466.85/s) q4_eff=70.47 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.793,
+        "gemv_max_abs": 0.00176287,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/010-attn-q-blk-15-attn-q-weight-row-upcast2/current.log",
+        "quant_gbs": 72.05,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.15.attn_q.weight\nprimitive_unpack_correctness: PASS blk.15.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.15.attn_q.weight max_abs=0.00176287\nblk.15.attn_q.weight 4096x4096 matmul_decoded: 0.576 ms (1734.73/s) q4_eff=16.37 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.15.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.939 ms (340.30/s) q4_eff=3.21 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.15.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.131 ms (7634.77/s) q4_eff=72.05 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": -0.021929215822345527,
+      "id": "010-attn-q-blk-15-attn-q-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/010-attn-q-blk-15-attn-q-weight-row-upcast2/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "tie",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.15.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.884,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/011-attn-q-blk-15-attn-q-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.817,
+        "gemv_max_abs": 0.00176287,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/011-attn-q-blk-15-attn-q-weight-reduce-unroll4/current.log",
+        "quant_gbs": 70.34,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.15.attn_q.weight\nprimitive_unpack_correctness: PASS blk.15.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.15.attn_q.weight max_abs=0.00176287\nblk.15.attn_q.weight 4096x4096 matmul_decoded: 0.586 ms (1706.71/s) q4_eff=16.11 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.15.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.979 ms (335.63/s) q4_eff=3.17 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.15.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.134 ms (7453.47/s) q4_eff=70.34 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "011-attn-q-blk-15-attn-q-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/011-attn-q-blk-15-attn-q-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.15.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.796,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/012-attn-q-blk-15-attn-q-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.15.attn_q.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.818,
+        "gemv_max_abs": 0.00176287,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/012-attn-q-blk-15-attn-q-weight-two-dim-local4/current.log",
+        "quant_gbs": 68.1,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.15.attn_q.weight\nprimitive_unpack_correctness: PASS blk.15.attn_q.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.15.attn_q.weight max_abs=0.00176287\nblk.15.attn_q.weight 4096x4096 matmul_decoded: 0.592 ms (1690.50/s) q4_eff=15.95 GB/s device_q4_eff=n/a kernels=1.0 mem=33.57 MB\nblk.15.attn_q.weight 4096x4096 decode_q4_k_plus_matmul: 2.982 ms (335.31/s) q4_eff=3.16 GB/s device_q4_eff=n/a kernels=1.0 mem=9.45 MB\nblk.15.attn_q.weight 4096x4096 q4k_primitive_gemv: 0.139 ms (7216.19/s) q4_eff=68.10 GB/s device_q4_eff=n/a kernels=1.0 mem=9.48 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "012-attn-q-blk-15-attn-q-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/012-attn-q-blk-15-attn-q-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "attn_q",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "attn_q",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.15.attn_q.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.747,
+        "gemv_max_abs": 0.00250673,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/013-ffn-gate-blk-17-ffn-gate-weight-direct-out/candidate.log",
+        "quant_gbs": 205.71,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.17.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.17.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.17.ffn_gate.weight max_abs=0.00250673\nblk.17.ffn_gate.weight 12288x4096 matmul_decoded: 0.585 ms (1708.69/s) q4_eff=48.38 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.17.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.981 ms (335.42/s) q4_eff=9.50 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.17.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.138 ms (7266.09/s) q4_eff=205.71 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.771,
+        "gemv_max_abs": 0.00250673,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/013-ffn-gate-blk-17-ffn-gate-weight-direct-out/current.log",
+        "quant_gbs": 203.8,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.17.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.17.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.17.ffn_gate.weight max_abs=0.00250673\nblk.17.ffn_gate.weight 12288x4096 matmul_decoded: 0.606 ms (1651.48/s) q4_eff=46.76 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.17.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.020 ms (331.09/s) q4_eff=9.37 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.17.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.139 ms (7198.32/s) q4_eff=203.80 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": 0.009371933267909638,
+      "id": "013-ffn-gate-blk-17-ffn-gate-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/013-ffn-gate-blk-17-ffn-gate-weight-direct-out/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "tie",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.17.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.82,
+        "gemv_max_abs": 0.00250673,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/014-ffn-gate-blk-17-ffn-gate-weight-row-upcast2/candidate.log",
+        "quant_gbs": 196.19,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.17.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.17.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.17.ffn_gate.weight max_abs=0.00250673\nblk.17.ffn_gate.weight 12288x4096 matmul_decoded: 0.605 ms (1653.19/s) q4_eff=46.80 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.17.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.039 ms (329.11/s) q4_eff=9.32 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.17.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.144 ms (6929.62/s) q4_eff=196.19 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.78,
+        "gemv_max_abs": 0.00250673,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/014-ffn-gate-blk-17-ffn-gate-weight-row-upcast2/current.log",
+        "quant_gbs": 208.38,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.17.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.17.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.17.ffn_gate.weight max_abs=0.00250673\nblk.17.ffn_gate.weight 12288x4096 matmul_decoded: 0.598 ms (1671.14/s) q4_eff=47.31 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.17.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.994 ms (333.97/s) q4_eff=9.46 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.17.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.136 ms (7360.21/s) q4_eff=208.38 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": -0.058498896247240584,
+      "id": "014-ffn-gate-blk-17-ffn-gate-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/014-ffn-gate-blk-17-ffn-gate-weight-row-upcast2/policy.json",
+      "reasons": [
+        "below min_gain=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "reject",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.17.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.81,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/015-ffn-gate-blk-17-ffn-gate-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.778,
+        "gemv_max_abs": 0.00250673,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/015-ffn-gate-blk-17-ffn-gate-weight-reduce-unroll4/current.log",
+        "quant_gbs": 205.3,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.17.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.17.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.17.ffn_gate.weight max_abs=0.00250673\nblk.17.ffn_gate.weight 12288x4096 matmul_decoded: 0.601 ms (1663.73/s) q4_eff=47.10 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.17.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.009 ms (332.35/s) q4_eff=9.41 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.17.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.138 ms (7251.30/s) q4_eff=205.30 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "015-ffn-gate-blk-17-ffn-gate-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/015-ffn-gate-blk-17-ffn-gate-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.17.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.737,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/016-ffn-gate-blk-17-ffn-gate-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.17.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.782,
+        "gemv_max_abs": 0.00250673,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/016-ffn-gate-blk-17-ffn-gate-weight-two-dim-local4/current.log",
+        "quant_gbs": 212.73,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.17.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.17.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.17.ffn_gate.weight max_abs=0.00250673\nblk.17.ffn_gate.weight 12288x4096 matmul_decoded: 0.603 ms (1657.97/s) q4_eff=46.94 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.17.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.016 ms (331.61/s) q4_eff=9.39 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.17.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.133 ms (7513.88/s) q4_eff=212.73 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "016-ffn-gate-blk-17-ffn-gate-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/016-ffn-gate-blk-17-ffn-gate-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.17.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.756,
+        "gemv_max_abs": 0.00224018,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/017-ffn-gate-blk-18-ffn-gate-weight-direct-out/candidate.log",
+        "quant_gbs": 203.77,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.18.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.18.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.18.ffn_gate.weight max_abs=0.00224018\nblk.18.ffn_gate.weight 12288x4096 matmul_decoded: 0.584 ms (1712.27/s) q4_eff=48.48 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.18.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.957 ms (338.16/s) q4_eff=9.57 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.18.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.139 ms (7197.28/s) q4_eff=203.77 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.803,
+        "gemv_max_abs": 0.00224018,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/017-ffn-gate-blk-18-ffn-gate-weight-direct-out/current.log",
+        "quant_gbs": 195.01,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.18.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.18.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.18.ffn_gate.weight max_abs=0.00224018\nblk.18.ffn_gate.weight 12288x4096 matmul_decoded: 0.608 ms (1644.64/s) q4_eff=46.56 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.18.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.041 ms (328.87/s) q4_eff=9.31 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.18.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.145 ms (6888.00/s) q4_eff=195.01 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": 0.044920773293677385,
+      "id": "017-ffn-gate-blk-18-ffn-gate-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/017-ffn-gate-blk-18-ffn-gate-weight-direct-out/policy.json",
+      "reasons": [
+        "requires confirmation before promotion"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "raw_accept",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.18.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.8,
+        "gemv_max_abs": 0.00224018,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/018-ffn-gate-blk-18-ffn-gate-weight-row-upcast2/candidate.log",
+        "quant_gbs": 206.35,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.18.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.18.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.18.ffn_gate.weight max_abs=0.00224018\nblk.18.ffn_gate.weight 12288x4096 matmul_decoded: 0.607 ms (1647.70/s) q4_eff=46.65 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.18.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.010 ms (332.21/s) q4_eff=9.41 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.18.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.137 ms (7288.56/s) q4_eff=206.35 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.784,
+        "gemv_max_abs": 0.00224018,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/018-ffn-gate-blk-18-ffn-gate-weight-row-upcast2/current.log",
+        "quant_gbs": 197.71,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.18.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.18.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.18.ffn_gate.weight max_abs=0.00224018\nblk.18.ffn_gate.weight 12288x4096 matmul_decoded: 0.601 ms (1662.88/s) q4_eff=47.08 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.18.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.997 ms (333.65/s) q4_eff=9.45 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.18.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.143 ms (6983.44/s) q4_eff=197.71 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.04370036922765652,
+      "id": "018-ffn-gate-blk-18-ffn-gate-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/018-ffn-gate-blk-18-ffn-gate-weight-row-upcast2/policy.json",
+      "reasons": [
+        "requires confirmation before promotion"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "raw_accept",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.18.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.83,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/019-ffn-gate-blk-18-ffn-gate-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.778,
+        "gemv_max_abs": 0.00224018,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/019-ffn-gate-blk-18-ffn-gate-weight-reduce-unroll4/current.log",
+        "quant_gbs": 202.75,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.18.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.18.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.18.ffn_gate.weight max_abs=0.00224018\nblk.18.ffn_gate.weight 12288x4096 matmul_decoded: 0.601 ms (1662.71/s) q4_eff=47.07 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.18.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.048 ms (328.09/s) q4_eff=9.29 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.18.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.140 ms (7161.31/s) q4_eff=202.75 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "019-ffn-gate-blk-18-ffn-gate-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/019-ffn-gate-blk-18-ffn-gate-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.18.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.762,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/020-ffn-gate-blk-18-ffn-gate-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.18.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.767,
+        "gemv_max_abs": 0.00224018,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/020-ffn-gate-blk-18-ffn-gate-weight-two-dim-local4/current.log",
+        "quant_gbs": 207.2,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.18.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.18.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.18.ffn_gate.weight max_abs=0.00224018\nblk.18.ffn_gate.weight 12288x4096 matmul_decoded: 0.608 ms (1645.60/s) q4_eff=46.59 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.18.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.028 ms (330.25/s) q4_eff=9.35 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.18.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.137 ms (7318.47/s) q4_eff=207.20 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "020-ffn-gate-blk-18-ffn-gate-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/020-ffn-gate-blk-18-ffn-gate-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.18.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.749,
+        "gemv_max_abs": 0.00224257,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/021-ffn-gate-blk-19-ffn-gate-weight-direct-out/candidate.log",
+        "quant_gbs": 211.43,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.19.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.19.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.19.ffn_gate.weight max_abs=0.00224257\nblk.19.ffn_gate.weight 12288x4096 matmul_decoded: 0.589 ms (1696.73/s) q4_eff=48.04 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.19.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.963 ms (337.50/s) q4_eff=9.56 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.19.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.134 ms (7467.98/s) q4_eff=211.43 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.774,
+        "gemv_max_abs": 0.00224257,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/021-ffn-gate-blk-19-ffn-gate-weight-direct-out/current.log",
+        "quant_gbs": 210.19,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.19.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.19.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.19.ffn_gate.weight max_abs=0.00224257\nblk.19.ffn_gate.weight 12288x4096 matmul_decoded: 0.600 ms (1667.33/s) q4_eff=47.20 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.19.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.005 ms (332.82/s) q4_eff=9.42 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.19.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.135 ms (7424.27/s) q4_eff=210.19 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": 0.005899424330367831,
+      "id": "021-ffn-gate-blk-19-ffn-gate-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/021-ffn-gate-blk-19-ffn-gate-weight-direct-out/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "tie",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.19.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.771,
+        "gemv_max_abs": 0.00224257,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/022-ffn-gate-blk-19-ffn-gate-weight-row-upcast2/candidate.log",
+        "quant_gbs": 214.23,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.19.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.19.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.19.ffn_gate.weight max_abs=0.00224257\nblk.19.ffn_gate.weight 12288x4096 matmul_decoded: 0.595 ms (1679.85/s) q4_eff=47.56 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.19.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.953 ms (338.69/s) q4_eff=9.59 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.19.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.132 ms (7567.04/s) q4_eff=214.23 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.81,
+        "gemv_max_abs": 0.00224257,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/022-ffn-gate-blk-19-ffn-gate-weight-row-upcast2/current.log",
+        "quant_gbs": 192.6,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.19.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.19.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.19.ffn_gate.weight max_abs=0.00224257\nblk.19.ffn_gate.weight 12288x4096 matmul_decoded: 0.635 ms (1575.15/s) q4_eff=44.59 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.19.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.161 ms (316.34/s) q4_eff=8.96 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.19.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.147 ms (6803.03/s) q4_eff=192.60 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": 0.11230529595015581,
+      "id": "022-ffn-gate-blk-19-ffn-gate-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/022-ffn-gate-blk-19-ffn-gate-weight-row-upcast2/policy.json",
+      "reasons": [
+        "requires confirmation before promotion"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "raw_accept",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.19.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.819,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/023-ffn-gate-blk-19-ffn-gate-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.778,
+        "gemv_max_abs": 0.00224257,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/023-ffn-gate-blk-19-ffn-gate-weight-reduce-unroll4/current.log",
+        "quant_gbs": 204.75,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.19.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.19.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.19.ffn_gate.weight max_abs=0.00224257\nblk.19.ffn_gate.weight 12288x4096 matmul_decoded: 0.603 ms (1657.90/s) q4_eff=46.94 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.19.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.024 ms (330.73/s) q4_eff=9.36 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.19.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.138 ms (7232.05/s) q4_eff=204.75 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "023-ffn-gate-blk-19-ffn-gate-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/023-ffn-gate-blk-19-ffn-gate-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.19.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.739,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/024-ffn-gate-blk-19-ffn-gate-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.19.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.772,
+        "gemv_max_abs": 0.00224257,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/024-ffn-gate-blk-19-ffn-gate-weight-two-dim-local4/current.log",
+        "quant_gbs": 209.28,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.19.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.19.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.19.ffn_gate.weight max_abs=0.00224257\nblk.19.ffn_gate.weight 12288x4096 matmul_decoded: 0.603 ms (1658.53/s) q4_eff=46.96 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.19.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.987 ms (334.77/s) q4_eff=9.48 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.19.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.135 ms (7392.20/s) q4_eff=209.28 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "024-ffn-gate-blk-19-ffn-gate-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/024-ffn-gate-blk-19-ffn-gate-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.19.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.794,
+        "gemv_max_abs": 0.00212336,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/025-ffn-gate-blk-20-ffn-gate-weight-direct-out/candidate.log",
+        "quant_gbs": 203.6,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.20.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.20.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.20.ffn_gate.weight max_abs=0.00212336\nblk.20.ffn_gate.weight 12288x4096 matmul_decoded: 0.605 ms (1652.18/s) q4_eff=46.78 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.20.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.026 ms (330.49/s) q4_eff=9.36 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.20.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.139 ms (7191.40/s) q4_eff=203.60 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.766,
+        "gemv_max_abs": 0.00212336,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/025-ffn-gate-blk-20-ffn-gate-weight-direct-out/current.log",
+        "quant_gbs": 209.65,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.20.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.20.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.20.ffn_gate.weight max_abs=0.00212336\nblk.20.ffn_gate.weight 12288x4096 matmul_decoded: 0.598 ms (1671.62/s) q4_eff=47.33 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.20.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.002 ms (333.14/s) q4_eff=9.43 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.20.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.135 ms (7405.18/s) q4_eff=209.65 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": -0.028857619842594828,
+      "id": "025-ffn-gate-blk-20-ffn-gate-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/025-ffn-gate-blk-20-ffn-gate-weight-direct-out/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "tie",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.20.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.846,
+        "gemv_max_abs": 0.00212336,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/026-ffn-gate-blk-20-ffn-gate-weight-row-upcast2/candidate.log",
+        "quant_gbs": 204.02,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.20.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.20.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.20.ffn_gate.weight max_abs=0.00212336\nblk.20.ffn_gate.weight 12288x4096 matmul_decoded: 0.616 ms (1623.87/s) q4_eff=45.97 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.20.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.074 ms (325.33/s) q4_eff=9.21 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.20.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.139 ms (7206.12/s) q4_eff=204.02 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.787,
+        "gemv_max_abs": 0.00212336,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/026-ffn-gate-blk-20-ffn-gate-weight-row-upcast2/current.log",
+        "quant_gbs": 205.95,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.20.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.20.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.20.ffn_gate.weight max_abs=0.00212336\nblk.20.ffn_gate.weight 12288x4096 matmul_decoded: 0.602 ms (1661.75/s) q4_eff=47.05 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.20.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.031 ms (329.96/s) q4_eff=9.34 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.20.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.137 ms (7274.38/s) q4_eff=205.95 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": -0.009371206603544402,
+      "id": "026-ffn-gate-blk-20-ffn-gate-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/026-ffn-gate-blk-20-ffn-gate-weight-row-upcast2/policy.json",
+      "reasons": [
+        "within tie_band=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "tie",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.20.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.811,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/027-ffn-gate-blk-20-ffn-gate-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.763,
+        "gemv_max_abs": 0.00212336,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/027-ffn-gate-blk-20-ffn-gate-weight-reduce-unroll4/current.log",
+        "quant_gbs": 210.3,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.20.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.20.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.20.ffn_gate.weight max_abs=0.00212336\nblk.20.ffn_gate.weight 12288x4096 matmul_decoded: 0.596 ms (1677.35/s) q4_eff=47.49 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.20.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.991 ms (334.39/s) q4_eff=9.47 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.20.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.135 ms (7428.13/s) q4_eff=210.30 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "027-ffn-gate-blk-20-ffn-gate-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/027-ffn-gate-blk-20-ffn-gate-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.20.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.757,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/028-ffn-gate-blk-20-ffn-gate-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.20.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.749,
+        "gemv_max_abs": 0.00212336,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/028-ffn-gate-blk-20-ffn-gate-weight-two-dim-local4/current.log",
+        "quant_gbs": 209.27,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.20.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.20.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.20.ffn_gate.weight max_abs=0.00212336\nblk.20.ffn_gate.weight 12288x4096 matmul_decoded: 0.592 ms (1688.73/s) q4_eff=47.81 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.20.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.969 ms (336.87/s) q4_eff=9.54 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.20.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.135 ms (7391.66/s) q4_eff=209.27 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "028-ffn-gate-blk-20-ffn-gate-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/028-ffn-gate-blk-20-ffn-gate-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.20.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode serial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.791,
+        "gemv_max_abs": 0.00277662,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/029-ffn-gate-blk-21-ffn-gate-weight-direct-out/candidate.log",
+        "quant_gbs": 194.25,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=serial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.21.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.21.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.21.ffn_gate.weight max_abs=0.00277662\nblk.21.ffn_gate.weight 12288x4096 matmul_decoded: 0.617 ms (1619.82/s) q4_eff=45.86 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.21.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.078 ms (324.86/s) q4_eff=9.20 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.21.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.146 ms (6861.17/s) q4_eff=194.25 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "not_applicable_to_this_candidate",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.76,
+        "gemv_max_abs": 0.00277662,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/029-ffn-gate-blk-21-ffn-gate-weight-direct-out/current.log",
+        "quant_gbs": 211.92,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.21.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.21.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.21.ffn_gate.weight max_abs=0.00277662\nblk.21.ffn_gate.weight 12288x4096 matmul_decoded: 0.588 ms (1699.35/s) q4_eff=48.11 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.21.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.973 ms (336.39/s) q4_eff=9.52 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.21.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.134 ms (7485.14/s) q4_eff=211.92 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": false,
+      "gain": -0.08338052095130233,
+      "id": "029-ffn-gate-blk-21-ffn-gate-weight-direct-out",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/029-ffn-gate-blk-21-ffn-gate-weight-direct-out/policy.json",
+      "reasons": [
+        "below min_gain=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "direct_out",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "not_applicable_to_this_candidate",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32_direct",
+        "format": "Q4_K",
+        "full_decode_supported": false,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "direct_out",
+        "opts": [
+          "LOCAL:0:64"
+        ],
+        "parts": 1,
+        "reduction_mode": "direct_out",
+        "requires": [
+          "q4k_gemv_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "reject",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.21.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UPCAST:0:2",
+        "elapsed_s": 1.845,
+        "gemv_max_abs": 0.00277662,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/030-ffn-gate-blk-21-ffn-gate-weight-row-upcast2/candidate.log",
+        "quant_gbs": 200.94,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64', 'UPCAST:0:2']\ncorrectness: PASS blk.21.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.21.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.21.ffn_gate.weight max_abs=0.00277662\nblk.21.ffn_gate.weight 12288x4096 matmul_decoded: 0.614 ms (1628.90/s) q4_eff=46.12 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.21.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.080 ms (324.65/s) q4_eff=9.19 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.21.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.141 ms (7097.47/s) q4_eff=200.94 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "correctness": {
+        "amd_gemv": true,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.75,
+        "gemv_max_abs": 0.00277662,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/030-ffn-gate-blk-21-ffn-gate-weight-row-upcast2/current.log",
+        "quant_gbs": 213.15,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.21.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.21.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.21.ffn_gate.weight max_abs=0.00277662\nblk.21.ffn_gate.weight 12288x4096 matmul_decoded: 0.590 ms (1694.78/s) q4_eff=47.98 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.21.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.949 ms (339.10/s) q4_eff=9.60 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.21.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.133 ms (7528.61/s) q4_eff=213.15 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": -0.05728360309641101,
+      "id": "030-ffn-gate-blk-21-ffn-gate-weight-row-upcast2",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/030-ffn-gate-blk-21-ffn-gate-weight-row-upcast2/policy.json",
+      "reasons": [
+        "below min_gain=0.030"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 2,
+        "name": "row_upcast2",
+        "opts": [
+          "LOCAL:0:64",
+          "UPCAST:0:2"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "reject",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.21.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64 --primitive-opt UNROLL:2:4",
+        "elapsed_s": 1.82,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/031-ffn-gate-blk-21-ffn-gate-weight-reduce-unroll4/candidate.log",
+        "quant_gbs": null,
+        "status": "compile-fail",
+        "tail": "  File \"tinygrad/codegen/__init__.py\", line 190, in do_compile\n    lib = ctx.compiler.compile_cached(source.arg)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/device.py\", line 282, in compile_cached\n    lib = self.compile(src)\n          ^^^^^^^^^^^^^^^^^\n  File \"tinygrad/runtime/support/compiler_amd.py\", line 100, in compile\n    except RuntimeError as e: raise CompileError(e) from e\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.device.CompileError: compile failed"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.777,
+        "gemv_max_abs": 0.00277662,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/031-ffn-gate-blk-21-ffn-gate-weight-reduce-unroll4/current.log",
+        "quant_gbs": 205.92,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.21.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.21.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.21.ffn_gate.weight max_abs=0.00277662\nblk.21.ffn_gate.weight 12288x4096 matmul_decoded: 0.597 ms (1673.82/s) q4_eff=47.39 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.21.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 2.981 ms (335.45/s) q4_eff=9.50 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.21.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.137 ms (7273.50/s) q4_eff=205.92 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "031-ffn-gate-blk-21-ffn-gate-weight-reduce-unroll4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/031-ffn-gate-blk-21-ffn-gate-weight-reduce-unroll4/policy.json",
+      "reasons": [
+        "candidate status=compile-fail"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 4,
+        "k_tile_blocks": 4,
+        "lane_width": 1,
+        "name": "reduce_unroll4",
+        "opts": [
+          "LOCAL:0:64",
+          "UNROLL:2:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 64,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.21.ffn_gate.weight"
+    },
+    {
+      "candidate": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:32 --primitive-opt LOCAL:1:4",
+        "elapsed_s": 1.709,
+        "gemv_max_abs": null,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/032-ffn-gate-blk-21-ffn-gate-weight-two-dim-local4/candidate.log",
+        "quant_gbs": null,
+        "status": "illegal-opt",
+        "tail": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 340, in apply_opts\n    for opt in ast.arg.opts_to_apply: k.apply_opt(opt)\n                                      ^^^^^^^^^^^^^^^^\n  File \"tinygrad/codegen/opt/postrange.py\", line 166, in apply_opt\n    check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, \"local is for globals\")\n  File \"tinygrad/codegen/opt/__init__.py\", line 20, in check\n    if not cond: raise KernelOptError(msg)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^\ntinygrad.codegen.opt.KernelOptError: local is for globals"
+      },
+      "correctness": {
+        "amd_gemv": false,
+        "full_decode_ab": false,
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "correctness_provenance": {
+        "amd_gemv": "required_by_amd_microbench_gate",
+        "full_decode_ab": "required_for_full_decode_promotion",
+        "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+        "reference_unpacked": "covered_by_qk_layout_reference_tests"
+      },
+      "current": {
+        "command": ".venv/bin/python extra/q4_k_bench.py /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --device AMD --tensor blk.21.ffn_gate.weight --iters 3 --format text --activation random --seed 1337 --primitive --primitive-mode partial --primitive-parts 1 --primitive-opt LOCAL:0:64",
+        "elapsed_s": 1.769,
+        "gemv_max_abs": 0.00277662,
+        "kernels": 1.0,
+        "log": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/032-ffn-gate-blk-21-ffn-gate-weight-two-dim-local4/current.log",
+        "quant_gbs": 200.89,
+        "status": "pass",
+        "tail": "model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}\nvariant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random\nprimitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']\ncorrectness: PASS blk.21.ffn_gate.weight\nprimitive_unpack_correctness: PASS blk.21.ffn_gate.weight rows=2 max_abs=0\nprimitive_gemv_correctness: PASS blk.21.ffn_gate.weight max_abs=0.00277662\nblk.21.ffn_gate.weight 12288x4096 matmul_decoded: 0.600 ms (1665.59/s) q4_eff=47.16 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB\nblk.21.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 3.059 ms (326.86/s) q4_eff=9.25 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB\nblk.21.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.141 ms (7095.64/s) q4_eff=200.89 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB"
+      },
+      "format": "Q4_K",
+      "full_decode_supported": true,
+      "gain": null,
+      "id": "032-ffn-gate-blk-21-ffn-gate-weight-two-dim-local4",
+      "policy": "bench/amd-decode-flywheel-proof-20260614/shadow-staged-v4/runs/schedule/8b/microbench-runs/032-ffn-gate-blk-21-ffn-gate-weight-two-dim-local4/policy.json",
+      "reasons": [
+        "candidate status=illegal-opt"
+      ],
+      "role": "ffn_gate",
+      "schedule": {
+        "activation_cache": "fp16_direct",
+        "codegen_mode": "partial",
+        "correctness_provenance": {
+          "amd_gemv": "required_by_amd_microbench_gate",
+          "full_decode_ab": "required_for_full_decode_promotion",
+          "note": "CPU/Mac tests prove packed-layout reference semantics; AMD microbench proves GEMV kernel numerics.",
+          "reference_unpacked": "covered_by_qk_layout_reference_tests"
+        },
+        "family": "q4_k_packed_u32",
+        "format": "Q4_K",
+        "full_decode_supported": true,
+        "group_unroll": 1,
+        "k_tile_blocks": null,
+        "lane_width": 1,
+        "name": "two_dim_local4",
+        "opts": [
+          "LOCAL:0:32",
+          "LOCAL:1:4"
+        ],
+        "parts": 1,
+        "reduction_mode": "split_k_partial",
+        "requires": [
+          "q4k_gemv_partial_kernel",
+          "u32_packed_storage"
+        ],
+        "role": "ffn_gate",
+        "row_tile": 32,
+        "semantic_object": "packed_quant_gemv_schedule",
+        "storage_effect": {
+          "metadata_sidecar_bytes": 0,
+          "nonpersistent_bytes_delta": 0,
+          "persistent_bytes_delta": 0,
+          "shared_bytes_delta": 0,
+          "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+        }
+      },
+      "status": "invalid",
+      "storage_effect": {
+        "metadata_sidecar_bytes": 0,
+        "nonpersistent_bytes_delta": 0,
+        "persistent_bytes_delta": 0,
+        "shared_bytes_delta": 0,
+        "storage_note": "schedule-only candidate reuses existing packed-weight storage"
+      },
+      "tensor": "blk.21.ffn_gate.weight"
+    }
+  ],
+  "source_candidates": "bench/qk-shared-storage-20260612/8b/policy.json",
+  "summary": {
+    "acceptance_rule": "raw_accept requires full-decode confirmation before promotion",
+    "accepted": 4,
+    "candidates": 32,
+    "full_decode_ready": 2,
+    "invalid": 16,
+    "next_decision": "run_full_policy_benchmark",
+    "raw_accepts": 4,
+    "rejected": 5,
+    "ties": 7
+  }
+}
