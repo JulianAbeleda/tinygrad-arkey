@@ -65,8 +65,10 @@ def _measure():
   temp = Tensor([0.0]); t = Tensor([[1]*mc], dtype="int32")
   T = 16
   if getenv("CONCRETE"):  # bypass the symbolic JIT batch var -> concrete N=16 so TC can apply
+    from tinygrad import TinyJit
     toks = Tensor([[1]*T], dtype="int32")
-    call = lambda: model.forward(toks, 0, temp)
+    jfwd = TinyJit(model.forward)
+    call = lambda: jfwd(toks, 0, temp)
   else:
     sp = v_sp.bind(0); nt = v_tk.bind(T); inp = t[:, sp:sp+nt]
     call = lambda: model(inp, sp, temp)
