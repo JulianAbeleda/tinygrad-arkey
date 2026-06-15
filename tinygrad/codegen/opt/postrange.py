@@ -359,10 +359,19 @@ def apply_opts(ast:UOp, ren:Renderer, beam:int=0) -> UOp:
       k = beam_search(k, rawbufs, beam, bool(getenv("BEAM_ESTIMATE", 1)))
   elif _WARMSTART_OPTS is not None and (forced := _warmstart_match(k)) is not None:
     _warmstart_stats["match"] += 1
+    if getenv("WARMSTART_DUMP") and len(_warmstart_stats.setdefault("dumps", [])) < 4:
+      rs = k.reduceops
+      if rs:
+        r = rs[0]; s0 = r.src[0]
+        s0b = s0.src[0] if s0.op is Ops.CAST else s0
+        _warmstart_stats["dumps"].append(f"reduce.arg={r.arg[0]} dtype={r.dtype} src0={s0.op} "
+          f"(after-cast={s0b.op} dtypes={[x.dtype for x in s0b.src][:2] if s0b.op is Ops.MUL else '?'})")
+      else: _warmstart_stats["dumps"].append("NO reduceops")
     try:
       for o in forced: k.apply_opt(o)
       _warmstart_stats["apply"] += 1
-    except KernelOptError:  # axis/fusion mismatch -> safe fallback to the heuristic on a fresh kernel
+    except KernelOptError as _e:  # axis/fusion mismatch -> safe fallback to the heuristic on a fresh kernel
+      _warmstart_stats.setdefault("errs", []).append(f"{[str(o) for o in forced]} -> {str(_e)[:90]}")
       _warmstart_stats["error"] += 1
       k = Scheduler(ast, ren); k.convert_loop_to_global()
       if not NOOPT and not any(u.op is Ops.STAGE for u in ast.backward_slice):
