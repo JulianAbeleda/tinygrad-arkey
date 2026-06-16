@@ -100,22 +100,35 @@ vestigial no-op block-dot loop in `qk_flywheel_shadow.run_outcomes` — removed 
   schemas/signatures (audit §F explicitly lists divergent row-builders as do-NOT-merge).
   The only shareable residue (`REPO = parents[2]` idiom ×31, a `read_jsonl`) is idiom,
   not knowledge-duplication; centralizing it is 31-file churn for no real payoff.
-- **C9** — *empirically refuted (not byte-safe).* The swap was implemented and tested
-  with the packet's exact protocol: OLD (committed) vs NEW code, same fixed seed,
-  8B model + 8b-last1-ffn-suffix-lora-r4-v5 adapter + 8b policy, on
-  training-data-v4/sft.jsonl (`--limit-train-rows 1 --k 2 --temperatures 0.0 0.5`).
-  Result: **greedy (temp=0.0) tokens are byte-identical** OLD==NEW==NEW2, but
-  **temperature=0.5 sampling diverges** (OLD `[271]` vs NEW `[4913,9217,788,330,16,20,9207]`),
-  while NEW is itself reproducible (NEW==NEW2). Root cause:
-  `llm_generate.load_model_and_tokenizer` runs `Tensor.manual_seed(seed)` at *load*
-  time, which the old inline path never did; tinygrad's counter-based RNG carries that
-  offset so the per-sample `manual_seed` no longer reproduces the same sampled draw.
-  No fix preserves parity without either changing `llm_generate`'s contract (affecting
-  its other callers) or re-bypassing its loader (defeating the consolidation). Per the
-  packet's "must be identical / do not commit unproven", the change was **reverted**.
-  Recommended: change `llm_generate.load_model_and_tokenizer` to take `seed:int|None`
-  and skip the load-time seed when `None`, then route rejection_sample with `seed=None`
-  (it reseeds per sample anyway) — re-run this same parity check to confirm.
+- **C9** — *empirically refuted; fix attempted and also refuted (not byte-safe).*
+  Implemented the swap and tested with the packet's exact protocol: OLD (committed)
+  vs NEW code, same fixed seed, 8B model + 8b-last1-ffn-suffix-lora-r4-v5 adapter +
+  8b policy, on training-data-v4/sft.jsonl
+  (`--limit-train-rows 1 --k 2 --temperatures 0.0 0.5`).
+  - **Greedy (temp=0.0): byte-identical** — OLD==NEW==NEW2==OLD2.
+  - **Sampling (temp=0.5): deterministically diverges** — OLD `[271]` vs
+    NEW `[4913,9217,788,330,16,20,9207]`. Both are reproducible (OLD==OLD2,
+    NEW==NEW2), so it is a real code-induced difference, not float-reduction noise.
+
+  Per the user's request the fix was attempted: gave
+  `llm_generate.load_model_and_tokenizer` a `seed:int|None` (skip the load-time
+  `Tensor.manual_seed` when `None`; the two existing callers pass an int and are
+  unchanged) and routed rejection_sample with `seed=None`. **The re-run produced the
+  identical NEW tokens — i.e. the fix did NOT close the gap, disproving the
+  load-time-seed hypothesis.** Two further hypotheses were tested and ruled out:
+  *build order* (prompt_ids built before vs after the per-sample `manual_seed` —
+  identical on a 1.7B fresh-process A/B) and *reduction non-determinism* (OLD is
+  reproducible). So the divergence is a deterministic shift in the per-sample RNG
+  trajectory that appears only in the full 8B+adapter sampling path and is not
+  reproduced by isolated tests; its exact mechanism was not pinned.
+
+  Since greedy is exact and `accepted.jsonl`/`sft.jsonl` were byte-identical in the
+  test (the accepted row was the greedy sample), the pipeline is *functionally*
+  equivalent — but raw temperature>0 samples change, so it fails the packet's strict
+  "tokens must be identical" bar. **Reverted.** A maintainer who values the SSOT over
+  byte-parity of stochastic samples could accept it deliberately; pinning the exact
+  RNG mechanism (instrument the THREEFRY counter at each sample step in both paths)
+  is the prerequisite for a parity-preserving version.
 
 ## Out of scope (untouched, as instructed)
 
