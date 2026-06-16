@@ -74,10 +74,7 @@ def _jsonl_bytes(rows:list[dict[str, Any]]) -> bytes:
 def _write_jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
   path.write_bytes(_jsonl_bytes(rows))
 
-def _read_json(path:pathlib.Path) -> dict[str, Any]:
-  data = json.loads(path.read_text())
-  if not isinstance(data, dict): raise ValueError(f"{path}: expected JSON object")
-  return data
+from extra.llm_eval_common import read_json_object as _read_json
 
 def _sha256(data:bytes) -> str:
   return hashlib.sha256(data).hexdigest()

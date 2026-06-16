@@ -19,11 +19,7 @@ LOWERING_AMD_RENDERER_PATTERN = "amd_renderer_pattern"
 LOWERING_RAW_CUSTOM_KERNEL = "raw_custom_kernel"
 
 
-def _portable(path:pathlib.Path, repo:pathlib.Path) -> str:
-  try:
-    return str(path.resolve().relative_to(repo.resolve()))
-  except ValueError:
-    return str(path)
+from extra.qk_paths import portable_path as _portable
 
 
 @dataclass(frozen=True)

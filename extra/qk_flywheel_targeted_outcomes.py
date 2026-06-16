@@ -26,32 +26,13 @@ SEMANTIC_CODEGEN_FAMILIES = (
 )
 
 
-def _read_json(path:pathlib.Path) -> dict[str, Any]:
-  data = json.loads(path.read_text())
-  if not isinstance(data, dict): raise ValueError(f"{path}: expected JSON object")
-  return data
+from extra.llm_eval_common import read_json_object as _read_json
 
-def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    rows.append(row)
-  return rows
+from extra.llm_eval_common import read_jsonl as _read_jsonl
 
-def _jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
-  with path.open("w") as f:
-    for row in rows: f.write(json.dumps(row, sort_keys=True) + "\n")
+from extra.llm_eval_common import write_jsonl as _jsonl
 
-def _portable(repo:pathlib.Path, path:pathlib.Path) -> str:
-  try:
-    return str(path.resolve().relative_to(repo.resolve()))
-  except ValueError:
-    return str(path)
+from extra.qk_paths import portable_path as _portable
 
 def _repo_path(repo:pathlib.Path, value:str) -> pathlib.Path:
   path = pathlib.Path(value)
@@ -60,7 +41,7 @@ def _repo_path(repo:pathlib.Path, value:str) -> pathlib.Path:
 def _source(repo:pathlib.Path, value:str) -> str:
   path = _repo_path(repo, value)
   if not path.exists(): raise FileNotFoundError(path)
-  return _portable(repo, path)
+  return _portable(path, repo)
 
 def _row(*, row_id:str, row_kind:str, model:str, tensor:str, role:str, fmt:str,
          mechanism:str, prediction_stage:str, pre_result_context:dict[str, Any],
@@ -337,7 +318,7 @@ def _qk_block_dot_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
       "next_allowed_gate": data.get("summary", {}).get("next_allowed_gate"),
       "source_compile_gate": "bench/qk-block-dot-compile-gate-20260613/compile-gate.json",
     },
-    source_files=[microbench, _portable(repo, compile_gate)] if compile_gate.exists() else [microbench],
+    source_files=[microbench, _portable(compile_gate, repo)] if compile_gate.exists() else [microbench],
   ))
 
   cmp = data.get("comparison", {})
@@ -387,7 +368,7 @@ def _semantic_codegen_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]
         continue
       data = _read_json(microbench)
       model = _canonical_model(model_dir)
-      source = _portable(repo, microbench)
+      source = _portable(microbench, repo)
       for item in data.get("rows", []):
         candidate_id = str(item.get("id") or "")
         schedule = (item.get("schedule") or {}) if isinstance(item.get("schedule"), dict) else {}
@@ -508,7 +489,7 @@ def _semantic_schedule_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]
     microbench = base / model_dir / "microbench.json"
     if not microbench.exists():
       continue
-    source = _portable(repo, microbench)
+    source = _portable(microbench, repo)
     data = _read_json(microbench)
     model = _canonical_model(model_dir)
     for item in data.get("rows", []):
@@ -569,7 +550,7 @@ def _semantic_schedule_raw_accept_rows(repo:pathlib.Path) -> list[dict[str, Any]
     model_name = str(model_row.get("model", "")).lower()
     model_dir = "14b" if "14" in model_name else "8b"
     model = _canonical_model(model_name)
-    model_source = _portable(repo, base / model_dir / "microbench.json")
+    model_source = _portable(base / model_dir / "microbench.json", repo)
     for item in model_row.get("microbench_accepts", []) or []:
       candidate_id = str(item.get("id") or "")
       source_row = microbench_maps.get(model_dir, {}).get(candidate_id, {})
@@ -622,9 +603,9 @@ def _phase3g_packed_load_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
   microbench_path = repo / PHASE3G_ROOT / "phase3g-packed-load/8b/microbench.json"
   if not microbench_path.exists():
     return []
-  microbench = _portable(repo, microbench_path)
+  microbench = _portable(microbench_path, repo)
   load_width_path = repo / PHASE3G_ROOT / "phase3g-packed-load/8b/load-width/report.json"
-  load_width = _portable(repo, load_width_path) if load_width_path.exists() else None
+  load_width = _portable(load_width_path, repo) if load_width_path.exists() else None
   load_width_data = _read_json(load_width_path) if load_width_path.exists() else {"tensors": []}
   load_width_by_tensor = {str(item.get("tensor")): item for item in load_width_data.get("tensors", [])}
   data = _read_json(microbench_path)
@@ -694,7 +675,7 @@ def _phase3g_block_dot_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
     microbench_path = repo / "bench" / microbench_dir / "microbench.json"
     if not microbench_path.exists():
       continue
-    microbench = _portable(repo, microbench_path)
+    microbench = _portable(microbench_path, repo)
     compile_gate_path = repo / "bench" / compile_dir / "compile-gate.json"
     data = _read_json(microbench_path)
     config = data.get("config") or {}
@@ -702,7 +683,7 @@ def _phase3g_block_dot_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
     cmp = data.get("comparison", {})
     gain_pct = cmp.get("gain_pct")
     label, reason, retry = v0._label_reason_retry("reject", gain=gain_pct / 100.0 if gain_pct is not None else None)
-    source_files = [microbench] + ([_portable(repo, compile_gate_path)] if compile_gate_path.exists() else [])
+    source_files = [microbench] + ([_portable(compile_gate_path, repo)] if compile_gate_path.exists() else [])
     rows.append(_row(
       row_id=f"{TARGETED_FAMILY}:phase3g_block_dot:{slug}",
       row_kind="candidate",
@@ -730,7 +711,7 @@ def _phase3g_block_dot_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
         "correctness_ok": data.get("summary", {}).get("correctness_ok"),
         "next_allowed_gate": data.get("summary", {}).get("next_allowed_gate"),
         "run_full_decode": data.get("summary", {}).get("run_full_decode"),
-        "source_compile_gate": _portable(repo, compile_gate_path) if compile_gate_path.exists() else None,
+        "source_compile_gate": _portable(compile_gate_path, repo) if compile_gate_path.exists() else None,
       },
       source_files=source_files,
     ))
@@ -741,7 +722,7 @@ def _phase3g_threeway_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
   microbench_path = repo / "bench/qk-threeway-load-microbench-blk0-ffn-up-20260614/microbench.json"
   if not microbench_path.exists():
     return []
-  microbench = _portable(repo, microbench_path)
+  microbench = _portable(microbench_path, repo)
   data = _read_json(microbench_path)
   rows = []
   # Only the newly covered dominant tensor (ffn_up) is added as branch-bounding diagnostic
@@ -799,7 +780,7 @@ def build_targeted_rows(repo:pathlib.Path) -> tuple[list[dict[str, Any]], list[d
   if semantic_contract.exists():
     contract = _read_json(semantic_contract)
     excluded.append({
-      "source_file": _portable(repo, semantic_contract),
+      "source_file": _portable(semantic_contract, repo),
       "rows": len(contract.get("contract_rows", [])) if isinstance(contract.get("contract_rows"), list) else 0,
       "reason": "design_only_no_runtime_lowering; recorded in plan but not used as train labels",
     })

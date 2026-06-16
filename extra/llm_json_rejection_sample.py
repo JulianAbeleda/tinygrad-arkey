@@ -9,9 +9,7 @@ from extra.llm_adapter_json_data_v4 import _completion
 from extra.llm_eval_common import build_prompt_ids, quality_summary, score_prompt
 from extra.llm_sft_smoke_train import load_sft_rows
 
-def _jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
-  with path.open("w") as f:
-    for row in rows: f.write(json.dumps(row, sort_keys=True) + "\n")
+from extra.llm_eval_common import write_jsonl as _jsonl
 
 def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
   if not path.exists(): return []

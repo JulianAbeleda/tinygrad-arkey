@@ -21,21 +21,9 @@ SAFE_TOP_LEVEL_CATEGORICAL = ("row_kind", "family", "role", "format", "mechanism
 SAFE_CONTEXT_CATEGORICAL = ("mode", "reference", "reference_mode", "model_size")
 SAFE_SCHEDULE_CATEGORICAL = ("activation_cache", "codegen_mode", "family", "format", "name", "reduction_mode", "role", "semantic_object")
 
-def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    rows.append(row)
-  return rows
+from extra.llm_eval_common import read_jsonl as _read_jsonl
 
-def _jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
-  with path.open("w") as f:
-    for row in rows: f.write(json.dumps(row, sort_keys=True) + "\n")
+from extra.llm_eval_common import write_jsonl as _jsonl
 
 def _model_size_b(value:Any) -> float:
   text = str(value or "")

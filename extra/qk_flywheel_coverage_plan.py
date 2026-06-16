@@ -48,10 +48,7 @@ LABEL_RECIPES = {
   "raw_accept_unconfirmed": "Only record when a repeated microbench clears its predeclared bar but no full-decode confirmation exists yet; do not force this label.",
 }
 
-def _read_json(path:pathlib.Path) -> dict[str, Any]:
-  data = json.loads(path.read_text())
-  if not isinstance(data, dict): raise ValueError(f"{path}: expected JSON object")
-  return data
+from extra.llm_eval_common import read_json_object as _read_json
 
 def build_coverage_plan(audit:dict[str, Any], audit_path:pathlib.Path) -> dict[str, Any]:
   audit_text = str(audit_path)

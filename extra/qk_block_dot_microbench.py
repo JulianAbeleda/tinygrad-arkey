@@ -20,11 +20,7 @@ PROMOTION_GAIN_PCT = 10.0
 TOLERANCE = 1e-2
 
 
-def _portable(path:pathlib.Path, repo:pathlib.Path) -> str:
-  try:
-    return str(path.resolve().relative_to(repo.resolve()))
-  except ValueError:
-    return str(path)
+from extra.qk_paths import portable_path as _portable
 
 
 def _display_path(path:pathlib.Path) -> str:
@@ -33,16 +29,7 @@ def _display_path(path:pathlib.Path) -> str:
   return text.replace(home + "/", "~/")
 
 
-def _stats(values:list[float]) -> dict[str, float|int]:
-  if not values: raise ValueError("cannot summarize empty values")
-  return {
-    "n": len(values),
-    "median": statistics.median(values),
-    "min": min(values),
-    "max": max(values),
-    "mean": statistics.fmean(values),
-    "stdev": statistics.stdev(values) if len(values) > 1 else 0.0,
-  }
+from extra.llm_eval_common import value_stats as _stats
 
 
 def _mode_kernel(mode:str, rows:int, k:int, parts:int, opts:tuple[Opt, ...]):

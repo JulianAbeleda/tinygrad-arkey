@@ -5,16 +5,7 @@ import argparse, filecmp, json, pathlib
 from typing import Any
 
 
-def load_json(path:pathlib.Path) -> Any:
-  try:
-    return json.loads(path.read_text())
-  except json.JSONDecodeError as exc:
-    raise ValueError(f"{path}: invalid JSON: {exc}") from exc
-
-
-def write_json(path:pathlib.Path, data:Any) -> None:
-  path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_text(json.dumps(data, indent=2, sort_keys=True))
+from extra.llm_eval_common import load_json, write_json
 
 
 def _confirmations(root:pathlib.Path, model:str, accepted_rows:list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

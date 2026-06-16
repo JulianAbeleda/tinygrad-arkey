@@ -125,11 +125,7 @@ def _sanitize_log(text:str, *, repo:pathlib.Path, model:pathlib.Path) -> str:
   return "\n".join(line.rstrip() for line in out.splitlines()) + "\n"
 
 
-def _portable(path:pathlib.Path, repo:pathlib.Path) -> str:
-  try:
-    return str(path.resolve().relative_to(repo.resolve()))
-  except ValueError:
-    return str(path)
+from extra.qk_paths import portable_path as _portable
 
 
 def _primitive(mode:str, out:Tensor, partials:Tensor, words:Tensor, x:Tensor, rows:int, k:int, parts:int, opts:tuple[Opt, ...]) -> Tensor:

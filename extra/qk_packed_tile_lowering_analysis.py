@@ -56,16 +56,7 @@ def _primitive_row(rows:list[dict[str, Any]]) -> dict[str, Any]:
     raise ValueError(f"expected exactly one q4k_primitive_gemv row, got {len(matches)}")
   return matches[0]
 
-def _stats(values:list[float]) -> dict[str, float|int]:
-  if not values: raise ValueError("cannot summarize empty values")
-  return {
-    "n": len(values),
-    "median": statistics.median(values),
-    "min": min(values),
-    "max": max(values),
-    "mean": statistics.fmean(values),
-    "stdev": statistics.stdev(values) if len(values) > 1 else 0.0,
-  }
+from extra.llm_eval_common import value_stats as _stats
 
 def summarize_runs(raw_runs:list[dict[str, Any]]) -> dict[str, Any]:
   grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}

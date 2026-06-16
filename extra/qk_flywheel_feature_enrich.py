@@ -14,31 +14,15 @@ def _read_json(path:pathlib.Path) -> dict[str, Any] | None:
   data = json.loads(path.read_text())
   return data if isinstance(data, dict) else None
 
-def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    rows.append(row)
-  return rows
+from extra.llm_eval_common import read_jsonl as _read_jsonl
 
-def _jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
-  with path.open("w") as f:
-    for row in rows: f.write(json.dumps(row, sort_keys=True) + "\n")
+from extra.llm_eval_common import write_jsonl as _jsonl
 
 def _repo_path(repo:pathlib.Path, value:Any) -> pathlib.Path:
   path = pathlib.Path(str(value))
   return path if path.is_absolute() else repo / path
 
-def _portable(repo:pathlib.Path, path:pathlib.Path) -> str:
-  try:
-    return str(path.resolve().relative_to(repo.resolve()))
-  except ValueError:
-    return str(path)
+from extra.qk_paths import portable_path as _portable
 
 def _load_width_words(value:Any) -> int:
   text = str(value or "").lower()
@@ -150,7 +134,7 @@ def _extract_from_json(row:dict[str, Any], repo:pathlib.Path, source:pathlib.Pat
     selected = _select_named(modes, row)
     if selected:
       _add_compile_features(features, selected)
-      used.append(_portable(repo, source))
+      used.append(_portable(source, repo))
 
   for extra_path in _feature_sources_for(source, data, repo):
     extra = _read_json(extra_path)
@@ -159,18 +143,18 @@ def _extract_from_json(row:dict[str, Any], repo:pathlib.Path, source:pathlib.Pat
       selected = _select_load_width_row(extra, row)
       if selected:
         _add_load_width_features(features, extra, selected)
-        used.append(_portable(repo, extra_path))
+        used.append(_portable(extra_path, repo))
     elif isinstance(extra.get("modes"), dict):
       selected = _select_named(extra["modes"], row)
       if selected:
         _add_compile_features(features, selected)
-        used.append(_portable(repo, extra_path))
+        used.append(_portable(extra_path, repo))
 
   if data.get("kind") == "qk_load_width_report":
     selected = _select_load_width_row(data, row)
     if selected:
       _add_load_width_features(features, data, selected)
-      used.append(_portable(repo, source))
+      used.append(_portable(source, repo))
 
   return features, sorted(set(used))
 

@@ -37,11 +37,7 @@ VECTOR_SOURCE_RE = re.compile(r"\b(?:tg_uint4|uint4|unsigned_int4)\b")
 TG_UINT4_LOAD_RE = re.compile(r"\btg_uint4\s+\w+\s*=\s*\*\s*\(\s*\(?\s*(?:const\s+)?tg_uint4\s*\*\s*\)")
 
 
-def _portable(path:pathlib.Path, repo:pathlib.Path) -> str:
-  try:
-    return str(path.resolve().relative_to(repo.resolve()))
-  except ValueError:
-    return str(path)
+from extra.qk_paths import portable_path as _portable
 
 
 def _time_to_us(value:float, unit:str) -> float:

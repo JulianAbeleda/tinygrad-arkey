@@ -1,9 +1,51 @@
 from __future__ import annotations
 
-import json, pathlib, re
+import json, pathlib, re, statistics
 from typing import Any
 
 from extra.llm_json_scorer import score_expected_json, summarize_json_axes, wilson_interval
+
+def read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
+  rows = []
+  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
+    if not raw.strip(): continue
+    try:
+      row = json.loads(raw)
+    except json.JSONDecodeError as exc:
+      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
+    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
+    rows.append(row)
+  return rows
+
+def write_jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
+  with path.open("w") as f:
+    for row in rows: f.write(json.dumps(row, sort_keys=True) + "\n")
+
+def read_json_object(path:pathlib.Path) -> dict[str, Any]:
+  data = json.loads(path.read_text())
+  if not isinstance(data, dict): raise ValueError(f"{path}: expected JSON object")
+  return data
+
+def load_json(path:pathlib.Path) -> Any:
+  try:
+    return json.loads(path.read_text())
+  except json.JSONDecodeError as exc:
+    raise ValueError(f"{path}: invalid JSON: {exc}") from exc
+
+def write_json(path:pathlib.Path, data:Any) -> None:
+  path.parent.mkdir(parents=True, exist_ok=True)
+  path.write_text(json.dumps(data, indent=2, sort_keys=True))
+
+def value_stats(values:list[float]) -> dict[str, float|int]:
+  if not values: raise ValueError("cannot summarize empty values")
+  return {
+    "n": len(values),
+    "median": statistics.median(values),
+    "min": min(values),
+    "max": max(values),
+    "mean": statistics.fmean(values),
+    "stdev": statistics.stdev(values) if len(values) > 1 else 0.0,
+  }
 
 def read_prompt_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
   rows: list[dict[str, Any]] = []

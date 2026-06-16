@@ -8,21 +8,9 @@ from typing import Any
 from extra.llm_eval_common import score_prompt
 from extra.qk_flywheel_dataset import LABELS, REASONS
 
-def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    rows.append(row)
-  return rows
+from extra.llm_eval_common import read_jsonl as _read_jsonl
 
-def _jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
-  with path.open("w") as f:
-    for row in rows: f.write(json.dumps(row, sort_keys=True) + "\n")
+from extra.llm_eval_common import write_jsonl as _jsonl
 
 def _completion(row:dict[str, Any]) -> str:
   return json.dumps({"label": row["label"], "reason": row["reason"], "retry": row["retry"]}, separators=(",", ":"))

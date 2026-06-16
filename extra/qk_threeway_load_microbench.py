@@ -21,11 +21,7 @@ Q4_RESULT_RE = re.compile(
 GEMV_RE = re.compile(r"^primitive_gemv_correctness: PASS \S+ max_abs=(?P<max_abs>[0-9.eE+-]+)", re.MULTILINE)
 
 
-def _portable(path:pathlib.Path, repo:pathlib.Path) -> str:
-  try:
-    return str(path.resolve().relative_to(repo.resolve()))
-  except ValueError:
-    return str(path)
+from extra.qk_paths import portable_path as _portable
 
 
 def _display_path(path:pathlib.Path) -> str:
