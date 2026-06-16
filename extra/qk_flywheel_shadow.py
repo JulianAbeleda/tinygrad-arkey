@@ -59,22 +59,13 @@ FRESH_SPECS: list[dict[str, Any]] = [
 
 # ----- io helpers -------------------------------------------------------------
 
-def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    row = json.loads(raw)
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    rows.append(row)
-  return rows
-
 def _jsonl_bytes(rows:list[dict[str, Any]]) -> bytes:
   return ("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows)).encode()
 
 def _write_jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
   path.write_bytes(_jsonl_bytes(rows))
 
-from extra.llm_eval_common import read_json_object as _read_json
+from extra.llm_eval_common import read_json_object as _read_json, read_jsonl as _read_jsonl
 
 def _sha256(data:bytes) -> str:
   return hashlib.sha256(data).hexdigest()
