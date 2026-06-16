@@ -71,20 +71,45 @@ of dataset builders that are the same "new experiment = new file" anti-pattern).
 
 ## Prioritized reduction plan (value × verifiability)
 
-Ranked by LOC ÷ risk. Each is its own commit, byte-proven, never red.
+**Correction (2026-06-16, after reading the chain code):** the scope doc's
+"dataset chain 2,050 → 280" is NOT a byte-preserving fold. The chain is **18
+bespoke per-artifact extractors** (9 in `dataset`, 9 in `targeted_outcomes`),
+each parsing a *distinct* committed-artifact schema, each consumed downstream.
+Like the row builders (Task C), they are genuinely divergent, not clones. The
+only byte-identical duplication is the ~6-line `_jsonl` writer in two files
+(`_slug` legitimately differs v0 `-` vs v1 `_`; `_load_json` adds validation).
+So there is **no large byte-provable reduction** in this chain.
 
-| # | action | LOC ↓ (est) | verifiable here? | risk |
+Reaching ~280 requires a **data-model rewrite** (collapse the v0→v1→featured→plus
+versioning into one representation, regenerate + repin every golden). That:
+- changes artifact bytes (not NFC) and **changes the `plus` corpus the cost-model
+  and shadow conclusions are computed from** — i.e. it alters research evidence,
+- cannot be byte-proven (it changes bytes by definition),
+- needs full re-validation of the cost-model/shadow corpus consistency.
+
+That is a different risk class from a refactor and should not be done as "LOC
+cleanup" without explicit sign-off. The chain's size mostly reflects real,
+evolved, evidence-bearing extraction for ~18 distinct experiment artifacts — it
+is the work product, not collapsible bloat.
+
+| # | action | LOC ↓ (est) | verifiable here? | recommendation |
 |---|---|---:|---|---|
-| 1 | **Fold the dataset stage-chain** (v0/v1 versioning + enrich/audit/coverage stages) into one module driven by a stage/spec table | ~1,800 | ✅ CPU-only; golden + kernel-triage regen (proven to work on this box) | medium |
-| 2 | **Collapse the adapter `json_data` version chain** (v0/v4/v4_1/signal → one config-driven builder) | ~500 | 🟡 needs its committed-dataset regen tests checked | medium |
-| 3 | **Consolidate `filter.py`** (rejection_sample + coverage_gate) | ~150 | ✅ CPU, has tests | low |
-| 4 | **`verdict.py` fold** (triage_eval + shadow + report) | ~900 | ❌ shadow score path not GPU-regen-provable here | high |
-| 5 | **Retire `eval_matrix`/`rollout_compare`/`runtime_contract`** if their consumers (`qwen_eval_matrix`, `scorecard`) can inline | ~600 | 🟡 must rework consumers | medium |
+| 1 | dataset-chain **data-model rewrite** (collapse v0/v1, regen+repin all goldens) | ~1,500 | ❌ changes bytes + corpus/evidence | **hold** — needs sign-off; alters research data |
+| 2 | adapter `json_data` version chain → config builder | ~500 | 🟡 needs its regen tests | candidate (separate subsystem) |
+| 3 | consolidate `filter.py` (rejection_sample + coverage_gate) | ~150 | ✅ CPU, has tests | safe, modest |
+| 4 | `verdict.py` fold (triage_eval + shadow + report) | ~900 | ❌ shadow score path not GPU-regen-provable here | hold |
+| 5 | retire `eval_matrix`/`rollout_compare`/`runtime_contract` | ~600 | 🟡 rework consumers | candidate |
+| — | file-consolidation toward the 8-module target (logic byte-identical, merge files, dedup `_jsonl`) | ~150 | ✅ golden+regen | low value / high churn |
 
-**Biggest safe win = #1** (dataset stage-chain fold, ~1,800 LOC, byte-provable on
-this box). That single step roughly halves the judging flywheel. #4 is the next
-largest but needs a verification story (regenerate shadow outcomes, or accept a
-non-byte-proven move) before it can be done under the discipline.
+**Honest conclusion:** the judging flywheel is large mostly because it accreted
+one bespoke extractor + one version layer per experiment phase. The collapsible
+*duplication* has largely been removed (cost-model merge, CLI, parameterized
+identical-schema builders, freeze dedup, dead-probe drop). Further big LOC cuts
+are **rewrites that change evidence**, not byte-safe folds. The remaining
+byte-safe wins (#3, file-consolidation) are modest. Recommend: stop treating raw
+LOC as the target; treat *duplication* and *re-sprawl prevention* (the overrides
+rule) as the target, and only do #1/#4 if the team accepts an evidence-changing
+rewrite with a fresh validation pass.
 
 ## Definition of done (target)
 
