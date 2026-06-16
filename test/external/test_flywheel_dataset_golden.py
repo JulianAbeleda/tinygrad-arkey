@@ -13,9 +13,10 @@ byte-reproducible from a different checkout and is deliberately excluded here.
 """
 from __future__ import annotations
 
-import json, pathlib, unittest
+import hashlib, json, pathlib, unittest
 from tempfile import TemporaryDirectory
 
+from extra.qk_flywheel_cost_model import run_cost_model
 from extra.qk_flywheel_targeted_outcomes import build_targeted_rows, write_phase3f
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -55,6 +56,28 @@ class TestFlywheelDatasetGolden(unittest.TestCase):
         _lines(PROOF / "kernel-triage-v1-featured-plus/prompts.jsonl"),
         "plus prompts.jsonl drifted",
       )
+
+  def test_cost_model_centroid_output_is_pinned(self):
+    """Lock the centroid-backend cost-model output (features + predictions +
+    summary) from the committed portable examples. xgboost is not required on
+    this checkout, so only the deterministic centroid backend is pinned; the
+    feature extractor is the load-bearing piece either way.
+    """
+    examples = PROOF / "kernel-triage-v1-featured-plus/examples.jsonl"
+    pinned = {
+      "predictions.jsonl": "bf10c793a7e6c1b4cdd8672a2fec36341aa217a93d4341d6f639322e56673068",
+      "features.jsonl": "3b54e164e68602ee933d21dd013b47ffa3c39a8ae1ed6469d17700f0a1e88f89",
+      "feature-vocab.json": "be73e4f708847723250418c9b5cbade8091e2a1d54fc1e3bfe539509cf9d3f31",
+    }
+    with TemporaryDirectory() as raw_td:
+      out = pathlib.Path(raw_td) / "cost-model"
+      summary = run_cost_model(examples, out, backend="centroid", seed=20260614)
+      self.assertEqual(summary["features"]["feature_count"], 232)
+      self.assertEqual(summary["conclusion"], "no_signal")
+      self.assertEqual(summary["backends"]["ran"][0]["backend"], "centroid")
+      for name, want in pinned.items():
+        got = hashlib.sha256((out / name).read_bytes()).hexdigest()
+        self.assertEqual(got, want, f"cost-model {name} drifted")
 
   def test_no_committed_locked_artifact_uses_absolute_paths(self):
     """Guard the portability invariant for every artifact we lock against."""
