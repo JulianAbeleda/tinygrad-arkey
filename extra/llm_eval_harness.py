@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, json, os, pathlib, subprocess, sys, time
+import argparse, json, pathlib, subprocess, sys, time
 from typing import Any
 
-from extra.llm_eval_common import build_prompt_ids, md_text, quality_summary, read_prompt_jsonl as _read_jsonl, score_prompt
-from extra.qk_modes import PolicyMode, eval_run_mode_choices, prompt_format_choices
+from extra.llm_eval_common import md_text, quality_summary, read_prompt_jsonl as _read_jsonl, score_prompt
+from extra.llm_generate import child_env, generate_one, load_model_and_tokenizer
+from extra.qk_modes import eval_run_mode_choices, prompt_format_choices
 
 DEFAULT_TIMEOUT = 1800.0
 
@@ -29,24 +30,7 @@ def _json_from_output(out:str) -> dict[str, Any]:
   return summary
 
 def _env_for_mode(args:argparse.Namespace, mode:str) -> dict[str, str]:
-  env = {**os.environ, "DEV": args.device, "JIT": "1", "PYTHONPATH": "."}
-  env["QK_PRIMITIVE_STORAGE"] = args.storage
-  env.pop("QK_GENERATED_POLICY", None)
-  env.pop("QK_GENERATED_POLICY_DEBUG", None)
-  env.pop("Q4K_PRIMITIVE_DEBUG", None)
-  env.pop("Q6K_PRIMITIVE_DEBUG", None)
-  if mode == PolicyMode.EXPLICIT.value:
-    env["Q4K_PRIMITIVE"] = "1"
-    env["Q6K_PRIMITIVE"] = "1"
-  elif mode == PolicyMode.GENERATED.value:
-    if args.policy is None: raise ValueError("--policy is required for generated mode")
-    env["Q4K_PRIMITIVE"] = "0"
-    env["Q6K_PRIMITIVE"] = "0"
-    env["QK_GENERATED_POLICY"] = str(args.policy)
-    if args.policy_debug: env["QK_GENERATED_POLICY_DEBUG"] = "1"
-  else:
-    raise ValueError(f"unknown mode {mode!r}")
-  return env
+  return child_env(mode, device=args.device, storage=args.storage, policy=args.policy, policy_debug=args.policy_debug)
 
 def _child_cmd(args:argparse.Namespace, mode:str) -> list[str]:
   cmd = [
@@ -183,33 +167,19 @@ def write_artifacts(args:argparse.Namespace, explicit:dict[str, Any], generated:
   (args.out / "README.md").write_text(summary_markdown(summary, explicit, generated))
 
 def run_child(args:argparse.Namespace) -> None:
-  from tinygrad import Tensor
-  from tinygrad.llm.cli import SimpleTokenizer
-  from tinygrad.llm.model import Transformer
-
-  Tensor.manual_seed(args.seed)
   prompts = _read_jsonl(args.prompts)
-  model, kv = Transformer.from_gguf(pathlib.Path(args.model).expanduser(), args.max_context)
-  tok = SimpleTokenizer.from_gguf_kv(kv)
+  model, tok = load_model_and_tokenizer(args.model, args.max_context, seed=args.seed)
   results = []
   total_tokens = 0
   st_total = time.perf_counter()
   for prompt in prompts:
-    prompt_ids = build_prompt_ids(tok, prompt["prompt"], args.prompt_format)
-    out: list[int] = []
-    st = time.perf_counter()
-    for tid in model.generate(prompt_ids, temperature=args.temperature):
-      if tok.is_end(tid): break
-      out.append(tid)
-      if len(out) >= args.tokens: break
-    elapsed = time.perf_counter() - st
-    total_tokens += len(out)
-    text = tok.decode(out)
+    gen = generate_one(model, tok, prompt["prompt"], args.prompt_format, temperature=args.temperature, max_tokens=args.tokens)
+    total_tokens += gen["generated"]
     results.append({
-      "id": prompt["id"], "prompt": prompt["prompt"], "tokens": out, "text": text,
-      "tags": prompt.get("tags", []), "score": score_prompt(prompt, text),
-      "prompt_len": len(prompt_ids), "generated": len(out), "elapsed_s": round(elapsed, 6),
-      "tok_s": 0.0 if elapsed == 0 else len(out) / elapsed,
+      "id": prompt["id"], "prompt": prompt["prompt"], "tokens": gen["tokens"], "text": gen["text"],
+      "tags": prompt.get("tags", []), "score": score_prompt(prompt, gen["text"]),
+      "prompt_len": gen["prompt_len"], "generated": gen["generated"], "elapsed_s": gen["elapsed_s"],
+      "tok_s": gen["tok_s"],
     })
   elapsed_total = time.perf_counter() - st_total
   print(json.dumps({

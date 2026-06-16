@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, json, os, pathlib, subprocess, sys, time
+import argparse, json, pathlib, subprocess, sys
 from typing import Any
 
-from extra.llm_eval_common import build_prompt_ids, md_text, quality_summary, read_prompt_jsonl, score_prompt
-from extra.qk_modes import PolicyMode, policy_mode_choices, prompt_format_choices, validate_policy_mode
+from extra.llm_eval_common import md_text, quality_summary, read_prompt_jsonl, score_prompt
+from extra.llm_generate import configure_process_env, generate_one, load_model_and_tokenizer
+from extra.qk_modes import policy_mode_choices, prompt_format_choices
 
 def _rate_ci(row:dict[str, Any]) -> str:
   if row.get("pass_rate") is None: return "n/a"
@@ -14,27 +15,7 @@ def _rate_ci(row:dict[str, Any]) -> str:
   return f"{row['pass_rate']:.2f} [{ci['low']:.2f}, {ci['high']:.2f}]"
 
 def configure_env(args:argparse.Namespace) -> None:
-  os.environ["DEV"] = args.device
-  os.environ["JIT"] = "1"
-  os.environ["PYTHONPATH"] = "."
-  os.environ["QK_PRIMITIVE_STORAGE"] = args.storage
-  os.environ.pop("QK_GENERATED_POLICY", None)
-  os.environ.pop("QK_GENERATED_POLICY_DEBUG", None)
-  os.environ.pop("Q4K_PRIMITIVE_DEBUG", None)
-  os.environ.pop("Q6K_PRIMITIVE_DEBUG", None)
-  mode = validate_policy_mode(args.mode)
-  if mode == PolicyMode.GENERATED:
-    if args.policy is None: raise ValueError("--policy is required for mode=generated")
-    os.environ["Q4K_PRIMITIVE"] = "0"
-    os.environ["Q6K_PRIMITIVE"] = "0"
-    os.environ["QK_GENERATED_POLICY"] = str(args.policy)
-    if args.policy_debug: os.environ["QK_GENERATED_POLICY_DEBUG"] = "1"
-  elif mode == PolicyMode.EXPLICIT:
-    os.environ["Q4K_PRIMITIVE"] = "1"
-    os.environ["Q6K_PRIMITIVE"] = "1"
-  elif mode == PolicyMode.BASELINE:
-    os.environ["Q4K_PRIMITIVE"] = "0"
-    os.environ["Q6K_PRIMITIVE"] = "0"
+  configure_process_env(args.mode, device=args.device, storage=args.storage, policy=args.policy, policy_debug=args.policy_debug)
 
 def summarize_rollouts(args:argparse.Namespace, rows:list[dict[str, Any]]) -> dict[str, Any]:
   elapsed = sum(row["elapsed_s"] for row in rows)
@@ -107,35 +88,18 @@ def write_artifacts(out:pathlib.Path, rows:list[dict[str, Any]], summary:dict[st
 
 def run_rollout(args:argparse.Namespace) -> int:
   configure_env(args)
-  from tinygrad import Tensor
-  from tinygrad.llm.cli import SimpleTokenizer
-  from tinygrad.llm.model import Transformer
-
-  Tensor.manual_seed(args.seed)
   dataset = read_prompt_jsonl(args.dataset)
-  model, kv = Transformer.from_gguf(pathlib.Path(args.model).expanduser(), args.max_context)
-  if args.adapter is not None:
-    from extra.llm_adapter import load_adapter
-    load_adapter(model, pathlib.Path(args.adapter).expanduser())
-  tok = SimpleTokenizer.from_gguf_kv(kv)
+  model, tok = load_model_and_tokenizer(args.model, args.max_context, seed=args.seed, adapter=args.adapter)
   rows: list[dict[str, Any]] = []
   for item in dataset:
-    ids = build_prompt_ids(tok, item["prompt"], args.prompt_format)
-    out: list[int] = []
     max_tokens = item.get("max_tokens", args.tokens)
-    st = time.perf_counter()
-    for tid in model.generate(ids, temperature=args.temperature):
-      if tok.is_end(tid): break
-      out.append(tid)
-      if len(out) >= max_tokens: break
-    elapsed = time.perf_counter() - st
-    text = tok.decode(out)
+    gen = generate_one(model, tok, item["prompt"], args.prompt_format, temperature=args.temperature, max_tokens=max_tokens)
     result = {
       "id": item["id"], "mode": args.mode, "model": str(args.model), "policy": str(args.policy) if args.policy else None,
-      "prompt": item["prompt"], "prompt_len": len(ids), "prompt_format": args.prompt_format,
-      "tags": item.get("tags", []), "max_tokens": max_tokens, "tokens": out, "text": text,
-      "generated": len(out), "elapsed_s": round(elapsed, 6), "tok_s": 0.0 if elapsed == 0 else len(out) / elapsed,
-      "score": score_prompt(item, text),
+      "prompt": item["prompt"], "prompt_len": gen["prompt_len"], "prompt_format": args.prompt_format,
+      "tags": item.get("tags", []), "max_tokens": max_tokens, "tokens": gen["tokens"], "text": gen["text"],
+      "generated": gen["generated"], "elapsed_s": gen["elapsed_s"], "tok_s": gen["tok_s"],
+      "score": score_prompt(item, gen["text"]),
     }
     if args.adapter is not None: result["adapter"] = str(args.adapter)
     rows.append(result)
