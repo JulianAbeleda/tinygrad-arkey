@@ -71,9 +71,20 @@ class Q4KPrimitiveLinear:
     return x.linear(self.weight.transpose(), self.bias)
 
   def __call__(self, x:Tensor) -> Tensor:
-    # This primitive is a decode GEMV path. Prefill, batching, and unsupported bias cases use the normal tinygrad graph.
+    # Decode GEMV (1 token) or batched verify/prefill GEMM (K tokens). Unsupported bias/shape -> normal graph.
     if not self.decode_enabled or self.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != self.in_features:
       return self._fallback(x)
+    K = x.shape[-2]
+    if not isinstance(K, int) or K != 1:  # batched (verify/prefill); fall back for large or symbolic K
+      if not isinstance(K, int) or K > 32 or self.kernel_mode == "direct_out": return self._fallback(x)
+      from extra.q4_k_gemv_primitive import q4k_gemm_kernel, parse_opt
+      x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
+      words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
+      partials = Tensor.empty(self.out_features, K, self.parts, dtype=dtypes.float32, device=x.device)
+      gemm_opts = self.opts + (parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
+      out = partials.custom_kernel(words, x_batch.reshape(K*self.in_features),
+        fxn=q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
+      return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
     from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
     words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
@@ -146,9 +157,19 @@ class Q6KPrimitiveLinear:
     return x.linear(self.weight.transpose(), self.bias)
 
   def __call__(self, x:Tensor) -> Tensor:
-    # Q6_K is currently only a measured win for the large decode GEMV ffn_down shape.
+    # Q6_K decode GEMV (1 token) or batched verify/prefill GEMM (K tokens).
     if not self.decode_enabled or self.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != self.in_features:
       return self._fallback(x)
+    K = x.shape[-2]
+    if not isinstance(K, int) or K != 1:  # batched (verify/prefill)
+      if not isinstance(K, int) or K > 32: return self._fallback(x)
+      from extra.q6_k_gemv_primitive import q6k_gemm_kernel, parse_opt
+      x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
+      partials = Tensor.empty(self.out_features, K, self.parts, dtype=dtypes.float32, device=x.device)
+      gemm_opts = self.opts + (parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
+      out = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_batch.reshape(K*self.in_features),
+        fxn=q6k_gemm_kernel(self.out_features, self.in_features, K, self.parts, gemm_opts))[0]
+      return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
     from extra.q6_k_gemv_primitive import q6k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
     partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
@@ -750,7 +771,12 @@ class Transformer:
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     if getenv("Q4K_VDOT_AMORT"): _VDOT_QUANT_CACHE.clear()  # E0: fresh quant cache per forward/trace
-    for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = not is_prefill
+    # S3: with Q4K_BATCHED, the primitives also handle a CONCRETE-K verify/prefill via a batched GEMM kernel
+    # (one weight read for K tokens, dequant hoisted across the K columns). Default-off: the symbolic prompt
+    # prefill can't use it (K is a UOp, not an int -> falls back), so it only activates for a concrete-K
+    # verify forward (the speculative path, not yet wired). The GEMM kernels are built + correctness-verified.
+    batched = bool(getenv("Q4K_BATCHED", 0))
+    for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = batched or (not is_prefill)
     return (self.prefill_jit if is_prefill else self.rollout_jit)(tokens.contiguous(), start_pos, temperature)
 
   @staticmethod

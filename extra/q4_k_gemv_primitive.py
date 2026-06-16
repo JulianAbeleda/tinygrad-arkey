@@ -326,6 +326,35 @@ def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple
 
   return kernel
 
+def _q4k_block_dot_gemm(words:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp, bb:UOp, k:int) -> UOp:
+  # GEMM body on the raw-words layout (same storage as the decode GEMV primitive); weight reused across bb.
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for grp in range(8):
+    w = _q4k_weight(words, base, grp, pos)
+    contrib = contrib + w * x[bb*k + x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
+  return contrib
+
+def q4k_gemm_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    bb = UOp.range(b, 1)
+    part = UOp.range(parts, 2)
+    blk_part = UOp.range(blocks_per_part, 3, axis_type=AxisType.REDUCE)
+    pos = UOp.range(32, 4, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_gemm(words, x, base, blk, pos, bb, k), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, bb, part].set(0.0)
+    acc = partials[row, bb, part].set(acc.after(blk_part, pos)[row, bb, part] + contrib, end=pos)
+    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"q4k_gemm_{rows}_{k}_{b}_{parts}", schedule, opts))
+
+  return kernel
+
 def q4k_gemv_packed_load_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)

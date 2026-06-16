@@ -53,6 +53,36 @@ def _q6k_block_dot(halfs:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp) -> UOp:
     contrib = contrib + _q6k_weight(halfs, base, grp, pos) * x[x_block*Q6_K_BLOCK_ELEMS + grp*16 + pos].cast(dtypes.float32)
   return contrib
 
+def _q6k_block_dot_gemm(halfs:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp, bb:UOp, k:int) -> UOp:
+  # GEMM body: x is flattened [B*k]; each dequantized weight is reused across the B columns.
+  # If bb is UPCAST'd, tinygrad unrolls it and CSEs the weight, so the Q6_K dequant runs once per weight.
+  contrib = UOp.const(dtypes.float32, 0.0)
+  for grp in range(16):
+    w = _q6k_weight(halfs, base, grp, pos)
+    contrib = contrib + w * x[bb*k + x_block*Q6_K_BLOCK_ELEMS + grp*16 + pos].cast(dtypes.float32)
+  return contrib
+
+def q6k_gemm_kernel(rows:int, k:int, b:int, parts:int, opts:tuple[Opt, ...]):
+  k_blocks = k // Q6_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, halfs:UOp, x:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    bb = UOp.range(b, 1)
+    part = UOp.range(parts, 2)
+    blk_part = UOp.range(blocks_per_part, 3, axis_type=AxisType.REDUCE)
+    pos = UOp.range(16, 4, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
+    contrib = in_range.where(_q6k_block_dot_gemm(halfs, x, base, blk, pos, bb, k), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, bb, part].set(0.0)
+    acc = partials[row, bb, part].set(acc.after(blk_part, pos)[row, bb, part] + contrib, end=pos)
+    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"q6k_gemm_{rows}_{k}_{b}_{parts}", opts))
+
+  return kernel
+
 def _kernel_info(name:str, opts:tuple[Opt, ...]) -> KernelInfo:
   return KernelInfo(name=name, opts_to_apply=opts)
 
