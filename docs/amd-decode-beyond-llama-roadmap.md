@@ -21,10 +21,14 @@ levers below extend the policy's decision space (kernel, bit-width, schedule, sp
 a search can beat a fixed reference.
 
 ## Parity levers (close the last of the gap to llama, ~29%→57%)
-- **P1 — lm_head primitive: DONE** (Q6K_COVER_MORE default-on; part of 53.5).
-- **P2 — attention reduces (~3.2 ms/token, the `r_*..start_pos` sdpa over the KV cache).** Today it is a
-  generic materialized softmax over the cache. Parity = a fused flash-attention-style kernel (no materialized
-  scores, online softmax) to match llama's fused attention. *Scope below.*
+- **P1 — lm_head primitive: DONE** (Q6K_COVER_MORE default-on; eliminated the 2.7 ms `r_1187`).
+- **P2 — attention reduces. RE-PROFILED 2026-06-15 → low ROI now.** After the Q6_K + COVER_MORE wins the
+  non-GEMV dropped 48% → **29% (5.9 ms)** and is now **diffuse**: attention ~3.0 ms spread across small
+  per-layer sdpa kernels (none >0.9 ms), lm_head sampling ~0.85 ms, norms ~1.3 ms. A custom flash-attention
+  decode kernel would save ~1.5–2 ms = **~8–10% (53 → ~58 tok/s)** for a substantial build over a diffuse
+  target. The token is now **71% GEMV (weight read, at the B1 occupancy ceiling)** — we are near the practical
+  per-kernel ceiling. P2 is a real but modest lever; not obviously worth a flash-attention build vs. banking
+  the arc.
 
 ## Beyond-llama levers (surpass 57%) — each ties to the policy/primitive frame
 Ranked by (ceiling × feasibility). Roofline deltas are per-token, stacking on the current 18.7 ms.
