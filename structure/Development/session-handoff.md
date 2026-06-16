@@ -1891,3 +1891,69 @@ split-softmax custom_kernel (occupancy) + reduce. Finicky .set/.after/.end accum
 _partial_kernel as template). Full plan: docs/amd-decode-flash-attention-plan.md (INTEGRATION STATUS).
 All flags default-off except Q6_K-on-with-Q4K and COVER_MORE (exact). Memories: amd-decode-{next-step,
 real-bottleneck,kernel-beats-llamacpp,measurement-confounds}.
+
+## 2026-06-16 — P2 flash-decode SHIPPED: model integration done, exact, long-context collapse fixed
+Closed out the open "NEXT TASK" above. The UOp flash-decode is built, wired into the model (gated
+`FLASH_DECODE=1` in `TransformerBlock._attention`), and verified **byte-exact vs SDPA** (40 identical greedy
+tokens at ctx 8 and ctx 1024). `extra/qk_flash_decode.py` (`flash_decode_attention` + 5 kernels), test
+`test/external/test_qk_flash_decode.py::test_uop_flash_decode_attention`, bench `extra/_flash_bench.py`,
+plan `docs/amd-decode-flash-attention-plan.md` (SHIPPED section).
+
+DECODE tok/s vs context (Qwen3-8B Q4_K_M, `Q4K_PRIMITIVE=1`, RX 7900 XTX, median of 12):
+| ctx | SDPA | FLASH | speedup | llama.cpp | flash % of llama |
+|---|---:|---:|---:|---:|---:|
+| 8    | 56.2 | 47.5 | 0.84x | 99.9 | 48% |
+| 1024 | 27.6 | 34.3 | 1.24x | 98.2 | 35% |
+| 3072 |  9.4 | 22.7 | **2.41x** | 94.0 | **24%** |
+(llama.cpp = `llama-bench -ngl 99 -n 128 -d <ctx>`, runs flash-attention; near-flat 99.9->94.0.)
+
+HEADLINE: the SDPA long-context **collapse** (6.0x drop 8->3072) is **flattened to 2.1x** — exactly the P2
+target. Honest framing: this removes the tinygrad-specific attention collapse (ctx-3072 went 10%->24% of
+llama) but does NOT make tinygrad competitive at long ctx — llama is still ~4x faster there (pre-existing
+~58% per-token baseline gap + my attention kernels are less optimized: 5 separate f32 kernels vs llama's
+fused fp16). Flash also doesn't fully flatten relative to llama (48%->24% of llama as ctx grows), so residual
+attention scaling remains. SHIPS **gated (default off)** — crossover ~ctx 400; flash regresses short-ctx ~15%
+from the 5 extra kernel launches/layer. Enable for long-context serving. `FLASH_L=256` default (won the L
+sweep: 128/512 both worse at ctx 1024, 512 much worse at 3072).
+
+DESIGN (5 single-accumulator UOp kernels — the q4k_gemv_partial pattern): precompute scores via
+`grouped_q @ k^T` matmul into a concrete `[Hq,MAXC]` buffer (avoids nesting a q.k reduce in the custom
+kernel), then `flash_max` (per-split max) -> `flash_partial` (exp-weighted partial out; 1s-augmented v folds
+the softmax denom) -> `flash_gmax` (global max) -> `flash_den` (denom) -> `flash_combine` (LSE reduce).
+WHY 5 NOT 2: tinygrad's linearizer range-ordering rejects coupled/multi-accumulator reduces in one kernel
+(online-softmax's m/l/acc cross-reference, and two siblings ending the same range) — each kernel must be ONE
+independent single-accumulator reduce. GOTCHAS SOLVED (the multi-iteration grind the plan predicted): (1)
+multi-dim store index breaks tinygrad's local-dim auto-mask -> flatten to 1D indexing; (2) `opts_to_apply=()`
+to skip the heuristic LOCAL opt; (3) symbolic split S=cdiv(start_pos+1,L) — a BIND in a custom-kernel range
+AST fails type_verify, so use the UNbound `DEFINE_VAR` twin for kernel ranges and the bound `start_pos+1`
+only in the score-matmul slice (which carries the value into the shared var_vals); buffers sized at concrete
+`Smax`, ranges/strides use symbolic S<=Smax; tinygrad `cdiv` truncates (not ceiling) -> use `(a+b-1)//b`; (4)
+**the model-only NaN bug** (exact standalone, garbage in-model): masked lanes computed `p(=0) *
+vc[uninitialized KV cache](=Inf) = NaN` poisoning the accumulator — fix: clamp the out-of-range v index to a
+written position so masked lanes read finite data.
+
+NEXT (modest, optional): merge gmax/den/combine to cut the short-ctx launch overhead and push the crossover
+lower; go fp16 in the attention math to close the residual long-ctx scaling vs llama. Memory updated
+(`amd-decode-next-step`). All flags still default-off except Q6_K-on-with-Q4K and COVER_MORE.
+
+## 2026-06-16 — Scorecard completed vs llama: PREFILL is the worst gap (corrects a wrong inference)
+Filled the two unmeasured cells. PREFILL was assumed "likely close to llama" — it is NOT. Measured (warm
+time-to-first-token, distinct warmup tokens so the prefix-cache doesn't skip prefill; bench `extra/_prefill
+_bench.py`): ours **~65 tok/s** (512/1024/3072: 67/66/60) vs **llama-bench pp ~3000** (`-p 512,1024,3072
+-n 0`) = **~2% of llama, ~45x behind**. Config-independent (same ~66 with and without `Q4K_PRIMITIVE`). Our
+prefill runs at ~decode-speed*N — ZERO batching benefit (~1 TFLOP/s effective; a 32-token chunk costs ~32
+decodes). The batched matmuls stay memory-bound instead of going compute-bound like llama's.
+Full scorecard vs llama (this GPU, Qwen3-8B Q4_K_M):
+| category | ours | llama | vs llama |
+|---|---:|---:|---|
+| Decode baseline (GEMV/FFN) | 56 | 100 | ~58% (2x behind) — hand-asm wall |
+| Decode attention short | (in 56) | — | ~fine |
+| Decode attention long (ctx 3072) | 22.7 | 94 | 24% (flash, today) |
+| **Prefill** | **65** | **3000** | **~2% (45x behind)** |
+| Batched/speculative | = prefill regime | — | same untuned-matmul story |
+| lm_head | (in 56) | — | done |
+KEY: the gap is NOT uniform. Decode ~58% (hand-asm wall); prefill ~2% (untuned matmul). The two are
+different problems — decode is memory-bound at batch-1 (can't tune past), prefill is COMPUTE-bound but
+UNTUNED, which is exactly the loop's proven substrate (N1/N2 hit 33-98% of peak on native matmul). So the
+highest-leverage unrealized target is PREFILL via the curated-loop / matmul tuning (NOT native BEAM — it
+hangs gfx1100). bench `extra/_prefill_bench.py`; llama bar `llama-bench -ngl 99 -p N -n 0`.

@@ -112,6 +112,36 @@ exactly right — a known finicky iteration cycle (the q4k/q6k kernels took seve
 compile error ("expression is not assignable") in the reduce kernel. This is mechanical but multi-iteration.
 Banked the verified raw kernel; the UOp wiring is a well-scoped, de-risked next build (not an open question).
 
+## SHIPPED (2026-06-16): UOp flash-decode wired into the model, exact, long-context collapse fixed
+The UOp path is built, integrated (`FLASH_DECODE=1` in `TransformerBlock._attention`), and verified
+byte-exact vs SDPA (40 identical greedy tokens at ctx 8 and ctx 1024). **Decode tok/s vs context** (Qwen3-8B
+Q4_K_M, `Q4K_PRIMITIVE=1`, RX 7900 XTX, median of 12):
+| ctx | SDPA | FLASH | speedup |
+|---|---|---|---|
+| 8    | 56.2 | 47.5 | 0.84x |
+| 1024 | 27.6 | 34.3 | 1.24x |
+| 3072 |  9.4 | 22.7 | **2.41x** |
+The SDPA long-context collapse (6.0x drop 8->3072) is flattened to 2.1x. Crossover ~ctx 400; flash regresses
+short-context by ~15% (5 extra kernel launches/layer), so it ships **gated (default off)** — enable for
+long-context serving. `FLASH_L` (default 256) tunes the split length; L=256 won the sweep (L=128/512 both
+worse at ctx 1024, L=512 much worse at 3072).
+
+**Design (what worked, 5 kernels):** precompute scores via `grouped_q @ k^T` matmul (avoids nesting a q.k
+reduce in the custom kernel) materialized into a concrete `[Hq,MAXC]` buffer; then 5 single-accumulator UOp
+kernels — `flash_max` (per-split max) -> `flash_partial` (exp-weighted partial out, 1s-augmented v folds the
+denominator) -> `flash_gmax` (global max) -> `flash_den` (softmax denom) -> `flash_combine` (LSE reduce).
+**Why 5 not 2:** the linearizer's range-ordering rejects coupled/multi-accumulator reduces in one kernel
+(online-softmax's m/l/acc cross-reference; two siblings ending the same range) — each kernel must be ONE
+independent single-accumulator reduce (the q4k_gemv_partial pattern). **Key gotchas solved:** (1) multi-dim
+store index breaks tinygrad's local-dim auto-mask -> flatten to 1D indexing; (2) `opts_to_apply=()` skips the
+heuristic LOCAL opt; (3) symbolic split count S=cdiv(start_pos+1,L): a BIND in a custom-kernel range AST fails
+type_verify -> use the UNbound `DEFINE_VAR` twin for kernel ranges, the bound `start_pos+1` only for the
+score-matmul slice (which carries the value into the shared var_vals); buffers sized at concrete `Smax`,
+ranges/strides use symbolic S<=Smax; (4) **the model-only NaN bug**: masked lanes did `p(=0) * vc[uninit KV
+cache](=Inf) = NaN` -> clamp the out-of-range v index to a written position so masked reads are finite. Code:
+`extra/qk_flash_decode.py` (`flash_decode_attention` + 5 kernels), test `test/external/test_qk_flash_decode.py`
+(`test_uop_flash_decode_attention`), bench `extra/_flash_bench.py`.
+
 ## Sources
 - Flash-Decoding for long-context inference — PyTorch blog: https://pytorch.org/blog/flash-decoding/
 - Princeton NLP / Tri Dao et al.: https://princeton-nlp.github.io/flash-decoding/
