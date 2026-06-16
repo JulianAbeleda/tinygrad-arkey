@@ -277,10 +277,9 @@ def run_outcomes(repo:pathlib.Path, out:pathlib.Path=DEFAULT_OUT, model_path:pat
     raise FileNotFoundError(
       "qk_flywheel_shadow packed-load microbench JSON is absent; qk_semantic_codegen_v3.py was removed and this replay path is no longer runnable."
     )
-  # block-dot: compile gate + microbench per tensor. A candidate whose correctness gate
-  # fails (a real per-tensor fp16 outcome) is recorded as construction_blocked, not a crash.
-  for spec in FRESH_SPECS:
-    if spec["mechanism"] != "qk_block_dot": continue
+  # block-dot replay path removed: qk_block_dot_compile_gate.py / qk_block_dot_microbench.py were
+  # deleted (Ops.QK_BLOCK_DOT gone from core; microbench rejected, -30% to -90%). The Phase-4
+  # shadow is concluded, so this generator is no longer runnable past the packed-load gate above.
   # three-way load diagnostic
   for spec in FRESH_SPECS:
     if spec["mechanism"] != "wide_load_only": continue
