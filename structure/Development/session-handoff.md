@@ -1851,3 +1851,43 @@ proved it) OR speculative K=16 (TC realizes but hurts). Lever real isolated (2x)
 the recurring thesis. Genuine remaining decode lever = fewer bytes (lower-bit/MoE) or megakernel (tinygrad
 can't express), not a kernel vocabulary. Commits a4a7e8660, 8838843f1. docs/amd-decode-option1-*.md.
 All experiment flags (Q4K_VDOT/FUSE/UNFUSE/WARMSTART) default-off; normal decode unchanged.
+
+## 2026-06-15 — DECODE ARC: 23 → 60.9 tok/s (2.65x), 22% → 58% of llama.cpp (capstone: docs/amd-decode-capstone.md)
+Picked up from the "kernel-vocabulary levers don't close decode" negative and RE-LOCALIZED the bottleneck —
+finding it was never the kernel. Two clean machine-search-beats-llama results landed.
+
+MEASUREMENT RE-BASE (killed 3 confounds: Infinity Cache, launch overhead, memory-clock ramp). Corrected
+several wrong conclusions (logged): "in-graph GEMV is 12%" (wrong kernel), "weight read is 95% of token"
+(circular), "small kernels can't saturate" (clock ramp), "decode is host-bound" (single-graph artifact; it's
+~99% GPU-busy). Standalone WIN: the int-dot (v_dot4) Q4_K GEMV sustains 76% of peak vs llama's 57% — the
+machine kernel BEATS the reference standalone. (amd-decode-flywheel-proof-20260614/{KERNEL_BEATS_LLAMACPP,
+prefetch-gemv/{PERLAYER,BREAKDOWN}_RESULT}.md)
+
+ROOT CAUSE + WINS (all in tinygrad/llm/model.py, gated):
+- Q6_K coverage (THE big one): Qwen3-8B-Q4_K_M is mixed-quant; the Q6_K matmuls (ffn_down 18/36 layers,
+  attn_v, lm_head) had NO primitive and ran a slow fallback (r_32_32_4_48 = 59% of GPU work). The Q6_K
+  primitive was built but gated off. **Q4K_PRIMITIVE now implies Q6K_PRIMITIVE (default-on): 23 → 53.5 tok/s
+  (2.2x), byte-identical output** (Q6_K dequant exact). Q6K_FIX_RESULT.md.
+- Q6K_COVER_MORE (attn_v + lm_head, default-on): +5% → 53.5, exact. (was wrongly "loses to fused graph".)
+- B3 bit-width (SHIPPED, first shippable search-beats-llama-quant): built the missing Q4_K QUANTIZER
+  (extra/qk_quantize.py, llama make_qkx2 port, validated BIT-EXACT vs llama's own Q4). ffn_down is
+  over-provisioned (Q6 where Q4 is ~free); **Q6K_DEMOTE_FFNDOWN=1 requants the 18 Q6 ffn_down -> Q4 at load:
+  53.4 → 60.9 tok/s (+14%) at dNLL -0.0028 (free).** Lossy (output diverges, coherent), gated, load-requant
+  ~2-3min (cacheable). B3_DEMOTE_RESULT.md.
+
+CLOSED DEAD-ENDS (measured, not assumed): B1 in-graph int-dot = per-kernel GEMV at its batch-1 occupancy
+ceiling (~llama's 57%); int-dot/split-K/fusion all within noise (B1_INTDOT_RESULT.md). B5 speculative =
+exact + verify-fast but net-negative (1.7B draft too costly vs 8B; S0+S1 results). S3 batched GEMM primitive
+(q4k_gemm_kernel + q6k_gemm_kernel, tests) BUILT + verified, dormant (gated Q4K_BATCHED) — used by the
+speculative verify; symbolic prefill can't use it.
+
+NEXT TASK — P2 flash-decode (the biggest real-world lever): decode collapses 56→14 tok/s from ctx 8→3072,
+attention-bound. Approach A (Tensor-level KV split) FAILED the S0 gate (slower; tinygrad won't parallelize
+the split). Approach B custom Flash-Decoding kernel BUILT + verified exact (extra/qk_flash_decode.py,
+test_qk_flash_decode, max_err ~1e-7). REMAINING = model integration: custom_kernel needs a UOp-builder fxn
+(no raw-C bridge); UOp.range takes symbolic bounds so a symbolic split S=cdiv(Tc,L) works. De-risked path:
+precompute scores via matmul (avoids nested reduce) + augment v with a 1s column (folds softmax denom) +
+split-softmax custom_kernel (occupancy) + reduce. Finicky .set/.after/.end accumulator pattern (use q4k_gemv
+_partial_kernel as template). Full plan: docs/amd-decode-flash-attention-plan.md (INTEGRATION STATUS).
+All flags default-off except Q6_K-on-with-Q4K and COVER_MORE (exact). Memories: amd-decode-{next-step,
+real-bottleneck,kernel-beats-llamacpp,measurement-confounds}.
