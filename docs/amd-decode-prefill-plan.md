@@ -215,3 +215,28 @@ Prefill is PARKED with a complete mechanism-level characterization (not a myster
 pristine throughout. Recommend: either the DEBUG=6 kernel-diff investigation (research-grade, tinygrad
 internals) or accept prefill as a characterized gap. All flag levers + the isolation/eager/realize recipe are
 exhausted.
+
+## llama KERNEL-LEVEL profile (rocprofv3, 2026-06-16): the reference target is rocBLAS Tensile WMMA GEMM
+Installed the profiler the gpu-perf doc prescribes (rocprofv3 + rocprofiler-compute/omniperf + aqlprofile).
+tinygrad's AMD backend bypasses ROCr (raw KFD/AQL) so rocprofv3 can't see it; its HIP backend can (but PMC
+counters break tinygrad's HIP device init, and HIP/ROCr is flaky alongside the AMD backend -- so only
+kernel-trace, not rich counters, on tinygrad). llama uses native HIP -> profiles cleanly. llama prefill (pp512,
+8B) top kernels:
+| total | kernel | VGPR | LDS | grid |
+|---|---|---|---|---|
+| 29.8ms x34 | `Cijk_Alik_Bljk_HB_MT128x128x16_MI16x16x16x1_SN` | 256 | 25600 | 4096 |
+| 2.9ms x36 | `Cijk_..._HB_MT64x64x32_MI16x16x16x1` | 128 | 9216 | 2048 |
+| -- | `quantize_q8_1`, `dequantize_block_q6_K`, `convert_unary` | | | |
+**Reduced to primitives:** llama's prefill GEMM is **rocBLAS/Tensile's fp16 WMMA GEMM** (`Cijk`=Tensile, `HB`=
+half-precision BLAS): `MT128x128x16` macro-tile (128x128 register/output blocking, K-tile 16), `MI16x16x16` =
+the **WMMA 16x16x16 matrix-core** instruction, **25.6 KB LDS** (shared-mem tiling, the doc's S1.4), 256 VGPR.
+It is the dequant->fp16->BLAS path (NOT MMQ int8 for this build/shape): `dequantize_block_q6_K`/`convert_unary`
+turn weights to fp16, then rocBLAS WMMA GEMM. This CONFIRMS the matmul_decoded approach AND names the missing
+piece: llama's "native GEMM" is rocBLAS Tensile (LDS-tiled + WMMA macro-tiles, ~80% peak); tinygrad's "native
+GEMM" is the `r_*` reduce kernel (minimal LDS tiling, no WMMA macro-tiles -> 5% chained / 17-27% isolated).
+TWO gaps to llama, both now kernel-measured: (1) tinygrad GEMM codegen 27% (isolated best) vs rocBLAS 80% =
+~3x kernel-quality gap (tinygrad's matmul codegen != Tensile); (2) in-model 1% vs tinygrad-isolated 27% = ~27x
+scheduling gap. To match llama, tinygrad prefill needs a rocBLAS-class tiled-WMMA GEMM (call rocBLAS/hipBLASLt,
+or hand-write the Marlin LDS-staged WMMA kernel -- the W2 path that hit tinygrad's auto-tiling wall) AND
+isolated large-batch calls. Profiler is now installed for future counter work; tinygrad PMC needs the
+HIP-backend/ROCr conflict resolved (or use the AMD-backend SQTT path).
