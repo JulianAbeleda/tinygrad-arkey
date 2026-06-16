@@ -89,8 +89,6 @@ def __getattr__(nm):
                                 args=["-I/opt/rocm/include", "-x", "c++"])
     case "amdgpu_drm": return load("amdgpu_drm", [ "/usr/include/drm/drm.h", *[root/f"extra/hip_gpu_driver/{s}.h" for s in ["amdgpu_drm"]]])
     case "kgsl": return load("kgsl", [root/"extra/qcom_gpu_driver/msm_kgsl.h"], args=["-D__user="])
-    case "qcom_dsp":
-      return load("qcom_dsp", [root/f"extra/dsp/include/{s}.h" for s in ["ion", "msm_ion", "adsprpc_shared", "remote_default", "apps_std"]])
     case "sqtt": return load("sqtt", [root/"extra/sqtt/sqtt.h"])
     case "rocprof":
       return load("rocprof", [f"{{}}/include/{s}.h" for s in ["rocprof_trace_decoder", "trace_decoder_instrument", "trace_decoder_types"]],
