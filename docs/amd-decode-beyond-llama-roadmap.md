@@ -56,6 +56,12 @@ the **lead parity lever** below. The faster-GEMV levers (B1/R1/R3/R4/R5) are out
   Since GEMV alone ≈ 80–95 tok/s, overlapping the ~4–5 ms non-GEMV recovers most of the gap to llama by
   itself (→ ~80 tok/s ≈ 75–80% of llama) and **keeps stacking past it**. This is structural, not a kernel
   tweak; it is both the parity finish and a beyond-llama multiplier. **Build this next.**
+  - **Status 2026-06-16: validated + GREENLIT for build** (`amd-decode-overlap-derisk-20260616.md`).
+    Spike confirmed HBM ~58% idle during the GEMV (+38% ceiling); a concurrent-decode capacity test
+    reclaimed +32% (the AMD hardware genuinely overlaps two streams) → realizable **~+25–32%**. Needs a
+    second compute queue in `runtime/graph/hcq.py` (the device already exposes the queue primitive; the
+    graph uses one today). The norm-fusion warm-up was **refuted** (single-accumulator kernel blocks the
+    RMS reduction; non-exact int8 round; norm already lazily fused) — overlap is the path, not fusion.
 
 ## Beyond-llama levers (surpass 57%) — each ties to the policy/primitive frame
 Ranked by (ceiling × feasibility). The path is **change the work, not the kernel.**
