@@ -5,6 +5,7 @@ import argparse, json, os, pathlib, subprocess, sys, time
 from typing import Any
 
 from extra.llm_eval_common import build_prompt_ids, md_text, quality_summary, read_prompt_jsonl as _read_jsonl, score_prompt
+from extra.qk_modes import PolicyMode, eval_run_mode_choices, prompt_format_choices
 
 DEFAULT_TIMEOUT = 1800.0
 
@@ -34,10 +35,10 @@ def _env_for_mode(args:argparse.Namespace, mode:str) -> dict[str, str]:
   env.pop("QK_GENERATED_POLICY_DEBUG", None)
   env.pop("Q4K_PRIMITIVE_DEBUG", None)
   env.pop("Q6K_PRIMITIVE_DEBUG", None)
-  if mode == "explicit":
+  if mode == PolicyMode.EXPLICIT.value:
     env["Q4K_PRIMITIVE"] = "1"
     env["Q6K_PRIMITIVE"] = "1"
-  elif mode == "generated":
+  elif mode == PolicyMode.GENERATED.value:
     if args.policy is None: raise ValueError("--policy is required for generated mode")
     env["Q4K_PRIMITIVE"] = "0"
     env["Q6K_PRIMITIVE"] = "0"
@@ -241,12 +242,12 @@ def main(argv:list[str] | None=None) -> int:
   parser.add_argument("--temperature", type=float, default=0.0)
   parser.add_argument("--device", default="AMD")
   parser.add_argument("--storage", default="shared")
-  parser.add_argument("--prompt-format", choices=("chat", "raw"), default="chat")
+  parser.add_argument("--prompt-format", choices=prompt_format_choices(), default="chat")
   parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
   parser.add_argument("--tail-lines", type=int, default=12)
   parser.add_argument("--policy-debug", action="store_true")
   parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
-  parser.add_argument("--run-mode", choices=("explicit", "generated"), default="explicit", help=argparse.SUPPRESS)
+  parser.add_argument("--run-mode", choices=eval_run_mode_choices(), default="explicit", help=argparse.SUPPRESS)
   args = parser.parse_args(argv)
 
   if args.child:

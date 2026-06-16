@@ -10,6 +10,7 @@ from extra.llm_eval_common import build_prompt_ids, quality_summary, score_promp
 from extra.llm_sft_smoke_train import load_sft_rows
 
 from extra.llm_eval_common import write_jsonl as _jsonl
+from extra.qk_modes import prompt_format_choices
 
 def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
   if not path.exists(): return []
@@ -309,7 +310,7 @@ def main() -> int:
   parser.add_argument("--out", type=pathlib.Path, required=True)
   parser.add_argument("--device", default="AMD")
   parser.add_argument("--storage", default="shared")
-  parser.add_argument("--prompt-format", choices=("chat", "raw"), default="chat")
+  parser.add_argument("--prompt-format", choices=prompt_format_choices(), default="chat")
   parser.add_argument("--tokens", type=int, default=24)
   parser.add_argument("--max-context", type=int, default=4096)
   parser.add_argument("--seed", type=int, default=20260614)

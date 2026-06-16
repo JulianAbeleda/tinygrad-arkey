@@ -5,6 +5,7 @@ import argparse, json, os, pathlib, subprocess, sys, time
 from typing import Any
 
 from extra.llm_eval_common import build_prompt_ids, md_text, quality_summary, read_prompt_jsonl, score_prompt
+from extra.qk_modes import PolicyMode, policy_mode_choices, prompt_format_choices, validate_policy_mode
 
 def _rate_ci(row:dict[str, Any]) -> str:
   if row.get("pass_rate") is None: return "n/a"
@@ -21,20 +22,19 @@ def configure_env(args:argparse.Namespace) -> None:
   os.environ.pop("QK_GENERATED_POLICY_DEBUG", None)
   os.environ.pop("Q4K_PRIMITIVE_DEBUG", None)
   os.environ.pop("Q6K_PRIMITIVE_DEBUG", None)
-  if args.mode == "generated":
+  mode = validate_policy_mode(args.mode)
+  if mode == PolicyMode.GENERATED:
     if args.policy is None: raise ValueError("--policy is required for mode=generated")
     os.environ["Q4K_PRIMITIVE"] = "0"
     os.environ["Q6K_PRIMITIVE"] = "0"
     os.environ["QK_GENERATED_POLICY"] = str(args.policy)
     if args.policy_debug: os.environ["QK_GENERATED_POLICY_DEBUG"] = "1"
-  elif args.mode == "explicit":
+  elif mode == PolicyMode.EXPLICIT:
     os.environ["Q4K_PRIMITIVE"] = "1"
     os.environ["Q6K_PRIMITIVE"] = "1"
-  elif args.mode == "baseline":
+  elif mode == PolicyMode.BASELINE:
     os.environ["Q4K_PRIMITIVE"] = "0"
     os.environ["Q6K_PRIMITIVE"] = "0"
-  else:
-    raise ValueError(f"unknown mode {args.mode!r}")
 
 def summarize_rollouts(args:argparse.Namespace, rows:list[dict[str, Any]]) -> dict[str, Any]:
   elapsed = sum(row["elapsed_s"] for row in rows)
@@ -216,14 +216,14 @@ def main() -> int:
   parser.add_argument("--adapter", type=pathlib.Path)
   parser.add_argument("--dataset", type=pathlib.Path)
   parser.add_argument("--out", type=pathlib.Path)
-  parser.add_argument("--mode", choices=("generated", "explicit", "baseline"), default="generated")
+  parser.add_argument("--mode", choices=policy_mode_choices(), default="generated")
   parser.add_argument("--tokens", type=int, default=64)
   parser.add_argument("--max-context", type=int, default=4096)
   parser.add_argument("--seed", type=int, default=20260612)
   parser.add_argument("--temperature", type=float, default=0.0)
   parser.add_argument("--device", default="AMD")
   parser.add_argument("--storage", default="shared")
-  parser.add_argument("--prompt-format", choices=("chat", "raw"), default="chat")
+  parser.add_argument("--prompt-format", choices=prompt_format_choices(), default="chat")
   parser.add_argument("--policy-debug", action="store_true")
   parser.add_argument("--fail-on-quality", action="store_true")
   args = parser.parse_args()

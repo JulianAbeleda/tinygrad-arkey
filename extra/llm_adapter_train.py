@@ -10,6 +10,7 @@ from tinygrad import Tensor
 from tinygrad.nn.optim import Adam
 
 from extra.llm_adapter import adapter_parameters, install_lora, save_adapter
+from extra.qk_modes import PolicyMode, policy_mode_choices, prompt_format_choices, validate_policy_mode
 from extra.llm_eval_common import build_prompt_ids, md_text
 from extra.llm_sft_smoke_train import load_sft_rows, split_rows
 
@@ -22,19 +23,18 @@ def configure_env(args:argparse.Namespace) -> None:
   os.environ.pop("QK_GENERATED_POLICY_DEBUG", None)
   os.environ.pop("Q4K_PRIMITIVE_DEBUG", None)
   os.environ.pop("Q6K_PRIMITIVE_DEBUG", None)
-  if args.mode == "generated":
+  mode = validate_policy_mode(args.mode)
+  if mode == PolicyMode.GENERATED:
     if args.policy is None: raise ValueError("--policy is required for mode=generated")
     os.environ["Q4K_PRIMITIVE"] = "0"
     os.environ["Q6K_PRIMITIVE"] = "0"
     os.environ["QK_GENERATED_POLICY"] = str(args.policy)
-  elif args.mode == "explicit":
+  elif mode == PolicyMode.EXPLICIT:
     os.environ["Q4K_PRIMITIVE"] = "1"
     os.environ["Q6K_PRIMITIVE"] = "1"
-  elif args.mode == "baseline":
+  elif mode == PolicyMode.BASELINE:
     os.environ["Q4K_PRIMITIVE"] = "0"
     os.environ["Q6K_PRIMITIVE"] = "0"
-  else:
-    raise ValueError(f"unknown mode {args.mode!r}")
 
 def _build_examples(rows:list[dict[str, Any]], tok:Any, prompt_format:str, max_context:int, target_positions:str="all",
                     append_eos:bool=False) -> list[dict[str, Any]]:
@@ -242,10 +242,10 @@ def main() -> int:
   parser.add_argument("--policy", type=pathlib.Path)
   parser.add_argument("--input", type=pathlib.Path, required=True)
   parser.add_argument("--out", type=pathlib.Path, required=True)
-  parser.add_argument("--mode", choices=("generated", "explicit", "baseline"), default="generated")
+  parser.add_argument("--mode", choices=policy_mode_choices(), default="generated")
   parser.add_argument("--device", default="AMD")
   parser.add_argument("--storage", default="shared")
-  parser.add_argument("--prompt-format", choices=("chat", "raw"), default="chat")
+  parser.add_argument("--prompt-format", choices=prompt_format_choices(), default="chat")
   parser.add_argument("--targets", nargs="+", default=["output"])
   parser.add_argument("--rank", type=int, default=4)
   parser.add_argument("--alpha", type=float, default=8.0)
