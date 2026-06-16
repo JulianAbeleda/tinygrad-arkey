@@ -6,6 +6,10 @@ Status: paused at a good stopping point. Local inference is consolidated; shared
 storage is validated across 8B, 14B, and 32B as the recommended explicit
 generated-policy storage mode.
 
+Reference: `docs/gpu-performance-first-principles.md` is the canonical bytes/math/overhead
++ roofline guide -- diagnose the binding bucket (and measure it with counters) before
+optimizing any kernel.
+
 ## Completed
 
 - [x] Verified the original fp32-spill thesis was false: tinygrad already fuses

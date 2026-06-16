@@ -1,5 +1,11 @@
 # Prefill optimization plan (P0-P3)
 
+> Framework: `docs/gpu-performance-first-principles.md` (the canonical bytes/math/overhead + roofline
+> reference). Prefill's verdict is a textbook **§1.4 (locality/reuse/tiling)** case: the in-model matmuls do
+> not tile (chained 5% of peak -> isolated 17-27%), so larger batch can't push them compute-bound. Per the
+> doc's Horace-He diagnostic (flat-with-size -> overhead/tiling, not memory- or compute-bound) + the measured
+> 95% GPU-busy, the binding limit is in-model scheduling/tiling, not bytes or the kernel.
+
 Date: 2026-06-16. The decode arc deliberately excluded prefill ("keep the dense path for prefill"); it was
 never scoped, profiled, or attacked. Measured this session: prefill ~65 tok/s vs llama.cpp ~3000 tok/s
 (`llama-bench -ngl 99 -p 512,1024,3072 -n 0`) = **~2% of llama, ~45x behind, ~1% of fp16 peak** — by far the

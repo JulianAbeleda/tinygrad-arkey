@@ -204,6 +204,9 @@ the old 8B peak artifact.
 
 Core verdicts and architecture:
 
+- `docs/gpu-performance-first-principles.md` -- CANONICAL "which bucket" reference (bytes/math/overhead +
+  roofline, how to measure each, campaign mapping). Diagnose the bucket BEFORE optimizing. Prefill is a
+  textbook §1.4 (tiling) case; decode is §1 (bandwidth) + launch overhead.
 - `docs/amd-decode-current-verdicts.md`
 - `docs/amd-decode-harness-architecture.md`
 - `docs/amd-decode-qk-storage-architecture.md`
