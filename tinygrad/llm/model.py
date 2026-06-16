@@ -264,6 +264,51 @@ def _q6k_effective_storage_mode(requested_mode:str) -> str:
     raise ValueError(f"unsupported QK primitive storage mode {requested_mode!r}")
   return "shared" if requested_mode == "shared" else "sidecar"
 
+@dataclass(frozen=True)
+class QKConfig:
+  """Single authority for the QK primitive *install* config read from the environment
+  inside `Transformer.from_gguf` once primitives are active (i.e. the flags consumed
+  under `if q4k_meta is not None`). Centralizes the reads + validation that were
+  scattered as `getenv` calls so invalid QK runtime config is rejected in one place.
+
+  Scope is deliberately the install config, not everything QK-shaped:
+  - Activation gating (`Q4K_PRIMITIVE`/`Q6K_PRIMITIVE`/`QK_GENERATED_POLICY`) stays at
+    the from_gguf gate -- its auto-default is coupled to the gguf source + device, a
+    separate (runtime, not env-only) concern.
+  - Forward-pass probe flags (`Q4K_VDOT`/`Q4K_VDOT_AMORT`/`Q6K_COVER_MORE`/`Q4K_UNFUSE`/
+    `FLASH_DECODE`/`FLASH_L`) are read per-call at their own sites; folding them here
+    would change when they are read.
+
+  Built via `from_env(storage_default=...)` at the top of the active-primitive block,
+  so every field is read exactly when the original scattered reads were (when the block
+  is entered) -- a behaviour-preserving centralization."""
+  generated_policy_strict: bool
+  max_storage_bytes: int | None
+  storage_mode: str
+  q6_storage_mode: str
+  policy_debug: bool
+  storage_debug: bool
+  demote_q6k_ffndown: bool
+  fuse_q4k: bool
+
+  @staticmethod
+  def from_env(*, storage_default:str) -> "QKConfig":
+    # Read order mirrors the original sites: cap + strict (QKPrimitiveBudget), then the
+    # validated storage mode, then the debug/probe flags -- so a first-raise on invalid
+    # input lands on the same variable as before.
+    max_storage_bytes = _qk_storage_cap_from_env()
+    generated_policy_strict = bool(getenv("QK_GENERATED_POLICY_STRICT", 0))
+    storage_mode = _qk_storage_mode_from_env(storage_default)
+    return QKConfig(
+      generated_policy_strict=generated_policy_strict,
+      max_storage_bytes=max_storage_bytes,
+      storage_mode=storage_mode,
+      q6_storage_mode=_q6k_effective_storage_mode(storage_mode),
+      policy_debug=bool(getenv("QK_GENERATED_POLICY_DEBUG", 0)),
+      storage_debug=bool(getenv("QK_GENERATED_POLICY_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", getenv("Q6K_PRIMITIVE_DEBUG", 0)))),
+      demote_q6k_ffndown=bool(getenv("Q6K_DEMOTE_FFNDOWN")),
+      fuse_q4k=bool(getenv("Q4K_FUSE")))
+
 def _qk_storage_summary(linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]) -> dict:
   by_kind: collections.Counter[str] = collections.Counter()
   by_mode: collections.Counter[str] = collections.Counter()
@@ -887,22 +932,22 @@ class Transformer:
     model = Transformer(config)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if q4k_meta is not None:
-      primitive_linears = []
-      primitive_budget = QKPrimitiveBudget(_qk_storage_cap_from_env(), bool(getenv("QK_GENERATED_POLICY_STRICT", 0)))
       # auto-enabled primitives default to `shared` storage (view the GGUF in place, storage_bytes=0) so
       # large models (e.g. 32B) stay within VRAM; explicit Q4K_PRIMITIVE keeps `sidecar`; env always wins.
-      q4_storage_mode = _qk_storage_mode_from_env("shared" if q4k_auto else "sidecar")
-      q6_storage_mode = _q6k_effective_storage_mode(q4_storage_mode)
+      qk_cfg = QKConfig.from_env(storage_default="shared" if q4k_auto else "sidecar")
+      primitive_linears = []
+      primitive_budget = QKPrimitiveBudget(qk_cfg.max_storage_bytes, qk_cfg.generated_policy_strict)
+      q4_storage_mode, q6_storage_mode = qk_cfg.storage_mode, qk_cfg.q6_storage_mode
       generated_policy = _load_qk_generated_policy(qk_generated_policy_path) if use_qk_generated_policy else None
       if generated_policy is not None:
-        if bool(getenv("QK_GENERATED_POLICY_DEBUG", 0)):
+        if qk_cfg.policy_debug:
           print(f"QK_GENERATED_POLICY_DEBUG loaded={qk_generated_policy_path} entries={_qk_generated_policy_len(generated_policy)}")
         primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q4_storage_mode)
         primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q6_storage_mode)
       else:
         if use_q4k_primitive: primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q4_storage_mode)
         if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q6_storage_mode)
-      if bool(getenv("QK_GENERATED_POLICY_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", getenv("Q6K_PRIMITIVE_DEBUG", 0)))):
+      if qk_cfg.storage_debug:
         summary = _qk_storage_summary(primitive_linears)
         cap = -1 if primitive_budget.cap_bytes is None else primitive_budget.cap_bytes
         by_kind_s = ",".join(f"{k}:{v}" for k, v in summary["by_kind"].items()) or "none"
@@ -913,10 +958,10 @@ class Transformer:
               f"runtime_cap_used_bytes={primitive_budget.used_bytes} by_kind={by_kind_s} by_mode={by_mode_s} "
               f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
               f"q6_effective_storage_mode={q6_storage_mode}")
-      if primitive_linears and getenv("Q6K_DEMOTE_FFNDOWN"):  # B3: requant over-provisioned Q6 ffn_down -> Q4
+      if primitive_linears and qk_cfg.demote_q6k_ffndown:  # B3: requant over-provisioned Q6 ffn_down -> Q4
         primitive_linears = _demote_q6k_ffndown_to_q4(model, primitive_linears)
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
-      if primitive_linears and getenv("Q4K_FUSE"): _install_q4k_fusions(model)  # B1 horizontal-fusion probe
+      if primitive_linears and qk_cfg.fuse_q4k: _install_q4k_fusions(model)  # B1 horizontal-fusion probe
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())
