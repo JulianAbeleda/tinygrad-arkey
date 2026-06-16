@@ -1,2 +1,0 @@
-am remote:127.0.0.1:6667:0000:08:00.0:0: using remote discovery profile gfx1100_744c
-am remote:127.0.0.1:6667:0000:08:00.0:0: PSP pre-bl ipver nbio=(4, 3, 0) gc=(11, 0, 0) mp0=(13, 0, 0)

@@ -90,3 +90,13 @@ bench/**
 !bench/**/profile-report.md
 !bench/**/decision.json
 !bench/qk-shared-storage-20260612/**/policy.json
+
+# PSP boot/trace captures are local provenance (backed up outside the repo), not code.
+# The durable record lives in docs/amd-linux-psp-good-trace.md; raw captures stay local.
+extra/amdpci/captures/
+psp-*.log
+linux-*gart*.log
+linux-*psp*.log
+linux-*vram*.log
+linux-*dense*.log
+linux-*audit*.log
