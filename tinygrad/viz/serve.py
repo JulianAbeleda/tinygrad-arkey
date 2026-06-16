@@ -497,22 +497,6 @@ def load_nv_counters(data:VizData, profile:list) -> None:
                                data=(e.blob, sm_version[e.device])))
   if steps: data.ctxs.append({"name":"All Counters", "steps":steps})
 
-def pma_timeline(blob:bytes, sm_version:int) -> list[ProfileEvent]:
-  from extra.nv_pma.decode import decode, decode_tpc_id
-  ret:list[ProfileEvent] = []
-  rows:dict[str, None] = {}
-  tpc_count:dict[int, int] = {}
-  # assume every sample is 32 cycles
-  cycles_per_sample = 32
-  for s, tpc_id in decode(blob, sm_version):
-    if len(ret) > getenv("MAX_SQTT_PKTS", 50_000): break
-    gpc, tpc, sm = decode_tpc_id(tpc_id)
-    tpc_count[tpc_id] = (n:=tpc_count.get(tpc_id,0)) + 1
-    rows.setdefault(row:=f"GPC:{gpc} TPC:{tpc} SM:{sm} WAVE:{s.wave_id}")
-    ret.append(ProfileRangeEvent(row, TracingKey(s.stall_reason.name, ret=f"pc=0x{s.pc_offset:06x} active={s.active}"),
-                                 Decimal(n*cycles_per_sample), Decimal((n+1)*cycles_per_sample)))
-  return [ProfilePointEvent(r, "start", r, ts=Decimal(0)) for r in rows]+ret
-
 # ** Assembly static analyzers
 
 def get_stdout(f: Callable) -> str:
@@ -638,12 +622,6 @@ def get_render(viz_data:VizData, query:str) -> dict:
   # viewers for the amd decoder in extra
   if fmt.startswith("amd-sqtt"): return data["fxn"](viz_data, i, j, *data["args"])
   if fmt == "cu-sqtt": return {"value":get_profile(viz_data, data, sort_fn=row_tuple), "content_type":"application/octet-stream"}
-  if fmt == "prg-pma-pkts":
-    ret = {}
-    with soft_err(lambda err:ret.update(err)):
-      if (events:=get_profile(viz_data, pma_timeline(*data), sort_fn=row_tuple)): ret = {"value":events, "content_type":"application/octet-stream"}
-      else: ret = {"src":"No PMA samples found."}
-    return ret
   return data
 
 # ** HTTP server
