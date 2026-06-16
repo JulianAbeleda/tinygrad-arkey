@@ -10,15 +10,14 @@ deterministic baseline the later model-guided search (G1) must beat.
 """
 from __future__ import annotations
 
-import argparse, json, os, pathlib, re, subprocess, statistics
+import argparse, json, os, pathlib, subprocess, statistics
 from typing import Any
 
 DEFAULT_MODEL = pathlib.Path("~/models/Qwen3-8B-Q4_K_M.gguf")
 DEFAULT_ARTIFACT = pathlib.Path("bench/amd-decode-flywheel-proof-20260614/generation-g0")
 DEFAULT_TENSORS = ("blk.20.attn_q.weight", "blk.21.attn_q.weight")
 
-DEVICE_RE = re.compile(r"q4k_primitive_gemv:.*device_q4_eff=(?P<dev>[0-9.]+) GB/s")
-CORRECT_RE = re.compile(r"primitive_gemv_correctness: (?P<status>PASS|FAIL)")
+from extra.q4k_bench_metrics import CORRECT_RE, DEVICE_RE
 
 # The current runtime (v1_partial) and the four hardcoded mechanisms are the bar to beat.
 BASELINE = {"label": "v1_partial", "opts": ["LOCAL:0:64"], "parts": 1, "group": "baseline"}

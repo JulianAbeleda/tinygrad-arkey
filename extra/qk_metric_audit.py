@@ -9,7 +9,7 @@ expresses everything as a fraction of measured peak HBM bandwidth, and reports w
 """
 from __future__ import annotations
 
-import argparse, json, os, pathlib, re, statistics, subprocess
+import argparse, json, os, pathlib, statistics, subprocess
 from typing import Any
 
 DEFAULT_MODEL = pathlib.Path("~/models/Qwen3-8B-Q4_K_M.gguf")
@@ -20,8 +20,7 @@ PEAK_GBS_MEASURED = 859.0
 # A device gain within this band of zero is a tie, not a real improvement.
 NOISE_BAND_PCT = 2.0
 
-DEVICE_RE = re.compile(r"q4k_primitive_gemv:.*device_q4_eff=(?P<dev>[0-9.]+) GB/s")
-CORRECT_RE = re.compile(r"primitive_gemv_correctness: (?P<status>PASS|FAIL)")
+from extra.q4k_bench_metrics import CORRECT_RE, DEVICE_RE
 
 # Modes that realize each 4.x mechanism in q4_k_bench (mirrors qk_semantic_schedule_bench).
 MECHANISM_SPEC = {

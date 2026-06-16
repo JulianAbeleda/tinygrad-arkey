@@ -9,7 +9,7 @@ to test whether any EXISTING kernel beats v1_partial before committing to new de
 """
 from __future__ import annotations
 
-import argparse, json, os, pathlib, re, statistics, subprocess
+import argparse, json, os, pathlib, statistics, subprocess
 from typing import Any
 
 DEFAULT_MODEL = pathlib.Path("~/models/Qwen3-8B-Q4_K_M.gguf")
@@ -22,8 +22,7 @@ MODES = ("partial", "serial", "packed_load", "vector_load", "grouped", "tile_cus
 PARTS = (1, 2, 4)
 BASELINE = {"mode": "partial", "opts": ["LOCAL:0:64"], "parts": 1, "row_group": 1, "label": "v1_partial"}
 
-DEVICE_RE = re.compile(r"q4k_primitive_gemv:.*device_q4_eff=(?P<dev>[0-9.]+) GB/s")
-CORRECT_RE = re.compile(r"primitive_gemv_correctness: (?P<status>PASS|FAIL)")
+from extra.q4k_bench_metrics import CORRECT_RE, DEVICE_RE
 
 
 def _mode_opts(mode:str) -> list[str]:
