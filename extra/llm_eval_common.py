@@ -17,6 +17,23 @@ def read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
     rows.append(row)
   return rows
 
+def read_id_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
+  rows = []
+  seen: set[str] = set()
+  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
+    if not raw.strip(): continue
+    try:
+      row = json.loads(raw)
+    except json.JSONDecodeError as exc:
+      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
+    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
+    row_id = row.get("id")
+    if not isinstance(row_id, str) or not row_id: raise ValueError(f"{path}:{lineno}: missing string id")
+    if row_id in seen: raise ValueError(f"{path}:{lineno}: duplicate id {row_id!r}")
+    seen.add(row_id)
+    rows.append(row)
+  return rows
+
 def write_jsonl(path:pathlib.Path, rows:list[dict[str, Any]]) -> None:
   with path.open("w") as f:
     for row in rows: f.write(json.dumps(row, sort_keys=True) + "\n")

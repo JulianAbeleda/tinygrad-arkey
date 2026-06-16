@@ -6,7 +6,7 @@ from collections import defaultdict
 from typing import Any
 
 from extra.llm_adapter_json_data_v4 import _completion
-from extra.llm_eval_common import build_prompt_ids, quality_summary, score_prompt
+from extra.llm_eval_common import build_prompt_ids, quality_summary, read_id_jsonl, score_prompt
 from extra.llm_sft_smoke_train import load_sft_rows
 
 from extra.llm_eval_common import write_jsonl as _jsonl
@@ -14,21 +14,7 @@ from extra.qk_modes import prompt_format_choices
 
 def _read_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
   if not path.exists(): return []
-  rows = []
-  seen: set[str] = set()
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    row_id = row.get("id")
-    if not isinstance(row_id, str) or not row_id: raise ValueError(f"{path}:{lineno}: missing string id")
-    if row_id in seen: raise ValueError(f"{path}:{lineno}: duplicate id {row_id!r}")
-    seen.add(row_id)
-    rows.append(row)
-  return rows
+  return read_id_jsonl(path)
 
 def _split_source_rows(rows:list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
   train_rows = [row for row in rows if row.get("split") == "train"]

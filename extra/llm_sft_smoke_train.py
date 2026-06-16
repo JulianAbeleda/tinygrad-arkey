@@ -9,23 +9,10 @@ import numpy as np
 from tinygrad import Device, Tensor
 from tinygrad.nn.optim import Adam
 
-from extra.llm_eval_common import md_text
+from extra.llm_eval_common import md_text, read_id_jsonl
 
 def _load_jsonl(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  seen: set[str] = set()
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    row_id = row.get("id")
-    if not isinstance(row_id, str) or not row_id: raise ValueError(f"{path}:{lineno}: missing string id")
-    if row_id in seen: raise ValueError(f"{path}:{lineno}: duplicate id {row_id!r}")
-    seen.add(row_id)
-    rows.append(row)
+  rows = read_id_jsonl(path)
   if not rows: raise ValueError(f"{path}: no rows")
   return rows
 

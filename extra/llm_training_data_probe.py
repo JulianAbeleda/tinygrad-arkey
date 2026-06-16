@@ -4,36 +4,17 @@ from __future__ import annotations
 import argparse, collections, json, pathlib, statistics
 from typing import Any
 
-from extra.llm_eval_common import md_text
+from extra.llm_eval_common import load_json as _load_json, md_text, read_id_jsonl
 
 def _display_path(value:Any) -> Any:
   if not isinstance(value, str): return value
   home = str(pathlib.Path.home())
   return value.replace(home + "/", "~/")
 
-def _load_json(path:pathlib.Path) -> Any:
-  try:
-    return json.loads(path.read_text())
-  except json.JSONDecodeError as exc:
-    raise ValueError(f"{path}: invalid JSON: {exc}") from exc
-
 def _read_rollout_rows(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  seen: set[str] = set()
   rows_path = path / "rollouts.jsonl"
   if not rows_path.exists(): raise ValueError(f"{path}: missing rollouts.jsonl")
-  for lineno, raw in enumerate(rows_path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{rows_path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{rows_path}:{lineno}: expected JSON object")
-    row_id = row.get("id")
-    if not isinstance(row_id, str) or not row_id: raise ValueError(f"{rows_path}:{lineno}: missing string id")
-    if row_id in seen: raise ValueError(f"{rows_path}:{lineno}: duplicate id {row_id!r}")
-    seen.add(row_id)
-    rows.append(row)
+  rows = read_id_jsonl(rows_path)
   if not rows: raise ValueError(f"{rows_path}: no rollout rows")
   return rows
 

@@ -4,32 +4,13 @@ from __future__ import annotations
 import argparse, json, pathlib
 from typing import Any
 
-from extra.llm_eval_common import md_text
+from extra.llm_eval_common import load_json as _read_json, md_text, read_id_jsonl
 
 def _rate(row:dict[str, Any]) -> str:
   return "n/a" if row.get("pass_rate") is None else f"{row['pass_rate']:.2f}"
 
-def _read_json(path:pathlib.Path) -> Any:
-  try:
-    return json.loads(path.read_text())
-  except json.JSONDecodeError as exc:
-    raise ValueError(f"{path}: invalid JSON: {exc}") from exc
-
 def _read_rows(path:pathlib.Path) -> list[dict[str, Any]]:
-  rows = []
-  seen: set[str] = set()
-  for lineno, raw in enumerate(path.read_text().splitlines(), 1):
-    if not raw.strip(): continue
-    try:
-      row = json.loads(raw)
-    except json.JSONDecodeError as exc:
-      raise ValueError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
-    if not isinstance(row, dict): raise ValueError(f"{path}:{lineno}: expected JSON object")
-    row_id = row.get("id")
-    if not isinstance(row_id, str) or not row_id: raise ValueError(f"{path}:{lineno}: missing string id")
-    if row_id in seen: raise ValueError(f"{path}:{lineno}: duplicate id {row_id!r}")
-    seen.add(row_id)
-    rows.append(row)
+  rows = read_id_jsonl(path)
   if not rows: raise ValueError(f"{path}: no rollout rows")
   return rows
 

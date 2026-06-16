@@ -4,8 +4,7 @@ from __future__ import annotations
 import argparse, json, pathlib, subprocess, sys
 from typing import Any
 
-def _load_json(path:pathlib.Path) -> dict[str, Any]:
-  return json.loads(path.read_text())
+from extra.llm_eval_common import load_json as _load_json
 
 def _repo_path(repo:pathlib.Path, value:str | pathlib.Path) -> pathlib.Path:
   path = pathlib.Path(value).expanduser()

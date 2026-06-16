@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, json, pathlib
 from typing import Any
 
-from extra.llm_eval_common import md_text
+from extra.llm_eval_common import load_json as _load_json, md_text
 
 SUMMARY_KINDS = {
   "eval": ("llm_eval_summary", "qwen_eval_summary"),
@@ -14,12 +14,6 @@ SUMMARY_KINDS = {
   "training_run": ("llm_sft_smoke_train_summary",),
   "adapter_train": ("llm_adapter_train_summary", "llm_adapter_suffix_train_summary"),
 }
-
-def _load_json(path:pathlib.Path) -> Any:
-  try:
-    return json.loads(path.read_text())
-  except json.JSONDecodeError as exc:
-    raise ValueError(f"{path}: invalid JSON: {exc}") from exc
 
 def _repo_path(repo:pathlib.Path, value:str | pathlib.Path) -> pathlib.Path:
   path = pathlib.Path(value).expanduser()
