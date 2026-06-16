@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse, json, pathlib, re, statistics
 
+from extra.qk_experiment_matrix import _fmt
+
 TOK_RE = re.compile(r"(?P<ms>[0-9]+\.[0-9]+) ms,\s+(?P<tps>[0-9]+\.[0-9]+) tok/s,\s+(?P<gbs>[0-9]+\.[0-9]+) GB/s")
 POLICY_RE = re.compile(r"QK_GENERATED_POLICY_DEBUG loaded=(?P<path>\S+) entries=(?P<entries>\d+)")
 INSTALL_RE = re.compile(r"(?P<kind>Q[46]K)_PRIMITIVE_DEBUG installed=(?P<installed>\d+) skipped_total=(?P<skipped>\d+)(?P<rest>.*)")
@@ -22,11 +24,6 @@ def _mean(xs:list[float]) -> float|None:
 
 def _stdev(xs:list[float]) -> float|None:
   return statistics.stdev(xs) if len(xs) >= 2 else None
-
-def _fmt(x) -> str:
-  if x is None: return "n/a"
-  if isinstance(x, float): return f"{x:.2f}"
-  return str(x)
 
 def _parse_counts(rest:str) -> dict[str, int]:
   out = {}

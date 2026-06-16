@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, json, pathlib, statistics
 from typing import Any
 
-from extra.qk_experiment_matrix import LLAMA_REFS, make_matrix
+from extra.qk_experiment_matrix import LLAMA_REFS, _fmt, _last_runtime_storage, make_matrix
 
 # Local Qwen3 GGUF file sizes used by the committed shared-storage matrix.
 # These are logical bytes-per-token estimates, not measured HBM transactions.
@@ -18,16 +18,6 @@ DEFAULT_PEAK_MEM_GBS = 960.0
 
 def _load_json(path:pathlib.Path) -> Any:
   return json.loads(path.read_text())
-
-def _fmt(x:Any, digits:int=2) -> str:
-  if x is None: return "n/a"
-  if isinstance(x, float): return f"{x:.{digits}f}"
-  return str(x)
-
-def _last_runtime_storage(decision:dict[str, Any], prefix:str) -> dict[str, Any]:
-  rows = decision.get("runtime_storage") or {}
-  matches = [(k, v) for k, v in rows.items() if k.startswith(prefix)]
-  return matches[-1][1] if matches else {}
 
 def _decision_path(experiment:pathlib.Path) -> pathlib.Path:
   if experiment.name == "decision.json": return experiment

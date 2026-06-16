@@ -6,11 +6,11 @@ from datetime import datetime
 
 from extra.qk_ansor import build_policy_entries, make_policy_cache
 from extra.qk_decode_summary import _md as decode_summary_md, parse_log as parse_decode_log
+from extra.qk_experiment_matrix import LLAMA_REFS
 from extra.qk_layout import read_metadata
 
 MANIFEST_VERSION = 1
 DECISION_SCHEMA_VERSION = 1
-LLAMA_REFS = {"8B": 101.2, "14B": 65.8, "32B": 30.8}
 MODEL_RE = re.compile(r"Qwen3-(?P<size>[0-9.]+B)-(?P<quant>[^/]+)\.gguf$", re.IGNORECASE)
 SPEC_FIELDS = (
   "model", "device", "level", "iters", "benchmark", "reference_mode", "repeats", "max_extra_repeats",

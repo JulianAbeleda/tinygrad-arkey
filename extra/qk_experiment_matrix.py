@@ -27,9 +27,9 @@ def _expand_inputs(paths:list[pathlib.Path]) -> list[pathlib.Path]:
       out.append(_decision_path(item_path))
   return out
 
-def _fmt(x) -> str:
+def _fmt(x, digits:int=2) -> str:
   if x is None: return "n/a"
-  if isinstance(x, float): return f"{x:.2f}"
+  if isinstance(x, float): return f"{x:.{digits}f}"
   return str(x)
 
 def _last_runtime_storage(decision:dict, prefix:str) -> dict:

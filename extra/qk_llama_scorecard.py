@@ -4,20 +4,10 @@ from __future__ import annotations
 import argparse, json, pathlib
 from typing import Any
 
-from extra.qk_experiment_matrix import LLAMA_REFS, make_matrix
+from extra.llm_eval_common import load_json as _load_json
+from extra.qk_experiment_matrix import LLAMA_REFS, _fmt, make_matrix
 
 DEFAULT_TARGETS = (70.0, 80.0, 100.0)
-
-def _load_json(path:pathlib.Path) -> Any:
-  try:
-    return json.loads(path.read_text())
-  except json.JSONDecodeError as exc:
-    raise ValueError(f"{path}: invalid JSON: {exc}") from exc
-
-def _fmt(x:Any) -> str:
-  if x is None: return "n/a"
-  if isinstance(x, float): return f"{x:.2f}"
-  return str(x)
 
 def _rollout_summary(path:pathlib.Path | None) -> dict[str, Any] | None:
   if path is None: return None
