@@ -145,3 +145,23 @@ forward RESTRUCTURE (compute each matmul as a separate top-level realized op out
 breaks fusion everywhere, large) or (b) a RAW MMQ custom_kernel (port mmq.cuh as raw HIP, bypassing tinygrad's
 scheduler — the flash-decode approach, but a full tiled-WMMA GEMM). Both are substantial hand-kernel builds
 ("the Writer"); neither is a flag or a quick win. Prefill stays PARKED. model.py pristine.
+
+## B0 bisection (2026-06-16) — the in-model penalty FACTORED + the right language (ubatch)
+Reframe via measuring llama's PHYSICAL batch knob (n_ubatch, the GPU kernel-launch batch; llama default 512,
+we use chunk=32). llama pp512 by ubatch: 32->1114, 128->1831, 512->3110, 2048->3112 tok/s. KEY: at ubatch=32
+llama=1114 (18 TF) and OUR STANDALONE matmul N=32 = 13.7 TF -- our kernel is already ~llama's MMQ. So the 44x
+is NOT a kernel gap; it's the in-model penalty (~17x at fixed batch) x the ubatch gap (~2.8x).
+B0 bisects the in-model matmul (GPU TF, N=32): clean Wf16real@Xf16real = 8.4; **fp32 activation = 2.3 (3.6x)**;
+**lazy Q4_K dequant weight = 2.0 (4x)**; producer rmsnorm = 10.8 (FREE); consumer silu = 12.2 (FREE); full =
+1.9 (~= in-model 1.1). So the collapse is TWO named factors -- (1) the lazy Q4_K dequant FUSES into the matmul
+(4x, dominant), (2) the fp32 residual stream (`x.float()`) blocks WMMA (3.6x) -- NOT neighbor fusion.
+COMPLETE factored picture (all measured, all tinygrad-level, none a mysterious wall):
+  prefill_slow = dequant-fused-into-matmul(4x) x fp32-stream(3.6x) x small-ubatch/memory-bound(16%->80% peak)
+                 x O(T^2)-prefill-attention(the large-batch tax)
+We do NOT need an MMQ kernel (our standalone matmul ~= MMQ). The fix is a coordinated PREFILL-MODE forward:
+  (a) per-layer dequant Q4_K->fp16 REALIZED once (kill the 4x fusion; per-layer streaming avoids 16 GB resident),
+  (b) fp16 residual stream for prefill (kill the 3.6x; enables WMMA),
+  (c) large ubatch (process 512+ tokens/launch -> compute-bound, 16%->80% peak),
+  (d) flash-style prefill attention (so O(T^2) doesn't dominate at large ubatch).
+Each is real but now understood; (a)+(b) alone ~= 8.4 TF (~10% peak, ~7x prefill) IF (c) amortizes the bytes.
+This is a distinct prefill forward path, a multi-component build -- but no longer an open wall.

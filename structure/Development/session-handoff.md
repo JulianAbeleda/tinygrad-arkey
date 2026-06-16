@@ -1987,6 +1987,14 @@ in-model config ~1% peak (REALIZE+PREFILL_FP16+chunk512/1024+contiguous+output-i
 tok/s). Same recurring "lever real isolated, never translates e2e" thesis. Transfer needs (a) full forward
 restructure (realize every matmul top-level, breaks fusion) or (b) raw MMQ custom_kernel (port mmq.cuh, the
 flash-decode approach) -- both substantial hand-kernel builds. Prefill PARKED; model.py pristine.
+B0 BISECTION + ubatch reframe: llama's physical batch = n_ubatch (default 512; we use chunk=32). At ubatch=32
+llama=1114 tok/s (18 TF) and our STANDALONE matmul N=32 = 13.7 TF -> our kernel ~= MMQ, NOT a kernel gap. B0
+factors the in-model matmul collapse (GPU TF, N=32): clean 8.4; fp32-activation 2.3 (3.6x); lazy-Q4K-dequant
+weight 2.0 (4x, DOMINANT); rmsnorm/silu fusion FREE. So prefill_slow = dequant-fused-in-matmul(4x) x fp32-
+stream(3.6x) x small-ubatch-memory-bound x O(T^2)-attention. Fix = coordinated PREFILL-MODE forward: per-layer
+dequant->fp16 realized + fp16 residual stream + large ubatch + flash prefill attention. (a)+(b) ~= 8.4 TF (~7x)
+if large batch amortizes bytes. Multi-component build, but every factor now named/measured -- no open wall. The
+recurring thesis holds (isolated win 13.7 TF, in-model 1.1) but the CAUSES are now concrete, not mysterious.
 
 ## 2026-06-16 — DEFAULT FLIP: Q4K/Q6K primitives now default-ON (path-aware, shared storage). The arc's win, out-of-the-box
 The recurring "biggest lever" lesson (a built win gated OFF) was still the live default: the master flag
