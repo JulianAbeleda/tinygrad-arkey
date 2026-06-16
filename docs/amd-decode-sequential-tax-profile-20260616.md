@@ -51,15 +51,33 @@ RX 7900 XTX gfx1100. Steady-state over 7 tokens (first dropped).
   3. `attention_misc` (4.5%) — already addressed at long context by shipped flash
      (`FLASH_DECODE`); at short context it's small. Lower priority than 1–2.
 
-## Caveat / next measurement
+## Gate closed: the token IS a single-queue sum (no existing overlap)
 
-This is the **named** (attribution) profile — it tells us the *relative* kernel cost. It does
-NOT directly measure how much non-GEMV already overlaps the weight stream in the real
-**batched** runtime. The next measurement step (before building B2) is to confirm the batched
-token is `GEMV + non-GEMV ≈ sum` (little existing overlap) — e.g. compare the batched
-wall-time/token against the GEMV-only lower bound — so the ~28% is genuinely on the table and
-not already hidden. Only then build the overlap lever (as a separate `[nn]`/`[codegen]`,
-AMD-validated commit, gated, exact-output).
+The named profile gives *relative* kernel cost; the open question was whether the batched
+runtime already overlaps non-GEMV behind the weight stream (which would make the 28% not
+reclaimable). **It does not — confirmed architecturally, not by a noisy timing:**
+
+- `tinygrad/runtime/graph/hcq.py:51` allocates **one** `hw_compute_queue_t` per device
+  (`comp_queues`); copy queues (SDMA) are separate and default to 1.
+- No multi-stream / concurrent-compute / overlap primitive exists in the JIT or HCQ graph path
+  (grep for `stream|overlap|concurrent|parallel.*queue` in `engine/jit.py` + `graph/hcq.py` is
+  empty).
+
+So every decode kernel — GEMV and non-GEMV — executes **back-to-back on a single compute
+queue**: `token wall ≈ sum(all kernel exec) + small host`. This matches the capstone's prior
+empirical decomposition (20.7 ms GPU-busy/token = 10.4 GEMV + 10.3 non-GEMV, 97% GPU-busy).
+**Conclusion: the ~28% non-GEMV is additive and genuinely reclaimable** — there is no existing
+overlap to compete with.
+
+### What this means for the B2 design (next, in plan mode)
+
+Overlap requires running non-GEMV concurrently with the GEMV weight stream, but within a layer
+non-GEMV *depends* on the GEMV output — so the opportunity is **cross-layer**: layer N's
+non-GEMV (norm/attention/sampling-tail) overlapping layer N+1's weight-GEMV stream. Two
+candidate mechanisms: (a) a second compute queue with explicit cross-layer signalling, or
+(b) fusing the small non-GEMV ops into the GEMV's memory-bound slack (the norm/elementwise
+buckets are the fusable ones). Both are `[nn]`/`[codegen]` hot-path changes requiring
+exact-output gating + AMD validation — scoped separately before any edit.
 
 Anchors: `docs/amd-decode-beyond-llama-roadmap.md` (B2 = lead parity lever),
 `docs/amd-decode-arc-synthesis.md` §6, `docs/amd-decode-capstone.md`,
