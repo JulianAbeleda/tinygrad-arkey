@@ -86,7 +86,6 @@ def __getattr__(nm):
                                                                                                "sienna_cichlid_ip_offset"]],
                                 args=["-I/opt/rocm/include", "-x", "c++"])
     case "amdgpu_drm": return load("amdgpu_drm", [ "/usr/include/drm/drm.h", *[root/f"extra/hip_gpu_driver/{s}.h" for s in ["amdgpu_drm"]]])
-    case "kgsl": return load("kgsl", [root/"extra/qcom_gpu_driver/msm_kgsl.h"], args=["-D__user="])
     case "sqtt": return load("sqtt", [root/"extra/sqtt/sqtt.h"])
     case "rocprof":
       return load("rocprof", [f"{{}}/include/{s}.h" for s in ["rocprof_trace_decoder", "trace_decoder_instrument", "trace_decoder_types"]],
@@ -125,7 +124,6 @@ def __getattr__(nm):
     case "corefoundation": return load("corefoundation",
                                        [f"{macossdk}/System/Library/Frameworks/CoreFoundation.framework/Headers/CF{s}.h" for s in ["String", "Data"]],
                                        dll="'CoreFoundation'",args=["-isysroot", macossdk])
-    case "llvm_qcom": return load("llvm_qcom", [root/"extra/tinydreno.h"], dll="'llvm-qcom'")
     case "ggml_common": return load("ggml_common", ["{}/ggml-common.h"], srcs=ggml_common_src,
                                     args=["-DGGML_COMMON_DECL_C", "-DGGML_COMMON_IMPL_C"], macros=False)
     case "mlx5":

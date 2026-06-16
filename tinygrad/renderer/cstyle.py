@@ -370,6 +370,9 @@ class OpenCLRenderer(CStyleLanguage):
 
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
 
+def fp8_index(dtype: DType): return (dtypes.fp8e4m3, dtypes.fp8e5m2).index(dtype.scalar())
+def _ocml(op): return lambda x,dtype: f"__ocml_{op}_f{ {dtypes.half:16, dtypes.double:64}.get(dtype, 32)}({x})"
+
 class HIPRenderer(CStyleLanguage):
   shared_max = 65536
   # NOTE: this is only really needed on gfx12, even though gfx11 reports the same limitation
@@ -486,14 +489,3 @@ class HIPRenderer(CStyleLanguage):
 
 class HIPCCRenderer(HIPRenderer):
   def __init__(self, target:Target): super().__init__(target, use_hipcc=True)
-
-class QCOMCLRenderer(OpenCLRenderer):
-  def __init__(self, target:Target):
-    super().__init__(target)
-    from tinygrad.runtime.support.compiler_qcom import QCOMCompiler
-    self.compiler = QCOMCompiler(target.arch)
-
-  # QCOM compiler is flaky with half
-  def supported_dtypes(self):
-    return {d for d in Renderer.supported_dtypes(self)
-            if (d != dtypes.float16 or (bool(IMAGE) and bool(FLOAT16))) and d not in dtypes.fp8s+(dtypes.bfloat16,dtypes.double)}
