@@ -296,7 +296,12 @@ def _accepted_runtime_rows(repo:pathlib.Path) -> list[dict[str, Any]]:
       data = _load_json(path)
       status = data.get("status") or (data.get("stages", {}).get("decide", {}).get("metadata", {}) or {}).get("status")
       if status != "accept" and data.get("gain", 0) <= 0: continue
-      row_id = f"accepted_runtime:{_slug(mechanism)}:{_slug(data.get('model_size') or path.parent.name)}:{_slug(str(path.parent))}"
+      # Derive the id suffix from the repo-RELATIVE path so row ids are machine
+      # independent. str(path.parent) is absolute (repo is resolved before glob),
+      # which baked the checkout path (e.g. home-ubuntu-tinygrad-arkey-...) into
+      # the id -- the same absolute-paths-in-artifacts defect the overrides forbid.
+      rel_parent = path.parent.relative_to(repo) if path.parent.is_relative_to(repo) else path.parent
+      row_id = f"accepted_runtime:{_slug(mechanism)}:{_slug(data.get('model_size') or path.parent.name)}:{_slug(str(rel_parent))}"
       rows.append(_make_row(
         row_id=row_id, row_kind="baseline", family=family, model=_model(data.get("model_size") or data.get("model")),
         tensor="all", role="unknown", fmt="unknown", mechanism=mechanism,

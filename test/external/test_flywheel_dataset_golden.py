@@ -66,7 +66,7 @@ class TestFlywheelDatasetGolden(unittest.TestCase):
     examples = PROOF / "kernel-triage-v1-featured-plus/examples.jsonl"
     pinned = {
       "predictions.jsonl": "bf10c793a7e6c1b4cdd8672a2fec36341aa217a93d4341d6f639322e56673068",
-      "features.jsonl": "c29f5cbd44b155ea22ff925767770d538f0eb6928ce688eb8116e72e552a4171",
+      "features.jsonl": "82eff99abc8faa57eed6017083721d487d920cc234cf0879bbeeeb7a6852a9b6",
       "feature-vocab.json": "be73e4f708847723250418c9b5cbade8091e2a1d54fc1e3bfe539509cf9d3f31",
     }
     with TemporaryDirectory() as raw_td:
@@ -91,6 +91,12 @@ class TestFlywheelDatasetGolden(unittest.TestCase):
             str(src).startswith("/") or "home-ubuntu" in str(src) or "users-julianabeleda" in str(src),
             f"{rel}: non-portable source path {src!r}",
           )
+        # Row ids must be machine-independent too: the accepted_runtime builder once
+        # slugged the absolute checkout path into the id (home-ubuntu-...), the same
+        # absolute-paths-in-artifacts defect the overrides forbid.
+        rid = str(row.get("id", ""))
+        self.assertNotIn("home-ubuntu", rid, f"{rel}: non-portable row id {rid!r}")
+        self.assertNotIn("users-julianabeleda", rid, f"{rel}: non-portable row id {rid!r}")
 
 
 if __name__ == "__main__":

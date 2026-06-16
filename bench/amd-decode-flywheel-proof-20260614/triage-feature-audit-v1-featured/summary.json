@@ -929,15 +929,15 @@
     },
     "note": "Rows at after_full_decode are useful historical outcomes but weak training signal for pre-outcome triage.",
     "post_full_decode_train_ids": [
-      "accepted_runtime:parts-local-policy:14b:home-ubuntu-tinygrad-arkey-bench-qk-harness-20260612-14b",
-      "accepted_runtime:parts-local-policy:14b:home-ubuntu-tinygrad-arkey-bench-qk-harness-20260612-14b-rerun",
-      "accepted_runtime:parts-local-policy:14b:home-ubuntu-tinygrad-arkey-bench-qk-policy-pipeline-20260612-14b",
-      "accepted_runtime:shared-storage:14b:home-ubuntu-tinygrad-arkey-bench-qk-shared-storage-20260612-14b",
-      "accepted_runtime:shared-storage:32b:home-ubuntu-tinygrad-arkey-bench-qk-shared-storage-20260612-32b",
-      "accepted_runtime:storage-cap:32b:home-ubuntu-tinygrad-arkey-bench-qk-policy-cap-20260612-32b-1536mb",
-      "accepted_runtime:parts-local-policy:8b:home-ubuntu-tinygrad-arkey-bench-qk-harness-20260612-8b",
-      "accepted_runtime:parts-local-policy:8b:home-ubuntu-tinygrad-arkey-bench-qk-policy-pipeline-20260612-8b",
-      "accepted_runtime:shared-storage:8b:home-ubuntu-tinygrad-arkey-bench-qk-shared-storage-20260612-8b"
+      "accepted_runtime:parts-local-policy:14b:bench-qk-harness-20260612-14b",
+      "accepted_runtime:parts-local-policy:14b:bench-qk-harness-20260612-14b-rerun",
+      "accepted_runtime:parts-local-policy:14b:bench-qk-policy-pipeline-20260612-14b",
+      "accepted_runtime:shared-storage:14b:bench-qk-shared-storage-20260612-14b",
+      "accepted_runtime:shared-storage:32b:bench-qk-shared-storage-20260612-32b",
+      "accepted_runtime:storage-cap:32b:bench-qk-policy-cap-20260612-32b-1536mb",
+      "accepted_runtime:parts-local-policy:8b:bench-qk-harness-20260612-8b",
+      "accepted_runtime:parts-local-policy:8b:bench-qk-policy-pipeline-20260612-8b",
+      "accepted_runtime:shared-storage:8b:bench-qk-shared-storage-20260612-8b"
     ],
     "post_full_decode_train_rows": 9
   },
