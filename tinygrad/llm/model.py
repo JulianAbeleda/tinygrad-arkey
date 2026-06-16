@@ -645,7 +645,17 @@ class TransformerBlock(FFNBlock):
     # TODO: this if statement should be removed and it shouldn't generate extra kernels
     mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
       if resolve(T != 1) else None
-    attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)     # (B,H,T,Hd)
+    if getenv("GQA_ATTN", 0):  # P2 probe: GQA-native attention (group queries by kv head, broadcast k/v
+      # instead of SDPA's repeat_interleave 8->32). Exact, but measured ~equal-to-slightly-slower than SDPA
+      # on this config -- the long-context slowdown is kernel inefficiency, not the GQA expansion. Default off.
+      Hq, Hkv = q.shape[1], k.shape[1]; g = Hq // Hkv; Tc = k.shape[2]
+      qg = q.reshape(B, Hkv, g, T, q.shape[-1])                                      # (B,KvH,g,T,Hd)
+      kg = k.reshape(B, Hkv, 1, Tc, k.shape[-1]); vg = v.reshape(B, Hkv, 1, Tc, v.shape[-1])
+      qk = qg.matmul(kg.transpose(-2, -1), dtype=dtypes.float32) / (q.shape[-1] ** 0.5)  # (B,KvH,g,T,Tc)
+      if mask is not None: qk = qk + mask.reshape(1, 1, 1, T, Tc)
+      attn = qk.softmax(-1).cast(vg.dtype).matmul(vg).reshape(B, Hq, T, q.shape[-1])
+    else:
+      attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)   # (B,H,T,Hd)
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
     return self.attn_output(attn if not self.config.attn_output_gate else (attn * gate.sigmoid()))
 
