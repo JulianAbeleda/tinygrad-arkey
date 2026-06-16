@@ -465,6 +465,25 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     if installed: print(f"Q6K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
   return installed
 
+def _demote_q6k_ffndown_to_q4(model, linears:list) -> list:
+  # B3: re-quantize the over-provisioned Q6_K ffn_down tensors to Q4_K (offline quantizer; measured ~free
+  # quality, ~5% fewer per-token bytes -> a faster operating point llama.cpp's fixed Q4_K_M doesn't offer).
+  from extra.qk_quantize import quantize_q4_k
+  from extra.q4_k_gemv_primitive import parse_opt
+  opts = tuple(parse_opt(x) for x in ("LOCAL:0:32",))  # ffn_down Q4 policy: parts=4
+  out = []
+  for lin in linears:
+    if isinstance(lin, Q6KPrimitiveLinear) and ".ffn_down.weight" in lin.name:
+      words = Tensor(quantize_q4_k(lin.weight.numpy())).to(None).contiguous().realize()
+      q4_bytes = lin.out_features * lin.in_features // 256 * 144
+      q4 = Q4KPrimitiveLinear(lin.weight, lin.bias, words, lin.out_features, lin.in_features, 4, opts,
+                              lin.name, q4_bytes, q4_bytes, "sidecar")
+      _set_module_at(model, lin.name[:-len(".weight")], q4)
+      out.append(q4)
+    else:
+      out.append(lin)
+  return out
+
 def pairwise_topk(x: Tensor, k: int) -> tuple[Tensor, Tensor]:
   n = x.shape[-1]
   vals = Tensor.arange(n).reshape(1,1,n).cast(x.dtype).expand(x.shape)
@@ -880,6 +899,8 @@ class Transformer:
               f"runtime_cap_used_bytes={primitive_budget.used_bytes} by_kind={by_kind_s} by_mode={by_mode_s} "
               f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
               f"q6_effective_storage_mode={q6_storage_mode}")
+      if primitive_linears and getenv("Q6K_DEMOTE_FFNDOWN"):  # B3: requant over-provisioned Q6 ffn_down -> Q4
+        primitive_linears = _demote_q6k_ffndown_to_q4(model, primitive_linears)
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
       if primitive_linears and getenv("Q4K_FUSE"): _install_q4k_fusions(model)  # B1 horizontal-fusion probe
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
