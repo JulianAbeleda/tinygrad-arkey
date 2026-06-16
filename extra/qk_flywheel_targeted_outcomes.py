@@ -436,7 +436,7 @@ def _qk_threeway_load_microbench_rows(repo:pathlib.Path) -> list[dict[str, Any]]
 
       gain_key = "vector_load_vs_v1" if mode == "vector_load" else "tile_custom_vs_v1"
       gain_pct = gains.get(gain_key)
-      status = "reject" if mode in ("vector_load", "tile_custom") else "reject"
+      status = "reject"
       label, reason, retry = v0._label_reason_retry(status, gain=gain_pct / 100.0 if gain_pct is not None else None)
       rows.append(_row(
         row_id=f"{TARGETED_FAMILY}:threeway_load_microbench:{tensor_slug}:{mode}",

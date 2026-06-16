@@ -72,11 +72,6 @@ def _load_width_report_paths(source:pathlib.Path) -> list[pathlib.Path]:
     parent / "load-width" / "report.json",
     parent / "source" / "load-width-report.json",
   ]
-  if source.name in ("analysis.json", "diagnostic.json", "verdict.json", "microbench.json"):
-    candidates += [
-      parent / "load-width" / "report.json",
-      parent / "source" / "load-width-report.json",
-    ]
   return [path for idx, path in enumerate(candidates) if path not in candidates[:idx]]
 
 def _add_load_width_features(features:dict[str, Any], report:dict[str, Any], item:dict[str, Any]) -> None:

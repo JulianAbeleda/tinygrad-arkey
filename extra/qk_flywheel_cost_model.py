@@ -10,13 +10,12 @@ load-bearing pieces.
 from __future__ import annotations
 
 import argparse, importlib.util, json, math, pathlib, re
-from collections import Counter
 from typing import Any
 
 import numpy as np
 
 from extra.qk_flywheel_dataset import LABELS, parse_load_width_words, parse_opts
-from extra.qk_flywheel_triage_eval import LABEL_SCORE, build_baseline_predictions, score_predictions
+from extra.qk_flywheel_triage_eval import LABEL_SCORE, _majority, build_baseline_predictions, score_predictions
 
 from extra.llm_eval_common import read_jsonl as _read_jsonl
 
@@ -226,9 +225,6 @@ class FeatureVectorizer:
 
 # --- Prediction backends ------------------------------------------------------------
 RANK_RELEVANCE = {"accept": 4, "raw_accept_unconfirmed": 3, "needs_rerun": 2, "tie": 1, "diagnostic_only": 0, "reject": 0, "construction_blocked": 0}
-
-def _majority(values:list[Any]) -> Any:
-  return sorted(Counter(values).items(), key=lambda item: (-item[1], str(item[0])))[0][0]
 
 def _label_policy(train:list[dict[str, Any]]) -> tuple[str, dict[str, tuple[str, bool]]]:
   majority_label = _majority([row["label"] for row in train])
