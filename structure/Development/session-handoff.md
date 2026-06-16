@@ -1979,6 +1979,14 @@ but inside the @function precompiled block graph tinygrad schedules it far below
 decode (good standalone kernels, bad in-model scheduling). Fix needs (a) transferring loop-tuned schedules INTO
 the @function forward (unsolved; L2 showed no cross-substrate transfer) or (b) hand-asm GEMM (the Writer) --
 both out of the "wire an existing block" scope. model.py pristine. Full sweep: `docs/amd-decode-prefill-plan.md`.
+MMQ RESEARCH + M0/M1 (2026-06-16): llama prefill = MMQ (`ggml-cuda/mmq.cuh`, GGML_HIP_MMQ_MFMA=ON -> AMD WMMA
+int8); 4 primitives (Q8_1 quant / LDS tile / int8 MMA / fused scale); measured 48-50 TF (~59% fp16 peak) vs us
+1.1 TF = 44x. M0 PASSED (kernel win exists): standalone native fp16 matmul goes 16->80% peak as batch 32->2048
+(N=2048 = 66.9 TF, BEATS llama); @function exonerated (=25% peak == standalone). M1 FAILED (no transfer): every
+in-model config ~1% peak (REALIZE+PREFILL_FP16+chunk512/1024+contiguous+output-isolation, all combos 19-49
+tok/s). Same recurring "lever real isolated, never translates e2e" thesis. Transfer needs (a) full forward
+restructure (realize every matmul top-level, breaks fusion) or (b) raw MMQ custom_kernel (port mmq.cuh, the
+flash-decode approach) -- both substantial hand-kernel builds. Prefill PARKED; model.py pristine.
 
 ## 2026-06-16 — DEFAULT FLIP: Q4K/Q6K primitives now default-ON (path-aware, shared storage). The arc's win, out-of-the-box
 The recurring "biggest lever" lesson (a built win gated OFF) was still the live default: the master flag

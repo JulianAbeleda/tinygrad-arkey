@@ -118,3 +118,30 @@ showed the loop doesn't transfer across substrates without retraining), or (b) h
 (the Writer). Both are out of the "wire an existing block" scope. Prefill optimization is therefore PARKED as a
 located negative: ~2% of llama, GPU-bound, schedule-transfer-walled. The standalone matmul_decoded 13 TF proves
 the silicon can do it; tinygrad's in-model scheduling is the ceiling.
+
+## llama's prefill primitive (researched 2026-06-16) + M0/M1: the win exists in isolation, won't transfer
+llama prefill = **MMQ (Matrix-Matrix Quantized)**, `ggml-cuda/mmq.cuh`, built here with `GGML_HIP_MMQ_MFMA=ON`
+-> AMD WMMA int8 matrix cores (dp4a for batch<=64, WMMA above). 4 primitives: (1) quantize activations ->
+Q8_1, (2) tile weight+activation into LDS, (3) int8 MMA (v_dot4 / WMMA), (4) fused dequant scale. Measured:
+llama prefill = **48-50 TF (~59% of fp16 peak)** vs us 1.1 TF (1.3%) = **44x**. Every MMQ primitive already
+exists in the repo (q8_1_quantize, q4k_q8_1 int-dot, q4k_gemm, the Marlin WMMA) but never composed into a tile.
+
+**M0 (make-or-break) PASSED**: the standalone native fp16 matmul (dequant separated -> `wf16 @ B`) goes
+compute-bound with batch: N=32 16% / N=128 41% / N=1024 57% / **N=2048 80% peak (66.9 TF, BEATS llama 48)**.
+`@function` is EXONERATED: wrapping a clean fp16 matmul in @function(precompile=True) = 25% peak == standalone.
+So the kernel-level win is real and beats llama in isolation.
+
+**M1 (transfer) FAILED**: the win does NOT reach the in-model prefill. EVERY config measured ~1% peak / 19-49
+tok/s: REALIZE=1 (clean fp16 weights) + PREFILL_FP16 (fp16 activations) + chunk 512/1024 + unfuse(contiguous) +
+output-isolation, and all combinations. Factors found: in-model activations are fp32 (`x.float()`), the lazy
+Q4_K dequant fuses into the matmul, and at large chunk the O(T^2) prefill ATTENTION grows too (chunk 512->25,
+1024->23, worse). But even fixing weight+activation dtype + batch, the in-model matmul never tiles like the
+standalone.
+
+**VERDICT (multiply-confirmed):** the prefill kernel win EXISTS and beats llama IN ISOLATION (M0), but
+tinygrad's in-model forward-graph scheduling will not produce it (M1) — the project's recurring "lever real
+isolated, never translates e2e" thesis, now the prefill verdict too. Transfer requires either (a) a full
+forward RESTRUCTURE (compute each matmul as a separate top-level realized op outside the fused block graph —
+breaks fusion everywhere, large) or (b) a RAW MMQ custom_kernel (port mmq.cuh as raw HIP, bypassing tinygrad's
+scheduler — the flash-decode approach, but a full tiled-WMMA GEMM). Both are substantial hand-kernel builds
+("the Writer"); neither is a flag or a quick win. Prefill stays PARKED. model.py pristine.
