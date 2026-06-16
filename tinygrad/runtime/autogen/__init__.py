@@ -19,7 +19,6 @@ llvm_lib = (
   (other_llvm:=repr(['LLVM'] + [f'LLVM-{i}' for i in reversed(range(14, 21+1))])))
 clang_lib = win_llvm.replace("LLVM-C", "libclang") + (mac_llvm + other_llvm).replace("LLVM", "clang")
 
-webgpu_lib = "os.path.join(sysconfig.get_paths()['purelib'], 'pydawn', 'lib', 'libwebgpu_dawn.dll') if WIN else 'webgpu_dawn'"
 nv_lib_path = ("[f'/{pre}/cuda/targets/{tgt}/lib' for pre in ['opt', 'usr/local'] for tgt in "
                "[sysconfig.get_config_vars().get(\"MULTIARCH\", \"\").rsplit(\"-\", 1)[0], 'sbsa-linux']]")
 
@@ -69,8 +68,6 @@ def __getattr__(nm):
     case "vfio": return load("vfio", ["{}/usr/include/linux/vfio.h"], args=["-I{}/usr/include"], srcs=linux_headers_deb,
                              preprocess=lambda path: subprocess.run(f"ar x {linux_headers_deb.split('/')[-1]} && tar xf data.tar.xz", cwd=path, shell=True, check=True))
     # could add rule: WGPU_COMMA -> ','
-    case "webgpu": return load("webgpu", [root/"extra/webgpu/webgpu.h"], dll=webgpu_lib,
-                               prolog=["from tinygrad.helpers import WIN, OSX", "import sysconfig, os"])
     case "libusb": return load("libusb", ["/usr/include/libusb-1.0/libusb.h"], dll="'usb-1.0'")
     case "hip": return load("hip", ["/opt/rocm/include/hip/hip_ext.h", "/opt/rocm/include/hip/hiprtc.h",
                                     "/opt/rocm/include/hip/hip_runtime_api.h", "/opt/rocm/include/hip/driver_types.h"],

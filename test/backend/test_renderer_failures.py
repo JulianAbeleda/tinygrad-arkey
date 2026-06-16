@@ -7,7 +7,6 @@ from tinygrad.codegen import to_program
 from tinygrad.helpers import prod
 from tinygrad.renderer.cstyle import CStyleLanguage
 from tinygrad.renderer.ptx import PTXRenderer
-from tinygrad.renderer.wgsl import WGSLRenderer
 from tinygrad.runtime.ops_python import PythonRenderer
 from tinygrad.uop.ops import UOp, Ops, KernelInfo, python_alu
 from tinygrad.tensor import Tensor, _to_np_dtype
@@ -69,19 +68,9 @@ class TestCStyleFailures(unittest.TestCase):
   def test_repeat_add(self): self._test_src_strip_paren(Ops.ADD)
   def test_repeat_mul(self): self._test_src_strip_paren(Ops.MUL)
   def test_repeat_xor(self): self._test_src_strip_paren(Ops.XOR)
-  @unittest.skipIf(isinstance(Device[Device.DEFAULT].renderer, WGSLRenderer), "wgsl ends up with '(' * 5")
   def test_repeat_or(self): self._test_src_strip_paren(Ops.OR)
-  @unittest.skipIf(isinstance(Device[Device.DEFAULT].renderer, WGSLRenderer), "wgsl ends up with '(' * 5")
   def test_repeat_and(self): self._test_src_strip_paren(Ops.AND)
   def test_repeat_sub(self): self._test_src_strip_paren(Ops.SUB, should_strip_paren=False)
-
-@unittest.skipUnless(isinstance(Device[Device.DEFAULT].renderer, WGSLRenderer), "tests for wgsl renderer")
-class TestWGSLFailures(unittest.TestCase):
-  def test_multiply_infinity(self):
-    # multiplying a positive constant by infinity should return infinity
-    # WGSL pipelines do not handle this reliably, some of which return zero, unless infinity always comes from a read on a dynamic buffer
-    ret = _setup_and_test_alu(Ops.MUL, 5.0, UOp.const(dtypes.float32, float("inf")))
-    self.assertEqual(ret[0], float("inf"))
 
 @unittest.skipIf(not isinstance(Device[Device.DEFAULT].renderer, PTXRenderer), "tests for ptx renderer")
 class TestPTXFailures(unittest.TestCase):
