@@ -94,3 +94,27 @@ The fix is a prefill-DRIVER restructure (not a Linear edit), addressing all thre
 Plus token-parity verify (fp16 accumulation differs from the fused path). This is a correctness-critical
 restructure interacting with @function/precompile/JIT — a real multi-stage build, NOT a flag or a one-line
 edit. The standalone win (matmul_decoded 5-18x) proves the ceiling is real; reaching it in-model is the work.
+
+## VERDICT (2026-06-16): prefill is GPU-bound at ~1.3% peak; NO accessible lever fixes it. Schedule-transfer wall.
+After exhausting every accessible lever — all measured NEGATIVE on the real in-model prefill (8B, warm):
+| lever | result |
+|---|---|
+| `Q4K_UNFUSE` / `TC=2` / `Q4K_BATCHED` | no change (~67 tok/s) |
+| `REALIZE=1` (resident fp16 weights) | 22 (worse) |
+| `PREFILL_FP16` (Linear fp16-contiguous) | 28 (worse), reverted |
+| concrete T=32 forward (vs symbolic) | ~same (529 vs ~470 ms) — symbolic batch is NOT the in-model cap |
+| matmul orientation (`x@Wᵀ` vs `W@xᵀ`) | 1.0x (no diff) |
+| chunk_size 32 / 128 / 512 | 67 / 69 / 39 — bigger batch does NOT help, hurts at 512 |
+| GPU-vs-host | **95% GPU-busy** (GPU 3775 ms / wall 3957 ms) -> GPU-bound, NOT launch overhead |
+
+ROOT CAUSE (confirmed): prefill is GPU-bound and the in-model matmul kernels run at ~1.3% of peak. The SAME
+matmul as a clean top-level kernel reaches ~13 TF on the GPU (matmul_decoded), but inside the @function
+precompiled block graph (with the fused Q4_K dequant) tinygrad schedules it far below peak — and NOTHING at the
+driver / flag / parameter level changes that. It is the SAME class of wall as decode (good standalone kernels,
+bad in-model scheduling), and worse for prefill because prefill SHOULD be compute-bound but tinygrad can't
+schedule it to be. The fix is NOT a build over the existing forward — it requires either (a) transferring the
+loop's tuned matmul schedules INTO the @function-compiled model forward (the unsolved transfer problem; L2
+showed the loop doesn't transfer across substrates without retraining), or (b) hand-written AMD GEMM kernels
+(the Writer). Both are out of the "wire an existing block" scope. Prefill optimization is therefore PARKED as a
+located negative: ~2% of llama, GPU-bound, schedule-transfer-walled. The standalone matmul_decoded 13 TF proves
+the silicon can do it; tinygrad's in-model scheduling is the ceiling.

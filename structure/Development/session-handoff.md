@@ -1970,6 +1970,15 @@ prefill's batch dim T is SYMBOLIC (v_toks) -> measured 2.2x slower than concrete
 dims); (2) untuned matmul (~2-15% peak); (3) per-chunk dequant. Real fix = prefill-DRIVER restructure:
 concrete fixed-size chunks (pad to 32 -> concrete matmul dims) + amortized per-layer dequant + warm-started TC
 schedules + token parity. Bigger than first scoped; the standalone 5-18x proves the ceiling exists.
+PREFILL VERDICT (exhausted, PARKED as a located negative): EVERY accessible lever measured NEGATIVE on the
+real in-model prefill -- Q4K_UNFUSE/TC/Q4K_BATCHED no-op; REALIZE=1 22 tok/s; PREFILL_FP16 28 (reverted);
+concrete-T=32 ~same as symbolic (symbolic batch is NOT the in-model cap); orientation 1.0x; chunk_size 32/128/
+512 = 67/69/39 (bigger batch does NOT help). Prefill is **95% GPU-busy** (GPU-bound, not launch overhead) with
+in-model matmuls at ~1.3% of peak. The SAME matmul as a clean top-level kernel hits ~13 TF (matmul_decoded),
+but inside the @function precompiled block graph tinygrad schedules it far below peak -- same class of wall as
+decode (good standalone kernels, bad in-model scheduling). Fix needs (a) transferring loop-tuned schedules INTO
+the @function forward (unsolved; L2 showed no cross-substrate transfer) or (b) hand-asm GEMM (the Writer) --
+both out of the "wire an existing block" scope. model.py pristine. Full sweep: `docs/amd-decode-prefill-plan.md`.
 
 ## 2026-06-16 — DEFAULT FLIP: Q4K/Q6K primitives now default-ON (path-aware, shared storage). The arc's win, out-of-the-box
 The recurring "biggest lever" lesson (a built win gated OFF) was still the live default: the master flag
