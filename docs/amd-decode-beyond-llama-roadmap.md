@@ -1,119 +1,142 @@
 # Beyond llama.cpp — the decode roadmap past parity
 
-Date: 2026-06-15. State: default decode **53.5 tok/s = ~29% of HBM peak** (RX 7900 XTX, Qwen3-8B Q4_K_M),
-up from 23 before the Q6_K work. llama.cpp = 105.7 tok/s = 57%.
+Date: 2026-06-15, **updated 2026-06-16** (post-capstone: ffn_down demotion, P2 flash-decode shipped,
+default-on flip, prefill diagnosed). State: default decode **60.9 tok/s = ~33% of HBM peak = 58% of
+llama.cpp** (RX 7900 XTX, Qwen3-8B Q4_K_M), up from 23 before the Q6_K work. llama.cpp = 105.7 tok/s = 57%.
+Out-of-the-box (default-on primitives) is now **55 tok/s** with no flags (was 12).
+
+> Scope: this doc is **decode** (batch-1 token generation). Prefill is a separate, worse gap with a
+> different root cause — see `docs/amd-decode-prefill-plan.md` (~2% of llama; it's an LDS-cache-blocking
+> codegen problem, not a coverage/policy problem). Don't conflate the two.
 
 ## The roofline (why "beyond llama" is real, not aspirational)
 Batch-1 decode reads ~4.68 GB of weights/token. At HBM peak (859 GB/s) the floor is **5.45 ms = 183 tok/s
 (100% of peak)**. So:
 
 ```
-peak 183 tok/s |==========================================| 100%
-llama.cpp 105  |=========================|                  57%   <- a FIXED hand-tuned scheme
-us now    53.5 |=============|                               29%
-                ^------ parity gap ------^------- BEYOND room (43% of peak still on the table) ------^
+peak      183 tok/s |==========================================| 100%
+llama.cpp 105.7     |=========================|                  57%   <- a FIXED hand-tuned scheme
+us now    60.9      |==============|                             33%   (58% of llama)
+                     ^---- parity gap ----^------- BEYOND room (43% of peak still on the table) ------^
 ```
 
 There is **as much headroom above llama as between us and llama.** llama leaves 43% of peak unused because it
 is a fixed scheme (fixed quant per type, fixed kernels, per-layer-sequential). The machine-search edge is an
-*adaptive per-tensor policy* — and we already proved that wins (mixed-quant coverage: 23→53 tok/s). The
-levers below extend the policy's decision space (kernel, bit-width, schedule, sparsity) — each one is a place
-a search can beat a fixed reference.
+*adaptive per-tensor policy* — and we already proved that wins (mixed-quant coverage: 23→53 tok/s; ffn_down
+Q6→Q4 demotion: +14% free). The levers below extend the policy's decision space (kernel, bit-width, schedule,
+sparsity) — each one is a place a search can beat a fixed reference.
 
-## Parity levers (close the last of the gap to llama, ~29%→57%)
-- **P1 — lm_head primitive: DONE** (Q6K_COVER_MORE default-on; eliminated the 2.7 ms `r_1187`).
-- **P2 — attention reduces. RE-PROFILED 2026-06-15 → low ROI now.** After the Q6_K + COVER_MORE wins the
-  non-GEMV dropped 48% → **29% (5.9 ms)** and is now **diffuse**: attention ~3.0 ms spread across small
-  per-layer sdpa kernels (none >0.9 ms), lm_head sampling ~0.85 ms, norms ~1.3 ms. A custom flash-attention
-  decode kernel would save ~1.5–2 ms = **~8–10% (53 → ~58 tok/s)** for a substantial build over a diffuse
-  target. The token is now **71% GEMV (weight read, at the B1 occupancy ceiling)** — we are near the practical
-  per-kernel ceiling. P2 is a real but modest lever; not obviously worth a flash-attention build vs. banking
-  the arc.
+## ⚠ The key reframe (2026-06-16): the parity gap is the NON-GEMV tax, not a slow GEMV
+A clean post-fix profile (`amd-decode-arc-synthesis.md` §6) makes the deciding factor explicit:
+
+- The **in-graph GEMV is already at ~52% of peak ≈ llama's 57% per-kernel rate.** A GEMV-only token would run
+  at **~80–95 tok/s (≈80–90% of llama)**. The per-kernel GEMV is **not** what keeps us below llama.
+- We land at 60.9 (58%) because the token is **sequential**: `token = GEMV + non-GEMV (≈ sum)`. The non-GEMV
+  work (attention reduces, norms, rope, lm_head sampling) is the **tax** that drops e2e from ~85 → 60.9.
+- llama reaches its GEMV ceiling end-to-end, which means **llama is NOT paying our non-GEMV tax** (it fuses /
+  has near-zero framework non-GEMV). So **closing/overlapping that tax is the parity path** — not a faster
+  GEMV.
+
+**Consequence for the categorization:** the lever that closes parity is **make non-GEMV cheap (P2/flash, done)
++ overlap non-GEMV behind the weight stream (B2)**. B2 was previously filed under "beyond"; it is promoted to
+the **lead parity lever** below. The faster-GEMV levers (B1/R1/R3/R4/R5) are out — see B1.
+
+## Parity levers (close the gap to llama, 33% → 57%)
+- **P1 — lm_head primitive: DONE** (`Q6K_COVER_MORE` default-on; eliminated the 2.7 ms `r_1187`).
+- **P2 — flash-attention decode: SHIPPED & EXACT (2026-06-16).** `FLASH_DECODE=1`, byte-exact vs SDPA
+  (`extra/qk_flash_decode.py`, 5 single-accumulator UOp kernels). It is a **long-context** parity lever:
+  SDPA's dense KV read collapses 6.0× by ctx 3072; flash flattens that to 2.1×. Measured (Q4K_PRIMITIVE=1):
+  ctx 8 `56.2→47.5` (0.84×), ctx 1024 `27.6→34.3` (1.24×), ctx 3072 `9.4→22.7` (**2.41×**). Crossover ~ctx
+  400, so **default-off** (5 extra kernels/layer cost ~15% at short ctx) — enable for long-context serving.
+  At short context P2 is spent: the residual non-GEMV is diffuse (norms 1.3 ms, sampling 0.85 ms, small sdpa)
+  and the win is now **B2 overlap**, not a faster attention kernel.
+- **B2 — overlap non-GEMV behind the weight stream. ← THE LEAD PARITY LEVER (promoted from "beyond").**
+  Today `token = GEMV + non-GEMV` (sequential, ≈ sum). The ~29% non-GEMV (attention/norms/lm_head) can be
+  pipelined to run *while* the next layer's weights stream from HBM → `token = max(GEMV, non-GEMV)` not sum.
+  Since GEMV alone ≈ 80–95 tok/s, overlapping the ~4–5 ms non-GEMV recovers most of the gap to llama by
+  itself (→ ~80 tok/s ≈ 75–80% of llama) and **keeps stacking past it**. This is structural, not a kernel
+  tweak; it is both the parity finish and a beyond-llama multiplier. **Build this next.**
 
 ## Beyond-llama levers (surpass 57%) — each ties to the policy/primitive frame
-Ranked by (ceiling × feasibility). Roofline deltas are per-token, stacking on the current 18.7 ms.
+Ranked by (ceiling × feasibility). The path is **change the work, not the kernel.**
 
-- **B1 — in-graph int-dot GEMV. TESTED → DECISIVE NEGATIVE (2026-06-15, `B1_INTDOT_RESULT.md`).** The
-  standalone int-dot is 76% vs fp 56%, but in-graph it runs 28.5 µs vs fp 32 µs — only 1.12×, both ~34% of
-  peak. The same kernel hits 64% amortized-standalone → the gap is **single-shot occupancy** (the attn GEMV
-  is 64 workgroups, too few to fill 96 CUs), not compute. int-dot's compute win is invisible because the
-  in-graph GEMV is occupancy-bound, not compute-bound; the q8 quant overhead then cancels the tiny gain →
-  null. split-K (more wg) is within noise; fusion hurts. **The per-layer GEMV is already at its batch-1
-  ceiling (~50–55% ≈ llama's 57%).** A faster per-kernel GEMV is NOT the path beyond llama. This also
-  down-grades R3/R4/R5 (also per-kernel GEMV levers → likely within-noise for the same reason).
-- **B2 — overlap non-GEMV behind the weight stream.** Today token = GEMV + non-GEMV (sequential, ~sum). The
-  48% non-GEMV (attention/norms/lm_head) can be pipelined to run *while* the next layer's weights stream from
-  HBM → token = max(GEMV, non-GEMV) not sum. llama is largely per-layer-sequential too, so a deeply pipelined
-  decode beats it structurally. Stacked with B1: token → max(7.1, ~5) ≈ 7 ms = ~140 tok/s.
-- **B3 — per-tensor sub-4-bit policy (read FEWER bytes than llama).** llama reads the full Q4_K_M (4.5 b/wt).
-  The policy already decides *per tensor* (which kernel); extend it to decide *bit-width* — push tolerant
-  tensors to 3-bit/2-bit where a search shows the per-tensor error is acceptable (the inverse of mixed-quant:
-  go LOWER where robust, not just higher where sensitive). ~15–20% fewer weight bytes → GEMV 7.1 → ~5.9 ms.
-  This is the purest "machine search beats a fixed scheme" lever and directly reuses the cost-model/flywheel.
-- **B4 — sparse / compressed-KV attention (DeepSeek-DSA style).** The attention reads the full KV cache every
-  token; top-k / compressed-KV reads only the relevant slots → less bandwidth as context grows. Beyond
-  llama's dense attention; biggest at long context. (Was flagged earlier in the session as on-hardware-relevant.)
-- **B5 — multi-token / self-speculative (amortize the read).** Emit >1 token per 4.68 GB weight pass via MTP
-  / Medusa-Eagle heads (no separate draft model). Amortizes the dominant cost across tokens. (Partly a llama
-  feature via draft models; self-speculative heads are the beyond version.)
+- **B1 — faster in-graph int-dot GEMV. TESTED → DECISIVE NEGATIVE (`B1_INTDOT_RESULT.md`).** Standalone
+  int-dot is 76% vs fp 56%, but in-graph it runs 28.5 µs vs fp 32 µs — only 1.12×, both ~34% of peak. The
+  gap is **single-shot occupancy** (the attn GEMV is 64 workgroups, too few to fill 96 CUs), not compute, so
+  int-dot's compute win is invisible and the q8 quant overhead cancels it → null. split-K is within noise;
+  fusion hurts. **The per-layer GEMV is already at its batch-1 ceiling (~50–55% ≈ llama's 57%).** A faster
+  per-kernel GEMV is NOT the path. This also closes R1/R3/R4/R5 (all per-kernel GEMV levers, same reason).
+  The only way to make the GEMV launch "bigger" is to give it more work per pass → **B5**.
+- **B3 — per-tensor sub-4-bit policy (read FEWER bytes than llama).** llama reads the full Q4_K_M (4.5 b/wt);
+  we already beat that once by demoting ffn_down Q6→Q4 (+14%, free). Extend the policy to decide *bit-width*
+  per tensor — push tolerant tensors to 3-bit/2-bit where a search shows acceptable per-tensor error (the
+  inverse of mixed-quant). ~15–20% fewer weight bytes → GEMV time drops proportionally. The purest "machine
+  search beats a fixed scheme" lever; directly reuses the cost-model/flywheel + the existing `qk_quantize`
+  quantizer. (Near-term sub-task: cache the requant to kill the ~3 min load cost.)
+- **B4 — sparse / compressed-KV attention (DeepSeek-DSA style).** Builds on the shipped flash kernel: instead
+  of reading the full KV cache every token, read only top-k / compressed slots → bandwidth grows sub-linearly
+  with context. Beyond llama's dense attention; biggest at long context (where flash already pays). Lossy →
+  gate on perplexity/coherence, unlike the exact Q6_K/flash wins.
+- **B5 — multi-token / self-speculative (amortize the read). THE MULTIPLIER.** Emit >1 token per 4.68 GB
+  weight pass via MTP / Medusa-Eagle heads (no separate draft model). Even at our current ~52% per-kernel
+  rate, emitting 2 tokens per weight pass ≈ doubles throughput. NB: the **draft-model** form was tested and
+  is **net-negative** (`B5_S0`/`S1_SPECULATIVE`: a 1.7B draft is too costly); the self-speculative *heads*
+  form is the viable version. The verify path is already fast (S3 batched GEMM primitive, built + dormant).
 
-### Stacked beyond-llama ceiling (revised after B1 negative)
-B1 is out — the per-kernel GEMV is already at ceiling, so the path is **change the work, not the kernel**:
-B3 (sub-4-bit: fewer bytes) + B2 (overlap: token = max not sum) + B4/P2 (cheap attention) + B5 (amortize
-across tokens). B5 is the multiplier: even at our current ~52% per-kernel rate, emitting 2 tokens per weight
-pass ≈ doubles throughput. The realistic beyond-llama route is **B5 × (B3 + B2)**, not a faster GEMV.
+### Stacked beyond-llama ceiling
+B1 is out (per-kernel GEMV at ceiling). The realistic route is **B5 × (B3 + B2)**:
+B2 (overlap: token = max not sum) + B3 (sub-4-bit: fewer bytes) + B4/flash (cheap attention) + B5 (amortize
+across tokens). B5 is the multiplier; B2 is the structural unlock that makes everything else stack instead
+of sum.
 
-## Scope: lever P2 (attention) — the immediate next concrete step
-1. **Identify** the attention kernels precisely (the `r_*start_pos*` reduces): what they read (KV-cache
-   bytes vs scores), their per-token cost as a function of context length, and whether scores are materialized.
-2. **Parity**: a fused online-softmax attention (flash-style) — no materialized N-wide scores; one pass over
-   the cache. Measure vs the generic reduce.
-3. **Beyond (B4)**: once fused, add top-k / compressed-KV selection — read only the relevant cache slots.
-4. **Gate**: attention/token drops materially AND output stays coherent (attention is lossy under sparsity —
-   verify perplexity/coherence, unlike the exact Q6_K win).
+## Scope: the immediate next concrete steps (revised)
+1. **B2 (overlap)** — pipeline the non-GEMV behind the next layer's weight stream so `token = max(GEMV,
+   non-GEMV)`. This is the lead parity-and-beyond lever now that flash has flattened long-ctx attention and
+   the GEMV is at its per-kernel ceiling.
+2. **B3 (sub-4-bit)** — extend the per-tensor policy from "which kernel" to "which bit-width"; reuse the
+   `qk_quantize` quantizer + flywheel cost-model; cache the requant. Free-quality demotions first (the
+   ffn_down win generalizes), then search the tolerant tensors.
+3. **B4 (sparse KV)** — once long-context serving uses flash, add top-k/compressed-KV on top; gate on
+   coherence.
+4. **B5 (self-speculative heads)** — the throughput multiplier; the draft-model form is already refuted, the
+   verify primitive (S3) already exists.
 
-## REVISIT — closures measured against the Q6_K-bottlenecked baseline (likely false nulls)
-The Q6_K discovery invalidates the baseline. Every e2e experiment closed *before* the flag was on ran with
-the Q6_K `ffn_down` fallback as a fixed 59%-of-token noise floor. A lever improving the Q4_K path (then ~40%
-of the token, now 49% of a shorter token) moved e2e by only `~0.4 × win` — often below noise → **null**. With
-Q6_K fast, the same levers should now register. Re-run each against the new 53.5 tok/s baseline:
+## REVISIT — closures measured against the Q6_K-bottlenecked baseline (resolved)
+The Q6_K discovery invalidated the pre-fix baseline; every e2e experiment closed *before* the flag was on ran
+with the Q6_K `ffn_down` fallback as a fixed 59%-of-token noise floor, so Q4_K-path levers moved e2e by only
+`~0.4 × win` → often null. Status after the post-fix re-derivation:
 
-- **R1 — D1/E0/A0: in-graph int-dot + amortized quant (= B1). HIGH.** Closed as "vdot e2e == fp e2e == 30",
-  but that null was dominated by the Q6_K 59%. The Q4_K GEMV is now ~half the token and the int-dot kernel
-  is proven 76% standalone → the win that was masked should surface. This is the single most important
-  revisit; it *is* B1.
-- **R2 — amortized q8 quant (A0/E0 mechanism).** The quant overhead "didn't pay" because the GEMV it sped up
-  was a small, diluted fraction. Now the GEMV is the dominant remaining cost → re-evaluate the quant-cache
-  break-even (it shares one quant across q/k/v + gate/up per layer).
-- **R3 — horizontal fusion (`Q4K_FUSE`, q/k/v→1, gate/up→1).** Fewer/fatter Q4_K launches mattered little
-  when Q6_K dominated; now the Q4_K GEMVs are the bulk of GPU work, so fusion's occupancy/launch win is worth
-  re-measuring.
-- **R4 — per-kernel opts / warm-start on the Q4_K GEMVs.** The opt sweeps were judged against the bottlenecked
-  e2e; the Q4_K `q4k_gemv_partial` opts (LOCAL/parts/UPCAST) now move a 49% slice — re-sweep.
-- **R5 — Q4_K attn_k coverage (`Q4K_COVER_KV`, closed null 23.3→23.7).** That ablation ran with Q6_K off;
-  re-test against the fast baseline (small expected, but cheap and now measurable).
-- **R6 — the generated policy / flywheel cost-model (`QK_GENERATED_POLICY`).** The whole machine-search policy
-  was fit/scored against the Q6_K-bottlenecked regime; its per-tensor opt picks may be stale. Re-score on the
-  new baseline — this is the flywheel's own dogfood and ties directly to the mission.
-- **R7 — re-audit the "structural / occupancy e2e wall" conclusion.** We nearly closed the whole investigation
-  on "the standalone→e2e gap is a structural occupancy wall." That was **wrong** — it was Q6_K coverage. Any
-  downstream reasoning that assumed an intrinsic e2e cap is suspect and should be re-derived.
+- **R1 (= B1, in-graph int-dot): re-tested → still null**, but for the *right* reason now (occupancy ceiling,
+  not Q6_K dilution). See B1.
+- **R3/R4/R5 (horizontal fusion / per-kernel opts / attn_k coverage):** all per-kernel GEMV levers; B1's
+  occupancy finding predicts within-noise. Cheap to re-confirm but low priority — the GEMV is at ceiling.
+- **R6 (generated policy / flywheel cost-model):** was fit against the Q6_K-bottlenecked regime; re-scored on
+  the fast baseline. Generated policies now win on 14B/32B (see `amd-decode-current-verdicts.md`).
+- **R7 (the "structural occupancy e2e wall" conclusion): RESOLVED — it was Q6_K coverage, not an intrinsic
+  cap.** The post-fix wall is the **non-GEMV sequential tax** (the reframe above), which B2 attacks.
 
-**Stays closed (not baseline-dependent, re-confirm only if cheap):** RDNA3 WMMA/tensor-cores need fp16 +
-concrete dims (decode runs fp32, batch-1 — architectural, unchanged by Q6_K); BEAM hangs gfx1100 (hardware
-fact); the cold/clock-controlled *standalone* kernel numbers (measured correctly, independent of the e2e
-baseline). The int-dot-beats-llama standalone result is solid regardless.
+**Stays closed (architectural, not baseline-dependent):** RDNA3 WMMA/tensor-cores need fp16 + concrete dims
+(decode is fp32, batch-1); BEAM hangs gfx1100 (hardware fact); the cold/clock-controlled *standalone* kernel
+numbers (measured correctly). The int-dot-beats-llama standalone result (76% vs 57%) is solid regardless.
 
 ## The thesis (why this is the machine-search mission, not just kernel hacking)
-llama.cpp is the strong *fixed* baseline. Every beyond-lever is the policy gaining a new degree of freedom:
-- coverage (which kernel) — DONE, won.
-- kernel choice (int-dot vs fp-dequant) — B1.
-- bit-width (per-tensor sub-4-bit) — B3.
-- schedule (overlap) — B2.
-- sparsity (KV) — B4.
+llama.cpp is the strong *fixed* baseline. Every lever is the policy gaining a new degree of freedom:
+- coverage (which kernel) — **DONE, won** (Q6_K + COVER_MORE).
+- bit-width (per-tensor sub-4-bit) — **B3** (ffn_down demotion already proved it).
+- schedule (overlap) — **B2** (the parity unlock).
+- sparsity (KV) — **B4** (on top of shipped flash).
+- amortize-across-tokens — **B5** (self-speculative heads).
+- kernel choice (int-dot vs fp-dequant) — **B1, refuted** (occupancy-bound, not the path).
+
 A hand-tuned reference picks one good fixed point in this space. A search picks per-tensor, per-shape,
 per-context. That is the structural reason search can go beyond llama — and the roofline says there is 43% of
-peak waiting to prove it.
+peak waiting to prove it. The corrected insight from the arc: **the next wins are scheduling and bytes, not a
+faster kernel** — the kernel is already at its batch-1 ceiling.
 
-Anchors: `KERNEL_BEATS_LLAMACPP.md` (int-dot 76%), `Q6K_FIX_RESULT.md` (coverage win), `amd-decode-arc-
-synthesis.md` (the primitive frame), `amd-decode-measurement-confounds.md` (how to measure any of this).
+Anchors: `KERNEL_BEATS_LLAMACPP.md` (int-dot 76%), `Q6K_FIX_RESULT.md` (coverage win),
+`B3_DEMOTE_RESULT.md` (sub-4-bit demotion), `amd-decode-capstone.md` (the 60.9 ledger),
+`amd-decode-arc-synthesis.md` (the primitive frame + §6 non-GEMV breakdown),
+`amd-decode-flash-attention-plan.md` (P2 SHIPPED section), `amd-decode-prefill-plan.md` (separate prefill
+gap), `amd-decode-measurement-confounds.md` (how to measure any of this).
+</content>
+</invoke>
