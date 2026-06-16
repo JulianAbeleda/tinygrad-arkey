@@ -64,27 +64,9 @@ def _norm_mechanism(row:dict[str, Any]) -> str:
   return mech if mech in V1_MECHANISMS else "unknown"
 
 def _opts_features(opts:Any) -> dict[str, Any]:
-  out = {"opt_count": 0, "local_axes": 0, "local0": 0, "local1": 0, "upcast_axes": 0, "upcast": 0, "unroll_axes": 0, "unroll": 0}
-  if not isinstance(opts, list): return out
-  out["opt_count"] = len(opts)
-  for raw in opts:
-    text = str(raw)
-    m = re.search(r"LOCAL:(\d+):(\d+)", text)
-    if not m: m = re.search(r"OptOps\.LOCAL.*axis=(\d+).*arg=(\d+)", text)
-    if m:
-      axis, arg = int(m.group(1)), int(m.group(2))
-      out["local_axes"] += 1
-      if axis == 0: out["local0"] = max(out["local0"], arg)
-      if axis == 1: out["local1"] = max(out["local1"], arg)
-    m = re.search(r"UPCAST:(\d+):(\d+)", text)
-    if m:
-      out["upcast_axes"] += 1
-      out["upcast"] = max(out["upcast"], int(m.group(2)))
-    m = re.search(r"UNROLL:(\d+):(\d+)", text)
-    if m:
-      out["unroll_axes"] += 1
-      out["unroll"] = max(out["unroll"], int(m.group(2)))
-  return out
+  raw = v0.parse_opts(opts)
+  return {"opt_count": raw["count"], "local_axes": raw["local_count"], "local0": raw["local0_arg"], "local1": raw["local1_arg"],
+          "upcast_axes": raw["upcast_count"], "upcast": raw["upcast_arg"], "unroll_axes": raw["unroll_count"], "unroll": raw["unroll_arg"]}
 
 def _shape_features(value:Any) -> dict[str, Any]:
   if isinstance(value, dict):
@@ -98,11 +80,7 @@ def _shape_features(value:Any) -> dict[str, Any]:
   return {}
 
 def _load_width_words(value:Any) -> int:
-  text = str(value or "").lower()
-  m = re.search(r"x(\d+)", text)
-  if m: return int(m.group(1))
-  m = re.search(r"(\d+)", text)
-  return int(m.group(1)) if m else 0
+  return v0.parse_load_width_words(value)
 
 def _normalize_pre_result_context(ctx:dict[str, Any]) -> dict[str, Any]:
   out = copy.deepcopy(ctx)

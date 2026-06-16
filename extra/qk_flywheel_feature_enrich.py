@@ -6,6 +6,7 @@ from collections import Counter
 from typing import Any
 
 from extra import qk_flywheel_dataset_v1 as v1
+from extra.qk_flywheel_dataset import parse_load_width_words
 
 FEATURE_SCHEMA = "candidate_outcome_v1_featured"
 
@@ -25,11 +26,7 @@ def _repo_path(repo:pathlib.Path, value:Any) -> pathlib.Path:
 from extra.qk_paths import portable_path as _portable
 
 def _load_width_words(value:Any) -> int:
-  text = str(value or "").lower()
-  m = re.search(r"x(\d+)", text)
-  if m: return int(m.group(1))
-  m = re.search(r"(\d+)", text)
-  return int(m.group(1)) if m else 0
+  return parse_load_width_words(value)
 
 def _mode_candidates(row:dict[str, Any]) -> list[str]:
   ctx = row.get("pre_result_context") or {}

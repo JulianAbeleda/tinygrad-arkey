@@ -6,6 +6,36 @@ from collections import Counter, defaultdict
 from typing import Any
 
 LABELS = ("accept", "reject", "tie", "raw_accept_unconfirmed", "needs_rerun", "construction_blocked", "diagnostic_only")
+
+def parse_load_width_words(value:Any) -> int:
+  text = str(value or "").lower()
+  m = re.search(r"x(\d+)", text)
+  if m: return int(m.group(1))
+  m = re.search(r"(\d+)", text)
+  return int(m.group(1)) if m else 0
+
+def parse_opts(opts:Any) -> dict[str, int]:
+  out = {"count": 0, "local_count": 0, "local0_arg": 0, "local1_arg": 0, "upcast_count": 0, "upcast_arg": 0, "unroll_count": 0, "unroll_arg": 0}
+  if not isinstance(opts, list): return out
+  out["count"] = len(opts)
+  for raw in opts:
+    text = str(raw)
+    m = re.search(r"LOCAL:(\d+):(\d+)", text)
+    if not m: m = re.search(r"OptOps\.LOCAL.*axis=(\d+).*arg=(\d+)", text)
+    if m:
+      axis, arg = int(m.group(1)), int(m.group(2))
+      out["local_count"] += 1
+      if axis == 0: out["local0_arg"] = max(out["local0_arg"], arg)
+      if axis == 1: out["local1_arg"] = max(out["local1_arg"], arg)
+    m = re.search(r"UPCAST:(\d+):(\d+)", text)
+    if m:
+      out["upcast_count"] += 1
+      out["upcast_arg"] = max(out["upcast_arg"], int(m.group(2)))
+    m = re.search(r"UNROLL:(\d+):(\d+)", text)
+    if m:
+      out["unroll_count"] += 1
+      out["unroll_arg"] = max(out["unroll_arg"], int(m.group(2)))
+  return out
 REASONS = (
   "static_gate_fail", "construction_blocked", "correctness_fail", "microbench_regression",
   "microbench_tie", "full_decode_regression", "confirmation_failed", "insufficient_gain",

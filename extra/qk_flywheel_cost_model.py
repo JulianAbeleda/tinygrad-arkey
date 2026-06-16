@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from extra.qk_flywheel_dataset import LABELS
+from extra.qk_flywheel_dataset import LABELS, parse_load_width_words, parse_opts
 from extra.qk_flywheel_triage_eval import LABEL_SCORE, build_baseline_predictions, score_predictions
 
 from extra.llm_eval_common import read_jsonl as _read_jsonl
@@ -71,34 +71,10 @@ def _add_flat_group(out:dict[str, Any], prefix:str, data:Any) -> None:
       _add_num(out, f"{name}_count", len(value))
 
 def _parse_load_width(value:Any) -> float:
-  text = str(value or "").lower()
-  m = re.search(r"x(\d+)", text)
-  if m: return float(m.group(1))
-  m = re.search(r"(\d+)", text)
-  return float(m.group(1)) if m else 0.0
+  return float(parse_load_width_words(value))
 
 def _opts_features(opts:Any) -> dict[str, float]:
-  out = {"count": 0.0, "local_count": 0.0, "local0_arg": 0.0, "local1_arg": 0.0, "upcast_count": 0.0, "upcast_arg": 0.0, "unroll_count": 0.0, "unroll_arg": 0.0}
-  if not isinstance(opts, list): return out
-  out["count"] = float(len(opts))
-  for raw in opts:
-    text = str(raw)
-    m = re.search(r"LOCAL:(\d+):(\d+)", text)
-    if not m: m = re.search(r"OptOps\.LOCAL.*axis=(\d+).*arg=(\d+)", text)
-    if m:
-      axis, arg = int(m.group(1)), float(m.group(2))
-      out["local_count"] += 1.0
-      if axis == 0: out["local0_arg"] = max(out["local0_arg"], arg)
-      if axis == 1: out["local1_arg"] = max(out["local1_arg"], arg)
-    m = re.search(r"UPCAST:(\d+):(\d+)", text)
-    if m:
-      out["upcast_count"] += 1.0
-      out["upcast_arg"] = max(out["upcast_arg"], float(m.group(2)))
-    m = re.search(r"UNROLL:(\d+):(\d+)", text)
-    if m:
-      out["unroll_count"] += 1.0
-      out["unroll_arg"] = max(out["unroll_arg"], float(m.group(2)))
-  return out
+  return {key: float(val) for key, val in parse_opts(opts).items()}
 
 def _add_opts(out:dict[str, Any], prefix:str, opts:Any) -> None:
   for key, value in _opts_features(opts).items(): out[f"{prefix}_{key}"] = value
