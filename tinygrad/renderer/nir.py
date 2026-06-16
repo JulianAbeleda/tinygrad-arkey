@@ -2,7 +2,7 @@ from typing import Callable, cast, Any
 from tinygrad.dtype import AddrSpace, DType, PtrDType, ImageDType, dtypes, truncate
 from tinygrad.helpers import DEBUG, OSX, unwrap, fromimport, Target
 from tinygrad.renderer import Renderer
-from tinygrad.renderer.cstyle import CUDARenderer, OpenCLRenderer
+from tinygrad.renderer.cstyle import OpenCLRenderer
 from tinygrad.uop.ops import GroupOp, Ops, UOp, PatternMatcher, UPat, range_str
 from tinygrad.runtime.autogen import mesa
 from tinygrad.runtime.support.c import POINTER
@@ -118,7 +118,7 @@ def nidx(b:mesa.nir_builder, buf, off, dtype, gate=None) -> mesa.nir_def:
 class NIRRenderer(Renderer):
   suffix = "NIR"
   nir_options: bytes
-  global_max, local_max, shared_max = CUDARenderer.global_max, CUDARenderer.local_max, CUDARenderer.shared_max
+  global_max, local_max, shared_max = (2147483647, 65535, 65535), (1024, 1024, 64), 49152  # was CUDARenderer.*
   code_for_op = {**{k:lambda:None for k in u_aop.keys()}, **{k:lambda:None for k in s_aop.keys()}, **{k:lambda:None for k in f_aop.keys()}}
 
   extra_matcher = PatternMatcher([

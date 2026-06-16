@@ -5,7 +5,6 @@ from tinygrad.codegen.opt import tc
 from tinygrad.uop.ops import Ops, UOp, PatternMatcher, UPat, GroupOp
 from tinygrad.dtype import dtypes, DType, PtrDType, AddrSpace
 from tinygrad.renderer import Renderer
-from tinygrad.renderer.cstyle import CUDARenderer
 from tinygrad.helpers import flatten, get_single_element, prod, unwrap, Target
 
 def render_val(x, dtype):
@@ -136,7 +135,7 @@ string_rewrite = PatternMatcher([
 
 class PTXRenderer(Renderer):
   suffix = "PTX"
-  global_max, local_max, shared_max = CUDARenderer.global_max, CUDARenderer.local_max, CUDARenderer.shared_max
+  global_max, local_max, shared_max = (2147483647, 65535, 65535), (1024, 1024, 64), 49152  # was CUDARenderer.*
   tc_sm80 = [x for x in tc.cuda_sm80 if x.dtype_in in [dtypes.half, dtypes.float]]
   code_for_op = asm_for_op
   extra_matcher = ptx_matcher
