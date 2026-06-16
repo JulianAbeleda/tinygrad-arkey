@@ -219,7 +219,7 @@ class TestMultiTensor(unittest.TestCase):
 
   @slow
   def test_data_parallel_resnet_train_step(self):
-    from extra.models.resnet import ResNet18
+    self.skipTest("extra.models removed in AMD-only fork")
     fake_image = Tensor.rand((2, 3, 224//16, 224//16))
     labels = Tensor.randint(2, low=0, high=1000)
     m = ResNet18()
@@ -420,7 +420,7 @@ class TestMultiTransformer(unittest.TestCase):
   def test_transformer(self):
     device = tuple(f"{Device.DEFAULT}:{i}" for i in range(2))
 
-    from extra.models.llama import Transformer
+    self.skipTest("extra.models removed in AMD-only fork")
     args = {"dim": 32, "n_heads": 1, "n_kv_heads": 1, "n_layers": 2, "norm_eps": 1e-5, "rope_theta": 500000, "vocab_size": 1024,
             "hidden_dim": 32, "max_context": 12}
     real_model = Transformer(**args)

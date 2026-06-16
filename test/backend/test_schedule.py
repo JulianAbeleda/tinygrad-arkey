@@ -974,7 +974,10 @@ class TestSchedule(unittest.TestCase):
 
   @unittest.skipUnless(dtypes.half in supported_dtypes, "need half")
   def test_precompute_freqs_cis(self):
-    from extra.models.llama import precompute_freqs_cis
+    def precompute_freqs_cis(dim, end, theta=10000.0):
+      freqs = 1.0 / (theta ** (Tensor.arange(0, dim, 2)[:(dim // 2)] / dim))
+      freqs = Tensor.arange(end).unsqueeze(dim=1) * freqs.unsqueeze(dim=0)
+      return Tensor.stack(freqs.cos(), freqs.sin(), dim=-1).reshape(1, end, 1, dim//2, 2)
     args = {"dim":32, "end":2048, "theta":10000}
     fused = precompute_freqs_cis(**args).clone()
     run_linear(*check_schedule(fused, 1))

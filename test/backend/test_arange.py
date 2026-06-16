@@ -216,7 +216,17 @@ class TestIndexing(unittest.TestCase):
 
   @unittest.skipUnless(Device.DEFAULT == "AMD" or (Device.DEFAULT == "NULL" and DEV.arch.startswith("gfx")), "tests AMD bf16 cast overhead")
   def base_test_llama_8b_rope_backward(self, dtype, ops_scale=1):
-    from extra.models.llama import precompute_freqs_cis, apply_rotary_emb
+    def precompute_freqs_cis(dim, end, theta=10000.0):
+      freqs = 1.0 / (theta ** (Tensor.arange(0, dim, 2)[:(dim // 2)] / dim))
+      freqs = Tensor.arange(end).unsqueeze(dim=1) * freqs.unsqueeze(dim=0)
+      return Tensor.stack(freqs.cos(), freqs.sin(), dim=-1).reshape(1, end, 1, dim//2, 2)
+    def _complex_mult(A, c, d):
+      a, b = A[..., 0:1], A[..., 1:2]
+      return (a*c - b*d).cat(a*d + b*c, dim=-1)
+    def apply_rotary_emb(xq, xk, freqs_cis):
+      xq = xq.reshape(*xq.shape[0:-1], -1, 2); xk = xk.reshape(*xk.shape[0:-1], -1, 2)
+      c, d = freqs_cis[..., 0:1], freqs_cis[..., 1:2]
+      return _complex_mult(xq, c, d).flatten(3), _complex_mult(xk, c, d).flatten(3)
     bs, seqlen, dim, n_heads = 1, 512, 256, 4
     head_dim = dim // n_heads
     x = Tensor.randn(bs, seqlen, dim, dtype=dtype)

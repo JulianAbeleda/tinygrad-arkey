@@ -310,7 +310,7 @@ class TestMultiTensor(unittest.TestCase):
   # NOTE: this is failing on LLVM CI, no idea why. Works locally.
   @slow
   def test_data_parallel_resnet(self):
-    from extra.models.resnet import ResNet18
+    self.skipTest("extra.models removed in AMD-only fork")
 
     fake_image = Tensor.rand((2, 3, 224//16, 224//16))
     fake_image_sharded = fake_image.shard(devices_2, axis=0)

@@ -128,7 +128,8 @@ class TestSafetensors(TempDirTestCase):
 
   @unittest.skip("this test takes 7 seconds. TODO: make disk assign lazy")
   def test_efficientnet_safetensors(self):
-    from extra.models.efficientnet import EfficientNet
+    self.skipTest("extra.models removed in AMD-only fork")
+    EfficientNet = None  # extra.models removed (AMD-only fork); body below is unreachable
     model = EfficientNet(0)
     state_dict = get_state_dict(model)
     safe_save(state_dict, self.tmp("eff0"))
