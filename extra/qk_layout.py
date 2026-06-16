@@ -7,6 +7,7 @@ from math import prod
 
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import round_up
+from tinygrad.llm.gguf import ggml_data_to_tensor
 
 GGML_Q4_K = 12
 GGML_Q6_K = 14
@@ -153,26 +154,15 @@ def model_shape_targets(infos:list[GGUFInfo], kv:dict, max_shapes:int|None=None,
       break
   return targets[:max_shapes] if max_shapes is not None else targets
 
-def q_to_uint8(t:Tensor, b:int) -> Tensor:
-  shift_tensor, bitmask = Tensor.stack(*[Tensor(2**(i*b), device=t.device, dtype=t.dtype) for i in range(8//b)]), 0xff >> (8 - b)
-  return t.unsqueeze(-1).expand((*t.shape, 8//b)).div(shift_tensor, rounding_mode="trunc").bitwise_and(bitmask).transpose(-1, -2).flatten(-2)
-
+# The GGML Q4_K / Q6_K block format is owned by tinygrad/llm/gguf.py (the live
+# decode loader). These references delegate to it so the block layout lives in
+# one place; the q4_k/q6_k dequant math previously copied here was byte-identical
+# (pinned by test_qk_layout.test_q*_k_reference_matches_current_gguf_expression).
 def q4_k_reference(t:Tensor, n:int) -> Tensor:
-  blocks = t[:(n//Q4_K_BLOCK_ELEMS)*Q4_K_BLOCK_BYTES].reshape((-1, Q4_K_BLOCK_BYTES)).contiguous()
-  d, dmin = (blocks[:,i:i+2].bitcast(dtypes.float16).cast(dtypes.float32).unsqueeze(-1) for i in [0, 2])
-  s = blocks[:,4:16]
-  sc = s[:,0:4].bitwise_and(63).cat(s[:,8:12].bitwise_and(0xF).bitwise_or(s[:,0:4].rshift(6).lshift(4)), dim=-1)
-  mn = s[:,4:8].bitwise_and(63).cat(s[:,8:12].rshift(4).bitwise_or(s[:,4:8].rshift(6).lshift(4)), dim=-1)
-  q = Tensor.stack((qs:=blocks[:,16:144].reshape(-1,4,32)).bitwise_and(0xF), qs.rshift(4), dim=2).reshape(-1,8,32)
-  return (d * sc.unsqueeze(-1) * q - dmin * mn.unsqueeze(-1)).flatten(-2)
+  return ggml_data_to_tensor(t, n, GGML_Q4_K)
 
 def q6_k_reference(t:Tensor, n:int) -> Tensor:
-  blocks = t[:(n//Q6_K_BLOCK_ELEMS)*Q6_K_BLOCK_BYTES].reshape((-1, Q6_K_BLOCK_BYTES)).contiguous()
-  xl = q_to_uint8(blocks[:,:128].reshape((-1, 2, 64)), 4)
-  xh = q_to_uint8(blocks[:,128:192].reshape((-1, 2, 32)), 2).lshift(4)
-  scales = blocks[:,192:208].bitcast(dtypes.int8).unsqueeze(-1).expand((-1, 16, 16)).reshape((-1, 256))
-  d = blocks[:,-2:].bitcast(dtypes.float16).cast(dtypes.float32).expand((-1, 256))
-  return d * (xl.bitwise_or(xh).bitcast(dtypes.int8) - 32).flatten(-2) * scales
+  return ggml_data_to_tensor(t, n, GGML_Q6_K)
 
 def quant_reference(t:Tensor, n:int, ggml_type:int) -> Tensor:
   if ggml_type == GGML_Q4_K: return q4_k_reference(t, n)
