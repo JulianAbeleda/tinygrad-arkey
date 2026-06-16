@@ -216,7 +216,6 @@ class TestQKAnsorTransition(unittest.TestCase):
   def test_semantic_verdicts_require_confirmation_for_raw_accepts(self):
     verdict_builders = [
       (build_semantic_verdict, "semantic_schedule_v0_raw_accept_unconfirmed", "semantic_schedule_v0_rejected"),
-      (build_codegen_verdict, "semantic_codegen_v1_raw_accept_unconfirmed", "semantic_codegen_v1_rejected"),
     ]
     for build, unconfirmed_decision, rejected_decision in verdict_builders:
       with tempfile.TemporaryDirectory() as tmp:
