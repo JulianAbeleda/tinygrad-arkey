@@ -868,6 +868,12 @@ class Transformer:
     use_qk_generated_policy = bool(qk_generated_policy_path)
     if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy) and isinstance(gguf, Tensor):
       raise ValueError("quant primitive paths require a GGUF path, not a preloaded Tensor")
+    # QK primitive/generated linears are backed by AMD-targeted custom kernels. Auto-enable is already
+    # AMD-only (q4k_auto), so this only catches an *explicit* Q4K_PRIMITIVE/Q6K_PRIMITIVE/QK_GENERATED_POLICY
+    # on another backend -- fail fast with a clear message instead of an obscure later kernel failure.
+    if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy) and Device.DEFAULT != "AMD":
+      raise ValueError(f"QK quant primitive paths (Q4K_PRIMITIVE/Q6K_PRIMITIVE/QK_GENERATED_POLICY) require "
+                       f"DEV=AMD; the kernels are AMD-targeted. Got Device.DEFAULT={Device.DEFAULT!r}.")
     if use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
     else:
