@@ -1957,6 +1957,14 @@ different problems — decode is memory-bound at batch-1 (can't tune past), pref
 UNTUNED, which is exactly the loop's proven substrate (N1/N2 hit 33-98% of peak on native matmul). So the
 highest-leverage unrealized target is PREFILL via the curated-loop / matmul tuning (NOT native BEAM — it
 hangs gfx1100). bench `extra/_prefill_bench.py`; llama bar `llama-bench -ngl 99 -p N -n 0`.
+PREFILL SCOPED + DIAGNOSED (P0-P2, `docs/amd-decode-prefill-plan.md`): no prior prefill doc existed (always
+"the other regime", deliberately excluded). P0: prefill = 1.3% of fp16 peak, NO WMMA; DEBUG=2 shows each block
+runs as ONE fused `function` ~86 ms/32-tok (Q4_K dequant fused into the block mega-kernel -> untiled). P1: NO
+flag fixes it (Q4K_UNFUSE/TC/Q4K_BATCHED no-op; REALIZE=1 WORSE at 22 tok/s) -- the fusion must be broken.
+P2: fix direction PROVEN standalone -- `matmul_decoded` (dequant->fp16->NATIVE matmul) is 5-18x faster than
+the fused path at batch-32 (ffn_gate 15.4% peak / 18x), projecting prefill ~2% -> ~15-25% of llama. Remaining
+= WIRE it (a correctness-critical prefill-forward restructure, not a flag): a dequant->fp16->native branch in
+Q4K/Q6K PrimitiveLinear for T>1 batched + per-layer dequant amortization + token-parity + TC/loop tuning.
 
 ## 2026-06-16 — DEFAULT FLIP: Q4K/Q6K primitives now default-ON (path-aware, shared storage). The arc's win, out-of-the-box
 The recurring "biggest lever" lesson (a built win gated OFF) was still the live default: the master flag
