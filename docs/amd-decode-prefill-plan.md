@@ -69,11 +69,28 @@ Even UNTUNED, dequant->fp16->native is **5-18x faster than the fused path** at b
 33-98%-of-peak substrate) is upside on top. So the fix is proven; what remains is WIRING it into the prefill
 forward.
 
-### Remaining build (P2-wire + P3): the real work, scoped
-The prefill linears must materialize the dequantized fp16 weight on a contiguous boundary (unfuse it from the
-block's mega-kernel) and run a native fp16 matmul — NOT the current fused-dequant path, and NOT a blanket
-REALIZE (which regressed). Touch points: `Q4KPrimitiveLinear`/`Q6KPrimitiveLinear` prefill/batched branch
-(add a dequant->fp16->native-matmul path gated on T>1 batched), per-layer dequant amortization (avoid the 16 GB
-fp16-resident cost), then token-parity verify and (P2-tune) warm-start TC/loop schedules. This is a
-correctness-critical restructure of the prefill forward (interacts with @function/precompile/JIT), not a quick
-edit — banked the de-risk (the fix provably works); the wiring is the next focused build.
+### P2-wire attempt 1 (Linear-level fp16-contiguous): FAILED -> root cause is multi-factor
+Added a gated `PREFILL_FP16` branch to `Q4K/Q6K PrimitiveLinear._fallback` (T>1): materialize the dequant
+weight on a `.contiguous()` fp16 boundary + native matmul. Result: **28 tok/s (WORSE than 68)** — same as
+`REALIZE=1`. So a Linear-level edit does NOT reproduce the standalone 15%-peak win. Reverted (model.py pristine).
+Diagnosed why the standalone matmul tiles but the in-model one doesn't — it is multi-factor:
+1. **Symbolic batch dim.** Prefill uses symbolic `T` (`v_toks`). Measured: the SAME fp16 matmul is **2.2x
+   slower with a symbolic batch (1.0 TF) than concrete (2.2 TF)** — TC/tiling want concrete dims.
+2. **Untuned matmul.** Even concrete, the default-scheduled matmul is only ~2-15% of peak (orientation- and
+   size-dependent; the matmul_decoded 15.4% was W[out,in]@X[in,32], a favourable orientation).
+3. **Per-chunk dequant.** Materializing the fp16 weight in `_fallback` re-dequants every chunk (and a blanket
+   REALIZE keeps 16 GB resident -> also slower).
+The current 1.3% is roughly the PRODUCT of these. No single Linear-level change fixes it.
+
+### Remaining build (P2-wire + P3): the real work, scoped (BIGGER than first thought)
+The fix is a prefill-DRIVER restructure (not a Linear edit), addressing all three factors together:
+1. **Concrete-batch prefill** — pad prefill chunks to a fixed size (e.g. 32) so the matmul dims are concrete
+   (TC/tiling eligible), instead of the symbolic `v_toks` chunk. Changes `generate()` chunking + the JIT
+   (a concrete-T prefill graph, or pad-to-32 always).
+2. **Cached/amortized dequant** — dequant each weight to fp16 ONCE per prefill (not per chunk) without keeping
+   16 GB resident (per-layer streaming, or a bounded fp16 weight cache).
+3. **Tuned matmul** — warm-start the loop's TC/native-matmul schedules onto the concrete-batch GEMMs (NOT
+   native BEAM — hangs gfx1100).
+Plus token-parity verify (fp16 accumulation differs from the fused path). This is a correctness-critical
+restructure interacting with @function/precompile/JIT — a real multi-stage build, NOT a flag or a one-line
+edit. The standalone win (matmul_decoded 5-18x) proves the ceiling is real; reaching it in-model is the work.

@@ -1963,8 +1963,13 @@ runs as ONE fused `function` ~86 ms/32-tok (Q4_K dequant fused into the block me
 flag fixes it (Q4K_UNFUSE/TC/Q4K_BATCHED no-op; REALIZE=1 WORSE at 22 tok/s) -- the fusion must be broken.
 P2: fix direction PROVEN standalone -- `matmul_decoded` (dequant->fp16->NATIVE matmul) is 5-18x faster than
 the fused path at batch-32 (ffn_gate 15.4% peak / 18x), projecting prefill ~2% -> ~15-25% of llama. Remaining
-= WIRE it (a correctness-critical prefill-forward restructure, not a flag): a dequant->fp16->native branch in
-Q4K/Q6K PrimitiveLinear for T>1 batched + per-layer dequant amortization + token-parity + TC/loop tuning.
+= WIRE it (a correctness-critical prefill-forward restructure, not a flag).
+P2-WIRE ATTEMPT 1 (Linear-level `PREFILL_FP16` fp16-contiguous branch in `_fallback`): FAILED -> 28 tok/s
+(worse, like REALIZE=1); reverted, model.py pristine. Root cause is MULTI-FACTOR (not a Linear edit): (1)
+prefill's batch dim T is SYMBOLIC (v_toks) -> measured 2.2x slower than concrete (TC/tiling want concrete
+dims); (2) untuned matmul (~2-15% peak); (3) per-chunk dequant. Real fix = prefill-DRIVER restructure:
+concrete fixed-size chunks (pad to 32 -> concrete matmul dims) + amortized per-layer dequant + warm-started TC
+schedules + token parity. Bigger than first scoped; the standalone 5-18x proves the ceiling exists.
 
 ## 2026-06-16 — DEFAULT FLIP: Q4K/Q6K primitives now default-ON (path-aware, shared storage). The arc's win, out-of-the-box
 The recurring "biggest lever" lesson (a built win gated OFF) was still the live default: the master flag
