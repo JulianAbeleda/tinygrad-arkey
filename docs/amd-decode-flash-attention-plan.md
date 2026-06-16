@@ -93,6 +93,25 @@ bottleneck, AND the cheap Tensor-level fix doesn't work → **Approach B (custom
 only remaining path.** It is a substantial, correctness-critical build (online-softmax numerics, cross-thread
 reductions, the symbolic split count from `start_pos` at runtime). Decision pending before committing to it.
 
+## INTEGRATION STATUS (2026-06-15): kernel done+verified; UOp wiring de-risked but finicky
+**The raw flash-decode kernel is built and verified exact** (`extra/qk_flash_decode.py`, `test_qk_flash_decode`,
+max_err ~1e-7). But integrating it into the model is blocked by two tinygrad constraints, now mapped:
+1. **No raw-kernel bridge**: `custom_kernel` takes a UOp-builder `fxn`, not raw C / a precompiled program. So
+   the raw kernel can't be dropped into the JITted attention graph.
+2. **Symbolic KV length**: decode's `Tc = start_pos+1` is symbolic. The raw kernel handles this with a runtime
+   scalar + dynamic C loop; a UOp `custom_kernel` needs `UOp.range` bounds — which DO accept symbolic `sint`
+   (confirmed), so a symbolic split `S = cdiv(Tc, L)` over fixed-L chunks is expressible.
+
+**The viable UOp path (de-risked):** precompute scores via a matmul (`grouped_q @ k^T` — avoids a nested
+reduce), augment `v` with a column of 1s (folds the softmax denominator into the same accumulator), then a
+**UOp `custom_kernel`** that splits the keys (`[Hq, S, Hd+1]` global, reduce over L per split) for occupancy,
++ a reduce custom_kernel. This is the right structure and every piece is expressible.
+
+**Remaining work:** getting the `.set/.after/.end` reduce-accumulator UOp pattern + the computed-index gather
+exactly right — a known finicky iteration cycle (the q4k/q6k kernels took several). First attempt hit a
+compile error ("expression is not assignable") in the reduce kernel. This is mechanical but multi-iteration.
+Banked the verified raw kernel; the UOp wiring is a well-scoped, de-risked next build (not an open question).
+
 ## Sources
 - Flash-Decoding for long-context inference — PyTorch blog: https://pytorch.org/blog/flash-decoding/
 - Princeton NLP / Tri Dao et al.: https://princeton-nlp.github.io/flash-decoding/
