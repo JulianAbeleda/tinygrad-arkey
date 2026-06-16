@@ -3,11 +3,6 @@ __pycache__
 .venv-*/
 .deepseek-arkey/
 .tinygrad-cache/
-structure/*
-!structure/Development/
-structure/Development/*
-!structure/Development/session-handoff.md
-!structure/Development/amd-optimization-checklist.md
 .vscode
 .DS_Store
 notebooks
