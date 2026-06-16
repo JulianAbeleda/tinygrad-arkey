@@ -1,9 +1,0 @@
-model_config: arch=qwen3 {'embedding_length': 4096, 'feed_forward_length': 12288, 'block_count': 36, 'attention.head_count': 32, 'attention.head_count_kv': 8}
-variant: GGUF_Q4K_WIDE=0 device=AMD seq_len=1 activation=random
-primitive: mode=partial parts=1 row_group=1 schedule=none opts=['LOCAL:0:64']
-correctness: PASS blk.0.ffn_gate.weight
-primitive_unpack_correctness: PASS blk.0.ffn_gate.weight rows=2 max_abs=0
-primitive_gemv_correctness: PASS blk.0.ffn_gate.weight max_abs=0.00179243
-blk.0.ffn_gate.weight 12288x4096 matmul_decoded: 1.549 ms (645.45/s) q4_eff=18.27 GB/s device_q4_eff=n/a kernels=1.0 mem=100.70 MB
-blk.0.ffn_gate.weight 12288x4096 decode_q4_k_plus_matmul: 8.799 ms (113.65/s) q4_eff=3.22 GB/s device_q4_eff=n/a kernels=1.0 mem=28.34 MB
-blk.0.ffn_gate.weight 12288x4096 q4k_primitive_gemv: 0.150 ms (6670.62/s) q4_eff=188.86 GB/s device_q4_eff=n/a kernels=1.0 mem=28.42 MB

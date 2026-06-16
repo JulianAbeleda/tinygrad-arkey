@@ -1,5 +1,0 @@
-=== baseline ===
-pass q4_gbs=2.88 device_ms=0.051 opts=['none']
-| candidate | status | q4_gbs | device_ms | gemv | unpack | opts |
-|---|---|---:|---:|---:|---:|---|
-| baseline | pass | 2.88 | 0.051 | 0.000589013 | 0.0 | none |

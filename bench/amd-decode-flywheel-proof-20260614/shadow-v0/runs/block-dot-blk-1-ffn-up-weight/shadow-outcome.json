@@ -1,6 +1,0 @@
-{
-  "error": "command failed (1): .venv/bin/python extra/qk_block_dot_compile_gate.py --tensor blk.1.ffn_up.weight --artifact bench/amd-decode-flywheel-proof-20260614/shadow-v0/runs/block-dot-blk-1-ffn-up-weight-compile-gate --model ~/models/Qwen3-8B-Q4_K_M.gguf --device AMD",
-  "reason": "correctness_failed",
-  "status": "construction_blocked",
-  "tensor": "blk.1.ffn_up.weight"
-}

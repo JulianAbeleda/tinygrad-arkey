@@ -1,6 +1,0 @@
-{"confidence": 0.548384, "id": "shadow_v0:packed_word_lane_unroll:8b:blk-4-ffn-gate-weight", "label": "reject", "model": "xgboost_cost_model", "reason": "microbench_regression", "retry": false, "score": -0.170265}
-{"confidence": 0.548384, "id": "shadow_v0:packed_word_lane_unroll:8b:blk-5-ffn-gate-weight", "label": "reject", "model": "xgboost_cost_model", "reason": "microbench_regression", "retry": false, "score": -0.054036}
-{"confidence": 0.548384, "id": "shadow_v0:packed_word_lane_unroll:8b:blk-6-ffn-gate-weight", "label": "reject", "model": "xgboost_cost_model", "reason": "microbench_regression", "retry": false, "score": -0.054036}
-{"confidence": 0.581971, "id": "shadow_v0:qk_block_dot:8b:blk-0-attn-output-weight", "label": "reject", "model": "xgboost_cost_model", "reason": "microbench_regression", "retry": false, "score": -0.320569}
-{"confidence": 0.581971, "id": "shadow_v0:qk_block_dot:8b:blk-1-ffn-up-weight", "label": "reject", "model": "xgboost_cost_model", "reason": "microbench_regression", "retry": false, "score": -0.426857}
-{"confidence": 0.581971, "id": "shadow_v0:wide_load_only:8b:blk-0-attn-output-weight", "label": "reject", "model": "xgboost_cost_model", "reason": "microbench_regression", "retry": false, "score": -0.320569}

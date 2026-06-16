@@ -79,3 +79,14 @@ bench/amd-decode-flywheel-proof-20260614/batch-ceiling-probe/verify_loop_result.
 bench/amd-decode-flywheel-proof-20260614/batch-ceiling-probe/warmstart_opts.json
 bench/amd-decode-flywheel-proof-20260614/dp4a-d0/builtin_vs_asm_result.json
 bench/amd-decode-flywheel-proof-20260614/native-matmul-N0/partial_schedule_log.jsonl
+
+# benchmark outputs are local by default; keep only durable verdict docs and
+# accepted runtime artifacts explicitly forced into git.
+bench/**
+!bench/
+!bench/**/
+!bench/**/README.md
+!bench/**/matrix-summary.md
+!bench/**/profile-report.md
+!bench/**/decision.json
+!bench/qk-shared-storage-20260612/**/policy.json
