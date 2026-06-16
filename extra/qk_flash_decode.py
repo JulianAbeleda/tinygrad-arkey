@@ -64,6 +64,132 @@ void flash_reduce(float* out, float* pout, float* pm, float* pl) {{
 }}
 '''
 
+# ============================================================================================
+# UOp Flash-Decoding (the model-integrated path). The raw kernels above can't bridge into the
+# JITted attention graph (custom_kernel takes a UOp builder, not raw C). These 5 UOp kernels do,
+# and accept a SYMBOLIC split count S = cdiv(start_pos+1, L) over fixed-L chunks for occupancy.
+#
+# Structure (each kernel is ONE single-accumulator reduce -- the proven q4k_gemv_partial pattern;
+# coupled/multi-accumulator reduces trip the linearizer's range-ordering, so the softmax is split
+# across kernels):
+#   flash_max:     pm[h,s]     = max_{t in split s} score[h,t]                  (per-split max)
+#   flash_partial: pout[h,s,:] = sum_{t in split} exp(score-pm)*v_aug[t,:]      (col Hd = 1s denom)
+#   flash_gmax:    gm[h]       = max_s pm[h,s]                                  (global max)
+#   flash_den:     den[h]      = sum_s exp(pm-gm)*pout[h,s,Hd]                  (softmax denominator)
+#   flash_combine: out[h,d]    = (sum_s exp(pm-gm)*pout[h,s,d]) / den[h]        (LSE reduction)
+# Scores are precomputed via a matmul (grouped_q @ k^T) so the kernels never nest a q.k reduce.
+# Buffers are Smax-sized (concrete, for placeholder_like); ranges/strides use the symbolic S<=Smax.
+from tinygrad import Tensor, dtypes  # noqa: E402
+from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, UOp  # noqa: E402
+
+_LOG2E = 1.4426950408889634
+_F32 = dtypes.float32
+def _fexp(x:UOp) -> UOp: return (x * _LOG2E).exp2()
+def _fc(v:float) -> UOp: return UOp.const(_F32, v)
+def _fki(name:str) -> KernelInfo: return KernelInfo(name=name, opts_to_apply=())
+def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
+
+def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
+  def kernel(pm:UOp, score:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S,  1, AxisType.GLOBAL)
+    j = UOp.range(L, 2, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    sc = (t < Tc).where(score[h * MAXC + t], _fc(-1e30))
+    m = UOp.placeholder((1,), _F32, 100, addrspace=AddrSpace.REG)
+    m = m.after(h, s)[0].set(-1e30)
+    m = m[0].set(m.after(j)[0].maximum(sc), end=j)
+    return pm[h * S + s].store(m[0]).end(h, s).sink(arg=_fki(f"flash_max_{Hq}"))
+  return kernel
+
+def flash_partial_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  # pout width W=Hd+1 per (h,s); column Hd folds the softmax denominator via a 1s-augmented v.
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(pout:UOp, pm:UOp, score:UOp, vc:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S,  1, AxisType.GLOBAL)
+    d = UOp.range(W,  2, AxisType.GLOBAL)
+    kv = h // G; hs = h * S + s
+    is_v = d < Hd
+    m_s = pm[hs]
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    in_r = t < Tc
+    p = in_r.where(_fexp(score[h * MAXC + t] - m_s), _fc(0.0))
+    # clamp the v index for out-of-range t to a valid (written) position so masked lanes read FINITE
+    # data -- else p(=0) * vc[uninit cache](=Inf/NaN) = NaN poisons the accumulator.
+    t_safe = in_r.where(t, t.const_like(0))
+    vd = is_v.where(vc[(kv * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    acc = UOp.placeholder((1,), _F32, 101, addrspace=AddrSpace.REG)
+    acc = acc.after(h, s, d)[0].set(0.0)
+    acc = acc[0].set(acc.after(j)[0] + p * vd, end=j)
+    return pout[hs * W + d].store(acc[0]).end(h, s, d).sink(arg=_fki(f"flash_partial_{Hq}_{Hd}"))
+  return kernel
+
+def flash_gmax_kernel(Hq:int, S):
+  def kernel(gm:UOp, pm:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, axis_type=AxisType.REDUCE)
+    g = UOp.placeholder((1,), _F32, 100, addrspace=AddrSpace.REG)
+    g = g.after(h)[0].set(-1e30)
+    g = g[0].set(g.after(s)[0].maximum(pm[h * S + s]), end=s)
+    return gm[h].store(g[0]).end(h).sink(arg=_fki(f"flash_gmax_{Hq}"))
+  return kernel
+
+def flash_den_kernel(Hd:int, Hq:int, S):
+  W = Hd + 1
+  def kernel(den:UOp, pout:UOp, pm:UOp, gm:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    gm_h = gm[h]
+    s = UOp.range(S, 1, axis_type=AxisType.REDUCE)
+    w = _fexp(pm[h * S + s] - gm_h)
+    dd = UOp.placeholder((1,), _F32, 100, addrspace=AddrSpace.REG)
+    dd = dd.after(h)[0].set(0.0)
+    dd = dd[0].set(dd.after(s)[0] + w * pout[(h * S + s) * W + Hd], end=s)
+    return den[h].store(dd[0]).end(h).sink(arg=_fki(f"flash_den_{Hq}"))
+  return kernel
+
+def flash_combine_kernel(Hd:int, Hq:int, S):
+  W = Hd + 1
+  def kernel(out:UOp, pout:UOp, pm:UOp, gm:UOp, den:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    d = UOp.range(Hd, 1, AxisType.GLOBAL)
+    gm_h = gm[h]; den_h = den[h]
+    s = UOp.range(S, 2, axis_type=AxisType.REDUCE)
+    w = _fexp(pm[h * S + s] - gm_h)
+    num = UOp.placeholder((1,), _F32, 101, addrspace=AddrSpace.REG)
+    num = num.after(h, d)[0].set(0.0)
+    num = num[0].set(num.after(s)[0] + w * pout[(h * S + s) * W + d], end=s)
+    return out[h * Hd + d].store(num[0] / den_h).end(h, d).sink(arg=_fki(f"flash_combine_{Hq}_{Hd}"))
+  return kernel
+
+def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
+                           Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=256) -> Tensor:
+  """Batch-1 GQA decode attention via Flash-Decoding. Exact vs SDPA (up to fp reassociation).
+  q:[Hq,Hd]  k_full,v_full:[Hkv,MAXC,Hd] (full KV cache buffers, concrete MAXC).
+  Tc_b: bound symbolic context length (carries start_pos's value into var_vals, used for the score
+        matmul slice).  Tc_u: same length as an UNbound DEFINE_VAR expr (used for the kernel ranges,
+        so no BIND lands in a custom-kernel AST).  Returns [Hq,Hd] (float32)."""
+
+  G = Hq // Hkv; W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
+  scale = 1.0 / (Hd ** 0.5)
+  # precompute scores via a matmul over the symbolic-length KV slice, materialized into a concrete
+  # [Hq,MAXC] buffer (the kernels need a concrete-shaped input). The matmul's bound Tc_b slice also
+  # carries start_pos's value into var_vals, so the kernels' unbound DEFINE_VAR ranges resolve.
+  qg = q.reshape(Hkv, G, Hd)
+  ks = k_full[:, 0:Tc_b, :]
+  scores = (qg @ ks.transpose(-1, -2)).reshape(Hq, Tc_b) * scale
+  score_buf = Tensor.empty(Hq, MAXC, dtype=_F32)
+  score_a = Tensor(score_buf.uop.after(score_buf[:, 0:Tc_b].uop.store(scores.cast(_F32).uop)))
+  score_f = score_a.reshape(Hq * MAXC)
+  vc_f = v_full.reshape(Hkv * MAXC * Hd)
+  pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
+  po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, vc_f, fxn=flash_partial_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
+  dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
+  return out.reshape(Hq, Hd)
+
 if __name__ == "__main__":
   import numpy as np
   from tinygrad.device import Device, Buffer

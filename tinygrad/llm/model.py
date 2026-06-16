@@ -645,7 +645,18 @@ class TransformerBlock(FFNBlock):
     # TODO: this if statement should be removed and it shouldn't generate extra kernels
     mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
       if resolve(T != 1) else None
-    if getenv("GQA_ATTN", 0):  # P2 probe: GQA-native attention (group queries by kv head, broadcast k/v
+    if getenv("FLASH_DECODE") and isinstance(start_pos, UOp) and isinstance(T, int) and T == 1:
+      # P2: Flash-Decoding for batch-1 GQA decode. Splits the symbolic-length KV cache into S chunks
+      # -> Hq*S workgroups (saturates the GPU at batch 1, vs SDPA's <1% occupancy at long context).
+      # Exact vs SDPA up to fp reassociation. Decode-only (T==1, symbolic start_pos).
+      from extra.qk_flash_decode import flash_decode_attention
+      Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
+      MAXC, L = self.config.max_context, getenv("FLASH_L", 256)
+      vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
+      out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
+                                   start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
+      attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
+    elif getenv("GQA_ATTN", 0):  # P2 probe: GQA-native attention (group queries by kv head, broadcast k/v
       # instead of SDPA's repeat_interleave 8->32). Exact, but measured ~equal-to-slightly-slower than SDPA
       # on this config -- the long-context slowdown is kernel inefficiency, not the GQA expansion. Default off.
       Hq, Hkv = q.shape[1], k.shape[1]; g = Hq // Hkv; Tc = k.shape[2]

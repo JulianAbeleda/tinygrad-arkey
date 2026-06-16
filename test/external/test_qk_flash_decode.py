@@ -1,6 +1,8 @@
 import unittest, numpy as np
 from tinygrad.device import Device, Buffer
 from tinygrad.dtype import dtypes
+from tinygrad import Tensor
+from tinygrad.uop.ops import UOp
 from extra.qk_flash_decode import flash_partial_src, flash_reduce_src
 
 class TestFlashDecode(unittest.TestCase):
@@ -25,6 +27,27 @@ class TestFlashDecode(unittest.TestCase):
       for h in range(Hq):
         kv = h // G; sc = (qf[h] @ kf[kv].T)/np.sqrt(Hd); pw = np.exp(sc-sc.max()); pw /= pw.sum(); ref[h] = pw @ vf[kv]
       self.assertLess(np.abs(got - ref).max(), 2e-2)
+
+  def test_uop_flash_decode_attention(self):
+    # the model-integrated UOp path, with a SYMBOLIC context length (bound start_pos variable).
+    from extra.qk_flash_decode import flash_decode_attention
+    Hd, Hq, Hkv, MAXC, L = 128, 32, 8, 4096, 256; G = Hq // Hkv
+    rng = np.random.default_rng(0)
+    qn = rng.standard_normal((Hq, Hd)).astype(np.float16)
+    kn = rng.standard_normal((Hkv, MAXC, Hd)).astype(np.float16)
+    vn = rng.standard_normal((Hkv, MAXC, Hd)).astype(np.float16)
+    qt = Tensor(qn, dtype=dtypes.half).contiguous().realize()
+    kt = Tensor(kn, dtype=dtypes.half).contiguous().realize()
+    vt = Tensor(vn, dtype=dtypes.half).contiguous().realize()
+    for tc in [3072, 1024, 777, 100, 8]:
+      vp = UOp.variable("start_pos", 0, MAXC - 1)
+      got = flash_decode_attention(qt, kt, vt, vp.bind(tc - 1) + 1, vp + 1, Hd, Hq, Hkv, MAXC, L).numpy()
+      qf, kf, vf = qn.astype(np.float32), kn.astype(np.float32), vn.astype(np.float32)
+      ref = np.zeros((Hq, Hd), np.float32)
+      for h in range(Hq):
+        kv = h // G; sc = (qf[h] @ kf[kv, :tc].T) / np.sqrt(Hd)
+        pw = np.exp(sc - sc.max()); pw /= pw.sum(); ref[h] = pw @ vf[kv, :tc]
+      self.assertLess(np.abs(got - ref).max(), 2e-2, f"flash_decode_attention mismatch at Tc={tc}")
 
 if __name__ == "__main__":
   unittest.main()
