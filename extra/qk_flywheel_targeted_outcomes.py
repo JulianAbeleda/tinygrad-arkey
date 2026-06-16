@@ -48,28 +48,15 @@ def _source(repo:pathlib.Path, value:str) -> str:
 def _row(*, row_id:str, row_kind:str, model:str, tensor:str, role:str, fmt:str,
          mechanism:str, prediction_stage:str, pre_result_context:dict[str, Any],
          label:str, reason:str, retry:bool, evidence:dict[str, Any], source_files:list[str]) -> dict[str, Any]:
-  if label not in v0.LABELS: raise ValueError(f"{row_id}: unknown label {label}")
-  if reason not in v0.REASONS: raise ValueError(f"{row_id}: unknown reason {reason}")
-  return {
-    "id": row_id,
-    "candidate_id": row_id.split(":", 1)[-1],
-    "row_kind": row_kind,
-    "family": TARGETED_FAMILY,
-    "family_order": TARGETED_FAMILY_ORDER,
-    "model": model,
-    "tensor": tensor,
-    "role": role,
-    "format": fmt,
-    "mechanism": mechanism,
-    "prediction_stage": prediction_stage,
-    "pre_result_context": pre_result_context,
-    "label": label,
-    "reason": reason,
-    "retry": retry,
-    "evidence": evidence,
-    "source_files": source_files,
-    "split": "train",
-  }
+  # Targeted outcomes are all train-split rows in the single targeted family and
+  # deliberately preserve v1-only mechanisms (resolved later by v1.normalize_row),
+  # so unlike the v0 builders they pass mechanism/role/format through unchanged.
+  return v0.assemble_row(
+    row_id=row_id, row_kind=row_kind, family=TARGETED_FAMILY, family_order=TARGETED_FAMILY_ORDER,
+    model=model, tensor=tensor, role=role, fmt=fmt, mechanism=mechanism, prediction_stage=prediction_stage,
+    pre_result_context=pre_result_context, label=label, reason=reason, retry=retry, evidence=evidence,
+    source_files=source_files, split="train",
+  )
 
 
 def _semantic_codegen_mechanism(schedule:dict[str, Any], candidate_id:str) -> str:

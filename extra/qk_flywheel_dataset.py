@@ -105,22 +105,29 @@ def _context(row:dict[str, Any]) -> dict[str, Any]:
     "candidate_context": row["pre_result_context"],
   }
 
-def _make_row(*, row_id:str, row_kind:str, family:str, model:str, tensor:str, role:str, fmt:str,
-              mechanism:str, prediction_stage:str, pre_result_context:dict[str, Any],
-              label:str, reason:str, retry:bool, evidence:dict[str, Any], source_files:list[str]) -> dict[str, Any]:
+def assemble_row(*, row_id:str, row_kind:str, family:str, family_order:int, model:str, tensor:str,
+                 role:str, fmt:str, mechanism:str, prediction_stage:str, pre_result_context:dict[str, Any],
+                 label:str, reason:str, retry:bool, evidence:dict[str, Any], source_files:list[str],
+                 split:str) -> dict[str, Any]:
+  """Build a triage row dict from already-normalized fields.
+
+  Single source of truth for the example row shape. Callers own field
+  normalization/validation policy (it differs across sources — e.g. the v0
+  builders clamp mechanism/role/format to the known sets, while the targeted
+  builders preserve v1-only mechanisms that v1 normalization resolves later),
+  so this helper only assembles the canonical key layout and must not mutate
+  values.
+  """
   if label not in LABELS: raise ValueError(f"{row_id}: unknown label {label}")
   if reason not in REASONS: raise ValueError(f"{row_id}: unknown reason {reason}")
-  if mechanism not in MECHANISMS: mechanism = "unknown"
-  if role not in ROLES: role = "unknown"
-  if fmt not in FORMATS: fmt = "unknown"
   return {
     "id": row_id,
     "candidate_id": row_id.split(":", 1)[-1],
     "row_kind": row_kind,
     "family": family,
-    "family_order": FAMILY_ORDER.get(family, 999),
+    "family_order": family_order,
     "model": model,
-    "tensor": tensor or "unknown",
+    "tensor": tensor,
     "role": role,
     "format": fmt,
     "mechanism": mechanism,
@@ -131,8 +138,21 @@ def _make_row(*, row_id:str, row_kind:str, family:str, model:str, tensor:str, ro
     "retry": retry,
     "evidence": evidence,
     "source_files": source_files,
-    "split": _split_for(family),
+    "split": split,
   }
+
+def _make_row(*, row_id:str, row_kind:str, family:str, model:str, tensor:str, role:str, fmt:str,
+              mechanism:str, prediction_stage:str, pre_result_context:dict[str, Any],
+              label:str, reason:str, retry:bool, evidence:dict[str, Any], source_files:list[str]) -> dict[str, Any]:
+  if mechanism not in MECHANISMS: mechanism = "unknown"
+  if role not in ROLES: role = "unknown"
+  if fmt not in FORMATS: fmt = "unknown"
+  return assemble_row(
+    row_id=row_id, row_kind=row_kind, family=family, family_order=FAMILY_ORDER.get(family, 999),
+    model=model, tensor=tensor or "unknown", role=role, fmt=fmt, mechanism=mechanism,
+    prediction_stage=prediction_stage, pre_result_context=pre_result_context, label=label,
+    reason=reason, retry=retry, evidence=evidence, source_files=source_files, split=_split_for(family),
+  )
 
 def _prompt(row:dict[str, Any]) -> dict[str, Any]:
   context = _context(row)
