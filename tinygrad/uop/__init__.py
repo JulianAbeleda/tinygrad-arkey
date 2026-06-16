@@ -62,9 +62,6 @@ class Ops(FastEnum):
   # tensor core math op, not elementwise
   WMMA = auto(); SHAPED_WMMA = auto()
 
-  # packed quant block math op, used to keep block-local QK load/decode visible without hiding GEMV loops
-  QK_BLOCK_DOT = auto()
-
   # UnaryOps
   CAST = auto(); BITCAST = auto(); EXP2 = auto(); LOG2 = auto(); SIN = auto()
   SQRT = auto(); RECIPROCAL = auto(); NEG = auto(); TRUNC = auto()

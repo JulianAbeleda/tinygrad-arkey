@@ -59,21 +59,10 @@ def ggml_data_to_tensor(t: Tensor, n: int, ggml_type: int) -> Tensor:
     if ggml_type in (12, 13):
       d, dmin = (blocks[:,i:i+2].bitcast(dtypes.float16).cast(dtypes.float32).unsqueeze(-1) for i in [0, 2])
       qs_off = 48 if ggml_type == 13 else 16
-      if getenv("GGUF_Q4K_WIDE", 0):
-        shifts = Tensor([0, 8, 16, 24], device=t.device, dtype=dtypes.uint32)
-        sw = blocks[:,4:16].bitcast(dtypes.uint32).reshape(-1, 3)
-        s0, s1, s2 = (sw[:,i:i+1].rshift(shifts).bitwise_and(0xFF).cast(dtypes.uint8) for i in range(3))
-        sc = s0.bitwise_and(63).cat(s2.bitwise_and(0xF).bitwise_or(s0.rshift(6).lshift(4)), dim=-1)
-        mn = s1.bitwise_and(63).cat(s2.rshift(4).bitwise_or(s1.rshift(6).lshift(4)), dim=-1)
-        qw = blocks[:,qs_off:qs_off+128].bitcast(dtypes.uint32).reshape(-1, 4, 8)
-        qlo = qw.unsqueeze(-1).rshift(shifts).bitwise_and(0xF).cast(dtypes.uint8).reshape(-1, 4, 32)
-        qhi = qw.unsqueeze(-1).rshift(shifts+4).bitwise_and(0xF).cast(dtypes.uint8).reshape(-1, 4, 32)
-        q = Tensor.stack(qlo, qhi, dim=2).reshape(-1, 8, 32)
-      else:
-        s = blocks[:,4:16]  # 12 bytes: 6-bit scales[0-3], 6-bit mins[0-3], high bits[4-7]
-        sc = s[:,0:4].bitwise_and(63).cat(s[:,8:12].bitwise_and(0xF).bitwise_or(s[:,0:4].rshift(6).lshift(4)), dim=-1)
-        mn = s[:,4:8].bitwise_and(63).cat(s[:,8:12].rshift(4).bitwise_or(s[:,4:8].rshift(6).lshift(4)), dim=-1)
-        q = Tensor.stack((qs:=blocks[:,qs_off:qs_off+128].reshape(-1,4,32)).bitwise_and(0xF), qs.rshift(4), dim=2).reshape(-1,8,32)
+      s = blocks[:,4:16]  # 12 bytes: 6-bit scales[0-3], 6-bit mins[0-3], high bits[4-7]
+      sc = s[:,0:4].bitwise_and(63).cat(s[:,8:12].bitwise_and(0xF).bitwise_or(s[:,0:4].rshift(6).lshift(4)), dim=-1)
+      mn = s[:,4:8].bitwise_and(63).cat(s[:,8:12].rshift(4).bitwise_or(s[:,4:8].rshift(6).lshift(4)), dim=-1)
+      q = Tensor.stack((qs:=blocks[:,qs_off:qs_off+128].reshape(-1,4,32)).bitwise_and(0xF), qs.rshift(4), dim=2).reshape(-1,8,32)
       if ggml_type == 13: q = q + q_to_uint8(blocks[:,16:48], 1).reshape(-1, 8, 32) * 16
       return (d * sc.unsqueeze(-1) * q - dmin * mn.unsqueeze(-1)).flatten(-2)
     if ggml_type == 14:

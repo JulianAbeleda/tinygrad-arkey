@@ -10,7 +10,7 @@ from tinygrad.codegen.late.devectorizer import no_vectorized_alu
 
 
 def _render_arg_format(ctx, x:UOp) -> str:
-  # CUSTOM/CUSTOMI/QK_BLOCK_DOT args are str.format templates with positional {0},{1},... placeholders;
+  # CUSTOM/CUSTOMI args are str.format templates with positional {0},{1},... placeholders;
   # literal C braces in the body must be doubled ({{ }}). Surface a clear, actionable error if they aren't,
   # instead of a bare IndexError/ValueError from .format. Success path is byte-identical to x.arg.format(...).
   try:
@@ -72,7 +72,6 @@ base_rewrite = PatternMatcher([
 
   # alu/gep
   (UPat(Ops.WMMA, name="x"), lambda ctx,x: f"__{x.arg[0]}({ctx[x.src[0]]}, {ctx[x.src[1]]}, {ctx[x.src[2]]})"),
-  (UPat(Ops.QK_BLOCK_DOT, name="x"), lambda ctx,x: _render_arg_format(ctx, x)),
   (UPat(GroupOp.ALU, name="x"), lambda ctx,x: ctx.code_for_op[x.op](
     *([strip_parens(ctx[v]) if v.op == x.op and x.op in {Ops.ADD, Ops.MUL, Ops.XOR, Ops.OR, Ops.AND} else ctx[v] for v in x.src]), x.dtype)),
 

@@ -95,7 +95,7 @@ if __name__ == "__main__":
   raw = Tensor(args.gguf)
   if args.primitive:
     from extra.q4_k_gemv_primitive import (
-      parse_opt, q4k_gemv_grouped_partial_kernel, q4k_gemv_hoist_partial_kernel, q4k_gemv_kernel,
+      parse_opt, q4k_gemv_grouped_partial_kernel, q4k_gemv_kernel,
       q4k_gemv_packed_load_partial_kernel,
       q4k_gemv_partial_kernel, q4k_gemv_tile_custom_partial_kernel, q4k_gemv_vector_load_partial_kernel,
       q4k_unpack_kernel,
@@ -159,9 +159,7 @@ if __name__ == "__main__":
             words, x_vec, fxn=q4k_gemv_packed_load_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]
           return partial.sum(axis=1)
         if args.primitive_mode == PrimitiveMode.HOIST_SCALE_MIN.value:
-          partial = partials.custom_kernel(
-            words, x_vec, fxn=q4k_gemv_hoist_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]
-          return partial.sum(axis=1)
+          raise ValueError("hoist_scale_min mode was removed (benchmarked performance regressed vs packed_load)")
         if args.primitive_mode == PrimitiveMode.VECTOR_LOAD.value:
           partial = vector_partials.custom_kernel(
             words, x_vec, fxn=q4k_gemv_vector_load_partial_kernel(rows, k, parts, args.primitive_schedule, parsed_primitive_opts))[0]

@@ -656,15 +656,6 @@ class TransformerBlock(FFNBlock):
       out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
                                    start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
-    elif getenv("GQA_ATTN", 0):  # P2 probe: GQA-native attention (group queries by kv head, broadcast k/v
-      # instead of SDPA's repeat_interleave 8->32). Exact, but measured ~equal-to-slightly-slower than SDPA
-      # on this config -- the long-context slowdown is kernel inefficiency, not the GQA expansion. Default off.
-      Hq, Hkv = q.shape[1], k.shape[1]; g = Hq // Hkv; Tc = k.shape[2]
-      qg = q.reshape(B, Hkv, g, T, q.shape[-1])                                      # (B,KvH,g,T,Hd)
-      kg = k.reshape(B, Hkv, 1, Tc, k.shape[-1]); vg = v.reshape(B, Hkv, 1, Tc, v.shape[-1])
-      qk = qg.matmul(kg.transpose(-2, -1), dtype=dtypes.float32) / (q.shape[-1] ** 0.5)  # (B,KvH,g,T,Tc)
-      if mask is not None: qk = qk + mask.reshape(1, 1, 1, T, Tc)
-      attn = qk.softmax(-1).cast(vg.dtype).matmul(vg).reshape(B, Hq, T, q.shape[-1])
     else:
       attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)   # (B,H,T,Hd)
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
@@ -811,12 +802,8 @@ class Transformer:
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     if getenv("Q4K_VDOT_AMORT"): _VDOT_QUANT_CACHE.clear()  # E0: fresh quant cache per forward/trace
-    # S3: with Q4K_BATCHED, the primitives also handle a CONCRETE-K verify/prefill via a batched GEMM kernel
-    # (one weight read for K tokens, dequant hoisted across the K columns). Default-off: the symbolic prompt
-    # prefill can't use it (K is a UOp, not an int -> falls back), so it only activates for a concrete-K
-    # verify forward (the speculative path, not yet wired). The GEMM kernels are built + correctness-verified.
-    batched = bool(getenv("Q4K_BATCHED", 0))
-    for q4k_linear in self._q4k_linears.linears: q4k_linear.decode_enabled = batched or (not is_prefill)
+    for q4k_linear in self._q4k_linears.linears:
+      q4k_linear.decode_enabled = not is_prefill
     return (self.prefill_jit if is_prefill else self.rollout_jit)(tokens.contiguous(), start_pos, temperature)
 
   @staticmethod

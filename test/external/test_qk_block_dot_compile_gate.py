@@ -1,8 +1,5 @@
 import json, pathlib, unittest
 
-from tinygrad import dtypes
-from tinygrad.uop.ops import Ops, UOp
-
 from extra.qk_block_dot_compile_gate import (
   QK_KERNEL, V1_KERNEL, build_report, qk_block_dot_source, report_markdown, summarize_gate,
 )
@@ -34,13 +31,6 @@ class TestQKBlockDotCompileGate(unittest.TestCase):
     self.assertIn("xv[even*32 + pos_base + nib]", source)
     self.assertNotIn("for (int row", source)
     self.assertNotIn("for (int blk", source)
-
-  def test_qk_block_dot_uop_is_scalar_float32(self):
-    x = UOp.const(dtypes.uint64, 0)
-    y = UOp.const(dtypes.uint64, 0)
-    op = UOp(Ops.QK_BLOCK_DOT, dtypes.float32, (x, y), arg="({0})")
-    self.assertEqual(op.shape, ())
-    self.assertEqual(op.dtype, dtypes.float32)
 
   def test_debug7_parser_accepts_const_tg_uint4_load(self):
     text = f"""

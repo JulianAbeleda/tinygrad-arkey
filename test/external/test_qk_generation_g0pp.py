@@ -5,11 +5,16 @@ G0PP = REPO / "bench/amd-decode-flywheel-proof-20260614/generation-g0pp"
 
 
 class TestQKGenerationG0PP(unittest.TestCase):
-  def test_hoist_kernel_builder_is_registered(self):
-    # The variant is a real, importable kernel builder and a registered primitive mode.
-    from extra.q4_k_gemv_primitive import q4k_gemv_hoist_partial_kernel
-    self.assertTrue(callable(q4k_gemv_hoist_partial_kernel(64, 4096, 1, "none", ())))
-    import extra.q4_k_bench as bench  # noqa: F401 -- ensure the module imports with the new mode wired
+  def test_packed_load_kernel_builder_is_registered(self):
+    # Keep this focused on importability of currently active primitive kernels.
+    from extra.q4_k_gemv_primitive import (
+      parse_opt, q4k_gemv_partial_kernel, q4k_gemv_packed_load_partial_kernel, q4k_gemv_vector_load_partial_kernel,
+    )
+    from extra import q4_k_bench  # noqa: F401
+    self.assertTrue(callable(parse_opt))
+    self.assertTrue(callable(q4k_gemv_partial_kernel))
+    self.assertTrue(callable(q4k_gemv_packed_load_partial_kernel))
+    self.assertTrue(callable(q4k_gemv_vector_load_partial_kernel))
 
   def test_committed_g0pp_records_honest_negative(self):
     if not (G0PP / "summary.json").exists():

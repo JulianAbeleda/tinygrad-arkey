@@ -274,34 +274,13 @@ def run_outcomes(repo:pathlib.Path, out:pathlib.Path=DEFAULT_OUT, model_path:pat
   # packed-load: fresh descriptor set -> v3 candidates/static-gate -> schedule_bench microbench
   packed = _packed_artifact(out)
   if not (packed / "microbench.json").exists():
-    desc = out / "runs/packed-load/8b-descriptors.json"
-    _build_packed_descriptor(repo, desc)
-    _run([py, "extra/qk_semantic_codegen_v3.py", "--descriptor", str(desc),
-          "--json", str(packed / "candidates.json"), "--gate-json", str(packed / "static-gate.json")],
-         cwd=repo, extra_env={"DEV": device}, timeout=300)
-    _run([py, "extra/qk_semantic_schedule_bench.py", "--model", "8b",
-          "--candidates", str(packed / "candidates.json"), "--static-gate", str(packed / "static-gate.json"),
-          "--out", str(packed / "microbench-runs"), "--json", str(packed / "microbench.json"),
-          "--md", str(packed / "microbench.md")],
-         cwd=repo, extra_env={"DEV": device}, timeout=900)
+    raise FileNotFoundError(
+      "qk_flywheel_shadow packed-load microbench JSON is absent; qk_semantic_codegen_v3.py was removed and this replay path is no longer runnable."
+    )
   # block-dot: compile gate + microbench per tensor. A candidate whose correctness gate
   # fails (a real per-tensor fp16 outcome) is recorded as construction_blocked, not a crash.
   for spec in FRESH_SPECS:
     if spec["mechanism"] != "qk_block_dot": continue
-    art = _block_dot_artifact(out, spec["tensor"])
-    if (art / "microbench.json").exists() or (art / "shadow-outcome.json").exists(): continue
-    try:
-      _run([py, "extra/qk_block_dot_compile_gate.py", "--tensor", spec["tensor"],
-            "--artifact", str(art) + "-compile-gate", "--model", model, "--device", device],
-           cwd=repo, extra_env={"DEV": device}, timeout=480)
-      _run([py, "extra/qk_block_dot_microbench.py", "--tensor", spec["tensor"],
-            "--artifact", str(art), "--model", model, "--device", device],
-           cwd=repo, extra_env={"DEV": device, "DEBUG": "2"}, timeout=600)
-    except RuntimeError as exc:
-      art.mkdir(parents=True, exist_ok=True)
-      (art / "shadow-outcome.json").write_text(json.dumps(
-        {"status": "construction_blocked", "reason": "correctness_failed", "tensor": spec["tensor"], "error": str(exc)},
-        indent=2, sort_keys=True) + "\n")
   # three-way load diagnostic
   for spec in FRESH_SPECS:
     if spec["mechanism"] != "wide_load_only": continue

@@ -91,27 +91,9 @@ def qk_block_dot_source() -> str:
 
 
 def q4k_block_dot_partial_kernel(rows:int, k:int, parts:int, opts:tuple[Opt, ...]):
-  k_blocks = k // Q4_K_BLOCK_ELEMS
-  blocks_per_part = cdiv(k_blocks, parts)
-  block_dot = qk_block_dot_source()
-
-  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
-    row = UOp.range(rows, 0)
-    part = UOp.range(parts, 1)
-    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
-    blk = part * blocks_per_part + blk_part
-    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
-    qk_ptr = words.index(base, ptr=True)
-    x_ptr = x.index(blk * Q4_K_BLOCK_ELEMS, ptr=True)
-    contrib = UOp(Ops.QK_BLOCK_DOT, dtypes.float32, (qk_ptr, x_ptr), arg=block_dot)
-    if k_blocks % parts != 0:
-      raise ValueError("QK_BLOCK_DOT compile gate only supports exact split-K partitions")
-
-    acc = partials[row, part].set(0.0)
-    acc = partials[row, part].set(acc.after(blk_part)[row, part] + contrib, end=blk_part)
-    return acc.end(row, part).sink(arg=_kernel_info(qk_kernel_name(rows, k, parts), opts))
-
-  return kernel
+  raise RuntimeError(
+    "QK_BLOCK_DOT has been removed from tinygrad uops; this probe path is intentionally disabled."
+  )
 
 
 def _sanitize_log(text:str, *, repo:pathlib.Path, model:pathlib.Path) -> str:

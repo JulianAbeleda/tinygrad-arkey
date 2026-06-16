@@ -303,7 +303,6 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       # wmma output shape = accumulator shape (src[2])
       case Ops.WMMA | Ops.SHAPED_WMMA: return self.src[2]._shape
 
-      case Ops.QK_BLOCK_DOT: return ()
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops
