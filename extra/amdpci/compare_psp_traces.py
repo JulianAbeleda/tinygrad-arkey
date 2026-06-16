@@ -157,13 +157,18 @@ def firmware_report(fname:str, skip:int|None, readback:dict) -> list[str]:
   return lines
 
 def parse_linux(path:pathlib.Path) -> dict:
-  out = {"bl": [], "waits": [], "wait_rregs": [], "gart": {}, "bo": [], "reg_events": [], "c2pmsg_events": [], "source": str(path)}
+  return parse_linux_lines(
+    lines_for(path, ["psp-linux-good.trace", "psp-linux-good-deep.trace", "linux-pre-kdb-key-events.txt", "linux-c2pmsg-events.txt"]),
+    source=str(path))
+
+def parse_linux_lines(lines:list[str], *, source:str="") -> dict:
+  out = {"bl": [], "waits": [], "wait_rregs": [], "gart": {}, "bo": [], "reg_events": [], "c2pmsg_events": [], "source": source}
   wait_start = None
   seen_bl = set()
   seen_reg_events = set()
   seen_events = set()
   pending_bo = {}
-  for line in lines_for(path, ["psp-linux-good.trace", "psp-linux-good-deep.trace", "linux-pre-kdb-key-events.txt", "linux-c2pmsg-events.txt"]):
+  for line in lines:
     if m := LINUX_BL_RE.search(line):
       item = tuple((k, as_int(v)) for k, v in m.groupdict().items())
       if item not in seen_bl:
@@ -205,10 +210,13 @@ def parse_linux(path:pathlib.Path) -> dict:
   return out
 
 def parse_tinygrad(path:pathlib.Path) -> dict:
-  out = {"source": str(path), "gart": {}, "pre_bl": {}, "skip": {}, "load": [], "regs": {}, "wait_vals": [],
+  return parse_tinygrad_lines(tinygrad_lines(path), source=str(path))
+
+def parse_tinygrad_lines(lines:list[str], *, source:str="") -> dict:
+  out = {"source": source, "gart": {}, "pre_bl": {}, "skip": {}, "load": [], "regs": {}, "wait_vals": [],
          "write_msg1": {}, "write_compid": None, "readback": {}, "timeout": False, "snapshots": [], "post_status": {}}
   snapshot = None
-  for line in tinygrad_lines(path):
+  for line in lines:
     if "BL not ready" in line: out["timeout"] = True
     if not (m := TG_RE.search(line)): continue
     msg = m.group("msg")
