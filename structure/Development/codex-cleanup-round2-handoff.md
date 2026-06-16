@@ -47,9 +47,9 @@ vestigial no-op block-dot loop in `qk_flywheel_shadow.run_outcomes` — removed 
 | 4 | shadow `_read_jsonl` → llm_eval_common | **done** | `7261b8f03` |
 | 5 | staged-shadow v0/v2 constants + CLI enum collapse | **SKIP — report** | — |
 | 6 | q4k_bench device-metric driver | **partial (regexes only)** | `705e292ed` |
-| 7 | Q4_K/Q6_K dequant → gguf.py authority | **SKIP — report** | — |
+| 7 | Q4_K/Q6_K dequant → gguf.py authority | **done (delegation)** | `809b4e20e` |
 | 8 | test fixtures → `_qk_testutil.py` | **SKIP — report** | — |
-| 9 | `llm_json_rejection_sample` → `llm_generate` | **SKIP — report** | — |
+| 9 | `llm_json_rejection_sample` → `llm_generate` | **SKIP — empirically refuted** | — |
 | 10 | dead majority/branch/ternary | **done** | `a0250a41d` |
 
 ### Done (each NFC, byte-proven)
@@ -72,6 +72,13 @@ vestigial no-op block-dot loop in `qk_flywheel_shadow.run_outcomes` — removed 
   `_jsonl_bytes`/`_write_jsonl`/`_sha256` (freeze-hash source). Proof: phase4 11 pass.
 - **C6 partial** (`705e292ed`): `DEVICE_RE`/`CORRECT_RE` (q4_k_bench stdout grammar,
   verbatim in 3 files) → new `extra/q4k_bench_metrics.py`; dropped unused `re`.
+- **C7** (`809b4e20e`): `qk_layout.q4_k_reference`/`q6_k_reference` now delegate to
+  `tinygrad/llm/gguf.ggml_data_to_tensor` (the live decode loader = the format
+  authority); the duplicated dequant math + local `q_to_uint8` removed. Done as a
+  pure `extra/` delegation, NOT the core refactor the packet sketched (gguf.py
+  untouched → no risk). Proof: the pre-existing exact byte-pin tests
+  `test_q*_k_reference_matches_current_gguf_expression` already pinned
+  `q*_k_reference == ggml_data_to_tensor`; suite 239.
 - **C10** (`a0250a41d`): `cost_model._majority` → `triage_eval._majority` (superset;
   cost_model never passes empty); removed a dead `if` branch in
   `feature_enrich._load_width_report_paths` (re-appended already-present paths the
@@ -89,20 +96,26 @@ vestigial no-op block-dot loop in `qk_flywheel_shadow.run_outcomes` — removed 
   `_measure`/`_run_candidate` (mode handling, status semantics, tail lengths) genuinely
   differ; merging is the wrong abstraction the principles forbid. Only the regexes
   were safe (done above).
-- **C7** — *high care, core/upstream.* `gguf.py`'s Q4_K dequant is fused into a shared
-  type-12/13 (Q4_K+Q5_K) branch over pre-reshaped `blocks`, while `qk_layout` starts
-  from raw bytes. Making `gguf.py` the importable authority means refactoring the core
-  decode hot path (upstream-tracked) — disproportionate to "~6 lines". Packet says
-  SKIP if unsure. Recommended: extract `_q4_k_dequant_blocks`/`_q6_k_dequant_blocks`
-  in gguf.py with a numeric-equality assert vs `qk_layout` + a fixed-seed decode parity
-  check, as its own carefully-reviewed `[nn]` change.
 - **C8** — *divergent row-builders.* The per-test `_row(...)` factories have different
   schemas/signatures (audit §F explicitly lists divergent row-builders as do-NOT-merge).
   The only shareable residue (`REPO = parents[2]` idiom ×31, a `read_jsonl`) is idiom,
   not knowledge-duplication; centralizing it is 31-file churn for no real payoff.
-- **C9** — *needs a model run.* Routing `llm_json_rejection_sample` through `llm_generate`
-  changes generation plumbing and requires fixed-seed token parity (a real GGUF decode).
-  Not runnable here; per the packet, hand back unproven rather than commit.
+- **C9** — *empirically refuted (not byte-safe).* The swap was implemented and tested
+  with the packet's exact protocol: OLD (committed) vs NEW code, same fixed seed,
+  8B model + 8b-last1-ffn-suffix-lora-r4-v5 adapter + 8b policy, on
+  training-data-v4/sft.jsonl (`--limit-train-rows 1 --k 2 --temperatures 0.0 0.5`).
+  Result: **greedy (temp=0.0) tokens are byte-identical** OLD==NEW==NEW2, but
+  **temperature=0.5 sampling diverges** (OLD `[271]` vs NEW `[4913,9217,788,330,16,20,9207]`),
+  while NEW is itself reproducible (NEW==NEW2). Root cause:
+  `llm_generate.load_model_and_tokenizer` runs `Tensor.manual_seed(seed)` at *load*
+  time, which the old inline path never did; tinygrad's counter-based RNG carries that
+  offset so the per-sample `manual_seed` no longer reproduces the same sampled draw.
+  No fix preserves parity without either changing `llm_generate`'s contract (affecting
+  its other callers) or re-bypassing its loader (defeating the consolidation). Per the
+  packet's "must be identical / do not commit unproven", the change was **reverted**.
+  Recommended: change `llm_generate.load_model_and_tokenizer` to take `seed:int|None`
+  and skip the load-time seed when `None`, then route rejection_sample with `seed=None`
+  (it reseeds per sample anyway) — re-run this same parity check to confirm.
 
 ## Out of scope (untouched, as instructed)
 
