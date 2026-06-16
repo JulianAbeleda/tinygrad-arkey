@@ -222,6 +222,56 @@ Good comments explain why the shape exists.
 
 Bad comments restate what the code already says.
 
+## Reducing Code The Right Way
+
+When a codebase feels "too big," the instinct to shrink it is correct but the
+target is usually wrong. **Line count is not the metric. Knowledge duplication
+is.** Optimize for one authoritative source per piece of knowledge and for deep,
+legible modules — fewer lines is a side effect of doing that, never the goal.
+
+### DRY means knowledge, not lines
+Eliminate duplicated *knowledge* — a rule, a schema, a policy — by giving it a
+single source of truth. Do **not** eliminate code that merely *looks* alike but
+encodes *different* concepts. Two functions with the same shape that read
+different inputs or mean different things are not a DRY violation.
+
+### Duplication is cheaper than the wrong abstraction
+If you are tempted to merge similar-looking code, first prove it represents the
+*same* knowledge. If it does not, leave the duplication — a wrong abstraction is
+harder to maintain than the duplication it replaces, because every future
+divergence must fight the forced shared shape. Prefer accidental duplication
+over a leaky generalization.
+
+### Abstract only what has earned it (Rule of Three / AHA)
+Wait until a pattern repeats ~3 times *and is genuinely identical* before
+abstracting it. Avoid hasty abstraction; let the right shape emerge. Premature
+generalization is itself an anti-pattern.
+
+### If similar things should be merged, fix the inputs first
+When near-duplicate code is blocked from merging only because its inputs differ
+(different ad-hoc schemas, formats, conventions), the elegant move is to
+**unify the inputs into one typed/canonical shape, then** collapse the code into
+one parameterized path. Standardize the data, and the duplication becomes real
+duplication you can correctly remove.
+
+### Prefer data over code (table-driven)
+Replace N near-identical functions/branches with **one parameterized
+implementation driven by a declarative table**. A new case becomes a *row of
+data*, not a new function or file. This is the durable cure for "every variant
+got its own copy."
+
+### Deep modules, simple surfaces
+Complexity, not line count, is the enemy. Favor modules whose interface is much
+simpler than their implementation. A small number of deep, orthogonal modules
+beats many shallow ones.
+
+### No-new-file rule (anti-sprawl)
+A new experiment, variant, or case adds a *row to a table* or a *parameter* — not
+a new file or a copy-pasted function/`main()`. New behaviors extend the existing
+authoritative module. Copy-pasting a builder, a `main()`, or a helper is the
+sprawl this section exists to prevent; when you reach for it, stop and extend
+instead.
+
 ## Anti-Patterns
 
 Avoid:
