@@ -62,6 +62,14 @@ the **lead parity lever** below. The faster-GEMV levers (B1/R1/R3/R4/R5) are out
     second compute queue in `runtime/graph/hcq.py` (the device already exposes the queue primitive; the
     graph uses one today). The norm-fusion warm-up was **refuted** (single-accumulator kernel blocks the
     RMS reduction; non-exact int8 round; norm already lazily fused) — overlap is the path, not fusion.
+  - **Milestone 0 (two-queue probe, `amd-decode-two-queue-probe-20260616.md`): scope escalated.**
+    tinygrad's AMD backend has **one** hardware compute ring (`ops_amd.py:1001`, `_submit` hardcodes
+    `dev.compute_queue`), so two queue objects serialize (measured 1.0×, invariant to kernel shape).
+    Hardware overlap is real (cross-process +32%), so the build now needs a **`[runtime]` 2nd compute
+    AQL ring + per-ring submit routing** *before* the cross-layer scheduler — deeper than first
+    estimated. Decision pending: invest in the backend surgery for ~+30%, or pivot to **B3** (fewer
+    bytes, no runtime surgery). `extra/qk_two_queue_probe.py` is the gate that re-fires once a 2nd
+    ring exists (A‖B should jump > 1.2×).
 
 ## Beyond-llama levers (surpass 57%) — each ties to the policy/primitive frame
 Ranked by (ceiling × feasibility). The path is **change the work, not the kernel.**
