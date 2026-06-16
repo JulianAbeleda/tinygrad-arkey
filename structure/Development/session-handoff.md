@@ -1957,3 +1957,22 @@ different problems — decode is memory-bound at batch-1 (can't tune past), pref
 UNTUNED, which is exactly the loop's proven substrate (N1/N2 hit 33-98% of peak on native matmul). So the
 highest-leverage unrealized target is PREFILL via the curated-loop / matmul tuning (NOT native BEAM — it
 hangs gfx1100). bench `extra/_prefill_bench.py`; llama bar `llama-bench -ngl 99 -p N -n 0`.
+
+## 2026-06-16 — DEFAULT FLIP: Q4K/Q6K primitives now default-ON (path-aware, shared storage). The arc's win, out-of-the-box
+The recurring "biggest lever" lesson (a built win gated OFF) was still the live default: the master flag
+`Q4K_PRIMITIVE` defaulted to 0, so a plain `from_gguf` ran the dense path at ~12 tok/s instead of ~55.
+Flipped it path-aware after the S0 safety matrix. `tinygrad/llm/model.py`:
+- `Q4K_PRIMITIVE` now defaults ON when `q4k_auto` (env unset AND gguf is a path AND `Device.DEFAULT=="AMD"`);
+  OFF for a preloaded Tensor or non-AMD device. Q6K follows (auto-on, exact). `Q4K_PRIMITIVE=0` forces dense.
+- Storage: when AUTO-enabled, defaults to `shared` (views the GGUF in place, storage_bytes=0) instead of
+  `sidecar` (which DUPLICATES weights). Explicit `Q4K_PRIMITIVE=1` keeps the `sidecar` default unchanged;
+  `QK_PRIMITIVE_STORAGE` always wins. This is the narrow shared-default the handoff deferred — coupled to
+  auto-enable only, reversible, and now justified by S0 + the prior 8B/14B/32B greedy-A/B passes.
+S0 safety matrix (VRAM 25.75 GB): 8B on=exact, peak 10.78 (sidecar) / **6.24 (shared, == dense)**; 14B
+shared fits; **32B sidecar OOMs (~38 GB) -> shared makes it safe (storage_bytes=0)**; non-Q4K Q8_0 = graceful
+no-op; Tensor input -> off. S2: default (no flags) = **55.0 tok/s vs dense 12.4 (4.4x), token-EXACT**, shared
+storage, no extra VRAM; explicit `Q4K_PRIMITIVE=1` still sidecar. Probe `extra/_s0_safety.py`.
+RESIDUAL RISKS (bounded by the `Q4K_PRIMITIVE=0` escape): MLA/MoE/SSM arches untested locally (only dense
+Qwen3 here) — install is per-tensor so it should skip-to-dense, but unverified; load now always goes through
+`gguf_load_with_metadata` (minor). NOT changed: Q6K_DEMOTE (lossy, opt-in), FLASH_DECODE (off), generated
+policies (still never a default). Commit `[nn]`.

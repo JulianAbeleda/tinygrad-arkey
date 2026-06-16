@@ -1,7 +1,7 @@
 from __future__ import annotations
-import collections, functools, itertools, json, pathlib
+import collections, functools, itertools, json, os, pathlib
 from dataclasses import dataclass, replace
-from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function
+from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function, Device
 from tinygrad.helpers import prod
 from tinygrad.llm.gguf import gguf_load, gguf_load_with_metadata
 from tinygrad.uop.ops import resolve
@@ -252,8 +252,8 @@ def _qk_storage_cap_from_env() -> int|None:
   if cap < 0: raise ValueError(f"QK_PRIMITIVE_MAX_STORAGE_MB must be non-negative, got {raw!r}")
   return cap
 
-def _qk_storage_mode_from_env() -> str:
-  mode = getenv("QK_PRIMITIVE_STORAGE", "sidecar")
+def _qk_storage_mode_from_env(default:str="sidecar") -> str:
+  mode = getenv("QK_PRIMITIVE_STORAGE", default)
   if mode not in ("sidecar", "q4_ondemand", "shared"):
     raise ValueError(f"QK_PRIMITIVE_STORAGE must be sidecar, q4_ondemand, or shared, got {mode!r}")
   return mode
@@ -823,7 +823,11 @@ class Transformer:
   def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:int|None=None,
                 realize=bool(getenv("REALIZE", 0))) -> tuple[Transformer, dict]:
     # TODO: remove the need for copy to default device
-    use_q4k_primitive = bool(getenv("Q4K_PRIMITIVE", 0))
+    # Q4K_PRIMITIVE defaults ON for a GGUF path ON AMD (the exact ~2.2x decode win, validated on AMD), and
+    # OFF for a preloaded Tensor (no GGUF storage to view; primitive paths require a path) or a non-AMD
+    # default device (the kernels are AMD-targeted). Set Q4K_PRIMITIVE=0/1 to override.
+    q4k_auto = "Q4K_PRIMITIVE" not in os.environ and not isinstance(gguf, Tensor) and Device.DEFAULT == "AMD"
+    use_q4k_primitive = bool(getenv("Q4K_PRIMITIVE", 1 if q4k_auto else 0))
     # Q6_K (ffn_down etc. in mixed-quant Q4_K_M) defaults ON with Q4K_PRIMITIVE: it's the decode bottleneck
     # otherwise (the slow fp-dequant fallback ~= 59% of GPU work), Q6_K dequant is exact (identical output),
     # and enabling it is a ~2.2x decode win. Set Q6K_PRIMITIVE=0 to opt out.
@@ -898,7 +902,9 @@ class Transformer:
     if q4k_meta is not None:
       primitive_linears = []
       primitive_budget = QKPrimitiveBudget(_qk_storage_cap_from_env(), bool(getenv("QK_GENERATED_POLICY_STRICT", 0)))
-      q4_storage_mode = _qk_storage_mode_from_env()
+      # auto-enabled primitives default to `shared` storage (view the GGUF in place, storage_bytes=0) so
+      # large models (e.g. 32B) stay within VRAM; explicit Q4K_PRIMITIVE keeps `sidecar`; env always wins.
+      q4_storage_mode = _qk_storage_mode_from_env("shared" if q4k_auto else "sidecar")
       q6_storage_mode = _q6k_effective_storage_mode(q4_storage_mode)
       generated_policy = _load_qk_generated_policy(qk_generated_policy_path) if use_qk_generated_policy else None
       if generated_policy is not None:
