@@ -458,6 +458,15 @@ def _markdown(summary:dict[str, Any]) -> str:
   ]
   return "\n".join(lines)
 
+def _portable_features(fmap:dict[str, Any]) -> dict[str, Any]:
+  # Round float features to 6 decimals before serialization so the artifact is
+  # byte-identical across platforms. Unrounded values include transcendental
+  # results (e.g. log1p proxies) whose last ULP differs between macOS libm and
+  # Linux glibc; that drift breaks the cross-machine golden lock without changing
+  # any prediction (predictions are already rounded the same way). The in-memory
+  # map fed to the vectorizer is left untouched.
+  return {k: (round(v, 6) if isinstance(v, float) else v) for k, v in fmap.items()}
+
 def run_cost_model(examples_path:pathlib.Path, out:pathlib.Path, *, backend:str="auto", seed:int=20260614) -> dict[str, Any]:
   examples = _read_jsonl(examples_path)
   train = [row for row in examples if row.get("split") == "train"]
@@ -485,7 +494,7 @@ def run_cost_model(examples_path:pathlib.Path, out:pathlib.Path, *, backend:str=
 
   feature_rows = []
   for row, fmap in zip(train + holdout, train_maps + holdout_maps):
-    feature_rows.append({"id": row["id"], "split": row["split"], "features": fmap})
+    feature_rows.append({"id": row["id"], "split": row["split"], "features": _portable_features(fmap)})
   prediction_rows = [pred for name in sorted(model_predictions) for pred in model_predictions[name]]
   ignored = vectorizer.ignored_holdout_categories(holdout_maps)
   model_best_name = None

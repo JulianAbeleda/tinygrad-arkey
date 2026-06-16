@@ -66,7 +66,7 @@ class TestFlywheelDatasetGolden(unittest.TestCase):
     examples = PROOF / "kernel-triage-v1-featured-plus/examples.jsonl"
     pinned = {
       "predictions.jsonl": "bf10c793a7e6c1b4cdd8672a2fec36341aa217a93d4341d6f639322e56673068",
-      "features.jsonl": "3b54e164e68602ee933d21dd013b47ffa3c39a8ae1ed6469d17700f0a1e88f89",
+      "features.jsonl": "c29f5cbd44b155ea22ff925767770d538f0eb6928ce688eb8116e72e552a4171",
       "feature-vocab.json": "be73e4f708847723250418c9b5cbade8091e2a1d54fc1e3bfe539509cf9d3f31",
     }
     with TemporaryDirectory() as raw_td:
