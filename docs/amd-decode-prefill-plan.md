@@ -240,3 +240,25 @@ scheduling gap. To match llama, tinygrad prefill needs a rocBLAS-class tiled-WMM
 or hand-write the Marlin LDS-staged WMMA kernel -- the W2 path that hit tinygrad's auto-tiling wall) AND
 isolated large-batch calls. Profiler is now installed for future counter work; tinygrad PMC needs the
 HIP-backend/ROCr conflict resolved (or use the AMD-backend SQTT path).
+
+## ROOT CAUSE NAILED (2026-06-16, kernel-level): tinygrad's matmul emits WMMA but uses ZERO LDS tiling
+rocprofv3 --pmc breaks tinygrad's HIP device init (ROCr conflict), so instead read tinygrad's OWN kernel
+resources (DEBUG=4 for WMMA emission, the HIP kernel-trace for LDS/VGPR). The definitive diff vs llama's
+rocBLAS Tensile GEMM:
+| | tinygrad matmul `r_32_48_..._256_2` | llama rocBLAS `Cijk_MT128x128x16_MI16x16x16` |
+|---|---|---|
+| **LDS** | **0** | **25600 bytes** |
+| WMMA emitted | YES (290 mentions, chained AND isolated) | YES |
+| VGPR | 192 | 256 |
+| workgroup | 32 (ONE wavefront) | large (MT128x128) |
+**THE ANSWER:** tinygrad's matmul **emits the WMMA matrix-core op but does NO shared-memory cache-blocking
+(LDS=0)** -- it re-reads operands from global memory per WMMA instead of staging a tile in LDS and reusing it.
+So it is BANDWIDTH-bound at ~27% peak; rocBLAS stages 128x128 tiles in 25.6 KB LDS (reuse) and is COMPUTE-bound
+at ~80%. This is precisely the doc's S1.4 (locality/reuse/tiling) / Simon Boehm's step-2 "shared-memory
+cache-blocking" -- the ONE primitive tinygrad's GEMM codegen is missing. WMMA was never the gap (it fires);
+LDS TILING is. Plus workgroup=32 (1 wavefront) = minimal occupancy per workgroup.
+**So the prefill gap, fully reduced:** (a) tinygrad GEMM = WMMA-without-LDS-tiling -> bandwidth-bound 27% vs
+rocBLAS 80% (the LDS-cache-blocking the matmul codegen/opt doesn't apply -- a GROUP/LOCAL-into-LDS opt that
+BEAM would find but BEAM hangs gfx1100); (b) the in-model 27x collapse stacks on top. To match llama: tinygrad
+needs LDS-staged matmul tiling (codegen/opt work, or call rocBLAS/hipBLASLt). Profiler + DEBUG path now
+established; this is the precise, measured target -- no longer a mystery at any level.
