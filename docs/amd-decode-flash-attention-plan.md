@@ -77,6 +77,22 @@ context (Tc < ~512) fall back to non-split (S=1) — the short-context path is a
 - Short-context decode (the arc's headline numbers) is unaffected (S=1 fallback) — this is a long-context
   lever, the biggest remaining for real usage.
 
+## S0 GATE RESULT (2026-06-15): Approach A FAILS → Approach B required
+Microbenchmark of the Tensor-level split at concrete Tc (exact, max_err 1.8e-4):
+| Tc=3072 | sdpa | flash S=4 | S=8 | S=16 | S=32 |
+|---|---|---|---|---|---|
+| GPU us | **198** | 385 | 652 | 2235 | 4712 |
+**The explicit split is SLOWER and worse with more splits** — tinygrad's codegen does not map the split dim to
+occupancy; it generates worse kernels (e.g. `r_2_8_16_4_4_384_8` at 540µs). Approach A is dead.
+
+Re-localized the real long-context cost (profile, decode @ctx~3000): the attention `r_*start_pos` kernels
+(`r_4_2_8_16_4_28start_pos` 6.0ms, `r_8_4_28start_pos` 3.0+1.5ms, ...) are the **dominant** GPU cost of the
+token — confirming P2's premise (the standalone-SDPA microbenchmark's 198µs was unrepresentative; the real
+decode attention over the symbolic-length KV cache is far heavier). So: the attention IS the long-context
+bottleneck, AND the cheap Tensor-level fix doesn't work → **Approach B (custom 2-kernel flash-decode) is the
+only remaining path.** It is a substantial, correctness-critical build (online-softmax numerics, cross-thread
+reductions, the symbolic split count from `start_pos` at runtime). Decision pending before committing to it.
+
 ## Sources
 - Flash-Decoding for long-context inference — PyTorch blog: https://pytorch.org/blog/flash-decoding/
 - Princeton NLP / Tri Dao et al.: https://princeton-nlp.github.io/flash-decoding/
