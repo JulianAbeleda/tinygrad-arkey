@@ -156,7 +156,8 @@ class TestLLMRuntimeContract(unittest.TestCase):
   def test_committed_runtime_contract_reproduces(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     root = repo / "bench/llm-runtime-contract-20260613"
-    if not root.exists(): return
+    if not (root / "manifest.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     manifest = load_manifest(root / "manifest.json")
     report = validate_contract(manifest, repo)
     self.assertEqual(json.loads((root / "report.json").read_text()), report)

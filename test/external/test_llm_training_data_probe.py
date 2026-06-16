@@ -73,7 +73,8 @@ class TestLLMTrainingDataProbe(unittest.TestCase):
   def test_committed_qwen_training_probe_reproduces_if_present(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     out = repo / "bench/qwen-rollout-20260612/training-data-v1"
-    if not out.exists(): return
+    if not (out / "summary.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     source_artifacts = [pathlib.Path(path) for path in json.loads((out / "summary.json").read_text())["source_artifacts"]]
     rows, summary = build_training_data(source_artifacts)
     self.assertEqual(json.loads((out / "summary.json").read_text()), summary)

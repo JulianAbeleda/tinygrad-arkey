@@ -51,7 +51,8 @@ class TestLLMAdapterJsonDataV4(unittest.TestCase):
   def test_committed_v4_dataset_if_present(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     out = repo / "bench/qwen-adapter-20260613/training-data-v4"
-    if not out.exists(): return
+    if not (out / "summary.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     summary = json.loads((out / "summary.json").read_text())
     self.assertEqual(summary["kind"], "llm_adapter_json_dataset_v4")
     self.assertGreaterEqual(summary["eval_rows"], 198)

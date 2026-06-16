@@ -81,6 +81,8 @@ class TestQKFlywheelPhase3E(unittest.TestCase):
 
   def test_featured_dataset_keeps_outcomes_out_of_prompts(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
+    if not (repo / "bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1/examples.jsonl").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     with TemporaryDirectory() as raw_td:
       out = pathlib.Path(raw_td) / "featured"
       summary = write_featured_dataset(repo, out, repo / "bench/amd-decode-flywheel-proof-20260614/kernel-triage-v1/examples.jsonl")

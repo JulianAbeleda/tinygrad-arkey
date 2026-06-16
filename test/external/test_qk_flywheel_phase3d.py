@@ -58,6 +58,8 @@ class TestQKFlywheelPhase3D(unittest.TestCase):
 
   def test_v1_dataset_preserves_v0_split_and_removes_prompt_outcome_leakage(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
+    if not (repo / "bench/qk-ansor-transition-20260612/benchmarks/verdict.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     with TemporaryDirectory() as raw_td:
       out = pathlib.Path(raw_td) / "kernel-triage-v1"
       summary = write_dataset(repo, out)

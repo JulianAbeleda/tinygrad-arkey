@@ -96,7 +96,8 @@ class TestQKThreewayLoadMicrobench(unittest.TestCase):
 
   def test_committed_artifact_reproduces(self):
     root = self.repo / "bench/qk-threeway-load-microbench-20260613"
-    if not root.exists(): return
+    if not (root / "microbench.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     committed = json.loads((root / "microbench.json").read_text())
     raw_runs = []
     for tensor in committed["tensors"]:

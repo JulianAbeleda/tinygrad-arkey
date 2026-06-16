@@ -5,7 +5,7 @@ candidate feature encoding matches the corpus convention (the TC tc_level round-
 is deterministic under the fixed seed, numpy scalars serialize, and the random baseline is well-formed.
 The live device-timing path (live_time_shape/evaluate_shape) is exercised by the L0/L1 runs, not here.
 """
-import json, unittest
+import json, pathlib, unittest
 import numpy as np
 
 from tinygrad.codegen.opt import Opt, OptOps
@@ -14,7 +14,13 @@ from extra.qk_loop_learnability import load_merged, _train_predict, FEAT_KEYS
 
 
 class TestQKLoopLive(unittest.TestCase):
+  def _corpus_present(self):
+    art = pathlib.Path(__file__).resolve().parents[2] / "bench/amd-decode-flywheel-proof-20260614/native-matmul-N0"
+    return bool(list(art.glob("beam_log_n1*.jsonl"))) or (art / "beam_log.jsonl").exists()
+
   def test_fresh_shapes_absent_from_corpus(self):
+    if not self._corpus_present():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     corpus_shapes = {r["shape"] for r in load_merged()}
     for s in [FRESH_L0, *FRESH_L1]:
       self.assertNotIn(s, corpus_shapes, f"{s} is in the corpus -- not a held-out test")
@@ -33,6 +39,8 @@ class TestQKLoopLive(unittest.TestCase):
     self.assertTrue(all(len(r["x"]) == len(FEAT_KEYS) for r in rows))
 
   def test_ranking_is_deterministic_under_fixed_seed(self):
+    if not self._corpus_present():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     rows = load_merged()
     shapes = sorted({r["shape"] for r in rows})
     held = shapes[0]

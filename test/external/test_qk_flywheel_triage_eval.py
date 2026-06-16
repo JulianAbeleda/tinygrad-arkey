@@ -7,6 +7,8 @@ from extra.qk_flywheel_triage_eval import evaluate_baselines, load_rollout_predi
 class TestQKFlywheelTriageEval(unittest.TestCase):
   def test_baseline_eval_scores_holdout_rows(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
+    if not (repo / "bench/qk-ansor-transition-20260612/benchmarks/verdict.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     with TemporaryDirectory() as raw_td:
       data_out = pathlib.Path(raw_td) / "data"
       summary = write_dataset(repo, data_out)

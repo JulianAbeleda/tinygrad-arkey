@@ -133,7 +133,8 @@ class TestLLMAdapter(unittest.TestCase):
   def test_committed_qwen_adapter_artifact_shape_if_present(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     root = repo / "bench/qwen-adapter-20260613/8b-output-lora-r4"
-    if not root.exists(): return
+    if not (root / "train-summary.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     summary = json.loads((root / "train-summary.json").read_text())
     self.assertEqual(summary["kind"], "llm_adapter_train_summary")
     self.assertEqual(summary["status"], "pass")

@@ -37,7 +37,8 @@ class TestLLMSFTSmokeTrain(unittest.TestCase):
   def test_committed_sft_smoke_summary_shape_if_present(self):
     repo = pathlib.Path(__file__).resolve().parents[2]
     out = repo / "bench/qwen-rollout-20260612/sft-smoke-v1"
-    if not out.exists(): return
+    if not (out / "summary.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
     summary = json.loads((out / "summary.json").read_text())
     self.assertEqual(summary["kind"], "llm_sft_smoke_train_summary")
     self.assertEqual(summary["status"], "pass")

@@ -12,12 +12,17 @@ class TestQKSemanticOp(unittest.TestCase):
   def setUpClass(cls):
     cls.repo = pathlib.Path(__file__).resolve().parents[2]
 
+  def _skip_if_descriptor_absent(self):
+    if not (self.repo / "bench/qk-ansor-transition-20260612/descriptors/8b.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
+
   def _q4_tile(self):
     descriptor = json.loads((self.repo / "bench/qk-ansor-transition-20260612/descriptors/8b.json").read_text())
     row = next(r for r in descriptor["descriptors"] if r["format"] == "Q4_K" and r["role"] == "ffn_gate")
     return tile_from_semantic_row(row)
 
   def test_qk_block_dot_contract_preserves_scheduler_boundary(self):
+    self._skip_if_descriptor_absent()
     contract = qk_block_dot_contract(self._q4_tile())
     self.assertEqual(contract.name, QK_BLOCK_DOT)
     self.assertEqual(contract.format, "Q4_K")
@@ -29,10 +34,12 @@ class TestQKSemanticOp(unittest.TestCase):
     self.assertFalse(contract.runtime_lowering_exists)
 
   def test_qk_block_dot_rejects_raw_custom_kernel_as_lowering_target(self):
+    self._skip_if_descriptor_absent()
     with self.assertRaisesRegex(ValueError, "raw custom full-kernel"):
       qk_block_dot_contract(self._q4_tile(), lowering_target=LOWERING_RAW_CUSTOM_KERNEL)
 
   def test_qk_block_dot_requires_q4_vector_load_tile(self):
+    self._skip_if_descriptor_absent()
     with self.assertRaisesRegex(ValueError, "requires u32x4_aligned"):
       qk_block_dot_contract(self._q4_tile(), load_tile_name="u32_scalar")
 
@@ -43,7 +50,9 @@ class TestQKSemanticOp(unittest.TestCase):
 
   def test_committed_semantic_op_contract_reproduces(self):
     out = self.repo / "bench/qk-packed-semantic-op-20260613"
-    if not out.exists(): return
+    if not (out / "semantic-op-contract.json").exists():
+      self.skipTest("committed bench artifact absent (gitignored post-prune); regenerate to re-lock")
+    self._skip_if_descriptor_absent()
     descriptors = [
       self.repo / "bench/qk-ansor-transition-20260612/descriptors/8b.json",
       self.repo / "bench/qk-ansor-transition-20260612/descriptors/14b.json",
