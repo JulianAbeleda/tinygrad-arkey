@@ -79,6 +79,14 @@ hit rate.
 Phase-B pivot to a **fused Q4_K GEMM + batching** — batching is precisely
 raising reuse (one weight read serves many tokens), the only way off the
 batch-1 bandwidth floor.
+**Measured (2026-06-16, prefill):** the canonical example of this primitive being
+*absent*. tinygrad's prefill matmul kernel `r_32_48_..._256_2` emits WMMA but has
+**LDS=0** (no shared-memory cache-blocking) and workgroup=32, so it re-reads operands
+from global per WMMA op → bandwidth-bound at ~27% of peak. llama.cpp's rocBLAS/Tensile
+GEMM `Cijk_MT128x128x16_MI16x16x16` stages a 128×128 tile in **25.6 KB of LDS** (256
+VGPR) → compute-bound at ~80%. WMMA emission was never the gap; the missing primitive
+is *this* (LDS tiling / Simon Boehm step 2). See `amd-decode-prefill-plan.md`. The fix is
+a GROUP/LOCAL-into-LDS opt (BEAM finds it but hangs gfx1100) or rocBLAS/hipBLASLt.
 
 ## 1.5 Latency hiding
 **Definition:** memory access has huge *latency*; you hide it not by faster

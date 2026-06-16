@@ -1999,6 +1999,24 @@ dequant->fp16 realized + fp16 residual stream + large ubatch + flash prefill att
 if large batch amortizes bytes. Multi-component build, but every factor now named/measured -- no open wall. The
 recurring thesis holds (isolated win 13.7 TF, in-model 1.1) but the CAUSES are now concrete, not mysterious.
 
+PREFILL FINAL -- ROOT CAUSE NAILED AT THE KERNEL LEVEL (2026-06-16). Two more steps closed it:
+(1) S2: even a CLEAN standalone prefill layer caps at 4-5% peak; the cap is CHAINED-matmul scheduling (single
+matmul 80%, 7-chained 5%); `.contiguous()` isolation recovers 3.5-5.7x STANDALONE (5%->27%) but NOT in-model
+(every recipe -- eager-bypass-@function + REALIZE fp16 W + fp16+isolate + ubatch, plain dense too -- = 22-25
+tok/s). (2) Installed the profiler the gpu-perf doc prescribes (rocprofv3 + rocprofiler-compute/omniperf +
+aqlprofile). tinygrad's AMD backend bypasses ROCr (raw KFD) so rocprofv3 can't see it; HIP backend can but
+PMC breaks its device init -> used DEBUG=4 (WMMA) + the HIP kernel-trace (LDS/VGPR) instead, and profiled
+LLAMA directly (native HIP). **THE ANSWER (measured):** llama prefill GEMM = rocBLAS/Tensile fp16 WMMA
+`Cijk_MT128x128x16_MI16x16x16` with **LDS=25600** (128x128 tile staged in shared mem) + 256 VGPR. tinygrad's
+matmul `r_32_48_..._256_2` **EMITS WMMA (290 mentions) but LDS=0 + workgroup=32** -- NO shared-memory
+cache-blocking. So tinygrad's GEMM re-reads operands from global per WMMA (bandwidth-bound, 27% peak) while
+rocBLAS reuses from LDS (compute-bound, 80%). WMMA was never the gap; LDS TILING is (doc S1.4 / Simon Boehm
+step-2 "shared-memory cache-blocking"). Prefill gap fully reduced: (a) GEMM codegen lacks LDS cache-blocking
+(27% vs rocBLAS 80%; a GROUP/LOCAL-into-LDS opt BEAM would find but BEAM hangs gfx1100); (b) in-model 27x
+scheduling collapse stacks on top. To match llama: LDS-staged matmul tiling in tinygrad codegen, or call
+rocBLAS/hipBLASLt. Profiler installed; full sweep `docs/amd-decode-prefill-plan.md`. model.py pristine
+throughout the whole prefill investigation.
+
 ## 2026-06-16 — DEFAULT FLIP: Q4K/Q6K primitives now default-ON (path-aware, shared storage). The arc's win, out-of-the-box
 The recurring "biggest lever" lesson (a built win gated OFF) was still the live default: the master flag
 `Q4K_PRIMITIVE` defaulted to 0, so a plain `from_gguf` ran the dense path at ~12 tok/s instead of ~55.
