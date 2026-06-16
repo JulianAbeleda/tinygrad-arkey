@@ -165,3 +165,20 @@ We do NOT need an MMQ kernel (our standalone matmul ~= MMQ). The fix is a coordi
   (d) flash-style prefill attention (so O(T^2) doesn't dominate at large ubatch).
 Each is real but now understood; (a)+(b) alone ~= 8.4 TF (~10% peak, ~7x prefill) IF (c) amortizes the bytes.
 This is a distinct prefill forward path, a multi-component build -- but no longer an open wall.
+
+## S1 (2026-06-16): the 4 components are INTERDEPENDENT -> no incremental win; flash-prefill-attn is the critical path
+Tried to build it incrementally and measured the interdependency directly:
+- (a) realized fp16 weights ONLY win at LARGE batch: at ubatch=32 they read 3.4x more bytes than packed Q4_K
+  and the matmul is memory-bound (AI~32 < ridge 97), so REALIZE is a WASH/LOSS at small batch. (a) needs (c).
+- (c) large ubatch ONLY wins if (d) flash-prefill-attention exists: REALIZE+fp16-stream+ubatch=512 measured
+  **24 tok/s (still worse than 67)** -- at large T the O(T^2) SDPA prefill attention dominates and eats the
+  matmul gain. (c) needs (d).
+- So NO single component yields a measurable e2e win in isolation -- they only pay off TOGETHER. That
+  interdependency is exactly why incremental probing (this whole thread) kept failing: each fix exposes the
+  next binding factor. There is a residual in-model penalty (clean-config still ~20x off the 8.4 TF standalone
+  at small batch) that the @function block-granularity profiling can't cleanly isolate.
+CRITICAL PATH = (d) **flash-style PREFILL attention** (T>1 causal, online softmax over T queries -- harder than
+the shipped flash-DECODE T=1 kernel). It is the unblocker: without it large ubatch is attention-bound, and
+without large ubatch the matmul fixes (a)(b) don't pay. The full build = (d) flash-prefill-attn + (a) per-layer
+dequant->fp16 + (b) fp16 prefill stream + (c) large ubatch, all together, token-parity gated. This is a
+genuine multi-session PROJECT, not an incremental edit -- and no piece demos a win alone. model.py pristine.
