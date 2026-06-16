@@ -45,3 +45,38 @@ Principle adherence is high and, crucially, **disciplined** — consolidations a
 byte-proven, wrong abstractions are refused, and the structure now *prevents*
 re-sprawl. Close the env-flag `QKConfig` gap and tidy the working tree and this is
 solidly an **A**.
+
+## Update — 2026-06-16 (later): QKConfig + QK runtime invariants
+
+The top "encode invariants" gap is now addressed.
+
+- **`QKConfig` landed (NFC).** `[nn] NFC centralize QK runtime config` folds the scattered
+  QK primitive *install* env reads (strict/cap/storage/debug/demote/fuse) into one typed
+  authority built at the top of the active-primitive block; byte-proven by
+  `test/external/test_qk_config.py` (9 tests). Activation gating + forward-pass probe flags
+  stay at their sites by design (runtime-coupled / per-call), documented on the class.
+- **DEV=AMD guard (functional).** `[nn] require DEV=AMD for QK quant primitive paths` makes
+  an explicit `Q4K_PRIMITIVE`/`Q6K_PRIMITIVE`/`QK_GENERATED_POLICY` on a non-AMD backend
+  fail fast with an actionable error instead of an obscure later kernel failure (covered by
+  `test_qk_amd_guard.py`). This is the "main actionable bug" from the flag scan.
+
+Bug-scan disposition (the rest):
+- **Already enforced:** GGUF-path requirement (existing `isinstance(gguf, Tensor)` guard);
+  shared-storage-needs-metadata (shared mode is only reachable inside the `q4k_meta`
+  block, which requires a GGUF path + `gguf_load_with_metadata`).
+- **No change (correct):** `Q4K_FUSE`/`Q4K_VDOT`/`Q6K_DEMOTE_FFNDOWN`/`FLASH_DECODE` stay
+  default-off (probes, not accepted paths).
+- **Deferred (needs sign-off + AMD validation):** make `QK_GENERATED_POLICY_STRICT`
+  default-on, or warn when generated linears are silently skipped under a storage cap.
+  This is a real operational footgun *with caps set*, but: (a) default-strict would turn
+  currently-passing capped runs (e.g. the 32B capped policy) into hard `MemoryError`s, and
+  (b) an under-install warning needs the install functions to return their `skipped`
+  counter (a return-contract change across both installers + 4 call sites). Both are
+  behaviour changes on the AMD decode path, which the no-GPU-test constraint means cannot
+  be validated here. Recommend a dedicated, AMD-validated commit. Operationally, until then:
+  generated-policy runs should set `QK_GENERATED_POLICY_STRICT=1 QK_GENERATED_POLICY_DEBUG=1`
+  when using `QK_PRIMITIVE_MAX_STORAGE_MB`.
+- **Operational note (not a bug):** accepted generated-policy wins (14B/32B especially) are
+  NOT active unless `QK_GENERATED_POLICY=...` is set; the AMD default is explicit primitives.
+  Intentional per `docs/amd-decode-current-verdicts.md`; the most likely reason someone
+  "doesn't see" the expected wins.
