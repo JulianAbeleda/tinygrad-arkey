@@ -182,3 +182,30 @@ the shipped flash-DECODE T=1 kernel). It is the unblocker: without it large ubat
 without large ubatch the matmul fixes (a)(b) don't pay. The full build = (d) flash-prefill-attn + (a) per-layer
 dequant->fp16 + (b) fp16 prefill stream + (c) large ubatch, all together, token-parity gated. This is a
 genuine multi-session PROJECT, not an incremental edit -- and no piece demos a win alone. model.py pristine.
+
+## S2 (2026-06-16): the cap is CHAINED-MATMUL SCHEDULING -- isolation fixes it standalone (3.5-5.7x), but it STILL won't transfer in-model
+Built a clean standalone prefill (realized fp16 weights, fp16 stream, SDPA) to find the achievable ceiling.
+Findings (GPU TF / % of 83.6 peak):
+- A single matmul = 80% (M0), but a CLEAN standalone transformer LAYER (7 matmuls + SDPA) = only 4-5% peak,
+  flat across batch. The cap is NOT Q4_K/fp32/attention/the model.
+- Isolated: 7-matmuls-only = 5% (46ms@T512); SDPA-attn-only = 2.9ms. So **the cap is the MATMUL CHAINING**,
+  not attention.
+- **`.contiguous()` isolation recovers it STANDALONE**: chained 4 big matmuls = 4.9% -> isolated = 17.2%
+  (T512) / 27.2% (T2048). A 3.5-5.7x win from forcing each matmul to be its own tiled kernel.
+- BUT it does NOT transfer in-model. Tried the FULL recipe (PREFILL_EAGER bypassing @function + REALIZE clean
+  fp16 weights + PREFILL_FP16 fp16+isolate + ubatch 256/512), AND on the plain dense path (Q4K_PRIMITIVE=0):
+  ALL = **22-25 tok/s / 0.4 TF / 0.5% peak**. Controlled for @function, weight dtype, activation dtype,
+  per-matmul isolation, batch, primitive-vs-dense, weight realization -- every factor -- and the in-model
+  matmul STILL won't tile like the identical standalone op.
+
+## END STATE (honest): mechanism found, standalone fix found, in-model transfer UNCRACKED by experiment
+The recurring thesis, now at its sharpest: standalone/isolated ops tile (17-80% peak); the same ops inside the
+real forward graph run at 0.5% peak, and NO black-box lever (dtype/realize/isolate/eager/batch) bridges it.
+There is a residual ~30x in-model penalty that experimentation cannot resolve -- it requires DEEP tinygrad
+kernel inspection (DEBUG=6 generated code: why does the in-model matmul kernel differ from the standalone one?
+not-applied TC opt? a fused symbolic-cache op? a layout/contiguity the scheduler picks differently?). That is a
+tinygrad-scheduler-internals investigation, a different kind of work than the e2e experimentation done here.
+Prefill is PARKED with a complete mechanism-level characterization (not a mystery, but not solved). model.py
+pristine throughout. Recommend: either the DEBUG=6 kernel-diff investigation (research-grade, tinygrad
+internals) or accept prefill as a characterized gap. All flag levers + the isolation/eager/realize recipe are
+exhausted.
