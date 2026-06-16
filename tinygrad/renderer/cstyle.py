@@ -323,51 +323,6 @@ class ClangRenderer(CStyleLanguage):
     from tinygrad.runtime.support.compiler_cpu import ClangCompiler
     self.compiler = ClangCompiler(target.arch.split(","))
 
-class OpenCLRenderer(CStyleLanguage):
-  has_aux = True
-
-  # language options
-  kernel_typedef = "__kernel void"
-  buffer_prefix = "__global "
-  smem_align = "__attribute__ ((aligned (16))) "
-  smem_prefix = "__local "
-  barrier = "barrier(CLK_LOCAL_MEM_FENCE);"
-  float4 = "(float4)"
-  code_for_workitem = {"g": lambda x: f"get_group_id({x})", "l": lambda x: f"get_local_id({x})", "i": lambda x: f"get_global_id({x})"}
-  type_map = { dtypes.int8: "char", dtypes.uint8: "uchar", dtypes.uint32: "uint", dtypes.uint16: "ushort", dtypes.uint64: "ulong",
-              dtypes.bfloat16: "ushort" }
-  extra_matcher = create_non_native_float_pats((dtypes.bfloat16,)) + pm_manual_bf16_cast + extra_pm
-
-  string_rewrite = PatternMatcher([
-    (UPat(Ops.BITCAST, name="x"), lambda ctx,x: f"as_{ctx.render_dtype(x.dtype)}(({ctx.render_dtype(x.src[0].dtype)})({ctx[x.src[0]]}))"),
-    # bfloat16 constants need to be rendered as their bit pattern since bf16 is stored as ushort
-    (UPat(Ops.CONST, dtypes.bfloat16, name="x"),
-      lambda ctx,x: f"{(struct.unpack('I', struct.pack('f', float_to_bf16(x.arg)))[0] >> 16)}u"),
-    # load/store image (OpenCL)
-    (UPat.var('buf').index(UPat.var('idx_y'), UPat.var('idx_x')), lambda ctx,buf,idx_y,idx_x: f"IMAGE<{ctx[buf]}, {ctx[idx_y]}, {ctx[idx_x]}>"),
-    (UPat(Ops.LOAD, dtype=dtypes.float, src=(UPat.var('buf').index(UPat.var('idx_y'), UPat.var('idx_x')), UPat.var("var"), UPat.var("gate"))),
-      lambda ctx,buf,idx_y,idx_x,var,gate: f"({ctx[gate]}?read_imagef({ctx[buf]}, smp, (int2)({ctx[idx_x]},{ctx[idx_y]})):{ctx[var]})"),
-    (UPat(Ops.LOAD, dtype=dtypes.float, src=(UPat.var('buf').index(UPat.var('idx_y'), UPat.var('idx_x')),)),
-      lambda ctx,buf,idx_y,idx_x: f"read_imagef({ctx[buf]}, smp, (int2)({ctx[idx_x]},{ctx[idx_y]}))"),
-    (UPat(Ops.STORE, src=(UPat.var('buf').index(UPat.var('idx_y'), UPat.var('idx_x')), UPat.var("var", dtypes.float))),
-      lambda ctx,buf,idx_y,idx_x,var: f"write_imagef({ctx[buf]}, (int2)({ctx[idx_x]},{ctx[idx_y]}), {ctx[var]});"),
-  ]) + base_rewrite
-
-  def render_kernel(self, function_name, kernel, bufs, uops, prefix=None) -> str:
-    if any(uop.dtype.base == dtypes.half for uop in uops): prefix = (["#pragma OPENCL EXTENSION cl_khr_fp16 : enable"] + (prefix or []))
-    return super().render_kernel(function_name, kernel, bufs, uops, prefix)
-
-  def aux(self, uops:list[UOp]):
-    arg_dtypes:list[list[tuple[int, DType]]] = []
-    for i,u in enumerate(u for u in uops if u.op is Ops.PARAM):
-      while len(arg_dtypes) <= u.arg.slot: arg_dtypes.append([])
-      arg_dtypes[u.arg.slot].append((i, u.dtype))
-    return tuple(tuple(a) for a in arg_dtypes),
-
-  def supported_dtypes(self): return {d for d in super().supported_dtypes()
-                                      if (d != dtypes.half or "cl_khr_fp16" in self.target.arch) and
-                                      (d != dtypes.double or "cl_khr_fp64" in self.target.arch) and d not in dtypes.fp8s}
-
 _nms = list("xyzwabcdefghijkl") + [f'v{i}' for i in range(16, 32)]
 
 def fp8_index(dtype: DType): return (dtypes.fp8e4m3, dtypes.fp8e5m2).index(dtype.scalar())
