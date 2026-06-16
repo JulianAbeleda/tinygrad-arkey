@@ -169,24 +169,31 @@ def build_fresh_candidates(repo:pathlib.Path, model_path:pathlib.Path=DEFAULT_MO
 
 # ----- freeze (train on corpus, predict on fresh, before any GPU run) ---------
 
-def freeze_predictions(repo:pathlib.Path, corpus_path:pathlib.Path=DEFAULT_CORPUS,
-                       out:pathlib.Path=DEFAULT_OUT, model_path:pathlib.Path=DEFAULT_MODEL) -> dict[str, Any]:
-  repo = repo.resolve()
+def _freeze(repo:pathlib.Path, corpus_path:pathlib.Path, out:pathlib.Path, fresh:list[dict[str, Any]], *,
+            kind:str, phase:str, note:str, include_excluded_sources:bool) -> dict[str, Any]:
+  """Shared train-on-corpus / predict-on-fresh / freeze-write skeleton.
+
+  The v0 (`freeze_predictions`) and staged (`freeze_staged`) freezes are the same
+  pipeline -- fit the leak-free vectorizer on the corpus, train+predict xgboost on
+  the fresh batch, hash everything, write candidates/predictions/freeze. They
+  differ only in the candidate builder (passed in as `fresh`), the freeze
+  `kind`/`phase`/`note`, and whether the leakage audit lists the documented
+  `excluded_feature_sources`. _xgboost_predictions trains on the corpus (reads
+  labels only from the corpus) and touches the fresh rows only for their id."""
   corpus = _read_jsonl(corpus_path)
-  fresh = build_fresh_candidates(repo, model_path)
   corpus_maps = [extract_feature_map(row) for row in corpus]
   fresh_maps = [extract_feature_map(row) for row in fresh]
   vec = FeatureVectorizer().fit(corpus_maps)
-  x_corpus, x_fresh = vec.transform(corpus_maps), vec.transform(fresh_maps)
-  # _xgboost_predictions trains on the corpus (reads labels only from corpus) and
-  # predicts on the fresh rows, which it touches only for their id.
-  preds, xgb_meta = _xgboost_predictions(corpus, fresh, x_corpus, x_fresh, SEED)
+  preds, xgb_meta = _xgboost_predictions(corpus, fresh, vec.transform(corpus_maps), vec.transform(fresh_maps), SEED)
 
-  forbidden_in_features = [name for name in vec.names if any(tok in name for tok in LEAKAGE_TOKENS)]
+  forbidden = [name for name in vec.names if any(tok in name for tok in LEAKAGE_TOKENS)]
+  leakage_audit:dict[str, Any] = {"forbidden_tokens_in_feature_names": forbidden, "leak_free": not forbidden}
+  if include_excluded_sources:
+    leakage_audit = {"excluded_feature_sources": list(FORBIDDEN_FEATURE_SOURCES), **leakage_audit}
   candidates_bytes, predictions_bytes = _jsonl_bytes(fresh), _jsonl_bytes(preds)
   freeze = {
-    "kind": "qk_flywheel_shadow_v0_freeze",
-    "phase": "Phase 4",
+    "kind": kind,
+    "phase": phase,
     "seed": SEED,
     "corpus_path": str(corpus_path),
     "corpus_rows": len(corpus),
@@ -199,18 +206,24 @@ def freeze_predictions(repo:pathlib.Path, corpus_path:pathlib.Path=DEFAULT_CORPU
     "feature_count": len(vec.names),
     "xgboost_meta": xgb_meta,
     "git_commit_at_freeze": _git_commit(repo),
-    "leakage_audit": {
-      "excluded_feature_sources": list(FORBIDDEN_FEATURE_SOURCES),
-      "forbidden_tokens_in_feature_names": forbidden_in_features,
-      "leak_free": not forbidden_in_features,
-    },
-    "note": "Frozen before any fresh GPU run. Commit this file and predictions.jsonl before producing outcomes.jsonl.",
+    "leakage_audit": leakage_audit,
+    "note": note,
   }
   out.mkdir(parents=True, exist_ok=True)
   out.joinpath("candidates.jsonl").write_bytes(candidates_bytes)
   out.joinpath("predictions.jsonl").write_bytes(predictions_bytes)
   out.joinpath("freeze.json").write_text(json.dumps(freeze, indent=2, sort_keys=True) + "\n")
   return freeze
+
+def freeze_predictions(repo:pathlib.Path, corpus_path:pathlib.Path=DEFAULT_CORPUS,
+                       out:pathlib.Path=DEFAULT_OUT, model_path:pathlib.Path=DEFAULT_MODEL) -> dict[str, Any]:
+  repo = repo.resolve()
+  return _freeze(
+    repo, corpus_path, out, build_fresh_candidates(repo, model_path),
+    kind="qk_flywheel_shadow_v0_freeze", phase="Phase 4",
+    note="Frozen before any fresh GPU run. Commit this file and predictions.jsonl before producing outcomes.jsonl.",
+    include_excluded_sources=True,
+  )
 
 # ----- run the deterministic generators on the fresh batch (GPU) --------------
 
@@ -615,31 +628,12 @@ def _staged_candidate_rows(repo:pathlib.Path, out:pathlib.Path, tensors:tuple[st
 def freeze_staged(repo:pathlib.Path, corpus_path:pathlib.Path=DEFAULT_CORPUS, out:pathlib.Path=STAGED_OUT,
                   tensors:tuple[str, ...]=STAGED_SCHEDULE_TENSORS) -> dict[str, Any]:
   repo = repo.resolve()
-  corpus = _read_jsonl(corpus_path)
-  fresh = _staged_candidate_rows(repo, out, tensors)
-  corpus_maps = [extract_feature_map(row) for row in corpus]
-  fresh_maps = [extract_feature_map(row) for row in fresh]
-  vec = FeatureVectorizer().fit(corpus_maps)
-  preds, xgb_meta = _xgboost_predictions(corpus, fresh, vec.transform(corpus_maps), vec.transform(fresh_maps), SEED)
-  forbidden = [name for name in vec.names if any(tok in name for tok in LEAKAGE_TOKENS)]
-  candidates_bytes, predictions_bytes = _jsonl_bytes(fresh), _jsonl_bytes(preds)
-  freeze = {
-    "kind": "qk_flywheel_shadow_staged_freeze", "phase": "Phase 4.1", "seed": SEED,
-    "corpus_path": str(corpus_path), "corpus_rows": len(corpus), "candidate_rows": len(fresh),
-    "candidate_ids": [row["id"] for row in fresh],
-    "corpus_sha256": _sha256(corpus_path.read_bytes()),
-    "candidates_sha256": _sha256(candidates_bytes), "predictions_sha256": _sha256(predictions_bytes),
-    "feature_vocab_sha256": _sha256(json.dumps(vec.names, sort_keys=True).encode()),
-    "feature_count": len(vec.names), "xgboost_meta": xgb_meta,
-    "git_commit_at_freeze": _git_commit(repo),
-    "leakage_audit": {"forbidden_tokens_in_feature_names": forbidden, "leak_free": not forbidden},
-    "note": "Frozen keep/skip rank scores before any microbench. Each candidate's score gates the expensive microbench.",
-  }
-  out.mkdir(parents=True, exist_ok=True)
-  out.joinpath("candidates.jsonl").write_bytes(candidates_bytes)
-  out.joinpath("predictions.jsonl").write_bytes(predictions_bytes)
-  out.joinpath("freeze.json").write_text(json.dumps(freeze, indent=2, sort_keys=True) + "\n")
-  return freeze
+  return _freeze(
+    repo, corpus_path, out, _staged_candidate_rows(repo, out, tensors),
+    kind="qk_flywheel_shadow_staged_freeze", phase="Phase 4.1",
+    note="Frozen keep/skip rank scores before any microbench. Each candidate's score gates the expensive microbench.",
+    include_excluded_sources=False,
+  )
 
 def run_staged(repo:pathlib.Path, out:pathlib.Path=STAGED_OUT, device:str="AMD") -> None:
   repo = repo.resolve()
