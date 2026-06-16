@@ -2,7 +2,6 @@ import json, pathlib, unittest
 from tempfile import TemporaryDirectory
 
 from extra.llm_adapter_suffix_train import _limit_rows
-from extra.qk_flywheel_protocol_diagnostic import run_diagnostic
 from extra.qk_flywheel_triage_sft import write_dataset
 
 def _example(row_id, split, label, reason, retry=False):
@@ -26,30 +25,6 @@ class TestQKFlywheelPhase3(unittest.TestCase):
     rows = [{"id": "a"}, {"id": "b"}, {"id": "c"}]
     self.assertEqual(_limit_rows(rows, 0, "train"), rows)
     self.assertEqual(_limit_rows(rows, 2, "train"), rows[:2])
-
-  def test_protocol_diagnostic_extracts_wrapped_json_without_changing_strict_score(self):
-    with TemporaryDirectory() as raw_td:
-      td = pathlib.Path(raw_td)
-      examples = [
-        _example("train_reject", "train", "reject", "microbench_regression"),
-        _example("train_accept", "train", "accept", "accepted_runtime_path"),
-        _example("holdout_reject", "holdout", "reject", "microbench_regression"),
-        _example("holdout_accept", "holdout", "accept", "accepted_runtime_path"),
-      ]
-      rollouts = [
-        {"id": "holdout_reject", "text": '<think>\n\n</think>\n\n{"label":"reject","reason":"microbench_regression","retry":false}'},
-        {"id": "holdout_accept", "text": '<think>\n\n</think>\n\n{"label":"accept","reason":"accepted_runtime_path","retry":false}'},
-      ]
-      examples_path = td / "examples.jsonl"
-      rollout_dir = td / "rollout"
-      rollout_dir.mkdir()
-      examples_path.write_text("\n".join(json.dumps(row) for row in examples) + "\n")
-      (rollout_dir / "rollouts.jsonl").write_text("\n".join(json.dumps(row) for row in rollouts) + "\n")
-      summary = run_diagnostic(examples_path, rollout_dir, td / "out")
-      self.assertEqual(summary["axes"]["strict_text"]["parse_ok"], 0)
-      self.assertEqual(summary["axes"]["json_extract"]["parse_ok"], 2)
-      self.assertEqual(summary["axes"]["json_extract"]["schema_ok"], 2)
-      self.assertGreater(summary["methods"]["json_extract"]["macro_f1"], summary["methods"]["strict_text"]["macro_f1"])
 
   def test_triage_sft_export_keeps_holdout_out_of_train_rows(self):
     with TemporaryDirectory() as raw_td:

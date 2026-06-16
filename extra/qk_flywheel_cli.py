@@ -31,7 +31,6 @@ COMMANDS: dict[str, str] = {
   "feature-audit": "extra.qk_flywheel_feature_audit",
   "coverage-plan": "extra.qk_flywheel_coverage_plan",
   "triage-sft": "extra.qk_flywheel_triage_sft",
-  "protocol-diagnostic": "extra.qk_flywheel_protocol_diagnostic",
   "shadow": "extra.qk_flywheel_shadow",
 }
 
