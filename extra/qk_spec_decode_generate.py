@@ -36,19 +36,21 @@ def main():
   verify_jit = TinyJit(lambda toks, spv: target.logits(toks, spv).argmax(-1).cast(dtypes.int32).realize())
 
   def spec_decode(prompt_ids, n_new):
-    # prefill both (eager, one-time, fills caches to L0)
+    # prefill both (eager, one-time, fills caches to L0) -- UNTIMED (prefill is not the decode-speed question)
     for lin in draft._q4k_linears.linears: lin.decode_enabled = False
     target.logits(Tensor([prompt_ids], dtype="int32").contiguous(), 0).realize()
     draft.logits(Tensor([prompt_ids], dtype="int32").contiguous(), 0).realize()
     L = len(prompt_ids); last = int(prompt_ids[-1]); out = []
     passes = 0
+    _t_decode = time.perf_counter()   # time ONLY the decode loop, not the prefill
     while len(out) < n_new:
-      proposed, cur, pos = [], last, L - 1
-      for _ in range(K):                                 # draft propose K (jit'd T=1 decode, greedy)
-        cur = int(draft(Tensor([[cur]], dtype="int32").contiguous(), v_sp.bind(pos), temp0).item()); proposed.append(cur); pos += 1
-      # cache proposed[-1] (it was an output, never an input) so the draft KV is valid through L+K-1 even on
-      # full acceptance; otherwise a full-accept leaves a hole at L+K-1 that corrupts later proposals.
-      draft(Tensor([[proposed[-1]]], dtype="int32").contiguous(), v_sp.bind(pos), temp0).realize()
+      # draft propose K -- feed the DEVICE output token back (out->out), no per-step Tensor creation (that
+      # per-step host creation was the spec 0.15x cause; normal decode is GPU-bound -- runtime accounting).
+      proposed, cur_t, pos = [], Tensor([[last]], dtype="int32").contiguous(), L - 1
+      for _ in range(K):
+        cur_t = draft(cur_t, v_sp.bind(pos), temp0); proposed.append(int(cur_t.item())); pos += 1
+      # cache proposed[-1] (an output, never an input) so the draft KV is valid through L+K-1 on full accept.
+      draft(cur_t, v_sp.bind(pos), temp0).realize()
       tgt = verify_jit(Tensor([[last] + proposed], dtype="int32").contiguous(), v_sp.bind(L - 1))  # [1,K+1] argmax
       tg = [int(tgt[0, i].item()) for i in range(K + 1)]
       n = 0
@@ -58,14 +60,16 @@ def main():
       new = proposed[:n] + [tg[n]]                       # n accepted + 1 bonus/correction
       out += new; L += len(new); last = tg[n]; passes += 1
       if last == getattr(tok, "eos_id", -1): break
-    return out[:n_new], passes
+    return out[:n_new], passes, time.perf_counter() - _t_decode
 
   def baseline_decode(prompt_ids, n_new):
-    out = []
+    # time decode-only: start the clock after the first token (prefill done)
+    out = []; t_start = None
     for t in target.generate(list(prompt_ids), temperature=0.0):
-      out.append(t)
+      if t_start is None: t_start = time.perf_counter()   # prefill produced the first token; time the rest
+      else: out.append(t)
       if len(out) >= n_new or t == getattr(tok, "eos_id", -1): break
-    return out
+    return out, time.perf_counter() - t_start
 
   prompts = [json.loads(l)["text"] for l in pathlib.Path(args.prompts).read_text().splitlines() if l.strip()][:args.num_prompts]
   # warm-up: compile both paths' jits once on the first prompt (discarded) so timed runs are warm, not compile-bound
@@ -76,13 +80,11 @@ def main():
   for pi, ptext in enumerate(prompts):
     ids = (tok.prefix() if hasattr(tok, "prefix") else []) + tok.encode(ptext)
     if len(ids) + args.n_new + K + 2 > MAXC: ids = ids[:MAXC - args.n_new - K - 2]
-    # per-prompt warm-up (prefill shape differs per prompt) then timed run -- for both paths
+    # per-prompt warm-up (prefill shape differs per prompt) then timed DECODE-ONLY run -- for both paths
     target._cached_tokens = []; baseline_decode(ids, 4)
-    target._cached_tokens = []
-    t0 = time.perf_counter(); base = baseline_decode(ids, args.n_new); base_dt = time.perf_counter() - t0
+    target._cached_tokens = []; base, base_dt = baseline_decode(ids, args.n_new)
     target._cached_tokens = []; spec_decode(ids, 4)
-    target._cached_tokens = []
-    t1 = time.perf_counter(); spec, passes = spec_decode(ids, args.n_new); spec_dt = time.perf_counter() - t1
+    target._cached_tokens = []; spec, passes, spec_dt = spec_decode(ids, args.n_new)
     match = spec[:len(base)] == base[:len(spec)]
     all_match = all_match and match
     rows.append({"prompt": pi, "tokens": len(spec), "passes": passes, "accepted_per_pass": round(len(spec) / passes, 2) if passes else 0,
