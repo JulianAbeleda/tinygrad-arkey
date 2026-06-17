@@ -204,7 +204,11 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
   q:[Hq,Hd]  k_full,v_full:[Hkv,MAXC,Hd] (full KV cache buffers, concrete MAXC).
   Tc_b: bound symbolic context length (carries start_pos's value into var_vals, used for the score
         matmul slice).  Tc_u: same length as an UNbound DEFINE_VAR expr (used for the kernel ranges,
-        so no BIND lands in a custom-kernel AST).  Returns [Hq,Hd] (float32)."""
+        so no BIND lands in a custom-kernel AST).  Returns [Hq,Hd] (float32).
+  variant: 'hoisted' (default in model.py, exp computed once/key) or 'v1' (legacy). Unknown -> raise, so a
+           mistyped FLASH_VARIANT can't silently fall back to v1 and lose the shipped ~11-29% decode win."""
+  if variant not in ("v1", "hoisted"):
+    raise ValueError(f"unknown flash variant {variant!r}; expected 'v1' or 'hoisted' (check FLASH_VARIANT)")
 
   G = Hq // Hkv; W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
   scale = 1.0 / (Hd ** 0.5)

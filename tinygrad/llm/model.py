@@ -1124,7 +1124,11 @@ class Transformer:
       if primitive_linears and qk_cfg.demote_targets:  # B3: requant over-provisioned Q6 tensors -> Q4 (searched set)
         primitive_linears = _demote_q6k_to_q4(model, primitive_linears, qk_cfg.demote_targets)
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
-      if primitive_linears and qk_cfg.fuse_q4k: _install_q4k_fusions(model)  # B1 horizontal-fusion probe
+      if primitive_linears and qk_cfg.fuse_q4k:  # B1 horizontal-fusion probe -- REFUTED, experimental only
+        import sys as _sys
+        print("WARNING: Q4K_FUSE is REFUTED (qk-gemv-final-mile-20260617.md): ~-18% decode + prefill fallback "
+              "broken on T>32. Enabled only for experiments; do NOT use for shipped benchmarks.", file=_sys.stderr)
+        _install_q4k_fusions(model)
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())
@@ -1148,9 +1152,8 @@ class Transformer:
     # recompute start_pos from what's currently valid in the caches
     start_pos = self.get_start_pos(tokens)
     if start_pos < len(self._cached_tokens) and (resets := [r for b in self.blk for r in b._state_reset_ops()]): Tensor.realize(*resets)
-    # context-aware flash-decode: SDPA below the searched threshold, flash at/above it (exact, opt-in).
-    # FLASH_DECODE_THRESHOLD=0 (default) -> never flash; ctx_range[0] of the accepted flash policy is the value.
-    flash_threshold = getenv("FLASH_DECODE_THRESHOLD", 0)
+    # flash-decode selection is centralized in should_use_flash_decode (default FLASH_DECODE=auto, threshold
+    # 512): generate passes no use_flash override and lets that single authority decide per captured graph.
     out, prompt_len = None, len(tokens)
     while len(tokens) < self.max_context:
       if PREFILL_V2 and (prompt_len - start_pos) >= PREFILL_UBATCH:
@@ -1161,8 +1164,7 @@ class Transformer:
       else:
         sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
         ntv = nt.val
-        use_flash = bool(flash_threshold) and start_pos >= flash_threshold
-        out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp, use_flash=use_flash).realize()
+        out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp).realize()
       start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
