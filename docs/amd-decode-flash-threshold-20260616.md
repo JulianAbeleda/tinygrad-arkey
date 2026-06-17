@@ -30,14 +30,26 @@ Cross-checks: ctx-8 0.85× ≈ prior 0.84×; ctx-1024 1.24× ≈ prior 1.24×; f
 continuous* generation (the real serving path), not a cold-primed prefill, so the high-ctx speedup is a
 more conservative 1.65× (not 2.4×). The crossover and the decision are robust to this.
 
-## Stage 2 — runtime threshold dispatch (`[nn]`, exact)
+## Stage 2 — runtime threshold dispatch (`[nn]`, exact) — DONE
 
-Make decode adaptive in one run: `FLASH_DECODE_THRESHOLD=<ctx>` → use SDPA while `start_pos < threshold`,
-flash at/above it. Mechanism: thread an explicit `use_flash` flag through `forward`/`logits`/
-`TransformerBlock.__call__`/`_attention` (not env — `getenv` caches), capture a second `rollout_jit_flash`
-decode graph, and dispatch in `generate()` (the only site with the concrete int `start_pos`). Default
-(threshold unset) = today's behavior exactly. Verified byte-identical to a full `FLASH_DECODE=1` run above
-the threshold and to SDPA below it.
+Decode is adaptive in one run: `FLASH_DECODE_THRESHOLD=<ctx>` → SDPA while `start_pos < threshold`, flash
+at/above it. Mechanism (`tinygrad/llm/model.py`): each block reads a per-trace `_use_flash` attribute set
+in `Transformer.__call__` (not env — `getenv` caches); a second `rollout_jit_flash` decode graph bakes the
+flash attention; `_attention` branches on `_use_flash or getenv("FLASH_DECODE")` (the global flag still
+works); `generate()` (the only site with the concrete int `start_pos`) sets `use_flash` per token. Default
+`FLASH_DECODE_THRESHOLD=0` ⇒ today's behavior exactly. Touches only `__init__`/`__call__`/`generate`/the
+`_attention` guard — not `forward`/`logits`/block signatures.
+
+**Verified (AMD):**
+- *Default unchanged:* threshold unset → ~56 tok/s, identical path (jit counts: `rollout_jit=29,
+  rollout_jit_flash=0`).
+- *Dispatch correct:* `FLASH_DECODE_THRESHOLD=10` → `rollout_jit=5, rollout_jit_flash=24` (genuinely
+  switches to the flash graph above the threshold).
+- *Exact:* greedy 60-token continuation is byte-identical between SDPA, flash-global, and the thresholded
+  run. Full suite 243 pass / 56 skip; the flash kernel stays byte-pinned by `test_qk_flash_decode.py`.
+
+Usage: set `FLASH_DECODE_THRESHOLD=384` for mixed-length serving — long-context requests get the flash win,
+short ones pay nothing.
 
 ## Status
 

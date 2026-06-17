@@ -50,6 +50,10 @@ the **lead parity lever** below. The faster-GEMV levers (B1/R1/R3/R4/R5) are out
   400, so **default-off** (5 extra kernels/layer cost ~15% at short ctx) — enable for long-context serving.
   At short context P2 is spent: the residual non-GEMV is diffuse (norms 1.3 ms, sampling 0.85 ms, small sdpa)
   and the win is now **B2 overlap**, not a faster attention kernel.
+  - **Now CONTEXT-AWARE (2026-06-16, `amd-decode-flash-threshold-20260616.md`):** the flag is a searched
+    threshold — `FLASH_DECODE_THRESHOLD=384` uses SDPA below ctx 384 and flash above, so one serving run
+    gets the long-ctx win with **zero short-ctx regression**. 8B crossover searched on the scaffold (Track
+    2 dogfood); exact; default-off. The flash lever is now exhausted for 8B.
 - **B2 — overlap non-GEMV behind the weight stream. ← THE LEAD PARITY LEVER (promoted from "beyond").**
   Today `token = GEMV + non-GEMV` (sequential, ≈ sum). The ~29% non-GEMV (attention/norms/lm_head) can be
   pipelined to run *while* the next layer's weights stream from HBM → `token = max(GEMV, non-GEMV)` not sum.
