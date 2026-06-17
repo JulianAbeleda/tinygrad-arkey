@@ -2163,3 +2163,19 @@ fix `_prefill_v2_opts(out,in)`. (3) isolated single-matmul/-chain benches are **
 (~20ms of 30ms wall; GPU ~9.7ms) -> the WARM full forward (JIT replay amortizes host overhead) is the truth
 (cf. [[amd-decode-measurement-confounds]]). **Open:** fp16 quality gate (lossy; greedy-identical is cheap
 signal only), VRAM-frugal realize for >8B, **Increment 2 = flash-PREFILL attention** (O(T^2) SDPA still rides).
+
+## 2026-06-17 (prefill v2 — hardening + QUALITY GATE PASSED)
+After Increment 1, two follow-ups landed (all pushed, suite **250 pass / 56 skip**):
+**(A) Post-audit hardening** (codex review): reject `PREFILL_UBATCH != 512` (`_prefill_v2_validate_ubatch`;
+schedule only measured at 512); **VRAM preflight** in `realize_prefill_v2_weights` (8B est=13.9GB; raise over
+`PREFILL_V2_MAX_REALIZE_GB`=18 unless `PREFILL_V2_FORCE_REALIZE=1` -> 14B/32B fail fast not OOM-late);
+**contained the warmstart global** -> built onto `self._pf16_warmstart`, installed into `pr._WARMSTART_OPTS`
+ONLY around the prefill-v2 forward (`__call__` try/finally; None at load & after); measure-harness model path
+via argv/`QK_MODEL`/`MODEL`. Tests for non-512 reject + realize-bytes estimator.
+**(B) QUALITY GATE PASSED** (`extra/qk_prefill_v2_nll_eval.py`): teacher-forced PREFILL-path dNLL over real
+text, PREFILL_V2 OFF (fp32-activation ref) vs ON. Qwen3-8B, 2 windows / **1022 tokens**, eps=0.01 -> **mean
+dNLL -0.00073 / max -0.00030 = ACCEPT** (~0, within noise; fp16 prefill doesn't degrade logits). Artifact
+`bench/qk-prefill-v2-nll/result.json` (force-added, byte-locked by `test_qk_prefill_v2.py`). **Status: the
+~13x prefill-v2 win is now opt-in + 8B-quality-validated.** NEXT (only after re-gating per model if broadened):
+**Increment 2 = flash-PREFILL attention** (O(T^2) SDPA still rides); VRAM-frugal realize for >8B; default-on
+is a separate decision (still opt-in for now).

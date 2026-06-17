@@ -56,10 +56,26 @@ Encoded the assumptions the first cut left implicit (codex audit):
 - Measure harness takes the model path via argv / `QK_MODEL` / `MODEL` (no hardcoded host path).
 - Tests added for non-512 rejection + the realize-bytes estimator (suite **249 pass / 56 skip**).
 
+## Quality gate — PASSED (2026-06-17)
+
+fp16 prefill is lossy, so greedy byte-identical is necessary-but-not-sufficient. The real gate is a
+teacher-forced **prefill-path dNLL** over real text (`extra/qk_prefill_v2_nll_eval.py`): prefill a ≥512-token
+window once and accumulate `-log p(true_next | prefill_logits)` with PREFILL_V2 OFF (fp32-activation
+reference) vs ON. Qwen3-8B, 2 windows / **1022 tokens scored**, ε=0.01:
+
+| window | baseline NLL | v2 NLL | dNLL |
+|---|---:|---:|---:|
+| [0:512] | 2.58238 | 2.58208 | **−0.00030** |
+| [256:768] | 2.78593 | 2.78476 | **−0.00117** |
+| **mean / max** | | | **−0.00073 / −0.00030** |
+
+**Verdict: ACCEPT** — dNLL is ~0 (even slightly negative, i.e. within noise), ~14× under the budget. fp16
+prefill does **not** degrade the logits it produces. Artifact: `bench/qk-prefill-v2-nll/result.json`
+(byte-locked by `test/external/test_qk_prefill_v2.py`). Re-run on other models before recommending them.
+
 ## Honest caveats / next
 
-- **fp16 is lossy** vs fp32 → a greedy/ppl **quality gate** is still owed (greedy byte-identical here is the
-  cheap signal, not proof). 
+- Quality validated on **8B**; re-run the gate per model before broadening (it's cheap). 
 - **VRAM**: 8B-only as shipped; larger models need a frugal realization scheme.
 - E2E "time to first token" is **JIT-compile-dominated** (~28 s capture, paid once per shape); the 13x is the
   warm throughput that matters for long prompts.
