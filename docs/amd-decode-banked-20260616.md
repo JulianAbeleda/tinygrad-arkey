@@ -1,5 +1,9 @@
 # AMD decode — BANKED (2026-06-16)
 
+> **NEWER WORK BANKED in `qk-8b-decode-banked-20260617.md`** — flash-threshold 512 ship (+12.8% ctx512),
+> PREFILL_V2, 2nd compute ring, and the post-06-16 refutations (GEMV final-mile, spec-decode, runtime-overhead).
+> Read this file for the core decode bank; read 06-17 for current state + the deep-codegen entry.
+
 Single-entry closeout for the decode-optimization arc. The decode result is **banked**: it is a
 strong, exact, fully-documented win, and the remaining levers are mapped + honestly gated. Future
 work should start here.
