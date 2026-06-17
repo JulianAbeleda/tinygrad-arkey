@@ -1,0 +1,97 @@
+{
+  "model_id": "Qwen3-8B-Q4_K_M",
+  "ctx": 512,
+  "kv_len": 513,
+  "T": 1,
+  "Hq": 32,
+  "Hkv": 8,
+  "Hd": 128,
+  "flash_decode_at_ctx512": false,
+  "path": "SDPA",
+  "total_kernels": 780,
+  "total_us_proxy": 47593.0,
+  "gemv_us": 24648.9,
+  "gemv_pct": 51.8,
+  "attention_kernels": 234,
+  "attention_per_layer": 6.5,
+  "attention_us": 12241.3,
+  "attention_pct": 25.7,
+  "per_layer_attention_sequence": [
+    {
+      "name": "r_2_513_8_4_4_16",
+      "count": 36,
+      "per_layer": 1.0,
+      "total_us": 533.4,
+      "mean_us": 14.82,
+      "role": "softmax max/sum (reduce over KV=513)"
+    },
+    {
+      "name": "r_8_4_513",
+      "count": 36,
+      "per_layer": 1.0,
+      "total_us": 2579.5,
+      "mean_us": 71.65,
+      "role": "softmax max/sum (reduce over KV=513)"
+    },
+    {
+      "name": "r_8_4_513n1",
+      "count": 36,
+      "per_layer": 1.0,
+      "total_us": 3151.8,
+      "mean_us": 87.55,
+      "role": "softmax max/sum (reduce over KV=513)"
+    },
+    {
+      "name": "r_4_2_8_16_4_513",
+      "count": 36,
+      "per_layer": 1.0,
+      "total_us": 3793.0,
+      "mean_us": 105.36,
+      "role": "softmax max/sum (reduce over KV=513)"
+    },
+    {
+      "name": "E_128_32_3",
+      "count": 36,
+      "per_layer": 1.0,
+      "total_us": 243.6,
+      "mean_us": 6.77,
+      "role": "attn out reshape/cast (Hd)"
+    },
+    {
+      "name": "E_128_32_3n1",
+      "count": 36,
+      "per_layer": 1.0,
+      "total_us": 227.9,
+      "mean_us": 6.33,
+      "role": "attn out reshape/cast (Hd)"
+    },
+    {
+      "name": "r_2_8_128_16_4_2_32",
+      "count": 18,
+      "per_layer": 0.5,
+      "total_us": 1712.1,
+      "mean_us": 95.12,
+      "role": "qk_scores (reduce over Hd=128)"
+    }
+  ],
+  "by_role": {
+    "softmax max/sum (reduce over KV=513)": {
+      "kernels": 144,
+      "per_layer": 4.0,
+      "us": 10057.7,
+      "pct": 21.1
+    },
+    "qk_scores (reduce over Hd=128)": {
+      "kernels": 18,
+      "per_layer": 0.5,
+      "us": 1712.1,
+      "pct": 3.6
+    },
+    "attn out reshape/cast (Hd)": {
+      "kernels": 72,
+      "per_layer": 2.0,
+      "us": 471.5,
+      "pct": 1.0
+    }
+  }
+}
