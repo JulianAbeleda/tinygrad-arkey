@@ -81,34 +81,19 @@ class TestFlashPrefillCustomKernel(unittest.TestCase):
     self.assertTrue(any(n.startswith("fp_maxpartial") for n in _program_names(jf)),
                     f"fused kernel not captured as Ops.PROGRAM: {_program_names(jf)}")
 
-_P3_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "qk-flash-prefill-phase3" / "result.json"
+_P5_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "qk-flash-prefill-phase5" / "result.json"
 
-class TestFlashPrefillPhase3Artifact(unittest.TestCase):
-  """Lock the Phase-3 single-head real-dim gate result (extra/qk_flash_prefill_phase3.py). Skip-if-absent; the
-  slow warm-timing benchmark stays out of the suite (run the script to regenerate)."""
-  def test_real_dim_gate(self):
-    if not _P3_ARTIFACT.exists(): self.skipTest(f"no artifact at {_P3_ARTIFACT}")
-    d = json.loads(_P3_ARTIFACT.read_text())
-    self.assertTrue(d["correctness_ok"], "Phase-3 correctness regressed")
-    self.assertTrue(d["capture"]["score_free"], "Phase-3 lost score-free property")
-    self.assertTrue(d["capture"]["jit_replayed"], "Phase-3 JIT replay regressed")
-    long = next(r for r in d["rows"] if r["KV"] == max(r2["KV"] for r2 in d["rows"]))
-    self.assertGreaterEqual(long["speedup"], 1.5, f"KV={long['KV']} single-head speedup below the 1.5x gate")
-
-_P4_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "qk-flash-prefill-phase4" / "result.json"
-
-class TestFlashPrefillPhase4Artifact(unittest.TestCase):
-  """Lock the Phase-4 GQA multi-head gate (extra/qk_flash_prefill_phase4.py). Skip-if-absent; the slow,
-  subprocess-isolated benchmark stays out of the suite."""
-  def test_gqa_gate(self):
-    if not _P4_ARTIFACT.exists(): self.skipTest(f"no artifact at {_P4_ARTIFACT}")
-    d = json.loads(_P4_ARTIFACT.read_text())
-    self.assertTrue(d["correctness_ok"], "Phase-4 correctness regressed")
-    ok = [r for r in d["rows"] if not r.get("faulted")]
-    long = next(r for r in ok if r["KV"] == max(r2["KV"] for r2 in ok))
-    self.assertTrue(long["score_free"] and long["jit_replayed"], "Phase-4 lost score-free/replay")
-    self.assertEqual(long["n_programs"], 2, "Phase-4 should be 2 programs (head dim inside the kernel)")
-    self.assertGreaterEqual(long["speedup"], 2.0, f"KV={long['KV']} GQA speedup below the 2x gate")
+class TestFlashPrefillPhase5Honest(unittest.TestCase):
+  """Lock the HONEST (DEBUG=2 GPU-time) perf verdict. NOTE: the Phase-3/4 wall-clock 'speedups' were
+  measurement artifacts (host dispatch, not GPU exec) and are SUPERSEDED -- see
+  docs/amd-decode-prefill-v2-increment2-phase5-correction-20260617.md. Honest GPU time shows flash is far
+  SLOWER than SDPA (score-free without LDS reuse is memory-bound). Skip-if-absent."""
+  def test_flash_is_slower_refuted(self):
+    if not _P5_ARTIFACT.exists(): self.skipTest(f"no artifact at {_P5_ARTIFACT}")
+    d = json.loads(_P5_ARTIFACT.read_text())
+    self.assertTrue(d["verdict"].startswith("REFUTED"))
+    for r in [r for r in d["rows"] if r.get("complete")]:
+      self.assertGreater(r["slowdown_x"], 1.0, f"{r['kind']} KV={r['KV']}: honest GPU time should show flash slower")
 
 if __name__ == "__main__":
   unittest.main()
