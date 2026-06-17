@@ -2179,3 +2179,18 @@ dNLL -0.00073 / max -0.00030 = ACCEPT** (~0, within noise; fp16 prefill doesn't 
 ~13x prefill-v2 win is now opt-in + 8B-quality-validated.** NEXT (only after re-gating per model if broadened):
 **Increment 2 = flash-PREFILL attention** (O(T^2) SDPA still rides); VRAM-frugal realize for >8B; default-on
 is a separate decision (still opt-in for now).
+
+## 2026-06-17 (prefill v2 — Increment 2 flash-attention: GATED/banked)
+Doc `docs/amd-decode-prefill-v2-increment2-20260617.md`. After Inc1, attention is the next prefill bottleneck
+(8B warm forward: 241ms@sp0 -> 1202ms@sp3072, attention ~51% at sp3072; SDPA materializes full [T,KV] scores
+~4% peak, symbolic KV blocks the FFN's concrete-TC lever). **Stage-0 gate `extra/qk_flash_prefill_gate.py`
+REFUTED the tractable approaches:** KV-tiled online-softmax in tinygrad ops is EXACT (err<=0.004) but
+0.15-0.52x (SLOWER -- online-softmax state spills to HBM per tile + GQA repeat_interleave); fp16-materialized
+== SDPA (1.0x). The flash win needs register/LDS-resident state = a custom FUSED HIP kernel; blocked by (1)
+linearizer rejects nesting q.k reduce in softmax reduce (UOp path would materialize=no win, same reason
+flash-DECODE precomputes scores), (2) raw-HIP doesn't bridge into the model JIT. Same wall-class as the decode
+overlap lever -> **GATED, not abandoned** (gate harness = re-fire test; artifact bench/qk-flash-prefill-gate/).
+**User chose: bank Inc2 gated, STOP prefill speed work.** RESTING POINT: decode banked ~64 tok/s + prefill v2
+Inc1 ~13x (short/medium prompts, quality-gated, opt-in). Inc1's win unaffected (attention only dominates sp>=1500).
+Cheaper open levers (not pursued): VRAM-frugal realize for 14B/32B (`PREFILL_V2` unlock); broaden quality gate;
+lm_head-last-token-only prefill (verify tinygrad doesn't already prune the all-T logits). Suite 250 pass/56 skip.

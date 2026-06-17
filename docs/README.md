@@ -20,8 +20,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 - **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486
   tok/s, ~83% of llama) via concrete-ubatch + fp16 + realized-weights + warmstart-TC, gated `PREFILL_V2`,
-  decode untouched. Corrects the gate's premise (lazy weights → realize/VRAM; per-shape opts; host-overhead
-  confound). Gate: `amd-decode-prefill-v2-gate-20260616.md`. Open: fp16 quality gate, VRAM for >8B, flash-prefill.
+  decode untouched. Quality gate PASSED (dNLL ~0, 8B). Corrects the Stage-0 gate's premise (lazy weights →
+  realize/VRAM; per-shape opts; host-overhead confound). Gate: `amd-decode-prefill-v2-gate-20260616.md`.
+- **`amd-decode-prefill-v2-increment2-20260617.md`** — **flash-prefill attention: GATED (banked)**. Attention
+  is the next prefill bottleneck at long ctx (~51% @ sp=3072) but the tractable approaches are refuted
+  (`extra/qk_flash_prefill_gate.py`: tiled-ops 0.15-0.52×, fp16-mat a wash); the real lever needs a custom
+  fused HIP kernel + linearizer/JIT-bridge surgery (same wall-class as the overlap lever). Inc1's short-prompt
+  13× is unaffected. Open (cheaper): VRAM-frugal realize for >8B; lm_head-last-token prefill.
 - `amd-decode-prefill-plan.md` — the original prefill diagnosis (~2% of llama; LDS cache-blocking). Superseded
   as the active plan by prefill v2 above, but still the canonical root-cause reference.
 - Phase-2 decode docs (2026-06-16): `amd-decode-sequential-tax-profile`, `…-overlap-feasibility-spike`,
