@@ -114,6 +114,35 @@ def chained_ffn(N, per_shape_opts) -> dict:
   return {"apply": st["apply"], "error": st["error"], "tflops": round(tf, 2),
           "pct_peak": round(100 * tf / PEAK_TF, 1)}
 
+def chained_ffn_function(N, per_shape_opts) -> dict:
+  """Transfer check: the real prefill block wraps the chain in `@function(precompile=True)`. Re-run the
+  isolated+warmstart FFN chain INSIDE @function (weights implicit, like the block) -- if it still recovers,
+  the @function wrapper doesn't defeat warmstart and the model.py wiring is safe."""
+  import tinygrad.codegen.opt.postrange as pr
+  from tinygrad import Tensor, dtypes, GlobalCounters, function
+  import time
+  H, FF = 4096, 12288
+  pr._WARMSTART_OPTS = {(frozenset({M, N}), K): tuple(o) for (M, K), o in per_shape_opts.items()}
+  pr._warmstart_stats = {"match": 0, "apply": 0, "error": 0}
+  x  = Tensor.randn(N, H, dtype=dtypes.float16, device="AMD").realize()
+  Wg = Tensor.randn(FF, H, dtype=dtypes.float16, device="AMD").realize()
+  Wu = Tensor.randn(FF, H, dtype=dtypes.float16, device="AMD").realize()
+  Wd = Tensor.randn(H, FF, dtype=dtypes.float16, device="AMD").realize()
+  @function(precompile=True, allow_implicit=True)   # mimic FFNBlock._run
+  def ffn_fn(x:Tensor) -> Tensor:
+    g = (x @ Wg.T).contiguous(); u = (x @ Wu.T).contiguous()
+    h = (g.silu() * u).contiguous(); return (h @ Wd.T).contiguous()
+  ffn_fn(x).realize()
+  ts = []
+  for _ in range(5):
+    GlobalCounters.reset(); t0 = time.perf_counter(); ffn_fn(x).realize(); ts.append(time.perf_counter() - t0)
+  pr._WARMSTART_OPTS = None
+  t = min(ts); flops = 2 * N * (FF*H + FF*H + H*FF)
+  tf = flops / t / 1e12 if t > 0 else 0.0
+  st = pr._warmstart_stats
+  return {"apply": st["apply"], "error": st["error"], "tflops": round(tf, 2),
+          "pct_peak": round(100 * tf / PEAK_TF, 1)}
+
 def main():
   out = {"peak_tf": PEAK_TF, "shapes": []}
   per_shape_opts = {}
@@ -129,6 +158,10 @@ def main():
   out["chained_ffn_512"] = chain
   print(f"CHAINED FFN (concrete 512, isolated, warmstart): apply={chain['apply']} error={chain['error']} "
         f"-> {chain['pct_peak']}% peak (vs ~5% fused-collapse, ~1.3% in-model today)", file=sys.__stdout__)
+  chain_fn = chained_ffn_function(512, per_shape_opts)
+  out["chained_ffn_function_512"] = chain_fn
+  print(f"CHAINED FFN inside @function(precompile) (transfer check): apply={chain_fn['apply']} "
+        f"error={chain_fn['error']} -> {chain_fn['pct_peak']}% peak", file=sys.__stdout__)
   # gate: per-matmul recovers (>=17% on >=1 FFN shape) AND the isolated chain does NOT collapse (>=15%)
   per_ok = any(r["warmstart_concrete"].get("apply", 0) > 0 and r["warmstart_concrete"].get("error", 1) == 0
                and (r["warmstart_concrete"].get("pct_peak") or 0) >= 17 for r in out["shapes"])

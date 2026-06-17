@@ -34,11 +34,16 @@ Q4_K→fp16 realized per-layer (`matmul_decoded`), **(b)** fp16 residual stream,
 `_WARMSTART_OPTS` with the loop-found per-shape opts (gate emits them), **(e)** flash-style prefill attention
 for O(T²). Target ~7–10× (→ ~15–25% of llama).
 
+### @function transfer check — PASS
+The real prefill block wraps the chain in `@function(precompile=True)`. Re-running the isolated+warmstart
+FFN chain INSIDE `@function` (weights implicit, like `FFNBlock._run`) holds **37.2% peak** (`apply=2,
+error=0`) vs 38.0% plain — the wrapper does **not** defeat the recovery. So the model.py wiring (concrete
+ubatch + fp16 + `.contiguous()` isolation + warmstart) should preserve it. (Increment-1 build: do the same
+in-model with the real Q4_K→fp16 dequant + attention.)
+
 ### Honest caveats
-- The microbench uses **isolated `Tensor` ops with `.contiguous()`, NOT the in-model `@function(precompile)`
-  block**. It proves the *scheduling* is recoverable; Stage 1 must verify the warmstart applies through the
-  prefill forward (likely by un-fusing the prefill `@function` so each matmul is a separate kernel — the
-  microbench's isolation).
+- The microbench uses **pre-realized fp16 weights**, not the real **Q4_K→fp16 dequant** (`matmul_decoded`) —
+  the dequant pass is still untested in-model (Increment 1).
 - 37.5% peak ≈ 63% of llama's *matmul*; e2e prefill tok/s also pays attention (O(T²) → flash) + the fp16
   dequant pass + activation/norm overhead, so e2e will land below the matmul ratio.
 - fp16 prefill is lossy vs fp32 → quality-gate (greedy/ppl) in Stage 1.
