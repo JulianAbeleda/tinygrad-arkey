@@ -29,6 +29,15 @@ weight-read (~18.2 ms for the T=K+1 prefill). Per pass = K·7.3 + 18.2 ms → sp
 (K·7.3+18.2). **Optimal K=2 → ~1.32×.** Higher K accepts more but the sequential draft cost dominates (K=8 →
 ~1.05×).
 
+## UPDATE — 0.6B draft fetched, gate PASSES both criteria (the integrate trigger)
+
+Per the engineering sequence (get 0.6B → re-run exact gate → integrate iff accepted/pass >2 AND draft >200
+tok/s): downloaded `Qwen3-0.6B-Q8_0.gguf` (tokenizer verified compatible). **Draft 273 tok/s (>200 ✓).**
+Re-ran the exact K=4 gate (same 16 prompts): **accepted/pass = 2.844 (>2 ✓)**, every prompt ≥1.6, per-pos
+69/52/36/28%. Refined speed model (draft 3.66 ms/step, target+verify 18.2 ms): optimal K≈3 → **~1.60×** (K2
+1.58, K4 1.58) — vs the 1.7B's ~1.3×. The smaller draft trades a little acceptance (2.84 vs 3.26) for 2× the
+speed → net better. **BOTH gate criteria met → INTEGRATE (with the 0.6B draft, not 1.7B).**
+
 ## 5. Verdict
 - **Acceptance gate: PASSES excellent** (3.26 @K4 ≫ 2.0). Acceptance is NOT the bottleneck.
 - **Speed: bucket B (marginal), ~1.3×** with the 1.7B draft — it's only 2.5× faster than the 8B target, so K
