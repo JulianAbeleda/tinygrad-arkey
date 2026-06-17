@@ -9,10 +9,13 @@ import numpy as np
 from tinygrad import Tensor, TinyJit, dtypes, Device
 from tinygrad.helpers import JIT
 from tinygrad.uop.ops import UOp, KernelInfo, Ops
+from tinygrad.uop.ops import AxisType
+from tinygrad.dtype import AddrSpace
 from extra.amd_warp_reduce import warp_shfl_xor, warp_reduce_max, warp_reduce_sum, WARP
 
 _DEV_OK = Device.DEFAULT == "AMD"
 NB = 8
+_LOG2E = 1.4426950408889634
 
 def _kernel(name, body):
   def k(y:UOp, x:UOp) -> UOp:
@@ -65,6 +68,39 @@ class TestAMDWarpReduce(unittest.TestCase):
     names = [u.src[0].arg.name for u in jf.captured.linear.toposort()
              if u.op is Ops.CALL and len(u.src) and u.src[0].op is Ops.PROGRAM]
     self.assertTrue(any(n.startswith("wmax_j") for n in names), f"warp-reduce kernel not captured: {names}")
+
+def _softmax_row_kernel(NTILES):
+  # WR3: online-softmax row STATE (max m + denominator l) over a row of NTILES*WARP scores, register-resident,
+  # using the warp reductions. TWO-PASS (max-reduce, then sum-reduce-using-max): each is a single-accumulator
+  # reduce. The single-pass ONLINE recurrence (coupled m/l in one group store) hits a store-ordering hazard --
+  # m is overwritten before alpha=exp(m_old-m_new) reads it, so alpha collapses to 1 (verified). Two-pass is
+  # the shape-safe equivalent (same lesson as Attempt A: sequential single-accumulator beats coupled).
+  def k(OM:UOp, OL:UOp, S:UOp) -> UOp:
+    gid = UOp.special(NB, "gidx0"); lane = UOp.special(WARP, "lidx0"); Sg = S.reshape(NB, NTILES, WARP)[gid]
+    m = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG); m = m.after(m[0].store(-1e30))
+    nt1 = UOp.range(NTILES, 0, AxisType.REDUCE)
+    mt = warp_reduce_max(Sg[nt1, lane].cast(dtypes.float32), lane)
+    m = m.after(m[0].store(m.after(nt1)[0].maximum(mt)).end(nt1)); mg = m[0]
+    l = UOp.placeholder((1,), dtypes.float32, 21, addrspace=AddrSpace.REG); l = l.after(l[0].store(0.0))
+    nt2 = UOp.range(NTILES, 1, AxisType.REDUCE)
+    p = ((Sg[nt2, lane].cast(dtypes.float32) - mg) * _LOG2E).exp2(); lt = warp_reduce_sum(p, lane)
+    l = l.after(l[0].store(l.after(nt2)[0] + lt).end(nt2))
+    return UOp.group(OM.reshape(NB)[gid].store(mg), OL.reshape(NB)[gid].store(l[0])).sink(
+      arg=KernelInfo(name=f"osm_{NTILES}", opts_to_apply=()))
+  return k
+
+@unittest.skipUnless(_DEV_OK, "WR3 online-softmax row is AMD (wave32) gated")
+class TestWR3OnlineSoftmaxRow(unittest.TestCase):
+  def test_softmax_row_state(self):
+    NTILES = 4; KV = NTILES * WARP
+    Snp = (np.random.default_rng(1).standard_normal((NB, KV)) * 1.5).astype(np.float32)
+    S = Tensor(Snp).realize()
+    res = Tensor.empty(NB, dtype=dtypes.float32).custom_kernel(
+      Tensor.empty(NB, dtype=dtypes.float32), S, fxn=_softmax_row_kernel(NTILES))
+    om = res[0].realize().numpy(); ol = res[1].realize().numpy()
+    ref_m = Snp.max(1); ref_l = np.exp(Snp - ref_m[:, None]).sum(1)
+    self.assertTrue(np.allclose(om, ref_m), "row max wrong")
+    self.assertTrue(np.allclose(ol, ref_l, rtol=1e-4), "softmax denominator wrong")
 
 if __name__ == "__main__":
   unittest.main()
