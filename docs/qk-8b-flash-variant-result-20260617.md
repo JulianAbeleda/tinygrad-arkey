@@ -12,15 +12,20 @@ shipped the winner as the default.
 > could never reach. The win is a new, faster member of the primitive family — not a different dispatch of the
 > old one.
 
-> **Hardware (read before quoting any absolute number):**
-> - This host is an **RX 7900 GRE [XFX]** (`rocm-smi`), **NOT the RX 7900 XTX** that every campaign doc/memory
->   assumes. Same Navi 31 / gfx1100 arch, but the GRE is cut down (~80 CU, 256-bit bus vs XTX 96 CU / 384-bit).
-> - **Do NOT compare the absolute tok/s here against the old XTX `llama.cpp ≈ 101–106 tok/s` numbers.** Those
->   were measured on a different (faster) card; any "% of llama" claim is invalid until llama is re-measured on
->   THIS host.
-> - **Relative before/after on the same host IS valid** — both sides of every table below ran on this GRE, and
->   the kernel anatomy / linearizer behavior is hardware-independent. The result stands; only the
->   absolute-baseline comparison is deferred.
+> **Hardware caveat (resolved 2026-06-17):** ROCm product string misreported the card as GRE; 24GB VRAM
+> confirms RX 7900 XTX. Benchmarks are XTX, but compare only within the same harness/config. Provenance:
+>
+> | check | value | verdict |
+> |---|---|---|
+> | `rocminfo` Marketing Name | `AMD Radeon RX 7900 XTX` | XTX (from amdgpu driver, authoritative) |
+> | VRAM total | 25,753,026,560 B = **23.98 GiB ≈ 24 GB** | **XTX (24 GB); GRE is 16 GB** — decisive |
+> | tinygrad device / arch | single AMD device, `gfx1100`, PCI `0000:08:00.0` | — |
+> | visibility env | `HIP_/ROCR_/CUDA_VISIBLE_DEVICES` all unset, 1 GPU | no wrong-device selection |
+> | `rocm-smi` Card model | `RX 7900 GRE [XFX]` | **MISIDENTIFIED** — XTX/XT/GRE share Navi 31 dev-id `0x744c`; rocm-smi's SKU lookup misread it |
+>
+> So absolute "% of llama" comparisons on this host are valid. (The default-path tok/s below — e.g. ctx512 ≈ 43 —
+> are not "low for an XTX": they are at long context. The campaign's ~64 tok/s figure is short-ctx (~ctx8);
+> decode decays ~3.4× by ctx4096, and ctx512 ≈ 38–39 is the established XTX baseline, which matches `v1` here.)
 
 ## Verdict: SHIPPED — exact, monotone, grows with KV
 

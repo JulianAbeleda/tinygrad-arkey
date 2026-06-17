@@ -44,8 +44,10 @@ bounded win" was **premature**. A primitive-family search of the (already-shippe
 **structural waste *inside* it** — `flash_partial` recomputed a `d`-independent `exp` 129× per output lane — and
 removing it won +11.5%/+15.7%/+21.1%/+29.2% @ctx 512/1024/2048/4096, byte-identical greedy. Corrected
 conclusion: **bounded primitive search can still find structural waste inside existing kernels; audit the
-dominant kernel's per-lane redundancy before declaring a path exhausted.** (Also: this host is an RX 7900 GRE,
-not the XTX the absolute numbers above assume — see `qk-8b-flash-variant-result-20260617.md`.)
+dominant kernel's per-lane redundancy before declaring a path exhausted.** (Hardware provenance confirmed
+2026-06-17: this host IS an RX 7900 XTX — `rocminfo` marketing name + 24 GB VRAM; `rocm-smi`'s "GRE" Card-model
+string is a misidentification. The XTX baseline applies; an earlier GRE note was wrong. See
+`qk-8b-flash-variant-result-20260617.md`.)
 
 ## Next: deep codegen (the only remaining 8B decode lever)
 
