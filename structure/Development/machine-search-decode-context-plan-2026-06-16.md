@@ -6,6 +6,19 @@ Purpose: record the current performance state and the recommended path for a
 principled machine-search layer. This is a handoff for later implementation,
 not an active runtime contract.
 
+> **Execution status (2026-06-16) — see `docs/amd-decode-banked-20260616.md`.**
+> - **Scaffold built** (`extra/qk_search_spec.py` + tests): the schema authority (rows, constraints,
+>   accepted-policy records) this plan prescribes. ✅
+> - **Track 1 (decode sequential tax): investigated → overlap GATED.** Profiled (72% GEMV / 28% non-GEMV,
+>   single-queue sum); overlap is reclaimable (~+30%, HBM ~58% idle) but tinygrad's AMD backend has one
+>   compute ring, so it needs a `[runtime]` 2nd-ring build first (`docs/amd-decode-two-queue-probe-...`).
+>   Norm-fusion refuted.
+> - **B3 (per-tensor bit-width) DONE** as the first real search run (`extra/qk_demote_search.py` on the
+>   scaffold): the quality-gated demotion search mapped the frontier and the gate rejected lm_head on
+>   quality; in-pattern lever tapped at ~64 tok/s (`docs/amd-decode-demotion-search-...`).
+> - **Track 2 (flash policy) / Track 3 (prefill LDS)**: not started. Decode is **banked**; these + the two
+>   gated builds (overlap 2nd-ring, sub-4-bit kernel) are the open frontiers.
+
 ## Current Performance State
 
 Decode is no longer blocked primarily by the standalone Q4_K GEMV kernel.

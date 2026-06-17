@@ -2035,3 +2035,75 @@ RESIDUAL RISKS (bounded by the `Q4K_PRIMITIVE=0` escape): MLA/MoE/SSM arches unt
 Qwen3 here) — install is per-tensor so it should skip-to-dense, but unverified; load now always goes through
 `gguf_load_with_metadata` (minor). NOT changed: Q6K_DEMOTE (lossy, opt-in), FLASH_DECODE (off), generated
 policies (still never a default). Commit `[nn]`.
+
+## 2026-06-16 (Phase 2 + BANK) — decode BANKED at ~64 tok/s; machine-search system shipped; overlap+sub-4-bit gated
+Single-entry closeout: `docs/amd-decode-banked-20260616.md`. Decode is **banked** — a strong, exact,
+documented win; remaining levers mapped + honestly gated. Suite **237 pass / 56 skip**. All pushed to
+`origin/master`. Memory `amd-decode-next-step` updated to the banked state.
+
+**Machine-search scaffold (Phase 1 of `structure/Development/machine-search-decode-context-plan-2026-06-16.md`).**
+`extra/qk_search_spec.py` — the schema authority: typed enums (`Phase`/`Model`/`OpScope`/`SearchSpace`/
+`Objective`), frozen validated dataclasses (`Constraints`/`SearchRow`/`AcceptedPolicy`), `assemble_search_row`
+SSOT, a read-only adapter from the existing `qk_generated_policy` artifacts, and `baseline()` single-sourcing
+`LLAMA_REFS`/model-bytes. All IO via `llm_eval_common`. `test/external/test_qk_search_spec.py` (22 tests).
+Found + recorded a cross-module baseline disagreement (`LLAMA_REFS` 101.2 vs docs 105.7; roofline peak 960 vs
+859) — imported, not re-typed; reconciliation deferred. Commit `[test]`.
+
+**Suite hygiene (the prune broke self-containment).** The hard-fork prune's `bench/**` gitignore (259116bba)
+dropped the committed artifacts the golden/reproduce tests lock against → 51 artifact-absence failures on a
+fresh tree (NOT code regressions — verified: every failure was a missing file, none a byte-drift). Fix:
+restored only the small high-value byte-locks (~3.2 MB: 18 rollout dirs for the scorer golden + the dataset
+golden's examples.jsonl, force-added past `bench/**`), and added **skip-if-absent guards** to ~20
+reproduce-from-artifact tests (skip only on absence; still assert when present). 233 → after B3's tests **237
+pass / 56 skip**. Commits `[test]`.
+
+**Phase-2 decode investigation (measurement-first).**
+- **Sequential-tax profile** (`docs/amd-decode-sequential-tax-profile-20260616.md`): reused
+  `extra/q4_k_profile_report.py` (no new tooling) on the current build — GEMV **72%** / non-GEMV **28%** of
+  in-graph kernel time. Confirms the reframe: the parity gap is the non-GEMV tax running sequentially, not a
+  slow GEMV (GEMV already ~52% peak ≈ llama's per-kernel rate; B1 settled).
+- **Single-queue gate**: decode runs all kernels on ONE compute queue (`graph/hcq.py:51`, no overlap
+  primitive) → `token = sum`, so the 28% is genuinely additive/reclaimable.
+- **Overlap feasibility spike** (`docs/amd-decode-overlap-feasibility-spike-20260616.md`): analytical
+  byte/bandwidth accounting (rocprofv3 PMC unusable on tinygrad's AMD backend), reconciled to 1.2% of measured
+  `global_mem` (4.671 vs 4.726 GB). GEMV reads at 359 GB/s = **42% peak → HBM ~58% idle**; non-GEMV is
+  compute/cache-bound (KV ≤0.45 GB even ctx 3072). Overlap ceiling **+38%** (55.6→76.8 tok/s).
+- **De-risk** (`docs/amd-decode-overlap-derisk-20260616.md`): 2 concurrent decodes = **1.32× aggregate** →
+  idle capacity is real (the AMD hardware overlaps compute), realizable floor **+32%**. Norm-into-GEMV fusion
+  **refuted** (single-accumulator GEMV kernel blocks the RMS reduction; `quantize(x·g)≠quantize(x)·g`
+  non-exact; norm already lazily fused).
+- **Two-queue probe → overlap GATED** (`extra/qk_two_queue_probe.py`,
+  `docs/amd-decode-two-queue-probe-20260616.md`): two `hw_compute_queue_t()` measured **1.0× overlap**,
+  invariant to kernel shape (even a 16-wg B that fits idle CUs). ROOT CAUSE: tinygrad's AMD backend has **ONE
+  hardware compute ring** (`ops_amd.py:1001`; `_submit` hardcodes `dev.compute_queue`) — software limit, not
+  hardware (cross-process +32% proved the GPU overlaps). So overlap (B2, ~+25-32%) needs a **`[runtime]` 2nd
+  compute AQL ring + per-ring submit routing** BEFORE the cross-layer scheduler. The probe is the re-fire gate
+  (A‖B should jump >1.2× once a 2nd ring exists). Commit `[test]`.
+
+**B3 per-tensor demotion search (DONE — first real dogfood of the scaffold).**
+- `[nn]` parameterized the Q6→Q4 demotion: `QKConfig.demote_targets` from `QK_DEMOTE_TENSORS` (comma-sep name
+  substrings); `_demote_q6k_ffndown_to_q4` → `_demote_q6k_to_q4(model, linears, targets)` filtering by
+  any-substring, reusing `_q4k_policy` opts with a shape fallback. NFC for the existing config
+  (`Q6K_DEMOTE_FFNDOWN=1` ≡ `demote_targets=("ffn_down",)` ≡ old hardcode). Commit `538072163 [nn]`.
+- `extra/qk_nll_eval.py` — teacher-forced **decode-path** dNLL gate (MUST be decode path: demotion only swaps
+  the decode primitive's bytes; prefill `_fallback` uses the original fp weight). JIT'd symbolic-start_pos
+  step. Reproduces the *direction* of the capstone ffn_down result ("≈ free", +0.0005 on our calib) but not
+  the exact −0.0028 (dNLL is calibration-data-dependent); it's sensitive + discriminating (the gate's job).
+- `extra/qk_demote_search.py` — the search loop on the scaffold (spec → isolated tok/s+dNLL runner → quality
+  gate → AcceptedPolicy); pure orchestration over the two existing CLIs; `test_qk_demote_search.py` synthetic.
+- **Frontier** (`docs/amd-decode-demotion-search-20260616.md`, ε=0.01): baseline 56.0; ffn_down 64.3 (ACCEPT);
+  +attn_v 63.7 (ACCEPT, quality-neutral, no extra speed); **+lm_head 75.0 tok/s / 74% llama but dNLL +0.0509 →
+  REJECTED on quality**. The gate caught a tempting-but-degrading config — machine-search thesis validated.
+  Verdict: in-pattern Q6→Q4 lever **tapped at ~64 tok/s**; bigger bytes need sub-4-bit (Q3/Q2 = new quantizer
+  + new GEMV kernel = dangerous surface, deferred). Artifacts `bench/qk-demote-search/` (16K, force-added).
+  Commits `[test]` + `[docs]`.
+
+**BANK (the resting point).** Decode at **~64 tok/s / ~63% llama**, exact, kernel beats llama (76% vs 57%
+peak). Every remaining decode lever is refuted (B1, norm-fusion, B5), tapped (B3 in-pattern), or gated behind
+dangerous-power surface (overlap 2nd-ring, sub-4-bit kernel). Prefill remains the largest absolute headroom
+(~2% of llama; LDS cache-blocking codegen, `docs/amd-decode-prefill-plan.md`). The bounded machine-search
+system is the lasting reusable asset. Also: `[docs]` added "Tiny means understandable" to
+`structure/Development/coding-principles.md`. Resume pointers in the closeout doc.
+Key commits this session: `66804832e`/`3c5c49d7c`/`87ec28305` (scaffold + suite), `d18637caa`/`9da8f779c`
+(tax profile + gate), `d4ccae747`/`6e4a68fa3`/`197aa0ca5` (spike/de-risk/probe), `538072163`/`2a2e6ea87`/
+`79c0e52e3` (B3), `a88bb72e4` (bank).
