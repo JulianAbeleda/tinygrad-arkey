@@ -1,5 +1,9 @@
 # Flash-decode auto-enable for long-context decode (2026-06-17)
 
+> **PARTIALLY SUPERSEDED.** Auto-enable shipped, but the default threshold was later lowered to **512** and the
+> partial kernel replaced by `FLASH_VARIANT=hoisted` (+ `FLASH_L=128`). Current authority:
+> `qk-8b-decode-banked-20260617.md` + `qk-8b-flash-variant-result-20260617.md`.
+
 The first measured win after the decode gap analysis + small-op audit: auto-select flash-decode when it's
 expected to win (long context), preserving short-context behavior and override controls. No new kernel.
 

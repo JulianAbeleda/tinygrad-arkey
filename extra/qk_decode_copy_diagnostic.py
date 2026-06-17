@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: FROZEN (one-off). Verdict: the "~6.5ms copy" was a measurement artifact (4B/0-GB/s sync stall
+# mismeasured by eager DEBUG=2), not real data. Diagnostic complete.
 """Narrow diagnostic: identify the ~6.5ms copy/gather kernel that the decode census attributed ~17% of GPU time.
 
 Captures one decode step's kernels (full DEBUG=2 lines: name, mem, GB/s, position in sequence), isolates the

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: FROZEN (one-off). Verdict recorded: small-op fusion REFUTED (each <3.5%, scheduler already fuses
+# elementwise). Do not reopen small-op fusion. See docs/qk-short-decode-exhaustion-20260617.md.
 """Decode small-op fusion audit: classify the ~580 non-GEMV decode kernels and rank fusion targets.
 
 Kernel source metadata is empty in the decode path, so we classify structurally: tinygrad auto-names kernels

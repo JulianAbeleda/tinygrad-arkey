@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# STATUS: FROZEN (historical) -- superseded by qk_decode_block_map.py (current decode census).
 """Phase 1: per-token decode primitive census for Qwen3-8B (or any QK gguf). Answers: how many GPU programs run
 per decode token, how much authoritative GPU time each primitive class costs, and how much is host/JIT overhead.
 

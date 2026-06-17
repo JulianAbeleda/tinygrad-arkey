@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: REFUTED integration (not wired into defaults). Acceptance gate PASSED but naive two-model integration
+# is jit-alternation runtime-bound (~0.24x). See docs/qk-spec-decode-integration-result-20260617.md.
 """Speculative-decoding generation prototype (gated, standalone -- does NOT modify model.py defaults). Realizes
 the ~1.6x the acceptance gate projected, using incremental KV (no per-step recompile):
   - draft proposes K tokens via its jit'd T=1 decode (rollout_jit, symbolic start_pos, greedy temp=0)

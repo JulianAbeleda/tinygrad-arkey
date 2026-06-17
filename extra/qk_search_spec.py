@@ -68,6 +68,9 @@ class SearchSpace(str, Enum):
   DEMOTION = "demotion"
   FLASH_THRESHOLD = "flash_threshold"
   FLASH_VARIANT = "flash_variant"   # decode flash-attention primitive family: {v1, hoisted} x KV-split L
+  # roadmap (not searchable variants yet): v3 (LDS/WMMA decode tile) REFUTED 2026-06-17 (regime mismatch,
+  # qk-decode-attention-v3-result-20260617.md); next target = GQA-batched cooperative tile + vectorized LDS
+  # load (tinygrad-decode-attention-next-primitive-spec-20260617.md), design-only, not yet a variant here.
   STORAGE = "storage"
   SCHEDULE = "schedule"
   LDS_BLOCKING = "lds_blocking"

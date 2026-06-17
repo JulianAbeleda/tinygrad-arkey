@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STATUS: v3 REFUTED on perf at decode shapes (docs/qk-decode-attention-v3-result-20260617.md). KEPT for the
+# hoisted-baseline measurement method (Phase 0) only; the WMMA/LDS v3 kernel was not built (regime mismatch).
 """decode_attention_v3 — isolated build + perf gate (Phase 0 baseline first).
 
 Phase 0: measure the CURRENT shipped hoisted flash-decode primitive (the real baseline v3 must beat by >=1.3x)

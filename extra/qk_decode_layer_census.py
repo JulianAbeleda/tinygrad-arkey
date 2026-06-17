@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# STATUS: FROZEN as a runner -- superseded by qk_decode_block_map.py (the current post-hoisted census, which
+# adds the flash path + multi-ctx + W==D tok/s). KEPT because its GEMV_ROLE map is the single source of truth
+# for GEMV output-dim roles, imported by qk_decode_block_map.py. Edit GEMV_ROLE here, not there.
 """Phase 1: per-layer decode program census. Breaks the ~780 programs/token into per-layer vs outside-layer
 (tail) buckets and per-region GPU time, at ctx 512. Method: capture one eager decode step (DEBUG=2), cluster by
 exact kernel name (a per-layer op emits the SAME name in all 36 layers -> count is a multiple of 36); count==1

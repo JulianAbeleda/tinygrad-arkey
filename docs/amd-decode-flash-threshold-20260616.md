@@ -1,5 +1,9 @@
 # Flash-threshold search (Track 2) — 2026-06-16
 
+> **SUPERSEDED (historical).** Flash-decode is now default-ON: `FLASH_DECODE=auto`, threshold **512**,
+> `FLASH_VARIANT=hoisted`, `FLASH_L=128`. Current authority: `qk-8b-decode-banked-20260617.md` +
+> `qk-8b-flash-variant-result-20260617.md`. This doc describes the original default-off/opt-in threshold search.
+
 Turns the all-or-nothing `FLASH_DECODE` flag into a **searched context threshold**: SDPA below it, flash
 above it, so one decode/serving run gets the long-context win with **no short-context regression**. Second
 dogfood of the machine-search scaffold (`qk_search_spec`): sweep → crossover → `AcceptedPolicy`. Flash is

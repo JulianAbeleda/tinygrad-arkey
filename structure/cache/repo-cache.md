@@ -48,12 +48,31 @@ Scope: stable implementation context for token-saving orientation. Full doc map:
 - `.venv/bin/python -m py_compile <file>`; `git diff --check`.
 - Decode smoke: the `cli --benchmark` command above (steady median ~55 tok/s default-on).
 
-## Current Direction
+## Current Direction (refreshed 2026-06-17)
 
-Decode is **BANKED** (~64 tok/s, 63% of llama.cpp) — see `../../docs/amd-decode-banked-20260616.md`. Remaining
-decode levers are refuted, tapped, or **gated** (overlap needs a 2nd compute ring; sub-4-bit needs a new
-kernel). Largest untapped gap = **prefill** (~2% of llama; LDS cache-blocking). The bounded machine-search
-system is the reusable asset. Don't reopen settled negatives (B1 GEMV, norm-fusion, the falsified flywheel).
+**Matched llama.cpp baseline measured on this RX 7900 XTX** (`../../docs/qk-llama-baseline-xtx-20260617.md`;
+the host is an XTX — rocm-smi misreports "GRE", 24GB VRAM + rocminfo confirm XTX): llama decode 99.5 (d0) /
+98.6 / 97.6 / 95.4 / 92.2 tok/s @ctx 0/512/1024/2048/4096; prefill pp512 = 3069.
+
+**Decode (shipped):** flash-decode default-ON — `FLASH_DECODE=auto` threshold **512**, **`FLASH_VARIANT=hoisted`**
+(exp-once-per-key), **`FLASH_L=128`** (`../../docs/qk-8b-flash-variant-result-20260617.md`,
+`../../docs/qk-8b-decode-banked-20260617.md`). Measured: 43.5 / 39.1 / 32.7 / 24.8 tok/s @ctx 512/1024/2048/4096
+= **44% / 40% / 34% / 27% of llama** (the "~64 tok/s" figure is short-ctx ~ctx8 + demotion). Plus Q6_K coverage,
+ffn_down demotion (dNLL-gated, default-off).
+
+**Key diagnosis (`../../docs/llama-rocm-decode-attention-audit-20260617.md`):** llama decode is ~context-FLAT
+(−7%), tinygrad decays −43% → the long-ctx gap is **attention**. llama uses `flash_attn_tile` + stream-K split +
+combine (GQA-batched tile, fp16 LDS staging, vectorized loads); tinygrad's hoisted flash_partial re-reads V 4×
+at ~33 GB/s. **CEILING:** perfect attention only removes the slope → still ~44% of llama; the **base-decode 2.3×
+gap (GEMV + ~780 progs/token)** is the bigger structural limiter.
+
+**Refuted/closed (do NOT reopen):** B1/Q4K_FUSE GEMV horizontal fusion (−18%), norm/small-op fusion, sub-4-bit
+(dNLL), register-blocking flash_partial, **decode_attention_v3** (LDS/WMMA at decode-M; naive LDS 0.5-0.77× vs
+IC-served baseline). **WMMA custom-kernel idiom REVIVED** (`spec_tensor` rule) — a lasting asset, but for the
+**PREFILL** regime (large-M), not decode. **Prefill (best gap): pp512 81% of llama** (PREFILL_V2 ~2486, opt-in).
+Next decode-attention target (design, not built): GQA-batched cooperative tile + vectorized LDS load
+(`../../docs/tinygrad-decode-attention-next-primitive-spec-20260617.md`). The bounded machine-search system is
+the reusable asset.
 
 ## Known Risks
 

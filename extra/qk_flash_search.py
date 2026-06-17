@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# STATUS: FROZEN (historical). The flash threshold (512) is shipped. The current machine-search pattern is
+# qk_flash_variant_search.py (Track 3). run_search/frontier_md here intentionally differ from that file's
+# (threshold-crossover vs best-variant-by-KV) -- same names, different knowledge; not a DRY violation.
 """Flash-threshold search (Track 2) — the second dogfood of the machine-search scaffold.
 
     search spec (SearchRow, search_space=flash_threshold) -> sweep runner (SDPA vs flash tok/s across
