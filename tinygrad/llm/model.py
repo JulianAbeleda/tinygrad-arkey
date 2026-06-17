@@ -773,10 +773,14 @@ class TransformerBlock(FFNBlock):
       # Exact vs SDPA up to fp reassociation. Decode-only (T==1, symbolic start_pos).
       from extra.qk_flash_decode import flash_decode_attention
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
-      MAXC, L = self.config.max_context, getenv("FLASH_L", 256)
+      MAXC, L = self.config.max_context, getenv("FLASH_L", 128)  # Track-3 search: L=128 >= L=256 at every ctx
       vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
+      # variant 'hoisted' (default): exp computed once per key in flash_prob, then a pure weighted-sum
+      # flash_partial_v2 -- v1 recomputed exp per output-dim lane (Hd+1=129x redundant). Byte-identical
+      # greedy; in-model +7.7% @ctx512 .. +28% @ctx4096 (gain grows with KV). See docs/qk-8b-flash-variant-*.
       out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                   start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
+                                   start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
+                                   variant=str(getenv("FLASH_VARIANT", "hoisted")))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     else:
       attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)   # (B,H,T,Hd)
