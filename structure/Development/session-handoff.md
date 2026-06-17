@@ -2139,3 +2139,27 @@ prefill loop in `generate()` (fixed-512 concrete-T chunks) + fp16+`.contiguous()
 `_feed_forward`/`_attention` + populate `_WARMSTART_OPTS` at init + measure in-model FFN %peak (target ~37%;
 e2e muddied by O(T²) SDPA until Increment 2 = flash-PREFILL attention). Ceiling ~7-10× (→ ~15-25% llama),
 fp16 lossy→quality-gate. User chose "build in increments". Commits `695a2b1c1`/`d15a544ad`.
+
+## 2026-06-17 (prefill v2 — Increment 1 BUILT & WON, ~13x warm prefill)
+Result doc: `docs/amd-decode-prefill-v2-increment1-20260617.md`. Built the model.py prefill-v2 path (gated
+`PREFILL_V2`, opt-in, **decode 100% untouched**); suite **247 pass / 56 skip**, all pushed to origin/master.
+**Warm Qwen3-8B prefill: 189 -> 2486 tok/s = 13.1x (~83% of llama's ~3000)**, greedy byte-identical,
+warmstart apply=5/error=0. Harness `extra/qk_prefill_v2_measure.py`; unit guards `test/external/test_qk_prefill_v2.py`.
+
+**Build (checkpointed [nn] 1a/1b/1c + a fix commit):** (1a) concrete-ubatch loop in `generate()` (full
+`PREFILL_UBATCH=512` chunks via a separate `prefill_v2_jit`; `<512` tail uses today's symbolic path; jits
+separated by `isinstance(tokens.shape[1], int)`), per-block `_prefill_v2` flag in `__call__` (mirrors
+`_use_flash`). (1b) `_pf16(lin,x)` = one clean fp16 `.contiguous()`-isolated TC GEMM, used in
+`_feed_forward`/`_attention` under the flag. (1c) `_install_prefill_v2_warmstart` forces the loop-found
+**per-shape** TC schedule by key `(frozenset({out,512}),in)` (512-specific -> never matches decode T=1).
+
+**The gate's premise was optimistic — 3 corrections this surfaced (measurement-first win):** the Stage-0 gate
+got 37% on a FRESH process, 2D inputs, PRE-REALIZED random fp16 weights. In-model: (1) the primitive
+`.weight` is a **LAZY Q4_K/Q6_K->fp16 dequant graph (149 ops)** -> raw it fuses into the matmul (~3% peak);
+fix `realize_prefill_v2_weights()` realizes a clean fp16 buffer per linear (`_pf16_w`) at end of `from_gguf`
+-- **COST ~fp16-model-size extra VRAM (~16GB/8B), coexists w/ Q4_K; fits 8B on 24GB, 14B/32B OOM (opt-in,
+documented).** (2) one schedule for all shapes -> ~9% (ffn_down 4096x12288 wants **UPCAST(0,4)** not 2);
+fix `_prefill_v2_opts(out,in)`. (3) isolated single-matmul/-chain benches are **host-launch-overhead bound**
+(~20ms of 30ms wall; GPU ~9.7ms) -> the WARM full forward (JIT replay amortizes host overhead) is the truth
+(cf. [[amd-decode-measurement-confounds]]). **Open:** fp16 quality gate (lossy; greedy-identical is cheap
+signal only), VRAM-frugal realize for >8B, **Increment 2 = flash-PREFILL attention** (O(T^2) SDPA still rides).

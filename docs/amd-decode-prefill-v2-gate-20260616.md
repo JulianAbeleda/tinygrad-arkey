@@ -1,5 +1,13 @@
 # Prefill v2 — Stage 0 make-or-break gate: PASS (2026-06-16)
 
+> **UPDATE 2026-06-17 — Increment 1 BUILT & WON (~13x warm prefill).** The model.py build landed; result +
+> the two gate-premise corrections it surfaced are in **`amd-decode-prefill-v2-increment1-20260617.md`**.
+> TL;DR: the gate's 37% (fresh process, 2D, *pre-realized* random fp16 weights) hid (1) the primitive weight
+> is a *lazy* Q4_K->fp16 dequant graph → must realize fp16 (extra VRAM), (2) per-shape opts (ffn_down wants
+> UPCAST(0,4)), and (3) isolated benches are host-overhead bound. Warm full forward: **189 → 2486 tok/s =
+> 13.1x (~83% of llama)**, greedy byte-identical, decode untouched.
+
+
 Prefill was a parked located negative (~2% of llama, ~1.3% fp16 peak). Prior work named two blockers:
 1. **Symbolic-batch blocks TC** — Step-3 (`9a17aae4e`) injected the loop's TC opts via `_WARMSTART_OPTS`
    onto the in-model forward matmul and it **errored**: the forward's batch dim is the symbolic `v_toks`,

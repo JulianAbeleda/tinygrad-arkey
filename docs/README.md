@@ -18,8 +18,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 ## Active / open frontiers
 
-- `amd-decode-prefill-plan.md` — **prefill** = the largest untapped gap (~2% of llama; LDS
-  cache-blocking codegen). Diagnosed, not solved.
+- **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486
+  tok/s, ~83% of llama) via concrete-ubatch + fp16 + realized-weights + warmstart-TC, gated `PREFILL_V2`,
+  decode untouched. Corrects the gate's premise (lazy weights → realize/VRAM; per-shape opts; host-overhead
+  confound). Gate: `amd-decode-prefill-v2-gate-20260616.md`. Open: fp16 quality gate, VRAM for >8B, flash-prefill.
+- `amd-decode-prefill-plan.md` — the original prefill diagnosis (~2% of llama; LDS cache-blocking). Superseded
+  as the active plan by prefill v2 above, but still the canonical root-cause reference.
 - Phase-2 decode docs (2026-06-16): `amd-decode-sequential-tax-profile`, `…-overlap-feasibility-spike`,
   `…-overlap-derisk`, `…-two-queue-probe` (**overlap GATED** on a 2nd compute ring), `…-demotion-search`
   (B3 done), `amd-decode-flash-attention-plan` (flash SHIPPED).
