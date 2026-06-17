@@ -49,13 +49,22 @@ dominant kernel's per-lane redundancy before declaring a path exhausted.** (Hard
 string is a misidentification. The XTX baseline applies; an earlier GRE note was wrong. See
 `qk-8b-flash-variant-result-20260617.md`.)
 
-## Next: deep codegen (the only remaining 8B decode lever)
+## Next: deep codegen — SELECTED via the decode-block map
 
-What's left requires compiler/codegen work, not policy/integration:
-1. **Flash-decode tile/split tuning** for KV~512–1024 (medium risk) — extend the just-shipped flash win.
-2. **Attention reduce-fusion in codegen** — collapse the 4 KV-length reduces/layer (the linearizer rejects
-   coupled multi-accumulator reduces; this is the known wall from flash-decode's 5-kernel split).
-3. **Decode-block program-count collapse** (780→<600) — the structural llama gap; very high risk, compiler-arch.
+**Decode-block primitive map done (2026-06-17, `qk-8b-decode-block-primitive-map-20260617.md`,
+`extra/qk_decode_block_map.py`).** Post-hoisted census: **programs/token = 1001** (UP from ~780 SDPA — flash
+adds kernels, yet wins; decode is GPU-bound so program count ≠ bottleneck). GPU time concentrates in **GEMV
+(~57% @ctx512, refuted) and `flash_partial` (47.5% @ctx4096)**; small-ops are ~55% of *kernels* but only
+~12–19% of GPU time (refuted to fuse). **Selected next hard target: `decode_attention_v3`** — a high-occupancy
+**WMMA flash + cooperative GQA V-reuse (LDS)** kernel (the only high-GPU-time region with measured headroom:
+`flash_partial` is occupancy-bound at ~33 GB/s effective, IC-served, not HBM-bound). Projected (Amdahl):
++4–10% @ctx≤1024, **+12–36% @ctx4096**. Deep `[codegen]` arc gated by the WMMA-convention wall (WR4/SHAPED_WMMA
+stale). All decode-block *fusion* boundaries deferred/rejected with measured justification (QKV/FFN fuse
+refuted; small-op fusion low-value/GPU-bound; whole-layer too risky). Superseded sub-list below:
+1. ~~Flash-decode tile/split tuning~~ — done (`hoisted`+L128 shipped; register-blocking refuted).
+2. **→ folded into `decode_attention_v3`** (WMMA + GQA V-reuse; the high-occupancy shape, not reduce-fusion).
+3. ~~Decode-block program-count collapse~~ — **deprioritized**: program count is not the decode bottleneck
+   (GPU-bound; flash raised count and still won).
 
 Entry points: `extra/qk_attention_kernel_map.py` (the 4 KV reduces/layer = 21% eager), `extra/qk_flash_decode.py`
 (the fused kernel + its single-accumulator constraint), `extra/qk_decode_runtime_overhead.py` (the clean
