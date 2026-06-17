@@ -35,6 +35,21 @@ class TestConcreteVsSymbolic(unittest.TestCase):
     sym = t[:, sp:sp + UOp.variable("toks", 1, 32).bind(5)]
     self.assertFalse(isinstance(sym.shape[1], int))
 
+class TestPrefillV2Invariants(unittest.TestCase):
+  def test_ubatch_validation(self):
+    M._prefill_v2_validate_ubatch(512)  # the only validated size -> no raise
+    for bad in (256, 1024, 384):
+      with self.assertRaises(ValueError): M._prefill_v2_validate_ubatch(bad)
+
+  def test_realize_bytes_estimate(self):
+    # fp16 = 2 bytes; estimate must match sum(out*in)*2 so the OOM preflight is honest.
+    self.assertEqual(M._prefill_v2_realize_bytes([(12288, 4096), (4096, 12288)]), (12288*4096 + 4096*12288) * 2)
+    self.assertEqual(M._prefill_v2_realize_bytes([]), 0)
+    # a full 8B-ish FFN+attn set should land in the ~10-16 GB range (the documented 8B cost), well under 14B.
+    eightb = ([(12288, 4096)] * 2 + [(4096, 12288)] + [(4096, 4096)] * 2 + [(1024, 4096)] * 2) * 36
+    gb = M._prefill_v2_realize_bytes(eightb) / 1e9
+    self.assertTrue(10 < gb < 18, f"8B FFN+attn fp16 estimate {gb:.1f}GB outside expected band")
+
 class TestPf16(unittest.TestCase):
   def test_uses_cached_realized_weight(self):
     # _pf16 must matmul against the realized fp16 cache (_pf16_w), not the lazy dequant weight -- the lazy

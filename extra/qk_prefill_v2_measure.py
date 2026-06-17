@@ -17,13 +17,13 @@ Reports (Qwen3-8B, gfx1100), warm (post-JIT-capture):
   - prefill_v2: concrete-512 chunk (fp16 + realized weights + warmstart-TC) -> tok/s + warmstart apply/error
 and the greedy byte-identical check (fp16 is lossy; this is the cheap exactness signal, full ppl is later).
 
-Run: DEV=AMD PREFILL_V2=1 PYTHONPATH=. .venv/bin/python extra/qk_prefill_v2_measure.py [model.gguf]
+Run: DEV=AMD PREFILL_V2=1 PYTHONPATH=. .venv/bin/python extra/qk_prefill_v2_measure.py <model.gguf>
+     (or set QK_MODEL / MODEL instead of the positional arg)
 """
 from __future__ import annotations
 
 import json, os, pathlib, sys, time
 
-DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
 PEAK_TF = 83.6  # fp16 compute peak, gfx1100
 
 def _warm(fn, iters:int=5):
@@ -35,9 +35,13 @@ def _warm(fn, iters:int=5):
   return min(ts)
 
 def main():
-  model_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODEL
+  model_path = sys.argv[1] if len(sys.argv) > 1 else (os.environ.get("QK_MODEL") or os.environ.get("MODEL"))
+  if not model_path:
+    print("ERROR: pass a model gguf path (argv) or set QK_MODEL / MODEL. e.g. "
+          "DEV=AMD PREFILL_V2=1 PYTHONPATH=. .venv/bin/python extra/qk_prefill_v2_measure.py ~/models/Qwen3-8B-Q4_K_M.gguf",
+          file=sys.__stdout__); sys.exit(2)
   if not os.environ.get("PREFILL_V2"):
-    print("ERROR: run with PREFILL_V2=1 (the model realizes fp16 weights + installs the warmstart table at load).",
+    print("ERROR: run with PREFILL_V2=1 (the model realizes fp16 weights + builds the warmstart table at load).",
           file=sys.__stdout__); sys.exit(2)
   from tinygrad import Tensor, UOp
   import tinygrad.codegen.opt.postrange as pr
@@ -65,7 +69,7 @@ def main():
   v2_toks = N / (v2_ms / 1e3)
   st = dict(pr._warmstart_stats)
 
-  out = {"model": pathlib.Path(model_path).name, "N": N, "warmstart_keys": len(pr._WARMSTART_OPTS or {}),
+  out = {"model": pathlib.Path(model_path).name, "N": N, "warmstart_keys": len(model._pf16_warmstart or {}),
          "baseline": {"per_tok_ms": round(base_ms / 32, 3), "tok_s": round(base_toks, 1)},
          "prefill_v2": {"forward_ms": round(v2_ms, 1), "tok_s": round(v2_toks, 1),
                         "match": st["match"], "apply": st["apply"], "error": st["error"]},
