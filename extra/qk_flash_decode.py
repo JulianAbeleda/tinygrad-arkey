@@ -126,6 +126,41 @@ def flash_partial_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
     return pout[hs * W + d].store(acc[0]).end(h, s, d).sink(arg=_fki(f"flash_partial_{Hq}_{Hd}"))
   return kernel
 
+def flash_prob_kernel(Hq:int, MAXC:int, L:int, S, Tc):
+  """Variant 'hoisted': compute p[h,t] = exp(score[h,t] - pm[h,s]) ONCE per key (elementwise, no reduce),
+  so flash_partial_v2 reads p instead of recomputing exp per output-dim lane (v1 recomputes it W=Hd+1 times).
+  Out-of-range t -> 0 (so the masked v read in partial_v2 contributes nothing)."""
+  def kernel(prob:UOp, pm:UOp, score:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S,  1, AxisType.GLOBAL)
+    j = UOp.range(L,  2, AxisType.GLOBAL)
+    t = s * L + j
+    p = (t < Tc).where(_fexp(score[h * MAXC + t] - pm[h * S + s]), _fc(0.0))
+    return prob[h * MAXC + t].store(p).end(h, s, j).sink(arg=_fki(f"flash_prob_{Hq}"))
+  return kernel
+
+def flash_partial_v2_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Variant 'hoisted' partial: pout[h,s,:] = sum_t prob[h,t]*v_aug[t,:]. No exp here (read from prob);
+  column Hd folds the denominator via the 1s-augmented v, same as v1."""
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(pout:UOp, prob:UOp, vc:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S,  1, AxisType.GLOBAL)
+    d = UOp.range(W,  2, AxisType.GLOBAL)
+    kv = h // G; hs = h * S + s
+    is_v = d < Hd
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    in_r = t < Tc
+    p = prob[h * MAXC + t]                                  # already 0 outside range (set in flash_prob)
+    t_safe = in_r.where(t, t.const_like(0))                 # masked lanes read a valid (finite) v position
+    vd = is_v.where(vc[(kv * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    acc = UOp.placeholder((1,), _F32, 101, addrspace=AddrSpace.REG)
+    acc = acc.after(h, s, d)[0].set(0.0)
+    acc = acc[0].set(acc.after(j)[0] + p * vd, end=j)
+    return pout[hs * W + d].store(acc[0]).end(h, s, d).sink(arg=_fki(f"flash_partial_v2_{Hq}_{Hd}"))
+  return kernel
+
 def flash_gmax_kernel(Hq:int, S):
   def kernel(gm:UOp, pm:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -164,7 +199,7 @@ def flash_combine_kernel(Hd:int, Hq:int, S):
   return kernel
 
 def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
-                           Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=256) -> Tensor:
+                           Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=256, variant:str="v1") -> Tensor:
   """Batch-1 GQA decode attention via Flash-Decoding. Exact vs SDPA (up to fp reassociation).
   q:[Hq,Hd]  k_full,v_full:[Hkv,MAXC,Hd] (full KV cache buffers, concrete MAXC).
   Tc_b: bound symbolic context length (carries start_pos's value into var_vals, used for the score
@@ -184,7 +219,12 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
   score_f = score_a.reshape(Hq * MAXC)
   vc_f = v_full.reshape(Hkv * MAXC * Hd)
   pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
-  po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, vc_f, fxn=flash_partial_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+  if variant == "hoisted":
+    # exp computed once per key (flash_prob), then a pure weighted-sum partial (no per-d exp recompute).
+    prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, vc_f, fxn=flash_partial_v2_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+  else:
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, vc_f, fxn=flash_partial_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
   dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
   out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
@@ -219,3 +259,29 @@ if __name__ == "__main__":
       pw = np.exp(sc - sc.max()); pw /= pw.sum(); ref[h] = pw @ vf[kv]
     err = np.abs(got - ref).max()
     print(f"Tc={Tc} S={S}: max_err={err:.4g}  {'OK' if err < 2e-2 else 'FAIL'}")
+
+  # UOp-path variants (the model-integrated path): v1 and hoisted must BOTH be exact, and identical to
+  # each other (hoisted only changes WHERE exp is computed, not the math). Bound/unbound start_pos twins.
+  print("\nUOp-path variants (v1 vs hoisted):")
+  MAXC2 = 4608  # divisible by all swept L so flash_prob's [Hq,MAXC] buffer covers every t=s*L+j
+  for Tc, L in [(512, 256), (1024, 256), (1024, 64), (3072, 256)]:
+    G = Hq // Hkv
+    rng = np.random.default_rng(1)
+    qn = rng.standard_normal((Hq, Hd)).astype(np.float16)
+    kn = rng.standard_normal((Hkv, MAXC2, Hd)).astype(np.float16)
+    vn = rng.standard_normal((Hkv, MAXC2, Hd)).astype(np.float16)
+    qf, kf, vf = qn.astype(np.float32), kn[:, :Tc].astype(np.float32), vn[:, :Tc].astype(np.float32)
+    ref = np.zeros((Hq, Hd), np.float32)
+    for h in range(Hq):
+      kv = h // G; sc = (qf[h] @ kf[kv].T) / np.sqrt(Hd)
+      pw = np.exp(sc - sc.max()); pw /= pw.sum(); ref[h] = pw @ vf[kv]
+    sp_b = UOp.variable("start_pos", 0, MAXC2 - 1).bind(Tc - 1); sp_u = UOp.variable("start_pos", 0, MAXC2 - 1)
+    outs = {}
+    for var in ("v1", "hoisted"):
+      o = flash_decode_attention(Tensor(qn), Tensor(kn), Tensor(vn), sp_b + 1, sp_u + 1,
+                                 Hd, Hq, Hkv, MAXC2, L, variant=var).numpy()
+      outs[var] = o
+      e = float(np.abs(o - ref).max())
+      print(f"  Tc={Tc} L={L} {var:8}: max_err={e:.4g} {'OK' if e < 2e-2 else 'FAIL'}")
+    same = float(np.abs(outs['v1'] - outs['hoisted']).max())
+    print(f"  Tc={Tc} L={L} v1-vs-hoisted max|diff|={same:.4g} {'IDENTICAL' if same == 0.0 else 'DIFFERS'}")
