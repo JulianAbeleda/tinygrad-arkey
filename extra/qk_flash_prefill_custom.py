@@ -71,6 +71,56 @@ def combine_kernel(T:int, Hd:int):
       arg=_ki(f"fp_combine_{T}_{Hd}"))
   return kernel
 
+def maxpartial_gqa_kernel(Hq:int, Hkv:int, T:int, KV:int, Hd:int, scale:float, start_pos:int):
+  # Phase 4: the head dimension `h` is a range INSIDE the kernel (ONE launch covers all Hq heads -- no Python
+  # per-head loop). GQA maps kv_head = h // G with NO repeat_interleave of K/V (each q-head reads its kv-head
+  # directly). Same two sequential single-accumulator reduces as the single-head kernel, per (h,i,d).
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(PO:UOp, Q:UOp, K:UOp, V:UOp) -> UOp:   # PO:[Hq,T,W]  Q:[Hq,T,Hd]  K,V:[Hkv,KV,Hd]
+    h = UOp.range(Hq, 0); i = UOp.range(T, 1); d = UOp.range(W, 2)
+    kv = h // G
+    # pass 1 -- max
+    j1 = UOp.range(KV, 3, axis_type=AxisType.REDUCE); e1 = UOp.range(Hd, 4, axis_type=AxisType.REDUCE)
+    dot1 = UOp.placeholder((1,), _F32, 0, addrspace=AddrSpace.REG)
+    dot1 = dot1.after(h, i, d, j1)[0].set(0.0)
+    dot1 = dot1[0].set(dot1.after(e1)[0] + Q[h, i, e1].cast(_F32) * K[kv, j1, e1].cast(_F32), end=e1)
+    s1 = (j1 <= (start_pos + i)).where(dot1[0] * scale, UOp.const(_F32, _NEG))
+    m = UOp.placeholder((1,), _F32, 1, addrspace=AddrSpace.REG)
+    m = m.after(h, i, d)[0].set(_NEG)
+    m = m[0].set(m.after(j1)[0].maximum(s1), end=j1)
+    # pass 2 -- weighted sum (+ denom via 1s-aug)
+    j2 = UOp.range(KV, 5, axis_type=AxisType.REDUCE); e2 = UOp.range(Hd, 6, axis_type=AxisType.REDUCE)
+    dot2 = UOp.placeholder((1,), _F32, 2, addrspace=AddrSpace.REG)
+    dot2 = dot2.after(h, i, d, j2)[0].set(0.0)
+    dot2 = dot2[0].set(dot2.after(e2)[0] + Q[h, i, e2].cast(_F32) * K[kv, j2, e2].cast(_F32), end=e2)
+    p = (j2 <= (start_pos + i)).where(_exp(dot2[0] * scale - m[0]), UOp.const(_F32, 0.0))
+    is_v = d < Hd
+    vd = is_v.where(V[kv, j2, is_v.where(d, d.const_like(0))].cast(_F32), UOp.const(_F32, 1.0))
+    acc = UOp.placeholder((1,), _F32, 3, addrspace=AddrSpace.REG)
+    acc = acc.after(h, i, d)[0].set(0.0)
+    acc = acc[0].set(acc.after(j2)[0] + p * vd, end=j2)
+    return PO[h, i, d].store(acc[0]).end(h, i, d).sink(arg=_ki(f"fp_maxpartial_gqa_{Hq}_{T}_{KV}_{Hd}"))
+  return kernel
+
+def combine_gqa_kernel(Hq:int, T:int, Hd:int):
+  W = Hd + 1
+  def kernel(O:UOp, PO:UOp) -> UOp:   # O:[Hq,T,Hd]  PO:[Hq,T,W]
+    h = UOp.range(Hq, 0); i = UOp.range(T, 1); d = UOp.range(Hd, 2)
+    return O[h, i, d].store((PO[h, i, d] / PO[h, i, Hd]).cast(dtypes.float16)).end(h, i, d).sink(
+      arg=_ki(f"fp_combine_gqa_{Hq}_{T}_{Hd}"))
+  return kernel
+
+def flash_prefill_attention(q:Tensor, k:Tensor, v:Tensor, start_pos:int = 0) -> Tensor:
+  """GQA multi-head causal attention, fused + score-free, heads covered INSIDE the kernel (2 programs total,
+  not 2*Hq). q:[Hq,T,Hd]  k,v:[Hkv,KV,Hd] with KV=start_pos+T. Returns [Hq,T,Hd] fp16. Exact vs SDPA up to fp
+  reassociation. Inputs should be contiguous (Phase-1 invariant)."""
+  Hq, T, Hd = q.shape; Hkv, KV, _ = k.shape
+  scale = 1.0 / math.sqrt(Hd)
+  PO = Tensor.empty(Hq, T, Hd + 1, dtype=_F32).custom_kernel(
+    q.contiguous(), k.contiguous(), v.contiguous(), fxn=maxpartial_gqa_kernel(Hq, Hkv, T, KV, Hd, scale, start_pos))[0]
+  O = Tensor.empty(Hq, T, Hd, dtype=dtypes.float16).custom_kernel(PO, fxn=combine_gqa_kernel(Hq, T, Hd))[0]
+  return O
+
 def flash_prefill_attention_1h(q:Tensor, k:Tensor, v:Tensor, start_pos:int = 0) -> Tensor:
   """Single-head causal attention, fused (no score materialization). q:[T,Hd]  k,v:[KV,Hd] with KV=start_pos+T.
   Returns [T,Hd] fp16. Exact vs SDPA up to fp reassociation. Inputs should be contiguous (Phase-1 invariant)."""

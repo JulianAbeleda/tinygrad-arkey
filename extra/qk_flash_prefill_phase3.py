@@ -20,12 +20,14 @@ import json, pathlib, sys, time
 Hd, T = 128, 512
 KVS = [512, 1024, 3584]
 
-def _warm(fn, iters:int = 8):
+def _warm(make_args, fn, iters:int = 6):
+  # HONEST timing: fresh inputs each iter so the kernel actually re-executes (reusing the same input tensors
+  # can return a cached no-op). make_args() returns a fresh (q,k,v); realized OUTSIDE the timed region.
   from tinygrad import GlobalCounters
-  fn().realize()
+  fn(*make_args()).realize()
   ts = []
   for _ in range(iters):
-    GlobalCounters.reset(); t0 = time.perf_counter(); fn().realize(); ts.append(time.perf_counter() - t0)
+    a = make_args(); GlobalCounters.reset(); t0 = time.perf_counter(); fn(*a).realize(); ts.append(time.perf_counter() - t0)
   return min(ts)
 
 def _sdpa(q, k, v, mask):
@@ -65,8 +67,11 @@ def run_shape(KV:int) -> dict:
   ref = _sdpa(q, k, v, mask).realize()
   out = flash_prefill_attention_1h(q, k, v, start_pos=sp).realize()
   err = float((ref - out).abs().max().item()); rmean = float(ref.abs().mean().item())
-  t_sdpa = _warm(lambda: _sdpa(q, k, v, mask))
-  t_flash = _warm(lambda: flash_prefill_attention_1h(q, k, v, start_pos=sp))
+  def fresh(): return (Tensor.randn(T, Hd, dtype=dtypes.float16).realize(),
+                       Tensor.randn(KV, Hd, dtype=dtypes.float16).realize(),
+                       Tensor.randn(KV, Hd, dtype=dtypes.float16).realize())
+  t_sdpa = _warm(fresh, lambda a, b, c: _sdpa(a, b, c, mask))
+  t_flash = _warm(fresh, lambda a, b, c: flash_prefill_attention_1h(a, b, c, start_pos=sp))
   return {"KV": KV, "start_pos": sp, "max_abs_err": round(err, 5), "ref_abs_mean": round(rmean, 5),
           "rel_err": round(err / max(rmean, 1e-9), 4), "sdpa_ms": round(t_sdpa * 1e3, 3),
           "flash_ms": round(t_flash * 1e3, 3), "speedup": round(t_sdpa / t_flash, 3)}

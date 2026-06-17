@@ -12,9 +12,9 @@
       "max_abs_err": 0.00098,
       "ref_abs_mean": 0.10608,
       "rel_err": 0.0092,
-      "sdpa_ms": 5.113,
-      "flash_ms": 1.94,
-      "speedup": 2.636
+      "sdpa_ms": 5.231,
+      "flash_ms": 2.037,
+      "speedup": 2.568
     },
     {
       "KV": 1024,
@@ -22,9 +22,9 @@
       "max_abs_err": 0.00037,
       "ref_abs_mean": 0.04709,
       "rel_err": 0.0078,
-      "sdpa_ms": 5.355,
-      "flash_ms": 1.976,
-      "speedup": 2.71
+      "sdpa_ms": 5.445,
+      "flash_ms": 2.083,
+      "speedup": 2.614
     },
     {
       "KV": 3584,
@@ -32,9 +32,9 @@
       "max_abs_err": 0.00018,
       "ref_abs_mean": 0.02339,
       "rel_err": 0.0078,
-      "sdpa_ms": 5.389,
-      "flash_ms": 1.975,
-      "speedup": 2.729
+      "sdpa_ms": 5.467,
+      "flash_ms": 2.087,
+      "speedup": 2.619
     }
   ],
   "capture": {

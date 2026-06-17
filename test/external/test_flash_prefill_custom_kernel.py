@@ -95,5 +95,20 @@ class TestFlashPrefillPhase3Artifact(unittest.TestCase):
     long = next(r for r in d["rows"] if r["KV"] == max(r2["KV"] for r2 in d["rows"]))
     self.assertGreaterEqual(long["speedup"], 1.5, f"KV={long['KV']} single-head speedup below the 1.5x gate")
 
+_P4_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "qk-flash-prefill-phase4" / "result.json"
+
+class TestFlashPrefillPhase4Artifact(unittest.TestCase):
+  """Lock the Phase-4 GQA multi-head gate (extra/qk_flash_prefill_phase4.py). Skip-if-absent; the slow,
+  subprocess-isolated benchmark stays out of the suite."""
+  def test_gqa_gate(self):
+    if not _P4_ARTIFACT.exists(): self.skipTest(f"no artifact at {_P4_ARTIFACT}")
+    d = json.loads(_P4_ARTIFACT.read_text())
+    self.assertTrue(d["correctness_ok"], "Phase-4 correctness regressed")
+    ok = [r for r in d["rows"] if not r.get("faulted")]
+    long = next(r for r in ok if r["KV"] == max(r2["KV"] for r2 in ok))
+    self.assertTrue(long["score_free"] and long["jit_replayed"], "Phase-4 lost score-free/replay")
+    self.assertEqual(long["n_programs"], 2, "Phase-4 should be 2 programs (head dim inside the kernel)")
+    self.assertGreaterEqual(long["speedup"], 2.0, f"KV={long['KV']} GQA speedup below the 2x gate")
+
 if __name__ == "__main__":
   unittest.main()

@@ -1,0 +1,71 @@
+{
+  "shape": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "T": 512
+  },
+  "rows": [
+    {
+      "KV": 512,
+      "start_pos": 0,
+      "max_abs_err": 0.00195,
+      "rel_err": 0.0187,
+      "flash_exec_ms": 2.198,
+      "sdpa_ms": 5.994,
+      "speedup": 2.727,
+      "compile_s": 1.33,
+      "n_programs": 2,
+      "captured": [
+        "fp_maxpartial_gqa_32_512_512_128",
+        "fp_combine_gqa_32_512_128"
+      ],
+      "jit_replayed": true,
+      "max_intermediate_numel": 2113536,
+      "score_numel": 8388608,
+      "score_free": true
+    },
+    {
+      "KV": 1024,
+      "start_pos": 512,
+      "max_abs_err": 0.00098,
+      "rel_err": 0.0205,
+      "flash_exec_ms": 2.224,
+      "sdpa_ms": 6.145,
+      "speedup": 2.762,
+      "compile_s": 2.93,
+      "n_programs": 2,
+      "captured": [
+        "fp_maxpartial_gqa_32_512_1024_128",
+        "fp_combine_gqa_32_512_128"
+      ],
+      "jit_replayed": true,
+      "max_intermediate_numel": 2113536,
+      "score_numel": 16777216,
+      "score_free": true
+    },
+    {
+      "KV": 3584,
+      "start_pos": 3072,
+      "max_abs_err": 0.00049,
+      "rel_err": 0.0213,
+      "flash_exec_ms": 2.189,
+      "sdpa_ms": 6.127,
+      "speedup": 2.799,
+      "compile_s": 10.79,
+      "n_programs": 2,
+      "captured": [
+        "fp_maxpartial_gqa_32_512_3584_128",
+        "fp_combine_gqa_32_512_128"
+      ],
+      "jit_replayed": true,
+      "max_intermediate_numel": 2113536,
+      "score_numel": 58720256,
+      "score_free": true
+    }
+  ],
+  "correctness_ok": true,
+  "pass_required": true,
+  "hit_target": false,
+  "verdict": "PASS (>=2x); compile 10.79s (SLOW -- Phase 5 should cut the d-recompute that inflates codegen)"
+}
