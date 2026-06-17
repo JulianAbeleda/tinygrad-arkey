@@ -67,6 +67,7 @@ class SearchSpace(str, Enum):
   PRIMITIVE_POLICY = "primitive_policy"
   DEMOTION = "demotion"
   FLASH_THRESHOLD = "flash_threshold"
+  FLASH_VARIANT = "flash_variant"   # decode flash-attention primitive family: {v1, hoisted} x KV-split L
   STORAGE = "storage"
   SCHEDULE = "schedule"
   LDS_BLOCKING = "lds_blocking"
