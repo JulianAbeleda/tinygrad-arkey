@@ -229,6 +229,28 @@ target is usually wrong. **Line count is not the metric. Knowledge duplication
 is.** Optimize for one authoritative source per piece of knowledge and for deep,
 legible modules — fewer lines is a side effect of doing that, never the goal.
 
+### Tiny means understandable
+For tinygrad-shaped systems, "tiny" does not mean minimizing line count at any
+cost. It means keeping the core idea small enough that one capable engineer can
+understand, modify, and reason about it end-to-end.
+
+Prefer:
+
+- a small conceptual core over many special cases
+- boring public interfaces over clever internal machinery
+- replacing old complexity with simpler tested machinery
+- contained backend/runtime power instead of ambient global behavior
+- table-driven experiments instead of cloned scripts
+- tests that make shrinking and replacement safe
+
+Avoid:
+
+- deleting useful tests or backend knowledge just to reduce LOC
+- adding framework layers that make the system harder to reason about
+- preserving obsolete probes after their verdict is recorded
+- letting machine search, runtime flags, or hardware-specific paths become a
+  second hidden system
+
 ### DRY means knowledge, not lines
 Eliminate duplicated *knowledge* — a rule, a schema, a policy — by giving it a
 single source of truth. Do **not** eliminate code that merely *looks* alike but
