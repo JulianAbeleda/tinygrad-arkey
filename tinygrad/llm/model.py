@@ -11,6 +11,10 @@ from tinygrad.uop.ops import resolve
 # tensor cores apply + the loop-found TC schedule warm-start in. See docs/amd-decode-prefill-v2-gate-20260616.md.
 PREFILL_V2 = bool(getenv("PREFILL_V2", 0))
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
+# NOTE: PREFILL_TC_ATTENTION (explicit TC Q@Kᵀ + softmax + P@V) was probed and UNWIRED -- it won ~2.5x over
+# SDPA standalone (concrete KV) but was ~0.8x (SLOWER) in-model because the prefill chunk's start_pos is
+# SYMBOLIC, so KV=start_pos+T is symbolic and the concrete-shape TC doesn't fire. See
+# docs/amd-prefill-tc-attention-probe-20260617.md / bench/qk-prefill-tc-attention/. Prefill attention stays SDPA.
 # The loop-found per-shape TC schedule (gate-validated; NO BEAM -- BEAM hangs gfx1100). Forced onto the
 # prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. The contraction-heavy shapes (in>out, e.g.
 # ffn_down 4096x12288) want UPCAST(0,4); the rest UPCAST(0,2) -- using one schedule for all drops the chain
