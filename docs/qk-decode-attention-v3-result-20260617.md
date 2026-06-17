@@ -64,11 +64,19 @@ load+barrier tax. This is the heart of v3, and it loses.
 
 ## Verdict
 
-**REFUTED on performance for the decode regime.** Decode attention (T=1, GQA low-M, IC-served) is at its
-practical floor for this hardware/framework: the GEMV-structured `hoisted` flash already exploits split-K
-occupancy and lets the Infinity Cache serve K/V; the high-occupancy-WMMA / cooperative-LDS levers that win in
-the GEMM/prefill regime do **not** transfer to low-M decode. NOT blocked by codegen — WMMA is revived and
-correct; it's a regime mismatch.
+**REFUTED on performance for the decode regime — for the levers we explored.** The high-occupancy-WMMA /
+cooperative-LDS levers that win in the GEMM/prefill regime do **not** transfer to low-M decode: the
+GEMV-structured `hoisted` flash already exploits split-K occupancy and lets the Infinity Cache serve K/V, and
+explicit LDS staging is measured 0.5–0.77× (slower). NOT blocked by codegen — WMMA is revived and correct; it's
+a regime mismatch for *these approaches*.
+
+**CORRECTION (do not over-claim a "floor"):** freshly-measured llama.cpp on this same XTX
+(`qk-llama-baseline-xtx-20260617.md`) is **~context-flat decode (99.5→92.2 tok/s, −7% to ctx4096)** while
+tinygrad decays −43% — i.e. llama's decode attention is *cheap at long context*. So decode attention is **NOT at
+a fundamental floor**; an efficient context-flat kernel demonstrably exists on this hardware (llama's tuned
+FA2-style flash-decode). What is refuted is **our specific LDS/WMMA levers**, not the existence of a faster
+kernel. Matching llama's flash-decode structure (efficient KV streaming, not LDS re-tiling) remains an **open,
+harder** kernel arc — closed only for the approaches tried here.
 
 ## Lasting assets (not wasted)
 
