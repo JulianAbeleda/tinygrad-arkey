@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # STATUS: FROZEN (historical). The flash threshold (512) is shipped. The current machine-search pattern is
-# qk_flash_variant_search.py (Track 3). run_search/frontier_md here intentionally differ from that file's
-# (threshold-crossover vs best-variant-by-KV) -- same names, different knowledge; not a DRY violation.
+# qk_flash_variant_search.py (Track 3). This module's search (threshold crossover) is distinct knowledge from
+# that file's (best-variant-by-KV); functions are named run_threshold_search / threshold_frontier_md for grep
+# clarity so the two are not confused.
 """Flash-threshold search (Track 2) — the second dogfood of the machine-search scaffold.
 
     search spec (SearchRow, search_space=flash_threshold) -> sweep runner (SDPA vs flash tok/s across
@@ -39,7 +40,7 @@ def find_threshold(sdpa:dict, flash:dict, max_context:int) -> tuple[int, list[di
     rows.append({"ctx": b, "sdpa": sdpa[b], "flash": flash[b], "speedup": round(speedup, 3), "flash_wins": win})
   return (threshold if threshold is not None else max_context), rows
 
-def run_search(model:str, *, buckets:list[int], max_context:int, timeout:int, out_dir:pathlib.Path) -> dict:
+def run_threshold_search(model:str, *, buckets:list[int], max_context:int, timeout:int, out_dir:pathlib.Path) -> dict:
   model_id, commit = _model_id(model), _git_commit()
   llama = model_baseline("qwen3_8b")["llama_tok_s"]
   sdpa = _sweep(model, False, buckets, max_context, timeout)
@@ -64,7 +65,7 @@ def run_search(model:str, *, buckets:list[int], max_context:int, timeout:int, ou
                                                          "threshold_ctx": threshold})
   return summary
 
-def frontier_md(summary:dict) -> str:
+def threshold_frontier_md(summary:dict) -> str:
   lines = [f"# Flash-threshold frontier — crossover at ctx {summary['threshold_ctx']}", "",
            f"llama.cpp = {summary['llama_tok_s']} tok/s; flash is exact (byte-identical to SDPA).", "",
            "| ctx | SDPA tok/s | flash tok/s | speedup | flash wins |",
@@ -82,9 +83,9 @@ def main():
   ap.add_argument("--timeout", type=int, default=900)
   ap.add_argument("--out", type=pathlib.Path, default=pathlib.Path("bench/qk-flash-search"))
   args = ap.parse_args()
-  summary = run_search(args.model, buckets=args.buckets, max_context=args.max_context, timeout=args.timeout,
-                       out_dir=args.out)
-  print(frontier_md(summary))
+  summary = run_threshold_search(args.model, buckets=args.buckets, max_context=args.max_context,
+                                 timeout=args.timeout, out_dir=args.out)
+  print(threshold_frontier_md(summary))
 
 if __name__ == "__main__":
   main()

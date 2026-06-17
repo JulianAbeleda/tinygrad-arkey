@@ -38,7 +38,7 @@ class TestFlashSearch(unittest.TestCase):
   def _run(self):
     with tempfile.TemporaryDirectory() as d, mock.patch.object(fs, "_sweep", _fake_sweep):
       out = pathlib.Path(d)
-      yield fs.run_search("fake.gguf", buckets=[8, 256, 512, 1024, 3072], max_context=4096,
+      yield fs.run_threshold_search("fake.gguf", buckets=[8, 256, 512, 1024, 3072], max_context=4096,
                           timeout=1, out_dir=out), out
 
   def test_emits_accepted_policy(self):
@@ -64,7 +64,7 @@ class TestFlashSearch(unittest.TestCase):
 
   def test_frontier_md_renders(self):
     with self._run() as (summary, _out):
-      md = fs.frontier_md(summary)
+      md = fs.threshold_frontier_md(summary)
       self.assertIn("crossover at ctx 512", md)
       self.assertIn("YES", md)
 
