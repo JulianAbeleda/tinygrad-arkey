@@ -51,8 +51,9 @@ class AMDSignal(HCQSignal):
     if time_spent_since_last_sleep_ms > 200 and self.owner is not None: self.owner.iface.sleep(200)
 
 class AMDComputeQueue(HWQueue):
-  def __init__(self, dev:AMDDevice):
+  def __init__(self, dev:AMDDevice, queue_idx:int=0):
     self.dev, self.soc, self.pm4, self.gc, self.nbio = dev, dev.soc, dev.pm4, dev.gc, dev.nbio
+    self.queue_idx = queue_idx  # which hardware compute ring to submit into (0 = default/only ring)
     super().__init__()
 
   def __del__(self):
@@ -407,19 +408,20 @@ class AMDComputeQueue(HWQueue):
     return self
 
   def _submit(self, dev:AMDDevice):
+    cq = dev.compute_queue_desc(self.queue_idx)
     cmds = self.indirect_cmd if dev == self.binded_device else self._q
     # WORKAROUND: PACKET3_PRED_EXEC doesn't work in rings, only in IBs, create a fake IB inside a ring to work around that
     if self.dev.xccs > 1 and dev != self.binded_device:
-      ib_end = ((dev.compute_queue.put_value + 5) % len(dev.compute_queue.ring)) + len(cmds)
-      ib_pad = len(dev.compute_queue.ring) - (ib_end - len(cmds)) if ib_end > len(dev.compute_queue.ring) else 0
-      ib_ptr = dev.compute_queue.ring.addr + ((dev.compute_queue.put_value + 5 + ib_pad) % len(dev.compute_queue.ring)) * 4
+      ib_end = ((cq.put_value + 5) % len(cq.ring)) + len(cmds)
+      ib_pad = len(cq.ring) - (ib_end - len(cmds)) if ib_end > len(cq.ring) else 0
+      ib_ptr = cq.ring.addr + ((cq.put_value + 5 + ib_pad) % len(cq.ring)) * 4
       cmds = [self.pm4.PACKET3(self.pm4.PACKET3_INDIRECT_BUFFER, 2), *data64_le(ib_ptr), len(cmds) | self.pm4.INDIRECT_BUFFER_VALID,
               self.pm4.PACKET3(self.pm4.PACKET3_NOP, ib_pad + len(cmds) - 1), *((0,) * ib_pad), *cmds]
 
-    for i, value in enumerate(cmds): dev.compute_queue.ring[(dev.compute_queue.put_value + i) % len(dev.compute_queue.ring)] = value
+    for i, value in enumerate(cmds): cq.ring[(cq.put_value + i) % len(cq.ring)] = value
 
-    dev.compute_queue.put_value += len(cmds)
-    dev.compute_queue.signal_doorbell(dev)
+    cq.put_value += len(cmds)
+    cq.signal_doorbell(dev)
 
 class AMDComputeAQLQueue(AMDComputeQueue):
   def exec(self, prg:AMDProgram, args_state:CLikeArgsState, global_size:tuple[sint, ...], local_size:tuple[sint, ...]):
@@ -454,15 +456,16 @@ class AMDComputeAQLQueue(AMDComputeQueue):
     return self
 
   def _submit(self, dev:AMDDevice):
+    cq = dev.compute_queue_desc(self.queue_idx)
     cmds = self._cmds if dev == self.binded_device else self._prep_aql(self._q, dev.pm4_ibs.offset(dev.pm4_ib_alloc.alloc(len(self._q) * 4, 16)))
     aql_bytes = b''.join(bytes(c) if isinstance(c, hsa.hsa_kernel_dispatch_packet_t) else c for c in cmds)
 
-    assert len(aql_bytes) < dev.compute_queue.ring.nbytes, "submit is too large for the queue"
-    cp_bytes = min(len(aql_bytes), (dev.compute_queue.ring.nbytes - (dev.compute_queue.put_value * 64) % dev.compute_queue.ring.nbytes))
-    dev.compute_queue.ring.view(offset=(dev.compute_queue.put_value * 64) % dev.compute_queue.ring.nbytes, fmt='B')[:cp_bytes] = aql_bytes[:cp_bytes]
-    if (tail_bytes:=(len(aql_bytes) - cp_bytes)) > 0: dev.compute_queue.ring.view(offset=0, fmt='B')[:tail_bytes] = aql_bytes[cp_bytes:]
-    dev.compute_queue.put_value += len(aql_bytes) // 64
-    dev.compute_queue.signal_doorbell(dev, doorbell_value=dev.compute_queue.put_value-1)
+    assert len(aql_bytes) < cq.ring.nbytes, "submit is too large for the queue"
+    cp_bytes = min(len(aql_bytes), (cq.ring.nbytes - (cq.put_value * 64) % cq.ring.nbytes))
+    cq.ring.view(offset=(cq.put_value * 64) % cq.ring.nbytes, fmt='B')[:cp_bytes] = aql_bytes[:cp_bytes]
+    if (tail_bytes:=(len(aql_bytes) - cp_bytes)) > 0: cq.ring.view(offset=0, fmt='B')[:tail_bytes] = aql_bytes[cp_bytes:]
+    cq.put_value += len(aql_bytes) // 64
+    cq.signal_doorbell(dev, doorbell_value=cq.put_value-1)
 
 class AMDCopyQueue(HWQueue):
   def __init__(self, dev, max_copy_size=0x40000000, queue_idx=0):
@@ -998,9 +1001,13 @@ class AMDDevice(HCQCompiled):
       self.pm4_ibs = self.iface.alloc(self.remote_alloc_size(16 << 20, 0x2000), uncached=True, cpu_access=True)
       self.pm4_ib_alloc = BumpAllocator(self.pm4_ibs.size, wrap=True)
 
-    self.compute_queue = self.create_queue(kfd.KFD_IOC_QUEUE_TYPE_COMPUTE_AQL if self.is_aql else kfd.KFD_IOC_QUEUE_TYPE_COMPUTE,
-      self.remote_alloc_size(16 << 20, 0x2000), eop_buffer_size=0x1000,
-      ctx_save_restore_size=0 if self.is_am() else wg_data_size + ctl_stack_size, ctl_stack_size=ctl_stack_size, debug_memory_size=debug_memory_size)
+    # compute ring creation spec (reused to lazily create extra rings for AMD_COMPUTE_RINGS, see compute_queue_desc)
+    self._compute_queue_spec = ((kfd.KFD_IOC_QUEUE_TYPE_COMPUTE_AQL if self.is_aql else kfd.KFD_IOC_QUEUE_TYPE_COMPUTE,
+      self.remote_alloc_size(16 << 20, 0x2000)), dict(eop_buffer_size=0x1000,
+      ctx_save_restore_size=0 if self.is_am() else wg_data_size + ctl_stack_size, ctl_stack_size=ctl_stack_size,
+      debug_memory_size=debug_memory_size))
+    self.compute_queue = self.create_queue(*self._compute_queue_spec[0], **self._compute_queue_spec[1])
+    self.compute_queues:dict = {0: self.compute_queue}  # idx -> AMDQueueDesc; ring 0 is the default/only ring
 
     self.max_copy_size = 0x40000000 if self.iface.ip_versions[am.SDMA0_HWIP][0] >= 5 else 0x400000
     self.sdma_queues:dict = {}
@@ -1061,6 +1068,11 @@ class AMDDevice(HCQCompiled):
     return (self.iface.create_queue(queue_type, ring, gart, rptr=getattr(hsa.amd_queue_t, 'read_dispatch_id').offset,
             wptr=getattr(hsa.amd_queue_t, 'write_dispatch_id').offset, eop_buffer=eop_buffer, cwsr_buffer=cwsr_buffer,
             ctx_save_restore_size=ctx_save_restore_size, ctl_stack_size=ctl_stack_size, idx=idx))
+
+  def compute_queue_desc(self, idx:int):
+    # Resolve a compute ring descriptor by index. idx 0 is always the default ring; Phase 1 has only ring 0.
+    if idx in self.compute_queues: return self.compute_queues[idx]
+    raise RuntimeError(f"compute ring {idx} not created (only {sorted(self.compute_queues)} exist); set AMD_COMPUTE_RINGS")
 
   def sdma_queue(self, idx:int):
     if getenv("AMD_DISABLE_SDMA"): return None
