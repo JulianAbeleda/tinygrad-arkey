@@ -73,14 +73,18 @@ def block_128x128_gemm(c:UOp, a:UOp, b:UOp) -> UOp:
     tile_m = UOp.range(TM // WMMA_ACC, 200, AxisType.LOOP)
     tile_n = UOp.range(TN, 201, AxisType.LOOP)
 
-    acc_frag = acc.reshape(TM // WMMA_ACC, WMMA_ACC, TN).permute(0,2,1)[tile_m, tile_n]
+    acc_view = acc.reshape(TM // WMMA_ACC, WMMA_ACC, TN).permute(0,2,1)
+    acc_frag = acc_view[tile_m, tile_n]
+    # AFTER must wrap the placeholder/movement, NOT an INDEX: acc.after(k)[idx], not acc[idx].after(k)
+    # (spec rejects AFTER(INDEX, RANGE); pm_mops moves movement/INDEX after AFTER). WR4 issue #1, fixed.
+    acc_frag_after = acc_view.after(k)[tile_m, tile_n]
     a_frag = A_local.reshape(WAVES_M, TM // WMMA_ACC, WMMA_M, BLOCK_K // WMMA_K, WMMA_K)[wave_m, tile_m, lane_n, k]
     b_frag = B_local.reshape(WAVES_N, TN, WMMA_N, BLOCK_K // WMMA_K, WMMA_K)[wave_n, tile_n, lane_n, k]
     if is_rdna4:
       # NOTE: since this is part of K, these 2 can be anywhere in the frags and long as a and b match
       a_frag = a_frag.reshape(2, 8)[lane_m, :]
       b_frag = b_frag.reshape(2, 8)[lane_m, :]
-    wmma = UOp(Ops.SHAPED_WMMA, dtypes.float, (a_frag, b_frag, acc_frag.after(k)), arg=((16, 16, 16), 'AMD', 32))
+    wmma = UOp(Ops.SHAPED_WMMA, dtypes.float, (a_frag, b_frag, acc_frag_after), arg=((16, 16, 16), 'AMD', 32))
     acc_store = acc_frag.store(wmma).end(tile_m, tile_n)
   else:
     # registers for LOCAL -> REG

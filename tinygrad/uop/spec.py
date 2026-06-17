@@ -116,6 +116,10 @@ spec_shared = PatternMatcher([
 
 # these ops can exist in tensor but not programs. example: movement
 spec_tensor = PatternMatcher([
+  # SHAPED_WMMA <a_frag, b_frag, acc_frag>, arg=(dims, device, threads); tensor-graph only
+  # (lowered to Ops.WMMA by lower_shaped_wmma during rangeify, so it never reaches the program graph).
+  (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 3),
+
   # DEVICE
   (UPat(Ops.DEVICE, dtypes.void, (), name="d"), lambda d:
    isinstance(d.arg, str) or (isinstance(d.arg, tuple) and all(isinstance(s, str) for s in d.arg))),
