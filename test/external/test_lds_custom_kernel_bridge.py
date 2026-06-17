@@ -11,7 +11,7 @@ Mechanism (see docs/amd-lds-tiling-existing-primitives-20260617.md): AddrSpace.L
 Ops.DEFINE_LOCAL (renders `__attribute__((shared,...))`), UOp.barrier -> Ops.BARRIER (renders
 `__builtin_amdgcn_s_barrier`).
 """
-import unittest
+import json, pathlib, unittest
 
 import numpy as np
 
@@ -66,6 +66,19 @@ class TestLDSCustomKernelBridge(unittest.TestCase):
     names = [u.src[0].arg.name for u in jf.captured.linear.toposort()
              if u.op is Ops.CALL and len(u.src) and u.src[0].op is Ops.PROGRAM]
     self.assertTrue(any(n.startswith("lds_smoke") for n in names), f"LDS kernel not captured as Ops.PROGRAM: {names}")
+
+_REUSE_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "lds-tiling-primitive-20260617" / "result.json"
+
+class TestLDSReuseArtifact(unittest.TestCase):
+  """Lock the Phase-3 result: LDS reuse beats redundant HBM reads in the high-reuse regime (the real primitive
+  proof). Skip-if-absent; the DEBUG=2 benchmark (extra/qk_lds_reuse_bench.py) stays out of the suite."""
+  def test_lds_reuse_wins(self):
+    if not _REUSE_ARTIFACT.exists(): self.skipTest(f"no artifact at {_REUSE_ARTIFACT}")
+    d = json.loads(_REUSE_ARTIFACT.read_text())
+    self.assertTrue(d["all_correct"], "LDS reuse benchmark correctness regressed")
+    self.assertTrue(d["verdict"].startswith("PASS"))
+    self.assertTrue(d["win_at_high_reuse_W"], "LDS reuse should beat global reads at high W (the flash regime)")
+    self.assertGreater(d["best_speedup"], 1.5, "LDS reuse speedup collapsed")
 
 if __name__ == "__main__":
   unittest.main()

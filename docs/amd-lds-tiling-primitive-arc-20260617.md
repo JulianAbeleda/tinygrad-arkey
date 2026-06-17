@@ -54,6 +54,34 @@ between Tensor/UOp custom math and real GPU kernel engineering.
   largest intermediate, estimated global bytes R/W, one-process-sweep stability, commit SHA, hardware.
 - Durable small artifacts under `bench/lds-tiling-primitive-20260617/`. No large raw logs.
 
+## Results (Phases 1–3, 2026-06-17)
+
+- **Phase 1 (inventory):** LDS + barrier are directly expressible in `custom_kernel` without BEAM
+  (`AddrSpace.LOCAL`→`DEFINE_LOCAL`, `UOp.barrier`→`Ops.BARRIER`, `UOp.special` grid/thread). A UOp LDS flash
+  attention even exists in-repo (`extra/gemm/amd_flash_attention.py`). → `amd-lds-tiling-existing-primitives-20260617.md`.
+- **Phase 2 (smoke):** a minimal `custom_kernel` does cooperative GLOBAL→LDS load + barrier + cross-lane LDS
+  read, **correct (err 0)**, emits real `__attribute__((shared))` + `s_barrier` (no CPU fallback), Ops.PROGRAM
+  + TinyJit replay. `test/external/test_lds_custom_kernel_bridge.py`.
+- **Phase 3 (the real proof):** synthetic — W lanes each need the whole K tile (mirrors the flash per-`d`
+  re-read). **LDS reuse beats redundant HBM reads up to ~3.0× at W=129** (the flash d-dim regime), and the
+  speedup **grows monotonically with W** (more reuse → bigger win); all correct. `extra/qk_lds_reuse_bench.py`,
+  `bench/lds-tiling-primitive-20260617/result.json`.
+  - **Constraint found:** LDS is 64 KB/workgroup — `L·Hd·4 ≤ 65536` (L≤128 at Hd=128; L=256 overflows). This
+    64 KB ceiling is exactly *why* real flash tiles KV instead of loading it whole.
+
+**Verdict: the missing locality primitive is REAL, expressible, and effective.** The Phase-5 conclusion that
+flash-prefill's reuse-free ~129× redundancy is fixable with LDS is now demonstrated (~3× recovered on the
+synthetic at the matching W). The Phase-5 "BEAM-only / not expressible" framing was too pessimistic — LDS is
+authorable directly in `custom_kernel`.
+
+## Decision (per the arc's table) — STOP after Phase 3
+
+Phase 3 passed (LDS reuse works AND is faster), so per plan: **STOP here and scope the next rung** rather than
+auto-continue. Next would be **Phase 4: q·k tile reuse** (load K tile→LDS, barrier, all query/d lanes reuse it
+for the dot), then Phase 5 (one attention tile: q·k + softmax + V from LDS), then — only if those win on GPU
+time — reopen flash-prefill as a new arc. Flash-prefill stays banked until that attention-tile primitive is
+proven faster than SDPA at real shapes (with the 64 KB LDS tiling constraint designed in from the start).
+
 ## Status statement
 
 **Flash-prefill is BANKED until an LDS/shared-memory tile primitive exists.** This arc tests whether tinygrad
