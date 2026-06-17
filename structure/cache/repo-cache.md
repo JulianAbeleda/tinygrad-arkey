@@ -1,97 +1,67 @@
 # Repo Cache
 
-Last updated: YYYY-MM-DD
-Analyzed source: `<folders/files analyzed>`
-Scope: stable implementation context for token-saving orientation.
+Last updated: 2026-06-16
+Analyzed source: `tinygrad/llm/`, `extra/qk_*`/`llm_*`, `test/external/`, `docs/`, `structure/`.
+Scope: stable implementation context for token-saving orientation. Full doc map: `../../docs/README.md`.
 
 ## Project Shape
 
-Describe the project in 3-8 bullets.
-
-Include:
-
-- primary user-facing surfaces
-- primary runtime or build system
-- important boundaries
-- what this repo is not
+- `tinygrad-arkey`: an **AMD-only hard-fork of tinygrad** for **quantized LLM decode** (Q4_K/Q6_K GGUF) on
+  RDNA3 (RX 7900 XTX, gfx1100). Non-AMD backends (NV/CUDA/METAL/QCOM/CL/WEBGPU/DSP) were pruned.
+- User-facing surface: `tinygrad/llm/cli.py` (chat / `--benchmark` / OpenAI-compat `--serve`).
+- The fork's value is **decode primitives + a bounded machine-search layer** in `extra/qk_*`.
+- What it is NOT: a general multi-backend tinygrad; a training framework (inference/decode focus).
 
 ## Core Facts
 
-Record stable facts an agent usually needs before editing.
-
-Examples:
-
-- language and package manager
-- important commands
-- primary entrypoints
-- state or storage locations
-- environment variables by name only
-- external services by name only
-- generated files or ignored folders
-
-Do not include secret values.
+- Python 3.12, deps via `uv` (`uv sync --extra testing_minimal --extra costmodel`); interpreter `.venv/bin/python`.
+- Run decode: `DEV=AMD .venv/bin/python -m tinygrad.llm.cli -m <gguf> --warmup --benchmark N`.
+- Models: `/home/ubuntu/models/Qwen3-{1.7B,4B,8B,14B,32B}*.gguf`.
+- Key files: `tinygrad/llm/model.py` (`Transformer.from_gguf`, `QKConfig`, Q4K/Q6K primitive install +
+  demotion), `tinygrad/llm/cli.py`, `extra/q4_k_gemv_primitive.py` / `q6_k_gemv_primitive.py` (kernels),
+  `extra/qk_quantize.py` (Q4_K quantizer), `extra/qk_flash_decode.py`, and the machine-search system
+  (`extra/qk_search_spec.py` + `qk_nll_eval.py` + `qk_demote_search.py`).
+- Env flags (names only): `DEV`, `JIT`, `Q4K_PRIMITIVE`/`Q6K_PRIMITIVE` (auto-on for AMD GGUF), `Q6K_COVER_MORE`,
+  `Q6K_DEMOTE_FFNDOWN`/`QK_DEMOTE_TENSORS`, `FLASH_DECODE`/`FLASH_L`, `QK_GENERATED_POLICY`,
+  `QK_PRIMITIVE_STORAGE`. Generated artifacts under `bench/**` are gitignored.
 
 ## Main Flow
 
-Summarize the normal execution flow.
-
-Prefer file pointers:
-
-1. `<entrypoint>` parses input.
-2. `<module>` routes the request.
-3. `<module>` performs the core behavior.
-4. `<module>` renders or returns output.
+1. `cli.py` loads a GGUF → `Transformer.from_gguf` (`model.py`) installs Q4_K/Q6_K decode primitives
+   (path-aware, default-on for AMD), applies any demotion/policy.
+2. `model.generate` runs the JIT'd decode loop (symbolic `start_pos`); primitives swap the GEMV kernels.
+3. Machine search (when used): `qk_search_spec` rows → isolated runner (`cli --benchmark` + `qk_nll_eval`) →
+   quality gate → `AcceptedPolicy` artifact.
 
 ## Key Boundaries
 
-List boundaries that protect correctness or safety.
-
-Examples:
-
-- filesystem scope
-- network scope
-- auth and secret handling
-- durable vs ephemeral state
-- read/write authority
-- public API compatibility
+- **AMD-only**; non-AMD paths gated/removed. Env-ordering invariant: set `DEV`/`JIT`/QK flags **before**
+  `from tinygrad import ...` (loaders import tinygrad lazily to preserve this).
+- **Do NOT run BEAM / risky schedule search on gfx1100** (hangs). Generated policies are **never a runtime default**.
+  Lossy quant demotions are **dNLL-gated, default-off**. Exact wins (Q6_K coverage, flash) are byte-identical.
+- Dangerous-power surface (custom kernels, raw queue/ring) stays contained + gated (see `coding-principles`).
 
 ## Verification
 
-List common checks from cheapest to broadest.
-
-Examples:
-
-- `<formatter command>`
-- `<typecheck/build command>`
-- `<unit test command>`
-- `<integration smoke command>`
-- `<live or external command, if any>`
-
-Note any commands that require network, credentials, GUI access, or destructive state.
+- `.venv/bin/python -m pytest test/external/ -q` → **237 pass / 56 skip** (56 skip = artifact-absent reproduce
+  tests, by design; `bench/**` is gitignored).
+- `.venv/bin/python -m py_compile <file>`; `git diff --check`.
+- Decode smoke: the `cli --benchmark` command above (steady median ~55 tok/s default-on).
 
 ## Current Direction
 
-Summarize the active development direction in a few bullets.
-
-This should help a new agent avoid reopening settled design questions.
+Decode is **BANKED** (~64 tok/s, 63% of llama.cpp) — see `../../docs/amd-decode-banked-20260616.md`. Remaining
+decode levers are refuted, tapped, or **gated** (overlap needs a 2nd compute ring; sub-4-bit needs a new
+kernel). Largest untapped gap = **prefill** (~2% of llama; LDS cache-blocking). The bounded machine-search
+system is the reusable asset. Don't reopen settled negatives (B1 GEMV, norm-fusion, the falsified flywheel).
 
 ## Known Risks
 
-List durable risks or gotchas.
-
-Do not record transient debugging notes.
+- `bench/**` gitignored → reproduce/golden tests skip-if-absent on a fresh tree (not regressions).
+- The two gated builds (overlap 2nd compute ring in `ops_amd.py`; sub-4-bit quantizer+kernel) are
+  dangerous-power surface — scope deliberately, don't bolt on.
 
 ## Update Rule
 
-Update this cache when changing:
-
-- command routing or public behavior
-- architecture boundaries
-- core data contracts
-- state or storage layout
-- provider or external integration behavior
-- verification commands
-- important file ownership
-
-Do not record transient logs, secrets, copied chats, local runtime memory, or session-specific user content.
-
+Update when command routing, architecture boundaries, core data contracts, storage layout, verification
+commands, or important file ownership change. No transient logs, secrets, or session content.
