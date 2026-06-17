@@ -18,6 +18,24 @@ from extra.llm_eval_common import write_json
 from extra.qk_search_spec import Constraints, AcceptedPolicy, assemble_search_row, baseline as model_baseline
 
 _TOK_RE = re.compile(r"([0-9]+\.[0-9]+) tok/s")
+HARDWARE = "RX 7900 XTX / gfx1100"
+
+def _git_commit() -> str:
+  """Real provenance: short HEAD SHA (+ '-dirty'), so committed artifacts are tied to a commit -- never
+  a placeholder. Falls back to 'unknown' only if git is unavailable."""
+  try:
+    repo = str(pathlib.Path(__file__).resolve().parents[1])
+    sha = subprocess.run(["git", "-C", repo, "rev-parse", "--short", "HEAD"], text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10).stdout.strip()
+    dirty = subprocess.run(["git", "-C", repo, "status", "--porcelain"], text=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10).stdout.strip()
+    return (sha + ("-dirty" if dirty else "")) or "unknown"
+  except Exception:
+    return "unknown"
+
+def _model_id(model:str) -> str:
+  """Portable model id from the gguf filename (no absolute path leaks into committed artifacts)."""
+  return pathlib.Path(model).stem.lower().replace("-", "_")
 
 # Candidate demotion sets (cumulative ladder over the Q6_K tensors of Qwen3-8B-Q4_K_M):
 # ffn_down already shipped (the free win); attn_v + output(lm_head) are the remaining Q6 tensors.
@@ -49,6 +67,9 @@ def measure(model:str, targets:str, *, bench:int, tokens:int, timeout:int) -> di
 
 def run_search(model:str, *, epsilon:float, bench:int, tokens:int, timeout:int, out_dir:pathlib.Path) -> dict:
   llama = model_baseline("qwen3_8b")["llama_tok_s"]
+  # Portable provenance for committed artifacts (no absolute paths; a real commit SHA; the hardware).
+  model_id, commit = _model_id(model), _git_commit()
+  meta = {"model_id": model_id, "hardware": HARDWARE, "commit": commit, "epsilon": epsilon, "llama_tok_s": llama}
   results, base = [], None
   for label, targets in CANDIDATES:
     spec = assemble_search_row(row_id=f"demote:{label or 'baseline'}", phase="decode", model="qwen3_8b",
@@ -60,8 +81,7 @@ def run_search(model:str, *, epsilon:float, bench:int, tokens:int, timeout:int, 
     except Exception as e:  # a candidate (e.g. a slow/large requant) may fail; record + keep going.
       if label == "baseline": raise RuntimeError(f"baseline measurement failed (no reference): {e}")
       results.append({"label": label, "targets": targets, "error": str(e)[:300], "accepted": False, "spec": spec})
-      write_json(out_dir / "search.json", {"model": model, "epsilon": epsilon, "llama_tok_s": llama,
-                                           "baseline": base, "results": results})
+      write_json(out_dir / "search.json", {**meta, "baseline": base, "results": results})
       continue
     if label == "baseline": base = m
     dnll = m["nll"] - base["nll"] if base else 0.0
@@ -76,11 +96,10 @@ def run_search(model:str, *, epsilon:float, bench:int, tokens:int, timeout:int, 
       ap = AcceptedPolicy(model="qwen3_8b", phase="decode", backend="AMD", ctx_range=(1, 4096),
                           objective="tok_s", baseline_tok_s=round(base["tok_s"], 2),
                           accepted_tok_s=round(m["tok_s"], 2), quality_gate=f"dNLL <= {epsilon}",
-                          exactness=f"lossy: dNLL={dnll:+.5f}", commit="uncommitted", memory_cap_mb=None)
-      write_json(out_dir / f"accepted-{label}.json", {**ap.to_dict(), "targets": targets})
-    write_json(out_dir / "search.json", {"model": model, "epsilon": epsilon, "llama_tok_s": llama,
-                                         "baseline": base, "results": results})  # incremental
-  return {"model": model, "epsilon": epsilon, "llama_tok_s": llama, "baseline": base, "results": results}
+                          exactness=f"lossy: dNLL={dnll:+.5f}", commit=commit, hardware=HARDWARE, memory_cap_mb=None)
+      write_json(out_dir / f"accepted-{label}.json", {**ap.to_dict(), "model_id": model_id, "targets": targets})
+    write_json(out_dir / "search.json", {**meta, "baseline": base, "results": results})  # incremental
+  return {**meta, "baseline": base, "results": results}
 
 def frontier_md(summary:dict) -> str:
   lines = ["# B3 demotion-search frontier", "",

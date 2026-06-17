@@ -58,6 +58,24 @@ class TestDemoteSearch(unittest.TestCase):
       self.assertEqual(rec["targets"], "ffn_down")
       self.assertTrue(rec["exactness"].startswith("lossy"))
 
+  def test_emitted_artifacts_are_portable_and_provenanced(self):
+    # Guard the overrides' rule: committed artifacts carry no absolute path, a real commit (not a
+    # placeholder), a portable model_id, and the hardware. Mirrors the dataset-golden portability guard.
+    with self._run(eps=0.01) as (_summary, out):
+      for f in out.glob("*.json"):
+        text = f.read_text()
+        self.assertNotIn("/home/", text, f"{f.name}: leaks an absolute path")
+        self.assertNotIn("uncommitted", text, f"{f.name}: placeholder commit")
+      search = json.loads((out / "search.json").read_text())
+      self.assertNotIn("model", search)                 # no raw path field
+      self.assertIn("model_id", search)
+      self.assertNotEqual(search["commit"], "uncommitted")
+      self.assertTrue(search["commit"])                 # a real SHA (or 'unknown' off-git), never the placeholder
+      self.assertIn("gfx", search["hardware"].lower())  # hardware recorded
+      acc = json.loads((out / "accepted-ffn_down.json").read_text())
+      self.assertEqual(acc["model_id"], ds._model_id("fake.gguf"))
+      self.assertTrue(acc["commit"] and acc["commit"] != "uncommitted")
+
   def test_epsilon_zero_rejects_any_regression(self):
     # with epsilon 0, even the tiny +0.0004 dNLL fails -> nothing accepted (all demotions slightly raise NLL here)
     with self._run(eps=0.0) as (summary, _out):

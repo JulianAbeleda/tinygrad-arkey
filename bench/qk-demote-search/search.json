@@ -3,9 +3,11 @@
     "nll": 2.779457037657912,
     "tok_s": 55.98
   },
+  "commit": "2a2e6ea87",
   "epsilon": 0.01,
+  "hardware": "RX 7900 XTX / gfx1100",
   "llama_tok_s": 101.2,
-  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_id": "qwen3_8b_q4_k_m",
   "results": [
     {
       "accepted": false,
