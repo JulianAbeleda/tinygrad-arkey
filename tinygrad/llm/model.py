@@ -216,6 +216,22 @@ class Q6KPrimitiveLinear:
                                      fxn=q6k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
 
+def should_use_flash_decode(start_pos, T, use_flash:bool=False) -> bool:
+  """Centralized flash-decode selection policy (decode attention). Invariants: single-token decode (T==1) with a
+  symbolic start_pos (the flash-decode kernel needs the symbolic KV length). `FLASH_DECODE` env: "0"/off, "1"/on,
+  "auto" (default). In auto, enable when the trace-time context (the decode-start position, read from the bound
+  start_pos) >= FLASH_DECODE_THRESHOLD (default 1024) -- conservative: short-context decode stays SDPA, and if the
+  context can't be read we stay SDPA. flash-decode is exact-vs-SDPA up to fp reassociation and measured
+  neutral-or-better (>=1.05x @512, 1.73x @4096); the threshold guards unmeasured very-short contexts."""
+  if not (isinstance(start_pos, UOp) and isinstance(T, int) and T == 1): return False  # decode-only invariant
+  mode = str(getenv("FLASH_DECODE", "auto")).lower()
+  if mode in ("0", "false", "off"): return False                 # force off
+  if use_flash or mode in ("1", "true", "on"): return True       # force on (programmatic or env), invariants hold
+  if mode != "auto": return False                                # unknown value -> conservative SDPA
+  try: ctx = start_pos.unbind()[1] + T                           # decode-start context known at trace/capture time
+  except Exception: return False                                 # can't read context -> conservative SDPA
+  return ctx >= getenv("FLASH_DECODE_THRESHOLD", 1024)
+
 def apply_rope(x:Tensor, freqs_cis:Tensor) -> Tensor:
   assert x.shape[-1] % 2 == 0
   cos, sin = freqs_cis.reshape(1, 1, x.shape[2], -1).chunk(2, dim=-1)
@@ -749,7 +765,7 @@ class TransformerBlock(FFNBlock):
     # TODO: this if statement should be removed and it shouldn't generate extra kernels
     mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
       if resolve(T != 1) else None
-    if (getattr(self, "_use_flash", False) or getenv("FLASH_DECODE")) and isinstance(start_pos, UOp) and isinstance(T, int) and T == 1:
+    if should_use_flash_decode(start_pos, T, getattr(self, "_use_flash", False)):
       # P2: Flash-Decoding for batch-1 GQA decode. Splits the symbolic-length KV cache into S chunks
       # -> Hq*S workgroups (saturates the GPU at batch 1, vs SDPA's <1% occupancy at long context).
       # Exact vs SDPA up to fp reassociation. Decode-only (T==1, symbolic start_pos).
