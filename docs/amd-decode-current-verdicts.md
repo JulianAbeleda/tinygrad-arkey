@@ -4,6 +4,10 @@ Date: 2026-06-13
 
 Status: canonical decision state for the AMD decode optimization campaign.
 
+> **SUPERSEDED (2026-06-16) — decode is BANKED; current state is `amd-decode-banked-20260616.md`** (+
+> `amd-decode-beyond-llama-roadmap.md`). This Jun-13 file predates Phase 2 (overlap gated, B3 search, bank);
+> read it as historical, not current.
+
 This document consolidates the current verdicts. Treat older hypothesis and
 execution-plan sections as historical unless they agree with this file.
 

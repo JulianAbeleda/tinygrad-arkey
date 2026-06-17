@@ -1,5 +1,8 @@
 # AMD Decode Optimization: Methodology, Timeline, and Roadmap
 
+> **SUPERSEDED (2026-06-16) — decode is BANKED; current state is `amd-decode-banked-20260616.md`.** This is
+> a historical narrative companion to the (also-superseded) `amd-decode-current-verdicts.md`.
+
 Audience: anyone who wants to understand how this campaign has worked, why it
 took the turns it did, and where it is going. This is a narrative companion to
 the canonical decision state in `amd-decode-current-verdicts.md`; when the two

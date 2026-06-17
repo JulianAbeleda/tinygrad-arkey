@@ -1,5 +1,8 @@
 # AMD Decode Flywheel — Final Report
 
+> **SUPERSEDED (2026-06-16) — current decode state is `amd-decode-banked-20260616.md`.** This Jun-15 report
+> predates Phase 2 + the bank; the flywheel verdict is in `amd-decode-flywheel-postmortem.md`. Historical.
+
 Date: 2026-06-15
 GPU: AMD RX 7900 XTX (gfx1100, RDNA3). Framework: tinygrad (this fork). Model: Qwen3-8B Q4_K_M (GGUF).
 Measured device peaks: HBM **859 GB/s** (warm streaming copy, 89% of datasheet), fp16 compute
