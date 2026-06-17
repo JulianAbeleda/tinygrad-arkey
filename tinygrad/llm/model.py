@@ -18,6 +18,19 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 def _prefill_v2_opts(out_f:int, in_f:int) -> tuple:
   return (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, 4 if in_f > out_f else 2), Opt(OptOps.UPCAST, 1, 4))
 
+# Increment 1 only measured/validated the TC schedule at ubatch 512. The warmstart key encodes the ubatch,
+# so a different size would silently reuse a schedule found for 512 -> reject until other sizes are measured.
+_PREFILL_V2_VALIDATED_UBATCH = (512,)
+def _prefill_v2_validate_ubatch(ubatch:int) -> None:
+  if ubatch not in _PREFILL_V2_VALIDATED_UBATCH:
+    raise ValueError(f"PREFILL_V2 only validates PREFILL_UBATCH in {_PREFILL_V2_VALIDATED_UBATCH} (got {ubatch}); "
+                     f"the warmstart TC schedule is shape-specific. Re-measure per-shape opts for {ubatch} first "
+                     f"(extra/qk_prefill_gate.py) and add it to _PREFILL_V2_VALIDATED_UBATCH.")
+
+# fp16 realization coexists with the Q4_K decode storage (~fp16-model-size extra VRAM). Preflight it so an
+# oversized model (14B/32B) fails fast with an actionable error instead of OOMing late mid-realize.
+def _prefill_v2_realize_bytes(shapes:list[tuple[int,int]]) -> int: return sum(o * i for o, i in shapes) * 2  # fp16
+
 def _pf16(lin, x:Tensor) -> Tensor:
   # prefill v2: a single fp16 matmul (both operands fp16 -> RDNA3 WMMA tensor cores can fire). The primitives'
   # `.weight` is a LAZY Q4_K/Q6_K->fp16 dequant graph (not a realized buffer); using it directly fuses the
@@ -882,7 +895,12 @@ class Transformer:
     # prefill v2 (opt-in): a SEPARATE jit captured with a CONCRETE token batch (T=PREFILL_UBATCH) so tensor
     # cores apply, distinct from the symbolic-batch prefill_jit. Only ever called when PREFILL_V2.
     self.prefill_v2_jit = TinyJit(self.forward)
-    if PREFILL_V2: self._install_prefill_v2_warmstart()
+    # prefill v2 warmstart table is built here but installed into the global codegen knob ONLY for the duration
+    # of the prefill-v2 forward (see __call__), to contain that ambient power rather than leave it set process-wide.
+    self._pf16_warmstart:dict|None = None
+    if PREFILL_V2:
+      _prefill_v2_validate_ubatch(PREFILL_UBATCH)
+      self._pf16_warmstart = self._build_prefill_v2_warmstart()
 
   # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
   _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
@@ -892,34 +910,42 @@ class Transformer:
     in_f  = getattr(lin, "in_features", None)  or lin.weight.shape[1]
     return (out_f, in_f) if isinstance(out_f, int) and isinstance(in_f, int) else (None, None)
 
-  def _install_prefill_v2_warmstart(self) -> None:
-    # Force the loop-found per-shape TC schedule onto the prefill-v2 fp16 FFN/attn matmuls. Key matches the
-    # in-model kernel signature (verified): (frozenset({out_features, PREFILL_UBATCH}), in_features). Shapes are
-    # config-fixed so this is computable at init from the (pre-primitive) nn.Linears. A kernel whose key is
-    # absent (e.g. a silu-fused gate) just keeps the heuristic; a key that applies-then-errors falls back too
-    # (postrange.py). GATED on PREFILL_V2 (opt-in) so decode/normal prefill never see a populated table; the
-    # 512-bearing keys can't match decode's T==1 GEMVs (which also bypass apply_opts via custom kernels).
-    import tinygrad.codegen.opt.postrange as pr
-    table:dict = {}
+  def _prefill_v2_covered(self):
+    # (linear, out_f, in_f) for each covered linear with a known concrete shape -- single source for the
+    # warmstart table, the VRAM estimate, and the realization, so they can't drift apart.
     for block in self.blk:
       for n in self._PREFILL_V2_LINEARS:
         lin = getattr(block, n, None)
         if lin is None or getattr(lin, "weight", None) is None: continue
         out_f, in_f = self._prefill_v2_dims(lin)
-        if out_f is not None: table[(frozenset({out_f, PREFILL_UBATCH}), in_f)] = _prefill_v2_opts(out_f, in_f)
-    pr._WARMSTART_OPTS = table
+        if out_f is not None: yield lin, out_f, in_f
+
+  def _build_prefill_v2_warmstart(self) -> dict:
+    # The loop-found per-shape TC schedule for the prefill-v2 fp16 FFN/attn matmuls, keyed by the in-model
+    # kernel signature (verified): (frozenset({out_features, PREFILL_UBATCH}), in_features). Shapes are
+    # config-fixed so this is computable at init from the (pre-primitive) nn.Linears. A kernel whose key is
+    # absent (e.g. a silu-fused gate) keeps the heuristic; a key that applies-then-errors falls back too
+    # (postrange.py). NOT set into the global here -- installed only around the prefill-v2 forward (__call__).
+    return {(frozenset({out_f, PREFILL_UBATCH}), in_f): _prefill_v2_opts(out_f, in_f)
+            for _, out_f, in_f in self._prefill_v2_covered()}
 
   def realize_prefill_v2_weights(self) -> int:
     # Realize a clean fp16 weight per covered linear (cached as `_pf16_w`, read by _pf16). The primitives' lazy
     # Q4_K/Q6_K->fp16 dequant graph, used raw, fuses into the matmul -> ~3% peak (no TC win); a realized fp16
     # buffer makes the prefill-v2 matmul a real TC GEMM (~13x prefill on 8B). COST: ~fp16-model-size extra VRAM
     # (it coexists with the Q4_K decode storage). Gated/opt-in; called at the end of from_gguf when PREFILL_V2.
+    covered = list(self._prefill_v2_covered())
+    # preflight: realizing ~fp16-model-size on top of Q4_K OOMs for 14B/32B -> fail fast with the estimate.
+    est_gb = _prefill_v2_realize_bytes([(o, i) for _, o, i in covered]) / 1e9
+    budget_gb = getenv("PREFILL_V2_MAX_REALIZE_GB", 18)
+    if est_gb > budget_gb and not getenv("PREFILL_V2_FORCE_REALIZE", 0):
+      raise RuntimeError(f"PREFILL_V2 would realize ~{est_gb:.1f} GB of fp16 weights (on top of Q4_K decode "
+                         f"storage), over the ~{budget_gb} GB budget -- likely OOM. This is 8B-sized work; for "
+                         f"larger models raise PREFILL_V2_MAX_REALIZE_GB or set PREFILL_V2_FORCE_REALIZE=1 to "
+                         f"override (a VRAM-frugal per-layer realize is future work).")
     n = 0
-    for block in self.blk:
-      for nm in self._PREFILL_V2_LINEARS:
-        lin = getattr(block, nm, None)
-        if lin is None or getattr(lin, "weight", None) is None: continue
-        lin._pf16_w = lin.weight.cast(dtypes.float16).contiguous().realize(); n += 1
+    for lin, _, _ in covered:
+      lin._pf16_w = lin.weight.cast(dtypes.float16).contiguous().realize(); n += 1
     return n
 
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
@@ -946,7 +972,15 @@ class Transformer:
     for block in self.blk: block._use_flash, block._prefill_v2 = use_flash, is_prefill_v2
     jit = (self.prefill_v2_jit if is_prefill_v2 else self.prefill_jit) if is_prefill else \
           (self.rollout_jit_flash if use_flash else self.rollout_jit)
-    return jit(tokens.contiguous(), start_pos, temperature)
+    if not is_prefill_v2: return jit(tokens.contiguous(), start_pos, temperature)
+    # contain the ambient codegen power: install the warmstart table ONLY around the prefill-v2 forward (it's
+    # consulted at kernel-compile time, i.e. this jit's first call), then restore -- decode/other paths never
+    # see a populated _WARMSTART_OPTS even within this process.
+    import tinygrad.codegen.opt.postrange as pr
+    saved = pr._WARMSTART_OPTS
+    pr._WARMSTART_OPTS = self._pf16_warmstart
+    try: return jit(tokens.contiguous(), start_pos, temperature)
+    finally: pr._WARMSTART_OPTS = saved
 
   @staticmethod
   def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:int|None=None,
