@@ -701,7 +701,7 @@ class TransformerBlock(FFNBlock):
     # TODO: this if statement should be removed and it shouldn't generate extra kernels
     mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
       if resolve(T != 1) else None
-    if getenv("FLASH_DECODE") and isinstance(start_pos, UOp) and isinstance(T, int) and T == 1:
+    if (getattr(self, "_use_flash", False) or getenv("FLASH_DECODE")) and isinstance(start_pos, UOp) and isinstance(T, int) and T == 1:
       # P2: Flash-Decoding for batch-1 GQA decode. Splits the symbolic-length KV cache into S chunks
       # -> Hq*S workgroups (saturates the GPU at batch 1, vs SDPA's <1% occupancy at long context).
       # Exact vs SDPA up to fp reassociation. Decode-only (T==1, symbolic start_pos).
@@ -841,9 +841,11 @@ class Transformer:
     self.has_recurrent_block = any(isinstance(b, GatedDeltaNetBlock) for b in self.blk)
     self._cached_tokens: list[int] = []
     self._q4k_linears = Q4KPrimitiveRegistry()
-    # we specialize the JIT for prefill and rollout
+    # we specialize the JIT for prefill and rollout; rollout_jit_flash is the context-aware flash-decode
+    # decode graph (captured lazily when ctx crosses FLASH_DECODE_THRESHOLD), see __call__/generate.
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
+    self.rollout_jit_flash = TinyJit(self.forward)
 
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)
@@ -855,12 +857,17 @@ class Transformer:
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
     return (logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
 
-  def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+  def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     if getenv("Q4K_VDOT_AMORT"): _VDOT_QUANT_CACHE.clear()  # E0: fresh quant cache per forward/trace
     for q4k_linear in self._q4k_linears.linears:
       q4k_linear.decode_enabled = not is_prefill
-    return (self.prefill_jit if is_prefill else self.rollout_jit)(tokens.contiguous(), start_pos, temperature)
+    # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
+    # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
+    # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
+    for block in self.blk: block._use_flash = use_flash
+    jit = self.prefill_jit if is_prefill else (self.rollout_jit_flash if use_flash else self.rollout_jit)
+    return jit(tokens.contiguous(), start_pos, temperature)
 
   @staticmethod
   def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:int|None=None,
@@ -1000,10 +1007,14 @@ class Transformer:
     # recompute start_pos from what's currently valid in the caches
     start_pos = self.get_start_pos(tokens)
     if start_pos < len(self._cached_tokens) and (resets := [r for b in self.blk for r in b._state_reset_ops()]): Tensor.realize(*resets)
+    # context-aware flash-decode: SDPA below the searched threshold, flash at/above it (exact, opt-in).
+    # FLASH_DECODE_THRESHOLD=0 (default) -> never flash; ctx_range[0] of the accepted flash policy is the value.
+    flash_threshold = getenv("FLASH_DECODE_THRESHOLD", 0)
     out, prompt_len = None, len(tokens)
     while len(tokens) < self.max_context:
       sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
-      out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp).realize()
+      use_flash = bool(flash_threshold) and start_pos >= flash_threshold
+      out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp, use_flash=use_flash).realize()
       start_pos += nt.val
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
