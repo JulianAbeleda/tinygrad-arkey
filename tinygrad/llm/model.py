@@ -220,9 +220,11 @@ def should_use_flash_decode(start_pos, T, use_flash:bool=False) -> bool:
   """Centralized flash-decode selection policy (decode attention). Invariants: single-token decode (T==1) with a
   symbolic start_pos (the flash-decode kernel needs the symbolic KV length). `FLASH_DECODE` env: "0"/off, "1"/on,
   "auto" (default). In auto, enable when the trace-time context (the decode-start position, read from the bound
-  start_pos) >= FLASH_DECODE_THRESHOLD (default 1024) -- conservative: short-context decode stays SDPA, and if the
-  context can't be read we stay SDPA. flash-decode is exact-vs-SDPA up to fp reassociation and measured
-  neutral-or-better (>=1.05x @512, 1.73x @4096); the threshold guards unmeasured very-short contexts."""
+  start_pos) >= FLASH_DECODE_THRESHOLD (default 512) -- short-context decode <512 stays SDPA, and if the context
+  can't be read we stay SDPA. flash-decode is exact-vs-SDPA up to fp reassociation and measured neutral-or-better
+  at/above the threshold; the crossover is ~ctx384 (flash REGRESSES below ~256: 0.93x @128, 0.95x @256), and it
+  wins above: +12.8% real-generate @ctx520 (byte-identical greedy), 1.05x @512, 1.23x @1024, 1.73x @4096. 512 is
+  the measured safe cutover (Arc 1, docs/qk-8b-attention-fusion-result-20260617.md)."""
   if not (isinstance(start_pos, UOp) and isinstance(T, int) and T == 1): return False  # decode-only invariant
   mode = str(getenv("FLASH_DECODE", "auto")).lower()
   if mode in ("0", "false", "off"): return False                 # force off
@@ -230,7 +232,7 @@ def should_use_flash_decode(start_pos, T, use_flash:bool=False) -> bool:
   if mode != "auto": return False                                # unknown value -> conservative SDPA
   try: ctx = start_pos.unbind()[1] + T                           # decode-start context known at trace/capture time
   except Exception: return False                                 # can't read context -> conservative SDPA
-  return ctx >= getenv("FLASH_DECODE_THRESHOLD", 1024)
+  return ctx >= getenv("FLASH_DECODE_THRESHOLD", 512)
 
 def apply_rope(x:Tensor, freqs_cis:Tensor) -> Tensor:
   assert x.shape[-1] % 2 == 0

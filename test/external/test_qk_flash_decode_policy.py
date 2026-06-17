@@ -52,7 +52,15 @@ class TestFlashDecodePolicy(unittest.TestCase):
   def test_threshold_boundary(self):
     with _Env(FLASH_DECODE="auto", FLASH_DECODE_THRESHOLD=1024):
       self.assertTrue(M.should_use_flash_decode(_sp(1023), 1))    # ctx 1024 >= 1024
-      self.assertFalse(M.should_use_flash_decode(_sp(1022), 1))   # ctx 1023 < 1024
+
+  def test_default_threshold_is_512(self):
+    # Arc 1: default cutover lowered 1024->512 (measured +12.8% real-generate @ctx520, byte-identical greedy,
+    # no regression <512 which stays SDPA). No FLASH_DECODE_THRESHOLD env -> getenv default applies.
+    with _Env(FLASH_DECODE="auto"):
+      self.assertFalse(M.should_use_flash_decode(_sp(255), 1))    # ctx 256 < 512 -> SDPA (flash regresses here)
+      self.assertFalse(M.should_use_flash_decode(_sp(510), 1))    # ctx 511 < 512 -> SDPA
+      self.assertTrue(M.should_use_flash_decode(_sp(511), 1))     # ctx 512 >= 512 -> flash
+      self.assertTrue(M.should_use_flash_decode(_sp(1022), 1))    # ctx 1023 >= 512 -> flash (long ctx preserved)
 
 if __name__ == "__main__":
   unittest.main()
