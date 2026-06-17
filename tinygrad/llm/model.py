@@ -2,6 +2,7 @@ from __future__ import annotations
 import collections, functools, itertools, json, os, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function, Device
+from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import prod
 from tinygrad.llm.gguf import gguf_load, gguf_load_with_metadata
 from tinygrad.uop.ops import resolve
@@ -10,6 +11,9 @@ from tinygrad.uop.ops import resolve
 # tensor cores apply + the loop-found TC schedule warm-start in. See docs/amd-decode-prefill-v2-gate-20260616.md.
 PREFILL_V2 = bool(getenv("PREFILL_V2", 0))
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
+# The loop-found per-shape TC schedule (gate-validated; NO BEAM -- BEAM hangs gfx1100). Forced onto the
+# prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. See docs/amd-decode-prefill-v2-gate-20260616.md.
+_PREFILL_V2_OPTS = (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, 2), Opt(OptOps.UPCAST, 1, 4))
 
 def _pf16(lin, x:Tensor) -> Tensor:
   # prefill v2: a single fp16 matmul (both operands fp16 -> RDNA3 WMMA tensor cores can fire). The Q4_K/Q6_K
@@ -873,6 +877,28 @@ class Transformer:
     # prefill v2 (opt-in): a SEPARATE jit captured with a CONCRETE token batch (T=PREFILL_UBATCH) so tensor
     # cores apply, distinct from the symbolic-batch prefill_jit. Only ever called when PREFILL_V2.
     self.prefill_v2_jit = TinyJit(self.forward)
+    if PREFILL_V2: self._install_prefill_v2_warmstart()
+
+  def _install_prefill_v2_warmstart(self) -> None:
+    # Force the loop-found TC schedule onto the prefill-v2 fp16 FFN/attn matmuls. Key matches the in-model
+    # kernel signature (verified): (frozenset({out_features, PREFILL_UBATCH}), in_features). Shapes are
+    # config-fixed so this is computable at init from the (pre-primitive) nn.Linears. A kernel whose key is
+    # absent (e.g. a silu-fused gate) just keeps the heuristic; a key that applies-then-errors falls back too
+    # (postrange.py). GATED on PREFILL_V2 (opt-in) so decode/normal prefill never see a populated table; the
+    # 512-bearing keys can't match decode's T==1 GEMVs (which also bypass apply_opts via custom kernels).
+    import tinygrad.codegen.opt.postrange as pr
+    names = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
+             "attn_q", "attn_k", "attn_v", "attn_output")
+    table:dict = {}
+    for block in self.blk:
+      for n in names:
+        lin = getattr(block, n, None)
+        if lin is None or getattr(lin, "weight", None) is None: continue
+        out_f = getattr(lin, "out_features", None) or lin.weight.shape[0]
+        in_f  = getattr(lin, "in_features", None)  or lin.weight.shape[1]
+        if isinstance(out_f, int) and isinstance(in_f, int):
+          table[(frozenset({out_f, PREFILL_UBATCH}), in_f)] = _PREFILL_V2_OPTS
+    pr._WARMSTART_OPTS = table
 
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)
