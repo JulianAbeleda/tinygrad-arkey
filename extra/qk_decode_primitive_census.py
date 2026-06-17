@@ -16,7 +16,7 @@ from __future__ import annotations
 import io, json, os, pathlib, re, statistics, sys, time, contextlib
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
-_KLINE = re.compile(r"\*\*\*\s+\S+\s+\d+\s+(\S+).*?tm\s+([\d.]+)us")
+_KLINE = re.compile(r"\*\*\*\s+\S+\s+\d+\s+(.+?)\s+arg\s.*?tm\s+([\d.]+)us")   # full name up to 'arg'
 _GEMV = re.compile(r"q[46]k_gemv\w*_(\d+)_(\d+)_")   # q4k/q6k_gemv_..._<out>_<in>_1
 # Qwen3-8B: hidden 4096, ffn 12288, kv 1024, vocab 151936. Map (out,in) of a GEMV to its role.
 _SHAPE_ROLE = {(151936, 4096): "lm_head", (4096, 12288): "ffn_down", (12288, 4096): "ffn_gate/up",
@@ -28,6 +28,9 @@ def _classify(name: str) -> str:
     role = _SHAPE_ROLE.get((int(mn.group(1)), int(mn.group(2))), "gemv_other")
     return f"QKGEMV:{role}"
   n = name.lower()
+  # the per-step 4-byte input upload (copy 4 B, AMD <- PYTHON) shows huge tm at 0 GB/s -- that's a step-boundary
+  # sync/launch STALL, not GPU work (proven in qk_decode_copy_diagnostic). Exclude it from GPU attribution.
+  if n.startswith("copy") and ("python" in n or " 4 b" in n or "4 b," in n): return "input_upload_sync_EXCLUDED"
   if n.startswith("copy"): return "copy/gather"
   # tinygrad auto-names the rest (E_*, r_*) -- attention compute + norms + rope + residuals; can't positively
   # split by name, so bucket honestly as non-GEMV compute/small-ops.
@@ -59,7 +62,8 @@ def main():
   for nm, us in kernels:
     c = _classify(nm); d = by_class.setdefault(c, {"count": 0, "us": 0.0})
     d["count"] += 1; d["us"] += us
-  total_us = sum(us for _, us in kernels) or 1.0
+  # exclude the input-upload sync stall from the GPU-time denominator (it's a measurement artifact, not GPU work)
+  total_us = sum(d["us"] for c, d in by_class.items() if c != "input_upload_sync_EXCLUDED") or 1.0
 
   # --- host/e2e: JIT decode step, median wall/token + GPU/token ---
   v_sp = UOp.variable("start_pos", 0, MAXC - 1)
