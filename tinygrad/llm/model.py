@@ -12,16 +12,21 @@ from tinygrad.uop.ops import resolve
 PREFILL_V2 = bool(getenv("PREFILL_V2", 0))
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
 # The loop-found per-shape TC schedule (gate-validated; NO BEAM -- BEAM hangs gfx1100). Forced onto the
-# prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. See docs/amd-decode-prefill-v2-gate-20260616.md.
-_PREFILL_V2_OPTS = (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, 2), Opt(OptOps.UPCAST, 1, 4))
+# prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. The contraction-heavy shapes (in>out, e.g.
+# ffn_down 4096x12288) want UPCAST(0,4); the rest UPCAST(0,2) -- using one schedule for all drops the chain
+# to ~9% (verified). See docs/amd-decode-prefill-v2-gate-20260616.md.
+def _prefill_v2_opts(out_f:int, in_f:int) -> tuple:
+  return (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, 4 if in_f > out_f else 2), Opt(OptOps.UPCAST, 1, 4))
 
 def _pf16(lin, x:Tensor) -> Tensor:
-  # prefill v2: a single fp16 matmul (both operands fp16 -> RDNA3 WMMA tensor cores can fire). The Q4_K/Q6_K
-  # primitives already keep the dequantized fp weight around for _fallback, so .cast(fp16) IS the dequant --
-  # no separate matmul_decoded pass. Works for primitives and plain nn.Linear (both expose .weight/.bias).
+  # prefill v2: a single fp16 matmul (both operands fp16 -> RDNA3 WMMA tensor cores can fire). The primitives'
+  # `.weight` is a LAZY Q4_K/Q6_K->fp16 dequant graph (not a realized buffer); using it directly fuses the
+  # whole dequant into the matmul -> bandwidth/dequant-bound ~3% peak (no TC win). So we realize a clean fp16
+  # weight ONCE per linear (cached as `_pf16_w` by _install_prefill_v2_warmstart) and matmul against that.
+  w = getattr(lin, "_pf16_w", None)
+  if w is None: w = lin.weight.cast(dtypes.float16)   # fallback (uncached): lazy, slow -- expect the cache
   b = getattr(lin, "bias", None)
-  return x.cast(dtypes.float16).linear(lin.weight.cast(dtypes.float16).transpose(),
-                                       b.cast(dtypes.float16) if b is not None else None)
+  return x.cast(dtypes.float16).linear(w.transpose(), b.cast(dtypes.float16) if b is not None else None)
 
 @functools.cache
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, device:str|None=None) -> Tensor:
@@ -879,26 +884,43 @@ class Transformer:
     self.prefill_v2_jit = TinyJit(self.forward)
     if PREFILL_V2: self._install_prefill_v2_warmstart()
 
+  # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
+  _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
+                         "attn_q", "attn_k", "attn_v", "attn_output")
+  def _prefill_v2_dims(self, lin):
+    out_f = getattr(lin, "out_features", None) or lin.weight.shape[0]
+    in_f  = getattr(lin, "in_features", None)  or lin.weight.shape[1]
+    return (out_f, in_f) if isinstance(out_f, int) and isinstance(in_f, int) else (None, None)
+
   def _install_prefill_v2_warmstart(self) -> None:
-    # Force the loop-found TC schedule onto the prefill-v2 fp16 FFN/attn matmuls. Key matches the in-model
-    # kernel signature (verified): (frozenset({out_features, PREFILL_UBATCH}), in_features). Shapes are
+    # Force the loop-found per-shape TC schedule onto the prefill-v2 fp16 FFN/attn matmuls. Key matches the
+    # in-model kernel signature (verified): (frozenset({out_features, PREFILL_UBATCH}), in_features). Shapes are
     # config-fixed so this is computable at init from the (pre-primitive) nn.Linears. A kernel whose key is
     # absent (e.g. a silu-fused gate) just keeps the heuristic; a key that applies-then-errors falls back too
     # (postrange.py). GATED on PREFILL_V2 (opt-in) so decode/normal prefill never see a populated table; the
     # 512-bearing keys can't match decode's T==1 GEMVs (which also bypass apply_opts via custom kernels).
     import tinygrad.codegen.opt.postrange as pr
-    names = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
-             "attn_q", "attn_k", "attn_v", "attn_output")
     table:dict = {}
     for block in self.blk:
-      for n in names:
+      for n in self._PREFILL_V2_LINEARS:
         lin = getattr(block, n, None)
         if lin is None or getattr(lin, "weight", None) is None: continue
-        out_f = getattr(lin, "out_features", None) or lin.weight.shape[0]
-        in_f  = getattr(lin, "in_features", None)  or lin.weight.shape[1]
-        if isinstance(out_f, int) and isinstance(in_f, int):
-          table[(frozenset({out_f, PREFILL_UBATCH}), in_f)] = _PREFILL_V2_OPTS
+        out_f, in_f = self._prefill_v2_dims(lin)
+        if out_f is not None: table[(frozenset({out_f, PREFILL_UBATCH}), in_f)] = _prefill_v2_opts(out_f, in_f)
     pr._WARMSTART_OPTS = table
+
+  def realize_prefill_v2_weights(self) -> int:
+    # Realize a clean fp16 weight per covered linear (cached as `_pf16_w`, read by _pf16). The primitives' lazy
+    # Q4_K/Q6_K->fp16 dequant graph, used raw, fuses into the matmul -> ~3% peak (no TC win); a realized fp16
+    # buffer makes the prefill-v2 matmul a real TC GEMM (~13x prefill on 8B). COST: ~fp16-model-size extra VRAM
+    # (it coexists with the Q4_K decode storage). Gated/opt-in; called at the end of from_gguf when PREFILL_V2.
+    n = 0
+    for block in self.blk:
+      for nm in self._PREFILL_V2_LINEARS:
+        lin = getattr(block, nm, None)
+        if lin is None or getattr(lin, "weight", None) is None: continue
+        lin._pf16_w = lin.weight.cast(dtypes.float16).contiguous().realize(); n += 1
+    return n
 
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)
@@ -1047,6 +1069,8 @@ class Transformer:
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())
       Tensor.realize(*params)
+    # prefill v2 (opt-in): realize fp16 weights now that primitives are installed (shapes/dequant graphs ready)
+    if PREFILL_V2: model.realize_prefill_v2_weights()
     return model, kv
 
   def get_start_pos(self, tokens:list[int]) -> int:
