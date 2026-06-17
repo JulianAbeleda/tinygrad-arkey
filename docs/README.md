@@ -11,6 +11,8 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 - `amd-decode-beyond-llama-roadmap.md` — the lever map with live statuses (parity vs beyond-llama).
 - `gpu-performance-first-principles.md` — **canonical** bytes/math/overhead + roofline reference;
   diagnose the bucket BEFORE optimizing.
+- **`../bench/README.md`** — the benchmark results index: every current number, its artifact, and the
+  exact command to reproduce it.
 - `amd-decode-capstone.md` — the decode ledger (23 → ~64 tok/s arc).
 - `amd-decode-arc-synthesis.md` — synthesis through the primitive lens.
 
