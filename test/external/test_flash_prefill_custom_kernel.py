@@ -6,7 +6,7 @@ Proves extra/qk_flash_prefill_custom.flash_prefill_attention_1h computes attenti
 formulation verdict (single-kernel online softmax A is linearizer-rejected; the shipped B = fused max+partial +
 combine). No GQA / tiling / perf / model edits. Gated to AMD (the target; CPU custom-kernel compile is
 unreliable here)."""
-import math, unittest
+import json, math, pathlib, unittest
 
 import numpy as np
 
@@ -80,6 +80,20 @@ class TestFlashPrefillCustomKernel(unittest.TestCase):
       self.assertLess(np.abs(out - ref).max(), 2e-2, f"call#{call_i} seed={seed}")
     self.assertTrue(any(n.startswith("fp_maxpartial") for n in _program_names(jf)),
                     f"fused kernel not captured as Ops.PROGRAM: {_program_names(jf)}")
+
+_P3_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "qk-flash-prefill-phase3" / "result.json"
+
+class TestFlashPrefillPhase3Artifact(unittest.TestCase):
+  """Lock the Phase-3 single-head real-dim gate result (extra/qk_flash_prefill_phase3.py). Skip-if-absent; the
+  slow warm-timing benchmark stays out of the suite (run the script to regenerate)."""
+  def test_real_dim_gate(self):
+    if not _P3_ARTIFACT.exists(): self.skipTest(f"no artifact at {_P3_ARTIFACT}")
+    d = json.loads(_P3_ARTIFACT.read_text())
+    self.assertTrue(d["correctness_ok"], "Phase-3 correctness regressed")
+    self.assertTrue(d["capture"]["score_free"], "Phase-3 lost score-free property")
+    self.assertTrue(d["capture"]["jit_replayed"], "Phase-3 JIT replay regressed")
+    long = next(r for r in d["rows"] if r["KV"] == max(r2["KV"] for r2 in d["rows"]))
+    self.assertGreaterEqual(long["speedup"], 1.5, f"KV={long['KV']} single-head speedup below the 1.5x gate")
 
 if __name__ == "__main__":
   unittest.main()

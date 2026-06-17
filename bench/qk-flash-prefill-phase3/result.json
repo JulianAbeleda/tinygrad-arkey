@@ -1,0 +1,52 @@
+{
+  "shape": {
+    "Hq": 1,
+    "Hkv": 1,
+    "Hd": 128,
+    "T": 512
+  },
+  "rows": [
+    {
+      "KV": 512,
+      "start_pos": 0,
+      "max_abs_err": 0.00098,
+      "ref_abs_mean": 0.10608,
+      "rel_err": 0.0092,
+      "sdpa_ms": 5.113,
+      "flash_ms": 1.94,
+      "speedup": 2.636
+    },
+    {
+      "KV": 1024,
+      "start_pos": 512,
+      "max_abs_err": 0.00037,
+      "ref_abs_mean": 0.04709,
+      "rel_err": 0.0078,
+      "sdpa_ms": 5.355,
+      "flash_ms": 1.976,
+      "speedup": 2.71
+    },
+    {
+      "KV": 3584,
+      "start_pos": 3072,
+      "max_abs_err": 0.00018,
+      "ref_abs_mean": 0.02339,
+      "rel_err": 0.0078,
+      "sdpa_ms": 5.389,
+      "flash_ms": 1.975,
+      "speedup": 2.729
+    }
+  ],
+  "capture": {
+    "captured": [
+      "fp_maxpartial_512_4096_128",
+      "fp_combine_512_128"
+    ],
+    "jit_replayed": true,
+    "max_intermediate_numel": 66048,
+    "score_numel": 2097152,
+    "score_free": true
+  },
+  "correctness_ok": true,
+  "promise": true
+}
