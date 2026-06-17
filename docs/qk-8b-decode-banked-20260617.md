@@ -9,6 +9,7 @@ and sets the clean baseline before the **deep-codegen** arc. Qwen3-8B-Q4_K_M, RX
 
 | win | effect | flag / location | doc |
 |---|---|---|---|
+| **flash variant `hoisted` + L=128** | **+11.5%/+15.7%/+21.1%/+29.2% decode @ctx 512/1024/2048/4096, byte-identical greedy** | defaults (`FLASH_VARIANT`, `FLASH_L`) | `qk-8b-flash-variant-result-20260617.md` |
 | **FLASH_DECODE_THRESHOLD 1024→512** | **+12.8% real decode @ctx520, byte-identical greedy** | default (`model.py:233`) | `qk-8b-attention-fusion-result-20260617.md` |
 | Flash-decode auto-enable | long-context win (1.23× @1024, 1.73× @4096), default `auto` | `FLASH_DECODE=auto` | (prior arc) |
 | PREFILL_V2 Increment 1 | ~13× warm prefill (189→2486 tok/s, ~83% llama), decode untouched | `PREFILL_V2` (gated) | prefill v2 docs |
@@ -33,11 +34,18 @@ byte-identical (flash is exact); ctx<512 stays SDPA (flash regresses there: 0.93
 
 ## Structural conclusion
 
-The 8B short-decode gap vs llama (~54–64 vs ~100 tok/s) is **GPU-kernel-structural**: ~780 programs/token vs
+The 8B short-decode gap vs llama is **GPU-kernel-structural** at the *cross-layer* level: ~780 programs/token vs
 llama's ~260 fused, a competitive-but-not-faster GEMV (51.8% of decode), and attention reduce granularity. It is
-**not** host/runtime overhead (refuted) and **not** a single fixable primitive (all refuted). Every *bounded /
-local* lever is now shipped, refuted, or necessary. The attention path was the last bounded win — and it shipped
-(flash-threshold).
+**not** host/runtime overhead (refuted) and **not** a single fixable primitive (all refuted).
+
+**CORRECTION (2026-06-17, flash-variant arc — `qk-8b-flash-variant-result-20260617.md`):** the earlier claim
+here that "every bounded/local lever is now shipped, refuted, or necessary; the attention path was the last
+bounded win" was **premature**. A primitive-family search of the (already-shipped) flash kernel found
+**structural waste *inside* it** — `flash_partial` recomputed a `d`-independent `exp` 129× per output lane — and
+removing it won +11.5%/+15.7%/+21.1%/+29.2% @ctx 512/1024/2048/4096, byte-identical greedy. Corrected
+conclusion: **bounded primitive search can still find structural waste inside existing kernels; audit the
+dominant kernel's per-lane redundancy before declaring a path exhausted.** (Also: this host is an RX 7900 GRE,
+not the XTX the absolute numbers above assume — see `qk-8b-flash-variant-result-20260617.md`.)
 
 ## Next: deep codegen (the only remaining 8B decode lever)
 
