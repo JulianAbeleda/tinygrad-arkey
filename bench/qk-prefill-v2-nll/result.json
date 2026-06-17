@@ -1,0 +1,31 @@
+{
+  "model_id": "Qwen3-8B-Q4_K_M.gguf",
+  "hardware": "ubuntu-dualboot",
+  "commit": "9023a540bdd5c41644153f01613706a553fe697c",
+  "ubatch": 512,
+  "windows": 2,
+  "stride": 256,
+  "tokens_scored": 1022,
+  "rows": [
+    {
+      "window": 0,
+      "start": 0,
+      "n": 512,
+      "nll_baseline": 2.582376,
+      "nll_prefill_v2": 2.582077,
+      "dNLL": -0.000299
+    },
+    {
+      "window": 1,
+      "start": 256,
+      "n": 512,
+      "nll_baseline": 2.785928,
+      "nll_prefill_v2": 2.784758,
+      "dNLL": -0.00117
+    }
+  ],
+  "mean_dNLL": -0.000735,
+  "max_dNLL": -0.000299,
+  "eps": 0.01,
+  "verdict": "accept"
+}

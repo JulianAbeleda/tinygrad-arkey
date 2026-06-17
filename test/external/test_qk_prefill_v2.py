@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Fast unit guards for the prefill-v2 build (no model load). The end-to-end win (~13x warm prefill on 8B)
 is measured by extra/qk_prefill_v2_measure.py; these lock the pure logic that makes it correct + decode-safe."""
-import unittest
+import json, pathlib, unittest
 
 from tinygrad import Tensor, UOp, dtypes
 from tinygrad.codegen.opt import OptOps
 from tinygrad.llm import model as M
+
+_NLL_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "qk-prefill-v2-nll" / "result.json"
 
 class TestPrefillV2Opts(unittest.TestCase):
   def test_per_shape_upcast(self):
@@ -70,6 +72,17 @@ class TestPf16(unittest.TestCase):
     out = M._pf16(lin, Tensor.randn(1, 2, 4, dtype=dtypes.float16))
     self.assertEqual(out.dtype, dtypes.float16)
     self.assertEqual(out.shape, (1, 2, 8))
+
+class TestPrefillV2QualityArtifact(unittest.TestCase):
+  """Lock the fp16-prefill quality verdict (extra/qk_prefill_v2_nll_eval.py). Skip-if-absent, matching the
+  repo's reproduce-from-artifact convention (the byte-lock asserts when the artifact is present)."""
+  def test_accepted_and_negligible_dnll(self):
+    if not _NLL_ARTIFACT.exists(): self.skipTest(f"no artifact at {_NLL_ARTIFACT}")
+    r = json.loads(_NLL_ARTIFACT.read_text())
+    self.assertEqual(r["verdict"], "accept")
+    self.assertLessEqual(r["max_dNLL"], r["eps"])
+    self.assertGreaterEqual(r["tokens_scored"], 500)         # a meaningful sample, not a token or two
+    self.assertTrue(all({"dNLL", "nll_baseline", "nll_prefill_v2"} <= set(row) for row in r["rows"]))
 
 if __name__ == "__main__":
   unittest.main()
