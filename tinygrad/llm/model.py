@@ -11,6 +11,14 @@ from tinygrad.uop.ops import resolve
 PREFILL_V2 = bool(getenv("PREFILL_V2", 0))
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
 
+def _pf16(lin, x:Tensor) -> Tensor:
+  # prefill v2: a single fp16 matmul (both operands fp16 -> RDNA3 WMMA tensor cores can fire). The Q4_K/Q6_K
+  # primitives already keep the dequantized fp weight around for _fallback, so .cast(fp16) IS the dequant --
+  # no separate matmul_decoded pass. Works for primitives and plain nn.Linear (both expose .weight/.bias).
+  b = getattr(lin, "bias", None)
+  return x.cast(dtypes.float16).linear(lin.weight.cast(dtypes.float16).transpose(),
+                                       b.cast(dtypes.float16) if b is not None else None)
+
 @functools.cache
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, device:str|None=None) -> Tensor:
   freqs = 1.0 / (theta ** (Tensor.arange(0, dim, 2)[:(dim // 2)] / dim))
@@ -618,6 +626,13 @@ class FFNBlock:
       self.ffn_down    = nn.Linear(config.hidden_dim, config.dim, bias=False)
 
   def _feed_forward(self, x:Tensor) -> Tensor:
+    if getattr(self, '_prefill_v2', False) and not hasattr(self, 'ffn_gate_exps') and not hasattr(self, 'ffn_gateup'):
+      # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
+      # kernel (mirrors extra/qk_prefill_gate.py chained_ffn, the gated 37.5%-peak chain). MoE/fused fall through.
+      g = _pf16(self.ffn_gate, x).contiguous()
+      u = _pf16(self.ffn_up, x).contiguous()
+      h = (g.silu() * u).contiguous()
+      return _pf16(self.ffn_down, h).contiguous()
     if hasattr(self, 'ffn_gate_exps'):
       h = x.unsqueeze(2)  # (B, T, 1, D) - add expert dim for broadcasting
       logits = self.ffn_gate_inp(x)
@@ -677,7 +692,9 @@ class TransformerBlock(FFNBlock):
     if config.qk_norm: self.attn_q_norm, self.attn_k_norm = nn.RMSNorm(config.qk_norm, config.norm_eps), nn.RMSNorm(config.qk_norm, config.norm_eps)
 
   def _attention(self, x:Tensor, start_pos:int|UOp) -> Tensor:
-    if hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
+    if getattr(self, '_prefill_v2', False) and not hasattr(self, "attn_qkv"):  # prefill v2: fp16 isolated q/k/v
+      q, k, v = _pf16(self.attn_q, x).contiguous(), _pf16(self.attn_k, x).contiguous(), _pf16(self.attn_v, x).contiguous()
+    elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
     else: q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
     if self.config.qk_norm and self.config.qk_norm != self.config.head_dim: q, k = self.attn_q_norm(q), self.attn_k_norm(k)
 
@@ -720,7 +737,9 @@ class TransformerBlock(FFNBlock):
     else:
       attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)   # (B,H,T,Hd)
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
-    return self.attn_output(attn if not self.config.attn_output_gate else (attn * gate.sigmoid()))
+    out_in = attn if not self.config.attn_output_gate else (attn * gate.sigmoid())
+    if getattr(self, '_prefill_v2', False): return _pf16(self.attn_output, out_in).contiguous()  # prefill v2
+    return self.attn_output(out_in)
 
   def _init_state(self, x:Tensor):
     if not hasattr(self, "cache_kv"):
