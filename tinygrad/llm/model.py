@@ -6,6 +6,11 @@ from tinygrad.helpers import prod
 from tinygrad.llm.gguf import gguf_load, gguf_load_with_metadata
 from tinygrad.uop.ops import resolve
 
+# Prefill v2 (opt-in, default off; decode 100% untouched when off). Concrete-ubatch fp16 prefill that lets
+# tensor cores apply + the loop-found TC schedule warm-start in. See docs/amd-decode-prefill-v2-gate-20260616.md.
+PREFILL_V2 = bool(getenv("PREFILL_V2", 0))
+PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
+
 @functools.cache
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, device:str|None=None) -> Tensor:
   freqs = 1.0 / (theta ** (Tensor.arange(0, dim, 2)[:(dim // 2)] / dim))
@@ -846,6 +851,9 @@ class Transformer:
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
     self.rollout_jit_flash = TinyJit(self.forward)
+    # prefill v2 (opt-in): a SEPARATE jit captured with a CONCRETE token batch (T=PREFILL_UBATCH) so tensor
+    # cores apply, distinct from the symbolic-batch prefill_jit. Only ever called when PREFILL_V2.
+    self.prefill_v2_jit = TinyJit(self.forward)
 
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)
@@ -859,14 +867,18 @@ class Transformer:
 
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
+    # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
+    # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
+    is_prefill_v2 = PREFILL_V2 and is_prefill and isinstance(tokens.shape[1], int)
     if getenv("Q4K_VDOT_AMORT"): _VDOT_QUANT_CACHE.clear()  # E0: fresh quant cache per forward/trace
     for q4k_linear in self._q4k_linears.linears:
       q4k_linear.decode_enabled = not is_prefill
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
-    for block in self.blk: block._use_flash = use_flash
-    jit = self.prefill_jit if is_prefill else (self.rollout_jit_flash if use_flash else self.rollout_jit)
+    for block in self.blk: block._use_flash, block._prefill_v2 = use_flash, is_prefill_v2
+    jit = (self.prefill_v2_jit if is_prefill_v2 else self.prefill_jit) if is_prefill else \
+          (self.rollout_jit_flash if use_flash else self.rollout_jit)
     return jit(tokens.contiguous(), start_pos, temperature)
 
   @staticmethod
@@ -1012,10 +1024,17 @@ class Transformer:
     flash_threshold = getenv("FLASH_DECODE_THRESHOLD", 0)
     out, prompt_len = None, len(tokens)
     while len(tokens) < self.max_context:
-      sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
-      use_flash = bool(flash_threshold) and start_pos >= flash_threshold
-      out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp, use_flash=use_flash).realize()
-      start_pos += nt.val
+      if PREFILL_V2 and (prompt_len - start_pos) >= PREFILL_UBATCH:
+        # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
+        # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
+        sp, ntv = v_start_pos.bind(start_pos), PREFILL_UBATCH
+        out = self(t[:, sp:sp+PREFILL_UBATCH], sp, temp, use_flash=False).realize()
+      else:
+        sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
+        ntv = nt.val
+        use_flash = bool(flash_threshold) and start_pos >= flash_threshold
+        out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp, use_flash=use_flash).realize()
+      start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
       tokens.append(int(out.item()))
