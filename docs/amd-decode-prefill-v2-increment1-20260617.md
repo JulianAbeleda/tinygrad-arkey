@@ -43,6 +43,19 @@ in-model surfaced three issues; (1) and (2) are real bugs (fixed), (3) is a meas
    (one JIT replay amortizes host overhead) is, and it is what a real prefill pays. (cf.
    `amd-decode-measurement-confounds`.)
 
+## Hardening pass (post-audit, 2026-06-17)
+
+Encoded the assumptions the first cut left implicit (codex audit):
+- **`PREFILL_UBATCH != 512` is rejected** (`_prefill_v2_validate_ubatch`) — the warmstart schedule is only
+  measured for 512; other sizes must be re-measured + added to `_PREFILL_V2_VALIDATED_UBATCH` first.
+- **VRAM preflight** (`realize_prefill_v2_weights`): estimates the fp16 realization bytes (8B = **13.9 GB**)
+  and raises an actionable error over `PREFILL_V2_MAX_REALIZE_GB` (default 18) unless `PREFILL_V2_FORCE_REALIZE=1`
+  — 14B/32B fail fast at load instead of OOMing late.
+- **Warmstart global is now contained**: `_WARMSTART_OPTS` is installed only *around the prefill-v2 forward*
+  (`__call__`, try/finally) and is `None` at load and after — no process-wide ambient codegen state.
+- Measure harness takes the model path via argv / `QK_MODEL` / `MODEL` (no hardcoded host path).
+- Tests added for non-512 rejection + the realize-bytes estimator (suite **249 pass / 56 skip**).
+
 ## Honest caveats / next
 
 - **fp16 is lossy** vs fp32 → a greedy/ppl **quality gate** is still owed (greedy byte-identical here is the
