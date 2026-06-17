@@ -1,5 +1,13 @@
 # Prefill v2 — Increment 2: flash-prefill attention — GATED (banked) (2026-06-17)
 
+> **CONFIRMED at the kernel level (2026-06-17).** A follow-on custom-kernel ladder (bridge proof →
+> capabilities → expressibility → real-dim/GQA) showed a fused score-free attention kernel IS expressible and
+> correct, but **PHASE 5 honest GPU-time measurement REFUTED it on performance** (~170–760× *slower* than
+> SDPA; the Phase-3/4 ~2.7× "speedups" were wall-clock measurement artifacts). Root cause: score-free without
+> LDS reuse is memory-bound. See **`amd-decode-prefill-v2-increment2-phase5-correction-20260617.md`**. Net:
+> flash-prefill stays banked; prefill v2 rests at Increment 1 (~13× FFN). Below = the original tiled-ops gate.
+
+
 Increment 1 made the prefill FFN fast (~13× warm, quality-gated). Increment 2 targeted the next bottleneck —
 attention — and **banked it gated**: the tractable approaches are refuted by measurement; the only path to the
 real win needs deeper kernel/runtime surgery (same shape of wall as the decode **overlap lever**). Stopping

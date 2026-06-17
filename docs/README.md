@@ -23,10 +23,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   decode untouched. Quality gate PASSED (dNLL ~0, 8B). Corrects the Stage-0 gate's premise (lazy weights →
   realize/VRAM; per-shape opts; host-overhead confound). Gate: `amd-decode-prefill-v2-gate-20260616.md`.
 - **`amd-decode-prefill-v2-increment2-20260617.md`** — **flash-prefill attention: GATED (banked)**. Attention
-  is the next prefill bottleneck at long ctx (~51% @ sp=3072) but the tractable approaches are refuted
-  (`extra/qk_flash_prefill_gate.py`: tiled-ops 0.15-0.52×, fp16-mat a wash); the real lever needs a custom
-  fused HIP kernel + linearizer/JIT-bridge surgery (same wall-class as the overlap lever). Inc1's short-prompt
-  13× is unaffected. Open (cheaper): VRAM-frugal realize for >8B; lm_head-last-token prefill.
+  is the next prefill bottleneck at long ctx (~51% @ sp=3072) but the tractable approaches are refuted.
+- **`amd-decode-prefill-v2-increment2-phase5-correction-20260617.md`** — **CORRECTION + kernel-level
+  confirmation**: a custom score-free fused attention kernel IS expressible/correct (bridge + capabilities +
+  expressibility proven, `test_flash_prefill_custom_kernel*.py`), but **honest DEBUG=2 GPU time REFUTES it on
+  perf (~170–760× SLOWER than SDPA**; the earlier ~2.7× were wall-clock artifacts). Score-free w/o LDS reuse =
+  memory-bound; real flash-2 needs LDS tiling (BEAM-territory, hangs gfx1100). Flash-prefill banked; prefill v2
+  rests at Increment 1. **Methodology lesson: GPU timing via DEBUG=2 `tm`, never wall-clock around `.realize()`.**
 - `amd-decode-prefill-plan.md` — the original prefill diagnosis (~2% of llama; LDS cache-blocking). Superseded
   as the active plan by prefill v2 above, but still the canonical root-cause reference.
 - Phase-2 decode docs (2026-06-16): `amd-decode-sequential-tax-profile`, `…-overlap-feasibility-spike`,

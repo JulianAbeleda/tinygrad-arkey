@@ -2194,3 +2194,22 @@ overlap lever -> **GATED, not abandoned** (gate harness = re-fire test; artifact
 Inc1 ~13x (short/medium prompts, quality-gated, opt-in). Inc1's win unaffected (attention only dominates sp>=1500).
 Cheaper open levers (not pursued): VRAM-frugal realize for 14B/32B (`PREFILL_V2` unlock); broaden quality gate;
 lm_head-last-token-only prefill (verify tinygrad doesn't already prune the all-T logits). Suite 250 pass/56 skip.
+
+## 2026-06-17 (flash-prefill custom-kernel ladder — CORRECTION: REFUTED on perf, banked)
+Doc `docs/amd-decode-prefill-v2-increment2-phase5-correction-20260617.md`. Pushed a kernel-probe ladder past the
+earlier "GATED" verdict. **Bridge + capabilities + expressibility + correctness ALL proven** (custom_kernel ->
+Ops.PROGRAM -> TinyJit capture/replay; sliced KV; symbolic start_pos; multiple outputs; fused score-free causal
+attention expressible as formulation B [max+partial(1s-aug)+combine]; single-kernel online softmax REJECTED by
+linearizer; exact vs SDPA single-head AND GQA multi-head with head dim INSIDE the kernel, kv=h//G, no
+repeat_interleave). Tests: `test_custom_kernel_jit_bridge.py`, `test_flash_prefill_custom_kernel_bridge.py`,
+`test_flash_prefill_custom_kernel.py`; kernel `extra/qk_flash_prefill_custom.py`.
+**BUT Phase 5 honest DEBUG=2 GPU-time REFUTED the speedup:** flash is **~170-760x SLOWER** than SDPA
+(`extra/qk_flash_prefill_phase5.py`, `bench/qk-flash-prefill-phase5/result.json`). The Phases 3-4 "~2.7-2.8x"
+were **wall-clock measurement artifacts** (timed host dispatch / cache no-ops, not GPU exec) -> banked the
+lesson in [[amd-decode-measurement-confounds]] #4 (use DEBUG=2 `tm`, never wall-clock around `.realize()`).
+ROOT CAUSE: score-free w/o LDS reuse is memory-bound -- d is a GLOBAL lane (W=129) so each lane re-streams all
+K/V from HBM (~129x redundant, ~0.19 TFLOP / 367 GB/s). Real flash-2 needs **LDS tiling** (stage K/V tile in
+shared mem, reuse across lanes) = BEAM-territory (hangs gfx1100) / dangerous-power surface -> same wall-class as
+the decode overlap lever. **FLASH-PREFILL BANKED (correct + integration-viable, not performant). Phase 6 model
+integration CANCELLED. Prefill v2 RESTS AT INCREMENT 1 (~13x FFN, real + quality-gated, opt-in).** Removed the
+flawed phase3/4 wall-clock harnesses+artifacts; kept correctness/expressibility tests. Suite 260 pass / 57 skip.
