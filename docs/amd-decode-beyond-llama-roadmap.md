@@ -87,6 +87,13 @@ Ranked by (ceiling × feasibility). The path is **change the work, not the kerne
   inverse of mixed-quant). ~15–20% fewer weight bytes → GEMV time drops proportionally. The purest "machine
   search beats a fixed scheme" lever; directly reuses the cost-model/flywheel + the existing `qk_quantize`
   quantizer. (Near-term sub-task: cache the requant to kill the ~3 min load cost.)
+  - **Status 2026-06-16: Q6→Q4 demotion search DONE — frontier mapped, lever tapped at the quality budget**
+    (`amd-decode-demotion-search-20260616.md`). First real run of the `qk_search_spec` scaffold (spec →
+    isolated tok/s+dNLL runner → quality gate → AcceptedPolicy). Result: ffn_down (shipped) + attn_v accepted
+    (~64 tok/s, 63% llama, dNLL within budget); **lm_head rejected** — fastest at 75 tok/s / 74% llama but
+    dNLL +0.051 (the gate caught a tempting-but-degrading config). So the in-pattern Q6→Q4 frontier is ~64
+    tok/s. **Bigger bytes need true sub-4-bit (Q3/Q2 on the Q4 bulk) = a new quantizer + new GEMV kernel
+    (dangerous-power surface) — deferred**, same gate as the overlap 2nd-ring build.
 - **B4 — sparse / compressed-KV attention (DeepSeek-DSA style).** Builds on the shipped flash kernel: instead
   of reading the full KV cache every token, read only top-k / compressed slots → bandwidth grows sub-linearly
   with context. Beyond llama's dense attention; biggest at long context (where flash already pays). Lossy →
