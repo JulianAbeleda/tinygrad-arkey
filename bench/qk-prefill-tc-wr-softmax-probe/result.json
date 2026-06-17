@@ -1,0 +1,41 @@
+{
+  "shape": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "T": 512
+  },
+  "rows": [
+    {
+      "KV": 512,
+      "err": 0.00391,
+      "rel": 0.0371,
+      "sdpa_ms": 1.173,
+      "explicit_ms": 0.616,
+      "speedup": 1.904,
+      "score_numel": 8388608
+    },
+    {
+      "KV": 1024,
+      "err": 0.00073,
+      "rel": 0.0152,
+      "sdpa_ms": 2.184,
+      "explicit_ms": 0.993,
+      "speedup": 2.2,
+      "score_numel": 16777216
+    },
+    {
+      "KV": 3584,
+      "err": 0.00049,
+      "rel": 0.0215,
+      "sdpa_ms": 7.328,
+      "explicit_ms": 2.859,
+      "speedup": 2.563,
+      "score_numel": 58720256
+    }
+  ],
+  "tc_fired_qk_or_pv": true,
+  "correct": true,
+  "beats_sdpa_1p5x": true,
+  "verdict": "OPTION B VIABLE: explicit TC+softmax 2.563x over SDPA at KV=3584, tc_fired=True -> SHAPED_WMMA surgery may be avoidable"
+}
