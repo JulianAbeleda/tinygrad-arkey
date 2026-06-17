@@ -119,8 +119,10 @@ Full per-cell tok/s (exact gate PASS — every cell greedy-identical to v1):
 
 1. **Per-KV L selection in `model.py`** (ctx-dependent L via trace-time ctx, like `should_use_flash_decode`):
    ~1% over flat L128; costs a JIT graph per ctx band. Low priority.
-2. **`flash_partial` further:** now a pure weighted-sum reduce; next bound is V-read bandwidth + the `d`-as-
-   GLOBAL layout (a register-blocked `d`-inner variant could drop work-items / raise reuse — a new family
-   member to search). Quantify before building.
+2. **`flash_partial` further — register-blocking REFUTED** (`qk-8b-flash-partial-register-blocking-refuted-20260617.md`):
+   `flash_partial_v2` is cache/occupancy-bound, not redundant-work-bound; register-blocking `d` gives only
+   1.07–1.08× kernel (BD=2) and regresses at BD≥4 → ~+1.4% decode @ctx1024 (below gate), ~+3.8% @ctx4096
+   (marginal). No cheap win remains; the next attention win needs a different primitive shape (high-occupancy
+   WMMA + cooperative GQA V-reuse via LDS — a separate `[codegen]` arc), not a bounded variant.
 3. **Phase B (decode-block fusion):** RoPE+KV-write+attention — the ~21 progs/layer → llama ~7 gap. Separate,
    harder arc (the linearizer wall is real there).
