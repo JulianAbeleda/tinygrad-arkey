@@ -25,6 +25,7 @@ SQTT = ContextVar("SQTT", abs(VIZ.value)>=2)
 SQTT_ITRACE_SE_MASK, SQTT_LIMIT_SE, SQTT_SIMD_SEL, SQTT_TOKEN_EXCLUDE = \
   ContextVar("SQTT_ITRACE_SE_MASK", 0b11), ContextVar("SQTT_LIMIT_SE", 0), ContextVar("SQTT_SIMD_SEL", 0), ContextVar("SQTT_TOKEN_EXCLUDE", 0)
 PMC = ContextVar("PMC", abs(VIZ.value)>=2)
+AMD_COMPUTE_RINGS = getenv("AMD_COMPUTE_RINGS", 1)  # opt-in: number of real hardware compute rings (default 1)
 EVENT_INDEX_PARTIAL_FLUSH = 4 # based on a comment in nvd.h
 WAIT_REG_MEM_FUNCTION_EQ  = 3 # ==
 WAIT_REG_MEM_FUNCTION_NEQ = 4 # !=
@@ -1070,9 +1071,18 @@ class AMDDevice(HCQCompiled):
             ctx_save_restore_size=ctx_save_restore_size, ctl_stack_size=ctl_stack_size, idx=idx))
 
   def compute_queue_desc(self, idx:int):
-    # Resolve a compute ring descriptor by index. idx 0 is always the default ring; Phase 1 has only ring 0.
+    # Resolve a compute ring descriptor by index, lazily creating opt-in extra rings (AMD_COMPUTE_RINGS).
+    # idx 0 is always the default ring. Extra rings are gated: KFD-local + non-AQL only (see the Phase-0 audit
+    # doc) -- on KFD each create_queue gets its own KFD-assigned doorbell, so rings are independent.
     if idx in self.compute_queues: return self.compute_queues[idx]
-    raise RuntimeError(f"compute ring {idx} not created (only {sorted(self.compute_queues)} exist); set AMD_COMPUTE_RINGS")
+    if not (0 <= idx < AMD_COMPUTE_RINGS):
+      raise RuntimeError(f"compute ring {idx} not enabled; set AMD_COMPUTE_RINGS>={idx+1} (currently {AMD_COMPUTE_RINGS})")
+    if self.is_aql:
+      raise RuntimeError("AMD_COMPUTE_RINGS>1 unsupported with AQL (AMD_AQL): per-queue aql_desc not implemented")
+    if self.is_am():
+      raise RuntimeError("AMD_COMPUTE_RINGS>1 only supported on KFD-local devices (not AM/PCI/USB): doorbell/recovery unproven")
+    self.compute_queues[idx] = self.create_queue(*self._compute_queue_spec[0], idx=idx, **self._compute_queue_spec[1])
+    return self.compute_queues[idx]
 
   def sdma_queue(self, idx:int):
     if getenv("AMD_DISABLE_SDMA"): return None
