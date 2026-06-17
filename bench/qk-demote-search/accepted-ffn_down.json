@@ -1,0 +1,18 @@
+{
+  "accepted_tok_s": 64.3,
+  "backend": "AMD",
+  "baseline_tok_s": 55.98,
+  "commit": "uncommitted",
+  "ctx_range": [
+    1,
+    4096
+  ],
+  "exactness": "lossy: dNLL=+0.00047",
+  "hardware": "required",
+  "memory_cap_mb": null,
+  "model": "qwen3_8b",
+  "objective": "tok_s",
+  "phase": "decode",
+  "quality_gate": "dNLL <= 0.01",
+  "targets": "ffn_down"
+}
