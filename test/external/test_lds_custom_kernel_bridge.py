@@ -80,5 +80,18 @@ class TestLDSReuseArtifact(unittest.TestCase):
     self.assertTrue(d["win_at_high_reuse_W"], "LDS reuse should beat global reads at high W (the flash regime)")
     self.assertGreater(d["best_speedup"], 1.5, "LDS reuse speedup collapsed")
 
+_QK_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "lds-tiling-primitive-20260617" / "phase4-qk" / "result.json"
+
+class TestLDSQkTileReuseArtifact(unittest.TestCase):
+  """Lock Phase 4: LDS q.k tile reuse beats global reread (locality inside the real attention math).
+  Skip-if-absent; the DEBUG=2 benchmark (extra/lds_qk_tile_reuse.py) stays out of the suite."""
+  def test_qk_reuse_wins(self):
+    if not _QK_ARTIFACT.exists(): self.skipTest(f"no artifact at {_QK_ARTIFACT}")
+    d = json.loads(_QK_ARTIFACT.read_text())
+    self.assertTrue(d["all_correct"] and d["lds_emitted"], "Phase-4 correctness / shared+barrier regressed")
+    self.assertTrue(d["verdict"].startswith("PASS"))
+    self.assertTrue(d["win_at_high_reuse_T"], "LDS q.k reuse should beat global reread at high T")
+    self.assertGreater(d["best_speedup"], 1.5, "LDS q.k reuse speedup collapsed")
+
 if __name__ == "__main__":
   unittest.main()
