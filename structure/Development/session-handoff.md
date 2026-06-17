@@ -2107,3 +2107,35 @@ system is the lasting reusable asset. Also: `[docs]` added "Tiny means understan
 Key commits this session: `66804832e`/`3c5c49d7c`/`87ec28305` (scaffold + suite), `d18637caa`/`9da8f779c`
 (tax profile + gate), `d4ccae747`/`6e4a68fa3`/`197aa0ca5` (spike/de-risk/probe), `538072163`/`2a2e6ea87`/
 `79c0e52e3` (B3), `a88bb72e4` (bank).
+
+## 2026-06-16 (post-bank, exhaust 8B) — flash-threshold SHIPPED; prefill v2 gate PASSED, build queued
+After banking, kept exhausting 8B. Housekeeping first: docs consolidated (`docs/README.md` map + SUPERSEDED
+stamps on stale "current state" docs), navigation wired top-down (root README + `structure/INDEX.md` +
+filled `cache/{repo-cache,repo-map}.md` → all point to `docs/amd-decode-banked-20260616.md`), `bench/README.md`
+benchmark index added, and the demote-search artifacts' provenance FIXED (`[test]` — they leaked an absolute
+model path + `commit:"uncommitted"`; now `model_id`/real SHA/`hardware` + a portability guard test).
+
+**Flash-threshold (Track 2) — SHIPPED, exact, both stages.** `docs/amd-decode-flash-threshold-20260616.md`.
+Turned the all-or-nothing `FLASH_DECODE` into a searched **context threshold**. Stage 1 (search, scaffold
+dogfood #2): `extra/qk_flash_{sweep,search}.py` swept SDPA vs flash tok/s vs ctx → **8B crossover = ctx 384**
+(1.04× there → 1.65× at ctx 3072; warm-continuous SDPA so more conservative than the cold-primed 2.41×);
+portable exact `AcceptedPolicy` in `bench/qk-flash-search/`. Stage 2 (`[nn]`): `FLASH_DECODE_THRESHOLD=<ctx>`
+→ SDPA below, flash above, in one run. 2nd `rollout_jit_flash` graph + per-block `_use_flash` set in
+`__call__` + `generate()` dispatch; `_attention` branches on `_use_flash or getenv("FLASH_DECODE")`. Touches
+only `__init__`/`__call__`/`generate`/the `_attention` guard. Verified: default unchanged (jit cnts 29/0),
+dispatch correct (threshold=10 → 5/24), greedy byte-identical across SDPA/flash/thresholded. Default-off.
+Commits `a8694ba73`/`06d4864d5`/`b1b30b84d`/`e64cda385`.
+
+**Prefill v2 — Stage 0 make-or-break gate PASSED; Increment 1 (model.py build) QUEUED.**
+`docs/amd-decode-prefill-v2-gate-20260616.md`, harness `extra/qk_prefill_gate.py`. Prefill (~2% llama) was a
+parked located negative on two walls; the gate breaks BOTH: (1) symbolic-batch blocked TC (prior Step-3
+warmstart errored, `9a17aae4e`) → **concrete ubatch fixes it** (43% peak per-matmul, error=0); (2) chained
+collapse (~27×) → **`.contiguous()` isolation + `_WARMSTART_OPTS` injection** (postrange.py:335, built;
+inject loop opts `[TC(0,(-1,2,1)),UPCAST(0,2),UPCAST(1,4)]` by shape key, NO BEAM) → FFN chain **37.5% peak**
+(vs ~5% fused / ~1.3% in-model; ~63% of llama's matmul). **`@function` preserves it** (37.2%) → transfers.
+Simplification: FFN-v2 weight = `self.weight.cast(fp16)` (primitives keep the fp weight for `_fallback`) —
+no separate dequant pass. **Increment 1 (NEXT, `[nn]`, gated `PREFILL_V2`, decode UNTOUCHED):** concrete-ubatch
+prefill loop in `generate()` (fixed-512 concrete-T chunks) + fp16+`.contiguous()`-isolated matmuls in
+`_feed_forward`/`_attention` + populate `_WARMSTART_OPTS` at init + measure in-model FFN %peak (target ~37%;
+e2e muddied by O(T²) SDPA until Increment 2 = flash-PREFILL attention). Ceiling ~7-10× (→ ~15-25% llama),
+fp16 lossy→quality-gate. User chose "build in increments". Commits `695a2b1c1`/`d15a544ad`.
