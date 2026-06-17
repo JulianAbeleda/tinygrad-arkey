@@ -74,6 +74,31 @@ flash-prefill's reuse-free ~129× redundancy is fixable with LDS is now demonstr
 synthetic at the matching W). The Phase-5 "BEAM-only / not expressible" framing was too pessimistic — LDS is
 authorable directly in `custom_kernel`.
 
+## Phase 4–5 update (2026-06-17)
+
+- **Phase 4 (q·k tile reuse): PASS.** T query lanes reuse one LDS-resident K tile for scores; beats global
+  reread **up to 4.04×** (L=128,T=32), grows with T, correct, shared+barrier emitted. Idiom learned: per-thread
+  vector output via the matmul **c_regs epilogue** (zero-init REG array → accumulate over reduce → copy to
+  global; a per-`l` `.after(l)` reset only writes l=0). `extra/lds_qk_tile_reuse.py`.
+- **Phase 5 (one attention tile: q·k + softmax + V): CORRECT but NOT faster (partial).** The full tile
+  (sequential max → 1s-aug weighted-V → combine, K/V in LDS) is **exact vs SDPA incl. causal** and emits
+  shared+barrier — but LDS is **0.5–0.74× (SLOWER)** than the global-reread baseline at L∈{64,128},T∈{16,32}.
+  `extra/lds_attention_tile.py`, `bench/lds-tiling-primitive-20260617/phase5-attention-tile/`.
+  - **Diagnosis (not a primitive failure):** (1) the small reused K/V tiles are served by the **96 MB Infinity
+    Cache**, so the baseline's "redundant" reads aren't hitting HBM — explicit LDS buys little; (2)
+    single-query-per-thread → **T=16–32 threads/workgroup = low occupancy** + a serial LDS-load prologue
+    (few threads loading 2·L·Hd) + barrier, overhead the cache-served baseline avoids. Phase 4 won because q·k
+    alone is lighter (K-only LDS, one pass); adding V + the 2-pass softmax tipped the cost balance under low
+    occupancy.
+  - **What it would take to win:** the high-occupancy warp/WMMA structure of `extra/gemm/amd_flash_attention.py`
+    (256-thread query blocks, WMMA tensor cores, warp-shuffle reductions) — i.e. occupancy + tensor-core reuse,
+    not "LDS" per se. That's a bigger build and the real next lever, not a from-scratch single-query kernel.
+
+**Net:** the LDS *primitive* is real and effective (Phases 2–4); at the *full attention tile*, naive
+single-query LDS does not beat the cache-served baseline (Phase 5). Flash-prefill remains banked. Reopening it
+means adopting the warp/WMMA flash structure (amd_flash_attention.py) — and proving THAT beats SDPA on prefill
+shapes (causal + GQA + 64 KB tiling) — not extending this single-query kernel.
+
 ## Decision (per the arc's table) — STOP after Phase 3
 
 Phase 3 passed (LDS reuse works AND is faster), so per plan: **STOP here and scope the next rung** rather than

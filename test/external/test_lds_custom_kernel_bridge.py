@@ -93,5 +93,19 @@ class TestLDSQkTileReuseArtifact(unittest.TestCase):
     self.assertTrue(d["win_at_high_reuse_T"], "LDS q.k reuse should beat global reread at high T")
     self.assertGreater(d["best_speedup"], 1.5, "LDS q.k reuse speedup collapsed")
 
+_TILE_ARTIFACT = pathlib.Path(__file__).parents[2] / "bench" / "lds-tiling-primitive-20260617" / "phase5-attention-tile" / "result.json"
+
+class TestLDSAttentionTileArtifact(unittest.TestCase):
+  """Lock Phase 5: a single flash-attention tile (q.k + softmax + V) with K/V in LDS is CORRECT (incl. causal)
+  and emits shared+barrier. NOTE: at these small tiles LDS is NOT faster than the global-reread baseline (the
+  96MB Infinity Cache serves the reused tile; single-query-per-thread is low-occupancy) -- so we lock
+  correctness/expressibility, NOT a speedup. Skip-if-absent."""
+  def test_tile_correct_and_emitted(self):
+    if not _TILE_ARTIFACT.exists(): self.skipTest(f"no artifact at {_TILE_ARTIFACT}")
+    d = json.loads(_TILE_ARTIFACT.read_text())
+    self.assertTrue(d["all_correct"], "attention-tile correctness regressed")
+    self.assertTrue(d["causal_ok"], "causal attention-tile incorrect")
+    self.assertTrue(d["lds_emitted"], "attention-tile lost shared+barrier")
+
 if __name__ == "__main__":
   unittest.main()
