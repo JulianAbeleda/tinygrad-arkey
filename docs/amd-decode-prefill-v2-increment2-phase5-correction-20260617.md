@@ -55,6 +55,42 @@ measurement** and should not be trusted.
 NOT integrate into the model (Phase 6 cancelled). Prefill v2 rests at **Increment 1** (the ~13× FFN win, real
 and quality-gated). Attention stays SDPA.
 
+## Reclassification — the missing primitive is LOCALITY, not attention
+
+The right way to name this failure: we are **not** missing "flash attention." We proved the attention *math*
+(score-free, fused, causal, exact, JIT-captured, GQA). We are missing a **memory-locality primitive**:
+
+> load a K/V tile into LDS/shared memory once → reuse it across many output lanes/queries/heads → accumulate
+> online in registers → write only compact state.
+
+Without it, the kernel is *score-free but reuse-free*, and reuse-free flash attention is not flash attention.
+A **performance primitive = operation + its required memory locality** — see the new section of
+`structure/Development/coding-principles.md`. The ladder expressed the operation but not the locality.
+
+**Primitive inventory (this fork):**
+- *Have:* Q4_K/Q6_K decode GEMV, per-tensor policy search, dNLL quality gates, `custom_kernel`→`Ops.PROGRAM`→
+  TinyJit bridge, symbolic-start_pos custom kernels, score-free attention math, fp16 realized prefill weights,
+  warmstart-TC matmul schedules, artifact discipline.
+- *Missing:* an LDS/shared-memory **tile primitive**; cooperative workgroup layout; explicit memory-hierarchy
+  control; register-resident multi-output accumulation; a barrier/sync primitive; a reusable tiled-attention
+  template; a **safe schedule search for LDS tiling** (BEAM would find these but hangs gfx1100).
+
+This is the same wall-class as the decode **overlap lever** (2nd compute ring) and the BEAM-hang: the
+abstraction can express *computation* but not the *memory hierarchy* that makes it fast — the boundary between
+Tensor/UOp custom math and real GPU kernel engineering. Owning prefix for that arc would be `[codegen]`/
+`[runtime]`, not `[nn]`.
+
+## Roadmap statement
+
+**Flash-prefill requires an LDS/shared-memory tiling primitive. The current `custom_kernel` path can express
+correctness but not locality. Banked until codegen/runtime can express cooperative tile reuse** (or until an
+external library kernel — rocBLAS/Composable Kernel/hipBLASLt/rocWMMA — is bridged in behind a clean boundary,
+itself a dangerous-power surface). Do NOT reopen as Increment 2; it is a new, harder arc:
+**"an LDS tiling primitive for custom kernels."**
+
+Lower-risk next moves (none reopen flash-prefill): VRAM-frugal prefill v2 for 14B/32B; lm_head-last-token-only
+prefill; a local tinygrad provider bridge into deepseek-arkey; a supported-config matrix / productization.
+
 ## Resume pointers (if reopened)
 - The lever is LDS tiling (flash-2): stage K/V tiles in shared memory, reuse across lanes. Needs a way to
   express GROUP/LOCAL→LDS in a custom kernel without BEAM (which hangs gfx1100), or to call rocBLAS/a vendor

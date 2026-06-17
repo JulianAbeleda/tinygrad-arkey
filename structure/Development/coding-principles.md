@@ -294,6 +294,36 @@ authoritative module. Copy-pasting a builder, a `main()`, or a helper is the
 sprawl this section exists to prevent; when you reach for it, stop and extend
 instead.
 
+## A performance primitive is an operation PLUS its required memory locality
+
+A *semantic* primitive names a computation: attention, matmul, GEMV, softmax. A *performance* primitive also
+controls where the data lives while that computation runs. The two are not the same, and confusing them
+silently produces correct-but-slow code.
+
+The flash-prefill arc (Increment 2) is the cautionary tale. We proved the custom-kernel path could express the
+math — score-free fused causal attention, exact vs SDPA, JIT-captured. But the kernel left `d` (the output
+dim) as a GLOBAL lane, so each of 129 lanes independently re-streamed all of K/V from HBM. Score-free but
+**reuse-free**: ~129× redundant reads, ~170–760× slower than SDPA. The math primitive was present; the
+**locality primitive** (load a K/V tile into LDS once, reuse it across many lanes, keep online max/sum/acc in
+registers, write only compact state) was missing. Reuse-free flash attention is not flash attention.
+
+So a primitive's contract includes its memory hierarchy:
+- `attention_with_LDS_tile_reuse`, not `attention`
+- `matmul_with_TC_schedule`, not `matmul`
+- `GEMV_with_coalesced_quant_loads`, not `GEMV`
+- `decode_with_multi_queue_overlap`, not `decode`
+
+Practical consequences:
+- **Measure at the hardware boundary.** Wall-clock around `.realize()` measures host dispatch and cache
+  hits, not GPU execution — it reported the reuse-free kernel as 2.7× *faster* when it was 300× slower. Use
+  the GPU's own per-kernel timing (DEBUG=2 `tm`).
+- **Bank correctness separately from performance.** A kernel can pass correctness/expressibility/integration
+  gates and still be unshippable on speed. Record that split honestly; don't let "it works" imply "it's fast."
+- **Reclassify the missing capability precisely.** When performance fails, name the *primitive* that's
+  missing (here: cooperative LDS tile reuse + barrier + register-resident accumulation), not the feature
+  (here: "flash attention"). That tells you whether the next arc is `[nn]` model work or `[codegen]`/`[runtime]`
+  hardware-locality work — a different, harder boundary.
+
 ## Anti-Patterns
 
 Avoid:
