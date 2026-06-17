@@ -64,6 +64,33 @@ is slower than Q4.
 - fake-dequant dNLL rejects all meaningful candidates (Phase 3) → **bank sub4 as quality-refuted.**
 - (later) GPU kernel slower than Q4 / e2e win < noise.
 
+## Result & closeout — REFUTED (Phase 3, dNLL fake-dequant)
+
+Q2 was killed at Phase 2 (reconstruction ~0.36 rel). Q3 single-role dNLL (`bench/qk-sub4-nll/search.json`,
+fake-dequant into the dense path, teacher-forced):
+
+| role | qtype | dNLL | decode bw | verdict |
+|---|---|---:|---:|---|
+| ffn_down | Q3 | **+0.0281** (3-win) | 12.8% | reject |
+| ffn_gate | Q3 | **+0.0216** | 5.1% | reject |
+| ffn_up | Q3 | **+0.0260** | 5.1% | reject |
+| attn_output | Q3 | **+0.0402** | 1.7% | reject |
+| attn_q | Q3 | +0.0006 | 1.7% | quality-ok but **<5% bw** |
+
+**No candidate passes dNLL ≤ 0.01 AND ≥5% bandwidth saving → sub4 is quality-refuted. Do NOT build a Q3/Q2
+GEMV kernel.** Every high-byte role rejects at Q3 (2–4× the 0.01 budget); the only quality-passing role (attn_q,
++0.0006) saves just 1.7% of decode bandwidth — not worth a kernel.
+
+**Measurement note (mattered):** ffn_down Q3 looked like a *pass* at single-window (dNLL −0.0045 — implausibly
+good for ~15% rel error), but 3 windows flipped it to +0.0281 — the single-window value was noise. Multi-window
+confirmation caught a false positive; the gate is only trustworthy with multiple windows. (Q2 not dNLL-tested —
+already refuted at reconstruction.)
+
+**Why this makes sense:** Q3 adds ~2× the reconstruction error of the accepted Q6→Q4 demotion (Phase 2:
+~0.15 vs ~0.072 rel), and dNLL is roughly quadratic in weight error, so ~4× the dNLL — the accepted Q6→Q4 was
+~+0.0005, so Q3 landing at ~+0.02–0.04 is consistent. Sub-4-bit is simply past this model's quality cliff for
+the bulk tensors. The cheap gate (no kernel) earned its keep: it refuted sub4 before any kernel/format work.
+
 ## Plan
 
 Phase 1 census ✅ → Phase 0 (this doc) → Phase 2 offline Q3/Q2 quant error by role → **Phase 3 dNLL fake-dequant
