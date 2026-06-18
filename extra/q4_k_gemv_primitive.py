@@ -375,6 +375,55 @@ def q4k_gemv_packed_load_partial_kernel(rows:int, k:int, parts:int, schedule:str
 
   return kernel
 
+def _sdot4_op(a:UOp, b:UOp, acc:UOp) -> UOp:
+  # first-class-via-renderer-helper signed dot4: emits a `_sdot4(a,b,c)` call; the HIP renderer owns the helper
+  # (cstyle.py, non-volatile inline-asm v_dot4_i32_i8 -- the only native dot4 on RDNA3) so the compiler can
+  # schedule/reorder the dot4 calls (vs an opaque user `asm volatile`). Visible-enough op, not user asm.
+  return UOp(Ops.CUSTOMI, dtypes.int32, (acc, a, b), arg='_sdot4({1}, {2}, {0})')
+
+def q8_signed_pack_u32_kernel(k:int):
+  # pack 4 consecutive SIGNED int8 q8 activations into one int32 (raw bits, NO +128 bias) for signed v_dot4_i32_i8.
+  def kernel(out:UOp, q:UOp) -> UOp:
+    idx = UOp.range(k // 4, 0); base = idx * 4
+    word = UOp.const(dtypes.uint32, 0)
+    for lane in range(4):
+      word = word.bitwise_or(q[base + lane].cast(dtypes.int32).bitwise_and(255).cast(dtypes.uint32).lshift(8 * lane))
+    return out[idx].store(word).end(idx).sink(arg=_kernel_info(f"q8_signed_pack_{k}", "none", ()))
+  return kernel
+
+def q4k_coop_sdot4_partial_kernel(rows:int, k:int, row_tile:int=8):
+  # Deep-linearizer arc microkernel: llama-structure Q4_K MMVQ via the first-class _sdot4 op. Packed extract
+  # (qword>>sh)&0x0F0F0F0F + signed _sdot4 dot + _sdot4(0x01010101,q8) qsum + per-group scale; block d/dmin once.
+  # Inputs: words, q8packed (signed int32, 4 raw int8/word), xscales. Output partials[rows, 8].
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(partials:UOp, words:UOp, q8packed:UOp, xscales:UOp) -> UOp:
+    row_o = UOp.range(cdiv(rows, row_tile), 0)
+    row_i = UOp.range(row_tile, 1, axis_type=AxisType.LOCAL)
+    lane4 = UOp.range(8, 2, axis_type=AxisType.LOCAL)
+    blk = UOp.range(k_blocks, 3, axis_type=AxisType.REDUCE)
+    row = row_o * row_tile + row_i
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    d_blk = _f16_word(words[base], False); dmin_blk = _f16_word(words[base], True)
+    psd = UOp.const(dtypes.float32, 0.0); psm = UOp.const(dtypes.float32, 0.0)
+    ones = UOp.const(dtypes.int32, 0x01010101); z = UOp.const(dtypes.int32, 0)
+    for grp in range(8):
+      _, _, sc, mn = _q4k_group_params(words, base, grp)
+      qword = words[base + 4 + (grp // 2) * 8 + lane4]
+      q4 = qword.rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F).cast(dtypes.int32)
+      q8 = q8packed[blk * 64 + grp * 8 + lane4].cast(dtypes.int32)
+      d8 = xscales[blk * 8 + grp].cast(dtypes.float32)
+      # _sdot4 is v_dot4_i32_iu8: a=SIGNED (q8), b=UNSIGNED (q4 nibbles 0..15 / ones). dot=Σq8*q4, qsum=Σq8.
+      psd = psd + d8 * _sdot4_op(q8, q4, z).cast(dtypes.float32) * sc.cast(dtypes.float32)
+      psm = psm + d8 * _sdot4_op(q8, ones, z).cast(dtypes.float32) * mn.cast(dtypes.float32)
+    contrib = d_blk * psd - dmin_blk * psm
+
+    acc = partials[row, lane4].set(0.0)
+    acc = partials[row, lane4].set(acc.after(blk)[row, lane4] + contrib, end=blk)
+    return acc.end(row_o, row_i, lane4).sink(arg=_kernel_info(f"q4k_coop_sdot4_partial_{rows}_{k}", "", ()))
+
+  return kernel
+
 def q4k_coop_partial_kernel(rows:int, k:int, row_tile:int=8):
   # Cooperative-K Q4_K GEMV (MMVQ_COOP, sibling of q6k_coop_partial_kernel). The Q4_K quant word index is
   # `4 + (grp//2)*8 + pos//4`, so the within-block word index `lane4` (= pos//4, 0..7) becomes a LOCAL lane
