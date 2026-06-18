@@ -62,5 +62,24 @@ class TestFlashDecodePolicy(unittest.TestCase):
       self.assertTrue(M.should_use_flash_decode(_sp(511), 1))     # ctx 512 >= 512 -> flash
       self.assertTrue(M.should_use_flash_decode(_sp(1022), 1))    # ctx 1023 >= 512 -> flash (long ctx preserved)
 
+class TestFlashVariant(unittest.TestCase):
+  """gqa_coop ship: accepted-variant SSOT + unknown-value-raises (no weights/GPU; the validation is the first
+  line of flash_decode_attention, so it raises before touching the tensor args)."""
+  def test_variant_ssot(self):
+    from extra.qk_flash_decode import FLASH_DECODE_VARIANTS, FLASH_DECODE_DEFAULT_VARIANT
+    self.assertEqual(FLASH_DECODE_VARIANTS, ("v1", "hoisted", "gqa_coop"))
+    self.assertEqual(FLASH_DECODE_DEFAULT_VARIANT, "gqa_coop")
+
+  def test_unknown_variant_raises(self):
+    from extra.qk_flash_decode import flash_decode_attention
+    for bad in ("foo", "hoizted", "GQA_COOP", ""):
+      with self.assertRaises(ValueError):
+        flash_decode_attention(None, None, None, None, None, 128, 32, 8, 4608, 128, variant=bad)
+
+  def test_model_default_is_gqa_coop(self):
+    import pathlib
+    src = pathlib.Path(__file__).resolve().parents[2].joinpath("tinygrad/llm/model.py").read_text()
+    self.assertIn('getenv("FLASH_VARIANT", "gqa_coop")', src)
+
 if __name__ == "__main__":
   unittest.main()
