@@ -9,7 +9,8 @@ and sets the clean baseline before the **deep-codegen** arc. Qwen3-8B-Q4_K_M, RX
 
 | win | effect | flag / location | doc |
 |---|---|---|---|
-| **flash variant `hoisted` + L=128** | **+11.5%/+15.7%/+21.1%/+29.2% decode @ctx 512/1024/2048/4096, byte-identical greedy** | defaults (`FLASH_VARIANT`, `FLASH_L`) | `qk-8b-flash-variant-result-20260617.md` |
+| **flash variant `gqa_coop`** (cooperative GQA V-reuse) | **+3.9/+6.7/+11.7/+19.8% decode @ctx 512/1024/2048/4096 over hoisted, byte-identical; flattens slope −43%→−34%** | default `FLASH_VARIANT=gqa_coop` | `qk-gqa-coop-decode-attention-result-20260617.md` |
+| flash variant `hoisted` + L=128 | +11.5%/+15.7%/+21.1%/+29.2% decode @ctx 512/1024/2048/4096 vs v1 (now superseded as default by gqa_coop) | `FLASH_VARIANT=hoisted` | `qk-8b-flash-variant-result-20260617.md` |
 | **FLASH_DECODE_THRESHOLD 1024→512** | **+12.8% real decode @ctx520, byte-identical greedy** | default (`model.py:233`) | `qk-8b-attention-fusion-result-20260617.md` |
 | Flash-decode auto-enable | long-context win (1.23× @1024, 1.73× @4096), default `auto` | `FLASH_DECODE=auto` | (prior arc) |
 | PREFILL_V2 Increment 1 | ~13× warm prefill (189→2486 tok/s, ~83% llama), decode untouched | `PREFILL_V2` (gated) | prefill v2 docs |
