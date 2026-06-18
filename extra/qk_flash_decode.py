@@ -91,7 +91,7 @@ def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
 
 # Single source of truth for accepted FLASH_VARIANT values (consumed by flash_decode_attention + model.py).
 # 'gqa_coop' is the shipped default; 'hoisted'/'v1' are historical/fallback. Unknown -> raise (see below).
-FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop")
+FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop", "gqa_coop_vec")
 FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop"
 
 def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
@@ -192,6 +192,32 @@ def flash_partial_coop_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
       arg=_fki(f"flash_partial_coop_{Hq}_{Hd}"))
   return kernel
 
+def flash_partial_coop_vec_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Variant 'gqa_coop_vec': identical math to gqa_coop, but the output-dim d is a LOCAL (workgroup-thread)
+  axis instead of GLOBAL (grid). gqa_coop runs as 1-thread workgroups (flat_work_group_size(1,1)) -> the per-d
+  V loads are scalar with no wavefront coalescing and ~1/32 lane use. Mapping d to LOCAL puts W=Hd+1 d-lanes in
+  one workgroup, so adjacent lanes read adjacent V[...+d] -> coalesced fp16 loads + full lane utilization
+  (llama's coalesced-load ingredient). Grid = Hkv x S. Output layout unchanged."""
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(pout:UOp, prob:UOp, vc:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)   # <-- LOCAL: d-lanes in a workgroup -> coalesced V loads
+    is_v = d < Hd
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j; in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    vd = is_v.where(vc[(kvh * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    c = UOp.placeholder((G,), _F32, 111, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4); c = c.after(c[zi].store(0.0).end(zi))
+    g = UOp.range(G, 5)
+    p = in_r.where(prob[(kvh * G + g) * MAXC + t], _fc(0.0))
+    acc = c[g].store(c.after(j)[g] + p * vd).end(g).end(j)
+    g2 = UOp.range(G, 6); fin = c.after(acc)
+    return pout[((kvh * G + g2) * S + s) * W + d].store(fin[g2]).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_partial_coop_vec_{Hq}_{Hd}"))
+  return kernel
+
 def flash_gmax_kernel(Hq:int, S):
   def kernel(gm:UOp, pm:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -255,11 +281,12 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
   score_f = score_a.reshape(Hq * MAXC)
   vc_f = v_full.reshape(Hkv * MAXC * Hd)
   pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
-  if variant in ("hoisted", "gqa_coop"):
+  if variant in ("hoisted", "gqa_coop", "gqa_coop_vec"):
     # exp computed once per key (flash_prob), then a pure weighted-sum partial (no per-d exp recompute).
     prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
-    partial_fxn = (flash_partial_coop_kernel if variant == "gqa_coop" else flash_partial_v2_kernel)(Hd, Hq, Hkv, MAXC, L, S, Tc_u)
-    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, vc_f, fxn=partial_fxn)[0]
+    _partial = {"gqa_coop": flash_partial_coop_kernel, "gqa_coop_vec": flash_partial_coop_vec_kernel}.get(
+      variant, flash_partial_v2_kernel)
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, vc_f, fxn=_partial(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   else:
     po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, vc_f, fxn=flash_partial_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
@@ -314,12 +341,12 @@ if __name__ == "__main__":
       pw = np.exp(sc - sc.max()); pw /= pw.sum(); ref[h] = pw @ vf[kv]
     sp_b = UOp.variable("start_pos", 0, MAXC2 - 1).bind(Tc - 1); sp_u = UOp.variable("start_pos", 0, MAXC2 - 1)
     outs = {}
-    for var in ("v1", "hoisted", "gqa_coop"):
+    for var in ("v1", "hoisted", "gqa_coop", "gqa_coop_vec"):
       o = flash_decode_attention(Tensor(qn), Tensor(kn), Tensor(vn), sp_b + 1, sp_u + 1,
                                  Hd, Hq, Hkv, MAXC2, L, variant=var).numpy()
       outs[var] = o
       e = float(np.abs(o - ref).max())
       print(f"  Tc={Tc} L={L} {var:8}: max_err={e:.4g} {'OK' if e < 2e-2 else 'FAIL'}")
-    for var in ("hoisted", "gqa_coop"):
+    for var in ("hoisted", "gqa_coop", "gqa_coop_vec"):
       same = float(np.abs(outs['v1'] - outs[var]).max())
       print(f"  Tc={Tc} L={L} v1-vs-{var:8} max|diff|={same:.4g} {'IDENTICAL' if same == 0.0 else 'DIFFERS'}")
