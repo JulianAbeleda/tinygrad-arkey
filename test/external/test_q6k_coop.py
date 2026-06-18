@@ -71,5 +71,24 @@ class TestQ6KCoop(unittest.TestCase):
     a_off = argmax_with("0"); a_on = argmax_with("1")
     self.assertEqual(a_off, a_on, "coop lm_head changed greedy argmax")
 
+  def test_routing_attn_qo_on_ffn_gateup_off(self):
+    # attn_q/o IS routed through coop by default (on vs off differs only by fp-reassoc); ffn_gate/up is NEVER
+    # routed (on vs off byte-identical -> proves the route does not touch the already-coalesced role).
+    m, Tensor, dtypes = self._setup()
+    for l in m._q4k_linears.linears: l.decode_enabled = True
+    q4 = [l for l in m._q4k_linears.linears if type(l).__name__ == "Q4KPrimitiveLinear"]
+    qo = next(l for l in q4 if l.out_features == 4096 and l.in_features == 4096 and l.parts == 1)
+    gu = next(l for l in q4 if l.out_features == 12288 and l.in_features == 4096 and l.parts == 1)
+    def fwd(lin, val):
+      os.environ["Q4K_ATTN_QO_COOP"] = val
+      x = Tensor(np.random.default_rng(2).standard_normal((1, 1, lin.in_features)).astype(np.float16)).contiguous().realize()
+      return lin(x).numpy()
+    qo_on, qo_off = fwd(qo, "1"), fwd(qo, "0")
+    rel = np.abs(qo_on - qo_off).max() / (np.abs(qo_off).max() + 1e-9)
+    self.assertLess(rel, 2e-2, "attn_q/o coop vs base out of tolerance")       # routed (fp-reassoc only)
+    gu_on, gu_off = fwd(gu, "1"), fwd(gu, "0")
+    self.assertEqual(np.abs(gu_on - gu_off).max(), 0.0)                        # ffn_gate/up NOT routed (identical)
+    os.environ.pop("Q4K_ATTN_QO_COOP", None)
+
 if __name__ == "__main__":
   unittest.main()
