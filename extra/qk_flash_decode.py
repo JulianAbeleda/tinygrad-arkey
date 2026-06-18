@@ -89,6 +89,11 @@ def _fc(v:float) -> UOp: return UOp.const(_F32, v)
 def _fki(name:str) -> KernelInfo: return KernelInfo(name=name, opts_to_apply=())
 def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
 
+# Single source of truth for accepted FLASH_VARIANT values (consumed by flash_decode_attention + model.py).
+# 'gqa_coop' is the shipped default; 'hoisted'/'v1' are historical/fallback. Unknown -> raise (see below).
+FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop")
+FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop"
+
 def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
   def kernel(pm:UOp, score:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -234,8 +239,8 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
   variant: 'hoisted' (default, exp computed once/key), 'gqa_coop' (hoisted + cooperative GQA V-reuse: V read
            once/group, ~3x on the partial), or 'v1' (legacy). Unknown -> raise, so a mistyped FLASH_VARIANT
            can't silently fall back and lose the shipped win."""
-  if variant not in ("v1", "hoisted", "gqa_coop"):
-    raise ValueError(f"unknown flash variant {variant!r}; expected 'v1', 'hoisted', or 'gqa_coop' (check FLASH_VARIANT)")
+  if variant not in FLASH_DECODE_VARIANTS:
+    raise ValueError(f"unknown flash variant {variant!r}; expected one of {FLASH_DECODE_VARIANTS} (check FLASH_VARIANT)")
 
   G = Hq // Hkv; W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
   scale = 1.0 / (Hd ** 0.5)
