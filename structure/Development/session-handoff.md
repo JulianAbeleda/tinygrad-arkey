@@ -2272,3 +2272,19 @@ ffn_gate/up int-dot CLOSED in practice. **(2) Research-banks roadmap** (`docs/8b
 bank that can BEAT llama (+40-60%); acceptance/draft-speed/greedy-exactness already proven, blocker is runtime/
 JIT alternation (tractable systems problem). Defer kernel banks (2-4, walled); q8-lifecycle demoted (verdict D);
 infra (Bank 6) small parallel investment. Decode unchanged ~66-69% llama. No code/route/default changes.
+
+## 2026-06-18 (ALL 6 research banks worked to verdict — hardest-first)
+User: "do all of them." Every bank taken to a decisive result. Docs `docs/bank{1,3,4,5,6}-*-20260618.md` +
+`docs/research-banks-results-synthesis-20260618.md`; `extra/q4k_{mmvq,w4a16}_handwritten.hip`;
+`bench/qk-handwritten-mmvq/result.json`. **HEADLINE (handwritten HIP kernels, standalone hipcc gfx1100):
+handwritten Q4_K MMVQ = 65% peak vs tinygrad custom_kernel 57% (+8% pure per-thread codegen) vs llama 70% —
+CONFIRMS the gap is codegen. But the +8% lever ONLY works on int-dot (dp4a); handwritten W4A16 (fp) = 49%
+(ALU-ceilinged). Metal tradeoff: fast=int-dot (lossy+q8 tax), byte-identical=fp (slow).** Verdicts:
+**Bank 1 (spec decode) FUND FIRST** — only path to beat llama (+40-60%); blocker precisely = per-step host sync
+(5 dispatches/pass), fix = on-device token feedback (1 sync/pass), feasible. **Bank 4 (handwritten W4A8) LIVE** —
+65% + fused pack → 1.21× coop whole-linear (revives the economics Bank 2 closed with the slower tinygrad kernel),
+contingent on correctness + raw-HIP bridge + fused pack + dNLL (lossy ~+4-6%). **Bank 6 (infra)** small, do
+alongside (schema+orchestrator+dNLL gate already exist; gap=ledger/auto-row). **Bank 3 (W4A16) refuted** (fp ALU
+ceiling 49%). **Bank 2 (q8 lifecycle) verdict D**. **Bank 5 (SmoothQuant) refuted** (q8 accuracy already fine
+rel 0.006; blocker is pack cost not accuracy). Cross-bank truth: kernels alone won't beat llama for 8B Q4_K; the
+"refuse to stop at 68%" win is spec decode. Decode unchanged ~66-69% llama; nothing routed; no default changes.
