@@ -61,11 +61,14 @@ Measured: **47.7 / 46.9 / 45.7 / 43.9 tok/s @ctx 512/1024/2048/4096 = ~48% of ll
 llama −7%; the decode-attention SLOPE GAP IS CLOSED). Was gqa_coop 44.8/41.3/36.3/29.6 (45/42/38/32, −34%).
 `FLASH_VARIANT={v1,hoisted,gqa_coop,gqa_coop_vec}` override. The "~64 tok/s" figure is short-ctx ~ctx8 +
 demotion. Plus Q6_K coverage, ffn_down demotion (dNLL-gated, default-off).
-**Cooperative-K Q6_K lm_head SHIPPED (default on, `Q6K_LM_HEAD_COOP=1`, `../../docs/qk-mmvq-q6k-lm-head-arc-20260617.md`):**
-pos→LOCAL coalesced packed-weight loads → lm_head 91→457 GB/s (10%→51% HBM peak), decode **56.4 / 55.3 / — /
-51.3 tok/s = ~57% of llama, +19% in-model, byte-identical greedy**. The cooperative-K MMVQ work-decomposition is
-the LIVE base-decode lever (extends to ffn_down Q6_K + Q4_K roles); the prior "bounded decode exhausted /
-no-bounded-target" conclusion is SUPERSEDED — the work-decomposition rewrite (not the dp4a knob) was the answer.
+**MMVQ_COOP family SHIPPED (cooperative-K coalesced Q6_K GEMV, default on):** pos→LOCAL lane → coalesced
+packed-weight loads (default is one-row-per-thread at ~10-14% HBM peak). `Q6K_LM_HEAD_COOP=1` (lm_head 91→457
+GB/s, 10%→51% peak) + `Q6K_FFN_DOWN_COOP=1` (ffn_down 125→347 GB/s, 14%→39% peak), same kernel
+`q6k_coop_partial_kernel` (`Q6K_COOP_RT` row_tile=4). **Decode 64.3 / 62.9 / — / 57.8 tok/s @ctx 512/1024/4096
+= ~64% of llama (+36/+35/+33% over the pre-coop 47.3/46.5/43.6), byte-identical greedy, W==D.**
+`../../docs/qk-mmvq-q6k-lm-head-arc-20260617.md`, `../../docs/qk-mmvq-coop-ffn-down-result-20260617.md`. The
+work-decomposition rewrite (NOT the refuted dp4a knob) was the base-decode answer; "bounded decode exhausted" is
+SUPERSEDED. Next MMVQ_COOP roles: Q4_K ffn_gate/up (sibling kernel), then Q4_K attn_q/o.
 
 **Key diagnosis (`../../docs/llama-rocm-decode-attention-audit-20260617.md`):** llama decode is ~context-FLAT
 (−7%), tinygrad decays −43% → the long-ctx gap is **attention**. llama uses `flash_attn_tile` + stream-K split +
