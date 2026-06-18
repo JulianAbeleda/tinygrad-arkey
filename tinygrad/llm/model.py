@@ -775,12 +775,13 @@ class TransformerBlock(FFNBlock):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       MAXC, L = self.config.max_context, getenv("FLASH_L", 128)  # Track-3 search: L=128 >= L=256 at every ctx
       vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
-      # variant 'hoisted' (default): exp computed once per key in flash_prob, then a pure weighted-sum
-      # flash_partial_v2 -- v1 recomputed exp per output-dim lane (Hd+1=129x redundant). Byte-identical
-      # greedy; in-model +7.7% @ctx512 .. +28% @ctx4096 (gain grows with KV). See docs/qk-8b-flash-variant-*.
+      # variant 'gqa_coop' (default): hoisted exp (once/key) + cooperative GQA V-reuse -- the kv-head is the
+      # kernel's global axis, so V[kv] is read once and reused across the G query heads (vs 'hoisted'/v2 which
+      # re-read V G=4x). Byte-identical greedy; in-model vs hoisted +3.9/+7.0/+12.0/+19.4% @ctx 512/1024/2048/
+      # 4096 (flattens the long-ctx slope). See docs/qk-gqa-coop-decode-attention-result-*.
       out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
                                    start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                   variant=str(getenv("FLASH_VARIANT", "hoisted")))
+                                   variant=str(getenv("FLASH_VARIANT", "gqa_coop")))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     else:
       attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)   # (B,H,T,Hd)
