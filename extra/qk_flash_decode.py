@@ -92,7 +92,7 @@ def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
 # Single source of truth for accepted FLASH_VARIANT values (consumed by flash_decode_attention + model.py).
 # 'gqa_coop' is the shipped default; 'hoisted'/'v1' are historical/fallback. Unknown -> raise (see below).
 FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop", "gqa_coop_vec")
-FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop"
+FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop_vec"
 
 def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
   def kernel(pm:UOp, score:UOp) -> UOp:
