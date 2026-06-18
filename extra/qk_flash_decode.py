@@ -161,6 +161,32 @@ def flash_partial_v2_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
     return pout[hs * W + d].store(acc[0]).end(h, s, d).sink(arg=_fki(f"flash_partial_v2_{Hq}_{Hd}"))
   return kernel
 
+def flash_partial_coop_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Variant 'gqa_coop': like v2 but the GLOBAL axis is the kv-head (not the query head), so V[kv,t,d] is read
+  ONCE per (kv,split,d) thread and reused across the G=4 query heads via G register accumulators -- vs v2's
+  per-query-head axis which re-reads V[kv] G times. Cuts V traffic G x (the llama flash_attn_tile reuse).
+  Output layout identical to v2 (pout[(h*S+s)*W+d]), so flash_{max,prob,gmax,den,combine} are unchanged.
+  Multi-reg-reduce pattern proven in extra/lds_attention_tile.py."""
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(pout:UOp, prob:UOp, vc:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.GLOBAL)
+    is_v = d < Hd
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j; in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    vd = is_v.where(vc[(kvh * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))  # ONCE
+    c = UOp.placeholder((G,), _F32, 110, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4); c = c.after(c[zi].store(0.0).end(zi))
+    g = UOp.range(G, 5)
+    p = in_r.where(prob[(kvh * G + g) * MAXC + t], _fc(0.0))
+    acc = c[g].store(c.after(j)[g] + p * vd).end(g).end(j)
+    g2 = UOp.range(G, 6); fin = c.after(acc)
+    return pout[((kvh * G + g2) * S + s) * W + d].store(fin[g2]).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_partial_coop_{Hq}_{Hd}"))
+  return kernel
+
 def flash_gmax_kernel(Hq:int, S):
   def kernel(gm:UOp, pm:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -205,10 +231,11 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
   Tc_b: bound symbolic context length (carries start_pos's value into var_vals, used for the score
         matmul slice).  Tc_u: same length as an UNbound DEFINE_VAR expr (used for the kernel ranges,
         so no BIND lands in a custom-kernel AST).  Returns [Hq,Hd] (float32).
-  variant: 'hoisted' (default in model.py, exp computed once/key) or 'v1' (legacy). Unknown -> raise, so a
-           mistyped FLASH_VARIANT can't silently fall back to v1 and lose the shipped ~11-29% decode win."""
-  if variant not in ("v1", "hoisted"):
-    raise ValueError(f"unknown flash variant {variant!r}; expected 'v1' or 'hoisted' (check FLASH_VARIANT)")
+  variant: 'hoisted' (default, exp computed once/key), 'gqa_coop' (hoisted + cooperative GQA V-reuse: V read
+           once/group, ~3x on the partial), or 'v1' (legacy). Unknown -> raise, so a mistyped FLASH_VARIANT
+           can't silently fall back and lose the shipped win."""
+  if variant not in ("v1", "hoisted", "gqa_coop"):
+    raise ValueError(f"unknown flash variant {variant!r}; expected 'v1', 'hoisted', or 'gqa_coop' (check FLASH_VARIANT)")
 
   G = Hq // Hkv; W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
   scale = 1.0 / (Hd ** 0.5)
@@ -223,10 +250,11 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
   score_f = score_a.reshape(Hq * MAXC)
   vc_f = v_full.reshape(Hkv * MAXC * Hd)
   pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
-  if variant == "hoisted":
+  if variant in ("hoisted", "gqa_coop"):
     # exp computed once per key (flash_prob), then a pure weighted-sum partial (no per-d exp recompute).
     prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
-    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, vc_f, fxn=flash_partial_v2_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+    partial_fxn = (flash_partial_coop_kernel if variant == "gqa_coop" else flash_partial_v2_kernel)(Hd, Hq, Hkv, MAXC, L, S, Tc_u)
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, vc_f, fxn=partial_fxn)[0]
   else:
     po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, vc_f, fxn=flash_partial_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
@@ -281,11 +309,12 @@ if __name__ == "__main__":
       pw = np.exp(sc - sc.max()); pw /= pw.sum(); ref[h] = pw @ vf[kv]
     sp_b = UOp.variable("start_pos", 0, MAXC2 - 1).bind(Tc - 1); sp_u = UOp.variable("start_pos", 0, MAXC2 - 1)
     outs = {}
-    for var in ("v1", "hoisted"):
+    for var in ("v1", "hoisted", "gqa_coop"):
       o = flash_decode_attention(Tensor(qn), Tensor(kn), Tensor(vn), sp_b + 1, sp_u + 1,
                                  Hd, Hq, Hkv, MAXC2, L, variant=var).numpy()
       outs[var] = o
       e = float(np.abs(o - ref).max())
       print(f"  Tc={Tc} L={L} {var:8}: max_err={e:.4g} {'OK' if e < 2e-2 else 'FAIL'}")
-    same = float(np.abs(outs['v1'] - outs['hoisted']).max())
-    print(f"  Tc={Tc} L={L} v1-vs-hoisted max|diff|={same:.4g} {'IDENTICAL' if same == 0.0 else 'DIFFERS'}")
+    for var in ("hoisted", "gqa_coop"):
+      same = float(np.abs(outs['v1'] - outs[var]).max())
+      print(f"  Tc={Tc} L={L} v1-vs-{var:8} max|diff|={same:.4g} {'IDENTICAL' if same == 0.0 else 'DIFFERS'}")
