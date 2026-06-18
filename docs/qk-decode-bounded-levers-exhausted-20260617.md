@@ -1,5 +1,12 @@
 # 8B decode — bounded levers EXHAUSTED (2026-06-17)
 
+> **SUPERSEDED 2026-06-17 (same day): NOT exhausted.** The one lever this doc flagged as un-refuted — the full
+> MMVQ work-decomposition — was built and **SHIPPED**: cooperative-K Q6_K lm_head (pos→LOCAL coalesced loads),
+> **+19% in-model decode, byte-identical**, decode ~48%→~57% of llama (`qk-mmvq-q6k-lm-head-arc-20260617.md`).
+> The lever is general (applies to every Q6_K/Q4_K role) — more decode wins are open. The "bounded levers
+> exhausted" framing below was wrong: the bounded *knobs* (dp4a/schedule/fusion) were exhausted, but the
+> *work-decomposition rewrite* was not, and it won big. Treat the rest of this doc as the pre-cooperative-K state.
+
 Campaign milestone. After the gqa_coop_vec ship + the Q6_K dp4a refutation, every **bounded/local** decode
 lever is shipped or refuted. Remaining work is high-risk (decode-block/runtime) or a different phase
 (prefill/14B). RX 7900 XTX, Qwen3-8B-Q4_K_M.

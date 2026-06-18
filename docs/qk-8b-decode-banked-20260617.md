@@ -9,6 +9,7 @@ and sets the clean baseline before the **deep-codegen** arc. Qwen3-8B-Q4_K_M, RX
 
 | win | effect | flag / location | doc |
 |---|---|---|---|
+| **cooperative-K Q6_K lm_head** (pos→LOCAL coalesced loads) | **lm_head 91→457 GB/s (10%→51% HBM peak); +19.2/+18.9/+17.7% decode @ctx 512/1024/4096, byte-identical; decode ~48%→~57% of llama** | default `Q6K_LM_HEAD_COOP=1` | `qk-mmvq-q6k-lm-head-arc-20260617.md` |
 | **flash variant `gqa_coop_vec`** (gqa_coop + coalesced LOCAL-d loads) | **+6.5/+13.3/+25.5/+48.8% decode @ctx 512/1024/2048/4096 over gqa_coop, byte-identical; slope −34%→−8% (≈llama-flat); ~48% of llama flat** | default `FLASH_VARIANT=gqa_coop_vec` | `qk-gqa-coop-vector-load-result-20260617.md` |
 | flash variant `gqa_coop` (cooperative GQA V-reuse) | +3.9/+6.7/+11.7/+19.8% over hoisted (superseded as default by gqa_coop_vec) | `FLASH_VARIANT=gqa_coop` | `qk-gqa-coop-decode-attention-result-20260617.md` |
 | flash variant `hoisted` + L=128 | +11.5%/+15.7%/+21.1%/+29.2% decode @ctx 512/1024/2048/4096 vs v1 (now superseded as default by gqa_coop) | `FLASH_VARIANT=hoisted` | `qk-8b-flash-variant-result-20260617.md` |

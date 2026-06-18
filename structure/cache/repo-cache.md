@@ -60,8 +60,12 @@ as pathological 1-thread workgroups), **`FLASH_L=128`** (`../../docs/qk-gqa-coop
 Measured: **47.7 / 46.9 / 45.7 / 43.9 tok/s @ctx 512/1024/2048/4096 = ~48% of llama FLAT** (slope **−8%** ≈
 llama −7%; the decode-attention SLOPE GAP IS CLOSED). Was gqa_coop 44.8/41.3/36.3/29.6 (45/42/38/32, −34%).
 `FLASH_VARIANT={v1,hoisted,gqa_coop,gqa_coop_vec}` override. The "~64 tok/s" figure is short-ctx ~ctx8 +
-demotion. Plus Q6_K coverage, ffn_down demotion (dNLL-gated, default-off). Remaining gap = base (GEMV/decode-block,
-structural — no bounded target per the GEMV audit).
+demotion. Plus Q6_K coverage, ffn_down demotion (dNLL-gated, default-off).
+**Cooperative-K Q6_K lm_head SHIPPED (default on, `Q6K_LM_HEAD_COOP=1`, `../../docs/qk-mmvq-q6k-lm-head-arc-20260617.md`):**
+pos→LOCAL coalesced packed-weight loads → lm_head 91→457 GB/s (10%→51% HBM peak), decode **56.4 / 55.3 / — /
+51.3 tok/s = ~57% of llama, +19% in-model, byte-identical greedy**. The cooperative-K MMVQ work-decomposition is
+the LIVE base-decode lever (extends to ffn_down Q6_K + Q4_K roles); the prior "bounded decode exhausted /
+no-bounded-target" conclusion is SUPERSEDED — the work-decomposition rewrite (not the dp4a knob) was the answer.
 
 **Key diagnosis (`../../docs/llama-rocm-decode-attention-audit-20260617.md`):** llama decode is ~context-FLAT
 (−7%), tinygrad decays −43% → the long-ctx gap is **attention**. llama uses `flash_attn_tile` + stream-K split +

@@ -1,5 +1,10 @@
 # Arc 1 — mmvq_q6k full work-decomposition (lm_head): opt-search REFUTED; cooperative-k needs a kernel rewrite
 
+> **SUPERSEDED (resolved) — the rewrite SHIPPED.** This doc settled the *opt-search* (refuted). The
+> cooperative-K *kernel rewrite* it scoped was then built and shipped: lm_head 10%→51% peak, +19% in-model,
+> byte-identical. See `qk-mmvq-q6k-lm-head-arc-20260617.md`. The "unproven/only-a-broken-artifact" caveat below
+> is resolved — a correct cooperative-K kernel (pos→LOCAL lane, stage-2 reduce) gave a real 5×.
+
 The first build attempt at the only un-refuted decode lever (the full MMVQ work-decomposition). Started with
 lm_head Q6_K (151936×4096, the worst-efficiency role at ~10% peak). **Verdict: the bounded schedule/opt-search
 finds no correct win; the cooperative-k coalescing lever is real but requires a kernel rewrite, and the only
