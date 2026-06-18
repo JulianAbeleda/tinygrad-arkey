@@ -53,8 +53,16 @@ GEMV class, same q8_1+dp4a mechanism; lm_head reads ~500MB/token = pure bandwidt
 ## 5. Remaining gap to llama
 
 ~**52% gap, flat** (48% of llama at all ctx). It is the **base decode**: GEMV ~58% of decode @ctx4096 + the
-~780 progs/token program-granularity. This is **bandwidth/structural** — no bounded single-kernel target
-(dp4a refuted both quants; fusion refuted; the in-pipeline GEMV is memory-bound where dp4a doesn't help).
+~780 progs/token program-granularity.
+
+**MMVQ structural diagnosis (2026-06-17, `qk-mmvq-primitive-roadmap-20260617.md`, `qk_q6_splitk_dp4a_probe.py`):**
+the GEMV achieves only ~**10% of HBM peak** (lm_head Q6_K 91.8 GB/s, ffn_down 129.7 GB/s) — it is **NOT
+raw-bandwidth-saturated and NOT dot-bound** (dp4a +1% both quants). READRAW shows the memory schedule reaches
+~730 GB/s *without* dequant, and the **dequant/unpack ALU per weight** is the limiter (Q4_K fp 365 → Q6_K 91
+GB/s). dp4a removes the *dot*, not the *unpack* → +1%. The unpack is **format-mandated** (must extract 4/6-bit
+per weight). The only path to llama's ~2× is **Phase F: a full llama-shaped MMVQ kernel** (unpack→int8 once +
+dp4a + block-amortized affine + q8_1) — high-risk, uncertain (+1% piecemeal precedent), a substantial build.
+Bounded knobs (dp4a, schedule search, q8_1 reuse) are refuted/low-EV.
 
 ## 6. Explicit status
 
