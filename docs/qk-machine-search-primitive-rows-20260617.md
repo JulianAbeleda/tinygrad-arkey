@@ -1,5 +1,13 @@
 # Machine-search primitive rows — decode (2026-06-17)
 
+> **UPDATE 2026-06-17/18 — the mmvq rows were the answer (via cooperative-K coalescing, not dp4a).** Shipped
+> MMVQ_COOP on lm_head + ffn_down (Q6_K) + attn_q/o (Q4_K): **decode ~48% → ~66-69% of llama**, byte-identical.
+> `mmvq_q6k` = SHIPPED (both roles). `mmvq_q4k` = PARTIAL — attn_q/o SHIPPED, ffn_gate/up + ffn_down REFUTED
+> (already coalesced ~35-41% peak). The low-risk role-by-role coop is DONE
+> (`qk-mmvq-coop-remaining-census-20260617.md`). The remaining decode lever is **deeper full-MMVQ on Q4_K
+> ffn_gate/up** (44% of weight traffic, 41%→~70% headroom — needs a new kernel family, high-risk), then prefill
+> WMMA / 14B. The "% of llama" figures below predate the coop ships.
+
 Derived from `qk-llama-token-primitive-accounting-20260617.md`. Encodes the remaining gap as searchable rows.
 Search/build governed by: in-model W==D ≥ gate, byte-identical-or-quality-gated, no default flip without the gate,
 no dense fallback, small/explicit.

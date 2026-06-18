@@ -11,6 +11,9 @@ an in-file `# STATUS:` header.
 |---|---|
 | `tinygrad/llm/model.py` | the model; `should_use_flash_decode` policy + flash-decode call site; defaults `FLASH_DECODE=auto`, threshold 512, **`FLASH_VARIANT=gqa_coop_vec`**, `FLASH_L=128` |
 | `extra/qk_flash_decode.py` | the decode-attention primitive: `flash_decode_attention` + UOp kernels (max/prob/partial_v2/partial_coop/**partial_coop_vec**/gmax/den/combine); `FLASH_DECODE_VARIANTS` SSOT (default **gqa_coop_vec**); `__main__` exactness self-test |
+| `extra/q6_k_gemv_primitive.py` | Q6_K decode GEMV: `q6k_gemv_partial_kernel` (default) + **`q6k_coop_partial_kernel`** (MMVQ_COOP cooperative-K: pos→LOCAL lane coalesced; shipped lm_head + ffn_down) |
+| `extra/q4_k_gemv_primitive.py` | Q4_K decode GEMV: `q4k_gemv_partial_kernel`/`q4k_gemv_packed_load_partial_kernel` (default) + **`q4k_coop_partial_kernel`** (MMVQ_COOP lane4→LOCAL coalesced; shipped attn_q/o; ffn_gate/up refuted) |
+| `test/external/test_q6k_coop.py` | MMVQ_COOP correctness + routing locks (lm_head/ffn_down/attn_q/o coop vs base; attn_q/o routed, ffn_gate/up not) |
 
 ## Durable search / gates (reusable machine-search layer)
 
