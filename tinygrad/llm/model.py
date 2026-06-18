@@ -209,8 +209,19 @@ class Q6KPrimitiveLinear:
       out = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_batch.reshape(K*self.in_features),
         fxn=q6k_gemm_kernel(self.out_features, self.in_features, K, self.parts, gemm_opts))[0]
       return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
-    from extra.q6_k_gemv_primitive import q6k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
+    # Cooperative-K Q6_K decode GEMV (opt-in, lm_head only for now): the within-block pos becomes a LOCAL lane
+    # axis -> coalesced packed-weight loads (the default one-row-per-thread path runs lm_head at ~10% HBM peak;
+    # coop reaches ~51%). Isolated 5x on lm_head, fp-reassoc-tol exact. out_features>=100000 selects the vocab
+    # head and excludes the smaller Q6_K roles. See docs/qk-mmvq-q6k-lm-head-arc-*.
+    rt = getenv("Q6K_COOP_RT", 4)
+    if getenv("Q6K_LM_HEAD_COOP", 1) and self.parts == 1 and self.out_features >= 100000 and self.out_features % rt == 0:
+      from extra.q6_k_gemv_primitive import q6k_coop_partial_kernel
+      partials = Tensor.empty(self.out_features, 16, dtype=dtypes.float32, device=x.device)
+      partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
+                                       fxn=q6k_coop_partial_kernel(self.out_features, self.in_features, rt))[0]
+      return partial.sum(axis=1).reshape(1, 1, self.out_features)
+    from extra.q6_k_gemv_primitive import q6k_gemv_partial_kernel
     partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
     partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
                                      fxn=q6k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, self.opts))[0]
