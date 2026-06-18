@@ -70,8 +70,13 @@ of llama (+44/+43/+40% over the pre-coop 47.3/46.5/43.6), byte-identical greedy,
 `../../docs/qk-mmvq-q6k-lm-head-arc-20260617.md`, `../../docs/qk-mmvq-coop-q4k-attn-result-20260617.md`. The
 work-decomposition rewrite (NOT the refuted dp4a knob) was the base-decode answer; "bounded decode exhausted" is
 SUPERSEDED. **MMVQ_COOP RULE: apply coop only where baseline coalescing is bad (<~30% peak); Q4_K ffn_gate/up
-(41% peak) + ffn_down (Q4_K) REFUTED — already coalesced. Low-risk role-by-role coop is DONE; remaining gap =
-deeper full-MMVQ (~40-51%→~70%) or different phase.**
+(41% peak) + ffn_down (Q4_K) REFUTED — already coalesced. Low-risk role-by-role coop is DONE. **Q4_K ffn_gate/up
+full-MMVQ (Family A: q8_1+dp4a) REFUTED 2026-06-18 (`../../docs/qk-mmvq-q4k-ffn-full-result-20260618.md`): dp4a
+kernel 39% peak (no faster than fp), whole-linear 0.82×; the dot was never the bottleneck — the 40→70 gap is the
+format-mandated UNPACK ALU (nibble+scale decode), which dp4a doesn't touch (READRAW 70% unreachable while unpack
+ALU present). ffn_gate/up unpack-ALU-bound at ~48% ceiling, no bounded kernel breaks past. Remaining decode gap
+(~32%) is unpack-ALU/codegen-ILP-structural; next levers OUT of decode-kernel scope: prefill WMMA / 14B / deep
+codegen-ILP (very high risk).**
 
 **Key diagnosis (`../../docs/llama-rocm-decode-attention-audit-20260617.md`):** llama decode is ~context-FLAT
 (−7%), tinygrad decays −43% → the long-ctx gap is **attention**. llama uses `flash_attn_tile` + stream-K split +
