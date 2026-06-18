@@ -2213,3 +2213,32 @@ shared mem, reuse across lanes) = BEAM-territory (hangs gfx1100) / dangerous-pow
 the decode overlap lever. **FLASH-PREFILL BANKED (correct + integration-viable, not performant). Phase 6 model
 integration CANCELLED. Prefill v2 RESTS AT INCREMENT 1 (~13x FFN, real + quality-gated, opt-in).** Removed the
 flawed phase3/4 wall-clock harnesses+artifacts; kept correctness/expressibility tests. Suite 260 pass / 57 skip.
+
+## 2026-06-17→18 (Q4_K MMVQ int-dot line — sudot4 SHIPPED, whole-linear REFUTED, line CLOSED)
+Closeout `docs/qk-mmvq-int-dot-closeout-20260618.md`. A long MMVQ deep-dive chasing the Q4_K ffn_gate/up gap to
+llama (kernel-level ladder: base fp 41% / fp coop 48% byte-identical / opaque asm 52% / llama 70%).
+**SHIPPED (durable codegen capability, used by NO default path):** fixed the `_sdot4` renderer helper
+(`tinygrad/renderer/cstyle.py`) to lower via **`__builtin_amdgcn_sudot4(true,a,false,b,c,false)`** → native
+`v_dot4_i32_iu8` + `neg_lo` modifier = correct a(signed)·b(unsigned). This fixed a **latent bug**: the prior
+bare-asm helper silently computed UNSIGNED×UNSIGNED (the lowering test had only checked instruction *emission*,
+never the *value*). Added a **value-level** test (`test_sdot4_lowering.py`, signed×unsigned incl negatives +
+unsigned-regression guard). Commits `0adb9f55b` (fix) + `d9be577d3` (test); 8/8 coop+sdot4 tests pass.
+**KERNEL win is real:** with correct sudot4, the **128-thread/row + warp-shuffle** kernel (llama's scheduler
+shape: 16 K-blocks parallel across 128 threads, `ds_bpermute` reduce + 4-elem LDS, one write) = **57% peak,
+correct** (rel 0.006) — beats opaque 52%. **WHOLE-LINEAR REFUTED (not routed):** the mandatory q8 activation
+pack (29.7µs / 4 kernels; per-kernel floor ~7µs, launch/ramp-bound on 16KB) eats the kernel win — paired
+gate+up (1 pack + 2 kernels) = **0.96× fp coop** (gates ≥1.3× base / ≥1.15× coop / ≥1.05× opaque all FALSE).
+**q8-lifecycle audit confirmed it's unfixable in-scope:** reuse ceiling = **2** (only gate+up share a Q4_K
+activation; k/v are Q6_K, o/down consume unique activations), and the ~7µs pack floor > the 5.0µs break-even for
+1.15× coop. Plus the sudot4 path is **q8-lossy** vs the byte-identical coop. Only theoretical reopen = q8 as a
+zero-extra-kernel **epilogue of the prior RMSNorm** (→ ~1.20× coop) — deep activation-lifecycle change, still
+lossy (needs dNLL), best-case decode EV ~+3-4% (gate+up = 2 of 7 linears/layer) → NOT pursued.
+**Also banked (refuted with quantified reasons):** MMVQ codegen/deep-linearizer/scale-hoist (`136b9859f`…
+`86f95ab97`), fused-coop-row quadrant (`e52cee446`, ceiling ~53-54%), llama-scheduler probe (`cfb389a95`/
+`d2545b5e5`), full-linear (`b7f0c1f11`), q8 lifecycle (`42416e248`). **Durable findings:** RDNA3 dot4 ISA map
+(sudot4 = native signed path; `__builtin_amdgcn_sdot4` scalar-fallbacks on gfx1100; bare v_dot4 asm = unsigned),
+llama's MMVQ scheduler decomposition, the q8-pack wall, the kernel-level ladder. **Lesson banked:** a dot4
+lowering test MUST validate the computed value, not just emission. **RESTING POINT unchanged:** decode ~66-69%
+of llama via the shipped byte-identical coop + flash-decode routes (no defaults touched this arc). **Q4_K int-dot
+FFN line CLOSED**; residual MMVQ gap to llama = per-thread codegen (clang vs custom_kernel = tinygrad-internals,
+high-risk). 14B/32B no-pivot preference honored throughout.
