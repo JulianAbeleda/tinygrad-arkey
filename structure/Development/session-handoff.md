@@ -2258,3 +2258,17 @@ activation; k/v are Q6_K). **VERDICT C: q8 lifecycle fails for gate/up; int-dot 
 sub-break-even path = q8 as a **zero-extra-kernel RMSNorm epilogue** (verdict D: ~1.20× coop but deep lifecycle
 change, still q8-lossy [dNLL ≤0.01 required, untested], best-case decode EV ~+3-4%) — not pursued. No kernel/
 route/default changes. Decode unchanged ~66-69% of llama.
+
+## 2026-06-18 (q8 side-channel feasibility + research-banks roadmap)
+Two follow-ups. **(1) q8 side-channel feasibility** (`docs/q8-sidechannel-ffn-{producer-audit,design-options,
+verdict}-20260618.md`, `bench/qk-q8-sidechannel/producer.json`): the only credible Q4_K ffn_gate/up int-dot
+reopening. Producer = `ffn_norm(h)` (nn.RMSNorm, model.py:747), gate+up share the expr, 19.4µs/2 kernels decode.
+RMSNorm reduces per-row mean(x²); q8 needs per-32 max → can't piggyback. Pure-graph side-channel does NOT fuse
+(4 pack kernels, proven). Only a hand-written fused custom RMSNorm+q8 kernel folds q8 in (~0-5µs effective,
+plausibly ≤4.8µs break-even) but that replaces a hot shared op + handles decode/prefill/residual/fp-fallback/
+multi-output for a lossy ~+3-4% gain → **VERDICT D: feasible but deep, scope separately, not built.** Q4_K
+ffn_gate/up int-dot CLOSED in practice. **(2) Research-banks roadmap** (`docs/8b-decode-research-banks-roadmap-
+20260618.md`): scoped the 6 banks; **recommend funding Bank 1 (low-sync speculative decode) first** — the only
+bank that can BEAT llama (+40-60%); acceptance/draft-speed/greedy-exactness already proven, blocker is runtime/
+JIT alternation (tractable systems problem). Defer kernel banks (2-4, walled); q8-lifecycle demoted (verdict D);
+infra (Bank 6) small parallel investment. Decode unchanged ~66-69% llama. No code/route/default changes.
