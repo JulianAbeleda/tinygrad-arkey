@@ -39,6 +39,25 @@ class TestQ6KCoop(unittest.TestCase):
     self.assertTrue(ff, "no Q6_K ffn_down found")
     self._coop_matches(ff[0], Tensor, dtypes, 3)
 
+  def test_coop_q4k_attn_qo_matches_base(self):
+    m, Tensor, dtypes = self._setup()
+    from extra.q4_k_gemv_primitive import q4k_gemv_partial_kernel, q4k_coop_partial_kernel
+    qo = [l for l in m._q4k_linears.linears if type(l).__name__ == "Q4KPrimitiveLinear"
+          and l.out_features == 4096 and l.in_features == 4096 and l.parts == 1]
+    self.assertTrue(qo, "no Q4_K attn_q/o found")
+    lin = qo[0]; OUT, IN = lin.out_features, lin.in_features
+    words = lin.q4k_storage.words.realize()
+    x = Tensor(np.random.default_rng(9).standard_normal((IN,)).astype(np.float16)).realize()
+    base = Tensor.empty(OUT, 1, dtype=dtypes.float32).custom_kernel(
+      words, x, fxn=q4k_gemv_partial_kernel(OUT, IN, 1, "none", lin.opts))[0].sum(1).numpy()
+    for rt in (8, 16):
+      coop = Tensor.empty(OUT, 8, dtype=dtypes.float32).custom_kernel(
+        words, x, fxn=q4k_coop_partial_kernel(OUT, IN, rt))[0].sum(1).numpy()
+      rel = np.abs(coop - base).max() / (np.abs(base).max() + 1e-9)
+      self.assertLess(rel, 2e-2, f"q4k attn_qo coop rt={rt} rel err {rel}")
+      self.assertFalse(np.isnan(coop).any())
+      self.assertTrue(OUT % rt == 0)
+
   def test_decode_greedy_byte_identical(self):
     # lm_head coop must not change greedy argmax (the shipped default gate)
     m, Tensor, dtypes = self._setup()
