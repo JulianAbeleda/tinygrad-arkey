@@ -2242,3 +2242,19 @@ lowering test MUST validate the computed value, not just emission. **RESTING POI
 of llama via the shipped byte-identical coop + flash-decode routes (no defaults touched this arc). **Q4_K int-dot
 FFN line CLOSED**; residual MMVQ gap to llama = per-thread codegen (clang vs custom_kernel = tinygrad-internals,
 high-risk). 14B/32B no-pivot preference honored throughout.
+
+## 2026-06-18 (q8 activation lifecycle — primitive-boundary audit + prototypes, VERDICT C)
+Follow-up applying the new `performance-primitive-research-principles.md` to the MMVQ blocker BEFORE touching
+sudot4 again. Docs `docs/q4k-ffn-q8-lifecycle-{scope,verdict}-20260618.md`; artifacts
+`bench/qk-q8-lifecycle/{reuse_map,pack_anatomy}.json`. Framed the full primitive
+(`q4k_ffn_mmvq_sudot4_with_q8_lifecycle` = fp source + q8 pack + reuse + extract + signed dot4 + correction +
+epilogue + quality + integration) and **prototyped** the two empirical questions: **Phase 4 graph-reuse** —
+TinyJit AUTO-COMMONS the q8 pack across gate+up (lazy 6 kernels < dup 7, no manual `.realize()`) but 1-pack-for-2
+still LOSES at **0.94-0.96× fp coop** → q8 reuse over two linears REFUTED. **Phase 5 fused pack** — a fused
+single-kernel quant+pack is **12.0µs** (redundant per-block max dominates; +~7µs for scales); idealized 1-kernel
+2-output floors ~8µs but fights custom_kernel multi-store plumbing; break-even needs **≤4.8µs** (unreachable by
+any separate kernel; even 8µs → 1.12× coop < 1.15× gate). Reuse ceiling = **2** (only gate+up share a Q4_K
+activation; k/v are Q6_K). **VERDICT C: q8 lifecycle fails for gate/up; int-dot Q4_K FFN stays CLOSED.** Only
+sub-break-even path = q8 as a **zero-extra-kernel RMSNorm epilogue** (verdict D: ~1.20× coop but deep lifecycle
+change, still q8-lossy [dNLL ≤0.01 required, untested], best-case decode EV ~+3-4%) — not pursued. No kernel/
+route/default changes. Decode unchanged ~66-69% of llama.
