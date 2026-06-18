@@ -29,8 +29,10 @@ from extra.qk_search_spec import AcceptedPolicy, Constraints, assemble_search_ro
 
 HARDWARE = "RX 7900 GRE / gfx1100"   # measured on this host (campaign docs assume XTX; same gfx1100 arch)
 DEFAULT_CKPTS = (512, 1024, 2048, 4096)
-# baseline first (v1@L256), then the hoisted L sweep. v1 is the pre-arc default; hoisted is the candidate.
-DEFAULT_GRID = (("v1", 256), ("hoisted", 256), ("hoisted", 128), ("hoisted", 64))
+# v1 (pre-arc default) baseline, then hoisted, then gqa_coop (the SHIPPED default 2026-06-17, cooperative GQA
+# V-reuse). NOTE: the committed bench/qk-flash-variant-search artifact predates gqa_coop (it picked hoisted);
+# re-run this grid to refresh it with gqa_coop. The gqa_coop in-model win is in qk-gqa-coop-decode-attention-result-*.
+DEFAULT_GRID = (("v1", 256), ("hoisted", 128), ("gqa_coop", 128), ("gqa_coop", 64))
 MAXC = 4608
 
 
