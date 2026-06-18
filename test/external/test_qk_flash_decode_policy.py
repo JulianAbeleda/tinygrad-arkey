@@ -67,8 +67,8 @@ class TestFlashVariant(unittest.TestCase):
   line of flash_decode_attention, so it raises before touching the tensor args)."""
   def test_variant_ssot(self):
     from extra.qk_flash_decode import FLASH_DECODE_VARIANTS, FLASH_DECODE_DEFAULT_VARIANT
-    self.assertEqual(FLASH_DECODE_VARIANTS, ("v1", "hoisted", "gqa_coop"))
-    self.assertEqual(FLASH_DECODE_DEFAULT_VARIANT, "gqa_coop")
+    self.assertEqual(FLASH_DECODE_VARIANTS, ("v1", "hoisted", "gqa_coop", "gqa_coop_vec"))
+    self.assertEqual(FLASH_DECODE_DEFAULT_VARIANT, "gqa_coop_vec")
 
   def test_unknown_variant_raises(self):
     from extra.qk_flash_decode import flash_decode_attention
@@ -79,7 +79,7 @@ class TestFlashVariant(unittest.TestCase):
   def test_model_default_is_gqa_coop(self):
     import pathlib
     src = pathlib.Path(__file__).resolve().parents[2].joinpath("tinygrad/llm/model.py").read_text()
-    self.assertIn('getenv("FLASH_VARIANT", "gqa_coop")', src)
+    self.assertIn('getenv("FLASH_VARIANT", "gqa_coop_vec")', src)
 
 if __name__ == "__main__":
   unittest.main()
