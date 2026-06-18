@@ -396,6 +396,15 @@ class HIPRenderer(CStyleLanguage):
     if any(u.op in (Ops.CUSTOM, Ops.CUSTOMI) and isinstance(u.arg, str) and re.search(r"(?<!\w)_dp4a\s*\(", u.arg) for u in uops):
       prefix.append('__attribute__((device)) __attribute__((target("dot-insts"))) unsigned int '
                     '_dp4a(unsigned int a, unsigned int b, unsigned int c){ return __builtin_amdgcn_udot4(a, b, c, false); }')
+    # gated SIGNED dot4 helper (RDNA3): __builtin_amdgcn_sdot4 scalar-fallbacks on gfx1100 (dot1-insts is GCN-era
+    # hw the card lacks), so the only native v_dot4 is inline asm v_dot4_i32_i8. Non-volatile so the compiler can
+    # schedule/reorder the dot4 calls (vs an opaque user `asm volatile`). Renderer-owned helper -> first-class
+    # enough for scheduling even though the final instruction is asm. See docs/qk-mmvq-deep-linearizer-*.
+    if any(u.op in (Ops.CUSTOM, Ops.CUSTOMI) and isinstance(u.arg, str) and re.search(r"(?<!\w)_sdot4\s*\(", u.arg) for u in uops):
+      # RDNA3 has no signed*signed dot4; the native op is v_dot4_i32_iu8 (operand a SIGNED int8 lanes, b UNSIGNED
+      # int8 lanes). Caller must pass the signed operand (e.g. q8 activations) as `a`, unsigned (q4 nibbles) as `b`.
+      prefix.append('__attribute__((device)) int _sdot4(int a, int b, int c){ int r = c; '
+                    'asm("v_dot4_i32_iu8 %0, %1, %2, %0" : "+v"(r) : "v"(a), "v"(b)); return r; }')
     type_map = { dtypes.bfloat16: "bf16", dtypes.float: "f32", dtypes.half: "f16", dtypes.fp8e4m3: "_fp8_fp8", dtypes.fp8e5m2: "_bf8_bf8" }
     used_dtypes = uops_to_dtypes(uops)
     if any(u.op is Ops.CONST and not math.isfinite(u.arg) for u in uops):
