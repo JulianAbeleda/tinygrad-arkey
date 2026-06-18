@@ -9,8 +9,8 @@ an in-file `# STATUS:` header.
 
 | file | owns |
 |---|---|
-| `tinygrad/llm/model.py` | the model; `should_use_flash_decode` policy + flash-decode call site; defaults `FLASH_DECODE=auto`, threshold 512, **`FLASH_VARIANT=gqa_coop`**, `FLASH_L=128` |
-| `extra/qk_flash_decode.py` | the decode-attention primitive: `flash_decode_attention` + the 6 UOp kernels (max/prob/**partial_v2**/**partial_coop**/gmax/den/combine); `FLASH_DECODE_VARIANTS` SSOT; `__main__` exactness self-test |
+| `tinygrad/llm/model.py` | the model; `should_use_flash_decode` policy + flash-decode call site; defaults `FLASH_DECODE=auto`, threshold 512, **`FLASH_VARIANT=gqa_coop_vec`**, `FLASH_L=128` |
+| `extra/qk_flash_decode.py` | the decode-attention primitive: `flash_decode_attention` + UOp kernels (max/prob/partial_v2/partial_coop/**partial_coop_vec**/gmax/den/combine); `FLASH_DECODE_VARIANTS` SSOT (default **gqa_coop_vec**); `__main__` exactness self-test |
 
 ## Durable search / gates (reusable machine-search layer)
 

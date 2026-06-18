@@ -54,12 +54,14 @@ Scope: stable implementation context for token-saving orientation. Full doc map:
 the host is an XTX — rocm-smi misreports "GRE", 24GB VRAM + rocminfo confirm XTX): llama decode 99.5 (d0) /
 98.6 / 97.6 / 95.4 / 92.2 tok/s @ctx 0/512/1024/2048/4096; prefill pp512 = 3069.
 
-**Decode (shipped):** flash-decode default-ON — `FLASH_DECODE=auto` threshold **512**, **`FLASH_VARIANT=gqa_coop`**
-(cooperative GQA V-reuse: V read once/group, not 4×), **`FLASH_L=128`**
-(`../../docs/qk-gqa-coop-decode-attention-result-20260617.md`, `../../docs/qk-8b-decode-banked-20260617.md`).
-Measured: 44.8 / 41.3 / 36.3 / 29.6 tok/s @ctx 512/1024/2048/4096 = **45% / 42% / 38% / 32% of llama**, slope
-−34% (vs hoisted −43%; was 43.5/39.1/32.7/24.8). `FLASH_VARIANT={v1,hoisted,gqa_coop}` override. The "~64 tok/s"
-figure is short-ctx ~ctx8 + demotion. Plus Q6_K coverage, ffn_down demotion (dNLL-gated, default-off).
+**Decode (shipped):** flash-decode default-ON — `FLASH_DECODE=auto` threshold **512**, **`FLASH_VARIANT=gqa_coop_vec`**
+(gqa_coop cooperative GQA V-reuse + output-dim `d` mapped to LOCAL threads → coalesced fp16 loads; gqa_coop ran
+as pathological 1-thread workgroups), **`FLASH_L=128`** (`../../docs/qk-gqa-coop-vector-load-result-20260617.md`).
+Measured: **47.7 / 46.9 / 45.7 / 43.9 tok/s @ctx 512/1024/2048/4096 = ~48% of llama FLAT** (slope **−8%** ≈
+llama −7%; the decode-attention SLOPE GAP IS CLOSED). Was gqa_coop 44.8/41.3/36.3/29.6 (45/42/38/32, −34%).
+`FLASH_VARIANT={v1,hoisted,gqa_coop,gqa_coop_vec}` override. The "~64 tok/s" figure is short-ctx ~ctx8 +
+demotion. Plus Q6_K coverage, ffn_down demotion (dNLL-gated, default-off). Remaining gap = base (GEMV/decode-block,
+structural — no bounded target per the GEMV audit).
 
 **Key diagnosis (`../../docs/llama-rocm-decode-attention-audit-20260617.md`):** llama decode is ~context-FLAT
 (−7%), tinygrad decays −43% → the long-ctx gap is **attention**. llama uses `flash_attn_tile` + stream-K split +

@@ -1,5 +1,10 @@
 # Target A — GQA-cooperative decode-attention: RESULT = SHIPPED (default `gqa_coop`) — 2026-06-17
 
+> **SUPERSEDED AS DEFAULT (still valid).** `gqa_coop` was default until 2026-06-17, when **`gqa_coop_vec`**
+> (gqa_coop + coalesced LOCAL-d loads, +6.5…+48.8% over gqa_coop, slope → −8%) replaced it. Current authority:
+> `qk-gqa-coop-vector-load-result-20260617.md`. `gqa_coop` remains a valid `FLASH_VARIANT` override; the win
+> below (vs hoisted) is still correct.
+
 The llama-derived lever (`docs/llama-rocm-decode-attention-audit-20260617.md`): llama's `flash_attn_tile`
 reuses one K/V tile across the GQA group; tinygrad's hoisted `flash_partial_v2` makes the query head a GLOBAL
 axis, re-reading V[kv] **4×** across the group. Target A builds the tinygrad-native version of that reuse and

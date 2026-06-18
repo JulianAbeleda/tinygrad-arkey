@@ -67,8 +67,8 @@ class SearchSpace(str, Enum):
   PRIMITIVE_POLICY = "primitive_policy"
   DEMOTION = "demotion"
   FLASH_THRESHOLD = "flash_threshold"
-  FLASH_VARIANT = "flash_variant"   # decode flash-attention primitive family: {v1, hoisted, gqa_coop} x KV-split L
-  # (gqa_coop = cooperative GQA V-reuse = shipped default 2026-06-17, qk-gqa-coop-decode-attention-result-*)
+  FLASH_VARIANT = "flash_variant"   # decode flash-attention primitive family: {v1, hoisted, gqa_coop, gqa_coop_vec} x KV-split L
+  # (gqa_coop_vec = gqa_coop + coalesced LOCAL-d loads = shipped default 2026-06-17, qk-gqa-coop-vector-load-result-*)
   # roadmap (not searchable variants yet): v3 (LDS/WMMA decode tile) REFUTED 2026-06-17 (regime mismatch,
   # qk-decode-attention-v3-result-20260617.md); next target = GQA-batched cooperative tile + vectorized LDS
   # load (tinygrad-decode-attention-next-primitive-spec-20260617.md), design-only, not yet a variant here.
