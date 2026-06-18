@@ -16,6 +16,25 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 - `amd-decode-capstone.md` — the decode ledger (23 → ~64 tok/s arc).
 - `amd-decode-arc-synthesis.md` — synthesis through the primitive lens.
 
+## 8B decode-attention + MMVQ frontier (2026-06-17 → 18) — latest state
+
+The work after the decode bank. Closeouts/results are canonical; the many dated `qk-*` arc docs are provenance.
+
+- **Decode-attention wins SHIPPED (byte-identical greedy, default-on):**
+  - `qk-8b-attention-fusion-result-20260617.md` — flash-decode threshold 1024→512 (+12.8% ctx520).
+  - `qk-8b-flash-variant-result-20260617.md` — `hoisted` exp + L=128 default (+11–29% across ctx).
+  - `qk-gqa-coop-vector-load-result-20260617.md` — `gqa_coop_vec` default → decode-attention slope gap CLOSED.
+- **Q4_K MMVQ int-dot line — CLOSED:** `qk-mmvq-int-dot-closeout-20260618.md` (**read this**) — the
+  consolidated bank. SHIPPED `_sdot4`→native signed dot4 via `__builtin_amdgcn_sudot4` (fixed a latent
+  unsigned-bug; value-tested; used by no default path); 128-thread/row sudot4 kernel 57% correct (beats opaque
+  52%) but whole-linear REFUTED by the q8-pack wall (reuse ceiling 2 + ~7µs pack floor); int-dot FFN refuted.
+  - Key sub-arcs (provenance): `qk-dot4-isa-audit-20260618.md` (the sudot4 fix + RDNA3 dot4 ISA map),
+    `llama-q4k-mmvq-scheduler-audit-20260618.md` (llama's MMVQ decomposition),
+    `qk-mmvq-llama-scheduler-probe-verdict-20260618.md`, `qk-mmvq-sudot4-full-linear-arc-20260618.md`,
+    `qk-q8-activation-lifecycle-verdict-20260618.md`, `qk-mmvq-{codegen,deep-linearizer,fused-coop-row}-*`.
+- **Current decode standing:** ~66–69% of llama via the shipped coop + flash-decode routes. Residual MMVQ gap =
+  per-thread codegen (tinygrad-internals). 14B/32B pivot deferred per standing preference.
+
 ## Active / open frontiers
 
 - **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486

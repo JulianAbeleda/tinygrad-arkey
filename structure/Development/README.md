@@ -26,3 +26,20 @@ Use `Purpose/` for role alignment.
 
 - `purpose-template.md` — canonical scaffold for `structure/Purpose/README.md`
 - `structure-convention.md` — default folder pattern and what each layer is for
+
+## Key documents (this fork)
+
+- `session-handoff.md` — **the running log / handoff** (rolling, dated entries; newest at the bottom). Start
+  here to resume; latest entry = current state.
+- `coding-principles.md` — core engineering principles for the repo.
+- `performance-primitive-research-principles.md` — supplement for GPU-perf / quantized-primitive /
+  machine-search work (isolated wins mislead → gate on in-model W==D, etc.).
+- `tinygrad-coding-overrides.md` — fork-specific overrides on top of upstream tinygrad conventions.
+- `roadmap.md`, `release-strategy.md` — direction + release thinking.
+- `machine-search-decode-context-plan-2026-06-16.md` — the active machine-search direction.
+- `amd-optimization-checklist.md` — the AMD perf-work checklist.
+- Audits/manifests (2026-06-16): `repo-audit-*`, `upstream-audit-*`, `qk-script-audit-*`,
+  `repo-script-map-*`, `principles-grade-*`, `hardfork-prune-{plan,manifest}.md`.
+- Sub-arc handoffs: `codex-cleanup-*`, `flywheel-rewrite-status.md`.
+
+For the engineering work itself (decode/prefill/MMVQ), the source of truth is `../../docs/README.md` (doc map).
