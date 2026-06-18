@@ -1,5 +1,11 @@
 # 8B Decode Attention Primitive Search Arc — RESULT: SHIPPED (flash variant `hoisted`)
 
+> **SUPERSEDED AS DEFAULT (still historically valid).** `hoisted` was the default until 2026-06-17, when
+> `FLASH_VARIANT=gqa_coop` (cooperative GQA V-reuse) replaced it as the default — gqa_coop strictly dominates
+> hoisted in-model (+3.9…+19.8% across ctx, byte-identical). Current authority:
+> `qk-gqa-coop-decode-attention-result-20260617.md`. The hoisted result below remains correct (vs v1) and
+> `FLASH_VARIANT=hoisted` is still a valid override.
+
 Qwen3-8B-Q4_K_M, gfx1100, FLASH_DECODE on (ctx ≥ 512). Successor to the flash-threshold ship
 (`qk-8b-attention-fusion-result-20260617.md`). This arc turned flash-decode from a single hand-written
 kernel into a **searched primitive family** `decode_attention ∈ {v1, hoisted} × L∈{64,128,256,512}` and
