@@ -127,6 +127,17 @@ class Q4KPrimitiveLinear:
     from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
     words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
+    # Cooperative-K Q4_K decode GEMV (MMVQ_COOP) for attn_q/o only: the within-block word index lane4=pos//4
+    # becomes a LOCAL lane -> coalesced packed-word loads. Q4_K coop is role-dependent: attn_q/o (4096x4096) is
+    # poorly coalesced by default (~19% peak -> ~29%, 1.52x), but ffn_gate/up is already ~41% peak so it is NOT
+    # routed. fp-reassoc-tol exact. See docs/qk-mmvq-coop-q4k-attn-*.
+    rt4 = getenv("Q4K_COOP_RT", 16)
+    if getenv("Q4K_ATTN_QO_COOP", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
+        and self.out_features % rt4 == 0:
+      from extra.q4_k_gemv_primitive import q4k_coop_partial_kernel
+      partials = Tensor.empty(self.out_features, 8, dtype=dtypes.float32, device=x.device)
+      partial = partials.custom_kernel(words, x_vec, fxn=q4k_coop_partial_kernel(self.out_features, self.in_features, rt4))[0]
+      return partial.sum(axis=1).reshape(1, 1, self.out_features)
     if self.kernel_mode == "direct_out":
       out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
       got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_kernel(self.out_features, self.in_features, "none", self.opts))[0]
