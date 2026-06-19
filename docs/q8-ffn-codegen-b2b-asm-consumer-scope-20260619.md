@@ -118,6 +118,44 @@ Executed fifth slice:
 This proves the first MMVQ math slice: fixed `sub=0`, `kb=row&15`, eight `v_dot4_i32_iu8` operations, low-nibble Q4
 extraction, positive q8 payload, and `sumi/sumq` accumulation for both gate/up pointers. It matches CPU exactly.
 
+Executed sixth slice:
+
+- probe: `extra/q8_ffn_asm_signed_high_dot.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_signed_high_dot.json`;
+- verdict: **PASS**.
+
+This closes the main dot4 correctness trap: odd-sub high-nibble extraction plus signed q8 payload. The AMD DSL
+`v_dot4_i32_iu8(..., neg=2)` matches the oracle's `neg_lo:[0,1,0]` signed-q8 modifier exactly.
+
+Executed seventh slice:
+
+- probe: `extra/q8_ffn_asm_scaled_subblock.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_scaled_subblock.json`;
+- verdict: **PASS**.
+
+This proves the scaled Q4_K affine for one sub-block: half `d`, half `dmin`, scale byte `sc`, min byte `mn`, half `d8`,
+signed q8, high nibble, and float output. The first attempt exposed `v_sub_f32_e32` operand ordering by producing an
+exact sign inverse; after fixing operand order, max_abs is `0.0`.
+
+Executed eighth slice:
+
+- probe: `extra/q8_ffn_asm_local_id_probe.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_local_id_probe.json`;
+- verdict: **PASS with local=(128,1,1)**.
+
+Important descriptor finding: under `assemble_linear`, `local=(32,4,1)` safely exposed `v0` as local-x only; using `v1`
+as local-y caused an MMU fault. The viable path is `local=(128,1,1)` with flattened `tid=v0`.
+
+Executed ninth slice:
+
+- probe: `extra/q8_ffn_asm_thread_partials.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_thread_partials.json`;
+- verdict: **PASS**.
+
+This proves the real 128-thread decomposition without reduction: `kb=tid>>3`, `sub=tid&7`, q4 low/high nibble selection,
+signed q8 dot4, and `sumi/sumq` accumulation. It writes one diagnostic partial per thread and matches CPU for the first
+128 rows across all 128 lanes for both gate/up pointers.
+
 ## B2b2 implementation order
 
 Do not write the whole consumer in one jump. Build it in slices:
@@ -129,8 +167,9 @@ Do not write the whole consumer in one jump. Build it in slices:
 3. **Q4 load skeleton:** load Q4_K scale/min/qs for one sub-block, store diagnostic scale/min/nibble values. Gate:
    matches CPU extraction. **DONE/PASS for pointer selection, row stride, scale byte, and `qs` word addressing.**
 4. **One-block dot:** compute one `kb` contribution for one row. Gate: matches CPU partial reference.
-   **PARTIAL/PASS for `sub=0`, positive q8, low-nibble extraction, eight dot4s. Remaining: signed q8 and high-nibble/sub parity.**
+   **DONE/PASS for signed q8, low/high nibble, scale/min affine, and all 128 per-thread partials.**
 5. **Full-row dot:** loop/emit all 16 `kb` lanes, reduce across wave/workgroup. Gate: one row matches reference.
+   **NEXT: workgroup reduction/full-row output.**
 6. **Full fused gate/up:** run all rows and both roles. Gate: real correctness + `<=60us`.
 
 Each slice must bank a JSON artifact. Stop at the first slice that proves this is becoming a broad assembler project
