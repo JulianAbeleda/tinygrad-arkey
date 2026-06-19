@@ -75,6 +75,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-large-project-p3-p4-q4-result-20260619.md` — **executed P3/P4 for Q4_K.** Imported llama Q4_K MMVQ is
   correct on `blk.0.attn_output.weight` (`max_abs 1.43e-6`) and reaches `903.9 GB/s` / `94.2%` HBM with single-submit
   HCQ timing. Next gate is P5: q8_1 producer/reuse plus one-role in-model routing.
+- `decode-mmvq-large-project-p5-p6-result-20260619.md` — **executed P5/P6 for Q4_K.** Real activation -> q8 producer
+  -> imported Q4 consumer is correct and clears the lifecycle device gate (`50.8%` HBM-equivalent vs current
+  `attn_q/o` ~`29%`), and the same Q4 template generalizes to `ffn_gate/up`. Next gate is graph-safe Q4 routing; Q6
+  remains a parallel coverage track.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

@@ -126,15 +126,26 @@ P3/P4 are complete for Q4_K:
 
 Detailed result: `docs/decode-mmvq-large-project-p3-p4-q4-result-20260619.md`.
 
+P5/P6 are complete for Q4_K:
+
+- real `blk.0.attn_output` activation -> q8 producer -> imported Q4_K consumer is correct;
+- q8 producer is byte-exact vs the CPU `block_q8_1` pack;
+- lifecycle device sum: `0.01934ms`, `488.0 GB/s`, `50.8%` HBM-equivalent;
+- the imported Q4 template generalizes to `blk.0.ffn_gate.weight` and `blk.0.ffn_up.weight`;
+- Q4 shape-matrix device rates: `893.6 / 1126.2 / 1115.2` Q4-GB/s for attn_output/gate/up;
+- eager wall timing is not a baseline authority for P5 because it includes Python graph construction.
+
+Detailed result: `docs/decode-mmvq-large-project-p5-p6-result-20260619.md`.
+
 ## Recommendation
 
-Start P5 next.
+Start P7a next: graph-safe Q4 route behind a research flag.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-q8_1 activation producer/reuse -> in-model one-role route
+Q4 imported consumer + q8_1 producer -> graph-safe one-block route -> W==D/dNLL gate
 ```
 
-If P1/P2/P3 fail for object-boundary reasons, then switch to Track B with a concrete oracle contract. If P1-P5 pass,
-the project has a measured imported-contract route and a much sharper native-transfer target.
+Q6 imported-kernel correctness/perf remains a coverage track. It should not block the Q4 graph route because Q4 already
+covers the largest decode traffic bucket (`ffn_gate/up`) plus `attn_q/o`.
