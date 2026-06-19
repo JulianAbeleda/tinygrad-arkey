@@ -269,7 +269,8 @@ class AMDComputeQueue(HWQueue):
         # CUs you want to by disabling other CUs via bits in regCOMPUTE_STATIC_THREAD_MGMT_SE<x> and trace even kernels that only have one wavefront.
         # Use SQTT_SIMD_SEL to select which SIMD to trace (0-3). Memory ops show different InstOp values (0x2x vs 0x5x) based on SIMD.
         cs_wtype = (1 << 6) if self.dev.target >= (12,0,0) else self.soc.SQ_TT_WTYPE_INCLUDE_CS_BIT
-        self.wreg(self.gc.regSQ_THREAD_TRACE_MASK, wtype_include=cs_wtype, simd_sel=SQTT_SIMD_SEL.value, wgp_sel=0, sa_sel=0)
+        if (raw_mask:=getenv("SQTT_RAW_MASK", 0)): self.wreg(self.gc.regSQ_THREAD_TRACE_MASK, raw_mask)
+        else: self.wreg(self.gc.regSQ_THREAD_TRACE_MASK, wtype_include=cs_wtype, simd_sel=SQTT_SIMD_SEL.value, wgp_sel=0, sa_sel=0)
         reg_include = self.soc.SQ_TT_TOKEN_MASK_SQDEC_BIT | self.soc.SQ_TT_TOKEN_MASK_SHDEC_BIT | self.soc.SQ_TT_TOKEN_MASK_GFXUDEC_BIT | \
                       self.soc.SQ_TT_TOKEN_MASK_COMP_BIT | self.soc.SQ_TT_TOKEN_MASK_CONTEXT_BIT
         token_exclude = SQTT_TOKEN_EXCLUDE.value | ((1 << self.soc.SQ_TT_TOKEN_EXCLUDE_PERF_SHIFT) if self.dev.target < (12,0,0) else 0)
@@ -281,11 +282,14 @@ class AMDComputeQueue(HWQueue):
                             1 << self.soc.SQ_TT_TOKEN_EXCLUDE_VALUINST_SHIFT | 1 << self.soc.SQ_TT_TOKEN_EXCLUDE_IMMEDIATE_SHIFT | \
                             1 << self.soc.SQ_TT_TOKEN_EXCLUDE_INST_SHIFT) if self.dev.target < (12,0,0) else 0x927
 
-        self.wreg(self.gc.regSQ_THREAD_TRACE_TOKEN_MASK, reg_include=reg_include, token_exclude=token_exclude,
-                  ttrace_exec=getenv("SQTT_TTRACE_EXEC", 0), inst_exclude=getenv("SQTT_INST_EXCLUDE", 0),
-                  bop_events_token_include=1,
-                  **({} if self.dev.target < (12,0,0) else {'exclude_barrier_wait': 1}))
-        self.sqtt_config(tracing=True)
+        if (raw_token:=getenv("SQTT_RAW_TOKEN_MASK", 0)): self.wreg(self.gc.regSQ_THREAD_TRACE_TOKEN_MASK, raw_token)
+        else:
+          self.wreg(self.gc.regSQ_THREAD_TRACE_TOKEN_MASK, reg_include=reg_include, token_exclude=token_exclude,
+                    ttrace_exec=getenv("SQTT_TTRACE_EXEC", 0), inst_exclude=getenv("SQTT_INST_EXCLUDE", 0),
+                    bop_events_token_include=1,
+                    **({} if self.dev.target < (12,0,0) else {'exclude_barrier_wait': 1}))
+        if (raw_ctrl:=getenv("SQTT_RAW_CTRL", 0)): self.wreg(self.gc.regSQ_THREAD_TRACE_CTRL, raw_ctrl)
+        else: self.sqtt_config(tracing=True)
 
     self.set_grbm()
     if self.dev.target[0] != 9: self.wreg(self.gc.regCOMPUTE_THREAD_TRACE_ENABLE, 1)

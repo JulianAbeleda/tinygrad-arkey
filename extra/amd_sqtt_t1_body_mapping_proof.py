@@ -13,6 +13,8 @@ CONFIGS: list[dict[str, Any]] = [
   {"name": "detail_mode", "env": {"SQTT_MODE": "3"}},
   {"name": "ttrace_exec", "env": {"SQTT_TTRACE_EXEC": "1"}},
   {"name": "detail_mode_ttrace_exec", "env": {"SQTT_MODE": "3", "SQTT_TTRACE_EXEC": "1"}},
+  {"name": "aqlprofile_start_regs", "env": {"SQTT_RAW_MASK": str(0x30013), "SQTT_RAW_TOKEN_MASK": str(0xc080683), "SQTT_RAW_CTRL": str(0xa0423941)}},
+  {"name": "aqlprofile_stop_like_token", "env": {"SQTT_RAW_MASK": str(0x30013), "SQTT_RAW_TOKEN_MASK": str(0xf0007ff), "SQTT_RAW_CTRL": str(0xa0423941)}},
 ]
 
 def summarize(name: str, env: dict[str, str], capture_run: dict[str, Any], decode: dict[str, Any]) -> dict[str, Any]:
