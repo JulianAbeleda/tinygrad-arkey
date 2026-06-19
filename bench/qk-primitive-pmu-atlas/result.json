@@ -1,0 +1,249 @@
+{
+ "model": "Qwen3-8B-Q4_K_M",
+ "ctx": 512,
+ "rows": [
+  {
+   "primitive": "r_32_32_4_48_2_2_2_32",
+   "launches": 18,
+   "tot_active_cyc": 56151431,
+   "VALU_util%": 4.1,
+   "L2_hit%": 5.8,
+   "class": "bandwidth-bound",
+   "gpu_time%": 14.6
+  },
+  {
+   "primitive": "r_32_32_4_48_4_2_32",
+   "launches": 18,
+   "tot_active_cyc": 44111470,
+   "VALU_util%": 2.2,
+   "L2_hit%": 3.0,
+   "class": "bandwidth-bound",
+   "gpu_time%": 11.4
+  },
+  {
+   "primitive": "r_128_32_3_16_4_2_32",
+   "launches": 36,
+   "tot_active_cyc": 38610718,
+   "VALU_util%": 6.2,
+   "L2_hit%": 11.8,
+   "class": "bandwidth-bound",
+   "gpu_time%": 10.0
+  },
+  {
+   "primitive": "r_32_32_4_16_4_2_32",
+   "launches": 36,
+   "tot_active_cyc": 38303218,
+   "VALU_util%": 1.9,
+   "L2_hit%": 6.6,
+   "class": "bandwidth-bound",
+   "gpu_time%": 9.9
+  },
+  {
+   "primitive": "r_32_32_4_16_4_2_32n1",
+   "launches": 36,
+   "tot_active_cyc": 34469715,
+   "VALU_util%": 1.8,
+   "L2_hit%": 4.8,
+   "class": "bandwidth-bound",
+   "gpu_time%": 8.9
+  },
+  {
+   "primitive": "r_128_32_3_16_4_2_32n1",
+   "launches": 36,
+   "tot_active_cyc": 34256906,
+   "VALU_util%": 6.6,
+   "L2_hit%": 12.7,
+   "class": "bandwidth-bound",
+   "gpu_time%": 8.9
+  },
+  {
+   "primitive": "r_4_2_8_16_4_523",
+   "launches": 36,
+   "tot_active_cyc": 17691929,
+   "VALU_util%": 0.4,
+   "L2_hit%": 4.3,
+   "class": "bandwidth-bound",
+   "gpu_time%": 4.6
+  },
+  {
+   "primitive": "r_8_4_523n1",
+   "launches": 36,
+   "tot_active_cyc": 15839891,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.2,
+   "class": "bandwidth-bound",
+   "gpu_time%": 4.1
+  },
+  {
+   "primitive": "r_1187_32_4_16_2_2_2_32",
+   "launches": 1,
+   "tot_active_cyc": 13726522,
+   "VALU_util%": 12.1,
+   "L2_hit%": 6.8,
+   "class": "bandwidth-bound",
+   "gpu_time%": 3.6
+  },
+  {
+   "primitive": "r_8_4_523",
+   "launches": 36,
+   "tot_active_cyc": 11936534,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.2,
+   "class": "bandwidth-bound",
+   "gpu_time%": 3.1
+  },
+  {
+   "primitive": "r_2_8_128_16_2_2_2_32n6",
+   "launches": 18,
+   "tot_active_cyc": 9866364,
+   "VALU_util%": 10.7,
+   "L2_hit%": 99.5,
+   "class": "cache/latency-bound",
+   "gpu_time%": 2.6
+  },
+  {
+   "primitive": "r_1024_16_4_2_32",
+   "launches": 36,
+   "tot_active_cyc": 9211905,
+   "VALU_util%": 4.9,
+   "L2_hit%": 30.0,
+   "class": "cache/latency-bound",
+   "gpu_time%": 2.4
+  },
+  {
+   "primitive": "r_2_523_8_4_4_16",
+   "launches": 36,
+   "tot_active_cyc": 9163798,
+   "VALU_util%": 0.8,
+   "L2_hit%": 51.3,
+   "class": "cache/latency-bound",
+   "gpu_time%": 2.4
+  },
+  {
+   "primitive": "r_16_256n1",
+   "launches": 37,
+   "tot_active_cyc": 8993807,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.0,
+   "class": "bandwidth-bound",
+   "gpu_time%": 2.3
+  },
+  {
+   "primitive": "r_16_256",
+   "launches": 36,
+   "tot_active_cyc": 8594795,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.0,
+   "class": "bandwidth-bound",
+   "gpu_time%": 2.2
+  },
+  {
+   "primitive": "E_2_8_16_4_4n6",
+   "launches": 36,
+   "tot_active_cyc": 8434808,
+   "VALU_util%": 0.0,
+   "L2_hit%": 50.0,
+   "class": "cache/latency-bound",
+   "gpu_time%": 2.2
+  },
+  {
+   "primitive": "r_2_8_4_4_16",
+   "launches": 36,
+   "tot_active_cyc": 8418428,
+   "VALU_util%": 0.0,
+   "L2_hit%": 13.2,
+   "class": "bandwidth-bound",
+   "gpu_time%": 2.2
+  },
+  {
+   "primitive": "r_8_16_8",
+   "launches": 36,
+   "tot_active_cyc": 8278703,
+   "VALU_util%": 0.0,
+   "L2_hit%": 60.0,
+   "class": "cache/latency-bound",
+   "gpu_time%": 2.1
+  },
+  {
+   "primitive": "r_2_8_128_16_4_2_32n6",
+   "launches": 18,
+   "tot_active_cyc": 6385522,
+   "VALU_util%": 7.2,
+   "L2_hit%": 99.0,
+   "class": "cache/latency-bound",
+   "gpu_time%": 1.7
+  },
+  {
+   "primitive": "r_32_4_1187",
+   "launches": 1,
+   "tot_active_cyc": 779277,
+   "VALU_util%": 0.0,
+   "L2_hit%": 2.6,
+   "class": "bandwidth-bound",
+   "gpu_time%": 0.2
+  },
+  {
+   "primitive": "E_16_4_2_8_16_2_4_4",
+   "launches": 1,
+   "tot_active_cyc": 701066,
+   "VALU_util%": 0.1,
+   "L2_hit%": 78.0,
+   "class": "cache/latency-bound",
+   "gpu_time%": 0.2
+  },
+  {
+   "primitive": "r_32_4_1187n1",
+   "launches": 1,
+   "tot_active_cyc": 687410,
+   "VALU_util%": 0.0,
+   "L2_hit%": 2.6,
+   "class": "bandwidth-bound",
+   "gpu_time%": 0.2
+  },
+  {
+   "primitive": "E_1187_32_4",
+   "launches": 1,
+   "tot_active_cyc": 247953,
+   "VALU_util%": 0.9,
+   "L2_hit%": 57.7,
+   "class": "cache/latency-bound",
+   "gpu_time%": 0.1
+  },
+  {
+   "primitive": "r_32_32_4_32_4",
+   "launches": 1,
+   "tot_active_cyc": 237161,
+   "VALU_util%": 0.0,
+   "L2_hit%": 4.4,
+   "class": "bandwidth-bound",
+   "gpu_time%": 0.1
+  },
+  {
+   "primitive": "r_16_8",
+   "launches": 1,
+   "tot_active_cyc": 230611,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.0,
+   "class": "bandwidth-bound",
+   "gpu_time%": 0.1
+  },
+  {
+   "primitive": "r_16_8n1",
+   "launches": 1,
+   "tot_active_cyc": 230383,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.0,
+   "class": "bandwidth-bound",
+   "gpu_time%": 0.1
+  },
+  {
+   "primitive": "E_2n7",
+   "launches": 1,
+   "tot_active_cyc": 229176,
+   "VALU_util%": 0.0,
+   "L2_hit%": 16.7,
+   "class": "bandwidth-bound",
+   "gpu_time%": 0.1
+  }
+ ]
+}
