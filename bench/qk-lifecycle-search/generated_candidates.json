@@ -22,14 +22,15 @@
       "state": "proposed",
       "legal": true,
       "requires": [
-        "T=K+1 target verify <=1.5x one pass",
+        "project-level T-cheap batched-forward route",
+        "T=K+1 target verify <=1.3-1.5x one pass",
         "low-sync accept/commit",
         "greedy byte-exact KV protocol"
       ],
       "would_be_pruned_by": [
         "spec_current_verify_not_amortized"
       ],
-      "promotion_gate": "SDB-3 verify <=1.5x one pass, then W==D >=1.2x"
+      "promotion_gate": "Only after project route exists: verify <=1.3-1.5x one pass, then W==D >=1.2x"
     },
     {
       "id": "decode_q8_separate_pack_dot4_retry",

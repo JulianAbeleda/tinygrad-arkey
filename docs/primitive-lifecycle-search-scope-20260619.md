@@ -144,7 +144,7 @@ Current seed candidates:
 | `decode_q8_artifact_lifecycle` | `pass_research` | W==D `1.051-1.063x`, dNLL `+0.002887`, default off |
 | `decode_q8_native_codegen` | `project_level` | artifact oracle works; native ownership needs AMD scheduler/codegen |
 | `decode_spec_verify_shortcut` | `closed` | verify cost is distributed T-scaling, not one primitive |
-| `decode_spec_weight_amortization_lifecycle` | `diagnostic` | PMU reopens spec as weight-read amortization, but current T=5 verify is `4.66x` one pass; hard gate is `<=1.5x` |
+| `decode_spec_weight_amortization_lifecycle` | `project_level` | SDB-1/SDB-2: PMU framing is right, but T=5 verify needs a `67.8%` cut across Q4_K, Q6_K/lm_head, and attention/reduces; no bounded shared primitive |
 | `prefill_tensile_artifact_full` | `pass_strong_policy_gated` | pp512 route reaches `1.761x` with attn_q/o included; external artifact policy remains |
 | `prefill_tensile_codegen_transfer` | `project_level` | Tensile is the oracle for native renderer work |
 | `prefill_route_a_asm_lds` | `diagnostic` | correct LDS/multi-wave path exists, but P2/P3 performance work is pending |
@@ -209,7 +209,7 @@ PLS-4: generator. **DONE**
 Result: `bench/qk-lifecycle-search/generated_candidates.json` emits generated rows. Legal proposed rows include:
 
 - `decode_q8_sidechannel_native_after_codegen_capability`
-- `decode_spec_tcheap_verify_forward`
+- `decode_spec_tcheap_verify_forward` (project-level prerequisite)
 - `prefill_tensile_artifact_hardened_shapes`
 - `prefill_tensile_native_renderer_transfer`
 

@@ -161,9 +161,13 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   on the captured RDNA3 blobs and no bounded `>=30us` A2 feature is identified. Route A remains closed for q8 decode
   except as a project-level AMD scheduler/codegen effort.
 - `spec-decode-bandwidth-amortization-scope-20260619.md` — reopens spec decode only under the PMU-backed
-  weight-read-amortization framing. Keeps the old `decode_spec_verify_shortcut` closed; defines the new diagnostic
-  row `decode_spec_weight_amortization_lifecycle`, whose hard gate is T=K+1 verify `<=1.5x` one T==1 pass plus
+  weight-read-amortization framing. Keeps the old `decode_spec_verify_shortcut` closed; defines the new
+  `decode_spec_weight_amortization_lifecycle` row, whose hard gate is T=K+1 verify `<=1.5x` one T==1 pass plus
   low-sync accept/commit and greedy byte-exactness.
+- `spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md` — **executed SDB-1/SDB-2.** Current spec remains
+  non-viable (`~0.52x` before runtime with 0.6B K=4) because verify is `4.65x`; reaching `<=1.5x` requires a
+  `67.8%` verify cut across Q4_K, Q6_K/lm_head, and attention/reduces. No bounded shared primitive; spec is
+  project-level T-cheap batched-forward work.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

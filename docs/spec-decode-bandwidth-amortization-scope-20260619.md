@@ -142,13 +142,17 @@ SDB-0: reconcile and bank the reopened row.
 - Keep `decode_spec_verify_shortcut` closed.
 - Gate: generated ledger shows both rows with different meanings.
 
-SDB-1: analytic viability model.
+SDB-1: analytic viability model. **DONE**
 
 - Use current acceptance, draft speed, target speed, verify `T` ladder, and runtime overhead.
 - Emit a JSON model for K=2/3/4/8.
 - Gate: identify the maximum verify cost that still clears `1.2x` and `1.5x`.
 
-SDB-2: verify-fastpath design audit.
+Result: `spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md` builds the model. With the 0.6B draft,
+current verify gives only about `0.52x` before runtime overhead. A `>=1.2x` route needs verify around `<=1.3-1.4x`
+one pass once a small runtime allowance is included.
+
+SDB-2: verify-fastpath design audit. **DONE**
 
 - Map each target component at T=K+1:
   - Q4_K GEMV/GEMM roles;
@@ -159,11 +163,17 @@ SDB-2: verify-fastpath design audit.
 - For each component, state whether an existing primitive can be made T-cheap.
 - Gate: either name a shared primitive that moves enough of verify, or classify as project-level batched-forward.
 
-SDB-3: minimal proof candidate.
+Result: `NO_BOUNDED_SHARED_PRIMITIVE`. T=5 verify needs a `67.8%` cut to reach `<=1.5x` one pass, but Q4_K,
+Q6_K/lm_head, and attention/reduces are co-dominant. No single component or existing primitive can move enough.
+The missing route is project-level T-cheap batched-forward.
+
+SDB-3: minimal proof candidate. **NOT EARNED**
 
 - Do not start with full model routing.
 - Build or import one T-cheap verify block only if SDB-2 finds a credible shared primitive.
 - Gate: T=5 verify `<=1.5x` one T=1 pass, exact argmax.
+
+Do not start this as a bounded kernel proof unless a credible project-level T-cheap batched-forward route is funded.
 
 SDB-4: low-sync integration.
 
@@ -189,7 +199,6 @@ Kill or defer immediately if any of these remain true:
 
 ## Current verdict before new work
 
-Spec decode is **the right decode lever by bottleneck class**, but **not yet a buildable speed path**. The current
-implementation is killed by verify and runtime overhead. The next useful work is SDB-1/SDB-2: quantify the exact
-verify budget and determine whether a T-cheap verify forward is a bounded primitive or a project-level batched-forward
-compiler/runtime arc.
+Spec decode is **the right decode lever by bottleneck class**, but **not a bounded buildable speed path** after
+SDB-1/SDB-2. The current implementation is killed by verify and runtime overhead, and the T-cheap verify forward is
+classified as project-level batched-forward compiler/runtime work.

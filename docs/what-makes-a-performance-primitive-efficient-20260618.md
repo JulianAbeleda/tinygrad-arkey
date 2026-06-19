@@ -514,6 +514,11 @@ The PMU atlas reopens spec decode only as `decode_spec_weight_amortization_lifec
 current T=5 verify is `4.66x` one T==1 pass. The reopened row is gated on a T-cheap target verify forward
 (`<=1.5x` one pass), low-sync accept/commit, and greedy byte-exactness.
 
+SDB-1/SDB-2 then classify that reopened row as project-level, not bounded
+(`spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md`): with the 0.6B K=4 draft, current spec is only
+about `0.52x` before runtime overhead, and T=5 verify needs a `67.8%` cut across Q4_K, Q6_K/lm_head, and
+attention/reduces. No single existing primitive or component is sufficient.
+
 ## External research check
 
 Second-round external research is consolidated in `performance-primitive-external-research-audit-20260619.md`.

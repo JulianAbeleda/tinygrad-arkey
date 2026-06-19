@@ -310,9 +310,9 @@ def generate_candidates(candidates:list[dict[str, Any]], refutations:dict[str, A
       "phase": "decode",
       "state": "proposed",
       "legal": True,
-      "requires": ["T=K+1 target verify <=1.5x one pass", "low-sync accept/commit", "greedy byte-exact KV protocol"],
+      "requires": ["project-level T-cheap batched-forward route", "T=K+1 target verify <=1.3-1.5x one pass", "low-sync accept/commit", "greedy byte-exact KV protocol"],
       "would_be_pruned_by": ["spec_current_verify_not_amortized"],
-      "promotion_gate": "SDB-3 verify <=1.5x one pass, then W==D >=1.2x",
+      "promotion_gate": "Only after project route exists: verify <=1.3-1.5x one pass, then W==D >=1.2x",
     },
     {
       "id": "decode_q8_separate_pack_dot4_retry",
@@ -396,6 +396,7 @@ def build_candidates() -> list[dict[str, Any]]:
   shape = _read_json("bench/qk-tensile-extraction/shape_matrix.json")
   q8_artifact = _read_json("bench/q8-ffn-amd-scheduler-project/result.json")
   codegen = _read_json("bench/amd-schedule-codegen-exhaustion/oracle_matrix.json")
+  spec_model = _read_json("bench/qk-spec-decode-bandwidth-amortization/model.json")
   q8_speedup = _speedup_by_ctx()
   q8_dnll = _dnll_delta()
 
@@ -474,26 +475,29 @@ def build_candidates() -> list[dict[str, Any]]:
     _candidate(
       id="decode_spec_weight_amortization_lifecycle",
       phase="decode",
-      state="diagnostic",
+      state="project_level",
       role="speculative decode target verify",
       producer={"placement": "0.6B draft low-sync proposal graph", "reuse_count": "accepted tokens/pass"},
       format={"activation": "short target verify block T=K+1", "weights": "target GGUF", "lossy": False},
       consumer={"primitive": "T-cheap target verify forward", "owner": "future tinygrad batched-forward/runtime route"},
       routing={"mode": "future SPEC_DECODE=1 research flag", "default_safe": True, "artifact_dependency": False},
       quality={"gate": "greedy byte-exact target output", "observed": "acceptance excellent; naive route exact but slow"},
-      score={"speed_gate": "DIAGNOSTIC_REOPENED_BY_PMU",
+      score={"speed_gate": "NO_BOUNDED_SHARED_PRIMITIVE",
              "accepted_per_pass_K4_0p6B": 2.844,
              "current_verify_T5_x_one_pass": 4.66,
              "required_verify_x_one_pass": "1.0-1.5",
-             "rank": 15},
+             "sdb2_classification": spec_model.get("sdb2_verify_design_audit", {}).get("classification"),
+             "rank": 32},
       evidence=["docs/spec-decode-bandwidth-amortization-scope-20260619.md",
+                "docs/spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md",
+                "bench/qk-spec-decode-bandwidth-amortization/model.json",
                 "bench/qk-spec-decode-acceptance/result.json",
                 "bench/qk-spec-decode-production/baseline.json",
                 "bench/qk-spec-verify-component-breakdown/result.json",
                 "bench/qk-primitive-pmu-atlas/result.json"],
       blocked_by_refutations=["current T>1 verify path does not amortize weights",
                               "naive production route is host/sync-bound"],
-      next_action="Run SDB-1/SDB-2: verify budget model and T-cheap verify design audit.",
+      next_action="Do not build SDB-3 unless a project-level T-cheap batched-forward route is funded.",
     ),
     _candidate(
       id="prefill_tensile_artifact_full",
@@ -591,11 +595,10 @@ def summarize(candidates:list[dict[str, Any]]) -> dict[str, Any]:
     "state_counts_by_phase": by_phase,
     "top_ranked": [c["id"] for c in ranked[:5]],
     "live_questions": [
-      "Can target verify be made T-cheap enough for spec decode (<=1.5x one T==1 pass)?",
       "Is external artifact policy acceptable for research routes?",
       "Does Claude's Route A/P2 dependency-free LDS work beat the current diagnostic state?",
       "Should q8 decode artifact route remain research-only or become a maintained opt-in?",
-      "Is a reusable AMD renderer/scheduler project funded, or are native codegen rows closed for now?",
+      "Is a reusable AMD renderer/scheduler or T-cheap batched-forward project funded, or are native codegen/spec rows closed for now?",
     ],
   }
 

@@ -142,7 +142,7 @@
       ]
     },
     "decode_spec_weight_amortization_lifecycle": {
-      "state": "diagnostic",
+      "state": "project_level",
       "refutations": [
         "spec_current_verify_not_amortized"
       ],
