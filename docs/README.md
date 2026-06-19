@@ -67,6 +67,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-large-project-p0-contract-inventory-result-20260619.md` — **executed P0.** The llama.cpp gfx1100
   `mmvq.cu` object contains `22` Q4_K/Q6_K candidate functions and `22` `.kd` descriptors with `144` byte kernargs.
   Next gate is P1: named-descriptor HCQ load smoke, no HIP runtime, no launch yet.
+- `decode-mmvq-large-project-p1-loader-smoke-result-20260619.md` — **executed P1.** Selected Q4_K and Q6_K low-VGPR
+  llama descriptors load through tinygrad HCQ (`0x74840`, `0x74e40`), no unsupported relocations, no HIP runtime, no
+  kernel launch. Next gate is P2: capture real llama kernargs/grid/local in a separate HIP-only process.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

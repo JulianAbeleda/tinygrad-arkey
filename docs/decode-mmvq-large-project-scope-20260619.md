@@ -99,14 +99,25 @@ P0 is complete:
 
 Detailed result: `docs/decode-mmvq-large-project-p0-contract-inventory-result-20260619.md`.
 
+P1 is complete:
+
+- selected Q4_K and Q6_K low-VGPR descriptors load through tinygrad HCQ;
+- Q4_K descriptor offset: `0x74840`;
+- Q6_K descriptor offset: `0x74e40`;
+- both use `144` byte kernargs;
+- no unsupported relocations;
+- no kernel launch.
+
+Detailed result: `docs/decode-mmvq-large-project-p1-loader-smoke-result-20260619.md`.
+
 ## Recommendation
 
-Start P1 next.
+Start P2 next.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-load selected llama MMVQ descriptor by name -> capture kernarg -> HCQ correctness -> in-model one-role route
+capture kernarg -> HCQ correctness -> in-model one-role route
 ```
 
 If P1/P2/P3 fail for object-boundary reasons, then switch to Track B with a concrete oracle contract. If P1-P5 pass,
