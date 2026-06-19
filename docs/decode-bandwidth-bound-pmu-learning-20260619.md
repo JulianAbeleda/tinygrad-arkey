@@ -45,6 +45,24 @@ So the **measured** decode levers, in EV order:
 
 Dead, by measurement: frontier #4 (codegen/VALU) for decode; all locality/LDS levers (A3 confirmed).
 
+## Decode across context (ctx 128/512/1024/4096) — bandwidth-bound at EVERY ctx; composition shifts
+| ctx | bandwidth-bound % | cache-served % | composition |
+|---|---:|---:|---|
+| 128 | 89 | 11 | ~85% weight-GEMV |
+| 512 | 89 | 11 | ~85% weight-GEMV |
+| 1024 | 89 | 11 | weight-GEMV + growing KV reads |
+| 4096 | 91 | 9 | weight-GEMV ~60% + **KV-streaming ~31%** |
+
+- **Decode is bandwidth-bound at ALL contexts (89–91%)** — it NEVER becomes compute- or cache-bound. So frontier
+  #4 (codegen) stays dead for decode at every context.
+- The **KV-cache-read/attention kernels** (`r_8_4_<kvlen>`, `r_4_2_8_16_4_<kvlen>`) grow from ~12% (ctx512) to
+  **~31% (ctx4096)** and are **bandwidth-bound** (L2 hit 0.8–3.6%) — the KV cache exceeds cache capacity and is
+  streamed from HBM each step. The cache-served flash-*reduce* (L2 ~99%) stays small (~9–11%).
+- **Efficiency signal:** at ctx4096 KV reads take ~31% of GPU time for only ~0.6 GB, vs ~60% for the 4.68 GB of
+  weights → **the KV/attention kernels achieve far lower bandwidth efficiency than the weight-GEMVs.** So long-ctx
+  decode has TWO bandwidth levers: amortize weight reads (spec-decode) AND (a) shrink KV bytes (KV quantization)
+  and (b) raise KV-read BW efficiency. tok/s decays 84.5→68.4 (ctx128→4096), consistent with the growing KV bytes.
+
 ## PREFILL is the OPPOSITE regime — compute/WMMA-bound (measured, `qk_prefill_pmu_atlas.py`)
 Same instrument, real 8B prefill forward (512-token chunk, `_prefill_v2=True`, fp16 TC GEMMs), ctx0:
 - **Dominant matmuls show HIGH L2 hit: 54–87%** (`r_8_48_32_*` = 55% of GPU time @ 54% L2 hit; others 67–87%).
