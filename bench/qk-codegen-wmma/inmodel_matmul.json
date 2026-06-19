@@ -36,5 +36,22 @@
     },
     "correction": "two prior framings overturned: (1) the v_cvt CONVERSION overhead is EPILOGUE (amortized), not a loop lever; (2) ADDRESS-lowering is minor in the loop (only 18 v_add). The real hot-loop bottleneck is 127 v_mov register init/marshaling tied to the strided per-element d16 fp16 loads.",
     "retarget": "lever = reduce the loop v_mov register overhead -- candidate: wider fp16 loads (avoid per-element d16 + their inits) via a coalesced copy (CG-W2), or a register-alloc/lowering fix. Renderer/codegen-level."
+  },
+  "CG_W2_coalesced_copy": {
+    "verdict": "REFUTED (kernel-level copy-pattern change does NOT cut v_mov / vectorize)",
+    "fair_back_to_back": {
+      "strided_baseline_tflops": 47.33,
+      "coalesced_tflops": 43.67,
+      "note": "coalesced slightly SLOWER (warp-uncoalescing)"
+    },
+    "coalesced_isa": {
+      "v_mov": 123,
+      "v_wmma": 16,
+      "global_load_d16": 16,
+      "global_load_b128": 2,
+      "note": "v_mov UNCHANGED (~123, like strided ~120); loads still d16 -> NOT vectorized by the access-pattern change"
+    },
+    "measurement_confound_caught": "single-eval runs read 42 / 65 / 67 TFLOPS for the SAME coalesced kernel = clock-ramp/warmth noise (AMD-decode-measurement-confounds principle). The FAIR back-to-back run (47.3 strided vs 43.7 coalesced) + the noise-free ISA are the truth. Led astray by TFLOPS momentarily; ISA + fair-compare corrected it.",
+    "conclusion": "the 120-127 v_mov fp16-load register overhead is NOT removable by the kernel copy access pattern -> it is RENDERER-FORCED (tinygrad's fp16 d16-load lowering / per-register init), regardless of strided vs contiguous. The dependency-free prefill lever = a RENDERER change (vectorize/widen fp16 loads, eliminate the d16 register-init) -- project-level, NOT kernel-expressible (CG-W2 refuted, like CG-1/CG-R1 before it)."
   }
 }
