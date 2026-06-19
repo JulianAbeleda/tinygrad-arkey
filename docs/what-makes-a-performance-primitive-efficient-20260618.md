@@ -524,6 +524,10 @@ contract, but stops before implementation: current Q4_K, Q6_K/lm_head, attention
 fail the `<=1.5x` T-cheap component gate. TBF-3 requires a concrete grouped-linears or short-block-attention
 component candidate first.
 
+That next gate is scoped in `spec-decode-component-route-candidates-scope-20260619.md`: candidate L is grouped
+short-block quantized linears, candidate A is short-block causal verify attention, and candidate C is their combined
+projection. No implementation is justified until a candidate changes the TBF-2 ratios.
+
 ## External research check
 
 Second-round external research is consolidated in `performance-primitive-external-research-audit-20260619.md`.

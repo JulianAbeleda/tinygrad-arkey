@@ -175,6 +175,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   IR contract is defined, but current component gates all fail: Q4_K `2.916x`, Q6_K/lm_head `5.831x`,
   attention/reduces `3.061x`, linears group `3.523x` vs the `<=1.5x` T-cheap gate. Stops before TBF-3 until a
   concrete component route exists.
+- `spec-decode-component-route-candidates-scope-20260619.md` — next decode-only scope after TBF-0..2: candidate
+  routes for grouped short-block quantized linears, short-block causal verify attention, and their combined
+  projection. No implementation until a candidate passes its component gate.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
