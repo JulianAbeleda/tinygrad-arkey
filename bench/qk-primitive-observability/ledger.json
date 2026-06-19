@@ -1,6 +1,6 @@
 {
-  "commit": "484804ecf",
-  "generated_at": "2026-06-19T07:00:44+00:00",
+  "commit": "ef9c4d3fb",
+  "generated_at": "2026-06-19T07:01:05+00:00",
   "latest": {
     "attention_kv:prefill:flash_prefill_reuse_free": {
       "id": "attention_kv:prefill:flash_prefill_reuse_free:c12a3025f829a9da",
