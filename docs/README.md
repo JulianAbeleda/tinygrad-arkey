@@ -27,6 +27,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   Consolidated source of truth for what makes a performance primitive efficient, using llama.cpp vs tinygrad as the
   case study: decode, lm_head, MMVQ, attention, spec, prefill, machine-search lessons, and every remaining path
   marked shipped/refuted/deferred/open.
+- `performance-primitive-external-research-audit-20260619.md` — second-round external research audit across
+  arXiv/OpenReview/ChinaXiv. Cites each paper/source, records the claim, checks whether it is true/applicable to this
+  tinygrad gfx1100 project, and maps it to current or future primitive rows.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
   exhausted; q8/RMSNorm is codegen-deferred; hand-LDS WMMA is refuted; external BLAS ceiling is measured; the bounded
   no-deps prefill WMMA sweep is refuted; EBT-1 kills the HIP-runtime bridge; the only material prefill route left is

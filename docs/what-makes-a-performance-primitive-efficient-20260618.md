@@ -478,6 +478,16 @@ by full MMVQ activation-format economics and by mature tiled kernels. Further pr
 
 There is no longer a credible single cheap kernel edit that explains or closes the llama benchmark gap.
 
+## External research check
+
+Second-round external research is consolidated in `performance-primitive-external-research-audit-20260619.md`.
+It covers arXiv/OpenReview/ChinaXiv sources such as FlashAttention-4, Event Tensor, KernelBench-X, FlashInfer,
+KVQuant, CodeGEMM, CudaForge/GPU Kernel Scientist, TileFuse, prefill/decode scheduling work, and ChinaXiv as a
+source. The audit's conclusion is that external work supports the **primitive lifecycle** framing and adds future
+rows for long-context KV/attention, dynamic megakernels, hardware-feedback search, and alternative quantization
+formats, but it does not invalidate the local verdicts above or change the immediate priority: TPE-6 one-block
+transfer for the extracted Tensile prefill primitive.
+
 ## Provenance
 
 Primary current docs:
@@ -498,6 +508,7 @@ Primary current docs:
 - `llama-kernel-residual-primitive-audit-20260619.md`
 - `qk-decode-per-role-delta-audit-20260618.md`
 - `qk-machine-search-primitive-rows-20260618.md`
+- `performance-primitive-external-research-audit-20260619.md`
 - `q4k-fp-coop-codegen-quality-scope-20260618.md`
 - `qk-spec-verify-component-breakdown-20260618.md`
 - `qk-prefill-weight-reuse-scope-20260618.md`
