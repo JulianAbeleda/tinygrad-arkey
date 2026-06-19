@@ -15,7 +15,7 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
 ```json
 [
   {
-    "primitive": "decode_q4k_ffn_q8_sidechannel", "phase": "decode", "state": "deferred D",
+    "primitive": "decode_q4k_ffn_q8_sidechannel", "phase": "decode", "state": "deferred behind codegen capability (Q8L-2 KILL: q8-mmvq-lifecycle-deep-result-20260619.md)",
     "current_impl": "Q4_K ffn_gate/up byte-identical fp dequant+fp dot, ~41% HBM peak [M]; coop refuted (already coalesced)",
     "reference_impl": "llama MMVQ: q8_1 activation (produced once) + native sudot4 + block-amortized affine, ~70% peak",
     "required_dataflow": "fused custom RMSNorm/apply PRODUCER emits (fp output + q8_1-packed activation + per-32 scales) in one launch -> gate/up int-dot consumes q8 -> sudot4 -> qsum/affine correction",
@@ -26,7 +26,7 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "expected_amdahl": "+3-4% e2e (gate/up = 2 of 7 linears; reuse ceiling 2 because k/v are Q6_K) [I]",
     "known_refutations": "separate q8 pack (29.7us/4 kernels) -> 0.96x; graph-reuse 0.94-0.96x; sudot4 whole-linear loses; per-32 max cannot piggyback RMSNorm sum-of-squares",
     "fallback": "byte-identical fp coop (shipped default) on unsupported shapes / non-AMD",
-    "blocked_by": "multi-output fused custom-norm kernel has NO single->multi-output precedent in repo; deep, lossy"
+    "blocked_by": "Q8L-2 PROVEN: fused per-row-reduce->broadcast->per-32-reduce->multi-output store NOT expressible via UOp store-group idiom (GROUP-of-ENDs fails verify; two granularities = serial separate kernels). Needs LDS-reduction flash-style kernel = deep codegen capability. Q8L-0 contract clean, Q8L-1 cost <=4.8us plausible if single-kernel."
   },
   {
     "primitive": "decode_q4k_ffn_coop_subgate", "phase": "decode", "state": "sub-gate candidate",

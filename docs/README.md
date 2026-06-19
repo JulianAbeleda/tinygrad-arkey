@@ -32,6 +32,16 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `qk-machine-search-primitive-rows-20260618.md` — current machine-search rows (live + closed); supersedes the
   06-17 rows doc. Live: q8 side-channel, ffn coop sub-gate, attention residual audit, fp16 WMMA LDS-tiling, LDS
   flash-prefill, external BLAS boundary; closed: quant-weight-reuse-8b, broad mmvq_q4k/q6k, decode_block_fusion.
+- `q8-mmvq-lifecycle-deep-scope-20260618.md` — deep scope for the only remaining decode MMVQ lifecycle reopening:
+  producer-side q8 from fused RMSNorm/apply into Q4_K ffn_gate/up int-dot. Explains what "q8/MMVQ lifecycle"
+  means, what is already refuted, phase gates, and why this is low-EV/deep rather than a kernel tweak.
+- `q8-mmvq-lifecycle-deep-result-20260619.md` — **executed it: Q8L-0/1 pass, Q8L-2 KILL.** The fused
+  per-row→per-32 multi-output producer is NOT expressible via the store-group idiom (needs an LDS-reduction
+  flash-style kernel); q8 side-channel is **deferred behind a codegen capability**, not a buildable arc — closes
+  the last bounded decode research question.
+- `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
+  primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
+  Separate from the tinygrad-vs-llama gap explanation.
 - **Decode-attention wins SHIPPED (byte-identical greedy, default-on):**
   - `qk-8b-attention-fusion-result-20260617.md` — flash-decode threshold 1024→512 (+12.8% ctx520).
   - `qk-8b-flash-variant-result-20260617.md` — `hoisted` exp + L=128 default (+11–29% across ctx).

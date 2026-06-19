@@ -196,8 +196,14 @@ Closed branches:
 - 128-thread row scheduler alone: **refuted** as a standalone routing win.
 
 Still technically open:
-- q8 as a zero-extra producer side-channel from RMSNorm: **deferred D**. Feasible only as a deep fused-norm,
-  multi-output custom kernel; expected decode EV ~3-4%, lossy, dNLL required.
+- q8 as a zero-extra producer side-channel from RMSNorm: **DEFERRED behind codegen capability** (was "deferred D";
+  sharpened by the Q8L deep scope, `q8-mmvq-lifecycle-deep-result-20260619.md`). Q8L-0 (contract clean: ffn_norm →
+  exactly gate+up, reuse 2) and Q8L-1 (cost ≤4.8µs plausible *if* single-kernel) pass, but **Q8L-2 KILL**: a single
+  fused custom kernel doing per-row mean-sq reduce → broadcast → per-32 max reduce → multi-output store is **not
+  expressible** via the store-group idiom (`UOp.group` needs shared ranges; the two granularities are serial
+  dependent stages = separate kernels; `GROUP`-of-`END`s fails verification). One-kernel fusion needs an
+  LDS-reduction flash-style kernel (deep `[codegen]`). EV ~+3-4%, lossy, dNLL-gated. **Not a buildable arc until that
+  custom-kernel capability lands.**
 
 ### Q4_K ffn_down
 
@@ -432,11 +438,12 @@ Close criterion:
 
 | frontier | status | expected value | why still open |
 |---|---|---:|---|
-| q8 side-channel for Q4_K gate/up | deferred D | ~3-4% decode | only if fused RMSNorm side-channel removes pack cost |
+| q8 side-channel for Q4_K gate/up | **deferred behind codegen capability** | ~3-4% decode | Q8L-2 KILL: fused multi-granularity multi-output producer not expressible via store-group; needs LDS-reduction flash-style kernel. `q8-mmvq-lifecycle-deep-result-20260619.md` |
 | fp16 WMMA LDS-tiling for prefill matmul | deferred D | prefill | PWR-1 shows ~74% matmul share; current WMMA lacks LDS/cache-blocking or needs BLAS/raw-HIP boundary |
 | flash-prefill with LDS reuse | deferred D | long prompt prefill | reuse-free kernel refuted; real flash needs LDS/register locality |
 | raw HIP / rocBLAS / Tensile boundary | strategic open | high for prefill | changes authority boundary from tinygrad codegen to external or handwritten kernels |
 | ffn_gate coop routing | sub-gate candidate | +1-2.3% decode | stackable only, below route gate |
+| llama.cpp residual primitive audit | audit open | unknown | separate audit of what llama itself leaves on the table; scoped in `llama-kernel-residual-primitive-audit-scope-20260619.md` |
 
 ## What should not be reopened without new evidence
 
@@ -473,6 +480,11 @@ Primary current docs:
 - `qk-mmvq-int-dot-closeout-20260618.md`
 - `q4k-ffn-q8-lifecycle-verdict-20260618.md`
 - `q8-sidechannel-ffn-verdict-20260618.md`
+- `q8-mmvq-lifecycle-deep-scope-20260618.md`
+- `q8-mmvq-lifecycle-deep-result-20260619.md`
+- `qk-decode-per-role-delta-audit-20260618.md`
+- `qk-machine-search-primitive-rows-20260618.md`
+- `llama-kernel-residual-primitive-audit-scope-20260619.md`
 - `q4k-fp-coop-codegen-quality-scope-20260618.md`
 - `qk-spec-verify-component-breakdown-20260618.md`
 - `qk-prefill-weight-reuse-scope-20260618.md`
