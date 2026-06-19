@@ -156,6 +156,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   valid and instruction-rich (`110446` decoded wave instruction records), but the only bounded HCQ patch
   (`SQTT_ORACLE_TARGET_CU=1`, with/without AQLprofile raw regs) still produced zero body packets. Track T is closed as a
   small primitive-observability patch; reopening requires broader ROCprofiler command-service integration.
+- `amd-rocprofiler-thread-trace-audit-result-20260619.md` — source audit of what that broader integration actually
+  means. Verdict: ROCprofiler ATT depends on a profiled HSA queue + AQLprofile-generated vendor AQL packet lifecycle
+  (`hsa_amd_profiling_set_profiler_enabled`, profiler-active queue packet, trace-control buffer, code-object markers),
+  not one missing SQTT register. Reopen only as AQLprofile packet import/replay or native profiled-HCQ work.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
