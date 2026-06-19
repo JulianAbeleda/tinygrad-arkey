@@ -156,6 +156,44 @@ This proves the real 128-thread decomposition without reduction: `kb=tid>>3`, `s
 signed q8 dot4, and `sumi/sumq` accumulation. It writes one diagnostic partial per thread and matches CPU for the first
 128 rows across all 128 lanes for both gate/up pointers.
 
+Executed tenth slice:
+
+- probe: `extra/q8_ffn_asm_fullrow_reduce.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_fullrow_reduce.json`;
+- verdict: **PASS**.
+
+This proves full-row synthetic reduction: scaled per-thread Q4_K x q8 contributions, variable `sub`, llama
+`get_scale_min`, `ds_bpermute` wave reduction, four-slot LDS reduction, and final row store. First 128 rows match CPU
+within reduction-order noise (`gate_max_abs=4.88e-4`, `up_max_abs=2.75e-4`). It also banked an important correction:
+`v_cmp_gt_u32_e32` operand order had to be `src0=sub, vsrc1=3` for the `sub > 3` scale/min path.
+
+Executed eleventh slice:
+
+- probe: `extra/q8_ffn_asm_gateup_full.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_gateup_full.json`;
+- verdict: **FAIL_PERF / B2b KILL**.
+
+The full real-GGUF fused gate/up ASM consumer is correct:
+
+| output | max_abs | mean_abs |
+|---|---:|---:|
+| gate | `9.54e-7` | `1.24e-7` |
+| up | `1.43e-6` | `2.34e-7` |
+
+But performance misses the gate badly:
+
+| consumer | median |
+|---|---:|
+| tinygrad AMD DSL/ASM fused gate/up | `166.649us` |
+| gate | `<=60us` target |
+
+This is worse than the already-closed COMGR fused-C route (`146.88us`) and far from the hipcc/LLD oracle. So B2b proves
+tinygrad-owned ASM correctness but does **not** transfer the fast schedule.
+
+Decision: **close B2b as a decode ownership route.** Do not proceed to producer ownership for this decode route unless
+the project first funds lower-level AMD scheduling/assembler work. The q8 decode path remains valid as a research
+artifact, but native tinygrad ownership is project-level compiler work, not a bounded primitive build.
+
 ## B2b2 implementation order
 
 Do not write the whole consumer in one jump. Build it in slices:
@@ -169,8 +207,9 @@ Do not write the whole consumer in one jump. Build it in slices:
 4. **One-block dot:** compute one `kb` contribution for one row. Gate: matches CPU partial reference.
    **DONE/PASS for signed q8, low/high nibble, scale/min affine, and all 128 per-thread partials.**
 5. **Full-row dot:** loop/emit all 16 `kb` lanes, reduce across wave/workgroup. Gate: one row matches reference.
-   **NEXT: workgroup reduction/full-row output.**
+   **DONE/PASS.**
 6. **Full fused gate/up:** run all rows and both roles. Gate: real correctness + `<=60us`.
+   **CORRECTNESS PASS / PERF FAIL (`166.649us`). B2b KILL.**
 
 Each slice must bank a JSON artifact. Stop at the first slice that proves this is becoming a broad assembler project
 rather than a bounded primitive.
@@ -186,8 +225,9 @@ Stop B2b and classify decode ownership as project-level renderer/ASM work if any
 
 ## Decision
 
-B2b is now **GO to B2b1/B2b2**, but with strict gates.
+B2b is now **closed at the consumer performance gate**.
 
-The smoke proves the assembler can host the primitive. The next meaningful work is the address/control skeleton, not more
-COMGR C variants and not producer work. If the fused consumer cannot clear `<=60us`, stop decode ownership; the q8 route
-stays a research artifact, and native parity becomes compiler project work.
+The assembler can host the primitive and the full consumer is correct, but the hand-owned AMD DSL schedule lands at
+`166.649us`, not `<=60us`. This means the remaining decode gap is not primitive expressibility; it is lower-level
+scheduling/codegen quality. Stop decode ownership here under the current principles. The q8 route stays a research
+artifact unless the project explicitly funds AMD scheduler/assembler work.

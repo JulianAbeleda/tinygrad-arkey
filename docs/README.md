@@ -108,7 +108,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md` — **B2b AMD DSL/ASM consumer scope + smoke PASS.** Adds
   `extra/q8_ffn_asm_gateup_smoke.py`, which emits `v_dot4_i32_iu8` through `Ops.PROGRAM` and HCQ with no C/hipcc path
   and stores the expected result. Next is a sliced hand-owned fused gate/up consumer: address skeleton -> q8/Q4 load
-  skeletons -> one-block dot -> full fused gate/up, gated at `<=60us`.
+  skeletons -> one-block dot -> full fused gate/up, gated at `<=60us`. Final B2b verdict: **correctness PASS /
+  PERF FAIL**. Full real-GGUF fused gate/up ASM consumer is correct (`max_abs <=1.43e-6`) but slow (`166.649us` vs
+  `<=60us`), so native decode ownership is closed as project-level AMD scheduling/compiler work.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
