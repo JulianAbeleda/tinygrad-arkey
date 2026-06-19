@@ -47,6 +47,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   bindings, policy candidates, generator, and refutation memory. Adds `extra/qk_lifecycle_search.py` and
   `bench/qk-lifecycle-search/*`; current frontier is q8 decode artifact/native transfer and Tensile prefill
   artifact/native transfer, not broad kernel search.
+- `primitive-coverage-gap-scope-20260619.md` — coverage audit scope after the latest decode/prefill integration
+  learning. Names rows missing from the map, not necessarily missing implementations: decode B2 runtime/cache identity,
+  decode MMVQ artifact/import, prefill transpose-free layout, long-context KV/attention, serving, alternative quant,
+  CUDA portability, and tooling visibility.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
   tinygrad's standalone GEMV is stronger than llama's, but in-model weight-GEMV falls to `~44%` vs llama `~54%`.
   Scopes activation/Q8 reuse plus occupancy/launch-shape preservation, starting with measurement-only FMI-1/FMI-2.
