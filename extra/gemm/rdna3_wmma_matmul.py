@@ -78,6 +78,79 @@ def test_tile():
     print("WRONG. asm[0,:6]:", c_np[0,:6]); print("ref  [0,:6]:", ref[0,:6])
     print("asm[:6,0]:", c_np[:6,0]); print("ref [:6,0]:", ref[:6,0])
 
+def waitcnt_lgkm(n):
+  # DS/LDS wait: lgkmcnt=bits[9:4] (per extra/gemm/amd_asm_matmul.py). vmcnt/expcnt maxed (don't wait on them).
+  return s_waitcnt(simm16=(0x7) | ((n & 0x3F) << 4) | (0x3F << 10))
+
+def build_lds_tile():
+  # P0 (A3): single 16x16x16 tile round-tripped through LDS. Proves RDNA3 LDS plumbing end-to-end:
+  # DEFINE_LOCAL alloc + ds_store + s_barrier + lgkmcnt waits + ds_load -> WMMA. Each lane writes/reads its
+  # own A-row and Bt-col (no real cross-lane share yet — just the plumbing).
+  FA, FB, ACC = 20, 32, 44
+  LDS_A, LDS_B = 0, 16*16*2   # B region after A (512 bytes)
+  I=[]
+  def e(i): I.append(i); return i
+  e(s_load_b128(sdata=s[4:7], sbase=s[0:1], offset=0, soffset=NULL))
+  e(s_load_b64(sdata=s[8:9], sbase=s[0:1], offset=0x10, soffset=NULL))
+  e(s_waitcnt(simm16=0))
+  e(v_and_b32_e32(v[2], 15, v[0]))               # lane&15
+  e(v_lshlrev_b32_e32(v[2], 5, v[2]))            # *32 = per-lane byte offset (row of 16 fp16)
+  e(v_mov_b32_e32(v[3], 0))
+  for i in range(8): e(v_mov_b32_e32(v[ACC+i], 0))
+  # global load A row + Bt col (saddr + v[2:3])
+  e(global_load_b128(vdst=v[FA:FA+3],   addr=v[2:2], saddr=s[4:5], offset=0))
+  e(global_load_b128(vdst=v[FA+4:FA+7], addr=v[2:2], saddr=s[4:5], offset=16))
+  e(global_load_b128(vdst=v[FB:FB+3],   addr=v[2:2], saddr=s[6:7], offset=0))
+  e(global_load_b128(vdst=v[FB+4:FB+7], addr=v[2:2], saddr=s[6:7], offset=16))
+  e(waitcnt_vm(0))                               # global loads landed
+  # LDS addresses: A at lane*32 (+LDS_A), B at lane*32 (+LDS_B)
+  e(v_mov_b32_e32(v[16], v[2]))
+  e(v_add_nc_u32_e32(v[17], LDS_B, v[2]))
+  e(ds_store_b128(addr=v[16], data0=v[FA:FA+3],   offset0=0,  offset1=0))
+  e(ds_store_b128(addr=v[16], data0=v[FA+4:FA+7], offset0=16, offset1=0))
+  e(ds_store_b128(addr=v[17], data0=v[FB:FB+3],   offset0=0,  offset1=0))
+  e(ds_store_b128(addr=v[17], data0=v[FB+4:FB+7], offset0=16, offset1=0))
+  e(waitcnt_lgkm(0))                             # ds_store done
+  e(s_barrier())
+  e(ds_load_b128(vdst=v[FA:FA+3],   addr=v[16], offset0=0,  offset1=0))
+  e(ds_load_b128(vdst=v[FA+4:FA+7], addr=v[16], offset0=16, offset1=0))
+  e(ds_load_b128(vdst=v[FB:FB+3],   addr=v[17], offset0=0,  offset1=0))
+  e(ds_load_b128(vdst=v[FB+4:FB+7], addr=v[17], offset0=16, offset1=0))
+  e(waitcnt_lgkm(0))                             # ds_load landed
+  e(v_wmma_f32_16x16x16_f16(vdst=v[ACC:ACC+7], src0=v[FA:FA+7], src1=v[FB:FB+7], src2=v[ACC:ACC+7]))
+  # store C (same layout as build_tile_kernel)
+  e(v_and_b32_e32(v[10], 15, v[0]))
+  e(v_lshrrev_b32_e32(v[11], 4, v[0])); e(v_and_b32_e32(v[11], 1, v[11]))
+  e(v_lshlrev_b32_e32(v[12], 4, v[11]))
+  e(v_add_nc_u32_e32(v[12], v[12], v[10]))
+  e(v_lshlrev_b32_e32(v[12], 1, v[12]))
+  e(v_mov_b32_e32(v[13], 0))
+  for i in range(8):
+    e(v_cvt_f16_f32_e32(v[14], v[ACC+i]))
+    e(global_store_b16(addr=v[12:12], data=v[14], saddr=s[8:9], offset=0))
+    if i < 7: e(v_add_nc_u32_e32(v[12], 64, v[12]))
+  e(s_waitcnt(simm16=0)); e(s_sendmsg(simm16=3)); e(s_endpgm())
+  return I
+
+def test_lds_tile():
+  insts=build_lds_tile()
+  rng=np.random.default_rng(0)
+  a_np=rng.standard_normal((16,16)).astype(np.float16); b_np=rng.standard_normal((16,16)).astype(np.float16)
+  bt_np=np.ascontiguousarray(b_np.T)
+  a=Tensor(a_np); bt=Tensor(bt_np); c=Tensor.empty(16,16,dtype=dtypes.half); Tensor.realize(a,bt,c)
+  def asm_kernel(A,B,C):
+    lds=UOp(Ops.DEFINE_LOCAL, dtypes.uint8.ptr(size=2048, addrspace=AddrSpace.LOCAL), (), 'lds')
+    sink=UOp.sink(A.base,B.base,C.base,lds,UOp.special(1,"gidx0"),UOp.special(32,"lidx0"),
+                  arg=KernelInfo(name=colored("rdna3_lds_tile","cyan"),estimates=Estimates(ops=16*16*16*2,mem=16*16*2*3)))
+    return UOp(Ops.PROGRAM, src=(sink,UOp(Ops.DEVICE,arg=Device.DEFAULT),UOp(Ops.LINEAR,src=tuple([UOp(Ops.INS,arg=x) for x in insts]))))
+  c=Tensor.custom_kernel(a,bt,c,fxn=asm_kernel)[2]; linear=c.schedule_linear()
+  with Context(DEBUG=2): run_linear(linear)
+  c_np=c.float().numpy(); ref=a_np.astype(np.float32)@b_np.astype(np.float32)
+  err=np.sqrt(np.mean((c_np-ref)**2))/(np.sqrt(np.mean(ref**2))+1e-9)
+  print(f"relative RMSE {err:.6f}  {'LDS TILE CORRECT' if err<0.05 else 'WRONG'}")
+  if err>=0.05:
+    print("asm[0,:6]:", c_np[0,:6]); print("ref [0,:6]:", ref[0,:6])
+
 def build_gemm(M, N, K, TM, TN):
   # workgroup (1 wave32) computes a (TM*16)x(TN*16) output tile. grid=(N//(TN*16), M//(TM*16),1).
   # s[2]=gx (col-block), s[3]=gy (row-block). A: MxK row-major. Bt: NxK row-major (B transposed).
@@ -232,6 +305,128 @@ def _run_insts(insts, a, bt, c, M, N, K, TM, TN, name):
   out=Tensor.custom_kernel(a,bt,c,fxn=asm_kernel)[2]
   return out.schedule_linear(), out
 
+def build_gemm_lds(M, N, K):
+  # P1 (A3): LDS-staged, multi-wave. Workgroup=128 threads=4 wave32 as 2x2; each wave computes a 64x64 sub-tile
+  # (4x4 WMMA tiles). Cooperative global->LDS load of a 128x16 A-slice + 128x16 Bt-slice each K-iter, full
+  # s_barrier, single-buffer LDS. BM=BN=128, BK=16. A: MxK row-major; Bt: NxK row-major (B transposed).
+  BM=BN=128; BK=16; WM=WN=4; THREADS=128
+  assert M%BM==0 and N%BN==0 and K%BK==0
+  NK=K//BK
+  FA=10; FB=FA+WM*8; ACCb=FB+WN*8                 # 10, 42, 74; ACC=16*8=128 -> 74..201
+  TA=ACCb+WM*WN*8                                  # cooperative-load temps: TA(A row 8), TA+8(Bt row 8)
+  assert TA+16 <= 256, f"VGPR overflow {TA+16}"
+  LDS_A=0; LDS_B=BM*BK*2                           # 4096; total 8192 bytes
+  I=[]; Br=[]; lbl={}
+  def e(i): I.append(i); return i
+  def label(n): lbl[n]=sum(i.size() for i in I)
+  def br(t): Br.append((len(I)-1,t))
+  e(s_load_b128(sdata=s[4:7], sbase=s[0:1], offset=0, soffset=NULL))
+  e(s_load_b64(sdata=s[8:9], sbase=s[0:1], offset=0x10, soffset=NULL))
+  e(s_waitcnt(simm16=0))
+  # lanepart=(tid&15)*32 ; wave=tid>>5 ; wave_m=wave>>1 ; wave_n=wave&1.
+  # wave_m/wave_n must survive the K-loop (read in epilogue) -> hold in v[218]/v[219], ABOVE all frag/acc/temp ranges.
+  WMR, WNR = 218, 219
+  e(v_and_b32_e32(v[1], 15, v[0])); e(v_lshlrev_b32_e32(v[1], 5, v[1]))     # v[1]=lanepart
+  e(v_lshrrev_b32_e32(v[8], 5, v[0]))                                       # v[8]=wave (scratch)
+  e(v_lshrrev_b32_e32(v[WMR], 1, v[8])); e(v_and_b32_e32(v[WMR], 1, v[WMR]))# wave_m
+  e(v_and_b32_e32(v[WNR], 1, v[8]))                                         # wave_n
+  # frag LDS read bases: vAfrag=wave_m*2048+lanepart ; vBfrag=LDS_B+wave_n*2048+lanepart
+  e(v_lshlrev_b32_e32(v[6], 11, v[WMR])); e(v_add_nc_u32_e32(v[6], v[6], v[1]))
+  e(v_lshlrev_b32_e32(v[7], 11, v[WNR])); e(v_add_nc_u32_e32(v[7], v[7], v[1])); e(v_add_nc_u32_e32(v[7], LDS_B, v[7]))
+  # coop-load LDS store addr = tid*32 ; global byte base = (gy*BM + tid)*K*2  (gy=s[3], gx=s[2])
+  e(v_lshlrev_b32_e32(v[4], 5, v[0]))                                       # vA_lds=tid*32
+  e(v_add_nc_u32_e32(v[5], LDS_B, v[4]))                                    # vB_lds=tid*32+LDS_B
+  if getenv("ZEROGID",0): e(s_mov_b32(s[10], 0)); e(s_mov_b32(s[11], 0))
+  else: e(s_lshl_b32(s[10], s[3], 7)); e(s_lshl_b32(s[11], s[2], 7))        # gy*BM, gx*BN
+  e(v_add_nc_u32_e32(v[2], s[10], v[0])); e(v_mul_lo_u32(v[2], v[2], K*2))  # vA_glob
+  e(v_add_nc_u32_e32(v[3], s[11], v[0])); e(v_mul_lo_u32(v[3], v[3], K*2))  # vB_glob
+  for i in range(WM*WN*8): e(v_mov_b32_e32(v[ACCb+i], 0))
+  e(s_mov_b32(s[16], 0))
+  label('LOOP')
+  # cooperative global -> regs -> LDS
+  e(global_load_b128(vdst=v[TA:TA+3],    addr=v[2:2], saddr=s[4:5], offset=0))
+  e(global_load_b128(vdst=v[TA+4:TA+7],  addr=v[2:2], saddr=s[4:5], offset=16))
+  e(global_load_b128(vdst=v[TA+8:TA+11], addr=v[3:3], saddr=s[6:7], offset=0))
+  e(global_load_b128(vdst=v[TA+12:TA+15],addr=v[3:3], saddr=s[6:7], offset=16))
+  e(waitcnt_vm(0))
+  e(ds_store_b128(addr=v[4], data0=v[TA:TA+3],     offset0=0,  offset1=0))
+  e(ds_store_b128(addr=v[4], data0=v[TA+4:TA+7],   offset0=16, offset1=0))
+  e(ds_store_b128(addr=v[5], data0=v[TA+8:TA+11],  offset0=0,  offset1=0))
+  e(ds_store_b128(addr=v[5], data0=v[TA+12:TA+15], offset0=16, offset1=0))
+  e(waitcnt_lgkm(0)); e(s_barrier())
+  # load fragments from LDS (offset for tile i = i*512 bytes; +16 for second b128 half)
+  for mi in range(WM):
+    o=mi*512
+    e(ds_load_b128(vdst=v[FA+mi*8:FA+mi*8+3],   addr=v[6], offset0=o&0xFF,      offset1=o>>8))
+    e(ds_load_b128(vdst=v[FA+mi*8+4:FA+mi*8+7], addr=v[6], offset0=(o+16)&0xFF, offset1=(o+16)>>8))
+  for ni in range(WN):
+    o=ni*512
+    e(ds_load_b128(vdst=v[FB+ni*8:FB+ni*8+3],   addr=v[7], offset0=o&0xFF,      offset1=o>>8))
+    e(ds_load_b128(vdst=v[FB+ni*8+4:FB+ni*8+7], addr=v[7], offset0=(o+16)&0xFF, offset1=(o+16)>>8))
+  e(waitcnt_lgkm(0))
+  for mi in range(WM):
+    for ni in range(WN):
+      ac=ACCb+(mi*WN+ni)*8
+      e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[FA+mi*8:FA+mi*8+7], src1=v[FB+ni*8:FB+ni*8+7], src2=v[ac:ac+7]))
+  e(s_barrier())                                  # before next iter overwrites LDS
+  e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
+  e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], NK)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
+  # epilogue: global row = gy*BM + wave_m*64 + mi*16 + (i*2+parity); col = gx*BN + wave_n*64 + ni*16 + (lane&15)
+  e(v_and_b32_e32(v[8], 15, v[0]))                                          # lane&15 (col within tile)
+  e(v_lshrrev_b32_e32(v[9], 4, v[0])); e(v_and_b32_e32(v[9], 1, v[9]))      # parity
+  e(v_lshlrev_b32_e32(v[21], 6, v[WMR])); e(v_add_nc_u32_e32(v[21], s[10], v[21]))  # row base = gy*BM + wave_m*64
+  e(v_lshlrev_b32_e32(v[22], 6, v[WNR])); e(v_add_nc_u32_e32(v[22], s[11], v[22]))  # col base = gx*BN + wave_n*64
+  if getenv("NOSTORE",0):
+    e(s_waitcnt(simm16=0)); e(s_sendmsg(simm16=3)); e(s_endpgm())
+    for idx,t in Br:
+      off=(lbl[t]-sum(i.size() for i in I[:idx+1]))//4
+      assert -32768<=off<=32767; I[idx].simm16=off
+    return I
+  for mi in range(WM):
+    for ni in range(WN):
+      ac=ACCb+(mi*WN+ni)*8
+      e(v_add_nc_u32_e32(v[12], v[21], v[9]))            # rowbase + parity
+      e(v_add_nc_u32_e32(v[12], mi*16, v[12]))           # + mi*16
+      e(v_add_nc_u32_e32(v[13], v[22], v[8]))            # colbase + (lane&15)
+      e(v_add_nc_u32_e32(v[13], ni*16, v[13]))           # + ni*16
+      e(v_mul_lo_u32(v[12], v[12], N)); e(v_add_nc_u32_e32(v[12], v[12], v[13]))
+      e(v_lshlrev_b32_e32(v[12], 1, v[12]))
+      for i in range(8):
+        e(v_cvt_f16_f32_e32(v[14], v[ac+i]))
+        e(global_store_b16(addr=v[12:12], data=v[14], saddr=s[8:9], offset=0))
+        if i<7: e(v_add_nc_u32_e32(v[12], N*4, v[12]))   # +2 rows
+  e(s_waitcnt(simm16=0)); e(s_sendmsg(simm16=3)); e(s_endpgm())
+  for idx,t in Br:
+    off=(lbl[t]-sum(i.size() for i in I[:idx+1]))//4
+    assert -32768<=off<=32767; I[idx].simm16=off
+  return I
+
+def _run_insts_lds(insts, a, bt, c, M, N, K, name, lds_bytes):
+  BM=BN=128; THREADS=128; grid=(N//BN, M//BM, 1)
+  def asm_kernel(A,Bt,C):
+    lds=UOp(Ops.DEFINE_LOCAL, dtypes.uint8.ptr(size=lds_bytes, addrspace=AddrSpace.LOCAL), (), 'lds')
+    g=[UOp.special(grid[0],"gidx0"), UOp.special(grid[1],"gidx1")]
+    sink=UOp.sink(A.base,Bt.base,C.base,lds,*g,UOp.special(THREADS,"lidx0"),
+                  arg=KernelInfo(name=colored(name,"cyan"),estimates=Estimates(ops=M*N*K*2,mem=(M*K+N*K+M*N)*2)))
+    return UOp(Ops.PROGRAM, src=(sink,UOp(Ops.DEVICE,arg=Device.DEFAULT),UOp(Ops.LINEAR,src=tuple([UOp(Ops.INS,arg=x) for x in insts]))))
+  out=Tensor.custom_kernel(a,bt,c,fxn=asm_kernel)[2]
+  return out.schedule_linear(), out
+
+def test_lds_gemm():
+  N=getenv("N",2048); M=getenv("M",N); K=getenv("K",N); CNT=getenv("CNT",20)
+  insts=build_gemm_lds(M,N,K)
+  rng=np.random.default_rng(1)
+  a_np=(rng.standard_normal((M,K))*0.1).astype(np.float16); bt_np=(rng.standard_normal((N,K))*0.1).astype(np.float16)
+  c=Tensor.empty(M,N,dtype=dtypes.half); Tensor.realize(c)
+  linear,out=_run_insts_lds(insts,Tensor(a_np),Tensor(bt_np),c,M,N,K,"rdna3_lds_gemm",max(8192,65536//getenv("LIMIT_OCC",1)))
+  ets=[]
+  with Context(DEBUG=2):
+    for _ in range(CNT):
+      st=GlobalCounters.time_sum_s; run_linear(linear); ets.append(GlobalCounters.time_sum_s-st)
+  print(f"REAL TFLOPS {M*N*K*2/min(ets)*1e-12:.2f}  (LDS multi-wave, M={M} K={K} N={N})")
+  err=_rmse(out,a_np,bt_np)
+  print(f"relative RMSE {err:.6f}  {'CORRECT' if err<0.05 else 'WRONG'}")
+
 def test_gemm():
   N=getenv("N",2048); M=getenv("M",N); K=getenv("K",N); TM,TN=getenv("TM",4),getenv("TN",4)
   insts=build_gemm_pipe(M,N,K,TM,TN) if getenv("USEPIPE",0) else build_gemm(M,N,K,TM,TN)
@@ -281,6 +476,8 @@ def test_pipe():
   print(f"speedup (best) {min(eb)/min(ep):.3f}x")
 
 if __name__ == "__main__":
-  if getenv("PIPE",0): test_pipe()
+  if getenv("LDSGEMM",0): test_lds_gemm()
+  elif getenv("LDSTILE",0): test_lds_tile()
+  elif getenv("PIPE",0): test_pipe()
   elif getenv("GEMM",1): test_gemm()
   else: test_tile()
