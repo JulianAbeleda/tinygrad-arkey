@@ -200,6 +200,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   explicit `q6_surface_fallback` after full model load hit a 4.68GB allocation failure.** Both Q6 surfaces launch the
   intended native coop programs (`q6k_coop_partial_4096_12288`, `q6k_coop_partial_151936_4096`) plus reduce/glue, with
   ATT body attribution. No bounded Q6 fallback/wiring fix found; proceed to reduce/glue Amdahl ledger.
+- `decode-complete-tooling-scope-20260619.md` — complete tooling scope for the remaining decode lifecycle question:
+  join role identity, ATT body attribution, lifecycle accounting, timing authority, reduce/glue Amdahl, and llama
+  comparison into one atlas before funding any direct-output/reduce-fusion or scheduler/resource build.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
