@@ -80,5 +80,22 @@
     },
     "verdict": "BEAM does NOT hang (wall refuted) BUT does NOT find a competitive schedule -- 14-17 TFLOPS, BELOW the default heuristic (17.7) and FAR below the warmstart (48) / Tensile (66), despite OptOps.TC being in its action space. Likely test-size mis-ranking + ineffective TC application in search. So Route B (use BEAM to auto-find the copy-vectorized schedule) is CLOSED -- BEAM is not the lever.",
     "implication": "the dependency-free prefill lever falls back to Route A (hand-coded copy vectorization / two-stage copy in the scheduler+renderer), project-level. The 'BEAM-hang' premise behind many prior deferrals was FALSE, but the deferrals' conclusion (can't easily get the schedule via search) still holds -- for a different reason (BEAM is too weak, not hanging)."
+  },
+  "CG_W3_copy_unroll_SHIPPED": {
+    "change": "_prefill_v2_opts += Opt(OptOps.UNROLL,0,8)",
+    "copy_vectorized": "d16->b128, v_mov/WMMA 8->2",
+    "pp512": {
+      "baseline": 1170,
+      "unroll8": 1213,
+      "delta_pct": 3.7,
+      "reproduced": 2
+    },
+    "vgpr_spill": 0,
+    "unroll4_spill": 362,
+    "dNLL": -0.00013,
+    "accept": true,
+    "decode": "untouched (prefill-only)",
+    "dependency": null,
+    "verdict": "option 1 (extend opt tuple) WORKS: reduce-axis UNROLL creates the contiguous copy axis CG-W1.5 thought didn't exist; vectorizes copy; +3.7% dependency-free. SHIPPED. Modest (IC-served); NOT the 48->66 Tensile gap."
   }
 }
