@@ -19,6 +19,9 @@ def main():
   ap.add_argument("--k", type=int, default=4)
   ap.add_argument("--n-new", type=int, default=48)
   ap.add_argument("--max-ctx", type=int, default=1024)
+  ap.add_argument("--measure-verify", action="store_true",
+                  help="isolate verify cost: single T==1 pass vs T=K+1 fallback vs T=K+1 batched-GEMM (decode_enabled). Diagnostic; exits.")
+  ap.add_argument("--measure-ctx", type=int, default=512)
   args = ap.parse_args()
   K, MAXC = args.k, args.max_ctx
   target, tok = load_model_and_tokenizer(args.target, MAXC, seed=7)
@@ -26,6 +29,42 @@ def main():
   for b in target.blk: b._use_flash, b._prefill_v2 = False, False
   v_sp = UOp.variable("start_pos", 0, MAXC - 1)
   verify_jit = TinyJit(lambda toks, spv: target.logits(toks, spv).argmax(-1).cast(dtypes.int32).realize())
+
+  if args.measure_verify:
+    # DIAGNOSTIC (Track 3): is the T=K+1 verify slow because of a missing primitive, or because the harness
+    # never set decode_enabled (so K>1 routes to the dense _fallback)? Time three ways, isolated, W==D-style.
+    import statistics
+    from tinygrad import Device
+    dev = Device[Device.DEFAULT]
+    CTX = args.measure_ctx
+    base_ids = list(tok.encode("In the beginning was the word. " * 64))
+    ids = (base_ids * (1 + (CTX + K + 2) // max(1, len(base_ids))))[:CTX]
+    target.logits(Tensor([ids], dtype="int32").contiguous(), 0).realize()           # prefill to CTX
+    last = int(ids[-1]); spb = v_sp.bind(CTX - 1)
+    vin = Tensor([[last] + ids[:K]], dtype="int32").contiguous()                     # [1,K+1] concrete verify input
+    one = Tensor([[last]], dtype="int32").contiguous()                              # [1,1] single-pass
+    rj = TinyJit(lambda t, s: target.logits(t, s)[:, -1:, :].argmax(-1).cast(dtypes.int32).realize())
+    def wd(fn, *a, M=40):
+      for _ in range(8): fn(*a)                                                      # warm + capture + clock ramp
+      dev.synchronize(); t0 = time.perf_counter()
+      for _ in range(M): fn(*a)
+      dev.synchronize(); return (time.perf_counter() - t0) / M * 1e3
+    # decode_enabled=True == production decode state: single pass hits the shipped coop kernels (K==1);
+    # the K+1 verify hits the batched GEMM (K>1). Capture+measure BOTH here before flipping the flag.
+    for lin in target._q4k_linears.linears: lin.decode_enabled = True
+    vj_bt = TinyJit(lambda t, s: target.logits(t, s).argmax(-1).cast(dtypes.int32).realize())
+    one_ms = wd(rj, one, spb); bt_ms = wd(vj_bt, vin, spb); bt_tok = vj_bt(vin, spb).tolist()
+    # decode_enabled=False == the (buggy) harness state: K+1 verify routes to the dense _fallback.
+    for lin in target._q4k_linears.linears: lin.decode_enabled = False
+    vj_fb = TinyJit(lambda t, s: target.logits(t, s).argmax(-1).cast(dtypes.int32).realize())
+    fb_ms = wd(vj_fb, vin, spb); fb_tok = vj_fb(vin, spb).tolist()
+    print(f"\n=== verify-cost isolation (ctx={CTX}, K={K}, T=K+1={K+1}) ===")
+    print(f"single T==1 pass     : {one_ms:6.2f} ms ({1000/one_ms:5.1f} tok/s)")
+    print(f"T=K+1 verify FALLBACK: {fb_ms:6.2f} ms  = {fb_ms/one_ms:.2f}x one pass (decode_enabled=False, dense)")
+    print(f"T=K+1 verify BATCHED : {bt_ms:6.2f} ms  = {bt_ms/one_ms:.2f}x one pass (decode_enabled=True, GEMM)")
+    print(f"batched vs fallback  : {fb_ms/bt_ms:.2f}x  | argmax tokens identical: {fb_tok == bt_tok}")
+    print(f"INTERPRETATION: spec ceiling needs verify <= ~1.x one-pass; {K+1} serial T==1 calls would be ~{K+1}x.")
+    return
   # proposal graph: K proposals + 1 cache-only forward (close the full-accept draft hole), distinct rebindable vars
   sps = [UOp.variable(f"sp{k}", 0, MAXC - 1) for k in range(K + 1)]
   @TinyJit
