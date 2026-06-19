@@ -129,6 +129,32 @@ structure is identical). Orthogonal multiplier: spec-decode (amortize the weight
 - Note: prefill is compute-bound (high L2 reuse), so the byte-count difference (4.5 vs 16-bit) matters less than
   raw matmul throughput — but the int8 path has higher arithmetic density per byte loaded.
 
+## MECHANISM (converged 3 ways) — the decode gap is int-dot e2e INTEGRATION, not the kernel
+Reconciling standalone vs in-model achieved HBM BW (all % of the 960 GB/s peak):
+| | standalone GEMV | **in-model** weight-GEMV |
+|---|---:|---:|
+| tinygrad | **76%** (banked `amd-decode-kernel-beats-llamacpp`, % of HBM peak) | **~44%** (4.68 GB / (0.85×token-time)) |
+| llama | 57% | **~54%** (4.68 GB / (0.86×token-time)) |
+
+**tinygrad's GEMV is the BETTER kernel standalone (76% > 57%) but loses 32 points going in-model (76→44%);
+llama loses only 3 (57→54%).** So the decode lever is NOT a better GEMV kernel and NOT codegen (VALU idle) — it
+is the **in-model integration penalty**. Three independent measurements this session converge on it, and it
+matches the prior banked boundary note (`amd-decode-kernel-beats-llamacpp`: the standalone win is "e2e-neutral …
+the gap is int-dot e2e integration — amortized activation-quant + sustained occupancy across ~252 launches, i.e.
+llama's fused mmvq structure, NOT the kernel"):
+1. **Amortized activation quantization.** llama quantizes the layer input → Q8_1 ONCE (`quantize_q8_1`, 3.6% of
+   decode) and reuses it across the GEMVs sharing that input (q/k/v; gate/up). If tinygrad re-quantizes per GEMV,
+   that's redundant work + extra launches.
+2. **Sustained max occupancy.** llama's `mul_mat_vec_q` launches **grid=131072, wg=32 (1 wave), vgpr=24–40,
+   lds=0** — a deliberately occupancy-maximizing config (tiny low-VGPR workgroups, huge grid → many waves
+   resident → saturate memory-level parallelism → high achieved BW). The in-model tinygrad GEMVs evidently don't
+   sustain this (76% standalone collapses to 44% in-model).
+
+**→ Decode lever, crystallized & triangulated: replicate llama's fused mmvq integration in tinygrad — amortize
+the activation→Q8 quant across input-sharing GEMVs, and sustain the max-occupancy launch config across the
+in-model launches. Target: in-model weight-GEMV 44%→54%+ peak BW.** This is a model/integration change (measurable
+against the 44% baseline), orthogonal to spec-decode (which multiplies on top by amortizing the weight read).
+
 ## Files
 `extra/qk_pmc_capture.py`, `extra/qk_primitive_pmu_atlas.py`, `bench/qk-primitive-pmu-atlas/result.json`. Prior:
 `route-a-a3-p2-p3-lds-refuted-20260619.md` (LDS), `frontier-scope-beyond-route-a-20260619.md` (#3 spec-decode),
