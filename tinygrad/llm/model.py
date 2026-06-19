@@ -1260,7 +1260,11 @@ class Transformer:
       if PREFILL_V2 and (prompt_len - start_pos) >= PREFILL_UBATCH:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
-        sp, ntv = (start_pos if PREFILL_CONCRETE_KV else v_start_pos.bind(start_pos)), PREFILL_UBATCH
+        # concrete start_pos -> KV=start_pos+T concrete -> attention TC fires (the validated 1.24x, byte-identical).
+        # Default ON for the FIRST chunk (start_pos==0): one cached concrete jit, no multi-chunk compile cost.
+        # PREFILL_CONCRETE_KV=1 forces it for ALL chunks (K jits, pays off only when cached / for prompt<=512).
+        use_concrete = (start_pos == 0) or PREFILL_CONCRETE_KV
+        sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), PREFILL_UBATCH
         out = self(t[:, sp:sp+PREFILL_UBATCH], sp, temp, use_flash=False).realize()
       else:
         sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
