@@ -196,6 +196,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   `~76%` standalone decode MMVQ efficiency in-model. Starts with Q6_K role-joined ATT (`ffn_down`, then `lm_head`),
   then reduce/glue Amdahl, one direct-output/reduce-fusion proof if gated, q8 lifecycle only if still justified, and
   finally project-level scheduler/resource work if all bounded routes fail.
+- `decode-standalone-retention-stage1-q6-role-join-result-20260619.md` — **executed Stage 1 Q6_K role join via
+  explicit `q6_surface_fallback` after full model load hit a 4.68GB allocation failure.** Both Q6 surfaces launch the
+  intended native coop programs (`q6k_coop_partial_4096_12288`, `q6k_coop_partial_151936_4096`) plus reduce/glue, with
+  ATT body attribution. No bounded Q6 fallback/wiring fix found; proceed to reduce/glue Amdahl ledger.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
