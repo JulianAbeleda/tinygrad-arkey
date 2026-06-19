@@ -123,6 +123,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   trace/counter bridge for the q8 visible gap. Defines DSO-0..5: q8 HCQ attribution rows, resource/occupancy metadata,
   controlled variant ladder, optional built-in AMD PMC/SQTT attempt, and final classifier
   (`load_shape_bound`, `wait_scheduler_bound`, `closed_project_level`, etc.).
+- `q8-ffn-dynamic-scheduler-observability-result-20260619.md` — **executed DSO-0..5.** Classifier:
+  `wait_scheduler_bound`. The decisive ladder is body-insensitive: reduction-only/synthetic-dot/load-only variants all
+  remain ~0.151-0.153ms vs full ASM 0.166ms, so the visible q8 gap is broader AMD scheduling/work-decomposition/codegen,
+  not a bounded load-shape primitive.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
