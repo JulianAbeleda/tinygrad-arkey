@@ -6,6 +6,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 ## ⭐ Start here (canonical, post-bank)
 
+- **`prefill-RECONCILIATION-source-of-truth-20260619.md`** — ⭐PREFILL SOURCE-OF-TRUTH. Settles the contradictory
+  prefill results under one controlled interleaved matrix. Verdict: concrete-KV = 1.24x byte-identical (shipped,
+  ~47% llama); **+Tensile (external .co, research) = 1.76x over concrete = ~86% llama, REPRODUCED** (the old
+  "4770/1.76x" is REAL; the "0.997x no-advantage" runs were a high-WMMA-clock outlier — tinygrad WMMA prefill is
+  clock-volatile 1449-2675, Tensile is clock-stable ~2640). Supersedes prefill-matmul-RECONCILED / tensile-land /
+  transpose-free "Tensile-no-advantage". Artifact: `artifacts/prefill-reconciliation-matrix-20260619.json`.
+
 - **`amd-decode-banked-20260616.md`** — THE entry point. Final decode state (~64 tok/s / 63% llama),
   the full lever map (shipped / tapped / refuted / gated), the machine-search system, resume pointers.
 - `amd-decode-beyond-llama-roadmap.md` — the lever map with live statuses (parity vs beyond-llama).

@@ -2,6 +2,15 @@
 
 Authoritative consolidation of the hardware-counter + kernel-trace measurement campaign. Replaces inference with
 measurement. Everything here is backed by native PMC (tinygrad HCQ), rocprofv3 kernel-trace (llama), or
+
+> **⭐PREFILL UPDATE (reconciliation, supersedes the prefill sections below where they conflict):**
+> see `prefill-RECONCILIATION-source-of-truth-20260619.md`. Controlled interleaved matrix (T=512, model.forward):
+> concrete-KV = 1.24x byte-identical over symbolic (shipped, ~47% llama); **+Tensile (external .co, research-only) =
+> 1.76-1.83x over concrete = ~86% of llama 3070, REPRODUCED.** The old "4770/1.76x" is REAL; the later "0.997x
+> Tensile-no-advantage / matmul-not-the-lever" was a HIGH-WMMA-CLOCK outlier (tinygrad WMMA prefill is clock-volatile
+> 1449-2675; Tensile is clock-stable ~2640). "Prefill exhausted at concrete-KV" is RETRACTED — the Tensile/external-
+> artifact lever is real and the open primitive class. Artifact: artifacts/prefill-reconciliation-matrix-20260619.json
+
 clock-controlled timing — and triangulated where it matters.
 
 ## TL;DR (the one conclusion)
