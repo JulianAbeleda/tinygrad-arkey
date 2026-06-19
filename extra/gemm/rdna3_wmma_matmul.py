@@ -140,9 +140,101 @@ def build_gemm(M, N, K, TM, TN):
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
 
+def waitcnt_vm(n):
+  # s_waitcnt simm16 (matches the proven in-repo encoder, extra/gemm/amd_asm_matmul.py):
+  #   expcnt=bits[2:0], lgkmcnt=bits[9:4], vmcnt=bits[15:10].
+  # Wait until <=n outstanding VMEM loads; leave expcnt/lgkmcnt maxed (don't wait on them).
+  if getenv("FULLWAIT",0): return s_waitcnt(simm16=0)
+  return s_waitcnt(simm16=(0x7) | ((0x3F) << 4) | ((n & 0x3F) << 10))
+
+def build_gemm_pipe(M, N, K, TM, TN):
+  # Double-buffered software-pipelined GEMM (A2). Unroll-by-2: F0 holds even-k frags, F1 holds odd-k.
+  # Prefetch next-k loads while WMMAs on the current buffer run; targeted s_waitcnt(vmcnt) instead of full barrier.
+  # 1 wave32/workgroup computes a (TM*16)x(TN*16) tile. A: MxK row-major. Bt: NxK row-major (B transposed).
+  assert M%(TM*16)==0 and N%(TN*16)==0 and K%32==0, "K must be multiple of 32 (unroll-by-2)"
+  NK = K//16; assert NK>=4, "need >=4 k-tiles"
+  LOOPS = NK//2 - 1
+  LPB = TM*2 + TN*2                              # b128 loads per buffer (each frag = 2x b128)
+  F0A=10; F0B=F0A+TM*8; F1A=F0B+TN*8; F1B=F1A+TM*8; VA=F1B+TN*8; ACCb=VA+(TM+TN)
+  assert ACCb+TM*TN*8 <= 256, f"VGPR overflow: {ACCb+TM*TN*8}"
+  I=[]; Br=[]; lbl={}
+  def e(i): I.append(i); return i
+  def label(n): lbl[n]=sum(i.size() for i in I)
+  def br(t): Br.append((len(I)-1,t))
+  sh = {4:6, 2:5, 1:4}
+  def issue_loads(Ab, Bb):                       # load current-k frags into buffers, advance addrs by one k-tile
+    for tm in range(TM):
+      e(global_load_b128(vdst=v[Ab+tm*8:Ab+tm*8+3],   addr=v[VA+tm:VA+tm], saddr=s[4:5], offset=0))
+      e(global_load_b128(vdst=v[Ab+tm*8+4:Ab+tm*8+7], addr=v[VA+tm:VA+tm], saddr=s[4:5], offset=16))
+    for tn in range(TN):
+      e(global_load_b128(vdst=v[Bb+tn*8:Bb+tn*8+3],   addr=v[VA+TM+tn:VA+TM+tn], saddr=s[6:7], offset=0))
+      e(global_load_b128(vdst=v[Bb+tn*8+4:Bb+tn*8+7], addr=v[VA+TM+tn:VA+TM+tn], saddr=s[6:7], offset=16))
+    for r in range(TM+TN): e(v_add_nc_u32_e32(v[VA+r], 32, v[VA+r]))
+  def do_wmmas(Ab, Bb):
+    for tm in range(TM):
+      for tn in range(TN):
+        ac=ACCb+(tm*TN+tn)*8
+        e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[Ab+tm*8:Ab+tm*8+7], src1=v[Bb+tn*8:Bb+tn*8+7], src2=v[ac:ac+7]))
+  e(s_load_b128(sdata=s[4:7], sbase=s[0:1], offset=0, soffset=NULL))
+  e(s_load_b64(sdata=s[8:9], sbase=s[0:1], offset=0x10, soffset=NULL))
+  e(s_waitcnt(simm16=0))
+  e(v_and_b32_e32(v[1], 15, v[0]))
+  e(s_lshl_b32(s[10], s[3], sh[TM]))
+  e(s_lshl_b32(s[11], s[2], sh[TN]))
+  e(v_add_nc_u32_e32(v[2], s[10], v[1]))
+  e(v_add_nc_u32_e32(v[3], s[11], v[1]))
+  for tm in range(TM):
+    e(v_add_nc_u32_e32(v[VA+tm], tm*16, v[2]) if tm else v_mov_b32_e32(v[VA+tm], v[2]))
+    e(v_mul_lo_u32(v[VA+tm], v[VA+tm], K*2))
+  for tn in range(TN):
+    e(v_add_nc_u32_e32(v[VA+TM+tn], tn*16, v[3]) if tn else v_mov_b32_e32(v[VA+TM+tn], v[3]))
+    e(v_mul_lo_u32(v[VA+TM+tn], v[VA+TM+tn], K*2))
+  for i in range(TM*TN*8): e(v_mov_b32_e32(v[ACCb+i], 0))
+  issue_loads(F0A, F0B)                          # k=0 -> F0
+  e(s_mov_b32(s[16], 0))
+  label('LOOP')                                  # invariant: F0 holds k=2j (in flight/done)
+  issue_loads(F1A, F1B)                          # k=2j+1 -> F1
+  e(waitcnt_vm(LPB)); do_wmmas(F0A, F0B)         # F0 ready (only F1's LPB outstanding)
+  issue_loads(F0A, F0B)                          # prefetch k=2j+2 -> F0
+  e(waitcnt_vm(LPB)); do_wmmas(F1A, F1B)         # F1 ready
+  e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], LOOPS)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
+  issue_loads(F1A, F1B)                          # tail: k=NK-1 -> F1 (F0 already holds k=NK-2)
+  e(waitcnt_vm(LPB)); do_wmmas(F0A, F0B)
+  e(s_waitcnt(simm16=0)); do_wmmas(F1A, F1B)
+  e(v_and_b32_e32(v[4], 15, v[0]))
+  e(v_lshrrev_b32_e32(v[5], 4, v[0])); e(v_and_b32_e32(v[5], 1, v[5]))
+  for tm in range(TM):
+    for tn in range(TN):
+      ac=ACCb+(tm*TN+tn)*8
+      e(v_add_nc_u32_e32(v[7], s[10], v[5]))
+      e(v_add_nc_u32_e32(v[7], tm*16, v[7]))
+      e(v_add_nc_u32_e32(v[8], s[11], v[4]))
+      e(v_add_nc_u32_e32(v[8], tn*16, v[8]))
+      e(v_mul_lo_u32(v[7], v[7], N)); e(v_add_nc_u32_e32(v[7], v[7], v[8]))
+      e(v_lshlrev_b32_e32(v[7], 1, v[7]))
+      for i in range(8):
+        e(v_cvt_f16_f32_e32(v[6], v[ac+i]))
+        e(global_store_b16(addr=v[7:7], data=v[6], saddr=s[8:9], offset=0))
+        if i<7: e(v_add_nc_u32_e32(v[7], N*4, v[7]))
+  e(s_waitcnt(simm16=0)); e(s_sendmsg(simm16=3)); e(s_endpgm())
+  for idx,t in Br:
+    off=(lbl[t]-sum(i.size() for i in I[:idx+1]))//4
+    assert -32768<=off<=32767; I[idx].simm16=off
+  return I
+
+def _run_insts(insts, a, bt, c, M, N, K, TM, TN, name):
+  grid=(N//(TN*16), M//(TM*16), 1)
+  def asm_kernel(A,Bt,C):
+    g=[UOp.special(grid[0],"gidx0"), UOp.special(grid[1],"gidx1")]
+    sink=UOp.sink(A.base,Bt.base,C.base,*g,UOp.special(32,"lidx0"),
+                  arg=KernelInfo(name=colored(name,"cyan"),estimates=Estimates(ops=M*N*K*2,mem=(M*K+N*K+M*N)*2)))
+    return UOp(Ops.PROGRAM, src=(sink,UOp(Ops.DEVICE,arg=Device.DEFAULT),UOp(Ops.LINEAR,src=tuple([UOp(Ops.INS,arg=x) for x in insts]))))
+  out=Tensor.custom_kernel(a,bt,c,fxn=asm_kernel)[2]
+  return out.schedule_linear(), out
+
 def test_gemm():
-  M=N=K=getenv("N",2048); TM,TN=getenv("TM",4),getenv("TN",4)
-  insts=build_gemm(M,N,K,TM,TN)
+  N=getenv("N",2048); M=getenv("M",N); K=getenv("K",N); TM,TN=getenv("TM",4),getenv("TN",4)
+  insts=build_gemm_pipe(M,N,K,TM,TN) if getenv("USEPIPE",0) else build_gemm(M,N,K,TM,TN)
   rng=np.random.default_rng(1)
   a_np=(rng.standard_normal((M,K))*0.1).astype(np.float16)
   bt_np=(rng.standard_normal((N,K))*0.1).astype(np.float16)
@@ -163,6 +255,32 @@ def test_gemm():
   err=np.sqrt(np.mean((c_np-ref)**2))/(np.sqrt(np.mean(ref**2))+1e-9)
   print(f"relative RMSE {err:.6f}  {'CORRECT' if err<0.05 else 'WRONG'}")
 
+def _rmse(c, a_np, bt_np):
+  c_np=c.float().numpy(); ref=a_np.astype(np.float32)@bt_np.astype(np.float32).T
+  return np.sqrt(np.mean((c_np-ref)**2))/(np.sqrt(np.mean(ref**2))+1e-9)
+
+def test_pipe():
+  # Fair same-process back-to-back: un-pipelined baseline vs double-buffered pipeline, identical clock.
+  M=N=K=getenv("N",2048); TM,TN=getenv("TM",4),getenv("TN",2); CNT=getenv("CNT",30)
+  rng=np.random.default_rng(1)
+  a_np=(rng.standard_normal((M,K))*0.1).astype(np.float16); bt_np=(rng.standard_normal((N,K))*0.1).astype(np.float16)
+  flop=M*N*K*2
+  # interleave the two kernels round-robin so clock drift hits both equally
+  base_i=build_gemm(M,N,K,TM,TN); pipe_i=build_gemm_pipe(M,N,K,TM,TN)
+  cb=Tensor.empty(M,N,dtype=dtypes.half); cp=Tensor.empty(M,N,dtype=dtypes.half); Tensor.realize(cb,cp)
+  lb,ob=_run_insts(base_i,Tensor(a_np),Tensor(bt_np),cb,M,N,K,TM,TN,"base")
+  lp,op=_run_insts(pipe_i,Tensor(a_np),Tensor(bt_np),cp,M,N,K,TM,TN,"pipe")
+  eb,ep=[],[]
+  with Context(DEBUG=2):
+    for _ in range(CNT):
+      st=GlobalCounters.time_sum_s; run_linear(lb); eb.append(GlobalCounters.time_sum_s-st)
+      st=GlobalCounters.time_sum_s; run_linear(lp); ep.append(GlobalCounters.time_sum_s-st)
+  rb=_rmse(ob,a_np,bt_np); rp=_rmse(op,a_np,bt_np)
+  print(f"baseline  TM={TM} TN={TN}: best {flop/min(eb)*1e-12:6.2f}  median {flop/sorted(eb)[len(eb)//2]*1e-12:6.2f} TFLOPS  RMSE {rb:.6f} {'OK' if rb<0.05 else 'WRONG'}")
+  print(f"pipeline  TM={TM} TN={TN}: best {flop/min(ep)*1e-12:6.2f}  median {flop/sorted(ep)[len(ep)//2]*1e-12:6.2f} TFLOPS  RMSE {rp:.6f} {'OK' if rp<0.05 else 'WRONG'}")
+  print(f"speedup (best) {min(eb)/min(ep):.3f}x")
+
 if __name__ == "__main__":
-  if getenv("GEMM",1): test_gemm()
+  if getenv("PIPE",0): test_pipe()
+  elif getenv("GEMM",1): test_gemm()
   else: test_tile()
