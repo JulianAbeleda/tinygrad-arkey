@@ -128,6 +128,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `amd-scheduler-tooling-backend-project-scope-20260619.md` — concrete scope for that project-level fork. Track T
   funds RDNA3 HCQ attribution tooling first; Track B funds the reusable AMD scheduler/resource backend only after a
   measurable feature or explicit backend investment decision.
+- `amd-scheduler-tooling-backend-t0t4-b0-result-20260619.md` — first combined execution. T0/T2/T3 pass, SQTT replay is
+  structurally decodable but maps only `S_ENDPGM` and no q8 body instructions, so T4 finds no bounded feature; B0 oracle
+  suite passes with q8 and Tensile targets.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
