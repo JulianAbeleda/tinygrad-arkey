@@ -15,6 +15,7 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
 PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
 Q8_FFN_HANDWRITTEN = bool(getenv("Q8_FFN_HANDWRITTEN", 0))
+DECODE_MMVQ_IMPORT_Q4 = bool(getenv("DECODE_MMVQ_IMPORT_Q4", 0))
 # NOTE: PREFILL_TC_ATTENTION (explicit TC Q@Kᵀ + softmax + P@V) was probed and UNWIRED -- it won ~2.5x over
 # SDPA standalone (concrete KV) but was ~0.8x (SLOWER) in-model because the prefill chunk's start_pos is
 # SYMBOLIC, so KV=start_pos+T is symbolic and the concrete-shape TC doesn't fire. See
@@ -849,6 +850,14 @@ class TransformerBlock(FFNBlock):
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
     out_in = attn if not self.config.attn_output_gate else (attn * gate.sigmoid())
     if getattr(self, '_prefill_v2', False): return _pf16(self.attn_output, out_in).contiguous()  # prefill v2
+    if DECODE_MMVQ_IMPORT_Q4 and resolve(T == 1) and out_in.shape == (1, 1, self.config.dim) and hasattr(self.attn_output, "q4k_storage"):
+      from extra.qk_decode_mmvq_graph_route import Q8_BYTES, route_imported_q4_mmvq
+      if not hasattr(self, "_decode_mmvq_import_q4_q8"):
+        self._decode_mmvq_import_q4_q8 = Tensor.empty(Q8_BYTES, dtype=dtypes.uint8, device=out_in.device).contiguous().realize()
+        self._decode_mmvq_import_q4_out = Tensor.empty(self.config.dim, dtype=dtypes.float32, device=out_in.device).contiguous().realize()
+      routed = route_imported_q4_mmvq(self.attn_output, out_in.cast(dtypes.float32).contiguous(),
+                                      self._decode_mmvq_import_q4_q8, self._decode_mmvq_import_q4_out)
+      if routed is not None: return routed
     return self.attn_output(out_in)
 
   def _init_state(self, x:Tensor):

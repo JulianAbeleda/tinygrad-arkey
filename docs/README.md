@@ -88,6 +88,12 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md` — **executed P7b.** Raw-kernarg rebind support
   passes: offsets `0/8/56` bind q4/q8/out VAs, eager parity is `max_abs 1.43e-6`, and TinyJit replay of real
   `blk.0.attn_output` activation is stable for `5/5` calls with zero diff vs eager.
+- `decode-mmvq-large-project-p7c-one-role-route-scope-20260619.md` — P7c scope for moving the imported Q4 route from
+  probe-only to one real model role behind `DECODE_MMVQ_IMPORT_Q4=1`, with persistent q8/out side buffers and no default
+  behavior change.
+- `decode-mmvq-large-project-p7c-one-role-route-result-20260619.md` — **executed P7c.** `blk.0.attn_output` routes
+  through the imported Q4_K path in `model.py`; smoke output shape is `[1,1,4096]`, routed blocks `[0]`. Next gate is
+  clock-controlled one-role timing, then q8 quality/dNLL.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

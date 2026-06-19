@@ -155,16 +155,26 @@ P7b is complete and supersedes the P7a failure:
 
 Detailed result: `docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md`.
 
+P7c is complete:
+
+- `DECODE_MMVQ_IMPORT_Q4=1` routes one real model role, `blk.0.attn_output`, through the imported Q4_K path;
+- the route uses persistent per-block q8/out side buffers;
+- the smoke output is `[1,1,4096]` and routed block list is `[0]`;
+- install must happen outside the precompiled function; the model path is launch-only;
+- defaults remain unchanged.
+
+Detailed scope: `docs/decode-mmvq-large-project-p7c-one-role-route-scope-20260619.md`.
+Detailed result: `docs/decode-mmvq-large-project-p7c-one-role-route-result-20260619.md`.
+
 ## Recommendation
 
-Start P7c next: one-role model integration behind a research flag, with persistent q8/out side buffers.
-
-Detailed scope: `docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-scope-20260619.md`.
+Start P7d next: clock-controlled one-role timing for `blk.0.attn_output`, then q8 quality/dNLL. Do not extend the route
+to FFN roles or W==D until the one-role route shows real local movement after integration overhead.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-Q4 imported consumer + q8_1 producer graph route -> one-role model flag -> W==D/dNLL gate
+Q4 imported consumer + q8_1 producer graph route -> one-role model flag -> timing + dNLL -> FFN role expansion -> W==D gate
 ```
 
 Q6 imported-kernel correctness/perf remains a coverage track. It should not block the Q4 graph route because Q4 already
