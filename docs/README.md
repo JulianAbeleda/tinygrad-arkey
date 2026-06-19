@@ -43,8 +43,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
 - `llama-kernel-residual-primitive-audit-20260619.md` — result of that audit. llama is not theoretically optimal,
-  but visible decode headroom collapses to MMVQ residual-to-practical-peak and RMSNorm/q8 producer lifecycle;
-  graph launch overhead is already solved by HIP graphs, and prefill residual needs a separate trace.
+  but fresh `rocprofv3` traces show prompt-free decode is 85.6% MMVQ; q8/RMSNorm is the only moderate non-MMVQ
+  decode lifecycle candidate, graph launch overhead is already solved by HIP graphs, and pp512 prefill is 74.4%
+  quantized MMQ/matmul rather than attention-limited.
 - **Decode-attention wins SHIPPED (byte-identical greedy, default-on):**
   - `qk-8b-attention-fusion-result-20260617.md` — flash-decode threshold 1024→512 (+12.8% ctx520).
   - `qk-8b-flash-variant-result-20260617.md` — `hoisted` exp + L=128 default (+11–29% across ctx).

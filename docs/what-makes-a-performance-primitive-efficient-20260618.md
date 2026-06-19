@@ -443,7 +443,7 @@ Close criterion:
 | flash-prefill with LDS reuse | deferred D | long prompt prefill | reuse-free kernel refuted; real flash needs LDS/register locality |
 | raw HIP / rocBLAS / Tensile boundary | strategic open | high for prefill | changes authority boundary from tinygrad codegen to external or handwritten kernels |
 | ffn_gate coop routing | sub-gate candidate | +1-2.3% decode | stackable only, below route gate |
-| llama.cpp residual primitive audit | audit open | unknown | separate audit of what llama itself leaves on the table; scoped in `llama-kernel-residual-primitive-audit-scope-20260619.md` |
+| llama.cpp residual primitive audit | mapped / partly deferred | decode + pp512 prefill | `llama-kernel-residual-primitive-audit-20260619.md`: fresh rocprof redo shows prompt-free decode is 85.6% MMVQ; q8/RMSNorm lifecycle is the only moderate non-MMVQ decode candidate; pp512 prefill is 74.4% quantized MMQ/matmul, while long-prompt prefill remains separate |
 
 ## What should not be reopened without new evidence
 
@@ -482,9 +482,10 @@ Primary current docs:
 - `q8-sidechannel-ffn-verdict-20260618.md`
 - `q8-mmvq-lifecycle-deep-scope-20260618.md`
 - `q8-mmvq-lifecycle-deep-result-20260619.md`
+- `llama-kernel-residual-primitive-audit-scope-20260619.md`
+- `llama-kernel-residual-primitive-audit-20260619.md`
 - `qk-decode-per-role-delta-audit-20260618.md`
 - `qk-machine-search-primitive-rows-20260618.md`
-- `llama-kernel-residual-primitive-audit-scope-20260619.md`
 - `q4k-fp-coop-codegen-quality-scope-20260618.md`
 - `qk-spec-verify-component-breakdown-20260618.md`
 - `qk-prefill-weight-reuse-scope-20260618.md`
