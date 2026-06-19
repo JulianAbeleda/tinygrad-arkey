@@ -146,6 +146,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `amd-att-decoder-blocker-scope-20260619.md` — concrete reopen scope for the known ATT blocker: binary decoder
   acquisition, source build from `ROCm/rocm-systems`, known-good ROCm environment, and why an ABI shim is not the first
   path. Gates require `rocprofv3 --att` payloads before returning to tinygrad HCQ SQTT body attribution.
+- `amd-att-decoder-solution-result-20260619.md` — **executed D0/D1 and solved the external ATT oracle blocker.**
+  ROCprof Trace Decoder `0.1.6` binary passes once HIP controls are compiled/linked coherently against ROCm 7.2 instead
+  of Ubuntu HIP 5.7. `rocprofv3 --att` now emits `.att`, decoded UI files, wave JSON, and result JSON for the HIP control.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
