@@ -1,0 +1,200 @@
+# q8 FFN dual-track route + codegen scope (2026-06-19)
+
+This scope splits the q8 side-channel reopening into two complementary tracks. They are **not mutually exclusive**.
+
+- **Track A: handwritten/backend research route.** Purpose: answer model truth first: dNLL, W==D speed, graph/host
+  overhead, and failure modes behind a research flag.
+- **Track B: tinygrad codegen transfer.** Purpose: make the primitive owned by tinygrad instead of relying on a
+  handwritten/backend escape hatch.
+
+Both tracks use the same oracle target already measured in `q8-ffn-handwritten-oracle-scope-20260619.md`.
+
+## Current authority
+
+Q8H-0 through Q8H-5 passed:
+
+| gate | result |
+|---|---|
+| real-GGUF handwritten Q4_K x q8_1 `ffn_gate/up` correctness | PASS, max_abs <= 1.91e-6 |
+| fused RMSNorm + q8 side-channel producer cost | PASS, incremental 0.92us |
+| gate+up lifecycle vs current fp coop | PASS, 1.23x |
+| decode EV model | PASS_TO_Q8H6, ~1.05x decode |
+
+So the remaining question is no longer "does the lifecycle work?" It is:
+
+1. Does q8-lossy gate/up pass quality?
+2. Can we route it in-model without losing the measured economics?
+3. If yes, should the route stay handwritten research-only, or should tinygrad learn to generate the producer/consumer?
+
+## Track A — handwritten/backend research route
+
+### A0 — quality proxy before route build: PASS
+
+Run teacher-forced dNLL where the normal graph remains in place but dense FFN `gate/up` see
+`q8_1_dequantize(q8_1_quantize(ffn_norm_output))`.
+
+This does **not** measure performance. It isolates the q8 activation quality risk before spending on HCQ in-model
+routing. Probe: `extra/q8_ffn_quality_proxy.py`.
+
+Gate:
+
+- `dNLL <= 0.01` vs the same baseline evaluator and token window.
+- If this fails, stop Track A and Track B for this q8 route; the speed oracle is not a model route.
+
+Artifact:
+
+- `bench/q8-ffn-handwritten-oracle/quality_proxy.json`.
+
+Result:
+
+| window | baseline NLL | q8 proxy NLL | dNLL | verdict |
+|---|---:|---:|---:|---|
+| 32-token sanity | 3.38016 | 3.38437 | +0.00421 | PASS |
+| 160-token gate | 2.85548 | 2.85712 | **+0.00165** | **PASS** |
+
+The proxy is quality-only, not a speed route. It proves the q8 activation loss on FFN gate/up is below the current
+`dNLL <= 0.01` quality threshold, so the handwritten route is worth building to W==D.
+
+### A1 — HCQ-launchable handwritten artifacts
+
+Convert the two handwritten HIP kernels into tinygrad-loadable AMD code objects:
+
+- fused RMSNorm/q8 producer: one output fp activation + q8 blocks;
+- Q4_K x q8_1 MMVQ consumer: gate/up real-GGUF shape.
+
+No in-process HIP runtime. EBT-1 proved HIP and tinygrad HCQ are mutually exclusive in-process, so this must use the
+same class of HCQ code-object launch used by the Tensile extraction work.
+
+Gate:
+
+- HCQ eager launch writes tinygrad-owned buffers correctly.
+- No host/device copies beyond existing model buffers.
+- Reproduces Q8H-1/Q8H-3 correctness.
+
+### A2 — one-block eager route behind research flag
+
+Route one dense FFN block:
+
+`ffn_norm side-channel -> q8 gate/up -> silu*up -> current ffn_down`
+
+behind `Q8_FFN_HANDWRITTEN=1`, default off.
+
+Gate:
+
+- block output max_abs vs graph q8 proxy within tolerance;
+- eager device-time speedup >= modeled threshold after route overhead;
+- no default behavior change.
+
+### A3 — TinyJit/HCQGraph route
+
+Make the route graph-capturable so W==D decode can measure it without per-token Python overhead.
+
+Gate:
+
+- graph replay stable across tokens;
+- no pointer-staleness from q8 side-channel buffers;
+- W==D ctx sweep >= 3% sustained speedup.
+
+### A4 — final quality/perf verdict
+
+Run:
+
+- dNLL on the accepted token window;
+- W==D decode at banked contexts;
+- fallback sanity with flag off.
+
+Verdict:
+
+- **PASS:** research route is valid and becomes the target for Track B.
+- **QUALITY_FAIL:** stop; do not build codegen.
+- **PERF_FAIL:** keep the kernels as oracle assets only; do not route.
+
+## Track B — tinygrad codegen transfer
+
+Track B starts from the same target but does not depend on Track A being shipped. Track A gives it measured target
+behavior.
+
+### B0 — capability contract
+
+Add a formal contract for a "lifecycle producer" kernel:
+
+- one per-row reduction over 4096 for RMSNorm sumsq;
+- barrier/LDS broadcast of `rinv`;
+- per-32 max/scale/quantize;
+- multi-output stores: fp normalized activation + q8 block payload/scales;
+- graph-visible q8 side-channel object passed to exactly gate/up.
+
+Gate:
+
+- contract documented with shapes, dtypes, lifetimes, aliasing rules, and quality boundary.
+
+### B1 — custom-kernel expressibility spike, second pass
+
+Revisit Q8L-2 with the handwritten oracle as target. Try to express the producer using current UOps plus explicit
+`Ops.BARRIER`/local storage instead of the store-group-only idiom.
+
+Gate:
+
+- one generated kernel, not per-stage kernels;
+- UOp verification passes;
+- DEBUG source contains one producer with barrier/local staging and multi-output stores.
+
+Kill:
+
+- if current custom-kernel UOps still cannot express the two reduction granularities in one kernel, stop B1 and go to
+  B2.
+
+### B2 — renderer/codegen capability
+
+If B1 fails, add the minimal renderer/codegen feature needed for this family:
+
+- range model for staged reductions with barriers;
+- multi-output stores after a staged reduction;
+- stable scheduling around `DEFINE_LOCAL`, `BARRIER`, and post-barrier stores.
+
+Gate:
+
+- small unit test: fused RMSNorm/q8 producer standalone matches the handwritten producer;
+- no broad scheduling regressions.
+
+### B3 — generated consumer parity
+
+The existing tinygrad q8 consumer is correct but slower than the handwritten oracle. Decide whether Track B owns only
+the producer or also the llama-style consumer.
+
+Options:
+
+- B3a: generated producer + existing q8 consumer. Lower engineering cost, likely smaller speedup.
+- B3b: generated producer + generated/ported 128-thread llama-style q8 MMVQ. Higher cost, target is Q8H-4 1.23x.
+
+Gate:
+
+- isolated gate+up lifecycle >= 1.15x over fp coop, same as Q8H-4.
+
+### B4 — model integration
+
+Only after B2/B3 pass:
+
+- add an internal q8 side-channel dataflow for dense FFN gate/up;
+- keep env gated and default off;
+- run dNLL and W==D.
+
+Gate:
+
+- same as Track A A4.
+
+## Decision matrix
+
+| outcome | action |
+|---|---|
+| A0 quality fails | stop both tracks; q8 side-channel remains an oracle-only speed trick |
+| A0 passes, A route fails perf | keep handwritten kernels as proof; Track B only if producer capability has other uses |
+| A route passes, B not started | acceptable as research flag only, not default |
+| A route passes, B passes | tinygrad-owned primitive can replace handwritten route |
+| B producer passes but consumer lags | route only if W==D still clears >=3%; otherwise keep as codegen asset |
+
+## Why both tracks are useful
+
+Track A answers whether the primitive is worth having in the model. Track B answers whether tinygrad can own the
+primitive cleanly. Running Track A first lowers risk for Track B: it prevents building a compiler feature for a route
+that later fails dNLL.

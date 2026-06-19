@@ -214,6 +214,11 @@ Artifacts:
 - `bench/q8-ffn-handwritten-oracle/dnll.json`.
 - `bench/q8-ffn-handwritten-oracle/decode_wd.json`.
 
+Quality proxy status: `bench/q8-ffn-handwritten-oracle/quality_proxy.json` passes the first q8-lossiness gate before
+route build: teacher-forced 160-token dNLL = **+0.00165** when `ffn_gate/up` consume
+`q8_1_dequantize(q8_1_quantize(ffn_norm_output))` through the normal graph. This does not measure route speed, but it
+removes the main quality objection to building the handwritten HCQ route.
+
 ## Stop rules
 
 Stop immediately if any of these occur:

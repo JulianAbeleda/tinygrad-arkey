@@ -78,6 +78,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   actually clears correctness, lifecycle speed, block EV, and dNLL gates before funding tinygrad codegen. Includes
   Q8H-0 preflight, Q8H-1 real-GGUF handwritten MMVQ correctness PASS, and Q8H-3/4 producer+lifecycle PASS
   (1.23x gate+up isolated), plus Q8H-5 EV PASS (~1.05x decode model); remaining gate is q8-lossy dNLL/W==D.
+- `q8-dual-track-route-and-codegen-scope-20260619.md` — splits q8 into complementary tracks: Track A handwritten/
+  backend research route for dNLL/W==D truth, and Track B tinygrad codegen transfer for owning the fused producer and
+  q8 MMVQ lifecycle. Adds `extra/q8_ffn_quality_proxy.py`; Track A A0 quality proxy PASS with 160-token dNLL
+  +0.00165, so next is HCQ-launchable handwritten route.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
