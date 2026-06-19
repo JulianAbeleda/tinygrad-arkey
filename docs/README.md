@@ -94,6 +94,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-large-project-p7c-one-role-route-result-20260619.md` — **executed P7c.** `blk.0.attn_output` routes
   through the imported Q4_K path in `model.py`; smoke output shape is `[1,1,4096]`, routed blocks `[0]`. Next gate is
   clock-controlled one-role timing, then q8 quality/dNLL.
+- `decode-mmvq-large-project-p7d-one-role-timing-scope-20260619.md` — P7d scope for timing the imported route on the
+  true pre-`attn_output` activation with same-process interleaved TinyJit A/B.
+- `decode-mmvq-large-project-p7d-one-role-timing-result-20260619.md` — **executed P7d.** Imported route is correct,
+  replay-stable, and model-branch reachable, but slower for `blk.0.attn_output`: `0.1396ms` vs baseline `0.1064ms`
+  (`0.763x`). Do not expand `attn_output`; next valid diagnostic is `ffn_gate/up` q8 amortization.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

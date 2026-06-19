@@ -166,15 +166,26 @@ P7c is complete:
 Detailed scope: `docs/decode-mmvq-large-project-p7c-one-role-route-scope-20260619.md`.
 Detailed result: `docs/decode-mmvq-large-project-p7c-one-role-route-result-20260619.md`.
 
+P7d is complete:
+
+- captured the true pre-`attn_output` activation from `_attention`;
+- interleaved TinyJit timing shows baseline `0.1064ms` vs imported `0.1396ms`;
+- imported replay is stable and the model branch still routes;
+- the speed gate fails at `0.763x`.
+
+Detailed scope: `docs/decode-mmvq-large-project-p7d-one-role-timing-scope-20260619.md`.
+Detailed result: `docs/decode-mmvq-large-project-p7d-one-role-timing-result-20260619.md`.
+
 ## Recommendation
 
-Start P7d next: clock-controlled one-role timing for `blk.0.attn_output`, then q8 quality/dNLL. Do not extend the route
-to FFN roles or W==D until the one-role route shows real local movement after integration overhead.
+Do not route `attn_output` further. The next valid question is narrower: does the `ffn_gate/up` pair change the result
+because it has three favorable differences from `attn_output`: `12288` rows, two Q4 consumers, and one shared q8
+producer. Scope that as a fresh diagnostic before any model route expansion.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-Q4 imported consumer + q8_1 producer graph route -> one-role model flag -> timing + dNLL -> FFN role expansion -> W==D gate
+Q4 imported consumer + q8_1 producer graph route -> attn_output timing refuted -> gate/up amortization diagnostic
 ```
 
 Q6 imported-kernel correctness/perf remains a coverage track. It should not block the Q4 graph route because Q4 already
