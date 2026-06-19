@@ -72,15 +72,44 @@ Performance gate:
 - no COMGR C source;
 - no HIP runtime in process.
 
+Executed first slice:
+
+- probe: `extra/q8_ffn_asm_gateup_skeleton.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_gateup_address_skeleton.json`;
+- verdict: **PASS**.
+
+This proves the real five-buffer fused gate/up signature works through `Ops.PROGRAM`, with `gidx0` as row and `gidx1`
+as gate/up selector. It writes `gate[row] = row` and `up[row] = row + 12288` across the full `(12288,2,1)` grid with
+zero mismatches.
+
+Executed second slice:
+
+- probe: `extra/q8_ffn_asm_q8_load_skeleton.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_q8_load_skeleton.json`;
+- verdict: **PASS**.
+
+This proves global byte loads from the q8 side-channel buffer work under the same five-buffer contract. The kernel loads
+`q8[(row & 127) * 36 + 4 + role]` and stores diagnostics to gate/up with zero mismatches.
+
+Executed third slice:
+
+- probe: `extra/q8_ffn_asm_q4_load_skeleton.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_q4_load_skeleton.json`;
+- verdict: **PASS**.
+
+This proves gate/up Q4 weight pointer selection and the `576`-word row stride work under the same contract. The kernel
+loads the first synthetic Q4 word for each row and role with zero mismatches.
+
 ## B2b2 implementation order
 
 Do not write the whole consumer in one jump. Build it in slices:
 
 1. **Address skeleton:** load five buffer pointers, compute row/which/tid/sub/kb, and store a deterministic value per
-   row/which. Gate: output pattern matches CPU expectation.
+   row/which. Gate: output pattern matches CPU expectation. **DONE/PASS.**
 2. **Q8 load skeleton:** load `q8` scale and one packed q8 lane, store a diagnostic value. Gate: matches CPU extraction.
+   **DONE/PASS for byte load and q8 block addressing.**
 3. **Q4 load skeleton:** load Q4_K scale/min/qs for one sub-block, store diagnostic scale/min/nibble values. Gate:
-   matches CPU extraction.
+   matches CPU extraction. **PARTIAL/PASS for gate/up pointer selection and row stride; field/nibble diagnostics remain.**
 4. **One-block dot:** compute one `kb` contribution for one row. Gate: matches CPU partial reference.
 5. **Full-row dot:** loop/emit all 16 `kb` lanes, reduce across wave/workgroup. Gate: one row matches reference.
 6. **Full fused gate/up:** run all rows and both roles. Gate: real correctness + `<=60us`.
