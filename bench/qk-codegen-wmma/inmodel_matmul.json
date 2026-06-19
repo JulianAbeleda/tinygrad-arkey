@@ -104,5 +104,19 @@
     "rdna3_wmma_supported": "YES - autogen rdna3/ins.py has V_WMMA_F32_16X16X16_F16; the assemble->ELF path can emit it.",
     "reframe": "Route A's real work is NOT tuning amd_asm_matmul (fp32 FMA) -- it is WRITING A NEW RDNA3 WMMA hand-asm GEMM (port rdna4 structure to rdna3.ins + the RDNA3 WMMA register layout). This is a multi-week expert-asm build, hang-prone.",
     "next": "A1 = build a CORRECT RDNA3 WMMA asm GEMM (mse 0), measure TFLOPS vs 48; KILL if can't beat 48 after tuning."
+  },
+  "RouteA_A1_result": {
+    "kernel": "extra/gemm/rdna3_wmma_matmul.py",
+    "correct": true,
+    "rmse": 0.0002,
+    "tflops_steady": 13,
+    "tflops_note": "19.28 was a warm-clock outlier; steady ~13 (12.3-13.3)",
+    "vs_llvm": 48,
+    "vs_tensile": 66,
+    "dependency": null,
+    "llvm_free": true,
+    "milestone": "PROVEN: dependency-free RDNA3 WMMA assembly GEMM works end-to-end (assemble->ELF, zero LLVM); RDNA3 WMMA layout solved",
+    "A2_binding_constraint": "naive: full s_waitcnt(0) every K-iter serializes load<->compute. Fix=software pipeline, but TM=TN=4's 128 acc VGPR leaves no room to double-buffer (>256); smaller tiles fit but lose amortization. VGPR-vs-amortization tension = the regalloc/scheduling wall LLVM solves automatically. SW-pipeline IC-served-refuted (CG-R1) caps upside.",
+    "verdict": "Route A PROVEN VIABLE; A2 (beat 48->66) = multi-day expert-asm-scheduling grind, uncertain ceiling. Fund vs PREFILL_V2(80% llama)/Tensile(1.41x,dep)."
   }
 }
