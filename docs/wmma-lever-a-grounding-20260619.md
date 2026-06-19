@@ -38,3 +38,20 @@ which is the prerequisite for a correct implementation.
 ## Files
 renderer/cstyle.py (HIP C load/index rendering), the index UOp lowering. Kernel dumped:
 r_192_2_32_4_2_2_2_4_4_256_2. Prior: wmma-make-expressible-scope-20260619.md, CG-W.
+
+## ⚠ LEVER A REFUTED (empirical, decisive) — clang already does the base grouping
+Worktree agent rendered the exact kernel, built a grouped-base variant of the identical source, compiled+
+disassembled+timed both (interleaved best-of-50, same process):
+- ORIGINAL 41.7 TFLOPS (34.1% peak) vs GROUPED 41.1 (33.7%) = **0.988x** (gate was >=1.2x) -> FAIL.
+- Outputs **bitwise identical** (relerr 0).
+- **Disassembly identical except register renumbering.** clang ALREADY materializes several base-address VGPR
+  pairs and emits every load with the `offset:` immediate field (incl. negative `offset:-4096` to cover two 4KB
+  windows per base) -> hoisting bases in C source changes nothing; instruction selection already does it.
+- ISA loop: `v_add_co_u32`=**61** (NOT ~128/160), global_load=544, v_wmma=64. **CG-W's "~160 address-ALU/iter,
+  no base+offset" was a MISREAD of the ISA** -- the addressing is already optimal.
+
+CONCLUSION: Lever A (renderer addressing/base-grouping) is REFUTED. The ~34% peak is bound by load throughput /
+WMMA scheduling / occupancy / single-wave latency-hiding (the POWN "software-pipelined K-loop" wall), NOT address
+ALU. This PROMOTES Lever B (latency hiding / pipelining / occupancy) from secondary to the PRIMARY remaining lever
+-- the bottleneck is exactly what B targets (memory-latency/scheduling), not what A targeted (ALU). No renderer
+change made.
