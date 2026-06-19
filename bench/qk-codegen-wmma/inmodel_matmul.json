@@ -67,5 +67,18 @@
     "finding": "explicit inner-8 vector reshape on the copy STILL emits 16 d16 loads + 123 v_mov (only 2 b128). Combined with CG-W2 (contiguous, also d16): NO UOp-structure change makes tinygrad emit wide fp16 loads for the copy without the UPCAST opt -- fp16 load width is OPT/RENDERER-controlled, not kernel-expressible.",
     "conclusion": "the dependency-free prefill lever (vectorize the transposing fp16 copy to kill the d16+v_mov overhead) is firmly a RENDERER/OPT-level change (CG-W3), PROJECT-LEVEL with broad blast radius + uncertain payoff (warp-uncoalescing trade). Every KERNEL-LEVEL prefill lever now refuted: POWN-1, PWLT-A2, CG-R1, CG-W2, CG-W2b."
   },
-  "final_kernel_level_verdict": "EXHAUSTED -- pure-tinygrad prefill matmul has no kernel-level lever left on gfx1100; only a project-level renderer/opt fp16-load-vectorization change remains, or rest at PREFILL_V2 (~80% llama), or the external Tensile route (1.41x llama, dependency)."
+  "final_kernel_level_verdict": "EXHAUSTED -- pure-tinygrad prefill matmul has no kernel-level lever left on gfx1100; only a project-level renderer/opt fp16-load-vectorization change remains, or rest at PREFILL_V2 (~80% llama), or the external Tensile route (1.41x llama, dependency).",
+  "CG_W3_routeB_beam_spike": {
+    "beam_hangs_gfx1100": false,
+    "note": "REFUTED the long-standing 'BEAM hangs gfx1100' wall: BEAM=2 and BEAM=8 both COMPLETED on the 1024^2 matmul AND the prefill shape (512x12288<-4096 fp16), no hang (exit 0).",
+    "prefill_matmul_tflops": {
+      "default_BEAM0": 17.7,
+      "BEAM2": 14.7,
+      "BEAM8": 14.3,
+      "warmstart_PREFILL_V2": 48,
+      "tensile": 66
+    },
+    "verdict": "BEAM does NOT hang (wall refuted) BUT does NOT find a competitive schedule -- 14-17 TFLOPS, BELOW the default heuristic (17.7) and FAR below the warmstart (48) / Tensile (66), despite OptOps.TC being in its action space. Likely test-size mis-ranking + ineffective TC application in search. So Route B (use BEAM to auto-find the copy-vectorized schedule) is CLOSED -- BEAM is not the lever.",
+    "implication": "the dependency-free prefill lever falls back to Route A (hand-coded copy vectorization / two-stage copy in the scheduler+renderer), project-level. The 'BEAM-hang' premise behind many prior deferrals was FALSE, but the deferrals' conclusion (can't easily get the schedule via search) still holds -- for a different reason (BEAM is too weak, not hanging)."
+  }
 }
