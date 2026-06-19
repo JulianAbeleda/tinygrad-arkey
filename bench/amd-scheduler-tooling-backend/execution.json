@@ -17,7 +17,7 @@
         "pmc_count": 2,
         "sqtt_count": 12,
         "sqtt_itrace_count": 2,
-        "sqtt_total_blob_bytes": 1775488,
+        "sqtt_total_blob_bytes": 2278432,
         "pmc_total_blob_bytes": 4880,
         "programs": [
           {
@@ -40,42 +40,88 @@
           "kern": 0,
           "se": 0,
           "itrace": true,
-          "blob_bytes": 146720,
+          "blob_bytes": 190656,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
-          "mapped_instruction_events": 2058,
-          "packet_counts_top": [
+          "mapped_instruction_events": 2110,
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17446
+              25930
             ],
             [
-              "TS_WAVE_STATE",
-              7002
-            ],
-            [
-              "TS_DELTA_SHORT",
-              4629
+              "WAVESTART",
+              16384
             ],
             [
               "WAVEEND",
-              2058
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              9325
+            ],
+            [
+              "UTILCTR",
+              4380
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4120
             ],
             [
               "TS_DELTA_OR_MARK",
-              453
+              1684
             ],
             [
               "REG",
               316
             ],
             [
+              "EVENT",
+              39
+            ],
+            [
+              "SNAPSHOT",
+              7
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              25930
+            ],
+            [
+              "TS_WAVE_STATE",
+              9325
+            ],
+            [
               "UTILCTR",
-              83
+              4380
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4120
+            ],
+            [
+              "WAVEEND",
+              2110
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1684
+            ],
+            [
+              "REG",
+              316
             ],
             [
               "EVENT",
-              18
+              39
             ],
             [
               "SNAPSHOT",
@@ -89,7 +135,7 @@
           "instruction_counts_top": [
             [
               "S_ENDPGM",
-              2058
+              2110
             ]
           ]
         },
@@ -98,14 +144,14 @@
           "kern": 0,
           "se": 1,
           "itrace": false,
-          "blob_bytes": 147520,
+          "blob_bytes": 190464,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17432
+              24633
             ],
             [
               "WAVESTART",
@@ -117,27 +163,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7027
-            ],
-            [
-              "TS_DELTA_SHORT",
-              4649
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              476
-            ],
-            [
-              "REG",
-              367
+              9126
             ],
             [
               "UTILCTR",
-              107
+              4367
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4186
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1788
+            ],
+            [
+              "REG",
+              368
             ],
             [
               "EVENT",
-              20
+              42
+            ],
+            [
+              "SNAPSHOT",
+              9
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              24633
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              9126
+            ],
+            [
+              "UTILCTR",
+              4367
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4186
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1788
+            ],
+            [
+              "REG",
+              368
+            ],
+            [
+              "EVENT",
+              42
             ],
             [
               "SNAPSHOT",
@@ -155,14 +247,14 @@
           "kern": 0,
           "se": 2,
           "itrace": false,
-          "blob_bytes": 147712,
+          "blob_bytes": 192160,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17522
+              26700
             ],
             [
               "WAVESTART",
@@ -174,27 +266,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7040
+              9313
+            ],
+            [
+              "UTILCTR",
+              4429
             ],
             [
               "TS_DELTA_SHORT",
-              4642
+              4225
             ],
             [
               "TS_DELTA_OR_MARK",
-              471
+              1668
             ],
             [
               "REG",
               418
             ],
             [
+              "EVENT",
+              42
+            ],
+            [
+              "SNAPSHOT",
+              11
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              26700
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              9313
+            ],
+            [
               "UTILCTR",
-              60
+              4429
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4225
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1668
+            ],
+            [
+              "REG",
+              418
             ],
             [
               "EVENT",
-              21
+              42
             ],
             [
               "SNAPSHOT",
@@ -212,14 +350,14 @@
           "kern": 0,
           "se": 3,
           "itrace": false,
-          "blob_bytes": 148352,
+          "blob_bytes": 191520,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17502
+              24904
             ],
             [
               "WAVESTART",
@@ -231,27 +369,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7038
+              9253
+            ],
+            [
+              "UTILCTR",
+              4400
             ],
             [
               "TS_DELTA_SHORT",
-              4757
+              4259
             ],
             [
               "TS_DELTA_OR_MARK",
-              471
+              1693
             ],
             [
               "REG",
               469
             ],
             [
+              "EVENT",
+              43
+            ],
+            [
+              "SNAPSHOT",
+              13
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              24904
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              9253
+            ],
+            [
               "UTILCTR",
-              79
+              4400
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4259
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1693
+            ],
+            [
+              "REG",
+              469
             ],
             [
               "EVENT",
-              22
+              43
             ],
             [
               "SNAPSHOT",
@@ -269,14 +453,14 @@
           "kern": 0,
           "se": 4,
           "itrace": false,
-          "blob_bytes": 148960,
+          "blob_bytes": 192736,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17524
+              25566
             ],
             [
               "WAVESTART",
@@ -288,27 +472,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7118
+              9214
+            ],
+            [
+              "UTILCTR",
+              4407
             ],
             [
               "TS_DELTA_SHORT",
-              4663
+              4396
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1759
             ],
             [
               "REG",
               520
             ],
             [
-              "TS_DELTA_OR_MARK",
-              483
+              "EVENT",
+              44
+            ],
+            [
+              "SNAPSHOT",
+              15
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              25566
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              9214
             ],
             [
               "UTILCTR",
-              71
+              4407
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4396
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1759
+            ],
+            [
+              "REG",
+              520
             ],
             [
               "EVENT",
-              23
+              44
             ],
             [
               "SNAPSHOT",
@@ -326,14 +556,14 @@
           "kern": 0,
           "se": 5,
           "itrace": false,
-          "blob_bytes": 149536,
+          "blob_bytes": 192128,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17446
+              23780
             ],
             [
               "WAVESTART",
@@ -345,27 +575,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7137
+              8825
+            ],
+            [
+              "UTILCTR",
+              4411
             ],
             [
               "TS_DELTA_SHORT",
-              4776
+              4343
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1935
             ],
             [
               "REG",
               571
             ],
             [
-              "TS_DELTA_OR_MARK",
-              495
+              "EVENT",
+              45
+            ],
+            [
+              "SNAPSHOT",
+              17
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              23780
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              8825
             ],
             [
               "UTILCTR",
-              62
+              4411
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4343
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1935
+            ],
+            [
+              "REG",
+              571
             ],
             [
               "EVENT",
-              24
+              45
             ],
             [
               "SNAPSHOT",
@@ -383,72 +659,14 @@
           "kern": 0,
           "se": 0,
           "itrace": true,
-          "blob_bytes": 146432,
+          "blob_bytes": 185280,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
-          "mapped_instruction_events": 2056,
-          "packet_counts_top": [
+          "mapped_instruction_events": 1868,
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17298
-            ],
-            [
-              "TS_WAVE_STATE",
-              7095
-            ],
-            [
-              "TS_DELTA_SHORT",
-              4572
-            ],
-            [
-              "WAVEEND",
-              2056
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              455
-            ],
-            [
-              "REG",
-              262
-            ],
-            [
-              "UTILCTR",
-              83
-            ],
-            [
-              "EVENT",
-              18
-            ],
-            [
-              "SNAPSHOT",
-              5
-            ],
-            [
-              "LAYOUT_HEADER",
-              1
-            ]
-          ],
-          "instruction_counts_top": [
-            [
-              "S_ENDPGM",
-              2056
-            ]
-          ]
-        },
-        {
-          "idx": 28,
-          "kern": 0,
-          "se": 1,
-          "itrace": false,
-          "blob_bytes": 146944,
-          "program": "q8_b2b_fullrow_reduce",
-          "decode_ok": true,
-          "mapped_instruction_events": 0,
-          "packet_counts_top": [
-            [
-              "NOP",
-              17388
+              19672
             ],
             [
               "WAVESTART",
@@ -460,27 +678,27 @@
             ],
             [
               "TS_WAVE_STATE",
-              7042
+              9718
             ],
             [
               "TS_DELTA_SHORT",
-              4768
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              455
-            ],
-            [
-              "REG",
-              313
+              4280
             ],
             [
               "UTILCTR",
-              83
+              4024
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1440
+            ],
+            [
+              "REG",
+              318
             ],
             [
               "EVENT",
-              20
+              40
             ],
             [
               "SNAPSHOT",
@@ -491,21 +709,68 @@
               1
             ]
           ],
-          "instruction_counts_top": []
-        },
-        {
-          "idx": 30,
-          "kern": 0,
-          "se": 2,
-          "itrace": false,
-          "blob_bytes": 147424,
-          "program": "q8_b2b_fullrow_reduce",
-          "decode_ok": true,
-          "mapped_instruction_events": 0,
           "packet_counts_top": [
             [
               "NOP",
-              17438
+              19672
+            ],
+            [
+              "TS_WAVE_STATE",
+              9718
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4280
+            ],
+            [
+              "UTILCTR",
+              4024
+            ],
+            [
+              "WAVEEND",
+              1868
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1440
+            ],
+            [
+              "REG",
+              318
+            ],
+            [
+              "EVENT",
+              40
+            ],
+            [
+              "SNAPSHOT",
+              7
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "instruction_counts_top": [
+            [
+              "S_ENDPGM",
+              1868
+            ]
+          ]
+        },
+        {
+          "idx": 28,
+          "kern": 0,
+          "se": 1,
+          "itrace": false,
+          "blob_bytes": 187712,
+          "program": "q8_b2b_fullrow_reduce",
+          "decode_ok": true,
+          "mapped_instruction_events": 0,
+          "raw_packet_counts_top": [
+            [
+              "NOP",
+              20079
             ],
             [
               "WAVESTART",
@@ -517,27 +782,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7057
+              10121
             ],
             [
               "TS_DELTA_SHORT",
-              4685
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              464
-            ],
-            [
-              "REG",
-              364
+              4521
             ],
             [
               "UTILCTR",
-              85
+              4019
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1504
+            ],
+            [
+              "REG",
+              368
             ],
             [
               "EVENT",
-              21
+              41
+            ],
+            [
+              "SNAPSHOT",
+              9
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              20079
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              10121
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4521
+            ],
+            [
+              "UTILCTR",
+              4019
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1504
+            ],
+            [
+              "REG",
+              368
+            ],
+            [
+              "EVENT",
+              41
             ],
             [
               "SNAPSHOT",
@@ -551,18 +862,18 @@
           "instruction_counts_top": []
         },
         {
-          "idx": 32,
+          "idx": 30,
           "kern": 0,
-          "se": 3,
+          "se": 2,
           "itrace": false,
-          "blob_bytes": 148256,
+          "blob_bytes": 188064,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17494
+              20528
             ],
             [
               "WAVESTART",
@@ -574,27 +885,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7128
+              10083
             ],
             [
               "TS_DELTA_SHORT",
-              4861
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              456
-            ],
-            [
-              "REG",
-              415
+              4580
             ],
             [
               "UTILCTR",
-              91
+              4047
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1438
+            ],
+            [
+              "REG",
+              418
             ],
             [
               "EVENT",
-              22
+              41
+            ],
+            [
+              "SNAPSHOT",
+              11
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              20528
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              10083
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4580
+            ],
+            [
+              "UTILCTR",
+              4047
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1438
+            ],
+            [
+              "REG",
+              418
+            ],
+            [
+              "EVENT",
+              41
             ],
             [
               "SNAPSHOT",
@@ -608,18 +965,18 @@
           "instruction_counts_top": []
         },
         {
-          "idx": 34,
+          "idx": 32,
           "kern": 0,
-          "se": 4,
+          "se": 3,
           "itrace": false,
-          "blob_bytes": 148576,
+          "blob_bytes": 188384,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17512
+              19846
             ],
             [
               "WAVESTART",
@@ -631,27 +988,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7116
+              10075
             ],
             [
               "TS_DELTA_SHORT",
-              4757
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              470
-            ],
-            [
-              "REG",
-              466
+              4575
             ],
             [
               "UTILCTR",
-              81
+              4031
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1498
+            ],
+            [
+              "REG",
+              469
             ],
             [
               "EVENT",
-              23
+              42
+            ],
+            [
+              "SNAPSHOT",
+              13
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              19846
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              10075
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4575
+            ],
+            [
+              "UTILCTR",
+              4031
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1498
+            ],
+            [
+              "REG",
+              469
+            ],
+            [
+              "EVENT",
+              42
             ],
             [
               "SNAPSHOT",
@@ -665,18 +1068,18 @@
           "instruction_counts_top": []
         },
         {
-          "idx": 36,
+          "idx": 34,
           "kern": 0,
-          "se": 5,
+          "se": 4,
           "itrace": false,
-          "blob_bytes": 149056,
+          "blob_bytes": 188224,
           "program": "q8_b2b_fullrow_reduce",
           "decode_ok": true,
           "mapped_instruction_events": 0,
-          "packet_counts_top": [
+          "raw_packet_counts_top": [
             [
               "NOP",
-              17402
+              20004
             ],
             [
               "WAVESTART",
@@ -688,27 +1091,73 @@
             ],
             [
               "TS_WAVE_STATE",
-              7105
+              9840
             ],
             [
               "TS_DELTA_SHORT",
-              4898
-            ],
-            [
-              "REG",
-              517
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              464
+              4401
             ],
             [
               "UTILCTR",
-              87
+              4057
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1507
+            ],
+            [
+              "REG",
+              520
             ],
             [
               "EVENT",
-              24
+              43
+            ],
+            [
+              "SNAPSHOT",
+              15
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              20004
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              9840
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4401
+            ],
+            [
+              "UTILCTR",
+              4057
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1507
+            ],
+            [
+              "REG",
+              520
+            ],
+            [
+              "EVENT",
+              43
             ],
             [
               "SNAPSHOT",
@@ -720,12 +1169,116 @@
             ]
           ],
           "instruction_counts_top": []
+        },
+        {
+          "idx": 36,
+          "kern": 0,
+          "se": 5,
+          "itrace": false,
+          "blob_bytes": 191104,
+          "program": "q8_b2b_fullrow_reduce",
+          "decode_ok": true,
+          "mapped_instruction_events": 0,
+          "raw_packet_counts_top": [
+            [
+              "NOP",
+              21150
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              10386
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4789
+            ],
+            [
+              "UTILCTR",
+              4065
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1475
+            ],
+            [
+              "REG",
+              571
+            ],
+            [
+              "EVENT",
+              44
+            ],
+            [
+              "SNAPSHOT",
+              17
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "packet_counts_top": [
+            [
+              "NOP",
+              21150
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              10386
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4789
+            ],
+            [
+              "UTILCTR",
+              4065
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              1475
+            ],
+            [
+              "REG",
+              571
+            ],
+            [
+              "EVENT",
+              44
+            ],
+            [
+              "SNAPSHOT",
+              17
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "instruction_counts_top": []
         }
       ],
       "decode_ok_count": 12,
       "decode_fail_count": 0,
-      "mapped_instruction_events": 4114,
+      "mapped_instruction_events": 3978,
       "body_instruction_events": 0,
+      "raw_body_packet_events_top20": 0,
       "structural_decode_ok": true,
       "gate_pass": false,
       "gate_note": "T1 requires q8 body instruction mapping; S_ENDPGM-only mapping is structural decode, not attribution."
@@ -744,45 +1297,45 @@
               "block": "SQ",
               "size": 384,
               "off": 0,
-              "nonzero_words": 12,
-              "sum_u64": 10323183,
-              "max_u64": 863817
+              "nonzero_words": 48,
+              "sum_u64": 482530317,
+              "max_u64": 10880193
             },
             {
               "name": "SQ_INSTS_VALU",
               "block": "SQ",
               "size": 384,
               "off": 384,
-              "nonzero_words": 12,
-              "sum_u64": 15433728,
-              "max_u64": 1291796
+              "nonzero_words": 48,
+              "sum_u64": 425216268,
+              "max_u64": 9676966
             },
             {
               "name": "SQ_INSTS_SALU",
               "block": "SQ",
               "size": 384,
               "off": 768,
-              "nonzero_words": 12,
-              "sum_u64": 589824,
-              "max_u64": 49368
+              "nonzero_words": 48,
+              "sum_u64": 63724087,
+              "max_u64": 1413892
             },
             {
               "name": "SQC_LDS_IDX_ACTIVE",
               "block": "SQ",
               "size": 384,
               "off": 1152,
-              "nonzero_words": 12,
-              "sum_u64": 1474560,
-              "max_u64": 123420
+              "nonzero_words": 48,
+              "sum_u64": 132129261,
+              "max_u64": 2918718
             },
             {
               "name": "SQC_LDS_BANK_CONFLICT",
               "block": "SQ",
               "size": 384,
               "off": 1536,
-              "nonzero_words": 0,
-              "sum_u64": 0,
-              "max_u64": 0
+              "nonzero_words": 48,
+              "sum_u64": 9740024,
+              "max_u64": 212788
             },
             {
               "name": "GRBM_GUI_ACTIVE",
@@ -790,8 +1343,8 @@
               "size": 8,
               "off": 1920,
               "nonzero_words": 1,
-              "sum_u64": 1867013,
-              "max_u64": 1867013
+              "sum_u64": 11883418,
+              "max_u64": 11883418
             },
             {
               "name": "GL2C_HIT",
@@ -799,8 +1352,8 @@
               "size": 256,
               "off": 1928,
               "nonzero_words": 24,
-              "sum_u64": 98900,
-              "max_u64": 4158
+              "sum_u64": 18752886,
+              "max_u64": 791028
             },
             {
               "name": "GL2C_MISS",
@@ -808,14 +1361,14 @@
               "size": 256,
               "off": 2184,
               "nonzero_words": 24,
-              "sum_u64": 446551,
-              "max_u64": 18627
+              "sum_u64": 11000409,
+              "max_u64": 472373
             }
           ],
           "derived": {
-            "gl2_hit_rate": 0.181318,
-            "lds_bank_conflict_sum": 0,
-            "valu_to_salu_inst_ratio": 26.166667
+            "gl2_hit_rate": 0.630279,
+            "lds_bank_conflict_sum": 9740024,
+            "valu_to_salu_inst_ratio": 6.672771
           }
         },
         {
@@ -829,45 +1382,45 @@
               "block": "SQ",
               "size": 384,
               "off": 0,
-              "nonzero_words": 12,
-              "sum_u64": 10282824,
-              "max_u64": 859429
+              "nonzero_words": 48,
+              "sum_u64": 514434131,
+              "max_u64": 11631904
             },
             {
               "name": "SQ_INSTS_VALU",
               "block": "SQ",
               "size": 384,
               "off": 384,
-              "nonzero_words": 12,
-              "sum_u64": 15433728,
-              "max_u64": 1291168
+              "nonzero_words": 48,
+              "sum_u64": 577189182,
+              "max_u64": 13304898
             },
             {
               "name": "SQ_INSTS_SALU",
               "block": "SQ",
               "size": 384,
               "off": 768,
-              "nonzero_words": 12,
-              "sum_u64": 589824,
-              "max_u64": 49344
+              "nonzero_words": 48,
+              "sum_u64": 44138505,
+              "max_u64": 953312
             },
             {
               "name": "SQC_LDS_IDX_ACTIVE",
               "block": "SQ",
               "size": 384,
               "off": 1152,
-              "nonzero_words": 12,
-              "sum_u64": 1474560,
-              "max_u64": 123360
+              "nonzero_words": 48,
+              "sum_u64": 149733164,
+              "max_u64": 3337759
             },
             {
               "name": "SQC_LDS_BANK_CONFLICT",
               "block": "SQ",
               "size": 384,
               "off": 1536,
-              "nonzero_words": 0,
-              "sum_u64": 0,
-              "max_u64": 0
+              "nonzero_words": 48,
+              "sum_u64": 14955958,
+              "max_u64": 336004
             },
             {
               "name": "GRBM_GUI_ACTIVE",
@@ -875,8 +1428,8 @@
               "size": 8,
               "off": 1920,
               "nonzero_words": 1,
-              "sum_u64": 1757239,
-              "max_u64": 1757239
+              "sum_u64": 12783336,
+              "max_u64": 12783336
             },
             {
               "name": "GL2C_HIT",
@@ -884,8 +1437,8 @@
               "size": 256,
               "off": 1928,
               "nonzero_words": 24,
-              "sum_u64": 98802,
-              "max_u64": 4143
+              "sum_u64": 8593110,
+              "max_u64": 359701
             },
             {
               "name": "GL2C_MISS",
@@ -893,14 +1446,14 @@
               "size": 256,
               "off": 2184,
               "nonzero_words": 24,
-              "sum_u64": 443244,
-              "max_u64": 18481
+              "sum_u64": 7569564,
+              "max_u64": 317282
             }
           ],
           "derived": {
-            "gl2_hit_rate": 0.182276,
-            "lds_bank_conflict_sum": 0,
-            "valu_to_salu_inst_ratio": 26.166667
+            "gl2_hit_rate": 0.531664,
+            "lds_bank_conflict_sum": 14955958,
+            "valu_to_salu_inst_ratio": 13.076772
           }
         }
       ],
@@ -935,7 +1488,7 @@
           "exec_tag": 1,
           "se": 0,
           "itrace": true,
-          "blob_bytes": 146720
+          "blob_bytes": 190656
         },
         {
           "kind": "sqtt",
@@ -945,7 +1498,7 @@
           "exec_tag": 1,
           "se": 1,
           "itrace": false,
-          "blob_bytes": 147520
+          "blob_bytes": 190464
         },
         {
           "kind": "sqtt",
@@ -955,7 +1508,7 @@
           "exec_tag": 1,
           "se": 2,
           "itrace": false,
-          "blob_bytes": 147712
+          "blob_bytes": 192160
         },
         {
           "kind": "sqtt",
@@ -965,7 +1518,7 @@
           "exec_tag": 1,
           "se": 3,
           "itrace": false,
-          "blob_bytes": 148352
+          "blob_bytes": 191520
         },
         {
           "kind": "sqtt",
@@ -975,7 +1528,7 @@
           "exec_tag": 1,
           "se": 4,
           "itrace": false,
-          "blob_bytes": 148960
+          "blob_bytes": 192736
         },
         {
           "kind": "sqtt",
@@ -985,7 +1538,7 @@
           "exec_tag": 1,
           "se": 5,
           "itrace": false,
-          "blob_bytes": 149536
+          "blob_bytes": 192128
         },
         {
           "kind": "sqtt",
@@ -995,7 +1548,7 @@
           "exec_tag": 2,
           "se": 0,
           "itrace": true,
-          "blob_bytes": 146432
+          "blob_bytes": 185280
         },
         {
           "kind": "sqtt",
@@ -1005,7 +1558,7 @@
           "exec_tag": 2,
           "se": 1,
           "itrace": false,
-          "blob_bytes": 146944
+          "blob_bytes": 187712
         },
         {
           "kind": "sqtt",
@@ -1015,7 +1568,7 @@
           "exec_tag": 2,
           "se": 2,
           "itrace": false,
-          "blob_bytes": 147424
+          "blob_bytes": 188064
         },
         {
           "kind": "sqtt",
@@ -1025,7 +1578,7 @@
           "exec_tag": 2,
           "se": 3,
           "itrace": false,
-          "blob_bytes": 148256
+          "blob_bytes": 188384
         },
         {
           "kind": "sqtt",
@@ -1035,7 +1588,7 @@
           "exec_tag": 2,
           "se": 4,
           "itrace": false,
-          "blob_bytes": 148576
+          "blob_bytes": 188224
         },
         {
           "kind": "sqtt",
@@ -1045,7 +1598,7 @@
           "exec_tag": 2,
           "se": 5,
           "itrace": false,
-          "blob_bytes": 149056
+          "blob_bytes": 191104
         }
       ],
       "has_level4_pmc": true,

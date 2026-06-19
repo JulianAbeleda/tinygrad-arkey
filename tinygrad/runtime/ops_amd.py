@@ -226,7 +226,7 @@ class AMDComputeQueue(HWQueue):
   def sqtt_config(self, tracing:bool):
     trace_ctrl = {'rt_freq': self.soc.SQ_TT_RT_FREQ_4096_CLK} if self.dev.target < (12,0,0) else {}
     self.wreg(self.gc.regSQ_THREAD_TRACE_CTRL, draw_event_en=1, spi_stall_en=1, sq_stall_en=1, reg_at_hwm=2, hiwater=1, util_timer=1,
-      mode=int(tracing), **trace_ctrl)
+      mode=getenv("SQTT_MODE", int(tracing)) if tracing else 0, **trace_ctrl)
 
   def sqtt_start(self, buf0s:list[HCQBuffer]):
     self.memory_barrier()
@@ -281,7 +281,9 @@ class AMDComputeQueue(HWQueue):
                             1 << self.soc.SQ_TT_TOKEN_EXCLUDE_VALUINST_SHIFT | 1 << self.soc.SQ_TT_TOKEN_EXCLUDE_IMMEDIATE_SHIFT | \
                             1 << self.soc.SQ_TT_TOKEN_EXCLUDE_INST_SHIFT) if self.dev.target < (12,0,0) else 0x927
 
-        self.wreg(self.gc.regSQ_THREAD_TRACE_TOKEN_MASK, reg_include=reg_include, token_exclude=token_exclude, bop_events_token_include=1,
+        self.wreg(self.gc.regSQ_THREAD_TRACE_TOKEN_MASK, reg_include=reg_include, token_exclude=token_exclude,
+                  ttrace_exec=getenv("SQTT_TTRACE_EXEC", 0), inst_exclude=getenv("SQTT_INST_EXCLUDE", 0),
+                  bop_events_token_include=1,
                   **({} if self.dev.target < (12,0,0) else {'exclude_barrier_wait': 1}))
         self.sqtt_config(tracing=True)
 

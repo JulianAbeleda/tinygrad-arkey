@@ -67,12 +67,13 @@ print("CAPTURE_JSON=" + json.dumps({"status": status, "dev_targets": dev_targets
 if not status["ok"]: sys.exit(2)
 """
 
-def run_capture(timeout_s: int = 360) -> dict[str, Any]:
+def run_capture(timeout_s: int = 360, env_extra: dict[str, str] | None = None) -> dict[str, Any]:
   env = os.environ.copy()
   env.update({
     "PYTHONPATH": str(ROOT), "PROFILE": "1", "PMC": "1", "SQTT": "1", "VIZ": "0", "DEBUG": "0",
     "SQTT_BUFFER_SIZE": "16", "SQTT_LIMIT_SE": "1", "SQTT_ITRACE_SE_MASK": "1", "SQTT_TOKEN_EXCLUDE": "0",
   })
+  if env_extra: env.update(env_extra)
   timing_out = OUTDIR / "t0_capture_q8_gateup_full.json"
   cmd = [sys.executable, "-c", CHILD, str(timing_out), str(Q8_SCRIPT)]
   t0 = time.perf_counter()
@@ -123,6 +124,8 @@ def attempt_sqtt_decode(capture: dict[str, Any] | None) -> dict[str, Any]:
       row.update({"decode_ok": False, "error": "empty_blob"})
     else:
       try:
+        raw_pkt_counts: dict[str, int] = {}
+        for pkt in sqtt_decoder.decode(blob): raw_pkt_counts[type(pkt).__name__] = raw_pkt_counts.get(type(pkt).__name__, 0) + 1
         pkt_counts: dict[str, int] = {}
         inst_counts: dict[str, int] = {}
         mapped = 0
@@ -139,6 +142,7 @@ def attempt_sqtt_decode(capture: dict[str, Any] | None) -> dict[str, Any]:
             op = getattr(inst.inst, "op_name", type(inst.inst).__name__)
             inst_counts[op] = inst_counts.get(op, 0) + 1
         row.update({"decode_ok": True, "mapped_instruction_events": mapped,
+                    "raw_packet_counts_top": sorted(raw_pkt_counts.items(), key=lambda kv: kv[1], reverse=True)[:20],
                     "packet_counts_top": sorted(pkt_counts.items(), key=lambda kv: kv[1], reverse=True)[:20],
                     "instruction_counts_top": sorted(inst_counts.items(), key=lambda kv: kv[1], reverse=True)[:20]})
       except Exception as exc:
@@ -147,9 +151,13 @@ def attempt_sqtt_decode(capture: dict[str, Any] | None) -> dict[str, Any]:
   ok_rows = [r for r in rows if r.get("decode_ok")]
   mapped = sum(r.get("mapped_instruction_events", 0) for r in ok_rows)
   body_mapped = 0
+  raw_body_packets = 0
   for r in ok_rows:
     for name, count in r.get("instruction_counts_top", []):
       if name != "S_ENDPGM": body_mapped += count
+    for name, count in r.get("raw_packet_counts_top", []):
+      if name in {"INST", "INST_RDNA4", "VALUINST", "IMMEDIATE", "IMMEDIATE_MASK", "VMEMEXEC", "ALUEXEC"}:
+        raw_body_packets += count
   return {
     "attempted": True,
     "rows": rows,
@@ -157,6 +165,7 @@ def attempt_sqtt_decode(capture: dict[str, Any] | None) -> dict[str, Any]:
     "decode_fail_count": len(rows) - len(ok_rows),
     "mapped_instruction_events": mapped,
     "body_instruction_events": body_mapped,
+    "raw_body_packet_events_top20": raw_body_packets,
     "structural_decode_ok": mapped > 0 and len(ok_rows) > 0,
     "gate_pass": body_mapped > 0,
     "gate_note": "T1 requires q8 body instruction mapping; S_ENDPGM-only mapping is structural decode, not attribution.",

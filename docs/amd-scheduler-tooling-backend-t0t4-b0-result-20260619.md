@@ -45,6 +45,10 @@ gate:
 
 So this is not usable scheduler attribution. It proves capture/replay works, but not PC-level body mapping.
 
+A follow-up proof swept baseline, `SQTT_MODE=3`, `SQTT_TTRACE_EXEC=1`, and both together. Every config still produced
+`0` raw body packet events and `0` mapped body instruction events. See
+`docs/amd-scheduler-tooling-t1-body-mapping-proof-20260619.md`.
+
 T2 parsed the PMC blobs structurally:
 
 | metric | run 1 | run 2 |
@@ -84,6 +88,6 @@ things happens:
 
 The next tooling step is narrower than "build a scheduler":
 
-1. fix SQTT PC/body mapping for RDNA3 HCQ traces, or prove why this capture mode only emits wave lifecycle packets;
+1. obtain body instruction packets through ROCprofiler/AQLprofile-compatible SQTT setup;
 2. use the PMC parser plus body mapping to label the q8 gap;
 3. only then start B1/B2, unless we explicitly choose the larger backend investment path.
