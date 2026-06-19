@@ -48,6 +48,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   HCQ is invisible to `rocprofv3` in the smoke; redirects to a tinygrad-native HCQ attribution adapter.
 - `primitive-hcq-attribution-scope-20260619.md` — PMU-4 scope: tinygrad-native HCQ attribution for eager launches and
   graphs, producing Level-3 runtime/graph evidence without pretending to have PMU counters.
+- `primitive-hcq-attribution-result-20260619.md` — PMU-4a..c result: probe-local attribution captures eager HCQ
+  launches, HCQGraph construction/replay, and a Tensile runtime row; classifies `rocprof_hcq_visibility_gap` +
+  `graph_rebind_ok`.
 - `prefill-tensile-tpe7a-rebindable-node-result-20260619.md` — TPE-7a result: one extracted Tensile kernel object
   can be rebound to current buffers through graph-style kernarg filling; correctness/protocol proof only.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are

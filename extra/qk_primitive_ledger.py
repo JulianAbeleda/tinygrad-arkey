@@ -399,6 +399,7 @@ def build_trace_plugins() -> dict[str, Any]:
   sqtt_examples = sorted(_rel(p) for p in (ROOT / "extra/sqtt/examples").glob("gfx1100/*.pkl")) if (ROOT / "extra/sqtt/examples/gfx1100").exists() else []
   rocprof_traces = sorted(_rel(p) for p in (BENCH / "llama-residual-exhaustion-20260619").glob("**/trace_results.json")) if (BENCH / "llama-residual-exhaustion-20260619").exists() else []
   pmu_probe = _read_json(BENCH / "qk-pmu-observability/result.json")
+  hcq_attr = _read_json(BENCH / "qk-hcq-attribution/result.json")
   return {
     "schema": "primitive_trace_plugin_inventory_v1",
     "mode": "inventory_only_no_trace_collection",
@@ -412,6 +413,14 @@ def build_trace_plugins() -> dict[str, Any]:
       "hip_control": pmu_probe.get("hip_control", {}).get("verdict") if pmu_probe else None,
       "tinygrad_hcq": pmu_probe.get("tinygrad_hcq", {}).get("verdict") if pmu_probe else None,
       "hcq_classification": pmu_probe.get("tinygrad_hcq", {}).get("classification") if pmu_probe else None,
+    },
+    "hcq_attribution": {
+      "path": "bench/qk-hcq-attribution/result.json",
+      "present": hcq_attr is not None,
+      "classification": hcq_attr.get("classification") if hcq_attr else None,
+      "program_count": hcq_attr.get("summary", {}).get("program_count") if hcq_attr else None,
+      "graph_count": hcq_attr.get("summary", {}).get("graph_count") if hcq_attr else None,
+      "graph_replay_count": hcq_attr.get("summary", {}).get("graph_replay_count") if hcq_attr else None,
     },
     "evidence_level": 4 if any(tools.values()) else 3,
     "note": "Trace/counter plugins are optional. This inventory does not run rocprof or require HIP runtime.",
@@ -502,6 +511,7 @@ def summary_markdown(observations:list[dict[str, Any]], validations:list[dict[st
     f"- tinygrad SQTT example files: `{len(traces.get('tinygrad_sqtt_examples', []))}`",
     f"- rocprof trace artifacts: `{len(traces.get('rocprof_trace_artifacts', []))}`",
     f"- PMU probe: `{traces.get('pmu_probe', {}).get('verdict') or 'missing'}`",
+    f"- HCQ attribution: `{','.join(traces.get('hcq_attribution', {}).get('classification') or ['missing'])}`",
     "",
     "## Principle Check",
     "",
