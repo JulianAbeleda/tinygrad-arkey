@@ -104,6 +104,12 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-large-project-p7e-gateup-amortization-result-20260619.md` — **executed P7e.** Imported route remains
   replay-stable but loses for `ffn_gate/up`: `0.2264ms` vs baseline `0.1685ms` (`0.744x`). Imported Q4 decode route is
   closed as a local timing win; remaining value is oracle/native-transfer evidence, not model-wide artifact routing.
+- `decode-mmvq-large-project-p8-fused-lifecycle-scope-20260619.md` — P8 scope for the full 1-4 sequence after P7e:
+  lower-bound model, current native expressibility, handwritten prototype evidence, and final decision.
+- `decode-mmvq-large-project-p8-fused-lifecycle-result-20260619.md` — **executed P8.** Fused q8+gate/up is
+  build-worthy by lower bound (`56.83us` vs `153.22us` gate); current native COMGR/DSL attempts fail; the hipcc/LLD
+  artifact route clears local gate (`115.24us`, `1.46x`) and graph route passes. Decision: artifact research flag or
+  project-level native renderer transfer.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

@@ -185,6 +185,18 @@ P7e is complete:
 Detailed scope: `docs/decode-mmvq-large-project-p7e-gateup-amortization-scope-20260619.md`.
 Detailed result: `docs/decode-mmvq-large-project-p7e-gateup-amortization-result-20260619.md`.
 
+P8 is complete:
+
+- P8a lower-bound model says the fused q8+gate/up primitive is build-worthy (`56.83us` additive lower bound vs
+  `153.22us` required for a `1.10x` local win);
+- P8b says current native COMGR/AMD-DSL routes do not clear the gate (`177.72us` lifecycle, `166.65us` consumer-only);
+- P8c says the handwritten hipcc/LLD artifact route does clear the gate (`115.24us`, `1.46x` local);
+- P8d decision: imported Q4 route closed, q8 fused artifact feasible as research flag, native tinygrad route is a
+  project-level renderer/scheduler transfer.
+
+Detailed scope: `docs/decode-mmvq-large-project-p8-fused-lifecycle-scope-20260619.md`.
+Detailed result: `docs/decode-mmvq-large-project-p8-fused-lifecycle-result-20260619.md`.
+
 ## Recommendation
 
 Stop the imported Q4 decode route as a local timing path. It is correct, graph-safe, and useful as an oracle, but it
@@ -196,6 +208,9 @@ loses for both local Q4 buckets that matter:
 The remaining decode path is not model-wide routing of the imported artifact. It would need a different primitive:
 fused q8 producer plus multi-consumer MMVQ in one graph/kernel, or native renderer transfer that preserves llama's
 low-VGPR/high-occupancy contract without the separate-launch lifecycle cost.
+
+P8 resolves that fork: the fused q8 artifact route is already feasible as a research flag, while the native route is
+project-level compiler/backend work.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
