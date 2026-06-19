@@ -1,0 +1,106 @@
+# q8 FFN B2b AMD DSL/ASM consumer scope (2026-06-19)
+
+This is the remaining decode ownership path after:
+
+- A4 proved the q8 route in-model: W==D `1.051-1.063x`, dNLL `+0.002887`;
+- B0/B1 showed both fast and slow consumers already emit `v_dot4_i32_iu8`;
+- B2a closed the COMGR fused-C sublane: correct but `146.88us` vs `<=60us`.
+
+The goal is a tinygrad-owned fused Q4_K x q8_1 `ffn_gate/up` consumer using the AMD DSL / `Ops.PROGRAM` assembler path,
+with no hipcc/LLD artifact and no COMGR C source.
+
+## B2b0 smoke result
+
+Executed:
+
+- probe: `extra/q8_ffn_asm_gateup_smoke.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_dot4_smoke.json`.
+
+Result: **PASS**.
+
+The probe emits a tiny AMD DSL kernel with:
+
+- `s_load_b64` kernarg pointer load;
+- `v_dot4_i32_iu8`;
+- `global_store_b32`;
+- HCQ launch through `Ops.PROGRAM`;
+- no C compiler, hipcc, LLD, or HIP runtime.
+
+It writes `4` from `dot4([1,1,1,1], [1,1,1,1])`.
+
+This proves the mechanical assembler path can host the required instruction family. It does not prove the full MMVQ
+consumer yet.
+
+## B2b1 exact contract
+
+Build a standalone fused gate/up consumer with the same buffer order as the A4 artifact:
+
+1. `dst_gate: float[12288]`
+2. `dst_up: float[12288]`
+3. `gate_words: uint32[7077888]`
+4. `up_words: uint32[7077888]`
+5. `q8: uint8[4608]`
+
+Launch:
+
+- global: `(12288, 2, 1)`;
+- local: `(32, 4, 1)`;
+- one row per `gidx0`;
+- `gidx1 == 0` selects gate, `gidx1 == 1` selects up.
+
+Work decomposition:
+
+- 128 threads per row;
+- `tid = ly * 32 + lx`;
+- `kb = tid / 8`, fixed `16` Q4_K blocks for `K=4096`;
+- `sub = tid & 7`;
+- 8 dot4 operations for `sumi`;
+- 8 dot4 operations for `sumq`;
+- wave reduction plus 4-way workgroup reduction;
+- one final store by `tid == 0`.
+
+Correctness gate:
+
+- compare against the existing q8 proxy on real GGUF `blk.0.ffn_gate.weight` and `blk.0.ffn_up.weight`;
+- gate/up max_abs `<=2e-3`;
+- no default route.
+
+Performance gate:
+
+- fused gate/up consumer `<=60us`;
+- no hipcc/LLD;
+- no COMGR C source;
+- no HIP runtime in process.
+
+## B2b2 implementation order
+
+Do not write the whole consumer in one jump. Build it in slices:
+
+1. **Address skeleton:** load five buffer pointers, compute row/which/tid/sub/kb, and store a deterministic value per
+   row/which. Gate: output pattern matches CPU expectation.
+2. **Q8 load skeleton:** load `q8` scale and one packed q8 lane, store a diagnostic value. Gate: matches CPU extraction.
+3. **Q4 load skeleton:** load Q4_K scale/min/qs for one sub-block, store diagnostic scale/min/nibble values. Gate:
+   matches CPU extraction.
+4. **One-block dot:** compute one `kb` contribution for one row. Gate: matches CPU partial reference.
+5. **Full-row dot:** loop/emit all 16 `kb` lanes, reduce across wave/workgroup. Gate: one row matches reference.
+6. **Full fused gate/up:** run all rows and both roles. Gate: real correctness + `<=60us`.
+
+Each slice must bank a JSON artifact. Stop at the first slice that proves this is becoming a broad assembler project
+rather than a bounded primitive.
+
+## Kill criteria
+
+Stop B2b and classify decode ownership as project-level renderer/ASM work if any of these are true:
+
+- address/control skeleton cannot be represented cleanly with current AMD DSL;
+- full-row correctness requires copying large chunks of compiler disassembly without understandable ownership;
+- consumer remains far above `60us` after matching the oracle's work decomposition;
+- register pressure or manual scheduling requires a general scheduler rather than a local hand kernel.
+
+## Decision
+
+B2b is now **GO to B2b1/B2b2**, but with strict gates.
+
+The smoke proves the assembler can host the primitive. The next meaningful work is the address/control skeleton, not more
+COMGR C variants and not producer work. If the fused consumer cannot clear `<=60us`, stop decode ownership; the q8 route
+stays a research artifact, and native parity becomes compiler project work.
