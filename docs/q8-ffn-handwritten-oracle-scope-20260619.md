@@ -59,7 +59,7 @@ Executed on the current tree with the real 8B GGUF and the existing standalone H
 The handwritten number is speed-only: random synthetic Q4_K blocks, no real-GGUF correctness yet. The value is still
 useful because it confirms the consumer skeleton is worth correctness work; it is not route evidence.
 
-### Q8H-1 — correctness-first handwritten MMVQ on real GGUF
+### Q8H-1 — correctness-first handwritten MMVQ on real GGUF: PASS
 
 Build a HIP or HCQ-launched probe that reads the real `blk.0.ffn_gate.weight` bytes from
 `/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf`, consumes q8_1 activations using the same layout as `q8_1_quantize`, and
@@ -77,9 +77,21 @@ Gate:
 - `max_abs <= 2e-2` and no systematic row/subchunk bias.
 - If correctness fails, stop. Do not tune speed around a wrong mapping.
 
-Artifact:
+Executed as `extra/q8_ffn_handwritten_oracle.py`, with Python doing GGUF parsing, q8_1 generation, and an independent
+NumPy Q4_K/q8 reference, then a separate HIP process running the handwritten consumer. This avoids the tinygrad
+HCQ-vs-HIP runtime conflict while still checking real GGUF bytes.
 
-- `bench/q8-ffn-handwritten-oracle/mmvq_correctness.json`.
+Artifact: `bench/q8-ffn-handwritten-oracle/mmvq_correctness.json`.
+
+| tensor | rows | device us | Q4 GB/s | max_abs | max_rel | verdict |
+|---|---:|---:|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 12288 | 49.83 | 568.1 | 9.54e-7 | 0.00124 | PASS |
+| `blk.0.ffn_up.weight` | 12288 | 50.31 | 562.8 | 1.91e-6 | 0.00106 | PASS |
+
+This retires the prior caveat in `bench/qk-handwritten-mmvq/result.json`: the handwritten consumer is no longer
+speed-only. Its real-GGUF Q4_K scale/min unpacking and q8 subchunk mapping are correct for the gate/up roles. The
+measured speed is lower than the synthetic preflight (about 50us vs 40.4us), but still in the earlier banked range and
+fast enough to keep the producer economics as the decisive next question.
 
 ### Q8H-2 — fused producer oracle design
 
