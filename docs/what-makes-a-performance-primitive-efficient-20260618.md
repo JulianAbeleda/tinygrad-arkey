@@ -520,6 +520,10 @@ FMI-1/FMI-2 (`decode-fused-mmvq-integration-fmi1-fmi2-result-20260619.md`) execu
 (`wg32`, large grid, low VGPR) that tinygrad does not preserve in-model. Decision: build Track B first because it is
 byte-identical and higher EV than q8-only gate/up reuse.
 
+FMI-4 B1 (`decode-fused-mmvq-integration-fmi4-b1-result-20260619.md`) then closes the bounded env-knob surface:
+`Q4K_COOP_RT`, `Q6K_COOP_RT`, and coop on/off do not move any high-share role by `>=10%` in a same-process relative
+probe. The remaining Track-B surfaces are deeper: runtime/cache identity, renderer/scheduler, or artifact/import.
+
 The PMU atlas reopens spec decode only as `decode_spec_weight_amortization_lifecycle`
 (`spec-decode-bandwidth-amortization-scope-20260619.md`). The old `decode_spec_verify_shortcut` remains closed:
 current T=5 verify is `4.66x` one T==1 pass. The reopened row is gated on a T-cheap target verify forward
