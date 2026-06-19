@@ -127,6 +127,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   `wait_scheduler_bound`. The decisive ladder is body-insensitive: reduction-only/synthetic-dot/load-only variants all
   remain ~0.151-0.153ms vs full ASM 0.166ms, so the visible q8 gap is broader AMD scheduling/work-decomposition/codegen,
   not a bounded load-shape primitive.
+- `q8-ffn-amd-scheduler-codegen-project-scope-20260619.md` — complete next-layer scope after DSO: Route A native
+  tinygrad AMD scheduler/codegen transfer, Route B artifact/import research route, and Route C schedule-import training
+  data. Defines gates for when to reopen q8 producer ownership vs keeping decode closed as compiler roadmap.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
