@@ -150,6 +150,8 @@ Detailed result: `docs/decode-mmvq-large-project-p7a-graph-route-result-20260619
 
 Start P7b next: first-class raw-kernarg rebind support, or stop the imported route at eager research primitive status.
 
+Detailed scope: `docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-scope-20260619.md`.
+
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
