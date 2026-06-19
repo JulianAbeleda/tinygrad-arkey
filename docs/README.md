@@ -207,6 +207,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   `extra/qk_decode_complete_tooling.py` and `bench/qk-decode-complete-tooling/*`. Verdict:
   `COMPLETE_TOOLING_PASS_WITH_EXPLICIT_GAPS`; reduce/glue is visible but does not clear the build gate, Q6 surface
   equivalence is accepted for visibility not timing, and ATT remains body evidence rather than timing authority.
+- `decode-native-mmvq-scheduler-renderer-full-scope-20260619.md` — full scope for the remaining dependency-free
+  native decode route after the tooling atlas: a project-level AMD scheduler/renderer path to preserve the MMVQ
+  lifecycle contract in-model. Defines NSR-0..NSR-8, start criteria, gates, kill conditions, expected potential, and
+  the boundary between q8 research-flag hardening and true native compiler ownership.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
