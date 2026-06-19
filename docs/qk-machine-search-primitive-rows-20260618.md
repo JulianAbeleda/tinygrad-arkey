@@ -111,7 +111,7 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "known_refutations": "the tinygrad-internal LDS alternative (prefill_fp16_wmma_lds_tiling) is REFUTED -- LDS-tiling doesn't help (PWLT-A2). Lane A in-process HIP runtime bridge is KILLED by EBT-1: HIP runtime and tinygrad HCQ/KFD are mutually exclusive. TPE-4 refutes 'HCQ launch loses the backend speed' for ffn_gate/up. TPE-5 refutes 'one-shape-only / per-role-opaque / needs-workspace' -- all 3 high-share roles (incl ffn_down StreamK) launch correct/stable/no-workspace from one code object.",
     "measured_generalization": "TPE-5 PASS: ffn_gate/up 66.8, ffn_down 68.9, attn_q/o 58.9 TFLOPS through HCQ; weighted ~1.40x full pp512 (~95% llama) if all three routed. shape_matrix.json.",
     "fallback": "pure tinygrad PREFILL_V2 (~70-83% llama)",
-    "blocked_by": "TPE-6 one-block transfer (minimal runtime helper, research flag, PREFILL_V2 fp16 weights) plus external-artifact authority decision. Shape matrix DONE (TPE-5 PASS, 1.40x). Full scope: prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md."
+    "blocked_by": "a single-dispatch graph (HCQGraph/TinyJit) runtime helper, then external-artifact authority. TPE-6 REDIRECT (DONE): a full FFN block routes EXACT + copy-free (weights natural [out,in], [feature,T] space, zero per-matmul transposes) at 61 TFLOPS = 1.53x the PREFILL_V2 plateau on GPU time, but naive per-op routing host overhead (~6.2ms, JIT-less probe artifact) swamps it end-to-end -> the win needs the kernels captured in the forward graph. Shape matrix DONE (TPE-5 PASS, 1.40x). Full scope: prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md."
   }
 ]
 ```

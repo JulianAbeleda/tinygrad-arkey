@@ -25,12 +25,14 @@ with better tools, and what remains a deep build rather than a bounded kernel tw
 
 Only two material things remain that are not already closed, refuted, or sub-gate:
 
-1. **Tensile extraction through HCQ — TPE-5 PASS, now at the TPE-6/policy gate:** the library ceiling exists, EBT-1
+1. **Tensile extraction through HCQ — TPE-6 REDIRECT, now at the runtime-helper/policy gate:** the library ceiling exists, EBT-1
    killed in-process HIP-runtime interop, TPE-4 proved one extracted rocBLAS Tensile primitive runs through tinygrad
    HCQ at mature-backend speed, and **TPE-5 proved it generalizes** — ffn_gate/up 66.8, ffn_down 68.9 (StreamK, no
    workspace), attn_q/o 58.9 TFLOPS, all correct/stable/no-workspace/no-layout-copies from one code object, weighted
-   ~**1.40× full pp512** (~95% of llama). The remaining gates are TPE-6 (one-block transfer + minimal runtime helper)
-   and the external-artifact policy decision — no longer a kernel question.
+   ~**1.40× full pp512** (~95% of llama). **TPE-6 = REDIRECT**: a full FFN block routes exact + copy-free at 1.53× the
+   PREFILL_V2 plateau on GPU time, but naive per-op routing host overhead (JIT-less probe artifact) swamps it
+   end-to-end → the win needs a single-dispatch HCQGraph/TinyJit runtime helper. The remaining gates are that runtime
+   helper + the external-artifact policy decision — no longer a kernel question.
 2. **Better llama MMVQ counters:** useful for research completeness, but locally blocked by gfx1100 counter-tool
    support. Current source/trace evidence does not justify a build.
 
@@ -52,5 +54,6 @@ complete performance primitives:
 After POWN-1 and EBT-1, there is no remaining bounded no-deps prefill kernel route and no direct HIP-runtime bridge.
 After TPE-4 and TPE-5, the remaining performance route is no longer speculative and is proven to generalize: Tensile
 extraction through HCQ keeps mature-backend speed across the three high-share prefill roles (~1.40× weighted pp512,
-~95% of llama), gated now only by TPE-6 one-block transfer and the external-artifact policy decision — or resting at
+~95% of llama); TPE-6 proved a full FFN block routes exact + copy-free at 1.53× the plateau on GPU time, gated now only
+by a single-dispatch graph runtime helper (to beat the per-op host overhead) and the external-artifact policy decision — or resting at
 PREFILL_V2.

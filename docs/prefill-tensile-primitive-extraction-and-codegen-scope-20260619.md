@@ -233,7 +233,16 @@ Kill:
 - only ffn_gate/up works and total pp upside is below ~1.15x;
 - each role requires a substantially different opaque contract that is not maintainable.
 
-### TPE-6 - one-block transfer
+### TPE-6 - one-block transfer  — STATUS: DONE, REDIRECT (2026-06-19, `prefill-tensile-tpe6-block-transfer-result-20260619.md`)
+
+Result: FFN block routed through the kernels is exact (rel 4.8e-4), copy-free (weights natural `[out,in]`, `[feature,T]`
+space, zero per-matmul transposes), block matmul 61 TFLOPS = 1.53× PREFILL_V2 plateau on GPU time. But naive per-op
+routing host overhead (~6.2 ms, JIT-less probe artifact) swamps the win end-to-end → REDIRECT: build a single-dispatch
+graph (HCQGraph/TinyJit) runtime helper so the kernels are captured in the forward graph, then re-run the ≥1.20×
+after-overhead gate and proceed to TPE-7. Correctness + GPU-time win + copy-free routing all proven; graph integration
+is the remaining blocker (the scope's own "minimal runtime-helper" deliverable).
+
+
 
 Goal: prove the primitive survives a real prefill block before touching full model routing.
 

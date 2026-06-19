@@ -101,8 +101,13 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `prefill-tensile-tpe5-shape-matrix-result-20260619.md` — **executed TPE-5: PASS.** The extracted Tensile primitive
   generalizes: ffn_gate/up 66.8, ffn_down 68.9 (StreamK, no workspace), attn_q/o 58.9 TFLOPS through HCQ — all correct,
   stable, no workspace/aux/layout-copies, one code object + one pointer convention. Weighted model predicts **~1.40×
-  full warm pp512** (→ ~2920 tok/s ≈ 95% of llama) if all three are routed, above the 1.25× gate. Next: TPE-6 one-block
-  transfer / minimal runtime-helper design (still no model default; external-artifact policy pending separate review).
+  full warm pp512** (→ ~2920 tok/s ≈ 95% of llama) if all three are routed, above the 1.25× gate.
+- `prefill-tensile-tpe6-block-transfer-result-20260619.md` — **executed TPE-6: REDIRECT.** A whole FFN block
+  (gate+up+silu·up+down) routed through the kernels is **exact** (rel 4.8e-4) and copy-free (weights stay natural
+  `[out,in]`, run in `[feature,T]` space, zero per-matmul transposes), and the block matmuls hit 61 TFLOPS = **1.53×
+  the PREFILL_V2 plateau on GPU time**. But naive per-op routing adds ~6.2 ms host sync overhead (a JIT-less probe
+  artifact) that swamps the win end-to-end → realizing it needs a **single-dispatch graph (HCQGraph/TinyJit) runtime
+  helper**. Next: build that helper, re-run the block gate, then TPE-7 (no model default; external-artifact policy pending).
 - `prefill-own-wmma-kernel-scope-20260619.md` — pure tinygrad/no-deps scope. Key learning: tinygrad's
   WMMA matmul (41 TFLOPS) only *matches* the non-WMMA ALU matmul (40) — it gets **none** of the tensor-core 2×, so
   WMMA units are **stalled, not the bottleneck**. POWN-0 diagnose (occupancy / accumulator-chain / issue-rate) →
