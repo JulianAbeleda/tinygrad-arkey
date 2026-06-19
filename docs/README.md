@@ -175,6 +175,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   `aqlprofile_att_create_packets` passes for all swept ATT profiles, returns nonzero start/stop packets, and exposes the
   allocation callback table. Next boundary is P1/P2: bind those buffers to tinygrad-submittable GPU VAs and replay around
   one HCQ dispatch.
+- `amd-rocprofiler-r1p2-hcq-replay-result-20260619.md` — **executed R1-P2 P1/P2; verdict
+  `PASS_BODY_ATTRIBUTION`.** A separate HSA helper exports v2 AQLprofile vendor packets, tinygrad allocates HCQ-owned
+  control/command/trace buffers, and the probe patches both raw 64-bit VAs and PM4 `VA >> 12` page-address fields. Full
+  `start -> tinygrad body kernel -> stop` replay syncs and yields decodable SQTT body packets (`98,269` body-like
+  packets), proving ROCprofiler ATT can be imported into tinygrad HCQ without HIP/HSA in the tinygrad process.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
