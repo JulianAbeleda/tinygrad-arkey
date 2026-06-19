@@ -115,6 +115,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-q8-two-lane-result-20260619.md` — **executed two-lane closeout.** Artifact lane is ready as
   `Q8_FFN_HANDWRITTEN=1` research flag (`1.051-1.063x`, dNLL `+0.002887`, no HIP runtime); native lane is project-level,
   with no bounded `>=30us` q8-specific patch identified.
+- `decode-q8-both-lanes-execution-scope-20260619.md` — execution scope for the "do both" decision: accept the q8
+  artifact dependency for research-flag use and charter the native AMD scheduler project separately.
+- `decode-q8-both-lanes-execution-result-20260619.md` — **executed both lanes.** `Q8_FFN_HANDWRITTEN=1` is accepted as
+  research-only/default-off; native transfer is chartered as N0-N4 project-level backend work with a `>=30us` start gate.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

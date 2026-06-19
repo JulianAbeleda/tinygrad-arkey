@@ -222,6 +222,15 @@ The post-P8 two-lane closeout is complete:
 Detailed scope: `docs/decode-q8-two-lane-scope-20260619.md`.
 Detailed result: `docs/decode-q8-two-lane-result-20260619.md`.
 
+The "do both" execution decision is also complete:
+
+- artifact lane accepted for research-flag use only;
+- native transfer chartered as N0-N4 project-level AMD backend work;
+- no default changes.
+
+Detailed scope: `docs/decode-q8-both-lanes-execution-scope-20260619.md`.
+Detailed result: `docs/decode-q8-both-lanes-execution-result-20260619.md`.
+
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
