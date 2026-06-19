@@ -57,6 +57,15 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   `bench/amd-schedule-codegen-exhaustion/oracle_matrix.json`: 7 feature rows are project-level, 1 artifact-only,
   1 bounded graph/rebind row, 1 tooling-blocked, 1 not worth owning, 1 already expressible. Native q8/prefill
   schedule generation is exhausted as a bounded primitive; remaining native work is a reusable AMD backend project.
+- `prefill-address-lowering-renderer-arc-plan-20260619.md` — dependency-free prefill renderer arc. CG-W1.5 validates
+  the real warmstarted in-model ffn matmul uses WMMA but is ALU-overhead-bound; CG-W2/2b then refute kernel-level
+  coalesced/wide-copy fixes. The only remaining no-deps lever is renderer/opt-level fp16 load vectorization or
+  hand-asm WMMA, both project-level.
+- `route-a-a3-lds-multiwave-scope-20260619.md` — continuation scope for dependency-free RDNA3 WMMA hand-asm:
+  LDS-staged, multi-wave GEMM to chase LLVM/Tensile after single-wave A2 stayed below LLVM.
+- `route-a-a3-lds-multiwave-result-20260619.md` — **executed A3 P0/P1 gates.** P0 LDS tile smoke passes
+  (RMSE `0.000209`); P1 multi-wave LDS GEMM faults even at `128^3`, so the next valid step is a smaller
+  store/load-only address-mapping debug probe before any P2 pipeline/tuning.
 - `prefill-tensile-research-measurement-scope-20260619.md` — complete Option A execution scope for Claude: finish the
   bounded JIT-dim step, route extracted Tensile prefill behind `PREFILL_TENSILE_GEMM=1`, and measure pp/dNLL as
   research-only evidence.

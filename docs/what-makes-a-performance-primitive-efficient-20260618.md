@@ -471,7 +471,7 @@ Close criterion:
 | raw HIP / rocBLAS / Tensile boundary | Lane A killed; Lane B TPE-4+TPE-5 PASS (generalizes) | moderate-high for prefill | PXB-1 clears isolated gate (69.8 TFLOPS ffn_gate/up), EBT-1 kills direct HIP-runtime bridge, TPE-4 proves ffn_gate/up keeps backend speed through HCQ (66.91 TFLOPS), and TPE-5 generalizes to ffn_down 68.9 (StreamK, no workspace) + attn_q/o 58.9 TFLOPS — weighted ~1.40× pp512 (~95% llama), one code object, no workspace/aux/copies |
 | ffn_gate coop routing | sub-gate candidate | +1-2.3% decode | stackable only, below route gate |
 | llama.cpp residual primitive audit | mapped / partly deferred | decode + pp512 prefill | `llama-kernel-residual-primitive-audit-20260619.md`: fresh rocprof redo shows prompt-free decode is 85.6% MMVQ; q8/RMSNorm lifecycle is the only moderate non-MMVQ decode candidate; pp512 prefill is 74.4% quantized MMQ/matmul, while long-prompt prefill remains separate |
-| AMD schedule/codegen transfer | exhausted as bounded primitive; project-level if native | q8 + prefill | `amd-schedule-codegen-exhaustion-result-20260619.md`: cross-primitive matrix over q8 decode and Tensile prefill finds no bounded native feature; 7 rows are project-level, 1 artifact-only, 1 bounded graph/rebind, 1 tooling-blocked, 1 not worth owning, 1 already expressible. Native transfer means broader AMD renderer/scheduler/register-allocation work, not a q8/prefill local edit. |
+| AMD schedule/codegen transfer | exhausted as bounded primitive; project-level if native | q8 + prefill | `amd-schedule-codegen-exhaustion-result-20260619.md`: cross-primitive matrix over q8 decode and Tensile prefill finds no bounded native feature; 7 rows are project-level, 1 artifact-only, 1 bounded graph/rebind, 1 tooling-blocked, 1 not worth owning, 1 already expressible. Native transfer means broader AMD renderer/scheduler/register-allocation work, not a q8/prefill local edit. The dependency-free prefill sub-arc has since sharpened: CG-W2/2b refute kernel-level copy vectorization, CG-W3 UNROLL gives only a modest +3.7%, and Route A/A3 P0 proves LDS plumbing but P1 multi-wave GEMM faults structurally. |
 
 ## What should not be reopened without new evidence
 
@@ -538,6 +538,9 @@ Primary current docs:
 - `q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md`
 - `amd-schedule-codegen-exhaustion-scope-20260619.md`
 - `amd-schedule-codegen-exhaustion-result-20260619.md`
+- `prefill-address-lowering-renderer-arc-plan-20260619.md`
+- `route-a-a3-lds-multiwave-scope-20260619.md`
+- `route-a-a3-lds-multiwave-result-20260619.md`
 - `llama-kernel-residual-primitive-audit-scope-20260619.md`
 - `llama-kernel-residual-primitive-audit-20260619.md`
 - `qk-decode-per-role-delta-audit-20260618.md`
