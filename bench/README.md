@@ -39,6 +39,8 @@ Both clean harnesses agree on one curve: **~86 @ctx≈0 → 68.2/66.4/60.7 @ 512
 | **Decode dNLL (quality gate)** | baseline 2.779; ffn_down +0.0005 | `amd-decode-demotion-search-*.md` | `python -m extra.qk_nll_eval --model <gguf> --tokens 128` (±0.01 calib noise) |
 | **Overlap feasibility (probe)** | 1.0× (gated: one compute ring) | `amd-decode-two-queue-probe-*.md` | `python -m extra.qk_two_queue_probe` |
 | **Prefill 8B** | ~67 tok/s (**~2% llama**) — outlier | `amd-decode-prefill-plan.md` | see that doc (diagnosed, not solved) |
+| **Prefill external BLAS ceiling** (standalone fp16 GEMM control, not routed) | ffn_gate/up: hipBLASLt **69.8 TFLOPS** (1.71× tinygrad); ffn_down: rocBLAS **70.9**; attn_q/o: rocBLAS **76.7** | **`bench/qk-prefill-external-blas/ceiling.json`**, `docs/prefill-external-blas-result-20260619.md` | `g++ -std=c++17 -D__HIP_PLATFORM_AMD__=1 ... extra/qk_prefill_blas_ceiling.cpp`; see result doc |
+| **Prefill pure tinygrad WMMA sweep** (not routed) | best **42.0 TFLOPS** (34% peak), gate was 62 TFLOPS; more waves/bigger tiles/BK32/noLDS regress | **`bench/qk-prefill-own-wmma/sweep.txt`**, `docs/prefill-own-wmma-kernel-result-20260619.md` | `DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_prefill_wmma_sweep.py` |
 
 ## Reproduce — the two most-cited
 

@@ -8,7 +8,7 @@ Source of truth: `what-makes-a-performance-primitive-efficient-20260618.md`; per
 Schema = full primitive boundary (per `performance-primitive-research-principles.md`): each live row carries
 primitive name, phase, current impl, reference impl, required dataflow, legal knobs, correctness/quality gate,
 isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New schema concepts needed in
-`extra/qk_search_spec.py` (scoped update): `Q8_SIDECHANNEL`, `WMMA_LDS_TILING`, `EXTERNAL_BLAS_BOUNDARY`.
+`extra/qk_search_spec.py` (scoped update): `Q8_SIDECHANNEL`, `WMMA_DENSE_ISSUE`, `EXTERNAL_BLAS_BOUNDARY`.
 
 ## Live rows
 
@@ -57,7 +57,7 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "blocked_by": "no bounded target; likely closes <=3%"
   },
   {
-    "primitive": "prefill_fp16_wmma_lds_tiling", "phase": "prefill", "state": "REFUTED as LDS-lever (PWLT-A2, prefill-wmma-lds-tiling-result-20260619.md): hand-LDS WMMA = 1.02x default, both ~34% peak; LDS-tiling IC-served on gfx1100. Real lever = rocBLAS-class Tensile tuning -> see external_blas row",
+    "primitive": "prefill_fp16_wmma_lds_tiling", "phase": "prefill", "state": "REFUTED as LDS-lever (PWLT-A2, prefill-wmma-lds-tiling-result-20260619.md): hand-LDS WMMA = 1.02x default, both ~34% peak; LDS-tiling IC-served on gfx1100. Real lever = dense WMMA issue / Tensile-class scheduling -> see prefill_wmma_dense_issue and external_blas rows",
     "current_impl": "PREFILL_V2 inc-1: fp16 realized weights + WMMA + warmstart-TC; ~74% of forward is WMMA matmul but LDS=0 (re-reads operands) [M]",
     "reference_impl": "rocBLAS/Tensile: 128x128 macro-tile staged in 25.6KB LDS -> ~80% peak",
     "required_dataflow": "stage fp16 operand tiles into LDS/shared, reuse across WMMA macro-tiles before HBM re-read (Boehm step 2)",
@@ -68,7 +68,21 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "expected_amdahl": "~74% matmul share; 2x matmul -> ~1.6x full pp [I]",
     "known_refutations": "PREFILL_FP16/REALIZE/Q4K_UNFUSE/Q4K_BATCHED no in-model win (controls); reuse-free custom kernels slow",
     "fallback": "PREFILL_V2 inc-1 (shipped, opt-in)",
-    "blocked_by": "GROUP/LOCAL->LDS opt found by BEAM but BEAM HANGS gfx1100; deep codegen. See external_blas row for the alternative"
+    "blocked_by": "not blocked; refuted. Explicit LDS staging did not move the shape. Do not reopen as a locality-only row"
+  },
+  {
+    "primitive": "prefill_wmma_dense_issue", "phase": "prefill", "state": "REFUTED as bounded config sweep (prefill-own-wmma-kernel-result-20260619.md): best 42.0 TFLOPS, below 62 TFLOPS gate",
+    "current_impl": "PREFILL_V2 fp16 realized weights + WMMA plateau around 40.8 TFLOPS; hand-LDS WMMA 41.5 TFLOPS; fp16 ALU path ~40 TFLOPS [M]",
+    "reference_impl": "measured external ceiling/control: hipBLASLt 69.8 TFLOPS ffn_gate/up, rocBLAS 70.9/76.7 TFLOPS ffn_down/attn_q/o (prefill-external-blas-result-20260619.md)",
+    "required_dataflow": "fp16 realized weights -> global/register load -> dense independent WMMA issue -> fp32 accumulate -> output; LDS optional/off because PWLT-A2 showed IC-served operands",
+    "legal_knobs": ["threads_per_block(128|256|512)","macro_tile_MN","accumulator_depth","independent_wmma_ops","K_unroll","BLOCK_K","LDS(on|off)","load_wmma_overlap"],
+    "correctness_quality_gate": "fp16 oracle mse tolerance per kernel; in-model fp16 dNLL <= 0.01; no decode regression",
+    "isolated_gate": "FAIL: best 42.0 TFLOPS, same as baseline; gate was >=62 TFLOPS",
+    "in_model_gate": "not reached",
+    "expected_amdahl": "~74% matmul share; if the bucket moves 40.8->~70 TFLOPS, full-pp upper bound is roughly 1.4-1.45x before overhead [I]",
+    "known_refutations": "LDS staging alone 1.02x; POWN-1: more waves, bigger tiles, BK32, W1x1, and noLDS all regress; quant-weight reuse closed for 8B",
+    "fallback": "PREFILL_V2 inc-1 (shipped, opt-in)",
+    "blocked_by": "not a bounded knob issue; remaining gap to external BLAS likely needs deeper codegen/software-pipelining/assembly/Tensile-class control"
   },
   {
     "primitive": "prefill_attention_lds_flash", "phase": "prefill", "state": "deferred D",
@@ -85,18 +99,18 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "blocked_by": "needs high-occupancy warp/WMMA flash (256-thread query blocks); SHAPED_WMMA custom-kernel convention stale (WR4 wall); WR1-3 + LDS-tiling assets exist"
   },
   {
-    "primitive": "external_blas_rawhip_boundary", "phase": "prefill", "state": "DECLINED 2026-06-19 (user: no external deps). Successor = prefill_wmma_dense_issue (pure tinygrad, prefill-own-wmma-kernel-scope-20260619.md)",
+    "primitive": "external_blas_rawhip_boundary", "phase": "prefill", "state": "measured ceiling/control; routing declined/policy-bound unless external deps are accepted later",
     "current_impl": "pure tinygrad codegen for all prefill matmuls (WMMA, LDS=0)",
-    "reference_impl": "rocBLAS / hipBLASLt / Tensile (call the mature library for fp16 tiles), or handwritten raw HIP",
+    "reference_impl": "rocBLAS / hipBLASLt / Tensile measured by extra/qk_prefill_blas_ceiling.cpp",
     "required_dataflow": "dequant->fp16 tiles handed to external GEMM with fallback + portability policy; or raw-HIP tiled kernel bridged via Ops.PROGRAM/custom_kernel",
     "legal_knobs": ["backend(rocblas|hipblaslt|rawhip|tinygrad)","fallback_policy","artifact_portability","authority_boundary"],
     "correctness_quality_gate": "bit/dNLL parity with tinygrad path; clean fallback when lib absent",
-    "isolated_gate": "external GEMM >= 1.5x tinygrad WMMA on the prefill shapes",
+    "isolated_gate": "PASS: hipBLASLt 69.8 TFLOPS on ffn_gate/up = 1.71x tinygrad; rocBLAS 70.9/76.7 TFLOPS on ffn_down/attn_q/o",
     "in_model_gate": ">= 1.5x full warm pp with fallback intact",
-    "expected_amdahl": "high for prefill (~34%->~80% peak = ~2.4x matmul -> ~1.6x pp) IF rocBLAS hits ~80% on these shapes [H, unverified]",
-    "known_refutations": "the tinygrad-internal alternative (prefill_fp16_wmma_lds_tiling) is REFUTED -- LDS-tiling doesn't help (PWLT-A2). This is now the PRIMARY prefill path, not the fallback.",
+    "expected_amdahl": "moderate-high for prefill: measured ~1.7x large matmuls gives roughly 1.4-1.45x full-pp upper before bridge/layout overhead [I]",
+    "known_refutations": "the tinygrad-internal LDS alternative (prefill_fp16_wmma_lds_tiling) is REFUTED -- LDS-tiling doesn't help (PWLT-A2). External ceiling is real but not a route.",
     "fallback": "pure tinygrad PREFILL_V2 (~70-83% llama)",
-    "blocked_by": "SPLIT ROCm TOOLCHAIN (system HIP 5.7 /usr/include vs rocBLAS 7.2.4 /opt/rocm-7.2.4 won't co-compile; PWLT-A2) -- must align toolchain (or clean 7.2.4 container) before any rocBLAS build. AUTHORITY DECISION (external boundary) also required."
+    "blocked_by": "toolchain ceiling compile solved via host-only C++ + __HIP_PLATFORM_AMD__; model integration still blocked by HCQ-vs-HIP-runtime bridge, fallback policy, and external-dependency authority decision"
   }
 ]
 ```
@@ -108,20 +122,20 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
 | `prefill_quant_weight_reuse_8b` | **REFUTED / CLOSED** | PWR-1: 8B PREFILL_V2 already realizes fp16 weights + WMMA → no in-forward dequant to amortize → zero Amdahl room. VRAM-frugal 14B/32B niche only (excluded by no-pivot). |
 | old broad `mmvq_q6k` | **SUPERSEDED** | SHIPPED for lm_head (51%) + ffn_down (39%) via coop coalescing; Q6_K dp4a/int-dot refuted (+1% e2e). Residual to 70% folded into `decode_q4k_ffn_q8_sidechannel` (same q8 wall). |
 | old broad `mmvq_q4k` | **SUPERSEDED** | SHIPPED attn_q/o (29%) coop; ffn_gate/up = `decode_q4k_ffn_q8_sidechannel` (deep q8 lifecycle only); ffn_down subordinate; dp4a-only / fp-codegen / sudot4-whole-linear all refuted. |
-| old `prefill_wmma_attention` (vague) | **SPLIT / SUPERSEDED** | now two rows: `prefill_fp16_wmma_lds_tiling` (the ~74% matmul) + `prefill_attention_lds_flash` (the ~24% attention). |
+| old `prefill_wmma_attention` (vague) | **SPLIT / SUPERSEDED** | now split into `prefill_wmma_dense_issue` (pure tinygrad matmul), `external_blas_rawhip_boundary` (measured ceiling/control), and `prefill_attention_lds_flash` (long-prompt attention). |
 | `decode_block_fusion` | **REFUTED / low-EV** | per-role delta audit found norms/RoPE/elementwise ~12–19% spread over ~380 tiny kernels, GPU-bound, no ≥5% fused target; only a norm→MMVQ epilogue could help and that IS `decode_q4k_ffn_q8_sidechannel`. |
 | dp4a/Q4K_VDOT, Q6_K split-K dp4a, Q4K_FUSE, stream-K, decode_attention_v3, schedule-knob-only, q8 amortization-alone, weight repack, sub-4-bit, naive spec, ring2 decode | **REFUTED** | carried from the 06-17 rows doc; see its closed table + `qk-mmvq-int-dot-closeout-20260618.md`. |
 | `spec_verify_q4k_batched_k` | **CLOSED** | spec verify is distributed T-scaling; no single kernel (`qk-spec-verify-component-breakdown-20260618.md`). |
 
 ## Live-row priority (Amdahl-ranked, all gated, none routable cheaply)
 
-1. `prefill_fp16_wmma_lds_tiling` / `external_blas_rawhip_boundary` — ~74% matmul share, ~1.6× pp potential; the
-   highest-EV deep arc, but BEAM-hang-walled (or an authority-boundary decision).
+1. `external_blas_rawhip_boundary` — isolated ceiling passes, but routing is an authority/runtime boundary
+   (HCQ-vs-HIP runtime, fallback, external dependency policy), not a kernel tweak.
 2. `decode_q4k_ffn_q8_sidechannel` — the only decode lever left (~+3–4%), deep + lossy + multi-output-precedent-less.
 3. `prefill_attention_lds_flash` — matters at long prompts; deep, SHAPED_WMMA-walled.
 4. `decode_q4k_ffn_coop_subgate` — +1–2.3% stackable, not routable alone.
-5. `decode_attention_residual_audit` — likely closes ≤3%.
+5. `decode_attention_residual_audit` — likely closes <=3%.
 
 No live row is a bounded cheap edit; all are deep (codegen/lifecycle/BLAS-boundary) or sub-gate. This matches the
 source-of-truth conclusion: the decode primitive space is exhausted; remaining progress needs a deep
-activation-lifecycle (decode) or LDS-tiling/BLAS (prefill) arc.
+activation-lifecycle (decode) or an external/raw-HIP boundary. The bounded pure-tinygrad dense-WMMA sweep is closed.

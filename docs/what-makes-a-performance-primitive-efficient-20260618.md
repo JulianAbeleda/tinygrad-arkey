@@ -260,19 +260,22 @@ quant dequant to amortize.
 | item | llama.cpp | tinygrad current | status |
 |---|---|---|---|
 | main prefill engine | rocBLAS/Tensile tiled WMMA GEMM | PREFILL_V2 inc-1: fp16 realized weights + WMMA + warmstart-TC | **partly shipped** |
-| dominant cost (~74%) | LDS/shared-mem tiled WMMA macro-tiles (~80% peak) | WMMA **with LDS=0** → re-reads operands per WMMA op | **open: fp16 WMMA LDS-tiling** |
+| dominant cost (~74%) | Tensile-class dense WMMA issue / scheduling | WMMA plateau around 40-41 TFLOPS (~34% peak) | **open only as pure-tinygrad WMMA issue/occupancy or external boundary** |
 | Q4_K/Q6_K weight reuse | n/a (dequant→fp16 then tiled GEMM) | subsumed by PREFILL_V2 fp16-WMMA | **CLOSED for 8B** (PWR-1: no Amdahl room; VRAM-frugal 14B/32B note only) |
 | current standing | ~3069 tok/s pp512 | ~2085–2486 tok/s pp512 (PREFILL_V2) | close on pp512; lever is matmul tiling, attention second |
 
 **CORRECTION (PWLT-A2, `prefill-wmma-lds-tiling-result-20260619.md`):** LDS-tiling is **NOT** the prefill lever on
 gfx1100. A hand-LDS-tiled WMMA matmul on the ffn shape = **1.02× the non-LDS default, both ~34% WMMA peak** — the
 96 MB Infinity Cache serves the operand reuse (same mechanism that refuted decode-attention LDS). So "WMMA
-LDS-tiling (Boehm step 2)" is **refuted as a bounded tinygrad win**. The real ~34%→~80% headroom is **rocBLAS-class
-Tensile tuning** (occupancy / double-buffer / K-split / scheduling), i.e. the **external BLAS boundary**
-(rocBLAS/hipBLASLt) — currently gated on a **split ROCm toolchain** (system HIP 5.7 vs rocBLAS 7.2.4 won't
-co-compile). **Quantized-weight reuse is CLOSED for 8B prefill** (weights already fp16-WMMA; VRAM-frugal 14B/32B
-only). Net: the prefill matmul lever is **external BLAS (toolchain-gated) or a deep Tensile-class hand kernel**;
-the bounded tinygrad LDS path is refuted. Until one is funded, prefill rests at PREFILL_V2 (~70-83% llama).
+LDS-tiling (Boehm step 2)" is **refuted as a bounded tinygrad win**. The real headroom is **dense WMMA issue /
+Tensile-class scheduling** (occupancy, independent accumulators, load/WMMA overlap, K-split/scheduling), not LDS
+staging alone. PXB-1 (`prefill-external-blas-result-20260619.md`) measured the reference/control: hipBLASLt reaches
+**69.8 TFLOPS** on ffn_gate/up (**1.71×** tinygrad) and rocBLAS reaches **70.9/76.7 TFLOPS** on ffn_down/attn_q/o.
+So the external ceiling is real, but it is closer to ~57-63% peak than the optimistic ~80% peak. Routing remains an
+external-dependency + HCQ-vs-HIP-runtime boundary; the no-deps successor is `prefill-own-wmma-kernel-scope-20260619.md`.
+POWN-1 (`prefill-own-wmma-kernel-result-20260619.md`) then killed the bounded no-deps config route: best remains
+**42.0 TFLOPS**, and more waves/bigger tiles/BLOCK_K/noLDS all regress.
+**Quantized-weight reuse is CLOSED for 8B prefill** (weights already fp16-WMMA; VRAM-frugal 14B/32B only).
 
 ### Prefill attention
 
@@ -321,21 +324,20 @@ for these until the listed audit exists.
 | prefill authoritative baseline | **mapped / banked** | fold `qk-prefill-weight-reuse-result-20260618.md` into this source of truth | no rerun unless HEAD or harness changed; use PWR-0 artifact | `PREFILL_V2` is the authority baseline for 8B prefill |
 | prefill component shares | **mapped / redirected** | convert PWR-1 result into the active prefill frontier | no quant-weight kernel; use result doc and artifact | fp16 WMMA matmul ~74%, attention ~24%, norm/RoPE/SwiGLU ~2%; quant-weight reuse closed for 8B |
 | prefill quantized weight reuse | **closed for 8B prefill** | only reopen for VRAM-frugal 14B/32B policy, not current 8B scope | none under standing no-pivot preference | current 8B path realizes fp16 weights and uses WMMA; Q4_K/Q6_K reuse has no Amdahl room |
-| prefill one-block transfer | not mapped | whether an isolated prefill linear win survives norm/activation/layout boundaries | PWR-3 one-block or one-layer harness with realistic T and no dense fallback | >=1.5x selected block-share win and no compile/recompile pathology |
+| prefill one-block transfer | superseded by POWN/PXB gates | whether an isolated prefill linear win survives norm/activation/layout boundaries | only after external bridge has a winning linear; POWN-1 failed isolated gate | >=1.5x selected block-share win and no compile/recompile pathology |
 | long-prompt prefill attention | deferred D | real LDS/register-resident flash-prefill design, not the refuted reuse-free score-free kernel | component shares first; if attention dominates, audit K/V tiling, online softmax state, LDS pressure, and codegen path | either a buildable LDS/register primitive row, or attention is deferred behind codegen/runtime capability |
 | lm_head in prefill | mostly refuted | whether lm_head ever matters outside the already-refuted last-token-only path at larger pp/shape changes | include lm_head in PWR-1 component breakdown rather than opening a separate arc | stays below Amdahl gate or gets a specific role row |
-| external kernel boundary | strategic open | policy and measurement for raw HIP/rocBLAS/hipBLASLt/Tensile ownership | compare pure tinygrad route cost against external-kernel integration cost, portability, fallback, and artifact policy | explicit decision: pure tinygrad only, external allowed for prefill, or raw-HIP research sandbox |
+| external kernel boundary | measured ceiling / policy-bound | raw HIP/rocBLAS/hipBLASLt/Tensile ownership and bridge cost | PXB-1 done: external BLAS clears isolated gate; next is only if dependency boundary is accepted | explicit decision: pure tinygrad only, external allowed for prefill, or raw-HIP research sandbox |
 | NVIDIA / RTX 5090 portability | not mapped for this fork | whether CUDA/NVIDIA changes the primitive frontier or only the backend implementation | audit tinygrad CUDA support, RTX 5090 backend maturity, llama reference on NVIDIA, and which primitives become library-backed | a separate backend matrix exists; do not mix NVIDIA conclusions into AMD gfx1100 verdicts |
 | formal machine-search rows | partially present in older docs | updated rows for only the remaining open/deferred frontiers using the full primitive boundary | update or supersede `qk-machine-search-primitive-rows-20260617.md` with side-channel, prefill weight reuse, flash-prefill, external boundary | every open item has dataflow, legal knobs, gates, Amdahl, refutations, and fallback |
 | provenance/index hygiene | ongoing | older docs marked provenance/superseded consistently so search does not resurrect dead paths | README + headers pass: closed branches point to this doc or closeout docs | no active doc contradicts the source-of-truth statuses here |
 
-Priority order:
-1. Build the final decode per-role delta table. This closes the "why llama is faster" explanation quantitatively.
-2. Bank the PWR-0/PWR-1 prefill result into the source-of-truth and redirect prefill from quant-weight reuse to
-   fp16 WMMA LDS-tiling / BLAS boundary.
-3. Convert surviving open items into formal machine-search rows.
-4. Only then consider deep builds: q8 side-channel, LDS-tiled fp16 prefill matmul, LDS flash-prefill, or external
-   kernels.
+Historical priority order (now executed through the 2026-06-19 exhaustion checkpoint):
+1. Final decode per-role delta table: done (`qk-decode-per-role-delta-audit-20260618.md`).
+2. PWR-0/PWR-1 prefill banking: done; 8B quant-weight reuse closed.
+3. Formal machine-search rows: refreshed and updated.
+4. Remaining deep work: q8 side-channel (codegen-deferred), pure-tinygrad WMMA issue/occupancy, long-prompt
+   LDS flash-prefill, or an external/raw-HIP boundary decision.
 
 ## Scopes for priority audits 1-3
 
@@ -385,21 +387,23 @@ Banked result to fold in:
 - PWR-0: `PREFILL_V2` is the 8B prefill authority baseline, ~2085 tok/s pp512 in that run, 11.35x over default.
 - PWR-1: component shares in `PREFILL_V2` are ~74% fp16 WMMA matmul, ~24% attention, ~2% norm/RoPE/SwiGLU.
 - Quantized-weight reuse is closed for 8B prefill because the active fast path already realizes fp16 weights and
-  uses WMMA; the missing primitive is WMMA LDS/cache-blocking or a BLAS/raw-HIP boundary.
+  uses WMMA; the missing primitive is dense WMMA issue/occupancy or a BLAS/raw-HIP boundary.
 
 Required output:
-- Update this file's prefill map so it says "fp16 WMMA LDS-tiling" rather than "Q4_K/Q6_K prefill weight reuse" as
-  the primary open prefill matmul frontier.
+- Update this file's prefill map so it says "dense WMMA issue / external BLAS boundary" rather than "Q4_K/Q6_K
+  prefill weight reuse" as the primary open prefill matmul frontier.
 - Mark Q4_K/Q6_K quant-weight reuse as closed for 8B prefill, with a possible VRAM-frugal 14B/32B note only.
 - Add `qk-prefill-weight-reuse-result-20260618.md` to provenance.
 - Decide which prefill rows survive into machine search:
-  - `prefill_fp16_wmma_lds_tiling`: deferred deep / codegen or BLAS boundary.
+  - `prefill_wmma_dense_issue`: refuted bounded pure-tinygrad WMMA issue/occupancy audit.
+  - `external_blas_rawhip_boundary`: measured ceiling, policy/runtime integration boundary.
   - `prefill_attention_lds_flash`: deferred deep / only if attention share matters for long prompts.
   - `prefill_quant_weight_reuse_8b`: refuted/closed.
 
 Close criterion:
 - No active doc says quant-weight reuse is the next 8B prefill build without pointing to the PWR-1 refutation.
-- The prefill frontier is represented as fp16 WMMA LDS-tiling first, attention second.
+- The prefill frontier is represented as pure-tinygrad WMMA issue/occupancy first, external BLAS as measured
+  ceiling/control, attention second.
 
 ### 3. Formal machine-search rows refresh
 
@@ -419,15 +423,16 @@ Rows to create or update:
 | `decode_q4k_ffn_q8_sidechannel` | decode | deferred D | RMSNorm/apply producer + q8 side-channel + Q4_K gate/up int-dot + dNLL | producer cost below target, then W==D >=5% or bank as sub-gate |
 | `decode_q4k_ffn_coop_subgate` | decode | sub-gate candidate | current fp coop routing for ffn_gate/up only | W==D exact A/B, EV decision threshold |
 | `decode_attention_residual_audit` | decode | audit-only | current `gqa_coop_vec` shares vs llama | close if <=3% e2e residual |
-| `prefill_fp16_wmma_lds_tiling` | prefill | deferred D | fp16 realized weights + WMMA + LDS/cache-blocked operand tiles + warm pp | >=1.5x full pp candidate or explicit codegen/BLAS blocker |
+| `prefill_wmma_dense_issue` | prefill | refuted bounded sweep | fp16 realized weights + dense WMMA issue / enough independent accumulators + warm pp | POWN-1 best 42.0 TFLOPS, below 62 TFLOPS gate |
 | `prefill_attention_lds_flash` | prefill | deferred D | K/V tiles in LDS + online state in registers + warm pp/dNLL | long-prefill +10% and quality accepted |
 | `prefill_quant_weight_reuse_8b` | prefill | refuted | Q4_K/Q6_K reuse across T in 8B PREFILL_V2 | closed by PWR-1: no Amdahl room |
-| `external_blas_rawhip_boundary` | prefill | strategic open | rocBLAS/hipBLASLt/raw HIP integration + fallback/portability policy | explicit authority decision before build |
+| `external_blas_rawhip_boundary` | prefill | measured ceiling / policy-bound | rocBLAS/hipBLASLt/raw HIP integration + fallback/portability policy | explicit authority decision before build |
 
 Rows to mark closed/superseded:
 - old broad `mmvq_q6k`: shipped for lm_head/ffn_down; dot-only refuted.
 - old broad `mmvq_q4k`: shipped for attn_q/o; ffn_gate/up deep q8 lifecycle only; dot-only/refuted paths closed.
-- old `prefill_wmma_attention`: split into fp16 WMMA LDS matmul and LDS flash attention; no longer one vague row.
+- old `prefill_wmma_attention`: split into pure-tinygrad dense WMMA issue, external BLAS boundary/control, and LDS
+  flash attention; no longer one vague row.
 - `decode_block_fusion`: refuted/low-EV unless the final per-role delta table names a >=5% fusion target.
 
 Close criterion:
@@ -436,16 +441,16 @@ Close criterion:
   dataflow, legal knobs, correctness/quality gate, isolated gate if any, in-model gate, expected Amdahl, known
   refutations, and fallback.
 - The rows match `extra/qk_search_spec.py` or the schema has a scoped update for missing concepts such as
-  `WMMA_LDS_TILING`, `Q8_SIDECHANNEL`, and `EXTERNAL_BLAS_BOUNDARY`.
+  `WMMA_DENSE_ISSUE`, `Q8_SIDECHANNEL`, and `EXTERNAL_BLAS_BOUNDARY`.
 
 ## What is still potentially more efficient
 
 | frontier | status | expected value | why still open |
 |---|---|---:|---|
 | q8 side-channel for Q4_K gate/up | **deferred behind codegen capability** | ~3-4% decode | Q8L-2 KILL: fused multi-granularity multi-output producer not expressible via store-group; needs LDS-reduction flash-style kernel. `q8-mmvq-lifecycle-deep-result-20260619.md` |
-| fp16 WMMA LDS-tiling for prefill matmul | deferred D | prefill | PWR-1 shows ~74% matmul share; current WMMA lacks LDS/cache-blocking or needs BLAS/raw-HIP boundary |
+| pure-tinygrad WMMA issue/occupancy for prefill matmul | refuted bounded sweep | prefill | POWN-1 best 42.0 TFLOPS; current WMMA plateau holds across scoped knobs |
 | flash-prefill with LDS reuse | deferred D | long prompt prefill | reuse-free kernel refuted; real flash needs LDS/register locality |
-| raw HIP / rocBLAS / Tensile boundary | strategic open | high for prefill | changes authority boundary from tinygrad codegen to external or handwritten kernels |
+| raw HIP / rocBLAS / Tensile boundary | measured ceiling / policy-bound | moderate-high for prefill | PXB-1 clears isolated gate (69.8 TFLOPS ffn_gate/up) but changes authority boundary |
 | ffn_gate coop routing | sub-gate candidate | +1-2.3% decode | stackable only, below route gate |
 | llama.cpp residual primitive audit | mapped / partly deferred | decode + pp512 prefill | `llama-kernel-residual-primitive-audit-20260619.md`: fresh rocprof redo shows prompt-free decode is 85.6% MMVQ; q8/RMSNorm lifecycle is the only moderate non-MMVQ decode candidate; pp512 prefill is 74.4% quantized MMQ/matmul, while long-prompt prefill remains separate |
 
@@ -465,8 +470,8 @@ The project has exhausted the bounded **decode** primitive space. The remaining 
 by full MMVQ activation-format economics and by mature tiled kernels. Further progress requires one of:
 
 1. a deep activation-lifecycle change for q8/int-dot decode;
-2. a prefill/batched-forward locality project with real LDS/tiled reuse;
-3. accepting an external/raw-HIP/rocBLAS-like kernel boundary for prefill-class work.
+2. accepting an external/raw-HIP/rocBLAS-like kernel boundary for prefill-class work, or a deeper codegen/Tensile
+   rewrite beyond the bounded pure-tinygrad sweep.
 
 There is no longer a credible single cheap kernel edit that explains or closes the llama benchmark gap.
 

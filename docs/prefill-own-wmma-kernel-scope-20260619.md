@@ -1,8 +1,17 @@
 # Scope — our own WMMA prefill kernel (no external deps): make the tensor cores the bottleneck
 
-The next plan, constrained to **pure tinygrad / no external dependencies** (rocBLAS path declined). Builds on
+Original plan, constrained to **pure tinygrad / no external dependencies** (rocBLAS path declined). Builds on
 PWLT-A2 (`prefill-wmma-lds-tiling-result-20260619.md`) with its key, under-exploited finding. Authority: DEBUG=2
 device time (kernel) + warm pp (model) + fp16 dNLL. No route/default until a gate passes.
+
+> **RESULT:** executed in `prefill-own-wmma-kernel-result-20260619.md`. POWN-1 **KILL**: best config remains
+> 42.0 TFLOPS, below the 62 TFLOPS gate; more waves, bigger tiles, BK32, and noLDS all regress. This scope is kept
+> as provenance for the no-deps route that was tested and closed.
+
+Update from `prefill-external-blas-result-20260619.md`: the external ceiling is now measured as a control, not just
+assumed. hipBLASLt reaches **69.8 TFLOPS** on ffn_gate/up (1.71× tinygrad), and rocBLAS reaches **70.9/76.7 TFLOPS**
+on ffn_down/attn_q/o. The pure-tinygrad target is therefore "break the ~41 TFLOPS plateau toward ~70 TFLOPS", not
+the earlier optimistic ~98 TFLOPS / 80%-peak guess.
 
 ## The learning that reframes this (why it's not "reimplement Tensile")
 

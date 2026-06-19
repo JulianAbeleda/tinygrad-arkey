@@ -27,11 +27,15 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   Consolidated source of truth for what makes a performance primitive efficient, using llama.cpp vs tinygrad as the
   case study: decode, lm_head, MMVQ, attention, spec, prefill, machine-search lessons, and every remaining path
   marked shipped/refuted/deferred/open.
+- **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
+  exhausted; q8/RMSNorm is codegen-deferred; hand-LDS WMMA is refuted; external BLAS ceiling is measured; the only
+  live no-deps build question is pure-tinygrad prefill WMMA issue/occupancy.
 - `qk-decode-per-role-delta-audit-20260618.md` — the quantitative per-role decode gap table (traffic/%peak/time-share/
   Amdahl/status); summed ceilings ~+27–30% ≈ the whole 1.47× llama gap, all behind one q8/full-MMVQ wall.
 - `qk-machine-search-primitive-rows-20260618.md` — current machine-search rows (live + closed); supersedes the
-  06-17 rows doc. Live: q8 side-channel, ffn coop sub-gate, attention residual audit, fp16 WMMA LDS-tiling, LDS
-  flash-prefill, external BLAS boundary; closed: quant-weight-reuse-8b, broad mmvq_q4k/q6k, decode_block_fusion.
+  06-17 rows doc. Live: q8 side-channel, ffn coop sub-gate, attention residual audit, pure-tinygrad WMMA
+  issue/occupancy, LDS flash-prefill, external BLAS boundary/control; closed: quant-weight-reuse-8b, broad
+  mmvq_q4k/q6k, decode_block_fusion, hand-LDS WMMA as the prefill lever.
 - `q8-mmvq-lifecycle-deep-scope-20260618.md` — deep scope for the only remaining decode MMVQ lifecycle reopening:
   producer-side q8 from fused RMSNorm/apply into Q4_K ffn_gate/up int-dot. Explains what "q8/MMVQ lifecycle"
   means, what is already refuted, phase gates, and why this is low-EV/deep rather than a kernel tweak.
@@ -63,22 +67,29 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 
 ## Active / open frontiers
 
-- **`prefill-wmma-lds-tiling-scope-20260619.md` — THE NEXT PLAN.** After decode closed, the surviving high-EV arc:
+- `prefill-wmma-lds-tiling-scope-20260619.md` — provenance for the now-refuted Branch A. After decode closed, the surviving high-EV arc:
   PREFILL_V2 forward is ~74% fp16 WMMA matmul emitted with LDS=0; the lever is WMMA operand LDS-tiling (~1.6× pp).
   Decision-first: Phase PWLT-0 is the authority call — Branch A (tinygrad hand-LDS, **triple payoff**: also unblocks
   q8 producer + flash-prefill attention) vs Branch B (external hipBLASLt/rocBLAS, prefill-only). Both feasible
   (assets/libs present); recommendation A-first, B as fallback control.
 - `prefill-wmma-lds-tiling-result-20260619.md` — **executed Branch A: PWLT-A1 pass, PWLT-A2 KILL.** Hand-LDS WMMA
   = 1.02× the default matmul (both ~34% peak) → **LDS-tiling is NOT the lever** (IC-served on gfx1100, like decode
-  attention). Real headroom is rocBLAS-class Tensile tuning → **Branch B (external rocBLAS)**, gated on a split ROCm
-  toolchain (HIP 5.7 vs rocBLAS 7.2.4 won't co-compile). Prefill rests at PREFILL_V2 until that's funded.
-- **`prefill-own-wmma-kernel-scope-20260619.md` — THE NEXT PLAN (pure tinygrad, no deps).** Key learning: tinygrad's
+  attention). Real headroom is dense WMMA issue / Tensile-class scheduling, not LDS staging.
+- `prefill-external-blas-result-20260619.md` — **ceiling/control measured.** Host-only C++ avoids the split-HIP
+  compile issue; hipBLASLt reaches 69.8 TFLOPS on ffn_gate/up (1.71× tinygrad) and rocBLAS reaches 70.9/76.7 TFLOPS
+  on ffn_down/attn_q/o. This proves a higher GEMM ceiling, but routing remains an external-dependency + HCQ-vs-HIP
+  runtime boundary.
+- `prefill-own-wmma-kernel-scope-20260619.md` — pure tinygrad/no-deps scope. Key learning: tinygrad's
   WMMA matmul (41 TFLOPS) only *matches* the non-WMMA ALU matmul (40) — it gets **none** of the tensor-core 2×, so
   WMMA units are **stalled, not the bottleneck**. POWN-0 diagnose (occupancy / accumulator-chain / issue-rate) →
-  POWN-1 config sweep (LDS-off since IC-served, chase dense WMMA issue + occupancy) gated ≥1.5× → POWN-2 structure →
-  POWN-3 in-model pp. Either breaks the 34% plateau or banks tinygrad's WMMA-codegen ceiling.
+  POWN-1 config sweep (LDS-off since IC-served, chase dense WMMA issue + occupancy) gated ≥1.5×. The result below
+  banks the bounded no-deps ceiling.
+- `prefill-own-wmma-kernel-result-20260619.md` — **executed POWN-1: KILL.** Best config is the existing
+  B128x128x16/W2x2 at 42.0 TFLOPS; more waves, bigger tiles, BK32, and noLDS all regress. No bounded no-deps
+  prefill WMMA knob reaches the 62 TFLOPS gate.
 - `prefill-external-blas-scope-20260619.md` — **DECLINED (no external deps).** rocBLAS/hipBLASLt ceiling-first plan;
-  kept as provenance for the bridge analysis (DEV=AMD HCQ vs HIP-runtime).
+  kept as provenance for the bridge analysis (DEV=AMD HCQ vs HIP-runtime). Its PXB-1 ceiling has now been measured
+  in `prefill-external-blas-result-20260619.md`.
 - **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486
   tok/s, ~83% of llama) via concrete-ubatch + fp16 + realized-weights + warmstart-TC, gated `PREFILL_V2`,
   decode untouched. Quality gate PASSED (dNLL ~0, 8B). Corrects the Stage-0 gate's premise (lazy weights →
