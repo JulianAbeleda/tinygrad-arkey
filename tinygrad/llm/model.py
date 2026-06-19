@@ -19,6 +19,10 @@ PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
 # separate concrete prefill jit per distinct start_pos (0,512,...) vs one symbolic jit. See
 # docs/prefill-concrete-kv-build-scope-20260619.md.
 PREFILL_CONCRETE_KV = bool(getenv("PREFILL_CONCRETE_KV", 0))
+# P2: explicit TC attention (Q@Kᵀ TC + fp16 scores + softmax + P@V TC, GQA broadcast) for prefill on CONCRETE KV
+# (the only regime where the concrete-shape tensor core fires; symbolic KV blocked it -> 0.79x in-model). Needs
+# PREFILL_CONCRETE_KV. Research, dNLL-gated. See docs/prefill-concrete-kv-build-scope-20260619.md.
+PREFILL_TC_ATTN = bool(getenv("PREFILL_TC_ATTN", 0))
 Q8_FFN_HANDWRITTEN = bool(getenv("Q8_FFN_HANDWRITTEN", 0))
 DECODE_MMVQ_IMPORT_Q4 = bool(getenv("DECODE_MMVQ_IMPORT_Q4", 0))
 # NOTE: PREFILL_TC_ATTENTION (explicit TC Q@Kᵀ + softmax + P@V) was probed and UNWIRED -- it won ~2.5x over
@@ -850,6 +854,16 @@ class TransformerBlock(FFNBlock):
                                    start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
                                    variant=str(getenv("FLASH_VARIANT", "gqa_coop_vec")))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
+    elif PREFILL_TC_ATTN and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
+      # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),
+      # GQA via broadcast (K/V per kv-head expanded over the G group dim). Concrete KV=start_pos+T -> TC fires.
+      Hkv, Hd, KV = self.config.n_kv_heads, self.config.head_dim, start_pos + T
+      G = self.config.n_heads // Hkv; scale = Hd ** -0.5
+      qg = q.reshape(B, Hkv, G, T, Hd).cast(dtypes.float16)
+      kg = k.reshape(B, Hkv, 1, KV, Hd).cast(dtypes.float16)
+      vg = v.reshape(B, Hkv, 1, KV, Hd).cast(dtypes.float16)
+      s = ((qg @ kg.transpose(-1, -2)).float() * scale + mask.reshape(1, 1, 1, T, KV)).softmax(-1)
+      attn = (s.cast(dtypes.float16) @ vg).reshape(B, self.config.n_heads, T, Hd).cast(q.dtype)  # (B,H,T,Hd)
     else:
       attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)   # (B,H,T,Hd)
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
