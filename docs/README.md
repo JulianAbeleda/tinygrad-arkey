@@ -89,6 +89,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   loading through HCQ passes when expressed as `producer + fused gate/up consumer` (`114.12us`, correct, no HIP runtime
   in-process). Path B current COMGR/raw-code route remains correct but too slow (`194.80us`). Reopens A3 graph/in-model
   routing only for the fast fused artifact route.
+- `q8-ffn-fast-artifact-a3-route-result-20260619.md` — **A3 result.** Fast artifact one-block route passes eagerly
+  (`121.38us`, correct vs q8 proxy), but Tensor-visible runtime-cache injection is `BLOCKED_UNSAFE` by an AMD MMU fault,
+  likely a `ProgramInfo.globals/outs/ins` to artifact-kernarg contract mismatch. W==D decode remains blocked on graph
+  integration, not kernel economics.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

@@ -1,0 +1,63 @@
+{
+  "date": "2026-06-19",
+  "phase": "A3-injection",
+  "route": "runtime_cache_swapped_PROGRAM_UOps_for_q8_producer_and_fused_gateup",
+  "compile_s": 1.9805240240020794,
+  "install": {
+    "producer_program": {
+      "placeholder_global_size": [
+        1,
+        1,
+        1
+      ],
+      "placeholder_local_size": [
+        1024,
+        1,
+        1
+      ],
+      "artifact_global_size": [
+        1,
+        1,
+        1
+      ],
+      "artifact_local_size": [
+        1024,
+        1,
+        1
+      ],
+      "kernarg_size": 32
+    },
+    "gateup_program": {
+      "placeholder_global_size": [
+        1,
+        12288,
+        1
+      ],
+      "placeholder_local_size": [
+        128,
+        1,
+        1
+      ],
+      "artifact_global_size": [
+        12288,
+        2,
+        1
+      ],
+      "artifact_local_size": [
+        32,
+        4,
+        1
+      ],
+      "kernarg_size": 40
+    }
+  },
+  "verdict": "BLOCKED_UNSAFE",
+  "reason": "A swapped-runtime execution attempt reached HCQ but caused an AMD MMU fault during eager route output copyout. The direct HCQ artifact route is correct; the Tensor-visible injection contract is not yet safe.",
+  "last_fault": {
+    "kind": "AMD_MMU_fault",
+    "address": "0x76205F713000",
+    "stage": "eager injected route"
+  },
+  "next": "Do not rerun execution by default. First build a contract verifier for ProgramInfo.globals/outs/ins and kernarg buffer order, or inject explicit Ops.PROGRAM nodes instead of runtime-cache swapping placeholder kernels.",
+  "execute_flag_required": "--execute"
+}

@@ -130,10 +130,9 @@ oracle timing. Forward scope: `q8-ffn-fast-artifact-and-codegen-transfer-scope-2
 
 Follow-up result: `q8-ffn-fast-artifact-vs-raw-code-result-20260619.md` executes that redirect. The hipcc/LLD
 artifact path passes when gate/up are fused into one shared-q8 lifecycle primitive (`114.12us`), while the current
-COMGR/raw-code path remains slow (`194.80us`). A3 is therefore reopened only for the fast fused artifact route, still
-behind a research flag and still default-off.
+COMGR/raw-code path remains slow (`194.80us`).
 
-### A3 — TinyJit/HCQGraph route: REOPENED FOR FAST FUSED ARTIFACT
+### A3 — TinyJit/HCQGraph route: EAGER PASS / GRAPH INJECTION BLOCKED_UNSAFE
 
 Make the route graph-capturable so W==D decode can measure it without per-token Python overhead.
 
@@ -142,6 +141,17 @@ Gate:
 - graph replay stable across tokens;
 - no pointer-staleness from q8 side-channel buffers;
 - W==D ctx sweep >= 3% sustained speedup.
+
+Executed follow-up: `q8-ffn-fast-artifact-a3-route-result-20260619.md`.
+
+Result:
+
+- eager one-block fast-artifact route **PASS**: `121.38us`, correct vs q8 proxy, no HIP runtime;
+- Tensor-visible runtime-cache injection **BLOCKED_UNSAFE**: placeholder `custom_kernel` PROGRAM nodes can be created,
+  but swapped-runtime execution causes an AMD MMU fault even after launch-dim override.
+
+W==D decode remains blocked until the q8 artifacts enter the graph through a verified `ProgramInfo`/kernarg contract
+or explicit precompiled `Ops.PROGRAM` nodes.
 
 ### A4 — final quality/perf verdict
 
