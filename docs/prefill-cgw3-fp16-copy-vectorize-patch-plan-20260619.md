@@ -29,12 +29,19 @@ load's unit-stride global axis and `apply_opt(Opt(OptOps.UPCAST, that_axis, 8))`
   stage) so each stage's contiguous axis vectorizes independently. That is a scheduler/lowering change, not a
   one-line opt.
 
-### Route B — fix the gfx1100 BEAM hang, let search find it (meta-lever)
-**UPCAST is an `OptOps` in BEAM's search space.** The warmstart opts are BEAM-found offline; if BEAM could search the
-copy-axis UPCAST, it would likely find the vectorized-copy schedule itself. BEAM hangs on gfx1100 (the recurring
-wall). **Fixing the BEAM hang** would (a) unlock auto-discovery of this schedule per shape, and (b) help broadly.
-This may be *more tractable and more general* than hand-coding Route A — and it is the same wall blocking other
-levers. Investigate the hang root cause first (it may be a compile/timeout/driver issue, not fundamental).
+### Route B — REFUTED (2026-06-19): BEAM is not in the prefill path and doesn't help
+CORRECTION: the prefill warmstart is **NOT BEAM-found** — it is a **hand-coded, loop-found fixed 3-opt tuple**
+(`model.py:27`: `(Opt(TC,0,(-1,2,1)), Opt(UPCAST,0,4|2), Opt(UPCAST,1,4))`) applied per shape-key. **We do not run
+BEAM for prefill, or anywhere at runtime.** The Route-B spike (`beam-hang-premise-audit-20260619.md`) found (a) BEAM
+does *not* hang on these shapes (the "BEAM-hang wall" was a never-verified, false assumption), and (b) BEAM
+*underperforms* — 14-17 TFLOPS vs the hand-coded warmstart's ~48 (and Tensile's 66). So "fix BEAM to find the
+schedule" is moot: BEAM is worse than the tuple we already hand-pick. **Route B is closed.**
+
+Implication for the copy-vectorization lever: it is about **extending/altering the hand-coded opt tuple** (can an
+added copy-axis vectorizing opt make the global read fold to b128?) OR the **two-stage copy** (Route A) — NOT about
+BEAM. The cheap first test: add a copy-axis `UPCAST` to `_prefill_v2_opts` and check the ISA. Caveat (CG-W1.5): the
+existing TC+2×UPCAST tuple already applies and still emits 127 `v_mov` + d16 — so a contiguous copy axis to UPCAST
+may not exist (the read is strided by the transpose), pushing this to the two-stage-copy scheduler change.
 
 ## Files / surfaces
 - `codegen/opt/heuristic.py` — `hand_coded_optimizations` (UPCAST axis selection; Route A).
