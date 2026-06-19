@@ -84,6 +84,22 @@ Per `prefill-tensile-a5-strong-gate-scope-20260619.md`, added attn_q/o to the ro
 **Updated verdict: PASS_STRONG_POLICY_GATED** (pp512 1.76×, dNLL accept, decode untouched, fallback clean). The only
 remaining gate is the **TPE-0 external-artifact policy** (rocBLAS/Tensile HSACO dependency) — a project decision.
 
+## llama.cpp pp512 re-measured (clean apples-to-apples, this machine) [M]
+`llama-bench -m Qwen3-8B-Q4_K_M.gguf -p 512 -n 0 -ngl 99` (HIP/rocBLAS, gfx1100, build ac4cddeb0):
+**llama.cpp pp512 = 3394 ± 210 tok/s** (151 ms/512).
+
+| prefill pp512 | tok/s | ms/512 | vs llama |
+|---|---:|---:|---:|
+| llama.cpp | 3394 | 151 | 1.00× |
+| tinygrad PREFILL_V2 | 2709 | 189 | **0.80×** |
+| tinygrad + Tensile route | 4770 | 107 | **1.41×** |
+
+So the route takes tinygrad prefill from **80% of llama → 1.41× llama**. Note (honest): the matmuls are the *same*
+rocBLAS Tensile kernels llama uses (~95% peak), so the margin *over* llama is not in the matmuls — it's the
+non-matmul portion (tinygrad's fused attention/norms + low per-chunk graph overhead) and would need a per-component
+breakdown to attribute precisely. Both are warm GPU prompt-processing of 512 tokens on the same GGUF. **Scope: prefill
+only** — decode (token generation) is untouched at ~66–69% of llama.
+
 ## Files
 `tinygrad/llm/model.py` (flag-gated `_pf16` branch + eager install; default off ⇒ byte-identical),
 `extra/qk_tensile_inmodel.py`, `bench/qk-tensile-extraction/inmodel_measurement.json`, `bench/qk-prefill-v2-nll/result.json`,

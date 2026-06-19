@@ -77,5 +77,15 @@
     "pp512_strong_gate_ge_1.35": true,
     "pp1024": "not validated (model warmstart shape-specific to UBATCH=512)",
     "verdict": "PASS_STRONG_POLICY_GATED (pp512 1.76x; pp1024 unvalidated)"
+  },
+  "llama_comparison": {
+    "llama_cpp_pp512_tok_s": 3394.05,
+    "llama_cpp_stddev": 209.96,
+    "llama_per512_ms": 150.9,
+    "harness": "llama-bench -p 512 -n 0 -ngl 99 (HIP/rocBLAS, gfx1100, same GGUF)",
+    "build": "ac4cddeb0",
+    "prefill_v2_vs_llama": 0.798,
+    "tensile_routed_vs_llama": 1.405,
+    "note": "routed tinygrad EXCEEDS llama pp512 by ~1.41x. matmuls are the same rocBLAS Tensile kernels (~95% peak) -> the margin over llama is in the non-matmul portion (tinygrad fused attention/norms) + low per-chunk overhead; a per-component breakdown would attribute it precisely. Both warm GPU prompt-processing of 512 tokens."
   }
 }
