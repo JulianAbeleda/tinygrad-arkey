@@ -92,6 +92,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   selected Tensile primitive and its full launch contract (solution, HSACO, symbol, `.kd`, kernargs, launch geometry,
   workspace) and run it through tinygrad HCQ. Also scopes option 2: only after a working extracted contract exists,
   use it as the target for a tinygrad codegen/Tensile-class schedule transfer.
+- `prefill-tensile-tpe4-perf-result-20260619.md` — **executed TPE-4: PASS.** The extracted rocBLAS Tensile
+  ffn_gate/up primitive runs through tinygrad HCQ at 66.91 TFLOPS median (0.7703 ms), correct, no copies, no HIP
+  runtime in-process. Lane B is now runnable and fast for one fixed shape; next gate is TPE-5 shape matrix.
 - `prefill-own-wmma-kernel-scope-20260619.md` — pure tinygrad/no-deps scope. Key learning: tinygrad's
   WMMA matmul (41 TFLOPS) only *matches* the non-WMMA ALU matmul (40) — it gets **none** of the tensor-core 2×, so
   WMMA units are **stalled, not the bottleneck**. POWN-0 diagnose (occupancy / accumulator-chain / issue-rate) →

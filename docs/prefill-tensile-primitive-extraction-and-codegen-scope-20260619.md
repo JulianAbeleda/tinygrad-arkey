@@ -28,6 +28,7 @@ If any one of those is missing, this is not a runnable primitive. It is only a f
 | fact | value |
 |---|---|
 | Lane A | **KILL**: HIP runtime and tinygrad HCQ/KFD are mutually exclusive in one process (`prefill-external-bridge-ebt1-result-20260619.md`) |
+| Lane B through TPE-4 | **PASS for ffn_gate/up fixed shape**: extracted rocBLAS Tensile primitive launches through HCQ at 66.91 TFLOPS median, correct/no-copy/no-HIP (`prefill-tensile-tpe4-perf-result-20260619.md`) |
 | target | 8B PREFILL_V2 fp16 matmul bucket, especially pp512/pp1024 |
 | tinygrad ceiling | ~40.8-42.0 TFLOPS on ffn_gate/up |
 | external ceiling | hipBLASLt 69.8 TFLOPS ffn_gate/up; rocBLAS 70.9 ffn_down; rocBLAS 76.7 attn_q/o |
