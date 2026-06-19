@@ -21,8 +21,9 @@ from extra.qk_tensile_runtime import TensileRunner
 from extra.qk_tensile_hcq_launch import unbundle
 
 _CAPS = "bench/qk-tensile-extraction/kernarg_all.jsonl"
-_ROLE_CAP = {"gateup": "ffn_gate_up", "down": "ffn_down"}
+_ROLE_CAP = {"gateup": "ffn_gate_up", "down": "ffn_down", "qo": "attn_q_o"}
 _installed = {"done": False, "runners": {}}
+ROUTE_COUNT = {}   # role -> times routed (diagnostic)
 
 def trivial_fxn(role:str):
   def fxn(c:UOp, a:UOp, b:UOp) -> UOp:
@@ -56,7 +57,7 @@ def install(dev=None):
   return runners
 
 # eligible (in, out) at T=512 -> role
-ELIGIBLE = {(4096, 12288): "gateup", (12288, 4096): "down"}
+ELIGIBLE = {(4096, 12288): "gateup", (12288, 4096): "down", (4096, 4096): "qo"}   # qo = attn_q + attn_output
 
 def route_pf16(lin, x:Tensor):
   """Tensile route for a PREFILL_V2 _pf16 call. Returns out[T,out] or None if not eligible."""
@@ -67,6 +68,7 @@ def route_pf16(lin, x:Tensor):
   if not isinstance(T, int) or T != 512 or (in_f, out_f) not in ELIGIBLE: return None
   if not _installed["done"]: return None   # must be install()ed eagerly at model setup (outside the prefill trace)
   role = ELIGIBLE[(in_f, out_f)]
+  ROUTE_COUNT[role] = ROUTE_COUNT.get(role, 0) + 1
   x2 = x.reshape(T, in_f).cast(dtypes.float16)
   x_t = x2.transpose().contiguous()                                   # [in, T] (A)
   C = Tensor.zeros(out_f, T, dtype=dtypes.float16).contiguous()       # [out, T] (=out^T)

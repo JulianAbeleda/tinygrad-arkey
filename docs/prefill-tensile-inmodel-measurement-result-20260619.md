@@ -61,6 +61,29 @@ engineering one. If accepted, the bounded follow-ups (attn_q/o + `[feature,T]` b
 declined, this stands as the measured proof that the mature-backend prefill speed transfers in-model, with the
 codegen oracle (CG-0/1, project-level) as the dependency-free alternative.
 
+## A5 UPDATE — route attn_q/o too → 1.76× warm pp512 (PASS_STRONG, pp512)
+Per `prefill-tensile-a5-strong-gate-scope-20260619.md`, added attn_q/o to the route (eligible `(4096,4096)` → role
+"qo"; attn_q + attn_output, already on `_pf16`). **Measured:**
+
+| | PREFILL_V2 | + Tensile (FFN + attn_q/o) |
+|---|---:|---:|
+| warm prefill | 2709 tok/s (189 ms) | **4770 tok/s (107 ms)** |
+| **warm pp512 speedup** | 1.00× | **1.76×** |
+
+- **dNLL: mean −0.00078 ≤ 0.01 → ACCEPT**, with `ROUTE_COUNT` confirming all roles routed in the NLL path
+  (qo:72, gateup:72, down:36 per forward = 36 layers × {q+o, gate+up, down}). attn_q/o routing is **quality-neutral**
+  (Tensile fp16 ≈ tinygrad fp16; dNLL measures fp16-vs-fp32, unchanged by which engine does the fp16 matmul).
+- The speed-harness greedy `match=1/5` is drift vs the *symbolic* reference path (more fp16 matmuls → more drift from
+  fp32), **not** a correctness failure — the robust 1022-token dNLL gate accepts.
+- **pp512 clears the ≥1.35× strong threshold (1.76×).** pp1024 is not validated (the model's PREFILL_V2 warmstart is
+  shape-specific to UBATCH=512; measuring 1024 needs re-validation, out of scope). So: **PASS_STRONG_POLICY_GATED on
+  pp512.** No A5-2 transpose-elimination needed — already well above the gate.
+- 1.76× > the ~1.40× weighted projection because the in-model PREFILL_V2 baseline for the attn `(4096,4096)` shape
+  runs well below the 40-TFLOPS plateau assumed in the projection, so Tensile's win there is larger.
+
+**Updated verdict: PASS_STRONG_POLICY_GATED** (pp512 1.76×, dNLL accept, decode untouched, fallback clean). The only
+remaining gate is the **TPE-0 external-artifact policy** (rocBLAS/Tensile HSACO dependency) — a project decision.
+
 ## Files
 `tinygrad/llm/model.py` (flag-gated `_pf16` branch + eager install; default off ⇒ byte-identical),
 `extra/qk_tensile_inmodel.py`, `bench/qk-tensile-extraction/inmodel_measurement.json`, `bench/qk-prefill-v2-nll/result.json`,
