@@ -131,6 +131,10 @@ Artifacts:
 
 - `bench/qk-lifecycle-search/candidates.json`
 - `bench/qk-lifecycle-search/summary.md`
+- `bench/qk-lifecycle-search/refutations.json`
+- `bench/qk-lifecycle-search/runner_bindings.json`
+- `bench/qk-lifecycle-search/policy_exports.json`
+- `bench/qk-lifecycle-search/generated_candidates.json`
 
 Current seed candidates:
 
@@ -168,29 +172,50 @@ PLS-0: schema and seed rows.
 - deliverable: this doc and `extra/qk_lifecycle_search.py`
 - gate: JSON artifact validates and ranks existing candidates
 
-PLS-1: refutation memory.
+PLS-1: refutation memory. **DONE**
 
 - import closed/refuted rows from `qk-machine-search-primitive-rows-20260618.md`
 - emit a "do not reopen" report keyed by candidate id
 - gate: every live candidate names which refutations it bypasses
 
-PLS-2: runner bindings.
+Result: `bench/qk-lifecycle-search/refutations.json` has 6 pruning entries and validates that live candidates carry
+refutation context.
+
+PLS-2: runner bindings. **DONE**
 
 - bind decode candidates to W==D and dNLL harnesses
 - bind prefill candidates to warm pp512/pp1024 and dNLL harnesses
 - gate: no candidate can be promoted from `diagnostic` without an in-model runner pointer
 
-PLS-3: policy export.
+Result: `bench/qk-lifecycle-search/runner_bindings.json` binds 6 live/deferred/project rows. These are runner
+pointers only; the script does not execute hardware.
+
+PLS-3: policy export. **DONE**
 
 - write accepted research policy records for q8 artifact and Tensile prefill if policy accepts them
 - include fallback shape checks and default-off semantics
 - gate: no default route changes
 
-PLS-4: generator.
+Result: `bench/qk-lifecycle-search/policy_exports.json` writes 2 research policy candidates:
+`Q8_FFN_HANDWRITTEN=1` and `PREFILL_TENSILE_GEMM=1`. Both remain default-off and decision-required.
+
+PLS-4: generator. **DONE**
 
 - manual/table-driven first: enumerate producer x format x consumer x routing choices only when each axis is legal
 - do not use ML or broad BEAM-style search until the table-driven layer proves stale rows are pruned correctly
 - gate: generated candidates must cite a speed gate, quality gate, and known refutations before any build
+
+Result: `bench/qk-lifecycle-search/generated_candidates.json` emits 6 generated rows. Three are legal proposed rows:
+
+- `decode_q8_sidechannel_native_after_codegen_capability`
+- `prefill_tensile_artifact_hardened_shapes`
+- `prefill_tensile_native_renderer_transfer`
+
+Three are pruned immediately:
+
+- `decode_q8_separate_pack_dot4_retry`
+- `prefill_rocblas_runtime_bridge_retry`
+- `prefill_attention_reuse_free_retry`
 
 ## Non-goals
 

@@ -1,4 +1,4 @@
-# Primitive lifecycle search seed - 2026-06-19
+# Primitive lifecycle search - 2026-06-19
 
 Read-only seed ledger. It does not run hardware or route a model path.
 
@@ -26,3 +26,16 @@ Read-only seed ledger. It does not run hardware or route a model path.
 - Does Claude's Route A/P2 dependency-free LDS work beat the current diagnostic state?
 - Should q8 decode artifact route remain research-only or become a maintained opt-in?
 - Is a reusable AMD renderer/scheduler project funded, or are native codegen rows closed for now?
+
+## PLS completion
+
+- `PLS-1 refutation memory`: 6 entries; validation `True`
+- `PLS-2 runner bindings`: 6 bindings; validation `True`
+- `PLS-3 policy exports`: 2 research policy candidates; defaults remain off
+- `PLS-4 generator`: 6 generated rows, 3 pruned by refutations
+
+## Generated legal rows
+
+- `decode_q8_sidechannel_native_after_codegen_capability`: requires fused multi-output RMSNorm/q8 producer, hipcc-quality schedule or imported equivalent
+- `prefill_tensile_artifact_hardened_shapes`: requires artifact policy yes, shape/fallback matrix, versioned HSACO contract
+- `prefill_tensile_native_renderer_transfer`: requires software-pipelined K-loop, spill-free accumulators, renderer/scheduler capability

@@ -1,0 +1,168 @@
+{
+  "schema": "primitive_lifecycle_refutation_memory_v1",
+  "entries": [
+    {
+      "id": "separate_q8_pack_wall",
+      "applies_to": [
+        "decode_q8_separate_pack"
+      ],
+      "prunes_patterns": [
+        "q8 activation produced in a separate pack kernel",
+        "dot4-only decode win"
+      ],
+      "reason": "The activation producer cost erases the native dot4/MMVQ consumer gain at reuse_count=2.",
+      "evidence": [
+        "docs/qk-q8-activation-lifecycle-verdict-20260618.md",
+        "docs/q8-mmvq-lifecycle-deep-result-20260619.md"
+      ]
+    },
+    {
+      "id": "native_q8_bounded_feature_absent",
+      "applies_to": [
+        "decode_q8_native_codegen"
+      ],
+      "prunes_patterns": [
+        "single bounded AMD DSL tweak for q8 decode",
+        "COMGR source reshuffle"
+      ],
+      "reason": "The passing artifact route is concrete, but tinygrad-owned COMGR/ASM variants miss the schedule and no bounded A2 feature clears the gate.",
+      "evidence": [
+        "docs/q8-ffn-route-a-scheduler-codegen-result-20260619.md",
+        "docs/q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md"
+      ]
+    },
+    {
+      "id": "spec_verify_distributed_t_scaling",
+      "applies_to": [
+        "decode_spec_verify_shortcut"
+      ],
+      "prunes_patterns": [
+        "single q4k verify kernel",
+        "spec decode as one-kernel shortcut"
+      ],
+      "reason": "Verify T-scaling is distributed across attention, Q4_K, Q6_K, and fast-path loss.",
+      "evidence": [
+        "docs/qk-spec-verify-component-breakdown-20260618.md"
+      ]
+    },
+    {
+      "id": "bounded_wmma_plateau",
+      "applies_to": [
+        "prefill_tensile_codegen_transfer"
+      ],
+      "prunes_patterns": [
+        "bounded WMMA knob sweep",
+        "LDS-only prefill matmul row"
+      ],
+      "reason": "Pure tinygrad bounded WMMA/LDS sweeps stay near the ~42 TFLOPS plateau; Tensile-class transfer is project-level.",
+      "evidence": [
+        "docs/prefill-own-wmma-kernel-result-20260619.md",
+        "docs/amd-schedule-codegen-exhaustion-result-20260619.md"
+      ]
+    },
+    {
+      "id": "hip_runtime_hcq_exclusion",
+      "applies_to": [
+        "prefill_tensile_artifact_full"
+      ],
+      "prunes_patterns": [
+        "in-process rocBLAS on tinygrad pointers",
+        "HIP runtime bridge lane A"
+      ],
+      "reason": "HIP runtime and tinygrad HCQ/KFD are mutually exclusive in-process; extracted HSACO through HCQ is the viable artifact boundary.",
+      "evidence": [
+        "docs/prefill-external-bridge-ebt1-result-20260619.md",
+        "docs/prefill-tensile-tpe4-perf-result-20260619.md"
+      ]
+    },
+    {
+      "id": "reuse_free_attention_not_a_primitive",
+      "applies_to": [
+        "prefill_attention_flash_lifecycle"
+      ],
+      "prunes_patterns": [
+        "reuse-free flash-prefill",
+        "global-reread attention rewrite"
+      ],
+      "reason": "Correct attention math without K/V locality is not a performance primitive.",
+      "evidence": [
+        "docs/qk-machine-search-primitive-rows-20260618.md"
+      ]
+    }
+  ],
+  "candidate_pruning": {
+    "decode_q8_separate_pack": {
+      "state": "refuted",
+      "refutations": [
+        "separate_q8_pack_wall"
+      ],
+      "blocked_by_refutations": [
+        "separate q8 pack cost erases dot4 gain"
+      ]
+    },
+    "decode_q8_artifact_lifecycle": {
+      "state": "pass_research",
+      "refutations": [],
+      "blocked_by_refutations": [
+        "native tinygrad ASM/COMGR variants fail perf"
+      ]
+    },
+    "decode_q8_native_codegen": {
+      "state": "project_level",
+      "refutations": [
+        "native_q8_bounded_feature_absent"
+      ],
+      "blocked_by_refutations": [
+        "no bounded AMD DSL feature closes artifact gap",
+        "producer multi-granularity reduction not UOp-expressible"
+      ]
+    },
+    "decode_spec_verify_shortcut": {
+      "state": "closed",
+      "refutations": [
+        "spec_verify_distributed_t_scaling"
+      ],
+      "blocked_by_refutations": [
+        "verify cost distributed across attention + Q4_K + Q6_K"
+      ]
+    },
+    "prefill_tensile_artifact_full": {
+      "state": "pass_strong_policy_gated",
+      "refutations": [
+        "hip_runtime_hcq_exclusion"
+      ],
+      "blocked_by_refutations": [
+        "in-process HIP runtime bridge killed; HCQ artifact route required"
+      ]
+    },
+    "prefill_tensile_codegen_transfer": {
+      "state": "project_level",
+      "refutations": [
+        "bounded_wmma_plateau"
+      ],
+      "blocked_by_refutations": [
+        "bounded WMMA/LDS knob sweeps plateau near 42 TFLOPS"
+      ]
+    },
+    "prefill_route_a_asm_lds": {
+      "state": "diagnostic",
+      "refutations": [],
+      "blocked_by_refutations": [
+        "naive multi-wave LDS occupancy/barrier tax; not yet double-buffered"
+      ]
+    },
+    "prefill_attention_flash_lifecycle": {
+      "state": "deferred",
+      "refutations": [
+        "reuse_free_attention_not_a_primitive"
+      ],
+      "blocked_by_refutations": [
+        "reuse-free attention is not a performance primitive"
+      ]
+    }
+  },
+  "validation": {
+    "live_candidates_with_refutations": true,
+    "errors": []
+  }
+}

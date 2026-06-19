@@ -1,0 +1,102 @@
+{
+  "schema": "primitive_lifecycle_generated_candidates_v1",
+  "method": "manual table-driven producer x format x consumer x routing enumeration; no hardware execution",
+  "rows": [
+    {
+      "id": "decode_q8_sidechannel_native_after_codegen_capability",
+      "derived_from": "decode_q8_native_codegen",
+      "phase": "decode",
+      "state": "proposed",
+      "legal": true,
+      "requires": [
+        "fused multi-output RMSNorm/q8 producer",
+        "hipcc-quality schedule or imported equivalent"
+      ],
+      "would_be_pruned_by": [],
+      "promotion_gate": "same W==D/dNLL gate as decode_q8_artifact_lifecycle"
+    },
+    {
+      "id": "decode_q8_separate_pack_dot4_retry",
+      "derived_from": "decode_q8_separate_pack",
+      "phase": "decode",
+      "state": "pruned",
+      "legal": false,
+      "requires": [
+        "separate activation pack"
+      ],
+      "would_be_pruned_by": [
+        "separate_q8_pack_wall"
+      ],
+      "promotion_gate": "none; refuted lifecycle"
+    },
+    {
+      "id": "prefill_tensile_artifact_hardened_shapes",
+      "derived_from": "prefill_tensile_artifact_full",
+      "phase": "prefill",
+      "state": "proposed",
+      "legal": true,
+      "requires": [
+        "artifact policy yes",
+        "shape/fallback matrix",
+        "versioned HSACO contract"
+      ],
+      "would_be_pruned_by": [],
+      "promotion_gate": "pp512/pp1024 + dNLL + fallback"
+    },
+    {
+      "id": "prefill_rocblas_runtime_bridge_retry",
+      "derived_from": "prefill_tensile_artifact_full",
+      "phase": "prefill",
+      "state": "pruned",
+      "legal": false,
+      "requires": [
+        "HIP runtime inside tinygrad process"
+      ],
+      "would_be_pruned_by": [
+        "hip_runtime_hcq_exclusion"
+      ],
+      "promotion_gate": "none; runtime boundary refuted"
+    },
+    {
+      "id": "prefill_tensile_native_renderer_transfer",
+      "derived_from": "prefill_tensile_codegen_transfer",
+      "phase": "prefill",
+      "state": "proposed",
+      "legal": true,
+      "requires": [
+        "software-pipelined K-loop",
+        "spill-free accumulators",
+        "renderer/scheduler capability"
+      ],
+      "would_be_pruned_by": [
+        "bounded_wmma_plateau"
+      ],
+      "promotion_gate": "approach Tensile isolated TFLOPS, then pp/dNLL"
+    },
+    {
+      "id": "prefill_attention_reuse_free_retry",
+      "derived_from": "prefill_attention_flash_lifecycle",
+      "phase": "prefill",
+      "state": "pruned",
+      "legal": false,
+      "requires": [
+        "reuse-free K/V reread"
+      ],
+      "would_be_pruned_by": [
+        "reuse_free_attention_not_a_primitive"
+      ],
+      "promotion_gate": "none; locality missing"
+    }
+  ],
+  "summary": {
+    "generated": 6,
+    "legal_proposed": 3,
+    "pruned": 3,
+    "refutation_entries_used": [
+      "bounded_wmma_plateau",
+      "hip_runtime_hcq_exclusion",
+      "reuse_free_attention_not_a_primitive",
+      "separate_q8_pack_wall"
+    ]
+  }
+}

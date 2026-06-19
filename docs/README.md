@@ -42,10 +42,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `primitive-ledger-analysis-audit-20260619.md` — uses the primitive ledger for the intended analysis pass: decode is
   q8/MMVQ lifecycle-limited; prefill is graph/artifact-boundary-limited; broad kernel search is not supported by the
   current evidence.
-- `primitive-lifecycle-search-scope-20260619.md` — scope + seed ledger for lifecycle-level search: producer placement,
-  activation/weight format, consumer primitive, routing boundary, quality gate, fallback, and refutation memory. Adds
-  `extra/qk_lifecycle_search.py` and `bench/qk-lifecycle-search/*`; current frontier is q8 decode artifact/native
-  transfer and Tensile prefill artifact/native transfer, not broad kernel search.
+- `primitive-lifecycle-search-scope-20260619.md` — scope + executed PLS-1..PLS-4 ledger for lifecycle-level search:
+  producer placement, activation/weight format, consumer primitive, routing boundary, quality gate, fallback, runner
+  bindings, policy candidates, generator, and refutation memory. Adds `extra/qk_lifecycle_search.py` and
+  `bench/qk-lifecycle-search/*`; current frontier is q8 decode artifact/native transfer and Tensile prefill
+  artifact/native transfer, not broad kernel search.
 - `primitive-pmu-observability-scope-20260619.md` — scope for using installed ROCm profiler tooling as the PMU oracle
   and building only the tinygrad primitive-local attribution layer needed around HCQ.
 - `primitive-pmu-observability-result-20260619.md` — PMU-1..PMU-3 result: ROCm PMU works on HIP controls, but tinygrad

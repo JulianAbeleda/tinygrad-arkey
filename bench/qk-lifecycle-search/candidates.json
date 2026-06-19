@@ -1,7 +1,7 @@
 {
-  "schema": "primitive_lifecycle_search_seed_v1",
+  "schema": "primitive_lifecycle_search_v1",
   "date": "2026-06-19",
-  "commit": "7184acb45",
+  "commit": "3a0ef0e6f",
   "scope_doc": "docs/primitive-lifecycle-search-scope-20260619.md",
   "candidates": [
     {
@@ -357,6 +357,435 @@
       "next_action": "Only reopen with an actual locality design and long-prompt Amdahl."
     }
   ],
+  "refutation_memory": {
+    "schema": "primitive_lifecycle_refutation_memory_v1",
+    "entries": [
+      {
+        "id": "separate_q8_pack_wall",
+        "applies_to": [
+          "decode_q8_separate_pack"
+        ],
+        "prunes_patterns": [
+          "q8 activation produced in a separate pack kernel",
+          "dot4-only decode win"
+        ],
+        "reason": "The activation producer cost erases the native dot4/MMVQ consumer gain at reuse_count=2.",
+        "evidence": [
+          "docs/qk-q8-activation-lifecycle-verdict-20260618.md",
+          "docs/q8-mmvq-lifecycle-deep-result-20260619.md"
+        ]
+      },
+      {
+        "id": "native_q8_bounded_feature_absent",
+        "applies_to": [
+          "decode_q8_native_codegen"
+        ],
+        "prunes_patterns": [
+          "single bounded AMD DSL tweak for q8 decode",
+          "COMGR source reshuffle"
+        ],
+        "reason": "The passing artifact route is concrete, but tinygrad-owned COMGR/ASM variants miss the schedule and no bounded A2 feature clears the gate.",
+        "evidence": [
+          "docs/q8-ffn-route-a-scheduler-codegen-result-20260619.md",
+          "docs/q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md"
+        ]
+      },
+      {
+        "id": "spec_verify_distributed_t_scaling",
+        "applies_to": [
+          "decode_spec_verify_shortcut"
+        ],
+        "prunes_patterns": [
+          "single q4k verify kernel",
+          "spec decode as one-kernel shortcut"
+        ],
+        "reason": "Verify T-scaling is distributed across attention, Q4_K, Q6_K, and fast-path loss.",
+        "evidence": [
+          "docs/qk-spec-verify-component-breakdown-20260618.md"
+        ]
+      },
+      {
+        "id": "bounded_wmma_plateau",
+        "applies_to": [
+          "prefill_tensile_codegen_transfer"
+        ],
+        "prunes_patterns": [
+          "bounded WMMA knob sweep",
+          "LDS-only prefill matmul row"
+        ],
+        "reason": "Pure tinygrad bounded WMMA/LDS sweeps stay near the ~42 TFLOPS plateau; Tensile-class transfer is project-level.",
+        "evidence": [
+          "docs/prefill-own-wmma-kernel-result-20260619.md",
+          "docs/amd-schedule-codegen-exhaustion-result-20260619.md"
+        ]
+      },
+      {
+        "id": "hip_runtime_hcq_exclusion",
+        "applies_to": [
+          "prefill_tensile_artifact_full"
+        ],
+        "prunes_patterns": [
+          "in-process rocBLAS on tinygrad pointers",
+          "HIP runtime bridge lane A"
+        ],
+        "reason": "HIP runtime and tinygrad HCQ/KFD are mutually exclusive in-process; extracted HSACO through HCQ is the viable artifact boundary.",
+        "evidence": [
+          "docs/prefill-external-bridge-ebt1-result-20260619.md",
+          "docs/prefill-tensile-tpe4-perf-result-20260619.md"
+        ]
+      },
+      {
+        "id": "reuse_free_attention_not_a_primitive",
+        "applies_to": [
+          "prefill_attention_flash_lifecycle"
+        ],
+        "prunes_patterns": [
+          "reuse-free flash-prefill",
+          "global-reread attention rewrite"
+        ],
+        "reason": "Correct attention math without K/V locality is not a performance primitive.",
+        "evidence": [
+          "docs/qk-machine-search-primitive-rows-20260618.md"
+        ]
+      }
+    ],
+    "candidate_pruning": {
+      "decode_q8_separate_pack": {
+        "state": "refuted",
+        "refutations": [
+          "separate_q8_pack_wall"
+        ],
+        "blocked_by_refutations": [
+          "separate q8 pack cost erases dot4 gain"
+        ]
+      },
+      "decode_q8_artifact_lifecycle": {
+        "state": "pass_research",
+        "refutations": [],
+        "blocked_by_refutations": [
+          "native tinygrad ASM/COMGR variants fail perf"
+        ]
+      },
+      "decode_q8_native_codegen": {
+        "state": "project_level",
+        "refutations": [
+          "native_q8_bounded_feature_absent"
+        ],
+        "blocked_by_refutations": [
+          "no bounded AMD DSL feature closes artifact gap",
+          "producer multi-granularity reduction not UOp-expressible"
+        ]
+      },
+      "decode_spec_verify_shortcut": {
+        "state": "closed",
+        "refutations": [
+          "spec_verify_distributed_t_scaling"
+        ],
+        "blocked_by_refutations": [
+          "verify cost distributed across attention + Q4_K + Q6_K"
+        ]
+      },
+      "prefill_tensile_artifact_full": {
+        "state": "pass_strong_policy_gated",
+        "refutations": [
+          "hip_runtime_hcq_exclusion"
+        ],
+        "blocked_by_refutations": [
+          "in-process HIP runtime bridge killed; HCQ artifact route required"
+        ]
+      },
+      "prefill_tensile_codegen_transfer": {
+        "state": "project_level",
+        "refutations": [
+          "bounded_wmma_plateau"
+        ],
+        "blocked_by_refutations": [
+          "bounded WMMA/LDS knob sweeps plateau near 42 TFLOPS"
+        ]
+      },
+      "prefill_route_a_asm_lds": {
+        "state": "diagnostic",
+        "refutations": [],
+        "blocked_by_refutations": [
+          "naive multi-wave LDS occupancy/barrier tax; not yet double-buffered"
+        ]
+      },
+      "prefill_attention_flash_lifecycle": {
+        "state": "deferred",
+        "refutations": [
+          "reuse_free_attention_not_a_primitive"
+        ],
+        "blocked_by_refutations": [
+          "reuse-free attention is not a performance primitive"
+        ]
+      }
+    },
+    "validation": {
+      "live_candidates_with_refutations": true,
+      "errors": []
+    }
+  },
+  "runner_bindings": {
+    "schema": "primitive_lifecycle_runner_bindings_v1",
+    "rows": [
+      {
+        "candidate_id": "decode_q8_artifact_lifecycle",
+        "candidate_state": "pass_research",
+        "schema": "primitive_lifecycle_runner_binding_v1",
+        "phase": "decode",
+        "authority": "W==D ctx sweep + dNLL",
+        "existing_artifacts": [
+          "bench/q8-ffn-handwritten-oracle/decode_wd_baseline.json",
+          "bench/q8-ffn-handwritten-oracle/decode_wd_q8_route.json",
+          "bench/q8-ffn-handwritten-oracle/nll_baseline.json",
+          "bench/q8-ffn-handwritten-oracle/nll_q8_route.json"
+        ],
+        "runner_commands": [
+          "Q8_FFN_HANDWRITTEN=1 <decode W==D harness for ctx 128/512/1024/4096>",
+          "Q8_FFN_HANDWRITTEN=1 <dNLL harness over fixed token windows>"
+        ],
+        "promotion_gate": ">=3% sustained W==D decode speedup and dNLL <= 0.01",
+        "runs_hardware": false
+      },
+      {
+        "candidate_id": "decode_q8_native_codegen",
+        "candidate_state": "project_level",
+        "schema": "primitive_lifecycle_runner_binding_v1",
+        "phase": "decode",
+        "authority": "compare native route to q8 artifact authority before W==D",
+        "existing_artifacts": [
+          "bench/q8-ffn-amd-scheduler-project/route_a_result.json",
+          "bench/q8-ffn-amd-scheduler-project/pmu_sqtt_evidence.json"
+        ],
+        "runner_commands": [
+          "<native q8 lifecycle micro + W==D only after lifecycle <= artifact budget>"
+        ],
+        "promotion_gate": "native lifecycle close to artifact route, then same W==D/dNLL gate",
+        "runs_hardware": false
+      },
+      {
+        "candidate_id": "prefill_tensile_artifact_full",
+        "candidate_state": "pass_strong_policy_gated",
+        "schema": "primitive_lifecycle_runner_binding_v1",
+        "phase": "prefill",
+        "authority": "warm pp512/pp1024 + dNLL + fallback",
+        "existing_artifacts": [
+          "bench/qk-tensile-extraction/inmodel_measurement.json",
+          "bench/qk-tensile-extraction/shape_matrix.json"
+        ],
+        "runner_commands": [
+          "PREFILL_TENSILE_GEMM=1 <warm pp512 harness>",
+          "PREFILL_TENSILE_GEMM=1 <prefill dNLL harness>",
+          "PREFILL_TENSILE_GEMM=0 <fallback parity harness>"
+        ],
+        "promotion_gate": "pp512 >=1.25x, dNLL <=0.01, fallback clean, decode untouched",
+        "runs_hardware": false
+      },
+      {
+        "candidate_id": "prefill_tensile_codegen_transfer",
+        "candidate_state": "project_level",
+        "schema": "primitive_lifecycle_runner_binding_v1",
+        "phase": "prefill",
+        "authority": "Tensile artifact is oracle; native route must match isolated and in-model gates",
+        "existing_artifacts": [
+          "bench/amd-schedule-codegen-exhaustion/oracle_matrix.json"
+        ],
+        "runner_commands": [
+          "<native renderer GEMM oracle ladder>",
+          "<warm pp512 after native route>"
+        ],
+        "promotion_gate": "native matmul approaches Tensile-class TFLOPS, then pp/dNLL gates",
+        "runs_hardware": false
+      },
+      {
+        "candidate_id": "prefill_route_a_asm_lds",
+        "candidate_state": "diagnostic",
+        "schema": "primitive_lifecycle_runner_binding_v1",
+        "phase": "prefill",
+        "authority": "P2/P3 isolated TFLOPS first; no model route while below A2/PREFILL_V2",
+        "existing_artifacts": [
+          "bench/qk-codegen-wmma/route_a_a3_lds_multiwave.json"
+        ],
+        "runner_commands": [
+          "<Route A P2 double-buffer isolated GEMM>",
+          "<warm pp only if isolated clears gate>"
+        ],
+        "promotion_gate": "beat A2/PREFILL_V2 isolated before any in-model route",
+        "runs_hardware": false
+      },
+      {
+        "candidate_id": "prefill_attention_flash_lifecycle",
+        "candidate_state": "deferred",
+        "schema": "primitive_lifecycle_runner_binding_v1",
+        "phase": "prefill",
+        "authority": "long-prompt pp and attention share",
+        "existing_artifacts": [
+          "bench/qk-flash-prefill-phase5/result.json"
+        ],
+        "runner_commands": [
+          "<long-prompt attention component map>",
+          "<long-prompt warm pp after locality kernel>"
+        ],
+        "promotion_gate": "long-prompt +10% warm pp and exact/dNLL gate",
+        "runs_hardware": false
+      }
+    ],
+    "validation": {
+      "all_live_candidates_bound": true,
+      "errors": []
+    }
+  },
+  "policy_exports": {
+    "schema": "primitive_lifecycle_policy_exports_v1",
+    "note": "Policy candidates only. No model default or runtime route is changed by this artifact.",
+    "policies": [
+      {
+        "schema": "primitive_lifecycle_policy_candidate_v1",
+        "candidate_id": "decode_q8_artifact_lifecycle",
+        "policy_state": "research_candidate_default_off",
+        "flag": "Q8_FFN_HANDWRITTEN=1",
+        "default": "off",
+        "fallback": "flag off uses current tinygrad path; unsupported shapes fall through",
+        "artifact_dependency": true,
+        "quality_gate": "dNLL <= 0.01",
+        "speed_gate": "PASS_RESEARCH",
+        "evidence": [
+          "docs/q8-ffn-handwritten-a4-decode-result-20260619.md",
+          "docs/q8-ffn-artifact-import-route-result-20260619.md",
+          "bench/q8-ffn-handwritten-oracle/decode_wd_q8_route.json",
+          "bench/q8-ffn-amd-scheduler-project/result.json"
+        ],
+        "decision_required": "accept external/research artifact policy before any maintained opt-in"
+      },
+      {
+        "schema": "primitive_lifecycle_policy_candidate_v1",
+        "candidate_id": "prefill_tensile_artifact_full",
+        "policy_state": "research_candidate_default_off",
+        "flag": "PREFILL_TENSILE_GEMM=1",
+        "default": "off",
+        "fallback": "flag off uses current tinygrad path; unsupported shapes fall through",
+        "artifact_dependency": true,
+        "quality_gate": "dNLL <= 0.01",
+        "speed_gate": "PASS_STRONG_POLICY_GATED",
+        "evidence": [
+          "docs/prefill-tensile-research-measurement-result-20260619.md",
+          "docs/prefill-tensile-tpe5-shape-matrix-result-20260619.md",
+          "bench/qk-tensile-extraction/inmodel_measurement.json",
+          "bench/qk-tensile-extraction/shape_matrix.json"
+        ],
+        "decision_required": "accept external/research artifact policy before any maintained opt-in"
+      }
+    ]
+  },
+  "generated_candidates": {
+    "schema": "primitive_lifecycle_generated_candidates_v1",
+    "method": "manual table-driven producer x format x consumer x routing enumeration; no hardware execution",
+    "rows": [
+      {
+        "id": "decode_q8_sidechannel_native_after_codegen_capability",
+        "derived_from": "decode_q8_native_codegen",
+        "phase": "decode",
+        "state": "proposed",
+        "legal": true,
+        "requires": [
+          "fused multi-output RMSNorm/q8 producer",
+          "hipcc-quality schedule or imported equivalent"
+        ],
+        "would_be_pruned_by": [],
+        "promotion_gate": "same W==D/dNLL gate as decode_q8_artifact_lifecycle"
+      },
+      {
+        "id": "decode_q8_separate_pack_dot4_retry",
+        "derived_from": "decode_q8_separate_pack",
+        "phase": "decode",
+        "state": "pruned",
+        "legal": false,
+        "requires": [
+          "separate activation pack"
+        ],
+        "would_be_pruned_by": [
+          "separate_q8_pack_wall"
+        ],
+        "promotion_gate": "none; refuted lifecycle"
+      },
+      {
+        "id": "prefill_tensile_artifact_hardened_shapes",
+        "derived_from": "prefill_tensile_artifact_full",
+        "phase": "prefill",
+        "state": "proposed",
+        "legal": true,
+        "requires": [
+          "artifact policy yes",
+          "shape/fallback matrix",
+          "versioned HSACO contract"
+        ],
+        "would_be_pruned_by": [],
+        "promotion_gate": "pp512/pp1024 + dNLL + fallback"
+      },
+      {
+        "id": "prefill_rocblas_runtime_bridge_retry",
+        "derived_from": "prefill_tensile_artifact_full",
+        "phase": "prefill",
+        "state": "pruned",
+        "legal": false,
+        "requires": [
+          "HIP runtime inside tinygrad process"
+        ],
+        "would_be_pruned_by": [
+          "hip_runtime_hcq_exclusion"
+        ],
+        "promotion_gate": "none; runtime boundary refuted"
+      },
+      {
+        "id": "prefill_tensile_native_renderer_transfer",
+        "derived_from": "prefill_tensile_codegen_transfer",
+        "phase": "prefill",
+        "state": "proposed",
+        "legal": true,
+        "requires": [
+          "software-pipelined K-loop",
+          "spill-free accumulators",
+          "renderer/scheduler capability"
+        ],
+        "would_be_pruned_by": [
+          "bounded_wmma_plateau"
+        ],
+        "promotion_gate": "approach Tensile isolated TFLOPS, then pp/dNLL"
+      },
+      {
+        "id": "prefill_attention_reuse_free_retry",
+        "derived_from": "prefill_attention_flash_lifecycle",
+        "phase": "prefill",
+        "state": "pruned",
+        "legal": false,
+        "requires": [
+          "reuse-free K/V reread"
+        ],
+        "would_be_pruned_by": [
+          "reuse_free_attention_not_a_primitive"
+        ],
+        "promotion_gate": "none; locality missing"
+      }
+    ],
+    "summary": {
+      "generated": 6,
+      "legal_proposed": 3,
+      "pruned": 3,
+      "refutation_entries_used": [
+        "bounded_wmma_plateau",
+        "hip_runtime_hcq_exclusion",
+        "reuse_free_attention_not_a_primitive",
+        "separate_q8_pack_wall"
+      ]
+    }
+  },
+  "pls_status": {
+    "PLS-0": "done",
+    "PLS-1": "done",
+    "PLS-2": "done",
+    "PLS-3": "done",
+    "PLS-4": "done"
+  },
   "summary": {
     "state_counts": {
       "refuted": 1,
