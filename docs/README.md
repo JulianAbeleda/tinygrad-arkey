@@ -85,6 +85,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `q8-ffn-fast-artifact-and-codegen-transfer-scope-20260619.md` — forward scope after A2: one-block q8 route is
   correct but COMGR-HCQ artifacts are too slow (`~195us` vs `<=129us` gate). Scopes the two remaining paths:
   hipcc-quality artifact loading through HCQ (`unknown AMD reloc 10` first) and tinygrad-owned raw/codegen transfer.
+- `q8-ffn-fast-artifact-vs-raw-code-result-20260619.md` — **executed the two paths.** Path A hipcc/LLD artifact
+  loading through HCQ passes when expressed as `producer + fused gate/up consumer` (`114.12us`, correct, no HIP runtime
+  in-process). Path B current COMGR/raw-code route remains correct but too slow (`194.80us`). Reopens A3 graph/in-model
+  routing only for the fast fused artifact route.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

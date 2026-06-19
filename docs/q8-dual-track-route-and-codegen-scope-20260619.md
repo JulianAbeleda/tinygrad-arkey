@@ -128,7 +128,12 @@ The producer is also slower in-model because the route casts the fp16 RMSNorm we
 HCQ-loadable artifact, or change the producer/consumer to a tinygrad-owned raw-ASM/codegen form that matches the HIP
 oracle timing. Forward scope: `q8-ffn-fast-artifact-and-codegen-transfer-scope-20260619.md`.
 
-### A3 — TinyJit/HCQGraph route: BLOCKED ON A2 PERF
+Follow-up result: `q8-ffn-fast-artifact-vs-raw-code-result-20260619.md` executes that redirect. The hipcc/LLD
+artifact path passes when gate/up are fused into one shared-q8 lifecycle primitive (`114.12us`), while the current
+COMGR/raw-code path remains slow (`194.80us`). A3 is therefore reopened only for the fast fused artifact route, still
+behind a research flag and still default-off.
+
+### A3 — TinyJit/HCQGraph route: REOPENED FOR FAST FUSED ARTIFACT
 
 Make the route graph-capturable so W==D decode can measure it without per-token Python overhead.
 

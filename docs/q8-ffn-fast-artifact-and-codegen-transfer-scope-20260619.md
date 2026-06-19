@@ -7,6 +7,17 @@ This is the forward scope after `q8-dual-track-route-and-codegen-scope-20260619.
 - **Economics in HIP oracle:** PASS. Producer + gate + up was `~107.6us`, implying about `~1.05x` decode EV.
 - **Economics in HCQ-loadable COMGR artifact:** FAIL. One-block eager route measured `~195.1us`.
 
+Update: this scope has now been executed. See
+`q8-ffn-fast-artifact-vs-raw-code-result-20260619.md`.
+
+Result:
+
+- Path A hipcc/LLD artifact route **passes** when expressed as the correct lifecycle primitive
+  (`producer + fused gate/up consumer`): `114.12us` vs `<=129.2us`.
+- Path B current COMGR/raw-code route remains **perf-failed**: `194.80us`.
+- Next step is Track A A3 graph/in-model routing using the fused gate/up artifact; Track B should use the passing
+  artifact as the transfer oracle rather than continue from the slow raw-C source.
+
 So the q8 lifecycle is not the blocker. The blocker is transferring the fast kernel into tinygrad's runtime or making
 tinygrad generate an equivalent primitive.
 
