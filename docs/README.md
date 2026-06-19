@@ -130,6 +130,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `q8-ffn-amd-scheduler-codegen-project-scope-20260619.md` — complete next-layer scope after DSO: Route A native
   tinygrad AMD scheduler/codegen transfer, Route B artifact/import research route, and Route C schedule-import training
   data. Defines gates for when to reopen q8 producer ownership vs keeping decode closed as compiler roadmap.
+- `q8-ffn-artifact-import-route-result-20260619.md` — **executed Route B.** Reproducible hipcc/LLD artifact build,
+  fixed-launch HCQ loader, graph injection, and maintenance boundary all pass as **research-only / policy-bound**.
+  Isolated lifecycle `115.24us`; graph replay max_abs `0.001373`; default off; no in-process HIP runtime.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

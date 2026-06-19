@@ -465,7 +465,7 @@ Close criterion:
 
 | frontier | status | expected value | why still open |
 |---|---|---:|---|
-| q8 side-channel for Q4_K gate/up | **research route PASS; native ownership CLOSED/project-level** | measured +5.1-6.3% decode under research flag | Q8L-2 killed current-UOp expression, but A4 proves the mature lifecycle in-model: W==D `1.051-1.063x`, dNLL `+0.002887`, default off. B2a COMGR and B2b AMD DSL/ASM are correct but slow; S0 closes bounded native ownership statically, and DSO closes the visible dynamic gap as `wait_scheduler_bound` / body-insensitive rather than load-shape-only. |
+| q8 side-channel for Q4_K gate/up | **research artifact route PASS; native ownership CLOSED/project-level** | measured +5.1-6.3% decode under research flag | Q8L-2 killed current-UOp expression, but A4 proves the mature lifecycle in-model: W==D `1.051-1.063x`, dNLL `+0.002887`, default off. Route B artifact/import now passes as research-only (`115.24us` lifecycle, graph-safe, no in-process HIP); B2a COMGR and B2b AMD DSL/ASM are correct but slow; S0+DSO close native ownership as project-level AMD scheduling/codegen. |
 | pure-tinygrad WMMA issue/occupancy for prefill matmul | refuted bounded sweep | prefill | POWN-1 best 42.0 TFLOPS; current WMMA plateau holds across scoped knobs |
 | flash-prefill with LDS reuse | deferred D | long prompt prefill | reuse-free kernel refuted; real flash needs LDS/register locality |
 | raw HIP / rocBLAS / Tensile boundary | Lane A killed; Lane B TPE-4+TPE-5 PASS (generalizes) | moderate-high for prefill | PXB-1 clears isolated gate (69.8 TFLOPS ffn_gate/up), EBT-1 kills direct HIP-runtime bridge, TPE-4 proves ffn_gate/up keeps backend speed through HCQ (66.91 TFLOPS), and TPE-5 generalizes to ffn_down 68.9 (StreamK, no workspace) + attn_q/o 58.9 TFLOPS — weighted ~1.40× pp512 (~95% llama), one code object, no workspace/aux/copies |
@@ -527,6 +527,7 @@ Primary current docs:
 - `q8-ffn-amd-scheduler-s0-result-20260619.md`
 - `q8-ffn-dynamic-scheduler-observability-result-20260619.md`
 - `q8-ffn-amd-scheduler-codegen-project-scope-20260619.md`
+- `q8-ffn-artifact-import-route-result-20260619.md`
 - `llama-kernel-residual-primitive-audit-scope-20260619.md`
 - `llama-kernel-residual-primitive-audit-20260619.md`
 - `qk-decode-per-role-delta-audit-20260618.md`
