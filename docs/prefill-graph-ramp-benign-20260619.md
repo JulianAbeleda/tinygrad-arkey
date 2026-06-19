@@ -29,3 +29,18 @@ measurable (PMC perturbs, ProfileGraphEvent timestamps corrupt). But the LEVER i
 ## Files
 A/B inline; jit mechanism `tinygrad/engine/jit.py:31-58`. Prior: `prefill-wall-CORRECTION-20260619.md`,
 `prefill-l1-l2-result-20260619.md`.
+
+## WHY benign (mechanism — code + cProfile confirmed, not inferred)
+1. The 5 graphs are the SAME 729-kernel forward chunked by submission order (graph_split walks the linear once,
+   flushes 32/64/128/256/512). Not functional units. Collapse to 1 = identical kernels/order = identical work.
+2. Per-graph submit is CHEAP: cProfile submit/__call__ = 0.002s for 25 replays.
+3. Back-to-back, no inter-graph host-wait: HCQGraph.__call__'s start-`wait` is for the graph's OWN previous replay
+   (buffer-reuse safety), satisfied immediately in steady state; the 5 graphs chain via the device TIMELINE signal
+   (GPU orders them). cProfile: 6 waits/forward = 5 cheap own-prev waits + 1 expensive final synchronize (the
+   483K-poll busy-wait for the GPU finishing all 729 kernels).
+4. The 0%-change A/B IS the proof of no inter-graph overhead (collapsing would close any gap; it didn't).
+5. Why the ramp exists: CAPTURE-time host/GPU overlap (small first graph starts GPU while host builds the rest);
+   irrelevant on warm replay (all pre-built, submit cheap).
+COROLLARY: the earlier "115ms GPU" was ONE graph (the 249-kernel one); total GPU = all 729 kernels (5 graphs)
+run back-to-back; the 333ms wall = final busy-wait for that. Prefill is GPU-bound on the full 729-kernel forward;
+matmul not the lever -> non-matmul (attention) dominates the GPU time (concrete-KV 1.24x attacks it).
