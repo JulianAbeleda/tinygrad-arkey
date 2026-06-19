@@ -73,6 +73,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   per-row→per-32 multi-output producer is NOT expressible via the store-group idiom (needs an LDS-reduction
   flash-style kernel); q8 side-channel is **deferred behind a codegen capability**, not a buildable arc — closes
   the last bounded decode research question.
+- `q8-ffn-handwritten-oracle-scope-20260619.md` — research-only oracle scope for the q8 decode reopening: use
+  handwritten kernels to test whether the deferred fused RMSNorm→q8 producer plus llama-style Q4_K int-dot consumer
+  actually clears correctness, lifecycle speed, block EV, and dNLL gates before funding tinygrad codegen. Includes
+  Q8H-0 preflight artifact; next gate is real-GGUF handwritten MMVQ correctness.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
