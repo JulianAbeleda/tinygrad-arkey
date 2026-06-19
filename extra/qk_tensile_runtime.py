@@ -27,6 +27,9 @@ class TensileRunner(NamedAMDProgram):
     gx,gy,gz = cap["global"]; lx,ly,lz = cap["local"]
     self.tensile_global = (gx//lx, gy//ly, gz//lz); self.tensile_local = (lx,ly,lz)
     super().__init__(dev, f"tensile_{role}", elf, kd_offset(elf, cap["kernel_symbol"]), self._template)
+  def __call__(self, *bufs, global_size=(1,1,1), local_size=(1,1,1), vals=(), wait=False, timeout=None):
+    # ignore the host kernel's launch dims/vals; FORCE the Tensile grid. bufs = (out, A, B) from ast.arg.globals.
+    return super().__call__(*bufs, global_size=self.tensile_global, local_size=self.tensile_local, vals=(), wait=wait, timeout=timeout)
   def fill_kernargs(self, bufs, vars=(), kernargs=None):
     """HCQGraph signature. bufs = (out, A, B) HCQBuffers; write Tensile layout with their VAs (rebindable)."""
     ab = kernargs or self.dev.kernargs_buf.offset(
