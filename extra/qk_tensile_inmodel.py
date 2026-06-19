@@ -74,3 +74,18 @@ def route_pf16(lin, x:Tensor):
   C = Tensor.zeros(out_f, T, dtype=dtypes.float16).contiguous()       # [out, T] (=out^T)
   out_t = C.custom_kernel(x_t, w, fxn=trivial_fxn(role))[0]           # routed -> TensileRunner
   return out_t.transpose().reshape(*x.shape[:-1], out_f)              # [T, out]
+
+def route_pf16_col(lin, x_col:Tensor):
+  """Transpose-FREE Tensile route: A = x_col [in, T] (contiguous fp16) -> C = [out, T] (column layout, no
+  transpose). The caller keeps the whole FFN in [feature, T] so per-linear in/out transposes cancel. See
+  docs/prefill-tensile-transpose-free-scope-20260619.md. C = W[out,in] @ x_col[in,T] = (x @ Wᵀ)ᵀ."""
+  w = getattr(lin, "_pf16_w", None)
+  if w is None or getattr(lin, "bias", None) is not None or len(w.shape) != 2: return None
+  out_f, in_f = w.shape
+  if x_col.ndim != 2 or x_col.shape[0] != in_f: return None
+  T = x_col.shape[1]
+  if not isinstance(T, int) or T != 512 or (in_f, out_f) not in ELIGIBLE or not _installed["done"]: return None
+  role = ELIGIBLE[(in_f, out_f)]
+  ROUTE_COUNT[role] = ROUTE_COUNT.get(role, 0) + 1
+  C = Tensor.zeros(out_f, T, dtype=dtypes.float16).contiguous()       # [out, T] (Tensile output)
+  return C.custom_kernel(x_col, w, fxn=trivial_fxn(role))[0]          # [out, T] -- NO transpose

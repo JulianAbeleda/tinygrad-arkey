@@ -43,6 +43,16 @@ def main():
   jon = build(True); run_once(jon)                       # traces with flag ON
   rc_on = dict(TI.ROUTE_COUNT)
   assert not rc_off, f"OFF jit unexpectedly routed: {rc_off}"
+  # correctness: compare OFF vs ON output logits
+  import numpy as np
+  def out_of(j):
+    pr._WARMSTART_OPTS = model._pf16_warmstart
+    try: r = j(chunk, 0, temp).realize().float().numpy()
+    finally: pr._WARMSTART_OPTS = saved
+    return r
+  oo, on_o = out_of(joff), out_of(jon)
+  rel = float(np.sqrt(((on_o-oo)**2).mean()) / (np.sqrt((oo**2).mean())+1e-9))
+  print(f"correctness rel_err(ON vs OFF) = {rel:.5f}  {'OK' if rel<2e-2 else 'WRONG'}")
   for _ in range(8): run_once(joff); run_once(jon)
   # interleaved measurement (round-robin) for clock fairness
   toff, ton = [], []

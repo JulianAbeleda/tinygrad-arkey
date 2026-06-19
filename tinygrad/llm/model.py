@@ -57,6 +57,22 @@ def _pf16(lin, x:Tensor) -> Tensor:
   b = getattr(lin, "bias", None)
   return x.cast(dtypes.float16).linear(w.transpose(), b.cast(dtypes.float16) if b is not None else None)
 
+def _ffn_tensile_col(block, x:Tensor):
+  """Transpose-free Tensile FFN (research, PREFILL_TENSILE_GEMM): keep gate/up/down in [feature,T] (column)
+  so the gate/up output-transpose + down input-transpose cancel (the diagnostic-localized prefill win).
+  Transpose x ONCE at entry, result ONCE at exit. Returns None (silent fallback) if any role is ineligible."""
+  from extra.qk_tensile_inmodel import route_pf16_col
+  gw = getattr(block.ffn_gate, "_pf16_w", None)
+  if gw is None or x.ndim < 2 or not isinstance(x.shape[-2], int) or x.shape[-2] != 512: return None
+  D, T = gw.shape[1], x.shape[-2]
+  xT = x.reshape(T, D).cast(dtypes.float16).transpose().contiguous()      # [D, T] (one entry transpose)
+  g = route_pf16_col(block.ffn_gate, xT); u = route_pf16_col(block.ffn_up, xT)
+  if g is None or u is None: return None
+  h = (g.silu() * u).contiguous()                                        # [hidden, T] (down's A, no transpose)
+  o = route_pf16_col(block.ffn_down, h)                                  # [dim, T]
+  if o is None: return None
+  return o.transpose().reshape(*x.shape[:-1], D)                         # [..., dim] (one exit transpose)
+
 @functools.cache
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, device:str|None=None) -> Tensor:
   freqs = 1.0 / (theta ** (Tensor.arange(0, dim, 2)[:(dim // 2)] / dim))
@@ -711,6 +727,9 @@ class FFNBlock:
     if getattr(self, '_prefill_v2', False) and not hasattr(self, 'ffn_gate_exps') and not hasattr(self, 'ffn_gateup'):
       # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
       # kernel (mirrors extra/qk_prefill_gate.py chained_ffn, the gated 37.5%-peak chain). MoE/fused fall through.
+      if PREFILL_TENSILE_GEMM:   # research: transpose-free column-layout Tensile FFN (silent fallback if ineligible)
+        col = _ffn_tensile_col(self, x)
+        if col is not None: return col
       g = _pf16(self.ffn_gate, x).contiguous()
       u = _pf16(self.ffn_up, x).contiguous()
       h = (g.silu() * u).contiguous()
