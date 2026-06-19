@@ -51,6 +51,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   learning. Names rows missing from the map, not necessarily missing implementations: decode B2 runtime/cache identity,
   decode MMVQ artifact/import, prefill transpose-free layout, long-context KV/attention, serving, alternative quant,
   CUDA portability, and tooling visibility.
+- `primitive-coverage-map-20260619.md` — **executed PCG-0.** Consolidates the current row map into
+  `bench/qk-primitive-coverage/rows.json` with 12 validated rows. Key update: Tensile prefill is refuted as an e2e
+  speed route after transpose-free `0.997x`; prefill now points to non-matmul overhead, while decode next points to B2
+  runtime/cache identity.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
   tinygrad's standalone GEMV is stronger than llama's, but in-model weight-GEMV falls to `~44%` vs llama `~54%`.
   Scopes activation/Q8 reuse plus occupancy/launch-shape preservation, starting with measurement-only FMI-1/FMI-2.

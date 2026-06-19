@@ -47,42 +47,47 @@ prefill ~82%.
 
 ## PREFILL — compute/WMMA-bound (opposite regime)
 - Dominant matmuls L2 hit **54–87%** (weights reused/cached across the 512-tile) → NOT bandwidth-bound.
-- Throughput hierarchy (~2×params/tok): tinygrad fp16-WMMA **~41 TFLOPS (34% of 122 peak)** < llama int8-MMQ
-  **~49 (40%)** < **Tensile fp16 66 (54%)**. tinygrad LOSES prefill to llama (82%). llama prefill = 74%
-  `mul_mat_q` (own int8 quantized GEMM) + 9.2% Tensile/rocBLAS fp16 + 4.4% flash.
+- Earlier throughput hierarchy mixed e2e-effective and kernel-local units. The corrected transpose-free diagnostic says
+  tinygrad warmstart-WMMA gate/up already matches the Tensile route in-model at roughly Tensile-class kernel speed;
+  tinygrad still loses prefill to llama (~82%), but the current pp512 residual is **non-matmul dilution**, not a
+  missing fp16 GEMM kernel.
 - **Tensile is the SAME story as decode:** 66 TFLOPS ISOLATED (shape-matrix 61–77) but the in-model route gives
   **0.999× (clock-controlled, reproduced 2×)** — the win evaporates in-model. The prior 1.27× was a clock-confound
   (RETRACTED). Amdahl predicted ~1.37×; got 1.00× → isolated speed doesn't transfer through the route.
-- **Prefill lever:** the in-model integration of the fast kernel (transpose-free Tensile route OR closing the
-  WMMA 34%→54% gap = the SW-pipelined-K-loop codegen, POWN-walled). NOT a kernel swap.
+- **Transpose-free Tensile correction:** the column-layout route removed the measured transpose tax, stayed correct,
+  and still measured **0.997×**. Therefore Tensile is refuted as an e2e prefill speed route for pp512. The next
+  prefill diagnostic is a warm non-matmul component atlas: attention, norms, residuals, activation layout/casts, and
+  lm_head.
 
 ## The meta-pattern (the campaign's central finding)
 | regime | isolated kernel | in-model | transfer loss |
 |---|---|---|---|
 | decode | tinygrad GEMV **76%** peak (>llama 57%) | **44%** | −32 pts |
-| prefill | Tensile **66 TFLOPS** (>llama 49, tinygrad 41) | **~41 (1.00×)** | win gone |
-**Both: winning kernels in isolation, advantage lost in-model → in-model integration is the universal bottleneck.**
+| prefill | Tensile **66 TFLOPS** isolated; tinygrad warmstart-WMMA is already comparable in-model | **0.997-0.999× route** | matmul not the current e2e lever |
+**Both: isolated kernel comparisons were insufficient; the current bottlenecks live at the primitive lifecycle boundary.**
 
 ## What's DEAD (by measurement, do not reopen without a new premise)
 - Codegen/VALU improvement for **decode** (VALU idle ≤12% everywhere, bandwidth-bound at all ctx).
 - LDS / locality / software-pipelining kernels (A3 refuted; decode weights uncacheable, prefill data already
   cache-served; IC-served on gfx1100).
 - BEAM as a Tensile replacement (14–17 < warmstart 48; refuted) and "BEAM hangs" (false premise; it underperforms).
-- Tensile prefill route AS-BUILT (0.999× in-model; the layout-transpose/in-model regime kills the isolated win).
+- Tensile prefill route AS-BUILT and transpose-free (`0.999×` / `0.997×` in-model).
 - Sub-4-bit quant (dNLL quality wall).
 
 ## What SURVIVES (the real, measured levers)
 1. **Decode: spec-decode** (frontier #3) — bandwidth-justified, A-pending (correct, ~1.3–1.4× est, needs cli-loop
    integration + clean clock-controlled measurement). Highest-confidence decode win.
 2. **Decode: fused-mmvq integration** — amortize activation-quant + sustain occupancy in-model (close 44→54%).
-3. **Prefill: in-model integration of the fast matmul** — transpose-free Tensile route, or the walled WMMA codegen.
-4. (Both deps-bounded:) external Tensile `.co` is confirmed present/working but its isolated win doesn't transfer
-   without integration work; bundling is a vendored-blob policy call (TPE-0, user decision).
+3. **Prefill: non-matmul component attribution** — after transpose-free Tensile, pp512 is not missing a faster fp16
+   GEMM route; the live question is where the remaining e2e overhead sits.
+4. (Both deps-bounded:) external Tensile `.co` remains a useful backend-contract oracle, but not a current pp512 speed
+   route.
 
 ## Index of supporting docs (all 2026-06-19 unless noted)
 - Full atlas + decode/prefill regimes + llama refs + mechanisms: `decode-bandwidth-bound-pmu-learning-20260619.md`
 - Decode integration tax ledger: `decode-integration-diagnostic-result-20260619.md`
-- Tensile prefill A/B (0.999×, 1.27× retracted): `prefill-tensile-land-result-20260619.md` (+ `…-land-scope`)
+- Tensile prefill A/B (`0.999×`, `1.27×` retracted) and transpose-free correction (`0.997×`):
+  `prefill-tensile-land-result-20260619.md`, `prefill-tensile-transpose-free-result-20260619.md`
 - Route A (dependency-free WMMA asm): `route-a-a2-pipeline-result`, `route-a-a3-p2-p3-lds-refuted`
 - Frontier scope (4 levers): `frontier-scope-beyond-route-a-20260619.md`
 - Prior proof points: `amd-decode-kernel-beats-llamacpp` (memory), `prefill-own-wmma-kernel-result` (POWN),

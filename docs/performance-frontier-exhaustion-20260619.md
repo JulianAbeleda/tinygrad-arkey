@@ -25,14 +25,10 @@ with better tools, and what remains a deep build rather than a bounded kernel tw
 
 Only two material things remain that are not already closed, refuted, or sub-gate:
 
-1. **Tensile extraction through HCQ — TPE-6 REDIRECT, now at the runtime-helper/policy gate:** the library ceiling exists, EBT-1
-   killed in-process HIP-runtime interop, TPE-4 proved one extracted rocBLAS Tensile primitive runs through tinygrad
-   HCQ at mature-backend speed, and **TPE-5 proved it generalizes** — ffn_gate/up 66.8, ffn_down 68.9 (StreamK, no
-   workspace), attn_q/o 58.9 TFLOPS, all correct/stable/no-workspace/no-layout-copies from one code object, weighted
-   ~**1.40× full pp512** (~95% of llama). **TPE-6 = REDIRECT**: a full FFN block routes exact + copy-free at 1.53× the
-   PREFILL_V2 plateau on GPU time, but naive per-op routing host overhead (JIT-less probe artifact) swamps it
-   end-to-end → the win needs a single-dispatch HCQGraph/TinyJit runtime helper. The remaining gates are that runtime
-   helper + the external-artifact policy decision — no longer a kernel question.
+1. **Prefill non-matmul overhead:** TPE-4/TPE-5 still prove extracted Tensile kernels run fast/correct through HCQ,
+   but the e2e speed route is now refuted for pp512: as-built Tensile measured `0.999x`, and transpose-free column FFN
+   measured `0.997x`. That means the main fp16 GEMM is not the current missing speed primitive; the remaining prefill
+   question is the non-matmul dilution (attention, norms, residuals, activation layout/casts, lm_head).
 2. **Better llama MMVQ counters:** useful for research completeness, but locally blocked by gfx1100 counter-tool
    support. Current source/trace evidence does not justify a build.
 
@@ -47,13 +43,11 @@ complete performance primitives:
 
 - decode: q8 activation format + native dot4 + packed MMVQ scheduler, with tinygrad blocked by q8 lifecycle/codegen
   economics;
-- prefill: dense WMMA/GEMM issue quality, where LDS tiling and the bounded pure-tinygrad config sweep are refuted,
-  while external BLAS proves a higher ceiling;
+- prefill: pp512 is no longer explained by a missing fp16 GEMM kernel; extracted Tensile is a fast backend oracle but
+  e2e-neutral, so the live question is non-matmul component overhead;
 - long prompt: separate attention locality, only relevant when the prompt regime makes it large.
 
 After POWN-1 and EBT-1, there is no remaining bounded no-deps prefill kernel route and no direct HIP-runtime bridge.
-After TPE-4 and TPE-5, the remaining performance route is no longer speculative and is proven to generalize: Tensile
-extraction through HCQ keeps mature-backend speed across the three high-share prefill roles (~1.40× weighted pp512,
-~95% of llama); TPE-6 proved a full FFN block routes exact + copy-free at 1.53× the plateau on GPU time, gated now only
-by a single-dispatch graph runtime helper (to beat the per-op host overhead) and the external-artifact policy decision — or resting at
-PREFILL_V2.
+After the transpose-free correction, Tensile extraction remains a valuable oracle for backend contracts but is not a
+current pp512 speed route. Rest at PREFILL_V2 unless a warm component atlas names a non-matmul primitive with enough
+Amdahl room.

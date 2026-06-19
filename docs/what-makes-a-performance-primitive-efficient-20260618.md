@@ -469,7 +469,7 @@ Close criterion:
 | q8 side-channel for Q4_K gate/up | **research artifact route PASS; native ownership CLOSED/project-level** | measured +5.1-6.3% decode under research flag | Q8L-2 killed current-UOp expression, but A4 proves the mature lifecycle in-model: W==D `1.051-1.063x`, dNLL `+0.002887`, default off. Route B artifact/import passes as research-only (`115.24us` lifecycle, graph-safe, no in-process HIP). Route A A0/A1 also executed: oracle contract is concrete, but no bounded A2 feature clears the `>=30us` gate. The post-A1 PMU/SQTT pass confirms HCQ-level capture works (`2` PMC, `12` SQTT events) but SQTT decode is not usable for feature attribution, so native ownership remains project-level AMD scheduling/codegen. |
 | pure-tinygrad WMMA issue/occupancy for prefill matmul | refuted bounded sweep | prefill | POWN-1 best 42.0 TFLOPS; current WMMA plateau holds across scoped knobs |
 | flash-prefill with LDS reuse | deferred D | long prompt prefill | reuse-free kernel refuted; real flash needs LDS/register locality |
-| raw HIP / rocBLAS / Tensile boundary | Lane A killed; Lane B TPE-4+TPE-5 PASS (generalizes) | moderate-high for prefill | PXB-1 clears isolated gate (69.8 TFLOPS ffn_gate/up), EBT-1 kills direct HIP-runtime bridge, TPE-4 proves ffn_gate/up keeps backend speed through HCQ (66.91 TFLOPS), and TPE-5 generalizes to ffn_down 68.9 (StreamK, no workspace) + attn_q/o 58.9 TFLOPS — weighted ~1.40× pp512 (~95% llama), one code object, no workspace/aux/copies |
+| raw HIP / rocBLAS / Tensile boundary | extraction PASS, e2e speed REFUTED for pp512 | backend oracle, not current speed route | TPE-4/TPE-5 prove extracted Tensile kernels run fast/correct through HCQ, but clean in-model A/B is `0.999x` and transpose-free column FFN is `0.997x`. The route is valuable as a backend-contract oracle; it is not a current pp512 performance route. |
 | ffn_gate coop routing | sub-gate candidate | +1-2.3% decode | stackable only, below route gate |
 | llama.cpp residual primitive audit | mapped / partly deferred | decode + pp512 prefill | `llama-kernel-residual-primitive-audit-20260619.md`: fresh rocprof redo shows prompt-free decode is 85.6% MMVQ; q8/RMSNorm lifecycle is the only moderate non-MMVQ decode candidate; pp512 prefill is 74.4% quantized MMQ/matmul, while long-prompt prefill remains separate |
 | AMD schedule/codegen transfer | exhausted as bounded primitive; project-level if native | q8 + prefill | `amd-schedule-codegen-exhaustion-result-20260619.md`: cross-primitive matrix over q8 decode and Tensile prefill finds no bounded native feature; 7 rows are project-level, 1 artifact-only, 1 bounded graph/rebind, 1 tooling-blocked, 1 not worth owning, 1 already expressible. Native transfer means broader AMD renderer/scheduler/register-allocation work, not a q8/prefill local edit. The dependency-free prefill sub-arc has since sharpened: CG-W2/2b refute kernel-level copy vectorization, CG-W3 UNROLL gives only a modest +3.7%, and Route A/A3 P0 proves LDS plumbing but P1 multi-wave GEMM faults structurally. |
@@ -493,9 +493,9 @@ by full MMVQ activation-format economics and by mature tiled kernels. Further pr
    - a narrow artifact/import route for the hipcc/LLD schedule; or
    - a project-level AMD scheduler/codegen transfer that can emit hipcc-quality schedules natively.
    The concrete scope is `q8-ffn-amd-scheduler-codegen-project-scope-20260619.md`.
-2. accepting an external/raw-HIP/rocBLAS-like kernel boundary for prefill-class work, or a deeper codegen/Tensile
-   rewrite beyond the bounded pure-tinygrad sweep. The concrete scope is
-   `prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md`.
+2. mapping prefill non-matmul overhead after the transpose-free Tensile correction. The extracted Tensile kernels
+   remain useful as an oracle, but the current e2e route is neutral (`0.999x` as-built, `0.997x` transpose-free), so
+   pp512 progress now needs component attribution outside the main fp16 GEMMs.
 
 There is no longer a credible single cheap kernel edit that explains or closes the llama benchmark gap.
 
@@ -504,10 +504,11 @@ The schedule/codegen question has also been made finite in
 each schedule feature is classified. The result does not reject native AMD codegen work; it says the native path is a
 reusable backend project, while the bounded measured path is artifact/policy/graph routing.
 
-The lifecycle-search question is now made explicit in `primitive-lifecycle-search-scope-20260619.md` and
-`bench/qk-lifecycle-search/candidates.json`. It ranks producer/format/consumer/routing candidates above kernel rows:
-`prefill_tensile_artifact_full` is the strongest policy-gated route, `decode_q8_artifact_lifecycle` is the measured
-research decode route, native q8/Tensile transfer is project-level, and separate-pack/spec shortcuts are pruned.
+The lifecycle-search question is now made explicit in `primitive-lifecycle-search-scope-20260619.md` and refined by
+`primitive-coverage-map-20260619.md`. It ranks producer/format/consumer/routing candidates above kernel rows. The
+current map changes the prefill conclusion: `prefill_tensile_artifact_route` is refuted for e2e speed on pp512, and
+`prefill_non_matmul_overhead` is the open diagnostic. `decode_q8_artifact_lifecycle` remains the measured research
+decode route, native q8/MMVQ transfer is project-level, and separate-pack/spec shortcuts are pruned.
 
 The newest decode convergence (`decode-bandwidth-bound-pmu-learning-20260619.md`) shifts the base-decode path one
 level up: tinygrad's standalone GEMV is stronger than llama's (`76%` vs `57%` HBM), but tinygrad falls to `~44%`

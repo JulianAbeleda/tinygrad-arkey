@@ -62,7 +62,7 @@ row**, not proven missing as an implementation.
 
 ## Exhaustive Scope Plan
 
-### PCG-0 - Authority Reconcile
+### PCG-0 - Authority Reconcile **DONE**
 
 Goal: create one current row list that supersedes `qk-machine-search-primitive-rows-20260618.md` without losing its
 refutations.
@@ -76,6 +76,16 @@ Gate:
 
 - every row must cite measured authority, state, phase, Amdahl target, correctness/quality gate, and "do not reopen"
   refutations.
+
+Result:
+
+- `docs/primitive-coverage-map-20260619.md`
+- `extra/qk_primitive_coverage.py`
+- `bench/qk-primitive-coverage/rows.json`
+- `bench/qk-primitive-coverage/summary.md`
+
+The generated map validates (`12` rows, `PASS`). It also updates the prefill state after the transpose-free result:
+Tensile remains a useful backend-contract oracle, but not an e2e speed route for the current pp512 target.
 
 ### PCG-1 - Decode B2 Runtime/Cache Identity
 

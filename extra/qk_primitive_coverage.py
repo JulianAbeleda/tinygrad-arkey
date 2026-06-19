@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""Current primitive coverage map.
+
+Read-only consolidation for PCG-0 in docs/primitive-coverage-gap-scope-20260619.md.
+It turns the latest decode/prefill learning into one row list with gates and
+refutations. It does not run kernels or change routes.
+"""
+from __future__ import annotations
+
+import json, pathlib, subprocess
+from typing import Any
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+OUT = ROOT / "bench/qk-primitive-coverage"
+
+
+def git_commit() -> str:
+  try:
+    return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
+                          text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          timeout=10).stdout.strip() or "unknown"
+  except Exception:
+    return "unknown"
+
+
+def exists(rel: str) -> bool:
+  return (ROOT / rel).exists()
+
+
+def row(**kw: Any) -> dict[str, Any]:
+  required = {
+    "id", "phase", "state", "primitive_class", "current_authority",
+    "measured_basis", "remaining_question", "first_gate",
+    "correctness_quality_gate", "amdahl_or_potential", "refutations",
+    "next_action", "evidence",
+  }
+  missing = sorted(required - set(kw))
+  if missing:
+    raise ValueError(f"{kw.get('id', '<unknown>')} missing {missing}")
+  return dict(kw)
+
+
+def build_rows() -> list[dict[str, Any]]:
+  return [
+    row(
+      id="decode_mmvq_contract_preservation",
+      phase="decode",
+      state="project_level_live",
+      primitive_class="MMVQ activation/reuse/launch contract",
+      current_authority="tinygrad 76% standalone -> ~44% in-model; llama 57% -> ~54%",
+      measured_basis="PMU atlas + FMI-1/FMI-2 + decode integration tax ledger",
+      remaining_question="Can tinygrad preserve low-VGPR, high-grid MMVQ behavior and activation-format reuse inside the model?",
+      first_gate="B2 runtime/cache identity; if no mismatch, renderer/scheduler or artifact/import only",
+      correctness_quality_gate="byte-identical unless q8 route is used; q8 requires dNLL gate",
+      amdahl_or_potential="44->54% over 85% weight-GEMV bucket = ~1.187x decode; full 76% transfer = ~1.557x theoretical",
+      refutations=[
+        "another standalone GEMV kernel is not the issue",
+        "stage2 reduction alone is too small",
+        "existing Q4K/Q6K env knobs fail FMI-4 B1",
+        "dot4 alone is not a primitive",
+      ],
+      next_action="Run decode_mmvq_runtime_cache_identity before any build.",
+      evidence=[
+        "docs/inference-perf-measured-map-20260619.md",
+        "docs/decode-integration-diagnostic-result-20260619.md",
+        "docs/decode-fused-mmvq-integration-fmi4-b1-result-20260619.md",
+      ],
+    ),
+    row(
+      id="decode_mmvq_runtime_cache_identity",
+      phase="decode",
+      state="open_diagnostic",
+      primitive_class="runtime/program identity lifecycle",
+      current_authority="FMI-4 B1 closed existing knobs but did not prove in-model program/cache identity",
+      measured_basis="no new measurement yet; scoped by PCG-1",
+      remaining_question="Does the in-model role use the intended compiled program, metadata, launch dims, and graph-safe cache key?",
+      first_gate="same-role identity ledger; promote only if mismatch explains >=5% projected W==D",
+      correctness_quality_gate="no value change expected; diagnostic-only",
+      amdahl_or_potential="up to the 44->54% contract-preservation target if a wiring/cache mismatch is found",
+      refutations=["do not retune env knobs; B1 already failed"],
+      next_action="Build read-only identity probe/artifact.",
+      evidence=["docs/primitive-coverage-gap-scope-20260619.md"],
+    ),
+    row(
+      id="decode_q8_artifact_lifecycle",
+      phase="decode",
+      state="pass_research_small",
+      primitive_class="lossy q8 producer + Q4_K gate/up dot4 consumer",
+      current_authority="Q8_FFN_HANDWRITTEN route passes W==D + dNLL as research flag",
+      measured_basis="W==D +5.1-6.3%; dNLL +0.002887",
+      remaining_question="Policy only for research use; native ownership remains scheduler/codegen project-level",
+      first_gate="none for research; default requires policy decision and broader quality comfort",
+      correctness_quality_gate="dNLL <= 0.01; W==D sustained >=3%",
+      amdahl_or_potential="~3-6% decode, capped by reuse_count=2",
+      refutations=[
+        "separate q8 pack loses",
+        "native current-UOp producer not expressible",
+        "native tinygrad ASM/COMGR variants miss artifact performance",
+      ],
+      next_action="Keep default-off; use as oracle for native codegen, not main parity path.",
+      evidence=[
+        "docs/q8-ffn-handwritten-a4-decode-result-20260619.md",
+        "docs/q8-ffn-artifact-import-route-result-20260619.md",
+        "docs/q8-ffn-route-a-scheduler-codegen-result-20260619.md",
+      ],
+    ),
+    row(
+      id="decode_mmvq_artifact_import_family",
+      phase="decode",
+      state="proposed",
+      primitive_class="external/mature MMVQ code-object import",
+      current_authority="Tensile import pattern worked mechanically for prefill, but no decode MMVQ artifact family has been identified",
+      measured_basis="no artifact inventory yet",
+      remaining_question="Is there a Q4_K/Q6_K x q8_1 gfx1100 MMVQ code-object family with recoverable HCQ launch contract?",
+      first_gate="inventory local/open-source artifacts; close if no family exists",
+      correctness_quality_gate="byte-exact for fp path or dNLL-gated for q8; HCQ no-HIP-runtime launch",
+      amdahl_or_potential="could target same 44->54%+ contract gap if an artifact preserves llama-like MMVQ behavior",
+      refutations=["HIP runtime bridge cannot coexist with tinygrad HCQ/KFD", "single handwritten q8 route only covers gate/up"],
+      next_action="Scope artifact inventory before extraction.",
+      evidence=["docs/primitive-coverage-gap-scope-20260619.md", "docs/prefill-external-bridge-ebt1-result-20260619.md"],
+    ),
+    row(
+      id="spec_decode_tcheap_batched_forward",
+      phase="decode",
+      state="project_level_closed_for_bounded_build",
+      primitive_class="T-cheap target verify lifecycle",
+      current_authority="spec correctness exists, but T=5 verify is ~4.66x one pass and current speed model loses",
+      measured_basis="SDB/TBF/SCR result docs",
+      remaining_question="Only a broad batched-forward rewrite across Q4_K, Q6_K/lm_head, and attention could reopen it",
+      first_gate="verify <=1.5x one T==1 pass before route",
+      correctness_quality_gate="greedy byte-exact target verification",
+      amdahl_or_potential="large if T-cheap verify exists; current path ~0.52x before overhead",
+      refutations=["single Q4_K verify kernel insufficient", "component routes do not sum to required cut"],
+      next_action="Do not build under current bounded primitive queue.",
+      evidence=[
+        "docs/spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md",
+        "docs/spec-decode-component-route-candidates-result-20260619.md",
+      ],
+    ),
+    row(
+      id="prefill_non_matmul_overhead",
+      phase="prefill",
+      state="open_diagnostic",
+      primitive_class="non-matmul lifecycle overhead",
+      current_authority="transpose-free Tensile is correct but 0.997x; tinygrad warmstart-WMMA matmul already matches Tensile-class speed in-model",
+      measured_basis="prefill transpose-free result: OFF 2675 tok/s, ON 2666 tok/s; gate/up kernel ~63 TFLOPS",
+      remaining_question="Which non-matmul pieces explain e2e-effective ~41 vs matmul-kernel ~63 TFLOPS?",
+      first_gate="prefill component atlas over attention, norms, residuals, activation transposes/casts, lm_head under warm pp authority",
+      correctness_quality_gate="byte-identical or dNLL <= 0.01 for lossy variants",
+      amdahl_or_potential="bounded by the ~35% non-matmul dilution; exact EV unknown until component atlas",
+      refutations=["Tensile fp16 kernel swap is e2e-neutral", "transpose-free Tensile route is e2e-neutral", "pure WMMA bounded knobs are not current bottleneck"],
+      next_action="Run/map warm prefill non-matmul component attribution before more GEMM work.",
+      evidence=[
+        "docs/prefill-tensile-transpose-free-result-20260619.md" if exists("docs/prefill-tensile-transpose-free-result-20260619.md") else "docs/prefill-tensile-diag-result-20260619.md",
+        "docs/inference-perf-measured-map-20260619.md",
+      ],
+    ),
+    row(
+      id="prefill_tensile_artifact_route",
+      phase="prefill",
+      state="refuted_for_e2e_speed",
+      primitive_class="external Tensile fp16 GEMM import",
+      current_authority="HCQ extraction works and kernels are fast/correct, but as-built and transpose-free in-model routes are ~1.00x",
+      measured_basis="TPE extraction PASS; land 0.999x; transpose-free 0.997x",
+      remaining_question="No speed reason to land for current pp512 target; keep as oracle/tooling asset",
+      first_gate="none; closed unless new non-matmul integration use appears",
+      correctness_quality_gate="already correct in research routes",
+      amdahl_or_potential="previous 1.40x model retracted for e2e; current measured e2e ~1.00x",
+      refutations=["layout-tax removal did not improve e2e", "WMMA in-model kernel already matches Tensile-class speed"],
+      next_action="Do not pursue as performance route; use as backend-contract oracle only.",
+      evidence=[
+        "docs/prefill-tensile-tpe5-shape-matrix-result-20260619.md",
+        "docs/prefill-tensile-land-result-20260619.md",
+        "docs/prefill-tensile-transpose-free-result-20260619.md" if exists("docs/prefill-tensile-transpose-free-result-20260619.md") else "docs/prefill-tensile-diag-result-20260619.md",
+      ],
+    ),
+    row(
+      id="long_context_kv_attention_lifecycle",
+      phase="long_context_decode",
+      state="deferred_until_target_expands",
+      primitive_class="KV cache layout/quantization/attention-engine lifecycle",
+      current_authority="normal decode attention is small; ctx4096 shows KV streaming growth",
+      measured_basis="PMU atlas says normal decode is weight-GEMV-dominated, KV grows at long ctx",
+      remaining_question="At which ctx does KV/attention exceed the Amdahl threshold and what is the limiter?",
+      first_gate="ctx sweep; promote only if attention/KV share >=15% and plausible movement >=5% e2e",
+      correctness_quality_gate="exact for layout/engine, dNLL for KV quant",
+      amdahl_or_potential="target-dependent; not part of current pp512/base-decode benchmark",
+      refutations=["normal decode attention optimization is not a large residual", "do not mix long-context rows into base decode"],
+      next_action="Defer until long-context benchmark is accepted.",
+      evidence=["docs/performance-primitive-external-research-audit-20260619.md", "docs/llama-kernel-residual-primitive-audit-20260619.md"],
+    ),
+    row(
+      id="serving_overlap_scheduler_lifecycle",
+      phase="serving",
+      state="out_of_scope",
+      primitive_class="request scheduler / overlap / prefix-sharing lifecycle",
+      current_authority="external papers apply to serving, not current single-stream tok/s",
+      measured_basis="no local serving workload",
+      remaining_question="Does the project want throughput/SLO serving benchmarks?",
+      first_gate="define serving workload before any implementation",
+      correctness_quality_gate="workload-specific",
+      amdahl_or_potential="not meaningful for current single-request authority",
+      refutations=["do not use serving papers to justify single-stream kernel changes"],
+      next_action="Keep out-of-scope.",
+      evidence=["docs/performance-primitive-external-research-audit-20260619.md"],
+    ),
+    row(
+      id="alternative_quant_representation_lifecycle",
+      phase="decode_prefill_research",
+      state="research_only_deferred",
+      primitive_class="codebook / activation sparsity / W4A8 / low-bit KV",
+      current_authority="potentially novel but changes model format or quality policy",
+      measured_basis="external research only; no local model-format audit",
+      remaining_question="Do alternative formats clear quality and conversion costs on this model?",
+      first_gate="declare format, calibration/eval set, and dNLL threshold before kernels",
+      correctness_quality_gate="dNLL and task-quality gates required",
+      amdahl_or_potential="unknown; not byte-identical to GGUF Q4_K/Q6_K comparison",
+      refutations=["not a current llama-vs-tinygrad byte-identical primitive"],
+      next_action="Keep visible as research, not build queue.",
+      evidence=["docs/performance-primitive-external-research-audit-20260619.md"],
+    ),
+    row(
+      id="backend_portability_cuda_nvidia_lifecycle",
+      phase="backend",
+      state="separate_audit",
+      primitive_class="CUDA/NVIDIA backend lifecycle",
+      current_authority="AMD/gfx1100 conclusions do not automatically transfer to RTX 5090/CUDA",
+      measured_basis="none for local CUDA backend in this campaign",
+      remaining_question="Which CUDA library/graph/profiler/kernel contracts replace the AMD HCQ/Tensile facts?",
+      first_gate="backend audit before transferring primitive verdicts",
+      correctness_quality_gate="same model gates, backend-specific implementation",
+      amdahl_or_potential="unknown",
+      refutations=["do not transfer AMD refutations blindly"],
+      next_action="Scope only if NVIDIA target becomes active.",
+      evidence=["docs/primitive-coverage-gap-scope-20260619.md"],
+    ),
+    row(
+      id="primitive_visibility_tooling",
+      phase="tooling",
+      state="supporting_row",
+      primitive_class="HCQ PMU/SQTT/trace attribution",
+      current_authority="HCQ attribution works partially; SQTT decode remains limited",
+      measured_basis="primitive observability + PMU/SQTT docs",
+      remaining_question="Do live build decisions require stronger counter-level attribution?",
+      first_gate="only build tooling when it gates a live primitive decision",
+      correctness_quality_gate="n/a",
+      amdahl_or_potential="no direct speedup",
+      refutations=["tooling is not a performance route by itself"],
+      next_action="Keep as supporting row.",
+      evidence=[
+        "docs/primitive-local-observability-search-result-20260619.md",
+        "docs/q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md",
+      ],
+    ),
+  ]
+
+
+def validate(rows: list[dict[str, Any]]) -> dict[str, Any]:
+  errors: list[str] = []
+  ids = set()
+  for r in rows:
+    if r["id"] in ids:
+      errors.append(f"duplicate id {r['id']}")
+    ids.add(r["id"])
+    for ev in r.get("evidence", []):
+      if ev.startswith("docs/") and not exists(ev):
+        errors.append(f"{r['id']} missing evidence {ev}")
+    if not r.get("refutations"):
+      errors.append(f"{r['id']} missing refutations")
+  return {"pass": not errors, "errors": errors, "row_count": len(rows)}
+
+
+def main() -> None:
+  OUT.mkdir(parents=True, exist_ok=True)
+  rows = build_rows()
+  validation = validate(rows)
+  obj = {
+    "schema": "primitive_coverage_rows_v1",
+    "date": "2026-06-19",
+    "commit": git_commit(),
+    "scope_doc": "docs/primitive-coverage-gap-scope-20260619.md",
+    "validation": validation,
+    "rows": rows,
+  }
+  (OUT / "rows.json").write_text(json.dumps(obj, indent=2) + "\n")
+
+  by_state: dict[str, int] = {}
+  for r in rows:
+    by_state[r["state"]] = by_state.get(r["state"], 0) + 1
+  summary = [
+    "# Primitive coverage map summary",
+    "",
+    f"- rows: `{len(rows)}`",
+    f"- validation: `{'PASS' if validation['pass'] else 'FAIL'}`",
+    f"- commit: `{obj['commit']}`",
+    "",
+    "## State Counts",
+    "",
+  ]
+  for state in sorted(by_state):
+    summary.append(f"- `{state}`: `{by_state[state]}`")
+  summary += [
+    "",
+    "## Priority Rows",
+    "",
+    "1. `decode_mmvq_runtime_cache_identity` - next bounded decode diagnostic.",
+    "2. `prefill_non_matmul_overhead` - replaces the stale Tensile-as-speed-route framing.",
+    "3. `decode_mmvq_artifact_import_family` - only if artifact/import is an accepted research direction.",
+    "4. long-context / serving / alternative-quant / CUDA rows stay deferred until the target changes.",
+    "",
+  ]
+  if validation["errors"]:
+    summary.append("## Validation Errors")
+    summary.extend(f"- {e}" for e in validation["errors"])
+    summary.append("")
+  (OUT / "summary.md").write_text("\n".join(summary))
+
+
+if __name__ == "__main__":
+  main()
