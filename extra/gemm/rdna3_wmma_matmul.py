@@ -401,8 +401,122 @@ def build_gemm_lds(M, N, K):
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
 
-def _run_insts_lds(insts, a, bt, c, M, N, K, name, lds_bytes):
-  BM=BN=128; THREADS=128; grid=(N//BN, M//BM, 1)
+def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF):
+  # P2/P3 (A3): parametric LDS-staged multi-wave GEMM. WAVES_M x WAVES_N wave32; each wave does WM x WN WMMA
+  # tiles. BK = K-block depth (KT=BK/16 substeps). PAD = LDS row-pad bytes (bank-conflict avoidance). DBUF =
+  # double-buffer LDS via unroll-by-2 (prefetch next block while computing current; removes the inner barrier).
+  THREADS=WAVES_M*WAVES_N*32; BM=WAVES_M*WM*16; BN=WAVES_N*WN*16; KT=BK//16; CPR=BK//8; RSTRIDE=THREADS//CPR
+  assert M%BM==0 and N%BN==0 and K%BK==0 and THREADS%CPR==0 and BM%RSTRIDE==0 and BN%RSTRIDE==0
+  loadsA=BM//RSTRIDE; loadsB=BN//RSTRIDE; NBLK=K//BK
+  SA=BK*2+PAD; SB=BK*2+PAD; LDS_A=SA*BM; BUFSZ=LDS_A+SB*BN; NBUF=2 if DBUF else 1
+  FA=10; FB=FA+WM*8; ACCb=FB+WN*8; CTA=ACCb+WM*WN*8; CTB=CTA+loadsA*4; SCR=CTB+loadsB*4
+  assert SCR+2<=256, f"VGPR overflow {SCR+2}"
+  assert BUFSZ*NBUF<=65536, f"LDS overflow {BUFSZ*NBUF}"
+  I=[]; Br=[]; lbl={}
+  def e(i): I.append(i); return i
+  def label(n): lbl[n]=sum(i.size() for i in I)
+  def br(t): Br.append((len(I)-1,t))
+  def dsoff(o): return dict(offset0=o&0xFF, offset1=(o>>8)&0xFF)
+  e(s_load_b128(sdata=s[4:7], sbase=s[0:1], offset=0, soffset=NULL))
+  e(s_load_b64(sdata=s[8:9], sbase=s[0:1], offset=0x10, soffset=NULL))
+  e(s_waitcnt(simm16=0))
+  # wave_m=(tid>>5)>>log2(WAVES_N) ... waves laid out row-major: wave=tid>>5; wave_m=wave//WAVES_N; wave_n=wave%WAVES_N
+  e(v_lshrrev_b32_e32(v[8], 5, v[0]))                                       # wave
+  if WAVES_N==1: e(v_mov_b32_e32(v[19], v[8])); e(v_mov_b32_e32(v[20], 0))
+  elif WAVES_N==2: e(v_lshrrev_b32_e32(v[19],1,v[8])); e(v_and_b32_e32(v[20],1,v[8]))
+  elif WAVES_N==4: e(v_lshrrev_b32_e32(v[19],2,v[8])); e(v_and_b32_e32(v[20],3,v[8]))
+  else: raise AssertionError("WAVES_N in {1,2,4}")
+  # frag read bases: vAfrag=(wave_m*WM*16 + (tid&15))*SA ; vBfrag=LDS_A + (wave_n*WN*16 + (tid&15))*SB
+  e(v_and_b32_e32(v[1], 15, v[0]))                                          # tid&15
+  e(v_lshlrev_b32_e32(v[6], 4, v[19]))                                      # wave_m*16  (* WM below via mul)
+  e(v_mul_lo_u32(v[6], v[6], WM)); e(v_add_nc_u32_e32(v[6], v[6], v[1])); e(v_mul_lo_u32(v[6], v[6], SA))
+  e(v_lshlrev_b32_e32(v[7], 4, v[20])); e(v_mul_lo_u32(v[7], v[7], WN)); e(v_add_nc_u32_e32(v[7], v[7], v[1]))
+  e(v_mul_lo_u32(v[7], v[7], SB))                                          # raw (LDS_A added in compute offset)
+  # coop-load: thread tid -> chunk=tid%CPR, row0=tid//CPR; loads rows row0 + j*RSTRIDE (j<loadsX), chunk fixed.
+  lg2=CPR.bit_length()-1
+  e(v_and_b32_e32(v[10], CPR-1, v[0])); e(v_lshrrev_b32_e32(v[11], lg2, v[0]))   # chunk, row0  (temp, pre-loop)
+  e(s_lshl_b32(s[10], s[3], BM.bit_length()-1)); e(s_lshl_b32(s[11], s[2], BN.bit_length()-1))  # gy*BM, gx*BN
+  # vA_glob = (gy*BM + row0)*K*2 + chunk*16 ; vA_lds = row0*SA + chunk*16
+  e(v_add_nc_u32_e32(v[2], s[10], v[11])); e(v_mul_lo_u32(v[2], v[2], K*2)); e(v_lshlrev_b32_e32(v[12],4,v[10])); e(v_add_nc_u32_e32(v[2], v[2], v[12]))
+  e(v_mul_lo_u32(v[4], v[11], SA)); e(v_add_nc_u32_e32(v[4], v[4], v[12]))
+  e(v_add_nc_u32_e32(v[3], s[11], v[11])); e(v_mul_lo_u32(v[3], v[3], K*2)); e(v_add_nc_u32_e32(v[3], v[3], v[12]))
+  e(v_mul_lo_u32(v[5], v[11], SB)); e(v_add_nc_u32_e32(v[5], v[5], v[12]))
+  for i in range(WM*WN*8): e(v_mov_b32_e32(v[ACCb+i], 0))
+  def coop_load(buf):                              # global -> CT regs (vmcnt drains at caller)
+    for j in range(loadsA):
+      if j==0: ar=2
+      else: e(v_add_nc_u32_e32(v[SCR], j*RSTRIDE*K*2, v[2])); ar=SCR
+      e(global_load_b128(vdst=v[CTA+j*4:CTA+j*4+3], addr=v[ar:ar], saddr=s[4:5], offset=0))
+    for j in range(loadsB):
+      if j==0: br_=3
+      else: e(v_add_nc_u32_e32(v[SCR], j*RSTRIDE*K*2, v[3])); br_=SCR
+      e(global_load_b128(vdst=v[CTB+j*4:CTB+j*4+3], addr=v[br_:br_], saddr=s[6:7], offset=0))
+  def coop_store(buf):                             # CT regs -> LDS[buf]
+    bo=buf*BUFSZ
+    for j in range(loadsA): e(ds_store_b128(addr=v[4], data0=v[CTA+j*4:CTA+j*4+3], **dsoff(bo+j*RSTRIDE*SA)))
+    for j in range(loadsB): e(ds_store_b128(addr=v[5], data0=v[CTB+j*4:CTB+j*4+3], **dsoff(bo+LDS_A+j*RSTRIDE*SB)))
+  def compute(buf):                                # WMMAs from LDS[buf]
+    bo=buf*BUFSZ
+    for kt in range(KT):
+      for mi in range(WM):
+        o=bo+mi*16*SA+kt*32
+        e(ds_load_b128(vdst=v[FA+mi*8:FA+mi*8+3],   addr=v[6], **dsoff(o)))
+        e(ds_load_b128(vdst=v[FA+mi*8+4:FA+mi*8+7], addr=v[6], **dsoff(o+16)))
+      for ni in range(WN):
+        o=bo+LDS_A+ni*16*SB+kt*32
+        e(ds_load_b128(vdst=v[FB+ni*8:FB+ni*8+3],   addr=v[7], **dsoff(o)))
+        e(ds_load_b128(vdst=v[FB+ni*8+4:FB+ni*8+7], addr=v[7], **dsoff(o+16)))
+      e(waitcnt_lgkm(0))
+      for mi in range(WM):
+        for ni in range(WN):
+          ac=ACCb+(mi*WN+ni)*8
+          e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[FA+mi*8:FA+mi*8+7], src1=v[FB+ni*8:FB+ni*8+7], src2=v[ac:ac+7]))
+  if not DBUF:
+    e(s_mov_b32(s[16], 0))
+    label('LOOP')
+    coop_load(0); e(waitcnt_vm(0)); coop_store(0); e(waitcnt_lgkm(0)); e(s_barrier())
+    compute(0); e(s_barrier())
+    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
+    e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], NBLK)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
+  else:
+    # double-buffer, unroll-by-2: prefetch next block into the OTHER buffer while computing current.
+    coop_load(0); e(waitcnt_vm(0)); coop_store(0); e(waitcnt_lgkm(0)); e(s_barrier())
+    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
+    e(s_mov_b32(s[16], 0)); NL=(NBLK//2)-1
+    label('LOOP')
+    coop_load(1); compute(0); e(waitcnt_vm(0)); coop_store(1); e(waitcnt_lgkm(0)); e(s_barrier())
+    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
+    coop_load(0); compute(1); e(waitcnt_vm(0)); coop_store(0); e(waitcnt_lgkm(0)); e(s_barrier())
+    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
+    e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], NL)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
+    coop_load(1); compute(0); e(waitcnt_vm(0)); coop_store(1); e(waitcnt_lgkm(0)); e(s_barrier())
+    compute(1)
+  # epilogue (recompute wave_m/wave_n from tid — v[19]/v[20] were clobbered by the K-loop frag loads)
+  e(v_and_b32_e32(v[8], 15, v[0])); e(v_lshrrev_b32_e32(v[9], 4, v[0])); e(v_and_b32_e32(v[9], 1, v[9]))
+  e(v_lshrrev_b32_e32(v[10], 5, v[0]))                                      # wave
+  if WAVES_N==1: e(v_mov_b32_e32(v[11], v[10])); e(v_mov_b32_e32(v[15], 0))
+  elif WAVES_N==2: e(v_lshrrev_b32_e32(v[11],1,v[10])); e(v_and_b32_e32(v[15],1,v[10]))
+  else: e(v_lshrrev_b32_e32(v[11],2,v[10])); e(v_and_b32_e32(v[15],3,v[10]))
+  e(v_lshlrev_b32_e32(v[21], 4, v[11])); e(v_mul_lo_u32(v[21], v[21], WM)); e(v_add_nc_u32_e32(v[21], s[10], v[21]))  # gy*BM + wave_m*WM*16
+  e(v_lshlrev_b32_e32(v[22], 4, v[15])); e(v_mul_lo_u32(v[22], v[22], WN)); e(v_add_nc_u32_e32(v[22], s[11], v[22]))  # gx*BN + wave_n*WN*16
+  for mi in range(WM):
+    for ni in range(WN):
+      ac=ACCb+(mi*WN+ni)*8
+      e(v_add_nc_u32_e32(v[12], v[21], v[9])); e(v_add_nc_u32_e32(v[12], mi*16, v[12]))
+      e(v_add_nc_u32_e32(v[13], v[22], v[8])); e(v_add_nc_u32_e32(v[13], ni*16, v[13]))
+      e(v_mul_lo_u32(v[12], v[12], N)); e(v_add_nc_u32_e32(v[12], v[12], v[13])); e(v_lshlrev_b32_e32(v[12], 1, v[12]))
+      for i in range(8):
+        e(v_cvt_f16_f32_e32(v[14], v[ac+i]))
+        e(global_store_b16(addr=v[12:12], data=v[14], saddr=s[8:9], offset=0))
+        if i<7: e(v_add_nc_u32_e32(v[12], N*4, v[12]))
+  e(s_waitcnt(simm16=0)); e(s_sendmsg(simm16=3)); e(s_endpgm())
+  for idx,t in Br:
+    off=(lbl[t]-sum(i.size() for i in I[:idx+1]))//4
+    assert -32768<=off<=32767; I[idx].simm16=off
+  return I
+
+def _run_insts_lds(insts, a, bt, c, M, N, K, name, lds_bytes, BM=128, BN=128, THREADS=128):
+  grid=(N//BN, M//BM, 1)
   def asm_kernel(A,Bt,C):
     lds=UOp(Ops.DEFINE_LOCAL, dtypes.uint8.ptr(size=lds_bytes, addrspace=AddrSpace.LOCAL), (), 'lds')
     g=[UOp.special(grid[0],"gidx0"), UOp.special(grid[1],"gidx1")]
@@ -426,6 +540,24 @@ def test_lds_gemm():
   print(f"REAL TFLOPS {M*N*K*2/min(ets)*1e-12:.2f}  (LDS multi-wave, M={M} K={K} N={N})")
   err=_rmse(out,a_np,bt_np)
   print(f"relative RMSE {err:.6f}  {'CORRECT' if err<0.05 else 'WRONG'}")
+
+def test_lds_gemm2():
+  N=getenv("N",2048); M=getenv("M",N); K=getenv("K",N); CNT=getenv("CNT",20)
+  WAVES_M=getenv("WAVES_M",2); WAVES_N=getenv("WAVES_N",2); WM=getenv("WM",4); WN=getenv("WN",4)
+  BK=getenv("BK",16); PAD=getenv("PAD",0); DBUF=getenv("DBUF",0)
+  THREADS=WAVES_M*WAVES_N*32; BM=WAVES_M*WM*16; BN=WAVES_N*WN*16
+  insts=build_gemm_lds2(M,N,K,WAVES_M,WAVES_N,WM,WN,BK,PAD,DBUF)
+  rng=np.random.default_rng(1)
+  a_np=(rng.standard_normal((M,K))*0.1).astype(np.float16); bt_np=(rng.standard_normal((N,K))*0.1).astype(np.float16)
+  c=Tensor.empty(M,N,dtype=dtypes.half); Tensor.realize(c)
+  ldsb=max((BK*2+PAD)*(BM+BN)*(2 if DBUF else 1), 65536//getenv("LIMIT_OCC",8))
+  linear,out=_run_insts_lds(insts,Tensor(a_np),Tensor(bt_np),c,M,N,K,"rdna3_lds2",ldsb,BM,BN,THREADS)
+  ets=[]
+  with Context(DEBUG=2):
+    for _ in range(CNT):
+      st=GlobalCounters.time_sum_s; run_linear(linear); ets.append(GlobalCounters.time_sum_s-st)
+  err=_rmse(out,a_np,bt_np)
+  print(f"REAL TFLOPS {M*N*K*2/min(ets)*1e-12:6.2f}  W{WAVES_M}x{WAVES_N} T{WM}x{WN} BK{BK} PAD{PAD} DBUF{DBUF} (M={M} K={K} N={N})  RMSE {err:.6f} {'CORRECT' if err<0.05 else 'WRONG'}")
 
 def test_gemm():
   N=getenv("N",2048); M=getenv("M",N); K=getenv("K",N); TM,TN=getenv("TM",4),getenv("TN",4)
@@ -476,7 +608,8 @@ def test_pipe():
   print(f"speedup (best) {min(eb)/min(ep):.3f}x")
 
 if __name__ == "__main__":
-  if getenv("LDSGEMM",0): test_lds_gemm()
+  if getenv("LDSGEMM2",0): test_lds_gemm2()
+  elif getenv("LDSGEMM",0): test_lds_gemm()
   elif getenv("LDSTILE",0): test_lds_tile()
   elif getenv("PIPE",0): test_pipe()
   elif getenv("GEMM",1): test_gemm()
