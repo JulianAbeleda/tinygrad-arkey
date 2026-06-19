@@ -93,6 +93,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   (`121.38us`, correct vs q8 proxy). Initial Tensor-visible injection faulted; the contract audit found optimized-away
   input buffers and a wrong Q4_K dummy dtype/shape. After fixing both, eager injected node and TinyJit replay PASS
   (`max_abs 0.00137`, no HIP runtime). W==D decode is next.
+- `q8-ffn-handwritten-a4-decode-result-20260619.md` — **A4 final gate PASS_RESEARCH.** `Q8_FFN_HANDWRITTEN=1`
+  routes dense decode FFN gate/up through the graph-injected q8 artifact. W==D decode improves
+  `1.051-1.063x` across ctx 128/512/1024/4096, and actual-route dNLL is `+0.002887` over 160 tokens. Default remains
+  off; remaining question is artifact dependency vs codegen/ASM transfer.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

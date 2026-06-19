@@ -14,6 +14,7 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
 # via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
 PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
+Q8_FFN_HANDWRITTEN = bool(getenv("Q8_FFN_HANDWRITTEN", 0))
 # NOTE: PREFILL_TC_ATTENTION (explicit TC Q@Kᵀ + softmax + P@V) was probed and UNWIRED -- it won ~2.5x over
 # SDPA standalone (concrete KV) but was ~0.8x (SLOWER) in-model because the prefill chunk's start_pos is
 # SYMBOLIC, so KV=start_pos+T is symbolic and the concrete-shape TC doesn't fire. See
@@ -751,6 +752,9 @@ class FFNBlock:
     @function(precompile=True, allow_implicit=True)
     def _run(x:Tensor, start_pos:int|UOp):
       h =     x + self._attention(self.attn_norm(x), start_pos)
+      if Q8_FFN_HANDWRITTEN and not hasattr(self, 'ffn_gate_exps'):
+        from extra.q8_ffn_graph_route import route_q8_ffn
+        if (routed := route_q8_ffn(self, h)) is not None: return (h + routed).contiguous()
       return (h + self._feed_forward(self.ffn_norm(h))).contiguous()
     return _run(x, start_pos)
 
@@ -965,6 +969,9 @@ class Transformer:
       if PREFILL_TENSILE_GEMM:   # research-only: build Tensile runners + install routing EAGERLY (outside the prefill trace)
         from extra.qk_tensile_inmodel import install
         install()
+    if Q8_FFN_HANDWRITTEN:        # research-only: install q8 decode artifacts before block function tracing
+      from extra.q8_ffn_graph_route import install_q8_ffn_artifacts
+      install_q8_ffn_artifacts()
 
   # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
   _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",

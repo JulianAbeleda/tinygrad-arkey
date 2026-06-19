@@ -172,6 +172,17 @@ Verdict:
 - **QUALITY_FAIL:** stop; do not build codegen.
 - **PERF_FAIL:** keep the kernels as oracle assets only; do not route.
 
+Executed: `q8-ffn-handwritten-a4-decode-result-20260619.md`.
+
+Result: **PASS_RESEARCH**.
+
+- W==D decode speedup: `1.051-1.063x` across ctx 128/512/1024/4096.
+- Actual-route dNLL: `+0.002887` over 160 tokens.
+- Default remains off; route is behind `Q8_FFN_HANDWRITTEN=1`.
+
+Track B now has a measured target worth transferring into tinygrad-owned codegen/ASM if the project wants to remove
+the external artifact dependency.
+
 ## Track B — tinygrad codegen transfer
 
 Track B starts from the same target but does not depend on Track A being shipped. Track A gives it measured target
