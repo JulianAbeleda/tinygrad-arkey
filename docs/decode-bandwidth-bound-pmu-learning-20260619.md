@@ -109,6 +109,26 @@ the **Q4_K weight-GEMV's effective HBM bandwidth (38%→47%+)** — a kernel mem
 pattern / occupancy / memory-level parallelism), NOT codegen-ALU (VALU idle) and NOT a new algorithm (llama's
 structure is identical). Orthogonal multiplier: spec-decode (amortize the weight read across ~2.5 tokens).
 
+## llama PREFILL reference — int8 quantized GEMM, not fp16 (reframes frontier #2)
+`rocprofv3 --kernel-trace` on llama prefill (pp512):
+| llama kernel | GPU-time% | note |
+|---|---:|---|
+| `mul_mat_q<Q4_K,128>` | **74.3%** | llama's OWN int8 quantized tiled GEMM (weights stay 4.5-bit) |
+| `Cijk_..MT128x128x16_MI16x16x16` | **9.2%** | **Tensile/rocBLAS fp16 WMMA** (the ~10% fp16 portion) |
+| `flash_attn_ext_f16` | 4.4% | prefill attention |
+| `quantize_mmq_q8_1`, `dequant_q6_K`, silu, rms_norm | rest | |
+
+- **llama prefill keeps weights quantized (int8 MMQ, 74%)**; uses Tensile/rocBLAS only for ~10% (fp16 GEMMs).
+  **tinygrad PREFILL_V2 instead dequantizes Q4_K→fp16 then does fp16 WMMA** (~35% of peak / 42 TFLOPS). Different
+  strategies: llama reads 4.5-bit weights (int8 dot); tinygrad reads 16-bit (after realizing fp16 weights, +VRAM).
+- **Reframes frontier #2:** Tensile fp16 (66 TFLOPS) targets only the path llama uses for ~10% of prefill. To
+  match llama's bulk you'd want an **int8 quantized GEMM** (like `mul_mat_q`), OR a fp16-Tensile that beats llama's
+  int8 MMQ throughput — open question, needs the int8-vs-fp16 throughput measurement. **The Tensile `.co` is
+  confirmed present and working on this box (llama loads `Cijk_*` from rocBLAS)** — so extraction for tinygrad is
+  feasible.
+- Note: prefill is compute-bound (high L2 reuse), so the byte-count difference (4.5 vs 16-bit) matters less than
+  raw matmul throughput — but the int8 path has higher arithmetic density per byte loaded.
+
 ## Files
 `extra/qk_pmc_capture.py`, `extra/qk_primitive_pmu_atlas.py`, `bench/qk-primitive-pmu-atlas/result.json`. Prior:
 `route-a-a3-p2-p3-lds-refuted-20260619.md` (LDS), `frontier-scope-beyond-route-a-20260619.md` (#3 spec-decode),
