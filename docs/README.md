@@ -33,6 +33,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `primitive-local-observability-search-scope-20260619.md` — scope for building primitive-local tooling instead of a
   generic profiler: read-only ledger first, then schema validators, runner wrappers, deterministic failure
   classifiers, guided search memory, and optional rocprof/SQTT counter plugins.
+- `primitive-local-observability-search-result-20260619.md` — **executed PLO-1..PLO-6.** Adds
+  `extra/qk_primitive_ledger.py`, a read-only primitive ledger/validator/classifier/search-memory/trace-plugin
+  inventory that reconstructs current verdicts from existing artifacts without hardware execution.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
   exhausted; q8/RMSNorm is codegen-deferred; hand-LDS WMMA is refuted; external BLAS ceiling is measured; the bounded
   no-deps prefill WMMA sweep is refuted; EBT-1 kills the HIP-runtime bridge; the only material prefill route left is
