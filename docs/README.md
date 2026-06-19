@@ -70,6 +70,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-large-project-p1-loader-smoke-result-20260619.md` — **executed P1.** Selected Q4_K and Q6_K low-VGPR
   llama descriptors load through tinygrad HCQ (`0x74840`, `0x74e40`), no unsupported relocations, no HIP runtime, no
   kernel launch. Next gate is P2: capture real llama kernargs/grid/local in a separate HIP-only process.
+- `decode-mmvq-large-project-p2-kernarg-capture-result-20260619.md` — **executed P2.** Versioned LD_PRELOAD capture
+  over llama-bench records `7` real Q4_K/Q6_K `mul_mat_vec_q` launches and reconstructs the `144` byte kernargs.
+- `decode-mmvq-large-project-p3-p4-q4-result-20260619.md` — **executed P3/P4 for Q4_K.** Imported llama Q4_K MMVQ is
+  correct on `blk.0.attn_output.weight` (`max_abs 1.43e-6`) and reaches `903.9 GB/s` / `94.2%` HBM with single-submit
+  HCQ timing. Next gate is P5: q8_1 producer/reuse plus one-role in-model routing.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

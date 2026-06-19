@@ -110,14 +110,30 @@ P1 is complete:
 
 Detailed result: `docs/decode-mmvq-large-project-p1-loader-smoke-result-20260619.md`.
 
+P2 is complete:
+
+- captured `7` real llama MMVQ decode launches from a separate HIP-only llama-bench process;
+- direct `hipLaunchKernel@hip_4.2` capture required versioned LD_PRELOAD interposition;
+- selected P3 templates: Q4_K attn_q/o, Q6_K ffn_down, Q6_K lm_head.
+
+Detailed result: `docs/decode-mmvq-large-project-p2-kernarg-capture-result-20260619.md`.
+
+P3/P4 are complete for Q4_K:
+
+- imported Q4_K no-fusion descriptor is correct on `blk.0.attn_output.weight`;
+- max_abs vs quantized-q8 CPU reference: `1.43e-6`;
+- single-submit device timing: `0.01044ms`, `903.9 GB/s`, `94.2%` of 960 GB/s peak.
+
+Detailed result: `docs/decode-mmvq-large-project-p3-p4-q4-result-20260619.md`.
+
 ## Recommendation
 
-Start P2 next.
+Start P5 next.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-capture kernarg -> HCQ correctness -> in-model one-role route
+q8_1 activation producer/reuse -> in-model one-role route
 ```
 
 If P1/P2/P3 fail for object-boundary reasons, then switch to Track B with a concrete oracle contract. If P1-P5 pass,
