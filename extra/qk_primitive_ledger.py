@@ -398,12 +398,21 @@ def build_trace_plugins() -> dict[str, Any]:
   tools = {name: _find_tool(name) for name in ("rocprofv3", "rocprof-compute", "rocprof-sys", "rocprof-compute-viewer")}
   sqtt_examples = sorted(_rel(p) for p in (ROOT / "extra/sqtt/examples").glob("gfx1100/*.pkl")) if (ROOT / "extra/sqtt/examples/gfx1100").exists() else []
   rocprof_traces = sorted(_rel(p) for p in (BENCH / "llama-residual-exhaustion-20260619").glob("**/trace_results.json")) if (BENCH / "llama-residual-exhaustion-20260619").exists() else []
+  pmu_probe = _read_json(BENCH / "qk-pmu-observability/result.json")
   return {
     "schema": "primitive_trace_plugin_inventory_v1",
     "mode": "inventory_only_no_trace_collection",
     "tools": tools,
     "tinygrad_sqtt_examples": sqtt_examples[:20],
     "rocprof_trace_artifacts": rocprof_traces[:20],
+    "pmu_probe": {
+      "path": "bench/qk-pmu-observability/result.json",
+      "present": pmu_probe is not None,
+      "verdict": pmu_probe.get("verdict") if pmu_probe else None,
+      "hip_control": pmu_probe.get("hip_control", {}).get("verdict") if pmu_probe else None,
+      "tinygrad_hcq": pmu_probe.get("tinygrad_hcq", {}).get("verdict") if pmu_probe else None,
+      "hcq_classification": pmu_probe.get("tinygrad_hcq", {}).get("classification") if pmu_probe else None,
+    },
     "evidence_level": 4 if any(tools.values()) else 3,
     "note": "Trace/counter plugins are optional. This inventory does not run rocprof or require HIP runtime.",
   }
@@ -492,6 +501,7 @@ def summary_markdown(observations:list[dict[str, Any]], validations:list[dict[st
     f"- rocprof-compute: `{traces['tools'].get('rocprof-compute') or 'missing'}`",
     f"- tinygrad SQTT example files: `{len(traces.get('tinygrad_sqtt_examples', []))}`",
     f"- rocprof trace artifacts: `{len(traces.get('rocprof_trace_artifacts', []))}`",
+    f"- PMU probe: `{traces.get('pmu_probe', {}).get('verdict') or 'missing'}`",
     "",
     "## Principle Check",
     "",

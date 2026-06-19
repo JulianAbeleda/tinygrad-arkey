@@ -44,6 +44,8 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   current evidence.
 - `primitive-pmu-observability-scope-20260619.md` — scope for using installed ROCm profiler tooling as the PMU oracle
   and building only the tinygrad primitive-local attribution layer needed around HCQ.
+- `primitive-pmu-observability-result-20260619.md` — PMU-1..PMU-3 result: ROCm PMU works on HIP controls, but tinygrad
+  HCQ is invisible to `rocprofv3` in the smoke; redirects to a tinygrad-native HCQ attribution adapter.
 - `prefill-tensile-tpe7a-rebindable-node-result-20260619.md` — TPE-7a result: one extracted Tensile kernel object
   can be rebound to current buffers through graph-style kernarg filling; correctness/protocol proof only.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
