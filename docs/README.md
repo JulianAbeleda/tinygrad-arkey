@@ -167,6 +167,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   `AMD_AQL=1` is stable but still lifecycle-only (`0` body packets). AQLprofile has nonzero gfx1100 command material,
   but the old command-buffer output is not a direct HCQ replay blob. Remaining reopen requires a v2 AQLprofile packet
   exporter with tinygrad-owned trace/control buffers, or native profiled-HCQ.
+- `amd-rocprofiler-r1p2-v2-exporter-scope-20260619.md` — scope for that remaining bounded reopen: v2
+  `aqlprofile_att_create_packets` exporter, allocation callback table, tinygrad-mappable buffers, one HCQ AQL dispatch
+  replay, and strict body-packet pass/kill gates before any native profiled-HCQ work.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
