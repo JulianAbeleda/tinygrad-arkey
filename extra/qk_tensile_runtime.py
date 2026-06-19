@@ -31,15 +31,15 @@ class TensileRunner(NamedAMDProgram):
     # ignore the host kernel's launch dims/vals; FORCE the Tensile grid. bufs = (out, A, B) from ast.arg.globals.
     return super().__call__(*bufs, global_size=self.tensile_global, local_size=self.tensile_local, vals=(), wait=wait, timeout=timeout)
   def fill_kernargs(self, bufs, vars=(), kernargs=None):
-    """HCQGraph signature. bufs = (out, A, B) HCQBuffers; write Tensile layout with their VAs (rebindable)."""
+    """HCQGraph signature. bufs = (out, A, B) HCQBuffers. Write the constant Tensile template, then BIND the 4 pointer
+    VAs (D@16,C@24,A@32,B@40 — consecutive) via bind_sints_to_buf so symbolic/JIT-rebound VAs are graph-updatable."""
     ab = kernargs or self.dev.kernargs_buf.offset(
       offset=self.dev.kernargs_offset_allocator.alloc(self.kernargs_alloc_size, 8), size=self.kernargs_alloc_size)
-    buf = bytearray(self._template)
-    out_va, a_va, b_va = bufs[0].va_addr, bufs[1].va_addr, bufs[2].va_addr
-    struct.pack_into("<Q", buf, PTR_OFFSETS["D"], out_va); struct.pack_into("<Q", buf, PTR_OFFSETS["C"], out_va)
-    struct.pack_into("<Q", buf, PTR_OFFSETS["A"], a_va);   struct.pack_into("<Q", buf, PTR_OFFSETS["B"], b_va)
-    ab.cpu_view().view(size=len(buf), fmt='B')[:] = buf
-    return HCQArgsState(ab, self, tuple(bufs), vals=tuple(vars))
+    ab.cpu_view().view(size=len(self._template), fmt='B')[:] = bytearray(self._template)   # constants (+ stale ptr slots)
+    st = HCQArgsState(ab, self, tuple(bufs), vals=tuple(vars))
+    out_va, a_va, b_va = bufs[0].va_addr, bufs[1].va_addr, bufs[2].va_addr                  # bufs = (out, A, B)
+    st.bind_sints_to_buf(out_va, out_va, a_va, b_va, buf=ab, fmt='Q', offset=PTR_OFFSETS["D"])  # D,C,A,B (rebindable)
+    return st
 
 def graph_protocol_launch(dev, runner, out, A, B):
   """exactly mirror HCQGraph: fill_kernargs(bufs) -> exec(args, dims) in one queue."""
