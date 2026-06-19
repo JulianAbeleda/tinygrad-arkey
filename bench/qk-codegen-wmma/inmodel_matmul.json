@@ -19,5 +19,22 @@
   "addressing": {
     "global_off_computed": 16,
     "global_offset_immediate": 8
+  },
+  "loop_epilogue_split": {
+    "hot_loop": {
+      "v_mov": 127,
+      "v_add": 18,
+      "v_wmma": 16,
+      "global_load": 16,
+      "note": "v_mov are register broadcasts (vN,v8) clustered before global_load = d16 fp16-load register init/marshaling"
+    },
+    "epilogue_once": {
+      "v_cvt": 128,
+      "global_store": 128,
+      "v_add": 65,
+      "note": "fp32->fp16 output store conversion, AMORTIZED over the K-loop -> NOT a bottleneck"
+    },
+    "correction": "two prior framings overturned: (1) the v_cvt CONVERSION overhead is EPILOGUE (amortized), not a loop lever; (2) ADDRESS-lowering is minor in the loop (only 18 v_add). The real hot-loop bottleneck is 127 v_mov register init/marshaling tied to the strided per-element d16 fp16 loads.",
+    "retarget": "lever = reduce the loop v_mov register overhead -- candidate: wider fp16 loads (avoid per-element d16 + their inits) via a coalesced copy (CG-W2), or a register-alloc/lowering fix. Renderer/codegen-level."
   }
 }
