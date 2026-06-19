@@ -67,6 +67,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-integration-diagnostic-result-20260619.md` — prefill-style decode localization. Verdict:
   **no single transpose-like tax**; Q4_K stage2 reduce is real but insufficient, q8 lifecycle is capped/lossy, env knobs
   fail, and the remaining large gap is MMVQ in-model contract preservation.
+- `decode-fused-mmvq-integration-b2-runtime-cache-result-20260619.md` — **executed PCG-1/FMI-4 B2.** Runtime/cache
+  identity closes: in-model decode and direct same-process role calls use the same program/launch identities for
+  `attn_q/o`, `ffn_gate/up`, `ffn_down`, `lm_head`, and `attn_k/v`. The hidden wiring-bug route is closed.
 - `primitive-pmu-observability-scope-20260619.md` — scope for using installed ROCm profiler tooling as the PMU oracle
   and building only the tinygrad primitive-local attribution layer needed around HCQ.
 - `primitive-pmu-observability-result-20260619.md` — PMU-1..PMU-3 result: ROCm PMU works on HIP controls, but tinygrad

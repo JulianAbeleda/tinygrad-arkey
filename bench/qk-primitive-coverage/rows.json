@@ -1,7 +1,7 @@
 {
   "schema": "primitive_coverage_rows_v1",
   "date": "2026-06-19",
-  "commit": "e6c4a9055",
+  "commit": "b77b6baba",
   "scope_doc": "docs/primitive-coverage-gap-scope-20260619.md",
   "validation": {
     "pass": true,
@@ -36,20 +36,20 @@
     {
       "id": "decode_mmvq_runtime_cache_identity",
       "phase": "decode",
-      "state": "open_diagnostic",
+      "state": "closed_no_mismatch",
       "primitive_class": "runtime/program identity lifecycle",
-      "current_authority": "FMI-4 B1 closed existing knobs but did not prove in-model program/cache identity",
-      "measured_basis": "no new measurement yet; scoped by PCG-1",
-      "remaining_question": "Does the in-model role use the intended compiled program, metadata, launch dims, and graph-safe cache key?",
-      "first_gate": "same-role identity ledger; promote only if mismatch explains >=5% projected W==D",
+      "current_authority": "B2 runtime/cache identity probe closes hidden wiring mismatch",
+      "measured_basis": "same-process in-model decode vs direct role calls: all high-share roles match program/launch identity",
+      "remaining_question": "none for runtime/cache identity; large decode movement now requires renderer/scheduler or artifact/import",
+      "first_gate": "closed",
       "correctness_quality_gate": "no value change expected; diagnostic-only",
-      "amdahl_or_potential": "up to the 44->54% contract-preservation target if a wiring/cache mismatch is found",
+      "amdahl_or_potential": "0 from runtime/cache identity; it does not explain the 44->54% gap",
       "refutations": [
         "do not retune env knobs; B1 already failed"
       ],
-      "next_action": "Build read-only identity probe/artifact.",
+      "next_action": "Do not pursue runtime/cache wiring fixes; choose renderer/scheduler or artifact/import for large decode movement.",
       "evidence": [
-        "docs/primitive-coverage-gap-scope-20260619.md"
+        "docs/decode-fused-mmvq-integration-b2-runtime-cache-result-20260619.md"
       ]
     },
     {
