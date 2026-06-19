@@ -188,6 +188,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   body-attributes native tinygrad Q4_K coop (`168,693` body-like packets), imported llama Q4_K MMVQ (`163,942`), and
   pp512 SDPA (`135,442`). This clears the tooling blocker but does not change timing conclusions; next decode use is a
   role-joined in-model ATT pass.
+- `amd-att-inmodel-role-join-scope-20260619.md`, `amd-att-inmodel-role-join-result-20260619.md` — **executed first
+  role-joined in-model ATT pass; verdict `PASS_INMODEL_ROLE_JOIN_NATIVE_Q4K_COOP`.** `blk.0.attn_output` launches the
+  intended `q4k_coop_partial_4096_4096` plus stage-2 reduce/glue in-model, with `16,137` body-like ATT packets. This
+  closes runtime/cache identity for that Q4_K role; next ATT target, if any, is higher-share Q6_K `ffn_down`/`lm_head`.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

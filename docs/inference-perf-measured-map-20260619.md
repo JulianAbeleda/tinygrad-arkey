@@ -47,6 +47,10 @@ prefill ~82%.
 - **Decode diagnostic update:** the prefill-style localization pass found no single transpose-like tax. Q4_K stage2
   reduce is a real `~10%` local tax but only reaches `~53-54%` on that surface; q8 lifecycle is capped by reuse `2`;
   existing env launch-shape knobs fail. The remaining large gap is **MMVQ contract preservation in-model**.
+- **ATT role-join update:** `blk.0.attn_output` was traced in-model and joined to HCQ program identity
+  (`amd-att-inmodel-role-join-result-20260619.md`). It launches the intended `q4k_coop_partial_4096_4096` plus
+  reduce/glue, so runtime/cache identity is closed for that Q4_K role. The unresolved decode residual should be checked
+  on higher-share Q6_K roles before claiming a bounded wiring bug.
 
 ## PREFILL — compute/WMMA-bound (opposite regime)
 - Dominant matmuls L2 hit **54–87%** (weights reused/cached across the 512-tile) → NOT bandwidth-bound.
