@@ -7,7 +7,28 @@ strided `half` gather materializes a separate 64-bit address per element instead
 Closing it → ~halve the loop overhead → toward llama-class prefill (1.41× ceiling already proven via the Tensile
 route), **no dependency, general (all AMD matmuls)**.
 
-## Confirmed diagnosis (ISA + emitted HIP source)
+## ⚠️ VALIDATION GAP (must close before trusting this plan) — added 2026-06-19
+The CG-W diagnosis below was measured on `extra/gemm/amd_copy_matmul.py`, a **proxy with `opts_to_apply=()` (no
+UPCAST/vectorize opts)**. An attempt to capture the **actual in-model PREFILL_V2 matmul** (via `m.logits` with
+`_prefill_v2=True` + warmstart) found kernels that look **nothing like the proxy**: `v_wmma`=0 (scalar `v_fma`/`v_dot`,
+not tensor cores) and addressing dominated by `offset:` immediates (80) not per-load `off` (24). That capture may be
+the **non-warmstarted fallback** (not the `prefill_v2_jit` path the measure harness uses for 2709 tok/s), OR the
+in-model matmul genuinely differs. **Conclusion: the "address-lowering is the in-model lever" premise is confirmed
+only for the amd_copy proxy, NOT for the in-model kernel.** Per *in-model authority*, this plan is **NOT YET
+validated** and must start with:
+
+- **CG-W1.5 (gating, do FIRST):** capture the **dominant warmstarted in-model ffn matmul kernel** on the real
+  `prefill_v2_jit` path (clone inputs to satisfy the JIT), disassemble it, and confirm (a) does it use WMMA? (b) is it
+  address-ALU-bound like the proxy, or `offset:`-clean? If the in-model kernel is *not* address-bound (or not WMMA),
+  the entire CG-W/CG-R/CG-W plan retargets — the in-model 80%-of-llama gap would then be a *different* primitive
+  constraint (e.g. TC not firing, or a non-WMMA scalar matmul), and this address-lowering plan does not apply.
+
+This caveat supersedes the confidence below until CG-W1.5 resolves it. (Lesson, against *in-model authority* +
+*isolated kernels are diagnostic only until they transfer*: the amd_copy proxy was a convenient isolated kernel; the
+in-model path uses warmstart opts that change the kernel — the proxy did not transfer, and I should have validated on
+the in-model kernel before scoping the renderer arc.)
+
+## Confirmed diagnosis (ISA + emitted HIP source) — ON THE amd_copy PROXY (see validation gap above)
 - ISA: `global_load_d16_b16 vN, v[156:157], off` — per-load 64-bit address, **no `offset:`**; 120 `v_mov`/iter
   broadcasting bases; the LDS loads (contrast) use one base + `offset:N`.
 - HIP source (the matmul kernel): `half val = *(data1 + (… + (Ridx100<<4) + Lidx1009))` — a **per-element 16-bit
