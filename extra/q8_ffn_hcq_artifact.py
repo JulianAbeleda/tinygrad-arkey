@@ -83,6 +83,7 @@ typedef struct { u16 d; u16 s; signed char qs[32]; } block_q8_1;
 
 extern "C" __attribute__((device, const)) unsigned int __ockl_get_local_id(unsigned int);
 extern "C" __attribute__((device, const)) unsigned long __ockl_get_group_id(unsigned int);
+extern "C" __attribute__((device, const)) float __ockl_wfred_add_f32(float);
 
 static inline __attribute__((device)) void get_scale_min(int j, const unsigned char *q, unsigned char *d, unsigned char *m) {
   if (j < 4) { *d = q[j] & 63; *m = q[j+4] & 63; }
@@ -108,9 +109,11 @@ static inline __attribute__((device)) float f16_to_f32(u16 h) {
 
 extern "C" __attribute__((global)) __attribute__((amdgpu_flat_work_group_size(1, 128)))
 void q8_mmvq(float *dst, const block_q4_K *x, const block_q8_1 *y) {
-  __attribute__((shared, aligned(16))) float sm[128];
+  __attribute__((shared, aligned(16))) float sm[4];
   const int row = (int)__ockl_get_group_id(0);
-  const int tid = (int)__ockl_get_local_id(0);
+  const int lx = (int)__ockl_get_local_id(0);
+  const int ly = (int)__ockl_get_local_id(1);
+  const int tid = ly * 32 + lx;
   float tmp = 0.0f;
   for (int kb = tid / 8; kb < 16; kb += 16) {
     const block_q4_K *bx = x + row * 16 + kb;
@@ -132,13 +135,10 @@ void q8_mmvq(float *dst, const block_q4_K *x, const block_q8_1 *y) {
     const float dd = f16_to_f32(bx->d), dm = f16_to_f32(bx->dmin);
     tmp += d8 * (dd * (float)sc * (float)sumi - dm * (float)mn * (float)sumq);
   }
-  sm[tid] = tmp;
+  tmp = __ockl_wfred_add_f32(tmp);
+  if (lx == 0) sm[ly] = tmp;
   __builtin_amdgcn_s_barrier();
-  for (int off = 64; off > 0; off >>= 1) {
-    if (tid < off) sm[tid] += sm[tid + off];
-    __builtin_amdgcn_s_barrier();
-  }
-  if (tid == 0) dst[row] = sm[0];
+  if (tid == 0) dst[row] = sm[0] + sm[1] + sm[2] + sm[3];
 }
 """
 
@@ -204,7 +204,7 @@ def main() -> None:
 
   q4buf, dstbuf = make_buffer(len(q4), dtypes.uint8), make_buffer(rows, dtypes.float32)
   q4buf.copyin(memoryview(q4))
-  mmvq(dstbuf._buf, q4buf._buf, q8buf._buf, global_size=(rows,1,1), local_size=(128,1,1), wait=True)
+  mmvq(dstbuf._buf, q4buf._buf, q8buf._buf, global_size=(rows,1,1), local_size=(32,4,1), wait=True)
   got_mmvq = copyout_array(dstbuf, np.empty(rows, dtype=np.float32))
 
   norm_abs = np.abs(got_norm - ref_norm)
@@ -238,7 +238,7 @@ def main() -> None:
       "producer_global": [1,1,1],
       "producer_local": [256,1,1],
       "consumer_global": [rows,1,1],
-      "consumer_local": [128,1,1],
+      "consumer_local": [32,4,1],
       "hip_runtime_in_process": False,
     },
   }

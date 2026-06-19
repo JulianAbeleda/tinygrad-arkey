@@ -2,7 +2,7 @@
   "date": "2026-06-19",
   "phase": "A1",
   "verdict": "PASS",
-  "compile_s": 0.24125895699762623,
+  "compile_s": 0.17086484399987967,
   "producer": {
     "n": 4096,
     "q8_bytes": 4608,
@@ -18,10 +18,10 @@
     "rows": 12288,
     "q4_bytes": 28311552,
     "max_abs": 7.152557373046875e-07,
-    "mean_abs": 1.0283505247343783e-07,
-    "worst_row": 8248,
-    "worst_got": 3.594356060028076,
-    "worst_ref": 3.5943567752838135
+    "mean_abs": 1.0243032733114887e-07,
+    "worst_row": 7652,
+    "worst_got": 2.1520423889160156,
+    "worst_ref": 2.1520416736602783
   },
   "launch": {
     "runtime": "tinygrad AMD HCQ",
@@ -41,8 +41,8 @@
       1
     ],
     "consumer_local": [
-      128,
-      1,
+      32,
+      4,
       1
     ],
     "hip_runtime_in_process": false

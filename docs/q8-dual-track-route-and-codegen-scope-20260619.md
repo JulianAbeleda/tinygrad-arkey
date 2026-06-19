@@ -90,7 +90,7 @@ This proves the handwritten producer and consumer are HCQ-loadable artifacts on 
 not yet prove model routing or graph capture; it retires only the "can these kernels be loaded without HIP in-process?"
 risk.
 
-### A2 — one-block eager route behind research flag: NEXT
+### A2 — one-block eager route behind research flag: PERF_FAIL / REDIRECT
 
 Route one dense FFN block:
 
@@ -104,7 +104,31 @@ Gate:
 - eager device-time speedup >= modeled threshold after route overhead;
 - no default behavior change.
 
-### A3 — TinyJit/HCQGraph route
+Executed as `extra/q8_ffn_oneblock_route.py` on block 0 using a real post-attention hidden state. The route launches
+the HCQ producer, HCQ gate consumer, HCQ up consumer, then feeds `silu(gate) * up` into the existing `ffn_down`.
+
+Artifact:
+
+- `bench/q8-ffn-handwritten-oracle/oneblock_route.json`
+
+| check | result | verdict |
+|---|---:|---|
+| route output vs graph q8 proxy max_abs | 0.00137 | PASS |
+| route output vs graph q8 proxy mean_abs | 4.44e-5 | PASS |
+| q8 proxy vs fp FFN max_abs | 0.00327 | quality context |
+| HCQ producer + gate + up lifecycle | 195.0us | FAIL |
+| modeled lifecycle target with 20% slack | <=129.2us | FAIL |
+
+The correctness route is real, but the HCQ-loadable COMGR artifact does not preserve the HIP oracle economics.
+The producer is also slower in-model because the route casts the fp16 RMSNorm weight to the producer's current
+`float*` contract. A hipcc-compiled code object was tested as a recovery path and compiled successfully, but
+`AMDProgram` rejected it with `unknown AMD reloc 10`; it is not yet loadable by tinygrad's current HCQ program loader.
+
+**Redirect before A3:** do not graph-capture this slow COMGR artifact. First recover a hipcc/clang-quality
+HCQ-loadable artifact, or change the producer/consumer to a tinygrad-owned raw-ASM/codegen form that matches the HIP
+oracle timing.
+
+### A3 — TinyJit/HCQGraph route: BLOCKED ON A2 PERF
 
 Make the route graph-capturable so W==D decode can measure it without per-token Python overhead.
 

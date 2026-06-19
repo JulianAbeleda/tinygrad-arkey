@@ -237,6 +237,22 @@ This is still not a W==D model route. It proves the backend artifact route is me
 producer-side q8 activation buffer can be written by one HCQ kernel and consumed by the gate/up MMVQ kernels without
 HIP, copies, or descriptor extraction.
 
+One-block eager route status: `extra/q8_ffn_oneblock_route.py` routes block 0 behind the same handwritten HCQ artifacts
+and feeds the result into the existing `ffn_down`. The route is numerically correct but fails the eager performance
+gate:
+
+| check | result |
+|---|---:|
+| route vs graph q8 proxy max_abs | 0.00137 |
+| route vs graph q8 proxy mean_abs | 4.44e-5 |
+| producer + gate + up HCQ lifecycle | 195.0us |
+| performance gate | FAIL |
+
+The failure is not a model-quality objection; it is an artifact/compiler-quality objection. The HIP oracle still has
+the right economics, but the COMGR-compiled HCQ artifact is too slow. A hipcc-compiled object currently fails tinygrad
+AMD loading with `unknown AMD reloc 10`, so A3 graph capture is blocked until the fast code object can be loaded or
+the same schedule is transferred into a tinygrad-owned raw-code path.
+
 ## Stop rules
 
 Stop immediately if any of these occur:
