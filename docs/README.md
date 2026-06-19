@@ -50,6 +50,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
   tinygrad's standalone GEMV is stronger than llama's, but in-model weight-GEMV falls to `~44%` vs llama `~54%`.
   Scopes activation/Q8 reuse plus occupancy/launch-shape preservation, starting with measurement-only FMI-1/FMI-2.
+- `decode-fused-mmvq-integration-fmi1-fmi2-result-20260619.md` — **executed FMI-1/FMI-2.** The in-model GEMV loss
+  atlas passes (`44% -> 54%` projects `1.187x` if recovered across the weight-GEMV bucket), and llama/tinygrad launch
+  contract diff passes. Decision: build Track B first, the byte-identical occupancy/launch-shape route.
 - `primitive-pmu-observability-scope-20260619.md` — scope for using installed ROCm profiler tooling as the PMU oracle
   and building only the tinygrad primitive-local attribution layer needed around HCQ.
 - `primitive-pmu-observability-result-20260619.md` — PMU-1..PMU-3 result: ROCm PMU works on HIP controls, but tinygrad

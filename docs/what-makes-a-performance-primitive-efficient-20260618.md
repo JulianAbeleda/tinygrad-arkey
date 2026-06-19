@@ -515,6 +515,11 @@ in-model while llama holds `~54%`. That makes the next base-decode primitive lif
 `decode-fused-mmvq-integration-next-path-scope-20260619.md`: activation/Q8 reuse plus preserving the low-VGPR,
 high-grid occupancy contract inside the model. This is orthogonal to spec decode.
 
+FMI-1/FMI-2 (`decode-fused-mmvq-integration-fmi1-fmi2-result-20260619.md`) execute the measurement gate: the aggregate
+`44% -> 54%` in-model weight-GEMV recovery projects `1.187x`, and the llama trace shows the concrete launch contract
+(`wg32`, large grid, low VGPR) that tinygrad does not preserve in-model. Decision: build Track B first because it is
+byte-identical and higher EV than q8-only gate/up reuse.
+
 The PMU atlas reopens spec decode only as `decode_spec_weight_amortization_lifecycle`
 (`spec-decode-bandwidth-amortization-scope-20260619.md`). The old `decode_spec_verify_shortcut` remains closed:
 current T=5 verify is `4.66x` one T==1 pass. The reopened row is gated on a T-cheap target verify forward
