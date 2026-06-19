@@ -28,14 +28,14 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   case study: decode, lm_head, MMVQ, attention, spec, prefill, machine-search lessons, and every remaining path
   marked shipped/refuted/deferred/open.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
-  exhausted; q8/RMSNorm is codegen-deferred; hand-LDS WMMA is refuted; external BLAS ceiling is measured; the only
-  live no-deps build question is pure-tinygrad prefill WMMA issue/occupancy.
+  exhausted; q8/RMSNorm is codegen-deferred; hand-LDS WMMA is refuted; external BLAS ceiling is measured; the bounded
+  no-deps prefill WMMA sweep is refuted; the only material route left is an explicit external/raw-HIP/Tensile boundary.
 - `qk-decode-per-role-delta-audit-20260618.md` — the quantitative per-role decode gap table (traffic/%peak/time-share/
   Amdahl/status); summed ceilings ~+27–30% ≈ the whole 1.47× llama gap, all behind one q8/full-MMVQ wall.
 - `qk-machine-search-primitive-rows-20260618.md` — current machine-search rows (live + closed); supersedes the
-  06-17 rows doc. Live: q8 side-channel, ffn coop sub-gate, attention residual audit, pure-tinygrad WMMA
-  issue/occupancy, LDS flash-prefill, external BLAS boundary/control; closed: quant-weight-reuse-8b, broad
-  mmvq_q4k/q6k, decode_block_fusion, hand-LDS WMMA as the prefill lever.
+  06-17 rows doc. Live/deferred: q8 side-channel, ffn coop sub-gate, attention residual audit, LDS flash-prefill,
+  external/raw-HIP boundary/control; closed: quant-weight-reuse-8b, broad mmvq_q4k/q6k, decode_block_fusion,
+  hand-LDS WMMA as the prefill lever, and bounded pure-tinygrad WMMA issue/occupancy.
 - `q8-mmvq-lifecycle-deep-scope-20260618.md` — deep scope for the only remaining decode MMVQ lifecycle reopening:
   producer-side q8 from fused RMSNorm/apply into Q4_K ffn_gate/up int-dot. Explains what "q8/MMVQ lifecycle"
   means, what is already refuted, phase gates, and why this is low-EV/deep rather than a kernel tweak.
@@ -79,6 +79,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   compile issue; hipBLASLt reaches 69.8 TFLOPS on ffn_gate/up (1.71× tinygrad) and rocBLAS reaches 70.9/76.7 TFLOPS
   on ffn_down/attn_q/o. This proves a higher GEMM ceiling, but routing remains an external-dependency + HCQ-vs-HIP
   runtime boundary.
+- `prefill-external-rawhip-tensile-boundary-scope-20260619.md` — **full scope for the only material route left.**
+  Starts with the authority decision, then EBT-1 tinygrad-buffer pointer interop, EBT-2 bridge/shape overhead,
+  EBT-3 one-block transfer, EBT-4 full warm pp, and fallback lanes for Tensile HSACO or raw-HIP kernels. It also
+  states the key gate conflict: strict >=1.5x full pp likely stops because the measured ceiling caps around
+  1.4-1.45x before overhead.
 - `prefill-own-wmma-kernel-scope-20260619.md` — pure tinygrad/no-deps scope. Key learning: tinygrad's
   WMMA matmul (41 TFLOPS) only *matches* the non-WMMA ALU matmul (40) — it gets **none** of the tensor-core 2×, so
   WMMA units are **stalled, not the bottleneck**. POWN-0 diagnose (occupancy / accumulator-chain / issue-rate) →

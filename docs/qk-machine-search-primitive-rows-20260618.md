@@ -110,7 +110,7 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "expected_amdahl": "moderate-high for prefill: measured ~1.7x large matmuls gives roughly 1.4-1.45x full-pp upper before bridge/layout overhead [I]",
     "known_refutations": "the tinygrad-internal LDS alternative (prefill_fp16_wmma_lds_tiling) is REFUTED -- LDS-tiling doesn't help (PWLT-A2). External ceiling is real but not a route.",
     "fallback": "pure tinygrad PREFILL_V2 (~70-83% llama)",
-    "blocked_by": "toolchain ceiling compile solved via host-only C++ + __HIP_PLATFORM_AMD__; model integration still blocked by HCQ-vs-HIP-runtime bridge, fallback policy, and external-dependency authority decision"
+    "blocked_by": "toolchain ceiling compile solved via host-only C++ + __HIP_PLATFORM_AMD__; model integration still blocked by HCQ-vs-HIP-runtime bridge, fallback policy, and external-dependency authority decision. Full scope: prefill-external-rawhip-tensile-boundary-scope-20260619.md; start EBT-1 only if the boundary is accepted."
   }
 ]
 ```
@@ -130,7 +130,8 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
 ## Live-row priority (Amdahl-ranked, all gated, none routable cheaply)
 
 1. `external_blas_rawhip_boundary` — isolated ceiling passes, but routing is an authority/runtime boundary
-   (HCQ-vs-HIP runtime, fallback, external dependency policy), not a kernel tweak.
+   (HCQ-vs-HIP runtime, fallback, external dependency policy), not a kernel tweak. Full scope:
+   `prefill-external-rawhip-tensile-boundary-scope-20260619.md`.
 2. `decode_q4k_ffn_q8_sidechannel` — the only decode lever left (~+3–4%), deep + lossy + multi-output-precedent-less.
 3. `prefill_attention_lds_flash` — matters at long prompts; deep, SHAPED_WMMA-walled.
 4. `decode_q4k_ffn_coop_subgate` — +1–2.3% stackable, not routable alone.

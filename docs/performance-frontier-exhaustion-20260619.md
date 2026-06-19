@@ -26,7 +26,9 @@ deep build rather than a bounded kernel tweak.
 Only two material things remain that are not already closed, refuted, or sub-gate:
 
 1. **External BLAS integration boundary:** the library ceiling exists, but routing it through tinygrad's HCQ model
-   path is a runtime/dependency decision, not a kernel-efficiency question.
+   path is a runtime/dependency decision, not a kernel-efficiency question. The scoped arc is
+   `prefill-external-rawhip-tensile-boundary-scope-20260619.md`; if accepted, the first executable step is EBT-1
+   tinygrad-buffer pointer interop.
 2. **Better llama MMVQ counters:** useful for research completeness, but locally blocked by gfx1100 counter-tool
    support. Current source/trace evidence does not justify a build.
 
@@ -45,5 +47,6 @@ complete performance primitives:
   while external BLAS proves a higher ceiling;
 - long prompt: separate attention locality, only relevant when the prompt regime makes it large.
 
-After POWN-1, there is no remaining bounded no-deps prefill kernel route. The remaining performance route is an
-explicit external/raw-HIP/Tensile boundary decision, or resting at PREFILL_V2.
+After POWN-1, there is no remaining bounded no-deps prefill kernel route. The remaining performance route is the
+explicit external/raw-HIP/Tensile boundary scoped in `prefill-external-rawhip-tensile-boundary-scope-20260619.md`,
+or resting at PREFILL_V2.
