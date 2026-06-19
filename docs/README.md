@@ -51,6 +51,12 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `primitive-hcq-attribution-result-20260619.md` — PMU-4a..c result: probe-local attribution captures eager HCQ
   launches, HCQGraph construction/replay, and a Tensile runtime row; classifies `rocprof_hcq_visibility_gap` +
   `graph_rebind_ok`.
+- `amd-schedule-codegen-exhaustion-scope-20260619.md` — cross-primitive scope for exhausting AMD scheduler/codegen by
+  oracle, not as an open-ended compiler ambition. Uses q8 decode and Tensile prefill as authority cases.
+- `amd-schedule-codegen-exhaustion-result-20260619.md` — **executed SCE-0/SCE-1.** Builds
+  `bench/amd-schedule-codegen-exhaustion/oracle_matrix.json`: 7 feature rows are project-level, 1 artifact-only,
+  1 bounded graph/rebind row, 1 tooling-blocked, 1 not worth owning, 1 already expressible. Native q8/prefill
+  schedule generation is exhausted as a bounded primitive; remaining native work is a reusable AMD backend project.
 - `prefill-tensile-research-measurement-scope-20260619.md` — complete Option A execution scope for Claude: finish the
   bounded JIT-dim step, route extracted Tensile prefill behind `PREFILL_TENSILE_GEMM=1`, and measure pp/dNLL as
   research-only evidence.
