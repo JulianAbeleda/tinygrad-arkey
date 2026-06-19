@@ -1,7 +1,7 @@
 # Primitive-local observability summary
 
-- generated: `2026-06-19T07:30:56+00:00`
-- commit: `84f424959-dirty`
+- generated: `2026-06-19T07:31:19+00:00`
+- commit: `5ae877964`
 - observations: `11`
 - validation: `PASS`
 - search sessions: `3`
