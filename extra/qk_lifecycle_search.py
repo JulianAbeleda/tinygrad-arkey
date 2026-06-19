@@ -490,6 +490,7 @@ def build_candidates() -> list[dict[str, Any]]:
              "rank": 32},
       evidence=["docs/spec-decode-bandwidth-amortization-scope-20260619.md",
                 "docs/spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md",
+                "docs/spec-decode-tcheap-batched-forward-project-scope-20260619.md",
                 "bench/qk-spec-decode-bandwidth-amortization/model.json",
                 "bench/qk-spec-decode-acceptance/result.json",
                 "bench/qk-spec-decode-production/baseline.json",

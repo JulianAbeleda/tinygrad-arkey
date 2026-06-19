@@ -1,7 +1,7 @@
 {
   "schema": "primitive_lifecycle_search_v1",
   "date": "2026-06-19",
-  "commit": "f230ff5b8",
+  "commit": "406af68ce",
   "scope_doc": "docs/primitive-lifecycle-search-scope-20260619.md",
   "candidates": [
     {
@@ -221,6 +221,7 @@
       "evidence": [
         "docs/spec-decode-bandwidth-amortization-scope-20260619.md",
         "docs/spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md",
+        "docs/spec-decode-tcheap-batched-forward-project-scope-20260619.md",
         "bench/qk-spec-decode-bandwidth-amortization/model.json",
         "bench/qk-spec-decode-acceptance/result.json",
         "bench/qk-spec-decode-production/baseline.json",

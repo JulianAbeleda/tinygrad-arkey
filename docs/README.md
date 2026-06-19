@@ -168,6 +168,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   non-viable (`~0.52x` before runtime with 0.6B K=4) because verify is `4.65x`; reaching `<=1.5x` requires a
   `67.8%` verify cut across Q4_K, Q6_K/lm_head, and attention/reduces. No bounded shared primitive; spec is
   project-level T-cheap batched-forward work.
+- `spec-decode-tcheap-batched-forward-project-scope-20260619.md` — project-level decode-only scope for making spec
+  viable after SDB-1/SDB-2: a short-block target verify forward, low-sync accept/commit, exact KV protocol, and
+  T=K+1 verify `<=1.3-1.5x` one pass. Explicitly not a prefill route and not a bounded kernel edit.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
