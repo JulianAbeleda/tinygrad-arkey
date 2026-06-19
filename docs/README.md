@@ -61,6 +61,12 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-artifact-import-discovery-result-20260619.md` — large-path L1 inventory. llama.cpp has MMVQ source and
   build objects, but no standalone Tensile-like HCQ code-object family; direct TPE-style decode extraction is closed as
   a bounded route.
+- `decode-mmvq-large-project-scope-20260619.md` — funded large decode MMVQ project scope. Splits the work into
+  source/object import first and native renderer/scheduler transfer second, with P0-P8 gates. Target remains
+  `44% -> 54%` in-model HBM over the weight-GEMV bucket, about `1.187x` decode.
+- `decode-mmvq-large-project-p0-contract-inventory-result-20260619.md` — **executed P0.** The llama.cpp gfx1100
+  `mmvq.cu` object contains `22` Q4_K/Q6_K candidate functions and `22` `.kd` descriptors with `144` byte kernargs.
+  Next gate is P1: named-descriptor HCQ load smoke, no HIP runtime, no launch yet.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
