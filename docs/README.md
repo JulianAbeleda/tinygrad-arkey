@@ -203,6 +203,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-complete-tooling-scope-20260619.md` — complete tooling scope for the remaining decode lifecycle question:
   join role identity, ATT body attribution, lifecycle accounting, timing authority, reduce/glue Amdahl, and llama
   comparison into one atlas before funding any direct-output/reduce-fusion or scheduler/resource build.
+- `decode-complete-tooling-result-20260619.md` — **executed DCT-0..DCT-7.** Adds
+  `extra/qk_decode_complete_tooling.py` and `bench/qk-decode-complete-tooling/*`. Verdict:
+  `COMPLETE_TOOLING_PASS_WITH_EXPLICIT_GAPS`; reduce/glue is visible but does not clear the build gate, Q6 surface
+  equivalence is accepted for visibility not timing, and ATT remains body evidence rather than timing authority.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
