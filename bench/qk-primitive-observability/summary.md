@@ -1,7 +1,7 @@
 # Primitive-local observability summary
 
-- generated: `2026-06-19T07:24:06+00:00`
-- commit: `247a12222`
+- generated: `2026-06-19T07:30:56+00:00`
+- commit: `84f424959-dirty`
 - observations: `11`
 - validation: `PASS`
 - search sessions: `3`
@@ -52,6 +52,7 @@
 - tinygrad SQTT example files: `8`
 - rocprof trace artifacts: `2`
 - PMU probe: `REDIRECT_HCQ_NATIVE_ADAPTER`
+- HCQ attribution: `rocprof_hcq_visibility_gap,graph_rebind_ok`
 
 ## Principle Check
 

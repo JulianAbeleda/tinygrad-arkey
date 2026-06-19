@@ -1,5 +1,16 @@
 {
   "evidence_level": 4,
+  "hcq_attribution": {
+    "classification": [
+      "rocprof_hcq_visibility_gap",
+      "graph_rebind_ok"
+    ],
+    "graph_count": 1,
+    "graph_replay_count": 3,
+    "path": "bench/qk-hcq-attribution/result.json",
+    "present": true,
+    "program_count": 23
+  },
   "mode": "inventory_only_no_trace_collection",
   "note": "Trace/counter plugins are optional. This inventory does not run rocprof or require HIP runtime.",
   "pmu_probe": {
