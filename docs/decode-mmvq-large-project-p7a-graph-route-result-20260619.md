@@ -1,5 +1,8 @@
 # Decode MMVQ large project P7a graph route result - 2026-06-19
 
+> **SUPERSEDED by `decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md`.** The P7a failure was real
+> for the first wrapper, but P7b fixed the raw-kernarg rebind/call path and the Q4 graph route now passes.
+
 Purpose: execute the next build after P5/P6: make the imported Q4_K MMVQ route graph-safe enough for an in-model
 decode route.
 

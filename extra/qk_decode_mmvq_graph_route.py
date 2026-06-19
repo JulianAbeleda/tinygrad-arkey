@@ -5,6 +5,8 @@ from functools import cache
 
 from tinygrad import Tensor, UOp, dtypes
 from tinygrad.device import Device
+from tinygrad.helpers import PROFILE, unwrap
+from tinygrad.runtime.support.hcq import HCQArgsState, hcq_profile
 from tinygrad.uop.ops import AxisType, KernelInfo
 import tinygrad.engine.realize as R
 import tinygrad.runtime.ops_amd as ops_amd
@@ -23,7 +25,15 @@ class FixedLaunchRunner:
     return getattr(self.prg, name)
 
   def __call__(self, *bufs, global_size=None, local_size=None, vals=(), wait=False, timeout=None):
-    return self.prg(*bufs, global_size=self.qk_global, local_size=self.qk_local, vals=vals, wait=wait, timeout=timeout)
+    kernargs = self.fill_kernargs(bufs, vals)
+    q = unwrap(self.prg.dev.hw_compute_queue_t)().wait(self.prg.dev.timeline_signal, self.prg.dev.timeline_value - 1).memory_barrier()
+    self.prg.dev.prof_exec_counter += 1
+    with hcq_profile(self.prg.dev, queue=q, desc=self.prg.name, enabled=wait or PROFILE) as (sig_st, sig_en):
+      q.exec(self, kernargs, self.qk_global, self.qk_local)
+    q.signal(self.prg.dev.timeline_signal, self.prg.dev.next_timeline()).submit(self.prg.dev)
+    if wait:
+      self.prg.dev.synchronize(timeout=timeout)
+    return (float(sig_en.timestamp - sig_st.timestamp) / 1e6) if wait else None
 
 
 class ImportedQ4MMVQRunner(FixedLaunchRunner):
@@ -60,12 +70,15 @@ class ImportedQ4MMVQRunner(FixedLaunchRunner):
     # identify the three buffers by allocation size instead of assuming stub source order.
     raw = bytearray(self.raw_template)
     out, q4, q8 = self._classify_bufs(bufs)
-    struct.pack_into("<Q", raw, 0, q4.va_addr)
-    struct.pack_into("<Q", raw, 8, q8.va_addr)
     struct.pack_into("<Q", raw, 16, 0)
-    struct.pack_into("<Q", raw, 56, out.va_addr)
-    self.prg._raw = bytes(raw)
-    return self.prg.fill_kernargs(bufs, vals=vals, kernargs=kernargs)
+    ab = kernargs or self.prg.dev.kernargs_buf.offset(offset=self.prg.dev.kernargs_offset_allocator.alloc(self.prg.kernargs_alloc_size, 8),
+                                                      size=self.prg.kernargs_alloc_size)
+    ab.cpu_view().view(size=len(raw), fmt="B")[:] = raw
+    st = HCQArgsState(ab, self.prg, tuple(bufs), vals=tuple(vals))
+    st.bind_sints_to_buf(q4.va_addr, buf=ab, fmt="Q", offset=0)
+    st.bind_sints_to_buf(q8.va_addr, buf=ab, fmt="Q", offset=8)
+    st.bind_sints_to_buf(out.va_addr, buf=ab, fmt="Q", offset=56)
+    return st
 
 
 _orig_exec = ops_amd.AMDComputeQueue.exec

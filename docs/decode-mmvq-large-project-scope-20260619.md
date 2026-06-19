@@ -146,16 +146,25 @@ P7a was attempted and redirected:
 
 Detailed result: `docs/decode-mmvq-large-project-p7a-graph-route-result-20260619.md`.
 
+P7b is complete and supersedes the P7a failure:
+
+- raw llama kernarg pointer fields are now rebindable through `HCQArgsState.bind_sints_to_buf`;
+- CPU args-state proof passes with offsets `0/8/56` patched to q4/q8/out live VAs;
+- eager rebind parity passes (`max_abs 1.43e-6`);
+- TinyJit graph replay passes for real `blk.0.attn_output` activation, `5/5` calls stable with zero diff vs eager.
+
+Detailed result: `docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md`.
+
 ## Recommendation
 
-Start P7b next: first-class raw-kernarg rebind support, or stop the imported route at eager research primitive status.
+Start P7c next: one-role model integration behind a research flag, with persistent q8/out side buffers.
 
 Detailed scope: `docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-scope-20260619.md`.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-raw-kernarg rebind support -> Q4 imported consumer + q8_1 producer graph route -> W==D/dNLL gate
+Q4 imported consumer + q8_1 producer graph route -> one-role model flag -> W==D/dNLL gate
 ```
 
 Q6 imported-kernel correctness/perf remains a coverage track. It should not block the Q4 graph route because Q4 already
