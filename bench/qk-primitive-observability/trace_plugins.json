@@ -2,6 +2,14 @@
   "evidence_level": 4,
   "mode": "inventory_only_no_trace_collection",
   "note": "Trace/counter plugins are optional. This inventory does not run rocprof or require HIP runtime.",
+  "pmu_probe": {
+    "hcq_classification": "rocprof_hcq_visibility_gap",
+    "hip_control": "PASS",
+    "path": "bench/qk-pmu-observability/result.json",
+    "present": true,
+    "tinygrad_hcq": "VISIBILITY_GAP",
+    "verdict": "REDIRECT_HCQ_NATIVE_ADAPTER"
+  },
   "rocprof_trace_artifacts": [
     "bench/llama-residual-exhaustion-20260619/pmc_mmvq_derived_d0_n1/trace_results.json",
     "bench/llama-residual-exhaustion-20260619/pmc_mmvq_q4_d0_n1/trace_results.json"

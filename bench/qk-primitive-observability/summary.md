@@ -1,7 +1,7 @@
 # Primitive-local observability summary
 
-- generated: `2026-06-19T07:18:58+00:00`
-- commit: `f8905422a`
+- generated: `2026-06-19T07:23:58+00:00`
+- commit: `07f38cff0-dirty`
 - observations: `11`
 - validation: `PASS`
 - search sessions: `3`
@@ -51,6 +51,7 @@
 - rocprof-compute: `/opt/rocm/bin/rocprof-compute`
 - tinygrad SQTT example files: `8`
 - rocprof trace artifacts: `2`
+- PMU probe: `REDIRECT_HCQ_NATIVE_ADAPTER`
 
 ## Principle Check
 
