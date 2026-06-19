@@ -72,10 +72,13 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   = 1.02× the default matmul (both ~34% peak) → **LDS-tiling is NOT the lever** (IC-served on gfx1100, like decode
   attention). Real headroom is rocBLAS-class Tensile tuning → **Branch B (external rocBLAS)**, gated on a split ROCm
   toolchain (HIP 5.7 vs rocBLAS 7.2.4 won't co-compile). Prefill rests at PREFILL_V2 until that's funded.
-- **`prefill-external-blas-scope-20260619.md` — THE NEXT PLAN (external BLAS).** Ceiling-first: PXB-0 toolchain fix →
-  PXB-1 standalone rocBLAS/hipBLASLt ceiling on the real shapes (the cheap go/no-go: ≥1.5× current matmul or kill) →
-  only then PXB-2 bridge (the hard part: tinygrad HCQ vs HIP-runtime are two device stacks) → PXB-3 in-model pp →
-  PXB-4 authority/portability decision. Most risk resolves at the PXB-1 ceiling measurement.
+- **`prefill-own-wmma-kernel-scope-20260619.md` — THE NEXT PLAN (pure tinygrad, no deps).** Key learning: tinygrad's
+  WMMA matmul (41 TFLOPS) only *matches* the non-WMMA ALU matmul (40) — it gets **none** of the tensor-core 2×, so
+  WMMA units are **stalled, not the bottleneck**. POWN-0 diagnose (occupancy / accumulator-chain / issue-rate) →
+  POWN-1 config sweep (LDS-off since IC-served, chase dense WMMA issue + occupancy) gated ≥1.5× → POWN-2 structure →
+  POWN-3 in-model pp. Either breaks the 34% plateau or banks tinygrad's WMMA-codegen ceiling.
+- `prefill-external-blas-scope-20260619.md` — **DECLINED (no external deps).** rocBLAS/hipBLASLt ceiling-first plan;
+  kept as provenance for the bridge analysis (DEV=AMD HCQ vs HIP-runtime).
 - **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486
   tok/s, ~83% of llama) via concrete-ubatch + fp16 + realized-weights + warmstart-TC, gated `PREFILL_V2`,
   decode untouched. Quality gate PASSED (dNLL ~0, 8B). Corrects the Stage-0 gate's premise (lazy weights →

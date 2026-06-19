@@ -1,5 +1,9 @@
 # Scope — prefill external BLAS (rocBLAS/hipBLASLt) for the fp16 WMMA matmul
 
+> **DECLINED 2026-06-19 (user: no external dependencies).** The external-BLAS path is not pursued — kept as
+> provenance for the ceiling-first method and the HCQ-vs-HIP-runtime bridge analysis. The pure-tinygrad successor
+> is `prefill-own-wmma-kernel-scope-20260619.md` (tune our own WMMA kernel for dense issue / occupancy, no deps).
+
 The next plan after PWLT-A2 refuted LDS-tiling as the prefill lever (`prefill-wmma-lds-tiling-result-20260619.md`):
 the only path to the ~34%→~80%-peak prefill matmul is **rocBLAS-class Tensile tuning, which an external BLAS already
 provides**. This scope determines — **cheaply, ceiling-first** — whether external rocBLAS/hipBLASLt can deliver

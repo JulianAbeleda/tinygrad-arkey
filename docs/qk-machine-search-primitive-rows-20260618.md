@@ -85,7 +85,7 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "blocked_by": "needs high-occupancy warp/WMMA flash (256-thread query blocks); SHAPED_WMMA custom-kernel convention stale (WR4 wall); WR1-3 + LDS-tiling assets exist"
   },
   {
-    "primitive": "external_blas_rawhip_boundary", "phase": "prefill", "state": "strategic open",
+    "primitive": "external_blas_rawhip_boundary", "phase": "prefill", "state": "DECLINED 2026-06-19 (user: no external deps). Successor = prefill_wmma_dense_issue (pure tinygrad, prefill-own-wmma-kernel-scope-20260619.md)",
     "current_impl": "pure tinygrad codegen for all prefill matmuls (WMMA, LDS=0)",
     "reference_impl": "rocBLAS / hipBLASLt / Tensile (call the mature library for fp16 tiles), or handwritten raw HIP",
     "required_dataflow": "dequant->fp16 tiles handed to external GEMM with fallback + portability policy; or raw-HIP tiled kernel bridged via Ops.PROGRAM/custom_kernel",
