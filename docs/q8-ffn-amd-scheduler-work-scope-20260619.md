@@ -209,8 +209,16 @@ Only if scheduler work gets the consumer to `<=60us`:
 
 ## Recommendation
 
-Run **S0 only** first.
+Run **S0 only** first. **Executed: see `q8-ffn-amd-scheduler-s0-result-20260619.md`.**
 
 Do not start hand-tuning until the ASM consumer's disassembly is counted against the hipcc/LLD oracle. If S0 shows a
 large, obvious delta, pursue the corresponding focused phase. If S0 does not, this should be closed as project-level AMD
 scheduler work rather than spending more time on local primitive probes.
+
+S0 verdict: **S0_CLOSE_PROJECT_LEVEL_SCHEDULER**.
+
+The tinygrad AMD DSL/ASM consumer emits the same `16` dot4 operations as the hipcc/LLD oracle and fewer static
+instructions overall (`218` vs `336`), but it remains `166.649us` vs the `<=60us` target. The visible deltas are load
+shape (`22` global loads vs `11`) and address/bit-manipulation VALU (`+37`), not a missing primitive or a massive
+instruction-count blowup. This trips the S0 kill rule: do not continue S1-S4 as blind tuning. Native q8 decode ownership
+is closed unless the project funds broader AMD scheduler/codegen work.

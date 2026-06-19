@@ -115,6 +115,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   search. Defines S0-S5: disassembly accounting, reduction audit, address/scale-min audit, load/wait/dot scheduling,
   descriptor/local-id capability, and the decision gate for local hand schedule vs AMD DSL feature vs project-level
   scheduler. Recommendation: run S0 first only.
+- `q8-ffn-amd-scheduler-s0-result-20260619.md` — **executed S0 and closed native q8 decode ownership.** tinygrad ASM
+  emits the same 16 dot4 ops as hipcc/LLD and fewer static instructions (`218` vs `336`) but is still `166.649us` vs
+  `<=60us`; visible deltas are load shape/address scheduling, not a bounded primitive edit. Verdict:
+  `S0_CLOSE_PROJECT_LEVEL_SCHEDULER`.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
