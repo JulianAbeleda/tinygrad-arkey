@@ -42,6 +42,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
+- `llama-kernel-residual-primitive-audit-20260619.md` — result of that audit. llama is not theoretically optimal,
+  but visible decode headroom collapses to MMVQ residual-to-practical-peak and RMSNorm/q8 producer lifecycle;
+  graph launch overhead is already solved by HIP graphs, and prefill residual needs a separate trace.
 - **Decode-attention wins SHIPPED (byte-identical greedy, default-on):**
   - `qk-8b-attention-fusion-result-20260617.md` — flash-decode threshold 1024→512 (+12.8% ctx520).
   - `qk-8b-flash-variant-result-20260617.md` — `hoisted` exp + L=128 default (+11–29% across ctx).
@@ -59,6 +62,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 
 ## Active / open frontiers
 
+- **`prefill-wmma-lds-tiling-scope-20260619.md` — THE NEXT PLAN.** After decode closed, the surviving high-EV arc:
+  PREFILL_V2 forward is ~74% fp16 WMMA matmul emitted with LDS=0; the lever is WMMA operand LDS-tiling (~1.6× pp).
+  Decision-first: Phase PWLT-0 is the authority call — Branch A (tinygrad hand-LDS, **triple payoff**: also unblocks
+  q8 producer + flash-prefill attention) vs Branch B (external hipBLASLt/rocBLAS, prefill-only). Both feasible
+  (assets/libs present); recommendation A-first, B as fallback control.
 - **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486
   tok/s, ~83% of llama) via concrete-ubatch + fp16 + realized-weights + warmstart-TC, gated `PREFILL_V2`,
   decode untouched. Quality gate PASSED (dNLL ~0, 8B). Corrects the Stage-0 gate's premise (lazy weights →
