@@ -180,6 +180,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   control/command/trace buffers, and the probe patches both raw 64-bit VAs and PM4 `VA >> 12` page-address fields. Full
   `start -> tinygrad body kernel -> stop` replay syncs and yields decodable SQTT body packets (`98,269` body-like
   packets), proving ROCprofiler ATT can be imported into tinygrad HCQ without HIP/HSA in the tinygrad process.
+- `amd-att-primitive-attribution-scope-20260619.md` — next scope after ATT replay passed: use imported ATT on real
+  tinygrad primitives, first decode MMVQ contract attribution (`76%` standalone HBM -> `44%` in-model) and then prefill
+  non-matmul residual attribution. Strictly observability-only; timing authority remains clock-controlled A/B + PMC.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
