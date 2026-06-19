@@ -25,9 +25,12 @@ with better tools, and what remains a deep build rather than a bounded kernel tw
 
 Only two material things remain that are not already closed, refuted, or sub-gate:
 
-1. **Tensile shape matrix:** the library ceiling exists, EBT-1 killed in-process HIP-runtime interop, and TPE-4 proved
-   one extracted rocBLAS Tensile primitive can run through tinygrad HCQ at mature-backend speed. The remaining gate is
-   TPE-5: repeat selection/contract/launch/perf for ffn_down and attn_q/o, then compute the weighted pp512 model.
+1. **Tensile extraction through HCQ — TPE-5 PASS, now at the TPE-6/policy gate:** the library ceiling exists, EBT-1
+   killed in-process HIP-runtime interop, TPE-4 proved one extracted rocBLAS Tensile primitive runs through tinygrad
+   HCQ at mature-backend speed, and **TPE-5 proved it generalizes** — ffn_gate/up 66.8, ffn_down 68.9 (StreamK, no
+   workspace), attn_q/o 58.9 TFLOPS, all correct/stable/no-workspace/no-layout-copies from one code object, weighted
+   ~**1.40× full pp512** (~95% of llama). The remaining gates are TPE-6 (one-block transfer + minimal runtime helper)
+   and the external-artifact policy decision — no longer a kernel question.
 2. **Better llama MMVQ counters:** useful for research completeness, but locally blocked by gfx1100 counter-tool
    support. Current source/trace evidence does not justify a build.
 
@@ -47,5 +50,7 @@ complete performance primitives:
 - long prompt: separate attention locality, only relevant when the prompt regime makes it large.
 
 After POWN-1 and EBT-1, there is no remaining bounded no-deps prefill kernel route and no direct HIP-runtime bridge.
-After TPE-4, the remaining performance route is no longer speculative: it is Tensile extraction through HCQ, gated by
-the TPE-5 shape matrix and external-artifact policy, or resting at PREFILL_V2.
+After TPE-4 and TPE-5, the remaining performance route is no longer speculative and is proven to generalize: Tensile
+extraction through HCQ keeps mature-backend speed across the three high-share prefill roles (~1.40× weighted pp512,
+~95% of llama), gated now only by TPE-6 one-block transfer and the external-artifact policy decision — or resting at
+PREFILL_V2.

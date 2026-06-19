@@ -205,7 +205,12 @@ Kill:
 - extracted launch falls near the 42 TFLOPS tinygrad plateau;
 - performance requires a host-side multi-kernel selection path that cannot be represented in HCQ.
 
-### TPE-5 - shape matrix
+### TPE-5 - shape matrix  — STATUS: DONE, PASS (2026-06-19, `prefill-tensile-tpe5-shape-matrix-result-20260619.md`)
+
+Result: all 3 high-share roles launch correct/stable/no-workspace through HCQ from one `Ailk_Bljk` code object with
+one pointer convention — ffn_gate/up 66.8, ffn_down 68.9 (StreamK, no workspace), attn_q/o 58.9 TFLOPS. Weighted
+model **~1.40× full pp512** (~95% llama). Gates met (all correct/stable, no layout copies, no workspace, ≥1.25×); no
+kill condition triggered. → proceed to TPE-6.
 
 Goal: decide whether one extracted primitive is enough or every role needs its own contract.
 

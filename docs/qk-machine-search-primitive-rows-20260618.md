@@ -108,9 +108,10 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "isolated_gate": "PASS: hipBLASLt 69.8 TFLOPS on ffn_gate/up = 1.71x tinygrad; extracted rocBLAS Tensile ffn_gate/up through HCQ reaches 66.91 TFLOPS; rocBLAS ceiling 70.9/76.7 TFLOPS on ffn_down/attn_q/o",
     "in_model_gate": ">= 1.5x full warm pp with fallback intact",
     "expected_amdahl": "moderate-high for prefill: measured ~1.7x large matmuls gives roughly 1.4-1.45x full-pp upper before bridge/layout overhead [I]",
-    "known_refutations": "the tinygrad-internal LDS alternative (prefill_fp16_wmma_lds_tiling) is REFUTED -- LDS-tiling doesn't help (PWLT-A2). Lane A in-process HIP runtime bridge is KILLED by EBT-1: HIP runtime and tinygrad HCQ/KFD are mutually exclusive. TPE-4 refutes 'HCQ launch loses the backend speed' for ffn_gate/up.",
+    "known_refutations": "the tinygrad-internal LDS alternative (prefill_fp16_wmma_lds_tiling) is REFUTED -- LDS-tiling doesn't help (PWLT-A2). Lane A in-process HIP runtime bridge is KILLED by EBT-1: HIP runtime and tinygrad HCQ/KFD are mutually exclusive. TPE-4 refutes 'HCQ launch loses the backend speed' for ffn_gate/up. TPE-5 refutes 'one-shape-only / per-role-opaque / needs-workspace' -- all 3 high-share roles (incl ffn_down StreamK) launch correct/stable/no-workspace from one code object.",
+    "measured_generalization": "TPE-5 PASS: ffn_gate/up 66.8, ffn_down 68.9, attn_q/o 58.9 TFLOPS through HCQ; weighted ~1.40x full pp512 (~95% llama) if all three routed. shape_matrix.json.",
     "fallback": "pure tinygrad PREFILL_V2 (~70-83% llama)",
-    "blocked_by": "TPE-5 shape matrix plus external-artifact authority decision: repeat contract/perf for ffn_down and attn_q/o, compute weighted pp512 model, then decide external artifact vs codegen-transfer target. Full scope: prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md."
+    "blocked_by": "TPE-6 one-block transfer (minimal runtime helper, research flag, PREFILL_V2 fp16 weights) plus external-artifact authority decision. Shape matrix DONE (TPE-5 PASS, 1.40x). Full scope: prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md."
   }
 ]
 ```
@@ -129,9 +130,10 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
 
 ## Live-row priority (Amdahl-ranked, all gated, none routable cheaply)
 
-1. `external_blas_rawhip_boundary` — isolated ceiling passes and TPE-4 proves one HCQ-extracted primitive keeps
-   backend speed, but routing remains a shape-matrix + authority/runtime boundary (fallback, external dependency
-   policy), not a kernel tweak. Current next gate is TPE-5 in
+1. `external_blas_rawhip_boundary` — isolated ceiling passes; TPE-4 proved one HCQ-extracted primitive keeps backend
+   speed; **TPE-5 PASS** proved it generalizes across the 3 high-share roles (~1.40× weighted pp512, all
+   correct/stable/no-workspace, one code object). Routing now remains a one-block-transfer + authority/runtime
+   boundary (TPE-6, fallback, external-dependency policy), not a kernel tweak. Next gate is TPE-6 in
    `prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md`.
 2. `decode_q4k_ffn_q8_sidechannel` — the only decode lever left (~+3–4%), deep + lossy + multi-output-precedent-less.
 3. `prefill_attention_lds_flash` — matters at long prompts; deep, SHAPED_WMMA-walled.
