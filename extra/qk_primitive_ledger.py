@@ -169,6 +169,31 @@ def _obs_block_transfer(path:pathlib.Path) -> list[dict[str, Any]]:
     evidence_levels=[0, 1, 3], bottleneck_inference="graph_boundary",
     notes="GPU matmul speed transfers; naive per-op routing redirects to graph integration")]
 
+def _obs_rebindable_node(path:pathlib.Path) -> list[dict[str, Any]]:
+  data = _read_json(path)
+  if not data or data.get("schema") != "qk_tensile_rebindable_node_v1": return []
+  gates = data.get("gates", {})
+  rel_errs = [row.get("rel_err") for row in data.get("bindings", []) if isinstance(row, dict) and isinstance(row.get("rel_err"), (int, float))]
+  return [_base_obs(
+    primitive="runtime_boundary", phase="graph_integration", role="tensile_rebindable_node",
+    shape={"T": 512, "hidden": 4096, "ffn": 12288},
+    candidate={"id": "tensile:tpe7a:rebindable_node", "parent_id": "tensile:tpe6:ffn_block_naive_per_op",
+               "legal_knobs": {"routing": "graph_style_fill_kernargs", "program_built_once": data.get("program_built_once")},
+               "source_hash": _hash_obj({"bindings": data.get("bindings"), "gates": gates})},
+    correctness={"oracle": "tinygrad fp16 matmul", "pass": data.get("verdict") == "PASS",
+                 "stable": gates.get("replay_stable"), "rel_err_max": max(rel_errs) if rel_errs else None,
+                 "replay_rel_err": data.get("replay_rel_err"), "tolerance": 2e-2},
+    timing={},
+    metadata={"bindings": len(data.get("bindings", [])), "program_built_once": data.get("program_built_once")},
+    runtime={"one_node_many_buffers": gates.get("one_node_many_buffers"),
+             "distinct_bindings_ok": data.get("distinct_bindings_ok"), "graph_protocol": "fill_kernargs_rebind"},
+    gate=_gate(str(data.get("verdict", "UNKNOWN")),
+               "TPE-7a proves one extracted Tensile node can be rebound to current buffers; next gate is in-model capture",
+               data.get("verdict") == "PASS"),
+    provenance=[_rel(path), "docs/prefill-tensile-tpe7-inmodel-route-scope-20260619.md"],
+    evidence_levels=[0, 3], bottleneck_inference="graph_boundary",
+    notes="Correctness-only graph-protocol keystone; no model route or timing gate yet")]
+
 def _obs_static_docs() -> list[dict[str, Any]]:
   specs: list[dict[str, Any]] = [
     {
@@ -213,6 +238,7 @@ def collect_observations() -> list[dict[str, Any]]:
   observations += _obs_tpe_shape_matrix(BENCH / "qk-tensile-extraction/shape_matrix.json")
   observations += _obs_hcq_perf(BENCH / "qk-tensile-extraction/hcq_perf.json")
   observations += _obs_block_transfer(BENCH / "qk-tensile-extraction/block_transfer.json")
+  observations += _obs_rebindable_node(BENCH / "qk-tensile-extraction/rebindable_node.json")
   observations += _obs_static_docs()
   return observations
 
@@ -289,6 +315,18 @@ def build_search_sessions(observations:list[dict[str, Any]]) -> list[dict[str, A
       "refuted_candidate_classes": ["naive_per_op_host_sync"],
       "artifact_paths": ["bench/qk-tensile-extraction/block_transfer.json"],
     },
+    {
+      "schema": "primitive_search_session_v1",
+      "id": "session:tpe7a_rebindable_node_replay",
+      "primitive_target": "runtime_boundary",
+      "candidate_generator": "extra/qk_tensile_rebindable_node.py",
+      "candidate_count": sum(1 for o in observations if o["candidate"].get("id") == "tensile:tpe7a:rebindable_node"),
+      "budget": "replay_existing_artifact",
+      "ranking_policy": "correctness across distinct buffer bindings, then replay stability",
+      "accepted_frontier": [o["id"] for o in observations if o["candidate"].get("id") == "tensile:tpe7a:rebindable_node" and o["gate"]["verdict"] == "PASS"],
+      "refuted_candidate_classes": [],
+      "artifact_paths": ["bench/qk-tensile-extraction/rebindable_node.json"],
+    },
   ]
   return sessions
 
@@ -318,7 +356,7 @@ def build_runner_registry() -> dict[str, Any]:
       {"primitive": "prefill_tensile", "runner": "extra/qk_tensile_shape_matrix.py / extra/qk_tensile_hcq_perf.py", "status": "available_adapter"},
       {"primitive": "prefill_wmma", "runner": "extra/qk_prefill_wmma_sweep.py", "status": "legacy_artifact_adapter"},
       {"primitive": "attention_kv", "runner": "future_attention_probe", "status": "scoped_not_built"},
-      {"primitive": "runtime_boundary", "runner": "extra/qk_tensile_block_transfer.py", "status": "available_adapter"},
+      {"primitive": "runtime_boundary", "runner": "extra/qk_tensile_block_transfer.py / extra/qk_tensile_rebindable_node.py", "status": "available_adapter"},
     ],
   }
 
@@ -426,6 +464,7 @@ def summary_markdown(observations:list[dict[str, Any]], validations:list[dict[st
     "- pure-tinygrad WMMA bounded sweep: killed/refuted.",
     "- Tensile extraction TPE-5: pass/generalizes.",
     "- TPE-6 block transfer: redirect to graph integration.",
+    "- TPE-7a rebindable node: pass; in-model graph capture remains the next gate.",
     "- spec decode shortcut: closed.",
     "",
     "## Runner Registry",

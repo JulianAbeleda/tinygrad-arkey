@@ -36,6 +36,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `primitive-local-observability-search-result-20260619.md` — **executed PLO-1..PLO-6.** Adds
   `extra/qk_primitive_ledger.py`, a read-only primitive ledger/validator/classifier/search-memory/trace-plugin
   inventory that reconstructs current verdicts from existing artifacts without hardware execution.
+- `primitive-local-observability-audit-20260619.md` — replay audit over the primitive ledger, including the TPE-7a
+  rebindable-node artifact. Confirms graph-protocol prerequisite PASS while keeping in-model capture and artifact
+  policy as remaining gates.
+- `prefill-tensile-tpe7a-rebindable-node-result-20260619.md` — TPE-7a result: one extracted Tensile kernel object
+  can be rebound to current buffers through graph-style kernarg filling; correctness/protocol proof only.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
   exhausted; q8/RMSNorm is codegen-deferred; hand-LDS WMMA is refuted; external BLAS ceiling is measured; the bounded
   no-deps prefill WMMA sweep is refuted; EBT-1 kills the HIP-runtime bridge; the only material prefill route left is

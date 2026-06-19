@@ -21,12 +21,14 @@ It implements the six scoped layers:
 
 ## First ledger [M]
 
-The generated ledger currently has 10 observations and reconstructs the required project states:
+The generated ledger initially had 10 observations and reconstructed the required project states. The follow-up audit
+extends it to 11 observations by ingesting the TPE-7a rebindable-node artifact:
 
 - q8/MMVQ lifecycle: **DEFERRED** behind codegen capability;
 - pure-tinygrad WMMA bounded sweep: **KILL**;
 - Tensile extraction TPE-5: **PASS** / generalizes;
 - TPE-6 block transfer: **REDIRECT** to graph integration;
+- TPE-7a rebindable node: **PASS** as a graph-protocol prerequisite;
 - spec decode shortcut: **CLOSED**;
 - reuse-free flash-prefill: **REFUTED**.
 
