@@ -97,5 +97,12 @@
     "decode": "untouched (prefill-only)",
     "dependency": null,
     "verdict": "option 1 (extend opt tuple) WORKS: reduce-axis UNROLL creates the contiguous copy axis CG-W1.5 thought didn't exist; vectorizes copy; +3.7% dependency-free. SHIPPED. Modest (IC-served); NOT the 48->66 Tensile gap."
+  },
+  "RouteA_A0_gatezero": {
+    "finding": "the existing hand-asm GEMM amd_asm_matmul.py is fp32 SCALAR FMA (14 v_dual_fmac, 0 WMMA) -> architecturally capped BELOW the WMMA path (40.7 < LLVM-warmstart 48 < Tensile 66). It is the WRONG ALGORITHM for the Tensile target.",
+    "wmma_asm_exists": "rdna4_asm_matmul.py uses WMMA (v_wmma_f32_16x16x16_f16) BUT targets RDNA4/gfx1200 -> HUNG our gfx1100 (Wait timeout; different RDNA3 vs RDNA4 WMMA operand layout). GPU recovered.",
+    "rdna3_wmma_supported": "YES - autogen rdna3/ins.py has V_WMMA_F32_16X16X16_F16; the assemble->ELF path can emit it.",
+    "reframe": "Route A's real work is NOT tuning amd_asm_matmul (fp32 FMA) -- it is WRITING A NEW RDNA3 WMMA hand-asm GEMM (port rdna4 structure to rdna3.ins + the RDNA3 WMMA register layout). This is a multi-week expert-asm build, hang-prone.",
+    "next": "A1 = build a CORRECT RDNA3 WMMA asm GEMM (mse 0), measure TFLOPS vs 48; KILL if can't beat 48 after tuning."
   }
 }
