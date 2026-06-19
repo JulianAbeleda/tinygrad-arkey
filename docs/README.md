@@ -183,6 +183,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `amd-att-primitive-attribution-scope-20260619.md` — next scope after ATT replay passed: use imported ATT on real
   tinygrad primitives, first decode MMVQ contract attribution (`76%` standalone HBM -> `44%` in-model) and then prefill
   non-matmul residual attribution. Strictly observability-only; timing authority remains clock-controlled A/B + PMC.
+- `amd-att-primitive-attribution-result-20260619.md` — **executed the ATT primitive atlas; verdict
+  `PASS_ATT_PRIMITIVE_ATTRIBUTION`, interpretation `ATT_USABLE_NOT_DECISIVE_FOR_INMODEL_GAP`.** ATT now
+  body-attributes native tinygrad Q4_K coop (`168,693` body-like packets), imported llama Q4_K MMVQ (`163,942`), and
+  pp512 SDPA (`135,442`). This clears the tooling blocker but does not change timing conclusions; next decode use is a
+  role-joined in-model ATT pass.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

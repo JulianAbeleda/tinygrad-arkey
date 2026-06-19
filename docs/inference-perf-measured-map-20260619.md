@@ -25,6 +25,9 @@ prefill ~82%.
 - **CLOCK is the dominant confound** (bit us twice): the same config varied 3433→7321 tok/s across processes from
   clock alone. Only **interleaved, one-process, clock-controlled** A/B is trustworthy. min-over-warm-iters within
   one process is OK; cross-process or non-interleaved comparison is NOT.
+- **ATT/SQTT is now usable for tinygrad HCQ primitive attribution** via imported AQLprofile packets
+  (`amd-att-primitive-attribution-result-20260619.md`). It body-attributes real decode/prefill primitive surfaces, but
+  it is not timing authority and has not yet changed the decode/prefill conclusions.
 
 ## DECODE — HBM-bandwidth-bound (all ctx)
 - **~85% of decode GPU time = weight-GEMVs** (FFN gate/up/down, qkv, attn-o, lm_head): L2 hit **3–13%**, VALU util
@@ -93,3 +96,4 @@ prefill ~82%.
 - Prior proof points: `amd-decode-kernel-beats-llamacpp` (memory), `prefill-own-wmma-kernel-result` (POWN),
   `spec-decode-low-sync-verdict-20260618.md`, `beam-hang-premise-audit-20260619.md`
 - Tools: `extra/qk_pmc_capture.py`, `qk_primitive_pmu_atlas.py`, `qk_prefill_pmu_atlas.py`, `qk_tensile_ab_measure.py`
+  plus ATT attribution `extra/qk_att_primitive_atlas.py`.
