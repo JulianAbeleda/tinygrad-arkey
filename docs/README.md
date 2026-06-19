@@ -192,6 +192,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   role-joined in-model ATT pass; verdict `PASS_INMODEL_ROLE_JOIN_NATIVE_Q4K_COOP`.** `blk.0.attn_output` launches the
   intended `q4k_coop_partial_4096_4096` plus stage-2 reduce/glue in-model, with `16,137` body-like ATT packets. This
   closes runtime/cache identity for that Q4_K role; next ATT target, if any, is higher-share Q6_K `ffn_down`/`lm_head`.
+- `decode-standalone-retention-staged-attack-scope-20260619.md` — staged attempt to recover more of tinygrad's
+  `~76%` standalone decode MMVQ efficiency in-model. Starts with Q6_K role-joined ATT (`ffn_down`, then `lm_head`),
+  then reduce/glue Amdahl, one direct-output/reduce-fusion proof if gated, q8 lifecycle only if still justified, and
+  finally project-level scheduler/resource work if all bounded routes fail.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
