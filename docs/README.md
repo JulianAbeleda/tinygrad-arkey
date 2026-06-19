@@ -51,6 +51,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `primitive-hcq-attribution-result-20260619.md` — PMU-4a..c result: probe-local attribution captures eager HCQ
   launches, HCQGraph construction/replay, and a Tensile runtime row; classifies `rocprof_hcq_visibility_gap` +
   `graph_rebind_ok`.
+- `prefill-tensile-research-measurement-scope-20260619.md` — complete Option A execution scope for Claude: finish the
+  bounded JIT-dim step, route extracted Tensile prefill behind `PREFILL_TENSILE_GEMM=1`, and measure pp/dNLL as
+  research-only evidence.
 - `prefill-tensile-tpe7a-rebindable-node-result-20260619.md` — TPE-7a result: one extracted Tensile kernel object
   can be rebound to current buffers through graph-style kernarg filling; correctness/protocol proof only.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
