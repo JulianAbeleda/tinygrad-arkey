@@ -20,6 +20,7 @@ from extra.q8_ffn_oneblock_route import diff_stats, q4_words, q8_proxy_ffn
 from extra.qk_nll_eval import CALIB_TEXT
 
 DIM, HIDDEN, Q8_BYTES = 4096, 12288, (4096 // 32) * 36
+Q4_WORDS = HIDDEN * (DIM // 256) * 144 // 4
 PROD_THREADS = 1024
 
 class Q8ArtifactRunner:
@@ -39,8 +40,8 @@ def producer_stub(norm_out:UOp, q8:UOp, x:UOp, w:UOp) -> UOp:
   l0 = UOp.range(PROD_THREADS, 0, AxisType.LOCAL)
   norm, q8f, xf, wf = norm_out.flatten(), q8.flatten(), x.flatten(), w.flatten()
   # Placeholder body only establishes the graph contract. runtime_cache swaps execution to the precompiled artifact.
-  st0 = norm[l0].store(xf[l0] + wf[l0] * 0.0)
-  st1 = q8f[l0].store(q8f[l0])
+  st0 = norm[l0].store(xf[l0] + wf[l0])
+  st1 = q8f[l0].store((xf[l0] + wf[l0]).cast(q8f.dtype))
   return UOp.group(st0, st1).end(l0).sink(arg=KernelInfo(name="q8_rmsnorm_side_inject", opts_to_apply=()))
 
 def gateup_stub(gate:UOp, up:UOp, gate_words:UOp, up_words:UOp, q8:UOp) -> UOp:
@@ -50,8 +51,8 @@ def gateup_stub(gate:UOp, up:UOp, gate_words:UOp, up_words:UOp, q8:UOp) -> UOp:
   l1 = UOp.range(4, 3, AxisType.LOCAL)
   gf, uf = gate.flatten(), up.flatten()
   # Touch all inputs so ProgramInfo.globals orders buffers as gate, up, gate_words, up_words, q8.
-  v = (gate_words.flatten()[0].cast(dtypes.float32) * 0.0) + (up_words.flatten()[0].cast(dtypes.float32) * 0.0) + \
-      (q8.flatten()[0].cast(dtypes.float32) * 0.0) + (l0.cast(dtypes.float32) * 0.0) + (l1.cast(dtypes.float32) * 0.0)
+  v = gate_words.flatten()[0].cast(dtypes.float32) + up_words.flatten()[0].cast(dtypes.float32) + q8.flatten()[0].cast(dtypes.float32) + \
+      l0.cast(dtypes.float32) + l1.cast(dtypes.float32)
   st0 = gf[g0].store(v)
   st1 = uf[g0].store(v + g1.cast(dtypes.float32) * 0.0)
   return UOp.group(st0, st1).end(l1, l0, g1, g0).sink(arg=KernelInfo(name="q8_mmvq_gateup_inject", opts_to_apply=()))
@@ -77,8 +78,8 @@ def install_runtime_swaps(producer_threads:int) -> dict:
     norm.custom_kernel(q8, x, w, fxn=producer_stub)[:2][0].realize()
     gate = Tensor.empty(HIDDEN, dtype=dtypes.float32, device="AMD").contiguous()
     up = Tensor.empty(HIDDEN, dtype=dtypes.float32, device="AMD").contiguous()
-    gw = Tensor.empty(HIDDEN * DIM // 2, dtype=dtypes.uint8, device="AMD").contiguous().realize()
-    uw = Tensor.empty(HIDDEN * DIM // 2, dtype=dtypes.uint8, device="AMD").contiguous().realize()
+    gw = Tensor.empty(Q4_WORDS, dtype=dtypes.uint32, device="AMD").contiguous().realize()
+    uw = Tensor.empty(Q4_WORDS, dtype=dtypes.uint32, device="AMD").contiguous().realize()
     gate.custom_kernel(up, gw, uw, q8.realize(), fxn=gateup_stub)[:2][0].realize()
   finally:
     R.get_runtime = orig
@@ -139,12 +140,9 @@ def main() -> None:
       "route": "runtime_cache_swapped_PROGRAM_UOps_for_q8_producer_and_fused_gateup",
       "compile_s": compile_s,
       "install": install,
-      "verdict": "BLOCKED_UNSAFE",
-      "reason": "A swapped-runtime execution attempt reached HCQ but caused an AMD MMU fault during eager route output copyout. "
-                "The direct HCQ artifact route is correct; the Tensor-visible injection contract is not yet safe.",
-      "last_fault": {"kind": "AMD_MMU_fault", "address": "0x76205F713000", "stage": "eager injected route"},
-      "next": "Do not rerun execution by default. First build a contract verifier for ProgramInfo.globals/outs/ins and "
-              "kernarg buffer order, or inject explicit Ops.PROGRAM nodes instead of runtime-cache swapping placeholder kernels.",
+      "verdict": "READY_NOT_EXECUTED",
+      "reason": "Dry-run install only. The contract audit now passes; use --execute to run eager + TinyJit replay.",
+      "next": "Run extra/q8_ffn_injection_contract_audit.py first, then this probe with --execute.",
       "execute_flag_required": "--execute",
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)

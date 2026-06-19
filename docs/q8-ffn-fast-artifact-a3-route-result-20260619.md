@@ -8,10 +8,10 @@ Goal:
 - route one dense FFN block through the real model buffers;
 - then test whether the primitive can become Tensor-visible for TinyJit/HCQGraph capture.
 
-Verdict:
+Corrected verdict after the contract audit:
 
 - **A3 eager one-block route: PASS.**
-- **A3 Tensor-visible runtime-cache injection: BLOCKED_UNSAFE.**
+- **A3 Tensor-visible runtime-cache injection: PASS.**
 
 ## A3a — eager one-block fast-artifact route: PASS
 
@@ -41,15 +41,17 @@ Result:
 
 This proves the passing isolated primitive survives a real one-block route when launched directly through HCQ.
 
-## A3b — Tensor-visible injection: BLOCKED_UNSAFE
+## A3b — Tensor-visible injection: PASS after contract audit
 
 Probe:
 
 - `extra/q8_ffn_fast_artifact_inject.py`
+- `extra/q8_ffn_injection_contract_audit.py`
 
 Artifact:
 
 - `bench/q8-ffn-handwritten-oracle/fast_artifact_inject.json`
+- `bench/q8-ffn-handwritten-oracle/fast_artifact_contract_audit.json`
 
 Attempted mechanism:
 
@@ -59,38 +61,53 @@ Attempted mechanism:
 4. use a probe-local `AMDComputeQueue.exec` patch so the artifact launch dims override placeholder dims, following the
    same pattern that worked for the Tensile route.
 
-The dry-run contract is:
+Initial attempt:
 
-| program | placeholder launch | artifact launch | kernarg |
-|---|---|---|---:|
-| producer | global `(1,1,1)`, local `(1024,1,1)` | global `(1,1,1)`, local `(1024,1,1)` | 32 B |
-| fused gate/up | global `(1,12288,1)`, local `(128,1,1)` | global `(12288,2,1)`, local `(32,4,1)` | 40 B |
+- placeholder `custom_kernel` bodies optimized away most inputs;
+- producer exposed only `(norm_out, x)`;
+- fused gate/up exposed only `(gate, up)`;
+- swapped-runtime execution caused an AMD MMU fault.
 
-The dim mismatch was handled by the queue-exec override, but execution still caused an AMD MMU fault during eager
-route output copyout:
+The principle-aligned fix was to stop executing and audit the Tensor `PROGRAM` contract first.
 
-`MMU fault: 0x76205F713000 | NotPresent=1 ReadOnly=0 NoExecute=0 imprecise=0`
+Contract audit result:
 
-So this is not just a launch-dim problem. The remaining unsafe mismatch is likely the Tensor placeholder
-`ProgramInfo.globals/outs/ins` contract versus the artifact kernarg buffer order/lifetime.
+| program | `globals` | `outs` | `ins` | artifact arg order |
+|---|---|---|---|---|
+| producer | `[0,1,2,3]` | `[0,1]` | `[2,3]` | `norm_out, q8, x, w` |
+| fused gate/up | `[0,1,2,3,4]` | `[0,1]` | `[2,3,4]` | `gate, up, gate_words, up_words, q8` |
 
-The probe is now safe by default: it writes the contract and `BLOCKED_UNSAFE` verdict unless explicitly run with
-`--execute`.
+Two concrete bugs were fixed:
+
+1. placeholder loads now keep all artifact input buffers alive in `ProgramInfo.globals`;
+2. runtime-key install now uses real Q4_K storage shape/dtype: `uint32[7077888]`, not dummy `uint8`.
+
+The remaining launch-dim mismatch is deliberate and handled by `Q8ArtifactRunner`:
+
+| program | placeholder launch | artifact launch |
+|---|---|---|
+| producer | global `(1,1,1)`, local `(1024,1,1)` | global `(1,1,1)`, local `(1024,1,1)` |
+| fused gate/up | global `(1,12288,1)`, local `(32,4,1)` | global `(12288,2,1)`, local `(32,4,1)` |
+
+Execution after the audit:
+
+| path | max_abs vs q8 proxy | mean_abs | verdict |
+|---|---:|---:|---|
+| eager injected node | 0.00137 | 4.44e-5 | PASS |
+| TinyJit replay calls 2-3 | 0.00137 | 4.44e-5 | PASS |
+
+No HIP runtime is loaded in-process.
 
 ## What this means
 
-The q8 route is fast enough and correct enough at the eager HCQ level. The blocker is graph integration, not kernel
-economics.
+The q8 route is now graph-integrable as a research primitive. The next question is not kernel economics or graph
+capture; it is full decode truth.
 
-Do **not** continue by rerunning unsafe runtime-cache swaps. The next safe step is one of:
+Next gate:
 
-1. build a contract verifier that prints `ProgramInfo.globals`, `outs`, `ins`, resolved buffer order, and kernarg
-   pointer offsets before launch; or
-2. bypass placeholder `custom_kernel` swapping and emit explicit precompiled `Ops.PROGRAM` nodes whose
-   `ProgramInfo` exactly matches the artifact launch and buffer contract.
-
-Until that exists, W==D decode cannot be measured honestly because direct HCQ calls are outside TinyJit/HCQGraph and
-would add per-token Python launch overhead.
+1. route dense FFN gate/up behind `Q8_FFN_HANDWRITTEN=1`, default off;
+2. run W==D decode sweep;
+3. rerun dNLL with the actual route.
 
 ## Current q8 status
 
@@ -99,7 +116,7 @@ would add per-token Python launch overhead.
 | q8 quality proxy | PASS (`dNLL +0.00165`) |
 | isolated fast lifecycle | PASS (`114.12 us`) |
 | eager one-block route | PASS (`121.38 us`) |
-| Tensor-visible graph injection | BLOCKED_UNSAFE |
-| W==D decode sweep | blocked on graph injection |
+| Tensor-visible graph injection | PASS |
+| W==D decode sweep | next |
 
-The next research unit is graph integration, not more q8 kernel tuning.
+The next research unit is W==D decode and quality, not more q8 kernel tuning.
