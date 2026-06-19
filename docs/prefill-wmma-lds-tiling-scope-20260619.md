@@ -42,6 +42,10 @@ operand tiles reused across macro-tiles** + double-buffer + warm pp + fp16 dNLL 
 
 ## Phase PWLT-0 — authority-boundary decision (USER'S CALL, gates everything)
 
+> **DECISION (2026-06-19): Branch A first** — tinygrad-internal hand-LDS WMMA, for the triple payoff and to keep the
+> authority boundary pure. Fall back to Branch B (external BLAS) only if PWLT-A2 fails the isolated ≥1.5× gate.
+> Next action: PWLT-A1 expressibility spike.
+
 Two branches reach ~80% peak; they differ in **who owns the kernel**. Decide before building.
 
 | | Branch A — tinygrad-internal hand-LDS WMMA | Branch B — external BLAS (hipBLASLt/rocBLAS) |
