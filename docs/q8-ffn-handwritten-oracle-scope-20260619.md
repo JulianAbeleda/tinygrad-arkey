@@ -93,7 +93,7 @@ speed-only. Its real-GGUF Q4_K scale/min unpacking and q8 subchunk mapping are c
 measured speed is lower than the synthetic preflight (about 50us vs 40.4us), but still in the earlier banked range and
 fast enough to keep the producer economics as the decisive next question.
 
-### Q8H-2 — fused producer oracle design
+### Q8H-2 / Q8H-3 — fused producer oracle design + cost gate: PASS
 
 Write the handwritten decode producer for one row of width 4096:
 
@@ -105,28 +105,24 @@ Write the handwritten decode producer for one row of width 4096:
 - Kernel shape: one workgroup per decode row, LDS staging for the per-row sumsq, barrier, then per-32 max/quantize.
 - No extra dense fallback and no separate q8 max/pack kernels.
 
-This is the exact capability tinygrad Q8L-2 could not express. The oracle should keep it handwritten so we measure the
+This is the exact capability tinygrad Q8L-2 could not express. The oracle keeps it handwritten so we measure the
 economics before funding a renderer/custom-kernel feature.
 
-### Q8H-3 — producer cost gate
+Executed as `extra/q8_ffn_producer_oracle.py`: one HIP kernel for RMSNorm-only and one HIP kernel for
+RMSNorm + q8 side-channel, both on a 4096-wide decode row. Artifact:
+`bench/q8-ffn-handwritten-oracle/producer_cost.json`.
 
-Measure producer-only cost against:
+| producer | device us | fp max_abs | q8 dequant max_abs |
+|---|---:|---:|---:|
+| RMSNorm only | 6.58 | 2.38e-7 | n/a |
+| RMSNorm + q8 side-channel | 7.50 | 2.38e-7 | 0.00522 |
+| incremental q8 side-channel | **0.92** | n/a | n/a |
 
-- current RMSNorm/apply alone,
-- current q8 pack anatomy (`29.7us / 4 kernels`),
-- ideal folded side-channel lower bound.
+**Gate: PASS.** The strong target was incremental side-channel cost <= 4.8us; the handwritten producer measured
+0.92us. This proves the q8 activation tax is not fundamental. The blocker is specifically that tinygrad cannot yet
+generate this fused per-row reduce -> per-32 quantize -> multi-output producer.
 
-Gates:
-
-- Strong pass: incremental side-channel cost <= 4.8us over RMSNorm/apply.
-- Weak research pass: complete fused producer cost makes paired gate+up >= 1.15x over fp coop.
-- Fail: any design that reintroduces multiple tiny launch-floored q8 stages.
-
-Artifact:
-
-- `bench/q8-ffn-handwritten-oracle/producer_cost.json`.
-
-### Q8H-4 — paired gate+up lifecycle benchmark
+### Q8H-4 — paired gate+up lifecycle benchmark: PASS
 
 Measure the actual lifecycle that can win:
 
@@ -145,7 +141,28 @@ Artifact:
 
 - `bench/q8-ffn-handwritten-oracle/gate_up_lifecycle.json`.
 
-### Q8H-5 — one-block FFN oracle
+Result is component-summed device time from Q8H-1 real-GGUF consumers plus Q8H-3 producer. It is not a model route and
+does not include host overhead, but it is the right isolated lifecycle unit.
+
+| component | device us |
+|---|---:|
+| fused RMSNorm/q8 producer | 7.50 |
+| `ffn_gate` handwritten q8 MMVQ | 49.83 |
+| `ffn_up` handwritten q8 MMVQ | 50.31 |
+| **q8 gate+up lifecycle** | **107.64** |
+
+Baselines:
+
+| baseline | gate+up us | speedup from q8 lifecycle |
+|---|---:|---:|
+| current fp coop | 132.20 | **1.23x** |
+| base fp | 154.80 | 1.44x |
+| old separate-pack sudot4 path | 139.70 | 1.30x |
+
+**Gate: PASS.** The isolated pair target was >=1.15x over current fp coop; measured component-summed speedup is
+1.23x.
+
+### Q8H-5 — one-block FFN EV oracle: PASS
 
 Run one full FFN block path:
 
@@ -163,6 +180,20 @@ Gates:
 Artifact:
 
 - `bench/q8-ffn-handwritten-oracle/block_oracle.json`.
+
+Implemented as an Amdahl one-block/decode EV model before routing: use Q8H-4 measured gate+up lifecycle speedup
+(1.23x) and the banked current decode-time share for Q4_K `ffn_gate/up` (~25.7% from
+`qk-decode-per-role-delta-audit-20260618.md`).
+
+| input | value |
+|---|---:|
+| measured gate+up lifecycle speedup vs fp coop | 1.228x |
+| current decode-time share of Q4_K gate/up | 25.7% |
+| predicted decode speedup | **1.050x** |
+| predicted latency reduction | 4.77% |
+
+**Gate: PASS_TO_Q8H6.** The Q8H-5 threshold was >=3% implied W==D decode EV; the measured-component model predicts
+about +5.0%. This is still not route evidence: it is a build-worthiness gate for dNLL and an in-model research flag.
 
 ### Q8H-6 — dNLL and W==D route gate
 

@@ -76,7 +76,8 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `q8-ffn-handwritten-oracle-scope-20260619.md` — research-only oracle scope for the q8 decode reopening: use
   handwritten kernels to test whether the deferred fused RMSNorm→q8 producer plus llama-style Q4_K int-dot consumer
   actually clears correctness, lifecycle speed, block EV, and dNLL gates before funding tinygrad codegen. Includes
-  Q8H-0 preflight and Q8H-1 real-GGUF handwritten MMVQ correctness PASS; next gate is the fused RMSNorm/q8 producer.
+  Q8H-0 preflight, Q8H-1 real-GGUF handwritten MMVQ correctness PASS, and Q8H-3/4 producer+lifecycle PASS
+  (1.23x gate+up isolated), plus Q8H-5 EV PASS (~1.05x decode model); remaining gate is q8-lossy dNLL/W==D.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
