@@ -139,6 +139,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   ATT decoder path, while AQLprofile command recovery passes. Transplanting recovered `MASK/TOKEN/CTRL` values into HCQ
   changes trace volume but still yields `0` body instruction packets, so the missing piece is a broader command-sequence
   or ROCprofiler-service detail, not a simple register value.
+- `amd-scheduler-tooling-t1c-att-decoder-repair-result-20260619.md` — **executed local ATT decoder repair.** Inspected
+  available ROCm packages and tested decoder aliases (`librocprofiler-sdk.so`, legacy `libatt_plugin.so`); no candidate
+  produced `rocprofv3 --att` output. External ATT is a ROCm packaging/toolchain blocker until a real
+  `librocprof-trace-decoder.so` is installed or built.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
