@@ -30,6 +30,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `performance-primitive-external-research-audit-20260619.md` — second-round external research audit across
   arXiv/OpenReview/ChinaXiv. Cites each paper/source, records the claim, checks whether it is true/applicable to this
   tinygrad gfx1100 project, and maps it to current or future primitive rows.
+- `primitive-local-observability-search-scope-20260619.md` — scope for building primitive-local tooling instead of a
+  generic profiler: read-only ledger first, then schema validators, runner wrappers, deterministic failure
+  classifiers, guided search memory, and optional rocprof/SQTT counter plugins.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
   exhausted; q8/RMSNorm is codegen-deferred; hand-LDS WMMA is refuted; external BLAS ceiling is measured; the bounded
   no-deps prefill WMMA sweep is refuted; EBT-1 kills the HIP-runtime bridge; the only material prefill route left is

@@ -60,7 +60,9 @@ It does add four future research categories that are underrepresented in our cur
 3. **Hardware-feedback machine search:** KernelBench-X / GPU Kernel Scientist / CudaForge validate our row/gate design
    but imply a future automated harness should feed back device timings/counters. The canonical principle is now the
    hardware-feedback hierarchy in `what-makes-a-performance-primitive-efficient-20260618.md`: correctness and timing
-   can decide gates, while counter-free root-cause claims must be labeled as inferred.
+   can decide gates, while counter-free root-cause claims must be labeled as inferred. The concrete follow-up scope is
+   `primitive-local-observability-search-scope-20260619.md`: build primitive-local observability/ledger tooling before
+   any broad agentic search.
 4. **Alternative quantization representations:** CodeGEMM and activation-sparsity work are novel, but require model
    format or quality-policy changes; they are not byte-identical paths for current Q4_K_M.
 
