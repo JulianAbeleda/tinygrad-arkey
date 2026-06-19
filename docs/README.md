@@ -111,6 +111,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   skeletons -> one-block dot -> full fused gate/up, gated at `<=60us`. Final B2b verdict: **correctness PASS /
   PERF FAIL**. Full real-GGUF fused gate/up ASM consumer is correct (`max_abs <=1.43e-6`) but slow (`166.649us` vs
   `<=60us`), so native decode ownership is closed as project-level AMD scheduling/compiler work.
+- `q8-ffn-amd-scheduler-work-scope-20260619.md` — next-layer scope after B2b: compiler/scheduler work, not primitive
+  search. Defines S0-S5: disassembly accounting, reduction audit, address/scale-min audit, load/wait/dot scheduling,
+  descriptor/local-id capability, and the decision gate for local hand schedule vs AMD DSL feature vs project-level
+  scheduler. Recommendation: run S0 first only.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
