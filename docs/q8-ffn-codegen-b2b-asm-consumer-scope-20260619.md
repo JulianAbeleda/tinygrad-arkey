@@ -100,6 +100,24 @@ Executed third slice:
 This proves gate/up Q4 weight pointer selection and the `576`-word row stride work under the same contract. The kernel
 loads the first synthetic Q4 word for each row and role with zero mismatches.
 
+Executed fourth slice:
+
+- probe: `extra/q8_ffn_asm_q4_field_skeleton.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_q4_field_skeleton.json`;
+- verdict: **PASS**.
+
+This proves Q4_K intra-block byte addressing for scale bytes and `qs` words. Coverage uses `kb=row&15` and
+`sub=(row>>4)&7` for both gate/up pointers, with zero mismatches against CPU.
+
+Executed fifth slice:
+
+- probe: `extra/q8_ffn_asm_one_subblock_dot.py`;
+- artifact: `bench/q8-ffn-codegen-transfer/asm_one_subblock_dot.json`;
+- verdict: **PASS**.
+
+This proves the first MMVQ math slice: fixed `sub=0`, `kb=row&15`, eight `v_dot4_i32_iu8` operations, low-nibble Q4
+extraction, positive q8 payload, and `sumi/sumq` accumulation for both gate/up pointers. It matches CPU exactly.
+
 ## B2b2 implementation order
 
 Do not write the whole consumer in one jump. Build it in slices:
@@ -109,8 +127,9 @@ Do not write the whole consumer in one jump. Build it in slices:
 2. **Q8 load skeleton:** load `q8` scale and one packed q8 lane, store a diagnostic value. Gate: matches CPU extraction.
    **DONE/PASS for byte load and q8 block addressing.**
 3. **Q4 load skeleton:** load Q4_K scale/min/qs for one sub-block, store diagnostic scale/min/nibble values. Gate:
-   matches CPU extraction. **PARTIAL/PASS for gate/up pointer selection and row stride; field/nibble diagnostics remain.**
+   matches CPU extraction. **DONE/PASS for pointer selection, row stride, scale byte, and `qs` word addressing.**
 4. **One-block dot:** compute one `kb` contribution for one row. Gate: matches CPU partial reference.
+   **PARTIAL/PASS for `sub=0`, positive q8, low-nibble extraction, eight dot4s. Remaining: signed q8 and high-nibble/sub parity.**
 5. **Full-row dot:** loop/emit all 16 `kb` lanes, reduce across wave/workgroup. Gate: one row matches reference.
 6. **Full fused gate/up:** run all rows and both roles. Gate: real correctness + `<=60us`.
 
