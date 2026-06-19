@@ -5,6 +5,10 @@ ffn_down demote, flash-decode, default-on flip — all still stand). This file b
 and sets the clean baseline before the **deep-codegen** arc. Qwen3-8B-Q4_K_M, RX 7900 XTX / gfx1100, llama.cpp
 ≈ 101–106 tok/s.
 
+> **REPRODUCED 2026-06-18 on HEAD `2b81dff42`** (in-model W==D): 68.2/66.4/60.7 tok/s @ ctx 512/1024/4096,
+> within 0.2 of banked, host-sync 0.0% (GPU-bound). Whole stack confirmed default-on. See
+> `qk-decode-banked-reproduce-20260618.md`, `bench/qk-decode-runtime-overhead/result.json`.
+
 ## Shipped since 06-16 (exact / measured / gated)
 
 | win | effect | flag / location | doc |
