@@ -1,0 +1,132 @@
+{
+  "schema": "qk_tensile_shape_matrix_v1",
+  "phase": "TPE-5",
+  "device": "RX 7900 XTX / gfx1100",
+  "rows": [
+    {
+      "role": "ffn_gate_up",
+      "m": 512,
+      "n": 12288,
+      "k": 4096,
+      "kernel_symbol": "Cijk_Ailk_Bljk_HHS_BH_MT128x128x16_MI16x16x16x1_SN_1LDSB0_APM1_ABV0_ACED0_AF0EM1_AF1EM1_AMAS0_ASE_ASGT_ASLT_ASM_ASAE01_ASCE01_ASEM1_AAC0_BL1_BS1_CLR0_DTLA0_DTLB0_DTVA0_DTVB0_DVO0_ETSP_EPS1_ELFLR0_EMLL0_FSSC10_FL0_GLVWA4_GLVWB4_GRCGA1_GRCGB1_GRPM1_GRVW4_GSU1_GSUASB_GLS0_ISA1100_IU1_K1_KLA_LBSPPA0_LBSPPB128_LPA0_LPB8_LDL1_LRVW16_LWPMn1_LDW0_FMA_MIAV1_MDA2_MO40_MMFGLC_MKFGSU256_NTA0_NTB0_NTC0_NTD0_NEPBS0_NLCA1_NLCB1_ONLL1_OPLV0_PK0_PAP0_PGR1_PLR1_PKA0_SIA1_SLW1_SS1_SU0_SUM0_SUS0_SCIUI1_SPO0_SRVW0_SSO0_SVW1_SNLL0_TSGRA0_TSGRB0_TT4_64_TLDS1_UMLDSA0_UMLDSB1_U64SL1_USFGROn1_VAW2_VSn1_VW1_VWB2_VFLRP0_WSGRA1_WSGRB1_WS32_WG32_4_1_WGM8",
+      "kernarg_size": 128,
+      "global_size": [
+        4,
+        96,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "workspace": "none (no workspace ptr in kernarg)",
+      "streamk": false,
+      "rel_err": 0.000348,
+      "stable": true,
+      "correct": true,
+      "median_ms": 0.7719,
+      "best_ms": 0.7206,
+      "median_tflops": 66.8,
+      "best_tflops": 71.5,
+      "ref_tflops": 60.96,
+      "pct_of_ref": 109.5,
+      "tinygrad_tflops": 42.0,
+      "speedup_vs_tinygrad": 1.59,
+      "meets_62": true
+    },
+    {
+      "role": "ffn_down",
+      "m": 512,
+      "n": 4096,
+      "k": 12288,
+      "kernel_symbol": "Cijk_Ailk_Bljk_HHS_BH_MT128x128x16_MI16x16x16x1_SN_1LDSB0_APM1_ABV0_ACED0_AF0EM1_AF1EM1_AMAS3_ASE_ASGT_ASLT_ASM_ASAE01_ASCE01_ASEM1_AAC0_BL1_BS1_CLR0_DTLA0_DTLB0_DTVA0_DTVB0_DVO0_ETSP_EPS1_ELFLR0_EMLL0_FSSC10_FL0_GLVWA4_GLVWB4_GRCGA1_GRCGB1_GRPM1_GRVW4_GSU1_GSUASB_GLS0_ISA1100_IU1_K1_KLA_LBSPPA0_LBSPPB128_LPA0_LPB8_LDL1_LRVW16_LWPMn1_LDW0_FMA_MIAV1_MDA2_MO40_MMFGLC_MKFGSU256_NTA0_NTB0_NTC0_NTD0_NEPBS0_NLCA1_NLCB1_ONLL1_OPLV0_PK0_PAP0_PGR1_PLR1_PKA0_SIA1_SLW1_SS1_SU32_SUM0_SUS256_SCIUI1_SPO0_SRVW0_SSO0_SVW2_SNLL0_TSGRA0_TSGRB0_TT4_64_TLDS1_UMLDSA0_UMLDSB1_U64SL1_USFGROn1_VAW2_VSn1_VW2_VWB2_VFLRP0_WSGRA1_WSGRB1_WS32_WG32_4_1_WGM8",
+      "kernarg_size": 132,
+      "global_size": [
+        4,
+        32,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "workspace": "none (no workspace ptr in kernarg)",
+      "streamk": true,
+      "rel_err": 0.000282,
+      "stable": true,
+      "correct": true,
+      "median_ms": 0.7484,
+      "best_ms": 0.7105,
+      "median_tflops": 68.9,
+      "best_tflops": 72.5,
+      "ref_tflops": 70.9,
+      "pct_of_ref": 97.1,
+      "tinygrad_tflops": 42.0,
+      "speedup_vs_tinygrad": 1.64,
+      "meets_62": true
+    },
+    {
+      "role": "attn_q_o",
+      "m": 512,
+      "n": 4096,
+      "k": 4096,
+      "kernel_symbol": "Cijk_Ailk_Bljk_HHS_BH_MT128x128x16_MI16x16x16x1_SN_1LDSB0_APM1_ABV0_ACED0_AF0EM1_AF1EM1_AMAS3_ASE_ASGT_ASLT_ASM_ASAE01_ASCE01_ASEM1_AAC0_BL1_BS1_CLR0_DTLA0_DTLB0_DTVA0_DTVB0_DVO0_ETSP_EPS1_ELFLR0_EMLL0_FSSC10_FL0_GLVWA2_GLVWB2_GRCGA1_GRCGB1_GRPM1_GRVW2_GSU1_GSUASB_GLS0_ISA1100_IU1_K1_KLA_LBSPPA0_LBSPPB128_LPA0_LPB8_LDL1_LRVW16_LWPMn1_LDW0_FMA_MIAV1_MDA2_MO40_MMFGLC_MKFGSU256_NTA0_NTB0_NTC0_NTD0_NEPBS0_NLCA2_NLCB1_ONLL1_OPLV0_PK0_PAP0_PGR1_PLR1_PKA0_SIA1_SLW1_SS1_SU0_SUM0_SUS0_SCIUI1_SPO0_SRVW0_SSO0_SVW4_SNLL0_TSGRA0_TSGRB0_TT4_64_TLDS1_UMLDSA0_UMLDSB1_U64SL1_USFGROn1_VAW2_VSn1_VW4_VWB2_VFLRP0_WSGRA1_WSGRB1_WS32_WG32_4_1_WGM8",
+      "kernarg_size": 128,
+      "global_size": [
+        4,
+        32,
+        1
+      ],
+      "local_size": [
+        128,
+        1,
+        1
+      ],
+      "workspace": "none (no workspace ptr in kernarg)",
+      "streamk": false,
+      "rel_err": 0.000419,
+      "stable": true,
+      "correct": true,
+      "median_ms": 0.2916,
+      "best_ms": 0.2522,
+      "median_tflops": 58.9,
+      "best_tflops": 68.1,
+      "ref_tflops": 76.7,
+      "pct_of_ref": 76.8,
+      "tinygrad_tflops": 42.0,
+      "speedup_vs_tinygrad": 1.4,
+      "meets_62": false
+    }
+  ],
+  "weighted_model": {
+    "ffn_gate_up": {
+      "replaced_tinygrad_ms": 94.4,
+      "replaced_tensile_ms": 55.6,
+      "forward_ms": 206.1,
+      "pp_speedup_vs_prefillv2": 1.189
+    },
+    "ffn_gate_up+ffn_down": {
+      "replaced_tinygrad_ms": 141.7,
+      "replaced_tensile_ms": 82.5,
+      "forward_ms": 185.9,
+      "pp_speedup_vs_prefillv2": 1.318
+    },
+    "ffn_gate_up+ffn_down+attn_q_o": {
+      "replaced_tinygrad_ms": 173.1,
+      "replaced_tensile_ms": 103.5,
+      "forward_ms": 175.4,
+      "pp_speedup_vs_prefillv2": 1.397
+    }
+  },
+  "full_pp_speedup": 1.397,
+  "gates": {
+    "all_correct": true,
+    "all_stable": true,
+    "no_layout_copies": true,
+    "no_workspace": true,
+    "full_pp_ge_125": true
+  },
+  "verdict": "PASS"
+}
