@@ -1,0 +1,323 @@
+{
+  "build": {
+    "cmd": [
+      "g++",
+      "-O2",
+      "-std=c++17",
+      "-I",
+      "/opt/rocm-7.2.4/include",
+      "/home/ubuntu/tinygrad-arkey/bench/amd-scheduler-tooling-backend/r1p2_v2_exporter_work/v2_exporter_smoke.cpp",
+      "-L",
+      "/opt/rocm-7.2.4/lib",
+      "-Wl,-rpath,/opt/rocm-7.2.4/lib",
+      "-ldl",
+      "-lhsa-runtime64",
+      "-o",
+      "/home/ubuntu/tinygrad-arkey/bench/amd-scheduler-tooling-backend/r1p2_v2_exporter_work/v2_exporter_smoke"
+    ],
+    "elapsed_s": 0.179,
+    "returncode": 0,
+    "stderr_tail": [],
+    "stdout_tail": []
+  },
+  "classification": {
+    "allocation_count": 0,
+    "attempt_count": 5,
+    "has_device_access_alloc": false,
+    "has_host_access_alloc": false,
+    "start_nonzero_words": 0,
+    "stop_nonzero_words": 0,
+    "working_attempts": []
+  },
+  "date": "2026-06-19",
+  "exe": "bench/amd-scheduler-tooling-backend/r1p2_v2_exporter_work/v2_exporter_smoke",
+  "gates": {
+    "p0_allocation_table": "FAIL",
+    "p0_start_stop_packets": "FAIL",
+    "p0_v2_create_packets": "FAIL",
+    "p1_mappable_strategy": "FAIL"
+  },
+  "next": "Stop; v2 API cannot create usable packet material.",
+  "parsed": {
+    "agent_handle": 0,
+    "attempts": [
+      {
+        "allocations": [],
+        "create_status": 4096,
+        "handle": 0,
+        "name": "cu_se_simd_buf",
+        "ok": false,
+        "pre_iterate_status": null,
+        "start_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "stop_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "allocations": [],
+        "create_status": 4096,
+        "handle": 0,
+        "name": "cu_se_simd",
+        "ok": false,
+        "pre_iterate_status": null,
+        "start_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "stop_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "allocations": [],
+        "create_status": 4096,
+        "handle": 0,
+        "name": "cu_se_only",
+        "ok": false,
+        "pre_iterate_status": null,
+        "start_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "stop_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "allocations": [],
+        "create_status": 4096,
+        "handle": 0,
+        "name": "cu_only",
+        "ok": false,
+        "pre_iterate_status": null,
+        "start_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "stop_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "allocations": [],
+        "create_status": 4096,
+        "handle": 0,
+        "name": "no_params",
+        "ok": false,
+        "pre_iterate_status": null,
+        "start_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "stop_packet": {
+          "bytes": 64,
+          "nonzero_words": 0,
+          "words": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    ],
+    "hsa_init_status": 0,
+    "ok": false,
+    "register_status": 0
+  },
+  "phase": "R1-P2 v2 AQLprofile exporter P0/P1",
+  "run": {
+    "cmd": [
+      "/home/ubuntu/tinygrad-arkey/bench/amd-scheduler-tooling-backend/r1p2_v2_exporter_work/v2_exporter_smoke"
+    ],
+    "elapsed_s": 0.038,
+    "returncode": 4,
+    "stderr_tail": [],
+    "stdout_tail": [
+      "{\"hsa_init_status\":0,\"register_status\":0,\"agent_handle\":0,\"attempts\":[{\"name\":\"cu_se_simd_buf\",\"ok\":false,\"create_status\":4096,\"handle\":0,\"allocations\":[],\"start_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"stop_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"pre_iterate_status\":null},{\"name\":\"cu_se_simd\",\"ok\":false,\"create_status\":4096,\"handle\":0,\"allocations\":[],\"start_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"stop_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"pre_iterate_status\":null},{\"name\":\"cu_se_only\",\"ok\":false,\"create_status\":4096,\"handle\":0,\"allocations\":[],\"start_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"stop_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"pre_iterate_status\":null},{\"name\":\"cu_only\",\"ok\":false,\"create_status\":4096,\"handle\":0,\"allocations\":[],\"start_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"stop_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"pre_iterate_status\":null},{\"name\":\"no_params\",\"ok\":false,\"create_status\":4096,\"handle\":0,\"allocations\":[],\"start_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"stop_packet\":{\"bytes\":64,\"nonzero_words\":0,\"words\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},\"pre_iterate_status\":null}],\"ok\":false}"
+    ]
+  },
+  "source": "bench/amd-scheduler-tooling-backend/r1p2_v2_exporter_work/v2_exporter_smoke.cpp",
+  "verdict": "P0_FAIL"
+}

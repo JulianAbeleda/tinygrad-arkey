@@ -170,6 +170,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `amd-rocprofiler-r1p2-v2-exporter-scope-20260619.md` — scope for that remaining bounded reopen: v2
   `aqlprofile_att_create_packets` exporter, allocation callback table, tinygrad-mappable buffers, one HCQ AQL dispatch
   replay, and strict body-packet pass/kill gates before any native profiled-HCQ work.
+- `amd-rocprofiler-r1p2-v2-exporter-result-20260619.md` — **executed R1-P2 P0/P1.** HSA init and static gfx1100 agent
+  registration pass, but `aqlprofile_att_create_packets` rejects all swept ATT profiles before allocation callbacks, so
+  no start/stop packets or buffer table exist to replay through HCQ. Static-agent v2 exporter route closed; remaining
+  choices are split tooling or project-level native profiled-HCQ/ROCprofiler-service integration.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
