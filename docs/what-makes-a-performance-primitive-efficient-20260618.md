@@ -509,6 +509,12 @@ The lifecycle-search question is now made explicit in `primitive-lifecycle-searc
 `prefill_tensile_artifact_full` is the strongest policy-gated route, `decode_q8_artifact_lifecycle` is the measured
 research decode route, native q8/Tensile transfer is project-level, and separate-pack/spec shortcuts are pruned.
 
+The newest decode convergence (`decode-bandwidth-bound-pmu-learning-20260619.md`) shifts the base-decode path one
+level up: tinygrad's standalone GEMV is stronger than llama's (`76%` vs `57%` HBM), but tinygrad falls to `~44%`
+in-model while llama holds `~54%`. That makes the next base-decode primitive lifecycle work
+`decode-fused-mmvq-integration-next-path-scope-20260619.md`: activation/Q8 reuse plus preserving the low-VGPR,
+high-grid occupancy contract inside the model. This is orthogonal to spec decode.
+
 The PMU atlas reopens spec decode only as `decode_spec_weight_amortization_lifecycle`
 (`spec-decode-bandwidth-amortization-scope-20260619.md`). The old `decode_spec_verify_shortcut` remains closed:
 current T=5 verify is `4.66x` one T==1 pass. The reopened row is gated on a T-cheap target verify forward

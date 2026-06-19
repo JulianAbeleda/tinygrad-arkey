@@ -47,6 +47,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   bindings, policy candidates, generator, and refutation memory. Adds `extra/qk_lifecycle_search.py` and
   `bench/qk-lifecycle-search/*`; current frontier is q8 decode artifact/native transfer and Tensile prefill
   artifact/native transfer, not broad kernel search.
+- `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
+  tinygrad's standalone GEMV is stronger than llama's, but in-model weight-GEMV falls to `~44%` vs llama `~54%`.
+  Scopes activation/Q8 reuse plus occupancy/launch-shape preservation, starting with measurement-only FMI-1/FMI-2.
 - `primitive-pmu-observability-scope-20260619.md` — scope for using installed ROCm profiler tooling as the PMU oracle
   and building only the tinygrad primitive-local attribution layer needed around HCQ.
 - `primitive-pmu-observability-result-20260619.md` — PMU-1..PMU-3 result: ROCm PMU works on HIP controls, but tinygrad
