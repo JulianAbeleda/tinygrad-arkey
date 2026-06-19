@@ -160,6 +160,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   means. Verdict: ROCprofiler ATT depends on a profiled HSA queue + AQLprofile-generated vendor AQL packet lifecycle
   (`hsa_amd_profiling_set_profiler_enabled`, profiler-active queue packet, trace-control buffer, code-object markers),
   not one missing SQTT register. Reopen only as AQLprofile packet import/replay or native profiled-HCQ work.
+- `amd-rocprofiler-reopen-tracks-scope-result-20260619.md` — scoped and executed the first phase for all three reopen
+  options. Verdict: split tooling is the default usable path; AQLprofile packet replay is the only bounded reopen;
+  native profiled-HCQ is project-level and should not start from another register sweep.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
