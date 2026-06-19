@@ -219,6 +219,24 @@ route build: teacher-forced 160-token dNLL = **+0.00165** when `ffn_gate/up` con
 `q8_1_dequantize(q8_1_quantize(ffn_norm_output))` through the normal graph. This does not measure route speed, but it
 removes the main quality objection to building the handwritten HCQ route.
 
+HCQ artifact status: `extra/q8_ffn_hcq_artifact.py` passes the first route-build gate before model integration. The
+probe compiles the fused RMSNorm/q8 producer and the Q4_K x q8_1 consumer as tinygrad AMD code objects, launches them
+through HCQ on tinygrad-owned buffers, and does not call the HIP runtime in-process.
+
+Artifacts:
+
+- `bench/q8-ffn-handwritten-oracle/hcq_artifact.json`
+- `bench/q8-ffn-handwritten-oracle/hcq_artifact_up.json`
+
+| tensor | producer fp max_abs | consumer max_abs | verdict |
+|---|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 4.77e-7 | 7.15e-7 | PASS |
+| `blk.0.ffn_up.weight` | 4.77e-7 | 1.43e-6 | PASS |
+
+This is still not a W==D model route. It proves the backend artifact route is mechanically viable: the same
+producer-side q8 activation buffer can be written by one HCQ kernel and consumed by the gate/up MMVQ kernels without
+HIP, copies, or descriptor extraction.
+
 ## Stop rules
 
 Stop immediately if any of these occur:

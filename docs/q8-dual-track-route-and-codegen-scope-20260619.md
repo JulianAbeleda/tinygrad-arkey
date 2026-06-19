@@ -55,7 +55,7 @@ Result:
 The proxy is quality-only, not a speed route. It proves the q8 activation loss on FFN gate/up is below the current
 `dNLL <= 0.01` quality threshold, so the handwritten route is worth building to W==D.
 
-### A1 — HCQ-launchable handwritten artifacts
+### A1 — HCQ-launchable handwritten artifacts: PASS
 
 Convert the two handwritten HIP kernels into tinygrad-loadable AMD code objects:
 
@@ -71,7 +71,26 @@ Gate:
 - No host/device copies beyond existing model buffers.
 - Reproduces Q8H-1/Q8H-3 correctness.
 
-### A2 — one-block eager route behind research flag
+Executed as `extra/q8_ffn_hcq_artifact.py`. The probe compiles one raw AMD code object per kernel through
+tinygrad's COMGR compiler and launches through tinygrad AMD HCQ. It deliberately uses the raw tinygrad kernel dialect
+instead of HIP runtime headers: `__attribute__((device))` helpers, explicit shared storage, raw half conversion, and
+no in-process HIP calls.
+
+Artifacts:
+
+- `bench/q8-ffn-handwritten-oracle/hcq_artifact.json`
+- `bench/q8-ffn-handwritten-oracle/hcq_artifact_up.json`
+
+| tensor | producer fp max_abs | q8 dequant max_abs | consumer max_abs | verdict |
+|---|---:|---:|---:|---|
+| `blk.0.ffn_gate.weight` | 4.77e-7 | 0.01165 | 7.15e-7 | PASS |
+| `blk.0.ffn_up.weight` | 4.77e-7 | 0.01165 | 1.43e-6 | PASS |
+
+This proves the handwritten producer and consumer are HCQ-loadable artifacts on tinygrad-owned GPU buffers. It does
+not yet prove model routing or graph capture; it retires only the "can these kernels be loaded without HIP in-process?"
+risk.
+
+### A2 — one-block eager route behind research flag: NEXT
 
 Route one dense FFN block:
 
