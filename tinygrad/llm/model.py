@@ -14,6 +14,11 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
 # via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
 PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
+# Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
+# concrete -> the attention's reduce tiles/TC fires (symbolic KV blocks it). ~1.24x e2e, byte-identical. Cost: a
+# separate concrete prefill jit per distinct start_pos (0,512,...) vs one symbolic jit. See
+# docs/prefill-concrete-kv-build-scope-20260619.md.
+PREFILL_CONCRETE_KV = bool(getenv("PREFILL_CONCRETE_KV", 0))
 Q8_FFN_HANDWRITTEN = bool(getenv("Q8_FFN_HANDWRITTEN", 0))
 DECODE_MMVQ_IMPORT_Q4 = bool(getenv("DECODE_MMVQ_IMPORT_Q4", 0))
 # NOTE: PREFILL_TC_ATTENTION (explicit TC Q@Kᵀ + softmax + P@V) was probed and UNWIRED -- it won ~2.5x over
@@ -992,6 +997,7 @@ class Transformer:
     # prefill v2 (opt-in): a SEPARATE jit captured with a CONCRETE token batch (T=PREFILL_UBATCH) so tensor
     # cores apply, distinct from the symbolic-batch prefill_jit. Only ever called when PREFILL_V2.
     self.prefill_v2_jit = TinyJit(self.forward)
+    self.prefill_v2_jits: dict = {}   # concrete-KV: one prefill jit per concrete start_pos (PREFILL_CONCRETE_KV)
     # prefill v2 warmstart table is built here but installed into the global codegen knob ONLY for the duration
     # of the prefill-v2 forward (see __call__), to contain that ambient power rather than leave it set process-wide.
     self._pf16_warmstart:dict|None = None
@@ -1073,8 +1079,12 @@ class Transformer:
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
     for block in self.blk: block._use_flash, block._prefill_v2 = use_flash, is_prefill_v2
-    jit = (self.prefill_v2_jit if is_prefill_v2 else self.prefill_jit) if is_prefill else \
-          (self.rollout_jit_flash if use_flash else self.rollout_jit)
+    # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
+    if is_prefill_v2 and isinstance(start_pos, int):
+      jit = self.prefill_v2_jits.setdefault(start_pos, TinyJit(self.forward))
+    else:
+      jit = (self.prefill_v2_jit if is_prefill_v2 else self.prefill_jit) if is_prefill else \
+            (self.rollout_jit_flash if use_flash else self.rollout_jit)
     if not is_prefill_v2: return jit(tokens.contiguous(), start_pos, temperature)
     # contain the ambient codegen power: install the warmstart table ONLY around the prefill-v2 forward (it's
     # consulted at kernel-compile time, i.e. this jit's first call), then restore -- decode/other paths never
@@ -1236,7 +1246,7 @@ class Transformer:
       if PREFILL_V2 and (prompt_len - start_pos) >= PREFILL_UBATCH:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
-        sp, ntv = v_start_pos.bind(start_pos), PREFILL_UBATCH
+        sp, ntv = (start_pos if PREFILL_CONCRETE_KV else v_start_pos.bind(start_pos)), PREFILL_UBATCH
         out = self(t[:, sp:sp+PREFILL_UBATCH], sp, temp, use_flash=False).realize()
       else:
         sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
