@@ -89,7 +89,7 @@ viable K range. That allows shape-specialized kernels/graphs, but the whole forw
 
 ## Phases
 
-### TBF-0 - authority lock
+### TBF-0 - authority lock - DONE
 
 Goal: decide whether this project is worth funding as a project-level route.
 
@@ -107,7 +107,9 @@ Kill:
 
 - if the expected next step must be a bounded kernel edit, stop here.
 
-### TBF-1 - short-block verify IR contract
+Result: `spec-decode-tcheap-batched-forward-tbf0-tbf2-result-20260619.md` executes this as a read-only decode audit.
+
+### TBF-1 - short-block verify IR contract - DONE
 
 Goal: define a separate target forward mode for speculative verify.
 
@@ -127,7 +129,9 @@ Gate:
 
 - graph contract can represent all target blocks and KV semantics without changing normal decode.
 
-### TBF-2 - component authority probes
+Result: contract defined in `bench/qk-spec-tcheap-forward/ir_contract.json`.
+
+### TBF-2 - component authority probes - DONE
 
 Goal: prove the best possible component ceilings before implementing a full route.
 
@@ -146,7 +150,10 @@ Kill:
 
 - any one of Q4_K/Q6_K/attention remains ~T-linear after a credible attempt.
 
-### TBF-3 - linears route
+Result: current baseline fails every component gate. Q4_K is `2.916x`, Q6_K/lm_head is `5.831x`,
+attention/reduces is `3.061x`, and linears as a group are `3.523x` their T=1-equivalent at T=5.
+
+### TBF-3 - linears route - NOT EARNED
 
 Goal: build/import the short-block quantized-linear route.
 
@@ -163,6 +170,8 @@ Gate:
 Kill:
 
 - Q4_K-only or Q6_K-only wins that do not move the group.
+
+Do not start TBF-3 until a concrete grouped short-block linears candidate exists and TBF-2 is rerun against it.
 
 ### TBF-4 - short-block attention route
 

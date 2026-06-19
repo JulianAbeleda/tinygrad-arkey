@@ -171,6 +171,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `spec-decode-tcheap-batched-forward-project-scope-20260619.md` — project-level decode-only scope for making spec
   viable after SDB-1/SDB-2: a short-block target verify forward, low-sync accept/commit, exact KV protocol, and
   T=K+1 verify `<=1.3-1.5x` one pass. Explicitly not a prefill route and not a bounded kernel edit.
+- `spec-decode-tcheap-batched-forward-tbf0-tbf2-result-20260619.md` — **executed TBF-0..TBF-2.** Short-block verify
+  IR contract is defined, but current component gates all fail: Q4_K `2.916x`, Q6_K/lm_head `5.831x`,
+  attention/reduces `3.061x`, linears group `3.523x` vs the `<=1.5x` T-cheap gate. Stops before TBF-3 until a
+  concrete component route exists.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

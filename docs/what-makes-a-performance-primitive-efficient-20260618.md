@@ -519,6 +519,11 @@ SDB-1/SDB-2 then classify that reopened row as project-level, not bounded
 about `0.52x` before runtime overhead, and T=5 verify needs a `67.8%` cut across Q4_K, Q6_K/lm_head, and
 attention/reduces. No single existing primitive or component is sufficient.
 
+TBF-0..2 (`spec-decode-tcheap-batched-forward-tbf0-tbf2-result-20260619.md`) defines the short-block verify IR
+contract, but stops before implementation: current Q4_K, Q6_K/lm_head, attention/reduces, and grouped linears all
+fail the `<=1.5x` T-cheap component gate. TBF-3 requires a concrete grouped-linears or short-block-attention
+component candidate first.
+
 ## External research check
 
 Second-round external research is consolidated in `performance-primitive-external-research-audit-20260619.md`.

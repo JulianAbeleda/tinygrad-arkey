@@ -17,7 +17,7 @@ Read-only seed ledger. It does not run hardware or route a model path.
 - `prefill_tensile_artifact_full`: `pass_strong_policy_gated`; next: Decide external artifact policy; if accepted, harden shape/fallback matrix.
 - `decode_q8_artifact_lifecycle`: `pass_research`; next: Policy decision: accept research-only artifact route or keep default off.
 - `decode_q8_native_codegen`: `project_level`; next: Only fund as AMD scheduler/codegen project, not primitive search.
-- `decode_spec_weight_amortization_lifecycle`: `project_level`; next: Do not build SDB-3 unless a project-level T-cheap batched-forward route is funded.
+- `decode_spec_weight_amortization_lifecycle`: `project_level`; next: Do not build TBF-3 until a concrete grouped-linears or short-block-attention component route exists.
 - `prefill_tensile_codegen_transfer`: `project_level`; next: Treat as reusable AMD renderer/scheduler project, using Tensile as oracle.
 
 ## Live questions
