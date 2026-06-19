@@ -39,6 +39,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `primitive-local-observability-audit-20260619.md` — replay audit over the primitive ledger, including the TPE-7a
   rebindable-node artifact. Confirms graph-protocol prerequisite PASS while keeping in-model capture and artifact
   policy as remaining gates.
+- `primitive-ledger-analysis-audit-20260619.md` — uses the primitive ledger for the intended analysis pass: decode is
+  q8/MMVQ lifecycle-limited; prefill is graph/artifact-boundary-limited; broad kernel search is not supported by the
+  current evidence.
 - `prefill-tensile-tpe7a-rebindable-node-result-20260619.md` — TPE-7a result: one extracted Tensile kernel object
   can be rebound to current buffers through graph-style kernarg filling; correctness/protocol proof only.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
