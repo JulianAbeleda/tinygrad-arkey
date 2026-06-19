@@ -12,7 +12,10 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 - `gpu-performance-first-principles.md` — **canonical** bytes/math/overhead + roofline reference;
   diagnose the bucket BEFORE optimizing.
 - **`../bench/README.md`** — the benchmark results index: every current number, its artifact, and the
-  exact command to reproduce it.
+  exact command to reproduce it. **Includes "Which harness for decode tok/s — READ FIRST"** (use the clean
+  `model.generate`-path CLI/W==D harnesses; the flash auto-bench's ~54 is contaminated, not a tok/s number).
+- `qk-decode-banked-reproduce-20260618.md` — banked decode line reproduced on HEAD (68.2/66.4/60.7, W==D,
+  host-sync 0%, whole stack default-on) + the harness lesson.
 - `amd-decode-capstone.md` — the decode ledger (23 → ~64 tok/s arc).
 - `amd-decode-arc-synthesis.md` — synthesis through the primitive lens.
 

@@ -8,12 +8,28 @@ artifacts are force-added. Doc map: `../docs/README.md`; current state: `../docs
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 101–106 tok/s** (8B decode).
 Measurement discipline (the 3 confounds: cache / launch / clock-ramp) — `../docs/amd-decode-measurement-confounds.md`.
 
+## Which harness for decode tok/s — READ FIRST (don't repeat the 2026-06-18 mistake)
+
+Decode tok/s is only trustworthy from a **clean `model.generate`-class path** (device-token feedback, **no
+per-step host `Tensor` creation** — that artifact *halves* the rate; `../docs/qk-runtime-overhead-arc-result-20260617.md`).
+Pick the harness by what you're measuring:
+
+| want | use | gives | notes |
+|---|---|---|---|
+| **production tok/s @ ctx≈0** (default headline) | **`-m tinygrad.llm … --warmup --benchmark`** (`tinygrad/llm/cli.py`) | ~86 tok/s, single point | the production default; `model.generate`, clean path |
+| **decode tok/s vs ctx** (512/1024/4096…) | **`extra/qk_decode_runtime_overhead.py`** (in-model **W==D**) | 68.2/66.4/60.7 @ 512/1024/4096 | only harness that sweeps ctx on the clean path; W≈D ⇒ GPU-bound |
+| flash-decode **policy** (which path is selected, off/on/auto) | `extra/qk_flash_decode_auto_bench.py` | ~54–56 flat | ⚠️ **NOT a tok/s number** — it builds a host input `Tensor` per step inside the timed loop (contaminated by design); use it for selection/correctness only |
+
+Both clean harnesses agree on one curve: **~86 @ctx≈0 → 68.2/66.4/60.7 @ 512/1024/4096** (default stack,
+2026-06-18, HEAD; matches banked within 0.2). See `../docs/qk-decode-banked-reproduce-20260618.md`,
+`qk-decode-runtime-overhead/result.json`.
+
 ## Current numbers
 
 | benchmark | value | recorded in | reproduce |
 |---|---:|---|---|
-| **Decode 8B, default-on** | ~55 tok/s (52% llama) | `amd-decode-banked-*.md` | `cli ... --warmup --benchmark 40` (steady median, drop first ~3) |
-| **Decode 8B, + ffn_down demote** | **64.3 tok/s (63%)** | `bench/qk-demote-search/search.json` | prefix `QK_DEMOTE_TENSORS=ffn_down` on the above |
+| **Decode 8B, default-on** (coop stack + gqa_coop_vec + flash, HEAD 2026-06-18) | **~86 @ctx≈0; 68.2/66.4/60.7 @ctx 512/1024/4096** (~67% llama) | `qk-decode-banked-reproduce-20260618.md`, `qk-8b-decode-banked-20260617.md` | CLI `--warmup --benchmark` (ctx≈0); `extra/qk_decode_runtime_overhead.py` (ctx sweep) — see "Which harness" above |
+| _superseded:_ Decode 8B pre-coop (~55) / +ffn_down demote (64.3) | historical | `amd-decode-banked-20260616.md`, `bench/qk-demote-search/search.json` | folded into the default-on stack above |
 | **Demotion frontier** (ffn_down/attn_v accept; lm_head 75.0 but rejected on dNLL +0.051) | see json | **`bench/qk-demote-search/search.json`** (+ `accepted-*.json`) | `python -m extra.qk_demote_search --epsilon 0.01` |
 | **Decode 14B** (generated policy) | 40.6 tok/s (62%) | **`bench/qk-shared-storage-20260612/matrix-summary.md`** | harness; see that dir's README |
 | **Decode 32B** (generated policy) | 17.2 tok/s (56%) | same matrix-summary | same |
@@ -27,8 +43,11 @@ Measurement discipline (the 3 confounds: cache / launch / clock-ramp) — `../do
 ## Reproduce — the two most-cited
 
 ```sh
-# Decode 8B, default-on (out-of-box) -> ~55 tok/s steady median
-DEV=AMD .venv/bin/python -m tinygrad.llm.cli -m /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 40
+# Decode 8B, default-on @ctx≈0 (production headline) -> ~86 tok/s steady median (drop first ~3, clock-ramp)
+DEV=AMD PYTHONPATH=. .venv/bin/python -m tinygrad.llm -m /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 40
+
+# Decode 8B vs ctx (the banked curve) -> 68.2/66.4/60.7 @ 512/1024/4096, in-model W==D, host-sync %
+DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_decode_runtime_overhead.py
 
 # The full demotion search (frontier + accepted policies) -> writes bench/qk-demote-search/
 DEV=AMD .venv/bin/python -m extra.qk_demote_search --epsilon 0.01 --bench 24 --tokens 128
