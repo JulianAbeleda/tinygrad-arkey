@@ -11,6 +11,9 @@ from tinygrad.uop.ops import resolve
 # tensor cores apply + the loop-found TC schedule warm-start in. See docs/amd-decode-prefill-v2-gate-20260616.md.
 PREFILL_V2 = bool(getenv("PREFILL_V2", 0))
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
+# Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
+# via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
+PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
 # NOTE: PREFILL_TC_ATTENTION (explicit TC Q@Kᵀ + softmax + P@V) was probed and UNWIRED -- it won ~2.5x over
 # SDPA standalone (concrete KV) but was ~0.8x (SLOWER) in-model because the prefill chunk's start_pos is
 # SYMBOLIC, so KV=start_pos+T is symbolic and the concrete-shape TC doesn't fire. See
@@ -41,6 +44,10 @@ def _pf16(lin, x:Tensor) -> Tensor:
   # whole dequant into the matmul -> bandwidth/dequant-bound ~3% peak (no TC win). So we realize a clean fp16
   # weight ONCE per linear (cached as `_pf16_w` by _install_prefill_v2_warmstart) and matmul against that.
   w = getattr(lin, "_pf16_w", None)
+  if PREFILL_TENSILE_GEMM and w is not None:   # research-only external Tensile route (flag-gated, eligible shapes only)
+    from extra.qk_tensile_inmodel import route_pf16
+    routed = route_pf16(lin, x)
+    if routed is not None: return routed       # else fall through to the normal fp16 matmul (silent fallback)
   if w is None: w = lin.weight.cast(dtypes.float16)   # fallback (uncached): lazy, slow -- expect the cache
   b = getattr(lin, "bias", None)
   return x.cast(dtypes.float16).linear(w.transpose(), b.cast(dtypes.float16) if b is not None else None)
@@ -955,6 +962,9 @@ class Transformer:
     if PREFILL_V2:
       _prefill_v2_validate_ubatch(PREFILL_UBATCH)
       self._pf16_warmstart = self._build_prefill_v2_warmstart()
+      if PREFILL_TENSILE_GEMM:   # research-only: build Tensile runners + install routing EAGERLY (outside the prefill trace)
+        from extra.qk_tensile_inmodel import install
+        install()
 
   # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
   _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
