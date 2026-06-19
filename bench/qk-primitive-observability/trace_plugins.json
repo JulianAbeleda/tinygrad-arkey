@@ -1,0 +1,26 @@
+{
+  "evidence_level": 3,
+  "mode": "inventory_only_no_trace_collection",
+  "note": "Trace/counter plugins are optional. This inventory does not run rocprof or require HIP runtime.",
+  "rocprof_trace_artifacts": [
+    "bench/llama-residual-exhaustion-20260619/pmc_mmvq_derived_d0_n1/trace_results.json",
+    "bench/llama-residual-exhaustion-20260619/pmc_mmvq_q4_d0_n1/trace_results.json"
+  ],
+  "schema": "primitive_trace_plugin_inventory_v1",
+  "tinygrad_sqtt_examples": [
+    "extra/sqtt/examples/gfx1100/profile_empty_run_0.pkl",
+    "extra/sqtt/examples/gfx1100/profile_empty_run_1.pkl",
+    "extra/sqtt/examples/gfx1100/profile_gemm_run_0.pkl",
+    "extra/sqtt/examples/gfx1100/profile_gemm_run_1.pkl",
+    "extra/sqtt/examples/gfx1100/profile_plus_run_0.pkl",
+    "extra/sqtt/examples/gfx1100/profile_plus_run_1.pkl",
+    "extra/sqtt/examples/gfx1100/profile_sync_run_0.pkl",
+    "extra/sqtt/examples/gfx1100/profile_sync_run_1.pkl"
+  ],
+  "tools": {
+    "rocprof-compute": null,
+    "rocprof-compute-viewer": null,
+    "rocprof-sys": null,
+    "rocprofv3": null
+  }
+}
