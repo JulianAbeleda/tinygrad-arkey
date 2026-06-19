@@ -487,7 +487,10 @@ Close criterion:
 The project has exhausted the bounded **decode** primitive space. The remaining llama.cpp advantage is explained
 by full MMVQ activation-format economics and by mature tiled kernels. Further progress requires one of:
 
-1. a deep activation-lifecycle change for q8/int-dot decode;
+1. accepting the q8/int-dot decode path as a research artifact route, then choosing between:
+   - a narrow artifact/import route for the hipcc/LLD schedule; or
+   - a project-level AMD scheduler/codegen transfer that can emit hipcc-quality schedules natively.
+   The concrete scope is `q8-ffn-amd-scheduler-codegen-project-scope-20260619.md`.
 2. accepting an external/raw-HIP/rocBLAS-like kernel boundary for prefill-class work, or a deeper codegen/Tensile
    rewrite beyond the bounded pure-tinygrad sweep. The concrete scope is
    `prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md`.
@@ -520,6 +523,10 @@ Primary current docs:
 - `q8-sidechannel-ffn-verdict-20260618.md`
 - `q8-mmvq-lifecycle-deep-scope-20260618.md`
 - `q8-mmvq-lifecycle-deep-result-20260619.md`
+- `q8-ffn-handwritten-a4-decode-result-20260619.md`
+- `q8-ffn-amd-scheduler-s0-result-20260619.md`
+- `q8-ffn-dynamic-scheduler-observability-result-20260619.md`
+- `q8-ffn-amd-scheduler-codegen-project-scope-20260619.md`
 - `llama-kernel-residual-primitive-audit-scope-20260619.md`
 - `llama-kernel-residual-primitive-audit-20260619.md`
 - `qk-decode-per-role-delta-audit-20260618.md`
