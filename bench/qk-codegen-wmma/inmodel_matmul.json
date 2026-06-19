@@ -53,5 +53,19 @@
     },
     "measurement_confound_caught": "single-eval runs read 42 / 65 / 67 TFLOPS for the SAME coalesced kernel = clock-ramp/warmth noise (AMD-decode-measurement-confounds principle). The FAIR back-to-back run (47.3 strided vs 43.7 coalesced) + the noise-free ISA are the truth. Led astray by TFLOPS momentarily; ISA + fair-compare corrected it.",
     "conclusion": "the 120-127 v_mov fp16-load register overhead is NOT removable by the kernel copy access pattern -> it is RENDERER-FORCED (tinygrad's fp16 d16-load lowering / per-register init), regardless of strided vs contiguous. The dependency-free prefill lever = a RENDERER change (vectorize/widen fp16 loads, eliminate the d16 register-init) -- project-level, NOT kernel-expressible (CG-W2 refuted, like CG-1/CG-R1 before it)."
-  }
+  },
+  "CG_W2b_explicit_vector_read": {
+    "verdict": "REFUTED -- wide fp16 loads NOT kernel/UOp-expressible (no-opts)",
+    "isa": {
+      "v_mov": 123,
+      "global_load_d16": 16,
+      "global_load_b128": 2,
+      "v_wmma": 16
+    },
+    "tflops": 42.35,
+    "correct": true,
+    "finding": "explicit inner-8 vector reshape on the copy STILL emits 16 d16 loads + 123 v_mov (only 2 b128). Combined with CG-W2 (contiguous, also d16): NO UOp-structure change makes tinygrad emit wide fp16 loads for the copy without the UPCAST opt -- fp16 load width is OPT/RENDERER-controlled, not kernel-expressible.",
+    "conclusion": "the dependency-free prefill lever (vectorize the transposing fp16 copy to kill the d16+v_mov overhead) is firmly a RENDERER/OPT-level change (CG-W3), PROJECT-LEVEL with broad blast radius + uncertain payoff (warp-uncoalescing trade). Every KERNEL-LEVEL prefill lever now refuted: POWN-1, PWLT-A2, CG-R1, CG-W2, CG-W2b."
+  },
+  "final_kernel_level_verdict": "EXHAUSTED -- pure-tinygrad prefill matmul has no kernel-level lever left on gfx1100; only a project-level renderer/opt fp16-load-vectorization change remains, or rest at PREFILL_V2 (~80% llama), or the external Tensile route (1.41x llama, dependency)."
 }
