@@ -84,6 +84,31 @@ The decode levers (spec-decode, bandwidth) do NOT help prefill, and the prefill 
 decode. Frontier #4 (codegen) is dead for decode (VALU idle) but LIVE for prefill (the 35%→54% WMMA-efficiency gap
 = software-pipelined K-loop, the POWN-walled codegen capability).
 
+## llama.cpp reference — SAME decode structure; gap is weight-GEMV bandwidth efficiency (measured)
+llama-bench is HIP/rocBLAS-linked → rocprof-traceable (unlike tinygrad's HCQ). `rocprofv3 --kernel-trace` on
+llama decode (tg48, 8B Q4_K) GPU-time breakdown:
+| llama kernel | GPU-time% | role |
+|---|---:|---|
+| `mul_mat_vec_q<Q4_K>` (×2) | **67%** | Q4_K weight GEMVs |
+| `mul_mat_vec_q<Q6_K>` (×2) | **19%** | Q6_K weight GEMVs |
+| `quantize_q8_1` | 3.6% | activation→Q8_1 (for int8-dot) |
+| `rms_norm` (×2) | 4.5% | norms |
+| `flash_attn_tile`+combine | 3.1% | attention |
+| `rope_neox` (×2) | 2.0% | rope |
+
+**→ llama decode is ~86% weight-GEMV — STRUCTURALLY IDENTICAL to tinygrad (~85%).** Both bandwidth-bound on the
+same operation. So the 77 (tinygrad) vs ~96 (llama) tok/s gap is **NOT structural/algorithmic** — it is the
+**bandwidth efficiency of the identical weight-GEMV**: llama reads the same ~4.68 GB/token at **~47% of peak HBM
+BW**, tinygrad at **~38%** (both from tok/s×bytes). llama uses Q8_1 activation-quant + int8-dot
+(`mul_mat_vec_q`); tinygrad's Q4_K GEMV reads the same bytes ~24% less efficiently. (rocprofv3 GL2C/GRBM counters
+returned 0 on llama — multiplexing/collection limit, same wall the prior PMU scope hit; the kernel-trace timing
+comparison is the trustworthy signal. SQ_WAVES did collect.)
+
+**Decode gap crystallized (triangulated 3 ways — atlas counters, llama kernel-trace, tok/s×bytes):** the lever is
+the **Q4_K weight-GEMV's effective HBM bandwidth (38%→47%+)** — a kernel memory-efficiency problem (access
+pattern / occupancy / memory-level parallelism), NOT codegen-ALU (VALU idle) and NOT a new algorithm (llama's
+structure is identical). Orthogonal multiplier: spec-decode (amortize the weight read across ~2.5 tokens).
+
 ## Files
 `extra/qk_pmc_capture.py`, `extra/qk_primitive_pmu_atlas.py`, `bench/qk-primitive-pmu-atlas/result.json`. Prior:
 `route-a-a3-p2-p3-lds-refuted-20260619.md` (LDS), `frontier-scope-beyond-route-a-20260619.md` (#3 spec-decode),
