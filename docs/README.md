@@ -79,6 +79,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   -> imported Q4 consumer is correct and clears the lifecycle device gate (`50.8%` HBM-equivalent vs current
   `attn_q/o` ~`29%`), and the same Q4 template generalizes to `ffn_gate/up`. Next gate is graph-safe Q4 routing; Q6
   remains a parallel coverage track.
+- `decode-mmvq-large-project-p7a-graph-route-result-20260619.md` — **attempted P7a.** Runtime-cache graph adapter was
+  built, but TinyJit replay faults even with persistent side buffers. Imported Q4 remains valid in eager HCQ; graph use
+  now requires first-class raw-kernarg rebind support or native lowering.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

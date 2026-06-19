@@ -137,14 +137,23 @@ P5/P6 are complete for Q4_K:
 
 Detailed result: `docs/decode-mmvq-large-project-p5-p6-result-20260619.md`.
 
+P7a was attempted and redirected:
+
+- graph-route adapter was built with runtime-cache swaps for the q8 producer and imported Q4 consumer;
+- hidden temporary q8/out buffers faulted on TinyJit replay;
+- persistent side buffers passed as explicit TinyJit arguments also faulted on TinyJit replay;
+- direct/eager imported Q4 remains valid (P3-P6), but raw captured llama kernargs are not graph-safe by wrapper alone.
+
+Detailed result: `docs/decode-mmvq-large-project-p7a-graph-route-result-20260619.md`.
+
 ## Recommendation
 
-Start P7a next: graph-safe Q4 route behind a research flag.
+Start P7b next: first-class raw-kernarg rebind support, or stop the imported route at eager research primitive status.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-Q4 imported consumer + q8_1 producer -> graph-safe one-block route -> W==D/dNLL gate
+raw-kernarg rebind support -> Q4 imported consumer + q8_1 producer graph route -> W==D/dNLL gate
 ```
 
 Q6 imported-kernel correctness/perf remains a coverage track. It should not block the Q4 graph route because Q4 already
