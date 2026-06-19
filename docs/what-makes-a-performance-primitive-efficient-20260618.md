@@ -74,6 +74,7 @@ operating contract for this document.
 | coalescing, registers, and reductions trade off | record lanes/row, rows/block, K split, reduction location, scale decode, occupancy | 128-thread/row helped diagnose but did not route alone |
 | value semantics beat source emission | intrinsic/lowering tests must validate computed values and edge lanes | signed dot4 source/ISA checks were insufficient until value tests caught unsigned behavior |
 | machine search needs rows | state current impl, reference impl, dataflow, legal knobs, gates, Amdahl, refutations, fallback | future searches should extend tables/spec rows, not clone one-off scripts |
+| lifecycle search is separate from kernel search | producer placement, activation/weight format, consumer primitive, routing boundary, quality policy, and fallback are search axes | q8 decode and Tensile prefill are lifecycle candidates; dot4/WMMA microbenchmarks alone are incomplete |
 | hardware feedback has levels | use the strongest available evidence, but separate go/kill authority from root-cause authority | correctness + device time can decide a gate; counter-free root-cause claims must be labeled as inferred |
 | stop conditions match the mode | shipping mode stops at failed gate; research mode names the next funded layer | Claude's "stop" was right for shipping; research could continue only by explicitly scoping deeper layers |
 | fallbacks and authority stay central | shipped paths need one route, explicit fallback, unsupported-shape tests, and updated docs | default coop/flash routes are banked; experimental flags are not silent defaults |
@@ -502,6 +503,11 @@ The schedule/codegen question has also been made finite in
 `amd-schedule-codegen-exhaustion-result-20260619.md`: q8 decode and Tensile prefill are the two authority oracles, and
 each schedule feature is classified. The result does not reject native AMD codegen work; it says the native path is a
 reusable backend project, while the bounded measured path is artifact/policy/graph routing.
+
+The lifecycle-search question is now made explicit in `primitive-lifecycle-search-scope-20260619.md` and
+`bench/qk-lifecycle-search/candidates.json`. It ranks producer/format/consumer/routing candidates above kernel rows:
+`prefill_tensile_artifact_full` is the strongest policy-gated route, `decode_q8_artifact_lifecycle` is the measured
+research decode route, native q8/Tensile transfer is project-level, and separate-pack/spec shortcuts are pruned.
 
 ## External research check
 
