@@ -126,7 +126,7 @@ The producer is also slower in-model because the route casts the fp16 RMSNorm we
 
 **Redirect before A3:** do not graph-capture this slow COMGR artifact. First recover a hipcc/clang-quality
 HCQ-loadable artifact, or change the producer/consumer to a tinygrad-owned raw-ASM/codegen form that matches the HIP
-oracle timing.
+oracle timing. Forward scope: `q8-ffn-fast-artifact-and-codegen-transfer-scope-20260619.md`.
 
 ### A3 — TinyJit/HCQGraph route: BLOCKED ON A2 PERF
 

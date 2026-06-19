@@ -82,6 +82,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   backend research route for dNLL/W==D truth, and Track B tinygrad codegen transfer for owning the fused producer and
   q8 MMVQ lifecycle. Adds `extra/q8_ffn_quality_proxy.py`; Track A A0 quality proxy PASS with 160-token dNLL
   +0.00165, so next is HCQ-launchable handwritten route.
+- `q8-ffn-fast-artifact-and-codegen-transfer-scope-20260619.md` — forward scope after A2: one-block q8 route is
+  correct but COMGR-HCQ artifacts are too slow (`~195us` vs `<=129us` gate). Scopes the two remaining paths:
+  hipcc-quality artifact loading through HCQ (`unknown AMD reloc 10` first) and tinygrad-owned raw/codegen transfer.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
