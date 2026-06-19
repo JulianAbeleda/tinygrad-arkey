@@ -52,7 +52,7 @@ typedef struct {
   };
 } aqlprofile_att_parameter_t;
 typedef struct {
-  aqlprofile_agent_handle_t agent;
+  hsa_agent_t agent;
   const aqlprofile_att_parameter_t* parameters;
   uint32_t parameter_count;
 } aqlprofile_att_profile_t;
@@ -78,6 +78,18 @@ struct AllocRec {
   uint32_t memory_hint;
 };
 static std::vector<AllocRec> allocs;
+static hsa_agent_t gpu_agent{};
+static bool found_gpu = false;
+
+static hsa_status_t find_gpu(hsa_agent_t agent, void*) {
+  hsa_device_type_t type{};
+  if (hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &type) == HSA_STATUS_SUCCESS && type == HSA_DEVICE_TYPE_GPU) {
+    gpu_agent = agent;
+    found_gpu = true;
+    return HSA_STATUS_INFO_BREAK;
+  }
+  return HSA_STATUS_SUCCESS;
+}
 
 static hsa_status_t cb_alloc(void** ptr, uint64_t size, aqlprofile_buffer_desc_flags_t flags, void*) {
   void* base = nullptr;
@@ -157,6 +169,12 @@ int main() {
     printf("{\"ok\":false,\"stage\":\"hsa_init\",\"hsa_init_status\":%u}\n", (unsigned)hsa_init_st);
     return 5;
   }
+  hsa_status_t find_st = hsa_iterate_agents(find_gpu, nullptr);
+  if (!found_gpu) {
+    printf("{\"ok\":false,\"stage\":\"find_gpu\",\"hsa_init_status\":%u,\"find_status\":%u}\n",
+           (unsigned)hsa_init_st, (unsigned)find_st);
+    return 6;
+  }
   void* lib = dlopen("libhsa-amd-aqlprofile64.so", RTLD_NOW | RTLD_LOCAL);
   if (!lib) {
     printf("{\"ok\":false,\"stage\":\"dlopen\",\"error\":\"%s\"}\n", dlerror());
@@ -202,13 +220,13 @@ int main() {
   attempts[4].name = "no_params";
   attempts[4].count = 0;
 
-  printf("{\"hsa_init_status\":%u,\"register_status\":%u,\"agent_handle\":%lu,\"attempts\":[",
-         (unsigned)hsa_init_st, (unsigned)reg_st, (unsigned long)agent.handle);
+  printf("{\"hsa_init_status\":%u,\"find_status\":%u,\"register_status\":%u,\"registered_agent_handle\":%lu,\"hsa_gpu_agent_handle\":%lu,\"attempts\":[",
+         (unsigned)hsa_init_st, (unsigned)find_st, (unsigned)reg_st, (unsigned long)agent.handle, (unsigned long)gpu_agent.handle);
   bool any_ok = false;
   for (size_t i = 0; i < 5; i++) {
     reset_allocs();
     aqlprofile_att_profile_t profile{};
-    profile.agent = agent;
+    profile.agent = gpu_agent;
     profile.parameters = attempts[i].count ? attempts[i].params : nullptr;
     profile.parameter_count = attempts[i].count;
     aqlprofile_handle_t handle{};
