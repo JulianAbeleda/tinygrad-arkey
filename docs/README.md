@@ -72,6 +72,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   = 1.02× the default matmul (both ~34% peak) → **LDS-tiling is NOT the lever** (IC-served on gfx1100, like decode
   attention). Real headroom is rocBLAS-class Tensile tuning → **Branch B (external rocBLAS)**, gated on a split ROCm
   toolchain (HIP 5.7 vs rocBLAS 7.2.4 won't co-compile). Prefill rests at PREFILL_V2 until that's funded.
+- **`prefill-external-blas-scope-20260619.md` — THE NEXT PLAN (external BLAS).** Ceiling-first: PXB-0 toolchain fix →
+  PXB-1 standalone rocBLAS/hipBLASLt ceiling on the real shapes (the cheap go/no-go: ≥1.5× current matmul or kill) →
+  only then PXB-2 bridge (the hard part: tinygrad HCQ vs HIP-runtime are two device stacks) → PXB-3 in-model pp →
+  PXB-4 authority/portability decision. Most risk resolves at the PXB-1 ceiling measurement.
 - **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486
   tok/s, ~83% of llama) via concrete-ubatch + fp16 + realized-weights + warmstart-TC, gated `PREFILL_V2`,
   decode untouched. Quality gate PASSED (dNLL ~0, 8B). Corrects the Stage-0 gate's premise (lazy weights →
