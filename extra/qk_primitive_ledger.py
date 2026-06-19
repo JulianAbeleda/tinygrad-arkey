@@ -388,7 +388,14 @@ def build_smoke_checks(sessions:list[dict[str, Any]], registry:dict[str, Any]) -
   }
 
 def build_trace_plugins() -> dict[str, Any]:
-  tools = {name: shutil.which(name) for name in ("rocprofv3", "rocprof-compute", "rocprof-sys", "rocprof-compute-viewer")}
+  def _find_tool(name:str) -> str | None:
+    found = shutil.which(name)
+    if found: return found
+    for root in (pathlib.Path("/opt/rocm/bin"), pathlib.Path("/opt/rocm-7.2.4/bin")):
+      cand = root / name
+      if cand.exists() and os.access(cand, os.X_OK): return str(cand)
+    return None
+  tools = {name: _find_tool(name) for name in ("rocprofv3", "rocprof-compute", "rocprof-sys", "rocprof-compute-viewer")}
   sqtt_examples = sorted(_rel(p) for p in (ROOT / "extra/sqtt/examples").glob("gfx1100/*.pkl")) if (ROOT / "extra/sqtt/examples/gfx1100").exists() else []
   rocprof_traces = sorted(_rel(p) for p in (BENCH / "llama-residual-exhaustion-20260619").glob("**/trace_results.json")) if (BENCH / "llama-residual-exhaustion-20260619").exists() else []
   return {

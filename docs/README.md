@@ -42,6 +42,8 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `primitive-ledger-analysis-audit-20260619.md` — uses the primitive ledger for the intended analysis pass: decode is
   q8/MMVQ lifecycle-limited; prefill is graph/artifact-boundary-limited; broad kernel search is not supported by the
   current evidence.
+- `primitive-pmu-observability-scope-20260619.md` — scope for using installed ROCm profiler tooling as the PMU oracle
+  and building only the tinygrad primitive-local attribution layer needed around HCQ.
 - `prefill-tensile-tpe7a-rebindable-node-result-20260619.md` — TPE-7a result: one extracted Tensile kernel object
   can be rebound to current buffers through graph-style kernarg filling; correctness/protocol proof only.
 - **`performance-frontier-exhaustion-20260619.md` — latest exhaustion checkpoint.** Bounded decode primitives are
