@@ -1,7 +1,7 @@
 {
   "schema": "primitive_lifecycle_search_v1",
   "date": "2026-06-19",
-  "commit": "3a0ef0e6f",
+  "commit": "1f9330fb8",
   "scope_doc": "docs/primitive-lifecycle-search-scope-20260619.md",
   "candidates": [
     {
@@ -184,6 +184,53 @@
       "next_action": "Do not treat spec verify as a single lifecycle candidate."
     },
     {
+      "id": "decode_spec_weight_amortization_lifecycle",
+      "phase": "decode",
+      "state": "diagnostic",
+      "role": "speculative decode target verify",
+      "producer": {
+        "placement": "0.6B draft low-sync proposal graph",
+        "reuse_count": "accepted tokens/pass"
+      },
+      "format": {
+        "activation": "short target verify block T=K+1",
+        "weights": "target GGUF",
+        "lossy": false
+      },
+      "consumer": {
+        "primitive": "T-cheap target verify forward",
+        "owner": "future tinygrad batched-forward/runtime route"
+      },
+      "routing": {
+        "mode": "future SPEC_DECODE=1 research flag",
+        "default_safe": true,
+        "artifact_dependency": false
+      },
+      "quality": {
+        "gate": "greedy byte-exact target output",
+        "observed": "acceptance excellent; naive route exact but slow"
+      },
+      "score": {
+        "speed_gate": "DIAGNOSTIC_REOPENED_BY_PMU",
+        "accepted_per_pass_K4_0p6B": 2.844,
+        "current_verify_T5_x_one_pass": 4.66,
+        "required_verify_x_one_pass": "1.0-1.5",
+        "rank": 15
+      },
+      "evidence": [
+        "docs/spec-decode-bandwidth-amortization-scope-20260619.md",
+        "bench/qk-spec-decode-acceptance/result.json",
+        "bench/qk-spec-decode-production/baseline.json",
+        "bench/qk-spec-verify-component-breakdown/result.json",
+        "bench/qk-primitive-pmu-atlas/result.json"
+      ],
+      "blocked_by_refutations": [
+        "current T>1 verify path does not amortize weights",
+        "naive production route is host/sync-bound"
+      ],
+      "next_action": "Run SDB-1/SDB-2: verify budget model and T-cheap verify design audit."
+    },
+    {
       "id": "prefill_tensile_artifact_full",
       "phase": "prefill",
       "state": "pass_strong_policy_gated",
@@ -221,7 +268,8 @@
         "pp512_speedup_ffn_only": 1.267,
         "pp512_speedup_all_roles": 1.761,
         "shape_matrix_speedup": 1.397,
-        "rank": 1
+        "rank": 1,
+        "codegen_oracle_state": "artifact_only_policy_gated__native_project_level"
       },
       "evidence": [
         "docs/prefill-tensile-research-measurement-result-20260619.md",
@@ -264,8 +312,7 @@
       "score": {
         "speed_gate": "UNKNOWN_NATIVE",
         "oracle_pp512_speedup": 1.761,
-        "rank": 35,
-        "codegen_oracle_state": "artifact_only_policy_gated__native_project_level"
+        "rank": 35
       },
       "evidence": [
         "docs/amd-schedule-codegen-exhaustion-result-20260619.md",
@@ -405,6 +452,21 @@
         ]
       },
       {
+        "id": "spec_current_verify_not_amortized",
+        "applies_to": [
+          "decode_spec_weight_amortization_lifecycle"
+        ],
+        "prunes_patterns": [
+          "current T>1 verify path",
+          "spec decode without T-cheap target verify"
+        ],
+        "reason": "The current T=5 verify costs 4.66x one T=1 pass, so spec only reopens if the verify lifecycle changes.",
+        "evidence": [
+          "docs/qk-spec-verify-component-breakdown-20260618.md",
+          "docs/spec-decode-bandwidth-amortization-scope-20260619.md"
+        ]
+      },
+      {
         "id": "bounded_wmma_plateau",
         "applies_to": [
           "prefill_tensile_codegen_transfer"
@@ -485,6 +547,16 @@
           "verify cost distributed across attention + Q4_K + Q6_K"
         ]
       },
+      "decode_spec_weight_amortization_lifecycle": {
+        "state": "diagnostic",
+        "refutations": [
+          "spec_current_verify_not_amortized"
+        ],
+        "blocked_by_refutations": [
+          "current T>1 verify path does not amortize weights",
+          "naive production route is host/sync-bound"
+        ]
+      },
       "prefill_tensile_artifact_full": {
         "state": "pass_strong_policy_gated",
         "refutations": [
@@ -561,6 +633,26 @@
           "<native q8 lifecycle micro + W==D only after lifecycle <= artifact budget>"
         ],
         "promotion_gate": "native lifecycle close to artifact route, then same W==D/dNLL gate",
+        "runs_hardware": false
+      },
+      {
+        "candidate_id": "decode_spec_weight_amortization_lifecycle",
+        "candidate_state": "diagnostic",
+        "schema": "primitive_lifecycle_runner_binding_v1",
+        "phase": "decode",
+        "authority": "verify-cost ladder + acceptance + W==D greedy-exact route",
+        "existing_artifacts": [
+          "bench/qk-spec-decode-acceptance/result.json",
+          "bench/qk-spec-decode-production/baseline.json",
+          "bench/qk-spec-verify-component-breakdown/result.json",
+          "bench/qk-primitive-pmu-atlas/result.json"
+        ],
+        "runner_commands": [
+          "<SDB-1 analytic speed model over K=2/3/4/8>",
+          "<SDB-2 verify component map for T=K+1>",
+          "SPEC_DECODE=1 <W==D greedy-exact decode only if verify <=1.5x one pass>"
+        ],
+        "promotion_gate": "T=K+1 verify <=1.5x one T==1 pass, greedy byte-exact, W==D >=1.2x",
         "runs_hardware": false
       },
       {
@@ -695,6 +787,22 @@
         "promotion_gate": "same W==D/dNLL gate as decode_q8_artifact_lifecycle"
       },
       {
+        "id": "decode_spec_tcheap_verify_forward",
+        "derived_from": "decode_spec_weight_amortization_lifecycle",
+        "phase": "decode",
+        "state": "proposed",
+        "legal": true,
+        "requires": [
+          "T=K+1 target verify <=1.5x one pass",
+          "low-sync accept/commit",
+          "greedy byte-exact KV protocol"
+        ],
+        "would_be_pruned_by": [
+          "spec_current_verify_not_amortized"
+        ],
+        "promotion_gate": "SDB-3 verify <=1.5x one pass, then W==D >=1.2x"
+      },
+      {
         "id": "decode_q8_separate_pack_dot4_retry",
         "derived_from": "decode_q8_separate_pack",
         "phase": "decode",
@@ -707,6 +815,21 @@
           "separate_q8_pack_wall"
         ],
         "promotion_gate": "none; refuted lifecycle"
+      },
+      {
+        "id": "decode_spec_current_verify_retry",
+        "derived_from": "decode_spec_verify_shortcut",
+        "phase": "decode",
+        "state": "pruned",
+        "legal": false,
+        "requires": [
+          "current T>1 verify path"
+        ],
+        "would_be_pruned_by": [
+          "spec_verify_distributed_t_scaling",
+          "spec_current_verify_not_amortized"
+        ],
+        "promotion_gate": "none; current verify is measured 4.66x one pass"
       },
       {
         "id": "prefill_tensile_artifact_hardened_shapes",
@@ -768,14 +891,16 @@
       }
     ],
     "summary": {
-      "generated": 6,
-      "legal_proposed": 3,
-      "pruned": 3,
+      "generated": 8,
+      "legal_proposed": 4,
+      "pruned": 4,
       "refutation_entries_used": [
         "bounded_wmma_plateau",
         "hip_runtime_hcq_exclusion",
         "reuse_free_attention_not_a_primitive",
-        "separate_q8_pack_wall"
+        "separate_q8_pack_wall",
+        "spec_current_verify_not_amortized",
+        "spec_verify_distributed_t_scaling"
       ]
     }
   },
@@ -792,8 +917,8 @@
       "pass_research": 1,
       "project_level": 2,
       "closed": 1,
+      "diagnostic": 2,
       "pass_strong_policy_gated": 1,
-      "diagnostic": 1,
       "deferred": 1
     },
     "state_counts_by_phase": {
@@ -801,7 +926,8 @@
         "refuted": 1,
         "pass_research": 1,
         "project_level": 1,
-        "closed": 1
+        "closed": 1,
+        "diagnostic": 1
       },
       "prefill": {
         "pass_strong_policy_gated": 1,
@@ -812,12 +938,13 @@
     },
     "top_ranked": [
       "prefill_tensile_artifact_full",
+      "decode_spec_weight_amortization_lifecycle",
       "decode_q8_artifact_lifecycle",
       "decode_q8_native_codegen",
-      "prefill_tensile_codegen_transfer",
-      "prefill_route_a_asm_lds"
+      "prefill_tensile_codegen_transfer"
     ],
     "live_questions": [
+      "Can target verify be made T-cheap enough for spec decode (<=1.5x one T==1 pass)?",
       "Is external artifact policy acceptable for research routes?",
       "Does Claude's Route A/P2 dependency-free LDS work beat the current diagnostic state?",
       "Should q8 decode artifact route remain research-only or become a maintained opt-in?",

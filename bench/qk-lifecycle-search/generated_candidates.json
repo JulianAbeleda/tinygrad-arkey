@@ -16,6 +16,22 @@
       "promotion_gate": "same W==D/dNLL gate as decode_q8_artifact_lifecycle"
     },
     {
+      "id": "decode_spec_tcheap_verify_forward",
+      "derived_from": "decode_spec_weight_amortization_lifecycle",
+      "phase": "decode",
+      "state": "proposed",
+      "legal": true,
+      "requires": [
+        "T=K+1 target verify <=1.5x one pass",
+        "low-sync accept/commit",
+        "greedy byte-exact KV protocol"
+      ],
+      "would_be_pruned_by": [
+        "spec_current_verify_not_amortized"
+      ],
+      "promotion_gate": "SDB-3 verify <=1.5x one pass, then W==D >=1.2x"
+    },
+    {
       "id": "decode_q8_separate_pack_dot4_retry",
       "derived_from": "decode_q8_separate_pack",
       "phase": "decode",
@@ -28,6 +44,21 @@
         "separate_q8_pack_wall"
       ],
       "promotion_gate": "none; refuted lifecycle"
+    },
+    {
+      "id": "decode_spec_current_verify_retry",
+      "derived_from": "decode_spec_verify_shortcut",
+      "phase": "decode",
+      "state": "pruned",
+      "legal": false,
+      "requires": [
+        "current T>1 verify path"
+      ],
+      "would_be_pruned_by": [
+        "spec_verify_distributed_t_scaling",
+        "spec_current_verify_not_amortized"
+      ],
+      "promotion_gate": "none; current verify is measured 4.66x one pass"
     },
     {
       "id": "prefill_tensile_artifact_hardened_shapes",
@@ -89,14 +120,16 @@
     }
   ],
   "summary": {
-    "generated": 6,
-    "legal_proposed": 3,
-    "pruned": 3,
+    "generated": 8,
+    "legal_proposed": 4,
+    "pruned": 4,
     "refutation_entries_used": [
       "bounded_wmma_plateau",
       "hip_runtime_hcq_exclusion",
       "reuse_free_attention_not_a_primitive",
-      "separate_q8_pack_wall"
+      "separate_q8_pack_wall",
+      "spec_current_verify_not_amortized",
+      "spec_verify_distributed_t_scaling"
     ]
   }
 }

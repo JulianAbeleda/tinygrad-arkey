@@ -144,6 +144,7 @@ Current seed candidates:
 | `decode_q8_artifact_lifecycle` | `pass_research` | W==D `1.051-1.063x`, dNLL `+0.002887`, default off |
 | `decode_q8_native_codegen` | `project_level` | artifact oracle works; native ownership needs AMD scheduler/codegen |
 | `decode_spec_verify_shortcut` | `closed` | verify cost is distributed T-scaling, not one primitive |
+| `decode_spec_weight_amortization_lifecycle` | `diagnostic` | PMU reopens spec as weight-read amortization, but current T=5 verify is `4.66x` one pass; hard gate is `<=1.5x` |
 | `prefill_tensile_artifact_full` | `pass_strong_policy_gated` | pp512 route reaches `1.761x` with attn_q/o included; external artifact policy remains |
 | `prefill_tensile_codegen_transfer` | `project_level` | Tensile is the oracle for native renderer work |
 | `prefill_route_a_asm_lds` | `diagnostic` | correct LDS/multi-wave path exists, but P2/P3 performance work is pending |
@@ -205,15 +206,17 @@ PLS-4: generator. **DONE**
 - do not use ML or broad BEAM-style search until the table-driven layer proves stale rows are pruned correctly
 - gate: generated candidates must cite a speed gate, quality gate, and known refutations before any build
 
-Result: `bench/qk-lifecycle-search/generated_candidates.json` emits 6 generated rows. Three are legal proposed rows:
+Result: `bench/qk-lifecycle-search/generated_candidates.json` emits generated rows. Legal proposed rows include:
 
 - `decode_q8_sidechannel_native_after_codegen_capability`
+- `decode_spec_tcheap_verify_forward`
 - `prefill_tensile_artifact_hardened_shapes`
 - `prefill_tensile_native_renderer_transfer`
 
-Three are pruned immediately:
+Rows pruned immediately include:
 
 - `decode_q8_separate_pack_dot4_retry`
+- `decode_spec_current_verify_retry`
 - `prefill_rocblas_runtime_bridge_retry`
 - `prefill_attention_reuse_free_retry`
 

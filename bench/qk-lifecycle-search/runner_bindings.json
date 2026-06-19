@@ -37,6 +37,26 @@
       "runs_hardware": false
     },
     {
+      "candidate_id": "decode_spec_weight_amortization_lifecycle",
+      "candidate_state": "diagnostic",
+      "schema": "primitive_lifecycle_runner_binding_v1",
+      "phase": "decode",
+      "authority": "verify-cost ladder + acceptance + W==D greedy-exact route",
+      "existing_artifacts": [
+        "bench/qk-spec-decode-acceptance/result.json",
+        "bench/qk-spec-decode-production/baseline.json",
+        "bench/qk-spec-verify-component-breakdown/result.json",
+        "bench/qk-primitive-pmu-atlas/result.json"
+      ],
+      "runner_commands": [
+        "<SDB-1 analytic speed model over K=2/3/4/8>",
+        "<SDB-2 verify component map for T=K+1>",
+        "SPEC_DECODE=1 <W==D greedy-exact decode only if verify <=1.5x one pass>"
+      ],
+      "promotion_gate": "T=K+1 verify <=1.5x one T==1 pass, greedy byte-exact, W==D >=1.2x",
+      "runs_hardware": false
+    },
+    {
       "candidate_id": "prefill_tensile_artifact_full",
       "candidate_state": "pass_strong_policy_gated",
       "schema": "primitive_lifecycle_runner_binding_v1",

@@ -160,6 +160,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   collection works for the q8 ASM path (`2` PMC events, `12` SQTT events, ~1.78 MB trace), but local SQTT decode fails
   on the captured RDNA3 blobs and no bounded `>=30us` A2 feature is identified. Route A remains closed for q8 decode
   except as a project-level AMD scheduler/codegen effort.
+- `spec-decode-bandwidth-amortization-scope-20260619.md` — reopens spec decode only under the PMU-backed
+  weight-read-amortization framing. Keeps the old `decode_spec_verify_shortcut` closed; defines the new diagnostic
+  row `decode_spec_weight_amortization_lifecycle`, whose hard gate is T=K+1 verify `<=1.5x` one T==1 pass plus
+  low-sync accept/commit and greedy byte-exactness.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

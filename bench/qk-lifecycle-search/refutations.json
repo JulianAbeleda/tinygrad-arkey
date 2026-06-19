@@ -46,6 +46,21 @@
       ]
     },
     {
+      "id": "spec_current_verify_not_amortized",
+      "applies_to": [
+        "decode_spec_weight_amortization_lifecycle"
+      ],
+      "prunes_patterns": [
+        "current T>1 verify path",
+        "spec decode without T-cheap target verify"
+      ],
+      "reason": "The current T=5 verify costs 4.66x one T=1 pass, so spec only reopens if the verify lifecycle changes.",
+      "evidence": [
+        "docs/qk-spec-verify-component-breakdown-20260618.md",
+        "docs/spec-decode-bandwidth-amortization-scope-20260619.md"
+      ]
+    },
+    {
       "id": "bounded_wmma_plateau",
       "applies_to": [
         "prefill_tensile_codegen_transfer"
@@ -124,6 +139,16 @@
       ],
       "blocked_by_refutations": [
         "verify cost distributed across attention + Q4_K + Q6_K"
+      ]
+    },
+    "decode_spec_weight_amortization_lifecycle": {
+      "state": "diagnostic",
+      "refutations": [
+        "spec_current_verify_not_amortized"
+      ],
+      "blocked_by_refutations": [
+        "current T>1 verify path does not amortize weights",
+        "naive production route is host/sync-bound"
       ]
     },
     "prefill_tensile_artifact_full": {

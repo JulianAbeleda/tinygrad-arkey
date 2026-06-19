@@ -509,6 +509,11 @@ The lifecycle-search question is now made explicit in `primitive-lifecycle-searc
 `prefill_tensile_artifact_full` is the strongest policy-gated route, `decode_q8_artifact_lifecycle` is the measured
 research decode route, native q8/Tensile transfer is project-level, and separate-pack/spec shortcuts are pruned.
 
+The PMU atlas reopens spec decode only as `decode_spec_weight_amortization_lifecycle`
+(`spec-decode-bandwidth-amortization-scope-20260619.md`). The old `decode_spec_verify_shortcut` remains closed:
+current T=5 verify is `4.66x` one T==1 pass. The reopened row is gated on a T-cheap target verify forward
+(`<=1.5x` one pass), low-sync accept/commit, and greedy byte-exactness.
+
 ## External research check
 
 Second-round external research is consolidated in `performance-primitive-external-research-audit-20260619.md`.
