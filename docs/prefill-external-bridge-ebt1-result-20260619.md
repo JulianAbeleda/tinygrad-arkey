@@ -54,6 +54,8 @@ it is still an external-artifact dependency. Recommendation: **only pursue Lane 
 Tensile-HSACO artifact dependency**; otherwise the prefill matmul rests at the pure-tinygrad ceiling (~42 TFLOPS /
 PREFILL_V2 ~70–83% llama) with the external ~1.34× pp now characterized but not bridgeable in-process.
 
+Follow-on scope: `prefill-tensile-primitive-extraction-and-codegen-scope-20260619.md`.
+
 ## Exact commands
 ```sh
 # build shim (.so)
