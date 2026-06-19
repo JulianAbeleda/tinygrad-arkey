@@ -97,6 +97,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   routes dense decode FFN gate/up through the graph-injected q8 artifact. W==D decode improves
   `1.051-1.063x` across ctx 128/512/1024/4096, and actual-route dNLL is `+0.002887` over 160 tokens. Default remains
   off; remaining question is artifact dependency vs codegen/ASM transfer.
+- `q8-ffn-codegen-asm-transfer-scope-20260619.md` — **Track B scope + B0/B1 audit.** Disassembles the passing
+  hipcc/LLD oracle and slower COMGR route. Both consumers already emit 16 `v_dot4_i32_iu8`; the gap is fused gate/up,
+  producer shape, scheduling, and q8 side-channel lifecycle, not a missing dot intrinsic. Next build is a tinygrad-owned
+  fused gate/up consumer (`<=60us`) before funding producer renderer work.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

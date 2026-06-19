@@ -438,7 +438,7 @@ Rows to create or update:
 
 | row | phase | state | required boundary | gate |
 |---|---|---|---|---|
-| `decode_q4k_ffn_q8_sidechannel` | decode | oracle-pass / codegen-deferred | RMSNorm/apply producer + q8 side-channel + Q4_K gate/up int-dot + dNLL | Q8H handwritten oracle passes producer/lifecycle/EV; remaining gates are dNLL + W==D route, or a tinygrad codegen capability to generate the producer |
+| `decode_q4k_ffn_q8_sidechannel` | decode | route-pass / codegen-deferred | RMSNorm/apply producer + q8 side-channel + fused Q4_K gate/up int-dot + dNLL | A4 handwritten route passes W==D (`1.051-1.063x`) and dNLL (`+0.002887`); remaining blocker is tinygrad-owned codegen/ASM transfer, not primitive validity |
 | `decode_q4k_ffn_coop_subgate` | decode | sub-gate candidate | current fp coop routing for ffn_gate/up only | W==D exact A/B, EV decision threshold |
 | `decode_attention_residual_audit` | decode | audit-only | current `gqa_coop_vec` shares vs llama | close if <=3% e2e residual |
 | `prefill_wmma_dense_issue` | prefill | refuted bounded sweep | fp16 realized weights + dense WMMA issue / enough independent accumulators + warm pp | POWN-1 best 42.0 TFLOPS, below 62 TFLOPS gate |
@@ -465,7 +465,7 @@ Close criterion:
 
 | frontier | status | expected value | why still open |
 |---|---|---:|---|
-| q8 side-channel for Q4_K gate/up | **handwritten oracle + quality proxy PASS; route/codegen open** | ~5% decode model before route overhead | Q8L-2 killed tinygrad expression, but `q8-ffn-handwritten-oracle-scope-20260619.md` shows the mature lifecycle itself works: real-GGUF gate/up correctness PASS, fused producer incremental 0.92us, gate+up lifecycle 1.23x, Amdahl model ~1.05x decode. `q8-dual-track-route-and-codegen-scope-20260619.md` adds quality proxy PASS: 160-token dNLL +0.00165. Remaining blockers: HCQ/W==D route and whether to build a tinygrad producer capability or accept a handwritten/backend escape hatch. |
+| q8 side-channel for Q4_K gate/up | **handwritten route PASS; codegen/ASM transfer open** | measured +5.1-6.3% decode under research flag | Q8L-2 killed current-UOp expression, but A4 proves the mature lifecycle in-model: W==D `1.051-1.063x`, dNLL `+0.002887`, default off. `q8-ffn-codegen-asm-transfer-scope-20260619.md` shows both fast and COMGR consumers already emit dot4; remaining work is owning fused gate/up + producer lifecycle/scheduling without hipcc/LLD artifacts. |
 | pure-tinygrad WMMA issue/occupancy for prefill matmul | refuted bounded sweep | prefill | POWN-1 best 42.0 TFLOPS; current WMMA plateau holds across scoped knobs |
 | flash-prefill with LDS reuse | deferred D | long prompt prefill | reuse-free kernel refuted; real flash needs LDS/register locality |
 | raw HIP / rocBLAS / Tensile boundary | Lane A killed; Lane B TPE-4+TPE-5 PASS (generalizes) | moderate-high for prefill | PXB-1 clears isolated gate (69.8 TFLOPS ffn_gate/up), EBT-1 kills direct HIP-runtime bridge, TPE-4 proves ffn_gate/up keeps backend speed through HCQ (66.91 TFLOPS), and TPE-5 generalizes to ffn_down 68.9 (StreamK, no workspace) + attn_q/o 58.9 TFLOPS — weighted ~1.40× pp512 (~95% llama), one code object, no workspace/aux/copies |
