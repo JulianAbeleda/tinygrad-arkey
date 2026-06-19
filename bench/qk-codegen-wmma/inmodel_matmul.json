@@ -1,0 +1,23 @@
+{
+  "schema": "qk_cgw15_inmodel_matmul_v1",
+  "phase": "CG-W1.5",
+  "verdict": "address-lowering premise VALIDATED in-model (refined)",
+  "warmstart_applied": 5,
+  "in_model_ffn_matmul_kernel": "r_8_64_32_2_2_2_4_4_768_2 (768*16=12288 ffn dim)",
+  "uses_wmma": true,
+  "v_wmma": 16,
+  "alu_overhead": {
+    "v_cvt": 128,
+    "v_mov": 127,
+    "v_add": 83,
+    "global_load": 16,
+    "total_alu": 338,
+    "alu_per_wmma": 21.1
+  },
+  "finding": "the WARMSTARTED in-model WMMA ffn matmul fires tensor cores AND is ALU-overhead-bound (~21 ALU/WMMA: fp16<->fp32 conversion v_cvt 128 + register marshaling v_mov 127 + addressing v_add 83, vs 16 v_wmma). MORE overhead than the amd_copy proxy (~10/wmma), not less. The earlier m.logits capture (no-WMMA, offset-clean) was the NON-WARMSTARTED FALLBACK, not the real path -- a capture error, not a real difference.",
+  "decision_tree_outcome": "WMMA + ALU-overhead-bound -> address-lowering plan VALIDATED in-model; ADD a v_cvt conversion-overhead sub-lever (the in-model kernel converts fp16<->fp32 heavily).",
+  "addressing": {
+    "global_off_computed": 16,
+    "global_offset_immediate": 8
+  }
+}

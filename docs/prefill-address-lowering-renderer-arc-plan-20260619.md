@@ -7,7 +7,18 @@ strided `half` gather materializes a separate 64-bit address per element instead
 Closing it → ~halve the loop overhead → toward llama-class prefill (1.41× ceiling already proven via the Tensile
 route), **no dependency, general (all AMD matmuls)**.
 
-## ⚠️ VALIDATION GAP (must close before trusting this plan) — added 2026-06-19
+## ✅ VALIDATION GAP RESOLVED — CG-W1.5 (2026-06-19): premise CONFIRMED in-model (refined)
+CG-W1.5 (`prefill-cgw15-inmodel-matmul-diagnose-scope-20260619.md`, `bench/qk-codegen-wmma/inmodel_matmul.json`)
+captured the REAL warmstarted in-model ffn matmul via `model(v2_chunk, sp, temp)` (warmstart `apply=5`), kernel
+`r_8_64…768` (768×16 = the 12288 ffn dim). It **DOES fire WMMA** (`v_wmma`=16) and **IS ALU-overhead-bound**:
+`v_cvt`=128 (fp16↔fp32 conversion) + `v_mov`=127 (marshaling/addressing) + `v_add`=83 (addressing) vs 16 `v_wmma` ≈
+**21 ALU/WMMA — MORE overhead than the amd_copy proxy (~10/WMMA), not less.** The earlier `m.logits` capture
+(no-WMMA, offset-clean) was the **non-warmstarted fallback** — a capture error, not a real difference. So the
+premise **holds in-model**, with a refinement: the in-model kernel also has heavy **fp16↔fp32 conversion overhead**
+(`v_cvt`) on top of the addressing/marshaling. The plan stands; add a **conversion-overhead sub-lever** (avoid the
+fp16↔fp32 round-trips around the WMMA). Proceed to CG-W2.
+
+## (historical) the validation-gap note that CG-W1.5 resolved — added 2026-06-19
 The CG-W diagnosis below was measured on `extra/gemm/amd_copy_matmul.py`, a **proxy with `opts_to_apply=()` (no
 UPCAST/vectorize opts)**. An attempt to capture the **actual in-model PREFILL_V2 matmul** (via `m.logits` with
 `_prefill_v2=True` + warmstart) found kernels that look **nothing like the proxy**: `v_wmma`=0 (scalar `v_fma`/`v_dot`,
