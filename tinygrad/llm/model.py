@@ -24,7 +24,11 @@ Q8_FFN_HANDWRITTEN = bool(getenv("Q8_FFN_HANDWRITTEN", 0))
 # ffn_down 4096x12288) want UPCAST(0,4); the rest UPCAST(0,2) -- using one schedule for all drops the chain
 # to ~9% (verified). See docs/amd-decode-prefill-v2-gate-20260616.md.
 def _prefill_v2_opts(out_f:int, in_f:int) -> tuple:
-  return (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, 4 if in_f > out_f else 2), Opt(OptOps.UPCAST, 1, 4))
+  # UNROLL(reduce,8): unrolling the K loop makes each thread's global->LDS copy loads contiguous, so they fold
+  # from per-element global_load_d16 (+ ~8 v_mov register-init/WMMA) to wide global_load_b128 (~2 v_mov/WMMA).
+  # +3.7% pp512, no VGPR spill (UNROLL,4 spills 362), dNLL -0.00013. See docs/prefill-cgw3-copy-unroll-result-20260619.md.
+  return (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, 4 if in_f > out_f else 2), Opt(OptOps.UPCAST, 1, 4),
+          Opt(OptOps.UNROLL, 0, 8))
 
 # Increment 1 only measured/validated the TC schedule at ubatch 512. The warmstart key encodes the ubatch,
 # so a different size would silently reuse a schedule found for 512 -> reject until other sizes are measured.
