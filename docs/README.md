@@ -119,6 +119,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   emits the same 16 dot4 ops as hipcc/LLD and fewer static instructions (`218` vs `336`) but is still `166.649us` vs
   `<=60us`; visible deltas are load shape/address scheduling, not a bounded primitive edit. Verdict:
   `S0_CLOSE_PROJECT_LEVEL_SCHEDULER`.
+- `q8-ffn-dynamic-scheduler-observability-scope-20260619.md` — scope for option 2 after S0: a tinygrad-native HCQ
+  trace/counter bridge for the q8 visible gap. Defines DSO-0..5: q8 HCQ attribution rows, resource/occupancy metadata,
+  controlled variant ladder, optional built-in AMD PMC/SQTT attempt, and final classifier
+  (`load_shape_bound`, `wait_scheduler_bound`, `closed_project_level`, etc.).
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
