@@ -136,6 +136,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `q8-ffn-route-a-scheduler-codegen-result-20260619.md` — **executed Route A A0/A1.** Oracle contract extraction
   passes, but AMD DSL capability map finds no bounded A2 feature: vector loads ~14us, wait grouping ~0.8us, reduction
   rewrite ~13us, dot4 already solved. Native q8 ownership stays project-level scheduler/codegen roadmap.
+- `q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md` — **post-A1 evidence gate.** tinygrad HCQ-level PMC/SQTT
+  collection works for the q8 ASM path (`2` PMC events, `12` SQTT events, ~1.78 MB trace), but local SQTT decode fails
+  on the captured RDNA3 blobs and no bounded `>=30us` A2 feature is identified. Route A remains closed for q8 decode
+  except as a project-level AMD scheduler/codegen effort.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

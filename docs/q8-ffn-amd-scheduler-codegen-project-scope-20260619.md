@@ -123,6 +123,11 @@ Kill:
 Status: **DONE/FAIL_A1_NO_BOUNDED_FEATURE**. No A2 candidate clears the `>=30us` gate. Route A remains project-level
 AMD scheduler/codegen roadmap for q8 decode.
 
+Post-A1 evidence gate: **DONE/NO_A2_REOPEN**. `q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md` confirms that
+tinygrad HCQ-level PMC/SQTT capture is runnable for the q8 ASM path (`2` PMC events, `12` SQTT events), but current
+local SQTT decode fails on the captured RDNA3 instruction-trace blobs and no bounded `>=30us` feature is identified.
+This keeps A2 closed unless new attribution names a concrete movement budget.
+
 ### A2 — one feature proof
 
 Deliverable:

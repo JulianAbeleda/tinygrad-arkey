@@ -438,7 +438,7 @@ Rows to create or update:
 
 | row | phase | state | required boundary | gate |
 |---|---|---|---|---|
-| `decode_q4k_ffn_q8_sidechannel` | decode | route-pass / native ownership closed at scheduler layer | RMSNorm/apply producer + q8 side-channel + fused Q4_K gate/up int-dot + dNLL | A4 handwritten route passes W==D (`1.051-1.063x`) and dNLL (`+0.002887`); B2b proves tinygrad AMD DSL/ASM correctness but fails perf (`166.649us` vs `<=60us`); S0 shows same 16 dot4 ops and fewer static instructions than hipcc/LLD; DSO confirms the dynamic gap is body-insensitive (`~0.151-0.153ms` variants vs `0.166ms` full), so the blocker is project-level AMD scheduling/work-decomposition/codegen |
+| `decode_q4k_ffn_q8_sidechannel` | decode | route-pass / native ownership closed at scheduler layer | RMSNorm/apply producer + q8 side-channel + fused Q4_K gate/up int-dot + dNLL | A4 handwritten route passes W==D (`1.051-1.063x`) and dNLL (`+0.002887`); B2b proves tinygrad AMD DSL/ASM correctness but fails perf (`166.649us` vs `<=60us`); S0 shows same 16 dot4 ops and fewer static instructions than hipcc/LLD; DSO confirms the dynamic gap is body-insensitive (`~0.151-0.153ms` variants vs `0.166ms` full); Route A A0/A1 finds no bounded `>=30us` feature, and the PMU/SQTT evidence pass captures PMC/SQTT but cannot decode SQTT into a usable feature attribution, so the blocker is project-level AMD scheduling/work-decomposition/codegen |
 | `decode_q4k_ffn_coop_subgate` | decode | sub-gate candidate | current fp coop routing for ffn_gate/up only | W==D exact A/B, EV decision threshold |
 | `decode_attention_residual_audit` | decode | audit-only | current `gqa_coop_vec` shares vs llama | close if <=3% e2e residual |
 | `prefill_wmma_dense_issue` | prefill | refuted bounded sweep | fp16 realized weights + dense WMMA issue / enough independent accumulators + warm pp | POWN-1 best 42.0 TFLOPS, below 62 TFLOPS gate |
@@ -465,7 +465,7 @@ Close criterion:
 
 | frontier | status | expected value | why still open |
 |---|---|---:|---|
-| q8 side-channel for Q4_K gate/up | **research artifact route PASS; native ownership CLOSED/project-level** | measured +5.1-6.3% decode under research flag | Q8L-2 killed current-UOp expression, but A4 proves the mature lifecycle in-model: W==D `1.051-1.063x`, dNLL `+0.002887`, default off. Route B artifact/import passes as research-only (`115.24us` lifecycle, graph-safe, no in-process HIP). Route A A0/A1 also executed: oracle contract is concrete, but no bounded A2 feature clears the `>=30us` gate, so native ownership remains project-level AMD scheduling/codegen. |
+| q8 side-channel for Q4_K gate/up | **research artifact route PASS; native ownership CLOSED/project-level** | measured +5.1-6.3% decode under research flag | Q8L-2 killed current-UOp expression, but A4 proves the mature lifecycle in-model: W==D `1.051-1.063x`, dNLL `+0.002887`, default off. Route B artifact/import passes as research-only (`115.24us` lifecycle, graph-safe, no in-process HIP). Route A A0/A1 also executed: oracle contract is concrete, but no bounded A2 feature clears the `>=30us` gate. The post-A1 PMU/SQTT pass confirms HCQ-level capture works (`2` PMC, `12` SQTT events) but SQTT decode is not usable for feature attribution, so native ownership remains project-level AMD scheduling/codegen. |
 | pure-tinygrad WMMA issue/occupancy for prefill matmul | refuted bounded sweep | prefill | POWN-1 best 42.0 TFLOPS; current WMMA plateau holds across scoped knobs |
 | flash-prefill with LDS reuse | deferred D | long prompt prefill | reuse-free kernel refuted; real flash needs LDS/register locality |
 | raw HIP / rocBLAS / Tensile boundary | Lane A killed; Lane B TPE-4+TPE-5 PASS (generalizes) | moderate-high for prefill | PXB-1 clears isolated gate (69.8 TFLOPS ffn_gate/up), EBT-1 kills direct HIP-runtime bridge, TPE-4 proves ffn_gate/up keeps backend speed through HCQ (66.91 TFLOPS), and TPE-5 generalizes to ffn_down 68.9 (StreamK, no workspace) + attn_q/o 58.9 TFLOPS — weighted ~1.40× pp512 (~95% llama), one code object, no workspace/aux/copies |
@@ -529,6 +529,7 @@ Primary current docs:
 - `q8-ffn-amd-scheduler-codegen-project-scope-20260619.md`
 - `q8-ffn-artifact-import-route-result-20260619.md`
 - `q8-ffn-route-a-scheduler-codegen-result-20260619.md`
+- `q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md`
 - `llama-kernel-residual-primitive-audit-scope-20260619.md`
 - `llama-kernel-residual-primitive-audit-20260619.md`
 - `qk-decode-per-role-delta-audit-20260618.md`
