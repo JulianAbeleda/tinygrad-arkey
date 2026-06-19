@@ -178,6 +178,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `spec-decode-component-route-candidates-scope-20260619.md` — next decode-only scope after TBF-0..2: candidate
   routes for grouped short-block quantized linears, short-block causal verify attention, and their combined
   projection. No implementation until a candidate passes its component gate.
+- `spec-decode-component-route-candidates-result-20260619.md` — **executed SCR-0..SCR-4.** Candidate attention
+  generalization has no bounded proof surface, grouped short-T linears have no shared Q4_K/Q6_K bounded schedule, and
+  combined projection has no passing ceilings. Verdict: `PROJECT_LEVEL_CLOSE`; do not build TBF-3 unless a new measured
+  component candidate clears `<=1.5x`.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

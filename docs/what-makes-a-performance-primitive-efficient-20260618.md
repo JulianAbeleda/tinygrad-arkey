@@ -528,6 +528,12 @@ That next gate is scoped in `spec-decode-component-route-candidates-scope-202606
 short-block quantized linears, candidate A is short-block causal verify attention, and candidate C is their combined
 projection. No implementation is justified until a candidate changes the TBF-2 ratios.
 
+SCR-0..4 then executed that gate (`spec-decode-component-route-candidates-result-20260619.md`) and closed it at the
+kernel level: current flash decode is a T==1 primitive, so short-block verify attention needs a new kernel family; Q4_K
+and Q6_K T>1 batched kernels already exist but still miss the `<=1.5x` gate; and the combined projection has no passing
+component ceilings. Verdict: `PROJECT_LEVEL_CLOSE`, with reopen limited to a new measured attention or grouped-linear
+component candidate.
+
 ## External research check
 
 Second-round external research is consolidated in `performance-primitive-external-research-audit-20260619.md`.

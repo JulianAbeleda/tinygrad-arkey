@@ -1,7 +1,7 @@
 {
   "schema": "primitive_lifecycle_search_v1",
   "date": "2026-06-19",
-  "commit": "e6cf4a977",
+  "commit": "f8c15f796",
   "scope_doc": "docs/primitive-lifecycle-search-scope-20260619.md",
   "candidates": [
     {
@@ -223,8 +223,11 @@
         "docs/spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md",
         "docs/spec-decode-tcheap-batched-forward-project-scope-20260619.md",
         "docs/spec-decode-tcheap-batched-forward-tbf0-tbf2-result-20260619.md",
+        "docs/spec-decode-component-route-candidates-scope-20260619.md",
+        "docs/spec-decode-component-route-candidates-result-20260619.md",
         "bench/qk-spec-decode-bandwidth-amortization/model.json",
         "bench/qk-spec-tcheap-forward/result.json",
+        "bench/qk-spec-component-routes/result.json",
         "bench/qk-spec-decode-acceptance/result.json",
         "bench/qk-spec-decode-production/baseline.json",
         "bench/qk-spec-verify-component-breakdown/result.json",
@@ -232,9 +235,10 @@
       ],
       "blocked_by_refutations": [
         "current T>1 verify path does not amortize weights",
-        "naive production route is host/sync-bound"
+        "naive production route is host/sync-bound",
+        "SCR-0..4 found no bounded attention or grouped-linears component route"
       ],
-      "next_action": "Do not build TBF-3 until a concrete grouped-linears or short-block-attention component route exists."
+      "next_action": "Closed at the bounded-kernel level; reopen only with a measured <=1.5x component candidate or as a project-level T-cheap forward effort."
     },
     {
       "id": "prefill_tensile_artifact_full",
@@ -560,7 +564,8 @@
         ],
         "blocked_by_refutations": [
           "current T>1 verify path does not amortize weights",
-          "naive production route is host/sync-bound"
+          "naive production route is host/sync-bound",
+          "SCR-0..4 found no bounded attention or grouped-linears component route"
         ]
       },
       "prefill_tensile_artifact_full": {

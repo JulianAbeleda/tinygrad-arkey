@@ -148,7 +148,8 @@
       ],
       "blocked_by_refutations": [
         "current T>1 verify path does not amortize weights",
-        "naive production route is host/sync-bound"
+        "naive production route is host/sync-bound",
+        "SCR-0..4 found no bounded attention or grouped-linears component route"
       ]
     },
     "prefill_tensile_artifact_full": {
