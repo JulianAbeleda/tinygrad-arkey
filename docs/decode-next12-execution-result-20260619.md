@@ -12,7 +12,7 @@ Artifacts:
 
 ## Verdict
 
-**NEXT_1_COMPLETE_NEXT_2_CHARTERED_N1_BLOCKED_ON_ATTRIBUTION**.
+**NEXT_1_COMPLETE_NEXT_2_CHARTERED_N1_COMPLETE_NO_N2_START**.
 
 ## 1 - q8 Research Answer
 
@@ -46,12 +46,14 @@ N0 is complete:
 - verdict: `PASS_A0`;
 - named features: global load shape, scheduler markers, wait/reduction details, resource contract, work decomposition.
 
-N1 is the first real work item and is currently blocked:
+N1 is now complete:
 
 - PMC profile runnable: yes;
 - SQTT capture runnable: yes;
 - SQTT decode usable: no;
-- A2 reopen: no.
+- N2 candidates `>=30us`: `0`;
+- largest bounded attribution: `14.087us`;
+- N2 start: no.
 
 Blocker:
 
@@ -63,7 +65,8 @@ Bounded-feature state:
 
 - A2 candidates: `0`;
 - largest measured standalone delta: `15.77us`;
-- verdict: `FAIL_A1_NO_BOUNDED_FEATURE`.
+- N1 largest bounded attribution: `14.087us`;
+- verdict: `N1_COMPLETE_NO_N2_START`.
 
 ## Next Native Work
 
@@ -78,3 +81,6 @@ Start gate for compiler code changes:
 ```text
 >=30us attributed feature or explicit whole AMD backend scheduler funding
 ```
+
+N1 scope: `docs/decode-n1-attribution-scope-20260619.md`.
+N1 result: `docs/decode-n1-attribution-result-20260619.md`.

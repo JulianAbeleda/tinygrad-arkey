@@ -234,10 +234,11 @@ Detailed result: `docs/decode-q8-both-lanes-execution-result-20260619.md`.
 The high-level decode next steps 1-2 are complete:
 
 - q8 artifact route is the final research answer for decode kernel/lifecycle work;
-- native scheduler project is active as a charter, with N0 oracle diff complete and N1 blocked on usable RDNA3 HCQ
-  attribution/SQTT decode.
+- native scheduler project is active as a charter, with N0 oracle diff complete and N1 attribution complete;
+- N1 found no bounded `>=30us` feature, so no N2 native patch should start.
 
 Detailed result: `docs/decode-next12-execution-result-20260619.md`.
+N1 result: `docs/decode-n1-attribution-result-20260619.md`.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 

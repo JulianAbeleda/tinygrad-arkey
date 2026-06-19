@@ -120,8 +120,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-q8-both-lanes-execution-result-20260619.md` — **executed both lanes.** `Q8_FFN_HANDWRITTEN=1` is accepted as
   research-only/default-off; native transfer is chartered as N0-N4 project-level backend work with a `>=30us` start gate.
 - `decode-next12-execution-result-20260619.md` — **executed high-level decode next steps 1-2.** The q8 artifact route is
-  the completed research answer; native scheduler work is active as a project charter with N0 complete and N1 blocked on
-  usable RDNA3 HCQ attribution/SQTT decode.
+  the completed research answer; native scheduler work is active as a project charter with N0 complete and N1 now closed
+  with no bounded N2 start.
+- `decode-n1-attribution-scope-20260619.md` / `decode-n1-attribution-result-20260619.md` — native q8 scheduler
+  attribution. Full oracle gap is `73.109us`, but largest bounded attribution is `14.087us`; SQTT capture works but
+  local RDNA3 HCQ decode fails, so remaining scheduler/resource movement is project-level tooling/backend work.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
