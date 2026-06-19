@@ -101,6 +101,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   hipcc/LLD oracle and slower COMGR route. Both consumers already emit 16 `v_dot4_i32_iu8`; the gap is fused gate/up,
   producer shape, scheduling, and q8 side-channel lifecycle, not a missing dot intrinsic. Next build is a tinygrad-owned
   fused gate/up consumer (`<=60us`) before funding producer renderer work.
+- `q8-ffn-codegen-b2a-comgr-fused-result-20260619.md` — **B2a COMGR fused-C result: FAIL_PERF.** The tinygrad-owned
+  COMGR fused gate/up consumer is correct (`max_abs <=1.43e-6`) but slow (`146.88us` vs `<=60us`; lifecycle
+  `177.72us` vs `<=129.2us`). Closes source-level C reshuffles; remaining B2 path is explicit AMD DSL/ASM or renderer
+  scheduling work.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.

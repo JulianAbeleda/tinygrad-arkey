@@ -94,6 +94,11 @@ Candidate implementations:
 2. A tinygrad AMD DSL kernel that explicitly emits the q8 MMVQ loop and reduction.
 3. A minimal source-to-ASM hand port from the oracle disassembly only if the DSL route is too slow.
 
+Update: the source-level fused-C sublane has been executed and closed. See
+`q8-ffn-codegen-b2a-comgr-fused-result-20260619.md`: tinygrad COMGR fused gate/up is correct, but measures
+`146.88us` vs the `<=60us` consumer gate and `177.72us` lifecycle vs the `<=129.2us` lifecycle gate. Do not continue
+source-level reshuffles without a concrete ISA-diff reason; the next useful B2 build is explicit AMD DSL/ASM.
+
 Gate:
 
 - correctness vs the existing q8 proxy on real GGUF `ffn_gate/up`;
