@@ -58,7 +58,9 @@ It does add four future research categories that are underrepresented in our cur
 2. **Persistent/dynamic block lifecycle:** Event Tensor-style megakernels could matter after TPE-6 if routing overhead
    or inter-kernel boundaries eat the isolated Tensile win.
 3. **Hardware-feedback machine search:** KernelBench-X / GPU Kernel Scientist / CudaForge validate our row/gate design
-   but imply a future automated harness should feed back device timings/counters.
+   but imply a future automated harness should feed back device timings/counters. The canonical principle is now the
+   hardware-feedback hierarchy in `what-makes-a-performance-primitive-efficient-20260618.md`: correctness and timing
+   can decide gates, while counter-free root-cause claims must be labeled as inferred.
 4. **Alternative quantization representations:** CodeGEMM and activation-sparsity work are novel, but require model
    format or quality-policy changes; they are not byte-identical paths for current Q4_K_M.
 

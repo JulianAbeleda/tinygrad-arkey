@@ -74,10 +74,26 @@ operating contract for this document.
 | coalescing, registers, and reductions trade off | record lanes/row, rows/block, K split, reduction location, scale decode, occupancy | 128-thread/row helped diagnose but did not route alone |
 | value semantics beat source emission | intrinsic/lowering tests must validate computed values and edge lanes | signed dot4 source/ISA checks were insufficient until value tests caught unsigned behavior |
 | machine search needs rows | state current impl, reference impl, dataflow, legal knobs, gates, Amdahl, refutations, fallback | future searches should extend tables/spec rows, not clone one-off scripts |
+| hardware feedback has levels | use the strongest available evidence, but separate go/kill authority from root-cause authority | correctness + device time can decide a gate; counter-free root-cause claims must be labeled as inferred |
 | stop conditions match the mode | shipping mode stops at failed gate; research mode names the next funded layer | Claude's "stop" was right for shipping; research could continue only by explicitly scoping deeper layers |
 | fallbacks and authority stay central | shipped paths need one route, explicit fallback, unsupported-shape tests, and updated docs | default coop/flash routes are banked; experimental flags are not silent defaults |
 | quality is first-class | lossy paths need dNLL/token-quality gates after speed passes | Q6->Q4 lm_head demotion was rejected despite speed |
 | refutations are assets | record what passed, what failed, why hypothesis changed, and what not to reopen | the closed branches below are part of the search map |
+
+Hardware-feedback hierarchy:
+
+| level | evidence | use |
+|---:|---|---|
+| 0 | correctness / value equality / dNLL where lossy | required for any candidate to survive |
+| 1 | device time / in-model tok/s / warm pp throughput | enough for decisive go/kill gates when the effect is large |
+| 2 | static metadata and ISA: VGPR/SGPR, LDS, spills, instruction mix, descriptors | supports bounded root-cause claims and candidate pruning |
+| 3 | runtime traces: kernel timeline, launch geometry, graph boundaries, per-kernel attribution | supports lifecycle and dispatch-boundary claims |
+| 4 | PMU counters / stall reasons / cache, VMEM, LDS, occupancy, tensor-issue metrics | strongest diagnostic feedback for search mutation and hardware-specific explanations |
+
+Rule: do not block a decisive gate waiting for unavailable counters, but do not overclaim why a timing result happened
+without the highest available diagnostic evidence. On gfx1100, Levels 0-3 are often available; Level 4 is partly
+blocked by consumer RDNA3/ROCm tooling and tinygrad's HCQ path. That means local search can rank candidates by timing,
+but counter-guided mutation remains weaker than on mature Nsight-style CUDA workflows.
 
 ### GPU first-principles checklist
 
