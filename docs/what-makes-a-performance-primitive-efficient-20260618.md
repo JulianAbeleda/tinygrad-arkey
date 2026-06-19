@@ -264,11 +264,15 @@ quant dequant to amortize.
 | Q4_K/Q6_K weight reuse | n/a (dequant→fp16 then tiled GEMM) | subsumed by PREFILL_V2 fp16-WMMA | **CLOSED for 8B** (PWR-1: no Amdahl room; VRAM-frugal 14B/32B note only) |
 | current standing | ~3069 tok/s pp512 | ~2085–2486 tok/s pp512 (PREFILL_V2) | close on pp512; lever is matmul tiling, attention second |
 
-The **primary open prefill matmul frontier is fp16 WMMA LDS/cache-blocking** (Boehm step 2: stage operand tiles in
-LDS, reuse across WMMA macro-tiles), the documented gfx1100 BEAM-hang wall — or an **external BLAS/raw-HIP
-boundary** (rocBLAS/hipBLASLt). **Quantized-weight reuse is CLOSED for 8B prefill** (the weights are already fp16 in
-the fast path; quant reuse only matters VRAM-frugally for 14B/32B, excluded by the standing no-pivot preference).
-This supersedes any older "Q4_K/Q6_K prefill weight reuse" framing as the next 8B build.
+**CORRECTION (PWLT-A2, `prefill-wmma-lds-tiling-result-20260619.md`):** LDS-tiling is **NOT** the prefill lever on
+gfx1100. A hand-LDS-tiled WMMA matmul on the ffn shape = **1.02× the non-LDS default, both ~34% WMMA peak** — the
+96 MB Infinity Cache serves the operand reuse (same mechanism that refuted decode-attention LDS). So "WMMA
+LDS-tiling (Boehm step 2)" is **refuted as a bounded tinygrad win**. The real ~34%→~80% headroom is **rocBLAS-class
+Tensile tuning** (occupancy / double-buffer / K-split / scheduling), i.e. the **external BLAS boundary**
+(rocBLAS/hipBLASLt) — currently gated on a **split ROCm toolchain** (system HIP 5.7 vs rocBLAS 7.2.4 won't
+co-compile). **Quantized-weight reuse is CLOSED for 8B prefill** (weights already fp16-WMMA; VRAM-frugal 14B/32B
+only). Net: the prefill matmul lever is **external BLAS (toolchain-gated) or a deep Tensile-class hand kernel**;
+the bounded tinygrad LDS path is refuted. Until one is funded, prefill rests at PREFILL_V2 (~70-83% llama).
 
 ### Prefill attention
 

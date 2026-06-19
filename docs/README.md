@@ -68,6 +68,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   Decision-first: Phase PWLT-0 is the authority call — Branch A (tinygrad hand-LDS, **triple payoff**: also unblocks
   q8 producer + flash-prefill attention) vs Branch B (external hipBLASLt/rocBLAS, prefill-only). Both feasible
   (assets/libs present); recommendation A-first, B as fallback control.
+- `prefill-wmma-lds-tiling-result-20260619.md` — **executed Branch A: PWLT-A1 pass, PWLT-A2 KILL.** Hand-LDS WMMA
+  = 1.02× the default matmul (both ~34% peak) → **LDS-tiling is NOT the lever** (IC-served on gfx1100, like decode
+  attention). Real headroom is rocBLAS-class Tensile tuning → **Branch B (external rocBLAS)**, gated on a split ROCm
+  toolchain (HIP 5.7 vs rocBLAS 7.2.4 won't co-compile). Prefill rests at PREFILL_V2 until that's funded.
 - **`amd-decode-prefill-v2-increment1-20260617.md`** — **prefill v2 BUILT & WON: ~13x warm prefill** (189→2486
   tok/s, ~83% of llama) via concrete-ubatch + fp16 + realized-weights + warmstart-TC, gated `PREFILL_V2`,
   decode untouched. Quality gate PASSED (dNLL ~0, 8B). Corrects the Stage-0 gate's premise (lazy weights →

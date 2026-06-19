@@ -57,7 +57,7 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "blocked_by": "no bounded target; likely closes <=3%"
   },
   {
-    "primitive": "prefill_fp16_wmma_lds_tiling", "phase": "prefill", "state": "deferred D",
+    "primitive": "prefill_fp16_wmma_lds_tiling", "phase": "prefill", "state": "REFUTED as LDS-lever (PWLT-A2, prefill-wmma-lds-tiling-result-20260619.md): hand-LDS WMMA = 1.02x default, both ~34% peak; LDS-tiling IC-served on gfx1100. Real lever = rocBLAS-class Tensile tuning -> see external_blas row",
     "current_impl": "PREFILL_V2 inc-1: fp16 realized weights + WMMA + warmstart-TC; ~74% of forward is WMMA matmul but LDS=0 (re-reads operands) [M]",
     "reference_impl": "rocBLAS/Tensile: 128x128 macro-tile staged in 25.6KB LDS -> ~80% peak",
     "required_dataflow": "stage fp16 operand tiles into LDS/shared, reuse across WMMA macro-tiles before HBM re-read (Boehm step 2)",
@@ -93,10 +93,10 @@ isolated gate, in-model gate, expected Amdahl, known refutations, fallback. New 
     "correctness_quality_gate": "bit/dNLL parity with tinygrad path; clean fallback when lib absent",
     "isolated_gate": "external GEMM >= 1.5x tinygrad WMMA on the prefill shapes",
     "in_model_gate": ">= 1.5x full warm pp with fallback intact",
-    "expected_amdahl": "high for prefill (sidesteps the BEAM-hang LDS wall) [H]",
-    "known_refutations": "none yet; this is a policy/authority decision, not a refuted path",
-    "fallback": "pure tinygrad PREFILL_V2",
-    "blocked_by": "AUTHORITY DECISION required first (pure-tinygrad vs external vs raw-HIP sandbox); changes the project boundary"
+    "expected_amdahl": "high for prefill (~34%->~80% peak = ~2.4x matmul -> ~1.6x pp) IF rocBLAS hits ~80% on these shapes [H, unverified]",
+    "known_refutations": "the tinygrad-internal alternative (prefill_fp16_wmma_lds_tiling) is REFUTED -- LDS-tiling doesn't help (PWLT-A2). This is now the PRIMARY prefill path, not the fallback.",
+    "fallback": "pure tinygrad PREFILL_V2 (~70-83% llama)",
+    "blocked_by": "SPLIT ROCm TOOLCHAIN (system HIP 5.7 /usr/include vs rocBLAS 7.2.4 /opt/rocm-7.2.4 won't co-compile; PWLT-A2) -- must align toolchain (or clean 7.2.4 container) before any rocBLAS build. AUTHORITY DECISION (external boundary) also required."
   }
 ]
 ```
