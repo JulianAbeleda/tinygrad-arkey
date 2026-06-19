@@ -99,6 +99,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-mmvq-large-project-p7d-one-role-timing-result-20260619.md` — **executed P7d.** Imported route is correct,
   replay-stable, and model-branch reachable, but slower for `blk.0.attn_output`: `0.1396ms` vs baseline `0.1064ms`
   (`0.763x`). Do not expand `attn_output`; next valid diagnostic is `ffn_gate/up` q8 amortization.
+- `decode-mmvq-large-project-p7e-gateup-amortization-scope-20260619.md` — P7e scope for the fresh favorable Q4 case:
+  `ffn_gate/up`, `12288` rows each, one q8 producer shared by two imported Q4 consumers.
+- `decode-mmvq-large-project-p7e-gateup-amortization-result-20260619.md` — **executed P7e.** Imported route remains
+  replay-stable but loses for `ffn_gate/up`: `0.2264ms` vs baseline `0.1685ms` (`0.744x`). Imported Q4 decode route is
+  closed as a local timing win; remaining value is oracle/native-transfer evidence, not model-wide artifact routing.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

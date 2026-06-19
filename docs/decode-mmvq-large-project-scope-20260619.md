@@ -176,16 +176,31 @@ P7d is complete:
 Detailed scope: `docs/decode-mmvq-large-project-p7d-one-role-timing-scope-20260619.md`.
 Detailed result: `docs/decode-mmvq-large-project-p7d-one-role-timing-result-20260619.md`.
 
+P7e is complete:
+
+- tested the favorable Q4 case: `ffn_gate/up`, `12288` rows each, one q8 producer shared by two imported consumers;
+- interleaved TinyJit timing shows baseline `0.1685ms` vs imported `0.2264ms`;
+- imported replay is stable, but the speed gate fails at `0.744x`.
+
+Detailed scope: `docs/decode-mmvq-large-project-p7e-gateup-amortization-scope-20260619.md`.
+Detailed result: `docs/decode-mmvq-large-project-p7e-gateup-amortization-result-20260619.md`.
+
 ## Recommendation
 
-Do not route `attn_output` further. The next valid question is narrower: does the `ffn_gate/up` pair change the result
-because it has three favorable differences from `attn_output`: `12288` rows, two Q4 consumers, and one shared q8
-producer. Scope that as a fresh diagnostic before any model route expansion.
+Stop the imported Q4 decode route as a local timing path. It is correct, graph-safe, and useful as an oracle, but it
+loses for both local Q4 buckets that matter:
+
+- `attn_output`: `0.763x`;
+- `ffn_gate/up`: `0.744x`.
+
+The remaining decode path is not model-wide routing of the imported artifact. It would need a different primitive:
+fused q8 producer plus multi-consumer MMVQ in one graph/kernel, or native renderer transfer that preserves llama's
+low-VGPR/high-occupancy contract without the separate-launch lifecycle cost.
 
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
-Q4 imported consumer + q8_1 producer graph route -> attn_output timing refuted -> gate/up amortization diagnostic
+Q4 imported consumer + q8_1 producer graph route -> attn_output timing refuted -> gate/up amortization refuted
 ```
 
 Q6 imported-kernel correctness/perf remains a coverage track. It should not block the Q4 graph route because Q4 already
