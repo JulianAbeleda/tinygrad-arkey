@@ -1,7 +1,7 @@
 {
   "schema": "primitive_coverage_rows_v1",
   "date": "2026-06-19",
-  "commit": "b77b6baba",
+  "commit": "c4fa1c145",
   "scope_doc": "docs/primitive-coverage-gap-scope-20260619.md",
   "validation": {
     "pass": true,
@@ -17,7 +17,7 @@
       "current_authority": "tinygrad 76% standalone -> ~44% in-model; llama 57% -> ~54%",
       "measured_basis": "PMU atlas + FMI-1/FMI-2 + decode integration tax ledger",
       "remaining_question": "Can tinygrad preserve low-VGPR, high-grid MMVQ behavior and activation-format reuse inside the model?",
-      "first_gate": "B2 runtime/cache identity; if no mismatch, renderer/scheduler or artifact/import only",
+      "first_gate": "B2 runtime/cache identity is closed; renderer/scheduler or source/artifact import only",
       "correctness_quality_gate": "byte-identical unless q8 route is used; q8 requires dNLL gate",
       "amdahl_or_potential": "44->54% over 85% weight-GEMV bucket = ~1.187x decode; full 76% transfer = ~1.557x theoretical",
       "refutations": [
@@ -26,11 +26,12 @@
         "existing Q4K/Q6K env knobs fail FMI-4 B1",
         "dot4 alone is not a primitive"
       ],
-      "next_action": "Run decode_mmvq_runtime_cache_identity before any build.",
+      "next_action": "No bounded diagnostic remains; choose project-level renderer/scheduler, source import, or the small q8 research flag.",
       "evidence": [
         "docs/inference-perf-measured-map-20260619.md",
         "docs/decode-integration-diagnostic-result-20260619.md",
-        "docs/decode-fused-mmvq-integration-fmi4-b1-result-20260619.md"
+        "docs/decode-fused-mmvq-integration-fmi4-b1-result-20260619.md",
+        "docs/decode-fused-mmvq-integration-b2-runtime-cache-result-20260619.md"
       ]
     },
     {
@@ -78,21 +79,22 @@
     {
       "id": "decode_mmvq_artifact_import_family",
       "phase": "decode",
-      "state": "proposed",
+      "state": "closed_no_ready_artifact_source_import_project_level",
       "primitive_class": "external/mature MMVQ code-object import",
-      "current_authority": "Tensile import pattern worked mechanically for prefill, but no decode MMVQ artifact family has been identified",
-      "measured_basis": "no artifact inventory yet",
-      "remaining_question": "Is there a Q4_K/Q6_K x q8_1 gfx1100 MMVQ code-object family with recoverable HCQ launch contract?",
-      "first_gate": "inventory local/open-source artifacts; close if no family exists",
+      "current_authority": "llama.cpp has MMVQ source and build objects, but no Tensile-like standalone HCQ code-object family was found",
+      "measured_basis": "decode path split inventory over /home/ubuntu/env/llama.cpp",
+      "remaining_question": "Only a source-contract import or renderer/scheduler project remains for large decode movement",
+      "first_gate": "closed for ready-artifact extraction; reopen only with an identified standalone code object or funded source-import project",
       "correctness_quality_gate": "byte-exact for fp path or dNLL-gated for q8; HCQ no-HIP-runtime launch",
       "amdahl_or_potential": "could target same 44->54%+ contract gap if an artifact preserves llama-like MMVQ behavior",
       "refutations": [
         "HIP runtime bridge cannot coexist with tinygrad HCQ/KFD",
         "single handwritten q8 route only covers gate/up"
       ],
-      "next_action": "Scope artifact inventory before extraction.",
+      "next_action": "Do not start TPE-style extraction; scope source-contract import only if accepting project-level work.",
       "evidence": [
-        "docs/primitive-coverage-gap-scope-20260619.md",
+        "docs/decode-large-small-paths-scope-20260619.md",
+        "docs/decode-mmvq-artifact-import-discovery-result-20260619.md",
         "docs/prefill-external-bridge-ebt1-result-20260619.md"
       ]
     },

@@ -53,8 +53,16 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   CUDA portability, and tooling visibility.
 - `primitive-coverage-map-20260619.md` — **executed PCG-0.** Consolidates the current row map into
   `bench/qk-primitive-coverage/rows.json` with 12 validated rows. Key update: Tensile prefill is refuted as an e2e
-  speed route after transpose-free `0.997x`; prefill now points to non-matmul overhead, while decode next points to B2
-  runtime/cache identity.
+  speed route after transpose-free `0.997x`; prefill now points to non-matmul overhead, while decode B2 is closed and
+  the remaining decode choice is large project-level MMVQ contract work or the small q8 research flag.
+- `decode-large-small-paths-scope-20260619.md` — split decode closeout into the large parity-scale path and small
+  research path. Large path: MMVQ contract preservation/source import, `~1.187x` measured target but project-level.
+  Small path: q8 FFN artifact route, `1.051-1.063x` and dNLL `+0.002887`, default-off research flag.
+- `decode-mmvq-artifact-import-discovery-result-20260619.md` — large-path L1 inventory. llama.cpp has MMVQ source and
+  build objects, but no standalone Tensile-like HCQ code-object family; direct TPE-style decode extraction is closed as
+  a bounded route.
+- `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
+  artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
   tinygrad's standalone GEMV is stronger than llama's, but in-model weight-GEMV falls to `~44%` vs llama `~54%`.
   Scopes activation/Q8 reuse plus occupancy/launch-shape preservation, starting with measurement-only FMI-1/FMI-2.

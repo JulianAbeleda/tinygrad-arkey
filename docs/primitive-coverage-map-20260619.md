@@ -9,6 +9,7 @@ Artifacts:
 - `extra/qk_primitive_coverage.py`
 - `bench/qk-primitive-coverage/rows.json`
 - `bench/qk-primitive-coverage/summary.md`
+- `docs/decode-large-small-paths-scope-20260619.md`
 
 No kernels were built, no routes were changed, and no defaults were touched.
 
@@ -29,9 +30,9 @@ lifecycle states were not represented in the old machine-search table, especiall
 
 | priority | row | state | why |
 |---:|---|---|---|
-| 1 | `decode_mmvq_runtime_cache_identity` | open diagnostic | the only remaining bounded decode diagnostic after env knobs failed |
-| 2 | `prefill_non_matmul_overhead` | open diagnostic | transpose-free Tensile is correct but `0.997x`; matmul is no longer the main prefill speed route |
-| 3 | `decode_mmvq_artifact_import_family` | proposed | artifact/import could mirror the Tensile method, but only if a mature MMVQ family exists |
+| 1 | `prefill_non_matmul_overhead` | open diagnostic | transpose-free Tensile is correct but `0.997x`; matmul is no longer the main prefill speed route |
+| 2 | `decode_mmvq_contract_preservation` | project-level live | large decode parity path after B1/B2 closed |
+| 3 | `decode_q8_artifact_lifecycle` | pass research small | bounded q8 route already passes as default-off research flag |
 | 4 | long-context / serving / alternative-quant / CUDA rows | deferred / separate | target-regime changes, not current benchmark work |
 
 ## Decode
@@ -41,12 +42,15 @@ The decode map has two different classes of row:
 1. **Current-target base decode.** `decode_mmvq_contract_preservation` is the real remaining large class:
    tinygrad `76%` standalone -> `~44%` in-model, while llama holds `57% -> ~54%`. The modeled target is `~1.187x`
    if `44% -> 54%` is recovered over the weight-GEMV bucket.
-2. **Bounded next diagnostic.** `decode_mmvq_runtime_cache_identity` checks whether there is a wiring/cache/program
-   identity mismatch before declaring the whole route renderer/scheduler or artifact/import only.
+2. **Closed bounded diagnostic.** `decode_mmvq_runtime_cache_identity` found no wiring/cache/program identity mismatch.
+   Large decode movement is now renderer/scheduler or source/artifact import only.
 
 The q8 artifact route remains real but small: `decode_q8_artifact_lifecycle` is `pass_research_small`, with
 `~5-6%` decode movement and dNLL inside gate. It is not the main parity path because reuse is capped at `2` and native
 ownership is project-level.
+
+The artifact/import row was also split: local llama.cpp has mature MMVQ source and build objects, but no standalone
+Tensile-like HCQ code-object family was found. That closes direct TPE-style extraction as a bounded decode route.
 
 Spec decode remains project-level closed for bounded builds. The PMU framing is right, but current verify is not
 T-cheap.
@@ -77,7 +81,9 @@ These are not implementation tasks unless the benchmark target changes:
 
 ## Decision
 
-Next work, if continuing decode, should be `decode_mmvq_runtime_cache_identity`.
+Next work, if continuing decode, is a choice rather than a diagnostic: keep the q8 research flag, or fund the large
+MMVQ contract project (`renderer/scheduler` or `source import`). Direct ready-artifact extraction is closed unless a
+real standalone MMVQ code-object family is identified.
 
 Next work, if continuing prefill, should be a warm prefill non-matmul component atlas. Do not keep chasing fp16 GEMM
 kernel swaps for pp512 unless that atlas contradicts the transpose-free result.
