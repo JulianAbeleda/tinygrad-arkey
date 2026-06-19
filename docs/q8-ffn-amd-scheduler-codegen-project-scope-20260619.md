@@ -86,6 +86,8 @@ Kill:
 
 - if the oracle cannot be reduced to a stable contract, prefer Route B artifact hosting only.
 
+Status: **DONE/PASS**. See `q8-ffn-route-a-scheduler-codegen-result-20260619.md`.
+
 ### A1 — AMD DSL capability map
 
 Deliverable:
@@ -117,6 +119,9 @@ Kill:
 
 - if every feature is "renderer/scheduler feature" with no bounded first milestone, Route A is a larger compiler
   roadmap item and should not be funded just for q8 decode.
+
+Status: **DONE/FAIL_A1_NO_BOUNDED_FEATURE**. No A2 candidate clears the `>=30us` gate. Route A remains project-level
+AMD scheduler/codegen roadmap for q8 decode.
 
 ### A2 — one feature proof
 

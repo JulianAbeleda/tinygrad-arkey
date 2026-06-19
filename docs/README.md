@@ -133,6 +133,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `q8-ffn-artifact-import-route-result-20260619.md` — **executed Route B.** Reproducible hipcc/LLD artifact build,
   fixed-launch HCQ loader, graph injection, and maintenance boundary all pass as **research-only / policy-bound**.
   Isolated lifecycle `115.24us`; graph replay max_abs `0.001373`; default off; no in-process HIP runtime.
+- `q8-ffn-route-a-scheduler-codegen-result-20260619.md` — **executed Route A A0/A1.** Oracle contract extraction
+  passes, but AMD DSL capability map finds no bounded A2 feature: vector loads ~14us, wait grouping ~0.8us, reduction
+  rewrite ~13us, dot4 already solved. Native q8 ownership stays project-level scheduler/codegen roadmap.
 - `llama-kernel-residual-primitive-audit-scope-20260619.md` — scope for auditing llama.cpp's **own** remaining
   primitive headroom: MMVQ residual-to-peak, q8 quant, attention, small-op fusion, graph boundaries, and prefill.
   Separate from the tinygrad-vs-llama gap explanation.
