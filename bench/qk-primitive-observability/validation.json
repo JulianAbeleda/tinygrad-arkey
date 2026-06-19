@@ -27,6 +27,10 @@
     },
     {
       "errors": [],
+      "id": "runtime_boundary:graph_integration:tensile_rebindable_node:9c7a7febaaf1c830"
+    },
+    {
+      "errors": [],
       "id": "mmvq_decode:decode:q8_sidechannel_ffn_gate_up:2b1cd2b49ad0fb16"
     },
     {

@@ -37,6 +37,22 @@
         "naive_per_op_host_sync"
       ],
       "schema": "primitive_search_session_v1"
+    },
+    {
+      "accepted_frontier": [
+        "runtime_boundary:graph_integration:tensile_rebindable_node:9c7a7febaaf1c830"
+      ],
+      "artifact_paths": [
+        "bench/qk-tensile-extraction/rebindable_node.json"
+      ],
+      "budget": "replay_existing_artifact",
+      "candidate_count": 1,
+      "candidate_generator": "extra/qk_tensile_rebindable_node.py",
+      "id": "session:tpe7a_rebindable_node_replay",
+      "primitive_target": "runtime_boundary",
+      "ranking_policy": "correctness across distinct buffer bindings, then replay stability",
+      "refuted_candidate_classes": [],
+      "schema": "primitive_search_session_v1"
     }
   ]
 }

@@ -57,6 +57,18 @@
       "mode": "replay_only_no_hardware_execution",
       "pass": true,
       "session_id": "session:tpe6_runtime_boundary_replay"
+    },
+    {
+      "artifacts": [
+        {
+          "exists": true,
+          "path": "bench/qk-tensile-extraction/rebindable_node.json"
+        }
+      ],
+      "candidate_count": 1,
+      "mode": "replay_only_no_hardware_execution",
+      "pass": true,
+      "session_id": "session:tpe7a_rebindable_node_replay"
     }
   ]
 }

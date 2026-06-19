@@ -1,10 +1,10 @@
 # Primitive-local observability summary
 
-- generated: `2026-06-19T07:01:05+00:00`
-- commit: `ef9c4d3fb`
-- observations: `10`
+- generated: `2026-06-19T07:04:58+00:00`
+- commit: `9d5c7da8f-dirty`
+- observations: `11`
 - validation: `PASS`
-- search sessions: `2`
+- search sessions: `3`
 - runner smoke: `PASS`
 
 ## Verdict Ledger
@@ -20,6 +20,7 @@
 | `prefill_tensile` | `prefill` | `weighted_shape_matrix` | `PASS` | `unknown` | `route_only_after_graph_gate_and_policy` | `3` |
 | `prefill_wmma` | `prefill` | `ffn_gate_up` | `KILL` | `occupancy_or_issue` | `do_not_reopen_without_new_evidence` | `2` |
 | `runtime_boundary` | `graph_integration` | `ffn_block` | `REDIRECT` | `graph_boundary` | `graph_integration_next` | `3` |
+| `runtime_boundary` | `graph_integration` | `tensile_rebindable_node` | `PASS` | `graph_boundary` | `eligible_for_next_gate` | `3` |
 | `spec_decode` | `spec_verify` | `verify_forward` | `CLOSED` | `unknown` | `do_not_reopen_without_new_evidence` | `3` |
 
 ## Reconstructed Required States
@@ -28,17 +29,20 @@
 - pure-tinygrad WMMA bounded sweep: killed/refuted.
 - Tensile extraction TPE-5: pass/generalizes.
 - TPE-6 block transfer: redirect to graph integration.
+- TPE-7a rebindable node: pass; in-model graph capture remains the next gate.
 - spec decode shortcut: closed.
 
 ## Runner Registry
 
 - `session:tpe5_shape_matrix_replay`: `prefill_tensile` via `extra/qk_tensile_shape_matrix.py`
 - `session:tpe6_runtime_boundary_replay`: `runtime_boundary` via `extra/qk_tensile_block_transfer.py`
+- `session:tpe7a_rebindable_node_replay`: `runtime_boundary` via `extra/qk_tensile_rebindable_node.py`
 
 ## Runner Smoke
 
 - `session:tpe5_shape_matrix_replay`: `PASS` (2 replay artifacts)
 - `session:tpe6_runtime_boundary_replay`: `PASS` (1 replay artifacts)
+- `session:tpe7a_rebindable_node_replay`: `PASS` (1 replay artifacts)
 
 ## Trace / Counter Plugin Inventory
 

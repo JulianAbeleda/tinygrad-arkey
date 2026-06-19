@@ -23,7 +23,7 @@
     },
     {
       "primitive": "runtime_boundary",
-      "runner": "extra/qk_tensile_block_transfer.py",
+      "runner": "extra/qk_tensile_block_transfer.py / extra/qk_tensile_rebindable_node.py",
       "status": "available_adapter"
     }
   ],

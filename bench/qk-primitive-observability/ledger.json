@@ -1,6 +1,6 @@
 {
-  "commit": "ef9c4d3fb",
-  "generated_at": "2026-06-19T07:01:05+00:00",
+  "commit": "9d5c7da8f-dirty",
+  "generated_at": "2026-06-19T07:04:58+00:00",
   "latest": {
     "attention_kv:prefill:flash_prefill_reuse_free": {
       "id": "attention_kv:prefill:flash_prefill_reuse_free:c12a3025f829a9da",
@@ -71,6 +71,15 @@
       ],
       "verdict": "REDIRECT"
     },
+    "runtime_boundary:graph_integration:tensile_rebindable_node": {
+      "id": "runtime_boundary:graph_integration:tensile_rebindable_node:9c7a7febaaf1c830",
+      "next_action": "eligible_for_next_gate",
+      "provenance": [
+        "bench/qk-tensile-extraction/rebindable_node.json",
+        "docs/prefill-tensile-tpe7-inmodel-route-scope-20260619.md"
+      ],
+      "verdict": "PASS"
+    },
     "spec_decode:spec_verify:verify_forward": {
       "id": "spec_decode:spec_verify:verify_forward:4c975f2feed8dadb",
       "next_action": "do_not_reopen_without_new_evidence",
@@ -80,6 +89,6 @@
       "verdict": "CLOSED"
     }
   },
-  "observations": 10,
+  "observations": 11,
   "schema": "primitive_ledger_v1"
 }

@@ -1,5 +1,5 @@
 {
-  "candidate_count": 10,
+  "candidate_count": 11,
   "candidates": [
     {
       "bottleneck": "occupancy_or_issue",
@@ -68,6 +68,17 @@
       "verdict": "REDIRECT"
     },
     {
+      "bottleneck": "graph_boundary",
+      "candidate_id": "tensile:tpe7a:rebindable_node",
+      "next_action": "eligible_for_next_gate",
+      "observation_id": "runtime_boundary:graph_integration:tensile_rebindable_node:9c7a7febaaf1c830",
+      "parent_id": "tensile:tpe6:ffn_block_naive_per_op",
+      "primitive": "runtime_boundary",
+      "role": "tensile_rebindable_node",
+      "source_hash": "1c99c5db883487c1",
+      "verdict": "PASS"
+    },
+    {
       "bottleneck": "pack_lifecycle",
       "candidate_id": "q8_sidechannel:fused_rmsnorm_apply",
       "next_action": "wait_for_named_capability",
@@ -112,6 +123,6 @@
       "verdict": "REFUTED"
     }
   ],
-  "generated_at": "2026-06-19T07:01:05+00:00",
+  "generated_at": "2026-06-19T07:04:58+00:00",
   "schema": "primitive_search_memory_v1"
 }
