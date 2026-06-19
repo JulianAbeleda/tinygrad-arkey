@@ -143,6 +143,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   available ROCm packages and tested decoder aliases (`librocprofiler-sdk.so`, legacy `libatt_plugin.so`); no candidate
   produced `rocprofv3 --att` output. External ATT is a ROCm packaging/toolchain blocker until a real
   `librocprof-trace-decoder.so` is installed or built.
+- `amd-att-decoder-blocker-scope-20260619.md` — concrete reopen scope for the known ATT blocker: binary decoder
+  acquisition, source build from `ROCm/rocm-systems`, known-good ROCm environment, and why an ABI shim is not the first
+  path. Gates require `rocprofv3 --att` payloads before returning to tinygrad HCQ SQTT body attribution.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
