@@ -45,6 +45,27 @@ So the **measured** decode levers, in EV order:
 
 Dead, by measurement: frontier #4 (codegen/VALU) for decode; all locality/LDS levers (A3 confirmed).
 
+## PREFILL is the OPPOSITE regime — compute/WMMA-bound (measured, `qk_prefill_pmu_atlas.py`)
+Same instrument, real 8B prefill forward (512-token chunk, `_prefill_v2=True`, fp16 TC GEMMs), ctx0:
+- **Dominant matmuls show HIGH L2 hit: 54–87%** (`r_8_48_32_*` = 55% of GPU time @ 54% L2 hit; others 67–87%).
+  Weights are **reused/cached across the 512-token tile** (arithmetic intensity ~512× decode) — the polar
+  opposite of decode's 3–13% streaming. **So prefill is NOT bandwidth-bound.**
+- A few small bandwidth-bound kernels remain (`r_128_32_4_128` = the per-token-streamed bits, <1% each).
+- **VALU% is low (0.5–13%) but UNINFORMATIVE here:** `v_wmma` is a single multi-cycle instruction doing a
+  16×16×16 matmul, so a WMMA kernel at full throughput issues few instructions/cycle → low instr-rate ≠ idle.
+  No WMMA-specific counter exists (only SQ_INSTS_VALU/WAVE32_VALU). Use TFLOPS-timing for prefill compute, not
+  VALU%. Banked TFLOPS (POWN): tinygrad prefill WMMA = **42 TFLOPS = 35% of the 122 peak**; Tensile = 66 = 54%.
+
+**So the two halves of inference are fundamentally different bottlenecks, now MEASURED:**
+| regime | counter signature | bound | measured lever |
+|---|---|---|---|
+| **decode** (T=1 GEMV) | L2 hit 3–13%, ~38% peak HBM BW | **HBM bandwidth** (weights streamed once) | spec-decode (amortize weight read) [#3]; raise achieved BW% |
+| **prefill** (T=512 GEMM) | L2 hit 54–87%, ~35% of WMMA peak | **compute / WMMA efficiency** (weights cached, matrix-engine-fed) | WMMA scheduling (Route A capped ~32 TFLOPS) / external Tensile 66 [#2] |
+
+The decode levers (spec-decode, bandwidth) do NOT help prefill, and the prefill levers (WMMA/Tensile) do NOT help
+decode. Frontier #4 (codegen) is dead for decode (VALU idle) but LIVE for prefill (the 35%→54% WMMA-efficiency gap
+= software-pipelined K-loop, the POWN-walled codegen capability).
+
 ## Files
 `extra/qk_pmc_capture.py`, `extra/qk_primitive_pmu_atlas.py`, `bench/qk-primitive-pmu-atlas/result.json`. Prior:
 `route-a-a3-p2-p3-lds-refuted-20260619.md` (LDS), `frontier-scope-beyond-route-a-20260619.md` (#3 spec-decode),

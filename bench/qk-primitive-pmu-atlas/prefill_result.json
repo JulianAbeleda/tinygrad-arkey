@@ -1,0 +1,249 @@
+{
+ "model": "Qwen3-8B-Q4_K_M",
+ "N": 512,
+ "rows": [
+  {
+   "primitive": "r_8_48_32_4_2_2_2_4_4_256_2",
+   "launches": 72,
+   "active": 975686825,
+   "VALU_util%": 0.5,
+   "L2_hit%": 54.2,
+   "class": "cache/compute-bound",
+   "gpu%": 55.1
+  },
+  {
+   "primitive": "r_8_16_32_4_2_2_2_4_4_768_2",
+   "launches": 36,
+   "active": 228932911,
+   "VALU_util%": 1.2,
+   "L2_hit%": 70.1,
+   "class": "cache/compute-bound",
+   "gpu%": 12.9
+  },
+  {
+   "primitive": "r_16_32_2_8_16_4_4_128_4",
+   "launches": 36,
+   "active": 123233624,
+   "VALU_util%": 13.2,
+   "L2_hit%": 67.4,
+   "class": "cache/compute-bound",
+   "gpu%": 7.0
+  },
+  {
+   "primitive": "r_8_16_32_4_2_2_2_4_4_256_2",
+   "launches": 36,
+   "active": 99794157,
+   "VALU_util%": 5.2,
+   "L2_hit%": 74.0,
+   "class": "cache/compute-bound",
+   "gpu%": 5.6
+  },
+  {
+   "primitive": "r_8_4_32_4_2_2_2_4_4_256_2",
+   "launches": 72,
+   "active": 88830162,
+   "VALU_util%": 2.9,
+   "L2_hit%": 87.2,
+   "class": "cache/compute-bound",
+   "gpu%": 5.0
+  },
+  {
+   "primitive": "r_8_16_32_4_2_2_2_4_4_256_2n1",
+   "launches": 36,
+   "active": 78089485,
+   "VALU_util%": 1.1,
+   "L2_hit%": 72.2,
+   "class": "cache/compute-bound",
+   "gpu%": 4.4
+  },
+  {
+   "primitive": "r_32_16_8_8_16_4_4_32_4",
+   "launches": 36,
+   "active": 33093165,
+   "VALU_util%": 20.9,
+   "L2_hit%": 96.8,
+   "class": "cache/compute-bound",
+   "gpu%": 1.9
+  },
+  {
+   "primitive": "r_128_32_4_128_4n1",
+   "launches": 36,
+   "active": 16690569,
+   "VALU_util%": 2.2,
+   "L2_hit%": 4.2,
+   "class": "bandwidth-bound",
+   "gpu%": 0.9
+  },
+  {
+   "primitive": "r_128_32_4_128_4",
+   "launches": 36,
+   "active": 15492425,
+   "VALU_util%": 0.7,
+   "L2_hit%": 1.0,
+   "class": "bandwidth-bound",
+   "gpu%": 0.9
+  },
+  {
+   "primitive": "r_1187_32_4_16_2_2_2_32",
+   "launches": 1,
+   "active": 13676247,
+   "VALU_util%": 12.2,
+   "L2_hit%": 6.5,
+   "class": "bandwidth-bound",
+   "gpu%": 0.8
+  },
+  {
+   "primitive": "r_512_16_256",
+   "launches": 36,
+   "active": 12139139,
+   "VALU_util%": 0.7,
+   "L2_hit%": 1.1,
+   "class": "bandwidth-bound",
+   "gpu%": 0.7
+  },
+  {
+   "primitive": "E_65536_32_3",
+   "launches": 36,
+   "active": 12015634,
+   "VALU_util%": 2.9,
+   "L2_hit%": 35.0,
+   "class": "cache/compute-bound",
+   "gpu%": 0.7
+  },
+  {
+   "primitive": "E_16384_32_4",
+   "launches": 36,
+   "active": 11074309,
+   "VALU_util%": 0.7,
+   "L2_hit%": 25.1,
+   "class": "bandwidth-bound",
+   "gpu%": 0.6
+  },
+  {
+   "primitive": "r_32_8_4_4_512",
+   "launches": 36,
+   "active": 10998506,
+   "VALU_util%": 0.4,
+   "L2_hit%": 1.1,
+   "class": "bandwidth-bound",
+   "gpu%": 0.6
+  },
+  {
+   "primitive": "E_8_64_2_8_16_4_4n1",
+   "launches": 36,
+   "active": 10936360,
+   "VALU_util%": 2.5,
+   "L2_hit%": 57.3,
+   "class": "cache/compute-bound",
+   "gpu%": 0.6
+  },
+  {
+   "primitive": "E_8_64_8_8_16_2n1",
+   "launches": 36,
+   "active": 10519873,
+   "VALU_util%": 2.7,
+   "L2_hit%": 86.9,
+   "class": "cache/compute-bound",
+   "gpu%": 0.6
+  },
+  {
+   "primitive": "E_16_64_8_16_4_4",
+   "launches": 36,
+   "active": 9918201,
+   "VALU_util%": 0.9,
+   "L2_hit%": 44.1,
+   "class": "cache/compute-bound",
+   "gpu%": 0.6
+  },
+  {
+   "primitive": "r_4_32_8_16_32_4",
+   "launches": 36,
+   "active": 8686194,
+   "VALU_util%": 0.2,
+   "L2_hit%": 10.6,
+   "class": "bandwidth-bound",
+   "gpu%": 0.5
+  },
+  {
+   "primitive": "r_32_8_16_32_4",
+   "launches": 36,
+   "active": 8575563,
+   "VALU_util%": 0.1,
+   "L2_hit%": 11.9,
+   "class": "bandwidth-bound",
+   "gpu%": 0.5
+  },
+  {
+   "primitive": "r_32_4_1187",
+   "launches": 1,
+   "active": 776379,
+   "VALU_util%": 0.0,
+   "L2_hit%": 2.6,
+   "class": "bandwidth-bound",
+   "gpu%": 0.0
+  },
+  {
+   "primitive": "r_32_4_1187n1",
+   "launches": 1,
+   "active": 604096,
+   "VALU_util%": 0.0,
+   "L2_hit%": 2.6,
+   "class": "bandwidth-bound",
+   "gpu%": 0.0
+  },
+  {
+   "primitive": "E_512_16_8_2_4_4",
+   "launches": 1,
+   "active": 452641,
+   "VALU_util%": 0.6,
+   "L2_hit%": 63.6,
+   "class": "cache/compute-bound",
+   "gpu%": 0.0
+  },
+  {
+   "primitive": "r_32_8_4_4_512n1",
+   "launches": 1,
+   "active": 305368,
+   "VALU_util%": 0.4,
+   "L2_hit%": 1.1,
+   "class": "bandwidth-bound",
+   "gpu%": 0.0
+  },
+  {
+   "primitive": "E_1187_32_4",
+   "launches": 1,
+   "active": 242451,
+   "VALU_util%": 0.9,
+   "L2_hit%": 57.7,
+   "class": "cache/compute-bound",
+   "gpu%": 0.0
+  },
+  {
+   "primitive": "r_16_8n1",
+   "launches": 1,
+   "active": 233386,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.0,
+   "class": "bandwidth-bound",
+   "gpu%": 0.0
+  },
+  {
+   "primitive": "E_2n7",
+   "launches": 1,
+   "active": 231954,
+   "VALU_util%": 0.0,
+   "L2_hit%": 12.5,
+   "class": "bandwidth-bound",
+   "gpu%": 0.0
+  },
+  {
+   "primitive": "r_16_8",
+   "launches": 1,
+   "active": 230739,
+   "VALU_util%": 0.0,
+   "L2_hit%": 0.0,
+   "class": "bandwidth-bound",
+   "gpu%": 0.0
+  }
+ ]
+}
