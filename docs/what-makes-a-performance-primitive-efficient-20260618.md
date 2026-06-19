@@ -524,6 +524,12 @@ FMI-4 B1 (`decode-fused-mmvq-integration-fmi4-b1-result-20260619.md`) then close
 `Q4K_COOP_RT`, `Q6K_COOP_RT`, and coop on/off do not move any high-share role by `>=10%` in a same-process relative
 probe. The remaining Track-B surfaces are deeper: runtime/cache identity, renderer/scheduler, or artifact/import.
 
+The prefill-style decode diagnostic (`decode-integration-diagnostic-result-20260619.md`) localizes that statement:
+unlike the Tensile route, decode has no single transpose-like tax. The closest measured local tax is Q4_K stage2
+reduction (`6.8us`, `10%` on the ffn_gate/up micro-surface), but removing it only reaches `~53-54%` and does not close
+the in-model `44% -> 54%` gap. q8 lifecycle is useful but capped by reuse `2` and lossy. The large remaining primitive
+is therefore **MMVQ contract preservation in-model**, not another isolated GEMV kernel.
+
 The PMU atlas reopens spec decode only as `decode_spec_weight_amortization_lifecycle`
 (`spec-decode-bandwidth-amortization-scope-20260619.md`). The old `decode_spec_verify_shortcut` remains closed:
 current T=5 verify is `4.66x` one T==1 pass. The reopened row is gated on a T-cheap target verify forward

@@ -41,6 +41,9 @@ prefill ~82%.
   max-occupancy launch (`mul_mat_vec_q` grid=131072, wg=32, vgpr=24–40). Matches prior `amd-decode-kernel-beats-llamacpp`.
 - **Decode levers:** (a) fused-mmvq integration (the above); (b) **spec-decode** — orthogonal multiplier,
   bandwidth-JUSTIFIED (amortizes the 4.68 GB weight read over ~2.5 accepted tokens); (c) KV-quant for long ctx.
+- **Decode diagnostic update:** the prefill-style localization pass found no single transpose-like tax. Q4_K stage2
+  reduce is a real `~10%` local tax but only reaches `~53-54%` on that surface; q8 lifecycle is capped by reuse `2`;
+  existing env launch-shape knobs fail. The remaining large gap is **MMVQ contract preservation in-model**.
 
 ## PREFILL — compute/WMMA-bound (opposite regime)
 - Dominant matmuls L2 hit **54–87%** (weights reused/cached across the 512-tile) → NOT bandwidth-bound.
@@ -78,6 +81,7 @@ prefill ~82%.
 
 ## Index of supporting docs (all 2026-06-19 unless noted)
 - Full atlas + decode/prefill regimes + llama refs + mechanisms: `decode-bandwidth-bound-pmu-learning-20260619.md`
+- Decode integration tax ledger: `decode-integration-diagnostic-result-20260619.md`
 - Tensile prefill A/B (0.999×, 1.27× retracted): `prefill-tensile-land-result-20260619.md` (+ `…-land-scope`)
 - Route A (dependency-free WMMA asm): `route-a-a2-pipeline-result`, `route-a-a3-p2-p3-lds-refuted`
 - Frontier scope (4 levers): `frontier-scope-beyond-route-a-20260619.md`

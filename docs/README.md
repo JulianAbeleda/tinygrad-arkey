@@ -56,6 +56,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-fused-mmvq-integration-fmi4-b1-result-20260619.md` — **executed FMI-4 B1.** Existing env launch-shape knobs
   (`Q4K_COOP_RT`, `Q6K_COOP_RT`, coop on/off) do not move a high-share role by `>=10%`; B1 is closed. Track B remains
   live only as runtime/cache identity or renderer/scheduler work.
+- `decode-integration-diagnostic-result-20260619.md` — prefill-style decode localization. Verdict:
+  **no single transpose-like tax**; Q4_K stage2 reduce is real but insufficient, q8 lifecycle is capped/lossy, env knobs
+  fail, and the remaining large gap is MMVQ in-model contract preservation.
 - `primitive-pmu-observability-scope-20260619.md` — scope for using installed ROCm profiler tooling as the PMU oracle
   and building only the tinygrad primitive-local attribution layer needed around HCQ.
 - `primitive-pmu-observability-result-20260619.md` — PMU-1..PMU-3 result: ROCm PMU works on HIP controls, but tinygrad
