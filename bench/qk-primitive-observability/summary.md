@@ -1,7 +1,7 @@
 # Primitive-local observability summary
 
-- generated: `2026-06-19T07:05:09+00:00`
-- commit: `ed1af86bd`
+- generated: `2026-06-19T07:18:46+00:00`
+- commit: `7e8e865e5-dirty`
 - observations: `11`
 - validation: `PASS`
 - search sessions: `3`
@@ -47,8 +47,8 @@
 ## Trace / Counter Plugin Inventory
 
 - mode: `inventory_only_no_trace_collection`
-- rocprofv3: `missing`
-- rocprof-compute: `missing`
+- rocprofv3: `/opt/rocm/bin/rocprofv3`
+- rocprof-compute: `/opt/rocm/bin/rocprof-compute`
 - tinygrad SQTT example files: `8`
 - rocprof trace artifacts: `2`
 

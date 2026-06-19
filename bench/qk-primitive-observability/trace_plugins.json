@@ -1,5 +1,5 @@
 {
-  "evidence_level": 3,
+  "evidence_level": 4,
   "mode": "inventory_only_no_trace_collection",
   "note": "Trace/counter plugins are optional. This inventory does not run rocprof or require HIP runtime.",
   "rocprof_trace_artifacts": [
@@ -18,9 +18,9 @@
     "extra/sqtt/examples/gfx1100/profile_sync_run_1.pkl"
   ],
   "tools": {
-    "rocprof-compute": null,
+    "rocprof-compute": "/opt/rocm/bin/rocprof-compute",
     "rocprof-compute-viewer": null,
     "rocprof-sys": null,
-    "rocprofv3": null
+    "rocprofv3": "/opt/rocm/bin/rocprofv3"
   }
 }
