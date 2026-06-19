@@ -214,7 +214,10 @@ class AMDComputeQueue(HWQueue):
             if SQTT_LIMIT_SE > 1: mask = 1 if SQTT_ITRACE_SE_MASK.value & (1 << i) else 0 # only run unmasked shader engines
             else:
               sa_mask = (1 << (self.dev.iface.props['cu_per_simd_array'] // 2)) - 1
-              cu_mask = (1 << (cu_per_se + (1 if i == 0 else 0))) - 1
+              if (oracle_cu:=getenv("SQTT_ORACLE_TARGET_CU", -1)) >= 0:
+                cu_mask = 1 << oracle_cu
+              else:
+                cu_mask = (1 << (cu_per_se + (1 if i == 0 else 0))) - 1
               mask = lo32((cu_mask & sa_mask) | (cu_mask & (sa_mask << 16)) << 16)
             self.wreg(getattr(self.gc, f'regCOMPUTE_STATIC_THREAD_MGMT_SE{i}'), mask)
 

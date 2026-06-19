@@ -10,9 +10,9 @@
       "returncode": 0,
       "sqtt_events": 12,
       "itrace_events": 2,
-      "total_sqtt_blob_bytes": 1778912,
+      "total_sqtt_blob_bytes": 1777760,
       "decode_ok_count": 12,
-      "mapped_instruction_events": 4112,
+      "mapped_instruction_events": 4104,
       "body_instruction_events": 0,
       "raw_body_packet_events_top20": 0,
       "gate_pass": false,
@@ -22,7 +22,7 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              17392
+              17410
             ],
             [
               "WAVESTART",
@@ -34,15 +34,15 @@
             ],
             [
               "TS_WAVE_STATE",
-              7034
+              7027
             ],
             [
               "TS_DELTA_SHORT",
-              4604
+              4562
             ],
             [
               "TS_DELTA_OR_MARK",
-              462
+              452
             ],
             [
               "REG",
@@ -50,7 +50,7 @@
             ],
             [
               "UTILCTR",
-              88
+              91
             ],
             [
               "EVENT",
@@ -78,7 +78,7 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              17358
+              17410
             ],
             [
               "WAVESTART",
@@ -90,15 +90,15 @@
             ],
             [
               "TS_WAVE_STATE",
-              7059
+              6988
             ],
             [
               "TS_DELTA_SHORT",
-              4656
+              4819
             ],
             [
               "TS_DELTA_OR_MARK",
-              462
+              445
             ],
             [
               "REG",
@@ -106,7 +106,7 @@
             ],
             [
               "UTILCTR",
-              75
+              80
             ],
             [
               "EVENT",
@@ -124,7 +124,7 @@
           "mapped_instruction_counts_top": [
             [
               "S_ENDPGM",
-              2058
+              2050
             ]
           ],
           "error": null
@@ -141,9 +141,9 @@
       "returncode": 0,
       "sqtt_events": 12,
       "itrace_events": 2,
-      "total_sqtt_blob_bytes": 1762656,
+      "total_sqtt_blob_bytes": 1762144,
       "decode_ok_count": 12,
-      "mapped_instruction_events": 4110,
+      "mapped_instruction_events": 4106,
       "body_instruction_events": 0,
       "raw_body_packet_events_top20": 0,
       "gate_pass": false,
@@ -153,7 +153,7 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              17502
+              17468
             ],
             [
               "WAVESTART",
@@ -165,11 +165,11 @@
             ],
             [
               "TS_WAVE_STATE",
-              7119
+              7041
             ],
             [
               "TS_DELTA_SHORT",
-              4596
+              4663
             ],
             [
               "TS_DELTA_OR_MARK",
@@ -181,11 +181,142 @@
             ],
             [
               "UTILCTR",
-              86
+              90
             ],
             [
               "EVENT",
               10
+            ],
+            [
+              "SNAPSHOT",
+              7
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "mapped_instruction_counts_top": [
+            [
+              "S_ENDPGM",
+              2056
+            ]
+          ],
+          "error": null
+        },
+        {
+          "idx": 26,
+          "raw_packet_counts_top": [
+            [
+              "NOP",
+              17462
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              7073
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4704
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              468
+            ],
+            [
+              "REG",
+              315
+            ],
+            [
+              "UTILCTR",
+              88
+            ],
+            [
+              "EVENT",
+              10
+            ],
+            [
+              "SNAPSHOT",
+              7
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "mapped_instruction_counts_top": [
+            [
+              "S_ENDPGM",
+              2050
+            ]
+          ],
+          "error": null
+        }
+      ],
+      "capture_error": null
+    },
+    {
+      "name": "ttrace_exec",
+      "env": {
+        "SQTT_TTRACE_EXEC": "1"
+      },
+      "capture_ok": true,
+      "returncode": 0,
+      "sqtt_events": 12,
+      "itrace_events": 2,
+      "total_sqtt_blob_bytes": 1779328,
+      "decode_ok_count": 12,
+      "mapped_instruction_events": 4108,
+      "body_instruction_events": 0,
+      "raw_body_packet_events_top20": 0,
+      "gate_pass": false,
+      "itrace_packet_tops": [
+        {
+          "idx": 10,
+          "raw_packet_counts_top": [
+            [
+              "NOP",
+              17360
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              7026
+            ],
+            [
+              "TS_DELTA_SHORT",
+              4634
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              461
+            ],
+            [
+              "REG",
+              316
+            ],
+            [
+              "UTILCTR",
+              80
+            ],
+            [
+              "EVENT",
+              18
             ],
             [
               "SNAPSHOT",
@@ -209,7 +340,7 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              17482
+              17404
             ],
             [
               "WAVESTART",
@@ -221,19 +352,19 @@
             ],
             [
               "TS_WAVE_STATE",
-              7121
+              7049
             ],
             [
               "TS_DELTA_SHORT",
-              4650
+              4639
             ],
             [
               "TS_DELTA_OR_MARK",
-              457
+              464
             ],
             [
               "REG",
-              315
+              316
             ],
             [
               "UTILCTR",
@@ -241,81 +372,6 @@
             ],
             [
               "EVENT",
-              10
-            ],
-            [
-              "SNAPSHOT",
-              7
-            ],
-            [
-              "LAYOUT_HEADER",
-              1
-            ]
-          ],
-          "mapped_instruction_counts_top": [
-            [
-              "S_ENDPGM",
-              2058
-            ]
-          ],
-          "error": null
-        }
-      ],
-      "capture_error": null
-    },
-    {
-      "name": "ttrace_exec",
-      "env": {
-        "SQTT_TTRACE_EXEC": "1"
-      },
-      "capture_ok": true,
-      "returncode": 0,
-      "sqtt_events": 12,
-      "itrace_events": 2,
-      "total_sqtt_blob_bytes": 1779392,
-      "decode_ok_count": 12,
-      "mapped_instruction_events": 4108,
-      "body_instruction_events": 0,
-      "raw_body_packet_events_top20": 0,
-      "gate_pass": false,
-      "itrace_packet_tops": [
-        {
-          "idx": 10,
-          "raw_packet_counts_top": [
-            [
-              "NOP",
-              17440
-            ],
-            [
-              "WAVESTART",
-              16384
-            ],
-            [
-              "WAVEEND",
-              16384
-            ],
-            [
-              "TS_WAVE_STATE",
-              7007
-            ],
-            [
-              "TS_DELTA_SHORT",
-              4703
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              462
-            ],
-            [
-              "REG",
-              316
-            ],
-            [
-              "UTILCTR",
-              97
-            ],
-            [
-              "EVENT",
               18
             ],
             [
@@ -330,63 +386,7 @@
           "mapped_instruction_counts_top": [
             [
               "S_ENDPGM",
-              2054
-            ]
-          ],
-          "error": null
-        },
-        {
-          "idx": 26,
-          "raw_packet_counts_top": [
-            [
-              "NOP",
-              17374
-            ],
-            [
-              "WAVESTART",
-              16384
-            ],
-            [
-              "WAVEEND",
-              16384
-            ],
-            [
-              "TS_WAVE_STATE",
-              6984
-            ],
-            [
-              "TS_DELTA_SHORT",
-              4689
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              469
-            ],
-            [
-              "REG",
-              316
-            ],
-            [
-              "UTILCTR",
-              104
-            ],
-            [
-              "EVENT",
-              18
-            ],
-            [
-              "SNAPSHOT",
-              7
-            ],
-            [
-              "LAYOUT_HEADER",
-              1
-            ]
-          ],
-          "mapped_instruction_counts_top": [
-            [
-              "S_ENDPGM",
-              2054
+              2056
             ]
           ],
           "error": null
@@ -404,9 +404,9 @@
       "returncode": 0,
       "sqtt_events": 12,
       "itrace_events": 2,
-      "total_sqtt_blob_bytes": 1889856,
+      "total_sqtt_blob_bytes": 1762816,
       "decode_ok_count": 12,
-      "mapped_instruction_events": 4284,
+      "mapped_instruction_events": 4108,
       "body_instruction_events": 0,
       "raw_body_packet_events_top20": 0,
       "gate_pass": false,
@@ -416,7 +416,7 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              18944
+              17492
             ],
             [
               "WAVESTART",
@@ -428,15 +428,15 @@
             ],
             [
               "TS_WAVE_STATE",
-              7383
+              6944
             ],
             [
               "TS_DELTA_SHORT",
-              4460
+              4622
             ],
             [
               "TS_DELTA_OR_MARK",
-              801
+              477
             ],
             [
               "REG",
@@ -444,7 +444,7 @@
             ],
             [
               "UTILCTR",
-              259
+              96
             ],
             [
               "EVENT",
@@ -462,7 +462,7 @@
           "mapped_instruction_counts_top": [
             [
               "S_ENDPGM",
-              2224
+              2054
             ]
           ],
           "error": null
@@ -472,7 +472,7 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              27090
+              17436
             ],
             [
               "WAVESTART",
@@ -484,23 +484,23 @@
             ],
             [
               "TS_WAVE_STATE",
-              7164
+              7092
             ],
             [
               "TS_DELTA_SHORT",
-              3960
+              4690
             ],
             [
               "TS_DELTA_OR_MARK",
-              1659
-            ],
-            [
-              "UTILCTR",
-              627
+              464
             ],
             [
               "REG",
-              261
+              315
+            ],
+            [
+              "UTILCTR",
+              87
             ],
             [
               "EVENT",
@@ -508,7 +508,7 @@
             ],
             [
               "SNAPSHOT",
-              5
+              7
             ],
             [
               "LAYOUT_HEADER",
@@ -518,7 +518,7 @@
           "mapped_instruction_counts_top": [
             [
               "S_ENDPGM",
-              2060
+              2054
             ]
           ],
           "error": null
@@ -537,9 +537,9 @@
       "returncode": 0,
       "sqtt_events": 12,
       "itrace_events": 2,
-      "total_sqtt_blob_bytes": 3231264,
+      "total_sqtt_blob_bytes": 3087712,
       "decode_ok_count": 12,
-      "mapped_instruction_events": 3824,
+      "mapped_instruction_events": 4112,
       "body_instruction_events": 0,
       "raw_body_packet_events_top20": 0,
       "gate_pass": false,
@@ -549,7 +549,7 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              279177
+              248671
             ],
             [
               "WAVESTART",
@@ -561,63 +561,15 @@
             ],
             [
               "TS_WAVE_STATE",
-              5739
+              5444
             ],
             [
               "TS_DELTA_SHORT",
-              4321
+              5345
             ],
             [
               "TS_DELTA_OR_MARK",
-              1755
-            ],
-            [
-              "REG",
-              112
-            ],
-            [
-              "SNAPSHOT",
-              5
-            ],
-            [
-              "LAYOUT_HEADER",
-              1
-            ]
-          ],
-          "mapped_instruction_counts_top": [
-            [
-              "S_ENDPGM",
-              1764
-            ]
-          ],
-          "error": null
-        },
-        {
-          "idx": 26,
-          "raw_packet_counts_top": [
-            [
-              "NOP",
-              251323
-            ],
-            [
-              "WAVESTART",
-              16384
-            ],
-            [
-              "WAVEEND",
-              16384
-            ],
-            [
-              "TS_WAVE_STATE",
-              5891
-            ],
-            [
-              "TS_DELTA_SHORT",
-              4686
-            ],
-            [
-              "TS_DELTA_OR_MARK",
-              590
+              370
             ],
             [
               "REG",
@@ -639,6 +591,54 @@
             ]
           ],
           "error": null
+        },
+        {
+          "idx": 26,
+          "raw_packet_counts_top": [
+            [
+              "NOP",
+              245537
+            ],
+            [
+              "WAVESTART",
+              16384
+            ],
+            [
+              "WAVEEND",
+              16384
+            ],
+            [
+              "TS_WAVE_STATE",
+              5473
+            ],
+            [
+              "TS_DELTA_SHORT",
+              5333
+            ],
+            [
+              "TS_DELTA_OR_MARK",
+              368
+            ],
+            [
+              "REG",
+              146
+            ],
+            [
+              "SNAPSHOT",
+              7
+            ],
+            [
+              "LAYOUT_HEADER",
+              1
+            ]
+          ],
+          "mapped_instruction_counts_top": [
+            [
+              "S_ENDPGM",
+              2052
+            ]
+          ],
+          "error": null
         }
       ],
       "capture_error": null
@@ -654,7 +654,7 @@
       "returncode": 0,
       "sqtt_events": 12,
       "itrace_events": 2,
-      "total_sqtt_blob_bytes": 8832,
+      "total_sqtt_blob_bytes": 9600,
       "decode_ok_count": 12,
       "mapped_instruction_events": 0,
       "body_instruction_events": 0,
@@ -666,23 +666,23 @@
           "raw_packet_counts_top": [
             [
               "NOP",
-              341
+              471
             ],
             [
               "TS_DELTA_OR_MARK",
-              14
+              19
             ],
             [
               "REG",
-              5
+              7
             ],
             [
               "SNAPSHOT",
-              5
+              7
             ],
             [
               "TS_DELTA_SHORT",
-              2
+              3
             ],
             [
               "LAYOUT_HEADER",

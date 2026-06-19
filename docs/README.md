@@ -152,6 +152,10 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `amd-sqtt-oracle-hcq-diff-scope-20260619.md` — next scoped tooling phase after the decoder pass: archive the working
   ROCprofiler ATT oracle, reproduce tinygrad HCQ lifecycle-only SQTT, diff setup/order/targeting, try one env-gated
   command-sequence patch if a bounded delta is found, and close with body-attribution pass/kill.
+- `amd-sqtt-oracle-hcq-diff-result-20260619.md` — **executed O0-O5; verdict `KILL_PATCH_NO_BODY`.** ROCprofiler ATT is
+  valid and instruction-rich (`110446` decoded wave instruction records), but the only bounded HCQ patch
+  (`SQTT_ORACLE_TARGET_CU=1`, with/without AQLprofile raw regs) still produced zero body packets. Track T is closed as a
+  small primitive-observability patch; reopening requires broader ROCprofiler command-service integration.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
