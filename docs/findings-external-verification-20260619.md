@@ -40,3 +40,23 @@ The FOUNDATIONAL findings (hardware specs, llama kernel structure, decode-BW/pre
 int-dot quant-activation mechanism) are EXACTLY confirmed by external sources. Our independent measurements landed
 on the established consensus + the documented llama.cpp design. The tinygrad-specific levers (concrete-KV, symbolic
 attention) are refinements within that consensus, verified internally.
+
+## Does it change what to explore? (strix-halo RDNA3 cross-check)
+strix-halo-testing (RDNA3-class AMD llama.cpp WMMA) gives the NORMAL RDNA3 prefill profile: weight GEMMs 65-85%,
+attention 15-35%. Implications:
+- **REFRAMES concrete-KV (not a micro-opt):** our prefill attention (26.5% symbolic) is at the HIGH end of normal
+  15-35% -> concrete-KV (->5.9%) FIXES a tinygrad-specific anomaly (symbolic-shape attention abnormally heavy),
+  restoring the normal FFN-dominated profile. Elevated motivation.
+- **CORROBORATES the TC-attention path:** strix uses rocWMMA flash attention (GGML_HIP_ROCWMMA_FATTN) for the
+  15-35% attention -> = our Option-B TC-attention on concrete KV. Direction endorsed.
+- **REFUTES a tempting new lever (quantized-weight prefill GEMM / fewer bytes):** strix's "weight GEMMs memory-
+  bound, INT8 halves bytes" is a DECODE/low-T statement. For T=512 prefill the FFN matmul is COMPUTE-bound (~1.29ms
+  compute @ 40 TFLOPS vs ~0.1ms weight read @ 960 GB/s; AI 512 >> 127 ridge) -> fewer weight bytes won't help
+  prefill (it's the decode GEMV where bytes dominate; that's the decode track). So do NOT pursue int8/quantized
+  weights for prefill.
+- **Residual tension (measurement-limited, not a new lever):** FFN matmul compute-bound in isolation, yet Tensile
+  (66 vs 40 TFLOPS) gave 1.00x in-model -> the unresolved measurement-wall (can't isolate in-model matmul fraction
+  under the 729-kernel busy-wait). Already banked as the boundary.
+
+NET: verification CONFIRMS + sharpens; does NOT change the plan. Prefill lever stays concrete-KV (1.24x) + Option-B
+TC-attention on concrete KV, now externally well-motivated. Weight-bytes refuted for prefill.
