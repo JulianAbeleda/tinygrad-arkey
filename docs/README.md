@@ -110,6 +110,11 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   build-worthy by lower bound (`56.83us` vs `153.22us` gate); current native COMGR/DSL attempts fail; the hipcc/LLD
   artifact route clears local gate (`115.24us`, `1.46x`) and graph route passes. Decision: artifact research flag or
   project-level native renderer transfer.
+- `decode-q8-two-lane-scope-20260619.md` — post-P8 two-lane closeout scope: harden the default-off q8 artifact
+  research flag and separately define the native renderer/scheduler transfer start gate.
+- `decode-q8-two-lane-result-20260619.md` — **executed two-lane closeout.** Artifact lane is ready as
+  `Q8_FFN_HANDWRITTEN=1` research flag (`1.051-1.063x`, dNLL `+0.002887`, no HIP runtime); native lane is project-level,
+  with no bounded `>=30us` q8-specific patch identified.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:

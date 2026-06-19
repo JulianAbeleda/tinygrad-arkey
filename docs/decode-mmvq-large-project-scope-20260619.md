@@ -212,6 +212,16 @@ low-VGPR/high-occupancy contract without the separate-launch lifecycle cost.
 P8 resolves that fork: the fused q8 artifact route is already feasible as a research flag, while the native route is
 project-level compiler/backend work.
 
+The post-P8 two-lane closeout is complete:
+
+- research artifact lane: `Q8_FFN_HANDWRITTEN=1` is ready as a default-off research flag (`1.051-1.063x` W==D,
+  dNLL `+0.002887`, lifecycle `115.24us`, no in-process HIP runtime);
+- native transfer lane: no bounded q8-specific native patch exists; start only as a broader AMD renderer/scheduler
+  project or after a new `>=30us` attributed feature appears.
+
+Detailed scope: `docs/decode-q8-two-lane-scope-20260619.md`.
+Detailed result: `docs/decode-q8-two-lane-result-20260619.md`.
+
 Do not begin native renderer work yet. The fastest high-signal path is:
 
 ```text
