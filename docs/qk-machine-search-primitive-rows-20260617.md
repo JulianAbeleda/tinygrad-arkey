@@ -1,5 +1,10 @@
 # Machine-search primitive rows — decode (2026-06-17)
 
+> **SUPERSEDED 2026-06-18 by `qk-machine-search-primitive-rows-20260618.md`.** The `mmvq_q6k`/`mmvq_q4k` "full
+> work-decomp" rows were resolved: coop SHIPPED (lm_head/ffn_down/attn_q/o), ffn_gate/up is now the deep-only
+> `decode_q4k_ffn_q8_sidechannel` row, and the prefill rows were split (fp16 WMMA LDS-tiling + LDS flash +
+> external BLAS boundary). Read the successor for live rows; this file is provenance.
+
 > **UPDATE 2026-06-17/18 — the mmvq rows were the answer (via cooperative-K coalescing, not dp4a).** Shipped
 > MMVQ_COOP on lm_head + ffn_down (Q6_K) + attn_q/o (Q4_K): **decode ~48% → ~66-69% of llama**, byte-identical.
 > `mmvq_q6k` = SHIPPED (both roles). `mmvq_q4k` = PARTIAL — attn_q/o SHIPPED, ffn_gate/up + ffn_down REFUTED

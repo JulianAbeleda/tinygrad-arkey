@@ -23,6 +23,15 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 The work after the decode bank. Closeouts/results are canonical; the many dated `qk-*` arc docs are provenance.
 
+- **`what-makes-a-performance-primitive-efficient-20260618.md` — READ THIS FIRST for the performance-primitive model and gap.**
+  Consolidated source of truth for what makes a performance primitive efficient, using llama.cpp vs tinygrad as the
+  case study: decode, lm_head, MMVQ, attention, spec, prefill, machine-search lessons, and every remaining path
+  marked shipped/refuted/deferred/open.
+- `qk-decode-per-role-delta-audit-20260618.md` — the quantitative per-role decode gap table (traffic/%peak/time-share/
+  Amdahl/status); summed ceilings ~+27–30% ≈ the whole 1.47× llama gap, all behind one q8/full-MMVQ wall.
+- `qk-machine-search-primitive-rows-20260618.md` — current machine-search rows (live + closed); supersedes the
+  06-17 rows doc. Live: q8 side-channel, ffn coop sub-gate, attention residual audit, fp16 WMMA LDS-tiling, LDS
+  flash-prefill, external BLAS boundary; closed: quant-weight-reuse-8b, broad mmvq_q4k/q6k, decode_block_fusion.
 - **Decode-attention wins SHIPPED (byte-identical greedy, default-on):**
   - `qk-8b-attention-fusion-result-20260617.md` — flash-decode threshold 1024→512 (+12.8% ctx520).
   - `qk-8b-flash-variant-result-20260617.md` — `hoisted` exp + L=128 default (+11–29% across ctx).
