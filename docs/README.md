@@ -125,6 +125,9 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 - `decode-n1-attribution-scope-20260619.md` / `decode-n1-attribution-result-20260619.md` — native q8 scheduler
   attribution. Full oracle gap is `73.109us`, but largest bounded attribution is `14.087us`; SQTT capture works but
   local RDNA3 HCQ decode fails, so remaining scheduler/resource movement is project-level tooling/backend work.
+- `amd-scheduler-tooling-backend-project-scope-20260619.md` — concrete scope for that project-level fork. Track T
+  funds RDNA3 HCQ attribution tooling first; Track B funds the reusable AMD scheduler/resource backend only after a
+  measurable feature or explicit backend investment decision.
 - `decode-q8-research-route-hardening-result-20260619.md` — small-path hardening pass. Consolidates W==D, dNLL,
   artifact hashes, fixed-launch boundary, and policy gate; verdict `PASS_RESEARCH_HARDENED_EXISTING_EVIDENCE`.
 - `decode-fused-mmvq-integration-next-path-scope-20260619.md` — next base-decode path after the PMU convergence:
