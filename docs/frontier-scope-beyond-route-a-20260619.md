@@ -126,12 +126,15 @@ Handwritten HIP 65% vs tinygrad 57% = a measured **+8% codegen lever on int-dot*
 **under-ranks** (chose 14.3 over 17.7 default) — a real **BEAM quality bug** (suspected `allow_test_size`
 mis-ranking + ineffective TC search; `beam-hang-premise-audit-20260619.md`).
 
-**Two concrete sub-levers (pick by #1's verdict):**
-- **(4a) Fix BEAM's matmul ranking/TC-search** so search becomes a usable general tuning lever toward warmstart ~48.
-  Entry: reproduce the under-ranking (`bench/qk-codegen-wmma/inmodel_matmul.json` CG_W3_routeB_beam_spike), audit
-  the cost-model/`allow_test_size` ranking in `tinygrad/engine/search.py`, check why TC opts aren't applied/ranked.
-- **(4b) Targeted renderer improvements** in `tinygrad/renderer/amd/`: VOPD dual-issue packing on the GEMV inner
-  loop, tighter `s_waitcnt` scheduling, dp4a/sudot4 selection coverage. Validate against the +8% int-dot ceiling.
+**NO BEAM (user, 2026-06-19): we do not use BEAM at all.** PREFILL_V2's ~48 comes from forced-TC *warmstart*, not
+search. So the prior "(4a) fix BEAM ranking" sub-lever is OFF the table — #4 is purely renderer codegen:
+- **Targeted renderer improvements** in `tinygrad/renderer/amd/`: VOPD dual-issue packing on the GEMV inner loop,
+  tighter `s_waitcnt` scheduling, dp4a/sudot4 selection coverage. Validate against the measured +8% int-dot ceiling.
+- **CRUCIAL — gated by #1's measurement (now partly in):** the decode weight-GEMV is **HBM-bandwidth-bound**
+  (measured L2 hit 0.2%, `extra/qk_pmc_capture.py`), NOT ALU/codegen-bound. So renderer/VALU improvements **cannot**
+  speed the bandwidth-bound projections — codegen only helps a kernel that is ALU- or latency-bound. Before any #4
+  work, use PMC to confirm a target kernel is ALU-bound (high VALU/active, low L2-miss-stall); else #4 is dead on
+  arrival for that kernel. This likely shrinks #4 to the few compute-bound kernels (e.g. int-dot dequant inner loop).
 
 **Gate / kill.** #1 must first show decode is **latency/scheduling-bound** (not already at the ALU ceiling) — else
 there's no room and #4 is dead on arrival. Bounded upside: ~+8% int-dot GEMV; BEAM-fix → warmstart-class prefill
