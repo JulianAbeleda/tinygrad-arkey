@@ -155,6 +155,27 @@ the activation→Q8 quant across input-sharing GEMVs, and sustain the max-occupa
 in-model launches. Target: in-model weight-GEMV 44%→54%+ peak BW.** This is a model/integration change (measurable
 against the 44% baseline), orthogonal to spec-decode (which multiplies on top by amortizing the weight read).
 
+## PREFILL mechanism — throughput hierarchy resolves frontier #2 (Tensile fp16, no int8 GEMM needed)
+Measured (llama-bench, clean): llama **pp512 = 3020 tok/s**, tg128 = 100 tok/s. Compute throughput
+(~2×params = 16.4 GFLOP/token, matmul-dominated; same convention both engines):
+| prefill approach | tok/s | ~TFLOPS | % of 122 WMMA peak |
+|---|---:|---:|---:|
+| tinygrad PREFILL_V2 (fp16 WMMA) | 2486 | ~41 | 34% |
+| llama (int8 MMQ 74% + Tensile fp16 10%) | 3020 | ~49 | 40% |
+| Tensile fp16 (isolated, banked) | — | **66** | 54% |
+| WMMA hardware peak | — | 122 | 100% |
+
+- **Hierarchy: tinygrad fp16-WMMA (41) < llama int8-MMQ (49) < Tensile fp16 (66).** tinygrad currently LOSES
+  prefill to llama (82% = banked ~83%); its WMMA sits at 34% peak vs llama's more-efficient int8 MMQ ~40%.
+- **Tensile fp16 (66) beats llama's int8 MMQ (49)** → **frontier #2 (extract/use the confirmed-present Tensile
+  `.co`) is the correct prefill lever; an int8 quantized GEMM is NOT needed** — fp16 Tensile leaps past both.
+- **Mechanism contrast with decode:** prefill's in-model ~41 ≈ its isolated WMMA ~42 (POWN) → prefill
+  **integrates fine; the limit IS the WMMA kernel** (34% peak, = the software-pipelined-K-loop scheduling gap).
+  Decode was the inverse (kernel great at 76%, integration bad at 44%). **Two regimes, two distinct mechanisms,
+  two distinct levers — both now measured end to end:**
+  - decode → fused-mmvq integration (amortize act-quant + sustain occupancy); spec-decode multiplies on top.
+  - prefill → WMMA compute efficiency → Tensile fp16 `.co` (66) [#2], or the walled SW-pipelined-K-loop codegen.
+
 ## Files
 `extra/qk_pmc_capture.py`, `extra/qk_primitive_pmu_atlas.py`, `bench/qk-primitive-pmu-atlas/result.json`. Prior:
 `route-a-a3-p2-p3-lds-refuted-20260619.md` (LDS), `frontier-scope-beyond-route-a-20260619.md` (#3 spec-decode),
