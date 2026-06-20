@@ -80,13 +80,22 @@ outlier sessions and are RETRACTED (see Superseded below).
    at typical clock ~1500 is the gap Tensile closes). Concrete-shape lifecycle (concrete-KV 1.24x) shipped.
    Attention-compute lifecycle: no Tensile primitive exists (would be the next external/codegen target).
 
-## Honest unresolved / missing measurement
-- **A reproducible/controllable WMMA clock.** profile_peak did NOT raise this session's WMMA past 1515; the prior
-  2675 sessions can't be reproduced on demand. So I cannot DEFINITIVELY pin whether the "representative" user sees
-  WMMA at ~1500 (Tensile 1.76x) or ~2675 (Tensile 1.0x). The WEIGHT of evidence (4 measurements at ~1500) favors
-  the 1.76x regime, but the exact clock-determinant of WMMA's volatility is the missing measurement. This is the
-  ONLY thing standing between "Tensile is a clear 1.76x prefill win" and certainty.
-- **Do NOT declare prefill exhausted.** The Tensile 1.76x is reproduced; the matmul IS the lever at typical clock.
+## Honest unresolved / missing measurement  →  ✅ FULLY RESOLVED 2026-06-19 — THIS DOC WAS RIGHT ALL ALONG
+- **This doc's 1.76–1.83× Tensile win is CORRECT and canonical.** `docs/prefill-occupancy-lever-result-20260619.md`
+  (P0 kernel-identity gate, probe `extra/qk_prefill_kernel_identity.py`) traced the contradictory `0.997×` to a
+  **flag-leak BUG** in `qk_tensile_ab_measure.py`: `TinyJit` captures on the 2nd call, and the harness left
+  `PREFILL_TENSILE_GEMM=True` during the "OFF"/WMMA jit's capture → "OFF" silently routed Tensile (3 `tensile_*`
+  kernels in its graph). So `0.997×` was Tensile-vs-Tensile, not WMMA-vs-Tensile.
+- **The intervening "bimodal / boost-lottery / not-clock-its-occupancy" detour (`prefill-boost-resolution-result`,
+  `prefill-clock-dpm-authority-result`) is RETRACTED — all the same bug.** Every "fast ~2674 WMMA" was leaked-Tensile;
+  clean WMMA (flag held False through capture) is **consistently ~1433 (~47% llama), no lottery** (fresh 1437/1434/
+  1433); Tensile is consistently ~2673 (~87% llama), byte-identical (rel_err 0). The `pp_dpm_sclk`-nominal "idle-gap"
+  story was a separate broken-sampler artifact; with the real `--showgpuclocks`, stuck WMMA runs at full clock 2333,
+  32/32 busy — it was just the genuinely slower WMMA kernel (47%), not a boost state.
+- **Prefill is settled:** dependency-free WMMA ~47% llama (POWN ~42 TFLOPS codegen wall) + shipped concrete-KV 1.24×;
+  +Tensile (vendored `.co` dependency) ~87% llama, byte-identical, a REAL 1.84× win. The decision is purely the
+  dependency-policy call. The matmul/Tensile **IS** the e2e lever (this doc was right); there is no occupancy/boost
+  lever.
 
 ## Superseded claims (explicit)
 - "matmul is a red herring / not the e2e lever" (prefill-matmul-RECONCILED) — SUPERSEDED: true only at high WMMA
