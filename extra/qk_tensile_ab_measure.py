@@ -36,12 +36,17 @@ def main():
     try: j(chunk, 0, temp).realize(); Device[Device.DEFAULT].synchronize()
     finally: pr._WARMSTART_OPTS = saved
 
-  # TinyJit traces on FIRST CALL -> set the flag, build, and trace each jit before changing the flag.
+  # TinyJit CAPTURES on the 2ND call (1st only traces). The capture re-runs model.forward, so the
+  # PREFILL_TENSILE_GEMM flag must still be correct on that 2nd call -> run each jit TWICE (trace + capture)
+  # BEFORE changing the flag, else joff('OFF') captures with the flag left True and silently routes Tensile
+  # (the flag-leak bug that produced the bogus '0.997x / no-win' -- both arms were Tensile).
   TI.ROUTE_COUNT.clear()
-  joff = build(False); run_once(joff)                    # traces with flag OFF
+  joff = build(False); run_once(joff); run_once(joff)    # trace + CAPTURE with flag OFF
   rc_off = dict(TI.ROUTE_COUNT); TI.ROUTE_COUNT.clear()
-  jon = build(True); run_once(jon)                       # traces with flag ON
+  jon = build(True); run_once(jon); run_once(jon)        # trace + CAPTURE with flag ON
   rc_on = dict(TI.ROUTE_COUNT)
+  assert any('tensile' in u.arg.name for u in jon.captured.linear.toposort() if u.op.name=='PROGRAM'), "ON jit didn't capture Tensile"
+  assert not any('tensile' in u.arg.name for u in joff.captured.linear.toposort() if u.op.name=='PROGRAM'), "OFF jit leaked Tensile (flag bug)"
   assert not rc_off, f"OFF jit unexpectedly routed: {rc_off}"
   # correctness: compare OFF vs ON output logits
   import numpy as np
