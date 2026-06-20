@@ -14,9 +14,21 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
 # via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
 PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
-# Research-only (default off): route eligible PREFILL_V2 fp16 matmuls through the dependency-free graph-capturable
-# RDNA3 GEMM. This is the in-model transfer gate for the isolated GEMM win; fallback is the normal PREFILL_V2 matmul.
-PREFILL_GRAPH_GEMM = bool(getenv("PREFILL_GRAPH_GEMM", 0))
+# Restricted default-ON (within PREFILL_V2): route eligible fp16 prefill matmuls through the dependency-free
+# graph-capturable RDNA3 GEMM. Passed all 4 default-on readiness gates (synced 1.61x, 0/256 greedy mismatches,
+# 11/11 fallback, 5/5 OOM; docs/prefill-graph-gemm-default-on-readiness-result-20260620.md). Default-on is
+# GUARDED to gfx1100 (the validated arch), decided ONCE HERE at import -- NOT in the route, because Device[...]
+# access is disallowed during JIT capture. Non-gfx1100/other-device -> default off. Unsupported shapes (T!=512,
+# non-tile-divisible, bias, ineligible role) silently fall back to the normal PREFILL_V2 matmul. Only active when
+# PREFILL_V2 is on. Set PREFILL_GRAPH_GEMM=0/1 to override. Absolute-parity drift (max_abs_dNLL 0.0176) accepted
+# report-only (greedy byte-identical; harmful dNLL <= 0.0094).
+def _prefill_graph_gemm_default() -> int:
+  if "PREFILL_GRAPH_GEMM" in os.environ: return getenv("PREFILL_GRAPH_GEMM", 0)   # explicit user override
+  try:                                                                            # restricted default-on: gfx1100 only
+    if Device.DEFAULT != "AMD": return 0
+    return 1 if "gfx1100" in str(getattr(Device["AMD"], "arch", "")) else 0
+  except Exception: return 0
+PREFILL_GRAPH_GEMM = bool(_prefill_graph_gemm_default())
 # Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
 # concrete -> the attention's reduce tiles/TC fires (symbolic KV blocks it). ~1.24x e2e, byte-identical. Cost: a
 # separate concrete prefill jit per distinct start_pos (0,512,...) vs one symbolic jit. See

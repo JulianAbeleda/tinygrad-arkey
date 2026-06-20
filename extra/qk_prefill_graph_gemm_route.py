@@ -24,6 +24,10 @@ def _kernel(out_f: int, in_f: int):
 
 
 def route_pf16_graph_gemm(lin, x: Tensor) -> Tensor | None:
+  # NOTE: the gfx1100 arch restriction for default-on lives in model.PREFILL_GRAPH_GEMM (computed once at import);
+  # it is NOT checked here because Device[...] access is disallowed during JIT capture (ALLOW_DEVICE_USAGE). The
+  # T==512 / tile-divisible / bias / role guards below restrict to the validated dense prefill shapes; everything
+  # else silently falls back to the normal PREFILL_V2 matmul.
   roles = str(getenv("PREFILL_GRAPH_GEMM_ROLES", ""))
   if roles:
     role = getattr(lin, "_prefill_graph_role", None)
