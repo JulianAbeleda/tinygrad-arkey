@@ -12,12 +12,175 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   "4770/1.76x" is REAL; the "0.997x no-advantage" runs were a high-WMMA-clock outlier — tinygrad WMMA prefill is
   clock-volatile 1449-2675, Tensile is clock-stable ~2640). Supersedes prefill-matmul-RECONCILED / tensile-land /
   transpose-free "Tensile-no-advantage". Artifact: `artifacts/prefill-reconciliation-matrix-20260619.json`.
-- **`prefill-clock-dpm-authority-scope-20260619.md`** — SCOPE for establishing telemetry-verified clock lanes
-  (the prefill numbers above are clock-state-dependent). Grounded P0 inventory: amd-smi absent; rocm-smi+sysfs;
-  determinism via `rocm-smi --setperfdeterminism`; DPM sclk{500,~1498,2304}/mclk{96,456,772,1249}; no OverDrive
-  ranges. Driver `extra/qk_prefill_clock_dpm_authority.py`; artifacts `bench/qk-prefill-clock-dpm-authority/`.
-  "Done" = a lane telemetry-proven to HOLD for both WMMA+Tensile, OR proof the card can't be pinned -> all prefill
-  claims become telemetry-binned by measured sclk.
+- **`prefill-occupancy-lever-result-20260619.md`** — ⭐⭐CANONICAL prefill verdict — RESOLVES THE WHOLE ARC. The P0
+  kernel-identity gate (`extra/qk_prefill_kernel_identity.py`) found the "WMMA bimodality" was a **flag-leak BUG** in
+  `qk_tensile_ab_measure.py`: `TinyJit` captures on the 2nd call, and the harness left `PREFILL_TENSILE_GEMM=True`
+  (from `build(True)`) during `joff`'s capture → the "OFF"/WMMA arm silently routed **Tensile** (3 `tensile_*`
+  kernels found in its graph). **TRUTH: WMMA prefill = ~1433 (~47% llama) CONSISTENT (no lottery); Tensile = ~2673
+  (~87% llama) CONSISTENT, byte-identical (rel_err 0) = a REAL 1.84× win.** The original reconciliation (1.83×) was
+  right; the `0.997× no-win` and every "fast 2674 WMMA" were leaked-Tensile. **Prefill decision (clean): accept the
+  vendored rocBLAS Tensile `.co` dependency → 87% llama byte-identical, OR rest dependency-free at WMMA ~47% (POWN
+  ~42 TFLOPS codegen wall) + shipped concrete-KV 1.24×.** No occupancy/clock/boost lever exists or is needed. Fixed
+  the harness; production unaffected (env flag set once, never toggled).
+- **`prefill-primitive-pmc-result-20260619.md`** — ⭐WHY Tensile prefill is faster, DISASM + PMC MEASURED. Both paths
+  use RDNA3 WMMA (corrects the old "Tensile = FMA-only, no WMMA" claim: the in-model gateup kernel
+  `MT128x128x16_MI16x16x16` = 80 `v_wmma` + 256 `v_fma_mix`). Same gateup GEMM, measured per-primitive: LDS staging →
+  WMMA reads DRAM **6.6× more** (`GL2C_MC_RDREQ` 29.8M vs 4.5M; WMMA LDS=0 vs Tensile 24.5KB); stalls → WMMA **6.5×
+  more** `SQ_WAIT_ANY` (Tensile prefetch-overlaps); occupancy 1 vs 32 waves/wg; **VALU overhead ~EQUAL (NOT the
+  cause)**. Verdict: the gap is **memory dataflow** (LDS staging + the stalls it removes), not codegen-VALU or the
+  matrix op. PMC captures the vendored Tensile kernel ✅; no WMMA-busy counter (TFLOPS-only). Driver
+  `extra/qk_prefill_primitive_pmc.py`; scope `prefill-primitive-pmc-scope-20260619.md`.
+- **⚠ RETRACTED as the-same-bug** (kept for provenance/methodology only — NOT current state):
+  `prefill-boost-resolution-{scope,result}-20260619.md` ("bimodal/boost/occupancy lottery"),
+  `prefill-clock-dpm-authority-{scope,result}-20260619.md` ("clock authority / not-clock-its-occupancy"),
+  `prefill-occupancy-lever-scope-20260619.md` (the scope whose premise P0 invalidated). All three chased artifacts of
+  the `ab_measure` flag-leak. Methodology bankable: a TinyJit A/B toggling a routing global must capture each jit
+  before changing it + assert on the captured graph's kernels; real GFXCLK via separate-process `--showgpuclocks`.
+- **`decode-native-tooling-readiness-scope-20260619.md`** — SCOPE for the missing decode-native tooling gate before
+  scheduler/renderer implementation. Current state: ATT/HCQ visibility exists and timing policy exists, but no
+  timing-grade `>=30us` feature attribution exists for native q8/MMVQ. Defines the readiness artifacts,
+  authority labels, q8 `ffn_gate/up` role-join gap, bucket-classification requirements, and exact start criteria for
+  N2/native backend work.
+- **`decode-native-tooling-readiness-result-20260619.md`** — DTR-0 executed. Adds
+  `extra/qk_decode_native_tooling_readiness.py` and `bench/qk-decode-native-tooling/*`. Verdict:
+  `TOOLING_NOT_READY`: N2 candidate count `0`, max attributed movement `14.087us`, and missing rows are q8
+  `ffn_gate/up` role-joined body evidence, `>=30us` timing-grade feature attribution, counter/timing feature join,
+  and bucket classification for q8 `ffn_gate/up`.
+- **`decode-native-tooling-completion-scope-20260619.md`** — execution scope for the remaining tooling phases
+  DTR-1..DTR-4. Immediate next step: extend `extra/qk_att_inmodel_role_join.py` to capture `ffn_gate`, `ffn_up`, and
+  `ffn_gateup_pair`; then build a feature joiner and ablation matrix before any scheduler/renderer implementation.
+- **`decode-native-tooling-completion-result-20260619.md`** — DTR-1..DTR-3 executed. `ffn_gate` and `ffn_up`
+  now have in-model ATT body attribution (`q4k_gemv_partial_12288_4096_1`, ~47k body packets each), clearing the
+  missing role-visibility row. DTR-2 feature join and DTR-3 ablation matrix still find `0` N2 candidates; max
+  timing-grade movement remains `14.087us`. Verdict: `TOOLING_NOT_READY_FOR_N2`; remaining blocker is
+  counter/timing-grade scheduler-resource attribution for the `73.109us` q8 native-to-oracle gap.
+- **`decode-native-tooling-pass-scope-20260619.md`** — exhaustive scope for making the tooling verdict pass. Defines
+  every acceptable route to `TOOLING_READY_FOR_N2`, `ROADMAP_ONLY`, or `BROAD_BACKEND_ACCEPTED`: PMC blob decoding,
+  SQTT/timeline attribution or formal decoder blockage, same-binary timing joins, scheduler/resource ablation rows,
+  W==D projection, and exact N2 start conditions. Current best guess is `ROADMAP_ONLY`, but the P1-P4 tooling rows must
+  prove it.
+- **`decode-native-tooling-pass-result-20260619.md`** — pass list completed. Adds the P1-P5 tooling scripts/artifacts
+  and updates readiness to final `ROADMAP_ONLY`: q8 `ffn_gate/up` role evidence exists, no N2 candidate exists, max
+  isolated movement remains `14.087us`, PMC/SQTT are blocked as counter/timeline attribution from current artifacts,
+  and no native W==D projection is justified. Native q8 scheduler/renderer is roadmap/broad-backend work only.
+- **`amd-broad-backend-roadmap-scope-20260619.md`** — roadmap scope for the only remaining native AMD path after the
+  decode tooling pass: explicit `BROAD_BACKEND_ACCEPTED` or stay `ROADMAP_ONLY`. Defines the reusable backend
+  capabilities, tracks, phases, gates, artifacts, and stop conditions for a scheduler/resource project spanning q8
+  decode and prefill WMMA/Tensile, while disallowing a q8-only native patch.
+- **`amd-broad-backend-roadmap-result-20260619.md`** — BB-0/BB-1 executed after accepting the broad backend roadmap.
+  Adds `extra/qk_amd_broad_backend_roadmap.py`, `extra/qk_amd_schedule_metadata_probe.py`,
+  `extra/qk_amd_wait_resource_probe.py`, `extra/qk_amd_software_pipeline_probe.py`,
+  `extra/qk_amd_bb5a_renderer_allocator_scope.py`, `extra/qk_amd_bb5a1_pipeline_ir_scope.py`,
+  `extra/qk_amd_bb5a1_pipeline_ir_probe.py`, `extra/qk_amd_bb5a_full_plan.py`,
+  `extra/qk_amd_bb5a_execute_plan.py`, `extra/qk_amd_bb5a2_solution_scope.py`,
+  `extra/qk_amd_bb5a2_lds_stage_plan_probe.py`, `extra/qk_amd_bb5a2_lowering_hook_probe.py`,
+  `extra/qk_amd_bb5a2_render_isa_evidence_probe.py`, `extra/qk_amd_bb5a2_real_lowering_integration_probe.py`,
+  `extra/qk_amd_bb5a2_pipelined_dataflow_probe.py`, `extra/qk_amd_bb5a3_wait_scheduler_integration_probe.py`,
+  `extra/qk_amd_bb5a4_allocator_resource_probe.py`, `extra/qk_amd_bb5a5_resource_policy_probe.py`,
+  `extra/qk_amd_bb5a6_correctness_probe.py`, `extra/qk_amd_bb5a7_performance_gate_probe.py`,
+  `extra/qk_amd_bb5a8_tensile_mapping_probe.py`, `extra/qk_amd_bb5a8_authority_kernel_capture_probe.py`,
+  `extra/qk_amd_bb5a9_causal_delta_package.py`,
+  `tinygrad/renderer/amd/schedule.py`, `tinygrad/renderer/amd/elf.py`, and
+  `bench/amd-broad-backend-roadmap/*`. Verdict:
+  `BROAD_BACKEND_ACCEPTED_BB5A9_CAUSAL_DELTA_DONE_PARALLEL_IMPLEMENTATION_READY_Q8_BLOCKED`:
+  authority/oracle suite, schedule metadata IR, semantic wait-scheduler probe, and resource accounting probe pass;
+  BB-5 formally blocks because software-pipelined prefill still needs real renderer/allocator integration; BB-5a now
+  scopes that missing layer; BB-5a.1 passes as a read-only two-stage pipeline IR surface; the full BB-5a plan was
+  executed through the roadblock sequence: BB-5a.2 double-buffered LDS lowering passes with gated source/ELF evidence,
+  BB-5a.3 wait scheduler integration passes, BB-5a.4 resource control passes, BB-5a.5 policy passes, and BB-5a.6
+  correctness passes. BB-5a.7 blocks because pure tinygrad authority prefill is `42.0 TFLOPS`, below the `60.0 TFLOPS`
+  gate. BB-5a.8 completes the static Tensile-to-tinygrad mapping and captures the timing-equivalent tinygrad authority
+  kernel (`43.026 TFLOPS`, `64` `v_wmma`, `0` LDS bytes, `0` `ds_load_b128`) as source/ELF/disassembly/resource
+  evidence. BB-5a.9 proves the causal deltas and makes LDS layout, K-loop scheduling, and resource policy parallel
+  implementation tracks. Q8 transfer remains disallowed.
+- **`amd-broad-backend-bb5a9-causal-delta-package-20260619.md`** — BB-5a.9 handoff. Root cause now proven at
+  same-kernel level: captured tinygrad authority uses WMMA but no LDS staging, while Tensile uses WMMA plus
+  LDS-staged wide reads/stores, explicit prefetch, and wait/barrier scheduling. Defines parallel tracks A-F and the
+  BB-5a.10 implementation backlog.
+- **`amd-lds-research-consolidation-20260619.md`** — LDS/WMMA consolidation checkpoint before BB-5a.10. Reconciles
+  old LDS refutations with the current Tensile-class renderer target. Closed: plain LDS tiling, multi-wave hand-LDS
+  tuning, waves/tile/BLOCK_K/no-LDS sweeps, and manual UOp prefetch. Open only: renderer-level staged LDS layout,
+  `ds_load_b128`, software-pipelined K-loop, semantic waits/barriers, and resource policy.
+- **`amd-broad-backend-bb5a10-tensile-layout-audit-20260619.md`** — BB-5a.10 focused Tensile layout audit. Isolates
+  the selected rocBLAS MT128 authority function from `/tmp/td_all.txt` and proves candidate-spec readiness, not
+  bit-exact Tensile layout readiness. Correction: this selected function uses `ds_store_b64` for LDS writes and
+  `ds_load_b128` for WMMA operand reads; require selected-kernel-compatible LDS stores, not `ds_store_b128`, for the
+  first pure-tinygrad candidate.
+- **`amd-broad-backend-bb5a10-implementation-plan-20260619.md`** — BB-5a.10 full phase list. P0 is complete; P1-P5
+  run as one coordinated implementation batch over LDS layout, renderer lowering, K-loop staging, waits/barriers, and
+  resource policy. P6/P7/P8 are structural/correctness/performance gates. P9 keeps q8 transfer blocked until P8 passes.
+- **`amd-broad-backend-bb5a10-p1-layout-spec-20260619.md`** — BB-5a.10 P1 result. Derives the first non-bitexact
+  selected-layout spec from the audit: two logical LDS regions, selected-kernel-compatible stores (`ds_store_b64`
+  accepted), `ds_load_b128` reads, WMMA handoff requirement, dependency metadata, and spill rejection. Next is P2-P5.
+- **`amd-broad-backend-bb5a10-p2-p6-structural-result-20260619.md`** — BB-5a.10 P2-P6 result. Structural ISA/ELF
+  candidate passes renderer LDS store/read, K-loop stage order, wait/barrier schedule, resource policy, and combined
+  structural gate. This is not correctness or performance yet; P7 executable correctness is now the frontier.
+- **`amd-broad-backend-bb5a10-p7-correctness-scope-20260619.md`** — BB-5a.10 P7 scope. Splits executable correctness
+  into P7a hardware LDS-WMMA smoke, P7b executable wrapper, P7c small numeric correctness, P7d authority-shape
+  correctness, and P7e P8 handoff. Key blocker: P6 has no output store and is not a complete K-loop matmul yet.
+- **`amd-broad-backend-bb5a10-p7a-p7c-correctness-result-20260619.md`** — BB-5a.10 P7a-P7c result. Known-good
+  LDS-WMMA smoke passes, the structural candidate has an executable wrapper with output, and a selected-compatible
+  `ds_store_b64 -> ds_load_b128 -> WMMA` small tile is numerically correct (`RMSE 0.000209`). Next is P7d.
+- **`amd-broad-backend-bb5a10-p7d-authority-correctness-result-20260619.md`** — BB-5a.10 P7d result. The selected-compatible
+  `ds_store_b64 -> ds_load_b128 -> WMMA` path passes a full authority-K subset (`16x16x4096`, RMSE `0.0001915`).
+  Next is P7e P8 handoff packaging; P8 timing remains blocked until the handoff exists.
+- **`amd-broad-backend-bb5a10-p7e-p8-handoff-result-20260619.md`** — BB-5a.10 P7e result. Packages the P7d
+  correctness/source/resource metadata and exact P8 command. No performance claim.
+- **`amd-broad-backend-bb5a10-p8-blocked-result-20260619.md`** — BB-5a.10 P8 result. P8 correctly blocks because
+  full authority `M=512,N=12288,K=4096` launch mapping is not implemented yet; do not time the single-tile smoke.
+- **`amd-broad-backend-bb5a10-p8-tta-scope-20260619.md`** — BB-5a.10 P8 TTA scope. Defines tile-to-authority
+  launch mapping: TTA1 `16x16` full-grid correctness bridge, TTA2 sampled authority correctness, TTA3 `128x128`
+  macro-tile performance candidate, TTA4 P8 timing gate. Next is TTA1.
+- **`amd-broad-backend-bb5a10-p8-tta-completion-scope-20260620.md`** — BB-5a.10 P8 TTA completion scope.
+  Freezes the full address formulas, artifact list, blocked continuations, and P8/P9 ordering through completion.
+  Next remains TTA1 implementation.
+- **`amd-broad-backend-bb5a10-p8-tta1-full-grid-correctness-result-20260620.md`** — BB-5a.10 P8 TTA1 result.
+  Full authority grid `(768,32,1)` over `16x16x4096` sampled tiles passes (`max RMSE 0.0002276`). This is a
+  correctness bridge only; next is TTA2 sampled authority correctness.
+- **`amd-broad-backend-bb5a10-p8-tta2-authority-sample-correctness-result-20260620.md`** — BB-5a.10 P8 TTA2
+  result. Full authority launch sampled first/middle/last row and column tiles passes (`max RMSE 0.0002276`);
+  next is TTA3 `128x128` macro-tile candidate.
+- **`amd-broad-backend-bb5a10-p8-tta3-macro-candidate-result-20260620.md`** — BB-5a.10 P8 TTA3 result.
+  The `128x128` macro helper has the right grid `(96,4,1)`, WMMA, `ds_load_b128`, and scratch/private `0`,
+  but blocks because it uses `ds_store_b128` instead of selected-compatible `ds_store_b64`. Next is TTA3a.
+- **`amd-broad-backend-bb5a10-p8-tta3a-ds64-macro-conversion-result-20260620.md`** — BB-5a.10 P8 TTA3a
+  result. Converts the `128x128` macro helper from `4` `ds_store_b128` stores to `8` selected-compatible
+  `ds_store_b64` stores, repatches the K-loop branch, and TTA3 then passes. Next is P8 timing.
+- **`amd-broad-backend-bb5a10-p8-performance-result-20260620.md`** — BB-5a.10 P8 result. The converted
+  `128x128` DS64 macro candidate is sampled-correct and scratch/private free, but reaches only `18.38 TFLOPS`
+  best versus the `60 TFLOPS` gate. P9/q8 transfer remains blocked.
+- **`amd-broad-backend-bb5a10-p8-bottleneck-classification-result-20260620.md`** — BB-5a.10 P8 bottleneck
+  classification. Original B128 macro (`21.47 TFLOPS`) and converted DS64 macro (`20.93 TFLOPS`) are both far
+  below gate; DS64 is not the root cause. The bottleneck is the LDS-staged family itself. Next is global-direct /
+  IC-served WMMA candidate decision; q8 remains blocked.
+- **`amd-broad-backend-bb5a10-p8-global-direct-candidate-decision-result-20260620.md`** — BB-5a.10 P8 global-direct
+  decision. Existing no-LDS candidates are correct but best is only `17.88 TFLOPS`; do not reopen q8. Next is
+  P8 timing-authority reconciliation against the prior `~43 TFLOPS` global-direct artifact.
+- **`amd-broad-backend-bb5a10-p8-timing-authority-reconciliation-result-20260620.md`** — BB-5a.10 P8 timing-authority
+  reconciliation. The prior `43.026 TFLOPS` captured authority kernel remains valid for that kernel only; it does
+  not validate current P8 hand-ASM candidates because kernel identity and timing harness differ. Current P8 authority
+  remains the synchronized custom-kernel harness. Next is a same-harness authority timing bridge; q8 remains blocked.
+- **`tensile-primitive-transfer-matrix-scope-20260620.md`** — PTM-0 scope for decomposing Tensile into primitive
+  transfer rows instead of looping on "Tensile" as one object. Uses official Tensile docs plus local artifacts to
+  split problem form, tile/WMMA, vector reads, LDS, K-loop prefetch, waits, resource policy, library logic, and timing
+  authority. Standalone LDS is closed; next is the same-harness authority bridge.
+- **`tensile-roadmap-scope-20260620.md`** — full Tensile roadmap built on PTM-0. Splits the work into three tracks
+  (Explanation: why the selected `MT128x128x16` kernel works + two cross-file corrections — the 43 TFLOPS authority
+  is tinygrad global-direct NOT Tensile-LDS, and per-body v_wmma is 80 not 13810; Prefill Transfer: native vs
+  external `.co`; Decode Applicability: q8 gates) and phases PTM-1..PTM-5. Encodes the stop rules (no standalone LDS,
+  no mixed-harness TFLOPS, name the row). Artifact `bench/qk-tensile-primitive-transfer/roadmap.json`. Next is PTM-1
+  same-harness authority bridge.
+- **`llama-relative-promotion-reconciliation-20260620.md`** — promotion reconciliation across prefill, decode, and
+  attention relative to llama. Keeps decode defaults and concrete-KV prefill banked, marks external Tensile prefill as
+  the only immediate policy-ready large promotion, keeps q8 artifact as research-only, and blocks native q8/Tensile
+  transfer until their explicit gates pass.
+- **`q8-ffn-artifact-promotion-scope-20260620.md`** — promotion scope for taking the q8 FFN handwritten/artifact
+  route from default-off research to default candidate. Defines Q8P-1..Q8P-6: quality breadth, default safety,
+  coverage, W==D performance, artifact ownership, and lossy model-policy decision. First gate is multi-window quality.
+- **`q8-ffn-artifact-promotion-result-20260620.md`** — Q8P-1..Q8P-6 executed. The q8 FFN route passes multi-window
+  quality (`max dNLL 0.002225`), default-safety, coverage, W==D performance (`1.0507x` min), artifact ownership, and
+  model-policy gates. Promoted from research-only evidence to hardened opt-in behind `Q8_FFN_HANDWRITTEN=1`; default
+  remains off.
 
 - **`amd-decode-banked-20260616.md`** — THE entry point. Final decode state (~64 tok/s / 63% llama),
   the full lever map (shipped / tapped / refuted / gated), the machine-search system, resume pointers.

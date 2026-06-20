@@ -1,5 +1,12 @@
 # RESULT — The 4 prefill primitives, MEASURED via PMC (gfx1100, 2026-06-19)
 
+> **⚠ CAVEAT (2026-06-20):** the "tinygrad WMMA" side of this scoreboard (12.5M cycles / 29.8M DRAM / "3.5× / 6.6×")
+> rests on an UNVALIDATED baseline — tinygrad's absolute gateup throughput does not reconcile across methods (6.5–46.5
+> TFLOPS; see `prefill-tensile-DEFINITIVE-source-of-truth` validation caveat). The DIRECTIONAL finding (tinygrad does
+> more DRAM traffic, is memory-stall-bound not VALU-bound; "dense issue" refuted) holds because those are ratios from
+> the same run; the precise multipliers and the "scheduling-quality" conclusion are NOT validated. BEAM (never on in
+> prod) emits a correct LDS-WMMA at 46.5 TFLOPS → tinygrad is NOT missing the LDS primitive.
+
 Executes `prefill-primitive-pmc-scope-20260619.md`. Driver `extra/qk_prefill_primitive_pmc.py` (isolated gateup GEMM
 out=12288/in=4096/T=512, ~51.5 GFLOP, identical work both sides), native tinygrad PMC (`PMC=1 PROFILE=1`, counters via
 `PMC_COUNTERS`). Artifacts `bench/qk-prefill-boost/primitive_pmc_pass_*.json`.
