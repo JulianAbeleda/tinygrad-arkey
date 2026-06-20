@@ -1,6 +1,6 @@
 {
-  "commit": "5ae877964",
-  "generated_at": "2026-06-19T07:31:19+00:00",
+  "commit": "bcac60955-dirty",
+  "generated_at": "2026-06-19T17:55:13+00:00",
   "latest": {
     "attention_kv:prefill:flash_prefill_reuse_free": {
       "id": "attention_kv:prefill:flash_prefill_reuse_free:c12a3025f829a9da",
