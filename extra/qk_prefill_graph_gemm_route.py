@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from tinygrad import Tensor, dtypes
+from tinygrad import Tensor, dtypes, getenv
 from tinygrad.device import Device
 from tinygrad.engine.realize import Estimates
 from tinygrad.helpers import colored
@@ -24,6 +24,10 @@ def _kernel(out_f: int, in_f: int):
 
 
 def route_pf16_graph_gemm(lin, x: Tensor) -> Tensor | None:
+  roles = str(getenv("PREFILL_GRAPH_GEMM_ROLES", ""))
+  if roles:
+    role = getattr(lin, "_prefill_graph_role", None)
+    if role is None or role not in {r.strip() for r in roles.split(",") if r.strip()}: return None
   w = getattr(lin, "_pf16_w", None)
   b = getattr(lin, "bias", None)
   if w is None or b is not None or x.ndim < 2: return None
