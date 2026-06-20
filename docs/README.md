@@ -12,6 +12,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   "4770/1.76x" is REAL; the "0.997x no-advantage" runs were a high-WMMA-clock outlier — tinygrad WMMA prefill is
   clock-volatile 1449-2675, Tensile is clock-stable ~2640). Supersedes prefill-matmul-RECONCILED / tensile-land /
   transpose-free "Tensile-no-advantage". Artifact: `artifacts/prefill-reconciliation-matrix-20260619.json`.
+- **`prefill-clock-dpm-authority-scope-20260619.md`** — SCOPE for establishing telemetry-verified clock lanes
+  (the prefill numbers above are clock-state-dependent). Grounded P0 inventory: amd-smi absent; rocm-smi+sysfs;
+  determinism via `rocm-smi --setperfdeterminism`; DPM sclk{500,~1498,2304}/mclk{96,456,772,1249}; no OverDrive
+  ranges. Driver `extra/qk_prefill_clock_dpm_authority.py`; artifacts `bench/qk-prefill-clock-dpm-authority/`.
+  "Done" = a lane telemetry-proven to HOLD for both WMMA+Tensile, OR proof the card can't be pinned -> all prefill
+  claims become telemetry-binned by measured sclk.
 
 - **`amd-decode-banked-20260616.md`** — THE entry point. Final decode state (~64 tok/s / 63% llama),
   the full lever map (shipped / tapped / refuted / gated), the machine-search system, resume pointers.
