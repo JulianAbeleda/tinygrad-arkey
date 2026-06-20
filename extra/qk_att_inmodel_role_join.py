@@ -24,9 +24,12 @@ class ProgramCapture:
     role = None
     if "q4k_coop_partial_4096_4096" in name: role = "attn_q/o_native_q4k_coop"
     elif "q4k_gemv" in name and "4096_4096" in name: role = "attn_q/o_native_q4k_other"
+    elif "q4k_gemv" in name and "12288_4096" in name: role = "ffn_gate/up_native_q4k_gemv"
+    elif "q4k_coop" in name and "12288_4096" in name: role = "ffn_gate/up_native_q4k_coop"
     elif "q6k_coop_partial_4096_12288" in name: role = "ffn_down_native_q6k_coop"
     elif "q6k_coop_partial_151936_4096" in name: role = "lm_head_native_q6k_coop"
     elif "q6k_gemv" in name: role = "q6k_native_other"
+    elif "q8" in name.lower() and ("gate" in name.lower() or "ffn" in name.lower()): role = "ffn_gate/up_q8_route"
     elif "sum" in name.lower() or name.startswith("r_"): role = "role_reduce_or_glue"
     self.rows.append({
       "program_name": name,
@@ -55,6 +58,8 @@ class ProgramCapture:
       "program_call_count": len(self.rows),
       "variants": variants,
       "q4k_native_coop_present": any(v.get("role") == "attn_q/o_native_q4k_coop" for v in variants),
+      "ffn_gateup_native_present": any(str(v.get("role") or "").startswith("ffn_gate/up_native") for v in variants),
+      "q8_gateup_present": any(v.get("role") == "ffn_gate/up_q8_route" for v in variants),
       "q6k_native_coop_present": any(v.get("role") in ("ffn_down_native_q6k_coop", "lm_head_native_q6k_coop") for v in variants),
       "fallback_dense_suspected": not any(("q4k" in v["program_name"] or "q6k" in v["program_name"]) for v in variants),
     }
@@ -137,6 +142,43 @@ def capture_ffn_down_activation(model: Any, tok: Any):
   return block, original, cap.last_input
 
 
+class PairLinear:
+  def __init__(self, left, right):
+    self.left, self.right = left, right
+    self.name = "ffn_gateup_pair"
+    self.decode_enabled = bool(getattr(left, "decode_enabled", False)) and bool(getattr(right, "decode_enabled", False))
+    self.out_features = [getattr(left, "out_features", None), getattr(right, "out_features", None)]
+    self.in_features = getattr(left, "in_features", getattr(right, "in_features", None))
+    self.parts = [getattr(left, "parts", None), getattr(right, "parts", None)]
+    self.kernel_mode = "pair"
+
+  def __call__(self, x):
+    return self.left(x).realize(), self.right(x).realize()
+
+
+def capture_ffn_norm_activation(model: Any, tok: Any):
+  block = model.blk[0]
+  x = first_token_hidden(model, tok)
+  block._init_state(x)
+  h = (x + block._attention(block.attn_norm(x), 0)).realize()
+  return block, block.ffn_norm(h).realize()
+
+
+def capture_ffn_gate_activation(model: Any, tok: Any):
+  block, xh = capture_ffn_norm_activation(model, tok)
+  return block, block.ffn_gate, xh
+
+
+def capture_ffn_up_activation(model: Any, tok: Any):
+  block, xh = capture_ffn_norm_activation(model, tok)
+  return block, block.ffn_up, xh
+
+
+def capture_ffn_gateup_pair_activation(model: Any, tok: Any):
+  block, xh = capture_ffn_norm_activation(model, tok)
+  return block, PairLinear(block.ffn_gate, block.ffn_up), xh
+
+
 def capture_lm_head_activation(model: Any, tok: Any):
   x = first_token_hidden(model, tok)
   for block in model.blk:
@@ -172,6 +214,9 @@ def load_surface_reference() -> dict[str, Any]:
 
 def role_capture(model: Any, tok: Any, role: str):
   if role == "attn_output": return capture_attn_output_activation(model, tok)
+  if role == "ffn_gate": return capture_ffn_gate_activation(model, tok)
+  if role == "ffn_up": return capture_ffn_up_activation(model, tok)
+  if role == "ffn_gateup_pair": return capture_ffn_gateup_pair_activation(model, tok)
   if role == "ffn_down": return capture_ffn_down_activation(model, tok)
   if role == "lm_head": return capture_lm_head_activation(model, tok)
   raise ValueError(f"unsupported role {role!r}")
@@ -197,6 +242,18 @@ def q6_surface_role(role: str):
   rng = np.random.default_rng(20260619 + (0 if role == "ffn_down" else 1))
   x = Tensor(rng.standard_normal((1, 1, k)).astype(np.float32), dtype=dtypes.float32, device="AMD").contiguous().realize()
   return None, lin, x
+
+
+def realize_output(out: Any):
+  if isinstance(out, tuple): return tuple(x.realize() if hasattr(x, "realize") else x for x in out)
+  if isinstance(out, list): return [x.realize() if hasattr(x, "realize") else x for x in out]
+  return out.realize() if hasattr(out, "realize") else out
+
+
+def output_shape(out: Any):
+  if isinstance(out, tuple): return [list(getattr(x, "shape", ())) for x in out]
+  if isinstance(out, list): return [list(getattr(x, "shape", ())) for x in out]
+  return list(getattr(out, "shape", ()))
 
 
 def run_role(model: Any, tok: Any, export: dict[str, Any], role: str) -> dict[str, Any]:
@@ -234,9 +291,9 @@ def run_role(model: Any, tok: Any, export: dict[str, Any], role: str) -> dict[st
   }
 
   # Warm compile outside the ATT interval.
-  warm = linear(activation).realize()
+  warm = realize_output(linear(activation))
   Device["AMD"].synchronize(timeout=10000)
-  result["activation"]["warm_output_shape"] = list(warm.shape)
+  result["activation"]["warm_output_shape"] = output_shape(warm)
 
   cap = ProgramCapture()
   att = ATTInterval(export)
@@ -244,10 +301,10 @@ def run_role(model: Any, tok: Any, export: dict[str, Any], role: str) -> dict[st
   def role_call() -> dict[str, Any]:
     with capture_hcq_programs(cap):
       t0 = time.perf_counter()
-      out = linear(activation).realize()
+      out = realize_output(linear(activation))
       Device["AMD"].synchronize(timeout=10000)
       wall_ms = (time.perf_counter() - t0) * 1000.0
-    return {"output_shape": list(out.shape), "wall_ms": round(wall_ms, 6)}
+    return {"output_shape": output_shape(out), "wall_ms": round(wall_ms, 6)}
 
   interval = att.trace("blk0_attn_output_inmodel_role", role_call)
   programs = cap.summary()
@@ -255,7 +312,8 @@ def run_role(model: Any, tok: Any, export: dict[str, Any], role: str) -> dict[st
   result["programs"] = programs
   trace_body = int(interval["trace"].get("body_like_packet_count") or 0)
   program_ok = programs["program_call_count"] > 0
-  native_ok = bool(programs["q4k_native_coop_present"] or programs["q6k_native_coop_present"])
+  native_ok = bool(programs["q4k_native_coop_present"] or programs["q6k_native_coop_present"] or
+                   programs.get("ffn_gateup_native_present") or programs.get("q8_gateup_present"))
   result["gates"] = {
     "att_start_stop_sync": "PASS" if interval["start"]["sync_ok"] and interval["stop"]["sync_ok"] else "FAIL",
     "att_body_packets": "PASS" if trace_body > 0 else "FAIL",
