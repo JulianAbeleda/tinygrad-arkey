@@ -401,7 +401,7 @@ def build_gemm_lds(M, N, K):
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
 
-def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0):
+def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0, LEANADDR=0):
   # P2/P3 (A3): parametric LDS-staged multi-wave GEMM. WAVES_M x WAVES_N wave32; each wave does WM x WN WMMA
   # tiles. BK = K-block depth (KT=BK/16 substeps). PAD = LDS row-pad bytes (bank-conflict avoidance). DBUF =
   # double-buffer LDS via unroll-by-2 (prefetch next block while computing current; removes the inner barrier).
@@ -447,7 +447,23 @@ def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PL
   e(v_add_nc_u32_e32(v[3], s[11], v[11])); e(v_mul_lo_u32(v[3], v[3], K*2)); e(v_add_nc_u32_e32(v[3], v[3], v[12]))
   e(v_mul_lo_u32(v[5], v[11], SB)); e(v_add_nc_u32_e32(v[5], v[5], v[12]))
   for i in range(WM*WN*8): e(v_mov_b32_e32(v[ACCb+i], 0))
+  # ---- LEANADDR (Lever A): move per-iter coop-load address arith from VALU -> SALU. Precompute the INVARIANT
+  # per-lane row byte-offsets (one vgpr per cooperative-load row), and advance the K-position by incrementing
+  # SCALAR buffer base pointers (s_add) instead of recomputing vector addresses (v_add) every K-block. ----
+  VRA=SCR+1; VRB=VRA+loadsA; SKA=18; SKB=20         # invariant row vgprs (A then B); scalar k-base sgpr pairs
+  if LEANADDR:
+    assert VRB+loadsB<=256, f"LEANADDR VGPR overflow {VRB+loadsB}"
+    for j in range(loadsA): e(v_mov_b32_e32(v[VRA+j], v[2]) if j==0 else v_add_nc_u32_e32(v[VRA+j], j*RSTRIDE*K*2, v[2]))
+    for j in range(loadsB): e(v_mov_b32_e32(v[VRB+j], v[3]) if j==0 else v_add_nc_u32_e32(v[VRB+j], j*RSTRIDE*K*2, v[3]))
+    e(s_mov_b32(s[SKA], s[4])); e(s_mov_b32(s[SKA+1], s[5])); e(s_mov_b32(s[SKB], s[6])); e(s_mov_b32(s[SKB+1], s[7]))
+  def coop_load_lean(buf):                          # addr=invariant row vgpr, saddr=advancing scalar k-base
+    for j in range(loadsA): e(global_load_b128(vdst=v[CTA+j*4:CTA+j*4+3], addr=v[VRA+j:VRA+j], saddr=s[SKA:SKA+1], offset=0))
+    for j in range(loadsB): e(global_load_b128(vdst=v[CTB+j*4:CTB+j*4+3], addr=v[VRB+j:VRB+j], saddr=s[SKB:SKB+1], offset=0))
+  def adv_kbase():                                  # SALU K-advance (replaces the v2/v3 VALU advance)
+    e(s_add_u32(s[SKA], s[SKA], BK*2)); e(s_addc_u32(s[SKA+1], s[SKA+1], 0))
+    e(s_add_u32(s[SKB], s[SKB], BK*2)); e(s_addc_u32(s[SKB+1], s[SKB+1], 0))
   def coop_load(buf):                              # global -> CT regs (vmcnt drains at caller)
+    if LEANADDR: return coop_load_lean(buf)
     for j in range(loadsA):
       if j==0: ar=2
       else: e(v_add_nc_u32_e32(v[SCR], j*RSTRIDE*K*2, v[2])); ar=SCR
@@ -527,7 +543,8 @@ def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PL
     label('LOOP')
     coop_load(0); e(waitcnt_vm(0)); coop_store(0); e(waitcnt_lgkm(0)); e(s_barrier())
     comp(0); e(s_barrier())
-    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
+    if LEANADDR: adv_kbase()                        # SALU K-advance (no VALU v2/v3 advance)
+    else: e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
     e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], NBLK)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
   else:
     # double-buffer, unroll-by-2: prefetch next block into the OTHER buffer while computing current.
