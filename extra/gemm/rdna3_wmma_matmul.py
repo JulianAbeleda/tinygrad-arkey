@@ -401,7 +401,7 @@ def build_gemm_lds(M, N, K):
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
 
-def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0):
+def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0):
   # P2/P3 (A3): parametric LDS-staged multi-wave GEMM. WAVES_M x WAVES_N wave32; each wave does WM x WN WMMA
   # tiles. BK = K-block depth (KT=BK/16 substeps). PAD = LDS row-pad bytes (bank-conflict avoidance). DBUF =
   # double-buffer LDS via unroll-by-2 (prefetch next block while computing current; removes the inner barrier).
@@ -413,7 +413,9 @@ def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0):
   loadsA=BM//RSTRIDE; loadsB=BN//RSTRIDE; NBLK=K//BK
   SA=BK*2+PAD; SB=BK*2+PAD; LDS_A=SA*BM; BUFSZ=LDS_A+SB*BN; NBUF=2 if DBUF else 1
   FA=10; FB=FA+WM*8; ACCb=FB+WN*8; CTA=ACCb+WM*WN*8; CTB=CTA+loadsA*4; SCR=CTB+loadsB*4
+  FB2=SCR+2                                          # 2nd fragment buffer for full A+B PLR (PLRAB), past everything
   assert SCR+2<=256, f"VGPR overflow {SCR+2}"
+  if PLRAB: assert FB2+WM*8+WN*8<=256, f"PLRAB VGPR overflow {FB2+WM*8+WN*8} (needs smaller tile than {WM}x{WN})"
   assert BUFSZ*NBUF<=65536, f"LDS overflow {BUFSZ*NBUF}"
   I=[]; Br=[]; lbl={}
   def e(i): I.append(i); return i
@@ -497,7 +499,29 @@ def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0):
     ww(FA)                                          # substep0 WMMAs (FA read before lb(1) overwrites FB; safe WAR)
     lb(1); e(waitcnt_lgkm(0))                       # substep1 B + wait (FAp prefetch already done, FB1 now ready)
     ww(FAp)                                         # substep1 WMMAs from the prefetched A
-  comp = compute_plra if PLRA else compute
+  def compute_plrab(buf):                          # FULL A+B PLR: both substep1 operands prefetched (needs 2nd buf FB2)
+    assert KT==2, "PLRAB needs KT==2"
+    bo=buf*BUFSZ; FAp=FB2; FBp=FB2+WM*8             # 2nd fragment buffer (A' then B')
+    def la(dst,kt):
+      for mi in range(WM):
+        o=bo+mi*16*SA+kt*32
+        e(ds_load_b128(vdst=v[dst+mi*8:dst+mi*8+3],   addr=v[6], **dsoff(o)))
+        e(ds_load_b128(vdst=v[dst+mi*8+4:dst+mi*8+7], addr=v[6], **dsoff(o+16)))
+    def lb(dst,kt):
+      for ni in range(WN):
+        o=bo+LDS_A+ni*16*SB+kt*32
+        e(ds_load_b128(vdst=v[dst+ni*8:dst+ni*8+3],   addr=v[7], **dsoff(o)))
+        e(ds_load_b128(vdst=v[dst+ni*8+4:dst+ni*8+7], addr=v[7], **dsoff(o+16)))
+    def ww(As,Bs):
+      for mi in range(WM):
+        for ni in range(WN):
+          ac=ACCb+(mi*WN+ni)*8
+          e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[As+mi*8:As+mi*8+7], src1=v[Bs+ni*8:Bs+ni*8+7], src2=v[ac:ac+7]))
+    la(FA,0); lb(FB,0); e(waitcnt_lgkm(0))         # substep0 A,B
+    la(FAp,1); lb(FBp,1)                            # PREFETCH substep1 A AND B -> overlap substep0 WMMAs
+    ww(FA,FB)                                       # substep0 WMMAs (separate buffers: no WAR on substep1 prefetch)
+    e(waitcnt_lgkm(0)); ww(FAp,FBp)                # substep1 ready (loads hidden) -> WMMAs
+  comp = compute_plrab if PLRAB else compute_plra if PLRA else compute
   if not DBUF:
     e(s_mov_b32(s[16], 0))
     label('LOOP')
