@@ -401,7 +401,7 @@ def build_gemm_lds(M, N, K):
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
 
-def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0, LEANADDR=0):
+def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0, LEANADDR=0, DSHALF=0):
   # P2/P3 (A3): parametric LDS-staged multi-wave GEMM. WAVES_M x WAVES_N wave32; each wave does WM x WN WMMA
   # tiles. BK = K-block depth (KT=BK/16 substeps). PAD = LDS row-pad bytes (bank-conflict avoidance). DBUF =
   # double-buffer LDS via unroll-by-2 (prefetch next block while computing current; removes the inner barrier).
@@ -482,11 +482,11 @@ def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PL
       for mi in range(WM):
         o=bo+mi*16*SA+kt*32
         e(ds_load_b128(vdst=v[FA+mi*8:FA+mi*8+3],   addr=v[6], **dsoff(o)))
-        e(ds_load_b128(vdst=v[FA+mi*8+4:FA+mi*8+7], addr=v[6], **dsoff(o+16)))
+        if not DSHALF: e(ds_load_b128(vdst=v[FA+mi*8+4:FA+mi*8+7], addr=v[6], **dsoff(o+16)))  # DSHALF: drop 2nd half (INCORRECT; ds_load-count throughput probe)
       for ni in range(WN):
         o=bo+LDS_A+ni*16*SB+kt*32
         e(ds_load_b128(vdst=v[FB+ni*8:FB+ni*8+3],   addr=v[7], **dsoff(o)))
-        e(ds_load_b128(vdst=v[FB+ni*8+4:FB+ni*8+7], addr=v[7], **dsoff(o+16)))
+        if not DSHALF: e(ds_load_b128(vdst=v[FB+ni*8+4:FB+ni*8+7], addr=v[7], **dsoff(o+16)))
       e(waitcnt_lgkm(0))
       for mi in range(WM):
         for ni in range(WN):
