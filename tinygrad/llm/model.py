@@ -14,6 +14,9 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
 # via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
 PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
+# Research-only (default off): route eligible PREFILL_V2 fp16 matmuls through the dependency-free graph-capturable
+# RDNA3 GEMM. This is the in-model transfer gate for the isolated GEMM win; fallback is the normal PREFILL_V2 matmul.
+PREFILL_GRAPH_GEMM = bool(getenv("PREFILL_GRAPH_GEMM", 0))
 # Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
 # concrete -> the attention's reduce tiles/TC fires (symbolic KV blocks it). ~1.24x e2e, byte-identical. Cost: a
 # separate concrete prefill jit per distinct start_pos (0,512,...) vs one symbolic jit. See
@@ -59,6 +62,10 @@ def _pf16(lin, x:Tensor) -> Tensor:
   # whole dequant into the matmul -> bandwidth/dequant-bound ~3% peak (no TC win). So we realize a clean fp16
   # weight ONCE per linear (cached as `_pf16_w` by _install_prefill_v2_warmstart) and matmul against that.
   w = getattr(lin, "_pf16_w", None)
+  if PREFILL_GRAPH_GEMM and w is not None:
+    from extra.qk_prefill_graph_gemm_route import route_pf16_graph_gemm
+    routed = route_pf16_graph_gemm(lin, x)
+    if routed is not None: return routed
   if PREFILL_TENSILE_GEMM and w is not None:   # research-only external Tensile route (flag-gated, eligible shapes only)
     from extra.qk_tensile_inmodel import route_pf16
     routed = route_pf16(lin, x)
