@@ -19,6 +19,9 @@ The route is acceptable as an explicit fast path when all of these hold:
 This level allows benign numeric drift when it does not degrade true-token probability beyond the bound and does
 not change greedy continuations.
 
+Decision: `PASS_PREFILL_GRAPH_GEMM_EXPERIMENTAL_OPT_IN`. The existing `PREFILL_GRAPH_GEMM=1` flag is the approved
+experimental route; no default behavior changes.
+
 ## Default-On
 
 Default-on needs stricter evidence:
