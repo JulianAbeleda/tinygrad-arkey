@@ -1023,3 +1023,128 @@ def decode_mmvq_artifact_oracle_binding_summary(binding: DecodeMMVQArtifactOracl
     "lowering_status": binding.lowering_status,
     "performance_claim": binding.performance_claim,
   }
+
+
+@dataclass(frozen=True)
+class DecodeMMVQSchedulerFeature:
+  name: str
+  category: str
+  native_state: str
+  oracle_state: str
+  standalone_movement_us: float | None
+  required_policy: str
+  implementation_status: str
+
+  def to_dict(self) -> dict[str, Any]: return asdict(self)
+
+  def structural_checks(self) -> dict[str, bool]:
+    return {
+      "name_present": bool(self.name),
+      "category_present": bool(self.category),
+      "native_state_present": bool(self.native_state),
+      "oracle_state_present": bool(self.oracle_state),
+      "required_policy_present": bool(self.required_policy),
+      "implementation_status_present": bool(self.implementation_status),
+    }
+
+
+@dataclass(frozen=True)
+class DecodeMMVQResourceLedger:
+  native_time_us: float
+  oracle_time_us: float
+  native_group_segment_size: int
+  oracle_group_segment_size: int
+  native_private_segment_size: int
+  oracle_private_segment_size: int
+  native_global_loads: int
+  oracle_global_loads: int
+  native_ds_ops: int
+  oracle_ds_ops: int
+  native_waitcnt: int
+  oracle_waitcnt: int
+  native_branch: int
+  oracle_branch: int
+  native_s_clause: int
+  oracle_s_clause: int
+  native_s_delay_alu: int
+  oracle_s_delay_alu: int
+
+  def to_dict(self) -> dict[str, Any]:
+    ret = asdict(self)
+    ret["native_minus_oracle_us"] = self.native_time_us - self.oracle_time_us
+    return ret
+
+  def structural_checks(self) -> dict[str, bool]:
+    return {
+      "native_time_positive": self.native_time_us > 0,
+      "oracle_time_positive": self.oracle_time_us > 0,
+      "native_slower_than_oracle": self.native_time_us > self.oracle_time_us,
+      "no_private_segments": self.native_private_segment_size == 0 and self.oracle_private_segment_size == 0,
+      "lds_known": self.native_group_segment_size >= 0 and self.oracle_group_segment_size >= 0,
+      "load_delta_visible": self.native_global_loads > self.oracle_global_loads,
+      "branch_delta_visible": self.native_branch < self.oracle_branch,
+      "scheduler_marker_delta_visible": self.native_s_clause < self.oracle_s_clause and self.native_s_delay_alu < self.oracle_s_delay_alu,
+    }
+
+
+@dataclass(frozen=True)
+class DecodeMMVQSchedulerResourcePlan:
+  role: str
+  quant_format: str
+  resource_ledger: DecodeMMVQResourceLedger
+  features: tuple[DecodeMMVQSchedulerFeature, ...]
+  required_capabilities: tuple[str, ...]
+  closed_standalone_features: tuple[str, ...]
+  hardware_attribution_status: str
+  lowering_status: str = "scheduler_resource_plan_unwired"
+  performance_claim: bool = False
+
+  def to_dict(self) -> dict[str, Any]:
+    return {
+      "role": self.role,
+      "quant_format": self.quant_format,
+      "resource_ledger": self.resource_ledger.to_dict(),
+      "features": [f.to_dict() for f in self.features],
+      "required_capabilities": list(self.required_capabilities),
+      "closed_standalone_features": list(self.closed_standalone_features),
+      "hardware_attribution_status": self.hardware_attribution_status,
+      "lowering_status": self.lowering_status,
+      "performance_claim": self.performance_claim,
+      "structural_gate": self.structural_gate(),
+    }
+
+  def structural_gate(self) -> dict[str, Any]:
+    checks: dict[str, bool] = {
+      "role_present": bool(self.role),
+      "quant_format_q4k_q8": self.quant_format == "Q4_K x q8_1",
+      "has_features": len(self.features) >= 5,
+      "has_required_capabilities": len(self.required_capabilities) >= 5,
+      "closed_standalone_features_recorded": {"dot4", "global_load_shape", "waitcnt", "reduction"}.issubset(set(self.closed_standalone_features)),
+      "hardware_attribution_status_recorded": bool(self.hardware_attribution_status),
+      "lowering_unwired": self.lowering_status == "scheduler_resource_plan_unwired",
+      "no_performance_claim": not self.performance_claim,
+    }
+    for name, ok in self.resource_ledger.structural_checks().items():
+      checks[f"resource.{name}"] = bool(ok)
+    for i, feature in enumerate(self.features):
+      for name, ok in feature.structural_checks().items():
+        checks[f"feature{i}.{name}"] = bool(ok)
+    return {"checks": checks, "passed": all(checks.values()), "performance_claim": self.performance_claim}
+
+
+def decode_mmvq_scheduler_resource_plan_summary(plan: DecodeMMVQSchedulerResourcePlan) -> dict[str, Any]:
+  gate = plan.structural_gate()
+  failed = [k for k, v in gate["checks"].items() if not v]
+  return {
+    "role": plan.role,
+    "quant_format": plan.quant_format,
+    "native_minus_oracle_us": plan.resource_ledger.native_time_us - plan.resource_ledger.oracle_time_us,
+    "feature_count": len(plan.features),
+    "required_capability_count": len(plan.required_capabilities),
+    "closed_standalone_features": list(plan.closed_standalone_features),
+    "hardware_attribution_status": plan.hardware_attribution_status,
+    "lowering_status": plan.lowering_status,
+    "performance_claim": plan.performance_claim,
+    "structural_gate_passed": gate["passed"],
+    "failed_checks": failed,
+  }
