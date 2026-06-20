@@ -2288,3 +2288,56 @@ alongside (schema+orchestrator+dNLL gate already exist; gap=ledger/auto-row). **
 ceiling 49%). **Bank 2 (q8 lifecycle) verdict D**. **Bank 5 (SmoothQuant) refuted** (q8 accuracy already fine
 rel 0.006; blocker is pack cost not accuracy). Cross-bank truth: kernels alone won't beat llama for 8B Q4_K; the
 "refuse to stop at 68%" win is spec decode. Decode unchanged ~66-69% llama; nothing routed; no default changes.
+
+## 2026-06-20 (prefill graph-GEMM PROMOTED default-on + nosync-measurement reckoning + Tensile 86% settled)
+
+Branch `qk-prefill-flag-leak-resolution`. **The session's spine: a measurement reckoning.** Many historical
+prefill numbers ("PREFILL_V2 ~83-93% llama", "Tensile +us ~86% llama") were **nosync artifacts** — the
+`qk_prefill_v2_measure`/A-B harnesses time `fn().realize()` WITHOUT `dev.synchronize()`, so they measure HOST
+DISPATCH, not GPU time, inflating ~2.3× (and, on a warm JIT, up to ~20× → absurd 800%+ of llama). Established
+the **arbiter** as the trustworthy measure: K forwards back-to-back, ONE `dev.synchronize()`, total/K = true
+GPU throughput (cross-checked vs per-call-sync and the gold-standard `wait=True`).
+
+**Verified synced prefill ladder (Qwen3-8B, gfx1100):** baseline WMMA 414ms = **41% llama**; Tensile `.co`
+276ms = **61%**; **graph route (ours, dep-free) 256ms = 66%**; llama pp512 170ms = 100% (3020 tok/s).
+
+**SHIPPED — `PREFILL_GRAPH_GEMM` PROMOTED default-on, gfx1100-restricted** (owner-approved policy; absolute
+parity `max_abs_dNLL 0.0176` accepted report-only — greedy byte-identical, harmful dNLL ≤0.0094). Default flip
+lives in `model._prefill_graph_gemm_default()` (decided ONCE at import; NOT in the route — `Device[...]` is
+disallowed during JIT capture). Only active under `PREFILL_V2`; `PREFILL_GRAPH_GEMM=0` opts out. Passed all 4
+default-on readiness gates: G3 fallback 11/11, G1 perf synced **1.61×** stable (3 sessions), G2 generation
+16×16 = 0/256 mismatches, G4 OOM 5/5. The graph route RECOVERS most of the ~2.7× in-model matmul penalty
+(baseline in-model gate/up ~22 TFLOPS vs ~60 isolated) → the isolated kernel win DOES transfer for prefill once
+wired (unlike decode). Our dep-free route BEATS the Tensile `.co` synced (66% > 61%) → Tensile dependency NOT
+needed.
+
+Commits: `72b7ab703` G3, `b928901ce` G1, `0eba5cbc7` G2, `633179017` G4, `f6dac01c8` readiness,
+`e919583a9` (route+model — ⚠bundled under `[test]`; model.py should've been `[nn]`; rejected-`[feat]` left it
+staged), `a9d4b4d65` Tensile-settle, `0701e429f`/`c189369c9` the true-throughput corrections.
+Docs (2026-06-20): `prefill-graph-gemm-{fallback-audit,default-perf,generation-coverage-16x16,oom-policy-audit,
+default-on-readiness}-result`, `prefill-tensile-86-settled-nosync`, `prefill-TRUE-throughput-and-matmul-penalty`,
+`prefill-LEARNINGS-BANKED-and-prefill-benchmark`, `prefill-next-gap-scope`.
+
+### >>> SELF-PROMPT FOR NEXT SESSION (prefill next gap) <<<
+Repo `/home/ubuntu/tinygrad-arkey`, branch `qk-prefill-flag-leak-resolution`, `DEV=AMD`, model
+`/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf`. Read `docs/prefill-next-gap-scope-20260620.md` FIRST, then memory
+`amd-prefill-lds-gemm-not-refuted.md` (latest entries).
+
+State: prefill graph route is PROMOTED default-on (gfx1100), **66% of llama synced** (1994 tok/s). 86%/93%
+were nosync mirages — SETTLED. Goal: close 66% → toward llama (100%) on the dependency-free path.
+
+DO FIRST (cheap, tools exist): the **localizing audit** — run `extra/qk_prefill_inmodel_attribution.py` with
+`PREFILL_GRAPH_GEMM=1` (ctx768 to dodge the profiling OOM) + `qk_prefill_pmu_atlas.py` to get the per-kernel
+synced breakdown of the 256ms graph forward and a bandwidth/compute label per dominant kernel. The baseline
+split was 47% gate/up / 28% attn / 23% other-mm / 1.6% norm; the graph route sped up FFN matmuls so attention's
+share has risen — find the new dominant lever. Write `docs/prefill-graph-route-attribution-result-<date>.md`.
+
+THEN branch: (A) if matmul-bandwidth dominant → **int8-MMQ** (llama's trick; BIG build — need an int8 GEMM
+kernel + activation→int8 quant, which we DON'T have; infra to build/wire/gate DOES exist). (B) if attention
+dominant → **flash/TC attention on concrete KV** (`PREFILL_CONCRETE_KV` + `PREFILL_TC_ATTN` scaffolding exists;
+cheaper). Gate any route: rel RMSE <1e-2 + sampled/chunked NLL dNLL≤0.01 + greedy-exact + synced arbiter +
+fallback + OOM.
+
+IRON LAW: SYNCED measurement only (arbiter K-forwards/one-sync; nosync = host dispatch, banned). Compare
+synced-vs-synced to llama. No BEAM (hangs gfx1100). Default-off unless owner-approved; gfx1100-restricted.
+Tooling: audit-COMPLETE; build-PARTIAL (int8 kernel is the one missing piece, Branch A only).
