@@ -51,6 +51,12 @@ Run two subprocesses:
 Each child loads the model once. For each window and each score offset:
 
 ```python
+for q4k_linear in model._q4k_linears.linears:
+  q4k_linear.decode_enabled = False
+for block in model.blk:
+  block._prefill_v2 = True
+  block._use_flash = False
+pr._WARMSTART_OPTS = model._pf16_warmstart
 logits = model.logits(tokens_512, 0)[:, offset, :].realize()[0].numpy()
 target = tokens_512[offset + 1]
 nll = logsumexp(logits) - logits[target]
@@ -60,6 +66,10 @@ argmax = logits.argmax()
 This realizes one vocab vector at a time, not `(512, vocab)`. It intentionally recomputes the `T=512` forward per
 offset unless/until tinygrad can safely materialize a small gather of vocab rows without keeping the full logits
 matrix. Correctness and memory safety matter more than speed for this gate.
+
+Important: calling `model.logits` directly does not pass through `Transformer.__call__`, so the tool must install
+the prefill-v2 block state and warmstart table itself. Otherwise it can silently measure the fallback logits path
+instead of the graph GEMM route.
 
 ## Acceptance Gates
 
