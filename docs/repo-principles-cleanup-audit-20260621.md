@@ -149,16 +149,24 @@ prefill GEMM lives in `extra/qk_prefill_graph_gemm_route.py` (a classified proje
 
 ## Ranked next-action plan
 
-1. **Fix the SSOT-drift test (finding #2) — trivial, makes the suite green.** Derive
-   `test_qk_search_spec.py:40`'s expected set from the `SearchSpace` enum. ~2 LOC, zero runtime risk,
-   removes the only failing test. *Highest value / lowest cost.*
-2. **Regenerate the two STALE caches (`structure/cache/repo-{cache,map}.md`).** They predate today's
-   376→133 reduction and list removed scripts; a stale map is worse than none for future agents. Keep
-   the banner until regenerated, then refresh from this inventory.
-3. **Centralize the model-weights path (finding #3).** Add a `MODELS_DIR`/default-model constant to
-   `extra/qk_paths.py`; route the 4 live scripts through it. Removes hidden-config spread.
-4. **Close the perf-state boundary leak (finding #4).** Let `qk_clock_pin` emit the provenance dict
-   shape `qk_decode_q8_model_route_timing_audit.py` needs, then delete that script's private pin.
+> **Execution status (post-audit follow-up):** items 1–4 (the Wave-4 `UPGRADE_TO_PRINCIPLES` set)
+> were executed in follow-up commits after the audit was accepted — each is a small, gate-verified,
+> NFC/test-only change. Items 5–6 stand as standing guidance / deferred scope.
+
+1. **✅ DONE — Fix the SSOT-drift test (finding #1, the only failing test).** Derived
+   `test_qk_search_spec.py:40`'s expected set from the `SearchSpace` enum. Suite now 299 pass / 0 fail
+   / 57 skip. *(commit `[test] derive search_space_choices assertion from SearchSpace enum`)*
+2. **✅ DONE — Regenerate the two STALE caches (`structure/cache/repo-{cache,map}.md`).** Rewrote both
+   as lean SSOT-pointers (current state → handoff; file ownership → this inventory; live evaluator/
+   search lifecycle added; test counts refreshed; no dead refs to deleted scripts). They now classify
+   KEEP_DOC_AUTHORITY (de-staled). *(commit `[docs] regenerate stale repo-cache/repo-map`)*
+3. **✅ DONE — Centralize the model-weights path (finding #3).** Added `DEFAULT_MODEL_GGUF` to
+   `extra/qk_paths.py`; routed the 4 live scripts through it. Value byte-identical.
+   *(commit `[runtime] NFC - centralize default model-weights path in qk_paths`)*
+4. **✅ DONE — Close the perf-state boundary leak (finding #4).** Hoisted the privileged sysfs/rocm-smi
+   command strings into `qk_clock_pin` (`PIN_PEAK_CMD`/`SET_AUTO_CMD`/`RESET_PERF_DETERMINISM`); the
+   audit script reuses them and keeps only its own provenance formatting. Commands byte-identical.
+   *(commit `[runtime] NFC - centralize GPU perf-state command strings in qk_clock_pin boundary`)*
 5. **Keep provenance, lean on the index.** Do **not** mass-delete the 925 provenance files — they are
    refutation assets. The real "lean enough" win is already in hand: 95 live files / ~17K LOC is the
    surface a future agent must reason about; the provenance index lets them ignore the rest safely.

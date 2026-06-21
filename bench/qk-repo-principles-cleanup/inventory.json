@@ -1,18 +1,18 @@
 {
   "summary": {
     "generated": "2026-06-21",
-    "git_head": "e0a7f21e2",
+    "git_head": "5bd7e512d",
     "total_tracked": 2468,
     "project_rows": 1615,
     "vendor_dirs": 26,
     "vendor_files": 853,
     "recommendation_counts": {
       "IGNORE_EXTERNAL_VENDOR": 26,
-      "ARCHIVE_PROVENANCE": 927,
+      "ARCHIVE_PROVENANCE": 925,
       "KEEP_LIBRARY_HELPER": 21,
       "KEEP_LIVE_TOOLING": 48,
       "KEEP_CORE": 27,
-      "KEEP_DOC_AUTHORITY": 332,
+      "KEEP_DOC_AUTHORITY": 334,
       "KEEP_TEST": 260
     },
     "by_subsystem": {
@@ -41,8 +41,8 @@
         "KEEP_CORE": 22
       },
       "structure": {
-        "KEEP_DOC_AUTHORITY": 31,
-        "ARCHIVE_PROVENANCE": 12
+        "KEEP_DOC_AUTHORITY": 33,
+        "ARCHIVE_PROVENANCE": 10
       },
       "test": {
         "KEEP_TEST": 260
@@ -1668,7 +1668,7 @@
     {
       "path": "extra/q8_ffn_oneblock_route.py",
       "type": "script",
-      "loc": 240,
+      "loc": 241,
       "subsystem": "extra_qk_tooling",
       "recommendation": "KEEP_LIVE_TOOLING",
       "reason": "in import-closure of live evaluator/search/runner roots",
@@ -1681,7 +1681,8 @@
         "q8_ffn_fast_artifact_probe",
         "q8_ffn_hcq_artifact",
         "qk_layout",
-        "qk_nll_eval"
+        "qk_nll_eval",
+        "qk_paths"
       ],
       "imported_by": [
         "extra/qk_decode_mmvq_p5_lifecycle_probe.py"
@@ -2606,7 +2607,7 @@
     {
       "path": "extra/qk_clock_pin.py",
       "type": "script",
-      "loc": 60,
+      "loc": 68,
       "subsystem": "extra_qk_tooling",
       "recommendation": "KEEP_LIVE_TOOLING",
       "reason": "live evaluator/search/runner ROOT entrypoint",
@@ -2618,6 +2619,7 @@
       "imported_by": [
         "extra/qk_decode_eval.py",
         "extra/qk_decode_fused_flash_tile_ab.py",
+        "extra/qk_decode_q8_model_route_timing_audit.py",
         "extra/qk_decode_warp_flash_tile_ab.py",
         "extra/qk_fused_flash_concrete_gate_ab.py",
         "extra/qk_fused_softmax_v_tail_ab.py",
@@ -2779,7 +2781,7 @@
     {
       "path": "extra/qk_decode_mmvq_p3_q4_correctness.py",
       "type": "script",
-      "loc": 169,
+      "loc": 170,
       "subsystem": "extra_qk_tooling",
       "recommendation": "KEEP_LIBRARY_HELPER",
       "reason": "shared lib imported by 3 project scripts",
@@ -2789,7 +2791,8 @@
       "stem": "qk_decode_mmvq_p3_q4_correctness",
       "imports": [
         "q8_ffn_handwritten_oracle",
-        "qk_layout"
+        "qk_layout",
+        "qk_paths"
       ],
       "imported_by": [
         "extra/qk_att_primitive_atlas.py",
@@ -2807,7 +2810,7 @@
     {
       "path": "extra/qk_decode_mmvq_p5_lifecycle_probe.py",
       "type": "script",
-      "loc": 237,
+      "loc": 238,
       "subsystem": "extra_qk_tooling",
       "recommendation": "KEEP_LIVE_TOOLING",
       "reason": "in import-closure of live evaluator/search/runner roots",
@@ -2820,7 +2823,8 @@
         "q8_ffn_handwritten_oracle",
         "q8_ffn_oneblock_route",
         "qk_decode_mmvq_p3_q4_correctness",
-        "qk_nll_eval"
+        "qk_nll_eval",
+        "qk_paths"
       ],
       "imported_by": [
         "extra/qk_decode_mmvq_graph_route.py"
@@ -2866,7 +2870,7 @@
     {
       "path": "extra/qk_decode_q8_model_route_timing_audit.py",
       "type": "script",
-      "loc": 337,
+      "loc": 339,
       "subsystem": "extra_qk_tooling",
       "recommendation": "ARCHIVE_PROVENANCE",
       "reason": "cited by canonical/ledger/test (1 canon, 0 ledger, 0 test) \u2014 kept as provenance/asset",
@@ -2875,7 +2879,8 @@
       "risk_if_kept": "false authority / sprawl if mistaken for current",
       "stem": "qk_decode_q8_model_route_timing_audit",
       "imports": [
-        "llm_generate"
+        "llm_generate",
+        "qk_clock_pin"
       ],
       "imported_by": [
         "extra/qk_decode_eval.py"
@@ -3735,7 +3740,7 @@
     {
       "path": "extra/qk_harness_contract.py",
       "type": "script",
-      "loc": 158,
+      "loc": 160,
       "subsystem": "extra_qk_tooling",
       "recommendation": "KEEP_LIVE_TOOLING",
       "reason": "live evaluator/search/runner ROOT entrypoint",
@@ -3745,7 +3750,8 @@
       "stem": "qk_harness_contract",
       "imports": [
         "qk_clock_pin",
-        "qk_harness_contract"
+        "qk_harness_contract",
+        "qk_paths"
       ],
       "imported_by": [
         "extra/qk_candidate_template_gen.py",
@@ -4402,23 +4408,27 @@
     {
       "path": "extra/qk_paths.py",
       "type": "script",
-      "loc": 10,
+      "loc": 16,
       "subsystem": "extra_qk_tooling",
       "recommendation": "KEEP_LIBRARY_HELPER",
-      "reason": "shared lib imported by 5 project scripts",
+      "reason": "shared lib imported by 9 project scripts",
       "principle_score": 9,
       "risk_if_deleted": "breaks importers",
       "risk_if_kept": "none \u2014 live/authority",
       "stem": "qk_paths",
       "imports": [],
       "imported_by": [
+        "extra/q8_ffn_oneblock_route.py",
+        "extra/qk_decode_mmvq_p3_q4_correctness.py",
+        "extra/qk_decode_mmvq_p5_lifecycle_probe.py",
         "extra/qk_flywheel_feature_enrich.py",
         "extra/qk_flywheel_targeted_outcomes.py",
+        "extra/qk_harness_contract.py",
         "extra/qk_packed_tile_closeout_diagnostic.py",
         "extra/qk_semantic_op.py",
         "extra/qk_threeway_load_microbench.py"
       ],
-      "in_live_closure": false,
+      "in_live_closure": true,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
         "docs/perf-probe-active-surface-reduction-plan-20260621.md",
@@ -23950,26 +23960,26 @@
     {
       "path": "structure/cache/repo-cache.md",
       "type": "doc",
-      "loc": 107,
+      "loc": 87,
       "subsystem": "structure",
-      "recommendation": "ARCHIVE_PROVENANCE",
-      "reason": "STALE cache (predates active-surface reduction) \u2014 regenerate or banner",
-      "principle_score": 4,
-      "risk_if_deleted": "loses historical handoff",
-      "risk_if_kept": "false authority if mistaken for current",
-      "stale": true
+      "recommendation": "KEEP_DOC_AUTHORITY",
+      "reason": "structure/role/convention layer (current)",
+      "principle_score": 8,
+      "risk_if_deleted": "loses principle/role authority",
+      "risk_if_kept": "none",
+      "stale": false
     },
     {
       "path": "structure/cache/repo-map.md",
       "type": "doc",
-      "loc": 69,
+      "loc": 74,
       "subsystem": "structure",
-      "recommendation": "ARCHIVE_PROVENANCE",
-      "reason": "STALE cache (predates active-surface reduction) \u2014 regenerate or banner",
-      "principle_score": 4,
-      "risk_if_deleted": "loses historical handoff",
-      "risk_if_kept": "false authority if mistaken for current",
-      "stale": true
+      "recommendation": "KEEP_DOC_AUTHORITY",
+      "reason": "structure/role/convention layer (current)",
+      "principle_score": 8,
+      "risk_if_deleted": "loses principle/role authority",
+      "risk_if_kept": "none",
+      "stale": false
     },
     {
       "path": ".gitignore",
