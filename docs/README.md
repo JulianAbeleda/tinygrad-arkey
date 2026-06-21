@@ -21,6 +21,9 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 - **`prefill-flash-increment2-result-20260620.md`** — Increment 2 flash prefill kernel is correct (`rel_rmse ~1e-7`)
   but **~15× too slow** at KV512 and not shipped. Recommendation: rest prefill here unless a multi-day WMMA/key-tiled
   flash build is explicitly reopened.
+- **`prefill-policy-integration-scope-20260620.md`** — CURRENT PREFILL ACTION SCOPE. Prefill kernels are settled;
+  remaining work is policy/integration: VRAM-aware `PREFILL_V2`, server/long-prompt `PREFILL_CONCRETE_KV`, avoiding
+  the 32-token symbolic fallback trap, and user-facing benchmark/CLI policy.
 - **`decode-role-tensor-kernel-attribution-solution-scope-20260620.md`** — CURRENT DECODE NEXT SCOPE. Decode remains
   below llama: default route is still the banked `~67%` llama class, while q8 FFN is a hardened default-off opt-in
   route rerun at **72.9/71.1 tok/s @ctx 512/1024** (`~1.064×`, host-sync `0.0%`). Next work is role/tensor/kernel

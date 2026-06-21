@@ -9,7 +9,35 @@ from tinygrad.uop.ops import resolve
 
 # Prefill v2 (opt-in, default off; decode 100% untouched when off). Concrete-ubatch fp16 prefill that lets
 # tensor cores apply + the loop-found TC schedule warm-start in. See docs/amd-decode-prefill-v2-gate-20260616.md.
-PREFILL_V2 = bool(getenv("PREFILL_V2", 0))
+# Costs ~fp16-covered-weight-size extra VRAM (it coexists with the Q4_K decode storage; ~+14GB for 8B) -> OOMs
+# small cards. `PREFILL_V2=auto` resolves on/off from detected VRAM in from_gguf (see prefill_v2_auto_decision +
+# docs/prefill-default-policy-evaluation-result-20260620.md). Explicit 0/1 always wins.
+_PREFILL_V2_ENV = os.environ.get("PREFILL_V2", "")
+PREFILL_V2_AUTO = _PREFILL_V2_ENV.strip().lower() == "auto"
+PREFILL_V2 = False if PREFILL_V2_AUTO else bool(getenv("PREFILL_V2", 0))
+def _set_prefill_v2(val:bool):   # auto policy resolves the module global before Transformer() is constructed
+  global PREFILL_V2; PREFILL_V2 = val
+def _detect_total_vram_bytes() -> int|None:
+  # cheap one-shot total-VRAM probe via rocm-smi; None on any failure -> auto stays conservatively OFF.
+  try:
+    import subprocess
+    out = subprocess.run(["rocm-smi", "--showmeminfo", "vram"], capture_output=True, text=True, timeout=10).stdout
+    for ln in out.splitlines():
+      if "VRAM Total Memory" in ln: return int(ln.split(":")[-1].strip())
+  except Exception: return None
+  return None
+def prefill_v2_auto_decision(total_vram_bytes:int|None, est_fp16_bytes:int, q4_bytes:int, kv_bytes:int,
+                             min_total_gb:float=23.0, margin_gb:float=3.0) -> tuple[bool, str]:
+  # Conservative first-pass policy: enable PREFILL_V2 only on a clearly large card (>=~24GB) where the full
+  # footprint (Q4 storage + realized fp16 covered weights + KV) fits with a margin for activations/scores/decode.
+  if total_vram_bytes is None: return (False, "VRAM unknown (rocm-smi unavailable) -> conservative OFF")
+  need = q4_bytes + est_fp16_bytes + kv_bytes
+  tot_gb, need_gb = total_vram_bytes/1e9, need/1e9
+  if total_vram_bytes < min_total_gb*1e9:
+    return (False, f"total {tot_gb:.1f}GB < {min_total_gb:.0f}GB floor -> OFF (PREFILL_V2 +fp16 would risk OOM)")
+  if total_vram_bytes < need + margin_gb*1e9:
+    return (False, f"need {need_gb:.1f}GB + {margin_gb:.0f}GB margin > {tot_gb:.1f}GB total -> OFF")
+  return (True, f"need {need_gb:.1f}GB + {margin_gb:.0f}GB margin <= {tot_gb:.1f}GB total -> ON")
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
 # Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
 # via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
@@ -1239,6 +1267,18 @@ class Transformer:
       full_attention_interval=kv.get(f'{arch}.full_attention_interval', 0),
       qkv_bias='blk.0.attn_q.bias' in state_dict,
       expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict)
+    # PREFILL_V2=auto: resolve the module global from detected VRAM BEFORE Transformer() (its __init__ reads
+    # PREFILL_V2 to build the warmstart). Estimate the realized fp16 cost from the covered linears' shapes in the
+    # (already fp16) state_dict; Q4 storage proxied by the gguf file size; KV from config. Explicit 0/1 skip this.
+    if PREFILL_V2_AUTO:
+      _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
+      est_fp16 = sum(t.numel() * 2 for k, t in state_dict.items() if any(k.endswith(s) for s in _cov))
+      q4_bytes = pathlib.Path(gguf).stat().st_size if not isinstance(gguf, Tensor) else 0
+      kv_bytes = 2 * config.n_kv_heads * config.max_context * config.head_dim * 2 * config.num_blocks
+      enabled, reason = prefill_v2_auto_decision(_detect_total_vram_bytes(), est_fp16, q4_bytes, kv_bytes)
+      _set_prefill_v2(enabled)
+      print(f"PREFILL_V2=auto -> {'ON' if enabled else 'OFF'}: {reason} "
+            f"(fp16 covered {est_fp16/1e9:.1f}GB, Q4 {q4_bytes/1e9:.1f}GB, KV {kv_bytes/1e9:.1f}GB @ctx{config.max_context})")
     model = Transformer(config)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if q4k_meta is not None:

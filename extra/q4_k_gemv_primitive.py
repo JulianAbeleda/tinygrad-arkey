@@ -306,6 +306,45 @@ def q4k_gemv_kernel(rows:int, k:int, schedule:str, opts:tuple[Opt, ...]):
 
   return kernel
 
+def q4k_gemv_silu_gate_kernel(rows:int, k:int, schedule:str, opts:tuple[Opt, ...]):
+  # FFN activation producer fusion (B1, decode scope): the 'up' GEMV writes silu(gate[row]) * (Sum w.x) at its
+  # final store, eliminating the standalone silu(gate)*up elementwise launch (E_49152, ~1.24ms/token). Uses a REG
+  # accumulator over a single flattened k reduce + an activated store (the flash_combine pattern). parts=1 only.
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(out:UOp, words:UOp, x:UOp, gate:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    kp = UOp.range(k_blocks * 32, 1, axis_type=AxisType.REDUCE)
+    blk = kp // 32; pos = kp % 32
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = _q4k_block_dot(words, x, base, blk, pos)
+    acc = UOp.placeholder((1,), dtypes.float32, 130, addrspace=AddrSpace.REG)
+    acc = acc.after(row)[0].set(0.0)
+    acc = acc[0].set(acc.after(kp)[0] + contrib, end=kp)
+    g = gate[row].cast(dtypes.float32)
+    sig = UOp.const(dtypes.float32, 1.0) / (UOp.const(dtypes.float32, 1.0) + (g * -1.4426950408889634).exp2())  # silu = g*sigmoid(g)
+    return out[row].store(g * sig * acc[0]).end(row).sink(arg=_kernel_info(f"q4k_gemv_silu_gate_{rows}_{k}", schedule, opts))
+
+  return kernel
+
+def q4k_gemv_silu_gate_v2_kernel(rows:int, k:int, schedule:str, opts:tuple[Opt, ...]):
+  # B1 v2: keep the FAST nested blk+pos buffer-accumulator codegen of q4k_gemv_partial (scratch buffer), then the
+  # final store applies silu(gate)*. out and scratch are separate buffers; the activated store ends blk.
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(out:UOp, scratch:UOp, words:UOp, x:UOp, gate:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    blk = UOp.range(k_blocks, 1, axis_type=AxisType.REDUCE)
+    pos = UOp.range(32, 2, axis_type=AxisType.REDUCE)
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    acc = scratch[row].set(0.0)
+    acc = scratch[row].set(acc.after(blk, pos)[row] + _q4k_block_dot(words, x, base, blk, pos), end=pos)
+    g = gate[row].cast(dtypes.float32)
+    sig = UOp.const(dtypes.float32, 1.0) / (UOp.const(dtypes.float32, 1.0) + (g * -1.4426950408889634).exp2())
+    return out[row].store(g * sig * acc.after(blk)[row]).end(row, blk).sink(arg=_kernel_info(f"q4k_gemv_silu_gate_v2_{rows}_{k}", schedule, opts))
+
+  return kernel
+
 def q4k_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)
