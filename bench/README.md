@@ -24,6 +24,10 @@ Pick the harness by what you're measuring:
 Both clean harnesses agree on one curve: **~86 @ctx≈0 → 68.4/66.9/61.2 @ 512/1024/4096** (default stack,
 rerun 2026-06-20; matches banked). See `../docs/qk-decode-banked-reproduce-20260618.md`,
 `qk-decode-runtime-overhead/result.json`.
+> ⚠️ **`87.6` is ambiguous — never quote it bare.** It is BOTH a real ctx≈0 decode **tok/s** (~11.4 ms) AND a real
+> ctx4096 decode **ms/token** (=11.4 tok/s). The decode headline is the *curve* (~86 @ctx≈0 → ~61 @ctx4096 = **~67%
+> llama** steady-state), not the ctx≈0 peak. Prefill policy (`PREFILL_V2=auto`/server) does NOT change decode (<1%,
+> identical output). See `../docs/decode-prefill-headline-reconciliation-result-20260621.md`.
 
 ## Current numbers
 
