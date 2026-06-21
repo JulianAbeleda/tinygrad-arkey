@@ -37,13 +37,25 @@ PREFILL_CONCRETE_KV = bool(getenv("PREFILL_CONCRETE_KV", 0))
 # P2: explicit TC attention (Q@Kᵀ TC + fp16 scores + softmax + P@V TC, GQA broadcast) for prefill on CONCRETE KV
 # (the only regime where the concrete-shape tensor core fires; symbolic KV blocked it -> 0.79x in-model). Needs
 # PREFILL_CONCRETE_KV. Research, dNLL-gated. See docs/prefill-concrete-kv-build-scope-20260619.md.
-PREFILL_TC_ATTN = bool(getenv("PREFILL_TC_ATTN", 0))
+# DEFAULT-ON, GUARDED to gfx1100 (validated arch), decided ONCE at import (not in the route -- Device[...] is
+# disallowed during JIT capture). Only active under PREFILL_V2; the route's isinstance(start_pos,int) guard keeps
+# it to CONCRETE chunks (start_pos=0 by default), the only validated regime. Set PREFILL_TC_ATTN=0/1 to override.
+# Concrete first chunk: cuts attention ~18%->~5%, reproducible ~1.16x whole-forward, BYTE-IDENTICAL (rel_RMSE 0.0,
+# dNLL 0.0, greedy-exact, 3 sessions). A FUSION win, NOT tensor cores (WMMA does not fire; no warmstart TC-opt for
+# attention shapes, no BEAM). See docs/prefill-branch-b-tc-attention-result-20260620.md.
+def _prefill_tc_attn_default() -> int:
+  if "PREFILL_TC_ATTN" in os.environ: return getenv("PREFILL_TC_ATTN", 0)   # explicit user override
+  try:                                                                       # restricted default-on: gfx1100 only
+    if Device.DEFAULT != "AMD": return 0
+    return 1 if "gfx1100" in str(getattr(Device["AMD"], "arch", "")) else 0
+  except Exception: return 0
+PREFILL_TC_ATTN = bool(_prefill_tc_attn_default())
 Q8_FFN_HANDWRITTEN = bool(getenv("Q8_FFN_HANDWRITTEN", 0))
 DECODE_MMVQ_IMPORT_Q4 = bool(getenv("DECODE_MMVQ_IMPORT_Q4", 0))
-# NOTE: PREFILL_TC_ATTENTION (explicit TC Q@Kᵀ + softmax + P@V) was probed and UNWIRED -- it won ~2.5x over
-# SDPA standalone (concrete KV) but was ~0.8x (SLOWER) in-model because the prefill chunk's start_pos is
-# SYMBOLIC, so KV=start_pos+T is symbolic and the concrete-shape TC doesn't fire. See
-# docs/amd-prefill-tc-attention-probe-20260617.md / bench/qk-prefill-tc-attention/. Prefill attention stays SDPA.
+# HISTORY: the earlier env `PREFILL_TC_ATTENTION` probe reported ~0.8x "REFUTED in-model" -- that was a BROKEN
+# harness: it set the typo'd env `PREFILL_TC_ATTENTION` (model reads PREFILL_TC_ATTN) so both arms ran SDPA, AND
+# it bound a symbolic start_pos that fails the concrete-int guard so the path never fired. Overturned 2026-06-20
+# (correct concrete-int, same-process interleaved synced A/B). See docs/prefill-branch-b-tc-attention-result-20260620.md.
 # The loop-found per-shape TC schedule (gate-validated; NO BEAM -- BEAM hangs gfx1100). Forced onto the
 # prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. The contraction-heavy shapes (in>out, e.g.
 # ffn_down 4096x12288) want UPCAST(0,4); the rest UPCAST(0,2) -- using one schedule for all drops the chain
