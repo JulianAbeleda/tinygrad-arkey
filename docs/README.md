@@ -145,6 +145,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   the concrete gate showed it's the hard capability) vs AMDGCN/HSACO escape hatch (bounded, oracle-proven)**.
   Recommends **escape-hatch first** (de-risk vendored `.co` → W==D, then own a hand-AMDGCN tile, DeepSeek-style),
   native codegen as the de-risked follow-on; `REST_DECODE`+v2 the explicit fallback. Scope/decision only.
+- **`decode-attention-route-a-route-b-full-execution-scope-20260621.md`** — ⭐ FULL ROUTE EXECUTION SCOPE.
+  `DECODE_ATTENTION_ROUTE_AB_FULL_SCOPE_READY`. Expands the route decision into two executable project plans: Route A
+  native tinygrad codegen/renderer (A0-A5: UOp/ISA fixtures, renderer intrinsics, fused flash scheduling, native local
+  A/B, W==D route, search) and Route B AMDGCN/HSACO escape hatch (B0-B5: binding metadata, vendored llama `.co` HCQ
+  local A/B, W==D de-risk, owned hand-AMDGCN tile, default-off route, search). Explicitly marks vendored as
+  non-promotable and owned AMDGCN as the promotable escape-hatch form. Recommended next executable task: Route B B0-B1.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

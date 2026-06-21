@@ -52,6 +52,11 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   HSACO escape hatch first** (de-risk vendored `.co` → W==D, then own a hand-AMDGCN tile), native tinygrad codegen as
   the de-risked follow-on; `REST_DECODE`+v2 fallback. Fund-vs-rest is the owner's call; both are now evidence-backed
   and executable. See `docs/decode-attention-primitive-spec-and-route-scope-20260621.md`.
+- **Both implementation routes FULLY SCOPED (2026-06-21) — `DECODE_ATTENTION_ROUTE_AB_FULL_SCOPE_READY`.**
+  Route A (native tinygrad codegen/renderer) and Route B (AMDGCN/HSACO escape hatch) now each have concrete phases,
+  files, gates, stop conditions, fallback logic, and lifecycle/search integration. Recommended next executable task:
+  Route B B0-B1 only — vendored llama `.co` through the HCQ bridge as a non-promotable local A/B de-risk before any
+  W==D/model route or native codegen work. See `docs/decode-attention-route-a-route-b-full-execution-scope-20260621.md`.
 
 - **Machine-search evaluator BUILT (2026-06-21).** `extra/qk_decode_eval.py` is the first-class, automated form of
   the lifecycle ladder (correctness → local A/B → whole-decode W==D → policy), emitting schema'd verdicts. It
