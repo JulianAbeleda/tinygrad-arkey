@@ -6,12 +6,9 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-decode-complete-tooling"
+from extra.qk_probe_harness import probe_io
+read_json, write_json = probe_io(OUT)
 
-
-def read_json(rel: str, default: Any = None) -> Any:
-  p = ROOT / rel
-  if not p.exists(): return default
-  return json.loads(p.read_text())
 
 
 def git_json(spec: str, default: Any = None) -> Any:
@@ -21,10 +18,6 @@ def git_json(spec: str, default: Any = None) -> Any:
   except Exception:
     return default
 
-
-def write_json(name: str, data: Any) -> None:
-  (OUT / name).parent.mkdir(parents=True, exist_ok=True)
-  (OUT / name).write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def program_kind(name: str) -> str:
