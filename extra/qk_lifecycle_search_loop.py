@@ -40,9 +40,7 @@ def _bindings() -> dict:
   if not BINDING_TEMPLATES.exists(): return {}
   return {b["binding_id"]: b for b in json.loads(BINDING_TEMPLATES.read_text()).get("templates", [])}
 
-def _git(*a):
-  try: return subprocess.check_output(["git", *a], cwd=ROOT, text=True).strip()
-  except Exception: return "unknown"
+from extra.qk_harness_contract import git_commit, dirty_tree  # provenance SSOT (was a local _git copy)
 
 def _text_of(c: dict) -> str:
   return " ".join(str(c.get(k, "")) for k in ("id", "family", "description", "intent", "notes")).lower() + \
@@ -119,7 +117,7 @@ def propose_ledger(c: dict, lifecycle: str) -> list[dict]:
 def run(cands: list[dict], pol: dict, reg: dict, suite: str | None, dry: bool, repeats: int | None) -> dict:
   v2l = pol["verdict_to_lifecycle_decision"]
   res = {"schema": "decode_lifecycle_search_run_v1", "run_id": f"decode_v0-{time.strftime('%Y%m%dT%H%M%S')}",
-         "date": "2026-06-21", "git_commit": _git("rev-parse", "HEAD"), "dirty_tree": bool(_git("status", "--short")),
+         "date": "2026-06-21", "git_commit": git_commit(), "dirty_tree": dirty_tree(),
          "evaluator": {"path": EVAL, "candidate_registry": "bench/qk-decode-eval/candidates.json"}, "suite": suite,
          "candidates_total": len(cands), "pruned": [], "executed": [], "ledger_updates_proposed": [],
          "default_behavior_changed": False, "stop_reason": None}

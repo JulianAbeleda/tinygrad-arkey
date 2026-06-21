@@ -28,18 +28,9 @@ RUNS = ROOT / "bench/qk-decode-eval/runs"
 SUMMARIES = ROOT / "bench/qk-decode-eval/summaries"
 WD_RESULT = ROOT / "bench/qk-decode-runtime-overhead/result.json"  # fixed path the W==D script overwrites
 MODEL = os.environ.get("QK_MODEL", "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
-DEV_SYS = "/sys/class/drm/card0/device/power_dpm_force_performance_level"
 
-# ---- provenance helpers -----------------------------------------------------------------------------------------
-def _git(*a):
-  try: return subprocess.check_output(["git", *a], cwd=ROOT, text=True).strip()
-  except Exception: return "unknown"
-def git_commit(): return _git("rev-parse", "HEAD")
-def dirty_tree(): return bool(_git("status", "--short"))
-def perf_state():
-  try: return pathlib.Path(DEV_SYS).read_text().strip()
-  except OSError: return "unknown"
-def hardware(): return "RX 7900 XTX / gfx1100"
+# ---- provenance helpers: single source of truth is extra/qk_harness_contract.py (centralized; was duplicated here) -
+from extra.qk_harness_contract import git_commit, dirty_tree, perf_state, hardware  # noqa: E402
 def now_ts(): return time.strftime("%Y%m%dT%H%M%S")
 def child_env(extra: dict) -> dict:
   e = os.environ.copy(); e.setdefault("DEV", "AMD"); e.setdefault("JIT", "1"); e["PYTHONPATH"] = str(ROOT)

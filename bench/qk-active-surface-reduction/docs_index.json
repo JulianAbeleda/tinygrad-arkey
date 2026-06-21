@@ -3552,7 +3552,7 @@
       "status": "current",
       "topic": "other",
       "date": "20260621",
-      "cited_by_canonical": false
+      "cited_by_canonical": true
     },
     {
       "doc": "docs/q4k-ffn-q8-lifecycle-scope-20260618.md",

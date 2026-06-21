@@ -5,7 +5,7 @@ reference graph, with an IMPORT-SAFETY FIXPOINT (a script is delete-eligible onl
 so no kept script is left with a broken import). Emits inventory.json + inventory.md. Read-only (no deletes)."""
 import json, pathlib, re
 from collections import Counter
-ROOT = pathlib.Path("/home/ubuntu/tinygrad-arkey")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/qk-active-surface-reduction"
 
 scripts = sorted({p.relative_to(ROOT).as_posix() for p in ROOT.glob("extra/*.py")})

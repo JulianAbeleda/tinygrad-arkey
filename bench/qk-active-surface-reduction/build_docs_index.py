@@ -5,7 +5,7 @@ topic cluster, so future agents navigate 650+ docs from one map. Emits docs_inde
 Does NOT move/delete any doc (that would break the ~251 canonical->dated-doc pointers)."""
 import json, pathlib, re, subprocess
 from collections import Counter, defaultdict
-ROOT = pathlib.Path("/home/ubuntu/tinygrad-arkey")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/qk-active-surface-reduction"
 
 # upstream tinygrad docs (leave alone) -- skip the tinygrad library doc tree, only classify the fork's flat docs/*.md

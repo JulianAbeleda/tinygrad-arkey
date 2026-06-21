@@ -29,9 +29,7 @@ DATE = "2026-06-21"
 REQ = ("id", "family", "description", "source", "decode_eval_candidate_id", "intent", "env", "allowed_by_policy",
        "closed_lane_risk", "expected_verdict", "expected_lane")
 
-def _git(*a):
-  try: return subprocess.check_output(["git", *a], cwd=ROOT, text=True).strip()
-  except Exception: return "unknown"
+from extra.qk_harness_contract import git_commit, dirty_tree  # provenance SSOT (was a local _git copy)
 
 def mk(id, family, desc, template_id, deid, intent, env, allowed, closed_risk, first_gate, promo_gate,
        exp_verdict, exp_lane, maps=None, deferred=False, notes="", extra=None):
@@ -160,7 +158,7 @@ def generate(template_ids: list[str], templates: dict) -> dict:
   by = {t["id"]: t for t in templates["templates"]}
   exps = [expand_template(by[tid]) for tid in template_ids]
   return {"schema": "decode_candidate_generation_v1", "date": DATE, "generator": "extra/qk_candidate_template_gen.py",
-          "git_commit": _git("rev-parse", "HEAD"), "dirty_tree": bool(_git("status", "--short")),
+          "git_commit": git_commit(), "dirty_tree": dirty_tree(),
           "templates": exps, "validation_result": "PASS" if all(e["validation_result"] == "PASS" for e in exps) else "FAIL"}
 
 def to_search_registry(gen: dict) -> dict:

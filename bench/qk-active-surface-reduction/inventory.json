@@ -1,8 +1,7 @@
 {
   "summary": {
-    "total_scripts": 223,
+    "total_scripts": 182,
     "counts": {
-      "delete": 41,
       "provenance": 161,
       "live": 21
     },
@@ -32,94 +31,9 @@
       "docs/project-north-star-llama-and-lifecycle-search-20260620.md",
       "structure/Development/performance-primitive-research-principles.md"
     ],
-    "delete_categories": {
-      "superseded_decode_probe": 4,
-      "no_canonical_reference": 14,
-      "superseded_mmvq_probe": 22,
-      "stale_scope_helper": 1
-    }
+    "delete_categories": {}
   },
   "files": [
-    {
-      "path": "extra/amd_att_decoder_d0d1_binary_probe.py",
-      "type": "script",
-      "stem": "amd_att_decoder_d0d1_binary_probe",
-      "imports": [],
-      "imported_by": [
-        "extra/amd_sqtt_oracle_hcq_diff.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-att-decoder-solution-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_decode_probe"
-    },
-    {
-      "path": "extra/amd_cross_ring_dependency_probe.py",
-      "type": "script",
-      "stem": "amd_cross_ring_dependency_probe",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger (no_canonical_reference)",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_multiprocess_decode_throughput.py",
-      "type": "script",
-      "stem": "amd_multiprocess_decode_throughput",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger (no_canonical_reference)",
-      "category": "superseded_decode_probe"
-    },
-    {
-      "path": "extra/amd_ring_overlap_characterize.py",
-      "type": "script",
-      "stem": "amd_ring_overlap_characterize",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-decode-overlap-scheduler-plan-20260617.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_rocprofiler_r1p1_replay_proof.py",
-      "type": "script",
-      "stem": "amd_rocprofiler_r1p1_replay_proof",
-      "imports": [
-        "amd_scheduler_tooling_backend_execute"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-rocprofiler-r1p1-aqlprofile-replay-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
     {
       "path": "extra/amd_rocprofiler_r1p2_hcq_replay.py",
       "type": "script",
@@ -139,168 +53,6 @@
       "status": "provenance",
       "reason": "shared utility imported by 1 kept script(s) ['extra/qk_att_primitive_atlas.py'] -- keep to avoid broken imports",
       "category": ""
-    },
-    {
-      "path": "extra/amd_rocprofiler_r1p2_v2_exporter.py",
-      "type": "script",
-      "stem": "amd_rocprofiler_r1p2_v2_exporter",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-rocprofiler-r1p2-v2-exporter-result-20260619.md",
-        "docs/amd-rocprofiler-r1p2-v2-exporter-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_rocprofiler_reopen_tracks.py",
-      "type": "script",
-      "stem": "amd_rocprofiler_reopen_tracks",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-rocprofiler-reopen-tracks-scope-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_rocprofiler_thread_trace_audit.py",
-      "type": "script",
-      "stem": "amd_rocprofiler_thread_trace_audit",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-rocprofiler-thread-trace-audit-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_schedule_codegen_exhaustion.py",
-      "type": "script",
-      "stem": "amd_schedule_codegen_exhaustion",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-schedule-codegen-exhaustion-result-20260619.md",
-        "docs/amd-schedule-codegen-exhaustion-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_scheduler_tooling_backend_execute.py",
-      "type": "script",
-      "stem": "amd_scheduler_tooling_backend_execute",
-      "imports": [],
-      "imported_by": [
-        "extra/amd_rocprofiler_r1p1_replay_proof.py",
-        "extra/amd_sqtt_oracle_hcq_diff.py",
-        "extra/amd_sqtt_t1_body_mapping_proof.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-scheduler-tooling-backend-t0t4-b0-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_sqtt_oracle_hcq_diff.py",
-      "type": "script",
-      "stem": "amd_sqtt_oracle_hcq_diff",
-      "imports": [
-        "amd_scheduler_tooling_backend_execute"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-sqtt-oracle-hcq-diff-result-20260619.md",
-        "docs/amd-sqtt-oracle-hcq-diff-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_sqtt_t1_body_mapping_proof.py",
-      "type": "script",
-      "stem": "amd_sqtt_t1_body_mapping_proof",
-      "imports": [
-        "amd_scheduler_tooling_backend_execute"
-      ],
-      "imported_by": [
-        "extra/amd_sqtt_oracle_hcq_diff.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-att-decoder-blocker-scope-20260619.md",
-        "docs/amd-att-decoder-solution-result-20260619.md",
-        "docs/amd-scheduler-tooling-t1-body-mapping-proof-20260619.md",
-        "docs/amd-scheduler-tooling-t1b-att-aqlprofile-result-20260619.md",
-        "docs/amd-sqtt-oracle-hcq-diff-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 5 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/amd_sqtt_t1b_att_aqlprofile.py",
-      "type": "script",
-      "stem": "amd_sqtt_t1b_att_aqlprofile",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-scheduler-tooling-t1b-att-aqlprofile-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_decode_probe"
-    },
-    {
-      "path": "extra/amd_sqtt_t1c_att_decoder_repair.py",
-      "type": "script",
-      "stem": "amd_sqtt_t1c_att_decoder_repair",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-att-decoder-blocker-scope-20260619.md",
-        "docs/amd-scheduler-tooling-t1c-att-decoder-repair-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_decode_probe"
     },
     {
       "path": "extra/amd_two_compute_ring_probe.py",
@@ -341,9 +93,7 @@
       "type": "script",
       "stem": "amd_two_ring_dependency_probe",
       "imports": [],
-      "imported_by": [
-        "extra/amd_cross_ring_dependency_probe.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [],
@@ -474,20 +224,6 @@
         "test/backend/test_tensor.py"
       ],
       "category": ""
-    },
-    {
-      "path": "extra/introspection.py",
-      "type": "script",
-      "stem": "introspection",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger (no_canonical_reference)",
-      "category": "no_canonical_reference"
     },
     {
       "path": "extra/lds_attention_tile.py",
@@ -749,8 +485,7 @@
         "qk_modes"
       ],
       "imported_by": [
-        "extra/llm_eval_matrix.py",
-        "extra/qwen_eval_harness.py"
+        "extra/llm_eval_matrix.py"
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
@@ -774,9 +509,7 @@
       "imports": [
         "llm_eval_common"
       ],
-      "imported_by": [
-        "extra/qwen_eval_matrix.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [],
@@ -800,8 +533,6 @@
       "imported_by": [
         "extra/llm_eval_harness.py",
         "extra/llm_rollout.py",
-        "extra/q8_ffn_artifact_promotion_execute.py",
-        "extra/q8_ffn_fast_artifact_inject.py",
         "extra/q8_ffn_oneblock_route.py",
         "extra/q8_ffn_quality_proxy.py",
         "extra/qk_att_inmodel_role_join.py",
@@ -1205,7 +936,6 @@
       "imports": [],
       "imported_by": [
         "extra/q4_k_gemv_primitive.py",
-        "extra/q6_k_policy_sweep.py",
         "extra/qk_ansor.py",
         "extra/qk_semantic_schedule_bench.py",
         "extra/qk_threeway_load_microbench.py"
@@ -1247,7 +977,6 @@
         "qk_layout"
       ],
       "imported_by": [
-        "extra/q6_k_policy_sweep.py",
         "extra/qk_ansor.py",
         "extra/qk_att_inmodel_role_join.py",
         "extra/qk_semantic_schedule_bench.py"
@@ -1284,27 +1013,6 @@
       "category": ""
     },
     {
-      "path": "extra/q6_k_policy_sweep.py",
-      "type": "script",
-      "stem": "q6_k_policy_sweep",
-      "imports": [
-        "q4_k_safety",
-        "qk_layout"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/amd-decode-ansor-direction.md",
-        "docs/amd-decode-optimization-plan.md",
-        "docs/amd-rocm-llamacpp-research.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "no_canonical_reference"
-    },
-    {
       "path": "extra/q8_1_q4k_bench.py",
       "type": "script",
       "stem": "q8_1_q4k_bench",
@@ -1327,122 +1035,6 @@
       "category": ""
     },
     {
-      "path": "extra/q8_ffn_artifact_import_route.py",
-      "type": "script",
-      "stem": "q8_ffn_artifact_import_route",
-      "imports": [
-        "q8_ffn_codegen_transfer_audit",
-        "q8_ffn_fast_artifact_probe"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-artifact-import-route-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_artifact_promotion_execute.py",
-      "type": "script",
-      "stem": "q8_ffn_artifact_promotion_execute",
-      "imports": [
-        "llm_generate"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-artifact-promotion-result-20260620.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_artifact_promotion_scope.py",
-      "type": "script",
-      "stem": "q8_ffn_artifact_promotion_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-artifact-promotion-scope-20260620.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "stale_scope_helper"
-    },
-    {
-      "path": "extra/q8_ffn_asm_fullrow_reduce.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_fullrow_reduce",
-      "imports": [],
-      "imported_by": [
-        "extra/q8_ffn_asm_gateup_full.py",
-        "extra/q8_ffn_asm_schedule_audit.py",
-        "extra/q8_ffn_dynamic_scheduler_observability.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_gateup_full.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_gateup_full",
-      "imports": [
-        "q8_ffn_asm_fullrow_reduce",
-        "q8_ffn_fast_artifact_probe",
-        "q8_ffn_handwritten_oracle",
-        "q8_ffn_hcq_artifact"
-      ],
-      "imported_by": [
-        "extra/amd_scheduler_tooling_backend_execute.py",
-        "extra/q8_ffn_dynamic_scheduler_observability.py",
-        "extra/q8_ffn_route_a_pmu_sqtt_evidence.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/decode-native-renderer-dnr2-lowering-result-20260620.md",
-        "docs/q8-ffn-amd-scheduler-work-scope-20260619.md",
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_gateup_skeleton.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_gateup_skeleton",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
       "path": "extra/q8_ffn_asm_gateup_smoke.py",
       "type": "script",
       "stem": "q8_ffn_asm_gateup_smoke",
@@ -1461,249 +1053,6 @@
       "category": ""
     },
     {
-      "path": "extra/q8_ffn_asm_local_id_probe.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_local_id_probe",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_one_subblock_dot.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_one_subblock_dot",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_q4_field_skeleton.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_q4_field_skeleton",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_q4_load_skeleton.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_q4_load_skeleton",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_q8_load_skeleton.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_q8_load_skeleton",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_scaled_subblock.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_scaled_subblock",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_schedule_audit.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_schedule_audit",
-      "imports": [
-        "q8_ffn_asm_fullrow_reduce",
-        "q8_ffn_codegen_transfer_audit",
-        "q8_ffn_comgr_fused_gateup_probe",
-        "q8_ffn_fast_artifact_probe"
-      ],
-      "imported_by": [
-        "extra/q8_ffn_dynamic_scheduler_observability.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-amd-scheduler-s0-result-20260619.md",
-        "docs/q8-ffn-dynamic-scheduler-observability-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_signed_high_dot.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_signed_high_dot",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_asm_thread_partials.py",
-      "type": "script",
-      "stem": "q8_ffn_asm_thread_partials",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2b-asm-consumer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_codegen_transfer_audit.py",
-      "type": "script",
-      "stem": "q8_ffn_codegen_transfer_audit",
-      "imports": [
-        "q8_ffn_fast_artifact_probe",
-        "q8_ffn_hcq_artifact"
-      ],
-      "imported_by": [
-        "extra/q8_ffn_artifact_import_route.py",
-        "extra/q8_ffn_asm_schedule_audit.py",
-        "extra/q8_ffn_dynamic_scheduler_observability.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-amd-scheduler-work-scope-20260619.md",
-        "docs/q8-ffn-codegen-asm-transfer-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_comgr_fused_gateup_probe.py",
-      "type": "script",
-      "stem": "q8_ffn_comgr_fused_gateup_probe",
-      "imports": [
-        "q8_ffn_fast_artifact_probe",
-        "q8_ffn_hcq_artifact"
-      ],
-      "imported_by": [
-        "extra/q8_ffn_asm_schedule_audit.py",
-        "extra/q8_ffn_dynamic_scheduler_observability.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-codegen-b2a-comgr-fused-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_dynamic_scheduler_observability.py",
-      "type": "script",
-      "stem": "q8_ffn_dynamic_scheduler_observability",
-      "imports": [
-        "q8_ffn_asm_fullrow_reduce",
-        "q8_ffn_asm_schedule_audit",
-        "q8_ffn_codegen_transfer_audit",
-        "q8_ffn_comgr_fused_gateup_probe",
-        "q8_ffn_fast_artifact_probe"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-dynamic-scheduler-observability-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_fast_artifact_inject.py",
-      "type": "script",
-      "stem": "q8_ffn_fast_artifact_inject",
-      "imports": [
-        "llm_generate",
-        "q8_ffn_fast_artifact_probe",
-        "q8_ffn_oneblock_route",
-        "qk_nll_eval"
-      ],
-      "imported_by": [
-        "extra/q8_ffn_injection_contract_audit.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-fast-artifact-a3-route-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
       "path": "extra/q8_ffn_fast_artifact_probe.py",
       "type": "script",
       "stem": "q8_ffn_fast_artifact_probe",
@@ -1713,13 +1062,6 @@
         "qk_layout"
       ],
       "imported_by": [
-        "extra/q8_ffn_artifact_import_route.py",
-        "extra/q8_ffn_asm_gateup_full.py",
-        "extra/q8_ffn_asm_schedule_audit.py",
-        "extra/q8_ffn_codegen_transfer_audit.py",
-        "extra/q8_ffn_comgr_fused_gateup_probe.py",
-        "extra/q8_ffn_dynamic_scheduler_observability.py",
-        "extra/q8_ffn_fast_artifact_inject.py",
         "extra/q8_ffn_graph_route.py",
         "extra/q8_ffn_oneblock_route.py"
       ],
@@ -1740,9 +1082,7 @@
       "imports": [
         "q8_ffn_fast_artifact_probe"
       ],
-      "imported_by": [
-        "extra/q8_ffn_artifact_promotion_execute.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [],
@@ -1762,7 +1102,6 @@
         "qk_layout"
       ],
       "imported_by": [
-        "extra/q8_ffn_asm_gateup_full.py",
         "extra/q8_ffn_fast_artifact_probe.py",
         "extra/q8_ffn_hcq_artifact.py",
         "extra/qk_att_primitive_atlas.py",
@@ -1788,9 +1127,6 @@
         "qk_layout"
       ],
       "imported_by": [
-        "extra/q8_ffn_asm_gateup_full.py",
-        "extra/q8_ffn_codegen_transfer_audit.py",
-        "extra/q8_ffn_comgr_fused_gateup_probe.py",
         "extra/q8_ffn_fast_artifact_probe.py",
         "extra/q8_ffn_oneblock_route.py"
       ],
@@ -1806,27 +1142,6 @@
       "category": ""
     },
     {
-      "path": "extra/q8_ffn_injection_contract_audit.py",
-      "type": "script",
-      "stem": "q8_ffn_injection_contract_audit",
-      "imports": [
-        "q8_ffn_fast_artifact_inject"
-      ],
-      "imported_by": [
-        "extra/q8_ffn_fast_artifact_inject.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-dual-track-route-and-codegen-scope-20260619.md",
-        "docs/q8-ffn-fast-artifact-a3-route-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
       "path": "extra/q8_ffn_oneblock_route.py",
       "type": "script",
       "stem": "q8_ffn_oneblock_route",
@@ -1838,7 +1153,6 @@
         "qk_nll_eval"
       ],
       "imported_by": [
-        "extra/q8_ffn_fast_artifact_inject.py",
         "extra/qk_decode_mmvq_p5_lifecycle_probe.py"
       ],
       "in_live_closure": false,
@@ -1854,22 +1168,6 @@
       "status": "provenance",
       "reason": "shared utility imported by 1 kept script(s) ['extra/qk_decode_mmvq_p5_lifecycle_probe.py'] -- keep to avoid broken imports",
       "category": ""
-    },
-    {
-      "path": "extra/q8_ffn_producer_oracle.py",
-      "type": "script",
-      "stem": "q8_ffn_producer_oracle",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-handwritten-oracle-scope-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
     },
     {
       "path": "extra/q8_ffn_quality_proxy.py",
@@ -1892,38 +1190,6 @@
       "status": "provenance",
       "reason": "cited by canonical/ledger (1 canon-doc, 0 ledger)",
       "category": ""
-    },
-    {
-      "path": "extra/q8_ffn_route_a_pmu_sqtt_evidence.py",
-      "type": "script",
-      "stem": "q8_ffn_route_a_pmu_sqtt_evidence",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-route-a-pmu-sqtt-evidence-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/q8_ffn_route_a_schedule_contract.py",
-      "type": "script",
-      "stem": "q8_ffn_route_a_schedule_contract",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [
-        "docs/q8-ffn-route-a-scheduler-codegen-result-20260619.md"
-      ],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
-      "category": "superseded_mmvq_probe"
     },
     {
       "path": "extra/qk_amd_bb5a1_pipeline_ir_probe.py",
@@ -3669,7 +2935,6 @@
         "extra/q4_k_bench.py",
         "extra/q4_k_gemv_primitive.py",
         "extra/q6_k_gemv_primitive.py",
-        "extra/q6_k_policy_sweep.py",
         "extra/q8_1_q4k_bench.py",
         "extra/q8_ffn_fast_artifact_probe.py",
         "extra/q8_ffn_handwritten_oracle.py",
@@ -4035,7 +3300,6 @@
         "llm_generate"
       ],
       "imported_by": [
-        "extra/q8_ffn_fast_artifact_inject.py",
         "extra/q8_ffn_oneblock_route.py",
         "extra/q8_ffn_quality_proxy.py",
         "extra/qk_att_inmodel_role_join.py",
@@ -5138,38 +4402,6 @@
       "status": "provenance",
       "reason": "shared utility imported by 1 kept script(s) ['extra/qk_amd_software_pipeline_probe.py'] -- keep to avoid broken imports",
       "category": ""
-    },
-    {
-      "path": "extra/qwen_eval_harness.py",
-      "type": "script",
-      "stem": "qwen_eval_harness",
-      "imports": [
-        "llm_eval_harness"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger (no_canonical_reference)",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/qwen_eval_matrix.py",
-      "type": "script",
-      "stem": "qwen_eval_matrix",
-      "imports": [
-        "llm_eval_matrix"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger (no_canonical_reference)",
-      "category": "no_canonical_reference"
     },
     {
       "path": "extra/training.py",
