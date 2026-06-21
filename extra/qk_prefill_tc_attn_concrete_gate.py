@@ -22,7 +22,7 @@ os.environ.setdefault("PREFILL_GRAPH_GEMM", "1")   # promoted baseline ON in BOT
 os.environ.setdefault("PROFILE", "1")              # for the kernel-identity assert
 
 
-def perflevel(x): subprocess.run(["rocm-smi", "--setperflevel", x], capture_output=True, text=True)
+from extra.qk_clock_pin import perflevel  # GPU perf-state boundary (was a local rocm-smi perf-level copy)
 
 
 def kernels_of(evs):

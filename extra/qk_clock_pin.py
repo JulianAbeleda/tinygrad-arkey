@@ -11,9 +11,15 @@ Use as a context manager:  `with pinned_peak(enabled=True): ...measure...`
 """
 from __future__ import annotations
 
-import contextlib, subprocess
+import contextlib, pathlib, subprocess
 
 DEV = "/sys/class/drm/card0/device"
+DEV_SYS = f"{DEV}/power_dpm_force_performance_level"  # the perf-state leaf (single source of truth for the path)
+
+def read_perf_state() -> str:
+  """Read the GPU perf-state ('auto'/'manual'/...) -- the READ side of the perf-state boundary (no sudo)."""
+  try: return pathlib.Path(DEV_SYS).read_text().strip()
+  except OSError: return "unknown"
 
 def _sudo(cmd: str) -> dict:
   p = subprocess.run(["sudo", "-n", "bash", "-c", cmd], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -37,3 +43,17 @@ def pinned_peak(enabled: bool = True):
     yield prov
   finally:
     if enabled: restore_auto()
+
+# --- the coarser `rocm-smi --setperflevel` idiom (distinct from the manual+sclk/mclk pin above) -------------------
+def perflevel(level: str) -> subprocess.CompletedProcess:
+  """Set the rocm-smi perf level ('high'/'auto'/...). The single boundary for the setperflevel mechanism."""
+  return subprocess.run(["rocm-smi", "--setperflevel", level], capture_output=True, text=True)
+
+@contextlib.contextmanager
+def pinned_perflevel(level: str = "high", restore: str = "auto"):
+  """Hold a rocm-smi perf level for the duration; ALWAYS restore in finally (the leak-safe boundary)."""
+  perflevel(level)
+  try:
+    yield
+  finally:
+    perflevel(restore)

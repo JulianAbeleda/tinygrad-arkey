@@ -89,6 +89,11 @@ def telemetry(rows: list[dict[str, Any]]) -> dict[str, Any]:
   return {"all": block(rows), "active": block(active)}
 
 
+# DOCUMENTED EXCEPTION to the qk_clock_pin GPU perf-state boundary: the pin sequence below is byte-identical to
+# qk_clock_pin.pin_peak()/restore_auto(), but this script emits its OWN provenance dict shape ({cmd,returncode,
+# stdout[-1000:],ok}) into its artifact and already wraps the pin in try/finally. Routing it through qk_clock_pin
+# would change the emitted provenance bytes (NON-NFC), so it is kept local. Centralizing it is a separate
+# (non-NFC) provenance-format change, not part of the NFC boundary fix.
 def sudo(cmd: str) -> dict[str, Any]:
   p = subprocess.run(["sudo", "-n", "bash", "-c", cmd], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   return {"cmd": cmd, "returncode": p.returncode, "stdout": p.stdout[-1000:], "ok": p.returncode == 0}

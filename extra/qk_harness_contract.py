@@ -30,7 +30,6 @@ from __future__ import annotations
 import os, pathlib, statistics, subprocess, sys, time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEV_SYS = "/sys/class/drm/card0/device/power_dpm_force_performance_level"
 
 # The 13 fields a valid benchmark artifact must record (the principle doc's enumerated contract).
 CONTRACT_FIELDS = (
@@ -50,8 +49,8 @@ def git_short() -> str: return _git("rev-parse", "--short", "HEAD")
 def dirty_tree() -> bool: return bool(_git("status", "--short"))
 
 def perf_state() -> str:
-  try: return pathlib.Path(DEV_SYS).read_text().strip()
-  except OSError: return "unknown"
+  from extra.qk_clock_pin import read_perf_state  # the GPU perf-state boundary (single source for the sysfs path)
+  return read_perf_state()
 
 def hardware() -> str: return "RX 7900 XTX / gfx1100"
 
