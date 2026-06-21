@@ -90,6 +90,15 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > llama's one-kernel LDS-staged `v_dot2` tile; flat-GEMM under-utilization + 2 extra layout kernels offset the benefit.
 > The true single fused LDS-tiled kernel is inexpressible (tiled-GEMM ⊥ `.set/.after` fusion). decode_eval
 > `fused_flash_concrete_gate` → `FAIL_LOCAL_AB` (match=True). **Bounded AND concrete-shape decode levers both exhausted.**
+>
+> **Harness evaluator-contract audit + applied** (`extra/qk_harness_contract.py`; `docs/harness-contract-audit-20260621.md`):
+> audited the live lifecycle harness set against the 13-field contract ("Harnesses Are Performance Primitives Too").
+> Systemic gaps = no spread/noise band, no git/dirty stamp, prose-only comparator-why; two distortion risks = the
+> llama-oracle hardcodes ctx512/4096 from constants (now provenance-disclosed) and `qk_gateup_sched_ab.py` emits no
+> artifact / isn't clock-pinned. Applied: centralized `qk_harness_contract` (provenance + `repro_band` +
+> `contract_audit` + `stamp`); `decode_eval` now auto-flags any non-conforming child artifact (`child_artifact_contract`
+> + `HARNESS-CONTRACT` note); `qk_fused_flash_concrete_gate_ab.py` upgraded to **CONFORMS 13/13** (reference). No
+> verdict/default changed.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

@@ -46,6 +46,7 @@ from tinygrad.uop.ops import UOp, AddrSpace, AxisType
 from extra.qk_flash_decode import (flash_max_kernel, flash_prob_kernel, flash_gmax_kernel,
                                    flash_decode_attention, _F32, _fexp, _fki)
 from extra.qk_clock_pin import pinned_peak
+from extra.qk_harness_contract import stamp, repro_band
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-fused-flash-concrete-gate"
@@ -149,15 +150,18 @@ def ab():
         dev.synchronize(); t0 = time.perf_counter()
         for _ in range(n): fn()
         dev.synchronize(); return (time.perf_counter() - t0) / n * 1e6
-      cand_thr = statistics.median([thr(cand) for _ in range(3)])
-      con_thr = statistics.median([thr(comp_con) for _ in range(3)])
-      sym_thr = statistics.median([thr(lambda: comp_sym(vsp.bind(Tc - 1))) for _ in range(3)])
+      cand_s = [thr(cand) for _ in range(5)]                                      # repeats for a noise band
+      con_s = [thr(comp_con) for _ in range(5)]
+      sym_s = [thr(lambda: comp_sym(vsp.bind(Tc - 1))) for _ in range(5)]
+      cand_thr = statistics.median(cand_s); con_thr = statistics.median(con_s); sym_thr = statistics.median(sym_s)
       sp_con = round(con_thr / cand_thr, 3) if cand_thr else 0     # vs strict same-shape concrete comparator (authority)
       sp_sym = round(sym_thr / cand_thr, 3) if cand_thr else 0     # vs canonical symbolic comparator (cross-check)
+      band = {"candidate": repro_band(cand_s), "comp_concrete": repro_band(con_s), "comp_symbolic": repro_band(sym_s)}
       rows.append({"ctx": Tc, "splits": [{"err": mx}], "S": S, "pv_workgroups": Hkv * S,
                    "cand_throughput_us": round(cand_thr, 1), "comp_concrete_us": round(con_thr, 1),
                    "comp_symbolic_us": round(sym_thr, 1), "best_speedup_vs_coop": sp_con,
                    "speedup_vs_coop_concrete": sp_con, "speedup_vs_coop_symbolic": sp_sym,
+                   "repro_band": band, "warmups": 23,
                    "rel_rmse": round(rel, 6), "max_abs": round(mx, 6)})
       print(f"  ctx{Tc} (S={S}, PV wg={Hkv*S}): cand {cand_thr:.1f}us vs coop[concrete] {con_thr:.1f}us -> {sp_con}x "
             f"(vs coop[symbolic] {sym_thr:.1f}us -> {sp_sym}x)  rel_rmse={rel:.1e}", file=sys.__stderr__)
@@ -185,7 +189,18 @@ def ab():
                             "Fixing ctx makes S=Tc/L=8 concrete & FAIR (no overread) -- the exact blocker removed.",
          "rows": rows, "results": [{"ctx": r["ctx"], "best_speedup_vs_coop": r["best_speedup_vs_coop"], "splits": r["splits"]} for r in rows],
          "correctness_rel_rmse": round(max_err, 6), "first_gate_pass": gate, "verdict": decision,
+         "stop_reason": f"local A/B {s1024}x vs concrete gqa_coop_vec {'>=' if gate else '<'} 1.05 gate; "
+                        + ("concrete pass -> needs symbolic generalization" if gate else "loses -> REST_DECODE + v2"),
+         "warmups": 23, "repeats": 5, "repro_band_by_ctx": {r["ctx"]: r["repro_band"] for r in rows},
+         "pass_fail_threshold": ">=1.05x local @ctx1024 (concrete comparator) AND rel_rmse <=1e-3",
          "clock_pin": (prov or {}).get("ok"), "commit": commit, "dirty_tree": dirty, "default_behavior_changed": False}
+  # stamp the centralized evaluator contract (provenance + comparator-why + timing authority + ledger links + self-audit)
+  art = stamp(art, comparator_id="gqa_coop_vec",
+              comparator_why="shipped default decode-attention primitive (FLASH_L=128); the reigning local-A/B winner all decode candidates must beat",
+              timing_authority="LOCAL throughput proxy (back-to-back perf_counter, median-of-5, clock-pinned) -- DIAGNOSTIC, not in-model W==D; gate is local-only by design (W==D not reached on a local fail)",
+              ledger_links=["docs/fused-flash-concrete-gate-result-20260621.md",
+                            "bench/qk-lifecycle-search/refutations.json#fused_flash_concrete_gate_register_tiled_not_lds",
+                            "bench/qk-decode-eval/candidates.json#fused_flash_concrete_gate"])
   OUT.mkdir(parents=True, exist_ok=True)
   f = OUT / f"local_ab_{time.strftime('%Y%m%dT%H%M%S')}.json"; f.write_text(json.dumps(art, indent=2)); (OUT / "latest.json").write_text(json.dumps(art, indent=2))
   print(json.dumps({"verdict": decision, "first_gate_pass": gate, "ctx1024_speedup_concrete": s1024,

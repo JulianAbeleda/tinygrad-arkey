@@ -99,8 +99,15 @@ def run_ab_script(script: str, result_json: str) -> dict:
       best = row.get("best_speedup_vs_coop") or row.get("fused_lds_speedup_vs_coop")
       for s in row.get("splits", []): err = max(err, s.get("err", 0.0))
       err = max(err, row.get("lds_err", 0.0))
+  # CONTRACT ENFORCEMENT (Harnesses Are Performance Primitives Too): audit the consumed child artifact against the
+  # 13-field evaluator contract and surface any gap, so a non-conforming ab_script harness is flagged centrally.
+  try:
+    from extra.qk_harness_contract import contract_audit
+    child_contract = contract_audit(d)
+  except Exception as e:
+    child_contract = {"conformance": "UNKNOWN", "missing": [f"audit_error:{e}"], "present": [], "n_present": 0, "n_total": 13}
   return {"command": "DEV=AMD JIT=1 " + " ".join(cmd[1:]), "first_gate_pass": d.get("first_gate_pass"),
-          "speedup_ctx1024": best, "max_err": err, "phase": d.get("phase")}
+          "speedup_ctx1024": best, "max_err": err, "phase": d.get("phase"), "child_contract": child_contract}
 
 def run_flash_l_local() -> dict:
   """Self-spawned child: flash_decode_attention L=64 vs L=128 at decode shape, clock-pinned, byte-exact vs numpy."""
@@ -200,7 +207,12 @@ def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, d
     elif r == "local_ab" and runner == "ab_script":
       d = run_ab_script(rung["script"], rung["result_json"]); res["commands"].append(d["command"]); res["source_files"].append(rung["script"])
       res["local_ab"] = {"checked": True, "speedup_ctx1024": d["speedup_ctx1024"], "threshold_min": th["local_min_speedup"],
-                         "passed": bool(d.get("first_gate_pass")), "authority": "clock-pinned local diagnostic", "note": d.get("phase")}
+                         "passed": bool(d.get("first_gate_pass")), "authority": "clock-pinned local diagnostic", "note": d.get("phase"),
+                         "child_artifact_contract": d.get("child_contract")}
+      cc = d.get("child_contract") or {}
+      if cc.get("conformance") not in (None, "CONFORMS"):
+        res["notes"].append(f"HARNESS-CONTRACT: child artifact {rung['result_json']} is {cc.get('conformance')} "
+                            f"({cc.get('n_present')}/{cc.get('n_total')} fields); missing: {', '.join(cc.get('missing', [])[:6])}")
       if cand.get("correctness_req") == "byte_exact":
         res["correctness"] = {"checked": True, "metric": "max_err", "value": d["max_err"], "threshold": th["correctness_tol"], "passed": d["max_err"] <= th["correctness_tol"], "note": "byte-exact vs numpy ref"}
     elif r == "wd" and runner == "runtime_overhead":

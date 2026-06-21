@@ -20,6 +20,7 @@ Run: DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_llama_flash_attn_tile_oracle_ab
 from __future__ import annotations
 import csv, json, pathlib, statistics, sys, time
 import numpy as np
+from extra.qk_harness_contract import stamp
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-llama-flash-attn-tile-oracle"
@@ -56,7 +57,8 @@ def llama_gpu_us():
       if c in pertok and disp_per_tok:
         t = pertok[c]["tile"] / disp_per_tok; cm = pertok[c]["combine"] / disp_per_tok
         out[c] = {"tile_us": round(t, 2), "combine_us": round(cm, 2), "call_us": round(t + cm, 2),
-                  "source": f"derived: per-token/{disp_per_tok:.1f} dispatches (calibrated @1024)"}
+                  "source": f"DERIVED from HARDCODED per-token audit constants (NOT re-measured) / {disp_per_tok:.1f} dispatches @1024",
+                  "data_provenance": "derived_from_constant_pertoken_table"}
   return out, disp_per_tok
 
 def _llama_pertoken_table():
@@ -66,7 +68,9 @@ def _llama_pertoken_table():
   except Exception:
     return {}
   txt = json.dumps(d)
-  # known values from the audit doc: tile 266/342/881, combine 115/116/152 @512/1024/4096
+  # WARNING (harness-contract honesty): these are HARDCODED constants from the audit doc, NOT re-read from the
+  # trace `d`. So ctx512/4096 are derived from fixed constants -- only ctx1024 is freshly measured per-dispatch.
+  # The artifact discloses this per-ctx via data_provenance. Re-measuring 512/4096 needs fresh rocprofv3 traces.
   fallback = {512: {"tile": 266.0, "combine": 115.0}, 1024: {"tile": 342.0, "combine": 116.0},
               4096: {"tile": 881.0, "combine": 152.0}}
   return fallback
@@ -113,6 +117,7 @@ def main():
     speedup = round(cc / lc, 2) if (lc and cc) else None  # >1 => llama faster
     rows.append({"ctx": c, "llama_attn_gpu_us": lc, "llama_tile_us": llama.get(c, {}).get("tile_us"),
                  "llama_combine_us": llama.get(c, {}).get("combine_us"), "llama_source": llama.get(c, {}).get("source"),
+                 "llama_data_provenance": llama.get(c, {}).get("data_provenance", "measured" if c == 1024 else "derived"),
                  "coop_attn_gpu_us": cc, "llama_speedup_vs_coop": speedup})
   s1024 = next(r["llama_speedup_vs_coop"] for r in rows if r["ctx"] == 1024)
   s4096 = next(r["llama_speedup_vs_coop"] for r in rows if r["ctx"] == 4096)
@@ -131,7 +136,14 @@ def main():
          "workgroups_by_ctx": "llama grid 32x16 (tile, ncols2=4 GQA fold) -- grows with ctx via parallel_blocks",
          "kv_splits_by_ctx": "llama parallel_blocks ~16 @1024 (occupancy-driven)", "query_heads_parallelized": Hq,
          "combine_kernel_count": 1, "correctness_note": "llama kernel is the REFERENCE (correct by construction); coop byte-exact vs numpy already established (err 2e-4). No re-implementation to verify.",
-         "default_behavior_changed": False}
+         "data_provenance_caveat": "ONLY ctx1024 is freshly rocprofv3-measured per-dispatch; ctx512/4096 are DERIVED from HARDCODED per-token audit constants (tile 266/342/881, combine 115/116/152) -- see per-row llama_data_provenance. The headline (~5.7x@1024) rests on measured data; the 512/4096 figures are constant-derived and should be re-measured before any quantitative reuse.",
+         "warmups": 8, "default_behavior_changed": False}
+  # stamp the centralized evaluator contract (provenance + comparator-why + timing authority + ledger + self-audit)
+  art = stamp(art, comparator_id="gqa_coop_vec",
+              comparator_why="shipped default decode-attention primitive; the reigning local winner this oracle measures the gap TO (non-promotable reference)",
+              timing_authority="pure GPU time: llama via rocprofv3 HW timestamps (ctx1024 measured; 512/4096 constant-derived), coop via tinygrad ProfileGraphEvent median-of-5 clock-pinned -- DIAGNOSTIC reference, never W==D/default",
+              ledger_links=["docs/llama-flash-attn-tile-oracle-result-20260621.md",
+                            "bench/qk-decode-eval/candidates.json#llama_flash_attn_tile_oracle"])
   OUT.mkdir(parents=True, exist_ok=True)
   f = OUT / f"local_ab_{time.strftime('%Y%m%dT%H%M%S')}.json"; f.write_text(json.dumps(art, indent=2))
   (OUT / "latest.json").write_text(json.dumps(art, indent=2))

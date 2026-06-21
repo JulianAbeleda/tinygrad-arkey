@@ -17,6 +17,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   candidates must be IO-aware, decode-aware, softmax-aware, dataflow-aware, resource-aware, and comparator-aware.
   It also grounds harness/search methodology in MLPerf, SPEC reproducibility, Ansor/TVM, and Triton: harnesses are
   performance primitives, and search means generated candidates → reproducible evaluator → ledger/refutation.
+- **`harness-contract-audit-20260621.md`** — ⭐ HARNESS EVALUATOR-CONTRACT AUDIT + APPLIED. Exhaustively audited the
+  live lifecycle harness set against the 13-field contract; found the systemic gaps (no spread/noise band, no
+  git/dirty, prose-only comparator-why) + two distortion risks (the llama-oracle hardcodes ctx512/4096 from constants;
+  `gateup_sched` emits no artifact / isn't clock-pinned). Applied the harness logic: centralized helper
+  `extra/qk_harness_contract.py` (provenance + `repro_band` + `contract_audit` + `stamp`), `decode_eval` now
+  auto-flags any non-conforming child artifact, `fused_flash_concrete_gate` upgraded to **CONFORMS 13/13** (reference),
+  llama-oracle provenance made honest. No verdict/default changed.
 - **`decode-evaluation-harness-hardening-result-20260621.md`** — ⭐ MACHINE-SEARCH EVALUATOR BUILT. `extra/qk_decode_eval.py`
   is the automated lifecycle ladder (correctness→local A/B→W==D→policy) emitting schema'd verdicts; it reproduces the
   historical classifications (baseline→REST, flash_l_64→LOCAL_PASS_WD_FAIL, warp_tile→FAIL_LOCAL_AB, q8→PASS_OPT_IN)
