@@ -12,7 +12,7 @@ import unittest
 
 from extra.llm_eval_common import load_json
 from extra.qk_search_spec import (
-  AcceptedPolicy, Constraints, Model, Objective, Phase, SearchRow,
+  AcceptedPolicy, Constraints, Model, Objective, Phase, SearchRow, SearchSpace,
   assemble_search_row, backend_choices, baseline, from_generated_policy,
   load_accepted_policy, load_search_rows, model_choices, model_size_key,
   objective_choices, op_scope_choices, phase_choices, save_accepted_policy,
@@ -37,7 +37,7 @@ class TestEnums(unittest.TestCase):
     self.assertEqual(set(phase_choices()), {p.value for p in Phase})
     self.assertEqual(set(model_choices()), {m.value for m in Model})
     self.assertEqual(set(op_scope_choices()), {"q4k_gemv", "q6k_gemv", "attention", "ffn_down", "lm_head", "scheduler"})
-    self.assertEqual(set(search_space_choices()), {"primitive_policy", "demotion", "flash_threshold", "storage", "schedule", "lds_blocking"})
+    self.assertEqual(set(search_space_choices()), {s.value for s in SearchSpace})
     self.assertEqual(set(objective_choices()), {o.value for o in Objective})
     self.assertEqual(backend_choices(), ("AMD",))
 
