@@ -70,6 +70,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   W=129 lanes recompute exp (vs coop's once/key), so it loses. Tail fusion doesn't help; coop's hoisted-exp split is
   near-optimal. Full online-max removal `BLOCKED_BY_IDIOM` (two-granularity pm+pout store). The 5–6× gap stays
   in-kernel-q·k codegen quality (deep). No W==D; banked.
+- **`decode-frontier-decision-after-path-a-20260621.md`** — ⭐ FRONTIER DECISION: `FRONTIER_LOW_LEVEL_TOOLING_FIRST`.
+  A per-kernel breakdown corrects the framing: coop's 70µs = `flash_partial` 24.7µs + **matmul q·k 13.9µs (≈ llama's
+  whole 12µs tile)** + softmax ~28µs — the **q·k is NOT the bottleneck**; the gap is the softmax+V multi-kernel that
+  Path A can't fuse. We lack counter/ISA attribution → deep q·k codegen (A) is mis-targeted, llama port (B) premature.
+  Next = **diagnostic-first low-level tooling** (rocprof-compute counters + ISA disasm of `flash_partial` vs llama
+  tile) to name the inefficiency, then a targeted codegen fix OR `REST_DECODE` with proof. Bounded decode exhausted.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

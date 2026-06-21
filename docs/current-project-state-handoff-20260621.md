@@ -132,6 +132,17 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   store wall. So the proven expressiveness does NOT yield a decode win; the 5–6× gap stays the **in-kernel q·k codegen
   quality** (deep, no bounded gate; Path A keeps coop's matmul q·k and doesn't attack it). Decode lever options now:
   the deep q·k-codegen-quality project, or REST. See `docs/fused-softmax-v-tail-candidate-result-20260621.md`.
+- **Decode frontier decision (2026-06-21) — `FRONTIER_LOW_LEVEL_TOOLING_FIRST`.** A purely-diagnostic per-kernel
+  breakdown **corrects the "deep q·k codegen" framing**: coop's 70µs @ctx1024 is `flash_partial` 24.7µs (35%) +
+  **matmul q·k 13.9µs (20%, ≈ llama's WHOLE 12µs tile)** + softmax kernels ~28µs (40%). So the **q·k matmul is NOT
+  the bottleneck** (it's llama-tile-class); the 5.7× gap is the **softmax+V multi-kernel** (separate, individually
+  inefficient kernels) that Path A proved can't be fused. We lack **counter/ISA-level attribution** of WHY
+  `flash_partial`/softmax are slow → a deep q·k-codegen project (A) is **mis-targeted**, and a llama port (B) /
+  immediate codegen are premature. **Next = low-level tooling (diagnostic first):** rocprof-compute counters +
+  AMDGCN ISA disasm of `flash_partial_coop_vec` vs llama's `fattn-tile` (reuse the existing rocprof/SQTT/ATT tooling)
+  to NAME the inefficiency — then either a targeted codegen fix (gated by local A/B + the oracle) or `REST_DECODE`
+  with counter-level proof. All bounded decode lanes are exhausted. See
+  `docs/decode-frontier-decision-after-path-a-20260621.md`.
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
   but missed W==D promotion (+1.8%@1024, −1.2%@4096). **Do not pursue another bounded tile or flag sweep.**

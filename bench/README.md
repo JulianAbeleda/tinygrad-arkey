@@ -55,6 +55,11 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > value-correct but **0.725×@1024 / 0.876×@4096** vs `gqa_coop_vec` → `FUSED_SOFTMAX_V_TAIL_FAIL_LOCAL_AB`. Fusing exp
 > into the partial makes W=129 lanes recompute exp (vs coop's once/key) → loses; coop's hoisted-exp split near-optimal.
 > Full online-max removal `BLOCKED_BY_IDIOM` (two-granularity store). No W==D; banked.
+>
+> **Decode frontier decision** (`docs/decode-frontier-decision-after-path-a-20260621.md`): per-kernel breakdown shows
+> coop's matmul q·k (13.9µs) ≈ llama's whole 12µs tile (q·k NOT the bottleneck); the gap is the softmax+V multi-kernel.
+> `FRONTIER_LOW_LEVEL_TOOLING_FIRST` — diagnostic counters + ISA disasm of `flash_partial` vs llama tile before any
+> codegen project. Bounded decode exhausted.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
