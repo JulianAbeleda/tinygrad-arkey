@@ -45,10 +45,15 @@ Baseline = `7a5dc6381~1` (parent of the first maintenance commit, the verdict-SS
 - **No runtime/model/kernel files changed** (verified above). The `[runtime] NFC` maintenance commits
   (`5b1a13a1f` qk_paths model-path SSOT, `5bd7e512d` qk_clock_pin command-string centralization) touch **`extra/`
   tooling only**, not `tinygrad/`.
-- **System clang:** `clang` is **not on PATH**. The 7-file guard set is pure-Python (light `extra/qk_*` modules, no
-  tinygrad compile) and is **clang-independent** — it passed. The **full** `test/unit` suite (745 tests) includes
-  backend/codegen tests that need a compiler, so a full run would skip/fail those **for environment reasons, not a
-  project regression**. Collection (check 6) succeeds regardless. Not treated as a regression.
+- **System clang → full suite now passes (resolved).** `clang` (unversioned) is not on PATH, but `clang-17`/`gcc`/`cc`
+  are. The full `test/unit` run initially showed **65 failures** from two ENV causes (not a code regression):
+  **(a)** 62 tests = tinygrad's CPU backend compiles via `getenv("CC", "clang")`; on a **cold** kernel cache, the
+  missing unversioned `clang` raises `FileNotFoundError` (a warm cache masks it). **(b)** 3 tests = the optional
+  external `safetensors` package is absent. **Fixes (`[test]`, no `tinygrad/` change):** `test/conftest.py` auto-points
+  `CC` at an available compiler when `clang` is absent (never overrides an explicit `CC`), and the 4 external-
+  `safetensors` tests are `skipUnless(HAS_SAFETENSORS)` (matching the gguf optional-skip; tinygrad's own
+  `safe_save`/`safe_load` tests untouched). **Result: `pytest test/unit` → 585 passed, 159 skipped, 0 failed**, cold or
+  warm, with no env fiddling. The 7-file guard set remains pure-Python / clang-independent.
 
 ## Boundary
 Sanity/readiness only. No `tinygrad/` change, no model/default/kernel/route change, no benchmark matrix rerun. Docs
