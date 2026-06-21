@@ -34,8 +34,11 @@ DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --validate runs/<file
 
 ## Verdict enum
 
-`PASS_PROMOTE` · `PASS_OPT_IN` · `LOCAL_PASS_WD_FAIL` · `FAIL_CORRECTNESS` · `FAIL_LOCAL_AB` · `FAIL_WD` ·
-`FAIL_REPRODUCIBILITY` · `REST` · `NEEDS_GPU_STATE_TOOLING` · `NEEDS_BESPOKE_TEMPLATE` · `SELFTEST_PASS`.
+Single source of truth: **`extra/qk_modes.py` → `Verdict`** (the 10 values `classify()` emits); the schema enum,
+`search_policy.json` map, and `evaluator_contract.json` are kept in sync by `test/unit/test_verdict_ssot.py`.
+
+`PASS_PROMOTE` · `PASS_OPT_IN` · `PASS_ORACLE_LOCAL_AB` · `LOCAL_PASS_WD_FAIL` · `FAIL_CORRECTNESS` ·
+`FAIL_LOCAL_AB` · `FAIL_ORACLE_LOCAL_AB` · `NEEDS_GPU_STATE_TOOLING` · `SELFTEST_PASS` · `REST`.
 
 ## Historical replay (the proof requirement)
 

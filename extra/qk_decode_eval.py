@@ -20,6 +20,7 @@ Run: DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --suite historic
 from __future__ import annotations
 import argparse, json, os, pathlib, shutil, statistics, subprocess, sys, time
 from typing import Any
+from extra.qk_modes import Verdict, VERDICTS  # verdict states SSOT
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REG = ROOT / "bench/qk-decode-eval/candidates.json"
@@ -143,31 +144,31 @@ def _child_flash_l_local() -> int:
   return 0
 
 # ---- verdict logic ----------------------------------------------------------------------------------------------
-def classify(cand: dict, th: dict, corr: dict, local: dict, wd: dict) -> tuple[str, str]:
+def classify(cand: dict, th: dict, corr: dict, local: dict, wd: dict) -> tuple[Verdict, str]:
   if cand["family"] == "binding_selftest":
-    return "SELFTEST_PASS", "evaluator-binding plumbing selftest; no performance measured (not a perf pass)"
+    return Verdict.SELFTEST_PASS, "evaluator-binding plumbing selftest; no performance measured (not a perf pass)"
   if cand["family"] == "reference_oracle":
     if local["checked"] and local["passed"]:
-      return "PASS_ORACLE_LOCAL_AB", f"reference oracle beats comparator local A/B ({local.get('speedup_ctx1024')}x); a TARGET that informs codegen; NON-promotable (vendored reference, not a tinygrad primitive)"
-    return "FAIL_ORACLE_LOCAL_AB", f"reference oracle does not beat comparator local A/B ({local.get('speedup_ctx1024')}x)"
+      return Verdict.PASS_ORACLE_LOCAL_AB, f"reference oracle beats comparator local A/B ({local.get('speedup_ctx1024')}x); a TARGET that informs codegen; NON-promotable (vendored reference, not a tinygrad primitive)"
+    return Verdict.FAIL_ORACLE_LOCAL_AB, f"reference oracle does not beat comparator local A/B ({local.get('speedup_ctx1024')}x)"
   if corr["checked"] and corr["passed"] is False:
-    return "FAIL_CORRECTNESS", f"correctness {corr.get('metric')}={corr.get('value')} > {corr.get('threshold')}"
+    return Verdict.FAIL_CORRECTNESS, f"correctness {corr.get('metric')}={corr.get('value')} > {corr.get('threshold')}"
   if local["checked"] and local["passed"] is False:
-    return "FAIL_LOCAL_AB", f"local speedup {local.get('speedup_ctx1024')} < {local.get('threshold_min')}"
+    return Verdict.FAIL_LOCAL_AB, f"local speedup {local.get('speedup_ctx1024')} < {local.get('threshold_min')}"
   if wd["checked"]:
     if wd.get("repro_band_ok") is False:
-      return "NEEDS_GPU_STATE_TOOLING", f"W==D repro band {wd.get('repro_band_pct')} > {th['repro_band_max_pct']}% (auto-clock variance exceeds the promotion margin)"
+      return Verdict.NEEDS_GPU_STATE_TOOLING, f"W==D repro band {wd.get('repro_band_pct')} > {th['repro_band_max_pct']}% (auto-clock variance exceeds the promotion margin)"
     if wd.get("promotion_gate_passed"):
-      return "PASS_PROMOTE", f"W==D delta {wd.get('delta_pct')} clears the promotion gate"
+      return Verdict.PASS_PROMOTE, f"W==D delta {wd.get('delta_pct')} clears the promotion gate"
     if local["checked"] and local["passed"]:
-      return "LOCAL_PASS_WD_FAIL", f"local passed ({local.get('speedup_ctx1024')}x) but W==D {wd.get('delta_pct')} below the >=5%@1024/>=7%@4096 gate"
+      return Verdict.LOCAL_PASS_WD_FAIL, f"local passed ({local.get('speedup_ctx1024')}x) but W==D {wd.get('delta_pct')} below the >=5%@1024/>=7%@4096 gate"
   if cand["family"] == "q8_route":
     spd = (wd.get("median_speedup_W") or 0)
     if spd >= th["opt_in_min_speedup"] and corr.get("passed"):
-      return "PASS_OPT_IN", f"q8 whole-decode {spd:.3f}x (opt-in, default-off) + dNLL {corr.get('value')} <= {th['dnll_max']}"
+      return Verdict.PASS_OPT_IN, f"q8 whole-decode {spd:.3f}x (opt-in, default-off) + dNLL {corr.get('value')} <= {th['dnll_max']}"
   if cand["family"] == "baseline":
-    return "REST", "baseline curve; not a promotion candidate"
-  return "REST", "no rung cleared a promotion gate"
+    return Verdict.REST, "baseline curve; not a promotion candidate"
+  return Verdict.REST, "no rung cleared a promotion gate"
 
 # ---- evaluate one candidate -------------------------------------------------------------------------------------
 def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, dry: bool) -> dict:
@@ -183,7 +184,7 @@ def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, d
          "local_ab": {"checked": False, "passed": None, "speedup_ctx1024": None, "threshold_min": None, "authority": None, "note": None},
          "wd": {"checked": False, "authority": "clean W==D PROFILE-off AUTO-clock (promotion authority)"}}
   if dry:
-    res["verdict"] = "REST"; res["stop_reason"] = "dry-run (no GPU)"; res["perf_state_after"] = perf_state()
+    res["verdict"] = Verdict.REST; res["stop_reason"] = "dry-run (no GPU)"; res["perf_state_after"] = perf_state()
     res["verdict_matches_expected"] = None
     res["commands"] = [f"[dry] would run rungs: {[r['rung'] for r in cand['rungs']]}"]
     return res
@@ -256,6 +257,7 @@ def validate(path: pathlib.Path) -> int:
   except jsonschema.ValidationError as e: print(f"INVALID: {path}\n  {e.message}"); return 1
 
 def emit(res: dict, outdir: pathlib.Path) -> pathlib.Path:
+  assert res["verdict"] in VERDICTS, f"invalid verdict {res['verdict']!r} not in the Verdict SSOT"  # encode the invariant
   outdir.mkdir(parents=True, exist_ok=True)
   f = outdir / f"{now_ts()}-{res['candidate_id']}.json"; f.write_text(json.dumps(res, indent=2, sort_keys=True) + "\n")
   return f
@@ -282,11 +284,12 @@ def main() -> int:
     print(f"=== evaluating {c['id']} ({c['family']}) ===", file=sys.stderr)
     try: res = evaluate(c, reg, cache, args.repeats, args.dry_run)
     except Exception as e:
-      res = {"schema": "decode_eval_run_v1", "candidate_id": c["id"], "verdict": "REST", "stop_reason": f"runner error: {str(e)[:200]}",
+      res = {"schema": "decode_eval_run_v1", "candidate_id": c["id"], "verdict": Verdict.REST, "stop_reason": f"runner error: {str(e)[:200]}",
              "verdict_expected": c.get("historical_expected_verdict"), "verdict_matches_expected": False, "default_behavior_changed": False, "notes": [str(e)[:300]]}
     f = emit(res, args.out); results.append(res)
     rel = f.relative_to(ROOT) if f.is_relative_to(ROOT) else f
-    print(f"  -> {res['verdict']} (expected {res.get('verdict_expected')}, match={res.get('verdict_matches_expected')}) | {res.get('stop_reason','')[:90]}\n  artifact: {rel}", file=sys.stderr)
+    vstr = res['verdict'].value if isinstance(res['verdict'], Verdict) else res['verdict']  # .value: str(enum) is the repr
+    print(f"  -> {vstr} (expected {res.get('verdict_expected')}, match={res.get('verdict_matches_expected')}) | {res.get('stop_reason','')[:90]}\n  artifact: {rel}", file=sys.stderr)
   SUMMARIES.mkdir(parents=True, exist_ok=True)
   summ = {"date": "2026-06-21", "git_commit": git_commit(), "rows": [{"candidate": r["candidate_id"], "verdict": r["verdict"],
           "expected": r.get("verdict_expected"), "match": r.get("verdict_matches_expected"),

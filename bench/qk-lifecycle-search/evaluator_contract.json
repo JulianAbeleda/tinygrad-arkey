@@ -16,16 +16,18 @@
     "cli": ["--candidate <id>", "--suite <name>", "--dry-run", "--repeats N", "--validate <run.json>"],
     "clock": "clean W==D runs AUTO clock (promotion authority); clock-pinning (extra/qk_clock_pin.py) is used ONLY in diagnostic local rungs and always restored to auto"
   },
+  "_verdict_interpretation_comment": "Keys MUST equal extra/qk_modes.py Verdict (the run-verdict SSOT); enforced by test/unit/test_verdict_ssot.py. Old FAIL_WD/FAIL_REPRODUCIBILITY/NEEDS_BESPOKE_TEMPLATE were never emitted and were removed; the loop's template-gap concept is PRUNE_NEEDS_TEMPLATE in search_policy.prune_to_lifecycle_decision.",
   "verdict_interpretation": {
     "PASS_PROMOTE": "W==D clears >=5%@1024 or >=7%@4096, no ctx512 regress >1%, within repro band -> eligible for an OWNER default decision (the evaluator never sets a default)",
     "PASS_OPT_IN": "opt-in route (e.g. q8) clears its speed gate + quality (dNLL<=0.01); default stays off",
+    "PASS_ORACLE_LOCAL_AB": "reference oracle beats the comparator in local A/B -> a non-promotable target that informs codegen",
     "LOCAL_PASS_WD_FAIL": "local A/B passed but whole-decode W==D below the promotion gate -> non-promotion (e.g. FLASH_L=64)",
-    "FAIL_LOCAL_AB": "local A/B below 1.05x vs the current winner gqa_coop_vec",
     "FAIL_CORRECTNESS": "byte-exact / dNLL gate failed",
-    "FAIL_WD": "W==D regressed",
-    "FAIL_REPRODUCIBILITY / NEEDS_GPU_STATE_TOOLING": "W==D auto-clock repeat band exceeds the promotion margin -> promotion cannot be trusted; needs GPU-state-control tooling",
-    "REST": "baseline curve or no rung cleared a gate",
-    "NEEDS_BESPOKE_TEMPLATE": "candidate cannot be expressed via the registry/runner contract"
+    "FAIL_LOCAL_AB": "local A/B below 1.05x vs the current winner gqa_coop_vec",
+    "FAIL_ORACLE_LOCAL_AB": "reference oracle does not beat the comparator in local A/B",
+    "NEEDS_GPU_STATE_TOOLING": "W==D auto-clock repeat band exceeds the promotion margin -> promotion cannot be trusted; needs GPU-state-control tooling",
+    "SELFTEST_PASS": "evaluator-binding plumbing selftest; no performance measured",
+    "REST": "baseline curve or no rung cleared a gate"
   },
   "required_artifact_fields": ["candidate_id", "git_commit", "dirty_tree", "hardware", "perf_state_before", "perf_state_after", "clock_pin_mode", "env", "commands", "contexts", "repeats", "correctness", "local_ab", "wd", "verdict", "thresholds", "stop_reason"],
   "promotion_rules": {

@@ -46,11 +46,46 @@ class PromptFormat(str, Enum):
   RAW = "raw"
 
 
+class Verdict(str, Enum):
+  """decode_eval per-run verdicts (single source of truth; .value == the legacy string -> NFC).
+
+  The set is exactly what extra/qk_decode_eval.py:classify() emits. The JSON schema enum, the lifecycle
+  search_policy map, the evaluator contract, and the bench README are asserted == this enum by
+  test/unit/test_verdict_ssot.py, so the four cannot drift from the producer again.
+  """
+  PASS_PROMOTE = "PASS_PROMOTE"
+  PASS_OPT_IN = "PASS_OPT_IN"
+  PASS_ORACLE_LOCAL_AB = "PASS_ORACLE_LOCAL_AB"
+  LOCAL_PASS_WD_FAIL = "LOCAL_PASS_WD_FAIL"
+  FAIL_CORRECTNESS = "FAIL_CORRECTNESS"
+  FAIL_LOCAL_AB = "FAIL_LOCAL_AB"
+  FAIL_ORACLE_LOCAL_AB = "FAIL_ORACLE_LOCAL_AB"
+  NEEDS_GPU_STATE_TOOLING = "NEEDS_GPU_STATE_TOOLING"
+  SELFTEST_PASS = "SELFTEST_PASS"
+  REST = "REST"
+
+
 # Union of every value that is valid as some kernel `mode`.
 KERNEL_MODES: frozenset[str] = frozenset(
   m.value for m in (*PolicyMode, *PrimitiveMode))
 
 PROMPT_FORMATS: frozenset[str] = frozenset(f.value for f in PromptFormat)
+
+VERDICTS: frozenset[str] = frozenset(v.value for v in Verdict)
+# verdict -> lifecycle decision. Values are copied VERBATIM from the live
+# bench/qk-lifecycle-search/search_policy.json:verdict_to_lifecycle_decision (NFC -- do NOT reword them).
+VERDICT_LIFECYCLE: dict[str, str] = {
+  Verdict.PASS_PROMOTE: "candidate_promotable_owner_decision",
+  Verdict.PASS_OPT_IN: "opt_in_candidate_banked",
+  Verdict.PASS_ORACLE_LOCAL_AB: "reference_oracle_target_informs_codegen_non_promotable",
+  Verdict.LOCAL_PASS_WD_FAIL: "refute_for_promotion_bank_learning",
+  Verdict.FAIL_CORRECTNESS: "refute_candidate",
+  Verdict.FAIL_LOCAL_AB: "refute_candidate",
+  Verdict.FAIL_ORACLE_LOCAL_AB: "reference_oracle_does_not_beat_comparator",
+  Verdict.NEEDS_GPU_STATE_TOOLING: "stop_search_needs_gpu_state",
+  Verdict.SELFTEST_PASS: "selftest_only_not_perf",
+  Verdict.REST: "bank_baseline_or_rest",
+}
 
 
 def policy_mode_choices() -> tuple[str, ...]:
