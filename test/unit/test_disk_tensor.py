@@ -1,10 +1,14 @@
-import os, pathlib, tempfile, unittest
+import os, pathlib, tempfile, unittest, importlib.util
 import numpy as np
 from tinygrad import Tensor, Device, dtypes
 from tinygrad.dtype import DType, DTYPES_DICT
 from tinygrad.nn.state import safe_load, safe_save, get_state_dict, torch_load
 from tinygrad.helpers import Timing, fetch, OSX, dedup
 from test.helpers import slow
+
+# optional external `safetensors` package: tinygrad's own safe_save/safe_load do NOT need it, but a few tests import
+# it to cross-check; skip those when it is absent (same optional-dependency policy as test_gguf.py).
+HAS_SAFETENSORS = importlib.util.find_spec("safetensors") is not None
 
 class TempDirTestCase(unittest.TestCase):
   def setUp(self):
@@ -93,6 +97,7 @@ class TestRawDiskBuffer(unittest.TestCase):
     pathlib.Path(tmp).unlink()
 
 class TestSafetensors(TempDirTestCase):
+  @unittest.skipUnless(HAS_SAFETENSORS, "optional external safetensors package required")
   def test_real_safetensors(self):
     import torch
     from safetensors.torch import save_file
@@ -114,6 +119,7 @@ class TestSafetensors(TempDirTestCase):
     ret2 = safe_load(self.tmp("real.safetensors_alt"))
     for k,v in tensors.items(): np.testing.assert_array_equal(ret2[k].numpy(), v.numpy())
 
+  @unittest.skipUnless(HAS_SAFETENSORS, "optional external safetensors package required")
   def test_real_safetensors_open(self):
     fn = self.tmp("real_safe")
     state_dict = {"tmp": Tensor.rand(10,10)}
@@ -127,6 +133,7 @@ class TestSafetensors(TempDirTestCase):
         np.testing.assert_array_equal(f.get_tensor(k).numpy(), state_dict[k].numpy())
 
   @unittest.skip("this test takes 7 seconds. TODO: make disk assign lazy")
+  @unittest.skipUnless(HAS_SAFETENSORS, "optional external safetensors package required")
   def test_efficientnet_safetensors(self):
     self.skipTest("extra.models removed in AMD-only fork")
     EfficientNet = None  # extra.models removed (AMD-only fork); body below is unreachable
@@ -187,6 +194,7 @@ class TestSafetensors(TempDirTestCase):
       safe_save(get_state_dict(ones), path)
       np.testing.assert_equal(ones.numpy(), list(safe_load(path).values())[0].numpy())
 
+  @unittest.skipUnless(HAS_SAFETENSORS, "optional external safetensors package required")
   def test_load_supported_types(self):
     import torch
     from safetensors.torch import save_file
