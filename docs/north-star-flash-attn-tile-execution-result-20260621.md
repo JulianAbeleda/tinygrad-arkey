@@ -1,5 +1,13 @@
 # North-Star Flash-Attn-Tile Candidate — Execution Result
 
+> ⚠ **CORRECTION (see `docs/north-star-decode-attention-redesign-audit-20260621.md`).** The `FAIL_LOCAL_AB` verdict
+> stands (confirmed by a throughput probe), but this doc's **"the combine is HBM-bandwidth-bound"** attribution
+> (below) is **WRONG**. Traffic accounting shows pout is ~1 MB (~1 µs at HBM peak) — negligible; the latency-measured
+> "combine cost" was 2nd-raw-dispatch overhead (the candidate runs 2 un-batched raw dispatches vs coop's batched JIT
+> graph). The real ceiling is the **cooperative-dot q·k partial** (flat ~163 µs throughput vs coop's scaling
+> 75–144 µs); coop's matmul q·k is near-optimal for tinygrad primitives. Read the redesign audit for the corrected
+> diagnosis.
+
 Date: 2026-06-21
 
 Scope: implement the missing pieces (kernel, local-A/B runner, decode_eval binding) so

@@ -35,8 +35,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 - **`north-star-flash-attn-tile-execution-result-20260621.md`** — ⭐ FIRST NORTH-STAR ATTEMPT EXECUTED + REFUTED.
   `extra/qk_north_star_flash_attn_tile_ab.py` (warp-cooperative q·k partial + many-wg combine) ran the local A/B vs
   `gqa_coop_vec` → **0.58×@1024 / 0.89×@4096** (byte-exact) → `FAIL_LOCAL_AB`; stopped before W==D.
-  `gen_north_star_flash_attn_tile` now EXECUTEs → FAIL_LOCAL_AB → refute_candidate. Refutes the serial-combine-ceiling
-  hypothesis: the combine is **HBM-bandwidth-bound** (128-wg stream-k == 32-wg serial). `NORTH_STAR_FAIL_LOCAL_AB`.
+  `gen_north_star_flash_attn_tile` now EXECUTEs → FAIL_LOCAL_AB → refute_candidate. `NORTH_STAR_FAIL_LOCAL_AB`.
+  (Combine-bandwidth claim CORRECTED by the redesign audit below — the combine is NOT the ceiling.)
+- **`north-star-decode-attention-redesign-audit-20260621.md`** — ⭐ BOUNDED TILE LEVER EXHAUSTED.
+  A throughput probe corrects the diagnosis: the combine is negligible (pout ~1 µs); the "combine cost" was
+  2nd-raw-dispatch overhead. The real ceiling is the **cooperative-dot q·k partial** (flat ~163 µs vs coop's
+  scaling 75–144 µs); **coop's matmul q·k is near-optimal for tinygrad primitives**. No bounded combine/compact-state
+  tile passes @ctx1024; the 10× gap to llama is **codegen quality**. `REDESIGN_AUDIT_POINTS_TO_CODEGEN_DATAFLOW`
+  (no build). Do not build another bounded tile.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

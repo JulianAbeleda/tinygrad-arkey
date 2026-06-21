@@ -75,11 +75,17 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   the system: `extra/qk_north_star_flash_attn_tile_ab.py` (warp-cooperative q·k partial + many-workgroup combine)
   ran the local A/B vs `gqa_coop_vec` and **MISSED: 0.58×@ctx1024, 0.89×@ctx4096** (byte-exact) → `FAIL_LOCAL_AB`.
   Per discipline, **stopped before any W==D route**. `gen_north_star_flash_attn_tile` now EXECUTEs (was
-  `PRUNE_NEEDS_TEMPLATE`) → decode_eval → FAIL_LOCAL_AB → refute_candidate. **Refines the ceiling (below):** the
-  combine is **HBM-bandwidth-bound on materialized split-partials**, NOT serial-launch-bound (a 128-wg stream-k
-  combine == the 32-wg serial combine), and at ctx1024 the fused cooperative q·k partial is not faster than coop's
-  separated matmul. `NORTH_STAR_FAIL_LOCAL_AB`. Next = a candidate with a faster q·k partial / less partial traffic.
-  See `docs/north-star-flash-attn-tile-execution-result-20260621.md`.
+  `PRUNE_NEEDS_TEMPLATE`) → decode_eval → FAIL_LOCAL_AB → refute_candidate. `NORTH_STAR_FAIL_LOCAL_AB`. **The
+  ceiling was then re-audited (next bullet) — the combine is NOT the lever.** See
+  `docs/north-star-flash-attn-tile-execution-result-20260621.md` and the redesign audit below.
+- **North-star redesign audit (2026-06-21) — bounded tile lever EXHAUSTED; `REDESIGN_AUDIT_POINTS_TO_CODEGEN_DATAFLOW`.**
+  A throughput probe (`extra/qk_north_star_dispatch_probe.py`) **corrects the prior diagnosis**: the combine is NOT
+  HBM-bandwidth-bound (pout ~1 MB ≈ ~1 µs; the latency-measured "combine cost" was 2nd-raw-dispatch overhead vs
+  coop's batched JIT graph). Under fair throughput the candidate is 0.46/0.52/0.87× @ctx512/1024/4096, **flat
+  ~163 µs** while coop **scales** 75→144 µs → the ceiling is the **cooperative-dot q·k PARTIAL** (latency/occupancy-
+  bound), and **coop's matmul q·k is near-optimal for tinygrad primitives**. No bounded combine/compact-state tile
+  can pass @ctx1024. The 10× gap to llama is hand-tuned-kernel **codegen quality**, not a dataflow restructure.
+  Do NOT build another bounded tile/combine. See `docs/north-star-decode-attention-redesign-audit-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
@@ -87,11 +93,12 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
 - **The only remaining decode lever is north-star lifecycle/codegen**, not a tactical patch: the full llama-style
   non-WMMA vector `flash_attn_tile` — many KV-split parallel blocks **with an efficient many-split / stream-k
   combine** at T=1, LDS K/V staging, GQA query-head column packing, K-tile-batched vectorized body, register
-  online-softmax. The bounded experiments showed tinygrad's **split-combine is the ceiling** — and the executed
-  north-star candidate (above) pinned WHY: the combine is **HBM-bandwidth-bound on the materialized split-partials**
-  (`pout` grows with splits), so more combine parallelism / stream-k does NOT help; and the fused cooperative q·k
-  partial is not faster than coop's separated matmul at ctx1024. The real lever is **less partial traffic + a faster
-  q·k partial**, not a more-parallel combine. Closing that is the north-star project, funded separately if at all. See
+  online-softmax. The executed north-star candidate + redesign audit (above) pinned the real ceiling: it is NOT the
+  combine (pout traffic is ~1 µs, negligible) — it is the **q·k partial** (a hand-rolled cooperative dot is
+  latency/occupancy-bound, flat ~163 µs, while coop's matmul q·k scales efficiently). coop's matmul q·k is
+  near-optimal for tinygrad primitives; the 10× gap to llama is hand-tuned-kernel **codegen quality**. The bounded
+  standalone-tile / combine lever is **exhausted** (every tile replaces coop's matmul q·k with a slower dot and
+  loses); the only remaining lever is llama-quality kernel codegen — a deep capability, funded separately if at all. See
   `docs/llama-decode-primitive-difference-audit-result-20260621.md` and
   `docs/project-north-star-llama-and-lifecycle-search-20260620.md`.
 - **Principle:** for decode `T=1`, a primitive must preserve/enlarge parallelism from KV splits and GQA columns;
