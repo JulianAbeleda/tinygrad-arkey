@@ -20,8 +20,9 @@ from extra.q8_ffn_handwritten_oracle import q4_ref_rows, q8_blocks
 from extra.q8_ffn_oneblock_route import realized_buf
 from extra.qk_decode_mmvq_p3_q4_correctness import OBJ, OUT, RawKernargAMDProgram, kd_offset, q4_tensor_bytes
 from extra.qk_nll_eval import CALIB_TEXT
+from extra.qk_paths import DEFAULT_MODEL_GGUF
 
-MODEL = pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
+MODEL = pathlib.Path(DEFAULT_MODEL_GGUF)
 K = 4096
 Q8_BYTES = (K // 32) * 36
 

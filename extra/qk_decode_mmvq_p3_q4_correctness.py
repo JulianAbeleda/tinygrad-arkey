@@ -16,11 +16,12 @@ from tinygrad.runtime.ops_amd import AMDProgram
 
 from extra.q8_ffn_handwritten_oracle import q4_ref_rows, q8_blocks
 from extra.qk_layout import GGML_Q4_K, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, read_metadata, tensor_shape
+from extra.qk_paths import DEFAULT_MODEL_GGUF
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-decode-mmvq-large-project"
 OBJ = pathlib.Path("/home/ubuntu/env/llama.cpp/build/ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/mmvq.cu.o.0.hipv4-amdgcn-amd-amdhsa--gfx1100")
-MODEL = pathlib.Path("/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
+MODEL = pathlib.Path(DEFAULT_MODEL_GGUF)
 
 
 def kd_offset(elf: bytes, symbol: str) -> int:

@@ -14,6 +14,7 @@ from extra.q8_ffn_hcq_artifact import NORM_SOURCE, MMVQ_SOURCE
 from extra.q8_ffn_fast_artifact_probe import HIP_MMVQ_GATEUP_SOURCE, compile_hipcc_linked, hip_norm_source
 from extra.qk_layout import q8_1_dequantize, q8_1_quantize
 from extra.qk_nll_eval import CALIB_TEXT
+from extra.qk_paths import DEFAULT_MODEL_GGUF
 
 def realized_buf(t:Tensor):
   t.realize()
@@ -149,7 +150,7 @@ def fp_ffn(block, h:Tensor) -> Tensor:
 
 def main() -> None:
   ap = argparse.ArgumentParser(description="A2 one-block eager q8 handwritten FFN route")
-  ap.add_argument("--model", default="/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
+  ap.add_argument("--model", default=DEFAULT_MODEL_GGUF)
   ap.add_argument("--max-context", type=int, default=4096)
   ap.add_argument("--block", type=int, default=0)
   ap.add_argument("--seed", type=int, default=20260616)

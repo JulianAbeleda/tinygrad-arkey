@@ -29,6 +29,8 @@ Usage in a harness:
 from __future__ import annotations
 import os, pathlib, statistics, subprocess, sys, time
 
+from extra.qk_paths import DEFAULT_MODEL_GGUF  # qk_paths imports only pathlib -> safe for light tooling
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # The current decode-attention comparator / reigning winner -- a light, importable mirror of the shipped
@@ -38,7 +40,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 DECODE_COMPARATOR = "gqa_coop_vec"
 
 # Default model + the single child-subprocess env builder (the env-ordering invariant lives here once).
-DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+DEFAULT_MODEL = DEFAULT_MODEL_GGUF
 
 def child_env(extra: dict | None = None) -> dict:
   """Build the env for a spawned QK eval subprocess: AMD/JIT/PYTHONPATH/QK_MODEL (+ caller overrides). The single
