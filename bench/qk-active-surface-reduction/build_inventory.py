@@ -8,10 +8,7 @@ from collections import Counter
 ROOT = pathlib.Path("/home/ubuntu/tinygrad-arkey")
 OUT = ROOT / "bench/qk-active-surface-reduction"
 
-scripts = sorted({p.relative_to(ROOT).as_posix() for p in ROOT.glob("extra/qk_*.py")})
-for s in ("extra/lds_attention_tile.py", "extra/llm_generate.py"):
-    if (ROOT / s).exists(): scripts.append(s)
-scripts = sorted(set(scripts))
+scripts = sorted({p.relative_to(ROOT).as_posix() for p in ROOT.glob("extra/*.py")})
 basenames = {s: pathlib.Path(s).stem for s in scripts}
 
 import_re = re.compile(r"from extra\.([a-z0-9_]+) import|import extra\.([a-z0-9_]+)\b|import_module\([\"']extra\.([a-z0-9_]+)[\"']\)")
@@ -23,7 +20,7 @@ for s in scripts:
     for fe in fromextra_re.finditer(t):
         for name in re.split(r"[,\s]+", fe.group(1)):
             name = name.split(" as ")[0].strip()
-            if name.startswith("qk_") or name in ("lds_attention_tile","llm_generate"): mods.add(name)
+            if name and not name[0].isdigit(): mods.add(name)
     imports[s] = {m for m in mods if m}
 stem_to_path = {pathlib.Path(s).stem: s for s in scripts}
 
