@@ -156,6 +156,16 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   class); the full llama-class win needs the **deep** LDS-tiled fused-flash codegen capability. NOT the closed
   coop-qk-preserving lane (that was timing-only; ISA is new evidence). **Next = scope the matmul-PV diagnostic; if
   W==D-marginal and deep codegen unfunded → REST_DECODE.** See `docs/low-level-decode-attn-attribution-result-20260621.md`.
+- **HCQ profiling visibility (2026-06-21) — `HCQ_VISIBILITY_USE_NATIVE_ATTRIBUTION_ONLY`.** Why rocprofv3 is blind to
+  tinygrad: `AMDComputeQueue` writes PM4/AQL packets **directly to a hardware ring + doorbell** (`ops_amd.py:431/434/475/478`),
+  never `hsa_queue_create` → rocprof's HSA queue interception never sees the dispatches (inherent, not a flag;
+  reproduced: 0 traces). rocprof-compute fix = **unbounded dep chain** (astunparse-pin→plotext→colorlover→plotly→dash→…)
+  AND wraps the rocprofv3 PMC backend that **returns 0 for compute counters on this gfx1100+ROCm-7.2.4 stack** (even for
+  llama) → not worth it. Bounded HCQ-counter paths were already KILLED (SQTT-patch no-body; AQLprofile-replay blocked).
+  **Native attribution (ISA/resources via llvm-objdump + ProfileGraphEvent durations + `extra/qk_att_primitive_atlas.py`
+  ATT intervals) EXISTS and SUFFICED** for the FIXABLE_CODEGEN verdict → use it. Live HCQ counters = a deep
+  native-profiled-HCQ project (low EV given the 0-backend), deferred. See
+  `docs/tinygrad-hcq-profiling-visibility-result-20260621.md`.
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
   but missed W==D promotion (+1.8%@1024, −1.2%@4096). **Do not pursue another bounded tile or flag sweep.**

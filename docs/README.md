@@ -83,6 +83,11 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   because it's tiled (LDS=64). Fixable lever = route the PV through tiled-matmul codegen (~1.16× attention, but
   W==D-marginal; full win = deep LDS-tiled fused-flash codegen). Counters tooling-opaque (rocprof-compute broken,
   rocprofv3 blind to HCQ) but binaries sufficed. Next = scope the matmul-PV diagnostic, else REST_DECODE.
+- **`tinygrad-hcq-profiling-visibility-result-20260621.md`** — `HCQ_VISIBILITY_USE_NATIVE_ATTRIBUTION_ONLY`. rocprofv3
+  is inherently blind to HCQ (tinygrad writes PM4/AQL to a hardware ring + doorbell, never `hsa_queue_create`, so
+  rocprof's HSA interception misses it; reproduced: 0 traces). rocprof-compute fix = unbounded deps + 0-counter
+  backend → not worth it; bounded HCQ-counter paths already killed. Native attribution (ISA/resources + ProfileGraphEvent
+  + ATT intervals) exists and suffices. Live HCQ counters = a deep native-profiled-HCQ project, deferred (low EV).
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.
