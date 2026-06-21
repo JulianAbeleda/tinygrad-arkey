@@ -110,3 +110,29 @@ Audit covers all 4 principles docs with file:line evidence; scorecard + per-clus
 applied fixes + prioritized backlog. No `tinygrad/`/model/default change. Self-inflicted high-severity items fixed NFC;
 structural refactors are specified for deliberate follow-up. Backing data: the 3 auditor reports (this session) +
 `bench/qk-active-surface-reduction/inventory.json`.
+
+## 8. Resolution status — Contract Centralization Sequence (2026-06-21, COMPLETE)
+Every finding is resolved with a tested SSOT, documented as already-centralized, or accepted-as-frozen with a guard:
+
+| finding | resolution | commit | test |
+|---|---|---|---|
+| C1 provenance fork | centralized in `qk_harness_contract`; 3 consumers import | `deccc62c7` | — |
+| C2/I1 verdict drift + dead values | `Verdict(str,Enum)` SSOT + emit-time assert | `c4c4caeae` | `test_verdict_ssot` |
+| C3/P4 GPU perf-state | `qk_clock_pin` owns read + both pin idioms; routed; 1 documented exception | `7b03f585a` | — |
+| C4 comparator | `DECODE_COMPARATOR` mirror + drift test | `755dd4882` | `test_comparator_ssot` |
+| C7 thresholds | **already centralized** (`candidates.json:thresholds_default`); no change | — | — |
+| C5 artifact fields | 3 lists distinguished; C⊆B + A-disjoint enforced | `60fe03bc0` | `test_artifact_contract_fields` |
+| C6 child env | one `child_env` + `DEFAULT_MODEL` | `c80655171` | `test_child_env_ssot` |
+| S1 probe IO clone | de-cloned all 25 → `qk_probe_harness.probe_io`; guard | `3e0e72884`/`5cbe498a1`/`8cefec13e` | `test_probe_harness` |
+| S1 verdict-template | **left by principle** (bespoke per-probe, not a clone) | `218945eb9` | — |
+| P1 absolute ROOT (tools) | `__file__`-relative | `deccc62c7` | — |
+| **P2 absolute paths (artifacts)** | **durable surface guarded; 82 historical artifacts accepted as frozen** | this commit | `test_artifact_portability` |
+| **P3 unrounded floats (artifacts)** | **golden-scoped rule; the historical dumps are not golden-locked (reproduce tests regenerate, they don't hash floats); no change** | this commit | — |
+
+**P2/P3 decision (load-bearing):** the durable/live surface (ledgers + current generated maps) is checkout-path-clean
+and now guarded by `test/unit/test_artifact_portability.py`. The ~82 tracked historical bench artifacts with absolute
+paths are **deliberately not rewritten**: 10 of their dirs are golden-locked by reproduce tests
+(`test_llm_training_data_probe`, `test_qk_experiment_matrix`, `test_qk_ansor_transition`, `test_qk_search_spec`,
+`test_llm_rollout*`) and some absolute paths are **functional inputs** (`source_artifacts` read by `build_training_data`),
+so a rewrite would break those tests and discard recorded data for a cosmetic gain — the same "don't excavate frozen,
+golden-locked history" judgment applied to the verdict-template. The centralization backlog is now exhausted.
