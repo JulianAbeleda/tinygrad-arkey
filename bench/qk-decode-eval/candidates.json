@@ -102,7 +102,7 @@
     {
       "id": "matmul_pv_diagnostic",
       "family": "attention_split",
-      "description": "ISA-justified diagnostic: replace coop's scalar flash_partial (PV, 24.7us, 0 v_dot2) with PV=prob@V as a tinygrad matmul (tiled-GEMM codegen). MEASURED FAIL_LOCAL_AB: 0.872/0.634/0.345x @ctx512/1024/4096 (value-correct rel_rmse 5e-4). The PV matmul runs at 68 GFLOPS (worse than flash_partial's 201) because the GQA decode PV is M=G=4 per kv-head (skinny GEMM, K=ctx) -> tiling can't fill; the fat-M alternative needs V-replication (layout copy). The matmul-PV lever is refuted; coop's flash_partial stands.",
+      "description": "ISA-justified diagnostic: replace coop's scalar flash_partial (PV, 24.7us, 0 v_dot2) with PV=prob@V as a SPLIT-preserving tiled matmul. MEASURED gate FAIL_LOCAL_AB (0.879/0.936/1.131x @ctx512/1024/4096, value-correct rel_rmse 7-8e-4) BUT project verdict MATMUL_PV_BLOCKED_BY_LAYOUT: the per-split matmul (K=L=128 concrete, Hkv*Smax=256 wg) TILES at ~1078 GFLOPS and WINS 1.13x @ctx4096; it loses at ctx1024/512 only because tinygrad cannot express a symbolic-count tiled batched matmul, forcing concrete Smax=32 (full-MAXC reads = 4-8x extra split work). Corrects an earlier non-split form (~50 GFLOPS, parallelism-collapsed Hkv=8 wg) that wrongly blamed skinny M=4. No promotion; bounded lever exhausted (needs deep fused-flash codegen).",
       "env": {},
       "rungs": [
         {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_matmul_pv_diagnostic_ab.py", "result_json": "bench/qk-matmul-pv-diagnostic/latest.json"}
@@ -111,7 +111,7 @@
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "FAIL_LOCAL_AB",
       "compare_artifact": "bench/qk-matmul-pv-diagnostic/latest.json",
-      "historical_note": "0.63x@1024 / 0.35x@4096 vs gqa_coop_vec; PV-as-matmul is a skinny M=4 GEMM (68 GFLOPS), worse than scalar flash_partial"
+      "historical_note": "0.936x@1024 / 1.131x@4096 vs gqa_coop_vec; split-preserving matmul PV TILES (~1078 GFLOPS) and wins at ctx4096; BLOCKED_BY_LAYOUT (symbolic split count -> concrete Smax full-MAXC reads) loses the ctx1024 gate"
     },
     {
       "id": "llama_flash_attn_tile_oracle",

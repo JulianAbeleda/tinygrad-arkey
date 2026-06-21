@@ -327,16 +327,17 @@
       ]
     },
     {
-      "id": "matmul_pv_skinny_gqa_gemm_worse_than_scalar_flash_partial",
+      "id": "matmul_pv_symbolic_split_layout_wall",
       "applies_to": [
         "decode_attention_reduce_stat_fusion",
         "matmul_pv_diagnostic"
       ],
       "prunes_patterns": [
-        "express PV (prob @ V) as a tinygrad matmul to get tiled-GEMM codegen as a decode win",
-        "standard SDPA (matmul PV) beats coop flash decode at T=1"
+        "express PV (prob @ V) as a tinygrad matmul to get tiled-GEMM codegen as a BOUNDED decode win",
+        "standard SDPA (matmul PV) beats coop flash decode at T=1",
+        "non-split matmul PV (batch over kv-head only) for decode"
       ],
-      "reason": "MEASURED 2026-06-21 (ISA-justified diagnostic; value-correct rel_rmse 5e-4, clock-pinned throughput): replacing coop's scalar flash_partial (PV) with PV=prob@V as a matmul scores 0.872/0.634/0.345x @ctx512/1024/4096 vs gqa_coop_vec -> FAIL_LOCAL_AB, and REGRESSES badly with ctx (414us@4096 vs coop 143us). REFUTES the ISA-evidence hypothesis that routing PV through tiled-GEMM codegen would help: DEBUG=2 shows the PV matmul (r_2_8_16_4_4_256_4) runs at 68 GFLOPS -- WORSE than flash_partial's 201 GFLOPS -- because the GQA decode PV is prob[Hkv,G,ctx]@V[Hkv,ctx,Hd] with M=G=4 per kv-head (skinny GEMM, K=ctx that scales with ctx) -> tinygrad's GEMM tiling can't fill M=4. The q.k matmul is fast because its contraction is over Hd=128 (fat), not a tiny-M batch. The only no-copy formulation is M=4 (slow); the fat-M alternative needs V-replication G x (a layout copy adding traffic). coop's hand-rolled scalar flash_partial is actually BETTER than a naive matmul-PV for the GQA decode shape. PRUNES matmul-PV / standard-SDPA as a decode lever. The bounded ISA lever from low-level-attribution is REFUTED; the only remaining path is the deep fused-tiled-flash (v_dot2 + LDS, one kernel) codegen capability tinygrad lacks. gqa_coop_vec stands -> decode bounded space + the named bounded codegen lever both exhausted.",
+      "reason": "MEASURED 2026-06-21 (ISA-justified diagnostic; value-correct rel_rmse 7-8e-4, clock-pinned throughput median-of-3). CORRECTED ROOT CAUSE (supersedes the earlier 'skinny M=4 defeats tiling' refutation): the SPLIT-preserving matmul PV (per (kvh,s) batched matmul, K=L=128 CONCRETE, Hkv*Smax=256 workgroups) TILES at ~1078 GFLOPS and WINS 1.131x @ctx4096 -- the ISA hypothesis (tiled-GEMM PV beats the scalar flash_partial) is CONFIRMED, not refuted, on the merits. The bounded lever is BLOCKED_BY_LAYOUT: tinygrad cannot reshape a SYMBOLIC Tc into a symbolic-count (S,L) tiled batched matmul (raises 'eval failed to be a single number'), so the only concrete-K (tileable) form needs a CONCRETE split count Smax=MAXC/L=32 -> it reads the FULL MAXC KV regardless of Tc -> 4-8x extra split work at ctx1024/512 -> 0.936x/0.879x, missing the >=1.05x@ctx1024 gate -> lifecycle FAIL_LOCAL_AB. The symbolic-Tc single matmul is not tiled at all (~13 GFLOPS); the earlier non-split form (r_2_8_16_4_4_256_4, batch over Hkv=8 only) ran at ~50 GFLOPS because it COLLAPSED the KV-split parallelism (the decode-T=1 anti-pattern), NOT because M=4 defeats tiling (the split form has the same M=4 and tiles fine). PRUNES bounded matmul-PV / standard-SDPA as a decode lever, AND prunes the non-split form. The win is real but unreachable Tc-proportionally without a symbolic-count tiled batched matmul (a tinygrad capability gap) -- the same family as the deep fused-tiled-flash (v_dot2 + LDS, one kernel) codegen capability, which would also unblock this. gqa_coop_vec stands -> bounded decode space + the named bounded codegen lever both exhausted.",
       "evidence": [
         "docs/matmul-pv-diagnostic-result-20260621.md",
         "bench/qk-matmul-pv-diagnostic/latest.json"

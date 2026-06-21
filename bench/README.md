@@ -67,10 +67,12 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > fused tile. Fixable lever = route the PV through tiled-matmul codegen (W==D-marginal; full win = deep fused-flash
 > codegen). Counters tooling-opaque (rocprof-compute broken, rocprofv3 blind to HCQ); binaries sufficed.
 >
-> **Matmul-PV diagnostic REFUTED the lever** (`extra/qk_matmul_pv_diagnostic_ab.py`, `qk-matmul-pv-diagnostic/`):
-> PV=prob@V as a matmul is value-correct but **0.87/0.63/0.35×** vs `gqa_coop_vec` — the GQA decode PV is a skinny
-> M=G=4 GEMM (**68 GFLOPS, worse than scalar flash_partial's 201**); tiling can't fill M=4. `MATMUL_PV_FAIL_LOCAL_AB`.
-> Bounded decode + the ISA-named codegen lever both exhausted → REST_DECODE.
+> **Matmul-PV diagnostic — `MATMUL_PV_BLOCKED_BY_LAYOUT`** (gate `FAIL_LOCAL_AB`; `extra/qk_matmul_pv_diagnostic_ab.py`,
+> `qk-matmul-pv-diagnostic/`): the **split-preserving** tiled matmul PV (K=L=128 concrete, Hkv·Smax=256 wg) TILES at
+> **~1078 GFLOPS** and **WINS 1.13×@ctx4096** — the ISA lever is CONFIRMED — but loses ctx1024/512 (0.94/0.88×)
+> because tinygrad can't express a symbolic-count tiled batched matmul, forcing concrete Smax=32 (full-MAXC reads).
+> Corrects an earlier non-split form (~50 GFLOPS, parallelism-collapsed) that wrongly blamed skinny M=4. Bounded
+> decode + the ISA-named codegen lever both exhausted (need symbolic-count tiled matmul / deep fused-flash) → REST_DECODE.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
