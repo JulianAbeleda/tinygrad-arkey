@@ -39,6 +39,10 @@ def prefill_v2_auto_decision(total_vram_bytes:int|None, est_fp16_bytes:int, q4_b
     return (False, f"need {need_gb:.1f}GB + {margin_gb:.0f}GB margin > {tot_gb:.1f}GB total -> OFF")
   return (True, f"need {need_gb:.1f}GB + {margin_gb:.0f}GB margin <= {tot_gb:.1f}GB total -> ON")
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
+# Phase-3 routing fix (default ON under PREFILL_V2): route a sub-UBATCH prompt remainder through ONE shifted
+# prefill-v2 chunk instead of the slow 32-token symbolic fallback. PREFILL_REMAINDER_FIX=0 reverts. See
+# docs/prefill-route-schedule-result-20260620.md.
+PREFILL_REMAINDER_FIX = bool(getenv("PREFILL_REMAINDER_FIX", 1))
 # Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
 # via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
 PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
@@ -1375,6 +1379,15 @@ class Transformer:
         use_concrete = (start_pos == 0) or PREFILL_CONCRETE_KV
         sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), PREFILL_UBATCH
         out = self(t[:, sp:sp+PREFILL_UBATCH], sp, temp, use_flash=False).realize()
+      elif PREFILL_REMAINDER_FIX and PREFILL_V2 and start_pos < prompt_len and prompt_len >= PREFILL_UBATCH:
+        # Phase-3 fix: a sub-UBATCH PROMPT remainder would otherwise fall to many slow 32-token symbolic calls
+        # (the fallback trap). Instead process the LAST PREFILL_UBATCH tokens as ONE prefill-v2 chunk by shifting
+        # the window back so it ENDS exactly at prompt_len -> all-real tokens (no padding), last position is
+        # prompt_len-1 so out.item() is the next token. Re-processes the small overlap with the prior chunk (same
+        # tokens -> same KV) -> correct. Symbolic start_pos reuses the one prefill_v2_jit (no per-remainder compile).
+        sp = v_start_pos.bind(prompt_len - PREFILL_UBATCH)   # symbolic offset -> matches the prefill_v2_jit signature
+        out = self(t[:, sp:sp+PREFILL_UBATCH], sp, temp, use_flash=False).realize()
+        ntv = prompt_len - start_pos                      # advance straight to end of prompt
       else:
         sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
         ntv = nt.val
