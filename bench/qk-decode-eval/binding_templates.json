@@ -1,0 +1,83 @@
+{
+  "schema": "decode_evaluator_binding_templates_v1",
+  "date": "2026-06-21",
+  "comment": "Evaluator-binding contract for north-star decode-attention candidates. A binding template specifies EXACTLY what a candidate must declare + produce to become an executable decode_eval candidate, and what is still missing. It builds no kernel. The north-star template is concrete_runner_status=deferred_no_kernel (well-specified, blocked only on a kernel + runner). The selftest template is executable plumbing (no performance claim).",
+  "templates": [
+    {
+      "binding_id": "north_star_flash_attn_tile_v0",
+      "candidate_family": "north_star_flash_attn_tile",
+      "role": "decode_attention",
+      "comparator": "gqa_coop_vec (current winning decode attention) / canonical decode route — NEVER a weaker baseline",
+      "local_ab_runner": "flash_attn_tile_local_ab [NOT YET IMPLEMENTED]: flash_attn_tile vs gqa_coop_vec at decode shape (T=1, ctx in supported_contexts), clock-pinned (extra/qk_clock_pin), byte-exact vs the numpy reference; mirrors the existing flash_l_local runner shape but for the tile primitive",
+      "wd_runner": "runtime_overhead with a flash_attn_tile decode route [NOT YET IMPLEMENTED]: requires a model route/flag that selects the tile in the decode attention path so extra/qk_decode_runtime_overhead.py measures whole-decode W==D; compares vs the canonical route W==D",
+      "correctness_runner": "byte-exact greedy vs gqa_coop_vec (preferred) OR teacher-forced dNLL <= 0.01",
+      "supported_contexts": [512, 1024, 2048, 4096],
+      "required_candidate_params": {
+        "kv_split_count": "split policy: MANY KV-splits, scaling with ctx; must be >= the comparator's split count (preserves T=1 parallel work)",
+        "flash_l": "tile length / split granularity (e.g. the FLASH_L axis)",
+        "query_head_pack": "GQA query-head column packing for coalesced fp16 loads (the gqa_coop_vec win)",
+        "gqa_grouping": "Hq/Hkv grouping (Qwen3-8B: 32/8 = G4); query heads mapped to LOCAL threads",
+        "k_tile": "K-tile batch length staged in LDS",
+        "v_tile": "V-tile batch length staged in LDS",
+        "combine_strategy": "efficient many-split / stream-k combine (NOT a naive serial reduce — the measured ceiling is the split-combine cost)",
+        "softmax_strategy": "register online softmax",
+        "lds_bytes_per_workgroup": "LDS K/V staging footprint per workgroup (must NOT collapse occupancy)",
+        "expected_workgroups_by_ctx": "must GROW with ctx and be >= comparator (manufacture parallel work from KV splits)",
+        "expected_no_wmma": true
+      },
+      "required_artifact_fields": [
+        "workgroups_by_ctx", "query_heads_parallelized", "kv_splits_by_ctx", "combine_kernel_count",
+        "local_attention_us_by_ctx", "comparator_attention_us_by_ctx", "wd_tok_s_by_ctx", "correctness_error",
+        "reproducibility_band_pct"
+      ],
+      "gates": {
+        "structural": "expected_workgroups_by_ctx GROWS with ctx AND >= comparator (proves decode T=1 parallelism is preserved/enlarged); expected_no_wmma true; combine_kernel_count bounded (no per-output serial combine blowup)",
+        "correctness": "byte-exact greedy vs gqa_coop_vec OR dNLL <= 0.01",
+        "local_ab": "local flash_attn_tile attention us < comparator gqa_coop_vec us at ctx1024 (gate >= 1.05x); must beat the CURRENT WINNER, not a weak baseline",
+        "wd": "whole-decode W==D >= 5%@1024 or >= 7%@4096 vs the canonical route, no ctx512 regress > 1%, within the measured reproducibility band (<0.6% per the evaluator)",
+        "promotion_policy": "PASS_PROMOTE only PROPOSES an OWNER default decision; the loop never auto-promotes; q8/FLASH_L promotion rules unaffected"
+      },
+      "stop_conditions": [
+        "collapses workgroups vs the comparator (violates the decode T=1 principle — fusion/LDS reuse that reduces workgroups is harmful)",
+        "benchmarks only a weak baseline instead of gqa_coop_vec / canonical route",
+        "fails correctness (greedy diverges or dNLL > 0.01)",
+        "local A/B <= comparator (does not beat the current winner)",
+        "W==D < 5%@1024 (and < 7%@4096) — local win does not transfer in-model",
+        "long-context (ctx4096) regression",
+        "any required_artifact_field missing"
+      ],
+      "concrete_runner_status": "deferred_no_kernel",
+      "decode_eval_binding": null,
+      "missing_for_executable": [
+        "a concrete flash_attn_tile decode kernel (many-KV-split / stream-k combine, LDS K/V staging, GQA column packing, register online softmax, no WMMA)",
+        "a flash_attn_tile_local_ab runner (vs gqa_coop_vec)",
+        "a whole-decode W==D route/flag for the tile (so runtime_overhead can measure it in-model)"
+      ],
+      "notes": "Well-specified and blocked ONLY on a concrete kernel + runner. Building the kernel is the NEXT project, not this one. Until then a candidate carrying this binding is classified PRUNE_NEEDS_TEMPLATE with this missing list."
+    },
+    {
+      "binding_id": "north_star_binding_selftest_v0",
+      "candidate_family": "binding_selftest",
+      "role": "decode_attention",
+      "comparator": "n/a — selftest validates binding plumbing only; makes NO performance claim",
+      "local_ab_runner": "none (selftest)",
+      "wd_runner": "none (selftest)",
+      "correctness_runner": "none (selftest)",
+      "supported_contexts": [],
+      "required_candidate_params": {"selftest": "plumbing only; no kernel params"},
+      "required_artifact_fields": ["verdict"],
+      "gates": {
+        "structural": "n/a (selftest)",
+        "correctness": "n/a (selftest)",
+        "local_ab": "n/a (selftest)",
+        "wd": "n/a (selftest)",
+        "promotion_policy": "never promotable; SELFTEST_PASS is not a performance pass"
+      },
+      "stop_conditions": ["must NOT be confused with north_star_flash_attn_tile_v0", "must NOT report a performance verdict"],
+      "concrete_runner_status": "selftest_stub",
+      "decode_eval_binding": "north_star_binding_selftest",
+      "missing_for_executable": [],
+      "notes": "Executable plumbing selftest: proves the binding -> generated candidate -> loop EXECUTE -> decode_eval -> SELFTEST_PASS artifact path works end-to-end, with NO benchmark and NO performance claim. Distinct from the deferred north-star candidate."
+    }
+  ]
+}

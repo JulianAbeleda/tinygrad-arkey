@@ -34,6 +34,11 @@ SUMMARIES = LS / "summaries"
 EVAL = "extra/qk_decode_eval.py"
 EVAL_RUNS = ROOT / "bench/qk-decode-eval/runs"
 REFUTATIONS = LS / "refutations.json"
+BINDING_TEMPLATES = ROOT / "bench/qk-decode-eval/binding_templates.json"
+
+def _bindings() -> dict:
+  if not BINDING_TEMPLATES.exists(): return {}
+  return {b["binding_id"]: b for b in json.loads(BINDING_TEMPLATES.read_text()).get("templates", [])}
 
 def _git(*a):
   try: return subprocess.check_output(["git", *a], cwd=ROOT, text=True).strip()
@@ -55,8 +60,18 @@ def prune_decision(c: dict, pol: dict) -> tuple[str | None, str, str | None]:
       any(p in txt for p in fp["patterns"]) for fp in pol["forbidden_promotions"]):
     fp = next((f for f in pol["forbidden_promotions"] if any(p in txt for p in f["patterns"])), None)
     return "PRUNE_POLICY_VIOLATION", (fp["reason"] if fp else "promotion/flip/ship of a default requires explicit owner approval; the loop never promotes"), None
+  # binding-template resolution (distinguishes: missing template / present-but-no-runner / executable)
+  btid = c.get("binding_template_id")
+  if btid:
+    bt = _bindings().get(btid)
+    if bt is None:
+      return "PRUNE_MISSING_EVALUATOR_BINDING", f"binding template '{btid}' not found in binding_templates.json", None
+    if not c.get("decode_eval_candidate_id"):
+      miss = bt.get("missing_for_executable") or ["a concrete runner/kernel"]
+      return "PRUNE_NEEDS_TEMPLATE", f"binding template '{btid}' exists (status={bt.get('concrete_runner_status')}) but has no concrete runner yet; missing: {'; '.join(miss)}", None
+    # else: binding template exists AND a concrete decode_eval candidate is bound -> fall through to EXECUTE
   if c.get("deferred"):
-    return "PRUNE_NEEDS_TEMPLATE", "deferred work: no evaluator-binding template/kernel exists yet (e.g. north-star flash_attn_tile)", None
+    return "PRUNE_NEEDS_TEMPLATE", "deferred work: no evaluator-binding template/kernel exists yet", None
   if not c.get("decode_eval_candidate_id"):
     return "PRUNE_MISSING_EVALUATOR_BINDING", "no decode_eval_candidate_id; cannot bind to the evaluator", None
   return None, "accepted for evaluation", None

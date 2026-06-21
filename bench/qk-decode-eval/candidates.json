@@ -70,6 +70,20 @@
       "historical_expected_verdict": "PASS_OPT_IN",
       "compare_artifact": "bench/qk-decode-primitive-transfer/decode_q8_model_route_timing_audit_result.json",
       "historical_note": "speedup_W ~1.06; dNLL 0.00288; opt-in default-off"
+    },
+    {
+      "id": "north_star_binding_selftest",
+      "family": "binding_selftest",
+      "description": "Evaluator-binding plumbing selftest (binding_templates.json north_star_binding_selftest_v0). Validates the binding -> candidate -> decode_eval -> artifact path WITHOUT benchmarking. Verdict SELFTEST_PASS; NOT a performance candidate.",
+      "env": {},
+      "rungs": [
+        {"rung": "selftest", "runner": "binding_selftest", "binding_template_id": "north_star_binding_selftest_v0"}
+      ],
+      "contexts": [],
+      "correctness_req": "none",
+      "historical_expected_verdict": "SELFTEST_PASS",
+      "compare_artifact": "bench/qk-decode-eval/binding_templates.json",
+      "historical_note": "plumbing only; no GPU; no performance claim"
     }
   ],
   "suites": {

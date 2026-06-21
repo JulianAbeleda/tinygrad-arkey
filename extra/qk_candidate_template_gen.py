@@ -34,14 +34,22 @@ def _git(*a):
   except Exception: return "unknown"
 
 def mk(id, family, desc, template_id, deid, intent, env, allowed, closed_risk, first_gate, promo_gate,
-       exp_verdict, exp_lane, maps=None, deferred=False, notes=""):
+       exp_verdict, exp_lane, maps=None, deferred=False, notes="", extra=None):
   c = {"id": id, "family": family, "description": desc, "source": f"generated:{template_id}", "template_id": template_id,
        "decode_eval_candidate_id": deid, "intent": intent, "env": env, "allowed_by_policy": allowed,
        "closed_lane_risk": closed_risk, "first_gate": first_gate, "promotion_gate": promo_gate,
        "stop_condition": "see template", "expected_verdict": exp_verdict, "expected_lane": exp_lane, "notes": notes}
   if maps: c["maps_to_ledger_candidate"] = maps
   if deferred: c["deferred"] = True
+  if extra: c.update(extra)
   return c
+
+BINDINGS = LS.parent / "qk-decode-eval/binding_templates.json"
+def _binding(bid):
+  if not BINDINGS.exists(): return None
+  for b in json.loads(BINDINGS.read_text()).get("templates", []):
+    if b["binding_id"] == bid: return b
+  return None
 
 # ---- per-template deterministic expanders --------------------------------------------------------------------
 def _flash_l(t):
@@ -90,11 +98,37 @@ def _closed(t):
   return out
 
 def _north_star(t):
-  return [mk("gen_north_star_flash_attn_tile", "north_star_deferred",
-             "Full llama-style vector flash_attn_tile (many-KV-split / stream-k combine). Not runnable yet.",
-             t["id"], None, "deferred_north_star", {}, True, None, "n/a (deferred)",
-             "needs a flash_attn_tile kernel + evaluator binding before any gate", None, "PRUNE_NEEDS_TEMPLATE",
-             deferred=True, notes="deferred north-star; no kernel/evaluator binding exists; never benchmarked")]
+  b = _binding("north_star_flash_attn_tile_v0") or {}
+  req = list((b.get("required_candidate_params") or {}).keys())
+  out = []
+  # 1) the real north-star: binding template EXISTS, no concrete runner -> precise PRUNE_NEEDS_TEMPLATE
+  out.append(mk("gen_north_star_flash_attn_tile", "north_star_flash_attn_tile",
+                "Full llama-style vector flash_attn_tile (many-KV-split / stream-k combine vs gqa_coop_vec). Well-specified by binding north_star_flash_attn_tile_v0; blocked only on a concrete kernel + runner.",
+                t["id"], None, "deferred_north_star", {}, True, None,
+                "structural: workgroups grow with ctx and >= gqa_coop_vec (T=1 parallelism preserved)",
+                "local A/B >= 1.05x vs gqa_coop_vec @ctx1024, then W==D >= 5%@1024", None, "PRUNE_NEEDS_TEMPLATE",
+                deferred=True,
+                notes="deferred north-star; specified by binding template; blocked on a concrete kernel/runner; never benchmarked; compares vs gqa_coop_vec, never a weak baseline",
+                extra={"binding_template_id": "north_star_flash_attn_tile_v0", "maps_to_north_star": True,
+                       "executable_status": "deferred_no_kernel", "required_params": req,
+                       "comparator": b.get("comparator"), "expected_first_real_gate": (b.get("gates") or {}).get("local_ab"),
+                       "expected_stop_conditions": b.get("stop_conditions"),
+                       "missing_for_executable": b.get("missing_for_executable")}))
+  # 2) executable plumbing selftest: binding EXISTS + concrete decode_eval runner -> EXECUTE -> SELFTEST_PASS (no perf)
+  out.append(mk("gen_north_star_binding_selftest", "binding_selftest",
+                "Binding-plumbing selftest (proves the binding->candidate->decode_eval->artifact path is executable). NOT a performance candidate.",
+                t["id"], "north_star_binding_selftest", "binding_selftest", {}, True, None,
+                "n/a (selftest)", "never promotable", "SELFTEST_PASS", "selftest_only_not_perf",
+                notes="executable plumbing only; SELFTEST_PASS is not a perf pass; distinct from gen_north_star_flash_attn_tile",
+                extra={"binding_template_id": "north_star_binding_selftest_v0", "executable_status": "executable_selftest"}))
+  # 3) missing-binding demo: binding_template_id does NOT exist -> PRUNE_MISSING_EVALUATOR_BINDING
+  out.append(mk("gen_north_star_missing_binding", "north_star_flash_attn_tile",
+                "Demonstrates the missing-binding case: references a binding template id that does not exist.",
+                t["id"], None, "deferred_north_star", {}, True, None, "n/a (missing binding)",
+                "n/a", None, "PRUNE_MISSING_EVALUATOR_BINDING", deferred=True,
+                notes="proves the loop distinguishes a missing binding template from a present-but-unimplemented one",
+                extra={"binding_template_id": "north_star_flash_attn_tile_vX_does_not_exist", "executable_status": "missing_binding_template"}))
+  return out
 
 EXPANDERS = {"decode_flash_l_sweep": _flash_l, "q8_opt_in_policy": _q8,
              "closed_lane_reopen_attempts": _closed, "north_star_flash_attn_tile_placeholder": _north_star}

@@ -146,6 +146,8 @@ def _child_flash_l_local() -> int:
 
 # ---- verdict logic ----------------------------------------------------------------------------------------------
 def classify(cand: dict, th: dict, corr: dict, local: dict, wd: dict) -> tuple[str, str]:
+  if cand["family"] == "binding_selftest":
+    return "SELFTEST_PASS", "evaluator-binding plumbing selftest; no performance measured (not a perf pass)"
   if corr["checked"] and corr["passed"] is False:
     return "FAIL_CORRECTNESS", f"correctness {corr.get('metric')}={corr.get('value')} > {corr.get('threshold')}"
   if local["checked"] and local["passed"] is False:
@@ -227,6 +229,11 @@ def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, d
       dnll = qn - bn; res["correctness"] = {"checked": True, "metric": "dNLL", "value": round(dnll, 5), "threshold": th["dnll_max"], "passed": dnll <= th["dnll_max"], "note": "historical teacher-forced dNLL artifact"}
       res["source_files"] += [rung["baseline_nll"], rung["q8_nll"]]
       res["notes"].append("q8 dNLL is from the historical bench/q8-ffn-handwritten-oracle artifact (the q8 audit script does not compute dNLL).")
+    elif r == "selftest" and runner == "binding_selftest":
+      # plumbing only: NO GPU, NO benchmark. Validates the binding -> candidate -> decode_eval -> artifact path.
+      res["commands"].append(f"[binding selftest: no GPU; binding_template_id={rung.get('binding_template_id')}]")
+      res["notes"].append("binding-plumbing selftest; SELFTEST_PASS is not a performance pass")
+      res["source_files"].append("bench/qk-decode-eval/binding_templates.json")
   v, reason = classify(cand, th, res["correctness"], res["local_ab"], res["wd"])
   res["verdict"], res["stop_reason"] = v, reason
   res["verdict_matches_expected"] = (cand.get("historical_expected_verdict") in (None, v)) or (v == cand.get("historical_expected_verdict"))

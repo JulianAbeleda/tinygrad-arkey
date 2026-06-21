@@ -45,15 +45,15 @@
     {
       "id": "north_star_flash_attn_tile_placeholder",
       "family": "north_star_deferred",
-      "description": "The remaining north-star lever: a full llama-style vector flash_attn_tile with efficient many-KV-split / stream-k combine. NOT runnable yet (no evaluator binding / kernel exists).",
-      "legal_params": {"mode": ["deferred"]},
-      "default_params": {"mode": ["deferred"]},
-      "expansion_rule": "one non-executable, deferred candidate with no decode_eval binding",
-      "closed_lane_guards": ["not a closed lane; legal future work, but no kernel/evaluator binding exists"],
-      "binding_strategy": "no decode_eval binding; deferred -> PRUNE_NEEDS_TEMPLATE (needs an evaluator-binding template)",
-      "expected_lifecycle_decision": {"gen_north_star_flash_attn_tile": "PRUNE_NEEDS_TEMPLATE"},
-      "stop_condition": "deferred until a flash_attn_tile kernel + evaluator binding exists; never pretend it is runnable",
-      "notes": "shows the generator can represent future work honestly without benchmarking it."
+      "description": "The remaining north-star lever: a full llama-style vector flash_attn_tile (many-KV-split / stream-k combine vs gqa_coop_vec). Specified by the binding template north_star_flash_attn_tile_v0; blocked only on a concrete kernel + runner.",
+      "legal_params": {"mode": ["deferred", "selftest", "missing_binding"]},
+      "default_params": {"mode": ["deferred", "selftest", "missing_binding"]},
+      "expansion_rule": "three candidates exercising the binding layer: (1) the north-star itself (binding exists, no runner), (2) an executable binding selftest (binding + concrete decode_eval runner), (3) a missing-binding demo (binding id absent)",
+      "closed_lane_guards": ["not a closed lane; legal future work specified by binding north_star_flash_attn_tile_v0; compares vs gqa_coop_vec, never a weak baseline"],
+      "binding_strategy": "carry binding_template_id; the loop resolves it -> missing template / present-but-no-runner / executable",
+      "expected_lifecycle_decision": {"gen_north_star_flash_attn_tile": "PRUNE_NEEDS_TEMPLATE", "gen_north_star_binding_selftest": "selftest_only_not_perf", "gen_north_star_missing_binding": "PRUNE_MISSING_EVALUATOR_BINDING"},
+      "stop_condition": "deferred until a flash_attn_tile kernel + runner exist; never pretend it is runnable; never benchmark a weak baseline as progress",
+      "notes": "binding template north_star_flash_attn_tile_v0 (bench/qk-decode-eval/binding_templates.json) makes the north-star a well-specified candidate, not a vague idea; selftest proves the executable binding path; missing_binding proves the loop distinguishes a missing template."
     }
   ],
   "suites": {
