@@ -148,6 +148,10 @@ def _child_flash_l_local() -> int:
 def classify(cand: dict, th: dict, corr: dict, local: dict, wd: dict) -> tuple[str, str]:
   if cand["family"] == "binding_selftest":
     return "SELFTEST_PASS", "evaluator-binding plumbing selftest; no performance measured (not a perf pass)"
+  if cand["family"] == "reference_oracle":
+    if local["checked"] and local["passed"]:
+      return "PASS_ORACLE_LOCAL_AB", f"reference oracle beats comparator local A/B ({local.get('speedup_ctx1024')}x); a TARGET that informs codegen; NON-promotable (vendored reference, not a tinygrad primitive)"
+    return "FAIL_ORACLE_LOCAL_AB", f"reference oracle does not beat comparator local A/B ({local.get('speedup_ctx1024')}x)"
   if corr["checked"] and corr["passed"] is False:
     return "FAIL_CORRECTNESS", f"correctness {corr.get('metric')}={corr.get('value')} > {corr.get('threshold')}"
   if local["checked"] and local["passed"] is False:

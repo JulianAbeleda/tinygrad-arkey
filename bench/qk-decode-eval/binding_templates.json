@@ -77,6 +77,33 @@
       "decode_eval_binding": "north_star_binding_selftest",
       "missing_for_executable": [],
       "notes": "Executable plumbing selftest: proves the binding -> generated candidate -> loop EXECUTE -> decode_eval -> SELFTEST_PASS artifact path works end-to-end, with NO benchmark and NO performance claim. Distinct from the deferred north-star candidate."
+    },
+    {
+      "binding_id": "llama_flash_attn_tile_oracle_v0",
+      "candidate_family": "reference_oracle",
+      "role": "decode_attention",
+      "comparator": "gqa_coop_vec (current winner) — pure GPU time, apples-to-apples",
+      "local_ab_runner": "extra/qk_llama_flash_attn_tile_oracle_ab.py [IMPLEMENTED, PROFILING ORACLE]: llama flash_attn_tile+combine GPU time (rocprofv3 trace) vs coop GPU-busy (tinygrad ProfileGraphEvent). NOT a re-implemented kernel.",
+      "wd_runner": "none (reference oracle; never routed in-model)",
+      "correctness_runner": "n/a — llama kernel is the REFERENCE (correct by construction); no re-implementation to verify",
+      "supported_contexts": [512, 1024, 4096],
+      "required_candidate_params": {"source": "llama.cpp fattn-tile.cuh flash_attn_tile<128,128,*,4,false> + flash_attn_combine_results<128>", "non_wmma": true, "ncols2": 4, "measurement": "pure GPU kernel time both sides"},
+      "required_artifact_fields": ["llama_attn_gpu_us", "coop_attn_gpu_us", "llama_speedup_vs_coop", "llama_source"],
+      "gates": {
+        "structural": "n/a (oracle; measures the real llama kernel)",
+        "correctness": "n/a (llama is the reference)",
+        "local_ab": "llama attention GPU us < coop GPU us @ctx1024, gate >= 1.05x llama-faster; MEASURED 5.71x",
+        "wd": "n/a (never routed; no W==D for a reference oracle)",
+        "promotion_policy": "NON-PROMOTABLE — vendored llama reference, not a tinygrad primitive; informs native codegen only; NEVER a default route"
+      },
+      "stop_conditions": ["must never become a default/model route", "must never be claimed as a tinygrad primitive win", "do not vendor llama machinery beyond the timing oracle"],
+      "concrete_runner_status": "implemented",
+      "decode_eval_binding": "llama_flash_attn_tile_oracle",
+      "missing_for_executable": [],
+      "is_reference_oracle": true,
+      "default_eligible": false,
+      "local_ab_result": "PASS_ORACLE_LOCAL_AB: llama 5.87/5.71/4.77x faster than gqa_coop_vec standalone @ctx512/1024/4096 (pure GPU: llama 10.2/12.2/27.7us vs coop 59.9/69.9/132us). The 10x decode-attention gap is a STANDALONE kernel-codegen target, NOT only in-model integration -> native codegen is aiming at the right layer; llama's kernel is the validated target + byte-level oracle for the codegen follow-up.",
+      "notes": "Reference oracle that resolved the central question (standalone kernel vs in-model integration): llama's flash_attn_tile beats coop STANDALONE ~5-6x. Full source port is BOUNDED (audited, ~700-900 lines, no cp_async/WMMA/broad-ggml) and deferred to the native-codegen follow-up that needs a re-runnable byte-level oracle. See docs/llama-flash-attn-tile-oracle-result-20260621.md."
     }
   ]
 }

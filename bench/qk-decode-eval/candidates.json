@@ -86,6 +86,20 @@
       "historical_note": "0.58x@1024 / 0.89x@4096 vs gqa_coop_vec; byte-exact; local gate missed -> no W==D route"
     },
     {
+      "id": "llama_flash_attn_tile_oracle",
+      "family": "reference_oracle",
+      "description": "REFERENCE ORACLE (non-default, non-promotable): llama.cpp flash_attn_tile decode attention vs gqa_coop_vec, pure GPU time (llama rocprofv3 trace vs coop ProfileGraphEvent). Answers whether llama's win is standalone-kernel or in-model. MEASURED: llama 5.7x faster @ctx1024 standalone -> PASS_ORACLE_LOCAL_AB. Vendored llama reference, NOT a tinygrad primitive; never a default route.",
+      "env": {},
+      "rungs": [
+        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_llama_flash_attn_tile_oracle_ab.py", "result_json": "bench/qk-llama-flash-attn-tile-oracle/latest.json"}
+      ],
+      "contexts": [512, 1024, 4096],
+      "correctness_req": "none",
+      "historical_expected_verdict": "PASS_ORACLE_LOCAL_AB",
+      "compare_artifact": "bench/qk-llama-flash-attn-tile-oracle/latest.json",
+      "historical_note": "llama 5.87/5.71/4.77x faster than coop standalone (pure GPU); reference oracle / codegen target; non-promotable"
+    },
+    {
       "id": "north_star_binding_selftest",
       "family": "binding_selftest",
       "description": "Evaluator-binding plumbing selftest (binding_templates.json north_star_binding_selftest_v0). Validates the binding -> candidate -> decode_eval -> artifact path WITHOUT benchmarking. Verdict SELFTEST_PASS; NOT a performance candidate.",
