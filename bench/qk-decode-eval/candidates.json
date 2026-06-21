@@ -266,6 +266,27 @@
       "historical_expected_verdict": "PASS_ORACLE_LOCAL_AB",
       "compare_artifact": "bench/qk-llama-hcq-tile/latest.json",
       "historical_note": "Route B B1: vendored llama tile via HCQ wins 2.96x GPU-time @ctx1024 (correct rel 1.3e-3); wall launch-overhead-bound -> W==D needs graph integration; non-promotable | B2 (launch integration): folding tile+combine into ONE bound HCQ queue (1 doorbell, baked kernargs) -> integrated WALL 1.65x FASTER than coop (~36 vs 60us; B1 was 0.39x) -> B2_LOCAL_GRAPH_PASS; GPU win survives integration; Route B viable -> B3 owned AMDGCN. Vendored W==D layout-blocked."
+    },
+    {
+      "id": "decode_attention_llama_flash_tile_owned_amdgcn",
+      "family": "north_star_flash_attn_tile",
+      "description": "OWNED, PROMOTABLE hand-AMDGCN decode-attention tile (extra/qk_owned_flash_decode.hip) for tinygrad's NATIVE K/V layout [Hkv,MAXC,Hd]. llama-style dataflow (warp-per-q-head + GQA-pack LDS staging, v_dot2 q.k, register online softmax+PV, KV-split+combine) authored from scratch (NOT vendored llama code). B3 LOCAL A/B: beats gqa_coop_vec 2.35x GPU-busy / 1.70x wall (matched-sync) @ctx1024, correct rel 2e-7. default_eligible=false: W==D blocked by external-kernel-as-JIT-graph-node integration (not Route-A codegen).",
+      "env": {},
+      "rungs": [
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_owned_flash_decode_amdgcn_b3.py",
+          "result_json": "bench/qk-decode-attention-route-b-b3/latest.json"
+        }
+      ],
+      "contexts": [
+        1024
+      ],
+      "correctness_req": "rel_rmse<=1e-3",
+      "historical_expected_verdict": "LOCAL_PASS_WD_FAIL",
+      "compare_artifact": "bench/qk-decode-attention-route-b-b3/latest.json",
+      "historical_note": "B3 owned AMDGCN tile: LOCAL PASS (2.35x GPU / 1.70x wall vs coop, correct rel 2e-7, v_dot2=2, 56 VGPR, 8KB LDS, 0 spill); promotable + tinygrad-native layout. W==D BLOCKED (raw HCQ kernel can't enter JIT decode graph w/o Route-A codegen or eager); default_eligible=false. decode_eval shows REST without a W==D runner. See docs/decode-attention-route-b-b3-owned-amdgcn-result-20260621.md."
     }
   ],
   "suites": {

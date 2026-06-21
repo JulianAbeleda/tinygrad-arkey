@@ -164,6 +164,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   correct). **The B1 launch-overhead penalty is RECOVERED — the GPU win survives launch integration → Route B remains
   viable → proceed to B3 (owned hand-AMDGCN).** Vendored in-model W==D is layout-blocked (needs llama's ggml KV layout)
   → W==D is B3's job. Zero `tinygrad/` diff. Harness `extra/qk_llama_flash_attn_tile_hcq_graph_b2.py`.
+- **`decode-attention-route-b-b3-owned-amdgcn-result-20260621.md`** — ⭐⭐⭐ Route B B3 EXECUTED: `B3_LOCAL_PASS` —
+  **the project crosses "can we own the primitive?" → YES.** The first OWNED, promotable hand-AMDGCN decode-attention
+  tile (`extra/qk_owned_flash_decode.hip`, our source, llama dataflow, tinygrad-native K/V layout — no repack) **beats
+  `gqa_coop_vec` 2.35× GPU-busy / 1.70× wall** (matched per-call sync) @ctx1024, **near-exact correct (rel 2e-7)**,
+  v_dot2=2, 56 VGPR, 8 KB LDS, **0 spill**. Launched via the B2 one-bound-HCQ queue. **W==D BLOCKED** (raw-HCQ kernel
+  can't enter the JIT decode graph without Route-A codegen or eager) → `default_eligible=false`, default off, zero
+  `tinygrad/` diff. Next: external-kernel-as-JIT-graph-node capability (bounded, NOT Route-A). Layout contract
+  `bench/qk-decode-attention-route-b-b3/tinygrad_kv_layout_contract.json`; harness `extra/qk_owned_flash_decode_amdgcn_b3.py`.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

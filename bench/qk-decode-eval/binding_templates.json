@@ -185,6 +185,57 @@
       "default_eligible": false,
       "local_ab_result": "PASS_ORACLE_LOCAL_AB: vendored llama tile via tinygrad HCQ wins 2.96x GPU-busy @ctx1024 (llama 15.1us vs coop 44.6us), correct (rel 1.3e-3). CONFIRMS the llama-class kernel wins when DISPATCHED BY tinygrad's runtime, not only in llama's own trace. CRITICAL B2 CAVEAT: by WALL time the 2-raw-HCQ-dispatch path is ~2.5x SLOWER (148 vs 58us) -- the GPU win is eaten by per-call launch overhead; a W==D win REQUIRES folding tile+combine into the model JIT graph (one dispatch). 'isolated wins don't transfer to integration' applies.",
       "notes": "Route B B1 de-risk (full capture-and-replay). The vendored .co + captured kernarg launch correctly + win on GPU time via HCQ -> the escape hatch is worth integrating AT THE KERNEL LEVEL, but B2 must eliminate per-call launch overhead (graph integration) or the win won't reach W==D. See docs/decode-attention-route-b-b1-result-20260621.md. B2 RESULT: the B1 wall penalty is RECOVERED by HCQ graph integration -- one bound queue (1 doorbell, baked kernargs, replayed) gives integrated wall 1.65x faster than coop (GPU-busy 3.6x). B2_LOCAL_GRAPH_PASS -> Route B viable, proceed to B3 owned AMDGCN. Vendored in-model W==D is layout-blocked (needs llama ggml KV layout). See docs/decode-attention-route-b-b2-graph-integration-result-20260621.md."
+    },
+    {
+      "binding_id": "decode_attention_llama_flash_tile_owned_amdgcn_v0",
+      "candidate_family": "north_star_flash_attn_tile",
+      "role": "decode_attention",
+      "comparator": "gqa_coop_vec (current winner) -- GPU-busy + matched-sync wall, apples-to-apples",
+      "local_ab_runner": "extra/qk_owned_flash_decode_amdgcn_b3.py [IMPLEMENTED, OWNED kernel]: hipcc-compiled extra/qk_owned_flash_decode.hip launched via HCQ NamedAMDProgram + B2 one-bound-queue; tinygrad-native K/V layout (no repack).",
+      "wd_runner": "none -- BLOCKED: raw-HCQ owned kernel cannot enter the JIT-traced decode graph without Route-A codegen (forbidden) or eager decode (non-production). Needs an external-kernel-as-graph-node capability.",
+      "correctness_runner": "numpy GQA softmax; rel_max 3.5e-7 (near-exact, far better than the vendored 1.3e-3)",
+      "supported_contexts": [
+        1024
+      ],
+      "required_candidate_params": {
+        "source": "extra/qk_owned_flash_decode.hip OWNED (not vendored)",
+        "layout": "tinygrad-native [Hkv,MAXC,Hd]",
+        "v_dot2": true,
+        "lds_staged": true,
+        "gqa_pack": 4,
+        "kv_split_combine": true
+      },
+      "required_artifact_fields": [
+        "kernel_hash",
+        "source_hash",
+        "isa_summary",
+        "v_dot2_count",
+        "lds_bytes",
+        "vgpr",
+        "spill",
+        "owned_gpu_busy_us",
+        "owned_wall_us",
+        "wall_speedup",
+        "tinygrad_kv_layout_contract_hash"
+      ],
+      "gates": {
+        "structural": "v_dot2 present, no spill, LDS-staged",
+        "correctness": "rel_rmse<=1e-3; MEASURED 2e-7",
+        "local_ab": "wall>=1.5x (matched-sync) AND GPU-busy>=1.5x; MEASURED 1.70x/2.35x",
+        "wd": "BLOCKED (graph-node integration)",
+        "promotion_policy": "PROMOTABLE in principle (owned, tinygrad-native) but default_eligible=false until W==D passes"
+      },
+      "stop_conditions": [
+        "default stays off until a real W==D passes",
+        "W==D requires external-kernel-as-JIT-graph-node integration, NOT Route-A codegen of the attention"
+      ],
+      "concrete_runner_status": "implemented",
+      "decode_eval_binding": "decode_attention_llama_flash_tile_owned_amdgcn",
+      "missing_for_executable": [],
+      "is_reference_oracle": false,
+      "default_eligible": false,
+      "local_ab_result": "B3_LOCAL_PASS: owned AMDGCN tile beats gqa_coop_vec 2.35x GPU-busy / 1.70x matched-sync wall @ctx1024 (owned 18.9us GPU vs coop 44.5us; owned 41.6us wall vs coop 70.6us), correct rel 2e-7, v_dot2=2, 56 VGPR, 8KB LDS, 0 spill. FIRST owned promotable kernel that beats the winner -- the project crosses 'can we own the primitive?' -> YES.",
+      "notes": "Realizes the north_star_flash_attn_tile row as an OWNED kernel (was PRUNE_NEEDS_TEMPLATE). Promotion gated on the external-kernel-graph-node capability. See docs/decode-attention-route-b-b3-owned-amdgcn-result-20260621.md + bench/qk-decode-attention-route-b-b3/tinygrad_kv_layout_contract.json."
     }
   ]
 }

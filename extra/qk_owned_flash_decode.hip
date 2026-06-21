@@ -1,0 +1,136 @@
+// Route B B3 — OWNED hand-authored decode-attention tile for TINYGRAD's KV layout (not vendored llama code).
+// llama-style dataflow (flash decode: online softmax + PV, v_dot2 q.k), authored from scratch to tinygrad's native
+// layout K/V = [Hkv, MAXC, Hd] fp16 (kv-head major) so NO repacking is needed (the B2 layout block is removed).
+// Fixed shape: T=1, Hd=128, Hq=32, Hkv=8, GQA group=4. KV-split S over positions for occupancy + a combine kernel.
+//
+// build: hipcc --offload-arch=gfx1100 --genco -D__AMDGCN_WAVEFRONT_SIZE=32 qk_owned_flash_decode.hip -o x.co
+//        then clang-offload-bundler --unbundle --targets=hipv4-amdgcn-amd-amdhsa--gfx1100 -> bare ELF for HCQ.
+#include <hip/hip_runtime.h>
+#include <hip/hip_fp16.h>
+
+#define Hd   128
+#define MAXC 4096
+#define G    4          // Hq / Hkv (GQA group)
+#define LANES 32        // warp (wave32)
+#define DPL  (Hd/LANES) // dims per lane = 4
+
+// --- tile kernel: one WARP (32 threads) per (q-head x split). grid.x = Hq, grid.y = S. block = 32.
+// each lane owns DPL=4 head-dims (lane*4 .. lane*4+3), as two half2. Online softmax over the split's positions;
+// writes per-split partial PV (un-normalized) + (m,l) meta to global for the combine kernel.
+extern "C" __global__ void owned_flash_tile(const __half* __restrict__ Q, const __half* __restrict__ K,
+                                            const __half* __restrict__ V, float* __restrict__ part,
+                                            float* __restrict__ meta, int n_valid, int S, float scale) {
+  const int h    = blockIdx.x;           // q-head 0..Hq-1
+  const int s    = blockIdx.y;           // split 0..S-1
+  const int kvh  = h / G;
+  const int lane = threadIdx.x;          // 0..31
+  // split this warp's KV range
+  const int per  = (n_valid + S - 1) / S;
+  const int t0   = s * per;
+  const int t1   = min(t0 + per, n_valid);
+
+  const __half2* q2 = (const __half2*)(Q + (long)h * Hd);
+  __half2 qa = q2[lane*2 + 0], qb = q2[lane*2 + 1];
+  const __half* kbase = K + (long)kvh * MAXC * Hd;
+  const __half* vbase = V + (long)kvh * MAXC * Hd;
+
+  float m = -1e30f, l = 0.0f;
+  float a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f;
+  for (int t = t0; t < t1; t++) {
+    const __half2* k2 = (const __half2*)(kbase + (long)t * Hd);
+    float pd = 0.f;
+    pd = __builtin_amdgcn_fdot2(qa, k2[lane*2 + 0], pd, false);   // v_dot2_f32_f16
+    pd = __builtin_amdgcn_fdot2(qb, k2[lane*2 + 1], pd, false);
+    #pragma unroll
+    for (int o = 16; o > 0; o >>= 1) pd += __shfl_xor(pd, o, 32); // warp-reduce -> full score on every lane
+    float sc   = pd * scale;
+    float mn   = fmaxf(m, sc);
+    float corr = __expf(m - mn);
+    float p    = __expf(sc - mn);
+    l  = l * corr + p;
+    const __half* vt = vbase + (long)t * Hd;
+    a0 = a0 * corr + p * (float)vt[lane*4 + 0];
+    a1 = a1 * corr + p * (float)vt[lane*4 + 1];
+    a2 = a2 * corr + p * (float)vt[lane*4 + 2];
+    a3 = a3 * corr + p * (float)vt[lane*4 + 3];
+    m  = mn;
+  }
+  // write un-normalized partial PV (NOT divided by l) + meta(m,l) for the combine
+  float* po = part + ((long)h * S + s) * Hd;
+  po[lane*4 + 0] = a0; po[lane*4 + 1] = a1; po[lane*4 + 2] = a2; po[lane*4 + 3] = a3;
+  if (lane == 0) { float* mo = meta + ((long)h * S + s) * 2; mo[0] = m; mo[1] = l; }
+}
+
+// --- v2 GQA-PACKED + LDS-STAGED tile: one WORKGROUP (128 threads = 4 warps) per (kv-head x split). The 4 warps are
+// the 4 q-heads sharing this kv-head, so K/V is staged into LDS ONCE and reused across all 4 (eliminates v1's 4x
+// redundant K/V global reads -- the llama ncols2=4 ingredient). grid.x=Hkv, grid.y=S, block=128.
+#define TK 16   // LDS tile of positions
+extern "C" __global__ void owned_flash_tile_gqa(const __half* __restrict__ Q, const __half* __restrict__ K,
+                                                const __half* __restrict__ V, float* __restrict__ part,
+                                                float* __restrict__ meta, int n_valid, int S, float scale) {
+  __shared__ __half ksh[TK * Hd];
+  __shared__ __half vsh[TK * Hd];
+  const int kvh  = blockIdx.x;
+  const int s    = blockIdx.y;
+  const int warp = threadIdx.x >> 5;     // 0..3 -> q-head in group
+  const int lane = threadIdx.x & 31;
+  const int h    = kvh * G + warp;
+  const int per  = (n_valid + S - 1) / S;
+  const int t0   = s * per, t1 = min(t0 + per, n_valid);
+  const __half2* q2 = (const __half2*)(Q + (long)h * Hd);
+  __half2 qa = q2[lane*2 + 0], qb = q2[lane*2 + 1];
+  const __half* kbase = K + (long)kvh * MAXC * Hd;
+  const __half* vbase = V + (long)kvh * MAXC * Hd;
+  float m = -1e30f, l = 0.0f, a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f;
+  for (int tb = t0; tb < t1; tb += TK) {
+    int n = min(TK, t1 - tb);
+    for (int i = threadIdx.x; i < n * Hd; i += 128) {       // 128 threads cooperatively stage K/V tile -> LDS
+      ksh[i] = kbase[(long)tb * Hd + i];
+      vsh[i] = vbase[(long)tb * Hd + i];
+    }
+    __syncthreads();
+    for (int tt = 0; tt < n; tt++) {
+      const __half2* k2 = (const __half2*)(ksh + tt * Hd);
+      float pd = 0.f;
+      pd = __builtin_amdgcn_fdot2(qa, k2[lane*2 + 0], pd, false);
+      pd = __builtin_amdgcn_fdot2(qb, k2[lane*2 + 1], pd, false);
+      #pragma unroll
+      for (int o = 16; o > 0; o >>= 1) pd += __shfl_xor(pd, o, 32);
+      float sc = pd * scale, mn = fmaxf(m, sc), corr = __expf(m - mn), p = __expf(sc - mn);
+      l = l * corr + p;
+      const __half* vt = vsh + tt * Hd;
+      a0 = a0*corr + p*(float)vt[lane*4+0]; a1 = a1*corr + p*(float)vt[lane*4+1];
+      a2 = a2*corr + p*(float)vt[lane*4+2]; a3 = a3*corr + p*(float)vt[lane*4+3];
+      m = mn;
+    }
+    __syncthreads();
+  }
+  float* po = part + ((long)h * S + s) * Hd;
+  po[lane*4 + 0] = a0; po[lane*4 + 1] = a1; po[lane*4 + 2] = a2; po[lane*4 + 3] = a3;
+  if (lane == 0) { float* mo = meta + ((long)h * S + s) * 2; mo[0] = m; mo[1] = l; }
+}
+
+// --- combine kernel: one warp per q-head merges the S partials via log-sum-exp. grid.x = Hq, block = 32.
+extern "C" __global__ void owned_flash_combine(const float* __restrict__ part, const float* __restrict__ meta,
+                                               float* __restrict__ out, int S) {
+  const int h    = blockIdx.x;
+  const int lane = threadIdx.x;
+  // global max over splits
+  float gm = -1e30f;
+  for (int s = 0; s < S; s++) gm = fmaxf(gm, meta[((long)h * S + s) * 2 + 0]);
+  float denom = 0.f;
+  float o0 = 0.f, o1 = 0.f, o2 = 0.f, o3 = 0.f;
+  for (int s = 0; s < S; s++) {
+    float ms = meta[((long)h * S + s) * 2 + 0];
+    float ls = meta[((long)h * S + s) * 2 + 1];
+    float w  = __expf(ms - gm);
+    denom += w * ls;
+    const float* ps = part + ((long)h * S + s) * Hd;
+    o0 += w * ps[lane*4 + 0]; o1 += w * ps[lane*4 + 1];
+    o2 += w * ps[lane*4 + 2]; o3 += w * ps[lane*4 + 3];
+  }
+  float inv = 1.0f / denom;
+  float* oo = out + (long)h * Hd;
+  oo[lane*4 + 0] = o0 * inv; oo[lane*4 + 1] = o1 * inv;
+  oo[lane*4 + 2] = o2 * inv; oo[lane*4 + 3] = o3 * inv;
+}

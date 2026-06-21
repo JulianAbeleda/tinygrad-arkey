@@ -75,6 +75,18 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   is layout-blocked + out of bounds + non-promotable → W==D is B3's job (owned kernel authored to tinygrad's layout).
   Zero `tinygrad/` diff, no `model.py` route. Harness `extra/qk_llama_flash_attn_tile_hcq_graph_b2.py`. See
   `docs/decode-attention-route-b-b2-graph-integration-result-20260621.md`.
+- **Route B B3 EXECUTED (2026-06-21) — `B3_LOCAL_PASS`: the project crosses "can we OWN the primitive?" → YES.** The
+  first OWNED, promotable hand-AMDGCN decode-attention tile (`extra/qk_owned_flash_decode.hip` — our source, llama
+  dataflow: GQA-packed LDS-staged warp tile + `v_dot2` q·k + register online-softmax+PV + KV-split/combine, authored to
+  tinygrad's **native** K/V layout `[Hkv,MAXC,Hd]` so NO repack) **beats `gqa_coop_vec` 2.35× GPU-busy / 1.70× wall**
+  (matched per-call sync — the fair model) @ctx1024, **near-exact correct (rel 2e-7)**, v_dot2=2, 56 VGPR, 8 KB LDS,
+  **0 spill**. hipcc→`.co`, launched via the B1 `NamedAMDProgram` + B2 one-bound-HCQ queue. **W==D BLOCKED**: the raw-HCQ
+  kernel can't enter the JIT-traced decode graph without Route-A codegen (forbidden) or eager decode (non-production) →
+  `default_eligible=false`, default off, **no `model.py` route, zero `tinygrad/` diff**. The single remaining step to
+  promotion is an *external-kernel-as-JIT-graph-node* capability (bounded, NOT Route-A codegen). Registered
+  `decode_attention_llama_flash_tile_owned_amdgcn` (realizes the north-star row). Harness
+  `extra/qk_owned_flash_decode_amdgcn_b3.py`; layout contract + result doc
+  `docs/decode-attention-route-b-b3-owned-amdgcn-result-20260621.md`.
 
 - **Machine-search evaluator BUILT (2026-06-21).** `extra/qk_decode_eval.py` is the first-class, automated form of
   the lifecycle ladder (correctness → local A/B → whole-decode W==D → policy), emitting schema'd verdicts. It
