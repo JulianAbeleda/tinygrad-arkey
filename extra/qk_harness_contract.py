@@ -38,6 +38,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 DECODE_COMPARATOR = "gqa_coop_vec"
 
 # The 13 fields a valid benchmark artifact must record (the principle doc's enumerated contract).
+# THIS IS A DISTINCT CONTRACT from the decode_eval RUN schema: CONTRACT_FIELDS is the abstract per-HARNESS audit
+# vocabulary (scored by contract_audit() against an ab_script harness artifact); the run artifact's concrete keys
+# live in bench/qk-decode-eval/schema.json:required, and evaluator_contract.json:required_artifact_fields is a curated
+# subset of THAT. The three relationships are pinned by test/unit/test_artifact_contract_fields.py (do not merge them).
 CONTRACT_FIELDS = (
   "workload_shape_and_context", "candidate_id_and_class", "comparator_id_and_why_winner",
   "exact_command_and_env", "git_commit_and_dirty", "hardware_and_clock_state", "warmup_compile_handling",

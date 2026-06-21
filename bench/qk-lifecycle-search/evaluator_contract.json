@@ -29,6 +29,7 @@
     "SELFTEST_PASS": "evaluator-binding plumbing selftest; no performance measured",
     "REST": "baseline curve or no rung cleared a gate"
   },
+  "_required_artifact_fields_comment": "A human-facing CURATED SUBSET of the authoritative decode_eval_run_v1 schema (bench/qk-decode-eval/schema.json:required). Enforced as a subset by test/unit/test_artifact_contract_fields.py. NOT the same list as the per-harness 13-field contract in extra/qk_harness_contract.py:CONTRACT_FIELDS (that audits ab_script harness artifacts, a different object).",
   "required_artifact_fields": ["candidate_id", "git_commit", "dirty_tree", "hardware", "perf_state_before", "perf_state_after", "clock_pin_mode", "env", "commands", "contexts", "repeats", "correctness", "local_ab", "wd", "verdict", "thresholds", "stop_reason"],
   "promotion_rules": {
     "authority": "clean W==D PROFILE-off AUTO-clock only",
