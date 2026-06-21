@@ -6,21 +6,35 @@ Executed the evidence-driven low-risk delete pass from
 `docs/perf-probe-active-surface-reduction-plan-20260621.md`. Goal: shrink the active `extra/` probe surface so future
 agents don't treat stale one-off probes as authority — without breaking the live evaluator/search system.
 
-## Decision: **`ACTIVE_SURFACE_REDUCTION_DELETE_COMPLETE`** (low-risk tier)
+## Decision: **`ACTIVE_SURFACE_REDUCTION_DELETE_COMPLETE`** (both waves executed)
 
-26 zero-reference scratch/scope/superseded probe scripts **deleted** (via `git rm`; history preserved). The live
-evaluator/search system is **verified intact**. The 279 dated-doc-cited provenance probes are **kept** this pass and
-documented as an owner-gated **second wave** (archive or delete) — per the gate "do not delete manual-review files;
-execute only low-risk deletes; if uncertain, archive rather than delete."
+**Two waves, 243 scripts deleted total** (via `git rm`; history preserved). The live evaluator/search system is
+**verified intact after both** (live imports + policy guard + all CLIs + 35 test modules import clean; tinygrad/model
+untouched).
+- **Wave 1 (low-risk):** 26 zero-reference scratch/scope probes.
+- **Wave 2 (owner-approved):** the user chose **"delete the 279"** dated-doc-cited provenance probes. Re-running the
+  full safety pass (import-closure fixpoint + path-string edges + external/test-importer protection, with
+  **comprehensive import detection** — see the lesson below) **rescued 62** as real dependencies (shared libs
+  `qk_layout`/`qk_quantize`/`qk_packed_tile`, the test-imported `qk_flash_search`/`qk_flywheel_cli` + the whole
+  `qk_flywheel_*`/`qk_semantic_*` subsystems, `qk_ansor_transition_loop`/`qk_candidate_generator`/`qk_gap_profile`,
+  …), so **217** were actually deleted.
 
-## Counts
+## Counts (final)
 
 | status | count | action |
 |---|---:|---|
 | live | 18 | kept (evaluator/search/runner import-closure) |
-| provenance | 55 | kept (canonical/ledger-cited, shared utilities, test-imported) |
-| manual_review | 279 | kept this pass (second-wave candidates) |
-| **deleted** | **26** | **removed from `extra/` (350 qk_ scripts remain, was 376)** |
+| provenance | 117 | kept (canonical/ledger-cited, shared libs, test-imported, dependency-rescued) |
+| **deleted** | **243** (26 + 217) | **removed from `extra/`** |
+| | | `extra/qk_*.py`: **376 → 133** |
+
+### Lesson — import-detection gap caught before damage
+The first wave-2 pass used a regex that matched `from extra.X import` / `import extra.X` but **missed**
+`from extra import X` and `importlib.import_module("extra.X")`. The test-stem cross-check flagged that
+`test/external/test_qk_flash_search.py` (`from extra import qk_flash_search`) and `test_qk_flywheel_cli.py` exercise
+delete-set scripts. Detection was made comprehensive and the set rebuilt (220 → 217); a retro-check confirmed **none
+of wave-1's 26 were affected** by the gap. This is why the delete only proceeds behind an independent all-styles,
+whole-repo reference check (result: every importer of a deleted script is itself deleted).
 
 ## What was deleted (26)
 
@@ -36,30 +50,31 @@ Their conclusions are folded into the canonical syntheses (handoff + result docs
 result. Git history preserves every file.
 
 ## What was archived
-Nothing this pass (no `archive/` move). The second-wave path offers archive **or** delete.
+Nothing — the owner chose delete over archive (git history is the preservation mechanism; `inventory.json` records
+every deleted file's path/imports/doc-refs/reason).
 
-## What remains live (kept active)
-- **18 live** + **55 provenance** = 73 kept perf scripts that are required to run/validate/explain current behavior or
-  are cited evidence / shared utilities / test deps. Includes all `ab_script` runners, the W==D authority, the search
-  infra, `qk_paths.py` (`portable_path`), and the `test/external/`-imported `qk_packed_tile_*` / `qk_loop_*` scripts.
+## What remains live (kept active): 18 live + 117 provenance = 135
+Every script required to run/validate/explain current behavior, plus cited evidence, shared libraries, test deps, and
+dependency-rescued modules: all `ab_script` runners, the W==D authority, the search infra, `qk_paths.py`
+(`portable_path`), `qk_layout.py`/`qk_quantize.py`, the `test/external/`-exercised `qk_packed_tile_*`/`qk_loop_*`/
+`qk_flash_search`/`qk_flywheel_*` subsystems, and the `qk_ansor_*`/`qk_semantic_*`/`qk_candidate_*` chains those tests
+import.
 
-## What remains manual-review (279, second wave)
-Cited only by dated result docs (conclusion captured there): superseded_decode 64, superseded_tensile 53,
-superseded_mmvq 48, superseded_prefill 38, no_canonical 41, stale_scope 21, generated_scratch 14. **None are imported
-by live code** (verified), so they can be archived/deleted in one command when the owner decides. Recommended:
-`archive/perf-probes-20260621/` with a manifest, or `git rm` (history preserves). See `inventory.json` for the
-per-file list + reasons.
+## What remains manual-review
+**None** — wave 2 resolved the 279: 217 deleted, 62 rescued to provenance (real dependencies). The active surface is
+now fully classified (live / provenance / deleted) with no unresolved bucket.
 
-## Validation (all passed)
+## Validation (all passed, after BOTH waves)
 ```
-live infra import (decode_eval, lifecycle_search_loop, candidate_template_gen, policy_check, harness_contract, flash_decode)  -> OK
+live infra import (decode_eval, lifecycle_search_loop, candidate_template_gen, policy_check, harness_contract, flash_decode, nll_eval)  -> OK
 extra/qk_policy_consistency_check.py            -> POLICY CONSISTENCY: PASS
-extra/qk_decode_eval.py --list                  -> OK (candidates listed)
+extra/qk_decode_eval.py --list                  -> OK
 extra/qk_lifecycle_search_loop.py --help        -> OK
 extra/qk_candidate_template_gen.py --help        -> OK
+import-smoke all 35 test/qk_* modules           -> NONE broken (all extra imports resolve)
 git diff --cached --stat -- tinygrad/ model.py  -> empty (untouched)
-canonical-doc + live-ledger refs to deleted paths -> NONE
-test/ refs to deleted paths                     -> NONE
+independent all-styles whole-repo ref check on the 217 -> every importer of a deleted script is itself deleted
+flywheel CLI dynamic-import command modules     -> all 12 kept (none in delete set)
 ```
 
 ## Residual risk
@@ -77,9 +92,11 @@ History is **not** rewritten. Recover any deleted script with:
 doc-refs/reason so a conclusion can be re-located even without checkout.
 
 ## Next cleanup step
-Owner-gated **second wave** on the 279 manual_review provenance probes: archive to `archive/perf-probes-20260621/`
-(preserve, browseable) **or** `git rm` (smaller surface, git-recoverable). Re-run `build_inventory.py` after to confirm
-counts. The 279 are import-safe for either action.
+Perf-probe surface reduction is **done** (`extra/qk_*.py` 376 → 133). Remaining cleanup is **outside this scope**:
+stale `bench/` artifact directories and dated `docs/`/`structure/Development/` provenance docs whose scripts are now
+deleted (cosmetic dangling refs). A follow-up could prune those, but they carry no execution-surface risk. Re-running
+`build_inventory.py` against the current tree reflects the kept set (deleted files are recorded in this commit's
+`inventory.json` + git history).
 
 ## Acceptance gates
 | gate | result |

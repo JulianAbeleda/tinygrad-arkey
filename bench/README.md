@@ -92,11 +92,12 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > `fused_flash_concrete_gate` → `FAIL_LOCAL_AB` (match=True). **Bounded AND concrete-shape decode levers both exhausted.**
 >
 > **Active-surface reduction** (`bench/qk-active-surface-reduction/`; `docs/perf-probe-active-surface-reduction-result-20260621.md`):
-> reference-graph inventory of all 378 perf scripts (live 18 / provenance 55 / manual_review 279 / delete 26). Executed
-> the low-risk tier: **26 zero-reference scratch/scope/superseded probes `git rm`'d** (live evaluator/search verified
-> intact; policy guard PASS; no canonical/ledger/test reference dangles; tinygrad/model untouched). The 279
-> dated-doc-cited provenance probes are kept as an owner-gated second wave (archive or delete; all import-safe).
-> `build_inventory.py` regenerates the inventory. `ACTIVE_SURFACE_REDUCTION_DELETE_COMPLETE`.
+> reference-graph inventory of all perf scripts. Deleted **243 in two waves** (wave 1 = 26 zero-reference scratch;
+> wave 2 = 217 owner-approved dated-doc-cited provenance probes, 62 rescued as real test/lib deps via the
+> import-safety fixpoint + comprehensive import detection). `extra/qk_*.py` **376 → 133**. Live evaluator/search
+> verified intact after both (policy guard PASS; all CLIs; 35 test modules import clean; tinygrad/model untouched;
+> independent all-styles whole-repo check = every importer of a deleted script is itself deleted). `build_inventory.py`
+> reproduces the classification; final record in `inventory.json`. `ACTIVE_SURFACE_REDUCTION_DELETE_COMPLETE`.
 >
 > **Harness evaluator-contract audit + applied** (`extra/qk_harness_contract.py`; `docs/harness-contract-audit-20260621.md`):
 > audited the live lifecycle harness set against the 13-field contract ("Harnesses Are Performance Primitives Too").

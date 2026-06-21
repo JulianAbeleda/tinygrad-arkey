@@ -14,11 +14,17 @@ for s in ("extra/lds_attention_tile.py", "extra/llm_generate.py"):
 scripts = sorted(set(scripts))
 basenames = {s: pathlib.Path(s).stem for s in scripts}
 
-import_re = re.compile(r"from extra\.([a-z0-9_]+) import|import extra\.([a-z0-9_]+)\b")
+import_re = re.compile(r"from extra\.([a-z0-9_]+) import|import extra\.([a-z0-9_]+)\b|import_module\([\"']extra\.([a-z0-9_]+)[\"']\)")
+fromextra_re = re.compile(r"from extra import\s+\(?([a-z0-9_,\s]+)\)?")
 imports, text = {}, {}
 for s in scripts:
     t = (ROOT / s).read_text(errors="ignore"); text[s] = t
-    imports[s] = {(m.group(1) or m.group(2)) for m in import_re.finditer(t)}
+    mods = {(m.group(1) or m.group(2) or m.group(3)) for m in import_re.finditer(t)}
+    for fe in fromextra_re.finditer(t):
+        for name in re.split(r"[,\s]+", fe.group(1)):
+            name = name.split(" as ")[0].strip()
+            if name.startswith("qk_") or name in ("lds_attention_tile","llm_generate"): mods.add(name)
+    imports[s] = {m for m in mods if m}
 stem_to_path = {pathlib.Path(s).stem: s for s in scripts}
 
 LEDGERS = ["bench/qk-decode-eval/candidates.json", "bench/qk-decode-eval/binding_templates.json",
@@ -75,8 +81,7 @@ for s in scripts:
     in_live = s in live
     if in_live: status, reason = "live", "in import-closure of live evaluator/search roots"
     elif canon_refs or lrefs: status, reason = "provenance", f"cited by canonical/ledger ({len(canon_refs)} canon-doc, {len(lrefs)} ledger)"
-    elif drefs: status, reason = "manual_review", f"cited only by dated result doc(s): {len(drefs)} (conclusion captured; not live/canonical)"
-    else: status, reason = "delete", "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)"
+    else: status, reason = "delete", (f"cited only by {len(drefs)} dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete" if drefs else "no reference in ANY doc or ledger (no_canonical_reference)")
     prelim[s] = status
     meta[s] = {"path": s, "type": "script", "stem": stem, "imports": sorted(imports[s]), "imported_by": sorted(imported_by[s]),
                "in_live_closure": in_live, "canonical_doc_refs": canon_refs, "dated_doc_refs": [d for d in drefs if d not in CANON],
@@ -88,8 +93,8 @@ import subprocess as _sp
 ext_protect = set()
 for s in scripts:
     stem = basenames[s]
-    hits = _sp.run(["grep","-rlE", f"from extra\\.{stem} import|import extra\\.{stem}\\b|extra/{stem}\\.py",
-                    "--include=*.py","--exclude-dir=.git","test/","extra/","examples/",".",], capture_output=True, text=True).stdout.split()
+    pat = f"from extra\\.{stem} import|import extra\\.{stem}\\b|from extra import .*\\b{stem}\\b|import_module\\([\"']extra\\.{stem}[\"']\\)|extra/{stem}\\.py"
+    hits = _sp.run(["grep","-rlE", pat, "--include=*.py","--exclude-dir=.git","."], capture_output=True, text=True).stdout.split()
     hits = [h.lstrip("./") for h in hits if h.lstrip("./") not in scripts and "qk-active-surface-reduction" not in h]
     if hits:
         ext_protect.add(s); meta[s]["external_importers"] = hits[:5]

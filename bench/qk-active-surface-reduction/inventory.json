@@ -1,11 +1,10 @@
 {
   "summary": {
-    "total_scripts": 378,
+    "total_scripts": 352,
     "counts": {
-      "provenance": 55,
+      "provenance": 117,
       "live": 18,
-      "manual_review": 279,
-      "delete": 26
+      "delete": 217
     },
     "live_roots": [
       "extra/qk_candidate_template_gen.py",
@@ -34,12 +33,12 @@
       "structure/Development/performance-primitive-research-principles.md"
     ],
     "delete_categories": {
-      "superseded_tensile_probe": 9,
-      "stale_scope_helper": 8,
-      "superseded_decode_probe": 2,
-      "superseded_mmvq_probe": 1,
-      "no_canonical_reference": 5,
-      "superseded_prefill_probe": 1
+      "stale_scope_helper": 20,
+      "superseded_tensile_probe": 46,
+      "no_canonical_reference": 12,
+      "superseded_decode_probe": 62,
+      "superseded_mmvq_probe": 45,
+      "superseded_prefill_probe": 32
     }
   },
   "files": [
@@ -59,7 +58,8 @@
         "docs/decode-fused-coop-primitive-implementation-scope-20260621.md",
         "docs/decode-fused-coop-primitive-result-20260621.md",
         "docs/qk-decode-attention-v3-result-20260617.md",
-        "docs/qk-gqa-coop-decode-attention-result-20260617.md"
+        "docs/qk-gqa-coop-decode-attention-result-20260617.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-lifecycle-search/generated_candidates.json"
@@ -80,7 +80,6 @@
       "imported_by": [
         "extra/qk_att_inmodel_role_join.py",
         "extra/qk_attention_kernel_map.py",
-        "extra/qk_attention_sdpa_vs_flash.py",
         "extra/qk_decode_attention_cost_split.py",
         "extra/qk_decode_block_map.py",
         "extra/qk_decode_copy_diagnostic.py",
@@ -99,13 +98,10 @@
         "extra/qk_decode_runtime_cache_identity.py",
         "extra/qk_decode_runtime_overhead.py",
         "extra/qk_decode_smallop_audit.py",
-        "extra/qk_ffn_contig_probe.py",
         "extra/qk_flash_decode_auto_bench.py",
         "extra/qk_flash_sweep.py",
-        "extra/qk_flash_threshold_validate.py",
         "extra/qk_flash_variant_search.py",
         "extra/qk_fuse_decode_probe.py",
-        "extra/qk_gemv_role_efficiency.py",
         "extra/qk_long_context_bench.py",
         "extra/qk_mmvq_lowering_scaffold.py",
         "extra/qk_nll_eval.py",
@@ -126,7 +122,6 @@
         "extra/qk_spec_decode_acceptance_gate.py",
         "extra/qk_spec_decode_generate.py",
         "extra/qk_spec_decode_lowsync.py",
-        "extra/qk_sub4_nll_eval.py",
         "extra/qk_verify_component_breakdown.py"
       ],
       "in_live_closure": true,
@@ -156,8 +151,8 @@
         "docs/amd-broad-backend-bb5a10-implementation-plan-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -172,8 +167,8 @@
         "docs/amd-broad-backend-bb5a10-p1-layout-spec-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -188,8 +183,8 @@
         "docs/amd-broad-backend-bb5a10-p2-p6-structural-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -204,8 +199,8 @@
         "docs/amd-broad-backend-bb5a10-p2-p6-structural-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -220,8 +215,8 @@
         "docs/amd-broad-backend-bb5a10-p7-correctness-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -236,8 +231,8 @@
         "docs/amd-broad-backend-bb5a10-p7a-p7c-correctness-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -252,8 +247,8 @@
         "docs/amd-broad-backend-bb5a10-p7a-p7c-correctness-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -261,9 +256,7 @@
       "type": "script",
       "stem": "qk_amd_bb5a10_p7d_authority_correctness",
       "imports": [],
-      "imported_by": [
-        "extra/qk_amd_bb5a10_p7e_p8_handoff.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
@@ -271,22 +264,8 @@
         "docs/amd-broad-backend-bb5a10-p7e-p8-handoff-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_amd_bb5a10_p7e_p8_handoff.py",
-      "type": "script",
-      "stem": "qk_amd_bb5a10_p7e_p8_handoff",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -303,22 +282,8 @@
         "docs/amd-broad-backend-bb5a10-p8-bottleneck-classification-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_amd_bb5a10_p8_global_direct_candidate_decision.py",
-      "type": "script",
-      "stem": "qk_amd_bb5a10_p8_global_direct_candidate_decision",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -328,10 +293,7 @@
       "imports": [
         "qk_amd_bb5a10_p8_tta3a_ds64_macro_conversion"
       ],
-      "imported_by": [
-        "extra/qk_amd_bb5a10_p7e_p8_handoff.py",
-        "extra/qk_amd_bb5a10_p8_tta_completion_scope.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
@@ -340,8 +302,8 @@
         "docs/amd-broad-backend-bb5a10-p8-performance-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -356,8 +318,8 @@
         "docs/amd-broad-backend-bb5a10-p8-timing-authority-reconciliation-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -365,52 +327,15 @@
       "type": "script",
       "stem": "qk_amd_bb5a10_p8_tta1_full_grid_correctness",
       "imports": [],
-      "imported_by": [
-        "extra/qk_amd_bb5a10_p8_tta2_authority_sample_correctness.py",
-        "extra/qk_amd_bb5a10_p8_tta_completion_scope.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
         "docs/amd-broad-backend-bb5a10-p8-tta-completion-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_amd_bb5a10_p8_tta2_authority_sample_correctness.py",
-      "type": "script",
-      "stem": "qk_amd_bb5a10_p8_tta2_authority_sample_correctness",
-      "imports": [
-        "qk_amd_bb5a10_p8_tta1_full_grid_correctness"
-      ],
-      "imported_by": [
-        "extra/qk_amd_bb5a10_p8_tta_completion_scope.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_amd_bb5a10_p8_tta3_macro_candidate.py",
-      "type": "script",
-      "stem": "qk_amd_bb5a10_p8_tta3_macro_candidate",
-      "imports": [],
-      "imported_by": [
-        "extra/qk_amd_bb5a10_p8_tta_completion_scope.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -427,37 +352,9 @@
       "canonical_doc_refs": [],
       "dated_doc_refs": [],
       "ledger_refs": [],
-      "status": "provenance",
-      "reason": "shared utility imported by 3 kept script(s) ['extra/qk_amd_bb5a10_p8_bottleneck_classification.py', 'extra/qk_amd_bb5a10_p8_performance.py', 'extra/qk_amd_bb5a10_ptm1_same_harness_bridge.py'] -- keep to avoid broken imports",
-      "category": ""
-    },
-    {
-      "path": "extra/qk_amd_bb5a10_p8_tta_completion_scope.py",
-      "type": "script",
-      "stem": "qk_amd_bb5a10_p8_tta_completion_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
-    },
-    {
-      "path": "extra/qk_amd_bb5a10_p8_tta_scope.py",
-      "type": "script",
-      "stem": "qk_amd_bb5a10_p8_tta_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
+      "reason": "no reference in ANY doc or ledger (no_canonical_reference)",
+      "category": "superseded_tensile_probe"
     },
     {
       "path": "extra/qk_amd_bb5a10_ptm1_same_harness_bridge.py",
@@ -476,10 +373,7 @@
         "extra/qk_amd_gemm_plra_probe.py",
         "extra/qk_amd_gemm_plrab_probe.py",
         "extra/qk_amd_gemm_pmc_probe.py",
-        "extra/qk_amd_gemm_promotion_benchmark.py",
-        "extra/qk_amd_gemm_shape_tile_sweep.py",
-        "extra/qk_amd_gemm_tensile_vs_ours_probe.py",
-        "extra/qk_prefill_matmul_penalty_verify.py"
+        "extra/qk_amd_gemm_promotion_benchmark.py"
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
@@ -488,8 +382,8 @@
         "docs/prefill-tensile-llama-strong-audit-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -505,8 +399,8 @@
         "docs/prefill-tensile-llama-strong-audit-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -895,8 +789,8 @@
         "docs/prefill-amd-gemm-bankconflict-fix-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -912,8 +806,8 @@
         "docs/prefill-amd-gemm-residual-resolved-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -928,8 +822,8 @@
         "docs/prefill-amd-gemm-bk-depth-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -944,8 +838,8 @@
         "docs/prefill-amd-gemm-emission-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -960,8 +854,8 @@
         "docs/prefill-amd-gemm-family-sweep-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -976,8 +870,8 @@
         "docs/prefill-amd-gemm-gputime-thorough-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -992,8 +886,8 @@
         "docs/prefill-amd-gemm-kloop-reconstruction-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1010,8 +904,8 @@
         "docs/prefill-amd-gemm-leanaddr-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1026,8 +920,8 @@
         "docs/prefill-amd-gemm-lowering-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1042,8 +936,8 @@
         "docs/prefill-amd-gemm-occupancy-diagnostic-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1060,8 +954,8 @@
         "docs/prefill-amd-gemm-plr-prefetch-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1078,8 +972,8 @@
         "docs/prefill-amd-gemm-plr-experiment-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1094,8 +988,8 @@
         "docs/prefill-amd-gemm-full-ab-plr-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1112,8 +1006,8 @@
         "docs/prefill-amd-gemm-pmc-bottleneck-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1128,8 +1022,8 @@
         "docs/prefill-amd-gemm-PROMOTED-dependency-free-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1144,8 +1038,8 @@
         "docs/prefill-amd-gemm-runnable-correctness-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1160,8 +1054,8 @@
         "docs/prefill-amd-gemm-runnable-timing-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1176,36 +1070,8 @@
         "docs/prefill-amd-gemm-schedule-object-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_amd_gemm_shape_factcheck.py",
-      "type": "script",
-      "stem": "qk_amd_gemm_shape_factcheck",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_amd_gemm_shape_tile_sweep.py",
-      "type": "script",
-      "stem": "qk_amd_gemm_shape_tile_sweep",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1222,22 +1088,8 @@
         "docs/prefill-amd-gemm-tensile-pmc-hard-audit-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_amd_gemm_tensile_vs_ours_probe.py",
-      "type": "script",
-      "stem": "qk_amd_gemm_tensile_vs_ours_probe",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1252,8 +1104,8 @@
         "docs/amd-lds-research-consolidation-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -1307,8 +1159,8 @@
         "docs/prefill-amd-tensile-source-gap-audit-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1350,13 +1202,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 5 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor.py",
         "test/external/test_qk_ansor.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_ansor_transition_loop.py",
@@ -1374,13 +1225,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_att_inmodel_role_join.py",
@@ -1405,7 +1255,8 @@
         "docs/decode-native-tooling-completion-scope-20260619.md",
         "docs/decode-native-tooling-readiness-scope-20260619.md",
         "docs/decode-standalone-retention-stage1-q6-role-join-result-20260619.md",
-        "docs/decode-standalone-retention-staged-attack-scope-20260619.md"
+        "docs/decode-standalone-retention-staged-attack-scope-20260619.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -1434,6 +1285,7 @@
         "docs/amd-att-primitive-attribution-scope-20260619.md",
         "docs/decode-native-tooling-completion-scope-20260619.md",
         "docs/inference-perf-measured-map-20260619.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md",
         "docs/tinygrad-hcq-profiling-visibility-result-20260621.md"
       ],
       "ledger_refs": [],
@@ -1457,24 +1309,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
-      "category": "superseded_decode_probe"
-    },
-    {
-      "path": "extra/qk_attention_sdpa_vs_flash.py",
-      "type": "script",
-      "stem": "qk_attention_sdpa_vs_flash",
-      "imports": [
-        "llm_generate"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1494,9 +1330,9 @@
         "docs/amd-decode-bandwidth-roofline.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_search_spec.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_batched_b0.py",
@@ -1510,13 +1346,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_batched_b0.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_batched_b0.py",
         "test/external/test_qk_batched_b0.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_batched_k_lds_gemm.py",
@@ -1533,8 +1368,8 @@
         "docs/qk-batched-k-lds-gemm-result-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -1553,9 +1388,9 @@
         "docs/amd-decode-loop-substrate.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_loop_live.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_candidate_generator.py",
@@ -1573,13 +1408,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_candidate_static_gate.py",
@@ -1596,13 +1430,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_candidate_template_gen.py",
@@ -1620,7 +1453,10 @@
         "docs/candidate-template-generation-v0-result-20260621.md",
         "docs/harness-contract-audit-20260621.md",
         "docs/north-star-evaluator-binding-templates-result-20260621.md",
-        "docs/north-star-flash-attn-tile-execution-result-20260621.md"
+        "docs/north-star-flash-attn-tile-execution-result-20260621.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
+        "docs/perf-probe-active-surface-reduction-result-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "live",
@@ -1655,7 +1491,9 @@
         "docs/decode-attention-elementwise-result-20260620.md",
         "docs/decode-evaluation-harness-hardening-scope-20260621.md",
         "docs/decode-fusion-build-scope-20260620.md",
-        "docs/next-project-scope-audit-20260621.md"
+        "docs/next-project-scope-audit-20260621.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-lifecycle-search/evaluator_contract.json"
@@ -1669,9 +1507,7 @@
       "type": "script",
       "stem": "qk_decode_att_unblock_audit",
       "imports": [],
-      "imported_by": [
-        "extra/qk_decode_dual_track_next_scope.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
@@ -1679,8 +1515,8 @@
         "docs/decode-dual-track-next-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1705,8 +1541,8 @@
         "docs/decode-fusion-build-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 5 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 5 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1724,8 +1560,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1740,8 +1576,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1762,8 +1598,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 4 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1799,8 +1635,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1826,8 +1662,8 @@
         "docs/next-project-scope-audit-20260621.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 7 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 7 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1842,8 +1678,8 @@
         "docs/decode-dnr4-liverange-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -1863,8 +1699,8 @@
         "docs/decode-dnr4-t1-reduction-reuse-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1886,8 +1722,8 @@
         "docs/decode-dnr4-t1-timing-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1902,8 +1738,8 @@
         "docs/decode-dnr4-t2-dotbody-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -1926,8 +1762,8 @@
         "docs/decode-dnr4-t2-lowband-preload-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -1947,8 +1783,7 @@
         "qk_pmc_capture"
       ],
       "imported_by": [
-        "extra/qk_decode_dnr4_t3_candidate_grid_probe.py",
-        "extra/qk_decode_dnr4_t3_issue_latency_scope.py"
+        "extra/qk_decode_dnr4_t3_candidate_grid_probe.py"
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
@@ -1957,37 +1792,9 @@
         "docs/decode-dnr4-t3-issue-latency-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
-    },
-    {
-      "path": "extra/qk_decode_dnr4_t3_issue_latency_scope.py",
-      "type": "script",
-      "stem": "qk_decode_dnr4_t3_issue_latency_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
-    },
-    {
-      "path": "extra/qk_decode_dual_track_next_scope.py",
-      "type": "script",
-      "stem": "qk_decode_dual_track_next_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
     },
     {
       "path": "extra/qk_decode_elementwise_cost_split.py",
@@ -2009,8 +1816,8 @@
         "docs/decode-ffn-activation-fusion-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 4 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2038,7 +1845,10 @@
         "docs/decode-evaluation-harness-hardening-scope-20260621.md",
         "docs/harness-contract-audit-20260621.md",
         "docs/llama-flash-attn-tile-oracle-result-20260621.md",
-        "docs/post-matmul-pv-decode-strategic-scope-20260621.md"
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
+        "docs/perf-probe-active-surface-reduction-result-20260621.md",
+        "docs/post-matmul-pv-decode-strategic-scope-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-decode-eval/candidates.json",
@@ -2068,8 +1878,8 @@
         "docs/harness-contract-audit-20260621.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 4 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2086,8 +1896,8 @@
         "docs/decode-fused-mmvq-integration-fmi4-b1-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2133,8 +1943,8 @@
         "docs/harness-contract-audit-20260621.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2149,8 +1959,8 @@
         "docs/decode-fused-mmvq-integration-fmi1-fmi2-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2165,8 +1975,8 @@
         "docs/decode-integration-diagnostic-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2187,8 +1997,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2203,8 +2013,8 @@
         "docs/decode-lifecycle-cross-apply-gate-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2230,12 +2040,12 @@
         "docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['tinygrad/llm/model.py'] -- keep",
       "external_importers": [
         "tinygrad/llm/model.py"
       ],
-      "category": "superseded_mmvq_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_decode_mmvq_large_project.py",
@@ -2250,8 +2060,8 @@
         "docs/decode-mmvq-large-project-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2266,8 +2076,8 @@
         "docs/decode-mmvq-large-project-p1-loader-smoke-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2282,8 +2092,8 @@
         "docs/decode-mmvq-large-project-p2-kernarg-capture-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2313,9 +2123,9 @@
         "docs/decode-mmvq-large-project-p3-p4-q4-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_mmvq_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 2 kept script(s) ['extra/qk_att_primitive_atlas.py', 'extra/qk_decode_mmvq_graph_route.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_decode_mmvq_p4_q4_perf.py",
@@ -2332,8 +2142,8 @@
         "docs/decode-mmvq-large-project-p3-p4-q4-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2356,9 +2166,9 @@
         "docs/decode-mmvq-large-project-p5-p6-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_mmvq_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_decode_mmvq_graph_route.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_decode_mmvq_p6_q4_shape_matrix.py",
@@ -2375,8 +2185,8 @@
         "docs/decode-mmvq-large-project-p5-p6-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2397,8 +2207,8 @@
         "docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2417,8 +2227,8 @@
         "docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2437,8 +2247,8 @@
         "docs/decode-mmvq-large-project-p7b-raw-kernarg-rebind-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2458,8 +2268,8 @@
         "docs/decode-mmvq-large-project-p7c-one-role-route-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2479,8 +2289,8 @@
         "docs/decode-mmvq-large-project-p7d-one-role-timing-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2500,8 +2310,8 @@
         "docs/decode-mmvq-large-project-p7e-gateup-amortization-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2516,8 +2326,8 @@
         "docs/decode-mmvq-large-project-p8-fused-lifecycle-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2532,8 +2342,8 @@
         "docs/decode-mmvq-schedule-object-structural-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -2549,8 +2359,8 @@
         "docs/decode-n1-attribution-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2566,8 +2376,8 @@
         "docs/decode-native-tooling-pass-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2582,8 +2392,8 @@
         "docs/decode-native-renderer-dnr1-oracle-binding-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2598,8 +2408,8 @@
         "docs/decode-native-renderer-dnr2-lowering-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2614,8 +2424,8 @@
         "docs/decode-native-renderer-dnr3-scheduler-resource-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -2630,8 +2440,8 @@
         "docs/decode-native-renderer-dnr3a-scheduler-resource-plan-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -2661,8 +2471,8 @@
         "docs/decode-native-renderer-dnr3b-compound-emitter-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2680,8 +2490,8 @@
         "docs/decode-native-renderer-dnr3c1-load-shape-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2705,8 +2515,8 @@
         "docs/decode-native-renderer-dnr3c2-dataflow-emitter-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2727,8 +2537,8 @@
         "docs/decode-native-renderer-dnr3c3-compound-shape-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2753,8 +2563,8 @@
         "docs/decode-native-renderer-dnr3c4-semantic-reduction-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2777,8 +2587,8 @@
         "docs/decode-native-renderer-dnr3c5-timing-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2810,8 +2620,8 @@
         "docs/decode-native-renderer-dnr3c6-attribution-scope-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -2826,8 +2636,8 @@
         "docs/decode-native-renderer-dnr3c7-issue-resource-scope-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -2848,8 +2658,8 @@
         "docs/decode-native-renderer-dnr3c7a-resource-ledger-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2875,8 +2685,8 @@
         "docs/decode-native-renderer-dnr3c7b-pmc-ladder-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2904,8 +2714,8 @@
         "docs/decode-native-renderer-dnr3c7c-issue-interleaving-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2930,8 +2740,8 @@
         "docs/decode-native-renderer-dnr3c7d-confirmation-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2950,8 +2760,8 @@
         "docs/decode-native-renderer-dnr3c8-tooling-inventory-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2966,8 +2776,8 @@
         "docs/decode-native-renderer-dnr3c9-new-info-ledger-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -2982,8 +2792,8 @@
         "docs/decode-native-renderer-project-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -2999,8 +2809,8 @@
         "docs/decode-native-tooling-pass-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3016,8 +2826,8 @@
         "docs/decode-native-tooling-pass-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3033,8 +2843,8 @@
         "docs/decode-native-tooling-pass-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3071,8 +2881,8 @@
         "docs/decode-native-tooling-pass-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3087,8 +2897,8 @@
         "docs/decode-next12-execution-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3108,8 +2918,8 @@
         "docs/decode-tools-and-pending-tasks-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3124,8 +2934,8 @@
         "docs/decode-oracle-coarse-attribution-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3144,8 +2954,8 @@
         "docs/decode-oracle-gateup-extraction-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3164,8 +2974,8 @@
         "docs/decode-oracle-hip-runner-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3180,8 +2990,8 @@
         "docs/decode-oracle-oes5-blocker-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3196,8 +3006,8 @@
         "docs/decode-oracle-online-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3214,8 +3024,8 @@
         "docs/decode-oracle-semantic-map-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3230,23 +3040,9 @@
         "docs/decode-owned-q8-artifact-parity-harness-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/qk_decode_owned_q8_first_build_scope.py",
-      "type": "script",
-      "stem": "qk_decode_owned_q8_first_build_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
+      "category": "superseded_mmvq_probe"
     },
     {
       "path": "extra/qk_decode_owned_q8_interleaved_lifecycle_gate.py",
@@ -3276,8 +3072,8 @@
         "docs/decode-q8-nt1024-lifecycle-gate-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3300,8 +3096,8 @@
         "docs/decode-owned-q8-lifecycle-attribution-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3316,8 +3112,8 @@
         "docs/decode-owned-q8-lifecycle-attribution-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3335,8 +3131,8 @@
         "docs/decode-owned-q8-lifecycle-successor-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3351,8 +3147,8 @@
         "docs/decode-owned-q8-lifecycle-successor-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3374,8 +3170,8 @@
         "docs/decode-owned-q8-mixed-lifecycle-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3390,8 +3186,8 @@
         "docs/decode-owned-q8-mixed-lifecycle-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3412,8 +3208,8 @@
         "docs/decode-owned-q8-producer-cache-lowering-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3428,8 +3224,8 @@
         "docs/decode-owned-q8-producer-cache-lowering-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3446,8 +3242,8 @@
         "docs/decode-owned-q8-producer-cache-nt-grid-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3465,8 +3261,8 @@
         "docs/decode-owned-q8-producer-cache-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3485,8 +3281,8 @@
         "docs/decode-owned-q8-producer-cache-reference-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3494,9 +3290,7 @@
       "type": "script",
       "stem": "qk_decode_owned_q8_producer_cache_scope",
       "imports": [],
-      "imported_by": [
-        "extra/qk_decode_owned_q8_first_build_scope.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
@@ -3504,8 +3298,8 @@
         "docs/decode-owned-q8-producer-cache-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -3517,9 +3311,7 @@
         "q8_ffn_fast_artifact_probe",
         "q8_ffn_hcq_artifact"
       ],
-      "imported_by": [
-        "extra/qk_decode_owned_q8_producer_hip_delta_scope.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
@@ -3527,8 +3319,8 @@
         "docs/decode-owned-q8-producer-hip-delta-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3549,8 +3341,8 @@
         "docs/decode-q8-producer-context-isolation-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3565,23 +3357,9 @@
         "docs/decode-owned-q8-producer-hcq-parity-closeout-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/qk_decode_owned_q8_producer_hip_delta_scope.py",
-      "type": "script",
-      "stem": "qk_decode_owned_q8_producer_hip_delta_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
+      "category": "superseded_mmvq_probe"
     },
     {
       "path": "extra/qk_decode_owned_q8_producer_order_provenance_audit.py",
@@ -3600,8 +3378,8 @@
         "docs/decode-q8-producer-order-provenance-audit-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3621,22 +3399,8 @@
         "docs/decode-q8-producer-resource-context-audit-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "superseded_mmvq_probe"
-    },
-    {
-      "path": "extra/qk_decode_owned_q8_producer_target_reconcile.py",
-      "type": "script",
-      "stem": "qk_decode_owned_q8_producer_target_reconcile",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3653,8 +3417,8 @@
         "docs/decode-q8-research-route-hardening-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3672,8 +3436,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3688,8 +3452,8 @@
         "docs/decode-llama-primitive-transfer-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -3704,8 +3468,8 @@
         "docs/decode-q8-both-lanes-execution-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3726,8 +3490,8 @@
         "docs/decode-q8-clock-authority-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3749,8 +3513,8 @@
         "docs/decode-q8-consumer-band-attribution-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3771,8 +3535,8 @@
         "docs/decode-q8-consumer-only-reconciliation-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3788,8 +3552,8 @@
         "docs/decode-q8-controlled-clock-policy-closeout-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3810,8 +3574,8 @@
         "docs/decode-q8-lifecycle-band-attribution-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3827,8 +3591,8 @@
         "docs/decode-q8-lifecycle-target-reconciliation-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3847,7 +3611,8 @@
       ],
       "dated_doc_refs": [
         "docs/decode-q8-model-route-timing-audit-result-20260620.md",
-        "docs/decode-q8-model-route-timing-audit-scope-20260620.md"
+        "docs/decode-q8-model-route-timing-audit-scope-20260620.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -3874,8 +3639,8 @@
         "docs/decode-q8-nt1024-lifecycle-gate-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3891,8 +3656,8 @@
         "docs/decode-q8-nt1024-reconciliation-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3913,8 +3678,8 @@
         "docs/decode-q8-oracle-repeated-comparator-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3930,8 +3695,8 @@
         "docs/decode-q8-primitive-solution-audit-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3959,8 +3724,8 @@
         "docs/decode-q8-producer-delta-variant-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3981,8 +3746,8 @@
         "docs/decode-q8-session-band-authority-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -3997,8 +3762,8 @@
         "docs/decode-q8-two-lane-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -4013,8 +3778,8 @@
         "docs/decode-role-contract-normalization-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4029,8 +3794,8 @@
         "docs/decode-route-decision-closeout-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4038,9 +3803,7 @@
       "type": "script",
       "stem": "qk_decode_route_level_primitive_ledger",
       "imports": [],
-      "imported_by": [
-        "extra/qk_decode_dual_track_next_scope.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
@@ -4048,8 +3811,8 @@
         "docs/decode-route-level-primitive-ledger-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4066,8 +3829,8 @@
         "docs/decode-fused-mmvq-integration-b2-runtime-cache-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4095,12 +3858,14 @@
         "docs/frontier-scope-beyond-route-a-20260619.md",
         "docs/harness-contract-audit-20260621.md",
         "docs/next-project-scope-audit-20260621.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
         "docs/q4k-fp-coop-codegen-quality-scope-20260618.md",
         "docs/q8-ffn-handwritten-a4-decode-result-20260619.md",
         "docs/qk-8b-decode-banked-20260617.md",
         "docs/qk-8b-deep-codegen-arc-prompt-20260617.md",
         "docs/qk-decode-banked-reproduce-20260618.md",
-        "docs/qk-script-ownership-20260617.md"
+        "docs/qk-script-ownership-20260617.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-decode-eval/binding_templates.json"
@@ -4124,8 +3889,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4143,9 +3908,8 @@
       "dated_doc_refs": [],
       "ledger_refs": [],
       "status": "provenance",
-      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_decode_summary.py', 'test/external/test_qk_decode_summary.py'] -- keep",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_decode_summary.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_decode_summary.py",
         "test/external/test_qk_decode_summary.py"
       ],
       "category": ""
@@ -4162,8 +3926,8 @@
         "docs/decode-tools-and-pending-tasks-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -4184,8 +3948,8 @@
         "docs/harness-contract-audit-20260621.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4234,11 +3998,15 @@
         "docs/amd-decode-demotion-search-20260616.md",
         "docs/bank6-machine-search-infra-scope-20260618.md",
         "docs/primitive-local-observability-search-scope-20260619.md",
-        "docs/qk-script-ownership-20260617.md"
+        "docs/qk-script-ownership-20260617.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
       "reason": "cited by canonical/ledger (1 canon-doc, 0 ledger)",
+      "external_importers": [
+        "test/external/test_qk_demote_search.py"
+      ],
       "category": ""
     },
     {
@@ -4262,13 +4030,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_experiment_matrix.py",
@@ -4290,29 +4057,12 @@
         "docs/amd-decode-harness-architecture.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_experiment_matrix.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_experiment_matrix.py",
         "test/external/test_qk_experiment_matrix.py"
       ],
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/qk_ffn_contig_probe.py",
-      "type": "script",
-      "stem": "qk_ffn_contig_probe",
-      "imports": [
-        "llm_generate"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_flash_decode.py",
@@ -4357,6 +4107,7 @@
         "docs/decode-latency-hiding-lifecycle-codegen-scope-20260621.md",
         "docs/decode-role-tensor-kernel-attribution-result-20260620.md",
         "docs/native-fused-flash-linearizer-scope-20260621.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
         "docs/post-matmul-pv-decode-strategic-scope-20260621.md",
         "docs/prefill-flash-increment2-result-20260620.md",
         "docs/prefill-flash-wmma-attention-scope-20260620.md",
@@ -4377,9 +4128,9 @@
       "status": "live",
       "reason": "in import-closure of live evaluator/search roots",
       "external_importers": [
-        "test/external/test_qk_flash_decode.py",
-        "test/external/test_qk_flash_decode_policy.py",
         "tinygrad/llm/model.py",
+        "bench/qk-low-level-decode-attn-attribution/recheck_meta.py",
+        "bench/qk-low-level-decode-attn-attribution/capture_tinygrad.py",
         "test/external/test_qk_flash_decode.py",
         "test/external/test_qk_flash_decode_policy.py"
       ],
@@ -4398,7 +4149,8 @@
         "bench/README.md"
       ],
       "dated_doc_refs": [
-        "docs/qk-decode-banked-reproduce-20260618.md"
+        "docs/qk-decode-banked-reproduce-20260618.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -4419,13 +4171,12 @@
         "docs/amd-decode-prefill-v2-increment2-phase5-correction-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_flash_prefill_custom_kernel.py'] -- keep",
       "external_importers": [
-        "test/external/test_flash_prefill_custom_kernel.py",
         "test/external/test_flash_prefill_custom_kernel.py"
       ],
-      "category": "superseded_prefill_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_flash_prefill_gate.py",
@@ -4439,8 +4190,8 @@
         "docs/amd-decode-prefill-v2-increment2-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -4457,8 +4208,8 @@
         "docs/amd-decode-prefill-v2-increment2-phase5-correction-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -4480,9 +4231,12 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "superseded_decode_probe"
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flash_search.py'] -- keep",
+      "external_importers": [
+        "test/external/test_qk_flash_search.py"
+      ],
+      "category": ""
     },
     {
       "path": "extra/qk_flash_sweep.py",
@@ -4501,25 +4255,9 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "superseded_decode_probe"
-    },
-    {
-      "path": "extra/qk_flash_threshold_validate.py",
-      "type": "script",
-      "stem": "qk_flash_threshold_validate",
-      "imports": [
-        "llm_generate"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "superseded_decode_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_flash_search.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_flash_variant_search.py",
@@ -4539,8 +4277,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4555,9 +4293,12 @@
         "docs/flywheel-rewrite-ubuntu-handoff.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "generated_scratch"
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_cli.py'] -- keep",
+      "external_importers": [
+        "test/external/test_qk_flywheel_cli.py"
+      ],
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_cost_model.py",
@@ -4578,16 +4319,16 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_phase4.py', 'test/external/test_qk_flywheel_cli.py', 'test/external/test_qk_flywheel_phase3e.py', 'test/external/test_qk_flywheel_cost_model.py', 'test/external/test_flywheel_dataset_golden.py'] -- keep",
       "external_importers": [
         "test/external/test_qk_flywheel_phase4.py",
+        "test/external/test_qk_flywheel_cli.py",
         "test/external/test_qk_flywheel_phase3e.py",
         "test/external/test_qk_flywheel_cost_model.py",
-        "test/external/test_flywheel_dataset_golden.py",
-        "test/external/test_qk_flywheel_phase3d.py"
+        "test/external/test_flywheel_dataset_golden.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_coverage_plan.py",
@@ -4605,13 +4346,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_phase3e.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_phase3e.py",
         "test/external/test_qk_flywheel_phase3e.py"
       ],
-      "category": "stale_scope_helper"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_dataset.py",
@@ -4620,9 +4360,11 @@
       "imports": [],
       "imported_by": [
         "extra/qk_flywheel_cost_model.py",
+        "extra/qk_flywheel_dataset_v1.py",
         "extra/qk_flywheel_feature_audit.py",
         "extra/qk_flywheel_feature_enrich.py",
         "extra/qk_flywheel_shadow.py",
+        "extra/qk_flywheel_targeted_outcomes.py",
         "extra/qk_flywheel_triage_eval.py",
         "extra/qk_flywheel_triage_sft.py",
         "extra/qk_search_spec.py"
@@ -4634,22 +4376,27 @@
         "docs/flywheel-judging-rewrite-scope.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_triage_eval.py', 'test/external/test_qk_flywheel_dataset.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_triage_eval.py",
-        "test/external/test_qk_flywheel_dataset.py",
         "test/external/test_qk_flywheel_triage_eval.py",
         "test/external/test_qk_flywheel_dataset.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_dataset_v1.py",
       "type": "script",
       "stem": "qk_flywheel_dataset_v1",
-      "imports": [],
-      "imported_by": [],
+      "imports": [
+        "qk_flywheel_dataset"
+      ],
+      "imported_by": [
+        "extra/qk_flywheel_feature_enrich.py",
+        "extra/qk_flywheel_shadow.py",
+        "extra/qk_flywheel_targeted_outcomes.py",
+        "extra/qk_flywheel_targeted_outcomes_report.py"
+      ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
@@ -4657,15 +4404,13 @@
         "docs/primitive-local-observability-search-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_phase3f.py', 'test/external/test_qk_flywheel_phase3d.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_phase3f.py",
-        "test/external/test_qk_flywheel_phase3d.py",
         "test/external/test_qk_flywheel_phase3f.py",
         "test/external/test_qk_flywheel_phase3d.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_feature_audit.py",
@@ -4685,13 +4430,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_feature_audit.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_feature_audit.py",
         "test/external/test_qk_flywheel_feature_audit.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_feature_enrich.py",
@@ -4700,6 +4444,7 @@
       "imports": [
         "llm_eval_common",
         "qk_flywheel_dataset",
+        "qk_flywheel_dataset_v1",
         "qk_paths"
       ],
       "imported_by": [
@@ -4713,13 +4458,12 @@
         "docs/primitive-local-observability-search-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_phase3e.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_phase3e.py",
         "test/external/test_qk_flywheel_phase3e.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_shadow.py",
@@ -4729,6 +4473,7 @@
         "llm_eval_common",
         "qk_flywheel_cost_model",
         "qk_flywheel_dataset",
+        "qk_flywheel_dataset_v1",
         "qk_flywheel_feature_enrich",
         "qk_flywheel_targeted_outcomes",
         "qk_flywheel_triage_eval",
@@ -4743,13 +4488,12 @@
         "docs/flywheel-rewrite-ubuntu-handoff.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_phase4.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_phase4.py",
         "test/external/test_qk_flywheel_phase4.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_targeted_outcomes.py",
@@ -4758,6 +4502,8 @@
       "imports": [
         "llm_eval_common",
         "qk_flywheel_coverage_plan",
+        "qk_flywheel_dataset",
+        "qk_flywheel_dataset_v1",
         "qk_flywheel_feature_audit",
         "qk_flywheel_feature_enrich",
         "qk_flywheel_targeted_outcomes_report",
@@ -4773,21 +4519,21 @@
         "docs/flywheel-judging-rewrite-scope.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_phase3f.py', 'test/external/test_flywheel_dataset_golden.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_phase3f.py",
-        "test/external/test_flywheel_dataset_golden.py",
         "test/external/test_qk_flywheel_phase3f.py",
         "test/external/test_flywheel_dataset_golden.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_targeted_outcomes_report.py",
       "type": "script",
       "stem": "qk_flywheel_targeted_outcomes_report",
-      "imports": [],
+      "imports": [
+        "qk_flywheel_dataset_v1"
+      ],
       "imported_by": [
         "extra/qk_flywheel_targeted_outcomes.py"
       ],
@@ -4818,13 +4564,12 @@
         "docs/flywheel-judging-rewrite-scope.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_triage_eval.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_triage_eval.py",
         "test/external/test_qk_flywheel_triage_eval.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_flywheel_triage_sft.py",
@@ -4841,13 +4586,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_flywheel_phase3.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_flywheel_phase3.py",
         "test/external/test_qk_flywheel_phase3.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_fuse_decode_probe.py",
@@ -4863,8 +4607,8 @@
         "docs/qk-gemv-final-mile-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -4884,7 +4628,8 @@
       ],
       "dated_doc_refs": [
         "docs/fused-flash-concrete-gate-result-20260621.md",
-        "docs/harness-contract-audit-20260621.md"
+        "docs/harness-contract-audit-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-decode-eval/candidates.json",
@@ -4910,7 +4655,8 @@
       ],
       "dated_doc_refs": [
         "docs/fused-softmax-v-tail-candidate-result-20260621.md",
-        "docs/harness-contract-audit-20260621.md"
+        "docs/harness-contract-audit-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-decode-eval/candidates.json"
@@ -4938,13 +4684,12 @@
         "docs/primitive-local-observability-search-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_gateup_sched_ab.py",
@@ -4978,24 +4723,8 @@
         "docs/prefill-l1-l2-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/qk_gemv_role_efficiency.py",
-      "type": "script",
-      "stem": "qk_gemv_role_efficiency",
-      "imports": [
-        "llm_generate"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -5012,13 +4741,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_generation_g0.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_generation_g0.py",
         "test/external/test_qk_generation_g0.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_generation_g0prime.py",
@@ -5034,13 +4762,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_generation_g0prime.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_generation_g0prime.py",
         "test/external/test_qk_generation_g0prime.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_gqa_coop_decode_attention.py",
@@ -5057,8 +4784,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -5080,7 +4807,9 @@
         "docs/README.md"
       ],
       "dated_doc_refs": [
-        "docs/harness-contract-audit-20260621.md"
+        "docs/harness-contract-audit-20260621.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "live",
@@ -5106,8 +4835,8 @@
         "docs/tinygrad-hcq-profiling-visibility-result-20260621.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 5 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 5 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -5122,23 +4851,9 @@
         "docs/inmodel-integration-penalty-audit-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/qk_inmodel_integration_penalty_audit_scope.py",
-      "type": "script",
-      "stem": "qk_inmodel_integration_penalty_audit_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
+      "category": "no_canonical_reference"
     },
     {
       "path": "extra/qk_layout.py",
@@ -5172,16 +4887,16 @@
         "docs/q8-mmvq-lifecycle-deep-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 10 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['tinygrad/llm/model.py', 'test/external/test_qk_packed_tile.py', 'test/external/test_qk_gemm_batched.py', 'test/external/test_qk_layout.py', 'test/external/test_qk_quantize.py'] -- keep",
       "external_importers": [
+        "tinygrad/llm/model.py",
         "test/external/test_qk_packed_tile.py",
         "test/external/test_qk_gemm_batched.py",
         "test/external/test_qk_layout.py",
-        "test/external/test_qk_quantize.py",
-        "test/external/test_qk_ansor.py"
+        "test/external/test_qk_quantize.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_lds_reuse_bench.py",
@@ -5195,13 +4910,12 @@
         "docs/amd-lds-tiling-primitive-arc-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_lds_custom_kernel_bridge.py'] -- keep",
       "external_importers": [
-        "test/external/test_lds_custom_kernel_bridge.py",
         "test/external/test_lds_custom_kernel_bridge.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_lifecycle_search.py",
@@ -5217,7 +4931,8 @@
       ],
       "dated_doc_refs": [
         "docs/lifecycle-search-loop-v0-result-20260621.md",
-        "docs/primitive-lifecycle-search-scope-20260619.md"
+        "docs/primitive-lifecycle-search-scope-20260619.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -5243,7 +4958,10 @@
         "docs/harness-contract-audit-20260621.md",
         "docs/lifecycle-search-loop-v0-result-20260621.md",
         "docs/north-star-evaluator-binding-templates-result-20260621.md",
-        "docs/post-matmul-pv-decode-strategic-scope-20260621.md"
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
+        "docs/perf-probe-active-surface-reduction-result-20260621.md",
+        "docs/post-matmul-pv-decode-strategic-scope-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "live",
@@ -5267,7 +4985,8 @@
       "dated_doc_refs": [
         "docs/harness-contract-audit-20260621.md",
         "docs/llama-flash-attn-tile-oracle-result-20260621.md",
-        "docs/post-matmul-pv-decode-strategic-scope-20260621.md"
+        "docs/post-matmul-pv-decode-strategic-scope-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-decode-eval/candidates.json",
@@ -5289,8 +5008,8 @@
         "docs/llama-relative-promotion-reconciliation-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -5308,13 +5027,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_load_width_report.py",
@@ -5331,13 +5049,12 @@
         "docs/amd-decode-memory-access-audit.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_packed_tile.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_packed_tile.py",
         "test/external/test_qk_packed_tile.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_long_context_bench.py",
@@ -5353,8 +5070,8 @@
         "docs/qk-long-context-benchmark-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -5370,9 +5087,8 @@
       "dated_doc_refs": [],
       "ledger_refs": [],
       "status": "provenance",
-      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py', 'test/external/test_qk_ansor_transition.py'] -- keep",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
       "category": ""
@@ -5393,13 +5109,12 @@
         "docs/amd-decode-lossy-quant-search.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_loop_live.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_loop_live.py",
         "test/external/test_qk_loop_live.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_loop_live.py",
@@ -5419,13 +5134,12 @@
         "docs/primitive-local-observability-search-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_loop_live.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_loop_live.py",
         "test/external/test_qk_loop_live.py"
       ],
-      "category": "generated_scratch"
+      "category": ""
     },
     {
       "path": "extra/qk_loop_verdict.py",
@@ -5440,9 +5154,8 @@
       "dated_doc_refs": [],
       "ledger_refs": [],
       "status": "provenance",
-      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py', 'test/external/test_qk_ansor_transition.py'] -- keep",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
       "category": ""
@@ -5463,7 +5176,8 @@
       "dated_doc_refs": [
         "docs/harness-contract-audit-20260621.md",
         "docs/matmul-pv-diagnostic-result-20260621.md",
-        "docs/post-matmul-pv-decode-strategic-scope-20260621.md"
+        "docs/post-matmul-pv-decode-strategic-scope-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-decode-eval/candidates.json"
@@ -5484,13 +5198,12 @@
         "docs/amd-decode-memory-access-audit.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_metric_audit.py",
@@ -5506,13 +5219,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_metric_audit.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_metric_audit.py",
         "test/external/test_qk_metric_audit.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_mmvq_lowering_scaffold.py",
@@ -5531,8 +5243,8 @@
         "docs/qk-mmvq-lowering-scaffold-verdict-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -5581,8 +5293,10 @@
       "dated_doc_refs": [
         "docs/amd-decode-banked-20260616.md",
         "docs/bank6-machine-search-infra-scope-20260618.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
         "docs/q8-ffn-handwritten-a4-decode-result-20260619.md",
-        "docs/qk-script-ownership-20260617.md"
+        "docs/qk-script-ownership-20260617.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "live",
@@ -5590,9 +5304,7 @@
       "external_importers": [
         "extra/q8_ffn_fast_artifact_inject.py",
         "extra/q8_ffn_oneblock_route.py",
-        "extra/q8_ffn_quality_proxy.py",
-        "extra/q8_ffn_fast_artifact_inject.py",
-        "extra/q8_ffn_oneblock_route.py"
+        "extra/q8_ffn_quality_proxy.py"
       ],
       "category": ""
     },
@@ -5613,7 +5325,8 @@
       ],
       "dated_doc_refs": [
         "docs/decode-codegen-dataflow-capability-scope-20260621.md",
-        "docs/north-star-decode-attention-redesign-audit-20260621.md"
+        "docs/north-star-decode-attention-redesign-audit-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -5638,7 +5351,8 @@
       ],
       "dated_doc_refs": [
         "docs/harness-contract-audit-20260621.md",
-        "docs/north-star-flash-attn-tile-execution-result-20260621.md"
+        "docs/north-star-flash-attn-tile-execution-result-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [
         "bench/qk-decode-eval/candidates.json",
@@ -5667,15 +5381,13 @@
         "docs/amd-decode-packed-load-lowering.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_packed_tile.py', 'test/external/test_qk_semantic_op.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_packed_tile.py",
-        "test/external/test_qk_semantic_op.py",
         "test/external/test_qk_packed_tile.py",
         "test/external/test_qk_semantic_op.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_packed_tile_closeout_diagnostic.py",
@@ -5691,9 +5403,8 @@
       "dated_doc_refs": [],
       "ledger_refs": [],
       "status": "provenance",
-      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_packed_tile.py', 'test/external/test_qk_packed_tile.py'] -- keep",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_packed_tile.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_packed_tile.py",
         "test/external/test_qk_packed_tile.py"
       ],
       "category": ""
@@ -5713,13 +5424,12 @@
         "docs/amd-decode-ansor-direction.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_packed_tile.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_packed_tile.py",
         "test/external/test_qk_packed_tile.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_packed_tile_lowering_analysis.py",
@@ -5735,9 +5445,8 @@
       "dated_doc_refs": [],
       "ledger_refs": [],
       "status": "provenance",
-      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_packed_tile.py', 'test/external/test_qk_packed_tile.py'] -- keep",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_packed_tile.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_packed_tile.py",
         "test/external/test_qk_packed_tile.py"
       ],
       "category": ""
@@ -5756,7 +5465,10 @@
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
-      "dated_doc_refs": [],
+      "dated_doc_refs": [
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
+        "docs/perf-probe-active-surface-reduction-result-20260621.md"
+      ],
       "ledger_refs": [],
       "status": "provenance",
       "reason": "shared utility imported by 5 kept script(s) ['extra/qk_flywheel_feature_enrich.py', 'extra/qk_flywheel_targeted_outcomes.py', 'extra/qk_packed_tile_closeout_diagnostic.py'] -- keep to avoid broken imports",
@@ -5792,9 +5504,9 @@
         "docs/prefill-primitive-pmc-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 7 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_prefill_primitive_pmc.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_pmu_observability.py",
@@ -5808,8 +5520,8 @@
         "docs/primitive-pmu-observability-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -5831,7 +5543,10 @@
         "docs/canonical-policy-handoff-audit-scope-20260621.md",
         "docs/decode-evaluation-harness-hardening-result-20260621.md",
         "docs/decode-evaluation-harness-hardening-scope-20260621.md",
-        "docs/next-project-scope-audit-20260621.md"
+        "docs/next-project-scope-audit-20260621.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md",
+        "docs/perf-probe-active-surface-reduction-result-20260621.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "live",
@@ -5850,12 +5565,13 @@
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
-      "dated_doc_refs": [],
+      "dated_doc_refs": [
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md"
+      ],
       "ledger_refs": [],
       "status": "provenance",
-      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_policy_parity.py', 'test/external/test_qk_policy_parity.py'] -- keep",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_policy_parity.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_policy_parity.py",
         "test/external/test_qk_policy_parity.py"
       ],
       "category": ""
@@ -5878,16 +5594,16 @@
       "dated_doc_refs": [
         "docs/amd-decode-ansor-direction.md",
         "docs/amd-decode-harness-architecture.md",
-        "docs/amd-decode-qk-storage-architecture.md"
+        "docs/amd-decode-qk-storage-architecture.md",
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_policy_pipeline.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_policy_pipeline.py",
         "test/external/test_qk_policy_pipeline.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_prefill_attention_kv_gate.py",
@@ -5901,8 +5617,8 @@
         "docs/prefill-attention-kv-gate-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -5921,8 +5637,8 @@
         "docs/prefill-occupancy-lever-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -5937,8 +5653,8 @@
         "docs/prefill-external-bridge-ebt1-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -5955,8 +5671,8 @@
         "docs/prefill-clock-dpm-authority-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -5974,8 +5690,8 @@
         "docs/prefill-clock-dpm-authority-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -5994,8 +5710,8 @@
         "docs/prefill-tensile-llama-strong-audit-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6011,8 +5727,8 @@
         "docs/qk-prefill-weight-reuse-result-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6027,7 +5743,9 @@
       "canonical_doc_refs": [
         "bench/README.md"
       ],
-      "dated_doc_refs": [],
+      "dated_doc_refs": [
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
+      ],
       "ledger_refs": [],
       "status": "provenance",
       "reason": "cited by canonical/ledger (1 canon-doc, 0 ledger)",
@@ -6046,7 +5764,8 @@
         "bench/README.md"
       ],
       "dated_doc_refs": [
-        "docs/prefill-policy-integration-scope-20260620.md"
+        "docs/prefill-policy-integration-scope-20260620.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -6065,8 +5784,8 @@
         "docs/prefill-concrete-kv-increment0-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6085,8 +5804,8 @@
         "docs/prefill-policy-integration-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6103,8 +5822,8 @@
         "docs/prefill-default-policy-evaluation-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6162,12 +5881,12 @@
         "docs/prefill-flash-wmma-attention-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['tinygrad/llm/model.py'] -- keep",
       "external_importers": [
         "tinygrad/llm/model.py"
       ],
-      "category": "superseded_prefill_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_prefill_graph_gemm_corpus_quality.py",
@@ -6185,8 +5904,8 @@
         "docs/prefill-graph-gemm-corpus-quality-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6205,8 +5924,8 @@
         "docs/prefill-graph-gemm-default-perf-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6225,8 +5944,8 @@
         "docs/prefill-graph-gemm-drift-attribution-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6245,8 +5964,8 @@
         "docs/prefill-graph-gemm-fallback-audit-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6268,15 +5987,17 @@
         "docs/prefill-graph-gemm-generation-coverage-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 5 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 5 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
       "path": "extra/qk_prefill_graph_gemm_oom_policy_audit.py",
       "type": "script",
       "stem": "qk_prefill_graph_gemm_oom_policy_audit",
-      "imports": [],
+      "imports": [
+        "qk_prefill_graph_gemm_route"
+      ],
       "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
@@ -6286,8 +6007,8 @@
         "docs/prefill-graph-gemm-oom-policy-audit-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6306,8 +6027,8 @@
         "docs/prefill-graph-gemm-sampled-quality-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6318,7 +6039,8 @@
         "gemm"
       ],
       "imported_by": [
-        "extra/qk_prefill_graph_gemm_fallback_audit.py"
+        "extra/qk_prefill_graph_gemm_fallback_audit.py",
+        "extra/qk_prefill_graph_gemm_oom_policy_audit.py"
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
@@ -6326,12 +6048,12 @@
         "docs/prefill-next-gap-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['tinygrad/llm/model.py'] -- keep",
       "external_importers": [
         "tinygrad/llm/model.py"
       ],
-      "category": "superseded_prefill_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_prefill_graph_node_feasibility_probe.py",
@@ -6340,17 +6062,15 @@
       "imports": [
         "gemm"
       ],
-      "imported_by": [
-        "extra/qk_prefill_graph_route_transfer_scope.py"
-      ],
+      "imported_by": [],
       "in_live_closure": false,
       "canonical_doc_refs": [],
       "dated_doc_refs": [
         "docs/prefill-graph-node-feasibility-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6365,8 +6085,8 @@
         "docs/prefill-wall-broken-host-dispatch-bound-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6383,8 +6103,8 @@
         "docs/prefill-graph-route-one-role-correctness-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6401,23 +6121,9 @@
         "docs/prefill-graph-route-one-role-timing-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "superseded_prefill_probe"
-    },
-    {
-      "path": "extra/qk_prefill_graph_route_transfer_scope.py",
-      "type": "script",
-      "stem": "qk_prefill_graph_route_transfer_scope",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "stale_scope_helper"
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
+      "category": "superseded_prefill_probe"
     },
     {
       "path": "extra/qk_prefill_inmodel_attribution.py",
@@ -6432,8 +6138,8 @@
         "docs/prefill-next-gap-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6448,8 +6154,8 @@
         "docs/prefill-inmodel-matmul-transfer-gate-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6466,26 +6172,13 @@
       ],
       "dated_doc_refs": [
         "docs/prefill-RECONCILIATION-source-of-truth-20260619.md",
-        "docs/prefill-occupancy-lever-result-20260619.md"
+        "docs/prefill-occupancy-lever-result-20260619.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
       "reason": "cited by canonical/ledger (1 canon-doc, 0 ledger)",
       "category": ""
-    },
-    {
-      "path": "extra/qk_prefill_matmul_penalty_verify.py",
-      "type": "script",
-      "stem": "qk_prefill_matmul_penalty_verify",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "superseded_prefill_probe"
     },
     {
       "path": "extra/qk_prefill_pmu_atlas.py",
@@ -6504,8 +6197,8 @@
         "docs/prefill-next-gap-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 4 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6525,6 +6218,7 @@
         "docs/prefill-primitive-pmc-result-20260619.md",
         "docs/prefill-primitive-pmc-scope-20260619.md",
         "docs/prefill-tensile-llama-strong-audit-scope-20260620.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md",
         "docs/tensile-variant-ablation-scope-20260619.md"
       ],
       "ledger_refs": [],
@@ -6548,8 +6242,8 @@
         "docs/prefill-route-schedule-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6567,8 +6261,8 @@
         "docs/qk-prefill-wmma-phase2-result-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 4 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6583,7 +6277,8 @@
       ],
       "dated_doc_refs": [
         "docs/prefill-branch-b-tc-attention-result-20260620.md",
-        "docs/prefill-branch-b-tc-attention-scope-20260620.md"
+        "docs/prefill-branch-b-tc-attention-scope-20260620.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -6605,8 +6300,8 @@
         "docs/prefill-branch-b-tc-attention-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6630,13 +6325,12 @@
         "docs/qk-prefill-wmma-phase3-result-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 6 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_prefill_tc_probe.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_prefill_tc_probe.py",
         "test/external/test_qk_prefill_tc_probe.py"
       ],
-      "category": "superseded_prefill_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_prefill_tensile_settle.py",
@@ -6650,8 +6344,8 @@
         "docs/prefill-tensile-86-settled-nosync-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6670,8 +6364,8 @@
         "docs/prefill-v2-auto-policy-result-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6694,13 +6388,12 @@
         "docs/qk-prefill-weight-reuse-result-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 9 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_prefill_v2.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_prefill_v2.py",
         "test/external/test_qk_prefill_v2.py"
       ],
-      "category": "superseded_prefill_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_prefill_v2_nll_eval.py",
@@ -6714,8 +6407,7 @@
         "extra/qk_prefill_graph_gemm_drift_attribution.py",
         "extra/qk_prefill_graph_gemm_generation_coverage.py",
         "extra/qk_prefill_graph_gemm_quality_sampled.py",
-        "extra/qk_prefill_tc_attn_quality_gate.py",
-        "extra/qk_sub4_nll_eval.py"
+        "extra/qk_prefill_tc_attn_quality_gate.py"
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
@@ -6729,13 +6421,12 @@
         "docs/route-a-a3-lds-multiwave-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 7 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_prefill_v2.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_prefill_v2.py",
         "test/external/test_qk_prefill_v2.py"
       ],
-      "category": "superseded_prefill_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_prefill_wmma_lds_probe.py",
@@ -6752,8 +6443,8 @@
         "docs/prefill-wmma-lds-tiling-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_prefill_probe"
     },
     {
@@ -6771,7 +6462,8 @@
       "dated_doc_refs": [
         "docs/prefill-external-rawhip-tensile-boundary-scope-20260619.md",
         "docs/prefill-own-wmma-kernel-result-20260619.md",
-        "docs/prefill-own-wmma-kernel-scope-20260619.md"
+        "docs/prefill-own-wmma-kernel-scope-20260619.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -6791,8 +6483,8 @@
         "docs/primitive-coverage-map-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -6810,7 +6502,8 @@
         "docs/primitive-lifecycle-search-scope-20260619.md",
         "docs/primitive-local-observability-audit-20260619.md",
         "docs/primitive-local-observability-search-result-20260619.md",
-        "docs/primitive-local-observability-search-scope-20260619.md"
+        "docs/primitive-local-observability-search-scope-20260619.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
@@ -6834,8 +6527,8 @@
         "docs/inference-perf-measured-map-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -6852,8 +6545,8 @@
         "docs/qk-decode-bounded-levers-exhausted-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -6871,8 +6564,8 @@
         "docs/q8-mmvq-lifecycle-deep-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_mmvq_probe"
     },
     {
@@ -6887,14 +6580,13 @@
         "docs/amd-decode-capstone.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['tinygrad/llm/model.py', 'test/external/test_qk_quantize.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_quantize.py",
         "tinygrad/llm/model.py",
         "test/external/test_qk_quantize.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_search_spec.py",
@@ -6923,13 +6615,13 @@
         "docs/qk-8b-flash-variant-result-20260617.md",
         "docs/qk-machine-search-primitive-rows-20260618.md",
         "docs/qk-script-ownership-20260617.md",
+        "docs/repo-active-surface-reduction-roadmap-20260621.md",
         "docs/what-makes-a-performance-primitive-efficient-20260618.md"
       ],
       "ledger_refs": [],
       "status": "provenance",
       "reason": "cited by canonical/ledger (1 canon-doc, 0 ledger)",
       "external_importers": [
-        "test/external/test_qk_search_spec.py",
         "test/external/test_qk_search_spec.py"
       ],
       "category": ""
@@ -6950,9 +6642,9 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
+      "status": "provenance",
+      "reason": "shared utility imported by 2 kept script(s) ['extra/qk_semantic_schedule.py', 'extra/qk_semantic_schedule_verdict.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_semantic_descriptor.py",
@@ -6967,13 +6659,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_semantic_op.py",
@@ -6993,13 +6684,12 @@
         "docs/amd-decode-packed-qk-semantic-op.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_semantic_op.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_semantic_op.py",
         "test/external/test_qk_semantic_op.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_semantic_report.py",
@@ -7011,7 +6701,9 @@
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
-      "dated_doc_refs": [],
+      "dated_doc_refs": [
+        "docs/perf-probe-active-surface-reduction-plan-20260621.md"
+      ],
       "ledger_refs": [],
       "status": "provenance",
       "reason": "shared utility imported by 1 kept script(s) ['extra/qk_policy_pipeline.py'] -- keep to avoid broken imports",
@@ -7035,13 +6727,12 @@
         "docs/amd-decode-flywheel-proof-plan.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_semantic_schedule_bench.py",
@@ -7062,9 +6753,9 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_flywheel_shadow.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_semantic_schedule_verdict.py",
@@ -7080,13 +6771,12 @@
         "docs/amd-rocm-llamacpp-research.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_ansor_transition.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_ansor_transition.py",
         "test/external/test_qk_ansor_transition.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_spec_component_routes.py",
@@ -7100,8 +6790,8 @@
         "docs/spec-decode-component-route-candidates-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -7119,8 +6809,8 @@
         "docs/qk-spec-decode-integration-plan-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -7135,8 +6825,8 @@
         "docs/spec-decode-bandwidth-amortization-sdb1-sdb2-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -7157,8 +6847,8 @@
         "docs/spec-decode-low-sync-phase4-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 5 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 5 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -7180,8 +6870,8 @@
         "docs/spec-decode-production-verdict-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 6 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 6 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -7197,8 +6887,8 @@
         "docs/spec-decode-low-sync-verdict-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_decode_probe"
     },
     {
@@ -7213,56 +6903,8 @@
         "docs/spec-decode-tcheap-batched-forward-tbf0-tbf2-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/qk_sub4_byte_census.py",
-      "type": "script",
-      "stem": "qk_sub4_byte_census",
-      "imports": [],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/qk_sub4_nll_eval.py",
-      "type": "script",
-      "stem": "qk_sub4_nll_eval",
-      "imports": [
-        "llm_generate",
-        "qk_prefill_v2_nll_eval",
-        "qk_sub4_quant_probe"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "no_canonical_reference"
-    },
-    {
-      "path": "extra/qk_sub4_quant_probe.py",
-      "type": "script",
-      "stem": "qk_sub4_quant_probe",
-      "imports": [],
-      "imported_by": [
-        "extra/qk_sub4_nll_eval.py"
-      ],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -7277,8 +6919,8 @@
         "docs/prefill-sw-pipeline-codegen-charter-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -7329,25 +6971,8 @@
         "docs/prefill-tensile-tpe6b-runtime-helper-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_tensile_block_jit.py",
-      "type": "script",
-      "stem": "qk_tensile_block_jit",
-      "imports": [
-        "qk_tensile_hcq_launch",
-        "qk_tensile_runtime"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
       "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7367,9 +6992,9 @@
         "docs/primitive-local-observability-search-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_primitive_ledger.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_tensile_contract.py",
@@ -7385,8 +7010,8 @@
         "docs/prefill-tensile-tpe2-contract-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7403,8 +7028,8 @@
         "docs/prefill-tensile-diag-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7421,8 +7046,8 @@
         "docs/prefill-tensile-tpe7cd-injection-and-codegen-oracle-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7435,15 +7060,12 @@
         "extra/qk_amd_gemm_gputime_goldstandard.py",
         "extra/qk_amd_gemm_promotion_benchmark.py",
         "extra/qk_amd_gemm_tensile_pmc_audit.py",
-        "extra/qk_amd_gemm_tensile_vs_ours_probe.py",
         "extra/qk_hcq_attribution.py",
         "extra/qk_tensile_block_graph.py",
-        "extra/qk_tensile_block_jit.py",
         "extra/qk_tensile_block_transfer.py",
         "extra/qk_tensile_hcq_perf.py",
         "extra/qk_tensile_inject.py",
         "extra/qk_tensile_inmodel.py",
-        "extra/qk_tensile_jit_dim.py",
         "extra/qk_tensile_rebindable_node.py",
         "extra/qk_tensile_runtime.py",
         "extra/qk_tensile_shape_matrix.py",
@@ -7465,9 +7087,9 @@
         "docs/tensile-variant-capture-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 11 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 2 kept script(s) ['extra/qk_tensile_block_transfer.py', 'extra/qk_tensile_inmodel.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_tensile_hcq_perf.py",
@@ -7487,9 +7109,9 @@
         "docs/qk-machine-search-primitive-rows-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_primitive_ledger.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_tensile_inject.py",
@@ -7508,8 +7130,8 @@
         "docs/prefill-tensile-tpe7cd-injection-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 3 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7545,29 +7167,12 @@
         "docs/tensile-transfer-audit-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 11 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['tinygrad/llm/model.py'] -- keep",
       "external_importers": [
         "tinygrad/llm/model.py"
       ],
-      "category": "superseded_tensile_probe"
-    },
-    {
-      "path": "extra/qk_tensile_jit_dim.py",
-      "type": "script",
-      "stem": "qk_tensile_jit_dim",
-      "imports": [
-        "qk_tensile_hcq_launch",
-        "qk_tensile_runtime"
-      ],
-      "imported_by": [],
-      "in_live_closure": false,
-      "canonical_doc_refs": [],
-      "dated_doc_refs": [],
-      "ledger_refs": [],
-      "status": "delete",
-      "reason": "no reference in ANY doc or ledger and not imported by a kept script (no_canonical_reference)",
-      "category": "superseded_tensile_probe"
+      "category": ""
     },
     {
       "path": "extra/qk_tensile_primitive_transfer_matrix_scope.py",
@@ -7581,8 +7186,8 @@
         "docs/tensile-primitive-transfer-matrix-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -7604,9 +7209,9 @@
         "docs/primitive-local-observability-audit-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_primitive_ledger.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_tensile_roadmap_scope.py",
@@ -7620,8 +7225,8 @@
         "docs/tensile-roadmap-scope-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "stale_scope_helper"
     },
     {
@@ -7633,10 +7238,8 @@
       ],
       "imported_by": [
         "extra/qk_hcq_attribution.py",
-        "extra/qk_tensile_block_jit.py",
         "extra/qk_tensile_inject.py",
-        "extra/qk_tensile_inmodel.py",
-        "extra/qk_tensile_jit_dim.py"
+        "extra/qk_tensile_inmodel.py"
       ],
       "in_live_closure": false,
       "canonical_doc_refs": [],
@@ -7647,9 +7250,9 @@
         "docs/prefill-tensile-tpe7cd-injection-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_tensile_inmodel.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_tensile_schedule_template_extract.py",
@@ -7664,8 +7267,8 @@
         "docs/prefill-tensile-winning-kernel-transfer-table-20260620.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7681,8 +7284,8 @@
         "docs/prefill-tensile-tpe1-selection-result-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 2 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7705,9 +7308,9 @@
         "docs/tensile-transfer-audit-CORRECTION-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 5 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_primitive_ledger.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_tensile_variant_ablation.py",
@@ -7728,8 +7331,8 @@
         "docs/tensile-variant-capture-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 5 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 5 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7750,13 +7353,12 @@
         "docs/amd-decode-kernel-optimization-flywheel.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 2 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['test/external/test_qk_threeway_load_microbench.py'] -- keep",
       "external_importers": [
-        "test/external/test_qk_threeway_load_microbench.py",
         "test/external/test_qk_threeway_load_microbench.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_two_queue_probe.py",
@@ -7772,13 +7374,12 @@
         "docs/amd-decode-two-queue-probe-20260616.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 3 (conclusion captured; not live/canonical)",
+      "status": "provenance",
+      "reason": "imported/invoked by external code (tests/model): ['extra/amd_two_compute_ring_probe.py'] -- keep",
       "external_importers": [
-        "extra/amd_two_compute_ring_probe.py",
         "extra/amd_two_compute_ring_probe.py"
       ],
-      "category": "no_canonical_reference"
+      "category": ""
     },
     {
       "path": "extra/qk_verify_component_breakdown.py",
@@ -7794,8 +7395,8 @@
         "docs/qk-spec-verify-component-breakdown-20260618.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "no_canonical_reference"
     },
     {
@@ -7810,8 +7411,8 @@
         "docs/prefill-address-lowering-renderer-arc-plan-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7829,8 +7430,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 4 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7851,9 +7452,9 @@
         "docs/prefill-codegen-software-pipeline-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 4 (conclusion captured; not live/canonical)",
-      "category": "superseded_tensile_probe"
+      "status": "provenance",
+      "reason": "shared utility imported by 1 kept script(s) ['extra/qk_amd_software_pipeline_probe.py'] -- keep to avoid broken imports",
+      "category": ""
     },
     {
       "path": "extra/qk_wmma_qk_tile.py",
@@ -7867,8 +7468,8 @@
         "docs/qk-script-ownership-20260617.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     },
     {
@@ -7883,8 +7484,8 @@
         "docs/prefill-fp16-load-vectorize-renderer-scope-20260619.md"
       ],
       "ledger_refs": [],
-      "status": "manual_review",
-      "reason": "cited only by dated result doc(s): 1 (conclusion captured; not live/canonical)",
+      "status": "delete",
+      "reason": "cited only by 1 dated result doc(s) (conclusion captured there) -- owner-approved wave-2 delete",
       "category": "superseded_tensile_probe"
     }
   ]
