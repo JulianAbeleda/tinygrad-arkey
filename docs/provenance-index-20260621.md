@@ -3,7 +3,7 @@
 Mechanized map of the fork's `docs/*.md` (roadmap #5 consolidation). **No docs deleted/moved** — this only
 classifies, so the ~251 canonical->dated-doc pointers stay intact. Regenerate: `PYTHONPATH=. .venv/bin/python bench/qk-active-surface-reduction/build_docs_index.py`. Backing data: `bench/qk-active-surface-reduction/docs_index.json`.
 
-**Totals:** 647 fork docs — canonical **4** · current **286** · provenance **357**
+**Totals:** 652 fork docs — canonical **4** · current **291** · provenance **357**
 
 ## Authority order (read these; ignore the rest unless tracing provenance)
 1. `docs/current-project-state-handoff-20260621.md` — canonical current state

@@ -2,9 +2,9 @@
   "counts": {
     "provenance": 357,
     "canonical": 4,
-    "current": 286
+    "current": 291
   },
-  "total": 647,
+  "total": 652,
   "canonical": [
     "docs/README.md",
     "docs/current-project-state-handoff-20260621.md",
@@ -2162,6 +2162,13 @@
       "cited_by_canonical": false
     },
     {
+      "doc": "docs/fix-scope-verdict-ssot-20260621.md",
+      "status": "current",
+      "topic": "other",
+      "date": "20260621",
+      "cited_by_canonical": false
+    },
+    {
       "doc": "docs/flywheel-judging-rewrite-scope.md",
       "status": "current",
       "topic": "flywheel",
@@ -2215,6 +2222,13 @@
       "status": "current",
       "topic": "other",
       "date": "undated",
+      "cited_by_canonical": true
+    },
+    {
+      "doc": "docs/harness-best-practices-adherence-audit-20260621.md",
+      "status": "current",
+      "topic": "harness",
+      "date": "20260621",
       "cited_by_canonical": true
     },
     {
@@ -4241,6 +4255,20 @@
       "cited_by_canonical": false
     },
     {
+      "doc": "docs/repo-principles-audit-20260621.md",
+      "status": "current",
+      "topic": "other",
+      "date": "20260621",
+      "cited_by_canonical": false
+    },
+    {
+      "doc": "docs/repo-principles-cleanup-audit-20260621.md",
+      "status": "current",
+      "topic": "other",
+      "date": "20260621",
+      "cited_by_canonical": false
+    },
+    {
       "doc": "docs/research-banks-results-synthesis-20260618.md",
       "status": "provenance",
       "topic": "other",
@@ -4316,6 +4344,13 @@
       "topic": "other",
       "date": "undated",
       "cited_by_canonical": true
+    },
+    {
+      "doc": "docs/scope-probe-harness-declone-20260621.md",
+      "status": "current",
+      "topic": "harness",
+      "date": "20260621",
+      "cited_by_canonical": false
     },
     {
       "doc": "docs/spec-decode-bandwidth-amortization-scope-20260619.md",
