@@ -292,6 +292,236 @@ So: the bounded decode-tile lane is rested; the remaining lever is the full llam
 lifecycle with an **efficient many-split / stream-k combine** (north-star), not another bounded tile or flag
 sweep. Do not promote `FLASH_L=64` by default. See `docs/decode-vector-flash-tile-realigned-result-20260621.md`.
 
+## Decode Attention Must Be Literature-Grounded
+
+Do not design a decode attention candidate as "a fused tile" in the abstract.
+
+A decode attention candidate must say which hardware-aware attention principle it implements:
+
+- **FlashAttention / IO-aware tiling:** reduce HBM traffic by keeping attention tiles and online-softmax state in
+  on-chip memory where possible.
+- **Flash-Decoding / T=1 parallelism:** manufacture parallel work from KV splits because decode has no token/query
+  axis to fill the GPU.
+- **FlashDecoding++ / adaptive dataflow:** avoid synchronized partial-softmax overhead, avoid under-utilized flat
+  GEMMs, and do not use one static dataflow for shapes with different bottlenecks.
+- **FlashInfer-style phase separation:** prefill, decode, and append are different workloads. A primitive that wins
+  for prefill does not automatically transfer to decode.
+
+Relevant references:
+
+- Dao et al., **FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness** (2022),
+  https://arxiv.org/abs/2205.14135.
+- **Flash-Decoding for long-context inference** (2023),
+  https://crfm.stanford.edu/2023/10/12/flashdecoding.html.
+- PyTorch, **Flash-Decoding for long-context inference**,
+  https://pytorch.org/blog/flash-decoding/.
+- Hong et al., **FlashDecoding++: Faster Large Language Model Inference on GPUs** (2024),
+  https://arxiv.org/abs/2311.01282.
+- FlashInfer, **Accelerating Self-Attentions for LLM Serving with FlashInfer**,
+  https://flashinfer.ai/2024/02/02/introduce-flashinfer.html.
+
+Rule:
+
+```text
+A decode attention candidate must be IO-aware, decode-aware, softmax-aware, dataflow-aware, resource-aware, and
+comparator-aware before it is timed.
+```
+
+Before implementing a fused decode attention candidate, document:
+
+- IO-aware plan: what HBM materialization is removed or avoided?
+- decode-aware plan: where does T=1 parallelism come from?
+- softmax-aware plan: where do `m`, `l`, and `acc` live, and how are partials combined?
+- dataflow-aware plan: how does it avoid redundant exp/PV work and flat-GEMM underutilization?
+- resource-aware plan: expected LDS bytes, VGPRs, workgroups, occupancy, and vector/dot instructions.
+- comparator-aware plan: why it should beat `gqa_coop_vec`, not only a weaker baseline.
+
+This section explains why recent failures were useful:
+
+- Path A had a valid online-softmax idiom but violated the dataflow rule by recomputing exp across output lanes.
+- Matmul-PV validated the tiled-PV idea at long context but exposed a symbolic-count layout/codegen blocker.
+- The llama oracle validated that the target is real: a fused, LDS-staged, vectorized decode attention tile is much
+  faster standalone than the current tinygrad route.
+
+## Name The Primitive Class: llama-style, vLLM-style, Silicon-style, DeepSeek-style
+
+This repo uses multiple reference families. Name which one a candidate is borrowing from.
+
+They are complementary, not mutually exclusive:
+
+```text
+llama-style primitive quality
++ vLLM-style lifecycle/search system
++ silicon-style hardware/compiler co-design awareness
++ DeepSeek-style lowest-layer escape hatches
+```
+
+### llama-style local primitive
+
+A llama-style primitive is a local-execution primitive optimized for low-latency, small-batch decode. For this repo,
+the key case is single-stream `T=1` decode on Qwen3-8B-Q4_K_M.
+
+Use this name for candidates that target:
+
+- tight per-token latency;
+- direct local decode rather than serving throughput;
+- high-occupancy work decomposition when the token axis is gone;
+- KV-split parallelism, GQA/query-head column packing, LDS/SRAM reuse, and efficient partial combine;
+- exact whole-model W==D token/s as the authority.
+
+Relevant references:
+
+- FlashAttention defines the IO-aware attention principle: tile attention to reduce HBM traffic by using on-chip
+  memory deliberately. See Dao et al., **FlashAttention: Fast and Memory-Efficient Exact Attention with
+  IO-Awareness** (2022), https://arxiv.org/abs/2205.14135.
+- Flash-Decoding states the decode-specific split/combine idea: split K/V loading across parallel workers, then
+  rescale and combine partial attention outputs. See **Flash-Decoding for long-context inference** (2023),
+  https://crfm.stanford.edu/2023/10/12/flashdecoding.html.
+- FlashDecoding++ reinforces that decode performance depends on staged pipeline/dataflow choices and hardware-aware
+  adaptation, not only fewer kernels. See Hong et al., **FlashDecoding++: Faster Large Language Model Inference on
+  GPUs** (2024), https://arxiv.org/abs/2311.01282.
+- llama.cpp is the implementation oracle for the current local decode comparator. Its exact source behavior must be
+  audited because it is not fully specified by a paper. In this project, the measured llama decode path is a non-WMMA
+  vector `flash_attn_tile`, not the prefill WMMA path.
+
+Rule:
+
+```text
+If the candidate is trying to close the single-stream decode gap, call it llama-style and prove it preserves
+T=1 parallelism against the current tinygrad winner.
+```
+
+### vLLM-style lifecycle primitive
+
+A vLLM-style primitive is not just a kernel body. It is a serving/lifecycle primitive: how requests, KV cache,
+candidate routes, batching, graph capture, and policy interact so the system can choose and maintain fast paths.
+
+Use this name for candidates that target:
+
+- paged/block KV cache layout and prefix/cache sharing;
+- continuous or iteration-level batching;
+- route/backend selection by workload shape;
+- graph capture/replay and scheduling policy;
+- candidate registry, evaluator contract, search loop, promotion/pruning rules;
+- serving throughput or maintainable route selection rather than one isolated kernel.
+
+Relevant references:
+
+- vLLM/PagedAttention defines the block-paged KV cache primitive and serving system built around it. See Kwon et al.,
+  **Efficient Memory Management for Large Language Model Serving with PagedAttention** (2023),
+  https://arxiv.org/abs/2309.06180.
+- Orca defines iteration-level scheduling and selective batching for generative-model serving. See Yu et al.,
+  **Orca: A Distributed Serving System for Transformer-Based Generative Models** (OSDI 2022),
+  https://www.usenix.org/conference/osdi22/presentation/yu.
+
+Rule:
+
+```text
+If the candidate changes how work is admitted, routed, cached, batched, evaluated, promoted, or pruned, call it
+vLLM-style and evaluate the full lifecycle, not only the kernel.
+```
+
+### Silicon-style hardware/compiler co-design primitive
+
+A silicon-style primitive treats hardware, compiler, runtime, memory hierarchy, and serving policy as one design
+surface. This repo is not building a chip, but it should still learn from systems where the accelerator is designed
+around the workload instead of treating hardware as a fixed black box.
+
+Use this name for candidates that target:
+
+- hardware-native tensor/dataflow shapes, not only source-level kernels;
+- compiler lowering that owns layout, tiling, and movement across memory levels;
+- runtime/graph scheduling that matches the accelerator's execution model;
+- observability hooks that expose the real hardware bottleneck;
+- route policies that change because the hardware prefers a different batch, tile, or communication shape.
+
+Relevant references:
+
+- AWS Trainium/Inferentia are exposed through Neuron, a stack containing compiler, runtime, profiling/debugging, and
+  framework integrations. See **AWS Neuron SDK**,
+  https://aws.amazon.com/ai/machine-learning/neuron/.
+- Google TPUs are ASICs designed for ML matrix workloads and are accessed through compiler/runtime stacks such as
+  JAX, PyTorch, and Cloud TPU infrastructure. See **TPU architecture**,
+  https://docs.cloud.google.com/tpu/docs/system-architecture-tpu-vm.
+- Google's original TPU architecture writeup describes the systolic array as the central hardware primitive for dense
+  matrix work. See **An in-depth look at Google's first Tensor Processing Unit**,
+  https://cloud.google.com/blog/products/ai-machine-learning/an-in-depth-look-at-googles-first-tensor-processing-unit-tpu.
+
+Rule:
+
+```text
+If the candidate depends on hardware execution structure, name the hardware/compiler contract explicitly instead of
+pretending the source kernel alone owns performance.
+```
+
+### DeepSeek-style lowest-layer escape hatch
+
+A DeepSeek-style primitive is used when the standard framework/library abstraction does not expose the control needed
+to use the hardware efficiently. The response is not to handwave "bypass CUDA" or abandon libraries everywhere. The
+response is to identify the exact missing control surface, drop to the lowest responsible layer for that primitive,
+and keep the result behind a measured lifecycle gate.
+
+The common public claim that DeepSeek simply "did not get NVIDIA libraries" is too loose. The DeepSeek-V3 report says
+they trained on NVIDIA H800 GPUs, built their own HAI-LLM framework, used custom all-to-all communication kernels,
+customized PTX instructions, FP8 fine-grained quantization, and overlapped computation with communication. The point is
+not no-library purity; the point is owning the layer where the default stack was insufficient.
+
+Use this name for candidates that target:
+
+- custom low-level instructions or backend-specific assembly/IR when the library path cannot express the needed
+  schedule;
+- explicit SM/work partitioning between compute and communication;
+- custom collective/dispatch/combine kernels tied to routing and topology;
+- precision or accumulation behavior not supported by standard kernels;
+- online quantization, dequantization, or format movement as part of the primitive;
+- algorithm/framework/hardware co-design where routing, data format, and kernel body are inseparable.
+
+Relevant references:
+
+- DeepSeek-V3 reports an H800 training cluster, an in-house HAI-LLM framework, DualPipe computation/communication
+  overlap, and custom all-to-all kernels. See **DeepSeek-V3 Technical Report**, Sections 3.1-3.2,
+  https://arxiv.org/html/2412.19437v1.
+- The same report says their communication kernels use customized PTX instructions and autotuned communication chunk
+  size to reduce L2 usage and interference with compute kernels. See Section 3.2.2,
+  https://arxiv.org/html/2412.19437v1.
+- The FP8 section describes fine-grained quantization, higher-precision accumulation by promotion to CUDA cores, and
+  online quantization as part of the training primitive. See Section 3.3,
+  https://arxiv.org/html/2412.19437v1.
+
+Rule:
+
+```text
+If a library/framework path hides the control surface that determines performance, define a DeepSeek-style escape
+hatch: exact missing control, lowest layer needed, correctness/quality gate, and default-off lifecycle boundary.
+```
+
+### Combined target for this project
+
+The project is complete only when the relevant classes work together:
+
+```text
+llama-style decode primitive:
+  beats the local llama.cpp W==D reference on the target benchmark
+
+vLLM-style lifecycle/search primitive:
+  finds, gates, routes, and preserves that win through a closed evaluator/search loop
+
+silicon-style co-design awareness:
+  explains which hardware/compiler/runtime contract the primitive relies on
+
+DeepSeek-style escape hatch:
+  uses lower-level control only when the normal stack cannot express the winning primitive
+```
+
+Do not collapse these categories:
+
+- A llama-style kernel win without lifecycle search is a hand patch, not the project goal.
+- A vLLM-style search loop without a llama-beating primitive is infrastructure, not completion.
+- A serving-throughput win does not automatically solve single-stream `T=1` decode.
+- A local decode win does not automatically solve paged KV, batching, or policy.
+- A hardware-aware explanation is not enough unless the compiler/runtime path can use it.
+- A low-level escape hatch must be justified by a missing control surface, not by preference for hand-written code.
+
 ## Value Semantics Beat Source Emission
 
 A lowering test must validate computed values, not just generated source or disassembly.
@@ -310,6 +540,108 @@ Rule:
 ```text
 Every new lowering or intrinsic needs value tests with signed, unsigned, negative, zero,
 and edge-case lanes.
+```
+
+## Harnesses Are Performance Primitives Too
+
+A benchmark harness is part of the primitive. If the harness changes the lifecycle, clock state, comparator, compile
+tax, quality gate, or dispatch path, it changes the result.
+
+This repo treats harness design as a first-class primitive because several wrong conclusions came from weak harnesses:
+
+- the prefill "no e2e change" result was a short-prompt harness bug;
+- the bare `87.6` decode number was ambiguous until context/unit authority was reconciled;
+- auto-clock per-kernel timing was volatile even when whole-decode W==D was stable;
+- q8 looked unstable until the evaluator used the clock-controlled lane;
+- local raw-dispatch timing was misleading until throughput and graph/JIT authority were separated.
+
+Relevant references:
+
+- **MLPerf Inference Benchmark** defines inference benchmarking around representative workloads, quality targets,
+  comparable scenarios, and reproducible submissions. See Reddi et al., **MLPerf Inference Benchmark** (2019),
+  https://arxiv.org/abs/1911.02549.
+- **Methodological Principles for Reproducible Performance Evaluation in Cloud Computing** emphasizes preserving
+  experiment artifacts and environment details because complex systems cannot be described by a single timing number.
+  See SPEC Research Group (2019),
+  https://research.spec.org/fileadmin/user_upload/documents/rg_cloud/endorsed_publications/SPEC_RG_2019_Methodological_Principles_for_Reproducible_Performance_Evaluation_in_Cloud_Computing.pdf.
+- **Ansor / TVM AutoScheduler** grounds the generate -> measure -> feedback loop: generate candidate programs,
+  measure on real hardware, and feed the results back into the search. See Zheng et al., **Ansor: Generating
+  High-Performance Tensor Programs for Deep Learning** (2020), https://arxiv.org/abs/2006.06762, and the TVM
+  auto-scheduler overview, https://tvm.apache.org/2021/03/03/intro-auto-scheduler.
+- **Triton** grounds the idea that high-performance GPU kernels need an explicit tiled programming model plus
+  autotuning, not only ordinary tensor expressions. See Tillet et al., **Triton: an intermediate language and
+  compiler for tiled neural network computations** (2019),
+  https://www.eecs.harvard.edu/~htk/publication/2019-mapl-tillet-kung-cox.pdf.
+
+Rule:
+
+```text
+A performance claim is only valid when the evaluator captures workload, comparator, correctness/quality, timing
+authority, environment, repeats/noise, candidate metadata, and promotion policy.
+```
+
+A valid benchmark artifact must include:
+
+- workload shape and context;
+- candidate id and primitive class;
+- comparator id and why it is the current winner;
+- exact command and env;
+- git commit and dirty status;
+- hardware and clock/perf state;
+- warmup/compile handling;
+- repeats, median, spread, and noise/reproducibility band;
+- correctness or quality gate;
+- local diagnostic timing vs in-model W==D authority;
+- pass/fail threshold;
+- final verdict and stop reason;
+- links to ledger/refutation rows.
+
+Do not promote from:
+
+- DEBUG/print timing alone;
+- PROFILE-on timing as the final authority;
+- one-off raw-dispatch timings when the real route uses a graph/JIT lifecycle;
+- results without a comparator;
+- results without correctness/quality;
+- results whose margin is inside the noise band.
+
+## Machine Search Is Generate, Evaluate, Prune, And Remember
+
+Machine search is not "try random kernels."
+
+The closed-loop shape is:
+
+```text
+template space
+-> generated candidate
+-> structural/policy pruning
+-> reproducible evaluator
+-> artifact
+-> lifecycle verdict
+-> ledger/refutation
+-> next candidate
+```
+
+Ansor's lesson is that search needs a candidate space, real hardware measurements, and feedback. MLPerf's lesson is
+that measurements need workload, scenario, and quality authority. Triton's lesson is that the search space must expose
+hardware-relevant tiling/dataflow knobs.
+
+For this repo, a machine-search system must have:
+
+- template definitions, not only prose scopes;
+- generated candidate specs;
+- closed-lane pruning before benchmarking;
+- evaluator bindings;
+- machine-readable artifacts;
+- policy/default rules;
+- refutation memory;
+- a path from local A/B to W==D promotion.
+
+Rule:
+
+```text
+If a candidate cannot be generated, evaluated, pruned, and remembered, it is still a manual experiment, not a
+machine-search row.
 ```
 
 ## Machine Search Needs Rows, Not Wishes
@@ -418,3 +750,5 @@ For GPU primitive research in this repo:
 8. Convert findings into machine-search rows.
 9. Keep authority centralized and fallbacks explicit.
 10. Record refutations as durable knowledge.
+11. Name whether a candidate is llama-style local primitive work, vLLM-style lifecycle work, silicon-style
+    hardware/compiler co-design, DeepSeek-style lowest-layer escape hatch, or an explicit combination of these.
