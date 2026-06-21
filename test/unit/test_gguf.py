@@ -4,8 +4,12 @@ from tinygrad.helpers import disable_gc
 from tinygrad.llm.gguf import _ggml_iq_grid, ggml_data_to_tensor, gguf_load
 from tinygrad.runtime.autogen import ggml_common as _ggml
 import numpy as np
-from gguf import GGUFReader, GGUFValueType, GGMLQuantizationType, GGML_QUANT_SIZES, dequantize, quantize
-from gguf.quants import IQ2_S, IQ3_S, IQ3_XXS
+try:
+  from gguf import GGUFReader, GGUFValueType, GGMLQuantizationType, GGML_QUANT_SIZES, dequantize, quantize
+  from gguf.quants import IQ2_S, IQ3_S, IQ3_XXS
+except ModuleNotFoundError as e:
+  if e.name != "gguf": raise
+  raise unittest.SkipTest("optional gguf package is required for GGUF reference tests")
 
 ggml_test_block_count = 4
 supported_dtypes = Device[Device.DEFAULT].renderer.supported_dtypes()
