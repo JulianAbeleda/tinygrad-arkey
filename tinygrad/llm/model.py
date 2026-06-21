@@ -1102,6 +1102,21 @@ class Transformer:
       lin._pf16_w = lin.weight.cast(dtypes.float16).contiguous().realize(); n += 1
     return n
 
+  def precompile_concrete_prefill_jits(self) -> int:
+    # Increment 0 ship: with PREFILL_CONCRETE_KV, every prefill chunk runs through a per-start_pos CONCRETE jit
+    # (-> the fusion attention path, 1.7-4.4x/chunk faster than the symbolic chunk). Those jits compile on first
+    # use (~5s each), so a COLD long prompt pays the tax inline. Precompiling them ONCE at load (here) moves the
+    # tax to load time, so every generation -- including the first -- is warm. Bounded: ceil(max_context/UBATCH)
+    # jits. Safe to leave the dummy KV behind: a fresh model's first generation starts at start_pos=0 and
+    # overwrites the cache in chunk order before any position is read. gfx1100/PREFILL_V2/PREFILL_CONCRETE_KV only.
+    if not (PREFILL_V2 and PREFILL_CONCRETE_KV): return 0
+    temp = Tensor([0.0])
+    dummy = Tensor.zeros(1, PREFILL_UBATCH, dtype="int32").contiguous().realize()
+    n = 0
+    for sp in range(0, self.max_context - PREFILL_UBATCH + 1, PREFILL_UBATCH):
+      self(dummy, sp, temp, use_flash=False).realize(); n += 1   # populates self.prefill_v2_jits[sp]
+    return n
+
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)
     for block in self.blk: x = block(x, start_pos)
@@ -1267,6 +1282,9 @@ class Transformer:
       Tensor.realize(*params)
     # prefill v2 (opt-in): realize fp16 weights now that primitives are installed (shapes/dequant graphs ready)
     if PREFILL_V2: model.realize_prefill_v2_weights()
+    # Increment 0 ship: with PREFILL_CONCRETE_KV, precompile the per-start_pos concrete prefill jits at load so the
+    # ~5s/jit compile tax is paid once here, not inline on a cold prompt -> every generation is warm.
+    if PREFILL_V2 and PREFILL_CONCRETE_KV: model.precompile_concrete_prefill_jits()
     return model, kv
 
   def get_start_pos(self, tokens:list[int]) -> int:

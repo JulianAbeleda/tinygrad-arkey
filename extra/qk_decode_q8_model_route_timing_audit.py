@@ -207,29 +207,16 @@ def run_child(args: argparse.Namespace) -> int:
   return 0
 
 
-def run_parent(args: argparse.Namespace) -> int:
-  children, artifacts = [], {}
+def aggregate_artifacts(args: argparse.Namespace, children: list[dict[str, Any]] | None = None) -> int:
+  children = children or []
+  artifacts = {}
   for lane in args.lanes.split(","):
     for mode in args.modes.split(","):
       out = args.out.parent / f"decode_q8_model_route_timing_{mode}_{lane}.json"
-      env = os.environ.copy()
-      env.setdefault("DEV", "AMD")
-      env.setdefault("JIT", "1")
-      env["PYTHONPATH"] = str(ROOT)
-      if mode == "q8":
-        env["Q8_FFN_HANDWRITTEN"] = "1"
-      else:
-        env.pop("Q8_FFN_HANDWRITTEN", None)
-      cmd = [
-        sys.executable, rel(pathlib.Path(__file__).resolve()), "--child-out", rel(out), "--mode", mode, "--lane", lane,
-        "--nmeas", str(args.nmeas), "--warmups", str(args.warmups), "--sample-interval-s", str(args.sample_interval_s),
-        "--settle-s", str(args.settle_s), "--model", args.model, "--max-context", str(args.max_context),
-        "--seed", str(args.seed), "--ckpts", *[str(x) for x in args.ckpts],
-      ]
-      p = subprocess.run(cmd, cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-      children.append({"mode": mode, "lane": lane, "cmd": cmd, "returncode": p.returncode, "stdout": p.stdout[-4000:], "artifact": rel(out)})
       if out.exists():
         artifacts[(mode, lane)] = json.loads(out.read_text())
+      elif args.aggregate_existing:
+        children.append({"mode": mode, "lane": lane, "artifact": rel(out), "missing_artifact": True})
   rows = []
   for lane in args.lanes.split(","):
     base, q8 = artifacts.get(("baseline", lane), {}), artifacts.get(("q8", lane), {})
@@ -261,7 +248,9 @@ def run_parent(args: argparse.Namespace) -> int:
   gates = {
     "all_children_present": len(artifacts) == len(args.lanes.split(",")) * len(args.modes.split(",")),
     "manual_peak_q8_speedup_positive": (summary.get("manual_peak", {}).get("min_speedup_W") or 0) > 1.0,
-    "manual_peak_host_sync_not_target": (summary.get("manual_peak", {}).get("median_q8_host_sync_pct") or 100) < 10,
+    "manual_peak_host_sync_not_target": (
+      (v := summary.get("manual_peak", {}).get("median_q8_host_sync_pct")) is not None and v < 10
+    ),
   }
   result = {
     "date": "2026-06-20",
@@ -289,6 +278,32 @@ def run_parent(args: argparse.Namespace) -> int:
   return 0 if all(gates.values()) else 1
 
 
+def run_parent(args: argparse.Namespace) -> int:
+  children, artifacts = [], {}
+  for lane in args.lanes.split(","):
+    for mode in args.modes.split(","):
+      out = args.out.parent / f"decode_q8_model_route_timing_{mode}_{lane}.json"
+      env = os.environ.copy()
+      env.setdefault("DEV", "AMD")
+      env.setdefault("JIT", "1")
+      env["PYTHONPATH"] = str(ROOT)
+      if mode == "q8":
+        env["Q8_FFN_HANDWRITTEN"] = "1"
+      else:
+        env.pop("Q8_FFN_HANDWRITTEN", None)
+      cmd = [
+        sys.executable, rel(pathlib.Path(__file__).resolve()), "--child-out", rel(out), "--mode", mode, "--lane", lane,
+        "--nmeas", str(args.nmeas), "--warmups", str(args.warmups), "--sample-interval-s", str(args.sample_interval_s),
+        "--settle-s", str(args.settle_s), "--model", args.model, "--max-context", str(args.max_context),
+        "--seed", str(args.seed), "--ckpts", *[str(x) for x in args.ckpts],
+      ]
+      p = subprocess.run(cmd, cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+      children.append({"mode": mode, "lane": lane, "cmd": cmd, "returncode": p.returncode, "stdout": p.stdout[-4000:], "artifact": rel(out)})
+      if out.exists():
+        artifacts[(mode, lane)] = json.loads(out.read_text())
+  return aggregate_artifacts(args, children)
+
+
 def main() -> int:
   ap = argparse.ArgumentParser(description="In-model q8 graph route W/D timing under clock lanes")
   ap.add_argument("--lanes", default="auto,manual_peak")
@@ -302,11 +317,14 @@ def main() -> int:
   ap.add_argument("--max-context", type=int, default=4608)
   ap.add_argument("--seed", type=int, default=20260620)
   ap.add_argument("--out", type=pathlib.Path, default=OUT)
+  ap.add_argument("--aggregate-existing", action="store_true")
   ap.add_argument("--child-out", type=pathlib.Path)
   ap.add_argument("--mode", choices=["baseline", "q8"], default="baseline")
   ap.add_argument("--lane", choices=["auto", "manual_peak"], default="auto")
   args = ap.parse_args()
-  return run_child(args) if args.child_out is not None else run_parent(args)
+  if args.child_out is not None: return run_child(args)
+  if args.aggregate_existing: return aggregate_artifacts(args)
+  return run_parent(args)
 
 
 if __name__ == "__main__":

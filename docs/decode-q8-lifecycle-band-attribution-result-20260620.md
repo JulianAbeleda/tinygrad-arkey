@@ -6,6 +6,24 @@ Date: 2026-06-20
 
 `BLOCKED_DECODE_Q8_LIFECYCLE_SESSION_STATE`
 
+## Current Status
+
+This artifact is still valid as a raw isolated-lifecycle measurement, but it is superseded as the top-level decode
+decision authority by the later clock-authority and in-model route timing audits.
+
+| question | lifecycle artifact answer | newer artifact answer | current decision |
+|---|---|---|---|
+| Is the q8 lifecycle slow because producer->consumer adjacency is bad? | No. Prebuilt, immediate-after-producer, and after-dummy consumers followed the same session band. | Still no. Clock control changes the band without changing producer/consumer adjacency. | Do not start fused producer+consumer work from this evidence. |
+| Is the isolated q8 lifecycle intrinsically limited to `~122us`? | No final authority. `auto` median was `121.74us`, with one fast `108.22us` session. | No. `manual_peak` confirmation reached `58.04us` median, `9/10` pass, with producer `~9.44us` and consumer `~48.61us`. | Treat `auto` as user-realistic blocked, `manual_peak` as controlled-fast research authority. |
+| Does lifecycle explain the whole decode gap to llama? | Not by itself; this artifact only priced the isolated FFN q8 lifecycle. | No. In-model q8 route is only `~1.06x` faster, lands around `70-72 tok/s`, and has `0.0%` host-sync residual. | Llama gap is broader than q8 lifecycle. Move to role/tensor/kernel attribution. |
+| Should q8 become default-on? | Blocked under uncontrolled fresh-session policy. | Still not default-on. The controlled-clock route is research-only; whole-model gain is stable but small. | Keep q8 opt-in/default-off. |
+| What is stale? | The raw rows are not stale. | The old conclusion that session-band policy is the next decode blocker is stale for whole-model work. | Use this artifact only as local q8 context, not as the next-build authority. |
+
+Superseding references:
+
+- `docs/decode-q8-clock-authority-result-20260620.md`
+- `docs/decode-q8-model-route-timing-audit-result-20260620.md`
+
 Command:
 
 ```bash
