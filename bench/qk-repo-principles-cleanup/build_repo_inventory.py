@@ -58,7 +58,10 @@ def is_vendor(p: str) -> bool:
     if p.startswith(("docs/showcase/", "docs/developer/")): return True   # upstream docs-site asset subtrees
     return False
 
-project = [p for p in tracked if not is_vendor(p)]
+# the builder's own report outputs are the audit ARTIFACT, not a subject of it; excluding them keeps the run
+# idempotent (inventory.json records LOC, so classifying itself would never reach a fixed point).
+SELF_OUTPUTS = {"bench/qk-repo-principles-cleanup/inventory.json", "bench/qk-repo-principles-cleanup/inventory.md"}
+project = [p for p in tracked if not is_vendor(p) and p not in SELF_OUTPUTS]
 vendor = [p for p in tracked if is_vendor(p)]
 
 # ---------------------------------------------------------------- helpers

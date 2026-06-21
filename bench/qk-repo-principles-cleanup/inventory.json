@@ -1,14 +1,14 @@
 {
   "summary": {
     "generated": "2026-06-21",
-    "git_head": "5bd7e512d",
+    "git_head": "e33a7975d",
     "total_tracked": 2468,
-    "project_rows": 1615,
+    "project_rows": 1613,
     "vendor_dirs": 26,
     "vendor_files": 853,
     "recommendation_counts": {
       "IGNORE_EXTERNAL_VENDOR": 26,
-      "ARCHIVE_PROVENANCE": 925,
+      "ARCHIVE_PROVENANCE": 923,
       "KEEP_LIBRARY_HELPER": 21,
       "KEEP_LIVE_TOOLING": 48,
       "KEEP_CORE": 27,
@@ -20,7 +20,7 @@
         "KEEP_LIVE_TOOLING": 3
       },
       "bench_artifact": {
-        "ARCHIVE_PROVENANCE": 429
+        "ARCHIVE_PROVENANCE": 427
       },
       "core_runtime": {
         "KEEP_CORE": 5
@@ -14240,7 +14240,7 @@
     {
       "path": "docs/repo-principles-cleanup-audit-20260621.md",
       "type": "doc",
-      "loc": 179,
+      "loc": 187,
       "subsystem": "docs",
       "recommendation": "KEEP_DOC_AUTHORITY",
       "reason": "current (cited by canonical / dated today / evergreen)",
@@ -19056,30 +19056,6 @@
       "absolute_path": false
     },
     {
-      "path": "bench/qk-repo-principles-cleanup/inventory.json",
-      "type": "bench_artifact",
-      "loc": 24228,
-      "subsystem": "bench_artifact",
-      "recommendation": "ARCHIVE_PROVENANCE",
-      "reason": "tracked durable bench artifact (gitignore force-add) \u2014 \u26a0 contains absolute /home/ubuntu path",
-      "principle_score": 3,
-      "risk_if_deleted": "loses verdict provenance (git preserves)",
-      "risk_if_kept": "non-portable",
-      "absolute_path": true
-    },
-    {
-      "path": "bench/qk-repo-principles-cleanup/inventory.md",
-      "type": "bench_artifact",
-      "loc": 32,
-      "subsystem": "bench_artifact",
-      "recommendation": "ARCHIVE_PROVENANCE",
-      "reason": "tracked durable bench artifact (gitignore force-add)",
-      "principle_score": 5,
-      "risk_if_deleted": "loses verdict provenance (git preserves)",
-      "risk_if_kept": "false authority if stale",
-      "absolute_path": false
-    },
-    {
       "path": "bench/qk-semantic-20260612/README.md",
       "type": "bench_artifact",
       "loc": 93,
@@ -20342,7 +20318,7 @@
     {
       "path": "bench/qk-repo-principles-cleanup/build_repo_inventory.py",
       "type": "script",
-      "loc": 361,
+      "loc": 364,
       "subsystem": "audit_tooling",
       "recommendation": "KEEP_LIVE_TOOLING",
       "reason": "audit inventory/index builder (read-only, re-runnable)",
