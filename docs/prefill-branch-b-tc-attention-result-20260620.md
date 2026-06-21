@@ -67,10 +67,14 @@ prompts only on the first chunk. `PREFILL_CONCRETE_KV=1` extends it to all chunk
 
 Branch B (explicit attention on concrete KV) is a **real, reproducible, byte-identical ~1.16× win on the
 concrete-chunk regime** — and it **overturns** the prior refutation. It passes every iron-law gate. It is NOT the
-tensor-core win; it is a fusion win on the attention reduce. **Recommend: promote `PREFILL_TC_ATTN` default-on
-behind the same gating as the graph route (gfx1100, PREFILL_V2, owner-approved), since it is byte-identical and
-free on the first chunk** — pending owner sign-off on the policy flip. (Code path already exists; flip = default
-in `_attention`/an import-time default like `_prefill_graph_gemm_default`.)
+tensor-core win; it is a fusion win on the attention reduce.
+
+**PROMOTED default-on (owner-approved, 2026-06-20, commit `945c695d3`).** `PREFILL_TC_ATTN` now defaults on via
+`_prefill_tc_attn_default()` — gfx1100-guarded, decided once at import like `_prefill_graph_gemm_default`;
+`PREFILL_TC_ATTN=0/1` overrides. The route's `isinstance(start_pos,int)` guard confines it to concrete chunks
+(start_pos=0 by default); symbolic chunks stay SDPA. Promotion gates all passed: rel_RMSE 0.0; dNLL 0.0 +
+greedy-exact (4 windows); generation coverage 8/8 tokens identical default-on vs `=0` end-to-end; fallback
+(non-gfx/non-AMD → off, symbolic → SDPA) + env override verified.
 
 ## The bigger prize (deferred): real flash/TC attention
 
