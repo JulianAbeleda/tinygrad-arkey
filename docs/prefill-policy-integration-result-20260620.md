@@ -46,8 +46,9 @@ Byte-identical greedy (tok0 match) across every probe: auto-policy loads, concre
 A/B rows. No decode regression (the decode path is untouched).
 
 ## 7. Default behavior changed?
-- **`PREFILL_V2` default: UNCHANGED (off).** New value `auto` is opt-in. Flipping the global default to `auto` is
-  the one remaining owner call (conservative floor makes it low-risk on 24GB+, a no-op elsewhere).
+- **`PREFILL_V2` default: UNCHANGED (off) — and STAYS OFF (decided 2026-06-21).** New value `auto` is opt-in. The
+  global default is **NOT** flipped to `auto`: it would keep +14GB fp16 prefill weights resident during decode for
+  zero decode benefit (see `docs/decode-prefill-headline-reconciliation-result-20260621.md`). Opt-in fast paths shipped.
 - **`PREFILL_REMAINDER_FIX`: DEFAULT-ON** — but only fires *when `PREFILL_V2` is already on*, and is byte-identical,
   so it changes nothing for the default (`V2=0`) user; it strictly improves the opt-in fast path.
 - `PREFILL_CONCRETE_KV` / `PREFILL_SERVER_PROFILE`: opt-in, default off.
@@ -75,6 +76,7 @@ probes `extra/qk_prefill_{v2_auto_policy_probe,concrete_kv_policy_probe,route_sc
 | **fast (auto-fit)** | `PREFILL_V2=auto` | 24GB+ cards; ~5–15× faster prefill, enabled only where it fits |
 | **server / long-prompt** | `PREFILL_SERVER_PROFILE=1` | servers / repeated / long prompts; best warm prefill (0.17–1.6s) |
 
-Remaining: (a) owner decision on flipping the global default to `PREFILL_V2=auto`; (b) optional VRAM reduction to
+Remaining: (a) ~~owner decision on flipping the global default~~ **DECIDED 2026-06-21: global default stays OFF**
+(don't flip — +14GB resident during decode for no decode benefit); (b) optional VRAM reduction to
 fit 16GB cards (`docs/prefill-v2-vram-reduction-scope-20260620.md`). **Decode (~67% llama) is the real frontier —
 prefill policy will not move it.**

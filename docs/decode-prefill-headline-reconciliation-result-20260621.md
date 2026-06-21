@@ -62,7 +62,7 @@ weights resident for the whole session, including decode** (20.2 GB pool vs 6.3 
 
 | area | default | opt-in / server | llama-relative status | next action |
 |---|---|---|---|---|
-| prefill | universal path (slow long prompts) | `PREFILL_V2=auto` (~5–15× faster, +14GB) · `PREFILL_SERVER_PROFILE=1` (warm prefill 0.17–1.6s) | concrete-KV **73–111% of llama pp512**; `PREFILL_REMAINDER_FIX` kills the 32-tok trap | kernel-solved; **owner: keep `auto` opt-in (do NOT flip global default — §5)** |
+| prefill | universal path (slow long prompts) | `PREFILL_V2=auto` (~5–15× faster, +14GB) · `PREFILL_SERVER_PROFILE=1` (warm prefill 0.17–1.6s) | concrete-KV **73–111% of llama pp512**; `PREFILL_REMAINDER_FIX` kills the 32-tok trap | kernel-solved, opt-in fast paths shipped; **global default STAYS OFF (decided §5)** |
 | decode | **~85–87 @ctx≈0; 68/66/61 @ctx 512/1024/4096** | q8 opt-in 76.6/72.8/70.9/64.3 (+~7%) | **~67% llama @ctx (≈86% @ctx≈0)** | decode is the real frontier — attention/elementwise fusion |
 
 Prefill and decode are separated; prefill policy does **not** change decode speed. The honest decode headline is the
@@ -70,9 +70,11 @@ Prefill and decode are separated; prefill policy does **not** change decode spee
 steady-state characterization** (ctx≈0 ~86 as the peak). 87.6 was a real ctx≈0 number, so the decode frontier is
 **unchanged**.
 
-## 5. Owner recommendation on global `PREFILL_V2=auto`
+## 5. Owner decision on global `PREFILL_V2=auto` — DECIDED: STAYS OFF (2026-06-21)
 
-**Do NOT flip the global default to `auto`.** Keep it opt-in (with the shipped CLI hint + `PREFILL_SERVER_PROFILE`).
+**DECISION (owner-confirmed 2026-06-21): the global default `PREFILL_V2` STAYS OFF — do NOT flip to `auto`.** Prefill
+is kernel-solved and the opt-in fast paths are shipped; users opt in with one flag. Keep it opt-in (with the shipped
+CLI hint + `PREFILL_SERVER_PROFILE`).
 Grounded in this reconciliation: `auto` realizes **+14 GB fp16 weights resident for the whole session including
 decode** (20.2 GB pool, +~11 s load) but benefits **only long prefills**. A decode-only / short-prompt user — the
 common case — pays the full VRAM+load cost for zero gain, and the 20 GB resident pool also eats long-context KV

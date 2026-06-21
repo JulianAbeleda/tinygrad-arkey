@@ -28,7 +28,10 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   fallback fix `PREFILL_REMAINDER_FIX` (Phase 3, default-on, byte-identical, up to 14× on prefix-cache resume),
   CLI hints (Phase 4). Per-phase: `prefill-{v2-auto-policy,concrete-kv-policy,route-schedule}-result-20260620.md`;
   scope `prefill-policy-integration-scope-20260620.md`; VRAM-reduction design `prefill-v2-vram-reduction-scope-20260620.md`.
-  Default `PREFILL_V2` unchanged (off); flipping it to `auto` is the one remaining owner call.
+  **POLICY (DECIDED 2026-06-21): prefill is kernel-solved and the opt-in fast paths are shipped, but the global
+  default `PREFILL_V2` STAYS OFF — do NOT flip to `auto`** (it would keep +14GB fp16 prefill weights resident during
+  decode for zero decode benefit; the common decode/short-prompt user must not pay that). Fast path is one flag away
+  (`PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE=1`), and the CLI hints it on large GPUs. **Decode remains the frontier.**
 - **`decode-prefill-headline-reconciliation-result-20260621.md`** — ⭐HEADLINE RECONCILED. `87.6` is a NUMERIC
   COINCIDENCE: a real ctx≈0 decode **tok/s** AND, separately, a real ctx4096 decode **ms/token** (=11.4 tok/s); the
   reported "87.6 tok/s" was the genuine ctx≈0 rate (reruns ~85–86), not the ms mislabeled. Clean-wall reruns
