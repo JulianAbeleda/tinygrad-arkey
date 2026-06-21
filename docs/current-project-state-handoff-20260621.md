@@ -192,6 +192,22 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   a blind month**; hard stop → if the gate fails, fall back to `POST_MATMUL_PV_REST_DECODE_V2` (decode capped at
   tinygrad's backend ceiling; full v2 transition sketch in the scope). See
   `docs/post-matmul-pv-decode-strategic-scope-20260621.md`.
+- **Fused-flash CONCRETE first gate EXECUTED + FAILED (2026-06-21) — `FUSED_FLASH_CONCRETE_GATE_FAIL_LOCAL_AB` → REST_DECODE + v2.**
+  The decisive gate has now been **run**. `extra/qk_fused_flash_concrete_gate_ab.py` builds the literature-grounded
+  (FlashAttention IO-aware tiling + online softmax / Flash-Decoding KV-splits / FlashDecoding++ flat-GEMM / FlashInfer
+  decode-phase) **concrete ctx1024** flash-decode pipeline whose q·k AND PV ride tinygrad's tiled-GEMM codegen.
+  **Fixing the shape DID remove the matmul-PV symbolic-split blocker** (S=Tc/L=8 FAIR splits, no full-MAXC overread) —
+  but the candidate is **value-correct (rel_rmse 4.9e-4) and 0.965× @ctx1024** vs the **strict same-shape concrete**
+  `gqa_coop_vec` (reproduced 0.965/0.967/0.969×) → **loses**, stopped before W==D. **The 1.42× vs the canonical
+  SYMBOLIC comparator is a concreteness artifact** (the ~27µs `start_pos` var-binding tax the candidate would also pay
+  once generalized), **NOT a win**. **Root cause:** at the decode shape tinygrad's tiled matmul renders **register-tiled
+  global-load HIP-C (16 wg, 305 GFLOPS, no `__shared__`/LDS, no `v_dot2`)** — NOT llama's one-kernel LDS-staged `v_dot2`
+  fused tile; FlashDecoding++ flat-GEMM under-utilization (16 wg ≪ 96 CUs) + 2 extra layout kernels offset the tiling
+  benefit. **The TRUE single fused LDS-tiled kernel is inexpressible** (tiled-GEMM codegen ⊥ `.set/.after` fusion —
+  mutually exclusive; reaching it needs an AMDGCN/HSACO escape hatch). **Bounded AND concrete-shape decode levers are
+  now BOTH exhausted → fall back to `POST_MATMUL_PV_REST_DECODE_V2`.** decode_eval `fused_flash_concrete_gate` →
+  `FAIL_LOCAL_AB` (match=True); refutation `fused_flash_concrete_gate_register_tiled_not_lds` banked. See
+  `docs/fused-flash-concrete-gate-result-20260621.md`.
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
   but missed W==D promotion (+1.8%@1024, −1.2%@4096). **Do not pursue another bounded tile or flag sweep.**

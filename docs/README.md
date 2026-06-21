@@ -11,6 +11,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   kernels, prefill default, bounded decode fusion, bounded decode vector-tile, the `87.6` ambiguity). **Bounded
   decode work is RESTED** — the only remaining decode lever is the north-star full `flash_attn_tile` lifecycle.
   Guardrail: `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens these.
+- **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
+  work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
+  the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
+  candidates must be IO-aware, decode-aware, softmax-aware, dataflow-aware, resource-aware, and comparator-aware.
+  It also grounds harness/search methodology in MLPerf, SPEC reproducibility, Ansor/TVM, and Triton: harnesses are
+  performance primitives, and search means generated candidates → reproducible evaluator → ledger/refutation.
 - **`decode-evaluation-harness-hardening-result-20260621.md`** — ⭐ MACHINE-SEARCH EVALUATOR BUILT. `extra/qk_decode_eval.py`
   is the automated lifecycle ladder (correctness→local A/B→W==D→policy) emitting schema'd verdicts; it reproduces the
   historical classifications (baseline→REST, flash_l_64→LOCAL_PASS_WD_FAIL, warp_tile→FAIL_LOCAL_AB, q8→PASS_OPT_IN)
@@ -102,6 +108,16 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   fused-flash first gate is untried). **Recommendation: fund the cheap concrete-ctx1024 toy LDS-tiled fused µkernel
   first gate (value-correct + ≥1.05× vs `gqa_coop_vec`), hard-stop → if it fails, fall back to REST_DECODE+v2.**
   Includes the full decode closure table, capability map, and the executable fused-flash scope + v2 fallback sketch.
+- **`fused-flash-concrete-gate-result-20260621.md`** — ⭐⭐⭐ THE DECISIVE GATE, EXECUTED + FAILED:
+  `FUSED_FLASH_CONCRETE_GATE_FAIL_LOCAL_AB` → **REST_DECODE + v2**. The literature-grounded (FlashAttention /
+  Flash-Decoding / FlashDecoding++ / FlashInfer) **concrete ctx1024** flash-decode pipeline (q·k AND PV ride the
+  tiled-GEMM codegen; S=8 FAIR splits — the matmul-PV symbolic-split blocker REMOVED by fixing the shape) is
+  value-correct (rel_rmse 4.9e-4) but only **0.965× @ctx1024** vs the **strict same-shape concrete** `gqa_coop_vec`
+  (the 1.42× vs the SYMBOLIC comparator is a concreteness artifact, NOT a win). Root cause: tinygrad renders the
+  decode-shape matmuls **register-tiled (16 wg, 305 GFLOPS, no LDS, no `v_dot2`)**, not llama's one-kernel LDS-staged
+  `v_dot2` tile; FlashDecoding++ flat-GEMM under-utilization + 2 extra layout kernels offset the benefit. **The true
+  single fused LDS-tiled kernel is inexpressible** (tiled-GEMM codegen ⊥ `.set/.after` fusion; needs an AMDGCN escape
+  hatch). **Bounded AND concrete-shape decode levers are now both exhausted.**
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

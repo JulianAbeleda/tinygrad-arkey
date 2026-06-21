@@ -205,6 +205,25 @@
       ]
     },
     {
+      "id": "fused_flash_concrete_gate_register_tiled_not_lds",
+      "applies_to": [
+        "fused_flash_concrete_gate",
+        "decode_concrete_tiled_matmul_flash"
+      ],
+      "prunes_patterns": [
+        "fix ctx to concrete to unblock the matmul-PV tiled-GEMM PV for a decode win",
+        "concrete-shape tiled-matmul flash-decode pipeline beats gqa_coop_vec",
+        "route decode PV through tinygrad matmul codegen for a local A/B win",
+        "claim a win vs the SYMBOLIC gqa_coop_vec comparator from a CONCRETE candidate"
+      ],
+      "reason": "The DECISIVE post-Matmul-PV concrete-shape first gate. Fixing ctx1024 removes the matmul-PV symbolic-split blocker (S=Tc/L=8 FAIR splits, no full-MAXC overread), so both q.k and PV ride tinygrad's tiled-GEMM codegen with fair work. STILL FAILS: 0.965x @ctx1024 vs the STRICT same-shape concrete gqa_coop_vec (value-correct rel_rmse 4.9e-4, reproduced 0.965/0.967/0.969x). The 1.42x vs the canonical SYMBOLIC comparator is a CONCRETENESS ARTIFACT -- the symbolic comparator carries ~27us of start_pos var-binding/dynamic-shape JIT overhead (85.6 vs 58.4us) that the candidate would ALSO pay once generalized to symbolic ctx; it is NOT a GPU-codegen win. ROOT CAUSE: at the decode shape tinygrad's tiled matmul renders REGISTER-tiled global-load HIP C (PV kernel r_8_2_8_16_4_4_32_4: float buf0[16], 16 grid workgroups x 128 threads, 305 GFLOPS, NO __shared__/LDS staging, NO v_dot2) -- this is NOT llama's one-kernel LDS-staged v_dot2 fused tile. The flat-GEMM under-utilization (FlashDecoding++, 16 wg underfills 96 CUs) + 2 extra layout kernels (prob-permute, l-reduce) offset the per-matmul tiling benefit, so the pipeline only TIES coop's scalar-partial path. The TRUE single fused LDS-tiled v_dot2 kernel stays INEXPRESSIBLE in tinygrad: the tiled-GEMM codegen is per-matmul / separate-kernel / HBM-round-tripping, and the .set/.after fusion idiom is scalar (no LDS/v_dot2) -- the two are MUTUALLY EXCLUSIVE; reaching it needs an AMDGCN/HSACO escape hatch. Bounded + concrete-shape decode levers are now BOTH exhausted -> REST_DECODE + v2 fallback.",
+      "evidence": [
+        "docs/fused-flash-concrete-gate-result-20260621.md",
+        "bench/qk-fused-flash-concrete-gate/latest.json",
+        "extra/qk_fused_flash_concrete_gate_ab.py"
+      ]
+    },
+    {
       "id": "ffn_down_prologue_recompute_blowup",
       "applies_to": [
         "decode_ffn_activation_producer_fusion"

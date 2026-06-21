@@ -79,6 +79,17 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > matmul is dominated (W==D-marginal + sub-capability of fused-flash); rest+v2 is premature until the cheap fused-flash
 > first gate (concrete-ctx1024 toy LDS-tiled fused µkernel, ≥1.05× vs `gqa_coop_vec`) is run — hard-stop fallback to
 > REST_DECODE+v2 if it fails.
+>
+> **Fused-flash CONCRETE GATE — EXECUTED + FAILED → REST_DECODE+v2** (`extra/qk_fused_flash_concrete_gate_ab.py`,
+> `qk-fused-flash-concrete-gate/`; `docs/fused-flash-concrete-gate-result-20260621.md`):
+> `FUSED_FLASH_CONCRETE_GATE_FAIL_LOCAL_AB`. The literature-grounded (FlashAttention/Flash-Decoding/FlashDecoding++/
+> FlashInfer) concrete ctx1024 flash-decode pipeline (q·k AND PV ride the tiled-GEMM codegen; S=8 FAIR splits — the
+> matmul-PV symbolic-split blocker REMOVED by fixing the shape) is value-correct (rel_rmse 4.9e-4) but **0.965×@ctx1024**
+> vs the strict same-shape **concrete** `gqa_coop_vec` (the 1.42× vs the SYMBOLIC comparator is a concreteness artifact,
+> not a win). tinygrad renders the decode-shape matmuls **register-tiled (16 wg, 305 GFLOPS, no LDS, no `v_dot2`)**, not
+> llama's one-kernel LDS-staged `v_dot2` tile; flat-GEMM under-utilization + 2 extra layout kernels offset the benefit.
+> The true single fused LDS-tiled kernel is inexpressible (tiled-GEMM ⊥ `.set/.after` fusion). decode_eval
+> `fused_flash_concrete_gate` → `FAIL_LOCAL_AB` (match=True). **Bounded AND concrete-shape decode levers both exhausted.**
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
