@@ -50,6 +50,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   llama's `fattn-tile.cuh` (source on disk) as a **non-default reference oracle**, measures standalone throughput vs
   `gqa_coop_vec` (first gate ≥1.05× @ctx1024) via the existing `ab_script` binding, resolving standalone-vs-in-model
   before any codegen surgery.
+- **`llama-flash-attn-tile-oracle-result-20260621.md`** — ⭐⭐ CENTRAL QUESTION ANSWERED: `LLAMA_ORACLE_LOCAL_AB_PASS`.
+  Pure-GPU-time A/B (llama rocprofv3 trace vs coop tinygrad ProfileGraphEvent): **llama 10.2/12.2/27.7 µs vs coop
+  59.9/69.9/132 µs → llama 5.87/5.71/4.77× faster STANDALONE** @ctx512/1024/4096. The 10× decode-attention gap is a
+  **standalone kernel-codegen target, not only in-model integration** → native fused-flash codegen is justified, with
+  llama's `flash_attn_tile` as the validated target. Profiling oracle (full port BOUNDED, deferred); registered as a
+  `reference_oracle` decode_eval candidate (`PASS_ORACLE_LOCAL_AB`, non-promotable). Next = native codegen.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

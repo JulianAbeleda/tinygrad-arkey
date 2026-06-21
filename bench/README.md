@@ -40,6 +40,11 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > `CODEGEN_SCOPE_LLAMA_ORACLE_FIRST` — port llama's `fattn-tile.cuh` (source on disk) as a non-default reference
 > oracle, measure standalone **throughput** vs `gqa_coop_vec` (first gate ≥1.05× @ctx1024) through the existing
 > `ab_script` binding, resolving standalone-kernel-codegen vs in-model-integration before any multi-week linearizer work.
+>
+> **Llama oracle ANSWERED the question** (`extra/qk_llama_flash_attn_tile_oracle_ab.py`, `qk-llama-flash-attn-tile-oracle/`):
+> pure-GPU-time A/B (llama rocprofv3 vs coop ProfileGraphEvent) → **llama 5.87/5.71/4.77× faster than coop STANDALONE**
+> @ctx512/1024/4096 → `LLAMA_ORACLE_LOCAL_AB_PASS`. The 10× gap is standalone kernel-codegen, not just in-model. Native
+> codegen justified; llama is the target. `reference_oracle` decode_eval candidate (non-promotable).
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

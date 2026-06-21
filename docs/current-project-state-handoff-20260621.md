@@ -98,6 +98,17 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   **throughput** vs `gqa_coop_vec` (first gate ≥1.05× @ctx1024) through the existing `ab_script` binding, and that
   resolves whether the 10× is **standalone kernel-codegen** (→ scope native codegen with a real target) or **in-model
   integration** (→ redirect to the W==D/dataflow frame). See `docs/decode-codegen-dataflow-capability-scope-20260621.md`.
+- **Llama flash_attn_tile reference oracle EXECUTED (2026-06-21) — `LLAMA_ORACLE_LOCAL_AB_PASS`. The central question
+  is ANSWERED: llama's win is the STANDALONE kernel, ~5-6×.** Pure-GPU-time A/B (llama rocprofv3 trace vs coop
+  tinygrad ProfileGraphEvent — both HW timestamps, dispatch confound eliminated): **llama attention 10.2/12.2/27.7 µs
+  vs coop 59.9/69.9/132 µs @ctx512/1024/4096 → llama 5.87/5.71/4.77× faster STANDALONE.** So the 10× gap is a
+  **standalone kernel-codegen target, NOT only in-model integration** → **native fused-flash codegen IS aiming at the
+  right layer**, and llama's `flash_attn_tile` is the validated target. Method = PROFILING oracle (Phase-0 confirmed
+  the full source port is BOUNDED — no cp_async/WMMA/broad-ggml — but it's deferred to the codegen follow-up that
+  needs a re-runnable byte-level oracle; rocprofv3 doesn't hook tinygrad's HCQ so coop used ProfileGraphEvent).
+  Registered as decode_eval `reference_oracle` candidate (`PASS_ORACLE_LOCAL_AB`, **non-promotable** — vendored llama
+  reference, never a default route). **Next = native codegen** (the single-fused-flash linearizer capability), with
+  llama as the target/oracle. See `docs/llama-flash-attn-tile-oracle-result-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
