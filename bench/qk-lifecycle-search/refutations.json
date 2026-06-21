@@ -309,6 +309,22 @@
         "docs/north-star-flash-attn-tile-execution-result-20260621.md",
         "bench/qk-north-star-flash-attn-tile/latest.json"
       ]
+    },
+    {
+      "id": "fused_softmax_v_tail_loses_exp_redundancy_coop_hoist_near_optimal",
+      "applies_to": [
+        "decode_attention_reduce_stat_fusion",
+        "fused_softmax_v_tail"
+      ],
+      "prunes_patterns": [
+        "fusing flash_prob/softmax exp into the partial (inline per-output-lane exp) as a decode win",
+        "softmax+V tail fusion as the lever to beat gqa_coop_vec"
+      ],
+      "reason": "MEASURED 2026-06-21 (Path A, value-correct rel_rmse 8e-4, clock-pinned throughput): a fused inline-exp softmax+V tail (coop matmul q.k + flash_prob fused INTO the partial, keep flash_max + GQA reuse) scores 0.725x@ctx1024 / 0.876x@ctx4096 vs gqa_coop_vec -> FAIL_LOCAL_AB. WHY: fusing exp into the partial makes each of W=Hd+1=129 output-dim lanes RECOMPUTE exp per key, vs coop's flash_prob computing exp ONCE per key (no redundancy); the ~129x redundant exp outweighs the saved prob materialization (~128KB ~0.3us) + one launch. Same per-lane redundancy that sank the fused-LDS tile (0.21x). coop's HOISTED-exp 6-kernel split is near-optimal; fusing the tail re-introduces redundant work (harmful per the decode T=1 principle). ALSO: the FULL online-softmax fusion that removes flash_max is BLOCKED_BY_IDIOM at the multi-split decode shape -- it must output per-split pm + per-d pout from one kernel = the Q8L-2 two-granularity store wall (AFTER(STORE,STORE)/store-group of different range nests fails verify). PRUNES tail-fusion / inline-exp as a decode lever. The remaining lever is in-kernel q.k codegen quality (Path A keeps coop's matmul q.k and does not attack it). gqa_coop_vec stands.",
+      "evidence": [
+        "docs/fused-softmax-v-tail-candidate-result-20260621.md",
+        "bench/qk-fused-softmax-v-tail/latest.json"
+      ]
     }
   ],
   "candidate_pruning": {

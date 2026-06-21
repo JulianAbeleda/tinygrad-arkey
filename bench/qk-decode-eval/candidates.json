@@ -86,6 +86,20 @@
       "historical_note": "0.58x@1024 / 0.89x@4096 vs gqa_coop_vec; byte-exact; local gate missed -> no W==D route"
     },
     {
+      "id": "fused_softmax_v_tail",
+      "family": "attention_split",
+      "description": "Path A: fused inline-exp softmax+V tail (coop matmul q.k + flash_prob fused into the partial, keep flash_max + GQA reuse) vs gqa_coop_vec. MEASURED FAIL_LOCAL_AB: 0.725x@ctx1024 / 0.876x@ctx4096 (value-correct rel_rmse 8e-4). Per-d-lane exp redundancy (W=129 lanes recompute exp) > the saved prob materialization. Full online-max removal is BLOCKED_BY_IDIOM (per-split pm + per-d pout = two-granularity store wall).",
+      "env": {},
+      "rungs": [
+        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_fused_softmax_v_tail_ab.py", "result_json": "bench/qk-fused-softmax-v-tail/latest.json"}
+      ],
+      "contexts": [512, 1024, 4096],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "FAIL_LOCAL_AB",
+      "compare_artifact": "bench/qk-fused-softmax-v-tail/latest.json",
+      "historical_note": "0.725x@1024 / 0.876x@4096 vs gqa_coop_vec; fusing exp into the partial loses (redundant per-lane exp); coop's hoisted-exp split stands"
+    },
+    {
       "id": "llama_flash_attn_tile_oracle",
       "family": "reference_oracle",
       "description": "REFERENCE ORACLE (non-default, non-promotable): llama.cpp flash_attn_tile decode attention vs gqa_coop_vec, pure GPU time (llama rocprofv3 trace vs coop ProfileGraphEvent). Answers whether llama's win is standalone-kernel or in-model. MEASURED: llama 5.7x faster @ctx1024 standalone -> PASS_ORACLE_LOCAL_AB. Vendored llama reference, NOT a tinygrad primitive; never a default route.",
