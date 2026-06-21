@@ -8,7 +8,7 @@
       "candidate_family": "north_star_flash_attn_tile",
       "role": "decode_attention",
       "comparator": "gqa_coop_vec (current winning decode attention) / canonical decode route — NEVER a weaker baseline",
-      "local_ab_runner": "flash_attn_tile_local_ab [NOT YET IMPLEMENTED]: flash_attn_tile vs gqa_coop_vec at decode shape (T=1, ctx in supported_contexts), clock-pinned (extra/qk_clock_pin), byte-exact vs the numpy reference; mirrors the existing flash_l_local runner shape but for the tile primitive",
+      "local_ab_runner": "extra/qk_north_star_flash_attn_tile_ab.py [IMPLEMENTED]: warp-cooperative q.k partial (ds_bpermute, LDS K/V, GQA pack, register online softmax) + many-workgroup combine, vs gqa_coop_vec, clock-pinned, byte-exact. MEASURED FAIL_LOCAL_AB 0.58x@ctx1024 / 0.89x@ctx4096.",
       "wd_runner": "runtime_overhead with a flash_attn_tile decode route [NOT YET IMPLEMENTED]: requires a model route/flag that selects the tile in the decode attention path so extra/qk_decode_runtime_overhead.py measures whole-decode W==D; compares vs the canonical route W==D",
       "correctness_runner": "byte-exact greedy vs gqa_coop_vec (preferred) OR teacher-forced dNLL <= 0.01",
       "supported_contexts": [512, 1024, 2048, 4096],
@@ -46,14 +46,13 @@
         "long-context (ctx4096) regression",
         "any required_artifact_field missing"
       ],
-      "concrete_runner_status": "deferred_no_kernel",
-      "decode_eval_binding": null,
+      "concrete_runner_status": "implemented",
+      "decode_eval_binding": "north_star_flash_attn_tile",
+      "local_ab_result": "FAIL_LOCAL_AB: 0.58x@ctx1024, 0.89x@ctx4096 vs gqa_coop_vec (byte-exact, err 0.0). Attribution: the warp-cooperative q.k PARTIAL alone (~111us@1024) already exceeds coop's whole attention (~109us), and a many-workgroup combine (128 wg) is byte-for-byte as slow as the serial flash_reduce (32 wg) -> the combine is HBM-bandwidth-bound, not launch-bound. This REFUTES the prior 'serial-combine-is-the-ceiling' hypothesis; the real ceiling is the fused cooperative q.k partial vs coop's separated optimized matmul.",
       "missing_for_executable": [
-        "a concrete flash_attn_tile decode kernel (many-KV-split / stream-k combine, LDS K/V staging, GQA column packing, register online softmax, no WMMA)",
-        "a flash_attn_tile_local_ab runner (vs gqa_coop_vec)",
-        "a whole-decode W==D route/flag for the tile (so runtime_overhead can measure it in-model)"
+        "a whole-decode W==D route/flag (NOT pursued: the local A/B gate failed first, per the discipline 'if local A/B fails, stop before W==D route')"
       ],
-      "notes": "Well-specified and blocked ONLY on a concrete kernel + runner. Building the kernel is the NEXT project, not this one. Until then a candidate carrying this binding is classified PRUNE_NEEDS_TEMPLATE with this missing list."
+      "notes": "Kernel + local-A/B runner are now IMPLEMENTED and EXECUTABLE; the candidate is MEASURED and refuted at the local gate (0.58x@1024). A future candidate that beats coop locally would need a faster q.k partial (separated matmul or a better cooperative dot), not a better combine. See docs/north-star-flash-attn-tile-execution-result-20260621.md."
     },
     {
       "binding_id": "north_star_binding_selftest_v0",

@@ -294,6 +294,22 @@
       "evidence": [
         "docs/decode-vector-flash-tile-realigned-result-20260621.md"
       ]
+    },
+    {
+      "id": "north_star_warp_tile_partial_exceeds_coop_combine_bandwidth_bound",
+      "applies_to": [
+        "decode_vector_flash_tile_high_kvsplit",
+        "north_star_flash_attn_tile"
+      ],
+      "prunes_patterns": [
+        "warp-cooperative fused q.k flash tile as a local win vs gqa_coop_vec",
+        "improving the split-combine (more workgroups / stream-k) as the lever to beat gqa_coop_vec"
+      ],
+      "reason": "MEASURED 2026-06-21 (first real north-star candidate executed through the binding system; byte-exact err 0.0, clock-pinned): the warp-cooperative flash_attn_tile (ds_bpermute q.k, LDS K/V, GQA pack, register online softmax, 128-1024 partial workgroups) scores 0.58x@ctx1024 / 0.89x@ctx4096 vs gqa_coop_vec -> FAIL_LOCAL_AB. ATTRIBUTION refutes the prior 'serial-combine-is-the-ceiling' hypothesis: (a) the warp PARTIAL ALONE (~111us@1024) already EXCEEDS coop's whole attention (~109us) -> even a free combine cannot win; (b) a many-workgroup combine (streamk, 128 wg) is byte-for-byte as slow as the serial flash_reduce (32 wg) -> the combine is HBM-bandwidth-bound, NOT launch/occupancy-bound. The real ceiling is the FUSED cooperative q.k partial vs coop's SEPARATED optimized matmul (tinygrad GEMM for scores) + weighted-sum partial + optimized multi-kernel combine. A future candidate must produce a faster q.k partial, not a better combine. gqa_coop_vec stands; bounded standalone tiles remain refuted.",
+      "evidence": [
+        "docs/north-star-flash-attn-tile-execution-result-20260621.md",
+        "bench/qk-north-star-flash-attn-tile/latest.json"
+      ]
     }
   ],
   "candidate_pruning": {

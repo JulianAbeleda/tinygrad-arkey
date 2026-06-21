@@ -101,19 +101,19 @@ def _north_star(t):
   b = _binding("north_star_flash_attn_tile_v0") or {}
   req = list((b.get("required_candidate_params") or {}).keys())
   out = []
-  # 1) the real north-star: binding template EXISTS, no concrete runner -> precise PRUNE_NEEDS_TEMPLATE
+  # 1) the real north-star: kernel + local-A/B runner now EXIST (binding north_star_flash_attn_tile_v0) -> EXECUTE.
+  #    MEASURED local A/B fail (0.58x@1024) -> FAIL_LOCAL_AB -> refute_candidate. No W==D route (gate missed).
   out.append(mk("gen_north_star_flash_attn_tile", "north_star_flash_attn_tile",
-                "Full llama-style vector flash_attn_tile (many-KV-split / stream-k combine vs gqa_coop_vec). Well-specified by binding north_star_flash_attn_tile_v0; blocked only on a concrete kernel + runner.",
-                t["id"], None, "deferred_north_star", {}, True, None,
-                "structural: workgroups grow with ctx and >= gqa_coop_vec (T=1 parallelism preserved)",
-                "local A/B >= 1.05x vs gqa_coop_vec @ctx1024, then W==D >= 5%@1024", None, "PRUNE_NEEDS_TEMPLATE",
-                deferred=True,
-                notes="deferred north-star; specified by binding template; blocked on a concrete kernel/runner; never benchmarked; compares vs gqa_coop_vec, never a weak baseline",
+                "Warp-cooperative flash_attn_tile decode candidate (many KV-splits, GQA pack, register online softmax, many-wg combine) vs gqa_coop_vec, per binding north_star_flash_attn_tile_v0. Executable local A/B.",
+                t["id"], "north_star_flash_attn_tile", "measure_candidate", {}, True, None,
+                "local A/B >= 1.05x vs gqa_coop_vec @ctx1024 (MEASURED 0.58x -> miss)",
+                "W==D >= 5%@1024 (not reached; local gate failed first)", "FAIL_LOCAL_AB", "refute_candidate",
+                maps="decode_vector_flash_tile_high_kvsplit",
+                notes="kernel + local-A/B runner implemented; local gate MISSED (warp partial alone >= coop; combine bandwidth-bound); refuted, not promoted; compares vs gqa_coop_vec",
                 extra={"binding_template_id": "north_star_flash_attn_tile_v0", "maps_to_north_star": True,
-                       "executable_status": "deferred_no_kernel", "required_params": req,
+                       "executable_status": "local_ab_implemented_failed_gate", "required_params": req,
                        "comparator": b.get("comparator"), "expected_first_real_gate": (b.get("gates") or {}).get("local_ab"),
-                       "expected_stop_conditions": b.get("stop_conditions"),
-                       "missing_for_executable": b.get("missing_for_executable")}))
+                       "expected_stop_conditions": b.get("stop_conditions")}))
   # 2) executable plumbing selftest: binding EXISTS + concrete decode_eval runner -> EXECUTE -> SELFTEST_PASS (no perf)
   out.append(mk("gen_north_star_binding_selftest", "binding_selftest",
                 "Binding-plumbing selftest (proves the binding->candidate->decode_eval->artifact path is executable). NOT a performance candidate.",

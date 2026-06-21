@@ -72,6 +72,20 @@
       "historical_note": "speedup_W ~1.06; dNLL 0.00288; opt-in default-off"
     },
     {
+      "id": "north_star_flash_attn_tile",
+      "family": "north_star_flash_attn_tile",
+      "description": "North-star flash_attn_tile decode candidate (warp-cooperative q.k partial + many-workgroup combine) per binding north_star_flash_attn_tile_v0. Local A/B vs gqa_coop_vec. MEASURED FAIL_LOCAL_AB: 0.58x@ctx1024, 0.89x@ctx4096 (byte-exact). The warp partial alone already exceeds coop; the combine is bandwidth-bound (more workgroups do not help) -> refutes the prior serial-combine-ceiling hypothesis.",
+      "env": {},
+      "rungs": [
+        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_north_star_flash_attn_tile_ab.py", "result_json": "bench/qk-north-star-flash-attn-tile/latest.json"}
+      ],
+      "contexts": [512, 1024, 4096],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "FAIL_LOCAL_AB",
+      "compare_artifact": "bench/qk-north-star-flash-attn-tile/latest.json",
+      "historical_note": "0.58x@1024 / 0.89x@4096 vs gqa_coop_vec; byte-exact; local gate missed -> no W==D route"
+    },
+    {
       "id": "north_star_binding_selftest",
       "family": "binding_selftest",
       "description": "Evaluator-binding plumbing selftest (binding_templates.json north_star_binding_selftest_v0). Validates the binding -> candidate -> decode_eval -> artifact path WITHOUT benchmarking. Verdict SELFTEST_PASS; NOT a performance candidate.",
