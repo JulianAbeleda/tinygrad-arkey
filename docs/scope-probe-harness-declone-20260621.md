@@ -5,6 +5,24 @@ Closes (scope only): `docs/repo-principles-audit-20260621.md` finding **S1** (th
 Status: **SCOPE — do not implement broadly in the centralization sequence.** Defines the shared helper + migration
 waves for a later, segmented effort.
 
+## ✅ COMPLETED 2026-06-21 (S1 IO de-clone done)
+Executed Waves 0–2: built `extra/qk_probe_harness.py` (`probe_io` + `emit_verdict`), migrated **all 25** IO-cloners
+(2 decode-tooling + 23 `qk_amd_bb5a*`/amd) to `read_json, write_json = probe_io(OUT)`, and added the
+`test_no_new_local_write_json_clone` guard. **0 residual `read_json`/`write_json` clones in `extra/`** (only the helper
++ `llm_eval_common` define them). NFC by construction (the shared writer is byte-identical to the removed clone
+format: `OUT/name`, `json.dumps(indent=2, sort_keys=True) + "\n"`). Commits: `3e0e72884` (helper), `5cbe498a1`
+(Wave 1), `8cefec13e` (Wave 2 + guard). Tests: `test/unit/test_probe_harness.py` (4, incl. guard) green; full SSOT
+suite green; policy guard PASS; no `tinygrad/` change.
+
+**Wave 3 (verdict-template) intentionally NOT done — it is the wrong abstraction.** The 37 files' `{phase, gate_pass,
+next_action, verdict, ...}` dicts share 3–4 conventional key names but each carries **bespoke domain keys** (e.g.
+`tensile_oracle_tflops`, `authority_prefill`, `pure_tinygrad_reaches_60_tflops`) encoding *different* gate logic per
+probe. Per `coding-principles.md` ("do not merge code that merely looks alike but encodes different concepts;
+duplication is cheaper than the wrong abstraction"), forcing them through `emit_verdict(**bespoke)` would rename the
+dict without centralizing real knowledge and is byte-risky on frozen provenance. `emit_verdict` is provided for
+genuinely-uniform future use; the no-new-clone guard prevents new **IO** clones (the real duplicated knowledge).
+S1 is therefore **complete** at its principled boundary.
+
 ## ROI framing (read first — it changes the priority)
 The cloned harness lives in **provenance** scripts. All **25** IO-cloners (23 `qk_amd_bb5a*`, 2 `qk_decode_*`) and the
 **37** files carrying the inline `verdict`/`gate_pass`/`next_action` template are `status: provenance` in
