@@ -61,8 +61,16 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   executable (bound to existing decode_eval candidates, verdicts match) + 6 pruned/deferred (closed-lane reopens,
   default-promotion attempts, and the north-star `flash_attn_tile` as a `PRUNE_NEEDS_TEMPLATE` deferred candidate).
   No kernels/flags/defaults. Loop gained a one-line `--candidates` option + a `deferred`→`PRUNE_NEEDS_TEMPLATE`
-  branch. `TEMPLATE_GENERATION_V0_READY`. Next = evaluator-binding templates for the north-star. See
-  `docs/candidate-template-generation-v0-result-20260621.md`.
+  branch. `TEMPLATE_GENERATION_V0_READY`. See `docs/candidate-template-generation-v0-result-20260621.md`.
+- **North-star evaluator-binding templates v0 BUILT (2026-06-21).** `bench/qk-decode-eval/binding_templates.json`
+  (`north_star_flash_attn_tile_v0`) now SPECIFIES exactly what an executable north-star flash_attn_tile candidate
+  must declare/run/produce vs `gqa_coop_vec` (comparator, T=1-parallelism artifact fields, local-A/B + W==D runners,
+  no-WMMA, 5 gates, 7 stop conditions). `gen_north_star_flash_attn_tile` carries this binding and is now a precise
+  `PRUNE_NEEDS_TEMPLATE` ("binding exists, missing: kernel + local_ab runner + W==D route"). The loop resolves
+  binding metadata into three cases (missing template / present-but-no-runner / executable); a no-GPU
+  `north_star_binding_selftest` (`SELFTEST_PASS`) proves the executable binding path with no perf claim. No kernel,
+  no defaults. `NORTH_STAR_BINDING_TEMPLATE_READY`. Next = **build the concrete flash_attn_tile kernel + runners**.
+  See `docs/north-star-evaluator-binding-templates-result-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)

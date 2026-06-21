@@ -25,7 +25,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   `extra/qk_candidate_template_gen.py` expands 4 templates into 9 legal decode candidate specs (policy metadata,
   deterministic) that flow **through the loop**: 3 executable (verdicts match) + 6 pruned/deferred (closed-lane
   reopens, default-promotion attempts, north-star `flash_attn_tile` deferred). No kernels/flags/defaults.
-  `TEMPLATE_GENERATION_V0_READY`. Next = evaluator-binding templates for the north-star.
+  `TEMPLATE_GENERATION_V0_READY`.
+- **`north-star-evaluator-binding-templates-result-20260621.md`** — ⭐ NORTH-STAR BINDING TEMPLATE BUILT.
+  `bench/qk-decode-eval/binding_templates.json` specifies what an executable `flash_attn_tile` candidate must
+  declare/run/produce vs `gqa_coop_vec` (comparator, T=1 artifact fields, runners, no-WMMA, gates, stop conditions).
+  `gen_north_star_flash_attn_tile` is now a precise `PRUNE_NEEDS_TEMPLATE` (blocked only on a kernel + runners); the
+  loop distinguishes missing-template / no-runner / executable; a no-GPU selftest proves the binding path.
+  `NORTH_STAR_BINDING_TEMPLATE_READY`. Next = build the concrete kernel + runners.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

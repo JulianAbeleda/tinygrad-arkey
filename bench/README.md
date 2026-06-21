@@ -21,9 +21,13 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > closed-lane / default-promotion candidates before benchmarking. No kernels, no defaults; propose-only ledger.
 >
 > **Candidate-template generation v0** (`extra/qk_candidate_template_gen.py`, `qk-lifecycle-search/templates.json`,
-> `generated/`): the 'generate' step — expands 4 templates into 9 legal decode candidate specs (policy metadata,
-> deterministic) consumed by the loop via `--candidates`. 3 executable + 6 pruned/deferred (incl. the north-star
-> `flash_attn_tile` as `PRUNE_NEEDS_TEMPLATE`). Specs only, no kernels/flags/defaults.
+> `generated/`): the 'generate' step — expands 4 templates into legal decode candidate specs (policy metadata,
+> deterministic) consumed by the loop via `--candidates`. Specs only, no kernels/flags/defaults.
+>
+> **North-star evaluator-binding templates v0** (`qk-decode-eval/binding_templates.json` + `binding_template_schema.json`):
+> the contract an executable `flash_attn_tile` candidate must satisfy vs `gqa_coop_vec` (comparator, T=1-parallelism
+> artifact fields, local-A/B + W==D runners, no-WMMA, gates, stop conditions). `gen_north_star_flash_attn_tile` is now
+> a precise `PRUNE_NEEDS_TEMPLATE`; the loop distinguishes missing-template / no-runner / executable. No kernel.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
