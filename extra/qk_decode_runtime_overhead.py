@@ -19,7 +19,8 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m"); _LINE = re.compile(r"\*\*\*\s+\S+\s+\d+\s
 CKPTS = [128, 512, 1024, 4096]; MAXC = 4608; NMEAS = 40
 
 def main():
-  model = os.environ.get("QK_MODEL", "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
+  from extra.qk_harness_contract import DEFAULT_MODEL  # tinygrad-free; import before tinygrad to preserve env-ordering
+  model = os.environ.get("QK_MODEL", DEFAULT_MODEL)
   from tinygrad import Tensor, UOp, TinyJit, Context, GlobalCounters, Device
   from extra.llm_generate import load_model_and_tokenizer
   dev = Device[Device.DEFAULT]

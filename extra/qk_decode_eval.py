@@ -28,16 +28,10 @@ SCHEMA = ROOT / "bench/qk-decode-eval/schema.json"
 RUNS = ROOT / "bench/qk-decode-eval/runs"
 SUMMARIES = ROOT / "bench/qk-decode-eval/summaries"
 WD_RESULT = ROOT / "bench/qk-decode-runtime-overhead/result.json"  # fixed path the W==D script overwrites
-MODEL = os.environ.get("QK_MODEL", "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
-
-# ---- provenance helpers: single source of truth is extra/qk_harness_contract.py (centralized; was duplicated here) -
-from extra.qk_harness_contract import git_commit, dirty_tree, perf_state, hardware  # noqa: E402
+# ---- provenance + child-env + model default: single source of truth is extra/qk_harness_contract.py (centralized) -
+from extra.qk_harness_contract import git_commit, dirty_tree, perf_state, hardware, child_env, DEFAULT_MODEL  # noqa: E402
+MODEL = os.environ.get("QK_MODEL", DEFAULT_MODEL)
 def now_ts(): return time.strftime("%Y%m%dT%H%M%S")
-def child_env(extra: dict) -> dict:
-  e = os.environ.copy(); e.setdefault("DEV", "AMD"); e.setdefault("JIT", "1"); e["PYTHONPATH"] = str(ROOT)
-  e["QK_MODEL"] = MODEL
-  for k, v in (extra or {}).items(): e[str(k)] = str(v)
-  return e
 
 # ---- runners (each spawns a subprocess, returns parsed numbers + the exact command) -----------------------------
 def run_wd(env: dict, repeats: int) -> dict:

@@ -37,6 +37,19 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 # update BOTH (the test will fail until they agree) so every A/B compares against the real current winner.
 DECODE_COMPARATOR = "gqa_coop_vec"
 
+# Default model + the single child-subprocess env builder (the env-ordering invariant lives here once).
+DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+
+def child_env(extra: dict | None = None) -> dict:
+  """Build the env for a spawned QK eval subprocess: AMD/JIT/PYTHONPATH/QK_MODEL (+ caller overrides). The single
+  source for 'how to launch a QK child' so the env-ordering invariant + model default cannot drift across launchers."""
+  e = os.environ.copy()
+  e.setdefault("DEV", "AMD"); e.setdefault("JIT", "1")
+  e["PYTHONPATH"] = str(ROOT)
+  e["QK_MODEL"] = os.environ.get("QK_MODEL", DEFAULT_MODEL)
+  for k, v in (extra or {}).items(): e[str(k)] = str(v)
+  return e
+
 # The 13 fields a valid benchmark artifact must record (the principle doc's enumerated contract).
 # THIS IS A DISTINCT CONTRACT from the decode_eval RUN schema: CONTRACT_FIELDS is the abstract per-HARNESS audit
 # vocabulary (scored by contract_audit() against an ab_script harness artifact); the run artifact's concrete keys

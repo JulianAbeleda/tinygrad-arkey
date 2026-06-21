@@ -40,7 +40,7 @@ def _bindings() -> dict:
   if not BINDING_TEMPLATES.exists(): return {}
   return {b["binding_id"]: b for b in json.loads(BINDING_TEMPLATES.read_text()).get("templates", [])}
 
-from extra.qk_harness_contract import git_commit, dirty_tree  # provenance SSOT (was a local _git copy)
+from extra.qk_harness_contract import git_commit, dirty_tree, child_env  # provenance + child-env SSOT
 
 def _text_of(c: dict) -> str:
   return " ".join(str(c.get(k, "")) for k in ("id", "family", "description", "intent", "notes")).lower() + \
@@ -78,7 +78,7 @@ def prune_decision(c: dict, pol: dict) -> tuple[str | None, str, str | None]:
 def run_decode_eval(eval_id: str, repeats: int | None) -> dict:
   before = set(glob.glob(str(EVAL_RUNS / f"*-{eval_id}.json")))
   cmd = [sys.executable, EVAL, "--candidate", eval_id, "--out", str(EVAL_RUNS)] + (["--repeats", str(repeats)] if repeats else [])
-  env = os.environ.copy(); env.setdefault("DEV", "AMD"); env.setdefault("JIT", "1"); env["PYTHONPATH"] = str(ROOT)
+  env = child_env()  # SSOT; harmonizes with decode_eval's spawn env (now also carries QK_MODEL=default, same value)
   p = subprocess.run(cmd, cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   after = set(glob.glob(str(EVAL_RUNS / f"*-{eval_id}.json")))
   new = sorted(after - before) or sorted(after)  # the artifact this run emitted (fallback: newest)
