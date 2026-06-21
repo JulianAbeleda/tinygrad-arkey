@@ -115,7 +115,7 @@ def _child_flash_l_local() -> int:
   import numpy as np
   from tinygrad import Tensor, Device, TinyJit
   from tinygrad.uop.ops import UOp
-  from extra.qk_flash_decode import flash_decode_attention
+  from extra.qk_flash_decode import flash_decode_attention, FLASH_DECODE_DEFAULT_VARIANT
   from extra.qk_clock_pin import pinned_peak
   dev = Device["AMD"]; Hd, Hq, Hkv, MAXC = 128, 32, 8, 4608; G = Hq // Hkv; rng = np.random.default_rng(0)
   q = rng.standard_normal((Hq, Hd)).astype(np.float16); k = rng.standard_normal((Hkv, MAXC, Hd)).astype(np.float16)
@@ -134,7 +134,7 @@ def _child_flash_l_local() -> int:
     time.sleep(0.4)
     for L in (128, 64):
       vsp = UOp.variable("start_pos", 0, MAXC - 1)
-      j = TinyJit(lambda spb, LL=L: flash_decode_attention(qn, kn, vn, spb + 1, vsp + 1, Hd, Hq, Hkv, MAXC, LL, variant="gqa_coop_vec").realize())
+      j = TinyJit(lambda spb, LL=L: flash_decode_attention(qn, kn, vn, spb + 1, vsp + 1, Hd, Hq, Hkv, MAXC, LL, variant=FLASH_DECODE_DEFAULT_VARIANT).realize())
       for _ in range(8): j(vsp.bind(Tc - 1))
       err = float(np.abs(j(vsp.bind(Tc - 1)).numpy() - ref).max()); res[L] = (tfn(lambda: j(vsp.bind(Tc - 1))), err)
   spd = res[128][0] / res[64][0] if res[64][0] else 0.0

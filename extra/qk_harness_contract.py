@@ -31,6 +31,12 @@ import os, pathlib, statistics, subprocess, sys, time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
+# The current decode-attention comparator / reigning winner -- a light, importable mirror of the shipped
+# extra/qk_flash_decode.py:FLASH_DECODE_DEFAULT_VARIANT (which imports tinygrad, so cannot be imported by light
+# tooling/harnesses). test/unit/test_comparator_ssot.py asserts the two never drift. If the shipped default changes,
+# update BOTH (the test will fail until they agree) so every A/B compares against the real current winner.
+DECODE_COMPARATOR = "gqa_coop_vec"
+
 # The 13 fields a valid benchmark artifact must record (the principle doc's enumerated contract).
 CONTRACT_FIELDS = (
   "workload_shape_and_context", "candidate_id_and_class", "comparator_id_and_why_winner",
@@ -126,7 +132,7 @@ if __name__ == "__main__":
   full = {"head_dim": 128, "ctx_fixed": 1024, "candidate_id": "x", "family": "attention_split",
           "warmups": 8, "repro_band": {1024: {}}, "correctness_rel_rmse": 5e-4, "first_gate_pass": False,
           "verdict": "FAIL_LOCAL_AB", "stop_reason": "local < 1.05"}
-  full = stamp(full, "gqa_coop_vec", "shipped default decode winner", "local throughput proxy -- NOT W==D",
+  full = stamp(full, DECODE_COMPARATOR, "shipped default decode winner", "local throughput proxy -- NOT W==D",
                ledger_links=["docs/x.md"])
   a = full["harness_contract"]["contract_audit"]
   print("full:", a["conformance"], f"{a['n_present']}/{a['n_total']}", "missing:", a["missing"])
