@@ -55,7 +55,15 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   59.9/69.9/132 µs → llama 5.87/5.71/4.77× faster STANDALONE** @ctx512/1024/4096. The 10× decode-attention gap is a
   **standalone kernel-codegen target, not only in-model integration** → native fused-flash codegen is justified, with
   llama's `flash_attn_tile` as the validated target. Profiling oracle (full port BOUNDED, deferred); registered as a
-  `reference_oracle` decode_eval candidate (`PASS_ORACLE_LOCAL_AB`, non-promotable). Next = native codegen.
+  `reference_oracle` decode_eval candidate (`PASS_ORACLE_LOCAL_AB`, non-promotable).
+- **`native-fused-flash-linearizer-scope-20260621.md`** — ⭐⭐ PREMISE CORRECTED: `NATIVE_FLASH_LINEARIZER_SCOPE_READY`.
+  An empirical probe **REFUTES the "compiler expressiveness wall"** — a coupled online-softmax+V fused decode kernel
+  (`m,l,acc` coupled) **verifies + runs value-correct in ONE kernel TODAY** via the existing `UOp.set`/`.after`
+  idiom; no `spec.py`/linearizer change. The 6-kernel split was an idiom pitfall (mirror-slot RAW / GROUP-shape-index
+  `ops.py:372` / two-ENDs `linearizer.py:81`), not a wall. So the next step is a **bounded kernel-build** (Path A:
+  coop's matmul q·k + ONE fused softmax+V), first gate = value-correct (met) + A/B vs `gqa_coop_vec`. The real 5–6×
+  gap is **in-kernel-q·k codegen QUALITY** (deep, deferred). `flash_fused_multireduce_linearizer_wall` refutation
+  corrected. No `tinygrad/` change; no llama port first.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

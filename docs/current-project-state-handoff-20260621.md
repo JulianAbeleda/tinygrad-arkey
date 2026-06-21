@@ -107,8 +107,20 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   the full source port is BOUNDED — no cp_async/WMMA/broad-ggml — but it's deferred to the codegen follow-up that
   needs a re-runnable byte-level oracle; rocprofv3 doesn't hook tinygrad's HCQ so coop used ProfileGraphEvent).
   Registered as decode_eval `reference_oracle` candidate (`PASS_ORACLE_LOCAL_AB`, **non-promotable** — vendored llama
-  reference, never a default route). **Next = native codegen** (the single-fused-flash linearizer capability), with
-  llama as the target/oracle. See `docs/llama-flash-attn-tile-oracle-result-20260621.md`.
+  reference, never a default route). See `docs/llama-flash-attn-tile-oracle-result-20260621.md`.
+- **Native fused-flash linearizer scope (2026-06-21) — `NATIVE_FLASH_LINEARIZER_SCOPE_READY`, premise CORRECTED.**
+  An empirical probe **REFUTES the "compiler expressiveness wall"**: the coupled online-softmax+V fused decode kernel
+  (running `m`,`l`,`acc[D]` coupled via `corr=exp(m_old−m_new)`) **already VERIFIES, LOWERS, and RUNS value-correct in
+  ONE kernel TODAY** via the existing `UOp.set`/`.after`/register-array idiom — **no `spec.py` REDUCE change, no
+  linearizer change**. The "6-kernel split / coupled reduces trip the linearizer" was an **idiom pitfall** (same-slot
+  RAW → use a mirror slot; GROUP-shape-index `ops.py:372`; two-ENDs-over-one-range `linearizer.py:81` → one `END(j)`),
+  not a wall. So `NEEDS_UOP_REDUCE_DESIGN_FIRST` / `NEEDS_LINEARIZER_RANGE_MODEL_FIRST` are **refuted**, and the prior
+  "multi-week linearizer project" framing is corrected: the next step is a **BOUNDED kernel-build** (Path A:
+  `flash_fused_decode` = coop's matmul q·k + ONE fused softmax+V kernel), first gate = value-correct (met) + local
+  A/B + in-model W==D vs `gqa_coop_vec`. **Honest caveat:** Path A fuses only softmax+V (keeps coop's matmul q·k), so
+  it tests a likely-MARGINAL fusion win — the 5–6× gap is the **in-kernel-q·k CODEGEN QUALITY** (the warp-tile floor),
+  which Path A does not address (deep, deferred until Path A's A/B). No `tinygrad/` change for Path A; profiling
+  oracle + numpy suffice (no llama port first). See `docs/native-fused-flash-linearizer-scope-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
