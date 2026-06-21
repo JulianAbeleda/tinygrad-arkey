@@ -69,8 +69,17 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   `PRUNE_NEEDS_TEMPLATE` ("binding exists, missing: kernel + local_ab runner + W==D route"). The loop resolves
   binding metadata into three cases (missing template / present-but-no-runner / executable); a no-GPU
   `north_star_binding_selftest` (`SELFTEST_PASS`) proves the executable binding path with no perf claim. No kernel,
-  no defaults. `NORTH_STAR_BINDING_TEMPLATE_READY`. Next = **build the concrete flash_attn_tile kernel + runners**.
+  no defaults. `NORTH_STAR_BINDING_TEMPLATE_READY`.
   See `docs/north-star-evaluator-binding-templates-result-20260621.md`.
+- **North-star flash_attn_tile candidate EXECUTED + REFUTED (2026-06-21).** First real north-star attempt through
+  the system: `extra/qk_north_star_flash_attn_tile_ab.py` (warp-cooperative q·k partial + many-workgroup combine)
+  ran the local A/B vs `gqa_coop_vec` and **MISSED: 0.58×@ctx1024, 0.89×@ctx4096** (byte-exact) → `FAIL_LOCAL_AB`.
+  Per discipline, **stopped before any W==D route**. `gen_north_star_flash_attn_tile` now EXECUTEs (was
+  `PRUNE_NEEDS_TEMPLATE`) → decode_eval → FAIL_LOCAL_AB → refute_candidate. **Refines the ceiling (below):** the
+  combine is **HBM-bandwidth-bound on materialized split-partials**, NOT serial-launch-bound (a 128-wg stream-k
+  combine == the 32-wg serial combine), and at ctx1024 the fused cooperative q·k partial is not faster than coop's
+  separated matmul. `NORTH_STAR_FAIL_LOCAL_AB`. Next = a candidate with a faster q·k partial / less partial traffic.
+  See `docs/north-star-flash-attn-tile-execution-result-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
@@ -78,9 +87,11 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
 - **The only remaining decode lever is north-star lifecycle/codegen**, not a tactical patch: the full llama-style
   non-WMMA vector `flash_attn_tile` — many KV-split parallel blocks **with an efficient many-split / stream-k
   combine** at T=1, LDS K/V staging, GQA query-head column packing, K-tile-batched vectorized body, register
-  online-softmax. The bounded experiments showed tinygrad's **split-combine efficiency is the ceiling** (more
-  splits help attention but the combine cost caps the gain and regresses long context) — closing that is the
-  north-star project, funded separately if at all. See
+  online-softmax. The bounded experiments showed tinygrad's **split-combine is the ceiling** — and the executed
+  north-star candidate (above) pinned WHY: the combine is **HBM-bandwidth-bound on the materialized split-partials**
+  (`pout` grows with splits), so more combine parallelism / stream-k does NOT help; and the fused cooperative q·k
+  partial is not faster than coop's separated matmul at ctx1024. The real lever is **less partial traffic + a faster
+  q·k partial**, not a more-parallel combine. Closing that is the north-star project, funded separately if at all. See
   `docs/llama-decode-primitive-difference-audit-result-20260621.md` and
   `docs/project-north-star-llama-and-lifecycle-search-20260620.md`.
 - **Principle:** for decode `T=1`, a primitive must preserve/enlarge parallelism from KV splits and GQA columns;

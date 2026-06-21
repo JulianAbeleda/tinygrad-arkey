@@ -28,6 +28,11 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > the contract an executable `flash_attn_tile` candidate must satisfy vs `gqa_coop_vec` (comparator, T=1-parallelism
 > artifact fields, local-A/B + W==D runners, no-WMMA, gates, stop conditions). `gen_north_star_flash_attn_tile` is now
 > a precise `PRUNE_NEEDS_TEMPLATE`; the loop distinguishes missing-template / no-runner / executable. No kernel.
+>
+> **North-star flash_attn_tile EXECUTED + REFUTED** (`extra/qk_north_star_flash_attn_tile_ab.py`,
+> `qk-north-star-flash-attn-tile/`): first real attempt — warp-cooperative q·k partial + many-wg combine vs
+> `gqa_coop_vec` → **0.58×@1024 / 0.89×@4096** (byte-exact) → `FAIL_LOCAL_AB`, no W==D route. The combine is
+> HBM-bandwidth-bound (128-wg stream-k == 32-wg serial); refutation banked.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

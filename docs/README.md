@@ -31,7 +31,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   declare/run/produce vs `gqa_coop_vec` (comparator, T=1 artifact fields, runners, no-WMMA, gates, stop conditions).
   `gen_north_star_flash_attn_tile` is now a precise `PRUNE_NEEDS_TEMPLATE` (blocked only on a kernel + runners); the
   loop distinguishes missing-template / no-runner / executable; a no-GPU selftest proves the binding path.
-  `NORTH_STAR_BINDING_TEMPLATE_READY`. Next = build the concrete kernel + runners.
+  `NORTH_STAR_BINDING_TEMPLATE_READY`.
+- **`north-star-flash-attn-tile-execution-result-20260621.md`** — ⭐ FIRST NORTH-STAR ATTEMPT EXECUTED + REFUTED.
+  `extra/qk_north_star_flash_attn_tile_ab.py` (warp-cooperative q·k partial + many-wg combine) ran the local A/B vs
+  `gqa_coop_vec` → **0.58×@1024 / 0.89×@4096** (byte-exact) → `FAIL_LOCAL_AB`; stopped before W==D.
+  `gen_north_star_flash_attn_tile` now EXECUTEs → FAIL_LOCAL_AB → refute_candidate. Refutes the serial-combine-ceiling
+  hypothesis: the combine is **HBM-bandwidth-bound** (128-wg stream-k == 32-wg serial). `NORTH_STAR_FAIL_LOCAL_AB`.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.
