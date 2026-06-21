@@ -18,9 +18,19 @@
       "description": "Current default decode route (gqa_coop_vec, FLASH_L=128, no q8). Establishes the canonical curve AND the whole-decode W==D auto-clock reproducibility band (the falsifier).",
       "env": {},
       "rungs": [
-        {"rung": "wd", "runner": "runtime_overhead", "repeats": 5, "is_baseline": true}
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 5,
+          "is_baseline": true
+        }
       ],
-      "contexts": [128, 512, 1024, 4096],
+      "contexts": [
+        128,
+        512,
+        1024,
+        4096
+      ],
       "correctness_req": "none",
       "historical_expected_verdict": "REST",
       "compare_artifact": "bench/qk-decode-runtime-overhead/result.json",
@@ -30,13 +40,26 @@
       "id": "flash_l_64",
       "family": "attention_split",
       "description": "More KV-splits on the existing winner gqa_coop_vec via FLASH_L=64. Known LOCAL-PASS / W==D-FAIL: ~1.08x attention @ctx1024 (byte-exact) but +1.8%@1024 / -1.2%@4096 whole-decode (below the >=5% bar). DO NOT PROMOTE.",
-      "env": {"FLASH_L": "64"},
+      "env": {
+        "FLASH_L": "64"
+      },
       "baseline_ref": "baseline_default",
       "rungs": [
-        {"rung": "local_ab", "runner": "flash_l_local"},
-        {"rung": "wd", "runner": "runtime_overhead", "repeats": 3}
+        {
+          "rung": "local_ab",
+          "runner": "flash_l_local"
+        },
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
       ],
-      "contexts": [512, 1024, 4096],
+      "contexts": [
+        512,
+        1024,
+        4096
+      ],
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "LOCAL_PASS_WD_FAIL",
       "compare_artifact": "docs/decode-vector-flash-tile-realigned-result-20260621.md",
@@ -48,9 +71,17 @@
       "description": "Warp-cooperative non-WMMA vector flash-decode tile (raw-C, standalone decode-shape A/B). Known FAIL: byte-exact but ~0.60x @ctx1024 vs gqa_coop_vec (work-bound per-key warp-reduce). Wraps the whole script as one fixed candidate.",
       "env": {},
       "rungs": [
-        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_decode_warp_flash_tile_ab.py", "result_json": "bench/qk-decode-vector-flash-tile/warp_tile_ab.json"}
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_decode_warp_flash_tile_ab.py",
+          "result_json": "bench/qk-decode-vector-flash-tile/warp_tile_ab.json"
+        }
       ],
-      "contexts": [1024, 4096],
+      "contexts": [
+        1024,
+        4096
+      ],
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "FAIL_LOCAL_AB",
       "compare_artifact": "bench/qk-decode-vector-flash-tile/warp_tile_ab.json",
@@ -60,12 +91,25 @@
       "id": "q8_opt_in",
       "family": "q8_route",
       "description": "q8 FFN handwritten route (Q8_FFN_HANDWRITTEN=1), opt-in only. Known PASS_OPT_IN: ~1.06x whole-decode W==D + dNLL 0.0029 <= 0.01. Not a default promotion (opt-in).",
-      "env": {"Q8_FFN_HANDWRITTEN": "1"},
+      "env": {
+        "Q8_FFN_HANDWRITTEN": "1"
+      },
       "rungs": [
-        {"rung": "wd_q8", "runner": "q8_audit"},
-        {"rung": "correctness", "runner": "q8_dnll_historical", "baseline_nll": "bench/q8-ffn-handwritten-oracle/nll_baseline.json", "q8_nll": "bench/q8-ffn-handwritten-oracle/nll_q8_route.json"}
+        {
+          "rung": "wd_q8",
+          "runner": "q8_audit"
+        },
+        {
+          "rung": "correctness",
+          "runner": "q8_dnll_historical",
+          "baseline_nll": "bench/q8-ffn-handwritten-oracle/nll_baseline.json",
+          "q8_nll": "bench/q8-ffn-handwritten-oracle/nll_q8_route.json"
+        }
       ],
-      "contexts": [512, 1024],
+      "contexts": [
+        512,
+        1024
+      ],
       "correctness_req": "dnll",
       "historical_expected_verdict": "PASS_OPT_IN",
       "compare_artifact": "bench/qk-decode-primitive-transfer/decode_q8_model_route_timing_audit_result.json",
@@ -77,9 +121,18 @@
       "description": "North-star flash_attn_tile decode candidate (warp-cooperative q.k partial + many-workgroup combine) per binding north_star_flash_attn_tile_v0. Local A/B vs gqa_coop_vec. MEASURED FAIL_LOCAL_AB: 0.58x@ctx1024, 0.89x@ctx4096 (byte-exact). The warp partial alone already exceeds coop; the combine is bandwidth-bound (more workgroups do not help) -> refutes the prior serial-combine-ceiling hypothesis.",
       "env": {},
       "rungs": [
-        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_north_star_flash_attn_tile_ab.py", "result_json": "bench/qk-north-star-flash-attn-tile/latest.json"}
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_north_star_flash_attn_tile_ab.py",
+          "result_json": "bench/qk-north-star-flash-attn-tile/latest.json"
+        }
       ],
-      "contexts": [512, 1024, 4096],
+      "contexts": [
+        512,
+        1024,
+        4096
+      ],
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "FAIL_LOCAL_AB",
       "compare_artifact": "bench/qk-north-star-flash-attn-tile/latest.json",
@@ -91,9 +144,18 @@
       "description": "Path A: fused inline-exp softmax+V tail (coop matmul q.k + flash_prob fused into the partial, keep flash_max + GQA reuse) vs gqa_coop_vec. MEASURED FAIL_LOCAL_AB: 0.725x@ctx1024 / 0.876x@ctx4096 (value-correct rel_rmse 8e-4). Per-d-lane exp redundancy (W=129 lanes recompute exp) > the saved prob materialization. Full online-max removal is BLOCKED_BY_IDIOM (per-split pm + per-d pout = two-granularity store wall).",
       "env": {},
       "rungs": [
-        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_fused_softmax_v_tail_ab.py", "result_json": "bench/qk-fused-softmax-v-tail/latest.json"}
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_fused_softmax_v_tail_ab.py",
+          "result_json": "bench/qk-fused-softmax-v-tail/latest.json"
+        }
       ],
-      "contexts": [512, 1024, 4096],
+      "contexts": [
+        512,
+        1024,
+        4096
+      ],
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "FAIL_LOCAL_AB",
       "compare_artifact": "bench/qk-fused-softmax-v-tail/latest.json",
@@ -105,9 +167,18 @@
       "description": "ISA-justified diagnostic: replace coop's scalar flash_partial (PV, 24.7us, 0 v_dot2) with PV=prob@V as a SPLIT-preserving tiled matmul. MEASURED gate FAIL_LOCAL_AB (0.879/0.936/1.131x @ctx512/1024/4096, value-correct rel_rmse 7-8e-4) BUT project verdict MATMUL_PV_BLOCKED_BY_LAYOUT: the per-split matmul (K=L=128 concrete, Hkv*Smax=256 wg) TILES at ~1078 GFLOPS and WINS 1.13x @ctx4096; it loses at ctx1024/512 only because tinygrad cannot express a symbolic-count tiled batched matmul, forcing concrete Smax=32 (full-MAXC reads = 4-8x extra split work). Corrects an earlier non-split form (~50 GFLOPS, parallelism-collapsed Hkv=8 wg) that wrongly blamed skinny M=4. No promotion; bounded lever exhausted (needs deep fused-flash codegen).",
       "env": {},
       "rungs": [
-        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_matmul_pv_diagnostic_ab.py", "result_json": "bench/qk-matmul-pv-diagnostic/latest.json"}
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_matmul_pv_diagnostic_ab.py",
+          "result_json": "bench/qk-matmul-pv-diagnostic/latest.json"
+        }
       ],
-      "contexts": [512, 1024, 4096],
+      "contexts": [
+        512,
+        1024,
+        4096
+      ],
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "FAIL_LOCAL_AB",
       "compare_artifact": "bench/qk-matmul-pv-diagnostic/latest.json",
@@ -119,9 +190,18 @@
       "description": "REFERENCE ORACLE (non-default, non-promotable): llama.cpp flash_attn_tile decode attention vs gqa_coop_vec, pure GPU time (llama rocprofv3 trace vs coop ProfileGraphEvent). Answers whether llama's win is standalone-kernel or in-model. MEASURED: llama 5.7x faster @ctx1024 standalone -> PASS_ORACLE_LOCAL_AB. Vendored llama reference, NOT a tinygrad primitive; never a default route.",
       "env": {},
       "rungs": [
-        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_llama_flash_attn_tile_oracle_ab.py", "result_json": "bench/qk-llama-flash-attn-tile-oracle/latest.json"}
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_llama_flash_attn_tile_oracle_ab.py",
+          "result_json": "bench/qk-llama-flash-attn-tile-oracle/latest.json"
+        }
       ],
-      "contexts": [512, 1024, 4096],
+      "contexts": [
+        512,
+        1024,
+        4096
+      ],
       "correctness_req": "none",
       "historical_expected_verdict": "PASS_ORACLE_LOCAL_AB",
       "compare_artifact": "bench/qk-llama-flash-attn-tile-oracle/latest.json",
@@ -133,7 +213,11 @@
       "description": "Evaluator-binding plumbing selftest (binding_templates.json north_star_binding_selftest_v0). Validates the binding -> candidate -> decode_eval -> artifact path WITHOUT benchmarking. Verdict SELFTEST_PASS; NOT a performance candidate.",
       "env": {},
       "rungs": [
-        {"rung": "selftest", "runner": "binding_selftest", "binding_template_id": "north_star_binding_selftest_v0"}
+        {
+          "rung": "selftest",
+          "runner": "binding_selftest",
+          "binding_template_id": "north_star_binding_selftest_v0"
+        }
       ],
       "contexts": [],
       "correctness_req": "none",
@@ -147,16 +231,49 @@
       "description": "DECISIVE post-Matmul-PV concrete-shape fused-flash first gate (literature-grounded: FlashAttention IO-aware tiling + online softmax, Flash-Decoding KV-splits, FlashDecoding++ flat-GEMM under-utilization, FlashInfer decode-phase). CONCRETE ctx1024 flash-decode pipeline whose q.k AND PV ride tinygrad's tiled-GEMM codegen (S=Tc/L=8 FAIR splits -- the matmul-PV symbolic-split BLOCKER removed by fixing the shape). MEASURED FAIL_LOCAL_AB: 0.965x @ctx1024 vs strict same-shape concrete gqa_coop_vec (value-correct rel_rmse 4.9e-4). The 1.42x vs the canonical SYMBOLIC comparator is a concreteness artifact (the ~27us symbolic generalization tax the candidate would also pay once generalized), NOT a win. ROOT CAUSE: at decode shape tinygrad's tiled matmul renders REGISTER-tiled global-load code (16 wg, 305 GFLOPS, no __shared__/LDS, no v_dot2) -- NOT llama's one-kernel LDS-staged v_dot2 fused tile; the under-utilization + 2 extra layout kernels offset the tiling benefit. The TRUE single fused LDS-tiled kernel stays inexpressible (tiled-GEMM codegen is per-matmul/separate-kernel; .set/.after fusion is scalar -- mutually exclusive). Gate fails -> REST_DECODE + v2.",
       "env": {},
       "rungs": [
-        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_fused_flash_concrete_gate_ab.py", "result_json": "bench/qk-fused-flash-concrete-gate/latest.json"}
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_fused_flash_concrete_gate_ab.py",
+          "result_json": "bench/qk-fused-flash-concrete-gate/latest.json"
+        }
       ],
-      "contexts": [1024],
+      "contexts": [
+        1024
+      ],
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "FAIL_LOCAL_AB",
       "compare_artifact": "bench/qk-fused-flash-concrete-gate/latest.json",
       "historical_note": "0.965x @ctx1024 vs concrete gqa_coop_vec (same fixed shape); register-tiled not LDS-tiled; FlashDecoding++ flat-GEMM under-utilization at 16 wg; FUSED_FLASH_CONCRETE_GATE_FAIL_LOCAL_AB"
+    },
+    {
+      "id": "reference_oracle_hcq_llama_tile",
+      "family": "reference_oracle",
+      "description": "REFERENCE ORACLE (non-default, non-promotable): vendored llama.cpp flash_attn_tile<128,128,1,4,false> + combine launched THROUGH tinygrad's HCQ (capture-and-replay) vs gqa_coop_vec, GPU-busy time. Route B B1 de-risk: does the llama-class kernel win when DISPATCHED BY tinygrad's runtime? MEASURED 2.96x GPU-time @ctx1024 -> PASS_ORACLE_LOCAL_AB; BUT wall is launch-overhead-bound (2 raw HCQ dispatches) so W==D needs graph integration. Vendored llama, never a default route.",
+      "env": {},
+      "rungs": [
+        {
+          "rung": "local_ab",
+          "runner": "ab_script",
+          "script": "extra/qk_llama_flash_attn_tile_hcq_ab.py",
+          "result_json": "bench/qk-llama-hcq-tile/latest.json"
+        }
+      ],
+      "contexts": [
+        1024
+      ],
+      "correctness_req": "none",
+      "historical_expected_verdict": "PASS_ORACLE_LOCAL_AB",
+      "compare_artifact": "bench/qk-llama-hcq-tile/latest.json",
+      "historical_note": "Route B B1: vendored llama tile via HCQ wins 2.96x GPU-time @ctx1024 (correct rel 1.3e-3); wall launch-overhead-bound -> W==D needs graph integration; non-promotable"
     }
   ],
   "suites": {
-    "historical": ["baseline_default", "flash_l_64", "warp_flash_tile", "q8_opt_in"]
+    "historical": [
+      "baseline_default",
+      "flash_l_64",
+      "warp_flash_tile",
+      "q8_opt_in"
+    ]
   }
 }

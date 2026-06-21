@@ -57,6 +57,15 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   files, gates, stop conditions, fallback logic, and lifecycle/search integration. Recommended next executable task:
   Route B B0-B1 only — vendored llama `.co` through the HCQ bridge as a non-promotable local A/B de-risk before any
   W==D/model route or native codegen work. See `docs/decode-attention-route-a-route-b-full-execution-scope-20260621.md`.
+- **Route B B0-B1 EXECUTED (2026-06-21) — `PASS_ORACLE_LOCAL_AB`; GPU-kernel win CONFIRMED 2.96×, but W==D is
+  launch-overhead-gated.** Vendored llama `flash_attn_tile<128,128,1,4,false>`+combine launched through tinygrad's
+  **HCQ** (full capture-and-replay: LD_PRELOAD kernarg capture from a real ggml decode → `NamedAMDProgram` replay of
+  the on-disk `.co` + COV5 hidden-arg fill) is value-correct (rel 1.3e-3) and **wins 2.96× by GPU-busy time** @ctx1024
+  (llama 15.1µs vs gqa_coop_vec 44.6µs). **CRITICAL:** by **wall** time the 2-raw-HCQ-dispatch path is ~2.5× SLOWER
+  (148 vs 58µs) — the GPU win is eaten by per-call launch overhead; a W==D win (B2) **REQUIRES graph-integrating the
+  tile+combine launches into the decode JIT graph**, which is now the true gate. Non-promotable
+  (`reference_oracle_hcq_llama_tile`). Harnesses `extra/qk_llama_fattn_kernarg_capture.cpp` +
+  `extra/qk_llama_flash_attn_tile_hcq_ab.py`. See `docs/decode-attention-route-b-b1-result-20260621.md`.
 
 - **Machine-search evaluator BUILT (2026-06-21).** `extra/qk_decode_eval.py` is the first-class, automated form of
   the lifecycle ladder (correctness → local A/B → whole-decode W==D → policy), emitting schema'd verdicts. It

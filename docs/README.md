@@ -151,6 +151,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   A/B, W==D route, search) and Route B AMDGCN/HSACO escape hatch (B0-B5: binding metadata, vendored llama `.co` HCQ
   local A/B, W==D de-risk, owned hand-AMDGCN tile, default-off route, search). Explicitly marks vendored as
   non-promotable and owned AMDGCN as the promotable escape-hatch form. Recommended next executable task: Route B B0-B1.
+- **`decode-attention-route-b-b1-result-20260621.md`** — ⭐ Route B B0-B1 EXECUTED: `PASS_ORACLE_LOCAL_AB`. Vendored
+  llama `flash_attn_tile`+combine launched through tinygrad's **HCQ** (full capture-and-replay: LD_PRELOAD kernarg
+  capture from a real ggml decode → `NamedAMDProgram` replay of the on-disk `.co` + COV5 hidden-arg fill) is correct
+  (rel 1.3e-3) and **wins 2.96× by GPU-busy** @ctx1024 (15.1 vs 44.6µs) — the kernel-level win is real and
+  capture/replay is feasible (NEEDS_DEEPER_PORT did not materialize). **But wall is ~2.5× SLOWER** (2 raw HCQ
+  dispatches) → a W==D win (B2) **requires graph-integrating the launches**; that integration cost is the true gate.
+  Non-promotable. Harnesses `extra/qk_llama_fattn_kernarg_capture.cpp` + `extra/qk_llama_flash_attn_tile_hcq_ab.py`.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

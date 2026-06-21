@@ -11,17 +11,23 @@ Buffers, and launch the tile + combine. Correctness vs numpy GQA softmax, then A
   run: DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_llama_flash_attn_tile_hcq_ab.py
 """
 from __future__ import annotations
-import ctypes, json, struct, weakref, math, time
+import ctypes, json, struct, weakref, math, time, statistics, subprocess, pathlib
 import numpy as np
-from tinygrad import Tensor, Device, dtypes
+from tinygrad import Tensor, Device, TinyJit, dtypes
 from tinygrad.helpers import round_up, getenv
 from tinygrad.device import Buffer, BufferSpec
 from tinygrad.runtime.support.elf import elf_loader
 from tinygrad.runtime.autogen import amdgpu_kd, hsa
 from tinygrad.runtime.ops_amd import AMDProgram
 from tinygrad.runtime.support.hcq import HCQProgram, HCQArgsState
+from extra.qk_flash_decode import flash_decode_attention
+from extra.qk_clock_pin import pinned_peak
+from extra.qk_harness_contract import stamp, repro_band
 
 CFG = "bench/qk-llama-hcq-tile/capture_decode_ctx1024.json"
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+OUT = ROOT / "bench/qk-llama-hcq-tile"
+COMP_MAXC, COMP_L, COMP_CTX = 4096, 128, 1024   # gqa_coop_vec comparator shape (Tc=1024)
 
 # --- the 37-arg flash_attn_tile signature (name, size, align, is_ptr) in declaration order (fattn-tile.cuh:788-811) ---
 TILE_SPEC = [("Q",8,8,1),("K",8,8,1),("V",8,8,1),("mask",8,8,1),("sinks",8,8,1),("KV_max",8,8,1),("dst",8,8,1),
@@ -166,18 +172,112 @@ def main():
   write_hidden(ck_full, comb.kernargs_segment_size, cg, cb); comb._raw = bytes(ck_full)
   print(f"  combine kernarg_size(desc)={comb.kernargs_segment_size} lds={comb.group_segment_size}")
 
-  def run():
-    tile(global_size=tuple(tg), local_size=tuple(tb), wait=True, timeout=10000)
-    comb(global_size=tuple(cg), local_size=tuple(cb), wait=True, timeout=10000)
-    dev.synchronize()
-  run()
+  def llama(wait=False):
+    tile(global_size=tuple(tg), local_size=tuple(tb), wait=wait, timeout=10000)
+    comb(global_size=tuple(cg), local_size=tuple(cb), wait=wait, timeout=10000)
+
+  # ---- B1.3 correctness ----
+  llama(wait=True); dev.synchronize()
   ob = bytearray(Hq*Hd*4); bDst.copyout(memoryview(ob))
   out = np.frombuffer(bytes(ob), np.float32).reshape(Hq, Hd)
   rel = float(np.abs(out-ref).max() / (np.abs(ref).max()+1e-6))
   rmse = float(np.sqrt(((out-ref)**2).mean()) / (np.sqrt((ref**2).mean())+1e-9))
-  print(f"correctness: rel_max={rel:.4e} rel_rmse={rmse:.4e}  (KV={KV} valid={NVALID} pb={PB} scale={scale:.5f})")
-  print(f"  out[0,:4]={out[0,:4]}  ref[0,:4]={ref[0,:4]}")
-  return rel, rmse
+  CORR_TOL = 5e-3   # fp16 K/V: ~1.2e-3 vs an fp32-accumulated ref is fp16-precision, not a logic error
+  print(f"correctness: rel_max={rel:.4e} rel_rmse={rmse:.4e} tol={CORR_TOL} {'OK' if rmse<=CORR_TOL else 'FAIL'}"
+        f"  (KV={KV} valid={NVALID} pb={PB} scale={scale:.5f})")
+
+  # ---- B1.4 local A/B vs gqa_coop_vec (the de-risk) ----
+  rng2 = np.random.default_rng(0)
+  cq = Tensor(rng2.standard_normal((Hq, Hd)).astype(np.float16))
+  ck_ = Tensor(rng2.standard_normal((Hkv, COMP_MAXC, Hd)).astype(np.float16))
+  cv = Tensor(rng2.standard_normal((Hkv, COMP_MAXC, Hd)).astype(np.float16))
+  from tinygrad import Context
+  from tinygrad.device import Compiled
+  with pinned_peak() as prov:
+    time.sleep(0.4)
+    comp = TinyJit(lambda: flash_decode_attention(cq, ck_, cv, COMP_CTX, COMP_CTX, Hd, Hq, Hkv, COMP_MAXC, COMP_L,
+                                                  variant="gqa_coop_vec").realize())
+    for _ in range(8): comp(); llama(wait=True)
+    dev.synchronize()
+    # GPU-busy time (NOT wall): wait=True returns the kernel's signal-timestamp GPU duration. Comparing GPU time is the
+    # de-risk's real question ("does the kernel win"); wall is launch-overhead-bound (2 raw HCQ dispatches vs 1 jit).
+    def llama_gpu():
+      return (tile(global_size=tuple(tg), local_size=tuple(tb), wait=True) +
+              comb(global_size=tuple(cg), local_size=tuple(cb), wait=True)) * 1e6
+    llama_s = [statistics.median([llama_gpu() for _ in range(20)]) for _ in range(5)]
+    llama_us = statistics.median(llama_s)
+    # comparator GPU-busy via ProfileGraphEvent (PROFILE=1), the oracle's method (qk_llama_flash_attn_tile_oracle_ab.py).
+    # The jit must be captured+warmed INSIDE the PROFILE context or the replay emits no ProfileGraphEvent.
+    comp_s = []
+    with Context(PROFILE=1):
+      compp = TinyJit(lambda: flash_decode_attention(cq, ck_, cv, COMP_CTX, COMP_CTX, Hd, Hq, Hkv, COMP_MAXC, COMP_L,
+                                                     variant="gqa_coop_vec").realize())
+      for _ in range(8): compp()
+      dev.synchronize(); dev._at_profile_finalize()
+      for _ in range(5):
+        base = len(Compiled.profile_events); compp(); dev.synchronize(); dev._at_profile_finalize()
+        busy = 0.0
+        for e in Compiled.profile_events[base:]:
+          if type(e).__name__ != "ProfileGraphEvent": continue
+          sigs = [float(s) for s in e.sigs]
+          for ent in e.ents: busy += sigs[ent.en_id] - sigs[ent.st_id]
+        if busy > 0: comp_s.append(busy)
+    comp_us = statistics.median(comp_s) if comp_s else 0.0
+    speedup = round(comp_us/llama_us, 3) if llama_us else 0.0
+    # wall-time secondary disclosure (launch-overhead reality of the 2-dispatch HCQ path vs a single jit graph)
+    def thr(fn, n=200):
+      for _ in range(10): fn()
+      dev.synchronize(); t0 = time.perf_counter()
+      for _ in range(n): fn()
+      dev.synchronize(); return (time.perf_counter()-t0)/n*1e6
+    llama_wall = round(statistics.median([thr(lambda: llama(wait=False)) for _ in range(3)]), 1)
+    comp_wall = round(statistics.median([thr(comp) for _ in range(3)]), 1)
+  corr_ok = rmse <= CORR_TOL
+  gate = bool(corr_ok and speedup >= 1.05)          # evaluator mechanical bar; de-risk TARGET is 1.5x (recorded below)
+  derisk_15x = speedup >= 1.5
+  print(f"  A/B @ctx1024 GPU-busy: gqa_coop_vec {comp_us:.1f}us vs llama tile+combine {llama_us:.1f}us -> {speedup}x "
+        f"({'>=1.5x DE-RISK PASS' if derisk_15x else '>=1.05x' if speedup>=1.05 else '<1.05x'})")
+  print(f"  (wall, launch-overhead-bound: gqa_coop_vec[jit] {comp_wall}us vs llama[2 raw HCQ dispatches] {llama_wall}us)")
+  try:
+    commit = subprocess.run(["git","rev-parse","--short","HEAD"], cwd=ROOT, text=True, capture_output=True).stdout.strip()
+    dirty = bool(subprocess.run(["git","status","--porcelain"], cwd=ROOT, text=True, capture_output=True).stdout.strip())
+  except Exception: commit, dirty = None, None
+  art = {"date":"2026-06-21","phase":"ROUTE_B_B1_VENDORED_HCQ_LOCAL_AB","candidate_id":"reference_oracle_hcq_llama_tile",
+         "comparator":"gqa_coop_vec","instance":cfg["instance"],"co_sha256":cfg["co_sha256"],
+         "tile_symbol":cfg["tile_kd_symbol"],"head_dim":Hd,"q_heads":Hq,"kv_heads":Hkv,"gqa_group":Hq//Hkv,
+         "KV_padded":KV,"KV_valid":NVALID,"parallel_blocks":PB,"tile_grid_workgroups":tg,"tile_block":tb,
+         "tile_lds":tile.group_segment_size,"combine_lds":comb.group_segment_size,"scale":round(scale,6),
+         "method":"vendored llama flash_attn_tile<128,128,1,4,false> + flash_attn_combine_results<128> from the on-disk "
+                  "gfx1100 .co, launched via tinygrad HCQ (NamedAMDProgram); kernarg captured from a real ggml-hip decode "
+                  "(LD_PRELOAD shim) and replayed with VAs patched to tinygrad Buffers + COV5 hidden-arg block populated.",
+         "llama_gpu_busy_us":round(llama_us,1),"coop_vec_gpu_busy_us":round(comp_us,1),
+         "llama_wall_us":llama_wall,"coop_vec_wall_us":comp_wall,
+         "timing_note":"GPU-busy time (signal timestamps / ProfileGraphEvent) is the kernel-win authority; wall is "
+                       "launch-overhead-bound (llama = 2 raw HCQ dispatches/call, coop = 1 jit graph) and NOT the gate.",
+         "results":[{"ctx":1024,"best_speedup_vs_coop":speedup,"splits":[{"err":round(rel,6)}]}],
+         "repro_band":{"llama":repro_band(llama_s),"gqa_coop_vec":repro_band(comp_s)},
+         "correctness_rel_max":round(rel,6),"correctness_rel_rmse":round(rmse,6),"correctness_tol":CORR_TOL,
+         "first_gate_pass":gate,"derisk_target_1_5x_pass":derisk_15x,
+         "derisk_verdict":("GPU-KERNEL WIN CONFIRMED (>=1.5x): the vendored llama tile is faster GPU-time when "
+                           "dispatched by tinygrad's HCQ" if derisk_15x else "vendored tile does NOT win GPU-time >=1.5x"),
+         "b2_caveat":("CRITICAL for B2 (W==D): by WALL time the 2-raw-HCQ-dispatch path (tile+combine) is "
+                      f"~{round(llama_wall/comp_wall,2)}x SLOWER than the single jit comparator -- the GPU-time win is "
+                      "eaten by per-call launch overhead. A W==D win REQUIRES graph-integrating the launches (folding "
+                      "tile+combine into the model JIT graph / one dispatch), else the kernel advantage does not transfer. "
+                      "This is the recurring 'isolated wins don't transfer to in-model integration' finding."),
+         "promotion_policy":"NON-PROMOTABLE — vendored llama reference, never a default route",
+         "pass_fail_threshold":">=1.05x local @ctx1024 (evaluator) AND rel_rmse<=5e-3; de-risk TARGET >=1.5x",
+         "clock_pin":(prov or {}).get("ok"),"commit":commit,"dirty_tree":dirty,"default_behavior_changed":False,
+         "warmups":23,"repeats":5}
+  art = stamp(art, comparator_id="gqa_coop_vec",
+              comparator_why="shipped default decode-attention primitive (gqa_coop_vec); the local-A/B winner the vendored llama oracle must beat to justify integrating the escape hatch",
+              timing_authority="LOCAL GPU-launch throughput proxy (back-to-back perf_counter, median-of-5, clock-pinned) -- DIAGNOSTIC, NOT in-model W==D; vendored reference, never promotable",
+              ledger_links=["docs/decode-attention-route-b-b1-result-20260621.md",
+                            "bench/qk-decode-eval/candidates.json#reference_oracle_hcq_llama_tile"])
+  OUT.mkdir(parents=True, exist_ok=True)
+  (OUT/"latest.json").write_text(json.dumps(art, indent=2))
+  print(json.dumps({"first_gate_pass":gate,"derisk_1_5x":derisk_15x,"ctx1024_speedup":speedup,
+                    "correctness_rel_rmse":round(rmse,6)}, indent=2))
 
 if __name__ == "__main__":
   main()
