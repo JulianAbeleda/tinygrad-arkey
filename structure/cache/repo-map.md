@@ -1,3 +1,5 @@
+> **⚠ STALE (2026-06-21)** — this cache predates the active-surface reduction (`docs/perf-probe-active-surface-reduction-result-20260621.md`, 291 perf files deleted) and lists removed scripts. Regenerate before relying on it; current authority is `docs/current-project-state-handoff-20260621.md`.
+
 # Repo Map
 
 Last updated: 2026-06-16

@@ -1,3 +1,5 @@
+> **⚠ SUPERSEDED (2026-06-21) — historical provenance only.** Current state lives in `docs/current-project-state-handoff-20260621.md` (+ `docs/README.md`). Do NOT treat this as authority. Many scripts/paths it references were removed in the active-surface reduction (`docs/perf-probe-active-surface-reduction-result-20260621.md`, 291 perf files deleted). Kept for history.
+
 # Principles Grade — 2026-06-16
 
 Graded analysis of the repo against [coding-principles.md](coding-principles.md)
