@@ -107,6 +107,13 @@ The latest timed attribution says:
 Kernel search can make one existing kernel faster. Lifecycle search can delete kernels, fuse stages, avoid
 materialization, or pick a different route by context. That is where the current measured gap lives.
 
+The decode-specific search rule now lives in the performance primitive principles:
+`structure/Development/performance-primitive-research-principles.md`.
+
+Short form: for decode `T=1`, reuse/fusion must not collapse parallelism. A candidate must manufacture enough
+parallel work from KV splits and GQA/query-head columns, and it must compare against the current winner rather than a
+weaker baseline.
+
 ## Required Search Stack
 
 The intended system has five layers:

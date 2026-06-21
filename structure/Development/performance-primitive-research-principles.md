@@ -237,6 +237,61 @@ When testing a scheduler shape, record:
 A variant that improves one side but regresses the other may be useful diagnostically but
 should not be routed.
 
+## Decode T=1 Must Preserve Parallelism
+
+Decode has a different shape than prefill. Prefill has a multi-query/token axis. Decode usually
+has `T=1`, so a primitive must create enough parallel work from other axes.
+
+Rule:
+
+```text
+For decode T=1, a primitive must manufacture enough parallel work from KV splits and
+GQA/query-head columns while preserving reuse. Fusion or LDS reuse that reduces workgroups
+is harmful, even if it removes kernels or memory reads.
+```
+
+This rule was added after the llama decode audit corrected the attention hypothesis:
+
+- llama's T=1 decode attention path is a non-WMMA vector `flash_attn_tile`, not the WMMA prefill path;
+- its win comes from many KV-split parallel blocks, LDS K/V staging, GQA query-head column packing, and register
+  online softmax;
+- tinygrad's raw fused flash and fused LDS+GQA scalar tiles were byte-exact but slower because they collapsed the
+  wrong axes or failed to preserve enough parallel work;
+- prefill-proven LDS tile structure did not transfer because decode lacks the prefill multi-query axis.
+
+Do not treat these as sufficient objectives for decode:
+
+- fewer kernels;
+- fusion alone;
+- LDS reuse alone;
+- GQA reuse by serializing G heads;
+- beating a weak global-reread baseline.
+
+Before timing a decode attention candidate, answer:
+
+- how many workgroups does it create at ctx512/1024/4096?
+- does it preserve query-head/GQA parallelism instead of serializing it?
+- does reuse reduce redundant memory traffic without collapsing occupancy?
+- is online-softmax/combine work hidden under enough parallel KV work?
+- does it compare against the current winner, not a weaker baseline?
+
+For this repo, the current decode-attention comparator is `gqa_coop_vec`, and a new vector-tile candidate must beat
+that comparator before any in-model route work is justified.
+
+```text
+Apply this principle to the existing winning primitive and its split parameters before building a new hand-tile.
+```
+
+This was learned the hard way (2026-06-21): new hand-tiles (scalar fused LDS+GQA, warp-cooperative) were
+byte-exact but slower than `gqa_coop_vec`'s **matmul** q·k. The principle's lever — more KV-splits — was instead
+cheapest and most effective applied to the existing winner: lowering `FLASH_L` (128→64) gave more workgroups and a
+~1.08× attention win @ctx1024 (passing the standalone gate), where a from-scratch tile could not. **But that win
+did not promote:** whole-decode W==D was +1.8%@1024 and **−1.2%@4096** — below the ≥5% bar and regressing long
+context, because tinygrad's split-combine cost caps the useful split count well below llama's many-split regime.
+So: the bounded decode-tile lane is rested; the remaining lever is the full llama-style `flash_attn_tile`
+lifecycle with an **efficient many-split / stream-k combine** (north-star), not another bounded tile or flag
+sweep. Do not promote `FLASH_L=64` by default. See `docs/decode-vector-flash-tile-realigned-result-20260621.md`.
+
 ## Value Semantics Beat Source Emission
 
 A lowering test must validate computed values, not just generated source or disassembly.

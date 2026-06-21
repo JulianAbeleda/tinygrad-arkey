@@ -8,8 +8,9 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 - **`current-project-state-handoff-20260621.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). One short page:
   canonical numbers, decided policies (global `PREFILL_V2` OFF; `auto`/server/q8 opt-in), closed lanes (prefill
-  kernels, prefill default, bounded decode fusion, the `87.6` ambiguity), and the only open frontier (Claude-1
-  fused+coop decode). Guardrail: `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens these.
+  kernels, prefill default, bounded decode fusion, bounded decode vector-tile, the `87.6` ambiguity). **Bounded
+  decode work is RESTED** — the only remaining decode lever is the north-star full `flash_attn_tile` lifecycle.
+  Guardrail: `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens these.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.
@@ -56,15 +57,26 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   roadmap below). The decode frontier is latency hiding / larger lifecycle codegen, not micro-fusion. The `87.6`
   headline is RECONCILED (`decode-prefill-headline-reconciliation-result-20260621.md`; decode is the curve / ~67%
   llama); then either prototype a fully fused flash-decode tile, prove a GEMV latency-hiding schedule, or compiler-backlog.
-- **`decode-fused-coop-primitive-roadmap-scope-20260621.md`** — CURRENT CLAUDE-1 NEXT SCOPE. After the latency-hiding
-  result returned `ROADMAP`, decide how to express the only live decode lever: **fused + coop-optimized in one
-  primitive**. Compare raw-kernel/JIT bridge vs linearizer coupled multi-reduce, diff the losing raw fused tile against
-  the winning UOp `gqa_coop_vec` path, and return `BRIDGE_FIRST`, `LINEARIZER_FIRST`, or `ROADMAP_ONLY` before any
-  implementation.
+- **`decode-fused-coop-primitive-roadmap-scope-20260621.md`** — DONE (historical). Returned `LINEARIZER_FIRST`,
+  which led to the vector-tile build; that build is now rested (see the realigned result below). Not current work.
 - **`canonical-policy-handoff-audit-result-20260621.md`** — CLAUDE-2 LANE CLOSED. Hardened the canonical
   policy/headline state: audited the policy commits (no junk; recorded the swept Claude-1 files), swept stale
   references, wrote `current-project-state-handoff-20260621.md`, and added the guardrail
   `extra/qk_policy_consistency_check.py`. Scope: `canonical-policy-handoff-audit-scope-20260621.md`.
+- **`llama-decode-primitive-difference-audit-scope-20260621.md`** — DONE (historical). Oracle audit; verdict
+  below.
+- **`llama-decode-primitive-difference-audit-result-20260621.md`** — DECODE PRINCIPLE CORRECTED. llama decode
+  attention is **not WMMA**; the gap is a non-WMMA vector `flash_attn_tile` that wins by many KV-split parallel blocks,
+  LDS K/V staging, and GQA query-head column packing. New rule: for decode `T=1`, reuse must not collapse occupancy.
+  WMMA and MMVQ stay closed. Canonical rule lives in
+  `../structure/Development/performance-primitive-research-principles.md`.
+- **`decode-vector-flash-tile-realigned-result-20260621.md`** — ⭐ BOUNDED DECODE VECTOR-TILE RESTED (current
+  decode state). Applying the T=1 principle to the existing winner `gqa_coop_vec` (lower `FLASH_L` → more splits)
+  passed the standalone gate (`FLASH_L=64` ~1.08× attention @ctx1024, byte-exact) but **failed W==D promotion**
+  (+1.8%@1024, −1.2%@4096). New hand-tiles were byte-exact but slower than the matmul q·k. **Decision:
+  `REST_DECODE` for bounded work; do not promote `FLASH_L=64` by default.** The only remaining decode lever is the
+  north-star full `flash_attn_tile` lifecycle with an efficient many-split / stream-k combine — not a bounded
+  patch.
 
 ### Historical / Superseded Prefill Provenance
 

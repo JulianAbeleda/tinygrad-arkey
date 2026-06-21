@@ -11,10 +11,34 @@ capability (linearizer coupled-multi-reduce, or a raw-kernel↔JIT bridge for a 
 marked: bounded fusion exhausted; remaining path is broad lifecycle/codegen research.** Default decode behavior
 NOT changed.
 
+## Conclusions (preserved — bounded decode fusion is CLOSED)
+
+The single load-bearing conclusion: **fusion alone is not the win.** The raw fully-fused flash tile was
+byte-exact but *slower* because it lost the current UOp `gqa_coop_vec` path's GQA V-reuse, coalescing, and
+dataflow advantages. The next valid decode project is therefore **not** another micro-fusion or launch-removal
+pass; it is **"fused + coop-optimized in one primitive,"** which means linearizer/codegen work or a raw-kernel↔JIT
+bridge. Specifically:
+
+1. **Bounded FFN activation fusion (`E_49152` silu·up) — REFUTED as work-conserved.** Built byte-exact, eliminated
+   the launch, **0% faster** (`docs/decode-ffn-activation-producer-fusion-result-20260620.md`). The down-prologue
+   latency-hiding variant is also closed (4096× recompute blowup).
+2. **Bounded attention reduce/stat micro-fusion — REFUTED / no-go.** The dominant `reduce_fixup` is the intrinsic
+   O(KV) Q@Kᵀ score reduce, `softmax_stats`' slope is the O(KV) per-key `exp`; only ~0.5 ms of fixed helpers are
+   fusible, and those are work-conserved (`docs/decode-attention-fusion-analysis-result-20260620.md`).
+3. **Raw fully-fused flash tile — CORRECT but SLOWER.** Byte-exact (max_err 0.0) yet 2.5–3.3× slower than the
+   optimized split coop path (266 vs 106 µs @ctx1024; 553 vs 165 µs @ctx4096) — it lacks GQA V-reuse/coalescing.
+4. **Decode remains ~67% llama at steady context** (~86% only at ctx≈0 empty KV). The realistic-ctx headline is
+   unchanged.
+5. **Next work is ROADMAP / codegen only — not tactical patching.** No more bounded fusion, launch-removal, or
+   micro-fusion passes (all refuted). The only live lever is an optimized fused flash primitive, gated by deep
+   codegen capability (see §9).
+
 ## 1. Baseline and authority (Phase 0 reconciled)
 
-`docs/decode-prefill-headline-reconciliation-result-20260621.md`: the "87.6 tok/s" headline was a `decode_ms`→
-tok/s mixup; the real ~86 is the ctx0 empty-KV rate. **Clean-wall decode (PROFILE=0, auto clock, HEAD):**
+`docs/decode-prefill-headline-reconciliation-result-20260621.md`: "87.6" is a numeric coincidence — the reported
+"87.6 tok/s" was the genuine **ctx≈0 empty-KV rate** (reproduced ~85–86 today), which collides with a separate
+ctx4096 `decode_ms=87.6` (=11.4 tok/s); either reading lands at the same decision. **Clean-wall decode (PROFILE=0,
+auto clock, HEAD):**
 
 | ctx | 0 | 128 | 512 | 1024 | 2048 | 4096 |
 |---|---:|---:|---:|---:|---:|---:|

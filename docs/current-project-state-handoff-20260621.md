@@ -29,20 +29,51 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
 - **Bounded decode fusion** — closed. FFN activation producer-fusion built & byte-exact but ~0% (work-conserved,
   not launch-recoverable); attention reduce/stat microfusion is a no-go (intrinsic O(KV) QK/softmax). See
   `docs/decode-fusion-build-result-20260620.md`.
+- **Bounded decode vector-tile** — closed/rested (2026-06-21). The corrected T=1 principle was applied to the
+  existing winner `gqa_coop_vec` by lowering `FLASH_L` (more KV-splits): **FLASH_L=64 passed the standalone
+  attention gate (~1.08× @ctx1024, byte-exact) — validating the principle — but FAILED W==D promotion**
+  (+2.8%@512, +1.8%@1024, **−1.2%@4096**; below the ≥5% bar, regresses long context). New hand-tiles (scalar
+  fused LDS+GQA, warp-cooperative) were byte-exact but slower than `gqa_coop_vec`'s matmul q·k. **Decision:
+  `REST_DECODE` for bounded work.** Do **not** promote FLASH_L=64 by default. See
+  `docs/decode-vector-flash-tile-realigned-result-20260621.md`.
 - **`87.6` ambiguity** — reconciled. `87.6` is a **numeric coincidence**: a real **ctx≈0 decode tok/s** (~11.4 ms)
   AND, separately, a real **ctx4096 decode ms/token** (=11.4 tok/s). **Never quote `87.6` bare.** The decode headline
   is the **curve** (~86 @ctx≈0 → ~61 @ctx4096), characterized as **~67% llama**, not the ctx≈0 peak.
 
-## 4. Open frontier (Claude 1 only)
+## 4. Frontier — bounded decode is RESTED; only the north-star remains
 
-- **Decode is the frontier.** The single live lever is **fused + coop-optimized in one primitive** —
-  `docs/decode-fused-coop-primitive-roadmap-scope-20260621.md` (Claude 1).
-- **No tactical decode patch** until that roadmap returns `BRIDGE_FIRST` or `LINEARIZER_FIRST` (else `ROADMAP_ONLY`).
+- **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
+  fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
+  (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
+  but missed W==D promotion (+1.8%@1024, −1.2%@4096). **Do not pursue another bounded tile or flag sweep.**
+- **The only remaining decode lever is north-star lifecycle/codegen**, not a tactical patch: the full llama-style
+  non-WMMA vector `flash_attn_tile` — many KV-split parallel blocks **with an efficient many-split / stream-k
+  combine** at T=1, LDS K/V staging, GQA query-head column packing, K-tile-batched vectorized body, register
+  online-softmax. The bounded experiments showed tinygrad's **split-combine efficiency is the ceiling** (more
+  splits help attention but the combine cost caps the gain and regresses long context) — closing that is the
+  north-star project, funded separately if at all. See
+  `docs/llama-decode-primitive-difference-audit-result-20260621.md` and
+  `docs/project-north-star-llama-and-lifecycle-search-20260620.md`.
+- **Principle:** for decode `T=1`, a primitive must preserve/enlarge parallelism from KV splits and GQA columns;
+  fusion/LDS/GQA reuse that collapses workgroups is harmful; compare against `gqa_coop_vec`, not weaker baselines;
+  and **apply the principle to the existing winner and its split parameters before building a new hand-tile**.
+  Canonical principle doc: `structure/Development/performance-primitive-research-principles.md`.
+- **No tactical decode patch.** A decode candidate must clear BOTH gates — standalone ≥1.05× @ctx1024 vs current
+  `gqa_coop_vec` AND W==D ≥5%@1024 / ≥7%@4096 with no ctx512 regression — or rest. `FLASH_L=64` cleared the first
+  but not the second, so it is **not promoted**.
 
 ## 5. Where to start
 
 `docs/README.md` · `bench/README.md` · `docs/decode-prefill-headline-reconciliation-result-20260621.md` (headline
-authority) · `docs/decode-fused-coop-primitive-roadmap-scope-20260621.md` (Claude 1's live lane).
+authority) · `docs/llama-decode-primitive-difference-audit-result-20260621.md` (corrected decode primitive) ·
+`docs/decode-vector-flash-tile-realigned-result-20260621.md` (bounded vector-tile rested: FLASH_L=64 local-pass /
+W==D-fail) · `docs/project-north-star-llama-and-lifecycle-search-20260620.md` (the only remaining decode lever).
+There is **no funded bounded decode build** — bounded decode is rested.
+
+**Optional owner knob (not promoted):** `FLASH_L=64` is a measured, byte-exact ~2% short-context decode gain
+(+2.8%@512, +1.8%@1024) that **regresses −1.2%@4096** and is below the ≥5% promotion bar. It may remain a
+research/owner-call knob for short-context-only use; it is **not** a default and **not** a bounded build to
+pursue.
 
 ## Consistency guardrail
 Run `DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_policy_consistency_check.py` — it fails if a canonical doc
