@@ -179,9 +179,19 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   The symbolic-`Tc` single matmul is not tiled at all (~13 GFLOPS). So the bounded matmul-PV lever is exhausted — the
   win is real but unreachable Tc-proportionally without a **symbolic-count tiled batched matmul** (a tinygrad
   capability gap, same family as the deep fused-`v_dot2`+LDS single-tile codegen, which would also unblock it).
-  **Decode bounded space AND the ISA-named codegen lever are both exhausted → honest recommendation: REST_DECODE**
-  (pivot to v2/search/tooling-hardening; keep the llama oracle + refutations as standing evidence).
+  **Decode bounded space AND the ISA-named codegen lever are both exhausted.**
   See `docs/matmul-pv-diagnostic-result-20260621.md`.
+- **Post-Matmul-PV strategic decision (2026-06-21) — `STRATEGY_RECOMMEND_FULL_FUSED_FLASH` → next project
+  `POST_MATMUL_PV_FULL_FUSED_FLASH` (gate-first).** Exhausted the three remaining options (rest+v2 / symbolic-count
+  tiled matmul / full fused-flash). Result: bounded decode is dead; only a **deep codegen capability** closes the 5–6×
+  llama gap. **Symbolic-count tiled matmul is dominated** (W==D-marginal ~3–4% decode < 5% bar AND a sub-capability of
+  fused-flash). **Rest+v2 is premature** — the cheap, decisive fused-flash *first gate* (a concrete-ctx1024 toy
+  LDS-tiled fused µkernel, value-correct + ≥1.05× vs `gqa_coop_vec`) has never been run; v2/search without a
+  llama-beating primitive is "infrastructure, not completion." Matmul-PV gives new leverage: tinygrad **does** emit
+  fast LDS-tiled code (1078 GFLOPS) for concrete shapes. **Recommendation: fund the cheap fused-flash first gate, not
+  a blind month**; hard stop → if the gate fails, fall back to `POST_MATMUL_PV_REST_DECODE_V2` (decode capped at
+  tinygrad's backend ceiling; full v2 transition sketch in the scope). See
+  `docs/post-matmul-pv-decode-strategic-scope-20260621.md`.
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
   but missed W==D promotion (+1.8%@1024, −1.2%@4096). **Do not pursue another bounded tile or flag sweep.**

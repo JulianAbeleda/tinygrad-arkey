@@ -72,7 +72,13 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > **~1078 GFLOPS** and **WINS 1.13×@ctx4096** — the ISA lever is CONFIRMED — but loses ctx1024/512 (0.94/0.88×)
 > because tinygrad can't express a symbolic-count tiled batched matmul, forcing concrete Smax=32 (full-MAXC reads).
 > Corrects an earlier non-split form (~50 GFLOPS, parallelism-collapsed) that wrongly blamed skinny M=4. Bounded
-> decode + the ISA-named codegen lever both exhausted (need symbolic-count tiled matmul / deep fused-flash) → REST_DECODE.
+> decode + the ISA-named codegen lever both exhausted (need symbolic-count tiled matmul / deep fused-flash).
+>
+> **Post-Matmul-PV STRATEGY — `STRATEGY_RECOMMEND_FULL_FUSED_FLASH`** (`docs/post-matmul-pv-decode-strategic-scope-20260621.md`):
+> exhausts the 3 remaining options. Next project = `POST_MATMUL_PV_FULL_FUSED_FLASH` (gate-first); symbolic-count tiled
+> matmul is dominated (W==D-marginal + sub-capability of fused-flash); rest+v2 is premature until the cheap fused-flash
+> first gate (concrete-ctx1024 toy LDS-tiled fused µkernel, ≥1.05× vs `gqa_coop_vec`) is run — hard-stop fallback to
+> REST_DECODE+v2 if it fails.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

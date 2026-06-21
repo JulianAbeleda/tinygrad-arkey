@@ -94,7 +94,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   cannot express a symbolic-count tiled batched matmul, so the concrete-K form needs concrete Smax=32 → reads the full
   MAXC KV (4–8× extra split work). **Corrects** an earlier non-split form (~50 GFLOPS, parallelism-collapsed) that
   wrongly blamed "skinny M=4." The bounded lever is exhausted (win unreachable Tc-proportionally without a
-  symbolic-count tiled matmul / the deep fused-`v_dot2`+LDS single-tile codegen). Decode bounded space exhausted → rest.
+  symbolic-count tiled matmul / the deep fused-`v_dot2`+LDS single-tile codegen). Decode bounded space exhausted.
+- **`post-matmul-pv-decode-strategic-scope-20260621.md`** — ⭐ STRATEGY: `STRATEGY_RECOMMEND_FULL_FUSED_FLASH` → next
+  project `POST_MATMUL_PV_FULL_FUSED_FLASH` (gate-first). Exhausts the 3 remaining options (rest+v2 / symbolic-count
+  tiled matmul / full fused-flash). Bounded decode is dead; only deep codegen closes the 5–6× llama gap. Symbolic-count
+  tiled matmul is **dominated** (W==D-marginal + a sub-capability of fused-flash); rest+v2 is **premature** (the cheap
+  fused-flash first gate is untried). **Recommendation: fund the cheap concrete-ctx1024 toy LDS-tiled fused µkernel
+  first gate (value-correct + ≥1.05× vs `gqa_coop_vec`), hard-stop → if it fails, fall back to REST_DECODE+v2.**
+  Includes the full decode closure table, capability map, and the executable fused-flash scope + v2 fallback sketch.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.
