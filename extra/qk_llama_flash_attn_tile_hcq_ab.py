@@ -109,9 +109,10 @@ def buf(nbytes):
   b = Buffer("AMD", nbytes, dtypes.uint8).ensure_allocated(); return b
 def va(b): return b._buf.va_addr
 
-def main():
-  assert Device.DEFAULT == "AMD"
-  dev = Device[Device.DEFAULT]
+def build_replay(dev):
+  """Build the tile + combine NamedAMDPrograms with baked kernargs + device buffers for the captured ctx1024 decode
+  shape, and the numpy GQA reference. Returns a namespace reused by both the B1 A/B and the B2 graph-integration."""
+  from types import SimpleNamespace
   cfg = json.load(open(CFG))
   elf = open(cfg["co_path"], "rb").read()
   tile_args = [bytes(a) for a in cfg["tile"]["args"]]
@@ -170,7 +171,19 @@ def main():
   comb = NamedAMDProgram(dev, "flash_attn_combine", elf, ckd, bytes(ck), dynamic_lds=cdyn)
   ck_full = bytearray(max(comb.kernargs_segment_size, len(ck))); ck_full[:len(ck)] = ck
   write_hidden(ck_full, comb.kernargs_segment_size, cg, cb); comb._raw = bytes(ck_full)
-  print(f"  combine kernarg_size(desc)={comb.kernargs_segment_size} lds={comb.group_segment_size}")
+  return SimpleNamespace(cfg=cfg, tile=tile, comb=comb, tg=tg, tb=tb, cg=cg, cb=cb, bDst=bDst, ref=ref,
+                         KV=KV, PB=PB, NVALID=NVALID, scale=scale, Hd=Hd, Hq=Hq, Hkv=Hkv,
+                         bufs=(bQ, bK, bV, bM, bDtmp, bMeta))
+
+def main():
+  assert Device.DEFAULT == "AMD"
+  dev = Device[Device.DEFAULT]
+  r = build_replay(dev)
+  cfg, tile, comb = r.cfg, r.tile, r.comb
+  tg, tb, cg, cb, bDst, ref = r.tg, r.tb, r.cg, r.cb, r.bDst, r.ref
+  KV, PB, NVALID, scale, Hd, Hq, Hkv = r.KV, r.PB, r.NVALID, r.scale, r.Hd, r.Hq, r.Hkv
+  print(f"  tile kernarg_size(desc)={tile.kernargs_segment_size} lds={tile.group_segment_size}; "
+        f"combine kernarg_size(desc)={comb.kernargs_segment_size} lds={comb.group_segment_size}")
 
   def llama(wait=False):
     tile(global_size=tuple(tg), local_size=tuple(tb), wait=wait, timeout=10000)

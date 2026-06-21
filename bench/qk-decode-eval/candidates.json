@@ -265,7 +265,7 @@
       "correctness_req": "none",
       "historical_expected_verdict": "PASS_ORACLE_LOCAL_AB",
       "compare_artifact": "bench/qk-llama-hcq-tile/latest.json",
-      "historical_note": "Route B B1: vendored llama tile via HCQ wins 2.96x GPU-time @ctx1024 (correct rel 1.3e-3); wall launch-overhead-bound -> W==D needs graph integration; non-promotable"
+      "historical_note": "Route B B1: vendored llama tile via HCQ wins 2.96x GPU-time @ctx1024 (correct rel 1.3e-3); wall launch-overhead-bound -> W==D needs graph integration; non-promotable | B2 (launch integration): folding tile+combine into ONE bound HCQ queue (1 doorbell, baked kernargs) -> integrated WALL 1.65x FASTER than coop (~36 vs 60us; B1 was 0.39x) -> B2_LOCAL_GRAPH_PASS; GPU win survives integration; Route B viable -> B3 owned AMDGCN. Vendored W==D layout-blocked."
     }
   ],
   "suites": {

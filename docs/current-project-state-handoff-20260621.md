@@ -66,6 +66,15 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   tile+combine launches into the decode JIT graph**, which is now the true gate. Non-promotable
   (`reference_oracle_hcq_llama_tile`). Harnesses `extra/qk_llama_fattn_kernarg_capture.cpp` +
   `extra/qk_llama_flash_attn_tile_hcq_ab.py`. See `docs/decode-attention-route-b-b1-result-20260621.md`.
+- **Route B B2 EXECUTED (2026-06-21) — `B2_LOCAL_GRAPH_PASS`: the GPU win SURVIVES launch integration.** Folding
+  tile+combine into ONE **bound HCQ compute queue** (one doorbell, kernargs baked once, queue `bind()`-ed + replayed —
+  the HCQGraph-ideal, audited as needing no `tinygrad/` change) drops the wall from **148µs (B1, 2 raw dispatches) →
+  ~36µs**, now **1.65× FASTER than gqa_coop_vec** (GPU-busy 3.6×, correct, reproduced). **The B1 launch-overhead
+  penalty is RECOVERED → Route B remains viable → proceed to B3 (owned hand-AMDGCN tile).** W==D NOT run: the *vendored*
+  kernel reads llama's exact ggml KV-cache layout (the tinygrad model doesn't produce it), so an in-model vendored W==D
+  is layout-blocked + out of bounds + non-promotable → W==D is B3's job (owned kernel authored to tinygrad's layout).
+  Zero `tinygrad/` diff, no `model.py` route. Harness `extra/qk_llama_flash_attn_tile_hcq_graph_b2.py`. See
+  `docs/decode-attention-route-b-b2-graph-integration-result-20260621.md`.
 
 - **Machine-search evaluator BUILT (2026-06-21).** `extra/qk_decode_eval.py` is the first-class, automated form of
   the lifecycle ladder (correctness → local A/B → whole-decode W==D → policy), emitting schema'd verdicts. It

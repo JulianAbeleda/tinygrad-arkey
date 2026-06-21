@@ -184,7 +184,7 @@
       "is_reference_oracle": true,
       "default_eligible": false,
       "local_ab_result": "PASS_ORACLE_LOCAL_AB: vendored llama tile via tinygrad HCQ wins 2.96x GPU-busy @ctx1024 (llama 15.1us vs coop 44.6us), correct (rel 1.3e-3). CONFIRMS the llama-class kernel wins when DISPATCHED BY tinygrad's runtime, not only in llama's own trace. CRITICAL B2 CAVEAT: by WALL time the 2-raw-HCQ-dispatch path is ~2.5x SLOWER (148 vs 58us) -- the GPU win is eaten by per-call launch overhead; a W==D win REQUIRES folding tile+combine into the model JIT graph (one dispatch). 'isolated wins don't transfer to integration' applies.",
-      "notes": "Route B B1 de-risk (full capture-and-replay). The vendored .co + captured kernarg launch correctly + win on GPU time via HCQ -> the escape hatch is worth integrating AT THE KERNEL LEVEL, but B2 must eliminate per-call launch overhead (graph integration) or the win won't reach W==D. See docs/decode-attention-route-b-b1-result-20260621.md."
+      "notes": "Route B B1 de-risk (full capture-and-replay). The vendored .co + captured kernarg launch correctly + win on GPU time via HCQ -> the escape hatch is worth integrating AT THE KERNEL LEVEL, but B2 must eliminate per-call launch overhead (graph integration) or the win won't reach W==D. See docs/decode-attention-route-b-b1-result-20260621.md. B2 RESULT: the B1 wall penalty is RECOVERED by HCQ graph integration -- one bound queue (1 doorbell, baked kernargs, replayed) gives integrated wall 1.65x faster than coop (GPU-busy 3.6x). B2_LOCAL_GRAPH_PASS -> Route B viable, proceed to B3 owned AMDGCN. Vendored in-model W==D is layout-blocked (needs llama ggml KV layout). See docs/decode-attention-route-b-b2-graph-integration-result-20260621.md."
     }
   ]
 }

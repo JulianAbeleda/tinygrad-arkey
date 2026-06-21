@@ -158,6 +158,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   capture/replay is feasible (NEEDS_DEEPER_PORT did not materialize). **But wall is ~2.5× SLOWER** (2 raw HCQ
   dispatches) → a W==D win (B2) **requires graph-integrating the launches**; that integration cost is the true gate.
   Non-promotable. Harnesses `extra/qk_llama_fattn_kernarg_capture.cpp` + `extra/qk_llama_flash_attn_tile_hcq_ab.py`.
+- **`decode-attention-route-b-b2-graph-integration-result-20260621.md`** — ⭐ Route B B2 EXECUTED: `B2_LOCAL_GRAPH_PASS`.
+  Folding tile+combine into ONE **bound HCQ queue** (1 doorbell, kernargs baked once, replayed — the HCQGraph-ideal)
+  drops the wall from **148µs (B1, 2 raw dispatches) → ~36µs**, now **1.65× FASTER than gqa_coop_vec** (GPU-busy 3.6×,
+  correct). **The B1 launch-overhead penalty is RECOVERED — the GPU win survives launch integration → Route B remains
+  viable → proceed to B3 (owned hand-AMDGCN).** Vendored in-model W==D is layout-blocked (needs llama's ggml KV layout)
+  → W==D is B3's job. Zero `tinygrad/` diff. Harness `extra/qk_llama_flash_attn_tile_hcq_graph_b2.py`.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.
