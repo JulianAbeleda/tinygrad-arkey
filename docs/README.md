@@ -88,11 +88,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   rocprof's HSA interception misses it; reproduced: 0 traces). rocprof-compute fix = unbounded deps + 0-counter
   backend → not worth it; bounded HCQ-counter paths already killed. Native attribution (ISA/resources + ProfileGraphEvent
   + ATT intervals) exists and suffices. Live HCQ counters = a deep native-profiled-HCQ project, deferred (low EV).
-- **`matmul-pv-diagnostic-result-20260621.md`** — ⭐ ISA lever REFUTED: `MATMUL_PV_FAIL_LOCAL_AB` → REST_DECODE.
-  Routing the PV through a tiled matmul (`prob @ V`) is **value-correct but 0.87/0.63/0.35×** vs `gqa_coop_vec` — the
-  PV matmul runs at **68 GFLOPS (worse than scalar `flash_partial`'s 201)** because the GQA decode PV is a skinny
-  M=G=4 GEMM that tiling can't fill. The one bounded codegen lever the attribution named is exhausted; llama's win is
-  the fused `v_dot2`+LDS single tile (deep codegen tinygrad lacks). Decode bounded space exhausted → rest.
+- **`matmul-pv-diagnostic-result-20260621.md`** — ⭐ `MATMUL_PV_BLOCKED_BY_LAYOUT` (gate `FAIL_LOCAL_AB`) → REST_DECODE.
+  The **split-preserving** tiled matmul PV (K=L=128 concrete, Hkv·Smax=256 wg) **TILES at ~1078 GFLOPS and WINS
+  1.13×@ctx4096** — the ISA lever is CONFIRMED on the merits — but loses ctx1024/512 (**0.94/0.88×**) because tinygrad
+  cannot express a symbolic-count tiled batched matmul, so the concrete-K form needs concrete Smax=32 → reads the full
+  MAXC KV (4–8× extra split work). **Corrects** an earlier non-split form (~50 GFLOPS, parallelism-collapsed) that
+  wrongly blamed "skinny M=4." The bounded lever is exhausted (win unreachable Tc-proportionally without a
+  symbolic-count tiled matmul / the deep fused-`v_dot2`+LDS single-tile codegen). Decode bounded space exhausted → rest.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

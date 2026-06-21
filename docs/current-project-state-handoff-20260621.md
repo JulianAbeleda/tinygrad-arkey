@@ -166,17 +166,21 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   ATT intervals) EXISTS and SUFFICED** for the FIXABLE_CODEGEN verdict → use it. Live HCQ counters = a deep
   native-profiled-HCQ project (low EV given the 0-backend), deferred. See
   `docs/tinygrad-hcq-profiling-visibility-result-20260621.md`.
-- **Matmul-PV diagnostic EXECUTED + REFUTED (2026-06-21) — `MATMUL_PV_FAIL_LOCAL_AB`; the ISA-named bounded lever is
-  REFUTED → REST_DECODE.** Tested the one bounded lever from the attribution: replace coop's scalar `flash_partial`
-  (PV) with `PV = prob @ V` as a matmul (tiled-GEMM codegen). Value-correct (rel_rmse 5e-4) but **0.872/0.634/0.345×
-  @ctx512/1024/4096** vs `gqa_coop_vec` — LOSES, regresses badly with ctx (414µs@4096 vs coop 143µs). WHY (DEBUG=2):
-  the PV matmul runs at **68 GFLOPS — WORSE than `flash_partial`'s 201** — because the GQA decode PV is
-  `[Hkv,G,ctx]@[Hkv,ctx,Hd]` with **M=G=4 per kv-head** (skinny GEMM, K=ctx) → tiling can't fill M=4; the q·k matmul
-  is fast because it contracts over Hd=128 (fat). No-copy = M=4 (slow); fat-M needs V-replication (layout copy).
-  **coop's scalar `flash_partial` is actually better than a naive matmul-PV for the GQA shape.** So the bounded
-  ISA lever is exhausted; llama's win is specifically the fused `v_dot2`+LDS single tile (deep codegen tinygrad
-  lacks). **Decode bounded space AND the ISA-named codegen lever are both exhausted → honest recommendation:
-  REST_DECODE** (pivot to v2/search/tooling-hardening; keep the llama oracle + refutations as standing evidence).
+- **Matmul-PV diagnostic EXECUTED (2026-06-21, CORRECTED) — `MATMUL_PV_BLOCKED_BY_LAYOUT` (lifecycle gate
+  `FAIL_LOCAL_AB`) → bounded lever exhausted → REST_DECODE.** Tested the one bounded lever from the attribution:
+  replace coop's scalar `flash_partial` (PV) with `PV = prob @ V` as a tiled matmul. **The ISA hypothesis is
+  CONFIRMED on the merits:** the **split-preserving** per-split matmul (K=L=128 **concrete**, Hkv·Smax=256 wg) TILES
+  at **~1078 GFLOPS** and **WINS 1.13× @ctx4096** (value-correct rel_rmse 7–8e-4). **But it is `BLOCKED_BY_LAYOUT`:**
+  tinygrad cannot reshape a **symbolic** `Tc` into a symbolic-count `(S,L)` tiled batched matmul, so the only
+  concrete-K form needs a **concrete** split count `Smax=32` → it reads the **full MAXC** KV regardless of `Tc` →
+  4–8× extra split work at ctx1024/512 → **0.936×/0.879×**, missing the ≥1.05×@ctx1024 gate. **Corrects the first
+  pass** (which measured a **non-split** form — batch over Hkv=8 only, ~50 GFLOPS — that COLLAPSED the KV-split
+  parallelism, then wrongly blamed "skinny M=4 defeats tiling"; the split form has the *same* M=4 and tiles fine).
+  The symbolic-`Tc` single matmul is not tiled at all (~13 GFLOPS). So the bounded matmul-PV lever is exhausted — the
+  win is real but unreachable Tc-proportionally without a **symbolic-count tiled batched matmul** (a tinygrad
+  capability gap, same family as the deep fused-`v_dot2`+LDS single-tile codegen, which would also unblock it).
+  **Decode bounded space AND the ISA-named codegen lever are both exhausted → honest recommendation: REST_DECODE**
+  (pivot to v2/search/tooling-hardening; keep the llama oracle + refutations as standing evidence).
   See `docs/matmul-pv-diagnostic-result-20260621.md`.
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
