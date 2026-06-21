@@ -66,6 +66,11 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > spills); root cause = `flash_partial` (PV) emits scalar loads / **0 `v_dot2` / 0 LDS** vs llama's LDS-tiled `v_dot2`
 > fused tile. Fixable lever = route the PV through tiled-matmul codegen (W==D-marginal; full win = deep fused-flash
 > codegen). Counters tooling-opaque (rocprof-compute broken, rocprofv3 blind to HCQ); binaries sufficed.
+>
+> **Matmul-PV diagnostic REFUTED the lever** (`extra/qk_matmul_pv_diagnostic_ab.py`, `qk-matmul-pv-diagnostic/`):
+> PV=prob@V as a matmul is value-correct but **0.87/0.63/0.35×** vs `gqa_coop_vec` — the GQA decode PV is a skinny
+> M=G=4 GEMM (**68 GFLOPS, worse than scalar flash_partial's 201**); tiling can't fill M=4. `MATMUL_PV_FAIL_LOCAL_AB`.
+> Bounded decode + the ISA-named codegen lever both exhausted → REST_DECODE.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
