@@ -40,9 +40,10 @@ Gates: 24GB→ON ✓, 16GB→OFF ✓, unknown→OFF ✓, explicit 0/1 ✓, unset
 
 ## Policy
 
-`PREFILL_V2=auto` is **safe to recommend**: it enables the fast prefill path only on cards that clearly fit it,
-stays off on ≤16GB and when VRAM can't be read, and never overrides an explicit choice. **Default remains off**
-(no behavior change) — flipping the global default to `auto` is an owner call (the conservative floor makes it
-low-risk on 24GB+, a no-op elsewhere). Recommended CLI/server wiring: pass `PREFILL_V2=auto` (Phase 4).
+`PREFILL_V2=auto` is **safe to recommend** as an opt-in: it enables the fast prefill path only on cards that clearly
+fit it, stays off on ≤16GB and when VRAM can't be read, and never overrides an explicit choice. **Default stays off
+— DECIDED 2026-06-21: the global default is NOT flipped to `auto`** (it would hold +14GB fp16 resident during decode
+for zero decode benefit; see `docs/decode-prefill-headline-reconciliation-result-20260621.md`). Recommended
+CLI/server wiring: pass `PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE=1` opt-in (the CLI hints it on large GPUs).
 
 Reproduce: `DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_prefill_v2_auto_policy_probe.py`

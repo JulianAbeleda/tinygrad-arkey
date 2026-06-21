@@ -6,6 +6,10 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 ## ⭐ Start here (canonical, post-bank)
 
+- **`current-project-state-handoff-20260621.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). One short page:
+  canonical numbers, decided policies (global `PREFILL_V2` OFF; `auto`/server/q8 opt-in), closed lanes (prefill
+  kernels, prefill default, bounded decode fusion, the `87.6` ambiguity), and the only open frontier (Claude-1
+  fused+coop decode). Guardrail: `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens these.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.
@@ -36,9 +40,9 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   COINCIDENCE: a real ctx≈0 decode **tok/s** AND, separately, a real ctx4096 decode **ms/token** (=11.4 tok/s); the
   reported "87.6 tok/s" was the genuine ctx≈0 rate (reruns ~85–86), not the ms mislabeled. Clean-wall reruns
   reproduce the canonical table exactly (68.1/66.4/60.7 @512/1024/4096); prefill policy (`auto`/server) does **not**
-  regress decode (<1%, identical output). **Decode headline stays `~67% llama` @ctx (≈86% @ctx≈0).** Recommendation:
-  **do NOT flip global `PREFILL_V2=auto`** (it holds +14GB resident during decode for zero decode benefit) — keep it
-  opt-in. Scope: `decode-prefill-headline-reconciliation-scope-20260621.md`; artifact `bench/qk-headline-reconciliation/result.json`.
+  regress decode (<1%, identical output). **Decode headline stays `~67% llama` @ctx (≈86% @ctx≈0).** **DECIDED
+  2026-06-21: global `PREFILL_V2` default stays OFF — not flipped to `auto`** (it holds +14GB resident during decode
+  for zero decode benefit); fast paths stay opt-in. Current-state: `current-project-state-handoff-20260621.md`.
 - **`decode-role-tensor-kernel-attribution-solution-scope-20260620.md`** — CURRENT DECODE NEXT SCOPE. Decode remains
   below llama: default route is still the banked `~67%` llama class, while q8 FFN is a hardened default-off opt-in
   route rerun at **72.9/71.1 tok/s @ctx 512/1024** (`~1.064×`, host-sync `0.0%`). Next work is role/tensor/kernel
@@ -48,10 +52,19 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   recoverable. Attention reduce/stat microfusion is a no-go because the dominant costs are intrinsic O(KV) QK /
   softmax work and the real fully fused flash path is linearizer/codegen-walled. Keep current decode defaults:
   baseline `60.8-68.0 tok/s`, q8 opt-in `64.5-72.8`.
-- **`decode-latency-hiding-lifecycle-codegen-scope-20260621.md`** — CURRENT DECODE NEXT SCOPE. The remaining decode
-  frontier is latency hiding / larger lifecycle codegen, not micro-fusion. First reconcile the `87.6 tok/s` headline,
-  then either prototype a fully fused flash-decode tile, prove a GEMV activation latency-hiding schedule, or produce a
-  precise compiler backlog and stop.
+- **`decode-latency-hiding-lifecycle-codegen-scope-20260621.md`** — (Claude-1 lane; superseded by the fused-coop
+  roadmap below). The decode frontier is latency hiding / larger lifecycle codegen, not micro-fusion. The `87.6`
+  headline is RECONCILED (`decode-prefill-headline-reconciliation-result-20260621.md`; decode is the curve / ~67%
+  llama); then either prototype a fully fused flash-decode tile, prove a GEMV latency-hiding schedule, or compiler-backlog.
+- **`decode-fused-coop-primitive-roadmap-scope-20260621.md`** — CURRENT CLAUDE-1 NEXT SCOPE. After the latency-hiding
+  result returned `ROADMAP`, decide how to express the only live decode lever: **fused + coop-optimized in one
+  primitive**. Compare raw-kernel/JIT bridge vs linearizer coupled multi-reduce, diff the losing raw fused tile against
+  the winning UOp `gqa_coop_vec` path, and return `BRIDGE_FIRST`, `LINEARIZER_FIRST`, or `ROADMAP_ONLY` before any
+  implementation.
+- **`canonical-policy-handoff-audit-result-20260621.md`** — CLAUDE-2 LANE CLOSED. Hardened the canonical
+  policy/headline state: audited the policy commits (no junk; recorded the swept Claude-1 files), swept stale
+  references, wrote `current-project-state-handoff-20260621.md`, and added the guardrail
+  `extra/qk_policy_consistency_check.py`. Scope: `canonical-policy-handoff-audit-scope-20260621.md`.
 
 ### Historical / Superseded Prefill Provenance
 

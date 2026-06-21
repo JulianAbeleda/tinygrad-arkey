@@ -1,10 +1,15 @@
 # Decode / Prefill Headline Reconciliation Scope
 
+> ✅ **RESOLVED — see `docs/decode-prefill-headline-reconciliation-result-20260621.md`** (and the canonical
+> `docs/current-project-state-handoff-20260621.md`). This is the provenance SCOPE; its "remaining owner call"
+> framing below is **superseded**: `87.6` is a numeric coincidence (ctx≈0 tok/s vs ctx4096 ms/token), the decode
+> headline stays ~67% llama @ctx, and the global `PREFILL_V2` default is **DECIDED OFF**. Do not re-open from here.
+
 Date: 2026-06-21
 
 Owner: next executor
 
-Status: scope only
+Status: scope only (RESOLVED)
 
 ## Context
 

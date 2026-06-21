@@ -2,7 +2,13 @@
 
 Single source for the fork's current benchmarks: each number, where it's recorded, and the exact
 command to reproduce it. Most `bench/**` output is gitignored (regeneratable); durable result
-artifacts are force-added. Doc map: `../docs/README.md`; current state: `../docs/amd-decode-banked-20260616.md`.
+artifacts are force-added. Doc map: `../docs/README.md`; **canonical current state: `../docs/current-project-state-handoff-20260621.md`**.
+
+> **Canonical policy (do not re-open — guardrail `extra/qk_policy_consistency_check.py`):** Global `PREFILL_V2`
+> default stays **OFF**; `PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE=1` / q8 are **opt-in**. `87.6` is contextual
+> (ctx≈0 tok/s vs a separate ctx4096 ms/token) — **never quote it bare**. The decode headline is the **curve**
+> (~86 @ctx≈0 → ~61 @ctx4096 = **~67% llama**), not ctx≈0. **Bounded decode fusion is closed.** The only live
+> decode lever is **fused+coop in one primitive** (Claude-1, `../docs/decode-fused-coop-primitive-roadmap-scope-20260621.md`).
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
