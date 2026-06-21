@@ -100,6 +100,20 @@
       "historical_note": "0.725x@1024 / 0.876x@4096 vs gqa_coop_vec; fusing exp into the partial loses (redundant per-lane exp); coop's hoisted-exp split stands"
     },
     {
+      "id": "matmul_pv_diagnostic",
+      "family": "attention_split",
+      "description": "ISA-justified diagnostic: replace coop's scalar flash_partial (PV, 24.7us, 0 v_dot2) with PV=prob@V as a tinygrad matmul (tiled-GEMM codegen). MEASURED FAIL_LOCAL_AB: 0.872/0.634/0.345x @ctx512/1024/4096 (value-correct rel_rmse 5e-4). The PV matmul runs at 68 GFLOPS (worse than flash_partial's 201) because the GQA decode PV is M=G=4 per kv-head (skinny GEMM, K=ctx) -> tiling can't fill; the fat-M alternative needs V-replication (layout copy). The matmul-PV lever is refuted; coop's flash_partial stands.",
+      "env": {},
+      "rungs": [
+        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_matmul_pv_diagnostic_ab.py", "result_json": "bench/qk-matmul-pv-diagnostic/latest.json"}
+      ],
+      "contexts": [512, 1024, 4096],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "FAIL_LOCAL_AB",
+      "compare_artifact": "bench/qk-matmul-pv-diagnostic/latest.json",
+      "historical_note": "0.63x@1024 / 0.35x@4096 vs gqa_coop_vec; PV-as-matmul is a skinny M=4 GEMM (68 GFLOPS), worse than scalar flash_partial"
+    },
+    {
       "id": "llama_flash_attn_tile_oracle",
       "family": "reference_oracle",
       "description": "REFERENCE ORACLE (non-default, non-promotable): llama.cpp flash_attn_tile decode attention vs gqa_coop_vec, pure GPU time (llama rocprofv3 trace vs coop ProfileGraphEvent). Answers whether llama's win is standalone-kernel or in-model. MEASURED: llama 5.7x faster @ctx1024 standalone -> PASS_ORACLE_LOCAL_AB. Vendored llama reference, NOT a tinygrad primitive; never a default route.",

@@ -325,6 +325,22 @@
         "docs/fused-softmax-v-tail-candidate-result-20260621.md",
         "bench/qk-fused-softmax-v-tail/latest.json"
       ]
+    },
+    {
+      "id": "matmul_pv_skinny_gqa_gemm_worse_than_scalar_flash_partial",
+      "applies_to": [
+        "decode_attention_reduce_stat_fusion",
+        "matmul_pv_diagnostic"
+      ],
+      "prunes_patterns": [
+        "express PV (prob @ V) as a tinygrad matmul to get tiled-GEMM codegen as a decode win",
+        "standard SDPA (matmul PV) beats coop flash decode at T=1"
+      ],
+      "reason": "MEASURED 2026-06-21 (ISA-justified diagnostic; value-correct rel_rmse 5e-4, clock-pinned throughput): replacing coop's scalar flash_partial (PV) with PV=prob@V as a matmul scores 0.872/0.634/0.345x @ctx512/1024/4096 vs gqa_coop_vec -> FAIL_LOCAL_AB, and REGRESSES badly with ctx (414us@4096 vs coop 143us). REFUTES the ISA-evidence hypothesis that routing PV through tiled-GEMM codegen would help: DEBUG=2 shows the PV matmul (r_2_8_16_4_4_256_4) runs at 68 GFLOPS -- WORSE than flash_partial's 201 GFLOPS -- because the GQA decode PV is prob[Hkv,G,ctx]@V[Hkv,ctx,Hd] with M=G=4 per kv-head (skinny GEMM, K=ctx that scales with ctx) -> tinygrad's GEMM tiling can't fill M=4. The q.k matmul is fast because its contraction is over Hd=128 (fat), not a tiny-M batch. The only no-copy formulation is M=4 (slow); the fat-M alternative needs V-replication G x (a layout copy adding traffic). coop's hand-rolled scalar flash_partial is actually BETTER than a naive matmul-PV for the GQA decode shape. PRUNES matmul-PV / standard-SDPA as a decode lever. The bounded ISA lever from low-level-attribution is REFUTED; the only remaining path is the deep fused-tiled-flash (v_dot2 + LDS, one kernel) codegen capability tinygrad lacks. gqa_coop_vec stands -> decode bounded space + the named bounded codegen lever both exhausted.",
+      "evidence": [
+        "docs/matmul-pv-diagnostic-result-20260621.md",
+        "bench/qk-matmul-pv-diagnostic/latest.json"
+      ]
     }
   ],
   "candidate_pruning": {
