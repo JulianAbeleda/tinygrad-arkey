@@ -65,28 +65,40 @@ single cold pass runs each chunk once, so compile offsets the run saving. Only a
      prefix-cache artifact) so the concrete prefill-v2 fast path isn't even exercised. The win only lands if
      generate() actually routes the prefill through concrete prefill-v2 512-chunks.
 
-## Implication for the roadmap
+## Result 3 — cold chunk-scheduling RESOLVED: prefill-v2 512-chunks DO engage cold
 
-The earlier "attribute a 6.5 s host overhead first" step is **withdrawn** — there is no such overhead. The real
-gating questions for whether the attention prize lands e2e are narrower and concrete:
-1. **Does a genuine COLD first prompt (no prefix cache, prompt ≥512) engage prefill-v2 512-chunks** for the bulk,
-   or does it too fall into the 32-token path after chunk@0? (Determines if Increment 0 / flash can ever help e2e
-   as generate() is written.)
-2. **Jit-caching** to amortize the per-start_pos compile tax (server/repeated-prompt use case).
+A clean cold trace (fresh model, empty cache, 1024-token varied prompt; `/tmp/inc0_cold2.py`) shows generate()
+makes exactly **2 forward calls: `start_pos=int, T=512` (concrete chunk@0) + `start_pos=UOp, T=512` (symbolic
+chunk@512)**. So on a genuine cold prompt the prefill-v2 path engages properly, and chunk@512 is symbolic only
+because ck=0 is default — with `PREFILL_CONCRETE_KV=1` it becomes concrete → Increment 0's per-chunk win applies
+to every chunk past the first. The warm "12× 32-token" pathology was purely a **prefix-cache artifact** of the
+repeated-filler harness (resume left `prompt_len - start_pos < 512` → the 32-token `else` path); it is not a
+property of cold prefill and not Increment 0's concern.
 
-The flash kernel (Increment 2) stays attractive precisely because it **compiles once** (no per-start_pos tax) and
-is symbolic-capable — it would also serve the 32-token symbolic remainder path, sidestepping both integration
-issues above.
+Concrete cold arithmetic, 1024-prompt: ck=0 forward ≈ 153 (concrete@0) + 398 (symbolic@512) = 551 ms; ck=1 ≈ 153
++ 162 = 315 ms → **1.75× on the cold forward**, plus a one-time ~5 s compile for the extra concrete jit.
 
-## Recommended next steps (revised)
-1. **Clean cold-first-prompt e2e check** (cheap): one fresh-model generate() on a ≥1024-token prompt, trace the
-   per-call start_pos/T like `/tmp/inc0_trace.py`, confirm whether the bulk goes through prefill-v2 512-chunks
-   (concrete vs symbolic) or the 32-token `else` path. This tells us if generate()-as-written can realize the
-   forward win at all.
-2. If prefill-v2 512-chunks ARE engaged cold → ship Increment 0 with **jit-caching** (amortize compile) for the
-   throughput win; and/or build **Increment 2 (flash)** for the symbolic/long-ctx + 32-token tail.
-3. If generate() keeps falling into 32-token chunks → the lever is generate()'s **prefill chunk scheduling**
-   (route more through concrete prefill-v2), orthogonal to and prerequisite for any attention-kernel work.
+## Implication for the roadmap (finalized)
+
+- The earlier "attribute a 6.5 s host overhead first" step is **withdrawn** — there is no host overhead (21.8 ms).
+- Cold chunk-scheduling question **resolved**: prefill-v2 512-chunks engage cold; Increment 0 makes chunks 2+
+  concrete → a real cold forward win (~1.75× on 1024-prompt, scaling with context).
+- **Sole remaining blocker = the per-start_pos compile tax** (cold, ~5 s/jit). Two ways it pays off:
+  (a) **jit-caching / repeated prompts / server** — compile amortizes across generations → the full 1.7–4.4×
+  forward win lands; (b) **long prompts** — many chunks each saving 0.2–0.8 s eventually exceed the one-time
+  compile. For a one-shot short cold prompt, compile dominates → no e2e win.
+- **Increment 2 (flash) is the cleaner general answer**: compiles ONCE (no per-start_pos tax), symbolic-capable
+  (serves chunk@512+ directly without forcing concrete), no score materialization, and also covers the 32-token
+  remainder path. It sidesteps the compile tax entirely.
+
+## Recommended next steps
+1. **Ship Increment 0 gated on jit-caching** for the repeated-prompt/server use case (the forward win is real and
+   byte-identical; only the cold compile tax blocks the one-shot case). Confirm `prefill_v2_jits` persist across
+   generations and measure a warm-second-generation e2e on a clean (non-prefix-colliding) prompt.
+2. **Build Increment 2 (flash)** for the one-shot / long-context / symbolic case — it removes the compile tax and
+   the score materialization that Increment 0 still pays at long KV. This is the durable lever.
+3. Increment 1 (warmstart TC-opts on the attention matmuls) remains optional, gated on a per-kernel attribution
+   of the explicit path's residual cost.
 
 ## Notes
 - The probe's attention-share buckets read 0.0% (PROFILE env init-timing in the subprocess — profiling captured no
