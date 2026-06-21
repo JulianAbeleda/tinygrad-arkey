@@ -16,6 +16,14 @@ import contextlib, pathlib, subprocess
 DEV = "/sys/class/drm/card0/device"
 DEV_SYS = f"{DEV}/power_dpm_force_performance_level"  # the perf-state leaf (single source of truth for the path)
 
+# Canonical privileged perf-state mutations. The dangerous-power sysfs/rocm-smi strings live ONCE here (the
+# boundary). A caller that needs a different provenance dict shape may wrap these with its own subprocess +
+# formatting, but must NOT re-spell the sysfs writes -- see coding-principles "Contain Dangerous Power".
+# (qk_decode_q8_model_route_timing_audit.py reuses these constants with its own artifact provenance shape.)
+PIN_PEAK_CMD = f"echo manual > {DEV}/power_dpm_force_performance_level && echo 2 > {DEV}/pp_dpm_sclk && echo 3 > {DEV}/pp_dpm_mclk"
+SET_AUTO_CMD = f"echo auto > {DEV}/power_dpm_force_performance_level"
+RESET_PERF_DETERMINISM = ["sudo", "-n", "rocm-smi", "--resetperfdeterminism"]
+
 def read_perf_state() -> str:
   """Read the GPU perf-state ('auto'/'manual'/...) -- the READ side of the perf-state boundary (no sudo)."""
   try: return pathlib.Path(DEV_SYS).read_text().strip()
@@ -27,13 +35,13 @@ def _sudo(cmd: str) -> dict:
 
 def pin_peak() -> dict:
   """force near-peak sclk(2304MHz idx2) + mclk(1249MHz idx3). Returns provenance dict."""
-  return _sudo(f"echo manual > {DEV}/power_dpm_force_performance_level && echo 2 > {DEV}/pp_dpm_sclk && echo 3 > {DEV}/pp_dpm_mclk")
+  return _sudo(PIN_PEAK_CMD)
 
 def restore_auto() -> list[dict]:
-  r = subprocess.run(["sudo", "-n", "rocm-smi", "--resetperfdeterminism"], text=True,
+  r = subprocess.run(RESET_PERF_DETERMINISM, text=True,
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   return [{"cmd": "rocm-smi --resetperfdeterminism", "rc": r.returncode, "ok": r.returncode == 0},
-          _sudo(f"echo auto > {DEV}/power_dpm_force_performance_level")]
+          _sudo(SET_AUTO_CMD)]
 
 @contextlib.contextmanager
 def pinned_peak(enabled: bool = True):

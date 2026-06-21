@@ -89,11 +89,13 @@ def telemetry(rows: list[dict[str, Any]]) -> dict[str, Any]:
   return {"all": block(rows), "active": block(active)}
 
 
-# DOCUMENTED EXCEPTION to the qk_clock_pin GPU perf-state boundary: the pin sequence below is byte-identical to
-# qk_clock_pin.pin_peak()/restore_auto(), but this script emits its OWN provenance dict shape ({cmd,returncode,
-# stdout[-1000:],ok}) into its artifact and already wraps the pin in try/finally. Routing it through qk_clock_pin
-# would change the emitted provenance bytes (NON-NFC), so it is kept local. Centralizing it is a separate
-# (non-NFC) provenance-format change, not part of the NFC boundary fix.
+# The privileged perf-state mutations are the SAME dangerous-power operations as qk_clock_pin's boundary; this
+# script reuses the boundary's command constants (PIN_PEAK_CMD/SET_AUTO_CMD/RESET_PERF_DETERMINISM) so the sysfs
+# writes are spelled in exactly one place. Only the provenance dict SHAPE differs ({cmd,returncode,stdout[-1000:],
+# ok} vs the boundary's {cmd,rc,ok,out}) -- that formatting stays local because this script bakes it into its
+# artifact bytes, but the operation itself is no longer duplicated.
+from extra.qk_clock_pin import PIN_PEAK_CMD, SET_AUTO_CMD, RESET_PERF_DETERMINISM
+
 def sudo(cmd: str) -> dict[str, Any]:
   p = subprocess.run(["sudo", "-n", "bash", "-c", cmd], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   return {"cmd": cmd, "returncode": p.returncode, "stdout": p.stdout[-1000:], "ok": p.returncode == 0}
@@ -101,17 +103,17 @@ def sudo(cmd: str) -> dict[str, Any]:
 
 def set_lane(lane: str) -> dict[str, Any]:
   if lane == "auto":
-    return sudo(f"echo auto > {DEV}/power_dpm_force_performance_level")
+    return sudo(SET_AUTO_CMD)
   if lane == "manual_peak":
-    return sudo(f"echo manual > {DEV}/power_dpm_force_performance_level && echo 2 > {DEV}/pp_dpm_sclk && echo 3 > {DEV}/pp_dpm_mclk")
+    return sudo(PIN_PEAK_CMD)
   raise ValueError(lane)
 
 
 def restore_lane() -> list[dict[str, Any]]:
-  p = subprocess.run(["sudo", "-n", "rocm-smi", "--resetperfdeterminism"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+  p = subprocess.run(RESET_PERF_DETERMINISM, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   return [
     {"cmd": "rocm-smi --resetperfdeterminism", "returncode": p.returncode, "stdout": p.stdout[-1000:], "ok": p.returncode == 0},
-    sudo(f"echo auto > {DEV}/power_dpm_force_performance_level"),
+    sudo(SET_AUTO_CMD),
   ]
 
 
