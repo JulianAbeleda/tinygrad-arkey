@@ -107,6 +107,10 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > `contract_audit` + `stamp`); `decode_eval` now auto-flags any non-conforming child artifact (`child_artifact_contract`
 > + `HARNESS-CONTRACT` note); `qk_fused_flash_concrete_gate_ab.py` upgraded to **CONFORMS 13/13** (reference). No
 > verdict/default changed.
+>
+> **Harness best practices** (`qk-decode-eval/HARNESS_GUIDE.md`): the operational checklist for new decode
+> performance harnesses. It codifies timing authority, artifact fields, stamping, reproducibility bands, verdict
+> discipline, and cleanup policy using MLPerf/SPEC/Google Benchmark/profiler/FlashAttention/vLLM references.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
