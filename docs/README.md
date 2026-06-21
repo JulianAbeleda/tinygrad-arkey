@@ -21,9 +21,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 - **`prefill-flash-increment2-result-20260620.md`** — Increment 2 flash prefill kernel is correct (`rel_rmse ~1e-7`)
   but **~15× too slow** at KV512 and not shipped. Recommendation: rest prefill here unless a multi-day WMMA/key-tiled
   flash build is explicitly reopened.
-- **`prefill-policy-integration-scope-20260620.md`** — CURRENT PREFILL ACTION SCOPE. Prefill kernels are settled;
-  remaining work is policy/integration: VRAM-aware `PREFILL_V2`, server/long-prompt `PREFILL_CONCRETE_KV`, avoiding
-  the 32-token symbolic fallback trap, and user-facing benchmark/CLI policy.
+- **`prefill-policy-integration-result-20260620.md`** — ⭐CURRENT PREFILL STATE (policy shipped). Three advertised
+  profiles: **universal default** (any card, slow long prompts), **`PREFILL_V2=auto`** (24GB+, ~5–15× faster prefill,
+  VRAM-gated so it never OOMs small cards), **`PREFILL_SERVER_PROFILE=1`** (servers/long/repeat, best warm prefill
+  0.17–1.6s). Shipped: VRAM-aware `PREFILL_V2=auto` (Phase 1), concrete-KV server policy (Phase 2), the 32-token
+  fallback fix `PREFILL_REMAINDER_FIX` (Phase 3, default-on, byte-identical, up to 14× on prefix-cache resume),
+  CLI hints (Phase 4). Per-phase: `prefill-{v2-auto-policy,concrete-kv-policy,route-schedule}-result-20260620.md`;
+  scope `prefill-policy-integration-scope-20260620.md`; VRAM-reduction design `prefill-v2-vram-reduction-scope-20260620.md`.
+  Default `PREFILL_V2` unchanged (off); flipping it to `auto` is the one remaining owner call.
 - **`decode-role-tensor-kernel-attribution-solution-scope-20260620.md`** — CURRENT DECODE NEXT SCOPE. Decode remains
   below llama: default route is still the banked `~67%` llama class, while q8 FFN is a hardened default-off opt-in
   route rerun at **72.9/71.1 tok/s @ctx 512/1024** (`~1.064×`, host-sync `0.0%`). Next work is role/tensor/kernel
