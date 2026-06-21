@@ -1,8 +1,8 @@
 {
   "summary": {
     "generated": "2026-06-21",
-    "git_head": "e33a7975d",
-    "total_tracked": 2468,
+    "git_head": "371bcb4bb",
+    "total_tracked": 2513,
     "project_rows": 1613,
     "vendor_dirs": 26,
     "vendor_files": 853,
@@ -20318,7 +20318,7 @@
     {
       "path": "bench/qk-repo-principles-cleanup/build_repo_inventory.py",
       "type": "script",
-      "loc": 364,
+      "loc": 366,
       "subsystem": "audit_tooling",
       "recommendation": "KEEP_LIVE_TOOLING",
       "reason": "audit inventory/index builder (read-only, re-runnable)",
@@ -23936,7 +23936,7 @@
     {
       "path": "structure/cache/repo-cache.md",
       "type": "doc",
-      "loc": 87,
+      "loc": 91,
       "subsystem": "structure",
       "recommendation": "KEEP_DOC_AUTHORITY",
       "reason": "structure/role/convention layer (current)",
@@ -23948,7 +23948,7 @@
     {
       "path": "structure/cache/repo-map.md",
       "type": "doc",
-      "loc": 74,
+      "loc": 80,
       "subsystem": "structure",
       "recommendation": "KEEP_DOC_AUTHORITY",
       "reason": "structure/role/convention layer (current)",

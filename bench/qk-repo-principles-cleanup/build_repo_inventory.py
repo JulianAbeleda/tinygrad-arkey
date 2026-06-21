@@ -61,7 +61,9 @@ def is_vendor(p: str) -> bool:
 # the builder's own report outputs are the audit ARTIFACT, not a subject of it; excluding them keeps the run
 # idempotent (inventory.json records LOC, so classifying itself would never reach a fixed point).
 SELF_OUTPUTS = {"bench/qk-repo-principles-cleanup/inventory.json", "bench/qk-repo-principles-cleanup/inventory.md"}
-project = [p for p in tracked if not is_vendor(p) and p not in SELF_OUTPUTS]
+# per-folder FILE_INDEX.md are generated navigation artifacts (build_folder_indexes.py) derived FROM this
+# inventory -> not subjects of it (avoids a generated-doc feedback loop).
+project = [p for p in tracked if not is_vendor(p) and p not in SELF_OUTPUTS and not p.endswith("FILE_INDEX.md")]
 vendor = [p for p in tracked if is_vendor(p)]
 
 # ---------------------------------------------------------------- helpers

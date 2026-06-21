@@ -5,6 +5,12 @@ Purpose: compact file ownership map for agents before reading source. Doc map: `
 Whole-repo file classification SSOT: `../../bench/qk-repo-principles-cleanup/inventory.json` (every tracked file →
 KEEP_CORE / LIVE_TOOLING / LIBRARY_HELPER / DOC_AUTHORITY / TEST / ARCHIVE_PROVENANCE / vendor).
 
+**Per-folder `FILE_INDEX.md`:** each major folder (`extra/`, `tinygrad/llm/`, `test/`, `structure/`, `docs/`, and
+each multi-file `bench/<project>/`) carries a generated `FILE_INDEX.md` listing its files with a live marker
+(● live runtime/tooling/library · ◐ current doc/test · ○ provenance), recommendation, LOC, and a one-line
+description. Regenerate with `bench/qk-repo-principles-cleanup/build_folder_indexes.py` (reads `inventory.json`);
+do not hand-edit. Single-file folders are omitted (their one file's status is in `inventory.json`).
+
 ## Root
 
 - `README.md` - upstream tinygrad README + a fork-orientation header (entry points).

@@ -8,6 +8,10 @@ Scope: stable implementation context for token-saving orientation. Full doc map:
 > `../../docs/current-project-state-handoff-20260621.md` (canonical). This cache holds only *stable* facts (project
 > shape, run commands, boundaries, file ownership) that do not change every time a perf number moves — so it does
 > not re-drift. Whole-repo file classification: `../../bench/qk-repo-principles-cleanup/inventory.json`.
+>
+> **Which files in a folder are live?** Each major folder has a generated `FILE_INDEX.md` marking every file
+> ● live / ◐ current doc-or-test / ○ provenance, with a one-line description. Regenerate via
+> `bench/qk-repo-principles-cleanup/build_folder_indexes.py`.
 
 ## Project Shape
 

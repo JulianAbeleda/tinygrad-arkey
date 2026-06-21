@@ -14,6 +14,10 @@ and (3) the live surface is lean enough to reason about end-to-end.
   references, importers, LOC, principle_score, risk_if_deleted/kept, recommendation, reason).
 - **Re-runnable builder:** `bench/qk-repo-principles-cleanup/build_repo_inventory.py` (read-only;
   extends the prior round's proven import-closure + import-safety-fixpoint engine to the whole repo).
+- **Per-folder navigation:** `bench/qk-repo-principles-cleanup/build_folder_indexes.py` writes a `FILE_INDEX.md`
+  into each major folder (`extra/`, `tinygrad/llm/`, `test/`, `structure/`, `docs/`, each multi-file
+  `bench/<project>/`) marking every file ● live / ◐ current doc-or-test / ○ provenance with a one-line
+  description — so live-vs-provenance is visible *in the folder*, not only in this inventory.
 - **Method note:** this generalizes the same evidence graph the active-surface reduction used today
   (`docs/perf-probe-active-surface-reduction-result-20260621.md`, `extra/qk_*.py` 376→133). That round
   covered only `extra/*.py` + `docs/*.md`; **this audit covers bench, tests, structure, root, and the
