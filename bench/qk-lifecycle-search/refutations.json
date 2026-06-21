@@ -296,7 +296,7 @@
       ]
     },
     {
-      "id": "north_star_warp_tile_partial_exceeds_coop_combine_bandwidth_bound",
+      "id": "north_star_warp_tile_qk_partial_is_ceiling_coop_matmul_near_optimal",
       "applies_to": [
         "decode_vector_flash_tile_high_kvsplit",
         "north_star_flash_attn_tile"
@@ -305,7 +305,7 @@
         "warp-cooperative fused q.k flash tile as a local win vs gqa_coop_vec",
         "improving the split-combine (more workgroups / stream-k) as the lever to beat gqa_coop_vec"
       ],
-      "reason": "MEASURED 2026-06-21 (first real north-star candidate executed through the binding system; byte-exact err 0.0, clock-pinned): the warp-cooperative flash_attn_tile (ds_bpermute q.k, LDS K/V, GQA pack, register online softmax, 128-1024 partial workgroups) scores 0.58x@ctx1024 / 0.89x@ctx4096 vs gqa_coop_vec -> FAIL_LOCAL_AB. ATTRIBUTION refutes the prior 'serial-combine-is-the-ceiling' hypothesis: (a) the warp PARTIAL ALONE (~111us@1024) already EXCEEDS coop's whole attention (~109us) -> even a free combine cannot win; (b) a many-workgroup combine (streamk, 128 wg) is byte-for-byte as slow as the serial flash_reduce (32 wg) -> the combine is HBM-bandwidth-bound, NOT launch/occupancy-bound. The real ceiling is the FUSED cooperative q.k partial vs coop's SEPARATED optimized matmul (tinygrad GEMM for scores) + weighted-sum partial + optimized multi-kernel combine. A future candidate must produce a faster q.k partial, not a better combine. gqa_coop_vec stands; bounded standalone tiles remain refuted.",
+      "reason": "MEASURED 2026-06-21 then RE-AUDITED with a throughput probe (docs/north-star-decode-attention-redesign-audit-20260621.md). The warp-cooperative flash_attn_tile scores 0.46-0.87x (throughput) / 0.52-0.71x (latency) vs gqa_coop_vec -> FAIL_LOCAL_AB (byte-exact). CORRECTION: the earlier 'combine is HBM-bandwidth-bound' claim is WRONG. Traffic accounting: pout is ~1 MB (~1 us at HBM peak) = negligible; the latency-measured ~75us 'combine cost' was 2nd-raw-dispatch overhead (coop is a batched JIT graph, the candidate is 2 un-batched raw dispatches; it was S-invariant and DECREASED with ctx, inconsistent with bandwidth). REAL ceiling: the candidate's q.k PARTIAL throughput is FLAT ~163us across ctx (latency/occupancy-bound: 512 small workgroups + LDS-load + barrier + 32-step ds_bpermute butterfly per key), while coop's matmul q.k SCALES efficiently from 75us. coop's optimized matmul q.k is near-optimal for tinygrad primitives; every standalone hand-rolled tile (warp/fused/vector) replaces it with a slower dot and loses. The combine is NOT the lever. PRUNES: 'more splits / better combine / compact-state combine / stream-k' as the way to beat gqa_coop_vec. The only remaining lever is llama-quality kernel codegen (10x gap), not a bounded tile. gqa_coop_vec stands.",
       "evidence": [
         "docs/north-star-flash-attn-tile-execution-result-20260621.md",
         "bench/qk-north-star-flash-attn-tile/latest.json"
