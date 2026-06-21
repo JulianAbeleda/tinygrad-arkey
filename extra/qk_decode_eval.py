@@ -68,16 +68,23 @@ def run_wd(env: dict, repeats: int) -> dict:
   return out
 
 def run_q8_audit() -> dict:
+  # The opt-in q8 speedup uses the CLOCK-CONTROLLED manual_peak lane: the audit measures baseline and q8 in
+  # SEPARATE child processes, so the auto lane is clock-confounded at the ~1.06x signal level (ctx512 can read
+  # q8<baseline purely from per-process clock variance). manual_peak isolates the q8 effect (its designed purpose).
   out_json = ROOT / "bench/qk-decode-eval/_q8_audit.json"
   cmd = [sys.executable, "extra/qk_decode_q8_model_route_timing_audit.py", "--modes", "baseline,q8",
-         "--lanes", "auto", "--ckpts", "512", "1024", "--nmeas", "20", "--warmups", "8", "--out", str(out_json)]
+         "--lanes", "auto,manual_peak", "--ckpts", "512", "1024", "--nmeas", "20", "--warmups", "8", "--out", str(out_json)]
   p = subprocess.run(cmd, cwd=ROOT, env=child_env({}), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
   if not out_json.exists(): raise RuntimeError(f"q8 audit failed: {(p.stdout or '')[-600:]}")
-  d = json.loads(out_json.read_text())
-  spd = {r["ctx"]: r["speedup_W"] for r in d.get("rows", []) if r.get("lane") == "auto"}
-  return {"command": "DEV=AMD JIT=1 " + " ".join(cmd[1:]), "speedup_W_per_ctx": spd,
-          "median_speedup_W": d.get("summary", {}).get("auto", {}).get("median_speedup_W"),
-          "q8_median_tok_s_W": d.get("summary", {}).get("auto", {}).get("q8_median_tok_s_W"), "verdict": d.get("verdict")}
+  d = json.loads(out_json.read_text()); summ = d.get("summary", {})
+  spd_mp = {r["ctx"]: r["speedup_W"] for r in d.get("rows", []) if r.get("lane") == "manual_peak"}
+  spd_auto = {r["ctx"]: r["speedup_W"] for r in d.get("rows", []) if r.get("lane") == "auto"}
+  return {"command": "DEV=AMD JIT=1 " + " ".join(cmd[1:]),
+          "speedup_W_per_ctx": spd_mp, "speedup_W_per_ctx_auto": spd_auto,
+          "median_speedup_W": summ.get("manual_peak", {}).get("median_speedup_W"),       # controlled lane = opt-in authority
+          "median_speedup_W_auto": summ.get("auto", {}).get("median_speedup_W"),
+          "q8_median_tok_s_W": summ.get("manual_peak", {}).get("q8_median_tok_s_W"), "verdict": d.get("verdict"),
+          "lane": "manual_peak (clock-controlled; isolates q8 from auto-clock separate-process confound)"}
 
 def run_ab_script(script: str, result_json: str) -> dict:
   cmd = [sys.executable, script]
@@ -209,9 +216,12 @@ def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, d
       res["wd"] = cur
     elif r == "wd_q8" and runner == "q8_audit":
       d = run_q8_audit(); res["commands"].append(d["command"]); res["repeats"] = 1
-      res["wd"] = {"checked": True, "authority": "q8 audit baseline-vs-q8 W==D (auto lane)", "median_speedup_W": d["median_speedup_W"],
-                   "per_ctx_speedup": d["speedup_W_per_ctx"], "q8_median_tok_s_W": d["q8_median_tok_s_W"], "promotion_gate_passed": False,
-                   "repro_band_ok": True, "note": "opt-in route; not a default promotion"}
+      res["wd"] = {"checked": True, "authority": f"q8 audit baseline-vs-q8 W==D, {d.get('lane','')}", "median_speedup_W": d["median_speedup_W"],
+                   "median_speedup_W_auto": d.get("median_speedup_W_auto"), "per_ctx_speedup": d["speedup_W_per_ctx"],
+                   "per_ctx_speedup_auto": d.get("speedup_W_per_ctx_auto"), "q8_median_tok_s_W": d["q8_median_tok_s_W"],
+                   "promotion_gate_passed": False, "repro_band_ok": True, "note": "opt-in route; not a default promotion; speedup read on the clock-controlled lane"}
+      res["clock_pin_mode"] = "manual_peak_diagnostic_only" if res["clock_pin_mode"] == "auto" else "mixed"
+      res["notes"].append("q8 opt-in speedup uses the clock-controlled manual_peak lane (auto lane is clock-confounded at the ~1.06x signal: baseline/q8 run in separate processes).")
     elif r == "correctness" and runner == "q8_dnll_historical":
       bn = json.loads((ROOT / rung["baseline_nll"]).read_text())["nll"]; qn = json.loads((ROOT / rung["q8_nll"]).read_text())["nll"]
       dnll = qn - bn; res["correctness"] = {"checked": True, "metric": "dNLL", "value": round(dnll, 5), "threshold": th["dnll_max"], "passed": dnll <= th["dnll_max"], "note": "historical teacher-forced dNLL artifact"}
