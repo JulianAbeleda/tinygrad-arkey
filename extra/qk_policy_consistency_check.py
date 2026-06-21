@@ -34,6 +34,11 @@ _HEAD_OK = ("curve", "~67", "67%", "non-headline", "ambig", "never", "contextual
 # self-referential meta lines that DESCRIBE the guardrail/audit (allowed to quote the banned phrases)
 _META = ("guardrail", "consistency check", "consistency: ", "re-open", "re-opens", "reopen", "stale reference",
          "stale ref", "banned", "qk_policy_consistency", "checker", "this file fails", "exit 1", "audit")
+# context that makes a vector-tile / FLASH_L / bounded-decode mention a CLOSED/RESTED statement, not an open proposal
+_DECODE_RESTED_OK = ("rested", "closed", "refuted", "no-go", "no go", "north-star", "north star", "not promote",
+                     "rest_decode", "rest decode", "not a default", "not a bounded", "do not pursue", "historical",
+                     "superseded", "no funded bounded", "failed w==d", "promotion failed", "exhausted", "do not",
+                     "don't", "opt-in", "owner", "not promoted", "below promotion", "sub-gate", "marginal", "rest")
 
 
 def scan(rel: str, lines: list[str]) -> list[str]:
@@ -57,6 +62,20 @@ def scan(rel: str, lines: list[str]) -> list[str]:
        and any(w in l for w in ("current", "next work", "todo", "implement now", "tactical", "in progress")) \
        and not any(w in win for w in ("closed", "no-go", "no go", "exhausted", "refuted", "historical", "superseded")):
       out.append((i+1, "bounded decode fusion as current work (it is closed)", line))
+    # vector-tile / fused+coop presented as an OPEN / next / fundable bounded decode build (it is rested)
+    if (("vector_flash_decode_tile" in l or "vector-tile" in l or "fused+coop" in l or "fused + coop" in l) and
+        any(w in l for w in ("fundable", "next build", "next bounded", "live decode lever", "live lever",
+                             "open frontier", "is the next", "next scope")) and
+        not any(w in win for w in _DECODE_RESTED_OK)):
+      out.append((i+1, "vector-tile/fused+coop as an OPEN/next bounded decode build (bounded decode is rested)", line))
+    # proposing to promote FLASH_L=64 by default (it passed local but failed W==D promotion)
+    if "flash_l=64" in l and any(w in l for w in ("promote", "default", "ship", "should be")) \
+       and not any(w in win for w in _DECODE_RESTED_OK):
+      out.append((i+1, "FLASH_L=64 promotion/default proposed (it failed W==D; do not promote)", line))
+    # "bounded decode ... open" framing (the lane is rested, not open)
+    if re.search(r"bounded decode.*(open|fundable|next build|remains open|still open)", l) \
+       and not any(w in win for w in _DECODE_RESTED_OK):
+      out.append((i+1, "bounded decode framed as open (it is rested)", line))
   return out
 
 

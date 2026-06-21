@@ -187,6 +187,113 @@
       "evidence": [
         "docs/decode-ffn-activation-fusion-result-20260620.md"
       ]
+    },
+    {
+      "id": "fused_flash_naive_loses_to_optimized_split",
+      "applies_to": [
+        "decode_fully_fused_flash_tile",
+        "decode_attention_reduce_stat_fusion"
+      ],
+      "prunes_patterns": [
+        "fewer-kernel fused flash tile as a bounded win",
+        "fusion/launch-reduction alone for attention"
+      ],
+      "reason": "The raw C fully-fused flash tile (2 kernels: qk+softmax+V interleaved + split-reduce) is byte-EXACT but 2.5-3.3x SLOWER than the optimized-but-split gqa_coop_vec 6-kernel path (266 vs 106us @ctx1024, 553 vs 165us @ctx4096, warm-JIT fair). The naive fused kernel lacks GQA V-reuse + coalescing; those per-kernel losses dwarf the fusion benefit. A winning tile needs fusion AND coop opts in one kernel (llama flash_attn_tile) = linearizer-walled / raw-bridge codegen, not a bounded patch. (Earlier 41x 'win' was a UOp-not-JITted artifact.)",
+      "evidence": [
+        "docs/decode-latency-hiding-lifecycle-codegen-result-20260621.md",
+        "bench/qk-decode-latency-hiding-lifecycle/fused_flash_tile_ab.json",
+        "extra/qk_decode_fused_flash_tile_ab.py"
+      ]
+    },
+    {
+      "id": "ffn_down_prologue_recompute_blowup",
+      "applies_to": [
+        "decode_ffn_activation_producer_fusion"
+      ],
+      "prunes_patterns": [
+        "fuse silu(gate)*up into the ffn_down GEMV input prologue for latency hiding"
+      ],
+      "reason": "The q6k coop ffn_down GEMV reads each activation element once PER OUTPUT ROW (4096x); fusing silu*up inline recomputes the activation 4096x = blowup. The kernel only shares loads within a workgroup's row_tile, not across all rows, so there is no load-once-reuse-across-all-rows to hang activation latency-hiding on. Combined with Phase B1 work-conservation, the FFN activation latency-hiding lane is closed.",
+      "evidence": [
+        "docs/decode-latency-hiding-lifecycle-codegen-result-20260621.md",
+        "extra/q6_k_gemv_primitive.py"
+      ]
+    },
+    {
+      "id": "fused_scalar_tile_regime_mismatch_decode",
+      "applies_to": [
+        "decode_fused_coop_lds_tile_LINEARIZER_FIRST",
+        "decode_fully_fused_flash_tile"
+      ],
+      "prunes_patterns": [
+        "fused single-kernel scalar flash tile for DECODE",
+        "port lds_attention_tile (prefill) to decode for a speedup",
+        "add LDS+GQA to the raw fused tile to beat gqa_coop_vec"
+      ],
+      "reason": "MEASURED: fused tile w/ LDS K/V reuse + GQA is byte-exact but 0.21x@1024 / 0.12x@4096 vs gqa_coop_vec -- WORSE than raw fused (0.40x). Classified: (1) OCCUPANCY: GQA consolidation drops workgroups 4x (per-kv-head vs per-query-head)+serial G loop, coop reuse REMOVED the GPU-filling parallelism; (2) q.k COMPUTE-MAPPING: 128 d-threads each recompute the full dot (ALU redundancy LDS can't fix), gqa_coop_vec does q.k ONCE via matmul; (3) REGIME MISMATCH (root): lds_attention_tile wins at PREFILL via T multi-query parallelism, DECODE has T=1 so no query-parallelism to fill the workgroup. NOT LDS/barrier, NOT V-reuse (exact). Only remaining path = WMMA/tensor-core flash tile (deep RDNA3-WMMA codegen, multi-week). Fused-scalar-tile lever REFUTED at decode shape.",
+      "evidence": [
+        "docs/decode-fused-coop-primitive-result-20260621.md",
+        "bench/qk-decode-fused-coop-primitive/fused_lds_tile_ab.json"
+      ]
+    },
+    {
+      "id": "wmma_flash_decode_refuted_llama_is_vector",
+      "applies_to": [
+        "decode_fully_fused_flash_tile",
+        "decode_vector_flash_tile_high_kvsplit"
+      ],
+      "prunes_patterns": [
+        "WMMA/tensor-core flash decode kernel",
+        "assume llama decode attention uses matrix cores"
+      ],
+      "reason": "AUDITED (rocprofv3 + llama source): llama DECODE attention is flash_attn_tile, a PURE VECTOR ggml_cuda_mad body. rocWMMA fattn is OFF by default (CMakeLists.txt:219) AND T=1 is below the tensor-core threshold (Q.ne1*gqa_ratio=4 > 8 is false, fattn.cu:519). The WMMA flash_attn_ext_f16 runs ONLY in prefill (n=72). So there is NO tensor-core attention trick to replicate; the decode win is parallel-block decomposition + LDS, not matrix hardware.",
+      "evidence": [
+        "docs/llama-decode-primitive-difference-audit-result-20260621.md",
+        "bench/qk-llama-decode-primitive-audit/decode_kernel_trace.json"
+      ]
+    },
+    {
+      "id": "mmvq_wall_parity_do_not_reopen",
+      "applies_to": [
+        "decode_q8_sidechannel_native_after_codegen_capability"
+      ],
+      "prunes_patterns": [
+        "reopen Q4_K/Q6_K MMVQ for a decode wall-time win",
+        "port llama int8 dp4a + q8 reuse for speed"
+      ],
+      "reason": "AUDITED: llama mmvq 7.69ms/tok vs tinygrad weight-GEMV 7.93ms @ctx1024 = +0.24ms PARITY. llama's int8 sudot4(V_DOT4) + q8_1 reuse + gate/up fusion is a STRUCTURAL body diff but NOT a wall-time gap -- both HBM-bandwidth-bound on the weight read at ~similar GB/s. mmvq is 77-81% of llama decode but at parity with tinygrad. The gap is attention, not mmvq.",
+      "evidence": [
+        "docs/llama-decode-primitive-difference-audit-result-20260621.md"
+      ]
+    },
+    {
+      "id": "vector_tile_bounded_levers_miss_needs_full_llama_engineering",
+      "applies_to": [
+        "decode_vector_flash_tile_high_kvsplit"
+      ],
+      "prunes_patterns": [
+        "bounded non-WMMA vector flash-decode tile (split-count + warp-coop dot) to beat gqa_coop_vec",
+        "naive per-key hand tile for decode attention"
+      ],
+      "reason": "MEASURED 2026-06-21: many KV-splits (0.21->0.51x, fixes occupancy) + warp-cooperative ds_bpermute q.k (->0.60x, byte-exact) IMPROVE but do NOT clear >=1.05x vs gqa_coop_vec @ctx1024 (best 0.60x; 0.96x@4096). Time flat across split count = WORK-bound on the per-key serial warp-reduce loop. gqa_coop_vec's q.k is a MATMUL (efficient GEMM) that beats a hand-rolled per-key warp loop; llama's flash_attn_tile (9.2us, 11x faster than gqa_coop_vec) needs nbatch_fa=64 K-tile batching + vectorized fp16 + register blocking = multi-day faithful port (north-star codegen), NOT a bounded build. Lever is real (llama proves it) but only the full-engineering port clears the gate -> REST_DECODE.",
+      "evidence": [
+        "docs/decode-vector-flash-tile-result-20260621.md",
+        "bench/qk-decode-vector-flash-tile/warp_tile_ab.json"
+      ]
+    },
+    {
+      "id": "gqa_coop_vec_more_splits_passes_local_misses_wd",
+      "applies_to": [
+        "decode_vector_flash_tile_high_kvsplit"
+      ],
+      "prunes_patterns": [
+        "FLASH_L downward (more splits) on gqa_coop_vec as a whole-decode win",
+        "split-count tuning to promote decode"
+      ],
+      "reason": "MEASURED 2026-06-21 (principle-aligned: more splits on the EXISTING winner, preserves matmul+GQA reuse, no workgroup reduction): FLASH_L=64 (64->128 workgroups) = 1.08x standalone attention @ctx1024, byte-exact -- PASSES the >=1.05x first gate (principle CONFIRMED). BUT W==D whole-decode = +1.8%@1024 / +2.8%@512 / -1.2%@4096 -- MISSES the >=5% promotion gate and REGRESSES at 4096. Two ceilings: attention is only ~23% of decode (1.08x -> ~1.8% whole), and tinygrad's combine-over-splits caps useful splits at ~16-32 (finer regresses) vs llama's 48-144 -- needs stream-k/efficient many-split combine = deep engineering. Sweet spot L=64; L<=16 regresses. REST_DECODE; FLASH_L=64 a marginal byte-exact ~2% short-ctx opt-in for owner only.",
+      "evidence": [
+        "docs/decode-vector-flash-tile-realigned-result-20260621.md"
+      ]
     }
   ],
   "candidate_pruning": {
