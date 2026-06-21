@@ -14,17 +14,10 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import s_endpgm
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
 
 OUT = ROOT / "bench/amd-broad-backend-roadmap"
+from extra.qk_probe_harness import probe_io
+read_json, write_json = probe_io(OUT)
 
 
-def read_json(rel: str, default: Any = None) -> Any:
-  path = ROOT / rel
-  if not path.exists(): return default
-  return json.loads(path.read_text())
-
-
-def write_json(name: str, data: Any) -> None:
-  OUT.mkdir(parents=True, exist_ok=True)
-  (OUT / name).write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def lowered_slots(layer2: dict[str, Any]) -> list[AMDLDSLoweredSlot]:

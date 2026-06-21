@@ -10,11 +10,9 @@ sys.path.insert(0, str(ROOT))
 from tinygrad.renderer.amd.schedule import pipeline_stage_dump, pipeline_stage_metadata_from_records
 
 OUT = ROOT / "bench/amd-broad-backend-roadmap"
+from extra.qk_probe_harness import probe_io
+read_json, write_json = probe_io(OUT)
 
-
-def write_json(name: str, data: Any) -> None:
-  OUT.mkdir(parents=True, exist_ok=True)
-  (OUT / name).write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def synthetic_wmma_prefill_pipeline_records() -> list[dict[str, Any]]:

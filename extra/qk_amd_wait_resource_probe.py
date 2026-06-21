@@ -16,11 +16,9 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
 )
 
 OUT = ROOT / "bench/amd-broad-backend-roadmap"
+from extra.qk_probe_harness import probe_io
+read_json, write_json = probe_io(OUT)
 
-
-def write_json(name: str, data: Any) -> None:
-  OUT.mkdir(parents=True, exist_ok=True)
-  (OUT / name).write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def inst_names(insts) -> list[str]:

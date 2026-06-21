@@ -40,8 +40,15 @@ class TestProbeHarness(unittest.TestCase):
     v = emit_verdict("p1", True, "proceed", extra_key=7)
     self.assertEqual(v, {"phase": "p1", "gate_pass": True, "next_action": "proceed", "extra_key": 7})
 
-  # NOTE: test_no_new_local_write_json_clone (the guard) is added in the final migration wave, once all 25
-  # historical clones import probe_io -- it would fail until then.
+  def test_no_new_local_write_json_clone(self):
+    """Guard: no extra/*.py re-clones write_json -- new probes must import qk_probe_harness.probe_io."""
+    offenders = []
+    for p in sorted(ROOT.glob("extra/*.py")):
+      rel = p.relative_to(ROOT).as_posix()
+      if rel in ALLOWED_WRITE_JSON: continue
+      if any(line.startswith("def write_json") for line in p.read_text(errors="ignore").splitlines()):
+        offenders.append(rel)
+    self.assertEqual(offenders, [], f"these re-clone write_json instead of importing probe_io: {offenders}")
 
 
 if __name__ == "__main__":

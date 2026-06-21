@@ -18,11 +18,9 @@ from tinygrad.renderer.amd.dsl import OFF, s, v
 from tinygrad.uop.ops import Ops, UOp, KernelInfo
 
 OUT = ROOT / "bench/amd-broad-backend-roadmap"
+from extra.qk_probe_harness import probe_io
+read_json, write_json = probe_io(OUT)
 
-
-def write_json(name: str, data: Any) -> None:
-  OUT.mkdir(parents=True, exist_ok=True)
-  (OUT / name).write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def q8_shaped_instruction_probe() -> dict[str, Any]:
