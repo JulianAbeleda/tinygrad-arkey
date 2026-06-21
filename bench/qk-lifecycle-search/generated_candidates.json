@@ -118,6 +118,65 @@
         "reuse_free_attention_not_a_primitive"
       ],
       "promotion_gate": "none; locality missing"
+    },
+    {
+      "id": "decode_ffn_activation_producer_fusion",
+      "derived_from": "decode_elementwise_E49152_split",
+      "phase": "decode",
+      "role": "ffn",
+      "template": "silu_mul_fused_into_producer_or_down",
+      "target_kernels": [
+        "E_49152_32_3"
+      ],
+      "state": "refuted",
+      "legal": true,
+      "requires": [
+        "fused gate/up-epilogue or ffn_down-prologue custom GEMV"
+      ],
+      "would_be_pruned_by": [
+        "ffn_activation_fusion_work_conserved"
+      ],
+      "quality_gate": "exact greedy / dNLL policy (achieved: byte-exact rel 0.0)",
+      "timing_gate": "W==D ctx512/1024/4096 >=3% @1024",
+      "promotion_gate": "local >=0.5ms@1024 then W==D >=3%@1024 (FAILED local: ~0% -- work conserved)",
+      "known_refutations": [
+        "remove_contiguous_no_target_movement",
+        "ffn_activation_fusion_work_conserved"
+      ]
+    },
+    {
+      "id": "decode_attention_reduce_stat_fusion",
+      "derived_from": "decode_attention_cost_split",
+      "phase": "decode",
+      "role": "attention",
+      "template": "gqa_flash_reduce_stat_fused",
+      "target_kernels": [
+        "flash_max",
+        "flash_den",
+        "flash_gmax",
+        "flash_combine",
+        "flash_prob",
+        "r_score_reduce"
+      ],
+      "state": "not_built_no_go",
+      "legal": true,
+      "requires": [
+        "coupled multi-accumulator reduce (linearizer-walled)",
+        "fully-fused Q@KT+softmax+P@V tiled flash kernel"
+      ],
+      "would_be_pruned_by": [
+        "attention_dominant_cost_is_intrinsic_okv",
+        "ffn_activation_fusion_work_conserved",
+        "flash_fused_multireduce_linearizer_wall"
+      ],
+      "quality_gate": "exact greedy vs SDPA (fp reassoc)",
+      "timing_gate": "W==D ctx512/1024/4096",
+      "promotion_gate": "local >=0.4ms@1024 then W==D >=2%@1024 (NOT built: intrinsic O(KV) + work-conserved + linearizer wall)",
+      "known_refutations": [
+        "FLASH_L_256_512",
+        "FLASH_DECODE_0_SDPA",
+        "attention_dominant_cost_is_intrinsic_okv"
+      ]
     }
   ],
   "summary": {

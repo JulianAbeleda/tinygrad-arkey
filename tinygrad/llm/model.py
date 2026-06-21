@@ -59,9 +59,24 @@ def _prefill_graph_gemm_default() -> int:
 PREFILL_GRAPH_GEMM = bool(_prefill_graph_gemm_default())
 # Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
 # concrete -> the attention's reduce tiles/TC fires (symbolic KV blocks it). ~1.24x e2e, byte-identical. Cost: a
-# separate concrete prefill jit per distinct start_pos (0,512,...) vs one symbolic jit. See
-# docs/prefill-concrete-kv-build-scope-20260619.md.
-PREFILL_CONCRETE_KV = bool(getenv("PREFILL_CONCRETE_KV", 0))
+# separate concrete prefill jit per distinct start_pos (0,512,...), precompiled at load -> best WARM/server prefill
+# but a load-time precompile tax that loses for cold one-shot short prompts. `PREFILL_CONCRETE_KV=auto` enables it
+# only under the server profile (see prefill_concrete_kv_auto_decision). See
+# docs/prefill-default-policy-evaluation-result-20260620.md, docs/prefill-concrete-kv-policy-result-20260620.md.
+# PREFILL_SERVER_PROFILE=1 is a convenience: serve >1 generation / long prompts -> implies PREFILL_V2=auto (if V2
+# unset) + concrete-KV on (when V2 ends up on). One-shot short prompts must NOT set it.
+PREFILL_SERVER_PROFILE = bool(getenv("PREFILL_SERVER_PROFILE", 0))
+_PREFILL_CKV_ENV = os.environ.get("PREFILL_CONCRETE_KV", "")
+PREFILL_CONCRETE_KV_AUTO = _PREFILL_CKV_ENV.strip().lower() == "auto"
+PREFILL_CONCRETE_KV = False if PREFILL_CONCRETE_KV_AUTO else bool(getenv("PREFILL_CONCRETE_KV", 0))
+def _set_prefill_concrete_kv(val:bool):
+  global PREFILL_CONCRETE_KV; PREFILL_CONCRETE_KV = val
+def prefill_concrete_kv_auto_decision(server_profile:bool, prefill_v2_on:bool) -> tuple[bool, str]:
+  # Precompile pays off only across repeated/long generation, which can't be detected at load -> the auto signal
+  # is the explicit server profile. (Cold one-shot short prompts should leave it off; the precompile load tax loses.)
+  if not prefill_v2_on: return (False, "PREFILL_V2 off -> concrete-KV moot, OFF")
+  if server_profile: return (True, "server profile + PREFILL_V2 on -> precompile concrete jits, ON")
+  return (False, "no server profile (one-shot assumed) -> OFF; set PREFILL_SERVER_PROFILE=1 or PREFILL_CONCRETE_KV=1")
 # P2: explicit TC attention (Q@Kᵀ TC + fp16 scores + softmax + P@V TC, GQA broadcast) for prefill on CONCRETE KV
 # (the only regime where the concrete-shape tensor core fires; symbolic KV blocked it -> 0.79x in-model). Needs
 # PREFILL_CONCRETE_KV. Research, dNLL-gated. See docs/prefill-concrete-kv-build-scope-20260619.md.
@@ -1267,10 +1282,11 @@ class Transformer:
       full_attention_interval=kv.get(f'{arch}.full_attention_interval', 0),
       qkv_bias='blk.0.attn_q.bias' in state_dict,
       expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict)
-    # PREFILL_V2=auto: resolve the module global from detected VRAM BEFORE Transformer() (its __init__ reads
-    # PREFILL_V2 to build the warmstart). Estimate the realized fp16 cost from the covered linears' shapes in the
-    # (already fp16) state_dict; Q4 storage proxied by the gguf file size; KV from config. Explicit 0/1 skip this.
-    if PREFILL_V2_AUTO:
+    # Prefill policy auto-resolution, BEFORE Transformer() (its __init__ reads PREFILL_V2 to build the warmstart,
+    # and the concrete-KV precompile + generate() read PREFILL_CONCRETE_KV). Explicit 0/1 skip these.
+    # PREFILL_SERVER_PROFILE=1 implies PREFILL_V2=auto (when V2 unset) + concrete-KV on (when V2 ends up on).
+    _v2_auto = PREFILL_V2_AUTO or (PREFILL_SERVER_PROFILE and "PREFILL_V2" not in os.environ)
+    if _v2_auto:
       _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
       est_fp16 = sum(t.numel() * 2 for k, t in state_dict.items() if any(k.endswith(s) for s in _cov))
       q4_bytes = pathlib.Path(gguf).stat().st_size if not isinstance(gguf, Tensor) else 0
@@ -1279,6 +1295,10 @@ class Transformer:
       _set_prefill_v2(enabled)
       print(f"PREFILL_V2=auto -> {'ON' if enabled else 'OFF'}: {reason} "
             f"(fp16 covered {est_fp16/1e9:.1f}GB, Q4 {q4_bytes/1e9:.1f}GB, KV {kv_bytes/1e9:.1f}GB @ctx{config.max_context})")
+    if PREFILL_CONCRETE_KV_AUTO or PREFILL_SERVER_PROFILE:
+      ckv_on, ckv_reason = prefill_concrete_kv_auto_decision(PREFILL_SERVER_PROFILE, PREFILL_V2)
+      _set_prefill_concrete_kv(ckv_on)
+      print(f"PREFILL_CONCRETE_KV=auto -> {'ON' if ckv_on else 'OFF'}: {ckv_reason}")
     model = Transformer(config)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if q4k_meta is not None:

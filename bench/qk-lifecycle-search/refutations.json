@@ -103,6 +103,90 @@
       "evidence": [
         "docs/qk-machine-search-primitive-rows-20260618.md"
       ]
+    },
+    {
+      "id": "ffn_activation_fusion_work_conserved",
+      "applies_to": [
+        "decode_ffn_activation_producer_fusion"
+      ],
+      "prunes_patterns": [
+        "fuse silu(gate)*up into producer/down GEMV to remove E_49152 launch",
+        "decode kernel-count reduction as a speedup lever"
+      ],
+      "reason": "Folding silu(gate)*up into the up GEMV is byte-exact but 0% faster: the activation work is CONSERVED (runs serially after the reduce, same ~33us) and the launch itself is ~free (decode is GPU-exec-bound, D~=W). llama gets it free by hiding the ALU under HBM-bound mmvq latency; naive fusion cannot. Recovery needs activation/HBM-latency overlap inside the GEMV inner loop, not fusion.",
+      "evidence": [
+        "docs/decode-ffn-activation-producer-fusion-result-20260620.md",
+        "bench/qk-decode-fusion-build/ffn_activation_producer_fusion_ab.json"
+      ]
+    },
+    {
+      "id": "attention_dominant_cost_is_intrinsic_okv",
+      "applies_to": [
+        "decode_attention_reduce_stat_fusion"
+      ],
+      "prunes_patterns": [
+        "fuse flash reduce/fixup rows to remove cross-chunk overhead",
+        "treat reduce_fixup as fusible fixup"
+      ],
+      "reason": "The attention 'reduce_fixup' bucket is dominated by the Q@KT SCORE matmul (r_*) and its ctx-slope is the O(KV) symbolic-length score reduce; softmax_stats' slope is flash_prob (O(KV) exp/key). These are intrinsic O(KV) compute, not fusible overhead. Only ~0.5ms of FIXED helper kernels are fusible, and those are work-conserved (see ffn_activation_fusion_work_conserved).",
+      "evidence": [
+        "docs/decode-attention-fusion-analysis-result-20260620.md",
+        "docs/decode-attention-cost-split-result-20260620.md"
+      ]
+    },
+    {
+      "id": "flash_fused_multireduce_linearizer_wall",
+      "applies_to": [
+        "decode_attention_reduce_stat_fusion"
+      ],
+      "prunes_patterns": [
+        "fully-fused Q@KT+softmax+P@V single flash kernel",
+        "coupled multi-accumulator reduce in one decode kernel"
+      ],
+      "reason": "tinygrad's flash-decode is split into 6 kernels BECAUSE coupled multi-accumulator reduces trip the linearizer's range-ordering (qk_flash_decode.py:73-80). The fully-fused flash kernel is the same codegen wall as the prefill POWN/software-pipelined-K-loop (BEAM-hang class). Multi-week linearizer project, not a bounded fusion build.",
+      "evidence": [
+        "extra/qk_flash_decode.py",
+        "docs/decode-attention-fusion-analysis-result-20260620.md"
+      ]
+    },
+    {
+      "id": "FLASH_L_256_512",
+      "applies_to": [
+        "decode_attention_reduce_stat_fusion"
+      ],
+      "prunes_patterns": [
+        "raise FLASH_L to reduce chunk count"
+      ],
+      "reason": "FLASH_L=256/512 regress: partial_compute parallelism collapses (fewer batch-1 workgroups) faster than reduce/stat shrinks. ctx4096 53.9 vs 60.8 tok/s. L=128 default is optimal.",
+      "evidence": [
+        "docs/decode-attention-candidate-ab-result-20260620.md"
+      ]
+    },
+    {
+      "id": "FLASH_DECODE_0_SDPA",
+      "applies_to": [
+        "decode_attention_reduce_stat_fusion"
+      ],
+      "prunes_patterns": [
+        "bypass flash with SDPA at short context"
+      ],
+      "reason": "FLASH_DECODE=0 catastrophic: batch-1 SDPA ~1% GPU occupancy. 10.4 vs 66.5 tok/s @1024. Threshold-512 cutover already correct.",
+      "evidence": [
+        "docs/decode-attention-candidate-ab-result-20260620.md"
+      ]
+    },
+    {
+      "id": "remove_contiguous_no_target_movement",
+      "applies_to": [
+        "decode_ffn_activation_producer_fusion"
+      ],
+      "prunes_patterns": [
+        "remove the FFN silu .contiguous() to drop E_49152"
+      ],
+      "reason": "Removing .contiguous() leaves E_49152 unchanged (1.22 vs 1.24ms): the custom ffn_down GEMV forces the activation to materialize regardless.",
+      "evidence": [
+        "docs/decode-ffn-activation-fusion-result-20260620.md"
+      ]
     }
   ],
   "candidate_pruning": {
