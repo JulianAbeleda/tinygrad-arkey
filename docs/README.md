@@ -76,6 +76,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   Path A can't fuse. We lack counter/ISA attribution → deep q·k codegen (A) is mis-targeted, llama port (B) premature.
   Next = **diagnostic-first low-level tooling** (rocprof-compute counters + ISA disasm of `flash_partial` vs llama
   tile) to name the inefficiency, then a targeted codegen fix OR `REST_DECODE` with proof. Bounded decode exhausted.
+- **`low-level-decode-attn-attribution-result-20260621.md`** — ⭐ ATTRIBUTION DONE: `LOW_LEVEL_ATTRIBUTION_FIXABLE_CODEGEN`.
+  ISA/resource attribution rules OUT occupancy/registers/spills (tinygrad kernels at **100% occupancy, ≤13 VGPR, 0
+  spills**) and fundamental limits. Root cause = **codegen quality**: `flash_partial` (PV, 24.7µs) emits scalar fp16
+  loads, **0 `v_dot2`, 0 LDS** (latency-bound) vs llama's LDS-tiled `v_dot2` fused tile; the q·k matmul is fast
+  because it's tiled (LDS=64). Fixable lever = route the PV through tiled-matmul codegen (~1.16× attention, but
+  W==D-marginal; full win = deep LDS-tiled fused-flash codegen). Counters tooling-opaque (rocprof-compute broken,
+  rocprofv3 blind to HCQ) but binaries sufficed. Next = scope the matmul-PV diagnostic, else REST_DECODE.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

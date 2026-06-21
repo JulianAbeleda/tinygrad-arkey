@@ -60,6 +60,12 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > coop's matmul q·k (13.9µs) ≈ llama's whole 12µs tile (q·k NOT the bottleneck); the gap is the softmax+V multi-kernel.
 > `FRONTIER_LOW_LEVEL_TOOLING_FIRST` — diagnostic counters + ISA disasm of `flash_partial` vs llama tile before any
 > codegen project. Bounded decode exhausted.
+>
+> **Low-level attribution DONE** (`qk-low-level-decode-attn-attribution/`, ISA/resources/occupancy):
+> `LOW_LEVEL_ATTRIBUTION_FIXABLE_CODEGEN`. Rules out occupancy/spills (tinygrad at 100% occupancy, ≤13 VGPR, 0
+> spills); root cause = `flash_partial` (PV) emits scalar loads / **0 `v_dot2` / 0 LDS** vs llama's LDS-tiled `v_dot2`
+> fused tile. Fixable lever = route the PV through tiled-matmul codegen (W==D-marginal; full win = deep fused-flash
+> codegen). Counters tooling-opaque (rocprof-compute broken, rocprofv3 blind to HCQ); binaries sufficed.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

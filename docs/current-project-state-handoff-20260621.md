@@ -143,6 +143,19 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   to NAME the inefficiency — then either a targeted codegen fix (gated by local A/B + the oracle) or `REST_DECODE`
   with counter-level proof. All bounded decode lanes are exhausted. See
   `docs/decode-frontier-decision-after-path-a-20260621.md`.
+- **Low-level attribution DONE (2026-06-21) — `LOW_LEVEL_ATTRIBUTION_FIXABLE_CODEGEN`.** ISA/resource/occupancy
+  attribution (`bench/qk-low-level-decode-attn-attribution/`, llvm-objdump + descriptors; rocprof-compute broken,
+  rocprofv3 blind to tinygrad HCQ, live VALU counters unavailable — but binaries sufficed). **Rules OUT** occupancy/
+  registers/spills (every tinygrad kernel at **100% occupancy, ≤13 VGPR, 0 spills, 0 LDS**) and fundamental limits
+  (llama hits 12.2µs on the same HW). **Root cause = codegen quality + fragmentation:** `flash_partial` (PV, 24.7µs)
+  emits **scalar fp16 V loads, 0 `v_dot2`, 0 LDS** (201 GFLOPS/60 GB/s, latency-bound) vs llama's LDS-staged
+  `v_dot2_f32_f16` fused tile; the q·k **matmul is fast (LDS=64, tiled)** because tinygrad's tiled-GEMM codegen
+  applies — `flash_partial` is a hand-rolled reduction so it gets none of it. **Fixable lever:** route the PV
+  (`prob @ V`) through tinygrad's tiled-matmul codegen instead of the scalar `flash_partial` (~24.7→~14µs ≈ 1.16×
+  attention). **Honest EV:** ~1.16× attention → ~3–4% whole-decode = likely **W==D-marginal** (LOCAL_PASS_WD_FAIL
+  class); the full llama-class win needs the **deep** LDS-tiled fused-flash codegen capability. NOT the closed
+  coop-qk-preserving lane (that was timing-only; ISA is new evidence). **Next = scope the matmul-PV diagnostic; if
+  W==D-marginal and deep codegen unfunded → REST_DECODE.** See `docs/low-level-decode-attn-attribution-result-20260621.md`.
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
   but missed W==D promotion (+1.8%@1024, −1.2%@4096). **Do not pursue another bounded tile or flag sweep.**
