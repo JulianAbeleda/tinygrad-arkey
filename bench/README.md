@@ -35,6 +35,11 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > CORRECTS the diagnosis: the combine is negligible (pout ~1 µs); the ceiling is the **cooperative-dot q·k partial**
 > (flat ~163 µs vs coop's scaling 75–144 µs). coop's matmul q·k is near-optimal for tinygrad; bounded tile lever
 > exhausted → `REDESIGN_AUDIT_POINTS_TO_CODEGEN_DATAFLOW`. Refutation banked.
+>
+> **Next decode move scoped** (`docs/decode-codegen-dataflow-capability-scope-20260621.md`):
+> `CODEGEN_SCOPE_LLAMA_ORACLE_FIRST` — port llama's `fattn-tile.cuh` (source on disk) as a non-default reference
+> oracle, measure standalone **throughput** vs `gqa_coop_vec` (first gate ≥1.05× @ctx1024) through the existing
+> `ab_script` binding, resolving standalone-kernel-codegen vs in-model-integration before any multi-week linearizer work.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

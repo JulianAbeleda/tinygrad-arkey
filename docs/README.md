@@ -43,6 +43,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   scaling 75–144 µs); **coop's matmul q·k is near-optimal for tinygrad primitives**. No bounded combine/compact-state
   tile passes @ctx1024; the 10× gap to llama is **codegen quality**. `REDESIGN_AUDIT_POINTS_TO_CODEGEN_DATAFLOW`
   (no build). Do not build another bounded tile.
+- **`decode-codegen-dataflow-capability-scope-20260621.md`** — ⭐ CAPABILITY SCOPE: `CODEGEN_SCOPE_LLAMA_ORACLE_FIRST`.
+  Native codegen (single fused flash kernel) is a multi-week linearizer project (`spec.py:163-165` single-op REDUCE +
+  store-group idiom; pre-refuted `flash_fused_multireduce_linearizer_wall`) with no validated target. The llama audit
+  numbers are **in-model only** — llama's kernel was never measured **standalone** vs coop. Next project ports
+  llama's `fattn-tile.cuh` (source on disk) as a **non-default reference oracle**, measures standalone throughput vs
+  `gqa_coop_vec` (first gate ≥1.05× @ctx1024) via the existing `ab_script` binding, resolving standalone-vs-in-model
+  before any codegen surgery.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

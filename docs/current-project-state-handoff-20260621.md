@@ -86,6 +86,18 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   bound), and **coop's matmul q·k is near-optimal for tinygrad primitives**. No bounded combine/compact-state tile
   can pass @ctx1024. The 10× gap to llama is hand-tuned-kernel **codegen quality**, not a dataflow restructure.
   Do NOT build another bounded tile/combine. See `docs/north-star-decode-attention-redesign-audit-20260621.md`.
+- **Decode codegen/dataflow capability scope (2026-06-21) — `CODEGEN_SCOPE_LLAMA_ORACLE_FIRST`.** Decision between
+  native tinygrad codegen (A), a llama source-port reference oracle (B), and rest (C). **Chosen: B first.** Native
+  codegen is a **multi-week linearizer project** (the single fused flash kernel — coupled `(m,l,acc)` online softmax
+  across different range nests — is blocked at `tinygrad/uop/spec.py:163-165` single-op `REDUCE` + the shared-range
+  store-group idiom + `linearizer.py:54-82`; pre-refuted as `flash_fused_multireduce_linearizer_wall`, "not bounded")
+  **with no validated target** (my fused tile already failed). The **central question is unmeasured**: the llama
+  audit numbers are **in-model only** — we have NEVER measured llama's kernel **standalone** vs coop. llama's actual
+  source is on disk (`/home/ubuntu/env/llama.cpp/.../fattn-tile.cuh` + the Hd=128 instance) and the raw-HIP→tinygrad-
+  Buffer bridge is proven. So the next project ports it as a **non-default reference oracle**, measures standalone
+  **throughput** vs `gqa_coop_vec` (first gate ≥1.05× @ctx1024) through the existing `ab_script` binding, and that
+  resolves whether the 10× is **standalone kernel-codegen** (→ scope native codegen with a real target) or **in-model
+  integration** (→ redirect to the W==D/dataflow frame). See `docs/decode-codegen-dataflow-capability-scope-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
