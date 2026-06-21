@@ -17,6 +17,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   candidates must be IO-aware, decode-aware, softmax-aware, dataflow-aware, resource-aware, and comparator-aware.
   It also grounds harness/search methodology in MLPerf, SPEC reproducibility, Ansor/TVM, and Triton: harnesses are
   performance primitives, and search means generated candidates → reproducible evaluator → ledger/refutation.
+- **`perf-probe-active-surface-reduction-result-20260621.md`** — ⭐ ACTIVE-SURFACE REDUCTION. Evidence-driven
+  low-risk delete: a reference-graph inventory (`bench/qk-active-surface-reduction/inventory.json`) classified all 378
+  perf scripts (live 18 / provenance 55 / manual_review 279 / delete 26); **26 zero-reference scratch/scope probes
+  deleted** (live evaluator/search verified intact; policy guard PASS; no canonical/ledger/test dangle). The 279
+  dated-doc-cited provenance probes are kept as an owner-gated **second wave** (archive or delete). Plan:
+  `perf-probe-active-surface-reduction-plan-20260621.md`. `ACTIVE_SURFACE_REDUCTION_DELETE_COMPLETE` (low-risk tier).
 - **`harness-contract-audit-20260621.md`** — ⭐ HARNESS EVALUATOR-CONTRACT AUDIT + APPLIED. Exhaustively audited the
   live lifecycle harness set against the 13-field contract; found the systemic gaps (no spread/noise band, no
   git/dirty, prose-only comparator-why) + two distortion risks (the llama-oracle hardcodes ctx512/4096 from constants;
