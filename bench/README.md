@@ -111,6 +111,10 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > **Harness best practices** (`qk-decode-eval/HARNESS_GUIDE.md`): the operational checklist for new decode
 > performance harnesses. It codifies timing authority, artifact fields, stamping, reproducibility bands, verdict
 > discipline, and cleanup policy using MLPerf/SPEC/Google Benchmark/profiler/FlashAttention/vLLM references.
+>
+> **Harness best-practice adherence audit** (`../docs/harness-best-practices-adherence-audit-20260621.md`):
+> `PARTIAL_ADHERENCE_WITH_LIVE_PATH_PROTECTED`. The live evaluator/search path is safe, but 5/6 registered
+> child `ab_script` artifacts are still WEAK standalone artifacts and broad historical probe sprawl remains.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
