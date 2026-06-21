@@ -19,6 +19,11 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > **Lifecycle-search loop v0** (`extra/qk_lifecycle_search_loop.py`, `qk-lifecycle-search/search_*.json`): the first
 > closed generate→evaluate→prune loop on the evaluator — runs valid candidates through `decode_eval` and prunes
 > closed-lane / default-promotion candidates before benchmarking. No kernels, no defaults; propose-only ledger.
+>
+> **Candidate-template generation v0** (`extra/qk_candidate_template_gen.py`, `qk-lifecycle-search/templates.json`,
+> `generated/`): the 'generate' step — expands 4 templates into 9 legal decode candidate specs (policy metadata,
+> deterministic) consumed by the loop via `--candidates`. 3 executable + 6 pruned/deferred (incl. the north-star
+> `flash_attn_tile` as `PRUNE_NEEDS_TEMPLATE`). Specs only, no kernels/flags/defaults.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

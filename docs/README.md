@@ -20,7 +20,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   is the first closed `generate→evaluate→prune` loop on the evaluator: runs valid candidates through `decode_eval`
   (4 executed, verdicts match) and **prunes invalid ones before benchmarking** (WMMA-decode reopen, FLASH_L=64
   default-promotion). No kernels, no defaults; propose-only ledger; surfaced + fixed a q8 auto-clock confound.
-  `LIFECYCLE_SEARCH_V0_READY`. Next = candidate-template generation layer.
+  `LIFECYCLE_SEARCH_V0_READY`.
+- **`candidate-template-generation-v0-result-20260621.md`** — ⭐ TEMPLATE GENERATION v0 BUILT.
+  `extra/qk_candidate_template_gen.py` expands 4 templates into 9 legal decode candidate specs (policy metadata,
+  deterministic) that flow **through the loop**: 3 executable (verdicts match) + 6 pruned/deferred (closed-lane
+  reopens, default-promotion attempts, north-star `flash_attn_tile` deferred). No kernels/flags/defaults.
+  `TEMPLATE_GENERATION_V0_READY`. Next = evaluator-binding templates for the north-star.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

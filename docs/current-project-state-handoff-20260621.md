@@ -54,8 +54,15 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   verdicts match) and **prunes invalid ones before benchmarking** (a WMMA-decode reopen → `PRUNE_CLOSED_LANE`, a
   FLASH_L=64 default-promotion → `PRUNE_POLICY_VIOLATION`). It builds no kernels, changes no defaults, proposes
   (dedup'd) ledger updates, and surfaced + drove a fix to a q8 auto-clock measurement confound (now reads the
-  controlled lane). `LIFECYCLE_SEARCH_V0_READY`. Next = candidate-template generation layer. See
-  `docs/lifecycle-search-loop-v0-result-20260621.md`.
+  controlled lane). `LIFECYCLE_SEARCH_V0_READY`. See `docs/lifecycle-search-loop-v0-result-20260621.md`.
+- **Candidate-template generation layer v0 BUILT (2026-06-21).** `extra/qk_candidate_template_gen.py` is the
+  'generate' step: it expands 4 route/fusion/layout templates into 9 legal decode candidate **specs** (in the
+  `search_candidates` schema, deterministic, with policy metadata) that flow **through the loop** unchanged — 3
+  executable (bound to existing decode_eval candidates, verdicts match) + 6 pruned/deferred (closed-lane reopens,
+  default-promotion attempts, and the north-star `flash_attn_tile` as a `PRUNE_NEEDS_TEMPLATE` deferred candidate).
+  No kernels/flags/defaults. Loop gained a one-line `--candidates` option + a `deferred`→`PRUNE_NEEDS_TEMPLATE`
+  branch. `TEMPLATE_GENERATION_V0_READY`. Next = evaluator-binding templates for the north-star. See
+  `docs/candidate-template-generation-v0-result-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
