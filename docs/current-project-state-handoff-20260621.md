@@ -40,8 +40,16 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   AND, separately, a real **ctx4096 decode ms/token** (=11.4 tok/s). **Never quote `87.6` bare.** The decode headline
   is the **curve** (~86 @ctx≈0 → ~61 @ctx4096), characterized as **~67% llama**, not the ctx≈0 peak.
 
-## 4. Frontier — bounded decode is RESTED; only the north-star remains
+## 4. Frontier — bounded decode is RESTED; the Method pillar is underway
 
+- **Machine-search evaluator BUILT (2026-06-21).** `extra/qk_decode_eval.py` is the first-class, automated form of
+  the lifecycle ladder (correctness → local A/B → whole-decode W==D → policy), emitting schema'd verdicts. It
+  **reproduces the project's historical classifications** (baseline→REST, flash_l_64→LOCAL_PASS_WD_FAIL,
+  warp_tile→FAIL_LOCAL_AB, q8→PASS_OPT_IN) and answered the key falsifier: **whole-decode W==D auto-clock variance
+  is <0.6% ≪ the 5% promotion margin** (`EVALUATOR_READY_FOR_LIFECYCLE_SEARCH`; GPU-state tooling NOT needed). It
+  only measures — no defaults change. Next project = the lifecycle-search loop on top of it. See
+  `docs/decode-evaluation-harness-hardening-result-20260621.md`, ledger contract
+  `bench/qk-lifecycle-search/evaluator_contract.json`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)

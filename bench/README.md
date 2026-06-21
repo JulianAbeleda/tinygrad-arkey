@@ -11,6 +11,10 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > and the vector-tile (FLASH_L=64 passed the local attention gate but failed W==D promotion) are all closed. The only
 > remaining decode lever is the **north-star full `flash_attn_tile` lifecycle** (efficient many-split / stream-k
 > combine), not a bounded patch. See `../docs/current-project-state-handoff-20260621.md`.
+>
+> **Machine-search evaluator** (`extra/qk_decode_eval.py`, `qk-decode-eval/`): the automated lifecycle ladder that
+> turns a candidate into a schema'd verdict; reproduces the historical classifications and proved whole-decode W==D
+> auto-clock variance <0.6% ≪ 5% margin. Measurement-only, no defaults changed.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
