@@ -4,6 +4,11 @@ Single navigation source-of-truth for this fork's docs. The AMD-decode work prod
 chronological probe log; the **verdicts are folded into the syntheses below** — start there, treat
 the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
+> **Supersession map:** `docs/provenance-index-20260621.md` (mechanized via
+> `bench/qk-active-surface-reduction/build_docs_index.py`) classifies all 646 fork docs — 4 canonical / 285 current /
+> **357 provenance** — and gives a per-topic table pointing each historical cluster (prefill 126, decode 81, q8 59, …)
+> at its **current authority**. Use it to tell live docs from the historical log without reading them all.
+
 ## ⭐ Start here (canonical, post-bank)
 
 - **`current-project-state-handoff-20260621.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). One short page:
