@@ -137,6 +137,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   `v_dot2` tile; FlashDecoding++ flat-GEMM under-utilization + 2 extra layout kernels offset the benefit. **The true
   single fused LDS-tiled kernel is inexpressible** (tiled-GEMM codegen ⊥ `.set/.after` fusion; needs an AMDGCN escape
   hatch). **Bounded AND concrete-shape decode levers are now both exhausted.**
+- **`decode-attention-primitive-spec-and-route-scope-20260621.md`** — ⭐ NEXT llama-facing work (post-audit).
+  `DECODE_ATTENTION_PRIMITIVE_SCOPE_READY — ROUTE_B_ESCAPE_HATCH_FIRST`. The lone runtime gap is the decode-attention
+  **codegen/control surface**; defines `decode_attention_llama_flash_tile` as a first-class lifecycle row (full
+  dataflow boundary: KV-split workgroups · GQA packing · LDS-staged K/V · `v_dot2` · register online-softmax+PV ·
+  stream-k combine · gated route) + the deep search-knob space, and decides the route: **native codegen (multi-week,
+  the concrete gate showed it's the hard capability) vs AMDGCN/HSACO escape hatch (bounded, oracle-proven)**.
+  Recommends **escape-hatch first** (de-risk vendored `.co` → W==D, then own a hand-AMDGCN tile, DeepSeek-style),
+  native codegen as the de-risked follow-on; `REST_DECODE`+v2 the explicit fallback. Scope/decision only.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

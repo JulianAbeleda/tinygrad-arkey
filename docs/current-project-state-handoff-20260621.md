@@ -45,6 +45,13 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
 - **Post-maintenance sanity passed (2026-06-21); no performance benchmark rerun required because no
   runtime/model/kernel path changed** (the repo-principles/centralization sequence was NFC/test/docs/tooling only).
   See `docs/post-maintenance-sanity-result-20260621.md`.
+- **Next llama-facing work SCOPED (2026-06-21) — `DECODE_ATTENTION_PRIMITIVE_SCOPE_READY — ROUTE_B_ESCAPE_HATCH_FIRST`.**
+  Past audit/cleanup, the lone runtime gap is the decode-attention codegen/control surface (the concrete fused-flash
+  gate proved tinygrad can't emit llama's fused LDS/`v_dot2` tile). Scoped the full primitive spec
+  (`decode_attention_llama_flash_tile`, first-class lifecycle row + deep search knobs) + the route decision: **AMDGCN/
+  HSACO escape hatch first** (de-risk vendored `.co` → W==D, then own a hand-AMDGCN tile), native tinygrad codegen as
+  the de-risked follow-on; `REST_DECODE`+v2 fallback. Fund-vs-rest is the owner's call; both are now evidence-backed
+  and executable. See `docs/decode-attention-primitive-spec-and-route-scope-20260621.md`.
 
 - **Machine-search evaluator BUILT (2026-06-21).** `extra/qk_decode_eval.py` is the first-class, automated form of
   the lifecycle ladder (correctness → local A/B → whole-decode W==D → policy), emitting schema'd verdicts. It
