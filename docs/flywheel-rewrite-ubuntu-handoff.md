@@ -1,5 +1,23 @@
 # Flywheel Rewrite — Ubuntu Execution Handoff
 
+## Project North Star
+
+Before doing new performance work, read
+`docs/project-north-star-llama-and-lifecycle-search-20260620.md`.
+
+The project is complete only when **both** are true:
+
+1. tinygrad beats the current llama.cpp reference on the target Qwen3-8B decode benchmark under trusted W==D timing;
+2. the win is produced or made repeatable by a **closed lifecycle machine-search system** that searches route
+   templates, fusion boundaries, materialization/reuse choices, kernel schedules, and policy thresholds.
+3. the winning system is cut over into a clean `tinygrad-v2` repo/workspace containing only the runtime/search/gate/docs
+   surface needed to execute and maintain the job, while this repo remains the research provenance ledger.
+
+A one-off benchmark win is not enough. A machine-search system that cannot beat llama is not enough. Current decode
+evidence says the immediate lifecycle targets are attention reduce/stat overhead and FFN activation elementwise fusion,
+not Q6/MMVQ, q8 lifecycle, or host runtime. A fast path buried in stale probes is also not enough; v2 is the clean
+execution surface.
+
 Audience: the dev agent on the Ubuntu AMD box. This is the execution handoff for
 the parts of the flywheel rewrite that **could not be verified on the Mac**
 because they touch the generation path (need the gguf model + AMD device). The

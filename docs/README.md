@@ -6,6 +6,32 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 ## ⭐ Start here (canonical, post-bank)
 
+- **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
+  complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
+  machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.
+  The search target is route/fusion/materialization/policy lifecycle, not just single-kernel schedules.
+- **`prefill-increment0-shipped-result-20260620.md`** — CURRENT PREFILL STATE. Increment 0 shipped
+  `PREFILL_CONCRETE_KV` as an opt-in server/long-prompt path with precompile-at-load. Combined with Branch B,
+  concrete prefill holds **73–111% of llama** across KV 512–3584. Rerun: A2 warm prefill `4941 -> 343 ms` when both
+  chunks are concrete, and A1 first-generation prefill `9.41 -> 3.44 s` after load-time precompile; byte-identical
+  tok0, default path untouched.
+- **`prefill-branch-b-tc-attention-result-20260620.md`** — Branch B is promoted default-on under `PREFILL_V2`/gfx1100:
+  concrete first-chunk explicit attention reruns at **3394 pp512 tok/s** (`112.7%` llama), byte-identical. The win is
+  attention-reduce fusion, not WMMA.
+- **`prefill-flash-increment2-result-20260620.md`** — Increment 2 flash prefill kernel is correct (`rel_rmse ~1e-7`)
+  but **~15× too slow** at KV512 and not shipped. Recommendation: rest prefill here unless a multi-day WMMA/key-tiled
+  flash build is explicitly reopened.
+- **`decode-role-tensor-kernel-attribution-solution-scope-20260620.md`** — CURRENT DECODE NEXT SCOPE. Decode remains
+  below llama: default route is still the banked `~67%` llama class, while q8 FFN is a hardened default-off opt-in
+  route rerun at **72.9/71.1 tok/s @ctx 512/1024** (`~1.064×`, host-sync `0.0%`). Next work is role/tensor/kernel
+  attribution, not q8 lifecycle.
+- **`decode-fusion-build-scope-20260620.md`** — CURRENT DECODE BUILD SCOPE. After timed attribution and cheap-candidate
+  rejection, the next builds are custom attention reduce/stat fusion in `qk_flash_decode.py` and FFN
+  `silu(gate)*up` activation fusion. Q6/MMVQ/q8 lifecycle/host runtime remain closed unless new timed evidence
+  contradicts the current results.
+
+### Historical / Superseded Prefill Provenance
+
 - **`prefill-RECONCILIATION-source-of-truth-20260619.md`** — ⭐PREFILL SOURCE-OF-TRUTH. Settles the contradictory
   prefill results under one controlled interleaved matrix. Verdict: concrete-KV = 1.24x byte-identical (shipped,
   ~47% llama); **+Tensile (external .co, research) = 1.76x over concrete = ~86% llama, REPRODUCED** (the old
