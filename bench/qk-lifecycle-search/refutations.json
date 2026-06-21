@@ -140,13 +140,12 @@
         "decode_attention_reduce_stat_fusion"
       ],
       "prunes_patterns": [
-        "fully-fused Q@KT+softmax+P@V single flash kernel",
-        "coupled multi-accumulator reduce in one decode kernel"
+        "claiming a fully-fused coupled online-softmax decode kernel is INEXPRESSIBLE / needs a multi-week linearizer project"
       ],
-      "reason": "tinygrad's flash-decode is split into 6 kernels BECAUSE coupled multi-accumulator reduces trip the linearizer's range-ordering (qk_flash_decode.py:73-80). The fully-fused flash kernel is the same codegen wall as the prefill POWN/software-pipelined-K-loop (BEAM-hang class). Multi-week linearizer project, not a bounded fusion build.",
+      "reason": "CORRECTED 2026-06-21 (empirical probe, docs/native-fused-flash-linearizer-scope-20260621.md): the prior 'coupled multi-accumulator reduces trip the linearizer / multi-week linearizer wall' claim is REFUTED. A coupled online-softmax+V fused kernel (running m, l, acc[D] coupled via corr=exp(m_old-m_new)) VERIFIES, LOWERS, and RUNS value-correct in ONE kernel TODAY via the existing UOp.set/.after/register-array idiom -- no spec.py REDUCE change, no linearizer change. The '6-kernel split' is an IDIOM choice, not a wall; the only sharp edges are (a) same-slot intra-iteration RAW (use a mirror slot), (b) GROUP-shape-index (ops.py:372; make the END root a STORE), (c) two ENDs over one range (linearizer.py:81; use one END(j)). EXPRESSIBILITY is NOT the gap. The REAL remaining gap is in-kernel-q.k CODEGEN QUALITY (the warp-tile flat ~163us floor) + overall scheduling to match llama's hand-tuned kernel -- a deep optimization problem, not a linearizer-expressiveness one. NOTE: single-op Ops.REDUCE (spec.py:163-165) still can't auto-fuse softmax (Tensor SDPA splits) -- the fused kernel uses the manual register-accumulator route, which is why the custom-kernel path exists.",
       "evidence": [
         "extra/qk_flash_decode.py",
-        "docs/decode-attention-fusion-analysis-result-20260620.md"
+        "docs/native-fused-flash-linearizer-scope-20260621.md"
       ]
     },
     {
