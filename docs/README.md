@@ -15,7 +15,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   is the automated lifecycle ladder (correctness→local A/B→W==D→policy) emitting schema'd verdicts; it reproduces the
   historical classifications (baseline→REST, flash_l_64→LOCAL_PASS_WD_FAIL, warp_tile→FAIL_LOCAL_AB, q8→PASS_OPT_IN)
   and proved whole-decode W==D auto-clock variance is **<0.6% ≪ 5% margin** → `EVALUATOR_READY_FOR_LIFECYCLE_SEARCH`
-  (GPU-state tooling not needed). Measurement-only; no defaults changed. Next project = the lifecycle-search loop.
+  (GPU-state tooling not needed). Measurement-only; no defaults changed.
+- **`lifecycle-search-loop-v0-result-20260621.md`** — ⭐ LIFECYCLE-SEARCH LOOP v0 BUILT. `extra/qk_lifecycle_search_loop.py`
+  is the first closed `generate→evaluate→prune` loop on the evaluator: runs valid candidates through `decode_eval`
+  (4 executed, verdicts match) and **prunes invalid ones before benchmarking** (WMMA-decode reopen, FLASH_L=64
+  default-promotion). No kernels, no defaults; propose-only ledger; surfaced + fixed a q8 auto-clock confound.
+  `LIFECYCLE_SEARCH_V0_READY`. Next = candidate-template generation layer.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

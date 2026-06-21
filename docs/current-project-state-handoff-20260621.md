@@ -47,9 +47,15 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   **reproduces the project's historical classifications** (baseline→REST, flash_l_64→LOCAL_PASS_WD_FAIL,
   warp_tile→FAIL_LOCAL_AB, q8→PASS_OPT_IN) and answered the key falsifier: **whole-decode W==D auto-clock variance
   is <0.6% ≪ the 5% promotion margin** (`EVALUATOR_READY_FOR_LIFECYCLE_SEARCH`; GPU-state tooling NOT needed). It
-  only measures — no defaults change. Next project = the lifecycle-search loop on top of it. See
-  `docs/decode-evaluation-harness-hardening-result-20260621.md`, ledger contract
-  `bench/qk-lifecycle-search/evaluator_contract.json`.
+  only measures — no defaults change. See `docs/decode-evaluation-harness-hardening-result-20260621.md`, ledger
+  contract `bench/qk-lifecycle-search/evaluator_contract.json`.
+- **Lifecycle-search loop v0 BUILT (2026-06-21).** `extra/qk_lifecycle_search_loop.py` is the first closed
+  `generate → evaluate → prune` loop on the evaluator: it runs valid candidates through `decode_eval` (4 executed,
+  verdicts match) and **prunes invalid ones before benchmarking** (a WMMA-decode reopen → `PRUNE_CLOSED_LANE`, a
+  FLASH_L=64 default-promotion → `PRUNE_POLICY_VIOLATION`). It builds no kernels, changes no defaults, proposes
+  (dedup'd) ledger updates, and surfaced + drove a fix to a q8 auto-clock measurement confound (now reads the
+  controlled lane). `LIFECYCLE_SEARCH_V0_READY`. Next = candidate-template generation layer. See
+  `docs/lifecycle-search-loop-v0-result-20260621.md`.
 - **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)

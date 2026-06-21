@@ -15,6 +15,10 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > **Machine-search evaluator** (`extra/qk_decode_eval.py`, `qk-decode-eval/`): the automated lifecycle ladder that
 > turns a candidate into a schema'd verdict; reproduces the historical classifications and proved whole-decode W==D
 > auto-clock variance <0.6% ≪ 5% margin. Measurement-only, no defaults changed.
+>
+> **Lifecycle-search loop v0** (`extra/qk_lifecycle_search_loop.py`, `qk-lifecycle-search/search_*.json`): the first
+> closed generate→evaluate→prune loop on the evaluator — runs valid candidates through `decode_eval` and prunes
+> closed-lane / default-promotion candidates before benchmarking. No kernels, no defaults; propose-only ledger.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,
