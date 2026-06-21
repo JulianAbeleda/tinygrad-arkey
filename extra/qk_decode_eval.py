@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""Decode evaluation harness — the project's first machine-search evaluator (infrastructure, NOT kernel work).
+
+Turns a registered decode candidate into a machine-readable verdict by running the lifecycle ladder
+(correctness -> local A/B -> whole-decode W==D -> policy) as ISOLATED SUBPROCESSES (env set per child only;
+`getenv` is @cache'd so a same-process loop would leak/cache), wrapping the existing benchmark scripts. It NEVER
+edits tinygrad/ or changes model defaults; it only MEASURES and classifies.
+
+Measurement authority (do not mix): clean W==D (PROFILE off, AUTO clock) = promotion authority; clock-pinned local
+= diagnostic only; PROFILE timestamps = attribution only. Promotion is reported, never applied.
+
+CLI:
+  python extra/qk_decode_eval.py --list
+  python extra/qk_decode_eval.py --candidate flash_l_64 [--dry-run] [--repeats N] [--out DIR]
+  python extra/qk_decode_eval.py --suite historical [--out DIR]
+  python extra/qk_decode_eval.py --validate bench/qk-decode-eval/runs/<file>.json
+
+Run: DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --suite historical
+"""
+from __future__ import annotations
+import argparse, json, os, pathlib, shutil, statistics, subprocess, sys, time
+from typing import Any
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+REG = ROOT / "bench/qk-decode-eval/candidates.json"
+SCHEMA = ROOT / "bench/qk-decode-eval/schema.json"
+RUNS = ROOT / "bench/qk-decode-eval/runs"
+SUMMARIES = ROOT / "bench/qk-decode-eval/summaries"
+WD_RESULT = ROOT / "bench/qk-decode-runtime-overhead/result.json"  # fixed path the W==D script overwrites
+MODEL = os.environ.get("QK_MODEL", "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf")
+DEV_SYS = "/sys/class/drm/card0/device/power_dpm_force_performance_level"
+
+# ---- provenance helpers -----------------------------------------------------------------------------------------
+def _git(*a):
+  try: return subprocess.check_output(["git", *a], cwd=ROOT, text=True).strip()
+  except Exception: return "unknown"
+def git_commit(): return _git("rev-parse", "HEAD")
+def dirty_tree(): return bool(_git("status", "--short"))
+def perf_state():
+  try: return pathlib.Path(DEV_SYS).read_text().strip()
+  except OSError: return "unknown"
+def hardware(): return "RX 7900 XTX / gfx1100"
+def now_ts(): return time.strftime("%Y%m%dT%H%M%S")
+def child_env(extra: dict) -> dict:
+  e = os.environ.copy(); e.setdefault("DEV", "AMD"); e.setdefault("JIT", "1"); e["PYTHONPATH"] = str(ROOT)
+  e["QK_MODEL"] = MODEL
+  for k, v in (extra or {}).items(): e[str(k)] = str(v)
+  return e
+
+# ---- runners (each spawns a subprocess, returns parsed numbers + the exact command) -----------------------------
+def run_wd(env: dict, repeats: int) -> dict:
+  """N repeats of the clean W==D script with `env`; returns per-ctx tok_s_W samples + median/band. AUTO clock."""
+  cmd = [sys.executable, "extra/qk_decode_runtime_overhead.py"]
+  samples: dict[int, list[float]] = {}
+  for _ in range(repeats):
+    p = subprocess.run(cmd, cwd=ROOT, env=child_env(env), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if "@@DONE@@" not in (p.stdout or "") or not WD_RESULT.exists():
+      raise RuntimeError(f"W==D run failed: {(p.stdout or '')[-500:]}")
+    rows = json.loads(WD_RESULT.read_text())["rows"]
+    for r in rows: samples.setdefault(int(r["ctx"]), []).append(float(r["tok_s_W"]))
+  out = {"command": "DEV=AMD JIT=1 " + " ".join(f"{k}={v}" for k, v in env.items()) + f" python3 {cmd[1]} (x{repeats})",
+         "repeats": repeats, "samples": samples, "median": {}, "band_pct": {}}
+  for ctx, xs in samples.items():
+    med = statistics.median(xs); spread = (max(xs) - min(xs)) / med * 100 if med else 0.0
+    out["median"][ctx] = round(med, 2); out["band_pct"][ctx] = round(spread, 2)
+    out.setdefault("min", {})[ctx] = round(min(xs), 2); out.setdefault("max", {})[ctx] = round(max(xs), 2)
+    out.setdefault("mad", {})[ctx] = round(statistics.median([abs(x - med) for x in xs]), 3)
+  return out
+
+def run_q8_audit() -> dict:
+  out_json = ROOT / "bench/qk-decode-eval/_q8_audit.json"
+  cmd = [sys.executable, "extra/qk_decode_q8_model_route_timing_audit.py", "--modes", "baseline,q8",
+         "--lanes", "auto", "--ckpts", "512", "1024", "--nmeas", "20", "--warmups", "8", "--out", str(out_json)]
+  p = subprocess.run(cmd, cwd=ROOT, env=child_env({}), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+  if not out_json.exists(): raise RuntimeError(f"q8 audit failed: {(p.stdout or '')[-600:]}")
+  d = json.loads(out_json.read_text())
+  spd = {r["ctx"]: r["speedup_W"] for r in d.get("rows", []) if r.get("lane") == "auto"}
+  return {"command": "DEV=AMD JIT=1 " + " ".join(cmd[1:]), "speedup_W_per_ctx": spd,
+          "median_speedup_W": d.get("summary", {}).get("auto", {}).get("median_speedup_W"),
+          "q8_median_tok_s_W": d.get("summary", {}).get("auto", {}).get("q8_median_tok_s_W"), "verdict": d.get("verdict")}
+
+def run_ab_script(script: str, result_json: str) -> dict:
+  cmd = [sys.executable, script]
+  p = subprocess.run(cmd, cwd=ROOT, env=child_env({}), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+  rj = ROOT / result_json
+  if not rj.exists(): raise RuntimeError(f"A/B script failed: {(p.stdout or '')[-500:]}")
+  d = json.loads(rj.read_text())
+  # both split-sweep and fused styles: pull ctx1024 best speedup + first_gate_pass + max err
+  best, err = None, 0.0
+  for row in d.get("results", d.get("rows", [])):
+    if row.get("ctx") == 1024:
+      best = row.get("best_speedup_vs_coop") or row.get("fused_lds_speedup_vs_coop")
+      for s in row.get("splits", []): err = max(err, s.get("err", 0.0))
+      err = max(err, row.get("lds_err", 0.0))
+  return {"command": "DEV=AMD JIT=1 " + " ".join(cmd[1:]), "first_gate_pass": d.get("first_gate_pass"),
+          "speedup_ctx1024": best, "max_err": err, "phase": d.get("phase")}
+
+def run_flash_l_local() -> dict:
+  """Self-spawned child: flash_decode_attention L=64 vs L=128 at decode shape, clock-pinned, byte-exact vs numpy."""
+  cmd = [sys.executable, "extra/qk_decode_eval.py", "--_child", "flash_l_local"]
+  p = subprocess.run(cmd, cwd=ROOT, env=child_env({}), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+  line = next((l for l in (p.stdout or "").splitlines() if l.startswith("@@FLASHL@@")), None)
+  if not line: raise RuntimeError(f"flash_l local A/B failed: {(p.stdout or '')[-600:]}")
+  d = json.loads(line[len("@@FLASHL@@"):])
+  d["command"] = "DEV=AMD JIT=1 python3 extra/qk_decode_eval.py --_child flash_l_local (clock-pinned diagnostic)"
+  return d
+
+def _child_flash_l_local() -> int:
+  import numpy as np
+  from tinygrad import Tensor, Device, TinyJit
+  from tinygrad.uop.ops import UOp
+  from extra.qk_flash_decode import flash_decode_attention
+  from extra.qk_clock_pin import pinned_peak
+  dev = Device["AMD"]; Hd, Hq, Hkv, MAXC = 128, 32, 8, 4608; G = Hq // Hkv; rng = np.random.default_rng(0)
+  q = rng.standard_normal((Hq, Hd)).astype(np.float16); k = rng.standard_normal((Hkv, MAXC, Hd)).astype(np.float16)
+  v = rng.standard_normal((Hkv, MAXC, Hd)).astype(np.float16); qn, kn, vn = Tensor(q), Tensor(k), Tensor(v); Tc = 1024
+  ref = np.zeros((Hq, Hd), np.float32)
+  for h in range(Hq):
+    kv = h // G; sc = (q[h].astype(np.float32) @ k[kv, :Tc].astype(np.float32).T) / np.sqrt(Hd)
+    pw = np.exp(sc - sc.max()); pw /= pw.sum(); ref[h] = pw @ v[kv, :Tc].astype(np.float32)
+  def tfn(fn, n=150):
+    dev.synchronize(); ts = []
+    for _ in range(n):
+      t0 = time.perf_counter(); fn(); dev.synchronize(); ts.append(time.perf_counter() - t0)
+    return statistics.median(ts) * 1e6
+  res = {}
+  with pinned_peak():
+    time.sleep(0.4)
+    for L in (128, 64):
+      vsp = UOp.variable("start_pos", 0, MAXC - 1)
+      j = TinyJit(lambda spb, LL=L: flash_decode_attention(qn, kn, vn, spb + 1, vsp + 1, Hd, Hq, Hkv, MAXC, LL, variant="gqa_coop_vec").realize())
+      for _ in range(8): j(vsp.bind(Tc - 1))
+      err = float(np.abs(j(vsp.bind(Tc - 1)).numpy() - ref).max()); res[L] = (tfn(lambda: j(vsp.bind(Tc - 1))), err)
+  spd = res[128][0] / res[64][0] if res[64][0] else 0.0
+  print("@@FLASHL@@" + json.dumps({"speedup_ctx1024": round(spd, 3), "us_L128": round(res[128][0], 1),
+        "us_L64": round(res[64][0], 1), "max_err": round(max(res[128][1], res[64][1]), 4),
+        "authority": "clock-pinned local diagnostic (NOT promotion)"}))
+  return 0
+
+# ---- verdict logic ----------------------------------------------------------------------------------------------
+def classify(cand: dict, th: dict, corr: dict, local: dict, wd: dict) -> tuple[str, str]:
+  if corr["checked"] and corr["passed"] is False:
+    return "FAIL_CORRECTNESS", f"correctness {corr.get('metric')}={corr.get('value')} > {corr.get('threshold')}"
+  if local["checked"] and local["passed"] is False:
+    return "FAIL_LOCAL_AB", f"local speedup {local.get('speedup_ctx1024')} < {local.get('threshold_min')}"
+  if wd["checked"]:
+    if wd.get("repro_band_ok") is False:
+      return "NEEDS_GPU_STATE_TOOLING", f"W==D repro band {wd.get('repro_band_pct')} > {th['repro_band_max_pct']}% (auto-clock variance exceeds the promotion margin)"
+    if wd.get("promotion_gate_passed"):
+      return "PASS_PROMOTE", f"W==D delta {wd.get('delta_pct')} clears the promotion gate"
+    if local["checked"] and local["passed"]:
+      return "LOCAL_PASS_WD_FAIL", f"local passed ({local.get('speedup_ctx1024')}x) but W==D {wd.get('delta_pct')} below the >=5%@1024/>=7%@4096 gate"
+  if cand["family"] == "q8_route":
+    spd = (wd.get("median_speedup_W") or 0)
+    if spd >= th["opt_in_min_speedup"] and corr.get("passed"):
+      return "PASS_OPT_IN", f"q8 whole-decode {spd:.3f}x (opt-in, default-off) + dNLL {corr.get('value')} <= {th['dnll_max']}"
+  if cand["family"] == "baseline":
+    return "REST", "baseline curve; not a promotion candidate"
+  return "REST", "no rung cleared a promotion gate"
+
+# ---- evaluate one candidate -------------------------------------------------------------------------------------
+def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, dry: bool) -> dict:
+  th = {**reg["thresholds_default"]}
+  res = {"schema": "decode_eval_run_v1", "candidate_id": cand["id"], "candidate_family": cand["family"],
+         "candidate_description": cand["description"], "date": "2026-06-21", "git_commit": git_commit(),
+         "dirty_tree": dirty_tree(), "hardware": hardware(), "perf_state_before": perf_state(),
+         "clock_pin_mode": "auto", "env": cand.get("env", {}), "commands": [], "contexts": cand["contexts"],
+         "repeats": 0, "warmups": 8, "thresholds": th, "verdict_expected": cand.get("historical_expected_verdict"),
+         "linked_ledger_entry": cand.get("compare_artifact"), "default_behavior_changed": False,
+         "source_files": ["extra/qk_decode_eval.py", "bench/qk-decode-eval/candidates.json"], "notes": [],
+         "correctness": {"checked": False, "passed": None, "metric": None, "value": None, "threshold": None, "note": None},
+         "local_ab": {"checked": False, "passed": None, "speedup_ctx1024": None, "threshold_min": None, "authority": None, "note": None},
+         "wd": {"checked": False, "authority": "clean W==D PROFILE-off AUTO-clock (promotion authority)"}}
+  if dry:
+    res["verdict"] = "REST"; res["stop_reason"] = "dry-run (no GPU)"; res["perf_state_after"] = perf_state()
+    res["verdict_matches_expected"] = None
+    res["commands"] = [f"[dry] would run rungs: {[r['rung'] for r in cand['rungs']]}"]
+    return res
+  for rung in cand["rungs"]:
+    r, runner = rung["rung"], rung["runner"]
+    if r == "local_ab" and runner == "flash_l_local":
+      d = run_flash_l_local(); res["commands"].append(d["command"]); res["clock_pin_mode"] = "manual_peak_diagnostic_only" if res["clock_pin_mode"] == "auto" else "mixed"
+      res["local_ab"] = {"checked": True, "speedup_ctx1024": d["speedup_ctx1024"], "threshold_min": th["local_min_speedup"],
+                         "passed": d["speedup_ctx1024"] >= th["local_min_speedup"], "authority": d["authority"], "note": f"L64 {d['us_L64']}us vs L128 {d['us_L128']}us"}
+      if cand.get("correctness_req") == "byte_exact":
+        res["correctness"] = {"checked": True, "metric": "max_err", "value": d["max_err"], "threshold": th["correctness_tol"], "passed": d["max_err"] <= th["correctness_tol"], "note": "byte-exact vs numpy ref"}
+    elif r == "local_ab" and runner == "ab_script":
+      d = run_ab_script(rung["script"], rung["result_json"]); res["commands"].append(d["command"]); res["source_files"].append(rung["script"])
+      res["local_ab"] = {"checked": True, "speedup_ctx1024": d["speedup_ctx1024"], "threshold_min": th["local_min_speedup"],
+                         "passed": bool(d.get("first_gate_pass")), "authority": "clock-pinned local diagnostic", "note": d.get("phase")}
+      if cand.get("correctness_req") == "byte_exact":
+        res["correctness"] = {"checked": True, "metric": "max_err", "value": d["max_err"], "threshold": th["correctness_tol"], "passed": d["max_err"] <= th["correctness_tol"], "note": "byte-exact vs numpy ref"}
+    elif r == "wd" and runner == "runtime_overhead":
+      reps = repeats_override or rung.get("repeats", 3); res["repeats"] = reps
+      wd = run_wd(cand.get("env", {}), reps); res["commands"].append(wd["command"])
+      cur = {"checked": True, "authority": res["wd"]["authority"], "per_ctx": wd["median"], "min": wd.get("min"),
+             "max": wd.get("max"), "mad": wd.get("mad"), "repro_band_pct": wd["band_pct"]}
+      cur["repro_band_ok"] = all(b <= th["repro_band_max_pct"] for b in wd["band_pct"].values())
+      if rung.get("is_baseline"):
+        cache["baseline_wd"] = wd["median"]; cur["note"] = "baseline curve + reproducibility band (the falsifier)"
+      else:
+        base = cache.get("baseline_wd")
+        if base is None:  # run baseline inline if not cached
+          b = run_wd({}, max(2, reps // 2)); base = b["median"]; res["commands"].append(b["command"] + " [baseline]")
+        cur["baseline_per_ctx"] = base
+        cur["delta_pct"] = {c: round((wd["median"][c] - base[c]) / base[c] * 100, 2) for c in wd["median"] if c in base}
+        d1024 = cur["delta_pct"].get(1024, 0); d4096 = cur["delta_pct"].get(4096, 0); d512 = cur["delta_pct"].get(512, 0)
+        cur["promotion_gate_passed"] = (d1024 >= th["wd_min_pct_ctx1024"] or d4096 >= th["wd_min_pct_ctx4096"]) and d512 >= -th["ctx512_regress_max_pct"]
+      res["wd"] = cur
+    elif r == "wd_q8" and runner == "q8_audit":
+      d = run_q8_audit(); res["commands"].append(d["command"]); res["repeats"] = 1
+      res["wd"] = {"checked": True, "authority": "q8 audit baseline-vs-q8 W==D (auto lane)", "median_speedup_W": d["median_speedup_W"],
+                   "per_ctx_speedup": d["speedup_W_per_ctx"], "q8_median_tok_s_W": d["q8_median_tok_s_W"], "promotion_gate_passed": False,
+                   "repro_band_ok": True, "note": "opt-in route; not a default promotion"}
+    elif r == "correctness" and runner == "q8_dnll_historical":
+      bn = json.loads((ROOT / rung["baseline_nll"]).read_text())["nll"]; qn = json.loads((ROOT / rung["q8_nll"]).read_text())["nll"]
+      dnll = qn - bn; res["correctness"] = {"checked": True, "metric": "dNLL", "value": round(dnll, 5), "threshold": th["dnll_max"], "passed": dnll <= th["dnll_max"], "note": "historical teacher-forced dNLL artifact"}
+      res["source_files"] += [rung["baseline_nll"], rung["q8_nll"]]
+      res["notes"].append("q8 dNLL is from the historical bench/q8-ffn-handwritten-oracle artifact (the q8 audit script does not compute dNLL).")
+  v, reason = classify(cand, th, res["correctness"], res["local_ab"], res["wd"])
+  res["verdict"], res["stop_reason"] = v, reason
+  res["verdict_matches_expected"] = (cand.get("historical_expected_verdict") in (None, v)) or (v == cand.get("historical_expected_verdict"))
+  res["perf_state_after"] = perf_state()
+  res["notes"].append(cand.get("historical_note", ""))
+  return res
+
+# ---- artifacts / CLI --------------------------------------------------------------------------------------------
+def validate(path: pathlib.Path) -> int:
+  import jsonschema
+  schema = json.loads(SCHEMA.read_text())
+  try: jsonschema.validate(json.loads(path.read_text()), schema); print(f"VALID: {path}"); return 0
+  except jsonschema.ValidationError as e: print(f"INVALID: {path}\n  {e.message}"); return 1
+
+def emit(res: dict, outdir: pathlib.Path) -> pathlib.Path:
+  outdir.mkdir(parents=True, exist_ok=True)
+  f = outdir / f"{now_ts()}-{res['candidate_id']}.json"; f.write_text(json.dumps(res, indent=2, sort_keys=True) + "\n")
+  return f
+
+def main() -> int:
+  ap = argparse.ArgumentParser(description="Decode evaluation harness (measurement only; no defaults/kernels changed)")
+  ap.add_argument("--list", action="store_true"); ap.add_argument("--candidate"); ap.add_argument("--suite")
+  ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--repeats", type=int)
+  ap.add_argument("--out", type=pathlib.Path, default=RUNS); ap.add_argument("--validate", type=pathlib.Path)
+  ap.add_argument("--_child")  # internal self-spawn
+  args = ap.parse_args()
+  if args._child == "flash_l_local": return _child_flash_l_local()
+  if args.validate: return validate(args.validate)
+  reg = json.loads(REG.read_text())
+  by_id = {c["id"]: c for c in reg["candidates"]}
+  if args.list:
+    print(f"{'id':22}{'family':16}{'expected':22} description")
+    for c in reg["candidates"]: print(f"{c['id']:22}{c['family']:16}{str(c.get('historical_expected_verdict')):22}{c['description'][:70]}")
+    return 0
+  cands = ([by_id[i] for i in reg["suites"][args.suite]] if args.suite else [by_id[args.candidate]] if args.candidate else [])
+  if not cands: print("specify --list, --candidate <id>, --suite <name>, or --validate <file>"); return 2
+  cache, results = {}, []
+  for c in cands:
+    print(f"=== evaluating {c['id']} ({c['family']}) ===", file=sys.stderr)
+    try: res = evaluate(c, reg, cache, args.repeats, args.dry_run)
+    except Exception as e:
+      res = {"schema": "decode_eval_run_v1", "candidate_id": c["id"], "verdict": "REST", "stop_reason": f"runner error: {str(e)[:200]}",
+             "verdict_expected": c.get("historical_expected_verdict"), "verdict_matches_expected": False, "default_behavior_changed": False, "notes": [str(e)[:300]]}
+    f = emit(res, args.out); results.append(res)
+    rel = f.relative_to(ROOT) if f.is_relative_to(ROOT) else f
+    print(f"  -> {res['verdict']} (expected {res.get('verdict_expected')}, match={res.get('verdict_matches_expected')}) | {res.get('stop_reason','')[:90]}\n  artifact: {rel}", file=sys.stderr)
+  SUMMARIES.mkdir(parents=True, exist_ok=True)
+  summ = {"date": "2026-06-21", "git_commit": git_commit(), "rows": [{"candidate": r["candidate_id"], "verdict": r["verdict"],
+          "expected": r.get("verdict_expected"), "match": r.get("verdict_matches_expected"),
+          "wd_repro_band_pct": r.get("wd", {}).get("repro_band_pct"), "stop_reason": r.get("stop_reason")} for r in results]}
+  (SUMMARIES / "latest.json").write_text(json.dumps(summ, indent=2) + "\n")
+  print(json.dumps(summ, indent=2))
+  return 0
+
+if __name__ == "__main__":
+  raise SystemExit(main())

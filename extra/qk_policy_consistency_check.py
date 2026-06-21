@@ -76,6 +76,17 @@ def scan(rel: str, lines: list[str]) -> list[str]:
     if re.search(r"bounded decode.*(open|fundable|next build|remains open|still open)", l) \
        and not any(w in win for w in _DECODE_RESTED_OK):
       out.append((i+1, "bounded decode framed as open (it is rested)", line))
+    # affirmative "WMMA decode is llama's path / the decode lever" (refuted — llama decode is a non-WMMA vector tile)
+    if re.search(r"wmma.{0,40}decode|decode.{0,40}wmma", l) \
+       and re.search(r"is (the )?(llama|decode|remaining|next).{0,20}(lever|path|gap)|llama'?s.{0,20}(decode|path)|reopen wmma|wmma.{0,20}is llama", l) \
+       and not any(w in win for w in ("not wmma", "non-wmma", "no wmma", "refuted", "closed", "below threshold", "prefill", "rest")):
+      out.append((i+1, "WMMA decode claimed as llama's path / the lever (refuted: llama decode is non-WMMA vector)", line))
+    # affirmative MMVQ-as-the-decode-gap / next bounded lever (refuted — wall parity, stays closed). NOTE: the bare
+    # word "reopen" is _META-skipped (the guardrail describes itself + a historical index entry use it), so this
+    # rule keys on the affirmative phrasings that survive _META, not on "reopen".
+    if "mmvq" in l and re.search(r"is (the )?(decode )?gap|is the (decode )?lever|next bounded|fundable|is the next", l) \
+       and not any(w in win for w in ("closed", "parity", "do not", "not the gap", "refuted", "stays closed", "not a")):
+      out.append((i+1, "MMVQ presented as the decode gap / next lever (refuted: wall parity, stays closed)", line))
   return out
 
 

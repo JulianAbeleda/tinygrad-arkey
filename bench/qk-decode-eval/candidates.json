@@ -1,0 +1,78 @@
+{
+  "schema": "decode_eval_candidate_registry_v1",
+  "comment": "Declarative candidate registry for extra/qk_decode_eval.py. Each candidate declares its ladder rungs, thresholds, and the historical verdict the evaluator must reproduce. No defaults are changed by running these.",
+  "thresholds_default": {
+    "local_min_speedup": 1.05,
+    "wd_min_pct_ctx1024": 5.0,
+    "wd_min_pct_ctx4096": 7.0,
+    "ctx512_regress_max_pct": 1.0,
+    "opt_in_min_speedup": 1.03,
+    "dnll_max": 0.01,
+    "correctness_tol": 0.02,
+    "repro_band_max_pct": 5.0
+  },
+  "candidates": [
+    {
+      "id": "baseline_default",
+      "family": "baseline",
+      "description": "Current default decode route (gqa_coop_vec, FLASH_L=128, no q8). Establishes the canonical curve AND the whole-decode W==D auto-clock reproducibility band (the falsifier).",
+      "env": {},
+      "rungs": [
+        {"rung": "wd", "runner": "runtime_overhead", "repeats": 5, "is_baseline": true}
+      ],
+      "contexts": [128, 512, 1024, 4096],
+      "correctness_req": "none",
+      "historical_expected_verdict": "REST",
+      "compare_artifact": "bench/qk-decode-runtime-overhead/result.json",
+      "historical_note": "default ~68.1/66.4/60.7 tok/s @512/1024/4096; not a promotion candidate"
+    },
+    {
+      "id": "flash_l_64",
+      "family": "attention_split",
+      "description": "More KV-splits on the existing winner gqa_coop_vec via FLASH_L=64. Known LOCAL-PASS / W==D-FAIL: ~1.08x attention @ctx1024 (byte-exact) but +1.8%@1024 / -1.2%@4096 whole-decode (below the >=5% bar). DO NOT PROMOTE.",
+      "env": {"FLASH_L": "64"},
+      "baseline_ref": "baseline_default",
+      "rungs": [
+        {"rung": "local_ab", "runner": "flash_l_local"},
+        {"rung": "wd", "runner": "runtime_overhead", "repeats": 3}
+      ],
+      "contexts": [512, 1024, 4096],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "LOCAL_PASS_WD_FAIL",
+      "compare_artifact": "docs/decode-vector-flash-tile-realigned-result-20260621.md",
+      "historical_note": "local ~1.08x @ctx1024; W==D +2.8%@512 +1.8%@1024 -1.2%@4096; non-promotion"
+    },
+    {
+      "id": "warp_flash_tile",
+      "family": "vector_tile",
+      "description": "Warp-cooperative non-WMMA vector flash-decode tile (raw-C, standalone decode-shape A/B). Known FAIL: byte-exact but ~0.60x @ctx1024 vs gqa_coop_vec (work-bound per-key warp-reduce). Wraps the whole script as one fixed candidate.",
+      "env": {},
+      "rungs": [
+        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_decode_warp_flash_tile_ab.py", "result_json": "bench/qk-decode-vector-flash-tile/warp_tile_ab.json"}
+      ],
+      "contexts": [1024, 4096],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "FAIL_LOCAL_AB",
+      "compare_artifact": "bench/qk-decode-vector-flash-tile/warp_tile_ab.json",
+      "historical_note": "first_gate_pass=false; ctx1024 best_speedup_vs_coop ~0.596"
+    },
+    {
+      "id": "q8_opt_in",
+      "family": "q8_route",
+      "description": "q8 FFN handwritten route (Q8_FFN_HANDWRITTEN=1), opt-in only. Known PASS_OPT_IN: ~1.06x whole-decode W==D + dNLL 0.0029 <= 0.01. Not a default promotion (opt-in).",
+      "env": {"Q8_FFN_HANDWRITTEN": "1"},
+      "rungs": [
+        {"rung": "wd_q8", "runner": "q8_audit"},
+        {"rung": "correctness", "runner": "q8_dnll_historical", "baseline_nll": "bench/q8-ffn-handwritten-oracle/nll_baseline.json", "q8_nll": "bench/q8-ffn-handwritten-oracle/nll_q8_route.json"}
+      ],
+      "contexts": [512, 1024],
+      "correctness_req": "dnll",
+      "historical_expected_verdict": "PASS_OPT_IN",
+      "compare_artifact": "bench/qk-decode-primitive-transfer/decode_q8_model_route_timing_audit_result.json",
+      "historical_note": "speedup_W ~1.06; dNLL 0.00288; opt-in default-off"
+    }
+  ],
+  "suites": {
+    "historical": ["baseline_default", "flash_l_64", "warp_flash_tile", "q8_opt_in"]
+  }
+}
