@@ -42,6 +42,10 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
 
 ## 4. Frontier — bounded decode is RESTED; the Method pillar is underway
 
+- **Post-maintenance sanity passed (2026-06-21); no performance benchmark rerun required because no
+  runtime/model/kernel path changed** (the repo-principles/centralization sequence was NFC/test/docs/tooling only).
+  See `docs/post-maintenance-sanity-result-20260621.md`.
+
 - **Machine-search evaluator BUILT (2026-06-21).** `extra/qk_decode_eval.py` is the first-class, automated form of
   the lifecycle ladder (correctness → local A/B → whole-decode W==D → policy), emitting schema'd verdicts. It
   **reproduces the project's historical classifications** (baseline→REST, flash_l_64→LOCAL_PASS_WD_FAIL,
