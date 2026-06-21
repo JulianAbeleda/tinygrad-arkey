@@ -64,6 +64,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   coop's matmul q·k + ONE fused softmax+V), first gate = value-correct (met) + A/B vs `gqa_coop_vec`. The real 5–6×
   gap is **in-kernel-q·k codegen QUALITY** (deep, deferred). `flash_fused_multireduce_linearizer_wall` refutation
   corrected. No `tinygrad/` change; no llama port first.
+- **`fused-softmax-v-tail-candidate-result-20260621.md`** — Path A EXECUTED + REFUTED:
+  `FUSED_SOFTMAX_V_TAIL_FAIL_LOCAL_AB`. The achievable fused tail (coop matmul q·k + inline-exp partial, keep
+  flash_max) is value-correct but **0.725×@1024 / 0.876×@4096** vs `gqa_coop_vec` — fusing exp into the partial makes
+  W=129 lanes recompute exp (vs coop's once/key), so it loses. Tail fusion doesn't help; coop's hoisted-exp split is
+  near-optimal. Full online-max removal `BLOCKED_BY_IDIOM` (two-granularity pm+pout store). The 5–6× gap stays
+  in-kernel-q·k codegen quality (deep). No W==D; banked.
 - **`project-north-star-llama-and-lifecycle-search-20260620.md`** — PROJECT COMPLETION DEFINITION. The project is
   complete only when tinygrad both beats the current llama.cpp decode reference and has a closed lifecycle
   machine-search system that can find/maintain that win, then cuts over into a clean `tinygrad-v2` execution repo.

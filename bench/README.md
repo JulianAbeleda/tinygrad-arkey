@@ -50,6 +50,11 @@ artifacts are force-added. Doc map: `../docs/README.md`; **canonical current sta
 > online-softmax+V fused decode kernel runs value-correct in ONE kernel TODAY (existing `UOp.set`/`.after` idiom) — no
 > `spec.py`/linearizer change. Next = bounded Path-A build (coop matmul q·k + fused softmax+V), A/B vs `gqa_coop_vec`;
 > the 5–6× gap is in-kernel-q·k codegen QUALITY (deep). `NATIVE_FLASH_LINEARIZER_SCOPE_READY`.
+>
+> **Path A fused softmax+V tail REFUTED** (`extra/qk_fused_softmax_v_tail_ab.py`, `qk-fused-softmax-v-tail/`):
+> value-correct but **0.725×@1024 / 0.876×@4096** vs `gqa_coop_vec` → `FUSED_SOFTMAX_V_TAIL_FAIL_LOCAL_AB`. Fusing exp
+> into the partial makes W=129 lanes recompute exp (vs coop's once/key) → loses; coop's hoisted-exp split near-optimal.
+> Full online-max removal `BLOCKED_BY_IDIOM` (two-granularity store). No W==D; banked.
 
 **Setup (all commands):** `cd /home/ubuntu/tinygrad-arkey`, interpreter `.venv/bin/python`, `DEV=AMD`,
 RX 7900 XTX (gfx1100), models at `/home/ubuntu/models/`. Bar: **llama.cpp ≈ 98–106 tok/s** (8B decode,

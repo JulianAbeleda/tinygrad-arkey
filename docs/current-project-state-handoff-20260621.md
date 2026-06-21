@@ -121,7 +121,17 @@ reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
   it tests a likely-MARGINAL fusion win — the 5–6× gap is the **in-kernel-q·k CODEGEN QUALITY** (the warp-tile floor),
   which Path A does not address (deep, deferred until Path A's A/B). No `tinygrad/` change for Path A; profiling
   oracle + numpy suffice (no llama port first). See `docs/native-fused-flash-linearizer-scope-20260621.md`.
-- **Bounded decode work is rested.** Every bounded lever is exhausted/refuted: weight-GEMV (llama parity),
+- **Path A fused softmax+V tail EXECUTED + REFUTED (2026-06-21) — `FUSED_SOFTMAX_V_TAIL_FAIL_LOCAL_AB`.** Built the
+  achievable Path-A kernel (`extra/qk_fused_softmax_v_tail_ab.py`: coop matmul q·k + `flash_prob` fused INTO the
+  partial as inline per-d-lane exp, keep `flash_max` + GQA reuse), value-correct (rel_rmse 8e-4). **MEASURED
+  0.725×@ctx1024 / 0.876×@ctx4096** vs `gqa_coop_vec` → LOSES → `FAIL_LOCAL_AB`, no W==D (discipline). WHY: fusing exp
+  into the partial makes W=129 output lanes RECOMPUTE exp per key vs coop's `flash_prob` (once/key) — the ~129×
+  redundant exp outweighs the saved `prob` materialization (same redundancy that sank fused-LDS 0.21×). coop's
+  hoisted-exp split is **near-optimal**; **tail fusion does not help**. The FULL online-max removal (fusing
+  `flash_max` too) is **BLOCKED_BY_IDIOM** — per-split `pm` + per-d `pout` from one kernel = the Q8L-2 two-granularity
+  store wall. So the proven expressiveness does NOT yield a decode win; the 5–6× gap stays the **in-kernel q·k codegen
+  quality** (deep, no bounded gate; Path A keeps coop's matmul q·k and doesn't attack it). Decode lever options now:
+  the deep q·k-codegen-quality project, or REST. See `docs/fused-softmax-v-tail-candidate-result-20260621.md`.
   fusion, micro-fusion, launch-removal, scalar fused LDS+GQA tile, warp-cooperative tile, and split-count tuning
   (`FLASH_L=64`). The latest (`FLASH_L=64`) validated the T=1 split principle locally (~1.08× attention @ctx1024)
   but missed W==D promotion (+1.8%@1024, −1.2%@4096). **Do not pursue another bounded tile or flag sweep.**
