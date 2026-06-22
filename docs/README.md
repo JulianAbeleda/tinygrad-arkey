@@ -36,6 +36,16 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   `extra/qk_harness_contract.py` (provenance + `repro_band` + `contract_audit` + `stamp`), `decode_eval` now
   auto-flags any non-conforming child artifact, `fused_flash_concrete_gate` upgraded to **CONFORMS 13/13** (reference),
   llama-oracle provenance made honest. No verdict/default changed.
+- **`split-kv-economics-audit-result-20260621.md`** — ⭐ PERMANENT SPLIT-KV ECONOMICS AUDIT. Banks the B4 combine-tax
+  lesson as a durable, reusable audit (`extra/qk_split_kv_economics_audit.py` →
+  `bench/qk-split-kv-economics-audit/latest.json`): every split-KV decode-attention candidate must report tile/combine
+  split, combine fraction, effective bandwidth, tile/combine workgroup counts, per-ctx optimal S, and an Amdahl
+  projection (measured/half/free combine) — and be classified (`COMBINE_TAX_DOMINATES` | `COMBINE_SMALL_AMDAHL_LIMIT`
+  | `POLICY_ONLY` | `MEASUREMENT_UNSTABLE`) — BEFORE any W==D promotion. Enforced via `split_kv_economics_contract_v1`
+  in `bench/qk-decode-eval/binding_templates.json`; principle in the research-principles doc. B4 classifies
+  `COMBINE_TAX_DOMINATES` (combine latency-bound ~64 GB/s; Amdahl ctx4096 +5.41%→+6.97% half→+8.58% free) → next
+  bounded lever is a cheaper combine (B5), not another tile. `SPLIT_KV_ECONOMICS_AUDIT_READY`. Scope:
+  `split-kv-economics-audit-scope-20260621.md`. No kernel/default changed.
 - **`decode-evaluation-harness-hardening-result-20260621.md`** — ⭐ MACHINE-SEARCH EVALUATOR BUILT. `extra/qk_decode_eval.py`
   is the automated lifecycle ladder (correctness→local A/B→W==D→policy) emitting schema'd verdicts; it reproduces the
   historical classifications (baseline→REST, flash_l_64→LOCAL_PASS_WD_FAIL, warp_tile→FAIL_LOCAL_AB, q8→PASS_OPT_IN)

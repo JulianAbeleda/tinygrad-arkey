@@ -95,6 +95,15 @@ bar as-is.
   (four policies, gate eval, `NO_POLICY_CLEARS_GATE`).
 - Scope `docs/b4-split-kv-combine-tax-scope-20260621.md` · this result doc.
 
+## Banked as a PERMANENT audit layer (2026-06-21)
+This one-time combine-tax measurement is now a **durable, reusable split-KV economics audit** so future split-KV
+decode-attention candidates cannot pass a local A/B without exposing the combine tax. Tool:
+`extra/qk_split_kv_economics_audit.py` → `bench/qk-split-kv-economics-audit/latest.json` (`split_kv_economics_audit_v1`);
+binding requirement `split_kv_economics_contract_v1` in `bench/qk-decode-eval/binding_templates.json`; principle in
+`structure/Development/performance-primitive-research-principles.md` (§ "Split-KV Reduction Economics Are Part Of The
+Decode Primitive"). The audit re-derives this result's economics from the measured artifacts and classifies B4 as
+`COMBINE_TAX_DOMINATES`. See `docs/split-kv-economics-audit-result-20260621.md`.
+
 ## Boundaries honored
 No new tile, no Route-A codegen, no KV repack, no default change, no closed-lane reopen. `gqa_coop_vec` comparator SSOT.
 Attribution is GPU-busy diagnostic (not a headline). Bounded: Phase 1 launch-only (fast); Phase 2 reused prior W==D +

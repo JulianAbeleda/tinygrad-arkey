@@ -312,7 +312,9 @@
       "correctness_req": "rel_rmse<=1e-3",
       "historical_expected_verdict": "REST",
       "compare_artifact": "bench/qk-decode-attention-route-b-b4/latest.json",
-      "historical_note": "B4 follow-on runtime eval: route-node visibility is confirmed in-model, but fixed-policy W==D does not clear the promotion gate (best measured: +0.24%@512, -0.76%@1024, +5.36%@4096 with route-firing policy; +5.56%@4096-only without 1024 route). decode_eval currently has no B4 verdict state, so this entry is tracked as REST with compare_artifact `bench/qk-decode-attention-route-b-b4/latest.json`. default_eligible=false."
+      "historical_note": "B4 follow-on runtime eval: route-node visibility is confirmed in-model, but fixed-policy W==D does not clear the promotion gate (best measured: +0.24%@512, -0.76%@1024, +5.36%@4096 with route-firing policy; +5.56%@4096-only without 1024 route). decode_eval currently has no B4 verdict state, so this entry is tracked as REST with compare_artifact `bench/qk-decode-attention-route-b-b4/latest.json`. default_eligible=false.",
+      "is_split_kv": true,
+      "split_kv_economics_audit": "bench/qk-split-kv-economics-audit/latest.json -> COMBINE_TAX_DOMINATES. The W==D miss is attributed (extra/qk_split_kv_economics_audit.py): the split-KV combine is a flat latency-bound floor (~64 GB/s << 960 peak, 32 wg << 96 CUs; combine 44/35/26/17% of attention @ctx512/1024/2048/4096) -- a cheaper/fused combine is the actionable lever (Amdahl projection: ctx4096 measured +5.41% -> +6.97% half-combine -> +8.58% free-combine), Amdahl co-limits. Per split_kv_economics_contract_v1, this and any future split-KV candidate must report tile/combine economics before W==D promotion. See docs/split-kv-economics-audit-result-20260621.md."
     }
   ],
   "suites": {

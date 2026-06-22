@@ -343,6 +343,64 @@ This section explains why recent failures were useful:
 - The llama oracle validated that the target is real: a fused, LDS-staged, vectorized decode attention tile is much
   faster standalone than the current tinygrad route.
 
+## Split-KV Reduction Economics Are Part Of The Decode Primitive
+
+A Flash-Decoding tile manufactures T=1 parallelism by splitting the KV cache into `S` chunks (`Hkv·S` workgroups),
+each writing a partial `(m, l, PV[D])`. A separate **combine** kernel then does the log-sum-exp merge. That combine
+is part of the primitive — and it is a separate **lifecycle/economics tax** that a tile A/B never measures.
+
+This was learned the hard way (2026-06-21, Route B B4): an owned hand-AMDGCN tile passed the local A/B (2.35×
+GPU-busy vs `gqa_coop_vec`) and the external-kernel-as-JIT-graph-node capability, then **missed W==D** —
+not from a bug, a graph-overhead defect, or a kernel mismatch (greedy byte-identical), but because the split-KV
+combine gives back part of the tile win every layer.
+
+Three facts that a tile-only benchmark hides:
+
+- **Low combine bytes do NOT imply a cheap combine.** B4's combine moves ~0.8 MB yet costs ~12–16 µs because it is
+  **latency/occupancy-bound** (~64 GB/s ≈ 6.7% of HBM peak; only 32 workgroups on 96 CUs), not bandwidth-bound.
+- **The combine is a flat floor in context, scaling only with `S`** — a fixed ~12–16 µs is paid every token. As a
+  share of attention it is large at short/mid context (44%/35%/26% @ctx512/1024/2048) and shrinks long
+  (17% @ctx4096).
+- **Amdahl can make a real local win non-promotable.** Attention is ~17% of the decode step; even a free combine
+  caps the achievable W==D. A cheaper combine is the lever only when the projection shows it clears the gate.
+
+Rule:
+
+```text
+A split-KV decode-attention candidate (KV-splits + a separate combine/reduction) must report split-KV economics
+BEFORE any W==D promotion work: tile_us, combine_us, combine_fraction, combine effective bandwidth, tile/combine
+workgroup counts (occupancy vs CU count), the per-ctx optimal split S, and an Amdahl projection of W==D for
+measured / half / free combine. A tile A/B win alone is NOT W==D-ready.
+```
+
+The audit is `extra/qk_split_kv_economics_audit.py` → `bench/qk-split-kv-economics-audit/latest.json`
+(`split_kv_economics_audit_v1`); the binding requirement is `split_kv_economics_contract_v1` in
+`bench/qk-decode-eval/binding_templates.json`. It classifies each candidate:
+
+- `COMBINE_TAX_DOMINATES` — a cheaper/fused combine is projected to clear the gate (the actionable next lever);
+- `COMBINE_SMALL_AMDAHL_LIMIT` — even a free combine cannot clear it (attention's Amdahl share is the ceiling;
+  attack FFN/GEMV, not the combine);
+- `POLICY_ONLY` — a ctx-gated opt-in already clears the gate (route policy is the lever);
+- `MEASUREMENT_UNSTABLE` — no trustworthy W==D anchor; tighten the harness first.
+
+B4 classifies `COMBINE_TAX_DOMINATES`: the combine is latency-bound and a cheaper combine is projected to move
+ctx4096 from +5.41% (measured) to ~+7.0% (half) / ~+8.6% (free), so the next bounded lever is a cheaper combine
+(B5), not another tile. See `docs/split-kv-economics-audit-result-20260621.md` and
+`docs/b4-split-kv-combine-tax-result-20260621.md`.
+
+When a combine optimization is scoped from this audit, its target must include margin over the W==D gate. A
+`half-combine` projection that lands around the +7% ctx4096 threshold is **not enough margin** for promotion once
+model noise, integration overhead, and policy constraints are included. For B4/B5-class split-KV routes:
+
+```text
+combine <= 8 us is a useful diagnostic/local gate, but borderline for promotion.
+combine <= 6-7 us is the preferred W==D target.
+combine ~= 5 us is the stretch target that gives real gate margin.
+```
+
+Do not start the W==D promotion loop for a cheaper-combine variant unless local attribution shows it plausibly reaches
+the preferred target at the operative long-context split (`S≈56-64`) and preserves correctness.
+
 ## Name The Primitive Class: llama-style, vLLM-style, Silicon-style, DeepSeek-style
 
 This repo uses multiple reference families. Name which one a candidate is borrowing from.

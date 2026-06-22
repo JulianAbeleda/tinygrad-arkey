@@ -2,6 +2,23 @@
   "schema": "decode_evaluator_binding_templates_v1",
   "date": "2026-06-21",
   "comment": "Evaluator-binding contract for north-star decode-attention candidates. A binding template specifies EXACTLY what a candidate must declare + produce to become an executable decode_eval candidate, and what is still missing. It builds no kernel. The north-star template is concrete_runner_status=deferred_no_kernel (well-specified, blocked only on a kernel + runner). The selftest template is executable plumbing (no performance claim).",
+  "split_kv_economics_contract_v1": {
+    "comment": "PERMANENT requirement (added 2026-06-21, banked from B4): ANY split-KV decode-attention candidate (a flash-decode tile that splits the KV cache into S chunks and merges per-split partials in a separate combine/reduction) MUST report split-KV reduction economics BEFORE any whole-decode W==D promotion work. A tile-only local A/B win is NOT sufficient: the split-KV combine is a flat latency/occupancy floor that the tile A/B never measures and that can make a real local win non-promotable (B4: passed local A/B + graph-node, missed W==D because the combine gives back part of the tile win, COMBINE_TAX_DOMINATES). Low combine bytes do NOT imply a cheap combine -- it can be latency/occupancy-bound. Audit tool: extra/qk_split_kv_economics_audit.py -> bench/qk-split-kv-economics-audit/latest.json (split_kv_economics_audit_v1). See docs/split-kv-economics-audit-result-20260621.md.",
+    "applies_to": "any candidate whose dataflow does Flash-Decoding KV-splits + a separate combine/reduction of partials (kv_split_combine=true, or combine_kernel_count>=1)",
+    "required_fields": {
+      "tile_us_by_ctx": "per-ctx GPU-busy time of the split tile kernel at the operative S",
+      "combine_us_by_ctx": "per-ctx GPU-busy time of the combine/reduction kernel at the operative S",
+      "combine_fraction_by_ctx": "combine_us / (tile_us + combine_us) per ctx -- the share of attention given back to the merge",
+      "combine_bytes_est": "combine read+write bytes estimate (e.g. Hq*S*(Hd+2)*4 read + Hq*Hd*4 write)",
+      "combine_effective_gbps": "combine_bytes / combine_us -- compared vs HBM peak (960 GB/s) to decide latency- vs bandwidth-bound",
+      "split_count_by_ctx": "the KV-split count S used per ctx (operative S; the min-total-us optimal S also reported)",
+      "tile_workgroups_by_ctx": "tile workgroups per ctx (e.g. Hkv*S) -- occupancy proxy vs CU count (96 on gfx1100)",
+      "combine_workgroups_by_ctx": "combine workgroups per ctx -- occupancy proxy vs CU count; under-occupation is the fixable lever",
+      "amdahl_projection": "whole-decode W==D projected for measured / half / free combine (anchored on the measured routed delta + the per-layer combine cost x N_LAYERS) -- proves whether a cheaper combine can clear the gate"
+    },
+    "gate": "the audit must classify the candidate (COMBINE_TAX_DOMINATES | COMBINE_SMALL_AMDAHL_LIMIT | POLICY_ONLY | MEASUREMENT_UNSTABLE) BEFORE W==D promotion. A cheaper-combine build is justified ONLY when COMBINE_TAX_DOMINATES; COMBINE_SMALL_AMDAHL_LIMIT means attention's Amdahl share is the ceiling and a cheaper combine cannot promote the candidate (attack FFN/GEMV instead); POLICY_ONLY means a ctx-gated opt-in is the lever; MEASUREMENT_UNSTABLE means tighten the harness first.",
+    "stop_condition": "a split-KV candidate that reports a tile A/B win but omits the split-KV economics fields is NOT W==D-ready -- the evaluator/audit flags it incomplete."
+  },
   "templates": [
     {
       "binding_id": "north_star_flash_attn_tile_v0",
@@ -41,6 +58,8 @@
         "correctness_error",
         "reproducibility_band_pct"
       ],
+      "is_split_kv": true,
+      "split_kv_economics_required": "split_kv_economics_contract_v1 -- a north-star flash_attn_tile uses Flash-Decoding KV-splits + a combine; before any W==D promotion it MUST report split-KV economics (tile/combine split, combine_fraction, combine_effective_gbps, tile/combine workgroups, amdahl_projection) and be classified by extra/qk_split_kv_economics_audit.py. A tile A/B win alone is NOT W==D-ready.",
       "gates": {
         "structural": "expected_workgroups_by_ctx GROWS with ctx AND >= comparator (proves decode T=1 parallelism is preserved/enlarged); expected_no_wmma true; combine_kernel_count bounded (no per-output serial combine blowup)",
         "correctness": "byte-exact greedy vs gqa_coop_vec OR dNLL <= 0.01",
@@ -218,6 +237,8 @@
         "wall_speedup",
         "tinygrad_kv_layout_contract_hash"
       ],
+      "is_split_kv": true,
+      "split_kv_economics_required": "split_kv_economics_contract_v1 -- this tile does KV-splits + a separate combine; it MUST report tile_us_by_ctx/combine_us_by_ctx/combine_fraction_by_ctx/combine_bytes_est/combine_effective_gbps/split_count_by_ctx/tile_workgroups_by_ctx/combine_workgroups_by_ctx/amdahl_projection and be CLASSIFIED by extra/qk_split_kv_economics_audit.py BEFORE W==D promotion. B4 (the graph-node form of this tile) classified COMBINE_TAX_DOMINATES.",
       "gates": {
         "structural": "v_dot2 present, no spill, LDS-staged",
         "correctness": "rel_rmse<=1e-3; MEASURED 2e-7",

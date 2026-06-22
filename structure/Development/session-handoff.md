@@ -72,6 +72,7 @@ primitive.
 | B4 graph-node | capability pass | external precompiled AMDGCN `.co` enters TinyJit as `Ops.PROGRAM` nodes |
 | B4 W==D | `B4_WD_FAIL_INTEGRATION` | whole-decode economics do not clear promotion |
 | B4 combine tax | `COMBINE_TAX_DOMINATES` | split-KV combine is the fixable latency-bound floor; Amdahl co-limits |
+| split-KV economics audit | `SPLIT_KV_ECONOMICS_AUDIT_READY` | permanent audit layer: split-KV candidates must report tile/combine economics before W==D |
 
 ## B3 Summary
 
@@ -178,12 +179,34 @@ Key findings:
 
 Verdict: the next attention-specific lever is a cheaper combine, not another tile.
 
+## Split-KV Economics Audit (permanent layer, 2026-06-21)
+
+`SPLIT_KV_ECONOMICS_AUDIT_READY`. The B4 combine-tax lesson is now a **durable, reusable audit** so a future
+split-KV candidate cannot pass a local A/B without exposing the combine tax.
+
+- tool: `extra/qk_split_kv_economics_audit.py` (default read-only over the measured B4 artifacts; `--live`
+  regenerates the attribution; general `--attribution/--wd/--candidate` for any future candidate)
+- artifact: `bench/qk-split-kv-economics-audit/latest.json` (`split_kv_economics_audit_v1`, contract-stamped CONFORMS 13/13)
+- binding requirement: `split_kv_economics_contract_v1` in `bench/qk-decode-eval/binding_templates.json`
+- B4 classifies `COMBINE_TAX_DOMINATES` — combine latency-bound (~64 GB/s, 32 wg << 96 CUs); Amdahl projection
+  ctx4096 +5.41% measured → +6.97% half-combine → +8.58% free-combine.
+
+Run:
+
+```sh
+DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_split_kv_economics_audit.py
+```
+
+Every future split-KV decode-attention candidate must report tile/combine split, combine fraction, effective
+bandwidth, workgroup count, and the Amdahl projection — and be classified by this audit — **before** W==D
+promotion work. See `docs/split-kv-economics-audit-result-20260621.md`.
+
 ## Recommended Next Action
 
 If continuing this lane:
 
 ```text
-Route B B5-lite: cheaper split-KV combine for the existing B4 route.
+Route B B5-lite: cheaper split-KV combine for the existing B4 route (justified: audit verdict COMBINE_TAX_DOMINATES).
 ```
 
 Goal:
@@ -232,6 +255,12 @@ At this handoff, B4-related work may still be uncommitted. Preserve these unless
 - `extra/qk_b4_decode_eval.py`
 - `extra/qk_b4_policy_sweep.py`
 - `extra/qk_b4_combine_tax.py`
+- `extra/qk_split_kv_economics_audit.py`
+- `bench/qk-split-kv-economics-audit/latest.json`
+- `bench/qk-decode-eval/binding_templates.json`
+- `bench/qk-decode-eval/candidates.json`
+- `docs/split-kv-economics-audit-scope-20260621.md`
+- `docs/split-kv-economics-audit-result-20260621.md`
 
 Run this to inspect:
 
