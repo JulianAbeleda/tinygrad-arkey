@@ -65,6 +65,15 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   lever; tile codegen quality is (unbounded, deferred). **Redirect:** the EXISTING two-node owned tile already reads the
   cache natively → it's the opaque read for the runtime-KV follow-on (`runtime-kv-opaque-read-followon-scope-20260623.md`)
   to remove the measured ~1.4 ms KV copy. Stopped at Phase 1 per scope; no source/default change.
+- **`runtime-kv-opaque-read-result-20260623.md`** — ⭐ EXECUTED the opaque-read follow-on → `KV_OPAQUE_READ_CORRECTNESS_FAIL`.
+  Phase-1 probe PASS (opaque append + owned-tile read, numpy-correct, no copy, replay-safe). In-model the route FIRES and
+  **removes E_49152** (copy gone), and the **first decode step is byte-identical** — but **multi-step JIT decode loses KV
+  persistence** (garbage after step 1). Root cause: the canonical `cache_kv.after(store)` materialization provides BOTH the
+  copy AND the `@function` cross-replay persistence; removing the copy breaks persistence (repoint→REDUCE hazard;
+  no-repoint→doesn't persist). The owned tile is also ctx-restricted to ≥2048 (short-ctx over-split NaN). **Confirms
+  `KV_RUNTIME_MANAGED_CACHE_REQUIRED`** — the copy and persistence are coupled in the functional model; removing the copy
+  needs a runtime-managed (two-graph) cache, not a single-`@function` route. Route reverted (model.py clean); probe
+  `extra/qk_kv_opaque_read_probe.py`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
