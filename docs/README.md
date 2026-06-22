@@ -16,6 +16,22 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   kernels, prefill default, bounded decode fusion, bounded decode vector-tile, the `87.6` ambiguity). **Bounded
   decode work is RESTED** — the only remaining decode lever is the north-star full `flash_attn_tile` lifecycle.
   Guardrail: `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens these.
+- **`tinygrad-vs-llama-decode-time-tax-diff-result-20260622.md`** — ⭐⭐ DECODE GAP ATTRIBUTED PER-BUCKET: `LLAMA_DIFF_AUDIT_READY`.
+  Apples-to-apples tinygrad-vs-llama per-primitive decode diff (9 buckets, per-role, ctx 512/1024/2048/4096, validated <1%
+  vs the llama oracle, gap_ms reconciles to wall token_ms). Verdict: after `Q4K_GEMV_WARP`, **weight-GEMV is at/below llama
+  (gap −1.1 ms/tok @1024)** — the remaining ~26 tok/s gap is **100%+ non-GEMV**: attention flash-decode (ctx-growing,
+  +1.6→+2.6 ms), norm/rope/small-ops fusion (+1.8 ms flat), FFN-activation fusion (+1.2 ms, ratio 10–20×). **Rank next work
+  by gap_ms, not share: FFN-activation fusion → small-ops sub-audit → attention flash-decode. NOT more weight-GEMV.** Tool
+  `extra/qk_tinygrad_vs_llama_time_tax.py`, artifact `bench/qk-tinygrad-vs-llama-time-tax/latest.json`, scope `-scope-20260622.md`.
+- **`8b-exhaustion-next-implementation-decision-20260622.md`** — ⭐⭐ 8B DECODE EXHAUSTION: `NEXT_IMPL_NORM_ROPE_KV`.
+  Rendered the actual decode kernels (`bench/qk-decode-kernel-probe/latest.json`: AST fingerprints + source flags) and
+  found **two of the diff's three remaining-gap buckets were MISLABELS**: "FFN activation" (10–20×) is really a
+  **full-`max_context` KV-cache rematerialization copy** (`E_49152`; silu is fused into the gate/up GEMV →
+  `FFN_ACTIVATION_GAP_IS_MAPPING_ARTIFACT`); "norm/rope/small-ops" is ~55% mislabeled KV-proj/q8-quant, genuine norm
+  is −0.21 ms (parity). Attention = `ATTENTION_BOUNDED_LEVER_EXHAUSTED_NO_REOPEN` (B5 overlap, codegen-blocked).
+  **Next bounded lever = eliminate the KV-cache copy** (`model.py:952` full-buffer `.after()`; ~1.4 ms/tok, measured
+  transfer +1.5 ms/+8 tok/s). Phase tools `qk_{ffn_activation_gap,small_ops_time_tax,attention_tail_after_b5}_audit.py`,
+  shared probe `qk_decode_audit_common.py`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
