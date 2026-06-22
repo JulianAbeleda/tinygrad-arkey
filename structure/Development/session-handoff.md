@@ -1,5 +1,18 @@
 # Session Handoff
 
+> ## ⭐ SUPERSEDED 2026-06-23 — owned AMDGCN decode-attention is now PROMOTED
+> The "Route B State" / "B4 W==D fails / no promotion from B4" narrative below is **superseded**. The owned tile
+> had a **dtype-contract bug** (read the fp32 cache as fp16) and an **over-conservative ctx guard** — both fixed.
+> It is now **real-cache byte-identical at all ctx** and **W==D-positive everywhere**, plus FO2 (native fp16 cache)
+> on top: **+13.1%@512, +16.0%@1024, +18.8%@2048, +23.2%@4096** vs gqa. Candidate
+> `decode_attention_llama_flash_tile_owned_amdgcn_b4` is now **`default_eligible=true`, `default_on=false`** (no
+> flip; in-process A/B recommended first). Runtime-KV is **deferred (incremental)**. The "attention exhausted /
+> B4/B5 sub-bar / runtime-KV next" framing is no longer current.
+> Authority: `docs/post-owned-attention-promotion-synthesis-20260623.md`,
+> `docs/owned-amdgcn-tile-short-ctx-result-20260623.md`,
+> `docs/owned-amdgcn-tile-real-cache-revalidation-result-20260623.md`,
+> `docs/owned-tile-post-promotion-four-step-result-20260623.md`.
+
 Date: 2026-06-21
 
 Repo: `/home/ubuntu/tinygrad-arkey`

@@ -118,6 +118,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   at ctx512(16t)/1024(64t)/2048(64t), default unchanged; **W==D +6.1/+8.4/+11.5/+15.5% @ctx512/1024/2048/4096** (repeated, tight) → clears
   +5%@1024 & +7%@4096. Candidate `decode_attention_..._owned_amdgcn_b4` → `default_eligible=true`, `default_on=false` (no flip; in-process A/B
   recommended before flipping). Runtime-KV deferred (now only incremental). Probe `extra/qk_owned_tile_short_ctx_probe.py`.
+- **`owned-tile-post-promotion-four-step-result-20260623.md`** — ⭐⭐ POST-PROMOTION 4-step: `OWNER_DEFAULT_READY` (kept default-off, no flip) +
+  **FO2 fp16 cache SHIPPED** (`FP16_CACHE_WD_PASS`). The route flag now implies a native fp16 cache → drops the fp32→fp16 cast copy (no-op),
+  byte-identical, **+13.1/+16.0/+18.8/+23.2% @512/1024/2048/4096** (~+5-8% over the cast route). In-process A/B hardening (1% spread) confirms route
+  fires + falls back. Runtime-KV `DEFER_INCREMENTAL` (FO2 removed the cast copy; open opaque-append-NaN). Synthesis updated
+  (`docs/post-owned-attention-promotion-synthesis-20260623.md` supersedes the "attention exhausted / runtime-KV next" narrative; session-handoff
+  banner). Default decode unchanged (cache fp32 when flag off). No flip.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
