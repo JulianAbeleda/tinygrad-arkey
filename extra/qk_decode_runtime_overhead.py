@@ -16,7 +16,9 @@ from __future__ import annotations
 import io, json, os, pathlib, re, statistics, sys, time, contextlib
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m"); _LINE = re.compile(r"\*\*\*\s+\S+\s+\d+\s+(.+?)\s+arg\s+\d+\s+mem")
-CKPTS = [128, 512, 1024, 4096]; MAXC = 4608; NMEAS = 40
+# ctx list is env-overridable (QK_CKPTS); flash-capability tracks the model's FLASH_DECODE_THRESHOLD (default 512,
+# the shipped value) so the measured decode matches the real generate path (the owned-attention route fires >=512).
+CKPTS = [int(x) for x in os.environ.get("QK_CKPTS", "128,512,1024,4096").split(",")]; MAXC = 4608; NMEAS = 40
 
 def main():
   from extra.qk_harness_contract import DEFAULT_MODEL  # tinygrad-free; import before tinygrad to preserve env-ordering
@@ -33,7 +35,7 @@ def main():
 
   rows = []
   for ck in CKPTS:
-    use_flash = ck >= 1024   # exercise flash-decode auto at long ctx
+    use_flash = ck >= int(os.environ.get("FLASH_DECODE_THRESHOLD", "512"))   # match the shipped real-generate flash threshold
     for b in m.blk: b._use_flash, b._prefill_v2 = use_flash, False
     step = TinyJit(m.forward)
     tokid = int(ids[ck])
