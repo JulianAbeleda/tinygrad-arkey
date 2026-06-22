@@ -159,6 +159,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   side-effect = the vLLM "update KV before replay" model; the prior in-graph append baked; Design C rejected TOO_BROAD; 4-rung proof ladder; needs
   owner authorization). **Lane 6 chartered** native-codegen learning (first experiment = tinygrad-native LDS+cross-lane microkernel, ISA-audited; NOT
   a W==D lane). Scopes: `runtime-kv-core-persistence-capability-scope-` + `native-codegen-learning-from-owned-primitives-scope-`. No source/default changes.
+- **`three-lane-completion-result-20260623.md`** — ⭐⭐ lanes driven to completion. Lane 3 ISA wrapper DONE; Lane 6 native-codegen first experiment
+  DONE (ISA-evidenced: tinygrad-native **LDS is native** but **cross-lane reduce + v_dot2 are NOT** — exactly the owned tile's primitives → concrete
+  codegen target). Lane 2 runtime-KV **implemented to the decisive blocker = `RUNTIME_KV_CORE_CAPABILITY_BLOCKED`**: the in-graph opaque append bakes
+  even at NL=1 (one layer, real prefill) while the microbench passes; the pre-graph form is fundamentally incompatible with interleaved transformer
+  layers → needs a CORE TinyJit/HCQ engine capability (non-materializing persistent in-graph cache mutation), not a model task. 8B bounded speed is
+  exhausted at the model/route layer; the ~+11% prize is core-engine-only. No source/default changes.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
