@@ -814,8 +814,15 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
   +8.71%@ctx4096 / +9.83%@ctx512** (decode 66.7→73.9 tok/s @1024; ~67%→~73% of llama), greedy 0 mismatches, local A/B
   1.31× gate/up / 1.37× down vs the opted default. The FIRST decode primitive to clear W==D since the attention arc.
   `default_eligible=true` (lossless) but kept **default-off** (`Q4K_GEMV_WARP`/`Q4K_GEMV_WARP_DOWN`) pending owner
-  approval. Realizes the `GEMV_SCHEDULE_BOUND` lever. Q6_K down = bounded follow-on. Kernel in
-  `extra/q4_k_gemv_primitive.py::q4k_gemv_warp_kernel`; harnesses `extra/qk_ffn_gemv_warp_{ab,wd}.py`.
+  approval. Realizes the `GEMV_SCHEDULE_BOUND` lever. Kernel in `extra/q4_k_gemv_primitive.py::q4k_gemv_warp_kernel`;
+  harnesses `extra/qk_ffn_gemv_warp_{ab,wd}.py`.
+- **`q4k-gemv-warp-promotion-hardening-result-20260622.md`** — ⭐ HARDENED → `Q4K_GEMV_WARP_READY_FOR_OWNER_DEFAULT_DECISION`.
+  Promoted route reproduced (~+9.6%@1024 / +8.5%@4096, spread ~0.4%), real-generation **byte-identical** (0/64),
+  `default_eligible=true`/`default_on=false`, fallback-safe. Same-lever expansions tested: **Q6_K down** (1.09× local,
+  already coop-served, no W==D gain → research flag `Q6K_GEMV_WARP_DOWN`) and **attn q/o** (1.32× local but
+  attention-overlapped → no transfer → research flag `Q4K_GEMV_WARP_PROJ`) — both banked, **not promoted** (the
+  transfer test again discriminates: FFN weight GEMV transfers, attention-adjacent does not). Kernel shape-general;
+  route 8B-shape-guarded (14B/32B fall back safely; guard-generalization is a bounded follow-on).
 - **`decode-ffn-gemv-scheduler-diagnostic-result-20260622.md`** — ⭐ the diagnostic that named the lever (above).
   `FFN_GEMV_DIAGNOSTIC_BOUNDED_SCHEDULE_SCOPE_READY` (class `GEMV_SCHEDULE_BOUND`). After Route B attention closed
   (B5 saturation), the decode time-tax audit (`decode-time-tax-audit-result-20260622.md`,

@@ -329,7 +329,12 @@
       "correctness_req": "byte_exact",
       "historical_expected_verdict": "WD_PASS",
       "compare_artifact": "bench/qk-ffn-gemv-warp/wd.json",
-      "historical_note": "Q4K_GEMV_WARP_WD_PASS: lossless FP work-decomposition GEMV (warp_reduce_sum) clears W==D BYTE-IDENTICALLY. gate/up+down W==D +9.83/+9.78/+8.71% @ctx512/1024/4096 (decode 66.7->73.9 @1024); local A/B 1.31x gate/up / 1.37x down vs opted default; greedy 0 mismatches. default_eligible=true (lossless + passes + no regress) but kept DEFAULT-OFF pending owner approval. Realizes the GEMV_SCHEDULE_BOUND bounded lever (docs/decode-ffn-gemv-warp-result-20260622.md). Q6_K down = bounded follow-on."
+      "default_eligible": true,
+      "default_on": false,
+      "supported_shapes": "gfx1100; FFN gate/up Q4_K 4096->12288 (parts==1), FFN down Q4_K 12288->4096 (k_blocks%4==0); kernel shape-general, route 8B-shape-guarded (14B/32B fall back to default)",
+      "research_only_expansions": {"Q6K_GEMV_WARP_DOWN": "Q6_K down 1.09x local, already coop-served, no W==D gain", "Q4K_GEMV_WARP_PROJ": "attn q/o 1.32x local but attention-overlapped, no transfer"},
+      "promotion_hardening": "Q4K_GEMV_WARP_READY_FOR_OWNER_DEFAULT_DECISION (docs/q4k-gemv-warp-promotion-hardening-result-20260622.md): reproduced ~+9.6%@1024 / +8.5%@4096 (spread ~0.4%), real-generation byte-identical 0/64, fallback-safe. OWNER decision pending to flip default-on.",
+      "historical_note": "Q4K_GEMV_WARP_WD_PASS: lossless FP work-decomposition GEMV (warp_reduce_sum) clears W==D BYTE-IDENTICALLY. gate/up+down W==D median +9.75/+9.63/+8.55% @ctx512/1024/4096 (decode 66.6->73.5 @1024, ~67%->~73% of llama); local A/B 1.31x gate/up / 1.37x down vs opted default; greedy 0 mismatches (real generation). default_eligible=true (lossless + passes + no regress) but kept DEFAULT-OFF pending owner approval. Realizes the GEMV_SCHEDULE_BOUND bounded lever (docs/decode-ffn-gemv-warp-result-20260622.md, docs/q4k-gemv-warp-promotion-hardening-result-20260622.md)."
     }
   ],
   "suites": {

@@ -86,6 +86,35 @@ def q6k_gemm_kernel(rows:int, k:int, b:int, parts:int, opts:tuple[Opt, ...]):
 def _kernel_info(name:str, opts:tuple[Opt, ...]) -> KernelInfo:
   return KernelInfo(name=name, opts_to_apply=opts)
 
+def q6k_gemv_warp_kernel(rows:int, k:int):
+  # FFN-down Q6_K WORK-DECOMPOSITION variant (lossless FP, same lever as q4k_gemv_warp): 32 threads/row = one
+  # gfx1100 wave; lane = block_group(0..1)*16 + pos(0..15). pos = within-block byte index -> 16 adjacent lanes read
+  # adjacent ql/qh bytes (coalesced, the coop insight); block_group splits the k_blocks into 2 K-parallel halves.
+  # Each lane FP-accumulates its blocks (REG), then IN-KERNEL warp_reduce_sum (ds_bpermute) -> out[row] (one store,
+  # no stage-2 partials buffer). Decode/math identical to the default (exact up to fp reassoc). k_blocks % 2 == 0.
+  from tinygrad.dtype import AddrSpace
+  from extra.amd_warp_reduce import warp_reduce_sum
+  k_blocks = k // Q6_K_BLOCK_ELEMS
+  if k_blocks % 2 != 0: raise ValueError(f"k_blocks={k_blocks} must be divisible by 2 for the 2-block_group Q6_K warp")
+  bpb = k_blocks // 2
+
+  def kernel(out:UOp, halfs:UOp, x:UOp) -> UOp:
+    row = UOp.special(rows, "gidx0")
+    lane = UOp.special(32, "lidx0")
+    bg = lane // 16                                # block_group 0..1 (K-parallel)
+    pos = lane % 16                                # within-block byte index 0..15 (coalesced)
+    lblk = UOp.range(bpb, 0, axis_type=AxisType.REDUCE)
+    blk = bg * bpb + lblk
+    base = (row * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
+    contrib = _q6k_block_dot(halfs, x, base, blk, pos)
+    acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
+    total = warp_reduce_sum(acc[0], lane, 32)
+    return out[row].store(total).sink(arg=_kernel_info(f"q6k_gemv_warp_{rows}_{k}", ()))
+
+  return kernel
+
 def q6k_gemv_partial_kernel(rows:int, k:int, parts:int, opts:tuple[Opt, ...]):
   k_blocks = k // Q6_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)

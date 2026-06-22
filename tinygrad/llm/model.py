@@ -256,6 +256,17 @@ class Q4KPrimitiveLinear:
     # becomes a LOCAL lane -> coalesced packed-word loads. Q4_K coop is role-dependent: attn_q/o (4096x4096) is
     # poorly coalesced by default (~19% peak -> ~29%, 1.52x), but ffn_gate/up is already ~41% peak so it is NOT
     # routed. fp-reassoc-tol exact. See docs/qk-mmvq-coop-q4k-attn-*.
+    # attn q/o projection work-decomposition warp (same lossless lever; Q4K_GEMV_WARP_PROJ, default-off). q/o is
+    # Q4_K 4096x4096, currently coop-routed (~27% -> warp ~36%, 1.32x local). Takes precedence over the coop branch.
+    if getenv("Q4K_GEMV_WARP_PROJ") and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
+       and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
+      try:
+        from extra.q4_k_gemv_primitive import q4k_gemv_warp_kernel
+        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+        got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
+        return got.reshape(1, 1, self.out_features)
+      except Exception as e:
+        if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP_PROJ fallback: {e}")
     rt4 = getenv("Q4K_COOP_RT", 16)
     if getenv("Q4K_ATTN_QO_COOP", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
         and self.out_features % rt4 == 0:
@@ -364,6 +375,19 @@ class Q6KPrimitiveLinear:
     # coop reaches ~40-51%). fp-reassoc-tol exact, byte-identical greedy. Gated per role-class:
     #   lm_head (out>=100000): Q6K_LM_HEAD_COOP default on (+19% decode, isolated 5x).
     #   ffn_down (4096x12288): Q6K_FFN_DOWN_COOP default on (isolated 2.77x). See docs/qk-mmvq-q6k-*.
+    # FFN-down Q6_K work-decomposition warp (same lossless lever). SEPARATE research flag Q6K_GEMV_WARP_DOWN (NOT the
+    # promoted Q4K_GEMV_WARP_DOWN): the Q6_K down is ALREADY coop-routed (~51% peak) so warp is only ~1.09x and does NOT
+    # improve W==D (correct, byte-identical, but not worth promoting). down shape only (NOT lm_head). default-off.
+    if getenv("Q6K_GEMV_WARP_DOWN") and self.parts == 1 and self.out_features == 4096 and self.in_features == 12288 \
+       and (self.in_features // 256) % 2 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
+      try:
+        from extra.q6_k_gemv_primitive import q6k_gemv_warp_kernel
+        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+        got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
+                                fxn=q6k_gemv_warp_kernel(self.out_features, self.in_features))[0]
+        return got.reshape(1, 1, self.out_features)
+      except Exception as e:
+        if getenv("DEBUG", 0): print(f"Q6K_GEMV_WARP down fallback: {e}")
     rt = getenv("Q6K_COOP_RT", 4)
     use_coop = self.parts == 1 and self.out_features % rt == 0 and (
       (getenv("Q6K_LM_HEAD_COOP", 1) and self.out_features >= 100000) or

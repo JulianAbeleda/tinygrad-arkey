@@ -223,8 +223,15 @@ output). gate/up+down W==D: +9.78%@1024 / +8.71%@4096 / +9.83%@512, greedy BYTE-
 the W==D gate since the attention arc. default_eligible=true (lossless) but DEFAULT-OFF (Q4K_GEMV_WARP /
 Q4K_GEMV_WARP_DOWN) pending owner approval.
 
-NEXT candidates: (1) flip Q4K_GEMV_WARP default-on (owner call -- lossless, passes, no regression). (2) Q6_K down warp
-variant (the other ~18 down layers, bounded follow-on). (3) attn q/o/k/v proj warp (10% share, same lever).
+HARDENED 2026-06-22 -> Q4K_GEMV_WARP_READY_FOR_OWNER_DEFAULT_DECISION (docs/q4k-gemv-warp-promotion-hardening-result-20260622.md):
+promoted route reproduced (~+9.6%@1024 / +8.5%@4096, spread ~0.4%), real-generation BYTE-IDENTICAL (0/64),
+default_eligible=true / default_on=false, fallback-safe. Same-lever expansions TESTED + banked research-only (do NOT
+help W==D): Q6_K down (1.09x local, already coop-served; flag Q6K_GEMV_WARP_DOWN) + attn q/o (1.32x local but
+attention-OVERLAPPED, no transfer; flag Q4K_GEMV_WARP_PROJ). Transfer test again discriminates: FFN weight GEMV
+transfers, attention-adjacent does not.
+
+NEXT candidates: (1) OWNER: flip Q4K_GEMV_WARP + Q4K_GEMV_WARP_DOWN default-on (lossless, +9.6%@1024, byte-identical,
+no regression). (2) generalize the route guards for 14B/32B (kernel is shape-general; bounded follow-on).
 ```
 
 Non-goals: no q8 default (lossy), no int-dot/MMVQ reopen (null in-model), no coalescing-only (gate/up not coop-routed),
