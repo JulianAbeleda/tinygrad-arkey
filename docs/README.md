@@ -39,6 +39,15 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   core-JIT redesign is a **stop/classify/defer** outcome (not undertaken). Gated experiment reverted (model.py byte-clean).
   **No bounded 8B model/primitive lever remains** — next is a new decision doc on funding core-JIT (in-place KV mutation /
   symbolic after-buffers), not scope creep into the closed lanes. Probe `extra/qk_kv_cache_copy_probe.py`, scope `-implementation-scope-20260622.md`.
+- **`kv-cache-stateful-jit-capability-result-20260622.md`** — ⭐ CORE-JIT CAPABILITY DECISION: `KV_RUNTIME_MANAGED_CACHE_REQUIRED`.
+  Probed the bounded stateful-KV-append capability. **Design A (opaque RDNA3 `custom_kernel` append node) PASSES the
+  microprobe** (byte-correct symbolic-offset in-place write + capture/replay with changing `start_pos` — bypasses the
+  `.assign()` bind-mismatch; `extra/qk_kv_cache_state_token.py`). But **in-model it's insufficient**: under
+  `@function(precompile=True)` the read side fails either by not persisting (write untracked) or by reintroducing the
+  read-after-write `REDUCE` `KeyError` (when tracked). The full-MAXC copy IS the functional scheduler's resolution of the
+  same-graph read-after-write hazard + symbolic-size requirement. Design B (alias rule) = unbounded (symbolic-range).
+  **Viable path = Design C runtime-managed/two-graph KV (vLLM/TRT-LLM style), a separate project — recommend NOT funding
+  now; keep the copy.** Gated experiment reverted (model.py byte-clean). Microprobe `extra/qk_kv_append_microprobe.py`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
