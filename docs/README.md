@@ -83,6 +83,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   the blocker from "@function persistence" to two named follow-ons: (a) replay an opaque append whose offset advances with
   start_pos-dependent src; (b) a short-ctx-correct owned tile (ctx<2048). Reverted (model.py clean); probe
   `extra/qk_runtime_kv_cache_probe.py`.
+- **`runtime-kv-baking-instrumentation-result-20260623.md`** — ⭐ Instrumented the in-model baking → `RUNTIME_KV_BAKING_TRIGGER_NARROWED_NOT_FULLY_ISOLATED`.
+  The append's `start_pos` IS a declared live var, yet replays don't advance. **Rope hypothesis refuted in-model**; also refuted: @function-prefill,
+  short/high-start_pos/256-step prefill, filled-cache-via-assign, RESHAPE-uop, route-fires-during-prefill (batched prefill still bakes). **Trigger narrowed:
+  the cache filled via the model's CANONICAL STORE (token-by-token OR batched) before the decode jit bakes; filling the SAME [0:2050] via `cache.assign`
+  advances** — both leave `cache_kv.uop=RESHAPE`, so it's a deeper buffer-identity/TinyJit-capture-state difference (the captured append writes a fresh
+  buffer only post-canonical-store-prefill). Next: diff `cache_kv` BUFFER identity after store-fill vs assign-fill; clone to pristine buffer before decode.
+  Reverted (model.py clean).
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
