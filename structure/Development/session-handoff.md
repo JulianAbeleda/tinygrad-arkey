@@ -201,43 +201,29 @@ Every future split-KV decode-attention candidate must report tile/combine split,
 bandwidth, workgroup count, and the Amdahl projection — and be classified by this audit — **before** W==D
 promotion work. See `docs/split-kv-economics-audit-result-20260621.md`.
 
-## Recommended Next Action
+## Recommended Next Action (updated 2026-06-22)
 
-If continuing this lane:
+Route B attention is CLOSED for default-promotion: B5-lite cheaper combine done (hw 2.4x) but W==D SATURATES ~+5.7%
+@ctx4096 (combine overlaps in-graph) -> `B5_COMBINE_LOCAL_PASS_WD_FAIL`. The decode time-tax audit
+(`docs/decode-time-tax-audit-result-20260622.md`, `NEXT_PRIMITIVE_Q4K_GEMV_SCHEDULER`) shows the FFN Q4_K weight GEMV is
+the dominant tax (gate/up 24% + down 14% = ~38%); q8 (+6%) proves it transfers, attention does not.
 
-```text
-Route B B5-lite: cheaper split-KV combine for the existing B4 route (justified: audit verdict COMBINE_TAX_DOMINATES).
-```
-
-Goal:
-
-- reduce `owned_flash_combine` from ~12-16 us to <= ~8 us at useful S values, ideally ~5 us
-- preserve existing B4 graph-node route and correctness
-- rerun `extra/qk_b4_decode_eval.py`
-- pass W==D only if:
-  - ctx4096 >= +7% with no ctx512/ctx1024 regression, or
-  - ctx1024 >= +5%
-
-Allowed directions:
-
-- more parallel combine over `Hq x Hd` or similar
-- cooperative reduction shape that increases occupancy
-- bounded fused/streamed merge that removes partial write/read or second-kernel latency
-
-Non-goals:
-
-- no new attention tile
-- no Route-A native codegen
-- no KV repack
-- no default promotion without W==D gate
-
-If not continuing combine work, current state is:
+The FFN-GEMV scheduler diagnostic (`docs/decode-ffn-gemv-scheduler-diagnostic-result-20260622.md`,
+`FFN_GEMV_DIAGNOSTIC_BOUNDED_SCHEDULE_SCOPE_READY`, class `GEMV_SCHEDULE_BOUND`) named the gap: tinygrad's gate/up GEMV
+is ~51% peak (1 thread/row, serial whole-row K, uncoalesced) vs llama MMVQ ~70% via **128 threads/row + K-block-parallel
++ in-kernel warp-shuffle reduce**. The dot4/extract are already matched; the missing piece is WORK DECOMPOSITION. The
+int-dot path is REFUTED in-model (Q4K_VDOT +1.25%, eaten by the q8-activation lifecycle); the lossless lever is an FP
+work-decomposition GEMV that pays no lifecycle tax.
 
 ```text
-B4 infrastructure win banked.
-B4 W==D promotion failed.
-Bounded attention lane rests.
+NEXT (bounded, W==D-gated): docs/decode-ffn-gemv-scheduler-implementation-scope-20260622.md
+Build a LOSSLESS FP q4k_gemv_warp variant (128-thread/row + K-parallel + warp_reduce_sum) for FFN gate/up (then down),
+env-gated default-off. Gate on W==D (>=+5%@ctx1024 OR >=+7%@ctx4096), NOT % peak (B5 lesson: local != in-graph).
+Projected +6.5% (gate/up) / ~+9-11% (gate/up+down).
 ```
+
+Non-goals: no q8 default (lossy), no int-dot/MMVQ reopen (null in-model), no coalescing-only (gate/up not coop-routed),
+no attention work (closed), no deep backend before the bounded FP variant is W==D-measured.
 
 ## Working Tree Note
 

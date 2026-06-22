@@ -808,6 +808,15 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 
 ## Active / open frontiers
 
+- **`decode-ffn-gemv-scheduler-diagnostic-result-20260622.md`** — ⭐CURRENT DECODE FRONTIER.
+  `FFN_GEMV_DIAGNOSTIC_BOUNDED_SCHEDULE_SCOPE_READY` (class `GEMV_SCHEDULE_BOUND`). After Route B attention closed
+  (B5 saturation), the decode time-tax audit (`decode-time-tax-audit-result-20260622.md`,
+  `NEXT_PRIMITIVE_Q4K_GEMV_SCHEDULER`) named the FFN Q4_K weight GEMV as the dominant tax (gate/up 24% + down 14% =
+  ~38%; q8 +6% proves it transfers, attention overlaps). The diagnostic named the gap: tinygrad gate/up ~51% peak
+  (1 thread/row, serial whole-row K, uncoalesced) vs llama MMVQ ~70% via **128 threads/row + K-block-parallel +
+  in-kernel warp-shuffle reduce** (dot4/extract already matched; int-dot REFUTED in-model +1.25%, q8-lifecycle-eaten).
+  Bounded, lossless, W==D-gated implementation scope: `decode-ffn-gemv-scheduler-implementation-scope-20260622.md`
+  (projected +6.5% gate/up / ~+9-11% gate/up+down). Harness `extra/qk_ffn_gemv_scheduler_diagnostic.py`.
 - `prefill-wmma-lds-tiling-scope-20260619.md` — provenance for the now-refuted Branch A. After decode closed, the surviving high-EV arc:
   PREFILL_V2 forward is ~74% fp16 WMMA matmul emitted with LDS=0; the lever is WMMA operand LDS-tiling (~1.6× pp).
   Decision-first: Phase PWLT-0 is the authority call — Branch A (tinygrad hand-LDS, **triple payoff**: also unblocks
