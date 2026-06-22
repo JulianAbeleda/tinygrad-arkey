@@ -148,6 +148,11 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   Vendor map: AMD `.co`/AMDGCN/llvm-objdump (ready) · NVIDIA `.cubin`/SASS/cuobjdump-nvdisasm (PTX alone NOT proof) · Intel device-module/Xe/IGC-ocloc.
   Normalized contract realizable for AMD now (`bench/qk-isa-primitive-audit/owned_decode_attention.json`). Confirms `RUNTIME_KV_NOT_ISA_BLOCKED`
   (it is `RUNTIME_GRAPH_LIFECYCLE_GAP`, not codegen) and small-ops `NEEDS_FUSION_GATE_BEFORE_SEARCH`. `MACHINE_SEARCH_NOT_READY`. No tooling/search built.
+- **`post-exhaustion-remaining-lanes-roadmap-result-20260623.md`** — ⭐ ROADMAP synthesis (sequencing, no impl). CLOSED: attention + FFN-GEMV
+  (maintenance/regression-guard only). ACTIVE bounded fallback: **small-ops/activation fusion gate** (run ONE silu→GEMV-epilogue fusion, ISA+W==D
+  gated, ≥1-2% or close the lane) = the recommended NEXT action. DEFERRED owner-decision: runtime-KV core persistence (biggest prize ~+11%, but
+  core-runtime-blocked — authorize separately). Standing: ISA audit = mandatory guard; machine search PARKED until a bounded knob exists;
+  generalization/14B-32B deferred until 8B closed. Final decision matrix included.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:

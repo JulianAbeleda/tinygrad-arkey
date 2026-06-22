@@ -10,7 +10,7 @@
 > llama.cpp). Candidate `decode_attention_llama_flash_tile_owned_amdgcn_b4`: **`default_eligible=true`,
 > `default_on=true`**. Runtime-KV is **deferred (incremental)**. The "attention exhausted / B4/B5 sub-bar /
 > runtime-KV next" framing is no longer current.
-> Authority: `docs/post-default-runtime-kv-diagnostic-result-20260623.md` (8B bounded-exhaustion checkpoint: attention+GEMV CLOSED at llama parity; KV-materialization +11.8% but CORE-RUNTIME-BLOCKED; small-ops overlapped; machine-search NOT yet justified), `docs/post-owned-attention-default-audit-result-20260623.md` (FRESH gap map: weight-GEMV+attention at/near llama parity; residual = KV-copy + small-op fusion; tinygrad ~85-88% of llama), `docs/owned-attention-default-flip-result-20260623.md`,
+> Authority: `docs/post-exhaustion-remaining-lanes-roadmap-result-20260623.md` (ROADMAP: NEXT = one small-ops fusion gate; runtime-KV deferred owner-decision; machine-search parked; attention+GEMV closed), `docs/post-default-runtime-kv-diagnostic-result-20260623.md` (8B bounded-exhaustion checkpoint: attention+GEMV CLOSED at llama parity; KV-materialization +11.8% but CORE-RUNTIME-BLOCKED; small-ops overlapped; machine-search NOT yet justified), `docs/post-owned-attention-default-audit-result-20260623.md` (FRESH gap map: weight-GEMV+attention at/near llama parity; residual = KV-copy + small-op fusion; tinygrad ~85-88% of llama), `docs/owned-attention-default-flip-result-20260623.md`,
 > `docs/post-owned-attention-promotion-synthesis-20260623.md`,
 > `docs/owned-tile-post-promotion-four-step-result-20260623.md`,
 > `docs/owned-amdgcn-tile-short-ctx-result-20260623.md`,
