@@ -1,17 +1,20 @@
 # Session Handoff
 
-> ## ⭐ SUPERSEDED 2026-06-23 — owned AMDGCN decode-attention is now PROMOTED
-> The "Route B State" / "B4 W==D fails / no promotion from B4" narrative below is **superseded**. The owned tile
-> had a **dtype-contract bug** (read the fp32 cache as fp16) and an **over-conservative ctx guard** — both fixed.
-> It is now **real-cache byte-identical at all ctx** and **W==D-positive everywhere**, plus FO2 (native fp16 cache)
-> on top: **+13.1%@512, +16.0%@1024, +18.8%@2048, +23.2%@4096** vs gqa. Candidate
-> `decode_attention_llama_flash_tile_owned_amdgcn_b4` is now **`default_eligible=true`, `default_on=false`** (no
-> flip; in-process A/B recommended first). Runtime-KV is **deferred (incremental)**. The "attention exhausted /
-> B4/B5 sub-bar / runtime-KV next" framing is no longer current.
-> Authority: `docs/post-owned-attention-promotion-synthesis-20260623.md`,
+> ## ⭐⭐ SUPERSEDED 2026-06-23 — owned AMDGCN decode-attention is now the DEFAULT (default_on=true)
+> The "Route B State" / "B4 W==D fails / no promotion from B4 / opt-in only" narrative below is **superseded**. The
+> owned tile had a **dtype-contract bug** (read the fp32 cache as fp16) and an **over-conservative ctx guard** —
+> both fixed — plus FO2 (native fp16 cache). It is now **real-cache byte-identical across the whole decode range**
+> and the **DEFAULT** decode attention for gfx1100 / Qwen3-8B / B=1 / T=1 (every other shape/device stays gqa+fp32;
+> `DECODE_ATTN_AMDGCN_TILE=0` disables). Canonical W==D harness (real decode tok/s) confirms
+> **+12.7/+15.4/+18.7/+22.4% @ctx512/1024/2048/4096** → default decode @ctx1024 ~74→~85 tok/s (~76%→~88% of
+> llama.cpp). Candidate `decode_attention_llama_flash_tile_owned_amdgcn_b4`: **`default_eligible=true`,
+> `default_on=true`**. Runtime-KV is **deferred (incremental)**. The "attention exhausted / B4/B5 sub-bar /
+> runtime-KV next" framing is no longer current.
+> Authority: `docs/owned-attention-default-flip-result-20260623.md`,
+> `docs/post-owned-attention-promotion-synthesis-20260623.md`,
+> `docs/owned-tile-post-promotion-four-step-result-20260623.md`,
 > `docs/owned-amdgcn-tile-short-ctx-result-20260623.md`,
-> `docs/owned-amdgcn-tile-real-cache-revalidation-result-20260623.md`,
-> `docs/owned-tile-post-promotion-four-step-result-20260623.md`.
+> `docs/owned-amdgcn-tile-real-cache-revalidation-result-20260623.md`.
 
 Date: 2026-06-21
 
@@ -51,8 +54,8 @@ Current default policy:
 
 - `PREFILL_V2`: default off
 - q8 FFN: opt-in only
-- B4 AMDGCN decode-attention route: opt-in only
-- no decode default promotion from B4
+- B4 AMDGCN decode-attention route: **DEFAULT-ON** (2026-06-23) for gfx1100/Qwen3-8B/B=1/T=1; `DECODE_ATTN_AMDGCN_TILE=0` disables
+- decode default attention is the owned AMDGCN route (fp16 cache); +12.7/+15.4/+18.7/+22.4% @ctx512/1024/2048/4096 vs gqa
 
 ## Read First
 

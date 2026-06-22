@@ -124,6 +124,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   fires + falls back. Runtime-KV `DEFER_INCREMENTAL` (FO2 removed the cast copy; open opaque-append-NaN). Synthesis updated
   (`docs/post-owned-attention-promotion-synthesis-20260623.md` supersedes the "attention exhausted / runtime-KV next" narrative; session-handoff
   banner). Default decode unchanged (cache fp32 when flag off). No flip.
+- **`owned-attention-default-flip-result-20260623.md`** — ⭐⭐⭐ DEFAULT FLIPPED → `OWNED_ATTENTION_DEFAULT_FLIP_CONFIRMED`, `default_on=true`.
+  The owned AMDGCN decode-attention route (fp16 cache) is now the **default** decode attention for gfx1100/Qwen3-8B/B=1/T=1 (every other
+  shape/device stays gqa+fp32; `DECODE_ATTN_AMDGCN_TILE=0` disables). Final confirmation on shipped code via the **canonical W==D harness**
+  (`extra/qk_decode_runtime_overhead.py`, real decode tok/s): **+12.7/+15.4/+18.7/+22.4% @ctx512/1024/2048/4096** (gqa 76/74/71/67 → owned
+  86/85/84/82). Byte-identical to gqa across the whole decode range (short-ctx SDPA + owned tile); route fires by default, falls back at ctx<512 /
+  TILE=0 / unsupported shape. Default decode @ctx1024 ~74→~85 tok/s (~76%→~88% of llama.cpp).
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
