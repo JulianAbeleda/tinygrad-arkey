@@ -57,6 +57,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   tile first (fork-local, HCQ-proven); pair with the opaque KV append as the follow-on; promote `Q4K_GEMV_WARP` in
   parallel. Native-linearizer/renderer routes = unbounded core tinygrad, defer. Artifacts
   `bench/qk-8b-remaining-architecture-understanding/{runtime_kv,fused_attention_codegen,decision}.json`.
+- **`fused-flash-single-tile-result-20260622.md`** — ⭐ FEASIBILITY-GATED (no kernel built): `FUSED_FLASH_SINGLE_TILE_SCOPE_REDUCED_TO_OPAQUE_READ`.
+  The single fused tile is **infeasible**: folding the cross-split combine into one kernel needs grid-wide sync, and
+  tinygrad's HCQ has **no cooperative-launch** support (`SINGLE_TILE_GLOBAL_REDUCTION_BLOCKED`); the no-split shape is
+  8–32 workgroups vs the split's 384 (`SINGLE_TILE_PARALLELISM_INSUFFICIENT`). Premise also refuted because **llama
+  itself uses two kernels** (`flash_attn_tile` + separate `flash_attn_combine_results`) — folding the combine isn't the
+  lever; tile codegen quality is (unbounded, deferred). **Redirect:** the EXISTING two-node owned tile already reads the
+  cache natively → it's the opaque read for the runtime-KV follow-on (`runtime-kv-opaque-read-followon-scope-20260623.md`)
+  to remove the measured ~1.4 ms KV copy. Stopped at Phase 1 per scope; no source/default change.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
