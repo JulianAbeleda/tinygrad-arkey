@@ -463,6 +463,37 @@ def q4k_coop_sdot4_partial_kernel(rows:int, k:int, row_tile:int=8):
 
   return kernel
 
+def q4k_gemv_warp_kernel(rows:int, k:int, lanes:int=32):
+  # FFN-GEMV WORK-DECOMPOSITION variant (lossless FP, no q8/int-dot). llama's MMVQ shape: many threads/row +
+  # K-block-parallel + IN-KERNEL warp-shuffle reduce + one output write (vs the default 1-thread/row serial
+  # uncoalesced ~51% peak, and the coop's 8-lanes + stage-2 .sum). Here: `lanes` threads/row = ONE wave (32 on
+  # gfx1100); lane = block_group*8 + lane4. lane4 (0..7) = within-block word index -> 8 adjacent lanes read 8
+  # adjacent packed words (coalesced); block_group (0..3) splits the k_blocks into 4 K-parallel chunks across the
+  # wave. Each lane FP-accumulates its blocks (REG), then warp_reduce_sum (ds_bpermute) -> out[row] (single store,
+  # no stage-2 partials buffer). Decode/math identical to the default (exact up to fp reassoc). k_blocks % 4 == 0.
+  from extra.amd_warp_reduce import warp_reduce_sum
+  if lanes != 32: raise ValueError("q4k_gemv_warp currently supports lanes=32 (one gfx1100 wave) only")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  if k_blocks % 4 != 0: raise ValueError(f"k_blocks={k_blocks} must be divisible by 4 for the 4-block_group warp split")
+  bpb = k_blocks // 4
+
+  def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.special(rows, "gidx0")              # one workgroup per row
+    lane = UOp.special(32, "lidx0")               # 32 threads = one gfx1100 wave (warp_reduce needs a real lidx)
+    bg = lane // 8                                 # block_group 0..3 (K-parallel across the wave)
+    lane4 = lane % 8                               # within-block word index 0..7 (coalesced packed-word loads)
+    lblk = UOp.range(bpb, 0, axis_type=AxisType.REDUCE)
+    blk = bg * bpb + lblk
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = _q4k_block_dot_packed_load(words, x, base, blk, lane4)
+    acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
+    total = warp_reduce_sum(acc[0], lane, 32)      # every lane holds the row sum
+    return out[row].store(total).sink(arg=KernelInfo(name=f"q4k_gemv_warp_{rows}_{k}", opts_to_apply=()))
+
+  return kernel
+
 def q4k_coop_partial_kernel(rows:int, k:int, row_tile:int=8):
   # Cooperative-K Q4_K GEMV (MMVQ_COOP, sibling of q6k_coop_partial_kernel). The Q4_K quant word index is
   # `4 + (grp//2)*8 + pos//4`, so the within-block word index `lane4` (= pos//4, 0..7) becomes a LOCAL lane

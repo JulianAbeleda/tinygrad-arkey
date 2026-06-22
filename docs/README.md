@@ -808,7 +808,15 @@ The work after the decode bank. Closeouts/results are canonical; the many dated 
 
 ## Active / open frontiers
 
-- **`decode-ffn-gemv-scheduler-diagnostic-result-20260622.md`** — ⭐CURRENT DECODE FRONTIER.
+- **`decode-ffn-gemv-warp-result-20260622.md`** — ⭐⭐ DECODE W==D WIN (`Q4K_GEMV_WARP_WD_PASS`). The bounded lossless
+  FP work-decomposition GEMV `q4k_gemv_warp` (32 threads/row + K-block-parallel + in-kernel `warp_reduce_sum`/ds_bpermute
+  + one output, llama's MMVQ shape in FP) clears the W==D gate **byte-identically**: gate/up+down **+9.78%@ctx1024 /
+  +8.71%@ctx4096 / +9.83%@ctx512** (decode 66.7→73.9 tok/s @1024; ~67%→~73% of llama), greedy 0 mismatches, local A/B
+  1.31× gate/up / 1.37× down vs the opted default. The FIRST decode primitive to clear W==D since the attention arc.
+  `default_eligible=true` (lossless) but kept **default-off** (`Q4K_GEMV_WARP`/`Q4K_GEMV_WARP_DOWN`) pending owner
+  approval. Realizes the `GEMV_SCHEDULE_BOUND` lever. Q6_K down = bounded follow-on. Kernel in
+  `extra/q4_k_gemv_primitive.py::q4k_gemv_warp_kernel`; harnesses `extra/qk_ffn_gemv_warp_{ab,wd}.py`.
+- **`decode-ffn-gemv-scheduler-diagnostic-result-20260622.md`** — ⭐ the diagnostic that named the lever (above).
   `FFN_GEMV_DIAGNOSTIC_BOUNDED_SCHEDULE_SCOPE_READY` (class `GEMV_SCHEDULE_BOUND`). After Route B attention closed
   (B5 saturation), the decode time-tax audit (`decode-time-tax-audit-result-20260622.md`,
   `NEXT_PRIMITIVE_Q4K_GEMV_SCHEDULER`) named the FFN Q4_K weight GEMV as the dominant tax (gate/up 24% + down 14% =

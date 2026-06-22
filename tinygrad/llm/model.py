@@ -284,6 +284,19 @@ class Q4KPrimitiveLinear:
       partial = partials.custom_kernel(words, q_bias_words, scales,
         fxn=q4k_q8_1_vdot_builtin_partial_kernel(self.out_features, self.in_features, 1, "none", ()))[0]
       return partial.sum(axis=1).reshape(1, 1, self.out_features)
+    # FFN-GEMV work-decomposition variant (B5-lite/FFN diagnostic): lossless FP 32-thread/row + K-block-parallel +
+    # in-kernel warp_reduce_sum (ds_bpermute), one output (vs default 1-thread/row serial). Default-OFF; gate/up first
+    # (out 12288, in 4096, parts==1, k_blocks%4==0, gfx1100 wave32). Local A/B ~1.31x vs opted default. W==D-gated.
+    if getenv("Q4K_GEMV_WARP") and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK \
+       and ((self.in_features == 4096 and self.out_features == 12288 and self.parts == 1)      # FFN gate/up
+            or (getenv("Q4K_GEMV_WARP_DOWN") and self.in_features == 12288 and self.out_features == 4096)):  # FFN down (Q4_K)
+      try:
+        from extra.q4_k_gemv_primitive import q4k_gemv_warp_kernel
+        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+        got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
+        return got.reshape(1, 1, self.out_features)
+      except Exception as e:
+        if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP fallback: {e}")
     partial = partials.custom_kernel(words, x_vec, fxn=q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
 

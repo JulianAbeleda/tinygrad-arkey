@@ -216,10 +216,15 @@ int-dot path is REFUTED in-model (Q4K_VDOT +1.25%, eaten by the q8-activation li
 work-decomposition GEMV that pays no lifecycle tax.
 
 ```text
-NEXT (bounded, W==D-gated): docs/decode-ffn-gemv-scheduler-implementation-scope-20260622.md
-Build a LOSSLESS FP q4k_gemv_warp variant (128-thread/row + K-parallel + warp_reduce_sum) for FFN gate/up (then down),
-env-gated default-off. Gate on W==D (>=+5%@ctx1024 OR >=+7%@ctx4096), NOT % peak (B5 lesson: local != in-graph).
-Projected +6.5% (gate/up) / ~+9-11% (gate/up+down).
+DONE 2026-06-22: q4k_gemv_warp IMPLEMENTED + W==D PASS -> Q4K_GEMV_WARP_WD_PASS (docs/decode-ffn-gemv-warp-result-20260622.md).
+LOSSLESS FP work-decomposition GEMV (32 threads/row + K-block-parallel + in-kernel warp_reduce_sum/ds_bpermute, one
+output). gate/up+down W==D: +9.78%@1024 / +8.71%@4096 / +9.83%@512, greedy BYTE-IDENTICAL (decode 66.7->73.9 @1024,
+~67%->~73% of llama). Local A/B 1.31x gate/up / 1.37x down vs the opted default. The FIRST decode primitive to clear
+the W==D gate since the attention arc. default_eligible=true (lossless) but DEFAULT-OFF (Q4K_GEMV_WARP /
+Q4K_GEMV_WARP_DOWN) pending owner approval.
+
+NEXT candidates: (1) flip Q4K_GEMV_WARP default-on (owner call -- lossless, passes, no regression). (2) Q6_K down warp
+variant (the other ~18 down layers, bounded follow-on). (3) attn q/o/k/v proj warp (10% share, same lever).
 ```
 
 Non-goals: no q8 default (lossy), no int-dot/MMVQ reopen (null in-model), no coalescing-only (gate/up not coop-routed),

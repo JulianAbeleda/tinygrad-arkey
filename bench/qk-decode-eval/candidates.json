@@ -315,6 +315,21 @@
       "historical_note": "B4 follow-on runtime eval: route-node visibility is confirmed in-model, but fixed-policy W==D does not clear the promotion gate (best measured: +0.24%@512, -0.76%@1024, +5.36%@4096 with route-firing policy; +5.56%@4096-only without 1024 route). decode_eval currently has no B4 verdict state, so this entry is tracked as REST with compare_artifact `bench/qk-decode-attention-route-b-b4/latest.json`. default_eligible=false.",
       "is_split_kv": true,
       "split_kv_economics_audit": "bench/qk-split-kv-economics-audit/latest.json -> COMBINE_TAX_DOMINATES. The W==D miss is attributed (extra/qk_split_kv_economics_audit.py): the split-KV combine is a flat latency-bound floor (~64 GB/s << 960 peak, 32 wg << 96 CUs; combine 44/35/26/17% of attention @ctx512/1024/2048/4096) -- a cheaper/fused combine is the actionable lever (Amdahl projection: ctx4096 measured +5.41% -> +6.97% half-combine -> +8.58% free-combine), Amdahl co-limits. Per split_kv_economics_contract_v1, this and any future split-KV candidate must report tile/combine economics before W==D promotion. See docs/split-kv-economics-audit-result-20260621.md."
+    },
+    {
+      "id": "q4k_gemv_warp_ffn",
+      "family": "ffn_gemv",
+      "description": "LOSSLESS FP Q4_K FFN weight-GEMV work-decomposition variant (q4k_gemv_warp): 32 threads/row (one gfx1100 wave) + K-block-parallel (block_group x lane4 coalesced) + IN-KERNEL warp_reduce_sum (ds_bpermute) + one output, vs the default 1-thread/row serial uncoalesced q4k_gemv_partial. llama's MMVQ work decomposition in FP (no q8, no int-dot/MMVQ). Env-gated default-off: Q4K_GEMV_WARP=1 (FFN gate/up) + Q4K_GEMV_WARP_DOWN=1 (Q4_K down). FIRST decode primitive to clear the W==D gate since the attention arc.",
+      "env": {"Q4K_GEMV_WARP": "1", "Q4K_GEMV_WARP_DOWN": "1"},
+      "rungs": [
+        {"rung": "local_ab", "runner": "ab_script", "script": "extra/qk_ffn_gemv_warp_ab.py", "result_json": "bench/qk-ffn-gemv-warp/latest.json"},
+        {"rung": "wd", "runner": "ab_script", "script": "extra/qk_ffn_gemv_warp_wd.py", "result_json": "bench/qk-ffn-gemv-warp/wd.json"}
+      ],
+      "contexts": [512, 1024, 4096],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "WD_PASS",
+      "compare_artifact": "bench/qk-ffn-gemv-warp/wd.json",
+      "historical_note": "Q4K_GEMV_WARP_WD_PASS: lossless FP work-decomposition GEMV (warp_reduce_sum) clears W==D BYTE-IDENTICALLY. gate/up+down W==D +9.83/+9.78/+8.71% @ctx512/1024/4096 (decode 66.7->73.9 @1024); local A/B 1.31x gate/up / 1.37x down vs opted default; greedy 0 mismatches. default_eligible=true (lossless + passes + no regress) but kept DEFAULT-OFF pending owner approval. Realizes the GEMV_SCHEDULE_BOUND bounded lever (docs/decode-ffn-gemv-warp-result-20260622.md). Q6_K down = bounded follow-on."
     }
   ],
   "suites": {
