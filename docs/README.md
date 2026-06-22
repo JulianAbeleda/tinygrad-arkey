@@ -90,6 +90,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   advances** — both leave `cache_kv.uop=RESHAPE`, so it's a deeper buffer-identity/TinyJit-capture-state difference (the captured append writes a fresh
   buffer only post-canonical-store-prefill). Next: diff `cache_kv` BUFFER identity after store-fill vs assign-fill; clone to pristine buffer before decode.
   Reverted (model.py clean).
+- **`runtime-kv-buffer-identity-rebase-result-20260623.md`** — ⭐ Tested the buffer-identity/rebase fix → `RUNTIME_KV_BUFFER_IDENTITY_DIFF_NOT_FOUND`.
+  **Hypothesis refuted + reframed.** Identity diff: canonical-store-fill vs assign-fill have IDENTICAL uop op/dtype/shape/op_counts (only object ids differ).
+  Pristine-buffer **rebase** (replace every cache with a fresh assign-filled buffer) **STILL BAKES** → the cache buffer is NOT the cause. Critically, the prior
+  "advances/bakes" proxy (block-0 positions-written) is **unreliable**: under TOKEN correctness, the full-model RUNTIME_KV decode bakes regardless of prefill
+  (full/chunked/large-T) or cache. Only the isolated microbench advances. Next: GraphRunner kernel-level instrumentation (does the kv_append `start_pos`
+  kernarg change per replay?) gated on token-correctness, not positions. Reverted (model.py clean); probe `extra/qk_runtime_kv_buffer_identity_probe.py`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
