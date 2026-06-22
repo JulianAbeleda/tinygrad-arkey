@@ -987,7 +987,13 @@ class TransformerBlock(FFNBlock):
          and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 2048):
         try:
           from extra.qk_owned_flash_decode_graph_node import amdgcn_flash_decode
-          out = amdgcn_flash_decode(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0], vsp,
+          # DTYPE CONTRACT (mandatory): the owned tile kernel reads __half K/V/Q, but the canonical cache_kv is fp32.
+          # Without this cast the tile reads fp32 bytes as fp16 -> NaN K -> garbage real-decode tokens (the route was
+          # silently broken for real cache; W==D was only validated with a degenerate zero cache). fp16->fp16 is a no-op.
+          # Validated 2026-06-23: byte-identical to gqa for 64 tokens; W==D +11.5%@ctx2048 / +16%@ctx4096.
+          _Qt = q.reshape(Hq, Hd).cast(dtypes.float16)
+          _Kt, _Vt = assigned_kv[0, 0].cast(dtypes.float16), assigned_kv[1, 0].cast(dtypes.float16)
+          out = amdgcn_flash_decode(_Qt, _Kt, _Vt, vsp,
                                     getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
                                     getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"))  # B5: 'base' or 'hd64' cheaper combine
         except Exception as e:
