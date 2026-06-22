@@ -951,7 +951,8 @@ class TransformerBlock(FFNBlock):
         try:
           from extra.qk_owned_flash_decode_graph_node import amdgcn_flash_decode
           out = amdgcn_flash_decode(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0], vsp,
-                                    getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC)
+                                    getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
+                                    getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"))  # B5: 'base' or 'hd64' cheaper combine
         except Exception as e:
           if getenv("DEBUG", 0): print(f"DECODE_ATTN_AMDGCN_TILE fallback to gqa_coop_vec: {e}")
           out = None

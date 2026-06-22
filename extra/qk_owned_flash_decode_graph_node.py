@@ -51,11 +51,13 @@ def _specialize_tile(src:str, S:int, maxc:int) -> str:
   body = body.replace("{\n", "{"+inject, 1)
   return _preamble(src, maxc) + "#define TK 16\n" + body
 
-def _specialize_combine(src:str, S:int, maxc:int) -> str:
-  body = _extract(src, "owned_flash_combine")
+def _specialize_combine(src:str, S:int, maxc:int, sym:str="owned_flash_combine", defines:dict|None=None) -> str:
+  body = _extract(src, sym)
   body = body.replace("float* __restrict__ out, int S)", "float* __restrict__ out)")
   body = body.replace("{\n", "{\n  const int S = "+str(S)+";\n", 1)
-  return _preamble(src, maxc) + body
+  pre = _preamble(src, maxc)
+  for k, v in (defines or {}).items(): pre += f"#define {k} {v}\n"   # B5 cheaper-combine geometry (CWD/CSR)
+  return pre + body
 
 def _compile(source:str, tag:str) -> bytes:
   h = hashlib.sha256(source.encode()).hexdigest()[:12]
@@ -95,19 +97,42 @@ def _group_seg(elf:bytes) -> int:
 
 # ---- the public entry: returns the [Hq,Hd] fp32 attention output Tensor via two graph nodes ----
 import functools
+# combine variant registry: name -> (kernel symbol, defines, grid, block). 'base' = the B4 warp/head combine;
+# 'hd<CWD>' = thread-per-dim LDS-meta combine (grid (Hq, Hd/CWD), block CWD); 'sr<CWD>x<CSR>' = thread-per-dim with the
+# S-reduction parallelized across CSR threads (block (CWD, CSR)) -- breaks the per-thread serial reduction chain.
+def _combine_spec(variant:str):
+  if variant == "base": return ("owned_flash_combine", {}, (Hq, 1, 1), (32, 1, 1))
+  if variant.startswith("hd"):
+    cwd = int(variant[2:]) if len(variant) > 2 else 128
+    assert Hd % cwd == 0, f"Hd={Hd} not divisible by CWD={cwd}"
+    return ("owned_flash_combine_hd", {"CWD": cwd}, (Hq, Hd//cwd, 1), (cwd, 1, 1))
+  if variant.startswith("hw"):
+    cwd = int(variant[2:]) if len(variant) > 2 else 64
+    assert Hd % cwd == 0, f"Hd={Hd} not divisible by CWD={cwd}"
+    return ("owned_flash_combine_hw", {"CWD": cwd}, (Hq, Hd//cwd, 1), (cwd, 1, 1))
+  if variant.startswith("sr"):
+    cwd, csr = (int(x) for x in variant[2:].split("x"))
+    assert Hd % cwd == 0, f"Hd={Hd} not divisible by CWD={cwd}"
+    return ("owned_flash_combine_sr", {"CWD": cwd, "CSR": csr}, (Hq, Hd//cwd, 1), (cwd, csr, 1))
+  raise ValueError(f"unknown combine variant {variant!r}")
+
 @functools.lru_cache(maxsize=None)
-def _kernels(S:int, maxc:int):
-  """Compile (cached) the specialized single-kernel ELFs for split count S and the model's max_context (=KV stride).
-  Memoized so the per-layer model route does not recompile/re-read during JIT capture."""
+def _kernels(S:int, maxc:int, combine:str="base"):
+  """Compile (cached) the specialized single-kernel ELFs for split count S, the model's max_context (=KV stride), and
+  the combine variant. Memoized so the per-layer model route does not recompile/re-read during JIT capture."""
   src = SRC.read_text()
+  sym, defs, _, _ = _combine_spec(combine)
   tile_elf = _compile(_specialize_tile(src, S, maxc), f"tile_s{S}_m{maxc}")
-  comb_elf = _compile(_specialize_combine(src, S, maxc), f"comb_s{S}_m{maxc}")
+  comb_elf = _compile(_specialize_combine(src, S, maxc, sym, defs), f"comb_{combine}_s{S}_m{maxc}")
   return tile_elf, comb_elf, _group_seg(tile_elf), _group_seg(comb_elf)
 
-def amdgcn_flash_decode(Q:Tensor, K:Tensor, V:Tensor, start_pos_var:UOp, S:int=48, MAXC:int=4096) -> Tensor:
+def amdgcn_flash_decode(Q:Tensor, K:Tensor, V:Tensor, start_pos_var:UOp, S:int=48, MAXC:int=4096,
+                        combine:str="base") -> Tensor:
   """Q:[Hq,Hd] fp16, K/V:[Hkv,MAXC,Hd] fp16 (native layout, MAXC=model max_context = KV stride), start_pos_var:
-  unbound 'start_pos' DEFINE_VAR. Returns out:[Hq,Hd] fp32. Two precompiled graph nodes: tile -> combine."""
-  tile_elf, comb_elf, tile_lds, comb_lds = _kernels(int(S), int(MAXC))
+  unbound 'start_pos' DEFINE_VAR. combine: 'base' (B4) or 'hd<CWD>' (B5 cheaper combine, e.g. 'hd64').
+  Returns out:[Hq,Hd] fp32. Two precompiled graph nodes: tile -> combine."""
+  tile_elf, comb_elf, tile_lds, comb_lds = _kernels(int(S), int(MAXC), combine)
+  sym, _, cg, cb = _combine_spec(combine)
 
   part = Tensor.empty(Hq*S*Hd, dtype=dtypes.float32)
   meta = Tensor.empty(Hq*S*2, dtype=dtypes.float32)
@@ -124,8 +149,7 @@ def amdgcn_flash_decode(Q:Tensor, K:Tensor, V:Tensor, start_pos_var:UOp, S:int=4
 
   # combine: bufs = [part, meta, out]; writes out(2); reads part(0),meta(1)
   def comb_fxn(*ph):
-    return _make_program("owned_flash_combine", comb_elf, list(ph), (),
-                         (Hq, 1, 1), (32, 1, 1), outs=(2,), ins=(0, 1),
+    return _make_program(sym, comb_elf, list(ph), (), cg, cb, outs=(2,), ins=(0, 1),
                          group_seg=comb_lds, est_ops=Hq*S*Hd, est_mem=Hq*S*Hd*4)
   rc = Tensor.custom_kernel(part2, meta2, out, fxn=comb_fxn)
   return rc[2].reshape(Hq, Hd)

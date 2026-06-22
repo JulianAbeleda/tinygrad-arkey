@@ -110,6 +110,84 @@ extern "C" __global__ void owned_flash_tile_gqa(const __half* __restrict__ Q, co
   if (lane == 0) { float* mo = meta + ((long)h * S + s) * 2; mo[0] = m; mo[1] = l; }
 }
 
+// --- cheaper combine (B5-lite): THREAD-PER-OUTPUT-DIM + LDS-staged meta + 2D grid for more workgroups. The base
+// combine below uses ONE 32-thread warp per q-head (1024 threads total, under-occupies gfx1100) and each lane
+// redundantly reloads all S meta for the gm reduction; it is latency-bound (~64 GB/s). This variant: grid=(Hq, Hd/CWD),
+// block=CWD, one thread per output head-dim. Meta (m,l for all S splits) is staged into LDS ONCE per workgroup (no
+// redundant global meta reloads); each thread streams its dim's S partials (coalesced across the CWD-wide warp). More
+// workgroups (Hq*Hd/CWD) + threads hide the partial-read latency that caps the base combine. Same log-sum-exp math.
+#ifndef CWD
+#define CWD 128
+#endif
+extern "C" __global__ void owned_flash_combine_hd(const float* __restrict__ part, const float* __restrict__ meta,
+                                                  float* __restrict__ out, int S) {
+  const int h = blockIdx.x;
+  const int d = blockIdx.y * CWD + threadIdx.x;          // output head-dim 0..Hd-1
+  __shared__ float sm[128];                              // S <= Smax = ceildiv(MAXC, L) <= 128
+  __shared__ float sl[128];
+  for (int s = threadIdx.x; s < S; s += CWD) { sm[s] = meta[((long)h*S+s)*2+0]; sl[s] = meta[((long)h*S+s)*2+1]; }
+  __syncthreads();
+  float gm = -1e30f;
+  for (int s = 0; s < S; s++) gm = fmaxf(gm, sm[s]);
+  float denom = 0.f, acc = 0.f;
+  for (int s = 0; s < S; s++) { float w = __expf(sm[s]-gm); denom += w*sl[s]; acc += w*part[((long)h*S+s)*Hd + d]; }
+  out[(long)h*Hd + d] = acc / denom;
+}
+
+// --- cheaper combine v3 (B5-lite): thread-per-dim + LDS meta + the per-split WEIGHTS exp(m_s-gm) PRECOMPUTED ONCE in
+// LDS cooperatively (the _hd variant recomputes exp per output dim -> CWD-times redundant exp). Main loop is then pure
+// FMA over the part reads. grid=(Hq, Hd/CWD), block=CWD. Same log-sum-exp math.
+extern "C" __global__ void owned_flash_combine_hw(const float* __restrict__ part, const float* __restrict__ meta,
+                                                  float* __restrict__ out, int S) {
+  const int h = blockIdx.x;
+  const int d = blockIdx.y * CWD + threadIdx.x;
+  __shared__ float sm[128], sl[128], sw[128];          // m, l, and precomputed weight w=exp(m-gm)
+  for (int s = threadIdx.x; s < S; s += CWD) { sm[s] = meta[((long)h*S+s)*2+0]; sl[s] = meta[((long)h*S+s)*2+1]; }
+  __syncthreads();
+  float gm = -1e30f;
+  for (int s = 0; s < S; s++) gm = fmaxf(gm, sm[s]);
+  for (int s = threadIdx.x; s < S; s += CWD) sw[s] = __expf(sm[s] - gm);   // S exps total per head (not CWD*S)
+  __syncthreads();
+  float denom = 0.f, acc = 0.f;
+  for (int s = 0; s < S; s++) { denom += sw[s]*sl[s]; acc += sw[s]*part[((long)h*S+s)*Hd + d]; }
+  out[(long)h*Hd + d] = acc / denom;
+}
+
+// --- cheaper combine v2 (B5-lite): thread-per-dim BUT the S-reduction is ALSO parallelized across CSR threads, then
+// reduced in LDS. The _hd variant above hit a ~10us floor because each thread serially walks all S partials (a
+// dependent reduction chain of length S); CWD-count alone did not help. Here block=(CWD, CSR): thread (d, sr) sums its
+// strided split subset (chain length S/CSR), then sr=0 reduces the CSR partials -> breaks the latency chain. Same math.
+#ifndef CWD
+#define CWD 64
+#endif
+#ifndef CSR
+#define CSR 4
+#endif
+extern "C" __global__ void owned_flash_combine_sr(const float* __restrict__ part, const float* __restrict__ meta,
+                                                  float* __restrict__ out, int S) {
+  const int h  = blockIdx.x;
+  const int d  = blockIdx.y * CWD + threadIdx.x;
+  const int sr = threadIdx.y;                            // 0..CSR-1
+  __shared__ float sm[128], sl[128];
+  __shared__ float acc_lds[CWD * CSR];
+  const int tid = threadIdx.y * CWD + threadIdx.x;
+  for (int s = tid; s < S; s += CWD * CSR) { sm[s] = meta[((long)h*S+s)*2+0]; sl[s] = meta[((long)h*S+s)*2+1]; }
+  __syncthreads();
+  float gm = -1e30f;
+  for (int s = 0; s < S; s++) gm = fmaxf(gm, sm[s]);     // per-head max from LDS (cheap)
+  float acc = 0.f;
+  for (int s = sr; s < S; s += CSR) acc += __expf(sm[s]-gm) * part[((long)h*S+s)*Hd + d];  // strided split subset
+  acc_lds[threadIdx.x * CSR + sr] = acc;
+  __syncthreads();
+  if (sr == 0) {
+    float a = 0.f;
+    for (int j = 0; j < CSR; j++) a += acc_lds[threadIdx.x * CSR + j];   // reduce the CSR partials
+    float denom = 0.f;
+    for (int s = 0; s < S; s++) denom += __expf(sm[s]-gm) * sl[s];        // per-head denom from LDS
+    out[(long)h*Hd + d] = a / denom;
+  }
+}
+
 // --- combine kernel: one warp per q-head merges the S partials via log-sum-exp. grid.x = Hq, block = 32.
 extern "C" __global__ void owned_flash_combine(const float* __restrict__ part, const float* __restrict__ meta,
                                                float* __restrict__ out, int S) {
