@@ -74,6 +74,15 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   `KV_RUNTIME_MANAGED_CACHE_REQUIRED`** — the copy and persistence are coupled in the functional model; removing the copy
   needs a runtime-managed (two-graph) cache, not a single-`@function` route. Route reverted (model.py clean); probe
   `extra/qk_kv_opaque_read_probe.py`.
+- **`runtime-managed-kv-cache-result-20260623.md`** — ⭐ EXECUTED the runtime-managed cache → `RUNTIME_KV_PERSISTENCE_FAIL`.
+  `RUNTIME_KV_MICROBENCH_PASS` (isolated runtime cache + opaque append + owned tile, TinyJit replay: persistence accumulates,
+  reset clean, no copy). Integration got far: bypassing `@function` + an **fp16** runtime cache (the canonical cache is fp32 →
+  wrong byte offsets for the fp16 append — the key bug) made **eager** multi-step persist, route fires per-layer, copy removed,
+  **first decode token byte-identical**. Wall: under **TinyJit decode replay the opaque append's write position bakes** at the
+  capture `start_pos` (replays don't advance → garbage), because the append's K/V src depends on `start_pos` via rope. Narrowed
+  the blocker from "@function persistence" to two named follow-ons: (a) replay an opaque append whose offset advances with
+  start_pos-dependent src; (b) a short-ctx-correct owned tile (ctx<2048). Reverted (model.py clean); probe
+  `extra/qk_runtime_kv_cache_probe.py`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
