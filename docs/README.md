@@ -171,6 +171,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   disallowed). NOT the kernel/persistence/args/dtype/cache/prefill (all refuted) — it is the EXECUTION MODEL. This finally explains the whole saga.
   Fix = tinygrad-core mutable-state-in-pure-graph (Tensor-purity change) → scope hard-stop. The ~+11%→parity prize is core-engine-only. Design doc
   `runtime-kv-core-engine-design-20260623.md`. No source/default changes; default decode byte-identical.
+- **`runtime-kv-core-engine-result-v2-20260623.md`** — ⭐⭐⭐ MAJOR CORRECTION (supersedes the callify hard-stop). A native-store + `AFTER`-node-read
+  route (`RUNTIME_KV_CORE`) is **64-token BYTE-IDENTICAL** to default on 2 prompts → **runtime-KV correctness IS achievable**; the bake was the
+  OPAQUE custom_kernel append, NOT a fundamental callify/persistence wall. W==D=0% because the `AFTER`-read of cache **slices** still materializes
+  (≈ default). **Re-frame**: the ~1.5ms/+11% materialization is the owned tile **reading the cache via slices**, NOT a missing runtime-KV persistence
+  capability. The real lever = **buffer-identity whole-buffer read** (separate K/V cache buffers, or a kernel V-offset) = a BOUNDED tile/cache change,
+  not a core-engine/Tensor-purity project. The "runtime-managed KV / TinyJit persistence" lane is RETIRED as mis-scoped. Route reverted (0% gain); no source/default changes.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
