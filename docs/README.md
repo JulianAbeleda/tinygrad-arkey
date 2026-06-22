@@ -137,6 +137,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   (owned tile: v_dot2×2, ds_bpermute×5 cross-lane, 8KB LDS, 56 VGPR, 0 spill). Stacking CONFIRMED (Q4K+owned additive). Runtime-KV
   `NEEDS_NEW_DIAGNOSTIC` (KV-copy still ~1.5ms; owned-tile blocker now fixed → re-diagnose). Next primitive: `NEXT_PRIMITIVE_RUNTIME_KV` (#1 bounded) /
   small-ops fusion (#2 codegen). Artifacts `bench/qk-post-owned-attention-default-audit/`.
+- **`post-default-runtime-kv-diagnostic-result-20260623.md`** — ⭐⭐ `RUNTIME_KV_CORE_RUNTIME_BLOCKED_SMALL_OPS_NEXT` + **8B bounded-exhaustion checkpoint**.
+  MAXC-shrink A/B PROVES the KV materialization is on the critical path (**+11.8%@ctx1024**, ~llama parity at MAXC=1280) — but the copy-free opaque
+  append **still bakes in-model even with the fixed fp16 owned tile** → `RUNTIME_GRAPH_LIFECYCLE_GAP` (the materialization is coupled to @function
+  persistence; core-runtime work, not a bounded primitive). Holistic Exhaustion Ledger: attention+GEMV **CLOSED** (llama parity), KV-materialization
+  **IMPLEMENT-WORTHY-but-CORE-BLOCKED**, small-ops **SEARCHABLE-but-OVERLAPPED**, llama delta **EXPLAINED**. Machine search NOT yet justified. Shipped
+  ISA audit tool `extra/qk_amdgpu_isa_primitive_audit.py`. Fallback scope `docs/small-ops-activation-fusion-scope-20260623.md`. No source/default changes.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
