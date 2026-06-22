@@ -48,6 +48,15 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   same-graph read-after-write hazard + symbolic-size requirement. Design B (alias rule) = unbounded (symbolic-range).
   **Viable path = Design C runtime-managed/two-graph KV (vLLM/TRT-LLM style), a separate project — recommend NOT funding
   now; keep the copy.** Gated experiment reverted (model.py byte-clean). Microprobe `extra/qk_kv_append_microprobe.py`.
+- **`8b-remaining-architecture-understanding-result-20260622.md`** — ⭐⭐ ARCHITECTURE DECISION (audit-only): `FUND_FUSED_ATTENTION_FIRST`.
+  The two remaining architectural lanes — runtime-managed KV (`RUNTIME_KV_REQUIRES_ATTENTION_INTERFACE_REWRITE`) and
+  codegen fused attention (`FUSED_ATTENTION_AMDGCN_SINGLE_TILE_GATE_READY`) — **converge on one substrate: the single
+  fused OWNED AMDGCN attention tile** (never tried; B4/B5 only ever used SEPARATE tile→combine). It's the untested
+  bounded attention lever AND the opaque cache read that unlocks the **measured** +1.4 ms/+8 tok/s KV-copy removal (the
+  default `gqa_coop_vec` functional reduce re-hits the read-after-write hazard; an opaque tile doesn't). Build the fused
+  tile first (fork-local, HCQ-proven); pair with the opaque KV append as the follow-on; promote `Q4K_GEMV_WARP` in
+  parallel. Native-linearizer/renderer routes = unbounded core tinygrad, defer. Artifacts
+  `bench/qk-8b-remaining-architecture-understanding/{runtime_kv,fused_attention_codegen,decision}.json`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
