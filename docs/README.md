@@ -130,6 +130,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   (`extra/qk_decode_runtime_overhead.py`, real decode tok/s): **+12.7/+15.4/+18.7/+22.4% @ctx512/1024/2048/4096** (gqa 76/74/71/67 → owned
   86/85/84/82). Byte-identical to gqa across the whole decode range (short-ctx SDPA + owned tile); route fires by default, falls back at ctx<512 /
   TILE=0 / unsupported shape. Default decode @ctx1024 ~74→~85 tok/s (~76%→~88% of llama.cpp).
+- **`post-owned-attention-default-audit-result-20260623.md`** — ⭐⭐ FRESH holistic primitive audit (supersedes prior gap maps). With owned attention
+  default-on + Q4K_GEMV_WARP: **weight-GEMV is at llama PARITY** (7620 vs 7686µs) and **attention NEAR-parity** (663 vs 507µs) — tinygrad is now
+  **~85-88% of llama @ctx1024** (wall gap +1.73ms). The decode bottleneck SHIFTED off attention/GEMV to: **KV-copy materialization** (E_49152 ~1.5ms,
+  mislabeled as norm_rope by the heuristic), **unfused small-ops/norm** (+1.2ms), **unfused FFN activation** (+1.0ms). ISA audit `ISA_PRIMITIVES_CONFIRMED`
+  (owned tile: v_dot2×2, ds_bpermute×5 cross-lane, 8KB LDS, 56 VGPR, 0 spill). Stacking CONFIRMED (Q4K+owned additive). Runtime-KV
+  `NEEDS_NEW_DIAGNOSTIC` (KV-copy still ~1.5ms; owned-tile blocker now fixed → re-diagnose). Next primitive: `NEXT_PRIMITIVE_RUNTIME_KV` (#1 bounded) /
+  small-ops fusion (#2 codegen). Artifacts `bench/qk-post-owned-attention-default-audit/`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
