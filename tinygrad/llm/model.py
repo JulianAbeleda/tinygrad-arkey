@@ -983,7 +983,9 @@ class TransformerBlock(FFNBlock):
       try: _amdgcn_ctx = start_pos.unbind()[1] + T if isinstance(start_pos, UOp) else -1
       except Exception: _amdgcn_ctx = -1
       out = None
-      if getenv("DECODE_ATTN_AMDGCN_TILE", 0) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
+      # DEFAULT-ON (2026-06-23) for the validated gfx1100 / Qwen3-8B / B=1 / T=1 / Hq=32 / Hkv=8 / Hd=128 / ctx>=512
+      # shape; strict guards keep every other shape/device on gqa. DECODE_ATTN_AMDGCN_TILE=0 disables.
+      if getenv("DECODE_ATTN_AMDGCN_TILE", 1) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
          and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 512):
         try:
           from extra.qk_owned_flash_decode_graph_node import amdgcn_flash_decode
@@ -1032,11 +1034,14 @@ class TransformerBlock(FFNBlock):
   def _init_state(self, x:Tensor):
     if not hasattr(self, "cache_kv"):
       # TODO: how is the dtype of this determined?
-      # FO2: a native fp16 cache for the owned-tile route makes the route's mandatory fp16 cast a no-op (drops the
-      # fp32->fp16 copy: +6.7%/+7.1% over the cast route @ctx1024/4096, byte-identical). The owned tile needs fp16
-      # anyway, so DECODE_ATTN_AMDGCN_TILE implies it (env override available). Default (no owned route) stays fp32
-      # -> canonical gqa byte-identical.
-      _kv_dtype = dtypes.float16 if (getenv("DECODE_ATTN_AMDGCN_FP16CACHE") or getenv("DECODE_ATTN_AMDGCN_TILE")) else None
+      # DEFAULT-ON (2026-06-23) for the validated shape/device: the owned AMDGCN decode-attention route uses a native
+      # fp16 cache (the tile reads __half; fp16 cache makes the cast a no-op, dropping the fp32->fp16 copy). Confirmed
+      # byte-identical to gqa across the whole decode range (short-ctx SDPA + mid/long-ctx owned tile) and W==D
+      # +12.7/+15.4/+18.7/+22.4% @ctx512/1024/2048/4096 (canonical harness). GATED to the supported shape so other
+      # models keep fp32; DECODE_ATTN_AMDGCN_TILE=0 fully disables (back to fp32 gqa).
+      _owned_supported = DECODE_ATTN_AMDGCN_ARCH_OK and x.shape[0] == 1 and self.config.n_heads == 32 \
+        and self.config.n_kv_heads == 8 and self.config.head_dim == 128
+      _kv_dtype = dtypes.float16 if ((getenv("DECODE_ATTN_AMDGCN_FP16CACHE") or getenv("DECODE_ATTN_AMDGCN_TILE", 1)) and _owned_supported) else None
       self.cache_kv = Tensor.empty(2, x.shape[0], self.config.n_kv_heads, self.config.max_context, self.config.head_dim, dtype=_kv_dtype, device=x.device)
       self.freqs_cis = precompute_freqs_cis(self.config.rope_dim, self.config.max_context, self.config.rope_theta, device=x.device)
 
