@@ -1032,7 +1032,12 @@ class TransformerBlock(FFNBlock):
   def _init_state(self, x:Tensor):
     if not hasattr(self, "cache_kv"):
       # TODO: how is the dtype of this determined?
-      self.cache_kv = Tensor.empty(2, x.shape[0], self.config.n_kv_heads, self.config.max_context, self.config.head_dim, device=x.device)
+      # FO2: a native fp16 cache for the owned-tile route makes the route's mandatory fp16 cast a no-op (drops the
+      # fp32->fp16 copy: +6.7%/+7.1% over the cast route @ctx1024/4096, byte-identical). The owned tile needs fp16
+      # anyway, so DECODE_ATTN_AMDGCN_TILE implies it (env override available). Default (no owned route) stays fp32
+      # -> canonical gqa byte-identical.
+      _kv_dtype = dtypes.float16 if (getenv("DECODE_ATTN_AMDGCN_FP16CACHE") or getenv("DECODE_ATTN_AMDGCN_TILE")) else None
+      self.cache_kv = Tensor.empty(2, x.shape[0], self.config.n_kv_heads, self.config.max_context, self.config.head_dim, dtype=_kv_dtype, device=x.device)
       self.freqs_cis = precompute_freqs_cis(self.config.rope_dim, self.config.max_context, self.config.rope_theta, device=x.device)
 
 class MLATransformerBlock(FFNBlock):
