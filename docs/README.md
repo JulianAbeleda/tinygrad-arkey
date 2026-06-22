@@ -165,6 +165,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   even at NL=1 (one layer, real prefill) while the microbench passes; the pre-graph form is fundamentally incompatible with interleaved transformer
   layers → needs a CORE TinyJit/HCQ engine capability (non-materializing persistent in-graph cache mutation), not a model task. 8B bounded speed is
   exhausted at the model/route layer; the ~+11% prize is core-engine-only. No source/default changes.
+- **`runtime-kv-core-engine-result-20260623.md`** — ⭐⭐⭐ FINAL runtime-KV root cause: `RUNTIME_KV_CORE_CAPABILITY_BLOCKED` by the **callify
+  (pure-function) execution model**. Toy proof PASSES (plain TinyJit); one-layer FAILS — the opaque append writes NaN given FINITE k because the
+  model decode is **callified** and callify forbids the eager mutable-buffer realize the append needs (`src.realize()` → `ALLOW_DEVICE_USAGE`
+  disallowed). NOT the kernel/persistence/args/dtype/cache/prefill (all refuted) — it is the EXECUTION MODEL. This finally explains the whole saga.
+  Fix = tinygrad-core mutable-state-in-pure-graph (Tensor-purity change) → scope hard-stop. The ~+11%→parity prize is core-engine-only. Design doc
+  `runtime-kv-core-engine-design-20260623.md`. No source/default changes; default decode byte-identical.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
