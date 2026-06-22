@@ -104,6 +104,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   (finite at K~200). In-model the tile is fed **NaN K** (prefill K clean; the decode append introduces NaN at layer 0). B4's bug = fp32-cache-read-as-fp16,
   masked by W==D validation with a degenerate zero cache. ⚠FLAGS that the default-eligible owned-tile candidate is broken for real decode. Next lane =
   owned-tile DATA correctness, not arg patching. Reverted (model.py clean); probe `extra/qk_runtime_kv_graphrunner_arg_probe.py`.
+- **`owned-amdgcn-tile-real-cache-revalidation-result-20260623.md`** — ⭐⭐⭐ FIX SHIPPED → `OWNED_TILE_REAL_CACHE_CTX1024_BLOCKED`.
+  The owned AMDGCN tile was broken for REAL decode by a **dtype-contract bug**: it reads `__half` but canonical `cache_kv` is **fp32** →
+  fp32-bytes-as-fp16 → NaN K → garbage (151936) from decode step 1 (masked because prior W==D used a degenerate zero cache). **FIX**: the
+  (default-off) owned-tile route now unconditionally casts Q/K/V to fp16. Revalidated real chunked-prefill multi-step decode: **byte-identical
+  to gqa for 64 tokens / 2 prompts**, default gqa decode unchanged, **W==D +11.5%@ctx2048 / +16.0%@ctx4096**. Stays `default_eligible=false`
+  ONLY because the route is ctx-restricted ≥2048 (can't fire at ctx1024). Runtime-KV unblocked on the owned-tile side but B4+fp16cast already
+  wins WITH the copy, so copy-elimination is now incremental. Probe `extra/qk_owned_tile_real_cache_repro.py`. ⚠the earlier owned-tile
+  "byte-identical W==D" claims (B3/B4/B5) were degenerate-cache artifacts — real-cache correctness now established.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
