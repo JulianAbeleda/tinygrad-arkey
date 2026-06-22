@@ -153,6 +153,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   gated, ≥1-2% or close the lane) = the recommended NEXT action. DEFERRED owner-decision: runtime-KV core persistence (biggest prize ~+11%, but
   core-runtime-blocked — authorize separately). Standing: ISA audit = mandatory guard; machine search PARKED until a bounded knob exists;
   generalization/14B-32B deferred until 8B closed. Final decision matrix included.
+- **`runtime-kv-isa-native-codegen-three-lane-result-20260623.md`** — ⭐ lanes 2/3/6 scoped. **Lane 3 BUILT**: vendor-neutral ISA wrapper
+  `extra/qk_isa_primitive_audit.py` (AMD active, validated owned tile `AMD_ISA_PRIMITIVE_CONFIRMED`; NVIDIA/Intel scoped-only) — now the mandatory
+  evidence guard. **Lane 2 design-scoped** `RUNTIME_KV_CORE_CAPABILITY_SCOPE_READY_DESIGN_A` (runtime-managed KV with append as a PRE-graph
+  side-effect = the vLLM "update KV before replay" model; the prior in-graph append baked; Design C rejected TOO_BROAD; 4-rung proof ladder; needs
+  owner authorization). **Lane 6 chartered** native-codegen learning (first experiment = tinygrad-native LDS+cross-lane microkernel, ISA-audited; NOT
+  a W==D lane). Scopes: `runtime-kv-core-persistence-capability-scope-` + `native-codegen-learning-from-owned-primitives-scope-`. No source/default changes.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
