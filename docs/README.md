@@ -112,6 +112,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   ONLY because the route is ctx-restricted ≥2048 (can't fire at ctx1024). Runtime-KV unblocked on the owned-tile side but B4+fp16cast already
   wins WITH the copy, so copy-elimination is now incremental. Probe `extra/qk_owned_tile_real_cache_repro.py`. ⚠the earlier owned-tile
   "byte-identical W==D" claims (B3/B4/B5) were degenerate-cache artifacts — real-cache correctness now established.
+- **`owned-amdgcn-tile-short-ctx-result-20260623.md`** — ⭐⭐⭐ PROMOTED → `OWNED_TILE_SHORT_CTX_WD_PASS`, `default_eligible=true`.
+  ctx1024 was blocked ONLY by an overly-conservative `MIN_CTX=2048` route guard — the standalone tile is **empty-split-safe** and the dtype
+  fp16-cast fix already resolved the real short-ctx failure. **Fix = one line** (`DECODE_ATTN_AMDGCN_MIN_CTX` 2048→512). Now byte-identical to gqa
+  at ctx512(16t)/1024(64t)/2048(64t), default unchanged; **W==D +6.1/+8.4/+11.5/+15.5% @ctx512/1024/2048/4096** (repeated, tight) → clears
+  +5%@1024 & +7%@4096. Candidate `decode_attention_..._owned_amdgcn_b4` → `default_eligible=true`, `default_on=false` (no flip; in-process A/B
+  recommended before flipping). Runtime-KV deferred (now only incremental). Probe `extra/qk_owned_tile_short_ctx_probe.py`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
