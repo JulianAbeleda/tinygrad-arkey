@@ -1,0 +1,46 @@
+{
+  "candidate": "owned_decode_attention_tile",
+  "vendor": "amd",
+  "arch": "gfx1100",
+  "code_object": "/tmp/b4_tile_s47_m4608_*.co (hipcc --genco, extra/qk_owned_flash_decode.hip)",
+  "symbols": [
+    "owned_flash_tile_gqa"
+  ],
+  "resources": {
+    "registers": 56,
+    "shared_memory_bytes": 8192,
+    "scratch_or_local_bytes": 0,
+    "spills": 0,
+    "sgpr": 26
+  },
+  "instruction_flags": {
+    "has_vector_dot": true,
+    "has_matrix_or_tensor_op": false,
+    "has_shared_memory": true,
+    "has_cross_lane": true,
+    "has_vector_global_load": true,
+    "has_spill": false
+  },
+  "graph_lifecycle": {
+    "route_fires": true,
+    "runtime_vars_patch": "start_pos (confirmed advancing per replay)",
+    "fallback": "gqa_coop_vec on unsupported shape/ctx<512/TILE=0"
+  },
+  "wd": {
+    "tokens_match": true,
+    "delta_pct": {
+      "512": 12.7,
+      "1024": 15.4,
+      "2048": 18.7,
+      "4096": 22.4
+    },
+    "contexts": [
+      512,
+      1024,
+      2048,
+      4096
+    ]
+  },
+  "verdict": "AMD_ISA_PRIMITIVE_CONFIRMED + WD_TRANSFER_CONFIRMED",
+  "note": "Demonstrates the normalized cross-vendor ISA-audit contract is realizable for AMD TODAY from real code-object evidence (extra/qk_amdgpu_isa_primitive_audit.py) + the W==D artifact. A NVIDIA/Intel backend would fill the same record via cuobjdump/nvdisasm or IGC/ocloc."
+}

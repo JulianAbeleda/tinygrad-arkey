@@ -143,6 +143,11 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   persistence; core-runtime work, not a bounded primitive). Holistic Exhaustion Ledger: attention+GEMV **CLOSED** (llama parity), KV-materialization
   **IMPLEMENT-WORTHY-but-CORE-BLOCKED**, small-ops **SEARCHABLE-but-OVERLAPPED**, llama delta **EXPLAINED**. Machine search NOT yet justified. Shipped
   ISA audit tool `extra/qk_amdgpu_isa_primitive_audit.py`. Fallback scope `docs/small-ops-activation-fusion-scope-20260623.md`. No source/default changes.
+- **`cross-vendor-isa-primitive-audit-and-search-result-20260623.md`** — ⭐ ISA-audit principle is GENERAL, implementation AMD-specific.
+  `ISA_AUDIT_GENERAL_PRINCIPLE_CONFIRMED` + `AMD_ISA_AUDIT_READY` (tool works; NVIDIA/Intel tooling absent on this box → backend-scoped only).
+  Vendor map: AMD `.co`/AMDGCN/llvm-objdump (ready) · NVIDIA `.cubin`/SASS/cuobjdump-nvdisasm (PTX alone NOT proof) · Intel device-module/Xe/IGC-ocloc.
+  Normalized contract realizable for AMD now (`bench/qk-isa-primitive-audit/owned_decode_attention.json`). Confirms `RUNTIME_KV_NOT_ISA_BLOCKED`
+  (it is `RUNTIME_GRAPH_LIFECYCLE_GAP`, not codegen) and small-ops `NEEDS_FUSION_GATE_BEFORE_SEARCH`. `MACHINE_SEARCH_NOT_READY`. No tooling/search built.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
