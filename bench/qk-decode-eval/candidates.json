@@ -287,6 +287,32 @@
       "historical_expected_verdict": "LOCAL_PASS_WD_FAIL",
       "compare_artifact": "bench/qk-decode-attention-route-b-b3/latest.json",
       "historical_note": "B3 owned AMDGCN tile: LOCAL PASS (2.35x GPU / 1.70x wall vs coop, correct rel 2e-7, v_dot2=2, 56 VGPR, 8KB LDS, 0 spill); promotable + tinygrad-native layout. W==D BLOCKED (raw HCQ kernel can't enter JIT decode graph w/o Route-A codegen or eager); default_eligible=false. decode_eval shows REST without a W==D runner. See docs/decode-attention-route-b-b3-owned-amdgcn-result-20260621.md."
+    },
+    {
+      "id": "decode_attention_llama_flash_tile_owned_amdgcn_b4",
+      "family": "north_star_flash_attn_tile",
+      "description": "Route B B4 follow-on: OWNED AMDGCN decode-attention route as external precompiled Ops.PROGRAM JIT graph nodes (`extra/qk_owned_flash_decode_graph_node.py`), tinygrad-native [Hkv,MAXC,Hd] layout, route-gated default-off with explicit `DECODE_ATTN_AMDGCN_TILE`, `DECODE_ATTN_AMDGCN_S`, and flash threshold flags. Local result still inherits B3; W==D is evaluated with the route active and currently misses promotion criteria.",
+      "env": {
+        "DECODE_ATTN_AMDGCN_TILE": "1",
+        "DECODE_ATTN_AMDGCN_S": "48",
+        "FLASH_DECODE_THRESHOLD": "2048"
+      },
+      "rungs": [
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 6
+        }
+      ],
+      "contexts": [
+        512,
+        1024,
+        4096
+      ],
+      "correctness_req": "rel_rmse<=1e-3",
+      "historical_expected_verdict": "REST",
+      "compare_artifact": "bench/qk-decode-attention-route-b-b4/latest.json",
+      "historical_note": "B4 follow-on runtime eval: route-node visibility is confirmed in-model, but fixed-policy W==D does not clear the promotion gate (best measured: +0.24%@512, -0.76%@1024, +5.36%@4096 with route-firing policy; +5.56%@4096-only without 1024 route). decode_eval currently has no B4 verdict state, so this entry is tracked as REST with compare_artifact `bench/qk-decode-attention-route-b-b4/latest.json`. default_eligible=false."
     }
   ],
   "suites": {

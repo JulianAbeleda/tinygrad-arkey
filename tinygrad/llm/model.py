@@ -61,6 +61,15 @@ def _prefill_graph_gemm_default() -> int:
     return 1 if "gfx1100" in str(getattr(Device["AMD"], "arch", "")) else 0
   except Exception: return 0
 PREFILL_GRAPH_GEMM = bool(_prefill_graph_gemm_default())
+
+# Route B B4 (default-off): the owned hand-AMDGCN flash-decode tile injected as external precompiled Ops.PROGRAM JIT
+# graph nodes. The device/arch guard is decided ONCE at import (Device[...] access is disallowed during JIT capture);
+# the per-call route adds only shape checks + the env flag. gfx1100-only (the validated arch). See
+# docs/decode-attention-route-b-b4-external-graph-node-result-20260621.md.
+def _decode_attn_amdgcn_arch_ok() -> bool:
+  try: return Device.DEFAULT == "AMD" and "gfx1100" in str(getattr(Device["AMD"], "arch", ""))
+  except Exception: return False
+DECODE_ATTN_AMDGCN_ARCH_OK = _decode_attn_amdgcn_arch_ok()
 # Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
 # concrete -> the attention's reduce tiles/TC fires (symbolic KV blocks it). ~1.24x e2e, byte-identical. Cost: a
 # separate concrete prefill jit per distinct start_pos (0,512,...), precompiled at load -> best WARM/server prefill
@@ -928,9 +937,28 @@ class TransformerBlock(FFNBlock):
       # as 1-thread workgroups -> scalar uncoalesced loads). Byte-identical greedy; in-model vs gqa_coop
       # +6.5/+13.3/+25.5/+48.8% @ctx 512/1024/2048/4096 -- flattens the decode slope to ~llama-flat (-8%).
       # See docs/qk-gqa-coop-vector-load-result-*.
-      out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                   start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                   variant=str(getenv("FLASH_VARIANT", "gqa_coop_vec")))
+      # Route B B4 (default-off, owner-gated): replay the OWNED hand-AMDGCN flash-decode tile (extra/
+      # qk_owned_flash_decode.hip) as external precompiled Ops.PROGRAM JIT graph nodes via Tensor.custom_kernel
+      # (the B3 kernel; NO repack -- reads tinygrad's native [Hkv,MAXC,Hd] layout). Strictly shape/device-guarded to
+      # the validated Qwen3-8B/gfx1100 decode shape; ANY mismatch or failure falls back to gqa_coop_vec.
+      # ctx-gate: the owned tile only wins at long context (its KV-split combine over-splits short KV); below the
+      # threshold the route falls back to gqa_coop_vec. Threshold read from the bound start_pos at trace time.
+      try: _amdgcn_ctx = start_pos.unbind()[1] + T if isinstance(start_pos, UOp) else -1
+      except Exception: _amdgcn_ctx = -1
+      out = None
+      if getenv("DECODE_ATTN_AMDGCN_TILE", 0) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
+         and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 2048):
+        try:
+          from extra.qk_owned_flash_decode_graph_node import amdgcn_flash_decode
+          out = amdgcn_flash_decode(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0], vsp,
+                                    getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC)
+        except Exception as e:
+          if getenv("DEBUG", 0): print(f"DECODE_ATTN_AMDGCN_TILE fallback to gqa_coop_vec: {e}")
+          out = None
+      if out is None:
+        out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
+                                     start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
+                                     variant=str(getenv("FLASH_VARIANT", "gqa_coop_vec")))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif PREFILL_TC_ATTN and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),

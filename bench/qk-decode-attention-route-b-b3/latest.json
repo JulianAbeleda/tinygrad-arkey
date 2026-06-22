@@ -26,7 +26,7 @@
   "tinygrad_kv_layout_contract_hash": "3b3d557259b7fb76",
   "tile_grid_workgroups": [
     8,
-    48,
+    8,
     1
   ],
   "tile_block": [
@@ -34,15 +34,15 @@
     1,
     1
   ],
-  "split_S": 48,
+  "split_S": 8,
   "combine": "log-sum-exp over S partials",
-  "owned_gpu_busy_us": 18.9,
-  "coop_gpu_busy_us": 44.5,
-  "owned_wall_us": 41.6,
-  "coop_wall_us": 70.6,
-  "coop_wall_pipelined_us": 58.3,
-  "gpu_busy_speedup": 2.353,
-  "wall_speedup": 1.697,
+  "owned_gpu_busy_us": 36.0,
+  "coop_gpu_busy_us": 44.0,
+  "owned_wall_us": 57.9,
+  "coop_wall_us": 73.0,
+  "coop_wall_pipelined_us": 58.9,
+  "gpu_busy_speedup": 1.225,
+  "wall_speedup": 1.261,
   "wall_method": "BOTH per-call sync (matched launch-overhead model) -- fair; coop pipelined wall reported as reference only",
   "correctness_rel_max": 0.0,
   "correctness_rel_rmse": 2e-07,
@@ -50,7 +50,7 @@
   "results": [
     {
       "ctx": 1024,
-      "best_speedup_vs_coop": 1.697,
+      "best_speedup_vs_coop": 1.261,
       "splits": [
         {
           "err": 0.0
@@ -58,8 +58,8 @@
       ]
     }
   ],
-  "first_gate_pass": true,
-  "verdict": "B3_LOCAL_PASS_WD_BLOCKED_GRAPH_NODE",
+  "first_gate_pass": false,
+  "verdict": "B3_FAIL_LOCAL_AB",
   "wd_status": "NOT RUN (blocked by graph-node integration)",
   "wd_blocked_reason": "The owned kernel reads tinygrad's NATIVE K/V layout (no repack -> B2 layout block REMOVED, and it is promotable). But it is a raw hipcc .co launched via HCQ, NOT a tinygrad UOp/graph op, so it cannot enter the JIT-traced decode graph that model.generate replays: injecting it needs either Route-A native codegen (FORBIDDEN this phase + the known UOp inexpressibility wall) or eager (un-jitted) decode (non-production, Amdahl-limited). So a production W==D is gated on a 'schedule an external precompiled kernel as a JIT graph node' capability -- a bounded tinygrad feature (NOT Route-A codegen of the attention). W==D NOT run; default stays off.",
   "promotable": true,
@@ -69,11 +69,11 @@
   "repro_band": {
     "coop_gpu": {
       "n": 5,
-      "median": 44.48,
-      "min": 44.32,
-      "max": 44.6,
-      "mean": 44.472,
-      "spread_pct": 0.63,
+      "median": 44.04,
+      "min": 44.0,
+      "max": 44.08,
+      "mean": 44.032,
+      "spread_pct": 0.18,
       "mad": 0.04
     }
   },
@@ -83,16 +83,17 @@
   "harness_contract": {
     "contract_version": "harness_evaluator_contract_v1",
     "provenance": {
-      "command": "DEV=AMD JIT=1 python3 extra/qk_owned_flash_decode_amdgcn_b3.py 48",
+      "command": "DEV=AMD JIT=1 python3 extra/qk_owned_flash_decode_amdgcn_b3.py",
       "env": {
-        "DEV": "AMD"
+        "DEV": "AMD",
+        "JIT": "1"
       },
-      "git_commit": "ddca909f4719a31d5f511308313a7600b49ecbfa",
-      "git_short": "ddca909f4",
+      "git_commit": "be32aa53de7f63fa87d8c27f039eda7588296e82",
+      "git_short": "be32aa53d",
       "dirty_tree": true,
       "hardware": "RX 7900 XTX / gfx1100",
       "perf_state": "auto",
-      "timestamp": "20260621T190634"
+      "timestamp": "20260621T221100"
     },
     "comparator": {
       "id": "gqa_coop_vec",
