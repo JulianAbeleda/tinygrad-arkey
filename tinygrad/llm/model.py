@@ -984,7 +984,7 @@ class TransformerBlock(FFNBlock):
       except Exception: _amdgcn_ctx = -1
       out = None
       if getenv("DECODE_ATTN_AMDGCN_TILE", 0) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
-         and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 2048):
+         and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 512):
         try:
           from extra.qk_owned_flash_decode_graph_node import amdgcn_flash_decode
           # DTYPE CONTRACT (mandatory): the owned tile kernel reads __half K/V/Q, but the canonical cache_kv is fp32.

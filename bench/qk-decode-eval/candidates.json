@@ -307,14 +307,17 @@
       "contexts": [
         512,
         1024,
+        2048,
         4096
       ],
       "correctness_req": "rel_rmse<=1e-3",
-      "historical_expected_verdict": "REST",
+      "historical_expected_verdict": "PROMOTABLE",
       "compare_artifact": "bench/qk-decode-attention-route-b-b4/latest.json",
       "historical_note": "B4 follow-on runtime eval: route-node visibility is confirmed in-model, but fixed-policy W==D does not clear the promotion gate (best measured: +0.24%@512, -0.76%@1024, +5.36%@4096 with route-firing policy; +5.56%@4096-only without 1024 route). decode_eval currently has no B4 verdict state, so this entry is tracked as REST with compare_artifact `bench/qk-decode-attention-route-b-b4/latest.json`. default_eligible=false.",
       "is_split_kv": true,
-      "real_cache_status": "FIXED_REAL_CACHE (2026-06-23): root cause was a dtype-contract bug -- the owned tile reads __half but canonical cache_kv is fp32 -> fp32 bytes read as fp16 -> NaN K -> garbage (151936) from decode step 1; masked because prior W==D used a DEGENERATE/zero cache. FIX: the owned-tile route now unconditionally casts Q/K/V to fp16 before the tile (model.py, mandatory contract, fp16->fp16 no-op). REVALIDATED real chunked-prefill multi-step decode: byte-identical to gqa for 64 tokens on 2 prompts, no collapse; default gqa decode unchanged. W==D +11.5%@ctx2048 / +16.0%@ctx4096 (route fires >=2048). default_eligible STAYS false: route is ctx-restricted to >=2048 so it CANNOT fire at ctx1024 (OWNED_TILE_REAL_CACHE_CTX1024_BLOCKED) -- needs a short-ctx-correct variant before universal promotion. See docs/owned-amdgcn-tile-real-cache-revalidation-result-20260623.md.",
+      "default_eligible": true,
+      "default_on": false,
+      "real_cache_status": "PROMOTABLE_ALLCTX (2026-06-23): two bugs fixed -> now real-cache-correct AND W==D-positive at ALL ctx. (1) dtype-contract: owned tile reads __half but canonical cache_kv is fp32 -> the route now unconditionally casts Q/K/V to fp16 (model.py; fp16->fp16 no-op). (2) ctx1024 was blocked ONLY by an overly-conservative MIN_CTX=2048 route guard (the standalone tile is empty-split-safe; the earlier short-ctx NaN was the dtype bug) -> MIN_CTX default lowered 2048->512. REVALIDATED real chunked-prefill multi-step decode token-correctness: byte-identical to gqa (ctx512 16tok, ctx1024 64tok, ctx2048 64tok/2prompts); default gqa decode unchanged. W==D (repeated, tight): +6.1%@512, +8.4%@1024, +11.5%@2048, +15.5%@4096 -> clears +5%@1024 & +7%@4096, no ctx512 regression. default_eligible=true (gates pass, byte-identical, shape/arch-guarded, fallback-safe); default_on=false (no flip; recommend an in-process A/B before flipping; route is gfx1100/Qwen3-8B/B=1/T=1-guarded external HCQ PROGRAM node behind DECODE_ATTN_AMDGCN_TILE). The fp16 cast adds a copy on top of the materialization (a native fp16 cache, deferred FO2, would drop it). See docs/owned-amdgcn-tile-short-ctx-result-20260623.md.",
       "split_kv_economics_audit": "bench/qk-split-kv-economics-audit/latest.json -> COMBINE_TAX_DOMINATES. The W==D miss is attributed (extra/qk_split_kv_economics_audit.py): the split-KV combine is a flat latency-bound floor (~64 GB/s << 960 peak, 32 wg << 96 CUs; combine 44/35/26/17% of attention @ctx512/1024/2048/4096) -- a cheaper/fused combine is the actionable lever (Amdahl projection: ctx4096 measured +5.41% -> +6.97% half-combine -> +8.58% free-combine), Amdahl co-limits. Per split_kv_economics_contract_v1, this and any future split-KV candidate must report tile/combine economics before W==D promotion. See docs/split-kv-economics-audit-result-20260621.md."
     },
     {
