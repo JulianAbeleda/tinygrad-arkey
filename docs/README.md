@@ -96,6 +96,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   "advances/bakes" proxy (block-0 positions-written) is **unreliable**: under TOKEN correctness, the full-model RUNTIME_KV decode bakes regardless of prefill
   (full/chunked/large-T) or cache. Only the isolated microbench advances. Next: GraphRunner kernel-level instrumentation (does the kv_append `start_pos`
   kernarg change per replay?) gated on token-correctness, not positions. Reverted (model.py clean); probe `extra/qk_runtime_kv_buffer_identity_probe.py`.
+- **`runtime-kv-graphrunner-arg-patch-result-20260623.md`** — ⭐⭐ ROOT CAUSE FOUND → `RUNTIME_KV_ARG_PATCH_VALUES_CORRECT_DATA_STALE`.
+  Kernel-level GraphRunner instrumentation: **args are CORRECT** (start_pos ∈ every append-graph .vars, every kv_append in var_vals_replace,
+  start_pos advances 2049→2052 per replay); **pure eager (no graph/jit) also bakes** → NOT graph-replay staleness (refutes the device-buffer-position
+  lane). **Misread corrected**: the "first token correct" was always the PREFILL output — EVERY decode step is garbage from step 1. **Real root cause is
+  the OWNED TILE route, not RUNTIME_KV**: B4 (DECODE_ATTN_AMDGCN_TILE, fp32 cache, no RUNTIME_KV) ALSO bakes; gqa works; the tile is correct STANDALONE
+  (finite at K~200). In-model the tile is fed **NaN K** (prefill K clean; the decode append introduces NaN at layer 0). B4's bug = fp32-cache-read-as-fp16,
+  masked by W==D validation with a degenerate zero cache. ⚠FLAGS that the default-eligible owned-tile candidate is broken for real decode. Next lane =
+  owned-tile DATA correctness, not arg patching. Reverted (model.py clean); probe `extra/qk_runtime_kv_graphrunner_arg_probe.py`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
