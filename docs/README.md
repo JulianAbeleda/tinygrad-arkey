@@ -32,6 +32,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   **Next bounded lever = eliminate the KV-cache copy** (`model.py:952` full-buffer `.after()`; ~1.4 ms/tok, measured
   transfer +1.5 ms/+8 tok/s). Phase tools `qk_{ffn_activation_gap,small_ops_time_tax,attention_tail_after_b5}_audit.py`,
   shared probe `qk_decode_audit_common.py`.
+- **`kv-cache-copy-elimination-result-20260622.md`** — ⭐ EXECUTED `NEXT_IMPL_NORM_ROPE_KV` → `KV_CACHE_COPY_ELIMINATION_JIT_BLOCKED`.
+  The KV-cache copy (`model.py:952`, ~1.4 ms/tok, transfers) is real but **eliminating it needs a core-JIT capability**:
+  both bounded local branches fail at schedule time — in-place `.assign()` → read-after-write hazard (`KeyError` on a
+  REDUCE uop); slice-scoped `.after()` → symbolic-alias eval (`eval failed to be a single number`). Per scope, the broad
+  core-JIT redesign is a **stop/classify/defer** outcome (not undertaken). Gated experiment reverted (model.py byte-clean).
+  **No bounded 8B model/primitive lever remains** — next is a new decision doc on funding core-JIT (in-place KV mutation /
+  symbolic after-buffers), not scope creep into the closed lanes. Probe `extra/qk_kv_cache_copy_probe.py`, scope `-implementation-scope-20260622.md`.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
