@@ -1,9 +1,11 @@
 # Oracle-Guided GPU Primitive Explorer — Unified Runner Design (2026-06-23)
 
-**Verdict: `EXPLORER_RUNNER_DESIGN_READY`.** Design only — not implemented in this scope (the scope says implement the
-runner only if explicitly requested). The decode lane already has a functional backend
-(`qk_decode_search_runner.py`); this document specifies how a single generic runner would drive every lane through the
-shared spec + ledger, without duplicating the lane executors.
+**Verdict: `EXPLORER_RUNNER_IMPLEMENTED`** (owner-authorized 2026-06-23; supersedes the earlier
+`EXPLORER_RUNNER_DESIGN_READY`). The generic runner now exists at `extra/qk_oracle_gpu_primitive_explorer.py` and
+implements §§1–9 below by **wrapping** the decode backend (`qk_decode_search_runner.run_candidate`) — it does not
+duplicate the lane executors or the gate stack. See
+`docs/oracle-guided-gpu-primitive-explorer-runner-implementation-result-20260623.md` for the build + proof. This
+document remains the design spec; the subsections below are now backed by code.
 
 ## 0. Position
 
