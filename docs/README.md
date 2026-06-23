@@ -202,6 +202,10 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   Tensile wins down +14%) — the "66% vs 87%" headline NOT reproduced. Coverage complete (all roles fire). The real residual = **small-N WG-starvation**:
   kv_proj (N=1024) = 32 workgroups → **21 TFLOPS / 34% parity**; qo 87%, down(deep-K) 89%. Bounded fix = **per-shape kernel config** (smaller tile for kv_proj),
   NOT machine search. Caveat: concrete chunk; whole multi-chunk (symbolic) axis needs a synced re-measure.
+- **⭐PREFILL AT PARITY (2026-06-23)** — synced whole multi-chunk prefill (`extra/qk_prefill_whole_synced.py`) RETIRES the stale "66%" headline: graph-GEMM
+  whole-prefill = 3424/3345/3115/2710 @512/1024/2048/4096 = ~96% of Tensile, AT/ABOVE llama (112%@512). Shipped the **kv_proj de-WG-starve fix** (BN
+  128→64 for out_f≤1024; in-model kv_proj 21→32 TFLOPS, total GPU-busy −5%, whole-prefill +3-4%) → graph-GEMM now **99.5% of vendored Tensile** and above
+  llama, **dependency-free**, byte-identical greedy (rel_rmse 2.08e-4). Prefill is AT REST. `bench/qk-prefill-post-decode-parity-frontier/whole_prefill_and_kvproj_fix.json`, commit da57c1ee6.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
