@@ -17,6 +17,15 @@ result and stand.
 
 Proof plan: `docs/amd-decode-flywheel-proof-plan.md`.
 
+Superseding note (2026-06-23): the "model-to-kernel closing link" is reframed. The learned model's job is **not** to
+judge kernel speed or triage kernels — that direction stays falsified (see the 2026-06-14 note above). Its job is to be
+a **primitive-space proposer**: emit a bounded search spec (lane / primitive / hypothesis / knobs / required-evidence /
+stop-rules) that the **deterministic** machine-search runner expands and the harness / ISA / correctness / W==D gates
+decide. LoRA/SFT first; RLVR deferred until schema + reward + shadow-mode utility are proven. The closing link is thus
+"learned proposal under deterministic gates," not "learned kernel triage." See
+`docs/primitive-space-learning-loop-lora-first-result-20260623.md` and
+`docs/oracle-guided-gpu-primitive-explorer-result-20260623.md`.
+
 ## Purpose
 
 There are two separate loops in this repo:

@@ -4,6 +4,12 @@ Date: 2026-06-14
 
 Status: research-backed plan of record for the next adapter/eval loop.
 
+> **Pointer (2026-06-23):** the strict-JSON generation + deterministic (non-LLM-judge) scorer machinery scoped here now
+> has a **second consumer** beyond answer-JSON: **primitive search specs**. The primitive-space learning loop reuses
+> the same strict-JSON-first gate and a programmatic scorer to teach an adapter to emit bounded `SearchRow` search
+> specs for the GPU primitive explorer (proposer only — deterministic gates still decide). See
+> `docs/primitive-space-learning-loop-lora-first-result-20260623.md`.
+
 ## Purpose
 
 The V5 suffix-cache adapter fixed the practical internal-adapter training

@@ -40,6 +40,16 @@ GPU, other quant) each with an explicit unlock condition (baseline oracle + corr
 Recommended first cross-shape search = the **prefill per-shape GEMM config map** at 14B (the kv_proj fix generalized).
 **Deferred** pending owner authorization — standing rule: no 14B/32B without an explicit ask.
 
+## 6b. Learning lane — primitive-space proposer (LoRA-first, 2026-06-23)
+A learned model/adapter is added as a **spec proposer, not a kernel judge**: it emits a bounded `SearchRow` search spec
+(lane / primitive / hypothesis / knobs+bounds / required-evidence / stop-rules) that the deterministic runner
+(Steps 1–5) expands and the harness / ISA / correctness / W==D-or-whole-prefill gates decide. **LoRA/SFT first**
+(structured supervised primitive-space generation); **RLVR deferred** until schema + deterministic reward + shadow-mode
+utility are proven. Verdicts: `PRIMITIVE_SPACE_PROPOSER_NOT_KERNEL_JUDGE`, `LORA_FIRST_FOR_PRIMITIVE_SPACE_LEARNING`,
+`RLVR_DEFERRED_UNTIL_SCHEMA_AND_REWARD_STABLE`, `DETERMINISTIC_HARNESS_REMAINS_AUTHORITY`. Next executable task: build
+`bench/qk-primitive-space-adapter/dataset-v0` + deterministic scorer. See
+`docs/primitive-space-learning-loop-lora-first-result-20260623.md`.
+
 ## 7. Global search rules (enforced across all lanes)
 W==D / whole-prefill synced is the only promotion authority; PROFILE/DEBUG/raw/no-sync/local are diagnostic only;
 correctness before speed; route-identity + materialization/ABI + ISA before W==D; stop at first failed gate; every

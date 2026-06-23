@@ -126,3 +126,19 @@ Branch `qk-prefill-flag-leak-resolution`. Pre-existing uncommitted WIP **not mad
 `extra/qk_owned_flash_decode_graph_node.py`, `extra/qk_decode_search_gate.py`, `extra/qk_b4_combine_tax.py` (Mode-B
 generated-tile WIP) + untracked `extra/qk_decode_mode_b_execute.py`, `extra/qk_prefill_search_execute.py`. This task's
 deliverables are committed separately and do not include those WIP edits.
+
+## 15. Learning layer: primitive-space proposer (addendum 2026-06-23)
+
+A learned model/adapter sits **in front of** the explorer as a *primitive-space proposer*, not a kernel judge
+(`PRIMITIVE_SPACE_PROPOSER_NOT_KERNEL_JUDGE`). It emits a bounded search spec (a `SearchRow`: lane, primitive,
+hypothesis, knobs+bounds, required evidence, stop rules) — never source code, never a promotion decision. That spec
+enters the runner **before candidate generation** (§3 of the runner design); everything downstream is unchanged and the
+deterministic lifecycle gates (harness contract → route/materialization → ISA/resource → correctness →
+W==D/whole-prefill) remain the only authority (`DETERMINISTIC_HARNESS_REMAINS_AUTHORITY`).
+
+**LoRA/SFT first** (`LORA_FIRST_FOR_PRIMITIVE_SPACE_LEARNING`) because the task is structured, supervised
+primitive-space generation with a programmatically scorable target. **RLVR is deferred**
+(`RLVR_DEFERRED_UNTIL_SCHEMA_AND_REWARD_STABLE`) until the strict-JSON schema is format-stable, a deterministic reward
+(with negative penalties for closed-lane reopens and missing evidence) is defined, rejection-sampling SFT has
+plateaued, and the adapter beats deterministic baselines in shadow mode. Full plan + dataset/scorer/eval prerequisites:
+`docs/primitive-space-learning-loop-lora-first-result-20260623.md`.

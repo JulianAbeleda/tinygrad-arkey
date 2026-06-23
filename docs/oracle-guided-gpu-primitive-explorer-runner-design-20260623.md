@@ -37,6 +37,16 @@ PYTHONPATH=. .venv/bin/python extra/qk_oracle_gpu_primitive_explorer.py \
   `{"id": str, "env": {knob: value}}` (decode Mode A/B) or a microprimitive expression descriptor (codegen).
 - Knobs/ranges come from the spec; the runner only enumerates within the declared bounds and `--max-candidates`.
 
+## 3a. Learned spec proposer (optional front-end)
+
+A LoRA/SFT adapter may act as an **optional proposer** that runs *before* §3 candidate generation: given summarized
+artifact context (an audit, a ledger slice), it emits a bounded `SearchRow`/explorer spec — lane, primitive,
+hypothesis, knobs+bounds, required evidence, stop rules. The runner treats this as a *proposed spec only*: it is first
+validated with `--dry-run` (schema/lane/primitive/evidence/stop-rule/closed-lane checks via the deterministic scorer),
+and only a valid spec is handed to the normal lane backend. The adapter **cannot** promote, flip a default, or judge
+kernel speed; the runner and its gate stack remain the deterministic authority. LoRA/SFT first, RLVR deferred. See
+`docs/primitive-space-learning-loop-lora-first-result-20260623.md`.
+
 ## 4. Gate ordering (cost-ordered, short-circuit on first reject)
 
 ```

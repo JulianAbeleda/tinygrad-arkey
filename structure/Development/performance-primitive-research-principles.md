@@ -820,3 +820,12 @@ For GPU primitive research in this repo:
     decode-to-parity win (2026-06-23): the "+11 % KV materialization tax" mis-diagnosed for ~10 tasks as a core
     Runtime-KV persistence problem was just the owned tile reading sliced cache views. See
     `docs/owned-tile-buffer-identity-kv-read-result-20260623.md`.
+13. **Learned models propose primitive search spaces; deterministic lifecycle gates decide.** A LoRA/SFT adapter (or
+    any learned policy) is a *primitive-space proposer*: it emits a bounded search spec (`SearchRow`: lane, primitive,
+    hypothesis, knobs+bounds, required evidence, stop rules) — never source code and never a promotion decision. The
+    deterministic runner stays the authority: harness contract, route/materialization, ISA/resource, correctness, and
+    W==D/whole-prefill transfer decide every outcome. LoRA/SFT comes first (structured supervised primitive-space
+    generation); RLVR/RL is deferred until the strict-JSON schema and a deterministic reward are stable and shown
+    useful in shadow mode. `PRIMITIVE_SPACE_PROPOSER_NOT_KERNEL_JUDGE` / `LORA_FIRST_FOR_PRIMITIVE_SPACE_LEARNING` /
+    `RLVR_DEFERRED_UNTIL_SCHEMA_AND_REWARD_STABLE` / `DETERMINISTIC_HARNESS_REMAINS_AUTHORITY`. See
+    `docs/primitive-space-learning-loop-lora-first-result-20260623.md`.

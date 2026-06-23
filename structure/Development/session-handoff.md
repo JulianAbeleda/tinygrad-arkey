@@ -1,5 +1,19 @@
 # Session Handoff
 
+> ## ⭐ 2026-06-23 — LEARNING LAYER REFRAMED: the model is a primitive-space PROPOSER, not a kernel judge
+> The learned-model/adapter role in the GPU primitive search system is: emit a **bounded search spec** (`SearchRow`:
+> lane / primitive / hypothesis / knobs+bounds / required-evidence / stop-rules), which the **deterministic** runner
+> expands and the harness / ISA / correctness / W==D-or-whole-prefill gates decide. **LoRA/SFT first** (structured
+> supervised primitive-space generation); **RLVR DEFERRED** until schema + deterministic reward + shadow-mode utility
+> are proven. Verdicts: `PRIMITIVE_SPACE_PROPOSER_NOT_KERNEL_JUDGE`, `LORA_FIRST_FOR_PRIMITIVE_SPACE_LEARNING`,
+> `RLVR_DEFERRED_UNTIL_SCHEMA_AND_REWARD_STABLE`, `DETERMINISTIC_HARNESS_REMAINS_AUTHORITY`. Doc-update only (no
+> training, no search, no source/default change). **Next executable task** = build
+> `bench/qk-primitive-space-adapter/dataset-v0` + deterministic scorer `extra/qk_primitive_space_scorer.py`. Also today:
+> **ORACLE-GUIDED GPU PRIMITIVE EXPLORER SCOPED** (oracle registry + shared spec + gate stack + ledger over the existing
+> backends; unified runner DESIGN-only). Docs: `docs/primitive-space-learning-loop-lora-first-result-20260623.md`,
+> `docs/oracle-guided-gpu-primitive-explorer-result-20260623.md`,
+> `docs/oracle-guided-gpu-primitive-explorer-runner-design-20260623.md`.
+
 > ## ⭐⭐ SUPERSEDED 2026-06-23 — owned AMDGCN decode-attention is now the DEFAULT (default_on=true)
 > The "Route B State" / "B4 W==D fails / no promotion from B4 / opt-in only" narrative below is **superseded**. The
 > owned tile had a **dtype-contract bug** (read the fp32 cache as fp16) and an **over-conservative ctx guard** —
