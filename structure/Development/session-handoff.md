@@ -1,5 +1,23 @@
 # Session Handoff
 
+> ## ⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER Inc 2 DONE: cross-motion SOUND + latency reorder NEUTRAL + Inc1 CORRECTION
+> Inc 1's "RDNA3 hardware-spacing hazard" was a MISDIAGNOSIS. The real missing gate is the **loop-entry (backward-branch
+> TARGET) control-flow boundary**: build_regions didn't model it, so the fence_only reorder moved instructions across
+> the loop entry (prologue<->loop body) -> wrong values in the prologue region only. Fix in `extra/qk_asm_scheduler.py`:
+> `branch_target_indices` + `boundaries` arg in build_regions; schedule(fence_only=True) auto-applies. Now fence_only
+> cross-motion is BYTE-IDENTICAL-CORRECT across default_PLRA/kv_halved/DBUF1/8wave_PLRAB, both asap (167-310 mem moved)
+> and critical modes (`extra/qk_asm_scheduler_inc2_test.py` R1/R2 PASS). ISA research (5-agent) CONFIRMS s_delay_alu is
+> PERF-ONLY on RDNA3 (hardware interlocks VALU/VMEM deps) -> a reg-legal+wait-correct reorder cannot corrupt via spacing.
+> Built a critical-path latency-aware scheduler (mode='critical', RDNA3 latency model). MEASURED clean clock-pinned
+> isolated (DBUF1 512x4096x4096, copies excluded): identity ~287us/59.8 TFLOPS vs critical ~288us = **PERF-NEUTRAL
+> (+/-<1%)**. Honest verdict: pure instruction REORDERING does NOT recover the prefill->Tensile residual (hardware
+> scoreboard + hand-tuning already capture in-region latency; regions are full-drain-wait-bounded). Three correctness
+> gates now complete: register DAG (Inc0) + wait model (Inc1) + loop-entry boundary (Inc2). **Next = Inc 3 (the only
+> remaining reorder-class lever)**: WAITCNT RELOCATION -- strip the full-drain lgkmcnt between ds_loads and wmmas,
+> interleave them, reinsert per-consumer waits (wait model gives counts; branch offsets now recomputable). Uncertain
+> ROI (<=~2-3%, partly beta confound). Docs: `docs/prefill-asm-instruction-scheduler-inc2-result-20260623.md` (+ Inc 1
+> doc carries a CORRECTION banner). No source/default/speed change.
+
 > ## ⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER Inc 1 DONE: wait-counter model (`ASM_SCHED_WAITCOUNT_MODEL_DELIVERED`)
 > Built the async-load wait-counter (`s_waitcnt`) model in `extra/qk_asm_scheduler.py`: `verify_wait_correct`
 > (soundness gate), `wait_constraints` (audit), `recompute_waits_inplace` (minimal counts, byte-layout preserving),

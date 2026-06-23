@@ -82,12 +82,13 @@ def main():
   fo = schedule(insts, "asap", fence_only=True)
   ok6g, why6 = verify_wait_correct(fo)
   moved_mem = sum(1 for a, b in zip(insts, fo) if a is not b and lift(a, 0).domain is not None)
-  q6 = ok6g and moved_mem > 0   # gate says wait-correct (necessary) though we know it's not hardware-sufficient
+  q6 = ok6g and moved_mem > 0   # gate says wait-correct (necessary); see Inc 2 for the OTHER necessary gate
   print(f"Q6 WAIT_CORRECTNESS_NECESSARY_NOT_SUFFICIENT (gate={ok6g}, {moved_mem} mem moved) ... {'PASS' if q6 else 'FAIL'}")
-  print("     -> cross-motion stays OFF: an RDNA3 hardware-spacing hazard (Inc 2) is the missing piece, not the wait model")
+  print("     -> CORRECTED by Inc 2: the missing gate is the LOOP-ENTRY (branch-target) control-flow boundary, NOT an")
+  print("        RDNA3 hardware hazard (ISA-confirmed: s_delay_alu is perf-only). With it, cross-motion is sound.")
   ok &= q6
 
-  print(f"\nINC1 {'ALL_PASS -- wait-counter model delivered (audit+recompute+verify); cross-motion needs Inc 2 hazard model' if ok else 'FAIL'}")
+  print(f"\nINC1 {'ALL_PASS -- wait-counter model delivered (audit+recompute+verify); cross-motion gate completed in Inc 2 (loop-entry boundary)' if ok else 'FAIL'}")
   return 0 if ok else 1
 
 if __name__ == "__main__":

@@ -112,11 +112,27 @@ def _delimits(nd: InstNode) -> bool:
   # region, so register RAW/WAR/WAW is sound and the reorder is provably correct.
   return nd.is_fence or nd.domain is not None
 
-def build_regions(nodes: list[InstNode], fence_only: bool = False) -> list[Region]:
+def branch_target_indices(insts: list) -> set[int]:
+  """Indices that are branch TARGETS (loop-entry points). These are CONTROL-FLOW boundaries: reordering across a
+  loop-entry would move instructions between the prologue and the loop body (or between iterations), corrupting
+  execution. The branch instruction itself is a fence; its target position must ALSO start a fresh region. (Inc 0's
+  memory-delimited regions hid this because the loop entry happens to be a global_load = already a boundary.)"""
+  sizes = [i.size() for i in insts]; off = [0]
+  for s in sizes: off.append(off[-1] + s)
+  byte2idx = {b: i for i, b in enumerate(off)}
+  targets: set[int] = set()
+  for k, inst in enumerate(insts):
+    if _opname(inst).startswith(("S_BRANCH", "S_CBRANCH")):
+      simm = inst.simm16; simm = simm - 65536 if simm >= 32768 else simm    # signed
+      tb = off[k + 1] + simm * 4
+      if tb in byte2idx: targets.add(byte2idx[tb])
+  return targets
+
+def build_regions(nodes: list[InstNode], fence_only: bool = False, boundaries: frozenset = frozenset()) -> list[Region]:
   # fence_only=False (Inc 0): memory ops also delimit -> only pure-compute moves (sound under the synchronous model).
-  # fence_only=True  (Inc 1): only control/sync fences delimit -> memory ops are INSIDE regions and movable. Sound
-  # because in build_gemm_lds2 every load's consumer sits after the region's terminating wait (a fence), so a load
-  # reordered within a fence-region is still drained by that wait -- verify_wait_correct() proves it on the result.
+  # fence_only=True  (Inc 1+): only control/sync fences delimit -> memory ops are INSIDE regions and movable. Pair with
+  # `boundaries` = branch_target_indices(insts) so loop-entry points also delimit (control-flow correctness), and with
+  # verify_wait_correct() for the async-drain gate. With both, the asap reorder is byte-identical-correct across configs.
   delim = (lambda nd: nd.is_fence) if fence_only else _delimits
   regions: list[Region] = []
   cur: list[InstNode] = []; start = 0
@@ -125,6 +141,8 @@ def build_regions(nodes: list[InstNode], fence_only: bool = False) -> list[Regio
   for k, nd in enumerate(nodes):
     if delim(nd):
       flush(start); cur.clear(); start = k + 1
+    elif k in boundaries:                     # loop-entry: end the current region, start a new one AT this instruction
+      flush(start); cur[:] = [nd]; start = k
     else:
       if not cur: start = k
       cur.append(nd)
@@ -152,28 +170,53 @@ def _region_with_deps(start: int, ns: list[InstNode]) -> Region:
 # topological schedule whose tie-break differs from program order -- the empirical faithfulness probe: if any real
 # dependency is missing from `deps`, asap will reorder a true hazard and the kernel will compute the wrong result.
 # ---------------------------------------------------------------------------------------------------------------------
+# RDNA3 issue/result latencies (cycles, approximate) for critical-path list scheduling. Memory RESULT latency is
+# hidden by the region-terminating wait, so for in-region ordering we weight by issue/dependent-use latency: long-latency
+# producers (VMEM issue, WMMA) are hoisted so dependents and the unit stay fed.
+_LAT = {"valu": 4, "wmma": 16, "load_vm": 8, "load_lgkm": 4, "store": 1, "salu": 2, "other": 1}
+def _lat(nd: InstNode) -> int:
+  n = nd.name
+  if "WMMA" in n or "DOT" in n: return _LAT["wmma"]
+  if nd.is_load: return _LAT["load_vm"] if nd.domain == "vm" else _LAT["load_lgkm"]
+  if nd.domain is not None: return _LAT["store"]
+  if n.startswith("V_"): return _LAT["valu"]
+  if n.startswith("S_"): return _LAT["salu"]
+  return _LAT["other"]
+
 def _schedule_region(region: Region, mode: str) -> list[int]:
   ns, deps = region.nodes, region.deps
   if mode == "identity": return list(range(len(ns)))
-  assert mode == "asap"
+  # successors for critical-path height
+  succ: dict[int, list[int]] = {a: [] for a in range(len(ns))}
+  for a in range(len(ns)):
+    for j in deps[a]: succ[j].append(a)
+  height: dict[int, int] = {}
+  for a in reversed(range(len(ns))):
+    height[a] = _lat(ns[a]) + max((height[s] for s in succ[a]), default=0)
   remaining = set(range(len(ns)))
   done: set[int] = set(); order: list[int] = []
   while remaining:
     ready = [a for a in remaining if deps[a] <= done]
     assert ready, "dependency cycle in region (should be impossible -- edges are all backward in program order)"
-    # tie-break that deliberately diverges from program order: among dependency-ready nodes, emit the LATEST (largest
-    # original index) first. Independent runs (e.g. the 16 mutually-independent wmmas) come out reversed -- a maximal
-    # legal permutation -- while true dependency chains stay ordered. If the register DAG missed a real hazard, this
-    # reorder would corrupt the result (caught by the GPU correctness check P6).
-    pick = max(ready, key=lambda a: a)
+    if mode == "asap":
+      # maximal legal permutation (correctness stress test): emit the LATEST ready node first.
+      pick = max(ready, key=lambda a: a)
+    elif mode == "critical":
+      # latency-aware: emit the highest critical-path-height ready node (keep the longest chain moving), tie-break by
+      # original order for stability. Hoists long-latency producers (VMEM/WMMA) ahead of their dependents.
+      pick = max(ready, key=lambda a: (height[a], -a))
+    else:
+      raise AssertionError(f"unknown mode {mode!r}")
     order.append(pick); done.add(pick); remaining.discard(pick)
   return order
 
 def schedule(insts: list, mode: str = "identity", fence_only: bool = False) -> list:
   """Return a reordered instruction list. Fences stay put; each region's instructions are scheduled by `mode`.
-  fence_only=True (Inc 1) lets memory ops move within fence-delimited regions -- pair with verify_wait_correct()."""
+  fence_only=True lets memory ops move within fence+branch-target-delimited regions (sound: register DAG + loop-entry
+  boundaries + verify_wait_correct() for async drains)."""
   nodes = [lift(i, k) for k, i in enumerate(insts)]
-  regions = build_regions(nodes, fence_only=fence_only)
+  bounds = frozenset(branch_target_indices(insts)) if fence_only else frozenset()
+  regions = build_regions(nodes, fence_only=fence_only, boundaries=bounds)
   out: list = list(insts)                 # start from original; overwrite each region's slice with its new order
   for region in regions:
     local_order = _schedule_region(region, mode)

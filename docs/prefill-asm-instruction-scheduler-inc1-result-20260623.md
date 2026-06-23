@@ -1,5 +1,15 @@
 # Prefill ASM Instruction Scheduler — Inc 1 Result (2026-06-23)
 
+> ## ★ CORRECTION (superseded by Inc 2, `prefill-asm-instruction-scheduler-inc2-result-20260623.md`)
+> The `WAIT_CORRECTNESS_NECESSARY_NOT_SUFFICIENT` finding below is **right in conclusion but wrong in cause**. The
+> additional necessary gate is NOT "an RDNA3 hardware-spacing/scoreboard hazard." It is the **loop-entry (branch-target)
+> control-flow boundary** — a static modeling gap (`build_regions` didn't treat the backward-branch target as a region
+> boundary, so the reorder moved instructions across the loop entry). Inc 2 adds `branch_target_indices` and makes
+> fence_only cross-motion byte-identical-correct across the config space. ISA research independently confirms the hazard
+> theory was wrong: on RDNA3 `s_delay_alu` is perf-only and the hardware interlocks VALU/VMEM deps, so a register-legal +
+> wait-correct reorder cannot corrupt values via spacing. The wait-counter model and §1-§3 below stand as delivered.
+
+
 ## Verdict: `ASM_SCHED_WAITCOUNT_MODEL_DELIVERED` + `WAIT_CORRECTNESS_NECESSARY_NOT_SUFFICIENT`
 Inc 1 builds the **wait-counter (`s_waitcnt`) model** — the async-load counter semantics named as the next capability
 in the scope (`prefill-asm-instruction-scheduler-scope-20260623.md`). It is delivered and proven as an audit, an
