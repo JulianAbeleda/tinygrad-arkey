@@ -11,8 +11,10 @@
 > `extra/qk_prefill_graph_gemm_route.py` (reversible: PREFILL_GEMM_DBUF=0 PREFILL_GEMM_PLRA=1); added global emit knobs
 > PREFILL_GEMM_{DBUF,BK,PLRA,PLRAB,LEANADDR}. New prefill default ~3085 vs old ~2975 tok/s @4096 (now ~115% of llama
 > pp512). BLOCKED candidates (VGPR-walled, document the structural ceilings): deeper-DepthU bk64 (268>256), PLRAB-4x4
-> (300), accumulator-partition (2x128-acc>256), full reg-pool (HW-limited). Tools: scratchpad emit_driver/worker +
-> confirm_dbuf; logs /tmp/prefill-emits/. Doc: `docs/prefill-structural-emit-search-result-20260623.md`. NOTE this is
+> (300), accumulator-partition (2x128-acc>256), full reg-pool (HW-limited). MACHINE-SEARCH TOOL (committed):
+> `extra/qk_prefill_emit_search.py` -- defines the emit SEARCH_SPACE (PREFILL_GEMM_* knobs+domains), `--candidates
+> default|grid|--spec`, isolated-subprocess workers, whole-prefill median/CI/significance, INFEASIBLE-on-VGPR-overflow,
+> ranked JSON+CSV+MD (`--quick` smoke). Ranks on WHOLE-PREFILL not isolated. Logs /tmp/prefill-emits/. Doc: `docs/prefill-structural-emit-search-result-20260623.md`. NOTE this is
 > COMPLEMENTARY to (not a contradiction of) the same-day NO_PRODUCTION_TENSILE_GAP finding: scheduling can't close it,
 > but a structural emit swap improves the graph-GEMM default itself.
 

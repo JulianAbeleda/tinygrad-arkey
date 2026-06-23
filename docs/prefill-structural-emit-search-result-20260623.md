@@ -69,6 +69,19 @@ transfers on top (+1% more): DBUF moves the roles into the exposed-LDS-latency r
 whole-prefill on the authority benchmark, decode untouched, fully reversible via `PREFILL_GEMM_DBUF=0
 PREFILL_GEMM_PLRA=1`. Relocation stays opt-in (`PREFILL_GEMM_RELOC=1`) for the extra ~+1% (now in-regime under DBUF).
 
+## Machine-search tool
+The study is now a reusable, committed search: `extra/qk_prefill_emit_search.py`. It defines the emit `SEARCH_SPACE`
+(the route's `PREFILL_GEMM_*` knobs + domains), enumerates candidates (`--candidates default|grid` or `--spec a.json`),
+runs each as an isolated subprocess (one model load), aggregates whole-prefill median/mean/std/95%CI with significance
+vs the current default, catches infeasible configs (VGPR/LDS/tile overflow) as `INFEASIBLE` instead of crashing, and
+writes ranked JSON+CSV+Markdown. Ranks on WHOLE-PREFILL (the authority), never isolated kernels.
+```
+DEV=AMD JIT=1 PREFILL_V2=1 PYTHONPATH=. .venv/bin/python extra/qk_prefill_emit_search.py --candidates grid
+# --quick for a fast smoke (3 repeats, ctx 512/4096); --spec cfg.json for a custom candidate list
+```
+Re-validates the flip: with the new DBUF default as baseline, `old_plra` scores −2.1% (significant); `bk64` returns
+`INFEASIBLE: VGPR overflow 268`. Extend `SEARCH_SPACE`/`grid_candidates()` to widen the search as new knobs are added.
+
 ## Caveats
 Single GPU/model (gfx1100, 8B/Q4_K_M); chunked-512 whole-prefill methodology; @8192 via interpolated start_pos points.
 C4 (8-wave) showed erratic variance (auto-boost/clock-lottery artifact) — not pursued. Raw timing logs under
