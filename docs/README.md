@@ -191,6 +191,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   artifact-type classification, owned-attention + Q4K-GEMV machine-code fact sheets, **buffer-identity ABI rule** (recorded in principles #12),
   native-codegen targets (v_dot2/cross-lane/LDS gaps), machine-search readiness (NOT_READY_FOR_8B_SPEED / READY_FOR_CODEGEN_MICROPRIMITIVES_ONLY;
   prefill LDS GEMM = the one searchable compute-bound lane). Artifacts under bench/qk-machine-code-translation/ + bench/qk-post-parity-hardening/.
+- **`prefill-post-decode-parity-frontier-result-20260623.md`** — ⭐⭐⭐ prefill frontier AUDIT (read-first, no kernels/search): `PREFILL_FRONTIER_AUDIT_COMPLETE`
+  + `PREFILL_MACHINE_SEARCH_NOT_READY`. The dependency-free LDS GEMM is at GPU-level **parity-to-+10% with vendored Tensile** on its shape (the "8% behind"
+  was measurement artifact); GEMM tuning knobs EXHAUSTED; local timing does NOT transfer (concrete-chunk 3436 vs whole-prefill synced 1983=66% llama; Tensile
+  2673=87%). Search would optimize a solved, non-transferring metric → `PREFILL_NEEDS_NONSEARCH_FIX_FIRST`. Only kernel residual = +23% VALU address-arithmetic
+  (deterministic leanness, ISA-confirmed). The whole-prefill gap (66%→87%) is the IN-MODEL INTEGRATION PENALTY, not the kernel. Harness-SOP applied (nosync
+  qk_prefill_v2_measure 4037 EXCLUDED as trap). Next: `docs/prefill-frontier-rest-or-nonsearch-next-scope-20260623.md` (synced per-role in-model time-tax first).
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
