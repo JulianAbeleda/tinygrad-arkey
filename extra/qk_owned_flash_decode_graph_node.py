@@ -42,8 +42,8 @@ def _extract(src:str, sym:str) -> str:
   assert m, f"kernel {sym} not found"
   return m.group(0)
 
-def _specialize_tile(src:str, S:int, maxc:int) -> str:
-  body = _extract(src, "owned_flash_tile_gqa")
+def _specialize_tile(src:str, S:int, maxc:int, sym:str="owned_flash_tile_gqa") -> str:
+  body = _extract(src, sym)
   # drop the (int n_valid, int S, float scale) params -> (int start_pos); bake constants at body top
   body = body.replace("int n_valid, int S, float scale)", "int start_pos)")
   inject = (f"\n  const int n_valid = start_pos + 1;   // T=1 decode (B4 graph-node specialization)\n"
@@ -117,27 +117,53 @@ def _combine_spec(variant:str):
   raise ValueError(f"unknown combine variant {variant!r}")
 
 @functools.lru_cache(maxsize=None)
-def _kernels(S:int, maxc:int, combine:str="base"):
+def _kernels(S:int, maxc:int, combine:str="base", whole_cache:bool=False):
   """Compile (cached) the specialized single-kernel ELFs for split count S, the model's max_context (=KV stride), and
-  the combine variant. Memoized so the per-layer model route does not recompile/re-read during JIT capture."""
+  the combine variant. Memoized so the per-layer model route does not recompile/re-read during JIT capture.
+  whole_cache: build the owned_flash_tile_gqa_whole variant (K/V from one cache buffer for buffer-identity reads)."""
   src = SRC.read_text()
   sym, defs, _, _ = _combine_spec(combine)
-  tile_elf = _compile(_specialize_tile(src, S, maxc), f"tile_s{S}_m{maxc}")
+  tile_sym = "owned_flash_tile_gqa_whole" if whole_cache else "owned_flash_tile_gqa"
+  tile_elf = _compile(_specialize_tile(src, S, maxc, tile_sym), f"tile_{'whole_' if whole_cache else ''}s{S}_m{maxc}")
   comb_elf = _compile(_specialize_combine(src, S, maxc, sym, defs), f"comb_{combine}_s{S}_m{maxc}")
   return tile_elf, comb_elf, _group_seg(tile_elf), _group_seg(comb_elf)
 
+def _combine_stage(part2, meta2, out, comb_elf, comb_lds, sym, cg, cb, S):
+  # combine: bufs = [part, meta, out]; writes out(2); reads part(0),meta(1)
+  def comb_fxn(*ph):
+    return _make_program(sym, comb_elf, list(ph), (), cg, cb, outs=(2,), ins=(0, 1),
+                         group_seg=comb_lds, est_ops=Hq*S*Hd, est_mem=Hq*S*Hd*4)
+  rc = Tensor.custom_kernel(part2, meta2, out, fxn=comb_fxn)
+  return rc[2].reshape(Hq, Hd)
+
 def amdgcn_flash_decode(Q:Tensor, K:Tensor, V:Tensor, start_pos_var:UOp, S:int=48, MAXC:int=4096,
-                        combine:str="base") -> Tensor:
+                        combine:str="base", whole_cache:bool=False) -> Tensor:
   """Q:[Hq,Hd] fp16, K/V:[Hkv,MAXC,Hd] fp16 (native layout, MAXC=model max_context = KV stride), start_pos_var:
   unbound 'start_pos' DEFINE_VAR. combine: 'base' (B4) or 'hd<CWD>' (B5 cheaper combine, e.g. 'hd64').
-  Returns out:[Hq,Hd] fp32. Two precompiled graph nodes: tile -> combine."""
-  tile_elf, comb_elf, tile_lds, comb_lds = _kernels(int(S), int(MAXC), combine)
+  whole_cache: K is the whole cache_kv buffer [2,1,Hkv,MAXC,Hd] (V ignored); the tile reads K/V halves from it via
+  buffer identity (no full-MAXC slice materialization). Returns out:[Hq,Hd] fp32. Two precompiled graph nodes."""
+  tile_elf, comb_elf, tile_lds, comb_lds = _kernels(int(S), int(MAXC), combine, whole_cache)
   sym, _, cg, cb = _combine_spec(combine)
 
   part = Tensor.empty(Hq*S*Hd, dtype=dtypes.float32)
   meta = Tensor.empty(Hq*S*2, dtype=dtypes.float32)
   out  = Tensor.empty(Hq*Hd, dtype=dtypes.float32)
-  Qf, Kf, Vf = Q.reshape(Hq*Hd), K.reshape(Hkv*MAXC*Hd), V.reshape(Hkv*MAXC*Hd)
+  Qf = Q.reshape(Hq*Hd)
+
+  if whole_cache:
+    # K is the whole cache_kv buffer. Do NOT reshape it -- a RESHAPE on top breaks callify buffer identity
+    # (transform_precompiled_call's redirect only accepts BUFFER/MULTI, not RESHAPE) -> materialization. The kernel
+    # reads the cache flat via its base pointer, so the tensor's shape is irrelevant to correctness.
+    Cf = K
+    def tile_fxn(*ph):
+      return _make_program("owned_flash_tile_gqa_whole", tile_elf, list(ph), (start_pos_var,),
+                           (Hkv, S, 1), (128, 1, 1), outs=(2, 3), ins=(0, 1),
+                           group_seg=tile_lds, est_ops=Hq*MAXC*Hd*2, est_mem=Hkv*MAXC*Hd*2*2)
+    r = Tensor.custom_kernel(Qf, Cf, part, meta, fxn=tile_fxn)
+    part2, meta2 = r[2], r[3]
+    return _combine_stage(part2, meta2, out, comb_elf, comb_lds, sym, cg, cb, S)
+
+  Kf, Vf = K.reshape(Hkv*MAXC*Hd), V.reshape(Hkv*MAXC*Hd)
 
   # tile: bufs = [Q, K, V, part, meta] (kernel arg order); writes part(3), meta(4); reads Q(0),K(1),V(2)
   def tile_fxn(*ph):
@@ -146,13 +172,7 @@ def amdgcn_flash_decode(Q:Tensor, K:Tensor, V:Tensor, start_pos_var:UOp, S:int=4
                          group_seg=tile_lds, est_ops=Hq*MAXC*Hd*2, est_mem=Hkv*MAXC*Hd*2*2)
   r = Tensor.custom_kernel(Qf, Kf, Vf, part, meta, fxn=tile_fxn)
   part2, meta2 = r[3], r[4]
-
-  # combine: bufs = [part, meta, out]; writes out(2); reads part(0),meta(1)
-  def comb_fxn(*ph):
-    return _make_program(sym, comb_elf, list(ph), (), cg, cb, outs=(2,), ins=(0, 1),
-                         group_seg=comb_lds, est_ops=Hq*S*Hd, est_mem=Hq*S*Hd*4)
-  rc = Tensor.custom_kernel(part2, meta2, out, fxn=comb_fxn)
-  return rc[2].reshape(Hq, Hd)
+  return _combine_stage(part2, meta2, out, comb_elf, comb_lds, sym, cg, cb, S)
 
 
 MAXC_TEST = 4096

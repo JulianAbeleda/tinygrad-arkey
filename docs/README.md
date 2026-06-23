@@ -177,6 +177,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   (≈ default). **Re-frame**: the ~1.5ms/+11% materialization is the owned tile **reading the cache via slices**, NOT a missing runtime-KV persistence
   capability. The real lever = **buffer-identity whole-buffer read** (separate K/V cache buffers, or a kernel V-offset) = a BOUNDED tile/cache change,
   not a core-engine/Tensor-purity project. The "runtime-managed KV / TinyJit persistence" lane is RETIRED as mis-scoped. Route reverted (0% gain); no source/default changes.
+- **`owned-tile-buffer-identity-kv-read-result-20260623.md`** — ⭐⭐⭐⭐ SHIPPED (default-off flag) the buffer-identity whole-cache read predicted by v2:
+  **+13–19% byte-identical** (ctx512 +18.7% / 1024 +17% / 2048 +16.3% / 4096 +13%), removing the owned tile's full-MAXC slice materialization
+  (`E_49152`). **tinygrad Qwen3-8B decode now 102–105% of llama.cpp across all contexts** — at/above parity, the decode-campaign culmination. New
+  kernel `owned_flash_tile_gqa_whole` (K at 0, V at +Hkv·MAXC·Hd from one cache buffer); model passes the WHOLE `cache_kv.after(store)` (no
+  reshape/slice → callify buffer identity → no materialization). ISA `AMD_ISA_PRIMITIVE_CONFIRMED` (60 VGPR, 0 spill, v_dot2/LDS/cross-lane). Behind
+  `DECODE_ATTN_KV_IDENTITY=1`; **default flip pending owner authorization** (recommended). Default decode byte-identical.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:

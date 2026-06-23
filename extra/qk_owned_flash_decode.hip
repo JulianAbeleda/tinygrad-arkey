@@ -11,6 +11,7 @@
 #define Hd   128
 #define MAXC 4096
 #define G    4          // Hq / Hkv (GQA group)
+#define Hkv  8          // number of KV heads (Qwen3-8B); K/V half stride in the whole-cache tile = Hkv*MAXC*Hd
 #define LANES 32        // warp (wave32)
 #define DPL  (Hd/LANES) // dims per lane = 4
 
@@ -211,4 +212,51 @@ extern "C" __global__ void owned_flash_combine(const float* __restrict__ part, c
   float* oo = out + (long)h * Hd;
   oo[lane*4 + 0] = o0 * inv; oo[lane*4 + 1] = o1 * inv;
   oo[lane*4 + 2] = o2 * inv; oo[lane*4 + 3] = o3 * inv;
+}
+
+// Whole-cache tile variant: K and V come from ONE buffer (model cache_kv [2,1,Hkv,MAXC,Hd] flattened) so callify can
+// pass it with BUFFER IDENTITY (no full-MAXC slice materialization). K half at offset 0, V half at +Hkv*MAXC*Hd.
+extern "C" __global__ void owned_flash_tile_gqa_whole(const __half* __restrict__ Q, const __half* __restrict__ CACHE,
+                                                      float* __restrict__ part,
+                                                      float* __restrict__ meta, int n_valid, int S, float scale) {
+  __shared__ __half ksh[TK * Hd];
+  __shared__ __half vsh[TK * Hd];
+  const int kvh  = blockIdx.x;
+  const int s    = blockIdx.y;
+  const int warp = threadIdx.x >> 5;
+  const int lane = threadIdx.x & 31;
+  const int h    = kvh * G + warp;
+  const int per  = (n_valid + S - 1) / S;
+  const int t0   = s * per, t1 = min(t0 + per, n_valid);
+  const __half2* q2 = (const __half2*)(Q + (long)h * Hd);
+  __half2 qa = q2[lane*2 + 0], qb = q2[lane*2 + 1];
+  const __half* kbase = CACHE + (long)kvh * MAXC * Hd;
+  const __half* vbase = CACHE + (long)(Hkv + kvh) * MAXC * Hd;   // V half at +Hkv*MAXC*Hd in the flat cache buffer
+  float m = -1e30f, l = 0.0f, a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f;
+  for (int tb = t0; tb < t1; tb += TK) {
+    int n = min(TK, t1 - tb);
+    for (int i = threadIdx.x; i < n * Hd; i += 128) {
+      ksh[i] = kbase[(long)tb * Hd + i];
+      vsh[i] = vbase[(long)tb * Hd + i];
+    }
+    __syncthreads();
+    for (int tt = 0; tt < n; tt++) {
+      const __half2* k2 = (const __half2*)(ksh + tt * Hd);
+      float pd = 0.f;
+      pd = __builtin_amdgcn_fdot2(qa, k2[lane*2 + 0], pd, false);
+      pd = __builtin_amdgcn_fdot2(qb, k2[lane*2 + 1], pd, false);
+      #pragma unroll
+      for (int o = 16; o > 0; o >>= 1) pd += __shfl_xor(pd, o, 32);
+      float sc = pd * scale, mn = fmaxf(m, sc), corr = __expf(m - mn), p = __expf(sc - mn);
+      l = l * corr + p;
+      const __half* vt = vsh + tt * Hd;
+      a0 = a0*corr + p*(float)vt[lane*4+0]; a1 = a1*corr + p*(float)vt[lane*4+1];
+      a2 = a2*corr + p*(float)vt[lane*4+2]; a3 = a3*corr + p*(float)vt[lane*4+3];
+      m = mn;
+    }
+    __syncthreads();
+  }
+  float* po = part + ((long)h * S + s) * Hd;
+  po[lane*4 + 0] = a0; po[lane*4 + 1] = a1; po[lane*4 + 2] = a2; po[lane*4 + 3] = a3;
+  if (lane == 0) { float* mo = meta + ((long)h * S + s) * 2; mo[0] = m; mo[1] = l; }
 }

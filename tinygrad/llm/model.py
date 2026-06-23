@@ -994,10 +994,17 @@ class TransformerBlock(FFNBlock):
           # silently broken for real cache; W==D was only validated with a degenerate zero cache). fp16->fp16 is a no-op.
           # Validated 2026-06-23: byte-identical to gqa for 64 tokens; W==D +11.5%@ctx2048 / +16%@ctx4096.
           _Qt = q.reshape(Hq, Hd).cast(dtypes.float16)
-          _Kt, _Vt = assigned_kv[0, 0].cast(dtypes.float16), assigned_kv[1, 0].cast(dtypes.float16)
-          out = amdgcn_flash_decode(_Qt, _Kt, _Vt, vsp,
-                                    getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
-                                    getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"))  # B5: 'base' or 'hd64' cheaper combine
+          if getenv("DECODE_ATTN_KV_IDENTITY"):
+            # buffer-identity read: pass the WHOLE cache_kv buffer (assigned_kv = cache_kv.after(store), no slice/reshape)
+            # so callify reads it directly (no full-MAXC slice materialization); the whole-cache tile offsets K/V halves.
+            out = amdgcn_flash_decode(_Qt, assigned_kv, assigned_kv, vsp,
+                                      getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
+                                      getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"), whole_cache=True)
+          else:
+            _Kt, _Vt = assigned_kv[0, 0].cast(dtypes.float16), assigned_kv[1, 0].cast(dtypes.float16)
+            out = amdgcn_flash_decode(_Qt, _Kt, _Vt, vsp,
+                                      getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
+                                      getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"))  # B5: 'base' or 'hd64' cheaper combine
         except Exception as e:
           if getenv("DEBUG", 0): print(f"DECODE_ATTN_AMDGCN_TILE fallback to gqa_coop_vec: {e}")
           out = None
