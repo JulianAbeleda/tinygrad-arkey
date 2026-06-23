@@ -197,6 +197,11 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   2673=87%). Search would optimize a solved, non-transferring metric → `PREFILL_NEEDS_NONSEARCH_FIX_FIRST`. Only kernel residual = +23% VALU address-arithmetic
   (deterministic leanness, ISA-confirmed). The whole-prefill gap (66%→87%) is the IN-MODEL INTEGRATION PENALTY, not the kernel. Harness-SOP applied (nosync
   qk_prefill_v2_measure 4037 EXCLUDED as trap). Next: `docs/prefill-frontier-rest-or-nonsearch-next-scope-20260623.md` (synced per-role in-model time-tax first).
+- **`prefill-per-role-transfer-attribution-result-20260623.md`** — ⭐⭐⭐ executed the synced per-role in-model prefill time-tax (`extra/qk_prefill_per_role_time_tax.py`,
+  PROFILE attribution). REVISES the premise: on the concrete chunk graph-GEMM is within **2.5%** of the Tensile route (ours WINS gate_up @63 TFLOPS parity;
+  Tensile wins down +14%) — the "66% vs 87%" headline NOT reproduced. Coverage complete (all roles fire). The real residual = **small-N WG-starvation**:
+  kv_proj (N=1024) = 32 workgroups → **21 TFLOPS / 34% parity**; qo 87%, down(deep-K) 89%. Bounded fix = **per-shape kernel config** (smaller tile for kv_proj),
+  NOT machine search. Caveat: concrete chunk; whole multi-chunk (symbolic) axis needs a synced re-measure.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:
