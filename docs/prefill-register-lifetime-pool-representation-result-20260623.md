@@ -1,5 +1,13 @@
 # Prefill Register-Lifetime / Pool Representation — Result (2026-06-23)
 
+> **⚠ SUPERSEDED / RETRACTED (2026-06-23):** the `REGISTER_POOL_INSUFFICIENT_HW_LIMIT` verdict below is RETRACTED by
+> `docs/prefill-adversarial-tensile-liveness-audit-result-20260623.md`. Tensile fits a pipelined 128×128 GEMM in 256
+> VGPR, and `build_gemm_lds2` CAN express the deep pipeline via the 8-wave `WAVES_M=4,WAVES_N=2,WM=2,WN=4` layout (188
+> VGPR, PIPELINED, correct). The prior "266>256 hardware ceiling" was an artifact of the 4-wave 4×4 layout. The real
+> residual is fine instruction scheduling, not register pressure. (History preserved below.)
+
+
+
 ## Verdict: `REGISTER_POOL_INSUFFICIENT_HW_LIMIT` — prefill speed search definitively closed
 The register-lifetime VGPR pool **does not unlock** the deep (A+B) software-pipelined K-loop at the occupancy-optimal
 WMMA tile. The pool concept is **real and already realized** for the A-side (`PLRA`, the shipped +9-11 %). Full A+B

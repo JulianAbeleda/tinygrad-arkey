@@ -20,11 +20,16 @@ def _kernel(out_f: int, in_f: int):
     waves_n, wn = 1, 4
   # Phase-B per-shape config OVERRIDE (additive, default unchanged): PREFILL_GEMM_CFG_{out_f}_{in_f}="wm,wn,wavesn,bk,pad,dbuf,plra"
   ov = os.environ.get(f"PREFILL_GEMM_CFG_{out_f}_{in_f}")
+  plrab = 0
   if ov:
     wm, wn, waves_n, bk, pad, dbuf, plra = (int(x) for x in ov.split(","))
+  # Adversarial-audit Tensile-like 8-wave layout (additive, default off): W4x2 T2x4 -> 128x128 tile, acc=64 (half),
+  # DBUF (block prefetch) + PLRAB (substep A+B prefetch) fit at ~188 VGPR -- the deep pipeline build_gemm_lds2 can express.
+  if os.environ.get("PREFILL_GEMM_8WAVE") and out_f % 128 == 0:
+    waves_m, waves_n, wm, wn, dbuf, plra, plrab = 4, 2, 2, 4, 1, 0, 1
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
   if m % bm or n % bn or k % bk: return None
-  insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra)
+  insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra, PLRAB=plrab)
   lds_bytes = max((bk * 2 + pad) * (bm + bn) * (2 if dbuf else 1), 65536 // 8)
   name = f"prefill_graph_gemm_{m}_{n}_{k}"
   return insts, lds_bytes, bm, bn, threads, name
