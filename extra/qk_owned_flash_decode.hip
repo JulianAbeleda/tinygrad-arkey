@@ -14,6 +14,12 @@
 #define Hkv  8          // number of KV heads (Qwen3-8B); K/V half stride in the whole-cache tile = Hkv*MAXC*Hd
 #define LANES 32        // warp (wave32)
 #define DPL  (Hd/LANES) // dims per lane = 4
+#ifndef WCVEC           // Mode-B whole-cache tile LDS-staging load width (1=shipped scalar). _specialize_tile overrides.
+#define WCVEC 1
+#endif
+#ifndef WCUNROLL        // Mode-B whole-cache tile position-loop unroll (1=shipped). _specialize_tile overrides.
+#define WCUNROLL 1
+#endif
 
 // --- tile kernel: one WARP (32 threads) per (q-head x split). grid.x = Hq, grid.y = S. block = 32.
 // each lane owns DPL=4 head-dims (lane*4 .. lane*4+3), as two half2. Online softmax over the split's positions;
@@ -235,11 +241,26 @@ extern "C" __global__ void owned_flash_tile_gqa_whole(const __half* __restrict__
   float m = -1e30f, l = 0.0f, a0 = 0.f, a1 = 0.f, a2 = 0.f, a3 = 0.f;
   for (int tb = t0; tb < t1; tb += TK) {
     int n = min(TK, t1 - tb);
+    // Mode-B knob VEC: LDS-staging load width (1=__half, 2=__half2/b32, 4=int2/b64). Hd=128 so n*Hd is /2 and /4;
+    // kbase/vbase are 256B-aligned per position -> VEC 2/4 are safe. VEC=1 reproduces the shipped scalar staging.
+#if WCVEC == 4
+    for (int i = threadIdx.x; i < (n * Hd) / 4; i += 128) {
+      ((int2*)ksh)[i] = ((const int2*)(kbase + (long)tb * Hd))[i];
+      ((int2*)vsh)[i] = ((const int2*)(vbase + (long)tb * Hd))[i];
+    }
+#elif WCVEC == 2
+    for (int i = threadIdx.x; i < (n * Hd) / 2; i += 128) {
+      ((__half2*)ksh)[i] = ((const __half2*)(kbase + (long)tb * Hd))[i];
+      ((__half2*)vsh)[i] = ((const __half2*)(vbase + (long)tb * Hd))[i];
+    }
+#else
     for (int i = threadIdx.x; i < n * Hd; i += 128) {
       ksh[i] = kbase[(long)tb * Hd + i];
       vsh[i] = vbase[(long)tb * Hd + i];
     }
+#endif
     __syncthreads();
+    #pragma unroll WCUNROLL
     for (int tt = 0; tt < n; tt++) {
       const __half2* k2 = (const __half2*)(ksh + tt * Hd);
       float pd = 0.f;

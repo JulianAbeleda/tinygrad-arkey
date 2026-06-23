@@ -13,7 +13,8 @@ See docs/decode-machine-search-readiness-package-scope-20260623.md. Does NOT cha
 from __future__ import annotations
 import os, re, sys, json, time
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
-CANDIDATE_KERNEL = "owned_flash_tile_gqa_whole"   # the buffer-identity whole-cache tile (the oracle's kernel)
+CANDIDATE_KERNEL = os.environ.get("QK_CAND_KERNEL", "owned_flash_tile_gqa_whole")  # the expected kernel symbol
+# (Mode B sets QK_CAND_KERNEL to the variant symbol e.g. owned_flash_tile_gqa_whole_tk8_v2_u1 so route-fire binds to it)
 SLICE_KERNEL = "owned_flash_tile_gqa"             # the pre-fix slice route (must be ABSENT on the buffer-identity route)
 WD_CTXS = [512, 1024]
 CORRECTNESS_PROMPT = "The history of computing began when"

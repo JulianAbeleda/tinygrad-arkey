@@ -1001,7 +1001,10 @@ class TransformerBlock(FFNBlock):
             # identical to the slice route; W==D +13-19% (ctx512..4096), tinygrad decode now 102-105% of llama.cpp.
             out = amdgcn_flash_decode(_Qt, assigned_kv, assigned_kv, vsp,
                                       getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
-                                      getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"), whole_cache=True)
+                                      getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"), whole_cache=True,
+                                      # Mode-B tile-constant knobs (default 16/1/1 = shipped kernel, byte-identical):
+                                      tk=getenv("DECODE_ATTN_AMDGCN_TK", 16), vec=getenv("DECODE_ATTN_AMDGCN_VEC", 1),
+                                      unroll=getenv("DECODE_ATTN_AMDGCN_UNROLL", 1))
           else:
             _Kt, _Vt = assigned_kv[0, 0].cast(dtypes.float16), assigned_kv[1, 0].cast(dtypes.float16)
             out = amdgcn_flash_decode(_Qt, _Kt, _Vt, vsp,

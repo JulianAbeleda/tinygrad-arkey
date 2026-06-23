@@ -53,7 +53,7 @@ def main():
       sc = (Q[h:h+1].astype(np.float32) @ Kf[kvh,:nvalid].astype(np.float32).T)[0]*SCALE
       p = np.exp(sc-sc.max()); p/=p.sum(); ref[h] = p @ Vf[kvh,:nvalid].astype(np.float32)
     for S in SPLITS:
-      tile_elf, comb_elf, _, _ = _kernels(S, MAXC)
+      tile_elf, comb_elf, _, _, _ = _kernels(S, MAXC)
       tile = AMDProgram(dev, "owned_flash_tile_gqa", tile_elf)
       comb = AMDProgram(dev, "owned_flash_combine", comb_elf)
       bPart, bMeta, bOut = _buf(Hq*S*Hd*4), _buf(Hq*S*2*4), _buf(Hq*Hd*4)
