@@ -112,13 +112,18 @@ def _delimits(nd: InstNode) -> bool:
   # region, so register RAW/WAR/WAW is sound and the reorder is provably correct.
   return nd.is_fence or nd.domain is not None
 
-def build_regions(nodes: list[InstNode]) -> list[Region]:
+def build_regions(nodes: list[InstNode], fence_only: bool = False) -> list[Region]:
+  # fence_only=False (Inc 0): memory ops also delimit -> only pure-compute moves (sound under the synchronous model).
+  # fence_only=True  (Inc 1): only control/sync fences delimit -> memory ops are INSIDE regions and movable. Sound
+  # because in build_gemm_lds2 every load's consumer sits after the region's terminating wait (a fence), so a load
+  # reordered within a fence-region is still drained by that wait -- verify_wait_correct() proves it on the result.
+  delim = (lambda nd: nd.is_fence) if fence_only else _delimits
   regions: list[Region] = []
   cur: list[InstNode] = []; start = 0
   def flush(s):
     if cur: regions.append(_region_with_deps(s, list(cur)))
   for k, nd in enumerate(nodes):
-    if _delimits(nd):
+    if delim(nd):
       flush(start); cur.clear(); start = k + 1
     else:
       if not cur: start = k
@@ -164,10 +169,11 @@ def _schedule_region(region: Region, mode: str) -> list[int]:
     order.append(pick); done.add(pick); remaining.discard(pick)
   return order
 
-def schedule(insts: list, mode: str = "identity") -> list:
-  """Return a reordered instruction list. Fences stay put; each region's instructions are scheduled by `mode`."""
+def schedule(insts: list, mode: str = "identity", fence_only: bool = False) -> list:
+  """Return a reordered instruction list. Fences stay put; each region's instructions are scheduled by `mode`.
+  fence_only=True (Inc 1) lets memory ops move within fence-delimited regions -- pair with verify_wait_correct()."""
   nodes = [lift(i, k) for k, i in enumerate(insts)]
-  regions = build_regions(nodes)
+  regions = build_regions(nodes, fence_only=fence_only)
   out: list = list(insts)                 # start from original; overwrite each region's slice with its new order
   for region in regions:
     local_order = _schedule_region(region, mode)
@@ -195,3 +201,108 @@ def check_offsets_preserved(insts: list, scheduled: list) -> bool:
   hence total layout. We assert per-region size multisets match so branch offsets baked by build_gemm_lds2 stay valid."""
   return ([i.size() for i in insts] and sum(i.size() for i in insts) == sum(i.size() for i in scheduled)
           and len(insts) == len(scheduled))
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Inc 1: the wait-counter (s_waitcnt) model. AMD RDNA3 tracks outstanding async memory ops in per-domain counters --
+# `vmcnt` (VMEM: global/buffer/scratch) and `lgkmcnt` (LDS+SMEM). An async load's destination register is valid only
+# AFTER an s_waitcnt drains its counter low enough; same-domain ops retire the counter in issue order, so to wait for
+# the op at issue-position `s` (0=oldest) you need `cnt <= issued_total - 1 - s`. This model is (a) the soundness gate
+# that makes memory-op motion legal (Inc 1's whole point) and (b) the consumer-only minimal-count recompute (the
+# "Tensile consumer-only s_waitcnt" lever). On the hand-tuned build_gemm_lds2 the existing full drains are already
+# minimal (measured slack ~0), so the standalone relax is ~free; the lever pays off combined with reordering (Inc 2).
+# ---------------------------------------------------------------------------------------------------------------------
+_WAIT_MAX = 0x3F                                         # 6-bit "don't wait on this domain" sentinel
+
+def decode_wait(simm16: int) -> tuple[int, int]:        # -> (vmcnt, lgkmcnt). Mirrors the in-repo encoder.
+  return (simm16 >> 10) & 0x3F, (simm16 >> 4) & 0x3F
+
+def encode_wait(orig_simm16: int, vm: int, lgkm: int) -> int:
+  return (orig_simm16 & 0xF) | ((lgkm & 0x3F) << 4) | ((vm & 0x3F) << 10)   # preserve the low (exp) nibble
+
+def _wait_simm(inst) -> int: return inst._raw & 0xFFFF
+
+def verify_wait_correct(insts: list) -> tuple[bool, str]:
+  """Soundness gate for ANY (possibly reordered) instruction stream: simulate the counters with the stream's actual
+  s_waitcnt instructions and assert no instruction consumes a register whose producing async load has not been
+  drained, and that LDS is drained at every barrier and all memory at kernel end. Returns (ok, reason)."""
+  nodes = [lift(i, k) for k, i in enumerate(insts)]
+  fifo = {"vm": [], "lgkm": []}            # each entry: (op_id, frozenset dest regs)
+  pending: dict[tuple, tuple] = {}         # reg -> (domain, op_id)
+  oid = 0
+  for k, nd in enumerate(nodes):
+    if nd.name == "S_WAITCNT":
+      cnt = dict(zip(("vm", "lgkm"), decode_wait(_wait_simm(insts[k]))))
+      for D in ("vm", "lgkm"):
+        while len(fifo[D]) > cnt[D]:
+          _, regs = fifo[D].pop(0)
+          for r in regs: pending.pop(r, None)
+      continue
+    if nd.name == "S_BARRIER":
+      if fifo["lgkm"]: return False, f"barrier@{k}: {len(fifo['lgkm'])} LDS/SMEM ops not drained"
+      continue
+    if nd.name == "S_ENDPGM":
+      if fifo["vm"] or fifo["lgkm"]: return False, f"endpgm@{k}: memory not drained (vm={len(fifo['vm'])} lgkm={len(fifo['lgkm'])})"
+      continue
+    for r in (nd.uses | nd.defs):          # any read OR write of a still-pending async-load dest is a hazard
+      if r in pending: return False, f"{nd.name}@{k} consumes {r} before its load drained"
+    if nd.domain is not None:
+      regs = nd.defs if nd.is_load else frozenset()
+      fifo[nd.domain].append((oid, regs))
+      for r in regs: pending[r] = (nd.domain, oid)
+      oid += 1
+  return True, "ok"
+
+def wait_constraints(insts: list) -> list[tuple]:
+  """Audit: for every finite (s_waitcnt, domain), return (idx, domain, have, required) where `required` is the loosest
+  count that is still correct. required<have => the existing drain is stricter than necessary (relaxable slack)."""
+  nodes = [lift(i, k) for k, i in enumerate(insts)]
+  issued = {"vm": 0, "lgkm": 0}; score: dict[tuple, tuple] = {}
+  consumes = [[] for _ in nodes]; issued_before = [None] * len(nodes)
+  for k, nd in enumerate(nodes):
+    issued_before[k] = dict(issued)
+    consumes[k] = [score[r] for r in (nd.uses | nd.defs) if r in score]
+    if nd.domain is not None:
+      if nd.is_load:
+        for r in nd.defs: score[r] = (nd.domain, issued[nd.domain])
+      issued[nd.domain] += 1
+  waits = [(k, decode_wait(_wait_simm(insts[k]))) for k, nd in enumerate(nodes) if nd.name == "S_WAITCNT"]
+  barriers = [k for k, nd in enumerate(nodes) if nd.name == "S_BARRIER"]
+  endpgm = [k for k, nd in enumerate(nodes) if nd.name == "S_ENDPGM"]
+  out = []
+  for di, D in enumerate(("vm", "lgkm")):
+    dwaits = [(k, w[di]) for k, w in waits if w[di] < _WAIT_MAX]
+    for wi, (k, have) in enumerate(dwaits):
+      nxt = dwaits[wi + 1][0] if wi + 1 < len(dwaits) else len(nodes)
+      req = _WAIT_MAX
+      for q in range(k, nxt):
+        for (cd, s) in consumes[q]:
+          if cd == D: req = min(req, issued_before[k][D] - 1 - s)
+      if D == "lgkm" and any(k <= b < nxt for b in barriers): req = min(req, 0)   # LDS visible at barrier
+      if any(k <= e < nxt for e in endpgm): req = min(req, 0)                      # all memory committed at end
+      out.append((k, D, have, req))
+  return out
+
+def recompute_waits_inplace(insts: list) -> list:
+  """Return a new stream with every s_waitcnt set to its minimal correct counts (byte-layout preserving: only the
+  simm16 value changes, instruction size is unchanged so branch offsets stay valid). Conservative -- folds in barrier
+  and endpgm memory-ordering constraints, so it never relaxes a drain that commits stores."""
+  req_by_wait: dict[int, dict] = {}
+  for k, D, _have, req in wait_constraints(insts):
+    req_by_wait.setdefault(k, {})[D] = req
+  from tinygrad.runtime.autogen.amd.rdna3.ins import s_waitcnt   # local import: encoder lives in the autogen module
+  out = list(insts)
+  for k, inst in enumerate(insts):
+    if (_opname(inst) == "S_WAITCNT") and k in req_by_wait:
+      orig = _wait_simm(inst); ovm, olgkm = decode_wait(orig)
+      r = req_by_wait[k]
+      nvm = r.get("vm", ovm if ovm < _WAIT_MAX else _WAIT_MAX)
+      nlgkm = r.get("lgkm", olgkm if olgkm < _WAIT_MAX else _WAIT_MAX)
+      # only ever loosen toward the minimal (never tighter than the original hand-placement)
+      nvm = min(_WAIT_MAX, max(ovm, nvm)) if ovm < _WAIT_MAX else ovm
+      nlgkm = min(_WAIT_MAX, max(olgkm, nlgkm)) if olgkm < _WAIT_MAX else olgkm
+      out[k] = s_waitcnt(simm16=encode_wait(orig, nvm, nlgkm))
+  return out
+
+def wait_slack(insts: list) -> int:
+  """Total relaxable slack across all (wait,domain) constraints -- 0 means the existing drains are already minimal."""
+  return sum(max(0, req - have) for _, _, have, req in wait_constraints(insts) if req < _WAIT_MAX)

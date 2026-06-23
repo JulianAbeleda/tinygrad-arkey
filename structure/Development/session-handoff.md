@@ -1,5 +1,20 @@
 # Session Handoff
 
+> ## ⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER Inc 1 DONE: wait-counter model (`ASM_SCHED_WAITCOUNT_MODEL_DELIVERED`)
+> Built the async-load wait-counter (`s_waitcnt`) model in `extra/qk_asm_scheduler.py`: `verify_wait_correct`
+> (soundness gate), `wait_constraints` (audit), `recompute_waits_inplace` (minimal counts, byte-layout preserving),
+> and `fence_only` region mode (Inc 2 substrate, default OFF). Proof `extra/qk_asm_scheduler_inc1_test.py` Q1-Q6 PASS
+> on gfx1100. TWO HONEST FINDINGS: (1) the hand-placed full drains are ALREADY minimal (total slack=1, a
+> perf-irrelevant prologue scalar load) -> standalone consumer-only relaxation is ~free; (2)
+> `WAIT_CORRECTNESS_NECESSARY_NOT_SUFFICIENT` -- a register-legal AND wait-correct fence_only reorder still computes
+> wrong in the prologue (0 missing register edges; reversing 128 indep movs / moving loadA0 / adjacent swaps all
+> correct; regions 0,2-7 incl 120 moved mem ops correct; only the tight prologue cross-motion breaks) = an RDNA3
+> hardware-spacing/scoreboard hazard. So cross-motion is kept OFF; the proven-safe reorder stays Inc-0 memory-anchored,
+> now composable with the wait model. **Next executable task = Inc 2**: a latency-aware list scheduler over fence_only
+> regions gated by BOTH verify_wait_correct AND a new RDNA3 hardware-hazard recognizer (VALU->VMEM/WMMA spacing,
+> s_nop/hard-clause), validated on clock-pinned synced whole-prefill -- where the bounded ~2-3% prefill win is realized.
+> Doc: `docs/prefill-asm-instruction-scheduler-inc1-result-20260623.md`.
+
 > ## ⭐⭐ 2026-06-23 — PREFILL ASM INSTRUCTION SCHEDULER: scoped + Inc 0 built & proven (`ASM_SCHED_IR_DAG_FAITHFUL`)
 > Owner chose the **owned asm-scheduler** path over vendored Tensile to close the ~4% prefill residual the adversarial
 > audit attributed to fine-grained instruction scheduling. **Inc 0 DONE**: `extra/qk_asm_scheduler.py` (instruction IR
