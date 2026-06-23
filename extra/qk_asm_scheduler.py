@@ -349,3 +349,83 @@ def recompute_waits_inplace(insts: list) -> list:
 def wait_slack(insts: list) -> int:
   """Total relaxable slack across all (wait,domain) constraints -- 0 means the existing drains are already minimal."""
   return sum(max(0, req - have) for _, _, have, req in wait_constraints(insts) if req < _WAIT_MAX)
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Inc 3: waitcnt RELOCATION (the only remaining reorder-class lever). The compute block is [N ds_loads][lgkm(0) full
+# drain][M wmmas] -- every WMMA waits for ALL fragment loads. Relocation removes the full drain and inserts, before each
+# WMMA, the MINIMAL lgkmcnt for just its own fragments (WMMAs issued in frag-ready order). This overlaps WMMA compute
+# with the tail of LDS-load latency. It INSERTS instructions, so branch offsets must be recomputed.
+# ---------------------------------------------------------------------------------------------------------------------
+def _signed16(x: int) -> int: return x - 65536 if x >= 32768 else x
+
+def capture_branch_targets(insts: list) -> dict:
+  """Map each branch Inst (by identity) to its target Inst (by identity), so offsets can be recomputed after the layout
+  changes. Robust to insertion/reorder as long as the original branch and target Inst objects are preserved."""
+  sizes = [i.size() for i in insts]; off = [0]
+  for s in sizes: off.append(off[-1] + s)
+  byte2idx = {b: i for i, b in enumerate(off)}
+  out = {}
+  for k, inst in enumerate(insts):
+    if _opname(inst).startswith(("S_BRANCH", "S_CBRANCH")):
+      tb = off[k + 1] + _signed16(inst.simm16) * 4
+      if tb in byte2idx: out[id(inst)] = insts[byte2idx[tb]]
+  return out
+
+def fix_branches(new_insts: list, targets: dict) -> list:
+  """Recompute each branch's simm16 from the new byte layout (target located by identity). Returns a NEW list with
+  FRESH branch Insts (does NOT mutate the caller's Inst objects, which may be shared with the un-relocated stream)."""
+  sizes = [i.size() for i in new_insts]; off = [0]
+  for s in sizes: off.append(off[-1] + s)
+  import copy
+  idx_of = {id(i): k for k, i in enumerate(new_insts)}
+  out = list(new_insts)
+  for k, inst in enumerate(new_insts):
+    if id(inst) in targets:
+      tk = idx_of[id(targets[id(inst)])]
+      nb = copy.copy(inst)                            # copy preserves op/encoding; .simm16 setter rewrites the offset
+      nb.simm16 = ((off[tk] - off[k + 1]) // 4) & 0xFFFF
+      out[k] = nb                                     # replace -> caller's shared Inst is untouched
+  return out
+
+def relocate_lgkm_waits(insts: list) -> list:
+  """Replace each COMPUTE-block full-drain lgkm(0) (ds_loads -> drain -> wmmas, NOT a pre-barrier drain) with per-WMMA
+  minimal lgkmcnt waits, WMMAs reordered frag-ready-first. Branch offsets are fixed. Returns the new instruction list."""
+  from tinygrad.runtime.autogen.amd.rdna3.ins import s_waitcnt
+  targets = capture_branch_targets(insts)
+  nodes = [lift(i, k) for k, i in enumerate(insts)]
+  is_fence_idx = [nd.is_fence for nd in nodes]
+  # locate compute drains: an S_WAITCNT with lgkm==0, preceded (since last fence) by ds_loads, followed (until next
+  # fence) by wmmas, and NOT immediately followed by a barrier.
+  out: list = []
+  i = 0; n = len(insts)
+  # find previous-fence index for each position
+  while i < n:
+    nd = nodes[i]
+    if nd.name == "S_WAITCNT" and decode_wait(_wait_simm(insts[i]))[1] == 0:
+      # gather producers since last fence
+      p0 = i - 1
+      while p0 >= 0 and not nodes[p0].is_fence: p0 -= 1
+      producers = [j for j in range(p0 + 1, i) if nodes[j].is_load and nodes[j].domain == "lgkm"]
+      # consumers = the maximal run of WMMAs immediately after the drain (stop at the next substep's ds_loads etc.)
+      q = i + 1
+      while q < n and "WMMA" in nodes[q].name: q += 1
+      wmmas = list(range(i + 1, q))
+      if producers and wmmas:
+        # per-wmma minimal lgkm: producers retire in issue order; score = position among producers (0=oldest)
+        P = len(producers); score = {producers[s]: s for s in range(P)}
+        prod_regs = {producers[s]: nodes[producers[s]].defs for s in range(P)}
+        def req(wj):
+          ms = max((score[pj] for pj in producers if prod_regs[pj] & nodes[wj].uses), default=-1)
+          return _WAIT_MAX if ms < 0 else P - 1 - ms
+        order = sorted(wmmas, key=req, reverse=True)   # highest count (earliest-ready) first
+        # producers are ALREADY in `out` (emitted as i walked past them); just skip the drain and emit waits+wmmas.
+        last = None
+        for wj in order:
+          r = req(wj)
+          if r != last and r < _WAIT_MAX:
+            out.append(s_waitcnt(simm16=encode_wait(0, _WAIT_MAX, r))); last = r
+          out.append(insts[wj])
+        i = q
+        continue
+    out.append(insts[i]); i += 1
+  return fix_branches(out, targets)

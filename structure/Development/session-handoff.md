@@ -1,5 +1,25 @@
 # Session Handoff
 
+> ## ⭐⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER Inc 3 DONE: waitcnt RELOCATION = FIRST NON-NEUTRAL lever (config-dependent)
+> Inc 2 = pure reorder is NEUTRAL. Inc 3 changes the instruction SET -- waitcnt RELOCATION -- and WINS: in each compute
+> block ([N ds_loads][lgkm(0) full drain][M wmmas]) strip the full drain, issue WMMAs frag-ready-first, insert per-WMMA
+> MINIMAL lgkmcnt (Inc-1 wait model) -> overlaps WMMA compute with LDS-load latency. Inserting waits needs branch-offset
+> fixup: `capture_branch_targets`/`fix_branches` (shallow-copy, NON-mutating -- a footgun fixed: it was corrupting the
+> shared identity stream's branch). New: `relocate_lgkm_waits` in `extra/qk_asm_scheduler.py`. Correct (rmse<=3e-4 +
+> verify_wait_correct) across plain/DBUF1/PLRA/kv_halved + K sizes NBLK 16/32/128 (`extra/qk_asm_scheduler_inc3_test.py`
+> S1/S2 PASS). MEASURED clean clock-pinned isolated (512x4096x4096): **DBUF1 ~+6% (reproduced 3x), PLRA route ~+2%,
+> plain +1.7%, kv_halved ~-4% (REGRESSION)**. Config-dependent: the win is overlapping exposed LDS latency, so
+> low-occupancy DBUF1 gains most and high-occupancy small-N kv_halved (latency already wave-hidden) REGRESSES. The
+> Inc-1 verify gate caught a real double-emit WAW bug. **Promotion gate NOT crossed** (isolated timing = signal not
+> authority; mixed/modest). NEXT (if pursued): wire into `extra/qk_prefill_graph_gemm_route.py` behind additive
+> `PREFILL_GEMM_RELOC`, **PLRA-roles only (exclude kv)**, measure clock-pinned synced WHOLE-PREFILL via
+> `extra/qk_prefill_whole_synced.py`; promote only if net positive. Doc:
+> `docs/prefill-asm-instruction-scheduler-inc3-result-20260623.md`. Capability shipped default-off; no source/default change.
+> ⭐SUMMARY of the asm-scheduler arc (Inc 0-3): register DAG (faithful) -> wait-counter model (waits already minimal) ->
+> cross-motion sound + pure reorder NEUTRAL -> waitcnt RELOCATION is the only lever that moves the needle (~+2% on route
+> roles, config-dependent). The prefill->Tensile residual is NOT recoverable by reordering; only mild gains from
+> wait-restructuring. Vendored Tensile remains the path to full parity.
+
 > ## ⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER Inc 2 DONE: cross-motion SOUND + latency reorder NEUTRAL + Inc1 CORRECTION
 > Inc 1's "RDNA3 hardware-spacing hazard" was a MISDIAGNOSIS. The real missing gate is the **loop-entry (backward-branch
 > TARGET) control-flow boundary**: build_regions didn't model it, so the fence_only reorder moved instructions across
