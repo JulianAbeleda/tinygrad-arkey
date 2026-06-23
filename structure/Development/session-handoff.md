@@ -1,6 +1,21 @@
 # Session Handoff
 
-> ## ⭐⭐⭐ 2026-06-23 — VALIDATION: NO PRODUCTION TENSILE GAP (graph-GEMM already BEATS Tensile route in-model ~6%)
+> ## ⭐⭐⭐⭐ 2026-06-23 — STRUCTURAL EMIT WIN SHIPPED: DBUF default = +2.84% whole-prefill, BYTE-IDENTICAL (default flipped)
+> The structural-emit stress study found a REAL transferable win, overturning "scheduling-limited". Swapping the route's
+> substep-prefetch (PLRA) for cross-iteration DOUBLE-BUFFER (DBUF) = **+2.84% +/-0.11% whole-prefill@4096, BYTE-IDENTICAL
+> output (logit max_abs_diff=0)**, significant at EVERY context (512..8192); DBUF+relocation = +3.87%. Pure scheduling
+> (relocation alone) stays at noise (+0.1%) -> *structural* emit TRANSFERS where *scheduling-only* does NOT. Confirmed by
+> interleaved paired A/B (clock-drift-cancelled) + byte-identical check. Root cause: DBUF's full block-level pipelining
+> beats PLRA's substep-only prefetch IN-MODEL; the old plra=1 default was set on ISOLATED benchmarks (isolated->
+> integrated reversal). **ACTION TAKEN: flipped the route default to dbuf=1,plra=0** in
+> `extra/qk_prefill_graph_gemm_route.py` (reversible: PREFILL_GEMM_DBUF=0 PREFILL_GEMM_PLRA=1); added global emit knobs
+> PREFILL_GEMM_{DBUF,BK,PLRA,PLRAB,LEANADDR}. New prefill default ~3085 vs old ~2975 tok/s @4096 (now ~115% of llama
+> pp512). BLOCKED candidates (VGPR-walled, document the structural ceilings): deeper-DepthU bk64 (268>256), PLRAB-4x4
+> (300), accumulator-partition (2x128-acc>256), full reg-pool (HW-limited). Tools: scratchpad emit_driver/worker +
+> confirm_dbuf; logs /tmp/prefill-emits/. Doc: `docs/prefill-structural-emit-search-result-20260623.md`. NOTE this is
+> COMPLEMENTARY to (not a contradiction of) the same-day NO_PRODUCTION_TENSILE_GAP finding: scheduling can't close it,
+> but a structural emit swap improves the graph-GEMM default itself.
+
 > Full-8B clock-pinned 3-repeat whole-prefill A/B/C/D. The graph-GEMM route (DEFAULT) BEATS the Tensile route
 > (`PREFILL_GRAPH_GEMM=0 PREFILL_TENSILE_GEMM=1`) at EVERY context: graph 3720/3635/3399/2997 vs tensile
 > 3506/3429/3200/2793 tok/s @512/1024/2048/4096 (~+6%) -- despite Tensile's ISOLATED GEMM being ~10% faster (66 vs 60

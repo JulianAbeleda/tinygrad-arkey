@@ -15,7 +15,12 @@ from extra.gemm import rdna3_wmma_matmul as ref
 def _kernel(out_f: int, in_f: int):
   import os
   m, n, k = 512, out_f, in_f
-  waves_m, waves_n, wm, wn, bk, pad, dbuf, plra = 2, 2, 4, 4, 32, 16, 0, 1
+  # DEFAULT: cross-iteration double-buffer (dbuf=1, plra=0). Validated +2.84% +/-0.11% whole-prefill@4096 over the old
+  # plra=1 default, byte-identical output (logit max_abs_diff=0), significant at every context 512..8192. The old
+  # plra=1 was chosen on ISOLATED kernel benchmarks; in-model DBUF's fuller block-level pipelining wins (isolated->
+  # integrated reversal). Reversible: PREFILL_GEMM_DBUF=0 PREFILL_GEMM_PLRA=1. See
+  # docs/prefill-structural-emit-search-result-20260623.md.
+  waves_m, waves_n, wm, wn, bk, pad, dbuf, plra = 2, 2, 4, 4, 32, 16, 1, 0
   if out_f <= 1024:  # small-N roles (kv_proj) are WG-starved at BN=128 -> halve BN to 2x the workgroups
     waves_n, wn = 1, 4
   # Phase-B per-shape config OVERRIDE (additive, default unchanged): PREFILL_GEMM_CFG_{out_f}_{in_f}="wm,wn,wavesn,bk,pad,dbuf,plra"
@@ -27,9 +32,23 @@ def _kernel(out_f: int, in_f: int):
   # DBUF (block prefetch) + PLRAB (substep A+B prefetch) fit at ~188 VGPR -- the deep pipeline build_gemm_lds2 can express.
   if os.environ.get("PREFILL_GEMM_8WAVE") and out_f % 128 == 0:
     waves_m, waves_n, wm, wn, dbuf, plra, plrab = 4, 2, 2, 4, 1, 0, 1
+  # Structural-emit stress-study overrides (additive, default UNSET -> baseline unchanged): global knobs to sweep the
+  # GEMM emit across ALL graph-gemm roles. DepthU=BK, cross-iter prefetch=DBUF, substep pipeline=PLRA/PLRAB,
+  # SALU-addr=LEANADDR. Invalid combos (tile/VGPR/LDS overflow) raise in build and are caught per-candidate by the
+  # sweep driver (marked FAILED). See docs/prefill-structural-emit-search-*.
+  def _envint(nm, dv):
+    v = os.environ.get(nm)
+    if v is None: return dv
+    try: return int(v)
+    except ValueError: return dv
+  bk    = _envint("PREFILL_GEMM_BK", bk)
+  dbuf  = _envint("PREFILL_GEMM_DBUF", dbuf)
+  plra  = _envint("PREFILL_GEMM_PLRA", plra)
+  plrab = _envint("PREFILL_GEMM_PLRAB", plrab)
+  leanaddr = _envint("PREFILL_GEMM_LEANADDR", 0)
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
   if m % bm or n % bn or k % bk: return None
-  insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra, PLRAB=plrab)
+  insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra, PLRAB=plrab, LEANADDR=leanaddr)
   lds_bytes = max((bk * 2 + pad) * (bm + bn) * (2 if dbuf else 1), 65536 // 8)
   # Inc-3 waitcnt relocation (additive, default off): apply ONLY at LOW OCCUPANCY, where LDS-load latency is EXPOSED.
   # The win is overlapping WMMA compute with exposed LDS latency (benefit is proportional to 1/occupancy); at high
