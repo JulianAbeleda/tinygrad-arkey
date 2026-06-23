@@ -183,6 +183,14 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   kernel `owned_flash_tile_gqa_whole` (K at 0, V at +Hkv·MAXC·Hd from one cache buffer); model passes the WHOLE `cache_kv.after(store)` (no
   reshape/slice → callify buffer identity → no materialization). ISA `AMD_ISA_PRIMITIVE_CONFIRMED` (60 VGPR, 0 spill, v_dot2/LDS/cross-lane). Behind
   `DECODE_ATTN_KV_IDENTITY=1`; **default flip pending owner authorization** (recommended). Default decode byte-identical.
+- **`decode-campaign-final-synthesis-20260623.md`** — ⭐⭐⭐⭐ FINAL synthesis: decode campaign COMPLETE, tinygrad Qwen3-8B decode 102-105% of llama.cpp
+  (default-on). Critical corrections (attention not exhausted; runtime-KV not core-blocked; buffer identity was the wall). Primitive ledger,
+  closed/optional lanes, default/fallback policy. `POST_PARITY_REGRESSION_GUARD_PASS` (default fires whole-cache tile, no E_49152; fallback restores
+  slice+E_49152; byte-identical; ctx1024 ~101.3; ISA confirmed).
+- **`machine-code-translation-roadmap-result-20260623.md`** — ⭐⭐⭐ exhaustive machine-code translation map (NO kernels/search): primitive inventory,
+  artifact-type classification, owned-attention + Q4K-GEMV machine-code fact sheets, **buffer-identity ABI rule** (recorded in principles #12),
+  native-codegen targets (v_dot2/cross-lane/LDS gaps), machine-search readiness (NOT_READY_FOR_8B_SPEED / READY_FOR_CODEGEN_MICROPRIMITIVES_ONLY;
+  prefill LDS GEMM = the one searchable compute-bound lane). Artifacts under bench/qk-machine-code-translation/ + bench/qk-post-parity-hardening/.
 - **`../structure/Development/performance-primitive-research-principles.md`** — canonical principles for GPU primitive
   work. It now explicitly names the reference classes (llama-style, vLLM-style, silicon-style, DeepSeek-style) and
   the decode-attention literature rules from FlashAttention / Flash-Decoding / FlashDecoding++ / FlashInfer:

@@ -810,3 +810,13 @@ For GPU primitive research in this repo:
 10. Record refutations as durable knowledge.
 11. Name whether a candidate is llama-style local primitive work, vLLM-style lifecycle work, silicon-style
     hardware/compiler co-design, DeepSeek-style lowest-layer escape hatch, or an explicit combination of these.
+12. **Buffer-identity ABI rule (precompiled graph-node kernels).** Pass BUFFER-IDENTITY inputs across a precompiled
+    `custom_kernel`/graph-node boundary; do NOT pass sliced/cache views when whole-buffer + in-kernel offset math is
+    possible. `callify.transform_precompiled_call` force-`.contiguous()`s every input except `Ops.AFTER`/`Ops.BIND`,
+    and `_precompiled_output_redirect` reads a `BUFFER`/`MULTI` with `has_buffer_identity()` directly (no copy) but
+    **materializes** a `SLICE`/`RESHAPE`. A `RESHAPE` *on top of* the `AFTER` also materializes (the redirect accepts
+    only `BUFFER`/`MULTI`). Bad: `cache_kv[0,layer]`, `cache_kv.reshape(flat).after(store)`. Good: whole
+    `cache_kv.after(store)` (no reshape) + kernel-computed K/V offsets. This single rule was the entire +13–19 %
+    decode-to-parity win (2026-06-23): the "+11 % KV materialization tax" mis-diagnosed for ~10 tasks as a core
+    Runtime-KV persistence problem was just the owned tile reading sliced cache views. See
+    `docs/owned-tile-buffer-identity-kv-read-result-20260623.md`.
