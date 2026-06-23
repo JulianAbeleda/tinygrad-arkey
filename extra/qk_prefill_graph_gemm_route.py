@@ -30,6 +30,13 @@ def _kernel(out_f: int, in_f: int):
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
   if m % bm or n % bn or k % bk: return None
   insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra, PLRAB=plrab)
+  # Inc-3 waitcnt relocation (additive, default off): overlap WMMA compute with LDS-load latency. Gated to the
+  # lower-occupancy non-kv roles (waves_n==2): the win is recovering EXPOSED LDS latency, so high-occupancy small-N
+  # (waves_n==1 kv_proj) gets no benefit and the extra waits regress -- exclude it. See
+  # docs/prefill-asm-instruction-scheduler-inc3-result-20260623.md.
+  if os.environ.get("PREFILL_GEMM_RELOC") and waves_n == 2:
+    from extra.qk_asm_scheduler import relocate_lgkm_waits
+    insts = relocate_lgkm_waits(insts)
   lds_bytes = max((bk * 2 + pad) * (bm + bn) * (2 if dbuf else 1), 65536 // 8)
   name = f"prefill_graph_gemm_{m}_{n}_{k}"
   return insts, lds_bytes, bm, bn, threads, name

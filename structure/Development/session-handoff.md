@@ -1,5 +1,20 @@
 # Session Handoff
 
+> ## ⭐⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER ARC CLOSED: waitcnt relocation wins isolated (+2-6%) but DOESN'T transfer
+> Chased the Inc-3 +2%. (A) kv_halved -4% regression is OCCUPANCY (causal: same kernel, vary LDS -> relocation Δ goes
+> +0.08%@4WG/CU, -3.03%@2WG, +4.26%@1WG). Primitives: benefit=LDS-latency-overlap ∝ 1/occupancy; cost=extra-waitcnt
+> overhead (~const). Net flips with occupancy; kv (high occ) is zero-benefit noise regime -> exclude. (B) Wired
+> `relocate_lgkm_waits` into `extra/qk_prefill_graph_gemm_route.py` behind additive `PREFILL_GEMM_RELOC` (default OFF),
+> gated waves_n==2 (non-kv PLRA roles). Clock-pinned synced WHOLE-PREFILL: baseline 3732/3645/3408/3001 vs reloc
+> 3713/3629/3391/2989 @512/1024/2048/4096 -- but baseline RE-RUN = 3705/3626/3388/2989, so the ~0.5% reloc gap is < the
+> 0.7% run-to-run noise = **NO net whole-prefill effect**. The isolated +2% does NOT transfer in-model (GEMM is a
+> fraction of prefill; real-shape occupancy higher than the 4096^3 probe; noise swamps it) -- the standing
+> [[inference-perf-measured-map]] lesson. `PREFILL_GEMM_RELOC` ships DEFAULT-OFF (like PREFILL_GEMM_8WAVE). **ARC
+> CONCLUSION: the prefill->Tensile residual is NOT recoverable by ANY instruction-scheduling transform of the current
+> kernel -- only vendored Tensile (parity, opaque dep) or a structurally different emit (deeper DepthU / cross-iteration
+> pipelining) closes it.** Docs: `docs/prefill-asm-instruction-scheduler-inc3-result-20260623.md` (Follow-up A/B + arc
+> close). Capability + 3 correctness gates (register DAG / wait model / branch boundaries) shipped default-off.
+
 > ## ⭐⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER Inc 3 DONE: waitcnt RELOCATION = FIRST NON-NEUTRAL lever (config-dependent)
 > Inc 2 = pure reorder is NEUTRAL. Inc 3 changes the instruction SET -- waitcnt RELOCATION -- and WINS: in each compute
 > block ([N ds_loads][lgkm(0) full drain][M wmmas]) strip the full drain, issue WMMAs frag-ready-first, insert per-WMMA
