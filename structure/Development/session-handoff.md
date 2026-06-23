@@ -1,5 +1,19 @@
 # Session Handoff
 
+> ## ⭐⭐ 2026-06-23 — PREFILL ASM INSTRUCTION SCHEDULER: scoped + Inc 0 built & proven (`ASM_SCHED_IR_DAG_FAITHFUL`)
+> Owner chose the **owned asm-scheduler** path over vendored Tensile to close the ~4% prefill residual the adversarial
+> audit attributed to fine-grained instruction scheduling. **Inc 0 DONE**: `extra/qk_asm_scheduler.py` (instruction IR
+> with exact register def/use decoded from the encoding; intra-region dependency DAG; pure-compute reorder within
+> memory+fence-delimited regions) + `extra/qk_asm_scheduler_inc0_test.py`. Proof on gfx1100 P1-P6 PASS: identity
+> byte-identical, **554 instructions legally permuted still rmse 2.07e-4**, across the whole route config space
+> (PLRA/DBUF/8-wave-PLRAB). The test caught 2 real bugs (RMW self-edge; an unsound async-load hoist that MMU-faulted →
+> memory ops anchored, async modeling deferred to Inc 1). **Next executable task = Inc 1**: the consumer-only
+> `s_waitcnt` recompute + wait-counter (async-load) model — the cheapest real lever and where memory-op motion becomes
+> sound. Honest ROI: schedulable upside ~2-3% (part of the 4% is a `beta=true` work confound). Validate only on
+> clock-pinned synced whole-prefill; additive default-off; no `tinygrad/` source change.
+> Doc: `docs/prefill-asm-instruction-scheduler-scope-20260623.md`. NOTE: stop calling decode search "exhausted"
+> (owner correction 2026-06-23) — frame remaining decode work as open levers, not a closed surface.
+
 > ## ⭐ 2026-06-23 — LEARNING LAYER REFRAMED: the model is a primitive-space PROPOSER, not a kernel judge
 > The learned-model/adapter role in the GPU primitive search system is: emit a **bounded search spec** (`SearchRow`:
 > lane / primitive / hypothesis / knobs+bounds / required-evidence / stop-rules), which the **deterministic** runner
