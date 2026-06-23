@@ -13,10 +13,15 @@ from extra.gemm import rdna3_wmma_matmul as ref
 
 @lru_cache(maxsize=None)
 def _kernel(out_f: int, in_f: int):
+  import os
   m, n, k = 512, out_f, in_f
   waves_m, waves_n, wm, wn, bk, pad, dbuf, plra = 2, 2, 4, 4, 32, 16, 0, 1
   if out_f <= 1024:  # small-N roles (kv_proj) are WG-starved at BN=128 -> halve BN to 2x the workgroups
     waves_n, wn = 1, 4
+  # Phase-B per-shape config OVERRIDE (additive, default unchanged): PREFILL_GEMM_CFG_{out_f}_{in_f}="wm,wn,wavesn,bk,pad,dbuf,plra"
+  ov = os.environ.get(f"PREFILL_GEMM_CFG_{out_f}_{in_f}")
+  if ov:
+    wm, wn, waves_n, bk, pad, dbuf, plra = (int(x) for x in ov.split(","))
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
   if m % bm or n % bn or k % bk: return None
   insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra)
