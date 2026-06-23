@@ -1,5 +1,22 @@
 # Session Handoff
 
+> ## ⭐⭐⭐ 2026-06-23 — VALIDATION: NO PRODUCTION TENSILE GAP (graph-GEMM already BEATS Tensile route in-model ~6%)
+> Full-8B clock-pinned 3-repeat whole-prefill A/B/C/D. The graph-GEMM route (DEFAULT) BEATS the Tensile route
+> (`PREFILL_GRAPH_GEMM=0 PREFILL_TENSILE_GEMM=1`) at EVERY context: graph 3720/3635/3399/2997 vs tensile
+> 3506/3429/3200/2793 tok/s @512/1024/2048/4096 (~+6%) -- despite Tensile's ISOLATED GEMM being ~10% faster (66 vs 60
+> TFLOPS). Tensile's throughput edge is eaten by in-model integration (layout/transpose kernels, weaker fusion).
+> Relocation (PREFILL_GEMM_RELOC, w1/w4) = -0.2..-0.33% @4096 = within 0.13% noise (no transfer), though isolated kv
+> sweep confirms it is a real occupancy-driven lever (+2.24%@4WG -> +4.12%@1WG). **KEY: whole-prefill is INSENSITIVE to
+> GEMM-kernel-speed in BOTH directions** -- the prefill bottleneck is integration + attention (the @512->@4096 decay
+> 3720->2997), NOT the GEMM kernel emit. This RETIRES the 'graph-GEMM ~99.5% of Tensile, close the gap' premise and the
+> whole asm-scheduler residual target. Doc: `docs/prefill-tensile-vs-graphgemm-whole-prefill-validation-20260623.md`.
+> IMPLICATION for any future prefill-GEMM emit search (DepthU/pipelining/tile-geom): very unlikely to move whole-prefill
+> (two independent data points already show GEMM-kernel speedups don't transfer); the bounded ceiling should be measured
+> (GEMM fraction of prefill) BEFORE committing to an expensive structural-emit matrix. NB much of that candidate space
+> is already implemented (DBUF=cross-iter prefetch, PLRA/PLRAB=substep pipeline, BK=DepthU [BK64 overflows 256 VGPR],
+> 8-wave tile) and prior arcs found its ceilings (+0.5% 8-wave; register-lifetime VGPR wall).
+
+
 > ## ⭐⭐⭐ 2026-06-23 — PREFILL ASM SCHEDULER ARC CLOSED: waitcnt relocation wins isolated (+2-6%) but DOESN'T transfer
 > Chased the Inc-3 +2%. (A) kv_halved -4% regression is OCCUPANCY (causal: same kernel, vary LDS -> relocation Δ goes
 > +0.08%@4WG/CU, -3.03%@2WG, +4.26%@1WG). Primitives: benefit=LDS-latency-overlap ∝ 1/occupancy; cost=extra-waitcnt
