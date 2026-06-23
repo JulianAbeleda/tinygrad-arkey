@@ -2,6 +2,6 @@
   "date": "2026-06-23",
   "phase": "DECISION",
   "result": "+13-19% byte-identical, tinygrad decode now 102-105% of llama.cpp across ctx 512-4096",
-  "default_state": "DECODE_ATTN_KV_IDENTITY default OFF (env-gated); implementation committed, default flip PENDING owner authorization per scope Phase 6",
+  "default_state": "PROMOTED DEFAULT-ON 2026-06-23 (owner-authorized); DECODE_ATTN_KV_IDENTITY=0 disables; default decode byte-identical re-confirmed (101.3@1024)",
   "verdict": "BUFFER_IDENTITY_KV_PROMOTION_READY"
 }

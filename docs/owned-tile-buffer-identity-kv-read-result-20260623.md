@@ -3,8 +3,7 @@
 ## Verdict: `BUFFER_IDENTITY_KV_WD_PASS` / `BUFFER_IDENTITY_KV_PROMOTION_READY` — **+13–19%, byte-identical, tinygrad decode now ≥ llama.cpp**
 The buffer-identity whole-cache read predicted by `runtime-kv-core-engine-result-v2` **works and exceeds the +11%
 target**. It removes the owned tile's full-MAXC slice materialization (`E_49152`), is **byte-identical** to the
-default route, passes ISA audit, and has **no ctx512 regression** (ctx512 is the *largest* gain). Implemented behind
-`DECODE_ATTN_KV_IDENTITY=1` (default **off**); **default flip pending owner authorization** (scope Phase 6).
+default route, passes ISA audit, and has **no ctx512 regression** (ctx512 is the *largest* gain). **DEFAULT-ON 2026-06-23 (owner-authorized)**; `DECODE_ATTN_KV_IDENTITY=0` disables.
 
 ## W==D (3 interleaved reps, `qk_decode_runtime_overhead`)
 | ctx | default tok/s | DECODE_ATTN_KV_IDENTITY tok/s | Δ | llama.cpp tok/s | tg / llama |
@@ -49,10 +48,9 @@ Byte-identical to the default owned route: 8-tok @ctx1024 + 64-tok × 2 prompts.
 flag off (`[279,1156,22148,…]`). Token correctness is authority.
 
 ## Candidate / default decision (Phase 6)
-`BUFFER_IDENTITY_KV_PROMOTION_READY`. The implementation is committed behind `DECODE_ATTN_KV_IDENTITY=1` (default
-**off**). Per the scope and standing rules, **the default flip requires explicit owner authorization** — strongly
-recommended (clean byte-identical +13–19%, ISA-clean, no regression). Flipping it = set the flag default-on in the
-owned-route guard.
+`BUFFER_IDENTITY_KV_PROMOTION_READY` → **PROMOTED DEFAULT-ON 2026-06-23** (owner-authorized). The guard now
+defaults `DECODE_ATTN_KV_IDENTITY` to 1; `=0` reverts to the slice route. Re-confirmed after the flip: default decode
+byte-identical (`[279,1156,22148,…]`), new default W==D 101.3@ctx1024 / 94.2@ctx4096.
 
 ## Files changed
 - `extra/qk_owned_flash_decode.hip`: `#define Hkv 8` + new `owned_flash_tile_gqa_whole` kernel.

@@ -994,9 +994,11 @@ class TransformerBlock(FFNBlock):
           # silently broken for real cache; W==D was only validated with a degenerate zero cache). fp16->fp16 is a no-op.
           # Validated 2026-06-23: byte-identical to gqa for 64 tokens; W==D +11.5%@ctx2048 / +16%@ctx4096.
           _Qt = q.reshape(Hq, Hd).cast(dtypes.float16)
-          if getenv("DECODE_ATTN_KV_IDENTITY"):
-            # buffer-identity read: pass the WHOLE cache_kv buffer (assigned_kv = cache_kv.after(store), no slice/reshape)
-            # so callify reads it directly (no full-MAXC slice materialization); the whole-cache tile offsets K/V halves.
+          if getenv("DECODE_ATTN_KV_IDENTITY", 1):
+            # buffer-identity read (DEFAULT-ON 2026-06-23, owner-authorized; DECODE_ATTN_KV_IDENTITY=0 disables): pass
+            # the WHOLE cache_kv buffer (assigned_kv = cache_kv.after(store), no slice/reshape) so callify reads it
+            # directly (no full-MAXC slice materialization E_49152); the whole-cache tile offsets K/V halves. Byte-
+            # identical to the slice route; W==D +13-19% (ctx512..4096), tinygrad decode now 102-105% of llama.cpp.
             out = amdgcn_flash_decode(_Qt, assigned_kv, assigned_kv, vsp,
                                       getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
                                       getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"), whole_cache=True)
