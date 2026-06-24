@@ -16,7 +16,7 @@ ceiling" frontier were overturned by the 06-22→06-24 campaign (owned attention
 | q8 FFN opt-in | ~+7% decode, **default-OFF, dNLL-gated** | `Q8_FFN_HANDWRITTEN=1` |
 | VRAM | default ~5–6 GB; **`PREFILL_V2` adds ~+14 GB fp16** (≈19–21 GB), resident through decode | handoff history |
 
-**⚠ Flag-stack caveat (do not mis-state the parity claim).** The 102+ "at/above llama" decode numbers are the
+**⚠ Flag-stack caveat (do not mis-state the parity claim).** The at/above-llama decode numbers above are the
 **canonical default stack with `Q4K_GEMV_WARP*` enabled** (promoted default 2026-06-24). A fresh *default-off*
 run reads **below** llama — the two families are reconciled in `decode-parity-no-regression-audit-result-20260623.md`.
 Always quote the canonical-stack number with the stack stated, not bare.
