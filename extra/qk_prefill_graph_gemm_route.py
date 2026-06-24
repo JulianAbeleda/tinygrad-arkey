@@ -46,25 +46,35 @@ def _kernel(out_f: int, in_f: int):
   plra  = _envint("PREFILL_GEMM_PLRA", plra)
   plrab = _envint("PREFILL_GEMM_PLRAB", plrab)
   leanaddr = _envint("PREFILL_GEMM_LEANADDR", 0)
+  pipe_mode = bool(_envint("PREFILL_GEMM_PIPELINE", 0))
+  pipe_tm = _envint("PREFILL_GEMM_PIPELINE_TM", 4)
+  pipe_tn = _envint("PREFILL_GEMM_PIPELINE_TN", 4)
+  pad = _envint("PREFILL_GEMM_PAD", pad)
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
   if m % bm or n % bn or k % bk: return None
-  insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra, PLRAB=plrab, LEANADDR=leanaddr)
-  lds_bytes = max((bk * 2 + pad) * (bm + bn) * (2 if dbuf else 1), 65536 // 8)
-  # Inc-3 waitcnt relocation (additive, default off): apply ONLY at LOW OCCUPANCY, where LDS-load latency is EXPOSED.
-  # The win is overlapping WMMA compute with exposed LDS latency (benefit is proportional to 1/occupancy); at high
-  # occupancy it is pure extra-waitcnt overhead and REGRESSES. Causal occupancy sweep (same kv kernel, vary only the LDS
-  # allocation): relocation delta = +0.08% @4 WG/CU -> -3.03% @2 WG/CU -> +4.26% @1 WG/CU. So gate on LDS-limited
-  # workgroups/CU (estimated from `lds_bytes`), NOT on waves_n. Threshold PREFILL_GEMM_RELOC_MAX_WGS (default 1 = only
-  # the lowest-occupancy configs). See docs/prefill-asm-instruction-scheduler-inc3-result-20260623.md.
-  if os.environ.get("PREFILL_GEMM_RELOC"):
-    try:
-      reloc_max_wgs = max(1, int(os.environ.get("PREFILL_GEMM_RELOC_MAX_WGS", "1")))
-    except ValueError:
-      reloc_max_wgs = 1
-    lds_waves_per_cu = max(1, 65536 // lds_bytes)
-    if lds_waves_per_cu <= reloc_max_wgs:
-      from extra.qk_asm_scheduler import relocate_lgkm_waits
-      insts = relocate_lgkm_waits(insts)
+  if pipe_mode:
+    # Pipeline option (explicitly OFF by default): software-pipeline-style compute kernel, not LDS-staged.
+    # This is a structural frontier probe, not the default path.
+    insts = ref.build_gemm_pipe(m, n, k, pipe_tm, pipe_tn)
+    lds_bytes = 1
+  else:
+    insts = ref.build_gemm_lds2(m, n, k, waves_m, waves_n, wm, wn, bk, pad, dbuf, PLRA=plra, PLRAB=plrab, LEANADDR=leanaddr)
+    lds_bytes = max((bk * 2 + pad) * (bm + bn) * (2 if dbuf else 1), 65536 // 8)
+    # Inc-3 waitcnt relocation (additive, default ON): apply ONLY at LOW OCCUPANCY, where LDS-load latency is EXPOSED.
+    # The win is overlapping WMMA compute with exposed LDS latency (benefit is proportional to 1/occupancy); at high
+    # occupancy it is pure extra-waitcnt overhead and REGRESSES. Causal occupancy sweep (same kv kernel, vary only the
+    # LDS allocation): relocation delta = +0.08% @4 WG/CU -> -3.03% @2 WG/CU -> +4.26% @1 WG/CU. So gate on LDS-limited
+    # workgroups/CU (estimated from `lds_bytes`), NOT on waves_n. Threshold PREFILL_GEMM_RELOC_MAX_WGS (default 1 = only
+    # the lowest-occupancy configs). See docs/prefill-asm-instruction-scheduler-inc3-result-20260623.md.
+    if os.environ.get("PREFILL_GEMM_RELOC", "1") not in ("0", "false", "False", "FALSE", "off", "OFF", "no", "NO"):
+      try:
+        reloc_max_wgs = max(1, int(os.environ.get("PREFILL_GEMM_RELOC_MAX_WGS", "1")))
+      except ValueError:
+        reloc_max_wgs = 1
+      lds_waves_per_cu = max(1, 65536 // lds_bytes)
+      if lds_waves_per_cu <= reloc_max_wgs:
+        from extra.qk_asm_scheduler import relocate_lgkm_waits
+        insts = relocate_lgkm_waits(insts)
   name = f"prefill_graph_gemm_{m}_{n}_{k}"
   return insts, lds_bytes, bm, bn, threads, name
 
