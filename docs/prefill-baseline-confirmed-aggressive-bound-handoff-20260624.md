@@ -62,3 +62,24 @@
 
 - Decode: keep `DECODE_ATTN_KV_IDENTITY` as shipped and use this row for parity-completion framing.
 - Prefill: run the next synced whole-prefill per-role transfer check before reopening bounded or search work.
+
+## 2026-06-24 (current-session direct-context proof update)
+
+- Prefill direct-context artifacts now include an additional synced whole-prefill closure attempt in
+  `bench/qk-prefill-aggressive-target-proof-20260624/`.
+- Decode W==D closure artifacts now include explicit aggressive target recheck in
+  `bench/qk-decode-aggressive-target-proof-20260624/`.
+
+### Current-context closure results (2026-06-24)
+
+| ctx | Prefill base | Prefill `pipe_tm2_tn2` | Prefill `pipe_tm4_tn2` | Decode base | Decode aggressive |
+|---:|---:|---:|---:|---:|---:|
+| 512 | 3572 | 4253 | 2332 | 101.9 | 103.4 |
+| 1024 | 3483 | 4037 | 2263 | 100.1 | 101.6 |
+| 2048 | 3226 | 3659 | 2139 | 97.6 | 99.1 |
+| 4096 | 2789 | 3110 | 1937 | 93.1 | 94.4 |
+
+Interpretation:
+- Prefill direct closure still does not reach the documented aggressive upper corridor; `pipe_tm2_tn2` is the strongest measured candidate in this session, but remains far below the projected aggressive bound.
+- Decode aggressive remains below its current non-search envelope in a reproducible fashion:
+  94.4/95.1 target and 103.4/104.0 target, and lockstep/gate closure remain intact.
