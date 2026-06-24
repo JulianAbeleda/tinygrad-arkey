@@ -48,7 +48,7 @@ store + subsequent load *within* the captured graph that persists across replays
 full-buffer materialization. This is not reachable from the model/route layer (proven: bakes at 1 layer), and per
 the design-scope stop rule ("do not rewrite all TinyJit buffer semantics → `TOO_BROAD`") it is a **core-engine
 project**, not completable as a model/route task. The Design A spec
-(`docs/runtime-kv-core-persistence-capability-scope-20260623.md`) stands as the target; its implementation requires
+(`docs/archive/runtime-kv-core-persistence-capability-scope-20260623.md`) stands as the target; its implementation requires
 tinygrad-engine work and is the only path to the remaining ~+11% (→ llama parity).
 
 ## What this means

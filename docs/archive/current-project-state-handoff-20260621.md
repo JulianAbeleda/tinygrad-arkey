@@ -1,5 +1,11 @@
 # Current Project State — Handoff (2026-06-21)
 
+> **⚠ SUPERSEDED (2026-06-24) — historical provenance only.** Current state lives in
+> `docs/current-project-state-handoff-20260624.md`. The `~67% llama` decode baseline and the §4
+> "bounded decode RESTED / capped at backend ceiling" frontier below were overturned by the 06-22→06-24
+> campaign (decode reached at/above llama parity via the owned attention tile + buffer-identity fix). Do
+> NOT treat this file as authority; kept for history.
+
 Canonical, high-signal snapshot. If anything elsewhere contradicts this file, this file (and the linked
 reconciliation result) wins. Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M.
 

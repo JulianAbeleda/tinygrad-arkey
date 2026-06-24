@@ -10,9 +10,9 @@
 
 Primary prior authority:
 
-- `docs/decode-ffn-gemv-warp-result-20260622.md`
-- `docs/q4k-gemv-warp-promotion-hardening-result-20260622.md`
-- `docs/decode-ctx-slope-audit-result-20260623.md`
+- `docs/archive/decode-ffn-gemv-warp-result-20260622.md`
+- `docs/archive/q4k-gemv-warp-promotion-hardening-result-20260622.md`
+- `docs/archive/decode-ctx-slope-audit-result-20260623.md`
 - `bench/qk-decode-parity-no-regression-audit/artifact_reconciliation.json`
 
 Core promotion evidence:

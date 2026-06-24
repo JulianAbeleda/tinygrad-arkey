@@ -8,7 +8,7 @@ Prove whether decode can sustain the documented aggressive target and show it is
 - Confirmed target (measured): `102.9 / 101.2 / 98.7 / 94.0` tok/s
 - Aggressive-theoretical target (non-search stack envelope): `104.0 / 102.1 / 99.6 / 95.1` tok/s
 
-Source: `docs/prefill-baseline-confirmed-aggressive-bound-handoff-20260624.md`, `bench/qk-owned-tile-buffer-identity-kv-read/wd.json`, `bench/qk-current-decode-benchmark/current.json`, `bench/qk-decode-parity-no-regression-audit/llama_vs_tinygrad_table.json`, `docs/decode-oracle-explanation-and-schedule-diff-result-20260623.md`.
+Source: `docs/prefill-baseline-confirmed-aggressive-bound-handoff-20260624.md`, `bench/qk-owned-tile-buffer-identity-kv-read/wd.json`, `bench/qk-current-decode-benchmark/current.json`, `bench/qk-decode-parity-no-regression-audit/llama_vs_tinygrad_table.json`, `docs/archive/decode-oracle-explanation-and-schedule-diff-result-20260623.md`.
 
 ## Goal state
 
@@ -137,7 +137,7 @@ Write one primary fail label and one line summary:
 Each label must include the best-practice explanation from tooling:
 
 - `decode-oracle-explanation...` for closed search surfaces,
-- `docs/decode-lifecycle-recheck-bundle-periodic-scope-20260624.md` for periodic gate requirements,
+- `docs/archive/decode-lifecycle-recheck-bundle-periodic-scope-20260624.md` for periodic gate requirements,
 - current authoritative `bench/qk-decode-lifecycle-recheck-bundle/latest.json` for baseline diff comparison.
 
 ## Success and next step

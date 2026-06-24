@@ -52,7 +52,7 @@ parity+ — no large structural lever remains.
 - Default decode (whole-cache, on): no flags needed. Disable: `DECODE_ATTN_KV_IDENTITY=0`. Tile off: `DECODE_ATTN_AMDGCN_TILE=0`.
 - W==D: `extra/qk_decode_runtime_overhead.py` (W==D harness). ISA: `extra/qk_isa_primitive_audit.py`.
 - Hardening artifacts: `bench/qk-post-parity-hardening/{authority,regression_guard,registry_audit}.json`.
-- Win evidence: `docs/owned-tile-buffer-identity-kv-read-result-20260623.md`, `bench/qk-owned-tile-buffer-identity-kv-read/`.
+- Win evidence: `docs/archive/owned-tile-buffer-identity-kv-read-result-20260623.md`, `bench/qk-owned-tile-buffer-identity-kv-read/`.
 
 ## 9. Default / fallback policy
 - **Default:** owned AMDGCN whole-cache buffer-identity tile, fp16 cache, ctx≥512, B=1/Hq32/Hkv8/Hd128/G4 (Qwen3-8B).

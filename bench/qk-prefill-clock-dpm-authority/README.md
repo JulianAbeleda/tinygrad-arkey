@@ -1,7 +1,7 @@
 # qk-prefill-clock-dpm-authority
 
 Artifacts for the prefill clock/DPM authority project. Scope:
-`docs/prefill-clock-dpm-authority-scope-20260619.md`. Driver: `extra/qk_prefill_clock_dpm_authority.py`.
+`docs/archive/prefill-clock-dpm-authority-scope-20260619.md`. Driver: `extra/qk_prefill_clock_dpm_authority.py`.
 
 - `supported_controls.json` — P0 control inventory on this RX 7900 XTX (amd-smi absent; rocm-smi+sysfs;
   perf-levels auto/high/manual/profile_peak/profile_standard/profile_min_sclk; determinism via

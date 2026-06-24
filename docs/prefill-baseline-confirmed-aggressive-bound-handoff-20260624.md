@@ -19,13 +19,13 @@
   - [runtime_overlap_by_ctx.json](/home/ubuntu/tinygrad-arkey/bench/qk-prefill-long-context-integration-hardening-20260624/runtime_overlap_by_ctx.json)
   - [kv_attention_split_timeseries.json](/home/ubuntu/tinygrad-arkey/bench/qk-prefill-long-context-integration-hardening-20260624/kv_attention_split_timeseries.json)
   - [route_coverage_by_ctx_and_role.json](/home/ubuntu/tinygrad-arkey/bench/qk-prefill-long-context-integration-hardening-20260624/route_coverage_by_ctx_and_role.json)
-  - [result: `docs/prefill-long-context-integration-hardening-result-20260624.md`](/home/ubuntu/tinygrad-arkey/docs/prefill-long-context-integration-hardening-result-20260624.md)
+  - [result: `docs/archive/prefill-long-context-integration-hardening-result-20260624.md`](/home/ubuntu/tinygrad-arkey/docs/archive/prefill-long-context-integration-hardening-result-20260624.md)
 - Decode
   - [latest baseline](/home/ubuntu/tinygrad-arkey/bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/throughput/current_context/wd_by_ctx.json)
   - [latest aggressive target probe baseline](/home/ubuntu/tinygrad-arkey/bench/qk-decode-aggressive-target-proof-20260624/throughput_baseline_probe.json)
   - [latest aggressive target probe](/home/ubuntu/tinygrad-arkey/bench/qk-decode-aggressive-target-proof-20260624/throughput_aggressive_probe.json)
   - [llama reference](https://huggingface.co)
-  - [decode-lifecycle periodic result](/home/ubuntu/tinygrad-arkey/docs/decode-lifecycle-recheck-bundle-result-20260624.md)
+  - [decode-lifecycle periodic result](/home/ubuntu/tinygrad-arkey/docs/archive/decode-lifecycle-recheck-bundle-result-20260624.md)
 
 ## Summary
 
@@ -68,7 +68,7 @@
 
 ## 2026-06-24 (proof snapshot)
 
-- New result doc: `docs/prefill-long-context-integration-hardening-result-20260624.md`
+- New result doc: `docs/archive/prefill-long-context-integration-hardening-result-20260624.md`
 - Decode aggressive proof snapshot still uses `bench/qk-decode-aggressive-target-proof-20260624/` for comparison and shortfall analysis.
 
 ### Probe rows (for continuity)

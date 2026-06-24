@@ -2,7 +2,7 @@
 
 Date: 2026-06-14
 
-> **Superseded — read `docs/amd-decode-flywheel-postmortem.md` first.** The triage
+> **Superseded — read `docs/archive/amd-decode-flywheel-postmortem.md` first.** The triage
 > results below (including the `xgboost macro-F1 0.873/0.891` and the "Phase 3G exit
 > gate met / Phase 4 unblocked" claims) were later **falsified**: kernel outcomes
 > were scored on wall-clock throughput dominated by ~0.27 ms launch overhead, so the

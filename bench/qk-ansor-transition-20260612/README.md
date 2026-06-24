@@ -366,7 +366,7 @@ PYTHONPATH=. .venv/bin/python extra/qk_semantic_codegen_verdict.py \
 
 ## Semantic Codegen v2: Family B Row Grouping
 
-Design note: `docs/amd-decode-semantic-family-b.md`.
+Design note: `docs/archive/amd-decode-semantic-family-b.md`.
 
 `extra/qk_semantic_codegen_v2.py` generated a bounded Family B surface:
 exact-tensor Q4_K `ffn_down` row-grouped partial GEMV. The pre-registered
@@ -397,7 +397,7 @@ Artifacts: `semantic-codegen-v2/verdict.md`.
 
 ## Semantic Codegen v3: Family C Packed Load
 
-Design note: `docs/amd-decode-packed-load-lowering.md`.
+Design note: `docs/archive/amd-decode-packed-load-lowering.md`.
 
 `extra/qk_semantic_codegen_v3.py` generated the first packed-load memory-access
 surface: exact-tensor Q4_K `ffn_gate` partial GEMV with an explicit packed-word
@@ -434,7 +434,7 @@ Artifacts: `semantic-codegen-v3/verdict.md`,
 
 ## Semantic Codegen v4: Family C Vector Load
 
-Design note: `docs/amd-decode-packed-load-lowering.md`.
+Design note: `docs/archive/amd-decode-packed-load-lowering.md`.
 
 `extra/qk_semantic_codegen_v4.py` generated the next memory-access probe:
 exact-tensor Q4_K `ffn_gate` partial GEMV requesting an aligned `uint32x4`

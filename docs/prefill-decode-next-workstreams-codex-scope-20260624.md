@@ -37,7 +37,7 @@ Run this first.
 
 Detailed scope:
 
-- `docs/prefill-long-context-integration-hardening-scope-20260624.md`
+- `docs/archive/prefill-long-context-integration-hardening-scope-20260624.md`
 
 Primary artifact directory:
 
@@ -45,8 +45,8 @@ Primary artifact directory:
 
 Read before executing:
 
-- `docs/prefill-long-context-root-cause-audit-result-20260624.md`
-- `docs/prefill-long-context-harness-authority-and-role-tax-result-20260624.md`
+- `docs/archive/prefill-long-context-root-cause-audit-result-20260624.md`
+- `docs/archive/prefill-long-context-harness-authority-and-role-tax-result-20260624.md`
 - `docs/prefill-eightwave-promotion-result-20260624.md`
 - `bench/qk-prefill-root-cause-long-context-20260624/`
 
@@ -110,8 +110,8 @@ Run this after Phase 1, unless decode has regressed or changed defaults.
 
 Detailed scopes:
 
-- `docs/decode-lifecycle-recheck-bundle-periodic-scope-20260624.md`
-- `docs/decode-ctx-slope-lifecycle-primitive-audit-scope-20260624.md`
+- `docs/archive/decode-lifecycle-recheck-bundle-periodic-scope-20260624.md`
+- `docs/archive/decode-ctx-slope-lifecycle-primitive-audit-scope-20260624.md`
 
 Primary artifact directories:
 
@@ -186,9 +186,9 @@ Run this only after Phase 2 identifies a material bounded target.
 
 Detailed scopes:
 
-- `docs/decode-ctx-slope-lifecycle-primitive-audit-scope-20260624.md`
-- `docs/decode-unknown-bucket-full-visibility-scope-20260624.md`
-- `docs/exhaustive-gpu-lifecycle-primitive-audit-scope-20260624.md`
+- `docs/archive/decode-ctx-slope-lifecycle-primitive-audit-scope-20260624.md`
+- `docs/archive/decode-unknown-bucket-full-visibility-scope-20260624.md`
+- `docs/archive/exhaustive-gpu-lifecycle-primitive-audit-scope-20260624.md`
 - `docs/gpu-lifecycle-primitive-coverage-tracker-20260624.md`
 
 Candidate search targets, ranked by likely value:

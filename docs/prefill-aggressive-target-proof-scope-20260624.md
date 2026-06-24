@@ -138,8 +138,8 @@ Capture memory pressure before/after each 8192 run and after profile loops.
 
 Include a root-cause section in `decision.json` referencing:
 
-- `docs/prefill-long-context-root-cause-audit-result-20260624.md`
-- `docs/prefill-long-context-integration-hardening-scope-20260624.md`
+- `docs/archive/prefill-long-context-root-cause-audit-result-20260624.md`
+- `docs/archive/prefill-long-context-integration-hardening-scope-20260624.md`
 - `bench/qk-prefill-post-decode-parity-frontier/time_tax.json`
 - `bench/qk-prefill-post-decode-parity-frontier/tensile_gap_attribution.json`
 

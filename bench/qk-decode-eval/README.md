@@ -50,7 +50,7 @@ numbers — same verdict class):
 | candidate | expected | source |
 |---|---|---|
 | `baseline_default` | `REST` + reproducibility band | the W==D falsifier (auto-clock variance vs the 5% margin) |
-| `flash_l_64` | `LOCAL_PASS_WD_FAIL` | `docs/decode-vector-flash-tile-realigned-result-20260621.md` |
+| `flash_l_64` | `LOCAL_PASS_WD_FAIL` | `docs/archive/decode-vector-flash-tile-realigned-result-20260621.md` |
 | `warp_flash_tile` | `FAIL_LOCAL_AB` | `bench/qk-decode-vector-flash-tile/warp_tile_ab.json` |
 | `q8_opt_in` | `PASS_OPT_IN` | `bench/qk-decode-primitive-transfer/decode_q8_model_route_timing_audit_result.json` + historical dNLL |
 

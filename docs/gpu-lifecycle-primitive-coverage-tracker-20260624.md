@@ -114,7 +114,7 @@ Decode implication: this is not a short-context throughput emergency. The remain
 
 Create:
 
-`docs/decode-ctx-slope-lifecycle-primitive-audit-scope-20260624.md`
+`docs/archive/decode-ctx-slope-lifecycle-primitive-audit-scope-20260624.md`
 
 Required outputs:
 
