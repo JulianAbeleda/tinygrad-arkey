@@ -30,7 +30,55 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-decode-kernel-probe"
 CTXS = [512, 1024, 2048, 4096]; MAXC = 4608; NSAMP = 7
 
-def capture(ctxs=CTXS, want_src=True):
+def _make_src_flags(name: str, hist: collections.Counter, src_text: str, store_dt: set[str], load_dt: set[str], full: bool) -> dict[str, bool]:
+  has_exp = hist.get("EXP2",0)+hist.get("EXP",0) > 0
+  has_sin = hist.get("SIN",0) > 0
+  has_reduce = hist.get("REDUCE",0)+hist.get("REDUCE_AXIS",0) > 0
+  has_sqrt = hist.get("SQRT",0) > 0
+  has_recip = hist.get("RECIP",0) > 0
+  has_mul = hist.get("MUL",0) > 0
+  has_add = hist.get("ADD",0) > 0 or hist.get("FMA",0) > 0
+  has_where = hist.get("WHERE",0) > 0
+  has_index = hist.get("INDEX",0) > 0
+  has_cast = hist.get("CAST",0) > 0
+  has_load = hist.get("LOAD",0) > 0
+  has_store = hist.get("STORE",0) > 0
+  has_bitcast = hist.get("BITCAST",0) > 0
+  has_shift = any(k in hist for k in ("SHL", "SHR", "AND", "OR", "XOR"))
+  has_int8_out = any("char" in d or "int8" in d or "uchar" in d or "uint8" in d for d in store_dt)
+  is_pure_copy = (not has_exp and not has_sin and not has_reduce and not has_sqrt and not has_recip and
+                  not has_mul and not has_add and not has_where and len(store_dt) <= 1 and all(("float" in d or "half" in d) for d in store_dt | load_dt))
+  src_flags = {
+    "start_pos": "start_pos" in src_text,
+    "uchar": has_int8_out or "uchar" in src_text or "uint8" in src_text,
+    "exp": has_exp,
+    "sin": has_sin,
+    "sqrt": has_sqrt,
+    "is_pure_copy": is_pure_copy,
+  }
+  if full:
+    src_flags.update({
+      "has_exp": has_exp,
+      "has_sin": has_sin,
+      "has_reduce": has_reduce,
+      "has_recip": has_recip,
+      "has_mul": has_mul,
+      "has_add": has_add,
+      "has_where": has_where,
+      "has_index": has_index,
+      "has_cast": has_cast,
+      "has_load": has_load,
+      "has_store": has_store,
+      "has_bitcast": has_bitcast,
+      "has_shift": has_shift,
+      "has_int8_out": has_int8_out,
+      "op_signature_fingerprint": ",".join(sorted(hist.keys())),
+      "op_count_signature": {k: hist[k] for k in sorted(hist.keys(), key=lambda x: (-hist[x], x))},
+      "store_dtypes_signature": sorted(store_dt),
+      "load_dtypes_signature": sorted(load_dt),
+    })
+  return src_flags
+def capture(ctxs=CTXS, want_src=True, full_source_flags=False):
   from extra.qk_harness_contract import DEFAULT_MODEL
   model = os.environ.get("QK_MODEL", DEFAULT_MODEL)
   from tinygrad import Tensor, UOp, TinyJit, Context, Device, getenv
@@ -82,15 +130,7 @@ def capture(ctxs=CTXS, want_src=True):
           has_int8_out = any("char" in d or "int8" in d or "uchar" in d or "uint8" in d for d in store_dt)
           has_sqrt = hist.get("SQRT",0) > 0
           has_recip = hist.get("RECIP",0) > 0
-          src_flags = {
-            "start_pos": "start_pos" in src_text,
-            "uchar": has_int8_out or "uchar" in src_text or "uint8" in src_text,
-            "exp": has_exp,
-            "sin": has_sin,
-            "sqrt": has_sqrt,
-            "is_pure_copy": (not has_exp and not has_sin and not has_reduce and not has_sqrt and not has_recip and
-                             len(store_dt) <= 1 and all(("float" in d or "half" in d) for d in store_dt | load_dt)),
-          }
+          src_flags = _make_src_flags(nm, hist, src_text, store_dt, load_dt, full_source_flags)
           sources[nm] = {"global": _dims(pi.global_size), "local": _dims(pi.local_size),
                          "ins": list(pi.ins), "outs": list(pi.outs),
                          "op_hist": dict(sorted(hist.items(), key=lambda x: -x[1])),
@@ -125,9 +165,11 @@ def main():
   ap = argparse.ArgumentParser(description="Canonical full decode kernel capture: timings, timeline, launch dims, and source-derived flags.")
   ap.add_argument("--contexts", default=",".join(map(str, CTXS)), help="comma-separated decode ctx points")
   ap.add_argument("--out", default=str(OUT), help="output directory")
+  ap.add_argument("--full-source-flags", action="store_true",
+                  help="capture expanded source-derived flags for every kernel (op-presence + signature fields)")
   args = ap.parse_args()
   ctxs = [int(x) for x in args.contexts.split(",") if x.strip()]
-  d = capture(ctxs=ctxs)
+  d = capture(ctxs=ctxs, full_source_flags=args.full_source_flags)
   out = pathlib.Path(args.out)
   out.mkdir(parents=True, exist_ok=True)
   ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

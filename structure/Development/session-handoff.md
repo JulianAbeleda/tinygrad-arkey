@@ -159,14 +159,29 @@ they are now superseded by the doc map and provenance index. Use:
 - `docs/current-project-state-handoff-20260621.md`
 - `docs/provenance-index-20260621.md`
 
-## Active objective (2026-06-24): decode + long-context prefill audits for parity-at-no-regression
+## Active objective (2026-06-24): decode lifecycle baseline refresh + periodic protocol
 
 Goal:
-- Reconcile decode flag-stack authority and freeze a no-regression decision.
-- Complete a focused prefill long-context, bounded candidate follow-up (post-frontier) and decide next bounded action.
-- Update the frontier decision with evidence-backed next action, not assumptions.
+- Refresh the decode baseline via one-periodic recheck bundle:
+  - correctness/reproducibility gate pre-post (`qk_decode_search_gate.py`)
+  - unknown-lockstep proof pre-post (`qk_decode_unknown_bucket_lockstep_audit.py`)
+  - interleaved W==D sweep variants (current + long + alternative capture)
+- Set the new baseline snapshot as the current reference for decode follow-up audits.
+
+Baseline run completed:
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-145514`
+- Decision: `DECODE_LIFECYCLE_RECHECK_BUNDLE_PASS`
+- Pointer: `bench/qk-decode-lifecycle-recheck-bundle/latest.json`
+
+Active scope artifacts:
+- `docs/prefill-decode-next-workstreams-codex-scope-20260624.md`
+- `docs/decode-lifecycle-recheck-bundle-scope-20260624.md`
+- `docs/decode-lifecycle-recheck-bundle-result-20260624.md`
+- `bench/qk-decode-lifecycle-recheck-bundle/`
 
 Current status:
+- Next Codex-executable umbrella scope: `docs/prefill-decode-next-workstreams-codex-scope-20260624.md`.
+- Recommended order: prefill long-context hardening first, decode-vs-llama authority refresh second, decode search expansion only if the refreshed decode evidence identifies a material bounded target.
 - Decode: `Q4K_GEMV_WARP` + `Q4K_GEMV_WARP_DOWN` promoted default-on for guarded FFN decode shapes (`DECODE_PROMOTE_Q4K_GEMV_WARP_FFN`).
 - New decode scope-in artifact for this cycle: `docs/decode-parity-harness-reconciliation-scope-20260624.md`
 - Decode promotion result doc: `docs/decode-q4k-gemv-warp-promotion-result-20260624.md`.
@@ -176,9 +191,9 @@ Current status:
 - Promotion result doc: `docs/prefill-eightwave-promotion-result-20260624.md`.
 - Long-context root-cause root-pass: `docs/prefill-long-context-root-cause-audit-result-20260624.md` completed.
 - Root-cause outcome: `PREFILL_ROOTCAUSE_LONG_CTX_INTEGRATION_BOUND` (no harness-only cause; single-chunk vs whole-gap confirms multi-chunk integration slope).
-- Next scoped Spark handoff for the suspected long-context harness issue:
-  `docs/prefill-long-context-harness-authority-and-role-tax-scope-20260624.md`.
-- Deep follow-up root-cause scope:
+- Next scoped Spark handoff:
+  `docs/prefill-long-context-integration-hardening-scope-20260624.md`.
+- Deep follow-up root-cause scope for continuity:
   `docs/prefill-long-context-root-cause-audit-scope-20260624.md`.
 
 ### A) Decode audit scope (long-context slope + route attribution)
@@ -216,6 +231,23 @@ Current status:
   - `CTX_SLOPE_DECISION_READY`
 - Fail-safe stop:
   - correctness mismatch, route mismatch, unstable spread, or incomplete authority lock.
+
+### C) Decode periodic lifecycle protocol
+
+- Baseline periodic script:
+  - `extra/qk_decode_lifecycle_recheck_periodic.py`
+- Scope doc:
+  - `docs/decode-lifecycle-recheck-bundle-periodic-scope-20260624.md`
+- Result artifact:
+  - `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-<RUN_ID>/periodic_diff.json`
+- Command:
+  - `python3 extra/qk_decode_lifecycle_recheck_periodic.py --out-root bench/qk-decode-lifecycle-recheck-bundle`
+
+  This script:
+  - runs the full periodic bundle (or compare-only with `--compare-only`),
+  - stores `periodic_diff.json`/`periodic_diff.md` in the run directory,
+  - updates `bench/qk-decode-lifecycle-recheck-bundle/latest.json`,
+  - and compares against prior baseline artifacts.
 
 ### B) Prefill long-context audit scope (post-decode frontier)
 
@@ -265,6 +297,34 @@ Current status:
   - do not restart broad prefill search until search-readiness verdict is explicit
   - do not use single concrete `start_pos=0` chunk data as the whole-prefill headline
   - do not use nosync/raw-dispatch data as authority
+
+### C) Prefill long-context integration hardening (execution scope)
+
+- Source scope:
+  - `docs/prefill-long-context-integration-hardening-scope-20260624.md`
+  - `docs/prefill-long-context-root-cause-audit-result-20260624.md`
+  - `bench/qk-prefill-root-cause-long-context-20260624/`
+- Required tools:
+  - `extra/qk_prefill_whole_synced.py`
+  - `extra/qk_prefill_per_role_time_tax.py`
+- Required artifact folder:
+  - `bench/qk-prefill-long-context-integration-hardening-20260624/`
+- Required outputs:
+  - `authority.json`, `whole_prefill_by_ctx_raw.json`, `whole_prefill_chunk_series.json`, `single_chunk_vs_whole_prefill.json`
+  - `runtime_overlap_by_ctx.json`, `per_role_time_tax_timeseries_by_ctx.json`, `route_coverage_by_ctx_and_role.json`, `kv_attention_split_timeseries.json`
+  - `memory_pressure_watch.json`, `decision.json`
+- Required contexts:
+  - 512, 1024, 2048, 4096, 8192
+- Completion decisions:
+  - `PREFILL_LONGCTX_INTEGRATION_HARDENING_HOSTSYNC_BOUND`
+  - `PREFILL_LONGCTX_INTEGRATION_HARDENING_DISPATCH_BOUND`
+  - `PREFILL_LONGCTX_INTEGRATION_HARDENING_ATTENTION_COPY_BOUND`
+  - `PREFILL_LONGCTX_INTEGRATION_HARDENING_NO_GROWTH_CONFIRMED`
+- Boundaries:
+  - no new prefill defaults/emit-search during this execution
+  - no decode changes
+  - no hardcoded `start_pos` overrides for 8192; full 16-chunk lattice required
+  - whole-lane timing only is authoritative; single-chunk diagnostics remain diagnostic-only
 
 ### Progress handoff format for this objective
 

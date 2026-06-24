@@ -1,0 +1,24 @@
+{
+  "date": "2026-06-24",
+  "phase": "PREFILL_LONGCTX_INTEGRATION_HARDENING_DECISION",
+  "label": "PREFILL_LONGCTX_INTEGRATION_HARDENING_NO_GROWTH_CONFIRMED",
+  "rationale": {
+    "route": "route_graph_gemm_on_tensile_off",
+    "contexts": [
+      512,
+      1024,
+      2048,
+      4096,
+      8192
+    ],
+    "ctx8192_wall_ms": 2284.1210287660942,
+    "ctx8192_gpu_only_ms": 1936.616717956543,
+    "ctx8192_host_sync_ms": 285.3551873631659,
+    "ctx8192_launch_overhead_ms": 62.14912344638539
+  },
+  "next_step": "NONSEARCH_INTEGRATION_FIX_SCOPE",
+  "action": {
+    "primary": "PREFILL_LONGCTX_INTEGRATION_HARDENING_NO_GROWTH_CONFIRMED",
+    "requires": "confirm_integration_fix"
+  }
+}

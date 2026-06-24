@@ -6,12 +6,24 @@ oracle wins because it satisfies the **whole lifecycle simultaneously**; nearby 
 instruction schedule within the same primitive boundary, so they don't transfer. No defaults changed, no new kernels,
 no broad reruns, no prefill.
 
+### Baseline refresh (2026-06-24)
+
+Decode lifecycle periodic recheck bundle `20260624-141949` re-validates the same oracle stack and adds
+single-pass versioned closure for:
+
+- pre/post oracle gate checks (`qk_decode_search_gate.py`)
+- pre/post unknown-lockstep closure (`DECODE_UNKNOWN_BUCKET_LOCKSTEP_PROVEN`)
+- current/long/legacy-capture W==D A/B sweep capture in one handoff bundle
+
+Latest bundle pointer:
+- `bench/qk-decode-lifecycle-recheck-bundle/latest.json`
+
 ## 1. What the oracle is
 Owned AMDGCN **whole-cache buffer-identity** attention tile (`owned_flash_tile_gqa_whole`, `DECODE_ATTN_KV_IDENTITY=1`
 default-on, ctx≥512): passes the whole `cache_kv.after(store)` (no slice/reshape across the precompiled boundary), the
 kernel offsets K/V halves; fp16 cache/Q/K/V, fp32 online softmax+PV; split-KV `S=48`, `TK=16`, `VEC=1`, `UNROLL=1`,
 `combine=base`, 4-warp wave32, GQA `G=4`. ISA: `v_dot2` + 8 KB LDS + `__shfl_xor` cross-lane, **60 VGPR, 0 spill**.
-W==D (canonical warp stack) **102.9 / 101.3 / 98.7 / 94.2 tok/s @ctx512/1024/2048/4096 = 102–105 % of llama.cpp.**
+W==D (canonical warp stack) **102.4 / 100.7 / 98.2 / 93.6 tok/s @ctx512/1024/2048/4096 = 101–105 % of llama.cpp.**
 
 ## 2. Why it beats gqa / slice / materialization
 - **vs gqa_coop_vec:** the owned split-KV tile (`v_dot2`+LDS+cross-lane+online softmax) is +12–22 % — structural.

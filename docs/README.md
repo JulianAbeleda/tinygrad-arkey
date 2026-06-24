@@ -11,6 +11,9 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 
 ## ⭐ Start here (canonical, post-bank)
 
+- **`prefill-decode-next-workstreams-codex-scope-20260624.md`** — current Codex-executable next-work map:
+  prefill long-context hardening first, decode-vs-llama authority refresh second, decode search expansion only after a
+  bounded target is proven by the refreshed evidence.
 - **`current-project-state-handoff-20260621.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). One short page:
   canonical numbers, decided policies (global `PREFILL_V2` OFF; `auto`/server/q8 opt-in), closed lanes (prefill
   kernels, prefill default, bounded decode fusion, bounded decode vector-tile, the `87.6` ambiguity). **Bounded
@@ -37,8 +40,12 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   for unknown-bucket/source-map work. Canonical command:
   `DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_decode_audit_common.py --contexts 512,1024,2048,4096`.
   It writes `bench/qk-decode-kernel-probe/latest.json` and a timestamped
-  `bench/qk-decode-kernel-probe/decode-kernel-probe-YYYYMMDD-HHMMSS.json`. Do not look for a separate
+  `bench/qk-decode-kernel-probe/decode-kernel-probe-YYYYMMDD-HHMMSS.json`. For exhaustive source tracing, run
+  `qk_decode_audit_common.py --full-source-flags`. Do not look for a separate
   `qk_decode_kernel_probe.py`; the canonical producer is the shared audit-common tool.
+- If strict unknown-bucket math is still noisy, run:
+  `DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_unknown_bucket_lockstep_audit.py` to force a fully synchronized
+  probe + unknown-map proof in one execution.
 - **`kv-cache-copy-elimination-result-20260622.md`** — ⭐ EXECUTED `NEXT_IMPL_NORM_ROPE_KV` → `KV_CACHE_COPY_ELIMINATION_JIT_BLOCKED`.
   The KV-cache copy (`model.py:952`, ~1.4 ms/tok, transfers) is real but **eliminating it needs a core-JIT capability**:
   both bounded local branches fail at schedule time — in-place `.assign()` → read-after-write hazard (`KeyError` on a
