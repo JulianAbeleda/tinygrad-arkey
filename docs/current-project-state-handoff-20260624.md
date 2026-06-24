@@ -9,7 +9,7 @@ ceiling" frontier were overturned by the 06-22→06-24 campaign (owned attention
 
 | metric | value | source |
 |---|---|---|
-| decode @ctx 512 / 1024 / 2048 / 4096 | **102.6 / 100.8 / 98.4 / 93.9 tok/s** (≈ **101–105% of llama** — at/above parity) | `prefill-baseline-confirmed-aggressive-bound-handoff-20260624.md` |
+| decode @ctx 512 / 1024 / 2048 / 4096 | **101.6 / 99.8 / 97.4 / 92.9 tok/s** (≈ **100.6–104.0% of llama** — at/above parity) | `prefill-baseline-confirmed-aggressive-bound-handoff-20260624.md` |
 | decode full-stack envelope (non-search) | 104.0 / 102.1 / 99.6 / 95.1 tok/s | `decode-q4k-gemv-warp-promotion-result-20260624.md` |
 | llama reference (same ctx) | 97.71 / 97.39 / 95.00 / 92.37 tok/s | `bench/qk-post-parity-hardening/authority.json` |
 | prefill @ctx 512 / 1024 / 2048 / 4096 / 8192 | **3597 / 3505 / 3263 / 2784 / 2217 tok/s** (`eightwave` promoted; ~+3% over prior) | `prefill-eightwave-promotion-result-20260624.md` |

@@ -21,7 +21,7 @@
   - [route_coverage_by_ctx_and_role.json](/home/ubuntu/tinygrad-arkey/bench/qk-prefill-long-context-integration-hardening-20260624/route_coverage_by_ctx_and_role.json)
   - [result: `docs/archive/prefill-long-context-integration-hardening-result-20260624.md`](/home/ubuntu/tinygrad-arkey/docs/archive/prefill-long-context-integration-hardening-result-20260624.md)
 - Decode
-  - [latest baseline](/home/ubuntu/tinygrad-arkey/bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/throughput/current_context/wd_by_ctx.json)
+- [latest baseline](/home/ubuntu/tinygrad-arkey/bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-1756/throughput/current_context/wd_by_ctx.json)
   - [latest aggressive target probe baseline](/home/ubuntu/tinygrad-arkey/bench/qk-decode-aggressive-target-proof-20260624/throughput_baseline_probe.json)
   - [latest aggressive target probe](/home/ubuntu/tinygrad-arkey/bench/qk-decode-aggressive-target-proof-20260624/throughput_aggressive_probe.json)
   - [llama reference](https://huggingface.co)

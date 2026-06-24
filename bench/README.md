@@ -2,15 +2,15 @@
 
 Single source for the fork's current benchmarks: each number, where it's recorded, and the exact
 command to reproduce it. Most `bench/**` output is gitignored (regeneratable); durable result
-artifacts are force-added. Doc map: `../docs/README.md`; **canonical current state: `../docs/archive/current-project-state-handoff-20260621.md`**.
+artifacts are force-added. Doc map: `../docs/README.md`; **canonical current state: `../docs/current-project-state-handoff-20260624.md`**.
 
 > **Canonical policy (do not re-open — guardrail `extra/qk_policy_consistency_check.py`):** Global `PREFILL_V2`
 > default stays **OFF**; `PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE=1` / q8 are **opt-in**. `87.6` is contextual
-> (ctx≈0 tok/s vs a separate ctx4096 ms/token) — **never quote it bare**. The decode headline is the **curve**
-> (~86 @ctx≈0 → ~61 @ctx4096 = **~67% llama**), not ctx≈0. **Bounded decode work is RESTED** — fusion, micro-fusion,
-> and the vector-tile (FLASH_L=64 passed the local attention gate but failed W==D promotion) are all closed. The only
-> remaining decode lever is the **north-star full `flash_attn_tile` lifecycle** (efficient many-split / stream-k
-> combine), not a bounded patch. See `../docs/archive/current-project-state-handoff-20260621.md`.
+> (ctx≈0 tok/s vs a separate ctx4096 ms/token) — **never quote it bare**. **Decode now runs at/above llama parity**
+> on the `Q4K_GEMV_WARP*` default stack (**101.6/99.8/97.4/92.9 tok/s @ctx512/1024/2048/4096 ≈ 100.6–104.0% of llama**),
+> reached via the owned attention tile + buffer-identity fix; the 06-21 "~67% llama / bounded decode RESTED" framing is
+> **superseded**. Prefill (eightwave default) **3597/3505/3263/2784/2217 @ctx512/1024/2048/4096/8192**. See
+> `../docs/current-project-state-handoff-20260624.md`.
 >
 > **Machine-search evaluator** (`extra/qk_decode_eval.py`, `qk-decode-eval/`): the automated lifecycle ladder that
 > turns a candidate into a schema'd verdict; reproduces the historical classifications and proved whole-decode W==D
@@ -130,14 +130,14 @@ Pick the harness by what you're measuring:
 | want | use | gives | notes |
 |---|---|---|---|
 | **production tok/s @ ctx≈0** (default headline) | **`-m tinygrad.llm … --warmup --benchmark`** (`tinygrad/llm/cli.py`) | ~86 tok/s, single point | the production default; `model.generate`, clean path |
-| **decode tok/s vs ctx** (512/1024/4096…) | **`extra/qk_decode_runtime_overhead.py`** (in-model **W==D**) | 68.2/66.4/60.7 @ 512/1024/4096 | only harness that sweeps ctx on the clean path; W≈D ⇒ GPU-bound |
+| **decode tok/s vs ctx** (512/1024/2048/4096) | **`extra/qk_decode_runtime_overhead.py`** (in-model **W==D**) | 101.6/99.8/97.4/92.9 @ 512/1024/2048/4096 (`Q4K_GEMV_WARP` default) | only harness that sweeps ctx on the clean path; W≈D ⇒ GPU-bound |
 | flash-decode **policy** (which path is selected, off/on/auto) | `extra/qk_flash_decode_auto_bench.py` | ~54–56 flat | ⚠️ **NOT a tok/s number** — it builds a host input `Tensor` per step inside the timed loop (contaminated by design); use it for selection/correctness only |
 
-Both clean harnesses agree on one curve: **~86 @ctx≈0 → 68.4/66.9/61.2 @ 512/1024/4096** (default stack,
+Both clean harnesses agree on one curve: **~86 @ctx≈0 → 101.6/99.8/97.4/92.9 @ 512/1024/2048/4096** (default stack,
 rerun 2026-06-20; matches banked). See `../docs/archive/qk-decode-banked-reproduce-20260618.md`,
 `qk-decode-runtime-overhead/result.json`.
 > ⚠️ **`87.6` is ambiguous — never quote it bare.** It is BOTH a real ctx≈0 decode **tok/s** (~11.4 ms) AND a real
-> ctx4096 decode **ms/token** (=11.4 tok/s). The decode headline is the *curve* (~86 @ctx≈0 → ~61 @ctx4096 = **~67%
+> ctx4096 decode **ms/token** (=11.4 tok/s). The decode headline is the *curve* (~86 @ctx≈0 → ~92.9 @ctx4096 = **~100.6–104%
 > llama** steady-state), not the ctx≈0 peak. Prefill policy (`PREFILL_V2=auto`/server) does NOT change decode (<1%,
 > identical output). See `../docs/archive/decode-prefill-headline-reconciliation-result-20260621.md`.
 
@@ -145,7 +145,7 @@ rerun 2026-06-20; matches banked). See `../docs/archive/qk-decode-banked-reprodu
 
 | benchmark | value | recorded in | reproduce |
 |---|---:|---|---|
-| **Decode 8B, default-on** (coop stack + gqa_coop_vec + flash) | **~86 @ctx≈0; 68.4/66.9/61.2 @ctx 512/1024/4096** (~67% llama) | `bench/qk-decode-runtime-overhead/result.json`, `archive/qk-decode-banked-reproduce-20260618.md`, `archive/qk-8b-decode-banked-20260617.md` | CLI `--warmup --benchmark` (ctx≈0); `extra/qk_decode_runtime_overhead.py` (ctx sweep) — see "Which harness" above |
+| **Decode 8B, default-on** (coop stack + gqa_coop_vec + flash) | **~86 @ctx≈0; 101.6/99.8/97.4/92.9 @ctx 512/1024/2048/4096** (~100.6–104.0% llama) | `bench/qk-decode-runtime-overhead/result.json`, `archive/qk-decode-banked-reproduce-20260618.md`, `archive/qk-8b-decode-banked-20260617.md` | CLI `--warmup --benchmark` (ctx≈0); `extra/qk_decode_runtime_overhead.py` (ctx sweep) — see "Which harness" above |
 | **Decode 8B, q8 FFN research route** (default-off / opt-in) | **72.9/71.1 tok/s @ctx 512/1024** in `auto`; median `~72.0`, `~1.064×`, host-sync `0.0%` | `bench/qk-decode-primitive-transfer/decode_q8_model_route_timing_audit_rerun_20260620.json`, `docs/archive/decode-q8-model-route-timing-audit-result-20260620.md` | `PYTHONPATH=. .venv/bin/python extra/qk_decode_q8_model_route_timing_audit.py --lanes auto,manual_peak --modes baseline,q8 --ckpts 512 1024 --nmeas 20 --warmups 8 --out bench/qk-decode-primitive-transfer/decode_q8_model_route_timing_audit_rerun_20260620.json` |
 | _superseded:_ Decode 8B pre-coop (~55) / +ffn_down demote (64.3) | historical | `archive/amd-decode-banked-20260616.md`, `bench/qk-demote-search/search.json` | folded into the default-on stack above |
 | **Demotion frontier** (ffn_down/attn_v accept; lm_head 75.0 but rejected on dNLL +0.051) | see json | **`bench/qk-demote-search/search.json`** (+ `accepted-*.json`) | `python -m extra.qk_demote_search --epsilon 0.01` |
@@ -170,7 +170,7 @@ rerun 2026-06-20; matches banked). See `../docs/archive/qk-decode-banked-reprodu
 # Decode 8B, default-on @ctx≈0 (production headline) -> ~86 tok/s steady median (drop first ~3, clock-ramp)
 DEV=AMD PYTHONPATH=. .venv/bin/python -m tinygrad.llm -m /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 40
 
-# Decode 8B vs ctx (the banked curve) -> 68.4/66.9/61.2 @ 512/1024/4096, in-model W==D, host-sync %
+# Decode 8B vs ctx (the banked curve) -> 101.6/99.8/97.4/92.9 @ 512/1024/2048/4096, in-model W==D, host-sync %
 DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_decode_runtime_overhead.py
 
 # Prefill 8B concrete-KV opt-in path -> precompile concrete prefill jits at load, then byte-identical faster prefill

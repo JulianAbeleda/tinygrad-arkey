@@ -10,7 +10,7 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
 ## ⭐ Start here (canonical, post-bank)
 
 - **`current-project-state-handoff-20260624.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). Current numbers
-  (decode **102.6/100.8/98.4/93.9 tok/s** @ctx512/1024/2048/4096 ≈ **101–105% of llama** with the `Q4K_GEMV_WARP*`
+  (decode **101.6/99.8/97.4/92.9 tok/s** @ctx512/1024/2048/4096 ≈ **100.6–104.0% of llama** with the `Q4K_GEMV_WARP*`
   default stack; prefill **3597/3505/3263/2784/2217**), decided policies (global `PREFILL_V2` OFF; `auto`/server/q8
   opt-in), and the parity win (owned attention tile + buffer-identity fix). Guardrail:
   `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens a closed question.

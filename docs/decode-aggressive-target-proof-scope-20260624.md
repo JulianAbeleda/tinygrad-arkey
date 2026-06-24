@@ -4,8 +4,8 @@
 
 Prove whether decode can sustain the documented aggressive target and show it is (or is not) achievable with current tooling:
 
-- Baseline (current default, measured): `102.6 / 100.8 / 98.4 / 93.9` tok/s @ `512,1024,2048,4096`
-- Confirmed target (measured): `102.9 / 101.2 / 98.7 / 94.0` tok/s
+- Baseline (current default, measured): `101.6 / 99.8 / 97.4 / 92.9` tok/s @ `512,1024,2048,4096`
+- Confirmed target (measured): `103.4 / 101.6 / 99.1 / 94.4` tok/s
 - Aggressive-theoretical target (non-search stack envelope): `104.0 / 102.1 / 99.6 / 95.1` tok/s
 
 Source: `docs/prefill-baseline-confirmed-aggressive-bound-handoff-20260624.md`, `bench/qk-owned-tile-buffer-identity-kv-read/wd.json`, `bench/qk-current-decode-benchmark/current.json`, `bench/qk-decode-parity-no-regression-audit/llama_vs_tinygrad_table.json`, `docs/archive/decode-oracle-explanation-and-schedule-diff-result-20260623.md`.
