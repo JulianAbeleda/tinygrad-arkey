@@ -2,7 +2,7 @@
 
 The fork's **active/core surface**: **100 ● live** files (KEEP_CORE / KEEP_LIVE_TOOLING / KEEP_LIBRARY_HELPER). Everything else is current docs/tests or historical provenance (kept under `docs/archive/` + dated `bench/<arc>/`).
 
-Generated from `bench/qk-repo-principles-cleanup/inventory.json` (HEAD `53f263979`, 2026-06-24) — do not hand-edit. Regenerate: `build_repo_inventory.py` then `build_folder_indexes.py`.
+Generated from `bench/qk-repo-principles-cleanup/inventory.json` (HEAD `d0425ae5d`, 2026-06-24) — do not hand-edit. Regenerate: `build_repo_inventory.py` then `build_folder_indexes.py`.
 
 **Repo totals:** ARCHIVE_PROVENANCE **1311** · KEEP_DOC_AUTHORITY **182** · KEEP_TEST **115** · KEEP_LIVE_TOOLING **64** · KEEP_CORE **29** · KEEP_LIBRARY_HELPER **7**
 

@@ -1,11 +1,11 @@
 {
   "summary": {
     "generated": "2026-06-24",
-    "git_head": "53f263979",
-    "total_tracked": 2132,
+    "git_head": "d0425ae5d",
+    "total_tracked": 2131,
     "project_rows": 1708,
     "vendor_dirs": 11,
-    "vendor_files": 345,
+    "vendor_files": 344,
     "recommendation_counts": {
       "IGNORE_EXTERNAL_VENDOR": 11,
       "KEEP_LIVE_TOOLING": 64,
@@ -269,14 +269,13 @@
       "loc": 0,
       "subsystem": "vendor",
       "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "3 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
+      "reason": "2 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
       "principle_score": 5,
       "risk_if_deleted": "would diverge from upstream / break framework",
       "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 3,
+      "member_count": 2,
       "members_sample": [
         "test/backend/__init__.py",
-        "test/backend/test_linearizer.py",
         "test/backend/test_softmax_fusion.py"
       ]
     },
