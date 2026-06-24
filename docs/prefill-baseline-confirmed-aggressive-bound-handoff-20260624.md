@@ -21,13 +21,14 @@
 - Decode
   - [bench/qk-owned-tile-buffer-identity-kv-read/wd.json](/home/ubuntu/tinygrad-arkey/bench/qk-owned-tile-buffer-identity-kv-read/wd.json)
   - [bench/qk-decode-parity-no-regression-audit/wd_decode_by_ctx.json](/home/ubuntu/tinygrad-arkey/bench/qk-decode-parity-no-regression-audit/wd_decode_by_ctx.json)
+  - [bench/qk-current-decode-benchmark/current.json](/home/ubuntu/tinygrad-arkey/bench/qk-current-decode-benchmark/current.json)
   - [tinygrad-vs-llama-time-tax latest](/home/ubuntu/tinygrad-arkey/bench/qk-tinygrad-vs-llama-time-tax/latest.json)
   - [decode-campaign-final-synthesis-20260623.md](/home/ubuntu/tinygrad-arkey/docs/decode-campaign-final-synthesis-20260623.md)
 
 ## Summary
 
 - Prefill: baseline default remains authority; `eightwave` is confirmed + promoted.
-- Decode: `DECODE_ATTN_KV_IDENTITY` uplift is measured and currently above llama parity; non-search aggressive projection is therefore planning-only as "parity/cross-lane ceiling".
+- Decode: canonical W==D defaults are measured at 102.6/100.8/98.4/93.9 tok/s @ctx512/1024/2048/4096; the previous confirm signal remains valid, and a non-search full-stack envelope exists at 104.0/102.1/99.6/95.1.
 - Old PLRA remains `needs_confirm`; `eightwave + old_plra` is rejected.
 
 ## Prefill table (tok/s)
@@ -44,17 +45,17 @@
 
 ## Decode table (tok/s)
 
-| ctx | Baseline (`DECODE_ATTN_KV_IDENTITY=0`) | Confirmed (current shipped target) | Confirmed Δ | Aggressive target / parity bound |
+| ctx | Baseline (current default) | Confirmed | Confirmed Δ | Aggressive non-search target |
 |---:|---:|---:|---:|---:|
-| 512 | 86.7 | 102.9 | +18.7% | 97.71 (parity target, already exceeded) |
-| 1024 | 86.2 | 101.2 | +17.4% | 97.39 (parity target, already exceeded) |
-| 2048 | 84.9 | 98.7 | +16.3% | 95.00 (parity target, already exceeded) |
-| 4096 | 82.9 | 94.0 | +13.3% | 92.37 (parity target, already exceeded) |
+| 512 | 102.6 | 102.9 | +0.29% | 104.0 |
+| 1024 | 100.8 | 101.2 | +0.40% | 102.1 |
+| 2048 | 98.4 | 98.7 | +0.31% | 99.6 |
+| 4096 | 93.9 | 94.0 | +0.11% | 95.1 |
 
 ## Source-bound interpretation
 
 - Prefill aggressive numbers are intentionally optimistic and are not measured points.
-- Decode aggressive numbers are the current parity-aware ceiling used for progress checks (since measured confirmed already cleared it).
+- Decode aggressive numbers are the current non-search stack envelope used for progress checks; they are a close upper bound over the current default route.
 - Use these rows only as a cross-lane handoff summary; keep context- and artifact-version consistency for any rollout claim.
 
 ## Suggested next step
