@@ -17,8 +17,7 @@ rebuild:
 - enums + `*_choices()` + `validate_*()` follow `extra/qk_modes.py`;
 - `@dataclass(frozen=True)` with raise-on-invalid validation follows `QKConfig`
   (`tinygrad/llm/model.py`);
-- `assemble_search_row(**validated) -> dict` follows `assemble_row`
-  (`extra/qk_flywheel_dataset.py`) and is the "new experiment = new ROW, not a
+- `assemble_search_row(**validated) -> dict` is the "new experiment = new ROW, not a
   new script" entry point the anti-re-sprawl rule requires;
 - all IO routes through `extra/llm_eval_common.py` (no new IO code).
 
