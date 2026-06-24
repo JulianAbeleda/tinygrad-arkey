@@ -1,13 +1,13 @@
 {
   "summary": {
     "generated": "2026-06-24",
-    "git_head": "7648f72a3",
-    "total_tracked": 2220,
+    "git_head": "53f263979",
+    "total_tracked": 2132,
     "project_rows": 1708,
-    "vendor_dirs": 12,
-    "vendor_files": 433,
+    "vendor_dirs": 11,
+    "vendor_files": 345,
     "recommendation_counts": {
-      "IGNORE_EXTERNAL_VENDOR": 12,
+      "IGNORE_EXTERNAL_VENDOR": 11,
       "KEEP_LIVE_TOOLING": 64,
       "KEEP_LIBRARY_HELPER": 7,
       "ARCHIVE_PROVENANCE": 1311,
@@ -48,7 +48,7 @@
         "KEEP_TEST": 115
       },
       "vendor": {
-        "IGNORE_EXTERNAL_VENDOR": 12
+        "IGNORE_EXTERNAL_VENDOR": 11
       }
     },
     "live_roots": [
@@ -221,26 +221,6 @@
         "extra/sqtt/examples/gfx1100/profile_empty_run_1.pkl",
         "extra/sqtt/examples/gfx1100/profile_gemm_run_0.pkl",
         "extra/sqtt/examples/gfx1100/profile_gemm_run_1.pkl"
-      ]
-    },
-    {
-      "path": "extra/thunder/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "88 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 88,
-      "members_sample": [
-        "extra/thunder/amd/fa.py",
-        "extra/thunder/amd/fa_bwd_causal.cpp",
-        "extra/thunder/amd/fa_bwd_post.cpp",
-        "extra/thunder/amd/fa_bwd_pre.cpp",
-        "extra/thunder/amd/fa_fwd_causal.cpp",
-        "extra/thunder/amd/gemm_bf16.cpp"
       ]
     },
     {
