@@ -174,6 +174,12 @@ Current status:
 - New result doc: `docs/prefill-long-context-no-regression-audit-result-20260623.md`.
 - Completed prefill interaction check: `docs/prefill-eightwave-oldplra-interaction-scope-20260624.md`; decision is `eightwave` alone.
 - Promotion result doc: `docs/prefill-eightwave-promotion-result-20260624.md`.
+- Long-context root-cause root-pass: `docs/prefill-long-context-root-cause-audit-result-20260624.md` completed.
+- Root-cause outcome: `PREFILL_ROOTCAUSE_LONG_CTX_INTEGRATION_BOUND` (no harness-only cause; single-chunk vs whole-gap confirms multi-chunk integration slope).
+- Next scoped Spark handoff for the suspected long-context harness issue:
+  `docs/prefill-long-context-harness-authority-and-role-tax-scope-20260624.md`.
+- Deep follow-up root-cause scope:
+  `docs/prefill-long-context-root-cause-audit-scope-20260624.md`.
 
 ### A) Decode audit scope (long-context slope + route attribution)
 
@@ -214,35 +220,51 @@ Current status:
 ### B) Prefill long-context audit scope (post-decode frontier)
 
 - Source scope:
+  - `docs/prefill-long-context-harness-authority-and-role-tax-scope-20260624.md`
   - `docs/prefill-eightwave-promotion-result-20260624.md`
   - `docs/prefill-eightwave-oldplra-interaction-scope-20260624.md`
   - `docs/prefill-long-context-no-regression-audit-scope-20260623.md`
   - `docs/prefill-post-decode-parity-frontier-scope-20260623.md`
   - `docs/prefill-post-decode-parity-frontier-result-20260623.md`
+  - `docs/prefill-frontier-rest-or-nonsearch-next-scope-20260623.md`
+  - `docs/prefill-per-role-transfer-attribution-result-20260623.md`
   - `docs/prefill-structural-emit-search-result-20260623.md`
   - `docs/prefill-structural-emit-search-runbook-20260623.md`
 - Required tools:
   - `extra/qk_prefill_whole_synced.py`
   - `extra/qk_prefill_emit_search.py`
+  - `extra/qk_prefill_per_role_time_tax.py`
   - `extra/qk_decode_time_tax_audit.py` (for shared tax decomposition)
   - `extra/qk_isa_primitive_audit.py`
 - Required artifact folder:
-  - `bench/qk-prefill-post-decode-parity-frontier/`
+  - `bench/qk-prefill-long-context-harness-authority-role-tax/`
 - Required outputs:
-  - `authority.json`, `corpus_reconciliation.json`, `baseline_prefill.json`, `shape_inventory.json`, `time_tax.json`, `isa_audit.json`, `tensile_gap_attribution.json`, `search_readiness.json`, `next_action_decision.json`
+  - `authority.json`
+  - `harness_reconciliation.json`
+  - `baseline_whole_prefill_by_ctx.json`
+  - `single_chunk_vs_whole_prefill.json`
+  - `per_role_time_tax_by_ctx.json`
+  - `route_coverage_by_role.json`
+  - `graphgemm_vs_tensile_integration_by_role.json`
+  - `decision.json`
 - Required contexts:
-  - short/medium/long prefill lengths aligned to current canonical prefill harness; preserve existing coverage from last frontier docs
+  - 512, 1024, 2048, 4096, 8192
 - Completion decisions:
-  - `PREFILL_AUTHORITY_LOCKED`
-  - `PREFILL_BASELINE_CONFIRMED`
-  - `PREFILL_SHAPES_INVENTORIED`
-  - `PREFILL_TAX_*` final bucket verdict
-  - `PREFILL_SEARCH_READINESS_DECIDED`
+  - `PREFILL_LONGCTX_HARNESS_ARTIFACT_CONFIRMED`
+  - `PREFILL_LONGCTX_REAL_INTEGRATION_SLOPE_CONFIRMED`
+  - `PREFILL_LONGCTX_ROLE_TAX_ATTRIBUTED`
+  - `PREFILL_LONGCTX_ATTENTION_OR_KV_BOUND`
+  - `PREFILL_LONGCTX_LAYOUT_OR_INTEGRATION_BOUND`
+  - `PREFILL_LONGCTX_GEMM_ROLE_COVERAGE_BOUND`
+  - `PREFILL_LONGCTX_NO_SEARCH_NEXT`
+  - `PREFILL_LONGCTX_INSTRUMENTATION_REQUIRED`
 - Boundaries:
   - do not change decode defaults during this run
   - do not flip defaults
   - do not implement new kernels during audit
   - do not restart broad prefill search until search-readiness verdict is explicit
+  - do not use single concrete `start_pos=0` chunk data as the whole-prefill headline
+  - do not use nosync/raw-dispatch data as authority
 
 ### Progress handoff format for this objective
 
