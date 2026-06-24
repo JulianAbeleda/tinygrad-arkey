@@ -4,5 +4,5 @@ Mechanized index of 2 project files: **2 ● live** (runtime/tooling/library), *
 
 | file | | recommendation | LOC | description |
 |---|---|---|---:|---|
-| `build_folder_indexes.py` | ● | KEEP_LIVE_TOOLING | 155 | Per-folder FILE_INDEX.md generator — so each folder shows which files are LIVE vs provenance + a description. |
+| `build_folder_indexes.py` | ● | KEEP_LIVE_TOOLING | 188 | Per-folder FILE_INDEX.md generator — so each folder shows which files are LIVE vs provenance + a description. |
 | `build_repo_inventory.py` | ● | KEEP_LIVE_TOOLING | 366 | Whole-repo principles cleanup audit — reference-graph inventory builder (2026-06-21). |
