@@ -48,15 +48,7 @@ Global `PREFILL_V2` default **OFF**; `PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE
 
 ## References
 
-- **Architecture (still useful, in archive):** `archive/amd-decode-harness-architecture.md`,
-  `archive/amd-decode-qk-storage-architecture.md`, `archive/amd-decode-primitive-v2-design.md`,
-  `archive/amd-decode-bandwidth-roofline.md`.
-- **Other subsystems:** PSP/boot — `archive/amd-kdb-root-cause.md`, `archive/amd-linux-psp-good-trace.md`,
-  `archive/amd-remote-dropout-investigation.md`; reference research — `archive/amd-rocm-llamacpp-research.md`.
-- **tinygrad developer docs:** `developer/` (am, hcq, runtime, speed, uop) and `tensor/`.
-- **Upstream tinygrad docs:** `index.md`, `quickstart.md`, `mnist.md`, `nn.md`, `dtypes.md`, `env_vars.md`, `showcase.md`.
-
-## History
-
-The full chronological probe log lives in `docs/archive/` (797 docs) and the dated `bench/<arc>/` dirs.
-Start from `provenance-index-20260624.md` to trace any historical cluster to its current authority.
+- **tinygrad docs (current):** `developer/` (am, hcq, runtime, speed, uop), `tensor/`, and upstream
+  `index.md` / `quickstart.md` / `mnist.md` / `nn.md` / `dtypes.md` / `env_vars.md`.
+- **History & subsystem docs** (architecture, PSP/boot, reference research, the full 797-doc probe log):
+  `docs/archive/` — start from `provenance-index-20260624.md` to trace any cluster to its current authority.
