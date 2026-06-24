@@ -432,23 +432,24 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   **POLICY (DECIDED 2026-06-21): prefill is kernel-solved and the opt-in fast paths are shipped, but the global
   default `PREFILL_V2` STAYS OFF — do NOT flip to `auto`** (it would keep +14GB fp16 prefill weights resident during
   decode for zero decode benefit; the common decode/short-prompt user must not pay that). Fast path is one flag away
-  (`PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE=1`), and the CLI hints it on large GPUs. **Decode remains the frontier.**
+  (`PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE=1`), and the CLI hints it on large GPUs. **(Historical: decode was then the frontier; it reached llama parity in the 06-22→06-24 campaign.)**
 - **`archive/decode-prefill-headline-reconciliation-result-20260621.md`** — ⭐HEADLINE RECONCILED. `87.6` is a NUMERIC
   COINCIDENCE: a real ctx≈0 decode **tok/s** AND, separately, a real ctx4096 decode **ms/token** (=11.4 tok/s); the
   reported "87.6 tok/s" was the genuine ctx≈0 rate (reruns ~85–86), not the ms mislabeled. Clean-wall reruns
-  reproduce the canonical table exactly (68.1/66.4/60.7 @512/1024/4096); prefill policy (`auto`/server) does **not**
-  regress decode (<1%, identical output). **Decode headline stays `~67% llama` @ctx (≈86% @ctx≈0).** **DECIDED
+  reproduced the then-canonical table (68.1/66.4/60.7 @512/1024/4096); prefill policy (`auto`/server) does **not**
+  regress decode (<1%, identical output). **(As of 06-21; SUPERSEDED — decode is now at/above llama parity, see
+  `current-project-state-handoff-20260624.md`.)** **DECIDED
   2026-06-21: global `PREFILL_V2` default stays OFF — not flipped to `auto`** (it holds +14GB resident during decode
   for zero decode benefit); fast paths stay opt-in. Current-state: `archive/current-project-state-handoff-20260621.md`.
 - **`archive/decode-role-tensor-kernel-attribution-solution-scope-20260620.md`** — CURRENT DECODE NEXT SCOPE. Decode remains
-  below llama: default route is still the banked `~67%` llama class, while q8 FFN is a hardened default-off opt-in
+  below llama: default route was then the banked `~67%` llama class (since SUPERSEDED — now at parity), while q8 FFN is a hardened default-off opt-in
   route rerun at **72.9/71.1 tok/s @ctx 512/1024** (`~1.064×`, host-sync `0.0%`). Next work is role/tensor/kernel
   attribution, not q8 lifecycle.
 - **`archive/decode-fusion-build-result-20260620.md`** — BOUNDED DECODE FUSION CLOSED. A real FFN activation producer-fusion
   kernel was built and byte-exact, but produced `~0%` speedup; the activation cost is work-conserved, not launch
   recoverable. Attention reduce/stat microfusion is a no-go because the dominant costs are intrinsic O(KV) QK /
-  softmax work and the real fully fused flash path is linearizer/codegen-walled. Keep current decode defaults:
-  baseline `60.8-68.0 tok/s`, q8 opt-in `64.5-72.8`.
+  softmax work and the real fully fused flash path is linearizer/codegen-walled. Decode defaults at that time:
+  baseline `60.8-68.0 tok/s` (since SUPERSEDED — now ~93-102 tok/s at parity), q8 opt-in `64.5-72.8`.
 - **`archive/decode-latency-hiding-lifecycle-codegen-scope-20260621.md`** — (Claude-1 lane; superseded by the fused-coop
   roadmap below). The decode frontier is latency hiding / larger lifecycle codegen, not micro-fusion. The `87.6`
   headline is RECONCILED (`archive/decode-prefill-headline-reconciliation-result-20260621.md`; decode is the curve / ~67%
