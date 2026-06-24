@@ -8,6 +8,12 @@ Settle the open decode question with a bounded runbook:
 - or just a flag-stack inconsistency (`Q4K_GEMV_WARP*` on/off)
 - and freeze a canonical decode flag contract before any decode optimization.
 
+Status update:
+
+- `Q4K_GEMV_WARP` and `Q4K_GEMV_WARP_DOWN` are promoted default-on in
+  `docs/decode-q4k-gemv-warp-promotion-result-20260624.md`.
+- `Q4K_GEMV_WARP_PROJ` remains research-only/default-off.
+
 ## Scope
 
 This is a decode-only harness-reconciliation scope. No source or runtime defaults are changed in this pass.
@@ -25,7 +31,7 @@ This is a decode-only harness-reconciliation scope. No source or runtime default
 
 ## Config matrix for this scope
 
-1. Canonical stack (the reference to compare toward)
+1. Canonical stack before promotion (the reference artifact)
 
 ```bash
 DECODE_ATTN_KV_IDENTITY=1 \
@@ -34,14 +40,24 @@ Q4K_GEMV_WARP_DOWN=1 \
 Q4K_GEMV_WARP_PROJ=1
 ```
 
-2. Current default snapshot
+2. Promoted default stack
 
 ```bash
 DECODE_ATTN_KV_IDENTITY=1
-# Q4K_GEMV_WARP*=default-off
+# Q4K_GEMV_WARP=default-on
+# Q4K_GEMV_WARP_DOWN=default-on
+# Q4K_GEMV_WARP_PROJ=default-off
 ```
 
-3. Old comparator path
+3. Old default-off snapshot
+
+```bash
+DECODE_ATTN_KV_IDENTITY=1
+Q4K_GEMV_WARP=0
+Q4K_GEMV_WARP_DOWN=0
+```
+
+4. Old comparator path
 
 ```bash
 DECODE_ATTN_KV_IDENTITY=0
@@ -111,6 +127,7 @@ DECODE_ATTN_KV_IDENTITY=0 QK_CKPTS=512,1024,2048,4096 DEV=AMD JIT=1 PYTHONPATH=.
 ## Source link
 
 - `structure/Development/session-handoff.md`
+- `docs/decode-q4k-gemv-warp-promotion-result-20260624.md`
 - `docs/decode-parity-no-regression-audit-scope-20260623.md`
 - `docs/decode-parity-no-regression-audit-result-20260623.md`
 - `bench/qk-decode-parity-no-regression-audit/`

@@ -256,7 +256,8 @@ class Q4KPrimitiveLinear:
     # becomes a LOCAL lane -> coalesced packed-word loads. Q4_K coop is role-dependent: attn_q/o (4096x4096) is
     # poorly coalesced by default (~19% peak -> ~29%, 1.52x), but ffn_gate/up is already ~41% peak so it is NOT
     # routed. fp-reassoc-tol exact. See docs/qk-mmvq-coop-q4k-attn-*.
-    # attn q/o projection work-decomposition warp (same lossless lever; Q4K_GEMV_WARP_PROJ, default-off). q/o is
+    # attn q/o projection work-decomposition warp (same lossless lever; Q4K_GEMV_WARP_PROJ, research-only/default-off).
+    # q/o is
     # Q4_K 4096x4096, currently coop-routed (~27% -> warp ~36%, 1.32x local). Takes precedence over the coop branch.
     if getenv("Q4K_GEMV_WARP_PROJ") and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
        and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
@@ -295,12 +296,13 @@ class Q4KPrimitiveLinear:
       partial = partials.custom_kernel(words, q_bias_words, scales,
         fxn=q4k_q8_1_vdot_builtin_partial_kernel(self.out_features, self.in_features, 1, "none", ()))[0]
       return partial.sum(axis=1).reshape(1, 1, self.out_features)
-    # FFN-GEMV work-decomposition variant (B5-lite/FFN diagnostic): lossless FP 32-thread/row + K-block-parallel +
-    # in-kernel warp_reduce_sum (ds_bpermute), one output (vs default 1-thread/row serial). Default-OFF; gate/up first
-    # (out 12288, in 4096, parts==1, k_blocks%4==0, gfx1100 wave32). Local A/B ~1.31x vs opted default. W==D-gated.
-    if getenv("Q4K_GEMV_WARP") and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK \
+    # FFN-GEMV work-decomposition variant: lossless FP 32-thread/row + K-block-parallel + in-kernel warp_reduce_sum
+    # (ds_bpermute), one output (vs default 1-thread/row serial). Default-ON for guarded 8B Q4_K FFN gate/up + down
+    # after W==D hardening: ~+9.6%@ctx1024 / ~+8.5%@ctx4096, byte-identical. Revert with Q4K_GEMV_WARP=0; disable
+    # down separately with Q4K_GEMV_WARP_DOWN=0. Q4K_GEMV_WARP_PROJ stays research-only because it did not transfer.
+    if getenv("Q4K_GEMV_WARP", 1) and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK \
        and ((self.in_features == 4096 and self.out_features == 12288 and self.parts == 1)      # FFN gate/up
-            or (getenv("Q4K_GEMV_WARP_DOWN") and self.in_features == 12288 and self.out_features == 4096)):  # FFN down (Q4_K)
+            or (getenv("Q4K_GEMV_WARP_DOWN", 1) and self.in_features == 12288 and self.out_features == 4096)):  # FFN down (Q4_K)
       try:
         from extra.q4_k_gemv_primitive import q4k_gemv_warp_kernel
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)

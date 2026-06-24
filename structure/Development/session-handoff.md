@@ -167,8 +167,9 @@ Goal:
 - Update the frontier decision with evidence-backed next action, not assumptions.
 
 Current status:
-- Decode: `DECODE_HARNESS_RECONCILIATION_ONLY` from `bench/qk-decode-parity-no-regression-audit/*`.
+- Decode: `Q4K_GEMV_WARP` + `Q4K_GEMV_WARP_DOWN` promoted default-on for guarded FFN decode shapes (`DECODE_PROMOTE_Q4K_GEMV_WARP_FFN`).
 - New decode scope-in artifact for this cycle: `docs/decode-parity-harness-reconciliation-scope-20260624.md`
+- Decode promotion result doc: `docs/decode-q4k-gemv-warp-promotion-result-20260624.md`.
 - Long-context prefill: `eightwave` promoted as the prefill graph-GEMM emit default (`PREFILL_PROMOTE_EIGHTWAVE_ONLY`).
 - New result doc: `docs/prefill-long-context-no-regression-audit-result-20260623.md`.
 - Completed prefill interaction check: `docs/prefill-eightwave-oldplra-interaction-scope-20260624.md`; decision is `eightwave` alone.
@@ -177,6 +178,7 @@ Current status:
 ### A) Decode audit scope (long-context slope + route attribution)
 
 - Source scope:
+  - `docs/decode-q4k-gemv-warp-promotion-result-20260624.md`
   - `docs/decode-parity-no-regression-audit-scope-20260623.md`
   - `docs/decode-parity-harness-reconciliation-scope-20260624.md`
   - `docs/decode-ctx-slope-audit-scope-20260623.md`
