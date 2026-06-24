@@ -1,6 +1,6 @@
 # Whole-Repo Principles Cleanup — Inventory
 
-HEAD `460785c73` · 2253 tracked · 1708 project rows · 466 vendor files in 19 dirs
+HEAD `7648f72a3` · 2220 tracked · 1708 project rows · 433 vendor files in 12 dirs
 
 ## By recommendation
 
@@ -9,7 +9,7 @@ HEAD `460785c73` · 2253 tracked · 1708 project rows · 466 vendor files in 19 
 - **KEEP_TEST**: 115
 - **KEEP_LIVE_TOOLING**: 64
 - **KEEP_CORE**: 29
-- **IGNORE_EXTERNAL_VENDOR**: 19
+- **IGNORE_EXTERNAL_VENDOR**: 12
 - **KEEP_LIBRARY_HELPER**: 7
 
 ## By subsystem
@@ -25,7 +25,7 @@ HEAD `460785c73` · 2253 tracked · 1708 project rows · 466 vendor files in 19 
 | root_config |  |  | 24 |  |  |  |  |
 | structure | 10 |  |  | 33 |  |  |  |
 | test |  |  |  |  |  |  | 115 |
-| vendor |  | 19 |  |  |  |  |  |
+| vendor |  | 12 |  |  |  |  |  |
 
 ## DELETE candidates (0) — proof: no importer/doc/test/ledger ref
 

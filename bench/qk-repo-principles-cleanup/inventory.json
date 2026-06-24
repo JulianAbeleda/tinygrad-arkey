@@ -1,13 +1,13 @@
 {
   "summary": {
     "generated": "2026-06-24",
-    "git_head": "460785c73",
-    "total_tracked": 2253,
+    "git_head": "7648f72a3",
+    "total_tracked": 2220,
     "project_rows": 1708,
-    "vendor_dirs": 19,
-    "vendor_files": 466,
+    "vendor_dirs": 12,
+    "vendor_files": 433,
     "recommendation_counts": {
-      "IGNORE_EXTERNAL_VENDOR": 19,
+      "IGNORE_EXTERNAL_VENDOR": 12,
       "KEEP_LIVE_TOOLING": 64,
       "KEEP_LIBRARY_HELPER": 7,
       "ARCHIVE_PROVENANCE": 1311,
@@ -48,7 +48,7 @@
         "KEEP_TEST": 115
       },
       "vendor": {
-        "IGNORE_EXTERNAL_VENDOR": 19
+        "IGNORE_EXTERNAL_VENDOR": 12
       }
     },
     "live_roots": [
@@ -129,21 +129,6 @@
       ]
     },
     {
-      "path": "extra/fp8/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "1 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 1,
-      "members_sample": [
-        "extra/fp8/fp8_linear.py"
-      ]
-    },
-    {
       "path": "extra/gemm/ (upstream)",
       "type": "vendor_dir",
       "loc": 0,
@@ -161,21 +146,6 @@
         "extra/gemm/amd_flash_attention.py",
         "extra/gemm/amd_matmul.py",
         "extra/gemm/amd_seb/kernel3_registers.cpp"
-      ]
-    },
-    {
-      "path": "extra/hcq/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "1 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 1,
-      "members_sample": [
-        "extra/hcq/hcq_smi.py"
       ]
     },
     {
@@ -197,26 +167,6 @@
       ]
     },
     {
-      "path": "extra/hcqfuzz/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "10 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 10,
-      "members_sample": [
-        "extra/hcqfuzz/.gitignore",
-        "extra/hcqfuzz/fuzzer.py",
-        "extra/hcqfuzz/readme",
-        "extra/hcqfuzz/spec.py",
-        "extra/hcqfuzz/tests/allocator.py",
-        "extra/hcqfuzz/tests/allreduce.py"
-      ]
-    },
-    {
       "path": "extra/hip_gpu_driver/ (upstream)",
       "type": "vendor_dir",
       "loc": 0,
@@ -234,60 +184,6 @@
         "extra/hip_gpu_driver/kfd_ioctl.h",
         "extra/hip_gpu_driver/nvd.h",
         "extra/hip_gpu_driver/sdma_registers.h"
-      ]
-    },
-    {
-      "path": "extra/huggingface_onnx/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "3 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 3,
-      "members_sample": [
-        "extra/huggingface_onnx/README.md",
-        "extra/huggingface_onnx/huggingface_manager.py",
-        "extra/huggingface_onnx/run_models.py"
-      ]
-    },
-    {
-      "path": "extra/llama_kernels/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "12 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 12,
-      "members_sample": [
-        "extra/llama_kernels/__init__.py",
-        "extra/llama_kernels/cast_amax/__init__.py",
-        "extra/llama_kernels/cast_amax/cast_amax_bwd_w13.cpp",
-        "extra/llama_kernels/cast_amax/cast_amax_fwd_w13.cpp",
-        "extra/llama_kernels/fp8_transpose/__init__.py",
-        "extra/llama_kernels/fp8_transpose/fp8_transpose.cpp"
-      ]
-    },
-    {
-      "path": "extra/mlx_driver/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "3 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 3,
-      "members_sample": [
-        "extra/mlx_driver/connect.py",
-        "extra/mlx_driver/loopback.py",
-        "extra/mlx_driver/mlx5.h"
       ]
     },
     {
@@ -345,23 +241,6 @@
         "extra/thunder/amd/fa_bwd_pre.cpp",
         "extra/thunder/amd/fa_fwd_causal.cpp",
         "extra/thunder/amd/gemm_bf16.cpp"
-      ]
-    },
-    {
-      "path": "extra/tinyfs/ (upstream)",
-      "type": "vendor_dir",
-      "loc": 0,
-      "subsystem": "vendor",
-      "recommendation": "IGNORE_EXTERNAL_VENDOR",
-      "reason": "3 upstream tinygrad files; not fork work. Acceptance gate forbids tinygrad/ edits.",
-      "principle_score": 5,
-      "risk_if_deleted": "would diverge from upstream / break framework",
-      "risk_if_kept": "none \u2014 out of audit scope",
-      "member_count": 3,
-      "members_sample": [
-        "extra/tinyfs/fetch_file.py",
-        "extra/tinyfs/fetch_raid.py",
-        "extra/tinyfs/upload_raid.py"
       ]
     },
     {
