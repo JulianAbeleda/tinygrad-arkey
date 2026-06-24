@@ -15,11 +15,12 @@ from extra.gemm import rdna3_wmma_matmul as ref
 def _kernel(out_f: int, in_f: int):
   import os
   m, n, k = 512, out_f, in_f
-  # DEFAULT: cross-iteration double-buffer (dbuf=1, plra=0). Validated +2.84% +/-0.11% whole-prefill@4096 over the old
-  # plra=1 default, byte-identical output (logit max_abs_diff=0), significant at every context 512..8192. The old
-  # plra=1 was chosen on ISOLATED kernel benchmarks; in-model DBUF's fuller block-level pipelining wins (isolated->
-  # integrated reversal). Reversible: PREFILL_GEMM_DBUF=0 PREFILL_GEMM_PLRA=1. See
-  # docs/prefill-structural-emit-search-result-20260623.md.
+  # DEFAULT: eightwave layout over cross-iteration double-buffer. DBUF beat the old PLRA default in whole-prefill;
+  # eightwave then confirmed another +3.1/+2.8/+2.7/+2.3/+1.9% over baseline at 512..8192. The combined
+  # eightwave+old_plra path regressed hard, so explicit CFG/DBUF/PLRA/PLRAB overrides suppress default eightwave unless
+  # PREFILL_GEMM_8WAVE=1 is also explicitly set. Reversible: PREFILL_GEMM_8WAVE=0. Old PLRA route:
+  # PREFILL_GEMM_8WAVE=0 PREFILL_GEMM_DBUF=0 PREFILL_GEMM_PLRA=1. See
+  # docs/prefill-eightwave-oldplra-interaction-scope-20260624.md.
   waves_m, waves_n, wm, wn, bk, pad, dbuf, plra = 2, 2, 4, 4, 32, 16, 1, 0
   if out_f <= 1024:  # small-N roles (kv_proj) are WG-starved at BN=128 -> halve BN to 2x the workgroups
     waves_n, wn = 1, 4
@@ -28,9 +29,12 @@ def _kernel(out_f: int, in_f: int):
   plrab = 0
   if ov:
     wm, wn, waves_n, bk, pad, dbuf, plra = (int(x) for x in ov.split(","))
-  # Adversarial-audit Tensile-like 8-wave layout (additive, default off): W4x2 T2x4 -> 128x128 tile, acc=64 (half),
-  # DBUF (block prefetch) + PLRAB (substep A+B prefetch) fit at ~188 VGPR -- the deep pipeline build_gemm_lds2 can express.
-  if os.environ.get("PREFILL_GEMM_8WAVE") and out_f % 128 == 0:
+  # Adversarial-audit Tensile-like 8-wave layout: W4x2 T2x4 -> 128x128 tile, acc=64 (half), DBUF (block prefetch) +
+  # PLRAB (substep A+B prefetch) fit at ~188 VGPR -- the deep pipeline build_gemm_lds2 can express.
+  explicit_emit_style = bool(ov) or any(x in os.environ for x in ("PREFILL_GEMM_DBUF", "PREFILL_GEMM_PLRA", "PREFILL_GEMM_PLRAB"))
+  eightwave_env = os.environ.get("PREFILL_GEMM_8WAVE")
+  eightwave_on = (eightwave_env not in ("0", "false", "False", "FALSE", "off", "OFF", "no", "NO")) if eightwave_env is not None else not explicit_emit_style
+  if eightwave_on and out_f % 128 == 0:
     waves_m, waves_n, wm, wn, dbuf, plra, plrab = 4, 2, 2, 4, 1, 0, 1
   # Structural-emit stress-study overrides (additive, default UNSET -> baseline unchanged): global knobs to sweep the
   # GEMM emit across ALL graph-gemm roles. DepthU=BK, cross-iter prefetch=DBUF, substep pipeline=PLRA/PLRAB,

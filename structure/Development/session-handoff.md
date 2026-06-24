@@ -168,13 +168,17 @@ Goal:
 
 Current status:
 - Decode: `DECODE_HARNESS_RECONCILIATION_ONLY` from `bench/qk-decode-parity-no-regression-audit/*`.
-- Long-context prefill: artifact pack created at `bench/qk-prefill-long-context-no-regression-audit/`; decision is bounded follow-up (`PREFILL_LONGCTX_SEARCH_READY`).
+- New decode scope-in artifact for this cycle: `docs/decode-parity-harness-reconciliation-scope-20260624.md`
+- Long-context prefill: `eightwave` promoted as the prefill graph-GEMM emit default (`PREFILL_PROMOTE_EIGHTWAVE_ONLY`).
 - New result doc: `docs/prefill-long-context-no-regression-audit-result-20260623.md`.
+- Completed prefill interaction check: `docs/prefill-eightwave-oldplra-interaction-scope-20260624.md`; decision is `eightwave` alone.
+- Promotion result doc: `docs/prefill-eightwave-promotion-result-20260624.md`.
 
 ### A) Decode audit scope (long-context slope + route attribution)
 
 - Source scope:
   - `docs/decode-parity-no-regression-audit-scope-20260623.md`
+  - `docs/decode-parity-harness-reconciliation-scope-20260624.md`
   - `docs/decode-ctx-slope-audit-scope-20260623.md`
   - `docs/decode-ctx-slope-audit-result-20260623.md`
   - `docs/owned-tile-buffer-identity-kv-read-result-20260623.md`
@@ -208,6 +212,8 @@ Current status:
 ### B) Prefill long-context audit scope (post-decode frontier)
 
 - Source scope:
+  - `docs/prefill-eightwave-promotion-result-20260624.md`
+  - `docs/prefill-eightwave-oldplra-interaction-scope-20260624.md`
   - `docs/prefill-long-context-no-regression-audit-scope-20260623.md`
   - `docs/prefill-post-decode-parity-frontier-scope-20260623.md`
   - `docs/prefill-post-decode-parity-frontier-result-20260623.md`

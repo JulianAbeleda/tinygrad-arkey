@@ -6,12 +6,13 @@ Goal:
 - Determine whether long-context prefill has a bounded transferable candidate path.
 - Preserve no-regression posture while deciding if we should proceed with a narrowly scoped bounded follow-up.
 
-Decision: **`PREFILL_LONGCTX_SEARCH_READY`** (bounded follow-up only).
+Decision: **`PREFILL_PROMOTE_EIGHTWAVE_ONLY`**.
 
 - The latest long-context evidence is in `/tmp/prefill-emits` and reused frontier artifacts under `bench/qk-prefill-post-decode-parity-frontier/`.
-- Long-context positive bounded candidates are `old_plra` and `eightwave`.
-- `eightwave` has confirm evidence in the artifact.
-- `old_plra` remains `needs_confirm` and must be confirmed for final promotion.
+- Long-context positive bounded candidates were `old_plra` and `eightwave`.
+- `eightwave` has confirm evidence and is promoted as the default prefill graph-GEMM emit layout.
+- `old_plra` remains secondary and is not promoted.
+- The explicit `eightwave_old_plra` interaction check regressed hard, so the promotion is `eightwave` alone.
 - Pipeline candidates remain excluded by strict ctx-span/safety gating.
 
 ## 2) Authority lock
@@ -38,6 +39,7 @@ Required artifacts now present:
 | `emit-search-20260623-150134.json` | strict quick prefill search | ⚠️ short-context quick | only `old_plra` and `eightwave` reached needs-confirm |
 | `emit-search-20260623-175446.json` | strict long-context variance probe | ⚠️ partial | old_plra near threshold in one sweep |
 | `emit-search-20260623-212625.json` | strict long-context run (primary for this follow-up) | ✅ primary follow-up | old_plra and eightwave positive across 5 contexts |
+| `emit-search-20260624-112043.json` | promotion interaction check | ✅ promotion authority | eightwave confirmed; eightwave+old_plra rejected |
 
 ## 4) Baseline by context
 
@@ -78,11 +80,31 @@ Required artifacts now present:
   - k/v proj: `M=512,N=1024,K=4096`
   - attention QK/PV is flash/WMMA (common path)
 
-## 7) Decision and next step
+## 7) Promotion interaction check
+
+Artifact:
+- `/tmp/prefill-emits/emit-search-20260624-112043.json`
+- `/tmp/prefill-emits/emit-search-20260624-112043.md`
+- `/tmp/prefill-emits/emit-search-20260624-112043.csv`
+
+| candidate | 512 | 1024 | 2048 | 4096 | 8192 | decision |
+|---|---:|---:|---:|---:|---:|---|
+| eightwave | +3.2% | +3.0% | +2.8% | +2.4% | +1.9% | promoted |
+| eightwave_old_plra | -10.3% | -10.3% | -9.5% | -8.3% | -6.7% | rejected |
+
+Confirm block for `eightwave` passed strict filters:
+- 512: +3.10%
+- 1024: +2.84%
+- 2048: +2.67%
+- 4096: +2.28%
+- 8192: +1.85%
+
+## 8) Decision and next step
 
 Current no-regression outcome:
-- `PREFILL_LONGCTX_SEARCH_READY` with bounded scope.
-- Immediate action: confirm `old_plra` under the same strict long-context envelope.
-- Continue with a constrained `old_plra` + `eightwave` route only; do not expand to broad GEMM search unless bounded lanes close with stable passes.
+- `PREFILL_PROMOTE_EIGHTWAVE_ONLY`.
+- `extra/qk_prefill_graph_gemm_route.py` now enables eightwave by default when no explicit emit-style override is set.
+- Escape hatch: `PREFILL_GEMM_8WAVE=0`.
+- Old PLRA escape hatch: `PREFILL_GEMM_8WAVE=0 PREFILL_GEMM_DBUF=0 PREFILL_GEMM_PLRA=1`.
 
 This keeps decode untouched per `docs/decode-parity-no-regression-audit-result-20260623.md` and avoids broad non-authoritative search reopens.
