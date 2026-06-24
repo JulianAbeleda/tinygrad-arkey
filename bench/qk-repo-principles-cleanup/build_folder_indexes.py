@@ -10,7 +10,7 @@ Run: PYTHONPATH=. .venv/bin/python bench/qk-repo-principles-cleanup/build_folder
 """
 from __future__ import annotations
 import ast, json, pathlib, re, subprocess
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 INV = json.load(open(ROOT / "bench/qk-repo-principles-cleanup/inventory.json"))
@@ -148,6 +148,39 @@ for root, members in sorted(groups.items()):
 bench_idx = [f"{w[0]}" for w in written if w[0].startswith("bench/")]
 if bench_idx:
   subprocess.run(["git", "add", "-f", *bench_idx], cwd=ROOT)
+
+# ---- ROOT FILE_INDEX.md: the front-door active-core manifest (repo-wide rollup of the ● live surface) ----
+AREA = {"tinygrad/llm": "Core runtime — decode/prefill CLI, model, gguf",
+        "extra": "qk_* tooling & q4k/q8 primitives", "bench": "Machine-search & audit builders",
+        "test": "Tests", "structure": "Structure / principles", ".": "Root config & entry docs"}
+def area_of(p: str) -> str:
+  for k in ("tinygrad/llm", "extra", "bench", "test", "structure"):
+    if p == k or p.startswith(k + "/"): return k
+  return "."
+live_rows = [r for r in rows if r["recommendation"] in LIVE_RECS]
+counts = Counter(r["recommendation"] for r in rows)
+by_area: dict[str, list] = defaultdict(list)
+for r in live_rows: by_area[area_of(r["path"])].append(r)
+sm = INV["summary"]
+RL = ["# FILE_INDEX — active core (repo front door)", "",
+      f"The fork's **active/core surface**: **{len(live_rows)} ● live** files "
+      "(KEEP_CORE / KEEP_LIVE_TOOLING / KEEP_LIBRARY_HELPER). Everything else is current docs/tests or historical "
+      "provenance (kept under `docs/archive/` + dated `bench/<arc>/`).", "",
+      f"Generated from `bench/qk-repo-principles-cleanup/inventory.json` (HEAD `{sm.get('git_head','')}`, "
+      f"{sm.get('generated','')}) — do not hand-edit. Regenerate: `build_repo_inventory.py` then `build_folder_indexes.py`.", "",
+      "**Repo totals:** " + " · ".join(f"{k} **{v}**" for k, v in sorted(counts.items(), key=lambda x: -x[1])), "",
+      "Drill-down: `extra/FILE_INDEX.md` · `tinygrad/llm/FILE_INDEX.md` · `bench/FILE_INDEX.md` · `docs/README.md` "
+      "(canonical state) · `docs/provenance-index-20260624.md` (archive map).", ""]
+for area in ("tinygrad/llm", "extra", "bench", "test", "structure", "."):
+  mem = sorted(by_area.get(area, []), key=lambda r: r["path"])
+  if not mem: continue
+  RL += [f"## {AREA[area]} ({len(mem)})", "", "| file | recommendation | LOC | description |", "|---|---|---:|---|"]
+  for r in mem:
+    desc = describe(r["path"]).replace("|", "\\|")[:120]
+    RL.append(f"| `{r['path']}` | {r['recommendation']} | {r.get('loc', '')} | {desc} |")
+  RL.append("")
+(ROOT / "FILE_INDEX.md").write_text("\n".join(RL))
+print(f"wrote root FILE_INDEX.md (active-core manifest): {len(live_rows)} live files")
 
 print(f"wrote {len(written)} FILE_INDEX.md files")
 for path, n, live in written:

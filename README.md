@@ -2,8 +2,9 @@
 ========================================================================================
   tinygrad-arkey — AMD-only hard-fork for quantized LLM decode (Q4_K/Q6_K) on RDNA3.
   WHERE TO GO:
-   - docs/README.md ......................... the doc map (start here)
-   - docs/amd-decode-banked-20260616.md ..... current decode state (~64 tok/s, 63% of llama.cpp) + lever map
+   - FILE_INDEX.md .......................... active-core manifest — the live scripts (start here)
+   - docs/README.md ......................... the doc map
+   - docs/current-project-state-handoff-20260624.md  canonical current state (decode at ~llama parity)
    - structure/Development/session-handoff.md  the running engineering log
    - structure/INDEX.md ..................... project / role boot layer
   (Upstream tinygrad README follows.)
@@ -11,7 +12,7 @@
 -->
 
 > **`tinygrad-arkey`** — an AMD-only hard-fork focused on quantized LLM decode on RDNA3. Project entry
-> points: **[doc map](docs/README.md)** · **[current decode state](docs/amd-decode-banked-20260616.md)** ·
+> points: **[active core](FILE_INDEX.md)** · **[doc map](docs/README.md)** · **[current state](docs/current-project-state-handoff-20260624.md)** ·
 > **[engineering log](structure/Development/session-handoff.md)** · **[boot layer](structure/INDEX.md)**.
 
 <div align="center">

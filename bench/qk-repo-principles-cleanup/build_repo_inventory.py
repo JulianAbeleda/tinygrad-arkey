@@ -142,11 +142,11 @@ doc_text["bench/README.md"] = text("bench/README.md")
 doc_text["structure/Development/performance-primitive-research-principles.md"] = text(
     "structure/Development/performance-primitive-research-principles.md")
 test_text = {t: text(t) for t in test_py}
-CANON_DOCS = {"docs/current-project-state-handoff-20260621.md", "docs/README.md", "bench/README.md",
+CANON_DOCS = {"docs/current-project-state-handoff-20260624.md", "docs/README.md", "bench/README.md",
               "structure/Development/performance-primitive-research-principles.md",
               "structure/Development/coding-principles.md",
-              "docs/project-north-star-llama-and-lifecycle-search-20260620.md",
-              "docs/decode-prefill-headline-reconciliation-result-20260621.md"}
+              "docs/decode-campaign-final-synthesis-20260623.md",
+              "docs/prefill-decode-next-workstreams-codex-scope-20260624.md"}
 
 def refs(corpus, p, stem, want_pyname=True):
     needle_py = stem + ".py"
@@ -335,7 +335,7 @@ by_sub = defaultdict(Counter)
 for r in rows: by_sub[r["subsystem"]][r["recommendation"]] += 1
 delete_set = sorted(r["path"] for r in rows if r["recommendation"] == "DELETE")
 summary = {
-    "generated": "2026-06-21", "git_head": subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+    "generated": "2026-06-24", "git_head": subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                                                            capture_output=True, text=True).stdout.strip(),
     "total_tracked": len(tracked), "project_rows": len([r for r in rows if r["subsystem"] != "vendor"]),
     "vendor_dirs": len(vendor_by_dir), "vendor_files": len(vendor),
