@@ -159,6 +159,93 @@ they are now superseded by the doc map and provenance index. Use:
 - `docs/current-project-state-handoff-20260621.md`
 - `docs/provenance-index-20260621.md`
 
+## Active objective (2026-06-24): decode + long-context prefill audits for parity-at-no-regression
+
+Goal:
+- Reconcile decode flag-stack authority and freeze a no-regression decision.
+- Complete a focused prefill long-context, bounded candidate follow-up (post-frontier) and decide next bounded action.
+- Update the frontier decision with evidence-backed next action, not assumptions.
+
+Current status:
+- Decode: `DECODE_HARNESS_RECONCILIATION_ONLY` from `bench/qk-decode-parity-no-regression-audit/*`.
+- Long-context prefill: artifact pack created at `bench/qk-prefill-long-context-no-regression-audit/`; decision is bounded follow-up (`PREFILL_LONGCTX_SEARCH_READY`).
+- New result doc: `docs/prefill-long-context-no-regression-audit-result-20260623.md`.
+
+### A) Decode audit scope (long-context slope + route attribution)
+
+- Source scope:
+  - `docs/decode-parity-no-regression-audit-scope-20260623.md`
+  - `docs/decode-ctx-slope-audit-scope-20260623.md`
+  - `docs/decode-ctx-slope-audit-result-20260623.md`
+  - `docs/owned-tile-buffer-identity-kv-read-result-20260623.md`
+  - `bench/qk-decode-eval/HARNESS_GUIDE.md`
+- Required tools:
+  - `extra/qk_decode_runtime_overhead.py`
+  - `extra/qk_decode_time_tax_audit.py`
+  - `extra/qk_decode_materialization_check.py`
+  - `extra/qk_decode_route_fire_check.py`
+  - `extra/qk_isa_primitive_audit.py`
+- Required artifact folder:
+  - `bench/qk-decode-ctx-slope-audit/`
+- Required outputs:
+  - `authority.json`, `wd_by_ctx.json`, `kernel_attribution_by_ctx.json`, `slope_fit.json`, `llama_comparison.json`, `decision.json`
+- Must run with clean synced W==D as authority (`.item()` inside timed loop).
+- Required contexts:
+  - Primary: 512, 1024, 2048, 4096
+  - Optional: 3072, 6144 if supported safely
+- Comparative configs:
+  - Config A: new default (`DECODE_ATTN_KV_IDENTITY=1`, owned whole-cache tile)
+  - Config B: old slice/materialization route (`DECODE_ATTN_KV_IDENTITY=0`)
+  - Config C: legacy comparator (`DECODE_ATTN_AMDGCN_TILE=0`) if cheap
+- Completion decisions:
+  - `CTX_SLOPE_AUTHORITY_LOCKED`
+  - `CTX_SLOPE_WD_MEASURED`
+  - `CTX_SLOPE_ROUTE_CONFIRMED`
+  - `CTX_SLOPE_DECISION_READY`
+- Fail-safe stop:
+  - correctness mismatch, route mismatch, unstable spread, or incomplete authority lock.
+
+### B) Prefill long-context audit scope (post-decode frontier)
+
+- Source scope:
+  - `docs/prefill-long-context-no-regression-audit-scope-20260623.md`
+  - `docs/prefill-post-decode-parity-frontier-scope-20260623.md`
+  - `docs/prefill-post-decode-parity-frontier-result-20260623.md`
+  - `docs/prefill-structural-emit-search-result-20260623.md`
+  - `docs/prefill-structural-emit-search-runbook-20260623.md`
+- Required tools:
+  - `extra/qk_prefill_whole_synced.py`
+  - `extra/qk_prefill_emit_search.py`
+  - `extra/qk_decode_time_tax_audit.py` (for shared tax decomposition)
+  - `extra/qk_isa_primitive_audit.py`
+- Required artifact folder:
+  - `bench/qk-prefill-post-decode-parity-frontier/`
+- Required outputs:
+  - `authority.json`, `corpus_reconciliation.json`, `baseline_prefill.json`, `shape_inventory.json`, `time_tax.json`, `isa_audit.json`, `tensile_gap_attribution.json`, `search_readiness.json`, `next_action_decision.json`
+- Required contexts:
+  - short/medium/long prefill lengths aligned to current canonical prefill harness; preserve existing coverage from last frontier docs
+- Completion decisions:
+  - `PREFILL_AUTHORITY_LOCKED`
+  - `PREFILL_BASELINE_CONFIRMED`
+  - `PREFILL_SHAPES_INVENTORIED`
+  - `PREFILL_TAX_*` final bucket verdict
+  - `PREFILL_SEARCH_READINESS_DECIDED`
+- Boundaries:
+  - do not change decode defaults during this run
+  - do not flip defaults
+  - do not implement new kernels during audit
+  - do not restart broad prefill search until search-readiness verdict is explicit
+
+### Progress handoff format for this objective
+
+- For each phase, record:
+  - exact command(s), environment, repeats, repeats spread, git hash, and artifact paths
+- Decision rule for next step:
+  - decode gap with confirmed route/tax decomposition -> either close with runtime-combine/route optimization or explicitly set to `non-search/blocked-by-tax`
+  - prefill gap attribution -> if non-search bound, scope non-search work only; if search-bound, start `qk_prefill_emit_search` on bounded candidate set
+
+---
+
 ## Current Baseline
 
 Target machine and model:
