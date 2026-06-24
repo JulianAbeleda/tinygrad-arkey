@@ -13,19 +13,19 @@ Periodic decode lifecycle baseline refresh across:
 Ran:
 - `extra/qk_decode_lifecycle_recheck_bundle.py`
 
-Bundle: `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942`
+Bundle: `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026`
 
 Latest pointer:
 - `bench/qk-decode-lifecycle-recheck-bundle/latest.json`
 
 Run artifacts in this run:
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/bundle_snapshot.json`
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/decision.json`
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/correctness/unknown_lockstep_pre.json`
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/correctness/unknown_lockstep_post.json`
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/throughput/current_context/wd_by_ctx.json`
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/throughput/long_context/wd_by_ctx.json`
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/throughput/alternative_route/wd_by_ctx.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/bundle_snapshot.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/decision.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/correctness/unknown_lockstep_pre.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/correctness/unknown_lockstep_post.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/throughput/current_context/wd_by_ctx.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/throughput/long_context/wd_by_ctx.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/throughput/alternative_route/wd_by_ctx.json`
 
 ## Decision
 
@@ -45,40 +45,40 @@ Run artifacts in this run:
 
 | ctx | A tok/s | B tok/s | delta% |
 |---:|---:|---:|---:|
-| 512 | 102.2 | 86.1 | +18.70 |
-| 1024 | 100.4 | 85.5 | +17.43 |
-| 2048 | 97.9 | 84.5 | +15.86 |
-| 4096 | 93.4 | 82.4 | +13.35 |
+| 512 | 101.6 | 85.8 | +18.41 |
+| 1024 | 99.8 | 85.3 | +17.00 |
+| 2048 | 97.4 | 84.3 | +15.54 |
+| 4096 | 92.9 | 82.2 | +13.02 |
 
 ### Long-context variant (`4096`)
 
 | ctx | A tok/s | B tok/s | delta% |
 |---:|---:|---:|---:|
-| 4096 | 93.7 | 82.3 | +13.85 |
+| 4096 | 93.0 | 82.1 | +13.28 |
 
 ### Alternative capture variant (`DECODE_ATTN_AMDGCN_TILE=0`)
 
 | ctx | A tok/s | B tok/s | delta% |
 |---:|---:|---:|---:|
-| 512 | 76.0 | 76.2 | -0.26 |
-| 1024 | 74.0 | 74.2 | -0.27 |
-| 2048 | 71.1 | 71.3 | -0.28 |
-| 4096 | 67.3 | 67.4 | -0.15 |
+| 512 | 75.8 | 75.8 | +0.00 |
+| 1024 | 73.9 | 73.9 | +0.00 |
+| 2048 | 70.9 | 70.8 | +0.14 |
+| 4096 | 66.8 | 66.9 | -0.15 |
 
 ## Oracle comparison snapshot (llama reference: `bench/qk-post-parity-hardening/authority.json`)
 
 | ctx | tinygrad A | llama | tinygrad / llama |
 |---:|---:|---:|---:|
-| 512 | 102.2 | 97.71 | 104.59% |
-| 1024 | 100.4 | 97.39 | 103.09% |
-| 2048 | 97.9 | 95.00 | 103.05% |
-| 4096 | 93.4 | 92.37 | 101.12% |
+| 512 | 101.6 | 97.71 | 104.01% |
+| 1024 | 99.8 | 97.39 | 102.47% |
+| 2048 | 97.4 | 95.00 | 102.53% |
+| 4096 | 92.9 | 92.37 | 100.57% |
 
 ## Baseline update outcome
 
 This bundle is now the working decode lifecycle baseline snapshot. Next audits should use this run id as the
 `DECODE_LIFECYCLE_RECHECK_BUNDLE` baseline, and then compare any future deltas against:
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942/bundle_snapshot.json`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026/bundle_snapshot.json`
 - `bench/qk-decode-lifecycle-recheck-bundle/latest.json`
 
 ## Closure

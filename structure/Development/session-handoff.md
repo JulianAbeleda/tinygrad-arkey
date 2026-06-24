@@ -169,7 +169,7 @@ Goal:
 - Set the new baseline snapshot as the current reference for decode follow-up audits.
 
 Baseline run completed:
-- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-145514`
+- `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026`
 - Decision: `DECODE_LIFECYCLE_RECHECK_BUNDLE_PASS`
 - Pointer: `bench/qk-decode-lifecycle-recheck-bundle/latest.json`
 

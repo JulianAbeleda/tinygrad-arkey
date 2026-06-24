@@ -23,8 +23,8 @@ This is an umbrella scope. It does not replace the detailed lane docs; it tells 
 
 - Current default decode path is healthy:
   - lifecycle bundle: `DECODE_LIFECYCLE_RECHECK_BUNDLE_PASS`
-  - latest baseline: `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-151942`
-  - current A/B vs old internal route: +13.35% to +18.70% across ctx 512..4096
+- latest baseline: `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-172026`
+- current A/B vs old internal route: +13.02% to +18.41% across ctx 512..4096
   - pre/post unknown-lockstep: `DECODE_UNKNOWN_BUCKET_LOCKSTEP_PROVEN`
 - The baseline is now recorded in the run above; run periodic diff again before any broad decode search to measure drift from the prior snapshot.
 - Priority: refresh clean decode-vs-llama first, then decide whether decode search is worth funding.

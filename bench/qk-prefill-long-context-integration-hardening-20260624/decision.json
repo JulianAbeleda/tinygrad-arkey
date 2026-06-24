@@ -11,10 +11,10 @@
       4096,
       8192
     ],
-    "ctx8192_wall_ms": 2284.1210287660942,
-    "ctx8192_gpu_only_ms": 1936.616717956543,
-    "ctx8192_host_sync_ms": 285.3551873631659,
-    "ctx8192_launch_overhead_ms": 62.14912344638539
+    "ctx8192_wall_ms": 2290.8629027733696,
+    "ctx8192_gpu_only_ms": 1938.492698852539,
+    "ctx8192_host_sync_ms": 286.15042987075867,
+    "ctx8192_launch_overhead_ms": 66.21977405007183
   },
   "next_step": "NONSEARCH_INTEGRATION_FIX_SCOPE",
   "action": {
