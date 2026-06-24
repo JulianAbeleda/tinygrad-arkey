@@ -11,17 +11,24 @@ GPU-active span) and, per bucket, SOLO time (only that bucket active) vs OVERLAP
 is on the serial critical path; a bucket that is overlapped by other work is (partly) hidden -> a wall-clock win there
 is bounded by its solo share, not its GPU-busy share. This is pure measurement (no kernel/default change).
 
-  run: DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_decode_audit_common.py
-  -> bench/qk-decode-kernel-probe/latest.json   (consumed by the three phase audit tools)
+  canonical run:
+    DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_decode_audit_common.py
+
+  canonical output:
+    bench/qk-decode-kernel-probe/latest.json
+    bench/qk-decode-kernel-probe/decode-kernel-probe-YYYYMMDD-HHMMSS.json
+
+  This is the canonical full decode kernel capture tool. It is consumed by the phase audit tools and by newer
+  decode unknown-bucket/source-map audits.
 """
 from __future__ import annotations
-import collections, json, os, pathlib, re, statistics, sys
+import argparse, collections, datetime, json, os, pathlib, re, statistics, sys
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 def _clean(s): return _ANSI.sub("", s)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-decode-kernel-probe"
-CTXS = [512, 1024, 4096]; MAXC = 4608; NSAMP = 7
+CTXS = [512, 1024, 2048, 4096]; MAXC = 4608; NSAMP = 7
 
 def capture(ctxs=CTXS, want_src=True):
   from extra.qk_harness_contract import DEFAULT_MODEL
@@ -62,20 +69,37 @@ def capture(ctxs=CTXS, want_src=True):
           if nm in sources: continue
           # AST fingerprint: op histogram + I/O dtypes -> kernel identity (silu=EXP, q8-quant=int8 STORE+MAX, norm=REDUCE, rope=SIN)
           hist = collections.Counter(); store_dt = set(); load_dt = set()
+          src_text = str(getattr(pi, "src", "")) + "\n" + str(nm)
           try:
             for x in u.src[0].toposort():
               hist[x.op.name] += 1
               if x.op is Ops.STORE and len(x.src) > 1: store_dt.add(str(x.src[1].dtype))
               if x.op is Ops.LOAD: load_dt.add(str(x.dtype))
           except Exception: pass
+          has_exp = hist.get("EXP2",0)+hist.get("EXP",0) > 0
+          has_sin = hist.get("SIN",0) > 0
+          has_reduce = hist.get("REDUCE",0)+hist.get("REDUCE_AXIS",0) > 0
+          has_int8_out = any("char" in d or "int8" in d or "uchar" in d or "uint8" in d for d in store_dt)
+          has_sqrt = hist.get("SQRT",0) > 0
+          has_recip = hist.get("RECIP",0) > 0
+          src_flags = {
+            "start_pos": "start_pos" in src_text,
+            "uchar": has_int8_out or "uchar" in src_text or "uint8" in src_text,
+            "exp": has_exp,
+            "sin": has_sin,
+            "sqrt": has_sqrt,
+            "is_pure_copy": (not has_exp and not has_sin and not has_reduce and not has_sqrt and not has_recip and
+                             len(store_dt) <= 1 and all(("float" in d or "half" in d) for d in store_dt | load_dt)),
+          }
           sources[nm] = {"global": _dims(pi.global_size), "local": _dims(pi.local_size),
                          "ins": list(pi.ins), "outs": list(pi.outs),
                          "op_hist": dict(sorted(hist.items(), key=lambda x: -x[1])),
                          "store_dtypes": sorted(store_dt), "load_dtypes": sorted(load_dt),
-                         "has_exp": hist.get("EXP2",0)+hist.get("EXP",0) > 0,
-                         "has_sin": hist.get("SIN",0) > 0, "has_reduce": hist.get("REDUCE",0)+hist.get("REDUCE_AXIS",0) > 0,
-                         "has_int8_out": any("char" in d or "int8" in d for d in store_dt),
-                         "has_sqrt": hist.get("SQRT",0) > 0, "has_recip": hist.get("RECIP",0) > 0}
+                         "has_exp": has_exp,
+                         "has_sin": has_sin, "has_reduce": has_reduce,
+                         "has_int8_out": has_int8_out,
+                         "has_sqrt": has_sqrt, "has_recip": has_recip,
+                         "src_flags": src_flags}
       # timeline samples: capture per-kernel absolute [start,end] for one replay, plus median busy us over NSAMP
       tl = None; agg = collections.defaultdict(list)
       for r in range(NSAMP):
@@ -98,11 +122,24 @@ def capture(ctxs=CTXS, want_src=True):
           "nsamp": NSAMP, "hardware": "RX 7900 XTX / gfx1100"}
 
 def main():
-  d = capture()
-  OUT.mkdir(parents=True, exist_ok=True)
-  d["date"] = "2026-06-22"; d["phase"] = "DECODE_KERNEL_PROBE"; d["default_behavior_changed"] = False
-  (OUT / "latest.json").write_text(json.dumps(d, indent=2))
-  print(f"artifact: {OUT/'latest.json'} (sources={len(d['sources'])})", file=sys.stderr)
+  ap = argparse.ArgumentParser(description="Canonical full decode kernel capture: timings, timeline, launch dims, and source-derived flags.")
+  ap.add_argument("--contexts", default=",".join(map(str, CTXS)), help="comma-separated decode ctx points")
+  ap.add_argument("--out", default=str(OUT), help="output directory")
+  args = ap.parse_args()
+  ctxs = [int(x) for x in args.contexts.split(",") if x.strip()]
+  d = capture(ctxs=ctxs)
+  out = pathlib.Path(args.out)
+  out.mkdir(parents=True, exist_ok=True)
+  ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+  d["date"] = datetime.date.today().isoformat(); d["created_at_local"] = ts
+  d["phase"] = "DECODE_KERNEL_PROBE"; d["canonical_tool"] = "extra/qk_decode_audit_common.py"
+  d["default_behavior_changed"] = False
+  d["source_flags_merged"] = sum(sum(1 for v in (s.get("src_flags", {}) or {}).values() if v) for s in d["sources"].values())
+  latest = out / "latest.json"
+  stamped = out / f"decode-kernel-probe-{ts}.json"
+  latest.write_text(json.dumps(d, indent=2))
+  stamped.write_text(json.dumps(d, indent=2))
+  print(f"artifact: {latest} (timestamped={stamped.name}, sources={len(d['sources'])})", file=sys.stderr)
 
 if __name__ == "__main__":
   main()

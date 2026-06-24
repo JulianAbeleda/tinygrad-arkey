@@ -32,6 +32,13 @@ the dated `*-plan/-result/-probe.md` files as provenance, not current state.
   **Next bounded lever = eliminate the KV-cache copy** (`model.py:952` full-buffer `.after()`; ~1.4 ms/tok, measured
   transfer +1.5 ms/+8 tok/s). Phase tools `qk_{ffn_activation_gap,small_ops_time_tax,attention_tail_after_b5}_audit.py`,
   shared probe `qk_decode_audit_common.py`.
+- **Canonical full decode kernel capture tool:** `extra/qk_decode_audit_common.py`.
+  Use this when a decode audit needs per-kernel GPU time, full timeline intervals, launch dims, and source-derived flags
+  for unknown-bucket/source-map work. Canonical command:
+  `DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_decode_audit_common.py --contexts 512,1024,2048,4096`.
+  It writes `bench/qk-decode-kernel-probe/latest.json` and a timestamped
+  `bench/qk-decode-kernel-probe/decode-kernel-probe-YYYYMMDD-HHMMSS.json`. Do not look for a separate
+  `qk_decode_kernel_probe.py`; the canonical producer is the shared audit-common tool.
 - **`kv-cache-copy-elimination-result-20260622.md`** — ⭐ EXECUTED `NEXT_IMPL_NORM_ROPE_KV` → `KV_CACHE_COPY_ELIMINATION_JIT_BLOCKED`.
   The KV-cache copy (`model.py:952`, ~1.4 ms/tok, transfers) is real but **eliminating it needs a core-JIT capability**:
   both bounded local branches fail at schedule time — in-place `.assign()` → read-after-write hazard (`KeyError` on a
