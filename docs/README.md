@@ -7,6 +7,7 @@ in `docs/archive/` as provenance, not current state.
 
 ## ⭐ Start here (canonical)
 
+- **`pure-machine-search-roadmap.md`** — stable roadmap for replacing hand-owned decode kernels with BubbleBeam-selected generated routes.
 - **`current-project-state-handoff-20260624.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). Current numbers
   (decode **101.6 / 99.8 / 97.3 / 92.7 tok/s** @ctx512/1024/2048/4096 ≈ **100.4-104.0% of llama** on the `Q4K_GEMV_WARP*`
   default stack; prefill **3574 / 3573 / 3572 / 3571 / 3569**), decided policies, and the parity win (owned attention tile +

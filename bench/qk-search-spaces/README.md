@@ -1,5 +1,7 @@
 # Search-space manifests (Milestone 1 of the generic-low-level-search goal)
 
+Roadmap: `../../docs/pure-machine-search-roadmap.md`.
+
 `docs/generic-low-level-search-goal-scope.md` Milestone 1. Each manifest declares **what a search over that
 primitive family can and cannot express**, so a search result is self-classifying: a failure is only a *true
 performance wall* if the winning oracle/owned kernel used **no excluded primitive**; otherwise it is

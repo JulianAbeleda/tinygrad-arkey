@@ -1,5 +1,7 @@
 # Regarding Pure Machine Search
 
+Roadmap: `docs/pure-machine-search-roadmap.md`.
+
 The goal of this fork is pure machine search: the scheduler generates every kernel, and a search picks the
 config to ship. We do not use tinygrad's BEAM autotuner. We built our own candidate and lifecycle search
 (`extra/qk_decode_eval.py`, `extra/qk_lifecycle_search_loop.py`) that decides which decode primitive and flag

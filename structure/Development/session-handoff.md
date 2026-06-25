@@ -6,6 +6,7 @@
 Source of truth:
 
 - `bench/canonical-benchmarks.json`
+- `docs/pure-machine-search-roadmap.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
