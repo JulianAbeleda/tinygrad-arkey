@@ -9,10 +9,10 @@ performance wall* if the winning oracle/owned kernel used **no excluded primitiv
 
 This is the machine-evidenced answer to "can we replace the hand-tuned kernels with search?":
 - **No, not yet, for the two hand-written decode kernels** — the owned AMDGCN attention tile and the warp GEMV.
-  Both depend on `v_dot2` (fused fp16 dot) and **cross-lane reduction** (`ds_bpermute`), which the tinygrad renderer
-  has **no lowering for** (the opcodes exist in `tinygrad/runtime/autogen/amd/rdna3/ins.py` but there is no rule in
-  `tinygrad/renderer/{cstyle,llvmir}.py` — `grep` = 0 hits). Their other needs (LDS staging, vector global loads) ARE
-  natively emittable. ISA evidence: `docs/archive/native-codegen-microprimitive-search-result-20260623.md:24-30`.
+  GEMV now has a BubbleBeam/FutureSight selector for the lane-partition custom bridge, but that is
+  `search_selected_custom_bridge`, not `search_generated`. Attention still depends on `v_dot2` and cross-lane
+  reduction; GEMV purity now depends on generating the packed-word/dequant/thread-map structure. Their other needs
+  (LDS staging, vector global loads) are natively emittable. ISA evidence: `docs/archive/native-codegen-microprimitive-search-result-20260623.md:24-30`.
 - **Yes, for everything else** — the search over `env_policy` + `tile_config` (split/combine policy, KV identity,
   route thresholds, flash variant, tile constants) is real and runs today; within it, the hand oracle remains best
   (`docs/archive/decode-mode-b-search-result-20260623.md`).

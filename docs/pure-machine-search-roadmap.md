@@ -17,7 +17,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 
 | Area | Status | Pure-search blocker |
 |---|---|---|
-| Decode GEMV | Hand warp GEMV ships; BubbleBeam/FutureSight can select the proven lane-partition route | Cross-lane/lane-map primitive is not fully generated/search-owned yet |
+| Decode GEMV | Hand warp GEMV ships; BubbleBeam/FutureSight selects the proven lane-partition custom bridge | Packed-word/dequant/thread-map structure is not generated/search-owned yet |
 | Decode attention | Hand AMDGCN tile + separate combine ships | `v_dot2`, cross-lane, and LDS-staged attention lifecycle are not generated/search-owned |
 | Prefill | `eightwave` default; emit search exists | Deeper schedule/codegen controls are incomplete, but this is not the first purity blocker |
 | Benchmark authority | Centralized in `bench/canonical-benchmarks.json` | Search-vs-manual provenance must be attached to candidates |
@@ -150,7 +150,7 @@ Immediate work:
 1. Add/complete candidate provenance fields in `bench/qk-decode-eval/candidates.json`.
 2. Update search-space manifests to mark GEMV lane-partition/FutureSight state.
 3. Extend BubbleBeam/FutureSight docs to state exactly what is search-selected and what is still hand-owned.
-4. Add a GEMV purity gate: generated/search-owned route, no hand warp GEMV program names, and W==D parity against the owned route.
+4. Add a GEMV purity gate: current expected verdict is `GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE`; future pass is `GEMV_PURE_SEARCH_GENERATED`.
 
 ## Non-Goals
 

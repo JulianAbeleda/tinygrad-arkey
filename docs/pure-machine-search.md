@@ -8,7 +8,9 @@ config to ship. We do not use tinygrad's BEAM autotuner. We built our own candid
 config wins, gated by correctness and a per-token throughput bar.
 
 We are not fully pure yet. Two kernels in the default runtime path are hand-written, because tinygrad's
-scheduler cannot yet emit them. Everything else the model runs is scheduler-generated.
+scheduler cannot yet emit them. BubbleBeam/FutureSight currently makes the GEMV lane-partition route
+search-selected, but that route still uses a custom-kernel bridge, so it is not search-generated. Everything else
+the model runs is scheduler-generated.
 
 ## The two hand-written kernels (default-on)
 

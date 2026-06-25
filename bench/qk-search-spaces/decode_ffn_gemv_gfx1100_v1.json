@@ -5,7 +5,22 @@
   "primitive_family": "decode_q4k_weight_gemv",
   "description": "Decode-time (T==1) Q4_K weight-GEMV for FFN gate/up, FFN down, and attn q/o projection. Covers the owned warp GEMV route (q4k_gemv_warp_kernel) and the scheduler-expressible coop / vdot variants.",
   "supported_profiles": [
-    {"model": "Qwen3-8B-Q4_K_M", "device": "AMD", "arch": "gfx1100", "shapes": ["4096x4096 (q/o)", "4096x12288 (gate/up)", "12288x4096 (down)"], "ctx_ladder": [512, 1024, 2048, 4096]}
+    {
+      "model": "Qwen3-8B-Q4_K_M",
+      "device": "AMD",
+      "arch": "gfx1100",
+      "shapes": [
+        "4096x4096 (q/o)",
+        "4096x12288 (gate/up)",
+        "12288x4096 (down)"
+      ],
+      "ctx_ladder": [
+        512,
+        1024,
+        2048,
+        4096
+      ]
+    }
   ],
   "exposed_instruction_primitives": [
     "udot4 / v_dot4 builtin (Q4K_VDOT) -- schedulable, NATIVE; but loses in-model 0.96x due to per-kernel q8 activation-quant cost (~7us)"
@@ -46,12 +61,22 @@
   ],
   "correctness_gate": "byte_exact (lossless work-decomposition; greedy 0 mismatches vs default)",
   "lifecycle_authority_gate": "clean W==D (extra/qk_decode_runtime_overhead.py) interleaved drift-cancelled A/B; gate >= +5%@ctx1024 OR +7%@ctx4096 (FFN) / positive byte-identical (proj)",
-  "classification": "SEARCH_BLOCKED_BY_NONREDUCE_HANDOPTS",
-  "classification_detail": "Cross-lane reduction is now scheduler-emittable for both single-group AND mixed serial+group reduces (real K=4096), opt-in (WARP_REDUCE_LOWERING), correct -- the cross-lane codegen gap that blocked search is RESOLVED. Milestone 6 (2026-06-25) WIRED a scheduler-generated FFN gate/up GEMV (Q4K_GEMV_SCHEDULER) and W==D-compared it to the owned warp kernel: it TRAILS ~2x AND cross-lane is ~neutral vs the LDS tree (-0.1..-0.3%) because the reduce is NOT the bottleneck of a bandwidth-bound GEMV. So the search-vs-oracle gap is NO LONGER the reduce/cross-lane -- it is the Q4_K dequant lifecycle + coalesced packed-word loads + block-group-K. Those are the next search-space levers.",
+  "classification": "SEARCH_SELECTED_CUSTOM_BRIDGE_NOT_PURE",
+  "classification_detail": "BubbleBeam/FutureSight can select the measured lane-partition Q4_K route, and W==D proves it matches owned throughput/token behavior. This is search-selected but not search-generated: the implementation still calls the lane-partition custom-kernel bridge. The remaining purity blocker is codegen representation of the packed-word thread map, in-register 8-nibble dequant, and block-group-K structure as generated code.",
   "m6_measurement": {
     "verdict": "M6_SCHEDULER_GEMV_TRAILS_OWNED",
-    "scheduler_xlane_vs_owned_pct": {"512": -104.5, "1024": -103.1, "2048": -100.6, "4096": -95.8},
-    "cross_lane_vs_lds_pct": {"512": -0.08, "1024": -0.22, "2048": -0.31, "4096": -0.30},
+    "scheduler_xlane_vs_owned_pct": {
+      "512": -104.5,
+      "1024": -103.1,
+      "2048": -100.6,
+      "4096": -95.8
+    },
+    "cross_lane_vs_lds_pct": {
+      "512": -0.08,
+      "1024": -0.22,
+      "2048": -0.31,
+      "4096": -0.3
+    },
     "tokens_match": true,
     "doc": "docs/scheduler-gemv-vs-owned-result-20260625.md",
     "artifact": "bench/qk-scheduler-gemv-vs-owned/decision.json"
@@ -81,5 +106,23 @@
     "MV_DEQUANT (shipped, gated/default-off): matvec-detection sees through fused dequant -> applies GROUP. Fixes the recognition gap (may help other fused-reduce shapes); does NOT close the GEMV (proof apparatus for the B verdict).",
     "OR pivot: v_dot2 renderer lowering for the attention tile (the other hand kernel)"
   ],
-  "promotion_status_note": "Owned warp GEMV is shipped default-on (search_space_id=manual_oracle_not_search_generated). Q4K_GEMV_SCHEDULER + WARP_REDUCE_LOWERING are research-only/default-off; a scheduler GEMV does not yet challenge the owned kernel (the gap is dequant/memory, not the reduce)."
+  "promotion_status_note": "Owned warp GEMV is shipped default-on (search_space_id=manual_oracle_not_search_generated). Q4K_GEMV_SCHEDULER + WARP_REDUCE_LOWERING are research-only/default-off; a scheduler GEMV does not yet challenge the owned kernel (the gap is dequant/memory, not the reduce).",
+  "bubblebeam_futuresight_2026_06_25": {
+    "status": "search_selected_custom_bridge",
+    "selector": "FutureSight",
+    "system": "BubbleBeam",
+    "canonical_env": {
+      "BUBBLEBEAM_FUTURESIGHT": "1"
+    },
+    "deprecated_alias": {
+      "BEAM_COALESCE": "1"
+    },
+    "selected_candidate": "lane_partition_q4k",
+    "route": "extra/qk_q4k_lane_partition_gemv.py custom_kernel bridge",
+    "verdict": "PROCEED_P3_SEARCH_GENERALIZATION",
+    "artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-162422.json",
+    "tokens_match_all_ctx": true,
+    "purity_verdict": "GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE",
+    "why_not_pure": "FutureSight statically selects the proven lane-partition route, but the selected implementation is still a custom-kernel bridge rather than a generated scheduler/codegen route."
+  }
 }

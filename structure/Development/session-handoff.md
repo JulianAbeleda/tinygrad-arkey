@@ -19,6 +19,7 @@ Current baseline snapshot:
 - Prefill baseline @ctx512/1024/2048/4096/8192: `3574 / 3573 / 3572 / 3571 / 3569` tok/s.
 - Latest decode lifecycle run: `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-200800`.
 - Latest BubbleBeam artifact: `bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-162422.json`.
+- Latest GEMV purity gate: `bench/qk-gemv-purity-gate/latest.json` (`GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE` expected until the route is generated).
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
