@@ -14,7 +14,16 @@ I forked tinygrad for three reasons:
 * Portability over USB.
 * Learn the essentials of kernels.
 
-This fork runs with tinygrad's BEAM autotuner off. The decode and prefill speed comes from hand-written kernels (the warp GEMV, the owned AMDGCN attention tile, the coop flash variant). On top of those it adds its own machine search: a candidate and lifecycle search that decides which primitive and flag config to ship, gated by correctness and a per-token throughput bar. See `extra/qk_decode_eval.py` and `extra/qk_lifecycle_search_loop.py`.
+We do not use tinygrad's BEAM autotuner. We built our own machine search. tinygrad's BEAM searches per-kernel schedules; ours searches which decode primitive and flag config to ship, gated by correctness and a per-token throughput bar. The speed comes from hand-written kernels (the warp GEMV, the owned AMDGCN attention tile, the coop flash variant); the search picks the config. See `extra/qk_decode_eval.py` and `extra/qk_lifecycle_search_loop.py`.
+
+## Differences from upstream tinygrad
+
+* Backends: AMD only (gfx1100 / RDNA3). Upstream targets AMD, NVIDIA, Metal, CPU, WebGPU, and more.
+* Scope: quantized LLM decode and prefill (Q4_K / Q6_K / q8). Upstream is a general deep learning framework.
+* Kernels: hand-written HIP and AMDGCN for the hot paths (attention tile, warp GEMV, coop flash). Upstream generates kernels from the scheduler.
+* Search: our own candidate and lifecycle search over primitives and flags. We run with tinygrad's BEAM autotuner off.
+* Size: stripped to the live core. Removed the example apps, the upstream test suite, and unused subsystems (about 150k LOC). Active surface is in `FILE_INDEX.md`.
+* Direction: hard fork, no plans to merge upstream.
 
 ## Benchmarks
 
