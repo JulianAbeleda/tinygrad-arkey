@@ -20,6 +20,7 @@ ARMS = {
   "owned": {"Q4K_GEMV_SCHEDULER": "0"},
   "bridge": {"Q4K_GEMV_SCHEDULER": "4"},
   "g2_lanemap": {"Q4K_GEMV_SCHEDULER": "5"},
+  "g3_lanemap_codegen": {"Q4K_GEMV_SCHEDULER": "6"},
 }
 CLEAR_ENV = ("Q4K_GEMV_SCHEDULER", "MV_ROWS_PER_THREAD", "WARP_REDUCE_LOWERING", "BUBBLEBEAM_FUTURESIGHT", "BEAM_COALESCE")
 
@@ -91,6 +92,7 @@ def _capture_arm(arm:str, env:dict[str, str]) -> dict[str, Any]:
   name_counts = Counter(names)
   gateup_owned = sum(n.startswith("q4k_gemv_warp_12288") for n in names)
   gateup_bridge = sum(n.startswith("q4k_lane_partition_gemv_12288") for n in names)
+  gateup_g3 = sum(n.startswith("q4k_g3_lanemap_gemv_12288") for n in names)
   q4k_named = [n for n in names if "q4k" in n]
   named_gateup = [n for n in names if n.startswith(("q4k_gemv_warp_12288", "q4k_lane_partition_gemv_12288"))]
   source_summary = {
@@ -109,6 +111,7 @@ def _capture_arm(arm:str, env:dict[str, str]) -> dict[str, Any]:
     "route_counts": {
       "owned_gateup": gateup_owned,
       "lane_partition_gateup": gateup_bridge,
+      "g3_lanemap_gateup": gateup_g3,
       "q4k_named_programs": len(q4k_named),
       "named_gateup_programs": len(named_gateup),
     },
@@ -125,6 +128,9 @@ def _decide(arms:dict[str, Any]) -> tuple[str, str]:
   bridge_ok = arms["bridge"]["route_counts"]["lane_partition_gateup"] > 0 and arms["bridge"]["route_counts"]["owned_gateup"] == 0
   g2_clean = arms["g2_lanemap"]["route_counts"]["owned_gateup"] == 0 and arms["g2_lanemap"]["route_counts"]["lane_partition_gateup"] == 0
   g2_has_no_named_gateup = arms["g2_lanemap"]["route_counts"].get("named_gateup_programs", 0) == 0
+  g3_ok = arms.get("g3_lanemap_codegen", {}).get("route_counts", {}).get("g3_lanemap_gateup", 0) > 0 and arms["g3_lanemap_codegen"]["route_counts"]["owned_gateup"] == 0 and arms["g3_lanemap_codegen"]["route_counts"]["lane_partition_gateup"] == 0
+  if owned_ok and bridge_ok and g3_ok:
+    return "G3_ONE_WORD_PER_LANE_LOWERING_HOOK_PRESENT", "G3 LaneMap codegen arm now emits a named wave32 gate/up program without owned warp or lane-partition bridge attribution. W==D decides whether it is promotable or only a generated custom-shape probe."
   if owned_ok and bridge_ok and g2_clean and g2_has_no_named_gateup:
     return "G3_CODEGEN_MISMATCH_CAPTURED", "Owned and bridge arms each have a named wave32 gate/up program, while G2 LaneMap is route-clean but has no named/generated gate/up program shape; it lowers into generic Tensor programs instead of one-word-per-lane in-register dequant/reduce."
   return "G3_CAPTURE_FAIL", "Capture did not observe the expected route attribution pattern."

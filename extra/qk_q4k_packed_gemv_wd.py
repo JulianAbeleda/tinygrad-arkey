@@ -22,6 +22,7 @@ ARMS = {
   "generated_skeleton": {"Q4K_GEMV_SCHEDULER": "2"},
   "sched_wordlane": {"Q4K_GEMV_SCHEDULER": "3"},
   "g2_lanemap": {"Q4K_GEMV_SCHEDULER": "5"},
+  "g3_lanemap_codegen": {"Q4K_GEMV_SCHEDULER": "6"},
   "lane_partition": {"Q4K_GEMV_SCHEDULER": "4"},
   "bubblebeam_futuresight":   {"BUBBLEBEAM_FUTURESIGHT": "1"},
 }
@@ -42,6 +43,7 @@ def _program_counts(step) -> dict[str, int]:
   return {
     "owned_gateup": sum(n.startswith("q4k_gemv_warp_12288") for n in names),
     "lane_partition_gateup": sum(n.startswith("q4k_lane_partition_gemv_12288") for n in names),
+    "g3_lanemap_gateup": sum(n.startswith("q4k_g3_lanemap_gemv_12288") for n in names),
     "scheduler_programs": sum("q4k_scheduler" in n for n in names),
   }
 
@@ -52,13 +54,13 @@ def _write_doc(ts:str, out:dict):
     f"# Coalesced dequant M-E result {ts}", "",
     f"Verdict: `{out['verdict']}`", "",
     "## Throughput", "",
-    "| ctx | owned tok/s | sched_packed | generated_skeleton | sched_wordlane | g2_lanemap | lane_partition | bubblebeam_futuresight | best scheduler | best/owned | tokens match |",
+    "| ctx | owned tok/s | sched_packed | generated_skeleton | sched_wordlane | g2_lanemap | g3_lanemap_codegen | lane_partition | bubblebeam_futuresight | best scheduler | best/owned | tokens match |",
     "|---:|---:|---:|---:|---:|---:|---:|---|---:|---|",
   ]
   for c in CTXS:
     r = rows[str(c)]
     lines.append(f"| {c} | {r['tok_s']['owned']} | {r['tok_s']['sched_packed']} | {r['tok_s']['generated_skeleton']} | "
-                 f"{r['tok_s']['sched_wordlane']} | {r['tok_s']['g2_lanemap']} | {r['tok_s']['lane_partition']} | {r['tok_s']['bubblebeam_futuresight']} | {r['best_scheduler_arm']} | "
+                 f"{r['tok_s']['sched_wordlane']} | {r['tok_s']['g2_lanemap']} | {r['tok_s']['g3_lanemap_codegen']} | {r['tok_s']['lane_partition']} | {r['tok_s']['bubblebeam_futuresight']} | {r['best_scheduler_arm']} | "
                  f"{r['best_vs_owned_ratio']:.3f} | {r['tokens_match_all']} |")
   lines += ["", "## Interpretation", "", out["interpretation"], "", "## Artifact", "", f"- `{out['artifact']}`", ""]
   (DOCS/f"coalesced-dequant-mE-result-{ts}.md").write_text("\n".join(lines))
@@ -120,9 +122,14 @@ def main():
                                     rows[str(c)]["program_counts"]["generated_skeleton"]["owned_gateup"] == 0 for c in CTXS)
   g2_lanemap_route_ok = all(rows[str(c)]["program_counts"]["g2_lanemap"]["lane_partition_gateup"] == 0 and
                             rows[str(c)]["program_counts"]["g2_lanemap"]["owned_gateup"] == 0 for c in CTXS)
+  g3_lanemap_route_ok = all(rows[str(c)]["program_counts"]["g3_lanemap_codegen"]["g3_lanemap_gateup"] > 0 and
+                            rows[str(c)]["program_counts"]["g3_lanemap_codegen"]["lane_partition_gateup"] == 0 and
+                            rows[str(c)]["program_counts"]["g3_lanemap_codegen"]["owned_gateup"] == 0 for c in CTXS)
   best_ratios = {c: rows[str(c)]["best_vs_owned_ratio"] for c in CTXS}
   g2_lanemap_ratio_by_ctx = {c: round(rows[str(c)]["tok_s"]["g2_lanemap"] / rows[str(c)]["tok_s"]["owned"], 4) for c in CTXS}
   g2_lanemap_verdict = "G2_LANEMAP_PROMOTABLE" if tok_ok and g2_lanemap_route_ok and all(v >= PROCEED_RATIO for v in g2_lanemap_ratio_by_ctx.values()) else "SEARCH_GENERATED_WD_FAIL"
+  g3_lanemap_ratio_by_ctx = {c: round(rows[str(c)]["tok_s"]["g3_lanemap_codegen"] / rows[str(c)]["tok_s"]["owned"], 4) for c in CTXS}
+  g3_lanemap_verdict = "G3_LANEMAP_PROMOTABLE" if tok_ok and g3_lanemap_route_ok and all(v >= PROCEED_RATIO for v in g3_lanemap_ratio_by_ctx.values()) else "SEARCH_GENERATED_WD_FAIL"
   proceed = tok_ok and owned_route_ok and bubblebeam_route_ok and max(best_ratios.values()) >= PROCEED_RATIO and all(v >= PROCEED_RATIO for v in best_ratios.values())
   ts = time.strftime("%Y%m%d-%H%M%S")
   verdict = "PROCEED_P3_SEARCH_GENERALIZATION" if proceed else "STOP_CUSTOM_NEEDED_FOR_GEMV_TARGET"
@@ -132,7 +139,7 @@ def main():
   out = {"date": "2026-06-25", "timestamp": ts, "phase": "COALESCED_DEQUANT_M_E_DECISION", "perflevel": perflevel,
          "role": "FFN gate/up (Q4_K 4096x12288)", "arms": ARMS, "ctxs": CTXS, "nmeas": NMEAS, "repeats": REPEATS,
          "proceed_ratio": PROCEED_RATIO, "rows": rows, "tokens_match_all_ctx": tok_ok, "owned_route_ok": owned_route_ok,
-         "lane_partition_route_ok": lane_route_ok, "bubblebeam_futuresight_route_ok": bubblebeam_route_ok, "generated_skeleton_route_ok": generated_skeleton_route_ok, "g2_lanemap_route_ok": g2_lanemap_route_ok, "g2_lanemap_ratio_by_ctx": g2_lanemap_ratio_by_ctx, "g2_lanemap_verdict": g2_lanemap_verdict, "best_ratio_by_ctx": best_ratios, "best_arm": {c: rows[str(c)]["best_scheduler_arm"] for c in CTXS},
+         "lane_partition_route_ok": lane_route_ok, "bubblebeam_futuresight_route_ok": bubblebeam_route_ok, "generated_skeleton_route_ok": generated_skeleton_route_ok, "g2_lanemap_route_ok": g2_lanemap_route_ok, "g2_lanemap_ratio_by_ctx": g2_lanemap_ratio_by_ctx, "g2_lanemap_verdict": g2_lanemap_verdict, "g3_lanemap_route_ok": g3_lanemap_route_ok, "g3_lanemap_ratio_by_ctx": g3_lanemap_ratio_by_ctx, "g3_lanemap_verdict": g3_lanemap_verdict, "best_ratio_by_ctx": best_ratios, "best_arm": {c: rows[str(c)]["best_scheduler_arm"] for c in CTXS},
          "verdict": verdict, "interpretation": interpretation, "artifact": str(artifact.relative_to(ROOT))}
   OUT.mkdir(parents=True, exist_ok=True)
   artifact.write_text(json.dumps(out, indent=2)); (OUT/"coalesced_dequant_mE_latest.json").write_text(json.dumps(out, indent=2))

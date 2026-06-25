@@ -76,7 +76,16 @@ G3_CODEGEN_MISMATCH_CAPTURED
 
 ### G3.1: One-word-per-lane lowering hook
 
-Status: next.
+Status: complete as `Q4K_GEMV_SCHEDULER=6` / `q4k_g3_lanemap_gemv_*`.
+
+Result: `G3_LANEMAP_PROMOTABLE`. The generated G3 arm emits a named wave32 gate/up program from `Q4KGateUpLaneMap`, does not fire owned warp or lane-partition bridge programs, matches tokens, and reaches owned/FutureSight throughput.
+
+| ctx | owned tok/s | G3 LaneMap codegen tok/s | ratio |
+|---:|---:|---:|---:|
+| 512 | 103.5 | 103.7 | 1.002 |
+| 1024 | 101.8 | 101.7 | 0.999 |
+| 2048 | 99.2 | 99.4 | 1.002 |
+| 4096 | 94.8 | 94.5 | 0.997 |
 
 Goal: make generated code preserve `word_col` as a lane-local packed-word load, rather than lowering the LaneMap path as a generic Tensor graph.
 
@@ -92,6 +101,8 @@ Kill:
 
 ### G3.2: In-register multi-nibble dequant
 
+Status: complete for the G3.1 generated gate/up program. Capture shows the G3 program has the same shift/mask/local-id/ds-bpermute structural signature as the owned/bridge wave32 shape, and W==D confirms the physical shape transfers.
+
 Goal: keep one loaded packed word live and reuse it for the relevant nibble contributions.
 
 Required evidence:
@@ -106,6 +117,8 @@ Kill:
 
 ### G3.3: Generated lane reduction
 
+Status: complete for the G3.1 generated gate/up program. The G3 route emits `q4k_g3_lanemap_gemv_12288_4096`, not `q4k_gemv_warp_12288_4096` or `q4k_lane_partition_gemv_12288_4096`.
+
 Goal: combine lane partials through generated cross-lane reduction, not the lane-partition bridge.
 
 Required evidence:
@@ -115,6 +128,8 @@ Required evidence:
 - No `q4k_lane_partition_gemv_*` program fires.
 
 ### G3.4: W==D promotion decision
+
+Status: complete for the default-off diagnostic arm. Decision is `G3_LANEMAP_PROMOTABLE`.
 
 Goal: decide whether the lowered generated route is promotable.
 
@@ -144,4 +159,4 @@ SEARCH_BLOCKED_BY_RUNTIME
 
 ## Current Completion
 
-G3.0 is complete when the capture artifact exists and records the current mismatch. G3 overall is complete only when either a generated route is promoted or the missing lowering primitive is precisely classified.
+G3 lowering is complete for the default-off diagnostic arm. The remaining purity blocker is not codegen shape; it is BubbleBeam binding/promotion policy. FutureSight still routes to the custom bridge, so `extra/qk_gemv_purity_gate.py` correctly reports `GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE` while also reporting `g3_lanemap_promotable: true`.

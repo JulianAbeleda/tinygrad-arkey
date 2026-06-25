@@ -216,5 +216,30 @@
     },
     "result": "Owned and bridge arms each expose a named wave32 gate/up program. The G2 LaneMap arm is route-clean but has no named/generated gate-up program shape; it lowers into generic Tensor programs instead of one-word-per-lane in-register dequant/reduce.",
     "decision": "Proceed to G3.1 one-word-per-lane lowering hook. The immediate missing primitive is generated gate/up codegen shape binding, not LaneMap/address algebra."
+  },
+  "g3_1_lanemap_codegen_2026_06_25": {
+    "verdict": "G3_LANEMAP_PROMOTABLE",
+    "artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
+    "stamped_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-181841.json",
+    "candidate_id": "q4k_gemv_g3_lanemap_codegen",
+    "env": {
+      "Q4K_GEMV_SCHEDULER": "6"
+    },
+    "route_clean": true,
+    "tokens_match_all_ctx": true,
+    "tok_s_by_ctx": {
+      "512": 103.7,
+      "1024": 101.7,
+      "2048": 99.4,
+      "4096": 94.5
+    },
+    "ratio_vs_owned_by_ctx": {
+      "512": 1.0019,
+      "1024": 0.999,
+      "2048": 1.002,
+      "4096": 0.9968
+    },
+    "result": "A named wave32 gate/up UOp program generated from Q4KGateUpLaneMap matches owned/FutureSight throughput without firing owned warp or lane-partition bridge programs.",
+    "decision": "Promotable as a diagnostic generated codegen-shape candidate. Next step is BubbleBeam binding/purity promotion policy: route FutureSight to this generated arm instead of the custom bridge only after provenance language accepts UOp custom_kernel generated from LaneMap as search-generated."
   }
 }

@@ -1,6 +1,6 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-182051",
+  "timestamp": "20260625-172354",
   "verdict": "GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE",
   "source_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
   "route_flags": {
@@ -11,17 +11,14 @@
     "generated_skeleton_arm_present": true,
     "generated_skeleton_route_used": true,
     "g2_lanemap_arm_present": true,
-    "g2_lanemap_route_clean": true,
-    "g3_lanemap_arm_present": true,
-    "g3_lanemap_route_clean": true,
-    "g3_lanemap_promotable": true
+    "g2_lanemap_route_clean": true
   },
   "tokens_match": true,
   "tok_s_by_ctx": {
-    "512": 103.7,
-    "1024": 101.5,
-    "2048": 99.4,
-    "4096": 94.4
+    "512": 103.2,
+    "1024": 101.1,
+    "2048": 98.6,
+    "4096": 93.8
   },
   "generated_skeleton_tok_s_by_ctx": {
     "512": 22.5,
@@ -36,12 +33,5 @@
     "4096": 14.0
   },
   "g2_lanemap_verdict": "SEARCH_GENERATED_WD_FAIL",
-  "g3_lanemap_tok_s_by_ctx": {
-    "512": 103.7,
-    "1024": 101.7,
-    "2048": 99.4,
-    "4096": 94.5
-  },
-  "g3_lanemap_verdict": "G3_LANEMAP_PROMOTABLE",
   "classification": "BubbleBeam/FutureSight is search-selected but not search-generated while it routes through qk_q4k_lane_partition_gemv custom_kernel bridge."
 }

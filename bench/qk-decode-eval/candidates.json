@@ -524,6 +524,39 @@
       "historical_note": "G2.3 runtime/codegen binding arm: route-clean generated Tensor/scheduler path consuming the minimal Q4_K LaneMap representation. Promotion requires W==D speed near owned/FutureSight plus route attribution proving no custom bridge."
     },
     {
+      "id": "q4k_gemv_g3_lanemap_codegen",
+      "family": "ffn_gemv",
+      "description": "Default-off G3.1 generated named wave32 Q4_K FFN gate/up UOp program from Q4KGateUpLaneMap. Emits q4k_g3_lanemap_gemv_* without owned warp or lane-partition bridge route attribution.",
+      "env": {
+        "Q4K_GEMV_SCHEDULER": "6"
+      },
+      "rungs": [
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "G3_LANEMAP_PROMOTABLE",
+      "compare_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-181841.json",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_ffn_gemv_gfx1100_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "generated_codegen_shape_promotable_diagnostic",
+      "excluded_primitives": [
+        "bubblebeam_generated_candidate_binding_policy"
+      ],
+      "historical_note": "G3.1 W==D: 103.7/101.7/99.4/94.5-ish class, route-clean, token-correct, named generated gate/up program. Not default until BubbleBeam binding replaces the bridge."
+    },
+    {
       "id": "decode_aggressive_probe_promotion",
       "family": "decode_promotion_probe",
       "description": "Promotion-focused proof lane for the measured aggressive decode probe. This is NOT the full aggressive-target envelope proof; it asks the narrower question: is the observed ~1.6-1.8% W==D gain over the current decode baseline stable, route-clean, byte-correct, and worth promoting as the next baseline? The latest probe measured 103.4/101.6/99.1/94.4 tok/s @ctx512/1024/2048/4096 versus current baseline 101.6/99.8/97.3/92.7, but the aggressive-target proof failed because it missed the higher 104.0/102.1/99.6/95.1 envelope.",

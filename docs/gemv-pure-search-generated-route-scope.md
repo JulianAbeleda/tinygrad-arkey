@@ -125,6 +125,8 @@ Current G2 result: G2.0-G2.2 pass (`G2_LANEMAP_ADDRESS_BUILDER_PASS`), and G2.3 
 
 Current G3.0 result: `G3_CODEGEN_MISMATCH_CAPTURED` in `bench/qk-gemv-g3-codegen-capture/latest.json`. Owned and bridge each expose a named wave32 gate/up program 72 times; G2 LaneMap exposes zero named gate-up programs and lowers into generic Tensor programs.
 
+Current G3.1 result: `G3_LANEMAP_PROMOTABLE` via `Q4K_GEMV_SCHEDULER=6`. The generated G3 LaneMap arm emits `q4k_g3_lanemap_gemv_12288_4096`, is token-correct, route-clean, and matches owned/FutureSight throughput. Remaining purity blocker: BubbleBeam/FutureSight still selects the custom bridge instead of the G3 generated candidate.
+
 Tasks:
 
 - Reuse the layout/codegen plan rather than inventing a second IR.
