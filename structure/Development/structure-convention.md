@@ -30,6 +30,7 @@ This file defines the default `structure/` pattern.
 
 - repo-shaping guidance
 - implementation principles
+- benchmark/evaluator harness principles
 - release strategy
 - roadmap
 - reusable scaffolds for the documentation pattern itself
