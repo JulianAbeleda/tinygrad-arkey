@@ -168,5 +168,29 @@
     ],
     "result": "A bridge-independent Q4_K gate/up LaneMap can serialize lane = block_group * 8 + word_col and generate the packed-word index with unit stride across word_col; sampled generated indices match the numeric reference.",
     "decision": "Proceed to G2.3 generated dequant/reduce/store route. Remaining blocker is runtime/codegen binding, not LaneMap/address algebra."
+  },
+  "g2_3_lanemap_runtime_binding_2026_06_25": {
+    "verdict": "SEARCH_GENERATED_WD_FAIL",
+    "artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
+    "stamped_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-171554.json",
+    "candidate_id": "q4k_gemv_g2_lanemap_generated",
+    "env": {
+      "Q4K_GEMV_SCHEDULER": "5"
+    },
+    "route_clean": true,
+    "tokens_match_all_ctx": true,
+    "tok_s_by_ctx": {
+      "512": 14.2,
+      "1024": 14.2,
+      "2048": 14.1,
+      "4096": 14.0
+    },
+    "ratio_vs_owned_by_ctx": {
+      "512": 0.1373,
+      "1024": 0.1399,
+      "2048": 0.1427,
+      "4096": 0.1486
+    },
+    "decision": "Do not promote. G2.3 proves LaneMap/address metadata can feed a generated route, but the Tensor scheduler still lowers to the slow wordlane structure rather than the owned one-word-per-lane in-register dequant/reduce kernel."
   }
 }

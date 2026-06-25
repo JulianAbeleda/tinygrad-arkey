@@ -12,6 +12,7 @@ words1-3 = 6-bit scales[0-7]/mins[0-7]; words4-35 = 32 quant-words (8 nibbles ea
 """
 from __future__ import annotations
 from tinygrad import Tensor, dtypes
+from extra.qk_gemv_g2_lanemap import Q4KGateUpLaneMap
 
 U16, U32, F16, F32 = dtypes.uint16, dtypes.uint32, dtypes.float16, dtypes.float32
 
@@ -65,3 +66,21 @@ def q4k_scheduler_matvec_wordlane(words:Tensor, x:Tensor, out_features:int, in_f
   W = W.reshape(out_features, nb, 4, 2, 8, 4).permute(0, 2, 4, 1, 5, 3).reshape(out_features, 32, nb, 8)  # [out, w, nb, n]
   xr = x.reshape(nb, 4, 2, 8, 4).permute(1, 3, 0, 4, 2).reshape(32, nb, 8).cast(F32)                      # [w, nb, n]
   return (W * xr).sum(axis=(1, 2, 3))                                             # [out], w(32) is first reduce axis
+
+def q4k_scheduler_matvec_lanemap(words:Tensor, x:Tensor, out_features:int, in_features:int) -> Tensor:
+  """Mode 5 / G2.3: generated Tensor route bound to the bridge-independent Q4_K LaneMap.
+
+  This is intentionally a runtime/codegen binding probe, not a promotion candidate.  G2.0-G2.2 proved the lane map
+  and packed-word address expression are representable; this arm consumes that representation in the generated
+  scheduler route and stays route-clean: no owned warp custom_kernel and no lane-partition custom bridge.
+  """
+  lm = Q4KGateUpLaneMap(k=in_features, n=out_features)
+  lm.validate()
+  nb = lm.k_blocks
+  W = q4k_dequant_words(words.reshape(lm.n, nb, lm.q4k_words_per_block))
+  # Layout follows the G2 LaneMap: word_col is the contiguous/coalesced word axis inside each group pair.  The current
+  # Tensor scheduler still materializes this as graph algebra, so this arm proves route cleanliness and correctness;
+  # W==D decides whether codegen can exploit the representation without a custom bridge.
+  W = W.reshape(lm.n, nb, 4, 2, lm.words_per_group, 4).permute(0, 2, 4, 1, 5, 3).reshape(lm.n, lm.group_pairs*lm.words_per_group, nb, 8)
+  xr = x.reshape(nb, 4, 2, lm.words_per_group, 4).permute(1, 3, 0, 4, 2).reshape(lm.group_pairs*lm.words_per_group, nb, 8).cast(F32)
+  return (W * xr).sum(axis=(1, 2, 3))

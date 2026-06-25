@@ -69,8 +69,10 @@ block_group = lane // 8
 word_col = lane % 8
 blk = block_group * blocks_per_group + local_block
 base = (row * k_blocks + blk) * 36
-word_idx = base + 4 + (group // 2) * 8 + word_col
+word_idx = base + 4 + group_pair * 8 + word_col
 ```
+
+Note: Q4_K has eight quant groups but four quant-word group pairs. G2.3 runtime routing caught and corrected the initial over-broad `group_pairs=8` probe assumption to `group_pairs=4`.
 
 - Assert the generated expression preserves stride-1 packed-word access across `word_col`.
 - Reuse existing layout/coalescing helpers where possible, such as `extra/qk_layout_coalesce_check.py`, rather than inventing a second analysis vocabulary.
@@ -134,7 +136,9 @@ Gate:
 
 ### G2.3: Generated dequant skeleton
 
-Status: next. G2.0-G2.2 removed the local representation/address blocker; G2.3 is now the first runtime/codegen binding step.
+Status: complete as a default-off runtime/codegen binding probe: `Q4K_GEMV_SCHEDULER=5` / `q4k_scheduler_matvec_lanemap`.
+
+Result: `SEARCH_GENERATED_WD_FAIL`. The route is token-correct and route-clean, but measures only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`. This proves the blocker moved past LaneMap/address representation into runtime/codegen lowering: the Tensor scheduler still does not emit the owned one-word-per-lane in-register dequant/reduce kernel.
 
 Goal: replace the current slow G1 generated skeleton with a generated route that uses the LaneMap and packed-address builder.
 
@@ -152,6 +156,8 @@ Gate:
 
 ### G2.4: Purity gate integration
 
+Status: complete for the G2.3 diagnostic arm. `extra/qk_gemv_purity_gate.py` now reports `g2_lanemap_arm_present`, `g2_lanemap_route_clean`, `g2_lanemap_tok_s_by_ctx`, and `g2_lanemap_verdict`.
+
 Goal: make the existing gate report the G2 generated route clearly.
 
 Build:
@@ -165,6 +171,8 @@ Gate:
 - `extra/qk_gemv_purity_gate.py` reports the generated route separately from owned and bridge routes.
 
 ### G2.5: W==D decision
+
+Status: complete for the G2.3 diagnostic arm. Current decision is `SEARCH_GENERATED_WD_FAIL`, not promotion.
 
 Goal: decide whether the representation is promotable, locally useful, or blocked.
 
@@ -204,3 +212,5 @@ G2 is complete when one of these is true:
 1. The generated Q4_K gate/up route is token-correct, route-clean, and fast enough to promote.
 2. The generated route is route-clean and token-correct but too slow, with W==D evidence proving `SEARCH_GENERATED_WD_FAIL`.
 3. The representation cannot be expressed locally, with a precise `SEARCH_BLOCKED_BY_CODEGEN` artifact naming the missing primitive.
+
+Current completion state: option 2. The generated route is route-clean and token-correct, but W==D evidence proves `SEARCH_GENERATED_WD_FAIL` for the current Tensor/scheduler binding.

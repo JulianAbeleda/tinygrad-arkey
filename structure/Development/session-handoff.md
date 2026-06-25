@@ -24,7 +24,8 @@ Current baseline snapshot:
 - Latest GEMV purity gate: `bench/qk-gemv-purity-gate/latest.json` (`GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE` expected until the route is generated).
 - GEMV generated skeleton: `q4k_gemv_generated_skeleton` (`Q4K_GEMV_SCHEDULER=2`) is registered for attribution only; expected to fail W==D speed until codegen representation lands.
 - GEMV G2.0-G2.2 representation result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` (`extra/qk_gemv_g2_lanemap.py`, `extra/qk_gemv_g2_representation_probe.py`, `bench/qk-gemv-g2-representation-probe/latest.json`). UOp/RANGE can express `lane = block_group * 8 + word_col`, the minimal Q4_K LaneMap is bridge-independent/serializable, and the generated packed-word index matches the numeric reference.
-- Next GEMV purity step: G2.3 generated dequant/reduce/store route. The remaining blocker is runtime/codegen binding, not LaneMap or packed-address algebra.
+- GEMV G2.3 runtime binding result: `SEARCH_GENERATED_WD_FAIL` (`Q4K_GEMV_SCHEDULER=5`, `q4k_scheduler_matvec_lanemap`). It is token-correct and route-clean, but only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`.
+- Next GEMV purity step: codegen lowering for one-word-per-lane in-register dequant and generated reduction. The remaining blocker is not LaneMap or packed-address algebra; it is lowering the representation into the owned physical kernel shape without the custom bridge.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->

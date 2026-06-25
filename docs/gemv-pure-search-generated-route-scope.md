@@ -121,7 +121,7 @@ Goal: express the lane-partition physical structure in generated code.
 
 Executable scope: `docs/gemv-g2-minimal-codegen-representation-scope.md`.
 
-Current G2 result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` in `bench/qk-gemv-g2-representation-probe/latest.json`; G2.0-G2.2 are complete, and the next blocker is G2.3 generated dequant/reduce/store binding.
+Current G2 result: G2.0-G2.2 pass (`G2_LANEMAP_ADDRESS_BUILDER_PASS`), and G2.3 runtime binding is route-clean/token-correct but fails speed (`SEARCH_GENERATED_WD_FAIL`, `14.2 / 14.2 / 14.1 / 14.0` tok/s). The next blocker is codegen lowering for one-word-per-lane in-register dequant/reduce, not LaneMap/address algebra.
 
 Tasks:
 

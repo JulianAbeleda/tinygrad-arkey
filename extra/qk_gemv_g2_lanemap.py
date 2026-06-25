@@ -22,7 +22,7 @@ WORDS_PER_GROUP = 8
 BLOCKS_PER_GROUP = K_BLOCKS // BLOCK_GROUPS
 Q4K_WORDS_PER_BLOCK = 36
 Q4K_QUANT_WORD_BASE = 4
-GROUP_PAIRS = 8
+GROUP_PAIRS = 4
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class Q4KGateUpLaneMap:
   q4k_words_per_block: int = Q4K_WORDS_PER_BLOCK
   q4k_quant_word_base: int = Q4K_QUANT_WORD_BASE
   group_pairs: int = GROUP_PAIRS
+  groups: int = 8
 
   @property
   def k_blocks(self) -> int: return self.k // self.qk_k

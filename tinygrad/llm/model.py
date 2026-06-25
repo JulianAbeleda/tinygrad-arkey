@@ -260,6 +260,8 @@ class Q4KPrimitiveLinear:
       #     uint32 word -- tests whether a pure-scheduler GEMV can coalesce packed-word loads like the owned kernel.
       #   4 (LANE_PARTITION): P2.1a/P2.2 research-only custom-kernel bridge using LanePartitionReduce. It keeps the
       #     owned q4k thread map expressible through a reusable primitive, but is not a generic add_gpudims route.
+      #   5 (G2_LANEMAP): generated Tensor/scheduler route bound to the bridge-independent G2 Q4_K LaneMap. Route-clean
+      #     runtime/codegen binding probe; expected to fail speed until codegen exploits the representation.
       if getenv("Q4K_GEMV_SCHEDULER") == 4 or (bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER")):
         if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
           from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
@@ -269,11 +271,11 @@ class Q4KPrimitiveLinear:
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
         _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         return _out.custom_kernel(_w, _xv, fxn=q4k_lane_partition_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
-      if getenv("Q4K_GEMV_SCHEDULER") in (2, 3):
-        from extra.qk_q4k_scheduler_gemv import q4k_scheduler_matvec, q4k_scheduler_matvec_wordlane
+      if getenv("Q4K_GEMV_SCHEDULER") in (2, 3, 5):
+        from extra.qk_q4k_scheduler_gemv import q4k_scheduler_matvec, q4k_scheduler_matvec_wordlane, q4k_scheduler_matvec_lanemap
         _w = self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float32)
-        _fn = q4k_scheduler_matvec_wordlane if getenv("Q4K_GEMV_SCHEDULER") == 3 else q4k_scheduler_matvec
+        _fn = q4k_scheduler_matvec_lanemap if getenv("Q4K_GEMV_SCHEDULER") == 5 else q4k_scheduler_matvec_wordlane if getenv("Q4K_GEMV_SCHEDULER") == 3 else q4k_scheduler_matvec
         return _fn(_w, _xv, self.out_features, self.in_features).reshape(1, 1, self.out_features)
       return self._fallback(x)
     from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel

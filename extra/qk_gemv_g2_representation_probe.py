@@ -81,7 +81,7 @@ def run_probe() -> dict[str, Any]:
     "samples_checked": samples,
     "mismatches": mismatches[:8],
     "lane_mismatches": lane_mismatches[:8],
-    "decision": "G2.0-G2.2 are structurally passable. Proceed to G2.3 generated dequant/reduce/store route; the remaining risk is runtime/codegen binding, not LaneMap or packed-address expression." if verdict == "G2_LANEMAP_ADDRESS_BUILDER_PASS" else "Do not proceed to runtime routing until the LaneMap/address-builder mismatch is classified.",
+    "decision": "G2.0-G2.2 are structurally passable after correcting Q4_K quant group-pairs to 4. Proceed to G2.3 generated dequant/reduce/store route; the remaining risk is runtime/codegen binding, not LaneMap or packed-address expression." if verdict == "G2_LANEMAP_ADDRESS_BUILDER_PASS" else "Do not proceed to runtime routing until the LaneMap/address-builder mismatch is classified.",
   }
 
 

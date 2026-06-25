@@ -15,11 +15,14 @@ def main() -> int:
   lane_bridge = all(rows[c]['program_counts']['bubblebeam_futuresight']['lane_partition_gateup'] > 0 for c in ctxs)
   owned_under_futuresight = any(rows[c]['program_counts']['bubblebeam_futuresight']['owned_gateup'] > 0 for c in ctxs)
   generated_arm = 'generated_skeleton' if 'generated_skeleton' in rows[ctxs[0]]['program_counts'] else None
+  g2_arm = 'g2_lanemap' if 'g2_lanemap' in rows[ctxs[0]]['program_counts'] else None
   generated_skeleton = bool(generated_arm) and all(rows[c]['program_counts'][generated_arm]['lane_partition_gateup'] == 0 and rows[c]['program_counts'][generated_arm]['owned_gateup'] == 0 for c in ctxs)
+  g2_lanemap = bool(g2_arm) and all(rows[c]['program_counts'][g2_arm]['lane_partition_gateup'] == 0 and rows[c]['program_counts'][g2_arm]['owned_gateup'] == 0 for c in ctxs)
   scheduler_generated = all(rows[c]['program_counts']['bubblebeam_futuresight']['lane_partition_gateup'] == 0 and rows[c]['program_counts']['bubblebeam_futuresight']['scheduler_programs'] > 0 for c in ctxs)
   tokens_match = bool(src.get('tokens_match_all_ctx'))
   tok_s = {c: rows[c]['tok_s']['bubblebeam_futuresight'] for c in ctxs}
   generated_tok_s = {c: rows[c]['tok_s'][generated_arm] for c in ctxs} if generated_arm else {}
+  g2_tok_s = {c: rows[c]['tok_s'][g2_arm] for c in ctxs} if g2_arm else {}
   if tokens_match and lane_bridge and not owned_under_futuresight:
     verdict = 'GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE'
   elif tokens_match and scheduler_generated:
@@ -38,10 +41,14 @@ def main() -> int:
       'scheduler_generated_route_used_in_bubblebeam_arm': scheduler_generated,
       'generated_skeleton_arm_present': bool(generated_arm),
       'generated_skeleton_route_used': generated_skeleton,
+      'g2_lanemap_arm_present': bool(g2_arm),
+      'g2_lanemap_route_clean': g2_lanemap,
     },
     'tokens_match': tokens_match,
     'tok_s_by_ctx': tok_s,
     'generated_skeleton_tok_s_by_ctx': generated_tok_s,
+    'g2_lanemap_tok_s_by_ctx': g2_tok_s,
+    'g2_lanemap_verdict': src.get('g2_lanemap_verdict'),
     'classification': 'BubbleBeam/FutureSight is search-selected but not search-generated while it routes through qk_q4k_lane_partition_gemv custom_kernel bridge.',
   }
   OUT.mkdir(parents=True, exist_ok=True)
