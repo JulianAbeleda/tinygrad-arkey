@@ -32,6 +32,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/pure-machine-search.md` | Narrative of current hand-written kernels and why they exist |
 | `docs/low-level-wall-exposure-audit-goal.md` | How to classify missing primitive/codegen walls |
 | `docs/layout-codegen-full-scope-20260625.md` | Existing execution plan for layout/codegen exposure |
+| `docs/gemv-pure-search-generated-route-scope.md` | GEMV-only execution scope for replacing the FutureSight custom bridge with generated code |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture
