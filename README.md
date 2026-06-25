@@ -20,7 +20,7 @@ We do not use tinygrad's BEAM autotuner. We built our own machine search. tinygr
 
 * Backends: AMD only (gfx1100 / RDNA3). Upstream targets AMD, NVIDIA, Metal, CPU, WebGPU, and more.
 * Scope: quantized LLM decode and prefill (Q4_K / Q6_K / q8). Upstream is a general deep learning framework.
-* Kernels: hand-written HIP and AMDGCN for the hot paths (attention tile, warp GEMV, coop flash). Upstream generates kernels from the scheduler.
+* Kernels: scheduler-generated, with two hand-written hot-path overrides (the warp GEMV and the owned AMDGCN attention tile). They are the only two, flag-gated with a scheduler fallback. See [docs/pure-machine-search.md](docs/pure-machine-search.md). Upstream generates all kernels from the scheduler.
 * Search: our own candidate and lifecycle search over primitives and flags. We run with tinygrad's BEAM autotuner off.
 * Size: stripped to the live core. Removed the example apps, the upstream test suite, and unused subsystems (about 150k LOC). Active surface is in `FILE_INDEX.md`.
 * Direction: hard fork, no plans to merge upstream.
