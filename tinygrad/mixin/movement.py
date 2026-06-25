@@ -234,6 +234,10 @@ class MovementMixin:
     flip_arg = tuple([i in axis_arg for i in range(len(self.shape))])
     return self._mop(Ops.FLIP, arg=flip_arg) if any(flip_arg) else self
 
+  def layout_transform(self, name:str) -> Self:
+    """Attach a named layout intent without changing logical shape. Experimental search/layout IR hook."""
+    return self._mop(Ops.LAYOUT_TRANSFORM, arg=name)
+
   # **** high level ****
 
   def shrink_to(self, shape, *args) -> Self:

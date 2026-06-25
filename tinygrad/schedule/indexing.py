@@ -146,6 +146,8 @@ def apply_movement_op(op:Ops, in_shape:tuple[sint,...], arg:tuple, rngs:tuple[UO
       sink = UOp.sink(*rngs).simplify() # NOTE: this applies any commutative flips to the rngs early
       sub_array = {r:UOp.range(r.src[0], i, AxisType.PLACEHOLDER) for i,r in enumerate(sink.ranges)}
       rngs = _apply_reshape(in_shape, arg, sink.substitute(sub_array)).substitute({v:k for k,v in sub_array.items()}).src
+    case Ops.LAYOUT_TRANSFORM:
+      if arg != "q4k_lane_partition": raise RuntimeError(f"unknown layout transform {arg!r}")
     case _: raise RuntimeError(f"{op} is not a MovementOp")
   return rngs
 

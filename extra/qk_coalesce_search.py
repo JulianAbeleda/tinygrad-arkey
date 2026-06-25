@@ -56,3 +56,7 @@ def q4k_lane_partition_candidates(lane:UOp, base:UOp|None=None) -> list[Coalesce
 def choose_q4k_candidate(lane:UOp|None=None) -> CoalesceScore:
   lane = UOp.range(WARP, 0) if lane is None else lane
   return rank_candidates(q4k_lane_partition_candidates(lane))[0]
+
+def score_layout_transform(name:str, lane:UOp|None=None) -> CoalesceScore:
+  if name != "q4k_lane_partition": raise ValueError(f"unknown layout transform {name!r}")
+  return choose_q4k_candidate(lane)
