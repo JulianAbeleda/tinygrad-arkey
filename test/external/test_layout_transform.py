@@ -6,7 +6,7 @@ from tinygrad.uop.ops import AxisType, GroupOp, Ops, UOp, graph_rewrite
 from tinygrad.schedule.indexing import apply_movement_op
 from tinygrad.schedule.rangeify import pm_mops
 from extra.amd_warp_reduce import WARP
-from extra.qk_coalesce_search import score_layout_transform
+from extra.qk_bubblebeam_futuresight import score_layout_transform
 
 class TestLayoutTransform(unittest.TestCase):
   def test_layout_transform_is_movement(self):

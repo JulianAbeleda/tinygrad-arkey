@@ -4,11 +4,11 @@ import json, pathlib, unittest
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.uop.ops import AxisType, UOp
 from extra.amd_warp_reduce import WARP
-from extra.qk_coalesce_search import choose_q4k_candidate, q4k_lane_partition_candidates, rank_candidates, should_route_q4k_lane_partition
+from extra.qk_bubblebeam_futuresight import choose_q4k_candidate, q4k_lane_partition_candidates, rank_candidates, should_route_q4k_lane_partition
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-class TestQKCoalesceSearch(unittest.TestCase):
+class TestQKBubbleBeamFutureSight(unittest.TestCase):
   def test_optops_has_coalesce_marker(self):
     self.assertIs(OptOps.COALESCE, OptOps.COALESCE)
     self.assertEqual(Opt(OptOps.COALESCE, 0, 8).op, OptOps.COALESCE)
@@ -34,7 +34,8 @@ class TestQKCoalesceSearch(unittest.TestCase):
     latest = ROOT / "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json"
     data = json.loads(latest.read_text())
     self.assertEqual(data["verdict"], "PROCEED_P3_SEARCH_GENERALIZATION")
-    self.assertTrue(all(v == "lane_partition" for v in data["best_arm"].values()))
+    self.assertTrue(data.get("bubblebeam_futuresight_route_ok", data.get("beam_coalesce_route_ok", False)))
+    self.assertTrue(all(v in ("lane_partition", "bubblebeam_futuresight") for v in data["best_arm"].values()))
     self.assertEqual(choose_q4k_candidate(UOp.range(WARP, 0, AxisType.WARP)).candidate.name, "lane_partition_q4k")
 
 if __name__ == "__main__":

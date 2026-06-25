@@ -4,7 +4,7 @@ Verdict: `PROCEED_P3_SEARCH_GENERALIZATION`
 
 ## Throughput
 
-| ctx | owned tok/s | sched_packed | sched_wordlane | lane_partition | beam_coalesce | best scheduler | best/owned | tokens match |
+| ctx | owned tok/s | sched_packed | sched_wordlane | lane_partition | bubblebeam_futuresight | best scheduler | best/owned | tokens match |
 |---:|---:|---:|---:|---:|---:|---|---:|---|
 | 512 | 103.6 | 22.5 | 14.2 | 103.7 | 103.7 | lane_partition | 1.001 | True |
 | 1024 | 101.9 | 22.4 | 14.2 | 101.9 | 101.8 | lane_partition | 1.000 | True |
