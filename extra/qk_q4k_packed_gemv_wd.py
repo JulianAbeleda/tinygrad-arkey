@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""W==D for the WORD-STRUCTURED packed-Q4_K scheduler GEMV (Q4K_GEMV_SCHEDULER=2, extra/qk_q4k_scheduler_gemv)
-vs the fp16-logical scheduler GEMV (=1, the M6 arm) vs the owned warp kernel. FFN gate/up only. Clock-pinned,
-in-process interleaved, real per-token .item() W==D, tokens_match. Tests whether reading packed uint32 WORDS
-(vs the logical fp16 dequant) closes the ~2x gap to owned -- i.e. whether the scheduler coalesces the word loads.
+"""P2.3/M-E W==D for Q4_K scheduler/lane-partition GEMV vs the owned warp GEMV.
+
+Clock-pinned, in-process interleaved, real per-token .item() W==D, tokens_match.  FFN gate/up only.
+This is the decision gate from docs/layout-codegen-full-scope-20260625.md:
+  - >=90% of owned with tokens_match -> proceed to P3/search generalization.
+  - plateau near the historical ~50 tok/s scheduler ceiling -> stop; CUSTOM remains needed for this GEMV target.
 
   run: DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_q4k_packed_gemv_wd.py
 """
@@ -11,12 +13,16 @@ import json, os, pathlib, statistics, subprocess, sys, time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-scheduler-gemv-vs-owned"
-CTXS = [512, 1024, 2048, 4096]; MAXC = 4608; NMEAS = 30; REPEATS = 3
+DOCS = ROOT / "docs"
+CTXS = [512, 1024, 2048, 4096]; MAXC = 4608; NMEAS = 30; REPEATS = 3; PROCEED_RATIO = 0.90
 ARMS = {
-  "owned":       {"Q4K_GEMV_SCHEDULER": "0"},
-  "sched_fp16":  {"Q4K_GEMV_SCHEDULER": "1", "MV_ROWS_PER_THREAD": "1"},
-  "sched_packed":{"Q4K_GEMV_SCHEDULER": "2"},
+  "owned":          {"Q4K_GEMV_SCHEDULER": "0"},
+  "sched_fp16":     {"Q4K_GEMV_SCHEDULER": "1", "MV_ROWS_PER_THREAD": "1"},
+  "sched_packed":   {"Q4K_GEMV_SCHEDULER": "2"},
+  "sched_wordlane": {"Q4K_GEMV_SCHEDULER": "3"},
+  "lane_partition": {"Q4K_GEMV_SCHEDULER": "4"},
 }
+CLEAR_ENV = ("Q4K_GEMV_SCHEDULER", "MV_ROWS_PER_THREAD", "WARP_REDUCE_LOWERING")
 
 def _try_pin_clock():
   try:
@@ -26,6 +32,32 @@ def _try_pin_clock():
       if "GPU" in ln and "Performance Level:" in ln: return ln.split("Performance Level:")[-1].strip()
   except Exception: pass
   return "unknown"
+
+def _program_counts(step) -> dict[str, int]:
+  names = [u.src[0].arg.name for u in step.captured.linear.toposort()
+           if u.op.name == "CALL" and len(u.src) and u.src[0].op.name == "PROGRAM"]
+  return {
+    "owned_gateup": sum(n.startswith("q4k_gemv_warp_12288") for n in names),
+    "lane_partition_gateup": sum(n.startswith("q4k_lane_partition_gemv_12288") for n in names),
+    "scheduler_programs": sum("q4k_scheduler" in n for n in names),
+  }
+
+def _write_doc(ts:str, out:dict):
+  rows = out["rows"]
+  best = out["best_arm"]
+  lines = [
+    f"# Coalesced dequant M-E result {ts}", "",
+    f"Verdict: `{out['verdict']}`", "",
+    "## Throughput", "",
+    "| ctx | owned tok/s | sched_packed | sched_wordlane | lane_partition | best scheduler | best/owned | tokens match |",
+    "|---:|---:|---:|---:|---:|---|---:|---|",
+  ]
+  for c in CTXS:
+    r = rows[str(c)]
+    lines.append(f"| {c} | {r['tok_s']['owned']} | {r['tok_s']['sched_packed']} | {r['tok_s']['sched_wordlane']} | "
+                 f"{r['tok_s']['lane_partition']} | {r['best_scheduler_arm']} | {r['best_vs_owned_ratio']:.3f} | {r['tokens_match_all']} |")
+  lines += ["", "## Interpretation", "", out["interpretation"], "", "## Artifact", "", f"- `{out['artifact']}`", ""]
+  (DOCS/f"coalesced-dequant-mE-result-{ts}.md").write_text("\n".join(lines))
 
 def main():
   perflevel = _try_pin_clock()
@@ -39,18 +71,14 @@ def main():
   ids = (ids * (1 + MAXC // max(1, len(ids))))[:MAXC]
   v = UOp.variable("start_pos", 0, MAXC - 1); temp = Tensor([0.0])
 
-  def owned_gateup(step):
-    return sum(1 for u in step.captured.linear.toposort()
-               if u.op.name == "CALL" and len(u.src) and u.src[0].op.name == "PROGRAM"
-               and u.src[0].arg.name.startswith("q4k_gemv_warp_12288"))
   def build(env, ck):
-    for k in ("Q4K_GEMV_SCHEDULER", "MV_ROWS_PER_THREAD", "WARP_REDUCE_LOWERING"): os.environ.pop(k, None)
+    for k in CLEAR_ENV: os.environ.pop(k, None)
     for k, val in env.items(): os.environ[k] = val
     getenv.cache_clear()
     for b in m.blk: b._use_flash, b._prefill_v2 = True, False
     step = TinyJit(m.forward); out = Tensor([[int(ids[ck])]], dtype="int32").contiguous()
     for i in range(8): out = step(out, v.bind(ck + i), temp).realize()
-    return step, owned_gateup(step)
+    return step, _program_counts(step)
   def measure(step, ck):
     out = Tensor([[int(ids[ck])]], dtype="int32").contiguous(); W = []; toks = []
     for i in range(NMEAS):
@@ -60,8 +88,8 @@ def main():
 
   rows = {}; arm_names = list(ARMS)
   for ck in CTXS:
-    steps, og = {}, {}
-    for a in arm_names: steps[a], og[a] = build(ARMS[a], ck)
+    steps, counts = {}, {}
+    for a in arm_names: steps[a], counts[a] = build(ARMS[a], ck)
     ms = {a: [] for a in arm_names}; toks = {}
     for r in range(REPEATS):
       order = arm_names[r % len(arm_names):] + arm_names[:r % len(arm_names)]
@@ -69,26 +97,36 @@ def main():
         mm, tt = measure(steps[a], ck); ms[a].append(mm); toks[a] = tt
     med = {a: statistics.median(ms[a]) for a in arm_names}
     tps = {a: round(1000/med[a], 1) for a in arm_names}
-    rows[ck] = {"tok_s": tps, "owned_gateup": og,
-                "tokens_match_all": all(toks[a] == toks["owned"] for a in arm_names),
-                "packed_vs_fp16_pct": round(100*(med["sched_fp16"]-med["sched_packed"])/med["sched_fp16"], 2),
-                "packed_vs_owned_pct": round(100*(med["owned"]-med["sched_packed"])/med["owned"], 2),
-                "spread_pct": {a: round(100*(max(ms[a])-min(ms[a]))/med[a], 2) for a in arm_names}}
-    print(f"ctx {ck:5}: owned {tps['owned']} | sched_fp16 {tps['sched_fp16']} | sched_packed {tps['sched_packed']} tok/s "
-          f"| packed vs fp16 {rows[ck]['packed_vs_fp16_pct']:+.2f}% | packed vs owned {rows[ck]['packed_vs_owned_pct']:+.2f}% "
-          f"| tokens_match {rows[ck]['tokens_match_all']} | owned_gateup {og}", file=sys.__stderr__)
+    sched_arms = [a for a in arm_names if a != "owned"]
+    best = max(sched_arms, key=lambda a: tps[a])
+    rows[str(ck)] = {"tok_s": tps, "program_counts": counts, "tokens_match_all": all(toks[a] == toks["owned"] for a in arm_names),
+                     "best_scheduler_arm": best, "best_vs_owned_ratio": round(tps[best] / tps["owned"], 4),
+                     "spread_pct": {a: round(100*(max(ms[a])-min(ms[a]))/med[a], 2) for a in arm_names}}
+    print(f"ctx {ck:5}: " + " | ".join(f"{a} {tps[a]}" for a in arm_names) +
+          f" tok/s | best {best} ratio {rows[str(ck)]['best_vs_owned_ratio']:.3f} | tokens_match {rows[str(ck)]['tokens_match_all']} | counts {counts}",
+          file=sys.__stderr__)
 
   tok_ok = all(r["tokens_match_all"] for r in rows.values())
-  route_ok = all(rows[c]["owned_gateup"]["owned"] > 0 and rows[c]["owned_gateup"]["sched_packed"] == 0 for c in CTXS)
-  out = {"date": "2026-06-25", "phase": "Q4K_PACKED_SCHEDULER_GEMV_WD", "perflevel": perflevel,
+  owned_route_ok = all(rows[str(c)]["program_counts"]["owned"]["owned_gateup"] > 0 for c in CTXS)
+  lane_route_ok = all(rows[str(c)]["program_counts"]["lane_partition"]["lane_partition_gateup"] > 0 and
+                      rows[str(c)]["program_counts"]["lane_partition"]["owned_gateup"] == 0 for c in CTXS)
+  best_ratios = {c: rows[str(c)]["best_vs_owned_ratio"] for c in CTXS}
+  proceed = tok_ok and owned_route_ok and max(best_ratios.values()) >= PROCEED_RATIO and all(v >= PROCEED_RATIO for v in best_ratios.values())
+  ts = time.strftime("%Y%m%d-%H%M%S")
+  verdict = "PROCEED_P3_SEARCH_GENERALIZATION" if proceed else "STOP_CUSTOM_NEEDED_FOR_GEMV_TARGET"
+  interpretation = ("Best scheduler/lane-partition arm reached the >=90% owned threshold at every ctx with matching tokens. Proceed to P3."
+                    if proceed else "Best scheduler/lane-partition arm did not reach the >=90% owned threshold at every ctx. Do not fund P3; record CUSTOM as needed for this GEMV performance target.")
+  artifact = OUT / f"coalesced_dequant_mE_{ts}.json"
+  out = {"date": "2026-06-25", "timestamp": ts, "phase": "COALESCED_DEQUANT_M_E_DECISION", "perflevel": perflevel,
          "role": "FFN gate/up (Q4_K 4096x12288)", "arms": ARMS, "ctxs": CTXS, "nmeas": NMEAS, "repeats": REPEATS,
-         "rows": rows, "tokens_match_all_ctx": tok_ok, "route_fire_ok": route_ok,
-         "verdict": ("Q4K_PACKED_SCHEDULER_GEMV_TRAILS_OWNED" if route_ok and tok_ok else "INCONCLUSIVE")}
-  OUT.mkdir(parents=True, exist_ok=True); (OUT/"packed_wd.json").write_text(json.dumps(out, indent=2))
-  print(f"\nverdict: {out['verdict']} | tokens_match {tok_ok} | route_ok {route_ok} | {OUT/'packed_wd.json'}", file=sys.__stderr__)
-  print(json.dumps({"verdict": out["verdict"], "tokens_match": tok_ok,
-                    "packed_vs_fp16_pct": {c: rows[c]["packed_vs_fp16_pct"] for c in CTXS},
-                    "packed_vs_owned_pct": {c: rows[c]["packed_vs_owned_pct"] for c in CTXS}}))
+         "proceed_ratio": PROCEED_RATIO, "rows": rows, "tokens_match_all_ctx": tok_ok, "owned_route_ok": owned_route_ok,
+         "lane_partition_route_ok": lane_route_ok, "best_ratio_by_ctx": best_ratios, "best_arm": {c: rows[str(c)]["best_scheduler_arm"] for c in CTXS},
+         "verdict": verdict, "interpretation": interpretation, "artifact": str(artifact.relative_to(ROOT))}
+  OUT.mkdir(parents=True, exist_ok=True)
+  artifact.write_text(json.dumps(out, indent=2)); (OUT/"coalesced_dequant_mE_latest.json").write_text(json.dumps(out, indent=2))
+  _write_doc(ts, out)
+  print(f"\nverdict: {verdict} | tokens_match {tok_ok} | owned_route {owned_route_ok} | lane_route {lane_route_ok} | {artifact}", file=sys.__stderr__)
+  print(json.dumps({"verdict": verdict, "tokens_match": tok_ok, "best_ratio_by_ctx": best_ratios, "best_arm": out["best_arm"]}))
 
 if __name__ == "__main__":
   main()

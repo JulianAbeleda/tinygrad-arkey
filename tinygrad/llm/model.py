@@ -257,6 +257,14 @@ class Q4KPrimitiveLinear:
       #     swaps the LDS-tree group reduce for the ds_bpermute ladder. (M6: cross-lane ~neutral.)
       #   2 (PACKED): word-structured tinygrad-ops dequant (extra/qk_q4k_scheduler_gemv) whose load unit is the
       #     uint32 word -- tests whether a pure-scheduler GEMV can coalesce packed-word loads like the owned kernel.
+      #   4 (LANE_PARTITION): P2.1a/P2.2 research-only custom-kernel bridge using LanePartitionReduce. It keeps the
+      #     owned q4k thread map expressible through a reusable primitive, but is not a generic add_gpudims route.
+      if getenv("Q4K_GEMV_SCHEDULER") == 4:
+        from extra.qk_q4k_lane_partition_gemv import q4k_lane_partition_gemv_kernel
+        _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
+        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
+        _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+        return _out.custom_kernel(_w, _xv, fxn=q4k_lane_partition_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
       if getenv("Q4K_GEMV_SCHEDULER") in (2, 3):
         from extra.qk_q4k_scheduler_gemv import q4k_scheduler_matvec, q4k_scheduler_matvec_wordlane
         _w = self.q4k_storage.words.to(x.device)
