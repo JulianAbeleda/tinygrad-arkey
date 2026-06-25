@@ -51,17 +51,25 @@ def _lane_width(r:UOp) -> int|None:
   return None
 
 def lower_warp_reduce(red:UOp) -> UOp|None:
-  """REDUCE(val, lane_range, arg=(alu, axes)) -> the ds_bpermute ladder over `val`, lane=lane_range.
-  First pass: exactly one reduce range, a power-of-2 (<=32) WARP/GROUP_REDUCE lane axis; alu in {ADD,MAX}; float.
-  (Mixed reduces -- e.g. a real GEMV's K=group + serial-K/group -- are declined here and fall back to the LDS
-  path; the inner serial-then-ladder split is the M6 follow-on.)"""
+  """REDUCE(val, [serial...,] lane_range, arg=(alu, axes)) -> [serial reduce then] the ds_bpermute ladder.
+  Handles a single power-of-2 (<=32) WARP/GROUP_REDUCE lane axis, with OR without serial reduce ranges
+  (a real GEMV's K=4096 becomes group + serial-K/group). alu in {ADD,MAX}; float.
+  Mirror of fix_group_for_reduce (expander.py): do the non-lane (serial) reduce first as a per-lane partial,
+  then the cross-lane ladder over the lane group. The lane RANGE is reused (gpudims binds it to a lidx); the
+  serial ranges stay AxisType.REDUCE and are lowered to a REG-accumulator loop by pm_reduce. REDUCE.arg is
+  already (op, ()) at this stage (indexing.py converts the positional-axes form away) -- never recompute it.
+  Strict superset of the single-axis case: serial==[] reproduces the original ladder-over-src[0]."""
   alu, _axes = red.arg
   if alu not in _LADDER: return None
   ranges = red.src[1:]
-  if len(ranges) != 1: return None
-  if (w := _lane_width(ranges[0])) is None: return None
+  if not all(r.op is Ops.RANGE for r in ranges): return None
+  group = [r for r in ranges if r.arg[-1] in _LANE_AXES]
+  serial = [r for r in ranges if r.arg[-1] not in _LANE_AXES]
+  if len(group) != 1: return None
+  if (w := _lane_width(group[0])) is None: return None
   if red.dtype.scalar() not in (dtypes.float32, dtypes.float): return None
-  return _LADDER[alu](red.src[0], ranges[0], w)
+  inner = red.src[0].reduce(*serial, arg=red.arg) if serial else red.src[0]   # per-lane partial; lane stays live
+  return _LADDER[alu](inner, group[0], w)
 
 pm_warp_reduce = PatternMatcher([
   (UPat(Ops.REDUCE, name="red"), lower_warp_reduce),

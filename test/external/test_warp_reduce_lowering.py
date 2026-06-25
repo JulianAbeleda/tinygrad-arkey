@@ -103,5 +103,23 @@ class TestWarpReduceLoweringPipeline(unittest.TestCase):
     self.assertNotIn("__attribute__((shared", red_src, "ds_bpermute path should not stage LDS for the reduce")
     self.assertNotIn("s_barrier", red_src, "ds_bpermute path should not emit s_barrier for the reduce")
 
+  def test_pipeline_mixed_reduce_k4096(self):
+    # MIXED reduce: a real GEMV K=4096 -> matvec heuristic adds GROUP(8) lane + serial-K/8 + LOCAL block(4).
+    # The serial+group split must lower correctly AND the lane-packing must be right while a LOCAL block shares
+    # the wave (the agent-flagged correctness subtlety). Garbage here = wrong lidx packing.
+    rng = np.random.default_rng(7); M, K = 256, 4096
+    anp = rng.standard_normal((M, K)).astype(np.float32); bnp = rng.standard_normal((K,)).astype(np.float32)
+    got = (Tensor(anp) * Tensor(bnp)).sum(axis=1).numpy()
+    ref = (anp.astype(np.float64) * bnp.astype(np.float64)).sum(1)
+    self.assertTrue(np.allclose(got, ref, rtol=2e-3, atol=5e-2), f"mixed-reduce K=4096 wrong, max_err {np.abs(got-ref).max()}")
+
+  def test_pipeline_mixed_reduce_emits_bpermute(self):
+    from tinygrad.engine.realize import compile_linear
+    rng = np.random.default_rng(7); M, K = 256, 4096
+    out = (Tensor(rng.standard_normal((M, K)).astype(np.float32)) * Tensor(rng.standard_normal((K,)).astype(np.float32))).sum(axis=1)
+    srcs = [next((u.arg for u in c.src[0].toposort() if u.op is Ops.SOURCE), "")
+            for c in compile_linear(out.schedule_linear()).src if c.src[0].op is Ops.PROGRAM]
+    self.assertTrue(any("ds_bpermute" in s for s in srcs), "mixed K=4096 reduce did not emit ds_bpermute")
+
 if __name__ == "__main__":
   unittest.main()
