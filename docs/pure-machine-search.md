@@ -13,7 +13,7 @@ scheduler cannot yet emit them. Everything else the model runs is scheduler-gene
 These are the only two hand-written kernels in the default decode path. Each is flag-gated and falls back to a
 scheduler-generated path when disabled.
 
-### 1. Warp GEMV — `extra/q4_k_gemv_primitive.py`
+### 1. Warp GEMV: `extra/q4_k_gemv_primitive.py`
 - Flag: `Q4K_GEMV_WARP=1` (FFN gate/up), `Q4K_GEMV_WARP_DOWN=1` (FFN down). Revert with the flag set to 0.
 - Why hand-written: the scheduler GEMV runs at about 51% of peak (one thread per row, serial over K,
   uncoalesced). llama's MMVQ shape needs 128 threads per row with K-block parallelism and an in-kernel
@@ -21,7 +21,7 @@ scheduler-generated path when disabled.
   leaves performance on the table.
 - Gain: about +9.6% at ctx 1024 and +8.5% at ctx 4096, byte-identical output.
 
-### 2. Owned AMDGCN attention tile — `extra/qk_owned_flash_decode.hip`
+### 2. Owned AMDGCN attention tile: `extra/qk_owned_flash_decode.hip`
 - Flag: `DECODE_ATTN_AMDGCN_TILE=1`, active at ctx >= 512 (`DECODE_ATTN_AMDGCN_MIN_CTX=512`).
 - Why hand-written: the fast attention kernel is a single fused tile that stages K and V in LDS and uses
   `v_dot2` with cross-lane reduction. The scheduler emits scalar fp16 loads, no LDS, and no `v_dot2`, which is
@@ -46,18 +46,18 @@ The repo carries more hand-written `.hip` and `.cpp` than those two. None of it 
 as opt-in references, measurement tooling, or control experiments.
 
 - Opt-in / research (off by default):
-  - `extra/q8_ffn_*.py` (`Q8_FFN_HANDWRITTEN=0`) — q8 FFN route, opt-in, dNLL-gated.
-  - `extra/q4k_mmvq_handwritten.hip`, `extra/q4k_w4a16_handwritten.hip` — handwritten reference kernels.
-  - `extra/q6_k_gemv_primitive.py` — Q6_K GEMV primitive (Q6_K down is coop-routed by default).
-  - `Q4K_GEMV_WARP_PROJ`, `Q4K_VDOT` — research levers that did not transfer in-model.
+  - `extra/q8_ffn_*.py` (`Q8_FFN_HANDWRITTEN=0`): q8 FFN route, opt-in, dNLL-gated.
+  - `extra/q4k_mmvq_handwritten.hip`, `extra/q4k_w4a16_handwritten.hip`: handwritten reference kernels.
+  - `extra/q6_k_gemv_primitive.py`: Q6_K GEMV primitive (Q6_K down is coop-routed by default).
+  - `Q4K_GEMV_WARP_PROJ`, `Q4K_VDOT`: research levers that did not transfer in-model.
 - Measurement tooling (capture harnesses, not kernels the model runs):
   - `extra/qk_decode_mmvq_kernarg_capture.cpp`, `extra/qk_llama_fattn_kernarg_capture.cpp`,
-    `extra/qk_tensile_kernarg_capture*.cpp` — kernarg capture for replaying vendor kernels.
+    `extra/qk_tensile_kernarg_capture*.cpp`: kernarg capture for replaying vendor kernels.
 - Control experiments (measured a ceiling, not routed into the model):
   - `extra/qk_prefill_blas_ceiling.cpp`, `extra/qk_prefill_blas_sequence.cpp`,
-    `extra/qk_prefill_bridge_shim.cpp` — external BLAS ceiling (hipBLASLt / rocBLAS).
-  - `extra/qk_tensile_solution_sweep.cpp` — Tensile solution sweep.
-  - `extra/gemm/amd_seb/*.cpp` — step-by-step GEMM study kernels.
+    `extra/qk_prefill_bridge_shim.cpp`: external BLAS ceiling (hipBLASLt / rocBLAS).
+  - `extra/qk_tensile_solution_sweep.cpp`: Tensile solution sweep.
+  - `extra/gemm/amd_seb/*.cpp`: step-by-step GEMM study kernels.
 - Vendor / upstream: `extra/torch_backend/wrapped_tensor.cpp`.
 
 ## The path to pure
