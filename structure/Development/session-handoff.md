@@ -1,5 +1,26 @@
 # Session Handoff
 
+<!-- CANONICAL_BENCHMARKS:START -->
+## Current Benchmark Authority
+
+Source of truth:
+
+- `bench/canonical-benchmarks.json`
+- Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
+- Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
+
+Current baseline snapshot:
+
+- Decode baseline @ctx512/1024/2048/4096: `101.6 / 99.8 / 97.3 / 92.7` tok/s.
+- Decode BubbleBeam FutureSight @ctx512/1024/2048/4096: `103.5 / 101.6 / 99.1 / 94.4` tok/s (`BUBBLEBEAM_FUTURESIGHT=1`, default-off selector).
+- Decode aggressive probe, measured but not promoted: `103.4 / 101.6 / 99.1 / 94.4` tok/s.
+- Decode aggressive target envelope: `104.0 / 102.1 / 99.6 / 95.1` tok/s.
+- Prefill baseline @ctx512/1024/2048/4096/8192: `3574 / 3573 / 3572 / 3571 / 3569` tok/s.
+- Latest decode lifecycle run: `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-200800`.
+- Latest BubbleBeam artifact: `bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-162422.json`.
+
+Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
+<!-- CANONICAL_BENCHMARKS:END -->
 > ## ⭐⭐⭐⭐ 2026-06-23 — STRUCTURAL EMIT WIN SHIPPED: DBUF default = +2.84% whole-prefill, BYTE-IDENTICAL (default flipped)
 > The structural-emit stress study found a REAL transferable win, overturning "scheduling-limited". Swapping the route's
 > substep-prefetch (PLRA) for cross-iteration DOUBLE-BUFFER (DBUF) = **+2.84% +/-0.11% whole-prefill@4096, BYTE-IDENTICAL

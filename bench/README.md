@@ -8,8 +8,8 @@ Canonical state: `../docs/current-project-state-handoff-20260624.md`. Most `benc
 
 | benchmark | value | reproduce |
 |---|---|---|
-| **Decode 8B** (default) | **101.6 / 99.8 / 97.4 / 92.9 tok/s** @ctx 512/1024/2048/4096 (~100.6–104% of llama) | `extra/qk_decode_runtime_overhead.py` |
-| **Prefill 8B** (default, `eightwave`) | **3597 / 3505 / 3263 / 2784 / 2217 tok/s** @ctx 512/1024/2048/4096/8192 | `extra/qk_prefill_emit_search.py` |
+| **Decode 8B** (default) | **101.6 / 99.8 / 97.3 / 92.7 tok/s** @ctx 512/1024/2048/4096 (~100.4-104.0% of llama) | `extra/qk_decode_runtime_overhead.py` |
+| **Prefill 8B** (default, `eightwave`) | **3574 / 3573 / 3572 / 3571 / 3569 tok/s** @ctx 512/1024/2048/4096/8192 | `extra/qk_prefill_emit_search.py` |
 | **Decode 8B, q8 FFN** (opt-in) | ~+7% decode (default-off, dNLL-gated) | `Q8_FFN_HANDWRITTEN=1` |
 | **Decode 14B / 32B** | 40.6 (62%) / 17.2 (56%) tok/s | `bench/qk-shared-storage-20260612/matrix-summary.md` |
 
