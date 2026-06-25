@@ -60,3 +60,12 @@ def choose_q4k_candidate(lane:UOp|None=None) -> CoalesceScore:
 def score_layout_transform(name:str, lane:UOp|None=None) -> CoalesceScore:
   if name != "q4k_lane_partition": raise ValueError(f"unknown layout transform {name!r}")
   return choose_q4k_candidate(lane)
+
+def should_route_q4k_lane_partition(out_features:int, in_features:int) -> bool:
+  """Search-owned q4k route selector for the proven FFN gate/up shape.
+
+  This is intentionally narrow for P3.3: route only when static COALESCE selects the lane-partition candidate for
+  the shape that passed M-E.  Broader beam synthesis remains a follow-on.
+  """
+  if out_features != 12288 or in_features != 4096: return False
+  return choose_q4k_candidate().candidate.requires_lane_partition

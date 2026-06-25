@@ -4,7 +4,7 @@ import json, pathlib, unittest
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.uop.ops import AxisType, UOp
 from extra.amd_warp_reduce import WARP
-from extra.qk_coalesce_search import choose_q4k_candidate, q4k_lane_partition_candidates, rank_candidates
+from extra.qk_coalesce_search import choose_q4k_candidate, q4k_lane_partition_candidates, rank_candidates, should_route_q4k_lane_partition
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -24,6 +24,11 @@ class TestQKCoalesceSearch(unittest.TestCase):
     best = choose_q4k_candidate(UOp.range(WARP, 0, AxisType.WARP))
     self.assertEqual(best.candidate.name, "lane_partition_q4k")
     self.assertTrue(best.candidate.requires_lane_partition)
+
+  def test_shape_route_selector_is_narrow(self):
+    self.assertTrue(should_route_q4k_lane_partition(12288, 4096))
+    self.assertFalse(should_route_q4k_lane_partition(4096, 4096))
+    self.assertFalse(should_route_q4k_lane_partition(4096, 12288))
 
   def test_static_choice_agrees_with_measured_m_e_artifact(self):
     latest = ROOT / "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json"

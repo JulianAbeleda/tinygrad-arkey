@@ -21,8 +21,9 @@ ARMS = {
   "sched_packed":   {"Q4K_GEMV_SCHEDULER": "2"},
   "sched_wordlane": {"Q4K_GEMV_SCHEDULER": "3"},
   "lane_partition": {"Q4K_GEMV_SCHEDULER": "4"},
+  "beam_coalesce":   {"BEAM_COALESCE": "1"},
 }
-CLEAR_ENV = ("Q4K_GEMV_SCHEDULER", "MV_ROWS_PER_THREAD", "WARP_REDUCE_LOWERING")
+CLEAR_ENV = ("Q4K_GEMV_SCHEDULER", "MV_ROWS_PER_THREAD", "WARP_REDUCE_LOWERING", "BEAM_COALESCE")
 
 def _try_pin_clock():
   try:
@@ -49,13 +50,14 @@ def _write_doc(ts:str, out:dict):
     f"# Coalesced dequant M-E result {ts}", "",
     f"Verdict: `{out['verdict']}`", "",
     "## Throughput", "",
-    "| ctx | owned tok/s | sched_packed | sched_wordlane | lane_partition | best scheduler | best/owned | tokens match |",
-    "|---:|---:|---:|---:|---:|---|---:|---|",
+    "| ctx | owned tok/s | sched_packed | sched_wordlane | lane_partition | beam_coalesce | best scheduler | best/owned | tokens match |",
+    "|---:|---:|---:|---:|---:|---:|---|---:|---|",
   ]
   for c in CTXS:
     r = rows[str(c)]
     lines.append(f"| {c} | {r['tok_s']['owned']} | {r['tok_s']['sched_packed']} | {r['tok_s']['sched_wordlane']} | "
-                 f"{r['tok_s']['lane_partition']} | {r['best_scheduler_arm']} | {r['best_vs_owned_ratio']:.3f} | {r['tokens_match_all']} |")
+                 f"{r['tok_s']['lane_partition']} | {r['tok_s']['beam_coalesce']} | {r['best_scheduler_arm']} | "
+                 f"{r['best_vs_owned_ratio']:.3f} | {r['tokens_match_all']} |")
   lines += ["", "## Interpretation", "", out["interpretation"], "", "## Artifact", "", f"- `{out['artifact']}`", ""]
   (DOCS/f"coalesced-dequant-mE-result-{ts}.md").write_text("\n".join(lines))
 
@@ -110,8 +112,10 @@ def main():
   owned_route_ok = all(rows[str(c)]["program_counts"]["owned"]["owned_gateup"] > 0 for c in CTXS)
   lane_route_ok = all(rows[str(c)]["program_counts"]["lane_partition"]["lane_partition_gateup"] > 0 and
                       rows[str(c)]["program_counts"]["lane_partition"]["owned_gateup"] == 0 for c in CTXS)
+  beam_route_ok = all(rows[str(c)]["program_counts"]["beam_coalesce"]["lane_partition_gateup"] > 0 and
+                      rows[str(c)]["program_counts"]["beam_coalesce"]["owned_gateup"] == 0 for c in CTXS)
   best_ratios = {c: rows[str(c)]["best_vs_owned_ratio"] for c in CTXS}
-  proceed = tok_ok and owned_route_ok and max(best_ratios.values()) >= PROCEED_RATIO and all(v >= PROCEED_RATIO for v in best_ratios.values())
+  proceed = tok_ok and owned_route_ok and beam_route_ok and max(best_ratios.values()) >= PROCEED_RATIO and all(v >= PROCEED_RATIO for v in best_ratios.values())
   ts = time.strftime("%Y%m%d-%H%M%S")
   verdict = "PROCEED_P3_SEARCH_GENERALIZATION" if proceed else "STOP_CUSTOM_NEEDED_FOR_GEMV_TARGET"
   interpretation = ("Best scheduler/lane-partition arm reached the >=90% owned threshold at every ctx with matching tokens. Proceed to P3."
@@ -120,12 +124,12 @@ def main():
   out = {"date": "2026-06-25", "timestamp": ts, "phase": "COALESCED_DEQUANT_M_E_DECISION", "perflevel": perflevel,
          "role": "FFN gate/up (Q4_K 4096x12288)", "arms": ARMS, "ctxs": CTXS, "nmeas": NMEAS, "repeats": REPEATS,
          "proceed_ratio": PROCEED_RATIO, "rows": rows, "tokens_match_all_ctx": tok_ok, "owned_route_ok": owned_route_ok,
-         "lane_partition_route_ok": lane_route_ok, "best_ratio_by_ctx": best_ratios, "best_arm": {c: rows[str(c)]["best_scheduler_arm"] for c in CTXS},
+         "lane_partition_route_ok": lane_route_ok, "beam_coalesce_route_ok": beam_route_ok, "best_ratio_by_ctx": best_ratios, "best_arm": {c: rows[str(c)]["best_scheduler_arm"] for c in CTXS},
          "verdict": verdict, "interpretation": interpretation, "artifact": str(artifact.relative_to(ROOT))}
   OUT.mkdir(parents=True, exist_ok=True)
   artifact.write_text(json.dumps(out, indent=2)); (OUT/"coalesced_dequant_mE_latest.json").write_text(json.dumps(out, indent=2))
   _write_doc(ts, out)
-  print(f"\nverdict: {verdict} | tokens_match {tok_ok} | owned_route {owned_route_ok} | lane_route {lane_route_ok} | {artifact}", file=sys.__stderr__)
+  print(f"\nverdict: {verdict} | tokens_match {tok_ok} | owned_route {owned_route_ok} | lane_route {lane_route_ok} | beam_route {beam_route_ok} | {artifact}", file=sys.__stderr__)
   print(json.dumps({"verdict": verdict, "tokens_match": tok_ok, "best_ratio_by_ctx": best_ratios, "best_arm": out["best_arm"]}))
 
 if __name__ == "__main__":
