@@ -7,19 +7,23 @@ config to ship. We do not use tinygrad's BEAM autotuner. We built our own candid
 (`extra/qk_decode_eval.py`, `extra/qk_lifecycle_search_loop.py`) that decides which decode primitive and flag
 config wins, gated by correctness and a per-token throughput bar.
 
-We are not fully pure yet. Two kernels in the default runtime path are hand-written, because tinygrad's
-scheduler cannot yet emit them. BubbleBeam/FutureSight currently makes the GEMV lane-partition route
-search-selected, but that route still uses a custom-kernel bridge, so it is not search-generated. Everything else
-the model runs is scheduler-generated.
+We are not fully pure yet. Tracked Q4_K decode GEMV is now generated under BubbleBeam G3, so the remaining
+default decode purity blocker is the owned AMDGCN attention tile and combine lifecycle. Everything else in the
+model path is scheduler-generated or routed through a generated BubbleBeam candidate.
 
-## The two hand-written kernels (default-on)
+## Current status of the formerly hand-written decode kernels
 
-These are the only two hand-written kernels in the default decode path. Each is flag-gated and falls back to a
-scheduler-generated path when disabled.
+These are the only two historical hand-written kernels in the default decode path. GEMV has been replaced for the
+tracked Q4_K decode roles; attention remains active.
 
 ### 1. Warp GEMV: `extra/q4_k_gemv_primitive.py`
 
-- Flag: `Q4K_GEMV_WARP=1` (FFN gate/up), `Q4K_GEMV_WARP_DOWN=1` (FFN down). Revert with the flag set to 0.
+- Status: superseded for tracked Q4_K decode GEMV by BubbleBeam G3 generated LaneMap routes. The current purity
+  gate verdict is `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV`.
+- Coverage: gate/up, FFN down, and Q4_K `4096x4096` projection route through generated G3 LaneMap programs under
+  BubbleBeam/FutureSight, with no owned Q4_K GEMV or lane-partition bridge on that path.
+- Fallback/reference: `Q4K_GEMV_WARP=1` (FFN gate/up), `Q4K_GEMV_WARP_DOWN=1` (FFN down). Revert with the flag set
+  to 0.
 - Why hand-written: the scheduler GEMV runs at about half of HBM peak (47 to 57%) because of the schedule:
   one thread per row, serial over K, uncoalesced. llama's MMVQ shape needs 128 threads per row with K-block
   parallelism and an in-kernel cross-lane (warp shuffle) reduce. The scheduler cannot emit the cross-lane
@@ -81,19 +85,17 @@ refuted before the hand tile shipped.
 - [Native fused-flash linearizer scope](archive/native-fused-flash-linearizer-scope-20260621.md)
 - [Hand AMDGCN tile adds +12 to +22%, capability gap confirmed](decode-campaign-final-synthesis-20260623.md)
 
-## Everything else is scheduler-generated
+## Everything else is scheduler-generated or generated through BubbleBeam
 
 - The model bulk: norms, rope, projections, elementwise, the KV path.
 - Attention below ctx 512: `gqa_coop_vec`, a tinygrad-expressed flash variant.
-- Several decode GEMV variants that the scheduler can express: `MMVQ_COOP` (cooperative-K), `Q4K_VDOT`
+- Tracked Q4_K decode GEMV: BubbleBeam G3 generated LaneMap programs for gate/up, FFN down, and Q4_K projection.
+- Several fallback decode GEMV variants that the scheduler can express: `MMVQ_COOP` (cooperative-K), `Q4K_VDOT`
   (schedulable builtin v_dot4).
 
-So the hand-written footprint in the default path is the minimum, and it is small. The attention tile is 283
-lines of HIP and AMDGCN; the warp GEMV is a few hundred lines of HIP inside a Python dispatch wrapper (the rest
-of its file is dispatch, fallback, and tests). That is the whole hand-written GPU surface, on the order of a
-few hundred lines, against vendor hand-tuned kernel libraries like Tensile, Composable Kernel, and
-FlashAttention that run to thousands or tens of thousands of lines. Two kernels, both necessary, neither
-droppable without losing llama parity, and no third hand-written kernel in the default route.
+So the active hand-written footprint in the default decode path is now the attention tile and combine lifecycle.
+The attention tile is 283 lines of HIP and AMDGCN. The warp GEMV remains in the repo as fallback/reference and is
+no longer required for the tracked Q4_K BubbleBeam default route.
 
 ## The rest of the hand-written source in the repo
 
@@ -135,7 +137,7 @@ matter and generate the rest.
 
 ## The path to pure
 
-The two hand-written kernels are the exact shape of the remaining codegen gap: native `v_dot2`, cross-lane
-reduction, and LDS staging. If the scheduler gains those, both hand-written kernels can be replaced by
-generated ones and the fork becomes pure machine search. Until then, both stay flag-gated with a scheduler
-fallback, so the generated path is always one env var away and serves as the portability and correctness baseline.
+The remaining active hand-written kernel is the exact shape of the codegen gap: native `v_dot2`, cross-lane
+reduction, LDS staging, and a generated/search-owned TILE+COMBINE attention lifecycle. If the scheduler and
+BubbleBeam gain those, the owned attention route can become fallback/reference and the default decode path becomes
+pure machine search for the currently tracked Q4_K model surface.

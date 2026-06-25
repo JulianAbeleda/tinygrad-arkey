@@ -10,6 +10,7 @@ Source of truth:
 - `docs/gemv-pure-search-generated-route-scope.md`
 - `docs/gemv-g2-minimal-codegen-representation-scope.md`
 - `docs/gemv-g3-codegen-lowering-scope.md`
+- `docs/decode-attention-pure-search-scope.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
@@ -22,7 +23,8 @@ Current baseline snapshot:
 - Prefill baseline @ctx512/1024/2048/4096/8192: `3574 / 3573 / 3572 / 3571 / 3569` tok/s.
 - Latest decode lifecycle run: `bench/qk-decode-lifecycle-recheck-bundle/decode-lifecycle-recheck-20260624-200800`.
 - Latest BubbleBeam artifact: `bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-162422.json`.
-- Latest GEMV purity gate: `bench/qk-gemv-purity-gate/latest.json` (`GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE` expected until the route is generated).
+- Latest GEMV purity gate: `bench/qk-gemv-purity-gate/latest.json` (`GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV`).
+- Latest decode attention purity capture: `bench/qk-decode-attention-purity/latest.json` (`DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE`).
 - GEMV generated skeleton: `q4k_gemv_generated_skeleton` (`Q4K_GEMV_SCHEDULER=2`) is registered for attribution only; expected to fail W==D speed until codegen representation lands.
 - GEMV G2.0-G2.2 representation result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` (`extra/qk_gemv_g2_lanemap.py`, `extra/qk_gemv_g2_representation_probe.py`, `bench/qk-gemv-g2-representation-probe/latest.json`). UOp/RANGE can express `lane = block_group * 8 + word_col`, the minimal Q4_K LaneMap is bridge-independent/serializable, and the generated packed-word index matches the numeric reference.
 - GEMV G2.3 runtime binding result: `SEARCH_GENERATED_WD_FAIL` (`Q4K_GEMV_SCHEDULER=5`, `q4k_scheduler_matvec_lanemap`). It is token-correct and route-clean, but only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`.
@@ -30,7 +32,8 @@ Current baseline snapshot:
 - GEMV G3.1 lowering hook: `G3_LANEMAP_PROMOTABLE` (`Q4K_GEMV_SCHEDULER=6`, `q4k_g3_lanemap_gemv_12288_4096`). W==D tok/s `103.7 / 101.7 / 99.4 / 94.5`, token-correct, route-clean, no owned warp gate/up and no lane-partition bridge gate/up.
 - GEMV G4 BubbleBeam binding: complete. FutureSight now routes to the generated G3 LaneMap program; purity gate verdict is `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3`. The old lane-partition bridge remains explicit-only as `Q4K_GEMV_SCHEDULER=4` fallback/debug route.
 - GEMV full tracked Q4_K purity: complete. Verdict `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV`. BubbleBeam/FutureSight routes gate/up (`g3_lanemap_gateup: 72`), FFN down (`g3_lanemap_down: 18`), and Q4_K `4096x4096` projection (`g3_lanemap_proj: 72`) through generated G3 LaneMap programs, with no owned Q4_K GEMV or lane-partition bridge under BubbleBeam.
-- Next pure-machine-search target: decode attention, because tracked Q4_K decode GEMV is now pure/generated under BubbleBeam.
+- Decode attention A0 purity capture: complete. Verdict `DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE` (`extra/qk_decode_attention_purity_capture.py`, `bench/qk-decode-attention-purity/latest.json`). Current default route fires `owned_flash_tile_gqa_whole` + `owned_flash_combine`, keeps buffer identity, and avoids `E_49152`.
+- Next pure-machine-search target: decode attention A1 generated skeleton candidate, because tracked Q4_K decode GEMV is now pure/generated under BubbleBeam.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->

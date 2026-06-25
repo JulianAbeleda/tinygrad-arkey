@@ -17,7 +17,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 
 | Area | Status | Pure-search blocker |
 |---|---|---|
-| Decode GEMV | Hand warp GEMV ships; BubbleBeam/FutureSight selects the proven lane-partition custom bridge | Packed-word/dequant/thread-map structure is not generated/search-owned yet |
+| Decode GEMV | Tracked Q4_K GEMV roles are pure/generated under BubbleBeam G3 | None for tracked Q4_K gate/up, down, and 4096x4096 projection |
 | Decode attention | Hand AMDGCN tile + separate combine ships | `v_dot2`, cross-lane, and LDS-staged attention lifecycle are not generated/search-owned |
 | Prefill | `eightwave` default; emit search exists | Deeper schedule/codegen controls are incomplete, but this is not the first purity blocker |
 | Benchmark authority | Centralized in `bench/canonical-benchmarks.json` | Search-vs-manual provenance must be attached to candidates |
@@ -35,6 +35,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/gemv-pure-search-generated-route-scope.md` | GEMV-only execution scope for replacing the FutureSight custom bridge with generated code |
 | `docs/gemv-g2-minimal-codegen-representation-scope.md` | Next executable GEMV step: prove or block the minimal Q4_K lane-map/codegen representation |
 | `docs/gemv-g3-codegen-lowering-scope.md` | Current GEMV step: lower the LaneMap route into one-word-per-lane generated code |
+| `docs/decode-attention-pure-search-scope.md` | Decode attention execution scope for replacing owned tile+combine with generated/search-owned code |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture
@@ -144,16 +145,16 @@ Gate:
 - Default runtime path uses generated/search-owned kernels for decode GEMV and decode attention.
 - `docs/pure-machine-search.md` can move from "not fully pure yet" to "pure for current profile."
 
-## First Implementation Target
+## Current Implementation Target
 
-Start with Phase 1 + Phase 2.
+Start Phase 3: decode attention purity.
 
 Immediate work:
 
-1. Add/complete candidate provenance fields in `bench/qk-decode-eval/candidates.json`.
-2. Update search-space manifests to mark GEMV lane-partition/FutureSight state.
-3. Extend BubbleBeam/FutureSight docs to state exactly what is search-selected and what is still hand-owned.
-4. Add a GEMV purity gate: current expected verdict is `GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE`; future pass is `GEMV_PURE_SEARCH_GENERATED`.
+1. Capture the current owned tile + combine attention lifecycle.
+2. Add a generated skeleton candidate with separate route attribution.
+3. Expose or classify the missing primitive lowerings: `v_dot2`, cross-lane reduction, LDS tile layout, and TILE+COMBINE lifecycle.
+4. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
 
 ## Non-Goals
 
