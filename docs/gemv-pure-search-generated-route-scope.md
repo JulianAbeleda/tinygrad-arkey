@@ -97,6 +97,8 @@ Gate:
 
 ### G1: Generated-route candidate skeleton
 
+Status: implemented as `q4k_gemv_generated_skeleton` / `Q4K_GEMV_SCHEDULER=2` for route attribution. This is a correctness/attribution skeleton, not a speed claim.
+
 Goal: introduce a default-off candidate lane that can be attributed separately from owned and bridge routes.
 
 Tasks:

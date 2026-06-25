@@ -455,6 +455,41 @@
       ]
     },
     {
+      "id": "q4k_gemv_generated_skeleton",
+      "family": "ffn_gemv",
+      "description": "Default-off generated/scheduler Q4_K FFN gate/up skeleton for GEMV purity attribution. This is not a promotion candidate yet; it exists so the purity gate can distinguish generated code from owned warp GEMV and the lane-partition custom bridge.",
+      "env": {
+        "Q4K_GEMV_SCHEDULER": "2"
+      },
+      "rungs": [
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "correctness_req": "byte_exact",
+      "historical_expected_verdict": "SEARCH_GENERATED_WD_FAIL",
+      "compare_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_ffn_gemv_gfx1100_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "generated_skeleton_not_promoted",
+      "excluded_primitives": [
+        "q4k_packed_word_threadmap",
+        "in_register_multi_nibble_dequant",
+        "block_group_k"
+      ],
+      "historical_note": "G1 generated-route skeleton: route attribution only. Existing scheduler-generated Q4_K packed dequant path is token-correct but far slower than owned/bridge; purity work continues in the codegen representation lane."
+    },
+    {
       "id": "decode_aggressive_probe_promotion",
       "family": "decode_promotion_probe",
       "description": "Promotion-focused proof lane for the measured aggressive decode probe. This is NOT the full aggressive-target envelope proof; it asks the narrower question: is the observed ~1.6-1.8% W==D gain over the current decode baseline stable, route-clean, byte-correct, and worth promoting as the next baseline? The latest probe measured 103.4/101.6/99.1/94.4 tok/s @ctx512/1024/2048/4096 versus current baseline 101.6/99.8/97.3/92.7, but the aggressive-target proof failed because it missed the higher 104.0/102.1/99.6/95.1 envelope.",
@@ -513,6 +548,11 @@
     "decode_aggressive_probe_promotion": [
       "baseline_default",
       "decode_aggressive_probe_promotion"
+    ],
+    "gemv_purity": [
+      "baseline_default",
+      "q4k_gemv_warp_ffn",
+      "q4k_gemv_generated_skeleton"
     ]
   }
 }

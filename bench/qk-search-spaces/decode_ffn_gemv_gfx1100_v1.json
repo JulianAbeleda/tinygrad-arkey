@@ -124,5 +124,19 @@
     "tokens_match_all_ctx": true,
     "purity_verdict": "GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE",
     "why_not_pure": "FutureSight statically selects the proven lane-partition route, but the selected implementation is still a custom-kernel bridge rather than a generated scheduler/codegen route."
+  },
+  "generated_skeleton_2026_06_25": {
+    "status": "search_generated",
+    "candidate_id": "q4k_gemv_generated_skeleton",
+    "env": {
+      "Q4K_GEMV_SCHEDULER": "2"
+    },
+    "purpose": "G1 route-attribution skeleton, not a performance promotion candidate",
+    "expected_verdict": "SEARCH_GENERATED_WD_FAIL until codegen can express the packed-word/dequant/thread-map structure",
+    "forbidden_routes": [
+      "q4k_gemv_warp_kernel",
+      "q4k_lane_partition_gemv_kernel"
+    ],
+    "authority": "extra/qk_q4k_packed_gemv_wd.py generated_skeleton arm and extra/qk_gemv_purity_gate.py"
   }
 }
