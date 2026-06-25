@@ -116,8 +116,12 @@ def main():
   owned_route_ok = all(rows[str(c)]["program_counts"]["owned"]["owned_gateup"] > 0 for c in CTXS)
   lane_route_ok = all(rows[str(c)]["program_counts"]["lane_partition"]["lane_partition_gateup"] > 0 and
                       rows[str(c)]["program_counts"]["lane_partition"]["owned_gateup"] == 0 for c in CTXS)
-  bubblebeam_route_ok = all(rows[str(c)]["program_counts"]["bubblebeam_futuresight"]["lane_partition_gateup"] > 0 and
-                      rows[str(c)]["program_counts"]["bubblebeam_futuresight"]["owned_gateup"] == 0 for c in CTXS)
+  bubblebeam_route_ok = all((rows[str(c)]["program_counts"]["bubblebeam_futuresight"]["lane_partition_gateup"] > 0 or
+                             rows[str(c)]["program_counts"]["bubblebeam_futuresight"].get("g3_lanemap_gateup", 0) > 0) and
+                            rows[str(c)]["program_counts"]["bubblebeam_futuresight"]["owned_gateup"] == 0 for c in CTXS)
+  bubblebeam_generated_route_ok = all(rows[str(c)]["program_counts"]["bubblebeam_futuresight"].get("g3_lanemap_gateup", 0) > 0 and
+                                      rows[str(c)]["program_counts"]["bubblebeam_futuresight"]["lane_partition_gateup"] == 0 and
+                                      rows[str(c)]["program_counts"]["bubblebeam_futuresight"]["owned_gateup"] == 0 for c in CTXS)
   generated_skeleton_route_ok = all(rows[str(c)]["program_counts"]["generated_skeleton"]["lane_partition_gateup"] == 0 and
                                     rows[str(c)]["program_counts"]["generated_skeleton"]["owned_gateup"] == 0 for c in CTXS)
   g2_lanemap_route_ok = all(rows[str(c)]["program_counts"]["g2_lanemap"]["lane_partition_gateup"] == 0 and
@@ -139,7 +143,7 @@ def main():
   out = {"date": "2026-06-25", "timestamp": ts, "phase": "COALESCED_DEQUANT_M_E_DECISION", "perflevel": perflevel,
          "role": "FFN gate/up (Q4_K 4096x12288)", "arms": ARMS, "ctxs": CTXS, "nmeas": NMEAS, "repeats": REPEATS,
          "proceed_ratio": PROCEED_RATIO, "rows": rows, "tokens_match_all_ctx": tok_ok, "owned_route_ok": owned_route_ok,
-         "lane_partition_route_ok": lane_route_ok, "bubblebeam_futuresight_route_ok": bubblebeam_route_ok, "generated_skeleton_route_ok": generated_skeleton_route_ok, "g2_lanemap_route_ok": g2_lanemap_route_ok, "g2_lanemap_ratio_by_ctx": g2_lanemap_ratio_by_ctx, "g2_lanemap_verdict": g2_lanemap_verdict, "g3_lanemap_route_ok": g3_lanemap_route_ok, "g3_lanemap_ratio_by_ctx": g3_lanemap_ratio_by_ctx, "g3_lanemap_verdict": g3_lanemap_verdict, "best_ratio_by_ctx": best_ratios, "best_arm": {c: rows[str(c)]["best_scheduler_arm"] for c in CTXS},
+         "lane_partition_route_ok": lane_route_ok, "bubblebeam_futuresight_route_ok": bubblebeam_route_ok, "bubblebeam_futuresight_generated_route_ok": bubblebeam_generated_route_ok, "generated_skeleton_route_ok": generated_skeleton_route_ok, "g2_lanemap_route_ok": g2_lanemap_route_ok, "g2_lanemap_ratio_by_ctx": g2_lanemap_ratio_by_ctx, "g2_lanemap_verdict": g2_lanemap_verdict, "g3_lanemap_route_ok": g3_lanemap_route_ok, "g3_lanemap_ratio_by_ctx": g3_lanemap_ratio_by_ctx, "g3_lanemap_verdict": g3_lanemap_verdict, "best_ratio_by_ctx": best_ratios, "best_arm": {c: rows[str(c)]["best_scheduler_arm"] for c in CTXS},
          "verdict": verdict, "interpretation": interpretation, "artifact": str(artifact.relative_to(ROOT))}
   OUT.mkdir(parents=True, exist_ok=True)
   artifact.write_text(json.dumps(out, indent=2)); (OUT/"coalesced_dequant_mE_latest.json").write_text(json.dumps(out, indent=2))

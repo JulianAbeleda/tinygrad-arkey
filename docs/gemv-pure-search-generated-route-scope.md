@@ -127,6 +127,8 @@ Current G3.0 result: `G3_CODEGEN_MISMATCH_CAPTURED` in `bench/qk-gemv-g3-codegen
 
 Current G3.1 result: `G3_LANEMAP_PROMOTABLE` via `Q4K_GEMV_SCHEDULER=6`. The generated G3 LaneMap arm emits `q4k_g3_lanemap_gemv_12288_4096`, is token-correct, route-clean, and matches owned/FutureSight throughput. Remaining purity blocker: BubbleBeam/FutureSight still selects the custom bridge instead of the G3 generated candidate.
 
+Current G4 result: `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3`. BubbleBeam/FutureSight now routes to `q4k_g3_lanemap_gemv_12288_4096`; the lane-partition bridge is kept only as explicit `Q4K_GEMV_SCHEDULER=4` fallback/debug route.
+
 Tasks:
 
 - Reuse the layout/codegen plan rather than inventing a second IR.

@@ -61,8 +61,8 @@
   ],
   "correctness_gate": "byte_exact (lossless work-decomposition; greedy 0 mismatches vs default)",
   "lifecycle_authority_gate": "clean W==D (extra/qk_decode_runtime_overhead.py) interleaved drift-cancelled A/B; gate >= +5%@ctx1024 OR +7%@ctx4096 (FFN) / positive byte-identical (proj)",
-  "classification": "SEARCH_SELECTED_CUSTOM_BRIDGE_NOT_PURE",
-  "classification_detail": "BubbleBeam/FutureSight can select the measured lane-partition Q4_K route, and W==D proves it matches owned throughput/token behavior. This is search-selected but not search-generated: the implementation still calls the lane-partition custom-kernel bridge. The remaining purity blocker is codegen representation of the packed-word thread map, in-register 8-nibble dequant, and block-group-K structure as generated code.",
+  "classification": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3",
+  "classification_detail": "BubbleBeam/FutureSight now selects the generated G3 LaneMap Q4_K gate/up program instead of the lane-partition custom bridge. The explicit bridge remains available only via Q4K_GEMV_SCHEDULER=4.",
   "m6_measurement": {
     "verdict": "M6_SCHEDULER_GEMV_TRAILS_OWNED",
     "scheduler_xlane_vs_owned_pct": {
@@ -241,5 +241,20 @@
     },
     "result": "A named wave32 gate/up UOp program generated from Q4KGateUpLaneMap matches owned/FutureSight throughput without firing owned warp or lane-partition bridge programs.",
     "decision": "Promotable as a diagnostic generated codegen-shape candidate. Next step is BubbleBeam binding/purity promotion policy: route FutureSight to this generated arm instead of the custom bridge only after provenance language accepts UOp custom_kernel generated from LaneMap as search-generated."
+  },
+  "g4_bubblebeam_binding_2026_06_25": {
+    "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3",
+    "artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
+    "purity_gate": "bench/qk-gemv-purity-gate/latest.json",
+    "route": "BubbleBeam/FutureSight -> q4k_g3_lanemap_gemv_12288_4096",
+    "bridge_fallback": "Q4K_GEMV_SCHEDULER=4",
+    "tok_s_by_ctx": {
+      "512": 103.5,
+      "1024": 101.6,
+      "2048": 99.3,
+      "4096": 94.5
+    },
+    "tokens_match_all_ctx": true,
+    "decision": "Promoted for BubbleBeam/FutureSight. This is the first GEMV path in this lane that is search-selected and generated from the LaneMap/codegen route rather than the custom bridge."
   }
 }

@@ -1,6 +1,6 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-183900",
+  "timestamp": "20260625-183835",
   "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3",
   "source_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
   "route_flags": {
@@ -44,5 +44,5 @@
     "4096": 94.6
   },
   "g3_lanemap_verdict": "G3_LANEMAP_PROMOTABLE",
-  "classification": "BubbleBeam/FutureSight routes to the generated G3 LaneMap gate/up program; no lane-partition bridge or owned warp gate/up fires under BubbleBeam."
+  "classification": "BubbleBeam/FutureSight is search-selected but not search-generated while it routes through qk_q4k_lane_partition_gemv custom_kernel bridge."
 }

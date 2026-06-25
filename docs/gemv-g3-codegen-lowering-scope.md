@@ -159,4 +159,4 @@ SEARCH_BLOCKED_BY_RUNTIME
 
 ## Current Completion
 
-G3 lowering is complete for the default-off diagnostic arm. The remaining purity blocker is not codegen shape; it is BubbleBeam binding/promotion policy. FutureSight still routes to the custom bridge, so `extra/qk_gemv_purity_gate.py` correctly reports `GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE` while also reporting `g3_lanemap_promotable: true`.
+G3 lowering is complete and BubbleBeam is now bound to the G3 generated route. `extra/qk_gemv_purity_gate.py` reports `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3`. The old lane-partition bridge remains available only as explicit `Q4K_GEMV_SCHEDULER=4` fallback/debug route.

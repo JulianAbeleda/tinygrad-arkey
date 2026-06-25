@@ -28,7 +28,7 @@ Current baseline snapshot:
 - GEMV G2.3 runtime binding result: `SEARCH_GENERATED_WD_FAIL` (`Q4K_GEMV_SCHEDULER=5`, `q4k_scheduler_matvec_lanemap`). It is token-correct and route-clean, but only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`.
 - GEMV G3.0 codegen capture: `G3_CODEGEN_MISMATCH_CAPTURED` (`extra/qk_gemv_g3_codegen_capture.py`, `bench/qk-gemv-g3-codegen-capture/latest.json`). Owned and bridge each expose a named wave32 gate/up program 72 times; G2 LaneMap exposes zero named gate-up programs and lowers into generic Tensor programs.
 - GEMV G3.1 lowering hook: `G3_LANEMAP_PROMOTABLE` (`Q4K_GEMV_SCHEDULER=6`, `q4k_g3_lanemap_gemv_12288_4096`). W==D tok/s `103.7 / 101.7 / 99.4 / 94.5`, token-correct, route-clean, no owned warp gate/up and no lane-partition bridge gate/up.
-- Next GEMV purity step: BubbleBeam binding/promotion policy. FutureSight still selects the custom bridge, so the purity gate remains `GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE` while also reporting `g3_lanemap_promotable: true`.
+- GEMV G4 BubbleBeam binding: complete. FutureSight now routes to the generated G3 LaneMap program; purity gate verdict is `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3`. The old lane-partition bridge remains explicit-only as `Q4K_GEMV_SCHEDULER=4` fallback/debug route.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
