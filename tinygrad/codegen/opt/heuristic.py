@@ -80,6 +80,24 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
             if MV_ROWS_PER_THREAD > 1: k.apply_opt(Opt(OptOps.UPCAST, global_idx, MV_ROWS_PER_THREAD))
             return k
 
+  # MV_DEQUANT (opt-in, research): the strict matvec check above requires reduceop.src[0] == MUL(INDEX, INDEX)
+  # (two DIRECT loads). A fused-dequant matvec is MUL(dequant(INDEX(words)), INDEX(x)) -- the weight operand is a
+  # MUL/SUB/CAST chain, not a bare INDEX -- so the detector misses it and the GEMV falls to GROUPTOP/output-parallel
+  # (uncoalesced). This branch "sees through" the dequant: apply the same GROUP+LOCAL+UPCAST matvec opts to any
+  # ADD-reduce of matvec shape. Tests whether GROUP (coalescing) was a navigation/recognition gap. Default-off.
+  if getenv("MV_DEQUANT") and k.ren.has_local and k.ren.has_shared and getenv("MV", 1) != 0 and k.reduceop is not None \
+     and k.reduceop.arg[0] is Ops.ADD and len(k.full_shape) >= 2 and k.ranges_of(AxisType.REDUCE):
+    first_reduce_rng = k.ranges_of(AxisType.REDUCE)[0]
+    for global_idx in k.axes_of(AxisType.GLOBAL):
+      if first_reduce_rng.src[0].divides(MV_THREADS_PER_ROW) is not None and k.full_shape[global_idx] % (MV_BLOCKSIZE*MV_ROWS_PER_THREAD) == 0:
+        if DEBUG >= 3: print(f"MV_DEQUANT MATVEC: {k.full_shape=} {MV_THREADS_PER_ROW=} {MV_BLOCKSIZE=} {MV_ROWS_PER_THREAD=}")
+        try:
+          if MV_THREADS_PER_ROW > 1: k.apply_opt(Opt(OptOps.GROUP, 0, MV_THREADS_PER_ROW))
+        except KernelOptError: pass
+        if MV_BLOCKSIZE > 1: k.apply_opt(Opt(OptOps.LOCAL, global_idx, MV_BLOCKSIZE))
+        if MV_ROWS_PER_THREAD > 1: k.apply_opt(Opt(OptOps.UPCAST, global_idx, MV_ROWS_PER_THREAD))
+        return k
+
   # are we grouping? (requires local shape support)
   if resolve(prod(k.output_shape[i] for i in k.upcastable_dims) <= (240 if NOLOCALS else 2048), False):
     for axis, sz in itertools.product((0, 1, 2), (16,)):

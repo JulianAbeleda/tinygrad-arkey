@@ -52,6 +52,30 @@ This closes the "can a pure scheduler GEMV match the owned kernel" question: **n
 attributed. The M5 cross-lane lowering remains the only in-model-proven scheduler primitive for the GEMV, but it is
 low-leverage; the GEMV's owned-kernel edge is a thread-map/coalescing codegen gap, not the reduce and not byte count.
 
+## Resolution: (A) navigation vs (B) representation — proven (B) by construction
+
+Follow-up probe (online lead: tinygrad's `GROUP` opt = coalesced; `GROUPTOP` = prefetch). Findings:
+- The gate/up scheduler GEMV got `LOCAL`+`UPCAST` (output-parallel), **never `GROUP`** — because the matvec
+  detector (`heuristic.py:67`) requires `reduceop.src[0] == MUL(INDEX, INDEX)` (two direct loads); a fused dequant
+  is `MUL(dequant(INDEX(words)), INDEX(x))`, so the weight operand isn't a bare `INDEX` → detection fails → no
+  `GROUP`. A real (A) **recognition** gap.
+- Fixed it: gated `MV_DEQUANT` branch (`heuristic.py`) sees through the dequant and applies the matvec
+  `GROUP`+`LOCAL`+`UPCAST` to any ADD-reduce of matvec shape. Confirmed firing (`DEBUG`: `MV_DEQUANT MATVEC
+  k.full_shape=[4096,128]`, `GROUP(32)` applied to the K-reduce).
+- **But it yields no speedup:** owned 103.5 / fp16_def 50.9 / fp16_mvdq32 (GROUP fired) **49.9** / fp16_mvdq8 9.8.
+  Also: forcing `MV_THREADS_PER_ROW=32/16` without the fix = no effect (the knob is downstream of the failed gate).
+
+**Conclusion — constructive (B):** the coalescing opt (`GROUP`) exists, the recognition gap is fixable, and `GROUP`
+*can* be applied to the fused-dequant matvec — yet the owned kernel's performance is **unreachable by the exposed
+knobs even when forced** (GROUP applied ⇒ 49.9 ≈ output-parallel 50.9). So it is not a navigation/recognition
+problem (that layer is thin and now closed); it is a genuine **representation/codegen incompleteness**: the owned
+kernel's coalesced packed-uint32-word load + in-register 8-nibble dequant + 4-way block-group-K is not expressible
+as (reshape + `GROUP`) over the standard dequant graph. The fix is a codegen capability (a coalesced packed-word
+load the lowerer can exploit) or a Marlin-style **offline weight reshuffle** so a plain map coalesces.
+
+`MV_DEQUANT` is kept as a gated, default-off research lever (it correctly fixes the matvec-detection recognition gap
+for fused-dequant reduces — useful elsewhere — and is the apparatus that proved the above).
+
 ## Status
 Research only; **no default change**. `Q4K_GEMV_SCHEDULER` (1=fp16-logical, 2=word-packed) and `WARP_REDUCE_LOWERING`
 stay default-off; the owned warp GEMV remains the shipped default (owned arm reproduces ~94–103 tok/s). Next: either a

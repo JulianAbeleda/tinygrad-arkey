@@ -63,9 +63,16 @@
     "doc": "docs/q4k-scheduler-coalesced-gemv-result-20260625.md",
     "artifact": "bench/qk-scheduler-gemv-vs-owned/packed-decision.json"
   },
+  "a_vs_b_resolution_2026_06_25": {
+    "question": "is the coalescing gap (A) search-navigation [optimum in space, not found] or (B) representation-incomplete [optimum not in space]",
+    "recognition_gap_A": "REAL but shallow: the matvec detector (heuristic.py:67) needs reduceop.src[0]==MUL(INDEX,INDEX); a fused dequant is MUL(dequant(INDEX(words)),INDEX(x)) so it is missed -> no GROUP -> output-parallel. Fixed via gated MV_DEQUANT (sees through the dequant, applies GROUP).",
+    "result": "MV_DEQUANT fires + applies GROUP(32) to the gate/up K-reduce (DEBUG-confirmed) but yields NO speedup: owned 103.5 / fp16_def 50.9 / fp16_mvdq32(GROUP) 49.9 / fp16_mvdq8 9.8.",
+    "verdict": "CONSTRUCTIVE (B): the coalescing opt (GROUP) exists, recognition is fixable, GROUP can be applied -- yet the owned kernel is unreachable by the exposed knobs even when forced. Not navigation; a genuine representation/codegen incompleteness. The owned coalesced-packed-word + in-register-8-nibble-dequant + block-group-K structure is not expressible as (reshape + GROUP) over the standard dequant graph.",
+    "doc": "docs/q4k-scheduler-coalesced-gemv-result-20260625.md"
+  },
   "next_search_space_levers": [
-    "CODEGEN CAPABILITY (the real gap): emit a coalesced packed-word (uint32) load with a custom per-row-workgroup + word-col-lane thread-map -- what the owned kernel hand-codes via CUSTOM; not reachable by restructuring the dequant expression or MV opts (proven 2026-06-25)",
-    "per-component cross-lane for UPCAST>1 vector reduces -- LOW priority (reduce is not the bottleneck)",
+    "CODEGEN CAPABILITY (the real gap, B-proven): a coalesced packed-uint32-word load the lowerer can exploit (one word/lane, in-register multi-nibble dequant) + the owned block-group-K thread-map; OR a Marlin-style OFFLINE WEIGHT RESHUFFLE so a plain GROUP coalesces. Not reachable by reshape+GROUP/opts (constructively proven 2026-06-25).",
+    "MV_DEQUANT (shipped, gated/default-off): matvec-detection sees through fused dequant -> applies GROUP. Fixes the recognition gap (may help other fused-reduce shapes); does NOT close the GEMV (proof apparatus for the B verdict).",
     "OR pivot: v_dot2 renderer lowering for the attention tile (the other hand kernel)"
   ],
   "promotion_status_note": "Owned warp GEMV is shipped default-on (search_space_id=manual_oracle_not_search_generated). Q4K_GEMV_SCHEDULER + WARP_REDUCE_LOWERING are research-only/default-off; a scheduler GEMV does not yet challenge the owned kernel (the gap is dequant/memory, not the reduce)."
