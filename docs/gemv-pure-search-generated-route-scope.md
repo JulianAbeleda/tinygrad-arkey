@@ -119,6 +119,8 @@ Gate:
 
 Goal: express the lane-partition physical structure in generated code.
 
+Executable scope: `docs/gemv-g2-minimal-codegen-representation-scope.md`.
+
 Tasks:
 
 - Reuse the layout/codegen plan rather than inventing a second IR.

@@ -8,6 +8,7 @@ Source of truth:
 - `bench/canonical-benchmarks.json`
 - `docs/pure-machine-search-roadmap.md`
 - `docs/gemv-pure-search-generated-route-scope.md`
+- `docs/gemv-g2-minimal-codegen-representation-scope.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
@@ -22,6 +23,7 @@ Current baseline snapshot:
 - Latest BubbleBeam artifact: `bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_20260625-162422.json`.
 - Latest GEMV purity gate: `bench/qk-gemv-purity-gate/latest.json` (`GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE` expected until the route is generated).
 - GEMV generated skeleton: `q4k_gemv_generated_skeleton` (`Q4K_GEMV_SCHEDULER=2`) is registered for attribution only; expected to fail W==D speed until codegen representation lands.
+- Next GEMV purity step: execute `docs/gemv-g2-minimal-codegen-representation-scope.md`; first prove `lane = block_group * 8 + word_col` and packed Q4_K word indexing are expressible in generated code before attempting promotion.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
