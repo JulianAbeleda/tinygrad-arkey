@@ -2,6 +2,58 @@ import math, functools
 from dataclasses import dataclass
 from tinygrad.dtype import DType, dtypes
 
+Swizzle = tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]], tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]]
+
+@dataclass(frozen=True)
+class LaneMap:
+  """CuTe-style TV layout for tensor-core fragments.
+
+  This wraps the historical TensorCore.swizzle tuple as a validated thread/value -> fragment-coordinate map.  Keeping
+  the tuple form preserves byte-identical WMMA lowering while giving non-WMMA code a first-class object to carry.
+  """
+  swizzle: Swizzle
+  local_axes: int
+  upcast_axes: int
+  reduce_axes: int
+  opts: tuple[str, ...]
+  dims: tuple[int, int, int]
+  threads: int
+  elements_per_thread: tuple[int, int, int]
+
+  def validate(self) -> None:
+    assert len(self.swizzle) == 2, "swizzle must have two operand maps"
+    assert len(self.swizzle[0]) == 3 and len(self.swizzle[1]) == 3, "swizzle has wrong part count"
+    assert len(self.swizzle[0][0]) == len(self.swizzle[1][0]) == self.local_axes, "local swizzle size is wrong"
+    assert len(self.swizzle[0][1]) == len(self.swizzle[1][1]) == self.upcast_axes, "upcast swizzle size is wrong"
+    assert len(self.swizzle[0][2]) == len(self.swizzle[1][2]) == self.reduce_axes, "reduce swizzle size is wrong"
+    assert all(len(s) == self.local_axes+self.upcast_axes+self.reduce_axes for s in self.remaps()), "remaps are the wrong size"
+    assert 2**self.local_axes == self.threads, f"{self.threads} threads construct the warp but found {2**self.local_axes}"
+    assert 2**self.upcast_axes == self.elements_per_thread[2], \
+      f"{self.elements_per_thread[2]} C elements per thread but found {2**self.upcast_axes}"
+
+    un, ln = 0, 0
+    zero_stride_0, zero_stride_1 = [], []
+    for o in self.opts:
+      if o[1] == '0': zero_stride_0.append(o[0] + str(un if o[0] == 'u' else ln))
+      if o[1] == '1': zero_stride_1.append(o[0] + str(un if o[0] == 'u' else ln))
+      if o[0] == 'u': un += 1
+      if o[0] == 'l': ln += 1
+    upcasted_0 = [x for x in (self.swizzle[0][1] + self.swizzle[0][2]) if x not in zero_stride_0 and x[0] != 'l']
+    upcasted_1 = [x for x in (self.swizzle[1][1] + self.swizzle[1][2]) if x not in zero_stride_1 and x[0] != 'l']
+    assert 2**len(upcasted_0) == self.elements_per_thread[0], \
+      f"mismatch in elements_per_thread[0], {upcasted_0} vs {self.elements_per_thread[0]}"
+    assert 2**len(upcasted_1) == self.elements_per_thread[1], \
+      f"mismatch in elements_per_thread[1], {upcasted_1} vs {self.elements_per_thread[1]}"
+
+  @functools.cache  # pylint: disable=method-cache-max-size-none
+  def remaps(self) -> list[dict[str, str]]:
+    fwd_st = [f"l{i}" for i in range(self.local_axes)] + [f"u{i}" for i in range(self.upcast_axes)] + [f"r{i}" for i in range(self.reduce_axes)]
+    return [dict(zip(fwd_st, sum(s, ()))) for s in self.swizzle]
+
+  def permutes_for_shape_str(self, shape_str:list[str]) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    ret = [[shape_str.index(remap[ss]) if ss in remap else i for i,ss in enumerate(shape_str)] for remap in self.remaps()]
+    return tuple(ret[0]), tuple(ret[1])
+
 @dataclass(frozen=True)
 class TensorCore: # D = A * B + C, A is (M x K), B is (K x N), C and D are (M x N)
   dims: tuple[int,int,int] # N, M, K
@@ -12,15 +64,18 @@ class TensorCore: # D = A * B + C, A is (M x K), B is (K x N), C and D are (M x 
   opts: tuple[str, ...] # ordered tuple of "ux" or "lx" specifying kernel opts to perform. "ux" upcasts dim x and "lx" localizes dim x
   # (local_swizzle, upcast_swizzle, reduce_swizzle)
   # l<num> is the num axis of the locals, similar for u<num> and upcasts, r<num> and reduces
-  swizzle: tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]], tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]]
+  swizzle: Swizzle
+  @functools.cached_property
+  def lane_map(self) -> LaneMap:
+    lm = LaneMap(self.swizzle, len(self.get_local_axes()), len(self.get_upcast_axes()), len(self.get_reduce_axes()),
+                 self.opts, self.dims, self.threads, self.elements_per_thread)
+    lm.validate()
+    return lm
   @functools.cache  # pylint: disable=method-cache-max-size-none
   def _remaps(self) -> list[dict[str, str]]:
-    local_axes, upcast_axes, reduce_axes = len(self.get_local_axes()), len(self.get_upcast_axes()), len(self.get_reduce_axes())
-    fwd_st = [f"l{i}" for i in range(local_axes)] + [f"u{i}" for i in range(upcast_axes)] + [f"r{i}" for i in range(reduce_axes)]
-    return [dict(zip(fwd_st, sum(s, ()))) for s in self.swizzle]
+    return self.lane_map.remaps()
   def permutes_for_shape_str(self, shape_str:list[str]) -> tuple[tuple[int, ...], tuple[int, ...]]:
-    ret = [[shape_str.index(remap[ss]) if ss in remap else i for i,ss in enumerate(shape_str)] for remap in self._remaps()]
-    return tuple(ret[0]), tuple(ret[1])
+    return self.lane_map.permutes_for_shape_str(shape_str)
   @functools.cache  # pylint: disable=method-cache-max-size-none
   def base_shape_str(self) -> list[str]:
     ret = []
@@ -49,26 +104,7 @@ class TensorCore: # D = A * B + C, A is (M x K), B is (K x N), C and D are (M x 
     assert self.dims[0] == 2**len(gd:=[x for x in self.opts if x[1] == '0']), f"opts wrong on dims[0], {self.dims[0]} vs {gd}"
     assert self.dims[1] == 2**len(gd:=[x for x in self.opts if x[1] == '1']), f"opts wrong on dims[1], {self.dims[1]} vs {gd}"
     # NOTE: the K opts is implictly set by the dim
-    # check swizzle
-    assert len(self.swizzle[0]) == 3 and len(self.swizzle[1]) == 3, "swizzle has wrong part count"
-    assert len(self.swizzle[0][0]) == len(self.swizzle[1][0]) == local_axes, "local swizzle size is wrong"
-    assert len(self.swizzle[0][1]) == len(self.swizzle[1][1]) == upcast_axes, "upcast swizzle size is wrong"
-    assert len(self.swizzle[0][2]) == len(self.swizzle[1][2]) == reduce_axes, "reduce swizzle size is wrong"
-    assert all(len(s) == local_axes+upcast_axes+reduce_axes for s in self._remaps()), "remaps are the wrong size"
-    # check elements_per_thread
-    un, ln = 0, 0
-    zero_stride_0 = []
-    zero_stride_1 = []
-    for o in self.opts:
-      if o[1] == '0': zero_stride_0.append(o[0] + str(un if o[0] == 'u' else ln))
-      if o[1] == '1': zero_stride_1.append(o[0] + str(un if o[0] == 'u' else ln))
-      if o[0] == 'u': un += 1
-      if o[0] == 'l': ln += 1
-    # NOTE: all the zero_stride dims can be placed in any order in the swizzle
-    upcasted_0 = [x for x in (self.swizzle[0][1] + self.swizzle[0][2]) if x not in zero_stride_0 and x[0] != 'l']
-    upcasted_1 = [x for x in (self.swizzle[1][1] + self.swizzle[1][2]) if x not in zero_stride_1 and x[0] != 'l']
-    assert 2**len(upcasted_0) == self.elements_per_thread[0], f"mismatch in elements_per_thread[0], {upcasted_0} vs {self.elements_per_thread[0]}"
-    assert 2**len(upcasted_1) == self.elements_per_thread[1], f"mismatch in elements_per_thread[1], {upcasted_1} vs {self.elements_per_thread[1]}"
+    self.lane_map.validate()
 
 # ***** NVIDIA *****
 
