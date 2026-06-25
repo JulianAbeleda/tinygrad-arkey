@@ -109,6 +109,9 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # devectorize
   sink = graph_rewrite(sink, sym+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
+  if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
+    from extra.qk_fdot2_lowering import pm_fdot2
+    sink = graph_rewrite(sink, pm_fdot2, name="fdot2 lowering")
 
   # lower the index dtype to a concrete int
   sink = graph_rewrite(sink, pm_lower_index_dtype+load_store_indexing+gep_pushing, name="lower all index dtypes")
@@ -132,6 +135,9 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   extra_matcher = ren.extra_matcher if ren.extra_matcher is not None else PatternMatcher([])
   pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_split_ends
   sink = graph_rewrite(sink, pm_final_rewrite, ctx=ren, name="final rewrite")
+  if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
+    from extra.qk_fdot2_lowering import pm_fdot2
+    sink = graph_rewrite(sink, pm_fdot2, name="fdot2 final lowering")
 
   if ren.new_style:
     sink = graph_rewrite(sink, pm_index_is_shrink, name="index is shrink")
@@ -168,7 +174,11 @@ def line_rewrite(lst:list[UOp], pm:PatternMatcher, ctx=None) -> list[UOp]:
 
 def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
   if DEBUG >= 3 and sink.arg.applied_opts: print(f"{sink.arg.function_name:<25} opts: {sink.arg.applied_opts}")
-  lst = line_rewrite(linearize(sink), pm_linearize_cleanups)
+  lst = linearize(sink)
+  if getenv("V_DOT2_LOWERING") and ctx.target.device == "AMD":
+    from extra.qk_fdot2_lowering import line_lower_fdot2
+    lst = line_lower_fdot2(lst)
+  lst = line_rewrite(lst, pm_linearize_cleanups)
   # isa renderers need to allocate registers
   if isinstance(ctx, ISARenderer):
     if ctx.pre_regalloc_matcher is not None: lst = line_rewrite(lst, ctx.pre_regalloc_matcher, PreRegAllocContext())
@@ -239,6 +249,6 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"))
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"))
   if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
   return prg
