@@ -121,6 +121,8 @@ Goal: express the lane-partition physical structure in generated code.
 
 Executable scope: `docs/gemv-g2-minimal-codegen-representation-scope.md`.
 
+Current G2.0 result: `G2_REPRESENTATION_PROBE_PASS` in `bench/qk-gemv-g2-representation-probe/latest.json`; proceed to the minimal Q4_K LaneMap object and generated packed-address builder.
+
 Tasks:
 
 - Reuse the layout/codegen plan rather than inventing a second IR.

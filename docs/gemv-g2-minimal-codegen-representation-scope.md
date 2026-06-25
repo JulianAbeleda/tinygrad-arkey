@@ -52,6 +52,10 @@ A route that is correct but scalarized or looped through the wrong physical layo
 
 ### G2.0: Static representation probe
 
+Status: complete. `extra/qk_gemv_g2_representation_probe.py` emits `bench/qk-gemv-g2-representation-probe/latest.json` with verdict `G2_REPRESENTATION_PROBE_PASS`.
+
+Result: the existing UOp/RANGE algebra can express `lane = block_group * 8 + word_col` and the Q4_K packed-word index with unit stride across `word_col`. The blocker is therefore not local address algebra; the next blocker is binding this representation into generated load/dequant/reduce/store code without the lane-partition custom bridge.
+
 Goal: prove the packed-word address math is expressible before touching runtime routing.
 
 Build:
@@ -190,4 +194,3 @@ G2 is complete when one of these is true:
 1. The generated Q4_K gate/up route is token-correct, route-clean, and fast enough to promote.
 2. The generated route is route-clean and token-correct but too slow, with W==D evidence proving `SEARCH_GENERATED_WD_FAIL`.
 3. The representation cannot be expressed locally, with a precise `SEARCH_BLOCKED_BY_CODEGEN` artifact naming the missing primitive.
-

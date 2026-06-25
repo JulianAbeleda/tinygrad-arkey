@@ -138,5 +138,20 @@
       "q4k_lane_partition_gemv_kernel"
     ],
     "authority": "extra/qk_q4k_packed_gemv_wd.py generated_skeleton arm and extra/qk_gemv_purity_gate.py"
+  },
+  "g2_0_representation_probe_2026_06_25": {
+    "verdict": "G2_REPRESENTATION_PROBE_PASS",
+    "artifact": "bench/qk-gemv-g2-representation-probe/latest.json",
+    "tool": "extra/qk_gemv_g2_representation_probe.py",
+    "result": "The existing UOp/RANGE algebra can express the Q4_K gate/up lane map lane = block_group * 8 + word_col and the packed-word index with unit stride across word_col.",
+    "strides": {
+      "lane_wrt_word_col": 1,
+      "lane_wrt_block_group": 8,
+      "word_idx_wrt_word_col": 1,
+      "word_idx_wrt_block_group": 144,
+      "word_idx_wrt_local_block": 36,
+      "word_idx_wrt_group_pair": 8
+    },
+    "decision": "Proceed to G2.1 minimal Q4_K LaneMap object. The current blocker is no longer local address algebra; it is binding that representation into generated load/dequant/reduce/store code without the custom bridge."
   }
 }
