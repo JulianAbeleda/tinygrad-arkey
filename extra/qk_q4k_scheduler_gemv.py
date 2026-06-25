@@ -53,3 +53,15 @@ def q4k_scheduler_matvec(words:Tensor, x:Tensor, out_features:int, in_features:i
   W = q4k_dequant_words(words.reshape(out_features, nb, 36))     # [out, nb, 256], lazy/fused
   xr = x.reshape(nb, 256).cast(F32)                              # [nb, 256]
   return (W * xr).sum(axis=(1, 2))                               # [out]
+
+def q4k_scheduler_matvec_wordlane(words:Tensor, x:Tensor, out_features:int, in_features:int) -> Tensor:
+  """Mode 3: same value as q4k_scheduler_matvec, but the K-reduce is restructured so the 32-quant-WORD axis is the
+  FIRST reduce axis. With MV_DEQUANT GROUP(0,32) the word axis lands on the wave -> lane w reads word (4+w), 32
+  adjacent lanes read 32 adjacent (contiguous) packed words -> coalesced (the owned kernel's lane4 access, no
+  reshuffle needed since a block's 32 quant words are already contiguous). 256 = g(8)xpos(32); g=(gpair4,gbit2),
+  pos=(wordcol8,p4 4); word index 4+w with w=(gpair,wordcol); the word's 8 nibbles = n=(p4,gbit)."""
+  nb = in_features // 256
+  W = q4k_dequant_words(words.reshape(out_features, nb, 36))                       # [out, nb, 256]
+  W = W.reshape(out_features, nb, 4, 2, 8, 4).permute(0, 2, 4, 1, 5, 3).reshape(out_features, 32, nb, 8)  # [out, w, nb, n]
+  xr = x.reshape(nb, 4, 2, 8, 4).permute(1, 3, 0, 4, 2).reshape(32, nb, 8).cast(F32)                      # [w, nb, n]
+  return (W * xr).sum(axis=(1, 2, 3))                                             # [out], w(32) is first reduce axis

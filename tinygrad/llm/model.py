@@ -257,11 +257,12 @@ class Q4KPrimitiveLinear:
       #     swaps the LDS-tree group reduce for the ds_bpermute ladder. (M6: cross-lane ~neutral.)
       #   2 (PACKED): word-structured tinygrad-ops dequant (extra/qk_q4k_scheduler_gemv) whose load unit is the
       #     uint32 word -- tests whether a pure-scheduler GEMV can coalesce packed-word loads like the owned kernel.
-      if getenv("Q4K_GEMV_SCHEDULER") == 2:
-        from extra.qk_q4k_scheduler_gemv import q4k_scheduler_matvec
+      if getenv("Q4K_GEMV_SCHEDULER") in (2, 3):
+        from extra.qk_q4k_scheduler_gemv import q4k_scheduler_matvec, q4k_scheduler_matvec_wordlane
         _w = self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float32)
-        return q4k_scheduler_matvec(_w, _xv, self.out_features, self.in_features).reshape(1, 1, self.out_features)
+        _fn = q4k_scheduler_matvec_wordlane if getenv("Q4K_GEMV_SCHEDULER") == 3 else q4k_scheduler_matvec
+        return _fn(_w, _xv, self.out_features, self.in_features).reshape(1, 1, self.out_features)
       return self._fallback(x)
     from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
