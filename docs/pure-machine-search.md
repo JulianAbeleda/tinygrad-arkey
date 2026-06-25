@@ -21,6 +21,11 @@ scheduler-generated path when disabled.
   parallelism and an in-kernel cross-lane (warp shuffle) reduce. The scheduler cannot emit the cross-lane
   reduce, so the generated GEMV leaves performance on the table.
 - Gain: about +9.6% at ctx 1024 and +8.5% at ctx 4096, byte-identical output.
+- We tried the instruction-level approach first (tinygrad's WMMA-style trick): a schedulable `udot4` builtin let
+  the scheduler compose the GEMV (`Q4K_VDOT`). The kernel was correct at about 57% of peak, but in-model it lost
+  at 0.96x, because every int-dot path pays a q8 activation-quant cost (about 7us per kernel) that eats the win.
+  Only then did we hand-write the kernel.
+  - [Schedulable udot4 GEMV built and refuted in-model](archive/qk-mmvq-int-dot-closeout-20260618.md)
 
 ### 2. Owned AMDGCN attention tile: `extra/qk_owned_flash_decode.hip`
 
@@ -31,6 +36,12 @@ scheduler-generated path when disabled.
   emission of `v_dot2` + cross-lane + LDS staging does not exist in the scheduler.
 - Gain: about +12 to +22% decode, on top of the scheduler baseline.
 - Fallback: at ctx < 512 the model uses `FLASH_VARIANT=gqa_coop_vec`, which is scheduler-generated.
+- We tried the instruction-level approach first (tinygrad's WMMA-style trick): the fused tile is expressible in
+  the scheduler idiom, so we built it (Path A) rather than hand-writing. It lost. With `v_dot2` available and
+  the fusion expressible, the scheduler still renders register-tiled global loads, not an LDS-staged tile, and
+  recomputes exp across lanes, so the generated tile came in at 0.725x to 0.965x. Only then did we hand-write.
+  - [Path A fused softmax+V built and refuted at 0.725x](archive/fused-softmax-v-tail-candidate-result-20260621.md)
+  - [Concrete fused-flash refuted at 0.965x (global loads, not LDS)](archive/fused-flash-concrete-gate-result-20260621.md)
 
 ## Evidence: we tried the scheduler path first
 
