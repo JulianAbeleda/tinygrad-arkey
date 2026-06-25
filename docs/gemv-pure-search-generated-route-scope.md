@@ -121,7 +121,7 @@ Goal: express the lane-partition physical structure in generated code.
 
 Executable scope: `docs/gemv-g2-minimal-codegen-representation-scope.md`.
 
-Current G2.0 result: `G2_REPRESENTATION_PROBE_PASS` in `bench/qk-gemv-g2-representation-probe/latest.json`; proceed to the minimal Q4_K LaneMap object and generated packed-address builder.
+Current G2 result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` in `bench/qk-gemv-g2-representation-probe/latest.json`; G2.0-G2.2 are complete, and the next blocker is G2.3 generated dequant/reduce/store binding.
 
 Tasks:
 

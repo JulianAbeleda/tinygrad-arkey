@@ -52,7 +52,7 @@ A route that is correct but scalarized or looped through the wrong physical layo
 
 ### G2.0: Static representation probe
 
-Status: complete. `extra/qk_gemv_g2_representation_probe.py` emits `bench/qk-gemv-g2-representation-probe/latest.json` with verdict `G2_REPRESENTATION_PROBE_PASS`.
+Status: complete. `extra/qk_gemv_g2_representation_probe.py` emits `bench/qk-gemv-g2-representation-probe/latest.json`; latest verdict is `G2_LANEMAP_ADDRESS_BUILDER_PASS`.
 
 Result: the existing UOp/RANGE algebra can express `lane = block_group * 8 + word_col` and the Q4_K packed-word index with unit stride across `word_col`. The blocker is therefore not local address algebra; the next blocker is binding this representation into generated load/dequant/reduce/store code without the lane-partition custom bridge.
 
@@ -96,6 +96,10 @@ SEARCH_BLOCKED_BY_CODEGEN: RANGE/AxisType cannot express lane-partition reduce s
 
 ### G2.1: Minimal Q4_K LaneMap object
 
+Status: complete. `extra/qk_gemv_g2_lanemap.py` defines a bridge-independent `Q4KGateUpLaneMap` for the target gate/up shape.
+
+Result: the LaneMap serializes `lane = block_group * 8 + word_col`, reproduces lane ownership for the target shape, and does not import or call the lane-partition custom bridge.
+
 Goal: create a minimal representation for the gate/up route without generalizing all tensor-core swizzles.
 
 Build:
@@ -111,6 +115,10 @@ Gate:
 
 ### G2.2: Generated packed-address builder
 
+Status: complete. The LaneMap emits the packed-word address expression and the probe compares generated indices against the numeric Q4_K reference.
+
+Result: sampled index equality passes across rows, block groups, local blocks, group pairs, and word columns. `word_col` stride is `1`, so adjacent word columns are statically coalesced by the existing layout predicate.
+
 Goal: produce the packed-word address expression from the LaneMap.
 
 Build:
@@ -125,6 +133,8 @@ Gate:
 - Stride/coalescing assertions pass for adjacent word columns.
 
 ### G2.3: Generated dequant skeleton
+
+Status: next. G2.0-G2.2 removed the local representation/address blocker; G2.3 is now the first runtime/codegen binding step.
 
 Goal: replace the current slow G1 generated skeleton with a generated route that uses the LaneMap and packed-address builder.
 

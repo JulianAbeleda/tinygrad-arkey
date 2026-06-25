@@ -1,6 +1,6 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-170416",
+  "timestamp": "20260625-170614",
   "verdict": "GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE",
   "source_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
   "route_flags": {

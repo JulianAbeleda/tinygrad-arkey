@@ -140,7 +140,7 @@
     "authority": "extra/qk_q4k_packed_gemv_wd.py generated_skeleton arm and extra/qk_gemv_purity_gate.py"
   },
   "g2_0_representation_probe_2026_06_25": {
-    "verdict": "G2_REPRESENTATION_PROBE_PASS",
+    "verdict": "G2_REPRESENTATION_PROBE_PASS_SUPERSEDED_BY_G2_LANEMAP_ADDRESS_BUILDER_PASS",
     "artifact": "bench/qk-gemv-g2-representation-probe/latest.json",
     "tool": "extra/qk_gemv_g2_representation_probe.py",
     "result": "The existing UOp/RANGE algebra can express the Q4_K gate/up lane map lane = block_group * 8 + word_col and the packed-word index with unit stride across word_col.",
@@ -153,5 +153,20 @@
       "word_idx_wrt_group_pair": 8
     },
     "decision": "Proceed to G2.1 minimal Q4_K LaneMap object. The current blocker is no longer local address algebra; it is binding that representation into generated load/dequant/reduce/store code without the custom bridge."
+  },
+  "g2_lanemap_address_builder_2026_06_25": {
+    "verdict": "G2_LANEMAP_ADDRESS_BUILDER_PASS",
+    "artifact": "bench/qk-gemv-g2-representation-probe/latest.json",
+    "tools": [
+      "extra/qk_gemv_g2_lanemap.py",
+      "extra/qk_gemv_g2_representation_probe.py"
+    ],
+    "completed_phases": [
+      "G2.0 static representation probe",
+      "G2.1 minimal Q4_K LaneMap object",
+      "G2.2 generated packed-address builder"
+    ],
+    "result": "A bridge-independent Q4_K gate/up LaneMap can serialize lane = block_group * 8 + word_col and generate the packed-word index with unit stride across word_col; sampled generated indices match the numeric reference.",
+    "decision": "Proceed to G2.3 generated dequant/reduce/store route. Remaining blocker is runtime/codegen binding, not LaneMap/address algebra."
   }
 }

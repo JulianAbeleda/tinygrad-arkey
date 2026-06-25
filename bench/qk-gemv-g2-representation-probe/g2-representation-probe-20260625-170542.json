@@ -1,6 +1,6 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-170614",
+  "timestamp": "20260625-170542",
   "verdict": "G2_LANEMAP_ADDRESS_BUILDER_PASS",
   "completed_phases": [
     "G2.0 static representation probe",
