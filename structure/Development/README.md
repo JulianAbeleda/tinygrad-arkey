@@ -26,7 +26,6 @@ Use `Purpose/` for role alignment.
 
 - `purpose-template.md` — canonical scaffold for `structure/Purpose/README.md`
 - `structure-convention.md` — default folder pattern and what each layer is for
-- `harness-principles-template.md` — portable benchmark/evaluator harness contract
 
 ## Key documents (this fork)
 
