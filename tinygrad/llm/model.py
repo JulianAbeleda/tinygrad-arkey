@@ -250,11 +250,18 @@ class Q4KPrimitiveLinear:
         fxn=q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
       return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
     if getenv("Q4K_GEMV_SCHEDULER") and self.in_features == 4096 and self.out_features == 12288:
-      # M5/M6 research lever (default-off): scheduler-GENERATED fp matvec for FFN gate/up instead of the owned
-      # warp custom_kernel. self.weight is a LAZY Q4_K->fp16 dequant graph (model.py:141) that fuses into the
-      # matmul, so this reads the packed weight; the matvec heuristic groups the K-reduce, so with
-      # WARP_REDUCE_LOWERING=1 the cross-lane ds_bpermute ladder replaces the LDS tree. Lets us W==D-compare a
-      # scheduler GEMV (cross-lane vs LDS) against the owned warp kernel. See docs/cross-lane-reduce-lowering-*.
+      # M5/M6 research lever (default-off): scheduler-GENERATED matvec for FFN gate/up instead of the owned warp
+      # custom_kernel. Two modes:
+      #   1 (=_fallback): x.linear(self.weight.T) -- self.weight is a LAZY Q4_K->fp16 dequant graph (model.py:141)
+      #     fused into the matmul (reads packed); the matvec heuristic groups the K-reduce, so WARP_REDUCE_LOWERING=1
+      #     swaps the LDS-tree group reduce for the ds_bpermute ladder. (M6: cross-lane ~neutral.)
+      #   2 (PACKED): word-structured tinygrad-ops dequant (extra/qk_q4k_scheduler_gemv) whose load unit is the
+      #     uint32 word -- tests whether a pure-scheduler GEMV can coalesce packed-word loads like the owned kernel.
+      if getenv("Q4K_GEMV_SCHEDULER") == 2:
+        from extra.qk_q4k_scheduler_gemv import q4k_scheduler_matvec
+        _w = self.q4k_storage.words.to(x.device)
+        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float32)
+        return q4k_scheduler_matvec(_w, _xv, self.out_features, self.in_features).reshape(1, 1, self.out_features)
       return self._fallback(x)
     from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
