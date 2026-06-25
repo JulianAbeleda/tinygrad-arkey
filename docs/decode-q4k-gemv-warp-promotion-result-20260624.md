@@ -45,7 +45,7 @@ Changed `tinygrad/llm/model.py`:
 
 - `Q4K_GEMV_WARP` now defaults to enabled for guarded FFN gate/up.
 - `Q4K_GEMV_WARP_DOWN` now defaults to enabled for guarded Q4_K FFN down.
-- `Q4K_GEMV_WARP_PROJ` remains default-off/research-only because the promotion hardening audit found local speedup but no W==D transfer.
+- `Q4K_GEMV_WARP_PROJ` (attn q/o) was default-off/research-only here because the 2026-06-22 hardening audit found local speedup but no W==D transfer. **CORRECTED 2026-06-25**: that was a non-interleaved auto-clock confound. A clock-pinned INTERLEAVED (drift-cancelled) W==D re-test shows +1.58–1.67%/ctx, byte-identical, route fires → promoted **default-on**. See `docs/decode-proj-gemv-warp-promotion-result-20260625.md`, `bench/qk-proj-gemv-warp/wd.json`.
 
 Escape hatches:
 

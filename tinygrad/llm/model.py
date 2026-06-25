@@ -256,10 +256,13 @@ class Q4KPrimitiveLinear:
     # becomes a LOCAL lane -> coalesced packed-word loads. Q4_K coop is role-dependent: attn_q/o (4096x4096) is
     # poorly coalesced by default (~19% peak -> ~29%, 1.52x), but ffn_gate/up is already ~41% peak so it is NOT
     # routed. fp-reassoc-tol exact. See docs/qk-mmvq-coop-q4k-attn-*.
-    # attn q/o projection work-decomposition warp (same lossless lever; Q4K_GEMV_WARP_PROJ, research-only/default-off).
-    # q/o is
-    # Q4_K 4096x4096, currently coop-routed (~27% -> warp ~36%, 1.32x local). Takes precedence over the coop branch.
-    if getenv("Q4K_GEMV_WARP_PROJ") and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
+    # attn q/o projection work-decomposition warp (same lossless q4k_gemv_warp_kernel as FFN; Q4K_GEMV_WARP_PROJ).
+    # q/o is Q4_K 4096x4096, coop-routed by default (~27% -> warp ~36%, 1.32x local). Takes precedence over coop.
+    # DEFAULT-ON 2026-06-25: a clock-pinned INTERLEAVED (drift-cancelled) W==D re-test shows +1.58-1.67%/ctx,
+    # byte-identical, route fires (q4k_gemv_warp_4096_4096) -- REFUTES the 2026-06-22 "did not transfer" finding,
+    # which was a non-interleaved auto-clock confound. Revert with Q4K_GEMV_WARP_PROJ=0.
+    # Evidence: bench/qk-proj-gemv-warp/wd.json, docs/decode-proj-gemv-warp-promotion-result-20260625.md.
+    if getenv("Q4K_GEMV_WARP_PROJ", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
        and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
       try:
         from extra.q4_k_gemv_primitive import q4k_gemv_warp_kernel
@@ -299,7 +302,8 @@ class Q4KPrimitiveLinear:
     # FFN-GEMV work-decomposition variant: lossless FP 32-thread/row + K-block-parallel + in-kernel warp_reduce_sum
     # (ds_bpermute), one output (vs default 1-thread/row serial). Default-ON for guarded 8B Q4_K FFN gate/up + down
     # after W==D hardening: ~+9.6%@ctx1024 / ~+8.5%@ctx4096, byte-identical. Revert with Q4K_GEMV_WARP=0; disable
-    # down separately with Q4K_GEMV_WARP_DOWN=0. Q4K_GEMV_WARP_PROJ stays research-only because it did not transfer.
+    # down separately with Q4K_GEMV_WARP_DOWN=0. Q4K_GEMV_WARP_PROJ (attn q/o) is now ALSO default-on (+1.6%/ctx,
+    # byte-identical, see above) -- the earlier "did not transfer" was a non-interleaved clock confound.
     if getenv("Q4K_GEMV_WARP", 1) and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK \
        and ((self.in_features == 4096 and self.out_features == 12288 and self.parts == 1)      # FFN gate/up
             or (getenv("Q4K_GEMV_WARP_DOWN", 1) and self.in_features == 12288 and self.out_features == 4096)):  # FFN down (Q4_K)
