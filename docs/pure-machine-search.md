@@ -14,21 +14,48 @@ These are the only two hand-written kernels in the default decode path. Each is 
 scheduler-generated path when disabled.
 
 ### 1. Warp GEMV: `extra/q4_k_gemv_primitive.py`
+
 - Flag: `Q4K_GEMV_WARP=1` (FFN gate/up), `Q4K_GEMV_WARP_DOWN=1` (FFN down). Revert with the flag set to 0.
-- Why hand-written: the scheduler GEMV runs at about half of peak (47 to 57% HBM) (one thread per row, serial over K,
-  uncoalesced). llama's MMVQ shape needs 128 threads per row with K-block parallelism and an in-kernel
-  cross-lane (warp shuffle) reduce. The scheduler cannot emit the cross-lane reduce, so the generated GEMV
-  leaves performance on the table.
+- Why hand-written: the scheduler GEMV runs at about half of HBM peak (47 to 57%) because of the schedule:
+  one thread per row, serial over K, uncoalesced. llama's MMVQ shape needs 128 threads per row with K-block
+  parallelism and an in-kernel cross-lane (warp shuffle) reduce. The scheduler cannot emit the cross-lane
+  reduce, so the generated GEMV leaves performance on the table.
 - Gain: about +9.6% at ctx 1024 and +8.5% at ctx 4096, byte-identical output.
 
 ### 2. Owned AMDGCN attention tile: `extra/qk_owned_flash_decode.hip`
+
 - Flag: `DECODE_ATTN_AMDGCN_TILE=1`, active at ctx >= 512 (`DECODE_ATTN_AMDGCN_MIN_CTX=512`).
 - Why hand-written: the fast attention kernel is a single fused tile that stages K and V in LDS and uses
   `v_dot2` with cross-lane reduction. The scheduler emits scalar fp16 loads, no LDS, and no `v_dot2`, which is
   about 5 to 6 times slower on this kernel standalone. The gap is a codegen capability, not tuning: native
   emission of `v_dot2` + cross-lane + LDS staging does not exist in the scheduler.
-- Gain: about +12 to +22% decode, entering the path on top of the scheduler baseline.
+- Gain: about +12 to +22% decode, on top of the scheduler baseline.
 - Fallback: at ctx < 512 the model uses `FLASH_VARIANT=gqa_coop_vec`, which is scheduler-generated.
+
+## Evidence: we tried the scheduler path first
+
+Neither kernel was hand-written by default. Each one followed measured scheduler attempts that fell short. We
+measured the generated path, built scheduler-expressed alternatives, refuted them, and only then hand-wrote.
+
+For the warp GEMV, the scheduler GEMV was measured at 47 to 57% of HBM peak vs llama MMVQ at about 70%, and a
+schedulable int-dot variant was built and refuted in-model before the hand kernel won byte-identical.
+
+- [Scheduler GEMV diagnosis, scope](archive/decode-ffn-gemv-scheduler-diagnostic-scope-20260622.md)
+- [Scheduler GEMV diagnosis, result](archive/decode-ffn-gemv-scheduler-diagnostic-result-20260622.md)
+- [Int-dot GEMV built and refuted in-model](archive/qk-mmvq-int-dot-closeout-20260618.md)
+- [Hand warp GEMV wins, byte-identical](decode-q4k-gemv-warp-promotion-result-20260624.md)
+
+For the attention tile, llama's tile measured 5 to 6 times faster standalone, ISA attribution showed the
+scheduler emits scalar fp16 loads with no LDS and no `v_dot2`, and three scheduler-expressed builds were
+refuted before the hand tile shipped.
+
+- [llama tile 5 to 6x faster standalone](archive/llama-flash-attn-tile-oracle-result-20260621.md)
+- [ISA attribution: scalar loads, 0 v_dot2, 0 LDS](archive/low-level-decode-attn-attribution-result-20260621.md)
+- [Scheduler attempt: fused softmax+V, refuted at 0.725x](archive/fused-softmax-v-tail-candidate-result-20260621.md)
+- [Scheduler attempt: tiled-matmul PV, blocked by layout](archive/matmul-pv-diagnostic-result-20260621.md)
+- [Scheduler attempt: concrete fused-flash, refuted at 0.965x](archive/fused-flash-concrete-gate-result-20260621.md)
+- [Native fused-flash linearizer scope](archive/native-fused-flash-linearizer-scope-20260621.md)
+- [Hand AMDGCN tile adds +12 to +22%, capability gap confirmed](decode-campaign-final-synthesis-20260623.md)
 
 ## Everything else is scheduler-generated
 
@@ -37,7 +64,11 @@ scheduler-generated path when disabled.
 - Several decode GEMV variants that the scheduler can express: `MMVQ_COOP` (cooperative-K), `Q4K_VDOT`
   (schedulable builtin v_dot4).
 
-So the hand-written footprint in the default path is the minimum: two kernels, both necessary, neither
+So the hand-written footprint in the default path is the minimum, and it is small. The attention tile is 283
+lines of HIP and AMDGCN; the warp GEMV is a few hundred lines of HIP inside a Python dispatch wrapper (the rest
+of its file is dispatch, fallback, and tests). That is the whole hand-written GPU surface, on the order of a
+few hundred lines, against vendor hand-tuned kernel libraries like Tensile, Composable Kernel, and
+FlashAttention that run to thousands or tens of thousands of lines. Two kernels, both necessary, neither
 droppable without losing llama parity, and no third hand-written kernel in the default route.
 
 ## The rest of the hand-written source in the repo
@@ -60,27 +91,9 @@ as opt-in references, measurement tooling, or control experiments.
   - `extra/gemm/amd_seb/*.cpp`: step-by-step GEMM study kernels.
 - Vendor / upstream: `extra/torch_backend/wrapped_tensor.cpp`.
 
-## Evidence: proof we tried the scheduler path first
-
-Neither kernel was hand-written by default. Each one followed measured scheduler attempts that fell short.
-
-### Warp GEMV
-- The scheduler GEMV was measured at ~47 to 57% of HBM peak vs llama MMVQ ~70%, schedule-bound (1 thread per row, serial over K, uncoalesced). Diagnosis: `docs/archive/decode-ffn-gemv-scheduler-diagnostic-scope-20260622.md`, `docs/archive/decode-ffn-gemv-scheduler-diagnostic-result-20260622.md`.
-- A schedulable int-dot (sudot4) GEMV was built and refuted in-model (it did not transfer past the q8-pack wall): `docs/archive/qk-mmvq-int-dot-closeout-20260618.md`.
-- The hand-written warp kernel then won, byte-identical: `docs/decode-q4k-gemv-warp-promotion-result-20260624.md`.
-
-### Owned attention tile
-- llama's tile measured 5 to 6 times faster standalone than the scheduler coop kernel (hardware timestamps): `docs/archive/llama-flash-attn-tile-oracle-result-20260621.md`.
-- ISA attribution showed the scheduler emits scalar fp16 loads, 0 `v_dot2`, 0 LDS: `docs/archive/low-level-decode-attn-attribution-result-20260621.md`.
-- Three scheduler-expressed alternatives were built and refuted: Path A fused softmax+V at 0.725x (`docs/archive/fused-softmax-v-tail-candidate-result-20260621.md`), tiled-matmul PV blocked by layout (`docs/archive/matmul-pv-diagnostic-result-20260621.md`), and a concrete fused-flash pipeline at 0.965x that renders register-tiled global loads, not an LDS `v_dot2` tile (`docs/archive/fused-flash-concrete-gate-result-20260621.md`). Scope: `docs/archive/native-fused-flash-linearizer-scope-20260621.md`.
-- The hand-AMDGCN tile then added +12 to +22% and the capability gap was confirmed: `docs/decode-campaign-final-synthesis-20260623.md`.
-
-We did not skip the scheduler. We measured it, built scheduler-expressed alternatives, refuted them, and only then hand-wrote the two kernels.
-
 ## The path to pure
 
 The two hand-written kernels are the exact shape of the remaining codegen gap: native `v_dot2`, cross-lane
 reduction, and LDS staging. If the scheduler gains those, both hand-written kernels can be replaced by
-generated ones and the fork becomes pure machine search. Until then, both stay flag-gated with a
-scheduler fallback, so the generated path is always one env var away and serves as the portability and
-correctness baseline.
+generated ones and the fork becomes pure machine search. Until then, both stay flag-gated with a scheduler
+fallback, so the generated path is always one env var away and serves as the portability and correctness baseline.
