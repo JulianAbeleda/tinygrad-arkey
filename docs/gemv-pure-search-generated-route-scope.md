@@ -129,6 +129,10 @@ Current G3.1 result: `G3_LANEMAP_PROMOTABLE` via `Q4K_GEMV_SCHEDULER=6`. The gen
 
 Current G4 result: `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3`. BubbleBeam/FutureSight now routes to `q4k_g3_lanemap_gemv_12288_4096`; the lane-partition bridge is kept only as explicit `Q4K_GEMV_SCHEDULER=4` fallback/debug route.
 
+Current shape-expansion result: BubbleBeam G3 covers gate/up and Q4_K `4096x4096` projection. FFN down `12288x4096` still routes through the owned warp GEMV and remains the next GEMV purity target.
+
+Final tracked Q4_K GEMV result: `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV`. BubbleBeam/FutureSight now routes gate/up, FFN down, and Q4_K `4096x4096` projection through generated G3 LaneMap programs, with no owned Q4_K GEMV or lane-partition bridge under BubbleBeam.
+
 Tasks:
 
 - Reuse the layout/codegen plan rather than inventing a second IR.

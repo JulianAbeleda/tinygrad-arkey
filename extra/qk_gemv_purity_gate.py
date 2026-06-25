@@ -14,6 +14,11 @@ def main() -> int:
   owned_warp = all(rows[c]['program_counts']['owned']['owned_gateup'] > 0 for c in ctxs)
   lane_bridge = all(rows[c]['program_counts']['bubblebeam_futuresight']['lane_partition_gateup'] > 0 for c in ctxs)
   g3_under_futuresight = all(rows[c]['program_counts']['bubblebeam_futuresight'].get('g3_lanemap_gateup', 0) > 0 for c in ctxs)
+  full_gemv_g3_under_futuresight = all(rows[c]['program_counts']['bubblebeam_futuresight'].get('g3_lanemap_gateup', 0) > 0 and
+                                      rows[c]['program_counts']['bubblebeam_futuresight'].get('g3_lanemap_down', 0) > 0 and
+                                      rows[c]['program_counts']['bubblebeam_futuresight'].get('g3_lanemap_proj', 0) > 0 and
+                                      rows[c]['program_counts']['bubblebeam_futuresight'].get('owned_down', 0) == 0 and
+                                      rows[c]['program_counts']['bubblebeam_futuresight'].get('owned_proj', 0) == 0 for c in ctxs)
   owned_under_futuresight = any(rows[c]['program_counts']['bubblebeam_futuresight']['owned_gateup'] > 0 for c in ctxs)
   generated_arm = 'generated_skeleton' if 'generated_skeleton' in rows[ctxs[0]]['program_counts'] else None
   g2_arm = 'g2_lanemap' if 'g2_lanemap' in rows[ctxs[0]]['program_counts'] else None
@@ -28,7 +33,9 @@ def main() -> int:
   g2_tok_s = {c: rows[c]['tok_s'][g2_arm] for c in ctxs} if g2_arm else {}
   g3_tok_s = {c: rows[c]['tok_s'][g3_arm] for c in ctxs} if g3_arm else {}
   g3_promotable = bool(src.get('g3_lanemap_verdict') == 'G3_LANEMAP_PROMOTABLE' and g3_lanemap and tokens_match)
-  if tokens_match and g3_under_futuresight and not owned_under_futuresight and not lane_bridge:
+  if tokens_match and full_gemv_g3_under_futuresight and not owned_under_futuresight and not lane_bridge:
+    verdict = 'GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV'
+  elif tokens_match and g3_under_futuresight and not owned_under_futuresight and not lane_bridge:
     verdict = 'GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3'
   elif tokens_match and lane_bridge and not owned_under_futuresight:
     verdict = 'GEMV_NOT_PURE__SEARCH_SELECTED_CUSTOM_BRIDGE'
@@ -36,7 +43,9 @@ def main() -> int:
     verdict = 'GEMV_PURE_SEARCH_GENERATED'
   else:
     verdict = 'GEMV_PURITY_GATE_FAIL'
-  classification = ('BubbleBeam/FutureSight routes to the generated G3 LaneMap gate/up program; no lane-partition bridge or owned warp gate/up fires under BubbleBeam.'
+  classification = ('BubbleBeam/FutureSight routes all tracked Q4_K GEMV roles (gate/up, down, projection) to generated G3 LaneMap programs; no lane-partition bridge or owned Q4_K GEMV fires under BubbleBeam.'
+                    if verdict == 'GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV' else
+                    'BubbleBeam/FutureSight routes to the generated G3 LaneMap gate/up program; no lane-partition bridge or owned warp gate/up fires under BubbleBeam.'
                     if verdict == 'GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3' else
                     'BubbleBeam/FutureSight is search-selected but not search-generated while it routes through qk_q4k_lane_partition_gemv custom_kernel bridge.')
   out = {
@@ -48,6 +57,7 @@ def main() -> int:
       'owned_warp_gemv_used_in_owned_arm': owned_warp,
       'lane_partition_custom_bridge_used_in_bubblebeam_arm': lane_bridge,
       'g3_lanemap_generated_used_in_bubblebeam_arm': g3_under_futuresight,
+      'g3_lanemap_full_q4k_gemv_used_in_bubblebeam_arm': full_gemv_g3_under_futuresight,
       'owned_warp_gemv_used_in_bubblebeam_arm': owned_under_futuresight,
       'scheduler_generated_route_used_in_bubblebeam_arm': scheduler_generated,
       'generated_skeleton_arm_present': bool(generated_arm),

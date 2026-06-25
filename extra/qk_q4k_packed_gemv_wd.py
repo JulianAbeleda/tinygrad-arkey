@@ -44,6 +44,10 @@ def _program_counts(step) -> dict[str, int]:
     "owned_gateup": sum(n.startswith("q4k_gemv_warp_12288") for n in names),
     "lane_partition_gateup": sum(n.startswith("q4k_lane_partition_gemv_12288") for n in names),
     "g3_lanemap_gateup": sum(n.startswith("q4k_g3_lanemap_gemv_12288") for n in names),
+    "owned_down": sum(n.startswith("q4k_gemv_warp_4096_12288") for n in names),
+    "g3_lanemap_down": sum(n.startswith("q4k_g3_lanemap_gemv_4096_12288") for n in names),
+    "owned_proj": sum(n.startswith("q4k_gemv_warp_4096_4096") for n in names),
+    "g3_lanemap_proj": sum(n.startswith("q4k_g3_lanemap_gemv_4096_4096") for n in names),
     "scheduler_programs": sum("q4k_scheduler" in n for n in names),
   }
 

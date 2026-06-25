@@ -61,8 +61,8 @@
   ],
   "correctness_gate": "byte_exact (lossless work-decomposition; greedy 0 mismatches vs default)",
   "lifecycle_authority_gate": "clean W==D (extra/qk_decode_runtime_overhead.py) interleaved drift-cancelled A/B; gate >= +5%@ctx1024 OR +7%@ctx4096 (FFN) / positive byte-identical (proj)",
-  "classification": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3",
-  "classification_detail": "BubbleBeam/FutureSight now selects the generated G3 LaneMap Q4_K gate/up program instead of the lane-partition custom bridge. The explicit bridge remains available only via Q4K_GEMV_SCHEDULER=4.",
+  "classification": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV",
+  "classification_detail": "BubbleBeam/FutureSight now selects generated G3 LaneMap Q4_K GEMV programs for gate/up, FFN down, and 4096x4096 projection. The explicit bridge remains available only via Q4K_GEMV_SCHEDULER=4.",
   "m6_measurement": {
     "verdict": "M6_SCHEDULER_GEMV_TRAILS_OWNED",
     "scheduler_xlane_vs_owned_pct": {
@@ -256,5 +256,67 @@
     },
     "tokens_match_all_ctx": true,
     "decision": "Promoted for BubbleBeam/FutureSight. This is the first GEMV path in this lane that is search-selected and generated from the LaneMap/codegen route rather than the custom bridge."
+  },
+  "g4_1_bubblebeam_shape_expansion_2026_06_25": {
+    "verdict": "BUBBLEBEAM_G3_PARTIAL_GEMV_EXPANSION",
+    "artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
+    "gateup": "generated G3 under BubbleBeam",
+    "proj_4096x4096": "generated G3 under BubbleBeam",
+    "down_12288x4096": "still owned warp under BubbleBeam",
+    "decision": "Scope FFN down as next G3 purity target; route precedence or shape-specific call path still prevents g3_lanemap_down from firing."
+  },
+  "g4_2_full_q4k_gemv_expansion_2026_06_25": {
+    "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV",
+    "artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
+    "route_counts_by_ctx": {
+      "512": {
+        "owned_gateup": 0,
+        "lane_partition_gateup": 0,
+        "g3_lanemap_gateup": 72,
+        "owned_down": 0,
+        "g3_lanemap_down": 18,
+        "owned_proj": 0,
+        "g3_lanemap_proj": 72,
+        "scheduler_programs": 0
+      },
+      "1024": {
+        "owned_gateup": 0,
+        "lane_partition_gateup": 0,
+        "g3_lanemap_gateup": 72,
+        "owned_down": 0,
+        "g3_lanemap_down": 18,
+        "owned_proj": 0,
+        "g3_lanemap_proj": 72,
+        "scheduler_programs": 0
+      },
+      "2048": {
+        "owned_gateup": 0,
+        "lane_partition_gateup": 0,
+        "g3_lanemap_gateup": 72,
+        "owned_down": 0,
+        "g3_lanemap_down": 18,
+        "owned_proj": 0,
+        "g3_lanemap_proj": 72,
+        "scheduler_programs": 0
+      },
+      "4096": {
+        "owned_gateup": 0,
+        "lane_partition_gateup": 0,
+        "g3_lanemap_gateup": 72,
+        "owned_down": 0,
+        "g3_lanemap_down": 18,
+        "owned_proj": 0,
+        "g3_lanemap_proj": 72,
+        "scheduler_programs": 0
+      }
+    },
+    "tok_s_by_ctx": {
+      "512": 103.7,
+      "1024": 101.6,
+      "2048": 99.0,
+      "4096": 94.3
+    },
+    "tokens_match_all_ctx": true,
+    "decision": "GEMV purity target is complete for tracked Q4_K decode GEMV roles under BubbleBeam. Next pure-machine-search target is decode attention."
   }
 }

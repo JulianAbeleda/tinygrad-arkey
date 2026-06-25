@@ -67,5 +67,5 @@ def should_route_q4k_lane_partition(out_features:int, in_features:int) -> bool:
   This is intentionally narrow for P3.3: route only when static COALESCE selects the lane-partition candidate for
   the shape that passed M-E.  Broader beam synthesis remains a follow-on.
   """
-  if out_features != 12288 or in_features != 4096: return False
+  if not ((out_features in (4096, 12288) and in_features == 4096) or (out_features == 4096 and in_features == 12288)): return False
   return choose_q4k_candidate().candidate.requires_lane_partition

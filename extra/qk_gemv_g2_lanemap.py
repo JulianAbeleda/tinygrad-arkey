@@ -12,14 +12,10 @@ from typing import Any
 
 from tinygrad.uop.ops import UOp, AxisType
 
-K = 4096
-N = 12288
 QK_K = 256
-K_BLOCKS = K // QK_K
 WARP = 32
 BLOCK_GROUPS = 4
 WORDS_PER_GROUP = 8
-BLOCKS_PER_GROUP = K_BLOCKS // BLOCK_GROUPS
 Q4K_WORDS_PER_BLOCK = 36
 Q4K_QUANT_WORD_BASE = 4
 GROUP_PAIRS = 4
@@ -27,8 +23,8 @@ GROUP_PAIRS = 4
 
 @dataclass(frozen=True)
 class Q4KGateUpLaneMap:
-  k: int = K
-  n: int = N
+  k: int = 4096
+  n: int = 12288
   qk_k: int = QK_K
   lane_extent: int = WARP
   block_groups: int = BLOCK_GROUPS

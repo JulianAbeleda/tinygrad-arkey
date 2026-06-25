@@ -29,6 +29,8 @@ Current baseline snapshot:
 - GEMV G3.0 codegen capture: `G3_CODEGEN_MISMATCH_CAPTURED` (`extra/qk_gemv_g3_codegen_capture.py`, `bench/qk-gemv-g3-codegen-capture/latest.json`). Owned and bridge each expose a named wave32 gate/up program 72 times; G2 LaneMap exposes zero named gate-up programs and lowers into generic Tensor programs.
 - GEMV G3.1 lowering hook: `G3_LANEMAP_PROMOTABLE` (`Q4K_GEMV_SCHEDULER=6`, `q4k_g3_lanemap_gemv_12288_4096`). W==D tok/s `103.7 / 101.7 / 99.4 / 94.5`, token-correct, route-clean, no owned warp gate/up and no lane-partition bridge gate/up.
 - GEMV G4 BubbleBeam binding: complete. FutureSight now routes to the generated G3 LaneMap program; purity gate verdict is `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3`. The old lane-partition bridge remains explicit-only as `Q4K_GEMV_SCHEDULER=4` fallback/debug route.
+- GEMV full tracked Q4_K purity: complete. Verdict `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV`. BubbleBeam/FutureSight routes gate/up (`g3_lanemap_gateup: 72`), FFN down (`g3_lanemap_down: 18`), and Q4_K `4096x4096` projection (`g3_lanemap_proj: 72`) through generated G3 LaneMap programs, with no owned Q4_K GEMV or lane-partition bridge under BubbleBeam.
+- Next pure-machine-search target: decode attention, because tracked Q4_K decode GEMV is now pure/generated under BubbleBeam.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->

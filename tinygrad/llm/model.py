@@ -250,6 +250,15 @@ class Q4KPrimitiveLinear:
         fxn=q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
       return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
     bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT") or getenv("BEAM_COALESCE")
+    g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
+    if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and g3_bubblebeam_shape:
+      from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
+      if should_route_q4k_lane_partition(self.out_features, self.in_features):
+        from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
+        _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
+        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
+        _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+        return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
     if (getenv("Q4K_GEMV_SCHEDULER") or bubblebeam_futuresight) and self.in_features == 4096 and self.out_features == 12288:
       # M5/M6 research lever (default-off): scheduler-GENERATED matvec for FFN gate/up instead of the owned warp
       # custom_kernel. Two modes:
@@ -265,7 +274,7 @@ class Q4KPrimitiveLinear:
       #     probe for one-word-per-lane in-register dequant without routing through the lane-partition bridge module.
       if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
         from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
-        if not should_route_q4k_lane_partition(self.out_features, self.in_features): return self._fallback(x)
+        if not (should_route_q4k_lane_partition(self.out_features, self.in_features) or g3_bubblebeam_shape): return self._fallback(x)
         from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
         _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()

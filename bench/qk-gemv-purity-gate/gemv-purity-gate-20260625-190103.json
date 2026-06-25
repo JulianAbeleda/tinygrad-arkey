@@ -1,6 +1,6 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-190122",
+  "timestamp": "20260625-190103",
   "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV",
   "source_artifact": "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json",
   "route_flags": {

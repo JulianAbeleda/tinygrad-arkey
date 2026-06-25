@@ -159,4 +159,4 @@ SEARCH_BLOCKED_BY_RUNTIME
 
 ## Current Completion
 
-G3 lowering is complete and BubbleBeam is now bound to the G3 generated route. `extra/qk_gemv_purity_gate.py` reports `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3`. The old lane-partition bridge remains available only as explicit `Q4K_GEMV_SCHEDULER=4` fallback/debug route.
+G3 lowering is complete and BubbleBeam is now bound to the G3 generated route for all tracked Q4_K GEMV roles. `extra/qk_gemv_purity_gate.py` reports `GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV`. The old lane-partition bridge remains available only as explicit `Q4K_GEMV_SCHEDULER=4` fallback/debug route.
