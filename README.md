@@ -4,7 +4,7 @@ A hard fork of [tinygrad](https://github.com/tinygrad/tinygrad). AMD only, focus
 
 ## Repo description
 
-tinygrad is a small deep learning framework by George Hotz. He founded comma.ai and is known for the first iPhone jailbreak. tinygrad lowers tensor operations to kernels and uses machine search (BEAM) to find fast implementations across many backends.
+tinygrad is a small deep learning framework by George Hotz. He founded comma.ai and is known for the first iPhone jailbreak. tinygrad lowers tensor operations to GPU kernels across many backends.
 
 I forked it and plan to never merge upstream. (Hi George, if you are reading this.)
 
@@ -13,6 +13,8 @@ I forked tinygrad for three reasons:
 * Machine code search.
 * Portability over USB.
 * Learn the essentials of kernels.
+
+This fork runs with tinygrad's BEAM autotuner off. The decode and prefill speed comes from hand-written kernels (the warp GEMV, the owned AMDGCN attention tile, the coop flash variant). On top of those it adds its own machine search: a candidate and lifecycle search that decides which primitive and flag config to ship, gated by correctness and a per-token throughput bar. See `extra/qk_decode_eval.py` and `extra/qk_lifecycle_search_loop.py`.
 
 ## Benchmarks
 
