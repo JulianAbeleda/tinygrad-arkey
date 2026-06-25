@@ -123,6 +123,8 @@ Executable scope: `docs/gemv-g2-minimal-codegen-representation-scope.md`.
 
 Current G2 result: G2.0-G2.2 pass (`G2_LANEMAP_ADDRESS_BUILDER_PASS`), and G2.3 runtime binding is route-clean/token-correct but fails speed (`SEARCH_GENERATED_WD_FAIL`, `14.2 / 14.2 / 14.1 / 14.0` tok/s). The next blocker is codegen lowering for one-word-per-lane in-register dequant/reduce, not LaneMap/address algebra.
 
+Current G3.0 result: `G3_CODEGEN_MISMATCH_CAPTURED` in `bench/qk-gemv-g3-codegen-capture/latest.json`. Owned and bridge each expose a named wave32 gate/up program 72 times; G2 LaneMap exposes zero named gate-up programs and lowers into generic Tensor programs.
+
 Tasks:
 
 - Reuse the layout/codegen plan rather than inventing a second IR.

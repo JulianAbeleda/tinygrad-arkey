@@ -34,6 +34,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/layout-codegen-full-scope-20260625.md` | Existing execution plan for layout/codegen exposure |
 | `docs/gemv-pure-search-generated-route-scope.md` | GEMV-only execution scope for replacing the FutureSight custom bridge with generated code |
 | `docs/gemv-g2-minimal-codegen-representation-scope.md` | Next executable GEMV step: prove or block the minimal Q4_K lane-map/codegen representation |
+| `docs/gemv-g3-codegen-lowering-scope.md` | Current GEMV step: lower the LaneMap route into one-word-per-lane generated code |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture
