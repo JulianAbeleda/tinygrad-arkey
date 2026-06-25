@@ -91,6 +91,23 @@ as opt-in references, measurement tooling, or control experiments.
   - `extra/gemm/amd_seb/*.cpp`: step-by-step GEMM study kernels.
 - Vendor / upstream: `extra/torch_backend/wrapped_tensor.cpp`.
 
+## Upstream is not purely generated either
+
+tinygrad positions itself as generating all kernels, with no hand-written kernels. That holds at the
+whole-kernel level, but not at the primitive level. The renderers hand-code the hot instructions and splice
+them into the generated kernels. The clearest is the tensor core: tinygrad's fast matmul depends on a
+hand-coded WMMA or MFMA emission, not a search-discovered one.
+
+- [HIP renderer WMMA define](../tinygrad/renderer/cstyle.py): `cstyle.py:440` defines `__WMMA_16_16_16_half_half` to the AMD builtin `__builtin_amdgcn_wmma_f16_16x16x16_f16_w32_gfx12`.
+- [LLVM renderer WMMA and MFMA emission](../tinygrad/renderer/llvmir.py): `llvmir.py:44` emits `@llvm.amdgcn.mfma.*` and `@llvm.amdgcn.wmma.f32.16x16x16.f16` (the AMD_LLVM path this fork uses).
+- [Hand-written workgroup barrier](../tinygrad/renderer/cstyle.py): `cstyle.py:370` is a fixed `__builtin_amdgcn_s_barrier` sequence (also `llvmir.py:192`).
+- [Hand-written dot4 and fp8 builtins](../tinygrad/renderer/cstyle.py): `cstyle.py:398` is `_dp4a` over `__builtin_amdgcn_udot4` (the same dot4 we use), `cstyle.py:358` is the fp8 convert.
+
+So the difference is degree, not kind. tinygrad hand-codes the hot instruction (WMMA, dot4, barrier); we
+hand-code the hot kernel (the fused tile and the warp GEMV) where the scheduler cannot compose those
+instructions into the shape we need. Neither is purely search-derived. Both hand-specify the primitives that
+matter and generate the rest.
+
 ## The path to pure
 
 The two hand-written kernels are the exact shape of the remaining codegen gap: native `v_dot2`, cross-lane
