@@ -96,14 +96,15 @@ as opt-in references, measurement tooling, or control experiments.
 tinygrad positions itself as generating all kernels, with no hand-written kernels. That holds at the
 whole-kernel level, but not at the primitive level. The renderers hand-code the hot instructions and splice
 them into the generated kernels. The clearest is the tensor core: tinygrad's fast matmul depends on a
-hand-coded WMMA or MFMA emission, not a search-discovered one.
+hand-coded WMMA or MFMA emission, not a search-discovered one. Citations are to upstream `tinygrad/tinygrad`
+at commit `65dd099b6`.
 
-- [HIP renderer WMMA define](../tinygrad/renderer/cstyle.py): `cstyle.py:440` defines `__WMMA_16_16_16_half_half` to the AMD builtin `__builtin_amdgcn_wmma_f16_16x16x16_f16_w32_gfx12`.
-- [LLVM renderer WMMA and MFMA emission](../tinygrad/renderer/llvmir.py): `llvmir.py:44` emits `@llvm.amdgcn.mfma.*` and `@llvm.amdgcn.wmma.f32.16x16x16.f16` (the AMD_LLVM path this fork uses).
-- [Hand-written workgroup barrier](../tinygrad/renderer/cstyle.py): `cstyle.py:370` is a fixed `__builtin_amdgcn_s_barrier` sequence (also `llvmir.py:192`).
-- [Hand-written dot4 and fp8 builtins](../tinygrad/renderer/cstyle.py): `cstyle.py:398` is `_dp4a` over `__builtin_amdgcn_udot4` (the same dot4 we use), `cstyle.py:358` is the fp8 convert.
+- [Tensor core WMMA define, cstyle.py L564](https://github.com/tinygrad/tinygrad/blob/65dd099b635b8c2e34812cda0ee173b6aff343e2/tinygrad/renderer/cstyle.py#L564): `#define __WMMA_16_16_16_half_half __builtin_amdgcn_wmma_f16_16x16x16_f16_w32_gfx12`.
+- [Tensor core WMMA and MFMA emission, llvmir.py L44](https://github.com/tinygrad/tinygrad/blob/65dd099b635b8c2e34812cda0ee173b6aff343e2/tinygrad/renderer/llvmir.py#L44): `@llvm.amdgcn.mfma.*` and `@llvm.amdgcn.wmma.f32.16x16x16.f16` (the AMD_LLVM path this fork uses).
+- [Workgroup barrier, cstyle.py L512](https://github.com/tinygrad/tinygrad/blob/65dd099b635b8c2e34812cda0ee173b6aff343e2/tinygrad/renderer/cstyle.py#L512): a fixed `__builtin_amdgcn_s_barrier` sequence (also [llvmir.py L196](https://github.com/tinygrad/tinygrad/blob/65dd099b635b8c2e34812cda0ee173b6aff343e2/tinygrad/renderer/llvmir.py#L196)).
+- [fp8 convert, cstyle.py L500](https://github.com/tinygrad/tinygrad/blob/65dd099b635b8c2e34812cda0ee173b6aff343e2/tinygrad/renderer/cstyle.py#L500): the `__builtin_amdgcn_cvt_f32_fp8` builtin.
 
-So the difference is degree, not kind. tinygrad hand-codes the hot instruction (WMMA, dot4, barrier); we
+So the difference is degree, not kind. tinygrad hand-codes the hot instruction (WMMA, MFMA, the barrier); we
 hand-code the hot kernel (the fused tile and the warp GEMV) where the scheduler cannot compose those
 instructions into the shape we need. Neither is purely search-derived. Both hand-specify the primitives that
 matter and generate the rest.
