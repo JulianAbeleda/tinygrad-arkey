@@ -21,6 +21,8 @@ scheduler-generated path when disabled.
   parallelism and an in-kernel cross-lane (warp shuffle) reduce. The scheduler cannot emit the cross-lane
   reduce, so the generated GEMV leaves performance on the table.
 - Gain: about +9.6% at ctx 1024 and +8.5% at ctx 4096, byte-identical output.
+- Size: tiny. The kernel is emitted programmatically by `q4k_gemv_warp_kernel`, a few hundred lines; the rest of
+  the 852-line file is Python dispatch, fallback, and tests.
 - We tried the instruction-level approach first (tinygrad's WMMA-style trick): a schedulable `udot4` builtin let
   the scheduler compose the GEMV (`Q4K_VDOT`). The kernel was correct at about 57% of peak, but in-model it lost
   at 0.96x, because every int-dot path pays a q8 activation-quant cost (about 7us per kernel) that eats the win.
@@ -35,6 +37,8 @@ scheduler-generated path when disabled.
   about 5 to 6 times slower on this kernel standalone. The gap is a codegen capability, not tuning: native
   emission of `v_dot2` + cross-lane + LDS staging does not exist in the scheduler.
 - Gain: about +12 to +22% decode, on top of the scheduler baseline.
+- Size: tiny. 283 lines of HIP and AMDGCN in one file, against vendor hand-tuned attention kernels (FlashAttention,
+  Composable Kernel) that run to thousands of lines.
 - Fallback: at ctx < 512 the model uses `FLASH_VARIANT=gqa_coop_vec`, which is scheduler-generated.
 - We tried the instruction-level approach first (tinygrad's WMMA-style trick): the fused tile is expressible in
   the scheduler idiom, so we built it (Path A) rather than hand-writing. It lost. With `v_dot2` available and
