@@ -23,6 +23,7 @@ actions += [Opt(op=OptOps.TC, axis=axis, arg=(-1, getenv("TC_OPT", 2), getenv("T
 actions += [Opt(op=OptOps.SWAP, axis=axis_0, arg=axis_1) for axis_0 in range(5) for axis_1 in range(axis_0+1, 5)]
 actions += [Opt(op=OptOps.THREAD, axis=axis, arg=amt) for amt in [2,3,4,5,8,12,16,24,32,64] for axis in range(3)]
 if getenv("NOLOCALS"): actions += [Opt(op=OptOps.NOLOCALS)]
+if getenv("BEAM_COALESCE"): actions += [Opt(op=OptOps.COALESCE, axis=0, arg=8)]
 
 def get_test_global_size(global_size, max_global_size, var_vals):
   test_global_size = [sym_infer(sz, var_vals) for sz in global_size]
