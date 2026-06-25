@@ -22,6 +22,7 @@ Promotion is **reported, never applied**. Default decode behavior is never chang
 DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --list
 DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --candidate flash_l_64 [--dry-run] [--repeats N] [--out DIR]
 DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --suite historical [--out DIR]
+DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --suite decode_aggressive_probe_promotion [--out DIR]
 DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --validate runs/<file>.json
 ```
 
@@ -53,6 +54,15 @@ numbers — same verdict class):
 | `flash_l_64` | `LOCAL_PASS_WD_FAIL` | `docs/archive/decode-vector-flash-tile-realigned-result-20260621.md` |
 | `warp_flash_tile` | `FAIL_LOCAL_AB` | `bench/qk-decode-vector-flash-tile/warp_tile_ab.json` |
 | `q8_opt_in` | `PASS_OPT_IN` | `bench/qk-decode-primitive-transfer/decode_q8_model_route_timing_audit_result.json` + historical dNLL |
+
+## Aggressive Probe Promotion Lane
+
+`decode_aggressive_probe_promotion` is the canonical smaller-win lane for the measured aggressive decode probe.
+It is separate from the aggressive-target proof: the target proof asks whether the full
+`104.0 / 102.1 / 99.6 / 95.1` envelope is reachable, while this promotion lane asks whether the measured
+`103.4 / 101.6 / 99.1 / 94.4` probe is stable enough to become the next baseline.
+
+Current benchmark authority is summarized in `structure/Development/session-handoff.md`.
 
 ## Adding a candidate
 
