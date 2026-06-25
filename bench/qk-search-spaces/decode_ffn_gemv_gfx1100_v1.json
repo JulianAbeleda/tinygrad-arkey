@@ -46,7 +46,20 @@
   ],
   "correctness_gate": "byte_exact (lossless work-decomposition; greedy 0 mismatches vs default)",
   "lifecycle_authority_gate": "clean W==D (extra/qk_decode_runtime_overhead.py) interleaved drift-cancelled A/B; gate >= +5%@ctx1024 OR +7%@ctx4096 (FFN) / positive byte-identical (proj)",
-  "classification": "SEARCH_BLOCKED_BY_CODEGEN__PARTIALLY_UNBLOCKED",
-  "classification_detail": "The cross_lane_reduction primitive that the winning warp GEMV depends on is now scheduler-emittable for a single full-group reduce (WARP_REDUCE_LOWERING, opt-in, correct) -- the cross-lane renderer-lowering gap that blocked search is RESOLVED for that shape. Remaining for a search-generated GEMV to challenge the owned kernel: handle the mixed serial+group reduce (real K), then W==D-compare (Milestone 6). The schedulable udot4 variant covers the dot; cross-lane was the missing reduce.",
-  "promotion_status_note": "Owned warp GEMV is shipped default-on (search_space_id=manual_oracle_not_search_generated); the cross-lane lowering is opt-in until a search-generated GEMV clears W==D."
+  "classification": "SEARCH_BLOCKED_BY_NONREDUCE_HANDOPTS",
+  "classification_detail": "Cross-lane reduction is now scheduler-emittable for both single-group AND mixed serial+group reduces (real K=4096), opt-in (WARP_REDUCE_LOWERING), correct -- the cross-lane codegen gap that blocked search is RESOLVED. Milestone 6 (2026-06-25) WIRED a scheduler-generated FFN gate/up GEMV (Q4K_GEMV_SCHEDULER) and W==D-compared it to the owned warp kernel: it TRAILS ~2x AND cross-lane is ~neutral vs the LDS tree (-0.1..-0.3%) because the reduce is NOT the bottleneck of a bandwidth-bound GEMV. So the search-vs-oracle gap is NO LONGER the reduce/cross-lane -- it is the Q4_K dequant lifecycle + coalesced packed-word loads + block-group-K. Those are the next search-space levers.",
+  "m6_measurement": {
+    "verdict": "M6_SCHEDULER_GEMV_TRAILS_OWNED",
+    "scheduler_xlane_vs_owned_pct": {"512": -104.5, "1024": -103.1, "2048": -100.6, "4096": -95.8},
+    "cross_lane_vs_lds_pct": {"512": -0.08, "1024": -0.22, "2048": -0.31, "4096": -0.30},
+    "tokens_match": true,
+    "doc": "docs/scheduler-gemv-vs-owned-result-20260625.md",
+    "artifact": "bench/qk-scheduler-gemv-vs-owned/decision.json"
+  },
+  "next_search_space_levers": [
+    "fused packed-Q4_K dequant in tinygrad ops with coalesced word loads (vs the lazy fp16 dequant the scheduler arm fuses)",
+    "block-group-K / occupancy via opts so a scheduler GEMV gets the owned kernel's K-split",
+    "per-component cross-lane for UPCAST>1 vector reduces -- LOW priority (reduce is not the bottleneck)"
+  ],
+  "promotion_status_note": "Owned warp GEMV is shipped default-on (search_space_id=manual_oracle_not_search_generated). Q4K_GEMV_SCHEDULER + WARP_REDUCE_LOWERING are research-only/default-off; a scheduler GEMV does not yet challenge the owned kernel (the gap is dequant/memory, not the reduce)."
 }

@@ -68,6 +68,10 @@ def lower_warp_reduce(red:UOp) -> UOp|None:
   if len(group) != 1: return None
   if (w := _lane_width(group[0])) is None: return None
   if red.dtype.scalar() not in (dtypes.float32, dtypes.float): return None
+  # Decline a VECTORIZED reduce value (UPCAST/UNROLL axis in src[0], e.g. the matvec heuristic's
+  # MV_ROWS_PER_THREAD>1): the scalar ds_bpermute ladder bit-casts one float per lane and cannot shuffle a vector.
+  # Falls back to the LDS tree (correct). Per-component shuffle is a follow-on; use MV_ROWS_PER_THREAD=1 to fire.
+  if any(u.op is Ops.RANGE and u.arg[-1] in (AxisType.UPCAST, AxisType.UNROLL) for u in red.src[0].toposort()): return None
   inner = red.src[0].reduce(*serial, arg=red.arg) if serial else red.src[0]   # per-lane partial; lane stays live
   return _LADDER[alu](inner, group[0], w)
 

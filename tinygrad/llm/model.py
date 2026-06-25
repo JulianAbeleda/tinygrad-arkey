@@ -249,6 +249,13 @@ class Q4KPrimitiveLinear:
       out = partials.custom_kernel(words, x_batch.reshape(K*self.in_features),
         fxn=q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
       return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
+    if getenv("Q4K_GEMV_SCHEDULER") and self.in_features == 4096 and self.out_features == 12288:
+      # M5/M6 research lever (default-off): scheduler-GENERATED fp matvec for FFN gate/up instead of the owned
+      # warp custom_kernel. self.weight is a LAZY Q4_K->fp16 dequant graph (model.py:141) that fuses into the
+      # matmul, so this reads the packed weight; the matvec heuristic groups the K-reduce, so with
+      # WARP_REDUCE_LOWERING=1 the cross-lane ds_bpermute ladder replaces the LDS tree. Lets us W==D-compare a
+      # scheduler GEMV (cross-lane vs LDS) against the owned warp kernel. See docs/cross-lane-reduce-lowering-*.
+      return self._fallback(x)
     from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
     words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
