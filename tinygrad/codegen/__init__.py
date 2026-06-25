@@ -1,7 +1,7 @@
 from typing import cast
 from dataclasses import replace
 import itertools
-from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC
+from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
 from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
 from tinygrad.uop.ops import ParamArg
@@ -77,7 +77,15 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   sink = graph_rewrite(sink, sym+pm_move_where_on_load, name="postopt symbolic")
 
   # expand
-  sink = graph_rewrite(sink, sym+pm_pre_expander+pm_group_for_reduce+expander, name="expander")
+  # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE
+  # pm_group_for_reduce claims it for the LDS tree. Milestone 5 of the generic-low-level-search goal -- makes the
+  # cross-lane reduce primitive scheduler-emittable (today only the hand kernels emit it). See
+  # extra/qk_warp_reduce_lowering.py + bench/qk-search-spaces/decode_ffn_gemv_gfx1100_v1.json.
+  _expander_pm = sym+pm_pre_expander+pm_group_for_reduce+expander
+  if getenv("WARP_REDUCE_LOWERING") and ren.target.device == "AMD":
+    from extra.qk_warp_reduce_lowering import pm_warp_reduce
+    _expander_pm = sym+pm_pre_expander+pm_warp_reduce+pm_group_for_reduce+expander
+  sink = graph_rewrite(sink, _expander_pm, name="expander")
 
   # add locals
   sink = graph_rewrite(sink, pm_add_buffers_local+rangeify_codegen, ctx=itertools.count(0), name="add local buffers")
@@ -231,6 +239,6 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config])
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"))
   if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
   return prg

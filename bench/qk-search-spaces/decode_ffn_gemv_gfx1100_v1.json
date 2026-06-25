@@ -1,0 +1,52 @@
+{
+  "search_space_id": "decode_ffn_gemv_gfx1100_v1",
+  "version": 1,
+  "date": "2026-06-25",
+  "primitive_family": "decode_q4k_weight_gemv",
+  "description": "Decode-time (T==1) Q4_K weight-GEMV for FFN gate/up, FFN down, and attn q/o projection. Covers the owned warp GEMV route (q4k_gemv_warp_kernel) and the scheduler-expressible coop / vdot variants.",
+  "supported_profiles": [
+    {"model": "Qwen3-8B-Q4_K_M", "device": "AMD", "arch": "gfx1100", "shapes": ["4096x4096 (q/o)", "4096x12288 (gate/up)", "12288x4096 (down)"], "ctx_ladder": [512, 1024, 2048, 4096]}
+  ],
+  "exposed_instruction_primitives": [
+    "udot4 / v_dot4 builtin (Q4K_VDOT) -- schedulable, NATIVE; but loses in-model 0.96x due to per-kernel q8 activation-quant cost (~7us)"
+  ],
+  "exposed_memory_primitives": [
+    "vector_global_load (packed Q4_K words) -- NATIVE",
+    "lds_staging -- NATIVE",
+    "register_staging"
+  ],
+  "exposed_scheduling_primitives": [
+    "workgroup_shape (threads/row, K-block parallelism via coop rt)",
+    "occupancy_tradeoff"
+  ],
+  "exposed_dataflow_primitives": [
+    "K-block split + partial sum (coop: q4k_coop_partial + sum)",
+    "q8 activation-quant lifecycle (Q4K_VDOT / amort)",
+    "role routing (gate/up, down, q/o)"
+  ],
+  "exposed_runtime_primitives": [
+    "per-role flag gating (Q4K_GEMV_WARP, Q4K_GEMV_WARP_DOWN, Q4K_GEMV_WARP_PROJ, Q4K_ATTN_QO_COOP, Q4K_VDOT)"
+  ],
+  "newly_exposed_primitives": [
+    {
+      "primitive": "cross_lane_reduction",
+      "examples": "ds_bpermute xor-ladder",
+      "status": "EXPOSED opt-in 2026-06-25 (WARP_REDUCE_LOWERING, default OFF) -- a generic Ops.REDUCE over a pow2 (<=32) WARP/GROUP_REDUCE lane axis auto-lowers to the ds_bpermute ladder (drops LDS+barrier), correct (sum/max). Was 'excluded / no renderer lowering' before.",
+      "impl": "extra/qk_warp_reduce_lowering.py (pm_warp_reduce) + tinygrad/codegen/__init__.py expander hook",
+      "evidence": "docs/cross-lane-reduce-lowering-result-20260625.md; test/external/test_warp_reduce_lowering.py (8 pass)",
+      "remaining_to_default_on": "mixed reduce (serial-K + group, the real GEMV K=4096 shape) still declines -> LDS; then W==D vs owned warp GEMV (Milestone 6)"
+    }
+  ],
+  "excluded_primitives": [
+    {
+      "primitive": "cross_lane_reduction (mixed serial+group reduce, e.g. real GEMV K=4096)",
+      "reason": "pm_warp_reduce first pass handles only a single full-group lane axis; a K>group reduce (group + serial-K/group) still falls to the LDS tree. The serial-then-ladder split is the M6 follow-on.",
+      "used_by_winning_kernel": "q4k_gemv_warp_kernel (extra/q4_k_gemv_primitive.py) -- shipped default-on for gate/up + down + (2026-06-25) q/o proj"
+    }
+  ],
+  "correctness_gate": "byte_exact (lossless work-decomposition; greedy 0 mismatches vs default)",
+  "lifecycle_authority_gate": "clean W==D (extra/qk_decode_runtime_overhead.py) interleaved drift-cancelled A/B; gate >= +5%@ctx1024 OR +7%@ctx4096 (FFN) / positive byte-identical (proj)",
+  "classification": "SEARCH_BLOCKED_BY_CODEGEN__PARTIALLY_UNBLOCKED",
+  "classification_detail": "The cross_lane_reduction primitive that the winning warp GEMV depends on is now scheduler-emittable for a single full-group reduce (WARP_REDUCE_LOWERING, opt-in, correct) -- the cross-lane renderer-lowering gap that blocked search is RESOLVED for that shape. Remaining for a search-generated GEMV to challenge the owned kernel: handle the mixed serial+group reduce (real K), then W==D-compare (Milestone 6). The schedulable udot4 variant covers the dot; cross-lane was the missing reduce.",
+  "promotion_status_note": "Owned warp GEMV is shipped default-on (search_space_id=manual_oracle_not_search_generated); the cross-lane lowering is opt-in until a search-generated GEMV clears W==D."
+}
