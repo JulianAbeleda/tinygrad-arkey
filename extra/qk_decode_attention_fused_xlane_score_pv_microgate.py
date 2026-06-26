@@ -158,9 +158,12 @@ def _run_mode(use_fdot2: bool, Hq: int, Hkv: int, Hd: int, MAXC: int, L: int, Tc
   # fdot2 reduces q.k in fp16 (the owned route's precision); use an fp16-appropriate tolerance.
   # A real layout/reduction bug is O(1e-1) (cf. the pre-reducer-fix P10 ~1.0 errors), far above this band.
   tol_abs, tol_rel = (5e-3, 5e-5) if use_fdot2 else (1e-3, 1e-5)
+  CU_COUNT = 96  # gfx1100; see docs/decode-fused-tile-occupancy-roofline-baseline.md
+  wg = Hkv * S
   return {
     "checked": True, "mode": "fdot2" if use_fdot2 else "scalar",
     "Tc": Tc, "L": L, "S": S, "finite": bool(np.isfinite(got).all()),
+    "tile_workgroups": wg, "wg_per_cu": round(wg / CU_COUNT, 3),
     "max_abs": max_abs, "rel_rmse": rel_rmse, "tol_abs": tol_abs, "tol_rel": tol_rel,
     "pass": bool(np.isfinite(got).all() and max_abs <= tol_abs and rel_rmse <= tol_rel),
   }
@@ -177,7 +180,10 @@ def _run_mode_or_blocker(use_fdot2: bool, **shape) -> dict[str, Any]:
 
 def build() -> dict[str, Any]:
   shape = dict(Hq=32, Hkv=8, Hd=128, MAXC=256)
-  cases = [dict(L=64, Tc=128), dict(L=64, Tc=130), dict(L=64, Tc=32), dict(L=64, Tc=256)]
+  # correctness across Tc, then a split-count sweep at Tc=256 (L small -> S large -> occupancy high).
+  # S = ceil(Tc/L); wg/CU = Hkv*S/96. Validates the layout is split-count-invariant up to the S~=48 regime.
+  cases = [dict(L=64, Tc=128), dict(L=64, Tc=130), dict(L=64, Tc=32), dict(L=64, Tc=256),
+           dict(L=32, Tc=256), dict(L=16, Tc=256), dict(L=8, Tc=256), dict(L=6, Tc=256), dict(L=4, Tc=256)]
   scalar = [_run_mode_or_blocker(False, **shape, **c) for c in cases]
   scalar_pass = all(r.get("pass") for r in scalar)
   scalar_blocked = any(r.get("blocked") for r in scalar)
