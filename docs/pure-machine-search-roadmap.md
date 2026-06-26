@@ -42,6 +42,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-a3-performance-primitive-lowering-scope.md` | A3 execution scope for turning the A2 clean skeleton into a speed candidate |
 | `docs/decode-attention-a3-baseline-result.md` | A3 baseline result: A2 is lifecycle-clean but 63-74% of owned W==D |
 | `docs/decode-attention-a3-1-vdot2-score-lowering-scope.md` | A3.1 detailed scope for exposing `v_dot2` in the generated whole-cache score path |
+| `docs/decode-attention-a3-1-vdot2-probe-result.md` | A3.1 probe result: generated tinygrad can expose `fdot2` with the opt-in lowering hook |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture
