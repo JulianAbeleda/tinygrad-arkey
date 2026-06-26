@@ -48,6 +48,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-a3-2b-scoped-lane-map-scope.md` | A3.2b scope for explicit attention lane-map/cross-lane wiring |
 | `docs/decode-attention-a3-2b-lane-map-probe-result.md` | A3.2b probe result: A2 clean and primitives exist; x-lane attention score not wired |
 | `docs/decode-attention-a3-2b-xlane-score-result.md` | A3.2b implementation result: x-lane score route is wired and captured, but collapses W==D throughput and is not promotable |
+| `docs/decode-attention-a3-3-lds-tile-lifecycle-result.md` | A3.3 result: generated LDS attention code exists standalone, but no decode-bound LDS/tile lifecycle candidate is routed |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture
@@ -167,8 +168,8 @@ Immediate work:
 
 1. Capture the current owned tile + combine attention lifecycle. Complete: A0.
 2. Add a generated skeleton candidate with separate route attribution. Complete: A1/A2, with A2 as the clean whole-cache skeleton.
-3. Expose or classify the missing primitive lowerings: `v_dot2`, cross-lane reduction, LDS tile layout, and TILE+COMBINE lifecycle. `v_dot2` and direct x-lane score are classified as no-transfer; global cross-lane lowering is blocked.
-4. Next: build or block an A3.3 generated LDS/tile-lifecycle candidate. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
+3. Expose or classify the missing primitive lowerings: `v_dot2`, cross-lane reduction, LDS tile layout, and TILE+COMBINE lifecycle. `v_dot2` and direct x-lane score are classified as no-transfer; global cross-lane lowering is blocked; generated LDS attention exists standalone but is not decode-route-bound.
+4. Next: define and bind an A3.4 decode TILE+COMBINE lifecycle candidate manifest. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
 
 ## Non-Goals
 
