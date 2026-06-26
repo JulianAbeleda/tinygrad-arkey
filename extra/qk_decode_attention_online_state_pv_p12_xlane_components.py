@@ -29,11 +29,11 @@ def component_kernel():
     x = x_in[c * LANES + lane]
     l = l_in[c * LANES + lane]
     acc = acc_in[c * LANES + lane]
-    gm = warp_reduce_max(m, lane, LANES)
-    sx = _warp_reduce_sum_staged(x, lane, LANES)
+    gm = warp_reduce_max(m, lane, LANES, 90)
+    sx = _warp_reduce_sum_staged(x, lane, LANES, 96)
     w = _fexp(m - gm)
-    den = _warp_reduce_sum_staged(l * w, lane, LANES)
-    num = _warp_reduce_sum_staged(acc * w, lane, LANES)
+    den = _warp_reduce_sum_staged(l * w, lane, LANES, 102)
+    num = _warp_reduce_sum_staged(acc * w, lane, LANES, 108)
     val = col.eq(0).where(gm, col.eq(1).where(sx, col.eq(2).where(den, num / den)))
     return out[c * 4 + col].store(val, lane.eq(0)).end(c, col).sink(arg=_fki("p12_xlane_components_32"))
   return kernel

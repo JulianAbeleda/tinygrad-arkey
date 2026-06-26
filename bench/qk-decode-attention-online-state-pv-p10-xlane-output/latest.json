@@ -1,7 +1,7 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-230916",
-  "verdict": "ONLINE_STATE_PV_P10_FAIL__XLANE_REF",
+  "timestamp": "20260625-232924",
+  "verdict": "ONLINE_STATE_PV_P10_XLANE_OUTPUT_PASS",
   "shape": {
     "Hq": 32,
     "Hkv": 8,
@@ -15,11 +15,11 @@
       "Tc": 128,
       "L": 64,
       "Sval": 2,
-      "verdict": "FAIL__XLANE_REF",
+      "verdict": "PASS",
       "errors": {
         "scalar_vs_ref": 2.2351741790771484e-08,
-        "xlane_vs_ref": 1.0107380151748657,
-        "xlane_vs_scalar": 1.0107380151748657
+        "xlane_vs_ref": 1.4901161193847656e-08,
+        "xlane_vs_scalar": 2.9802322387695312e-08
       },
       "nans": {
         "scalar": false,
@@ -31,11 +31,11 @@
       "Tc": 130,
       "L": 64,
       "Sval": 3,
-      "verdict": "FAIL__XLANE_REF",
+      "verdict": "PASS",
       "errors": {
         "scalar_vs_ref": 3.725290298461914e-08,
-        "xlane_vs_ref": 1.0107142925262451,
-        "xlane_vs_scalar": 1.0107142925262451
+        "xlane_vs_ref": 2.2351741790771484e-08,
+        "xlane_vs_scalar": 2.2351741790771484e-08
       },
       "nans": {
         "scalar": false,
@@ -47,11 +47,11 @@
       "Tc": 32,
       "L": 64,
       "Sval": 1,
-      "verdict": "FAIL__XLANE_REF",
+      "verdict": "PASS",
       "errors": {
         "scalar_vs_ref": 3.725290298461914e-08,
-        "xlane_vs_ref": 1.051076889038086,
-        "xlane_vs_scalar": 1.051076889038086
+        "xlane_vs_ref": 2.9802322387695312e-08,
+        "xlane_vs_scalar": 3.725290298461914e-08
       },
       "nans": {
         "scalar": false,
@@ -63,11 +63,11 @@
       "Tc": 256,
       "L": 64,
       "Sval": 4,
-      "verdict": "FAIL__XLANE_REF",
+      "verdict": "PASS",
       "errors": {
         "scalar_vs_ref": 1.4901161193847656e-08,
-        "xlane_vs_ref": 0.9974192976951599,
-        "xlane_vs_scalar": 0.9974192976951599
+        "xlane_vs_ref": 1.1175870895385742e-08,
+        "xlane_vs_scalar": 1.1175870895385742e-08
       },
       "nans": {
         "scalar": false,
@@ -76,21 +76,6 @@
       }
     }
   ],
-  "first_failure": {
-    "Tc": 128,
-    "L": 64,
-    "Sval": 2,
-    "verdict": "FAIL__XLANE_REF",
-    "errors": {
-      "scalar_vs_ref": 2.2351741790771484e-08,
-      "xlane_vs_ref": 1.0107380151748657,
-      "xlane_vs_scalar": 1.0107380151748657
-    },
-    "nans": {
-      "scalar": false,
-      "xlane": false,
-      "ref": false
-    }
-  },
+  "first_failure": null,
   "decision": "If pass, rerun P7 in-model; if fail, debug x-lane final-output merge."
 }

@@ -355,32 +355,38 @@ def flash_online_state_pv_tile_xlane_whole_cache_kernel(Hd:int, Hq:int, Hkv:int,
     t = s * L + j; in_r = (j < L) & (t < Tc)
     t_safe = in_r.where(t, t.const_like(0))
     vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
-    c = UOp.placeholder((G,), _F32, 136, addrspace=AddrSpace.REG)
-    l = UOp.placeholder((G,), _F32, 137, addrspace=AddrSpace.REG)
-    m = UOp.placeholder((G,), _F32, 138, addrspace=AddrSpace.REG)
+    # d is a GLOBAL output-column axis in this x-lane route. Keep recurrence
+    # registers indexed by both query-group and output column; otherwise
+    # independent PV/state columns alias the same REG slots and corrupt the
+    # online update before the lane merge.
+    c = UOp.placeholder((G * W,), _F32, 136, addrspace=AddrSpace.REG)
+    l = UOp.placeholder((G * W,), _F32, 137, addrspace=AddrSpace.REG)
+    m = UOp.placeholder((G * W,), _F32, 138, addrspace=AddrSpace.REG)
     zi = UOp.range(G, 4)
-    init = c[zi].store(0.0).end(zi)
+    init = c[zi * W + d].store(0.0).end(zi)
     zi2 = UOp.range(G, 5)
-    init = l.after(init)[zi2].store(0.0).end(zi2)
+    init = l.after(init)[zi2 * W + d].store(0.0).end(zi2)
     zi3 = UOp.range(G, 6)
-    init = m.after(init)[zi3].store(-float("inf")).end(zi3)
+    init = m.after(init)[zi3 * W + d].store(-float("inf")).end(zi3)
     c, l, m = c.after(init), l.after(init), m.after(init)
     g = UOp.range(G, 7)
     h = kvh * G + g
-    old_m = m.after(r)[g]
+    gd = g * W + d
+    old_m = m.after(r)[gd]
     sc = in_r.where(score[h * MAXC + t_safe], old_m)
     mn = in_r.where(old_m.maximum(sc), old_m)
     corr = in_r.where(_fexp(old_m - mn), _fc(1.0))
     p = in_r.where(_fexp(sc - mn), _fc(0.0))
-    upd = c[g].store(c.after(r)[g] * corr + p * vd)
-    upd = l.after(upd)[g].store(l.after(r)[g] * corr + p)
-    upd = m.after(upd)[g].store(mn).end(g).end(r)
+    upd = c[gd].store(c.after(r)[gd] * corr + p * vd)
+    upd = l.after(upd)[gd].store(l.after(r)[gd] * corr + p)
+    upd = m.after(upd)[gd].store(mn).end(g).end(r)
     g2 = UOp.range(G, 8)
+    gd2 = g2 * W + d
     cf, lf, mf = c.after(upd), l.after(upd), m.after(upd)
-    gm = warp_reduce_max(mf[g2], lane, LANES)
-    w = _fexp(mf[g2] - gm)
-    acc_all = _warp_reduce_sum_staged(cf[g2] * w, lane, LANES)
-    l_all = _warp_reduce_sum_staged(lf[g2] * w, lane, LANES)
+    gm = warp_reduce_max(mf[gd2], lane, LANES, 90)
+    w = _fexp(mf[gd2] - gm)
+    acc_all = _warp_reduce_sum_staged(cf[gd2] * w, lane, LANES, 96)
+    l_all = _warp_reduce_sum_staged(lf[gd2] * w, lane, LANES, 102)
     val = is_v.where(acc_all, is_l.where(l_all, gm))
     return pout[((kvh * G + g2) * S + s) * W + d].store(val, lane.eq(0)).end(g2).end(kvh, s, d).sink(
       arg=_fki(f"flash_online_state_pv_tile_xlane_whole_cache_{Hq}_{Hd}"))

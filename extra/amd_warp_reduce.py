@@ -33,8 +33,8 @@ def _staged_shfl(val:UOp, offset:int, lane:UOp, slot:int) -> UOp:
   reg = UOp.placeholder((1,), val.dtype, slot, addrspace=AddrSpace.REG)
   return reg.after(reg[0].store(warp_shfl_xor(val, offset, lane)))[0]
 
-def warp_reduce_max(val:UOp, lane:UOp, width:int = WARP) -> UOp:
-  off, slot = width >> 1, _STAGE_SLOT
+def warp_reduce_max(val:UOp, lane:UOp, width:int = WARP, slot_base:int = _STAGE_SLOT) -> UOp:
+  off, slot = width >> 1, slot_base
   while off >= 1:
     val = val.maximum(_staged_shfl(val, off, lane, slot)); off >>= 1; slot += 1
   return val   # every lane holds the width-wide max

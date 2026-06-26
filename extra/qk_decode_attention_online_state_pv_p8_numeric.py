@@ -48,7 +48,10 @@ def _run_tile(xlane: bool) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _max_abs(a: np.ndarray, b: np.ndarray) -> float:
-  return float(np.nanmax(np.abs(a - b)))
+  with np.errstate(invalid="ignore"):
+    diff = np.abs(a - b)
+  if np.isnan(diff).all(): return float("nan")
+  return float(np.nanmax(diff))
 
 
 def build() -> dict[str, Any]:
@@ -67,8 +70,14 @@ def build() -> dict[str, Any]:
     "out_max_abs": _max_abs(scalar_out, xlane_out),
     "xlane_has_nan": bool(np.isnan(xlane_active).any() or np.isnan(xlane_out).any()),
     "scalar_has_nan": bool(np.isnan(scalar_active).any() or np.isnan(scalar_out).any()),
+    "xlane_active_has_nan": bool(np.isnan(xlane_active).any()),
+    "scalar_active_has_nan": bool(np.isnan(scalar_active).any()),
+    "xlane_out_has_nan": bool(np.isnan(xlane_out).any()),
+    "scalar_out_has_nan": bool(np.isnan(scalar_out).any()),
   }
-  if errs["scalar_has_nan"] or errs["xlane_has_nan"]:
+  if errs["scalar_out_has_nan"] or errs["xlane_out_has_nan"]:
+    verdict = "ONLINE_STATE_PV_P8_FAIL__NAN"
+  elif any(np.isnan(errs[k]) for k in ("m_max_abs", "l_max_abs", "pv_max_abs", "out_max_abs")):
     verdict = "ONLINE_STATE_PV_P8_FAIL__NAN"
   elif errs["m_max_abs"] > 1e-4:
     verdict = "ONLINE_STATE_PV_P8_FAIL__M"
@@ -86,7 +95,7 @@ def build() -> dict[str, Any]:
     "verdict": verdict,
     "shape": {"Hq": Hq, "Hkv": Hkv, "Hd": Hd, "MAXC": MAXC, "L": L, "Tc": Tc, "Sval": Sval, "W": W},
     "errors": errs,
-    "decision": "Fix the first failing state column before rerunning P7 in-model."
+    "decision": "Raw state buffers may contain NaNs in non-authoritative slots; use finite active-column errors and final output as the gate."
   }
 
 

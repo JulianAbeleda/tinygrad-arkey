@@ -30,8 +30,8 @@ from extra.amd_warp_reduce import warp_reduce_max, _staged_shfl, _STAGE_SLOT, WA
 # from a single lane (the gpudims gate `if(lidx0==0)`), an INLINE ds_bpermute (plain warp_reduce_sum) gets pulled
 # INSIDE that divergent gate -> the cross-lane read targets a masked-off lane -> garbage (verified: K=16 matvec,
 # max_err 6.7). Staging forces all ds_bpermute to run unconditionally on every lane before the gated store.
-def _warp_reduce_sum_staged(val:UOp, lane:UOp, width:int = WARP) -> UOp:
-  off, slot = width >> 1, _STAGE_SLOT
+def _warp_reduce_sum_staged(val:UOp, lane:UOp, width:int = WARP, slot_base:int = _STAGE_SLOT) -> UOp:
+  off, slot = width >> 1, slot_base
   while off >= 1:
     val = val + _staged_shfl(val, off, lane, slot); off >>= 1; slot += 1
   return val

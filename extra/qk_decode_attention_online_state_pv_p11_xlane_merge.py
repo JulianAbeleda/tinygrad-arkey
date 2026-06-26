@@ -27,10 +27,10 @@ def merge_kernel():
     m = m_in[c * LANES + lane]
     l = l_in[c * LANES + lane]
     acc = acc_in[c * LANES + lane]
-    gm = warp_reduce_max(m, lane, LANES)
+    gm = warp_reduce_max(m, lane, LANES, 90)
     w = _fexp(m - gm)
-    den = _warp_reduce_sum_staged(l * w, lane, LANES)
-    num = _warp_reduce_sum_staged(acc * w, lane, LANES)
+    den = _warp_reduce_sum_staged(l * w, lane, LANES, 96)
+    num = _warp_reduce_sum_staged(acc * w, lane, LANES, 102)
     return out[c].store(num / den, lane.eq(0)).end(c).sink(arg=_fki("p11_xlane_merge_32"))
   return kernel
 

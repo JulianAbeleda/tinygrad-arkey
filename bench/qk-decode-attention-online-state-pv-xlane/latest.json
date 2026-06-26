@@ -1,20 +1,20 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-225822",
-  "verdict": "ONLINE_STATE_PV_XLANE_FAIL__TOKEN_MISMATCH",
+  "timestamp": "20260625-233037",
+  "verdict": "ONLINE_STATE_PV_XLANE_STRUCTURAL_ROUTE_CLEAN",
   "search_space_id": "decode_attention_online_softmax_pv_tile_v1",
   "candidate_id": "decode_attention_online_state_pv_xlane_p7",
   "flags": {
     "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
     "DECODE_ATTN_ONLINE_STATE_PV_TILE_XLANE": "1"
   },
-  "token_match": false,
-  "route_clean": false,
+  "token_match": true,
+  "route_clean": true,
   "owned": {
     "arm": "owned",
     "route": {
       "date": "2026-06-25",
-      "timestamp": "20260625-225821",
+      "timestamp": "20260625-233036",
       "mode": "baseline",
       "verdict": "DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE",
       "selected_candidate": "owned_flash_tile_gqa_whole",
@@ -234,17 +234,17 @@
     "arm": "xlane",
     "route": {
       "date": "2026-06-25",
-      "timestamp": "20260625-225747",
+      "timestamp": "20260625-233002",
       "mode": "a2",
       "verdict": "DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN",
       "selected_candidate": "decode_attention_generated_wholecache_skeleton",
       "tokens_sample": [
         315,
-        119523,
-        119523,
-        313,
-        296,
-        296
+        24231,
+        6009,
+        979,
+        220,
+        576
       ],
       "route_counts": {
         "owned_flash_tile_gqa_whole": 0,
