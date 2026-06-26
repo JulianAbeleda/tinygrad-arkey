@@ -28,6 +28,7 @@ SCHEMA = ROOT / "bench/qk-decode-eval/schema.json"
 RUNS = ROOT / "bench/qk-decode-eval/runs"
 SUMMARIES = ROOT / "bench/qk-decode-eval/summaries"
 WD_RESULT = ROOT / "bench/qk-decode-runtime-overhead/result.json"  # fixed path the W==D script overwrites
+HEARTBEAT = ROOT / "bench/qk-decode-eval/heartbeat.json"
 # ---- provenance + child-env + model default: single source of truth is extra/qk_harness_contract.py (centralized) -
 from extra.qk_harness_contract import git_commit, dirty_tree, perf_state, hardware, child_env, DEFAULT_MODEL  # noqa: E402
 MODEL = os.environ.get("QK_MODEL", DEFAULT_MODEL)
@@ -38,10 +39,37 @@ def run_wd(env: dict, repeats: int) -> dict:
   """N repeats of the clean W==D script with `env`; returns per-ctx tok_s_W samples + median/band. AUTO clock."""
   cmd = [sys.executable, "extra/qk_decode_runtime_overhead.py"]
   samples: dict[int, list[float]] = {}
-  for _ in range(repeats):
-    p = subprocess.run(cmd, cwd=ROOT, env=child_env(env), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if "@@DONE@@" not in (p.stdout or "") or not WD_RESULT.exists():
-      raise RuntimeError(f"W==D run failed: {(p.stdout or '')[-500:]}")
+  for rep in range(repeats):
+    started = time.time()
+    p = subprocess.Popen(cmd, cwd=ROOT, env=child_env(env), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    last_hb, out = 0.0, ""
+    try:
+      while p.poll() is None:
+        time.sleep(5)
+        elapsed = time.time() - started
+        if elapsed - last_hb >= 30:
+          last_hb = elapsed
+          hb = {"status": "running", "pid": p.pid, "elapsed_s": round(elapsed, 1), "repeat": rep + 1,
+                "repeats": repeats, "command": " ".join(cmd), "env": env, "result_json": str(WD_RESULT)}
+          HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
+          HEARTBEAT.write_text(json.dumps(hb, indent=2, sort_keys=True) + "\n")
+          print(f"[wd heartbeat] pid={p.pid} repeat={rep + 1}/{repeats} elapsed={elapsed:.0f}s env={env}", file=sys.stderr, flush=True)
+      out = p.stdout.read() if p.stdout is not None else ""
+    except KeyboardInterrupt:
+      p.terminate()
+      hb = {"status": "interrupted", "pid": p.pid, "elapsed_s": round(time.time() - started, 1),
+            "repeat": rep + 1, "repeats": repeats, "command": " ".join(cmd), "env": env,
+            "result_json": str(WD_RESULT)}
+      HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
+      HEARTBEAT.write_text(json.dumps(hb, indent=2, sort_keys=True) + "\n")
+      raise
+    hb = {"status": "completed", "pid": p.pid, "elapsed_s": round(time.time() - started, 1),
+          "repeat": rep + 1, "repeats": repeats, "returncode": p.returncode, "command": " ".join(cmd),
+          "env": env, "result_json": str(WD_RESULT)}
+    HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
+    HEARTBEAT.write_text(json.dumps(hb, indent=2, sort_keys=True) + "\n")
+    if "@@DONE@@" not in (out or "") or not WD_RESULT.exists():
+      raise RuntimeError(f"W==D run failed: {(out or '')[-500:]}")
     rows = json.loads(WD_RESULT.read_text())["rows"]
     for r in rows: samples.setdefault(int(r["ctx"]), []).append(float(r["tok_s_W"]))
   out = {"command": "DEV=AMD JIT=1 " + " ".join(f"{k}={v}" for k, v in env.items()) + f" python3 {cmd[1]} (x{repeats})",

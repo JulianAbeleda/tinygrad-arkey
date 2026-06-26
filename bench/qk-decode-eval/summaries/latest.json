@@ -1,6 +1,6 @@
 {
-  "date": "2026-06-24",
-  "git_commit": "132ad9e48d9b471c7b7cd441b21d28781834c499",
+  "date": "2026-06-21",
+  "git_commit": "eb1f07d85f62bfb9c52293606415bc90651c2060",
   "rows": [
     {
       "candidate": "baseline_default",
@@ -8,40 +8,24 @@
       "expected": "REST",
       "match": true,
       "wd_repro_band_pct": {
-        "128": 0.61,
-        "512": 0.88,
-        "1024": 1.0,
-        "4096": 1.07
+        "128": 0.24,
+        "512": 0.1,
+        "1024": 0.1,
+        "4096": 0.0
       },
       "stop_reason": "baseline curve; not a promotion candidate"
     },
     {
-      "candidate": "flash_l_64",
-      "verdict": "LOCAL_PASS_WD_FAIL",
-      "expected": "LOCAL_PASS_WD_FAIL",
+      "candidate": "decode_attention_online_state_pv_xlane",
+      "verdict": "REST",
+      "expected": null,
       "match": true,
       "wd_repro_band_pct": {
-        "128": 0.5,
-        "512": 0.89,
-        "1024": 0.9,
-        "4096": 0.86
+        "128": 0.24,
+        "512": 0.0,
+        "1024": 0.0,
+        "4096": 0.0
       },
-      "stop_reason": "local passed (1.082x) but W==D {128: -0.74, 512: -0.68, 1024: -0.7, 4096: -0.54} below the >=5%@1024/>=7%@4096 gate"
-    },
-    {
-      "candidate": "warp_flash_tile",
-      "verdict": "FAIL_LOCAL_AB",
-      "expected": "FAIL_LOCAL_AB",
-      "match": true,
-      "wd_repro_band_pct": null,
-      "stop_reason": "local speedup 0.604 < 1.05"
-    },
-    {
-      "candidate": "q8_opt_in",
-      "verdict": "REST",
-      "expected": "PASS_OPT_IN",
-      "match": false,
-      "wd_repro_band_pct": null,
       "stop_reason": "no rung cleared a promotion gate"
     }
   ]

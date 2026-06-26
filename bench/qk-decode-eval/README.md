@@ -32,6 +32,8 @@ DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk_decode_eval.py --validate runs/<file
 - `schema.json` — JSON Schema for every emitted run artifact (`--validate` checks against it).
 - `runs/<timestamp>-<candidate>.json` — one verdict artifact per candidate run (full reproducibility metadata).
 - `summaries/latest.json` — last suite's verdict table.
+- `heartbeat.json` — live W==D child status while a long evaluator run is active: pid, repeat, elapsed seconds,
+  env, command, and the fixed runtime result path. Check this before killing a silent run.
 - `HARNESS_GUIDE.md` — best-practices checklist for new performance-claiming harnesses, grounded in MLPerf,
   SPEC RG reproducibility methodology, Google Benchmark, GPU profiler docs, FlashAttention, and vLLM/PagedAttention.
 
