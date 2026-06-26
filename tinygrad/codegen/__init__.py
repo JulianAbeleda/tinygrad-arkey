@@ -3,7 +3,7 @@ from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
-from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
+from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, pm_unbind, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
 from tinygrad.uop.ops import ParamArg
 from tinygrad.uop.render import pyrender
 from tinygrad.uop.spec import type_verify, spec_tensor, spec_program
@@ -51,6 +51,10 @@ pm_remove_vec_dtypes = PatternMatcher([
 def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if VIZ: graph_rewrite(ast, PatternMatcher([]), name="View Base AST")
   if DEBUG >= 5: print(pyrender(ast))
+  if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
+    # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
+    from extra.qk_codegen_recurrence_unroll import unroll_recurrence
+    ast = unroll_recurrence(ast, _u)
   if SPEC: type_verify(ast, spec_tensor)
 
   # preprocess
@@ -109,6 +113,9 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # devectorize
   sink = graph_rewrite(sink, sym+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
+  if getenv("REG_STORE_DEVEC") and ren.target.device == "AMD":
+    from extra.qk_reg_store_devec import pm_reg_store_devec
+    sink = graph_rewrite(sink, pm_reg_store_devec, name="reg store devec")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
     from extra.qk_fdot2_lowering import pm_fdot2
     sink = graph_rewrite(sink, pm_fdot2, name="fdot2 lowering")
@@ -142,6 +149,9 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if ren.new_style:
     sink = graph_rewrite(sink, pm_index_is_shrink, name="index is shrink")
     sink = graph_rewrite(sink, pm_remove_vec_dtypes, name="transform to new style")
+
+  if getenv("CODEGEN_UNBIND_BEFORE_RENDER", 0):
+    sink = graph_rewrite(sink, pm_unbind, ctx={}, name="unbind runtime vars before program render")
 
   # this was the linearizer
   sink = graph_rewrite(sink, pm_add_control_flow, ctx=CFGContext(sink), name="add control flow", bottom_up=True)
@@ -249,6 +259,6 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"))
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"))
   if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
   return prg
