@@ -671,6 +671,40 @@
         "manual_oracle"
       ],
       "historical_note": "P15 numeric gate passes; W==D decides if this replaces the refuted per-d online-state x-lane route."
+    },
+    {
+      "id": "decode_attention_fused_pv_tile",
+      "family": "attention_split",
+      "description": "Default-off generated whole-cache decode-attention fused PV tile route. Standalone numeric gate passes and route/materialization gate is clean: target program flash_fused_pv_tile_whole_cache_32_128 fires, owned tile/combine absent, refuted split x-lane PV absent, E_49152 absent, tokens match. W==D decides whether the local-d fused PV representation transfers to whole-decode speed.",
+      "env": {
+        "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+        "DECODE_ATTN_FUSED_PV_TILE": "1"
+      },
+      "rungs": [
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "correctness_req": "standalone_numeric_plus_route_gate_plus_wd",
+      "historical_expected_verdict": null,
+      "compare_artifact": "bench/qk-decode-attention-fused-pv-tile/latest.json",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_attention_online_softmax_pv_tile_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "generated_route_numeric_and_route_clean_perf_pending",
+      "excluded_primitives": [
+        "manual_oracle"
+      ],
+      "historical_note": "Added after FUSED_PV_TILE_ROUTE_CLEAN__WD_REQUIRED; W==D is the first speed authority."
     }
   ],
   "suites": {
@@ -696,6 +730,10 @@
     "decode_attention_split_xlane_wd": [
       "baseline_default",
       "decode_attention_split_xlane"
+    ],
+    "decode_attention_fused_pv_tile_wd": [
+      "baseline_default",
+      "decode_attention_fused_pv_tile"
     ]
   }
 }
