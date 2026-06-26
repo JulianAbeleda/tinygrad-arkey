@@ -45,6 +45,8 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-a3-1-vdot2-probe-result.md` | A3.1 probe result: generated tinygrad can expose `fdot2` with the opt-in lowering hook |
 | `docs/decode-attention-a3-1-vdot2-score-result.md` | A3.1 score result: route-clean vdot2-named score path, but no material W==D transfer |
 | `docs/decode-attention-a3-2-cross-lane-result.md` | A3.2 result: global cross-lane lowering is blocked; needs scoped attention lane-axis mapping |
+| `docs/decode-attention-a3-2b-scoped-lane-map-scope.md` | A3.2b scope for explicit attention lane-map/cross-lane wiring |
+| `docs/decode-attention-a3-2b-lane-map-probe-result.md` | A3.2b probe result: A2 clean and primitives exist; x-lane attention score not wired |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture

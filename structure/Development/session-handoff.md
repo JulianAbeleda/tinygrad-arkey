@@ -20,6 +20,8 @@ Source of truth:
 - `docs/decode-attention-a3-1-vdot2-probe-result.md`
 - `docs/decode-attention-a3-1-vdot2-score-result.md`
 - `docs/decode-attention-a3-2-cross-lane-result.md`
+- `docs/decode-attention-a3-2b-scoped-lane-map-scope.md`
+- `docs/decode-attention-a3-2b-lane-map-probe-result.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
@@ -52,7 +54,9 @@ Current baseline snapshot:
 - Decode attention A3.1 v_dot2 probe: complete. Verdict `A3_1_RENDERER_VDOT2_PROBE_PASS` (`extra/qk_decode_attention_a3_1_vdot2_probe.py`, `bench/qk-decode-attention-a3-1-vdot2/latest.json`). Existing opt-in `V_DOT2_LOWERING=1` can render `__builtin_amdgcn_fdot2` in generated tinygrad code and returns the expected dot result.
 - Decode attention A3.1 score wiring: complete. Artifact `bench/qk-decode-attention-a3-1-vdot2-score/latest.json`, doc `docs/decode-attention-a3-1-vdot2-score-result.md`. Route stays clean, tokens match, owned flash stays off, `E_49152` stays absent, and `flash_score_whole_cache_vdot2_32_128` is captured. W==D is flat versus A2 (`100.3 / 100.0 / 100.1 / 99.8%`), so there is no material transfer and nothing to promote.
 - Decode attention A3.2 cross-lane gate: complete with blocker. Verdict `A3_2_BLOCKED_BY_CODEGEN_GLOBAL_WARP_REDUCE` (`extra/qk_decode_attention_a3_2_cross_lane_gate.py`, `bench/qk-decode-attention-a3-2-cross-lane/latest.json`). Global `WARP_REDUCE_LOWERING=1` fails UOp verification during decode capture (`Ops.UNROLL dtypes.float ... ((4, 4),)`) before W==D can run.
-- Next executable step: A3.2b scoped attention lane-axis mapping. Cross-lane lowering must be applied only to the generated attention candidate/reductions intended for `WARP` or `GROUP_REDUCE`, not globally across the model.
+- Decode attention A3.2b scope: ready (`docs/decode-attention-a3-2b-scoped-lane-map-scope.md`). Cross-lane lowering must be applied only to the generated attention candidate/reductions intended for explicit lane ownership, not globally across the model.
+- Decode attention A3.2b lane-map probe: complete. Verdict `A3_2B_ATTENTION_LANE_MAP_NOT_WIRED` (`extra/qk_decode_attention_a3_2b_lane_map_probe.py`, `bench/qk-decode-attention-a3-2b-lane-map/latest.json`). A2 route is clean and lane primitives exist, but only `flash_score_whole_cache_32_128` is present; no x-lane score program is wired.
+- Next executable step: implement `DECODE_ATTN_SCORE_XLANE=1` with explicit `UOp.special(32, "lidx0")` and `lane_partition_reduce_sum` as `flash_score_whole_cache_xlane_32_128`.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
