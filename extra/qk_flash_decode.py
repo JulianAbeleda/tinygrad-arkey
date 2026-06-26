@@ -190,6 +190,27 @@ def flash_partial_coop_vec_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int,
       arg=_fki(f"flash_partial_coop_vec_whole_cache_{Hq}_{Hd}"))
   return kernel
 
+def flash_tile_partial_pv_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(pout:UOp, prob:UOp, cache:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)
+    is_v = d < Hd
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j; in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    c = UOp.placeholder((G,), _F32, 127, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4); c = c.after(c[zi].store(0.0).end(zi))
+    g = UOp.range(G, 5)
+    p = in_r.where(prob[(kvh * G + g) * MAXC + t], _fc(0.0))
+    acc = c[g].store(c.after(j)[g] + p * vd).end(g).end(j)
+    g2 = UOp.range(G, 6); fin = c.after(acc)
+    return pout[((kvh * G + g2) * S + s) * W + d].store(fin[g2]).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_tile_partial_pv_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
 def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
   def kernel(pm:UOp, score:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -416,8 +437,9 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
     prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_tile_prob_kernel(Hd, Hq, MAXC, L, S, Tc_u))[0]
   else:
     prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
-  po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, cache_f,
-    fxn=flash_partial_coop_vec_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+  partial_kernel = flash_tile_partial_pv_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u) if getenv("DECODE_ATTN_TILE_PARTIAL_PV", 0) else \
+    flash_partial_coop_vec_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u)
+  po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, cache_f, fxn=partial_kernel)[0]
   gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
   dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
   out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]

@@ -29,6 +29,7 @@ Source of truth:
 - `docs/decode-attention-a3-6-tile-score-max-result.md`
 - `docs/decode-attention-a3-7-tile-prob-result.md`
 - `docs/decode-attention-a3-8-stage-attribution-result.md`
+- `docs/decode-attention-a3-9-tile-partial-pv-result.md`
 - `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
@@ -54,6 +55,7 @@ Current baseline snapshot:
 - Latest decode attention A3.6 tile score+max gate: `bench/qk-decode-attention-a3-6-tile-score-max/latest.json` (`A3_6_TILE_SCORE_MAX_NO_TRANSFER`).
 - Latest decode attention A3.7 tile probability gate: `bench/qk-decode-attention-a3-7-tile-prob/latest.json` (`A3_7_TILE_PROB_NO_TRANSFER`).
 - Latest decode attention A3.8 stage attribution audit: `bench/qk-decode-attention-a3-8-stage-attribution/latest.json` (`A3_8_ATTRIBUTION_READY__PARTIAL_PV_NEXT`).
+- Latest decode attention A3.9 tile partial-PV gate: `bench/qk-decode-attention-a3-9-tile-partial-pv/latest.json` (`A3_9_TILE_PARTIAL_PV_NO_TRANSFER`).
 - GEMV generated skeleton: `q4k_gemv_generated_skeleton` (`Q4K_GEMV_SCHEDULER=2`) is registered for attribution only; expected to fail W==D speed until codegen representation lands.
 - GEMV G2.0-G2.2 representation result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` (`extra/qk_gemv_g2_lanemap.py`, `extra/qk_gemv_g2_representation_probe.py`, `bench/qk-gemv-g2-representation-probe/latest.json`). UOp/RANGE can express `lane = block_group * 8 + word_col`, the minimal Q4_K LaneMap is bridge-independent/serializable, and the generated packed-word index matches the numeric reference.
 - GEMV G2.3 runtime binding result: `SEARCH_GENERATED_WD_FAIL` (`Q4K_GEMV_SCHEDULER=5`, `q4k_scheduler_matvec_lanemap`). It is token-correct and route-clean, but only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`.
@@ -78,7 +80,8 @@ Current baseline snapshot:
 - Decode attention A3.6 tile score+max: complete. Verdict `A3_6_TILE_SCORE_MAX_NO_TRANSFER` (`extra/qk_decode_attention_a3_6_tile_score_max_gate.py`, `bench/qk-decode-attention-a3-6-tile-score-max/latest.json`, `docs/decode-attention-a3-6-tile-score-max-result.md`). `DECODE_ATTN_TILE_SCORE_MAX=1` routes `flash_tile_score_max_32_128`, removes separate `flash_max_32`, keeps tokens/route/materialization clean, and binds the bundle. W==D is flat/slightly negative vs A2: `78.0 / 75.3 / 69.5 / 60.2` tok/s vs A2 `78.1 / 75.4 / 69.5 / 60.4` at ctx `512 / 1024 / 2048 / 4096`. First attempted score+max multi-output kernel hit a UOp grouped-output shape limitation, so the committed payload is max-only over the existing score buffer.
 - Decode attention A3.7 tile probability: complete. Verdict `A3_7_TILE_PROB_NO_TRANSFER` (`extra/qk_decode_attention_a3_7_tile_prob_gate.py`, `bench/qk-decode-attention-a3-7-tile-prob/latest.json`, `docs/decode-attention-a3-7-tile-prob-result.md`). `DECODE_ATTN_TILE_PROB=1` routes `flash_tile_score_max_32_128` and `flash_tile_prob_32_128`, removes separate `flash_max_32` and `flash_prob_32`, keeps route/materialization/tokens clean, and binds the bundle. W==D is not promotable: `76.6 / 74.4 / 69.4 / 61.3` tok/s vs A2 `78.5 / 75.8 / 69.9 / 60.7` at ctx `512 / 1024 / 2048 / 4096`; short/mid contexts regress and only ctx4096 has a small uptick.
 - Decode attention A3.8 stage attribution audit: complete. Verdict `A3_8_ATTRIBUTION_READY__PARTIAL_PV_NEXT` (`extra/qk_decode_attention_a3_8_stage_attribution.py`, `bench/qk-decode-attention-a3-8-stage-attribution/latest.json`, `docs/decode-attention-a3-8-stage-attribution-result.md`). It compared A2, A3.6, and A3.7 route/W==D deltas. A3.6 removed `flash_max_32` and stayed flat/slightly negative; A3.7 removed `flash_max_32` + `flash_prob_32`, regressed at short/mid ctx, and only had a small ctx4096 uptick. Metadata replacement is not the main gap.
-- Next executable step: A3.9 target partial PV production. The tile payload must remove or replace `flash_partial_coop_vec_whole_cache_32_128`, because metadata-only tile work has now failed to transfer.
+- Decode attention A3.9 tile partial-PV: complete. Verdict `A3_9_TILE_PARTIAL_PV_NO_TRANSFER` (`extra/qk_decode_attention_a3_9_tile_partial_pv_gate.py`, `bench/qk-decode-attention-a3-9-tile-partial-pv/latest.json`, `docs/decode-attention-a3-9-tile-partial-pv-result.md`). `DECODE_ATTN_TILE_PARTIAL_PV=1` routes `flash_tile_partial_pv_whole_cache_32_128` and removes old `flash_partial_coop_vec_whole_cache_32_128`, with route/materialization/tokens clean. Corrected gate requires delta beyond spread; W==D is flat: `78.2 / 75.6 / 69.7 / 60.6` tok/s vs A2 `78.3 / 75.7 / 69.8 / 60.6` at ctx `512 / 1024 / 2048 / 4096`.
+- Next executable step: build fused probability+partial-PV tile payload, or add deeper per-kernel timing first if exact stage cost is needed. A one-for-one partial replacement is not enough.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
