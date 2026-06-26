@@ -193,11 +193,11 @@ def classify(cand: dict, th: dict, corr: dict, local: dict, wd: dict) -> tuple[V
   return Verdict.REST, "no rung cleared a promotion gate"
 
 # ---- evaluate one candidate -------------------------------------------------------------------------------------
-def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, dry: bool) -> dict:
+def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, dry: bool, dirty_tree_at_start: bool | None = None) -> dict:
   th = {**reg["thresholds_default"]}
   res = {"schema": "decode_eval_run_v1", "candidate_id": cand["id"], "candidate_family": cand["family"],
          "candidate_description": cand["description"], "date": "2026-06-21", "git_commit": git_commit(),
-         "dirty_tree": dirty_tree(), "hardware": hardware(), "perf_state_before": perf_state(),
+         "dirty_tree": dirty_tree() if dirty_tree_at_start is None else dirty_tree_at_start, "hardware": hardware(), "perf_state_before": perf_state(),
          "clock_pin_mode": "auto", "env": cand.get("env", {}), "commands": [], "contexts": cand["contexts"],
          "repeats": 0, "warmups": 8, "thresholds": th, "verdict_expected": cand.get("historical_expected_verdict"),
          "linked_ledger_entry": cand.get("compare_artifact"), "default_behavior_changed": False,
@@ -302,9 +302,10 @@ def main() -> int:
   cands = ([by_id[i] for i in reg["suites"][args.suite]] if args.suite else [by_id[args.candidate]] if args.candidate else [])
   if not cands: print("specify --list, --candidate <id>, --suite <name>, or --validate <file>"); return 2
   cache, results = {}, []
+  dirty_tree_at_start = dirty_tree()
   for c in cands:
     print(f"=== evaluating {c['id']} ({c['family']}) ===", file=sys.stderr)
-    try: res = evaluate(c, reg, cache, args.repeats, args.dry_run)
+    try: res = evaluate(c, reg, cache, args.repeats, args.dry_run, dirty_tree_at_start)
     except Exception as e:
       res = {"schema": "decode_eval_run_v1", "candidate_id": c["id"], "verdict": Verdict.REST, "stop_reason": f"runner error: {str(e)[:200]}",
              "verdict_expected": c.get("historical_expected_verdict"), "verdict_matches_expected": False, "default_behavior_changed": False, "notes": [str(e)[:300]]}
