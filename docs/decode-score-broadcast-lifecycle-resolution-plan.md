@@ -14,10 +14,29 @@ it and do not keep tuning it.** Three classes of work remain:
 2. **Resolve the latent hazards that ship regardless** — the diagnosis confound, and the code hazards
    (H1 barrier no-op, H2 ungated core changes, H3 gate blindness) that live in the working tree and
    would ride along with any merge.
-3. **Move to the real lever** — build `FusedScorePVLifecycle`, the missing primitive.
+3. **Move to the real lever** — but it is *not* "build `FusedScorePVLifecycle`" directly. The fused tile
+   is gated on the **cross-lane reduction/store primitive** that already walled in P11/P12. The
+   score-broadcast route was a detour *around* that wall (broadcasting one score across a chunk avoids
+   needing a cross-lane reduction). Go back *through* the wall: prove the reducer in isolation first,
+   then the fused tile falls out. See "The real dependency" below.
 
-Do these in order. Steps 1–2 are cheap and protect correctness/honesty of the assets; step 3 is the
-research.
+Do these in order. Steps 1–2 are cheap and protect correctness/honesty of the assets; steps 8–10 are the
+research, and step 8 (the reducer) is the actual deliverable.
+
+## The real dependency: the cross-lane reduction/store primitive
+
+The forward lever is commonly mis-stated as "write a fused flash decode tile." It isn't a new attention
+idea — the shipped owned route already *is* the flash split-KV primitive we want. The blocker is purely
+codegen: tinygrad's generated-UOp model could not reliably compose a cross-lane reduction with a
+`lane==0` gated multi-store (P11 `FAIL__MERGE`, P12 `FAIL__MAX`, `Ops.AFTER` verification failure). Every
+P5–P12 attempt failed *inside* the attention tile because the reducer underneath was wrong; the
+score-broadcast route then sidestepped the reducer entirely and paid for it with O(ctx) rescans (134×).
+
+So the dependency chain is: **proven cross-lane reducer (step 8) → expressible fused tile (step 9) →
+economics-gated W==D (step 10).** If step 8 walls, this is a renderer/lowering problem
+(`SEARCH_BLOCKED_BY_CODEGEN` on the reducer, adjacent to the `v_dot2` + cross-lane lowering gap), and the
+honest next move is codegen work, not another attention route. Knowing which side of that fork we are on
+is the single most important output of resuming this lane.
 
 ## Why you should not reopen the route itself
 
@@ -37,7 +56,9 @@ closes this. Treat the route as a parked, correctness-clean diagnostic only.
 | 5 | **Resolve the diagnosis confound** (protect the asset before banking it). Run the missing controlled cell: barrier **off** @ `chunks=4` (with persistent scratch on). Then, if needed, scratch-off @ `chunks=4` with barrier on. | A 2×2 (barrier × chunks at fixed scratch) that isolates which intervention actually removes the MMU fault. Update mmu-scope: replace "the decisive fix is the local graph-batch barrier" with the controlled result. | If barrier-off @ chunks=4 also passes, the barrier is **not** the fix — the asset is `chunks=4` addressing or persistent scratch; relabel and keep only what is load-bearing. |
 | 6 | **Decide H2 (ungated core changes).** Determine whether `schedule/__init__.py:133-139` (toposort BIND scan) and `codegen/__init__.py:146` (unconditional `pm_unbind`) are needed at all once the candidate is parked. Run the baseline default decode + a prefill regression with and without them. | Either: gate both behind the route (so the default path is byte-for-byte unchanged), or keep them only if a regression run on the shipped owned route + baseline W==D (82.3/103.2/101.3/94.0) is unchanged and the bind-mismatch `RuntimeError` cannot trigger on default workloads. | If baseline W==D or any default gate regresses, revert/gate them — they must not ship for a parked candidate. |
 | 7 | **(Optional, low priority) Harden scratch (H4)** only if the route is kept runnable: assert batch-1/single-stream at route build, and assert (or structurally guarantee) the state-kernel and PV-kernel `m` recurrences stay bit-identical. | A guard that raises rather than silently producing wrong attention if the invariant is violated. | Skip if the route is fully parked and never run outside the gate. |
-| 8 | **Forward lever: build `FusedScorePVLifecycle`.** A single q.k pass feeding all 128 PV columns inside a flash/online-softmax tile with an efficient split-KV combine. Restore the flash IO-aware structure (not whole-cache); preserve T=1 KV-split parallelism; report split-KV economics (tile_us / combine_us / combine_fraction / occupancy) **before** W==D. | A generated candidate that is flash-structured, route-clean (with the step-3 stricter gate), and clears W==D vs baseline. | Per corpus: do not start an unfused/whole-cache variant; do not promote on route-gate PASS alone — W==D is authority. |
+| 8 | **Prove the cross-lane reduction/store primitive in isolation — this is the real deliverable.** Standalone microgate: synthetic per-lane `(m,l,acc[D])` → `warp_reduce` max/sum → `lane==0` gated store, proven numerically against NumPy, with a store contract that survives UOp verification (P11/P12 failed exactly here; `Ops.AFTER` verification failure on multiple gated stores). Do **not** touch the attention tile until this passes. | A microgate where the staged cross-lane merge matches NumPy to tight tol and the multi-store contract verifies. | If the microgate also walls, the correct verdict is `SEARCH_BLOCKED_BY_CODEGEN` on the **reducer** — the next move is renderer/lowering work (cross-lane + `v_dot2`), NOT another attention route. Stop attention work here. |
+| 9 | **Rebuild `FusedScorePVLifecycle` on the proven reducer.** Single q.k pass feeding all 128 PV columns inside a flash/online-softmax tile with split-KV combine. Use the owned route (`owned_flash_tile_gqa_whole + owned_flash_combine`) as the numeric oracle — the goal is to make *its* dataflow generatable, not to invent a new algorithm. Restore flash IO-aware structure (not whole-cache); preserve T=1 KV-split parallelism. | A generated candidate that is flash-structured and route-clean under the step-3 stricter gate. | Do not start an unfused/whole-cache variant; do not fall back to score-broadcast to dodge the reducer. |
+| 10 | **Economics pre-gate, then W==D.** Before hand-writing/benching: a cheap analytical check on the proposed dataflow (q.k passes, HBM traffic, kernel count, split-KV parallelism preserved). Only routes that pass on paper proceed to W==D; report split-KV economics (tile_us / combine_us / combine_fraction / occupancy). | Pre-gate passes, then W==D clears vs baseline (82.3/103.2/101.3/94.0). | A route that loses on the paper roofline never reaches W==D — kill it at the pre-gate, as the score-broadcast route should have been. Do not promote on route-gate PASS alone; W==D is authority. |
 
 ## Sequencing notes
 
@@ -47,8 +68,9 @@ closes this. Treat the route as a parked, correctness-clean diagnostic only.
   any doc claims the barrier is the fix.
 - Step 6 is the only thing that touches the **shipped default path** — treat as the highest-risk item to
   leave unresolved if this branch is ever merged.
-- Step 8 is the actual research and should reuse the (now-trustworthy) `CapturePhaseGate` and the
-  (now-fixed) barrier.
+- Steps 8–10 are the actual research and should reuse the (now-trustworthy) `CapturePhaseGate` and the
+  (now-fixed) barrier. Do **not** jump to step 9 (the fused tile) before step 8 (the reducer) passes —
+  that is exactly the mistake the P5–P12 series made.
 
 ## Acceptance for "issue resolved"
 
@@ -57,4 +79,7 @@ closes this. Treat the route as a parked, correctness-clean diagnostic only.
 - The barrier is either observably active (H1 fixed + asserted) or honestly relabeled as not the fix.
 - The default decode path is byte-for-byte unchanged unless a baseline-W==D regression run proves the
   core changes inert.
-- The next candidate in this lane is flash-structured (`FusedScorePVLifecycle`), not whole-cache.
+- The cross-lane reduction/store reducer is either proven in isolation (step 8) or the lane is honestly
+  parked as `SEARCH_BLOCKED_BY_CODEGEN` on the reducer — no more attention routes that detour around it.
+- The next candidate in this lane is flash-structured (`FusedScorePVLifecycle`) built on the proven
+  reducer, not whole-cache.
