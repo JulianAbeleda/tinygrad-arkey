@@ -1,0 +1,109 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260626-002809",
+  "verdict": "FUSED_PV_TILE_BLOCKED__NO_GENERATED_TILE_BUILDER",
+  "target": {
+    "builder": "flash_fused_pv_tile_whole_cache_kernel",
+    "program": "flash_fused_pv_tile_whole_cache_32_128",
+    "exists": false,
+    "marker_counts": {},
+    "selected_source_lines": []
+  },
+  "refuted_current_route": {
+    "builder": "flash_xlane_pv_from_m_kernel",
+    "program": "flash_xlane_pv_from_m_32_128",
+    "exists": true,
+    "marker_counts": {
+      "axis_global": 3,
+      "axis_local": 0,
+      "axis_reduce": 1,
+      "special_lane": 1,
+      "warp_reduce_sum": 2,
+      "warp_reduce_max": 0,
+      "reg_placeholder": 1,
+      "local_placeholder": 0,
+      "d_global_refuted_shape": 1,
+      "d_local_required_shape": 0,
+      "sink": 1
+    },
+    "selected_source_lines": [
+      "1: def flash_xlane_pv_from_m_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):",
+      "3:   def kernel(pv:UOp, pm:UOp, score:UOp, cache:UOp) -> UOp:",
+      "4:     from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged",
+      "5:     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)",
+      "6:     s = UOp.range(S, 1, AxisType.GLOBAL)",
+      "7:     d = UOp.range(W, 2, AxisType.GLOBAL)",
+      "8:     lane = UOp.special(LANES, \"lidx0\")",
+      "10:     r = UOp.range(R, 3, axis_type=AxisType.REDUCE)",
+      "15:     g = UOp.range(G, 4)",
+      "19:     acc = UOp.placeholder((G * W,), _F32, 147, addrspace=AddrSpace.REG)",
+      "20:     zi = UOp.range(G, 5)",
+      "21:     init = acc[zi * W + d].store(0.0).end(zi)",
+      "24:     upd = acc[gd].store(acc.after(r)[gd] + p * vd).end(g).end(r)",
+      "25:     g2 = UOp.range(G, 6)",
+      "26:     part = _warp_reduce_sum_staged(acc.after(upd)[g2 * W + d], lane, LANES, 90)",
+      "28:     return pv[(h2 * S + s) * W + d].store(part, lane.eq(0)).end(g2).end(kvh, s, d).sink("
+    ]
+  },
+  "required_shape": {
+    "d_axis": "local/cooperative ownership, not global output-column ownership",
+    "tile_lifecycle": "score/state/PV inside one tile lifecycle before compact partial output",
+    "must_not_be": "flash_xlane_pv_from_m_32_128",
+    "must_include": [
+      "tile-local K/V reuse",
+      "register online state",
+      "cross-lane score reduction",
+      "vectorized loads or packed-dot lowering"
+    ]
+  },
+  "owned_oracle_facts": {
+    "available": true,
+    "path": "bench/qk-isa-primitive-audit/owned_decode_attention.json",
+    "verdict": "AMD_ISA_PRIMITIVE_CONFIRMED",
+    "instruction_flags": {
+      "has_vector_dot": true,
+      "has_lds": true,
+      "has_cross_lane": true,
+      "has_vector_global_load": true,
+      "has_spill": false
+    },
+    "instr_counts": {
+      "v_dot2": 2,
+      "ds_store": 22,
+      "ds_load": 1,
+      "ds_bpermute": 5,
+      "global_load": 23,
+      "v_fma_f32": 2,
+      "v_exp": 2,
+      "v_max": 2,
+      "s_waitcnt": 22,
+      "scratch_": 0
+    },
+    "resources": {
+      "vgpr": 56,
+      "sgpr": 26,
+      "lds_bytes": null,
+      "scratch_bytes": 0,
+      "spills": 0
+    }
+  },
+  "wall_audit_facts": {
+    "available": true,
+    "path": "bench/qk-decode-attention-generated-pv-kernel-audit/latest.json",
+    "verdict": "PV_WALL_CONFIRMED__GENERATED_GLOBAL_COLUMN_SCALAR_CODEGEN",
+    "generated_pv_shape_flags": {
+      "global_d_axis": true,
+      "local_d_axis_absent": true,
+      "xlane_sum_present": true,
+      "local_d_reference_is_expressible_elsewhere": true
+    },
+    "blockers": [
+      "PV output column d is GLOBAL, not LOCAL/coalesced tile ownership",
+      "token lanes are reduced, but PV still materializes per-column partials instead of a fused LDS/register tile",
+      "owned oracle uses LDS + vector global loads + cross-lane + v_dot2 confirmed by ISA artifact",
+      "whole-decode wall artifact shows GPU time collapse with normal route firing",
+      "W==D artifact shows catastrophic candidate tok/s collapse, so this is not async timing noise"
+    ]
+  },
+  "decision": "Do not route or W==D yet. Build the generated fused PV tile builder first, then extend this gate with standalone numeric comparison."
+}
