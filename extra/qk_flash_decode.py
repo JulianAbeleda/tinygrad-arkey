@@ -9,6 +9,7 @@ Two kernels:
   flash_reduce:  workgroup=head h -> combine the S splits via the LSE formula -> out[h,:].
 """
 from __future__ import annotations
+import os
 
 _HDR = '''
 extern "C" __attribute__((device, const)) unsigned long __ockl_get_group_id(unsigned int);
@@ -80,6 +81,7 @@ void flash_reduce(float* out, float* pout, float* pm, float* pl) {{
 # Scores are precomputed via a matmul (grouped_q @ k^T) so the kernels never nest a q.k reduce.
 # Buffers are Smax-sized (concrete, for placeholder_like); ranges/strides use the symbolic S<=Smax.
 from tinygrad import Tensor, dtypes  # noqa: E402
+from tinygrad.helpers import getenv  # noqa: E402
 from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, UOp  # noqa: E402
 
 _LOG2E = 1.4426950408889634
@@ -94,7 +96,7 @@ def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
 FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop", "gqa_coop_vec")
 FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop_vec"
 
-def flash_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc):
+def flash_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc, use_vdot2:bool=False):
   G = Hq // Hkv
   def kernel(score:UOp, q:UOp, cache:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -107,7 +109,7 @@ def flash_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc):
     kvv = cache[((0 * Hkv + kv) * MAXC + t) * Hd + e].cast(_F32)
     acc = acc[0].set(acc.after(e)[0] + qv * kvv, end=e)
     return score[h * MAXC + t].store(acc[0] * (1.0 / (Hd ** 0.5))).end(h, t).sink(
-      arg=_fki(f"flash_score_whole_cache_{Hq}_{Hd}"))
+      arg=_fki(f"flash_score_whole_cache{'_vdot2' if use_vdot2 else ''}_{Hq}_{Hd}"))
   return kernel
 
 def flash_partial_coop_vec_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
@@ -337,11 +339,13 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
 
   This avoids passing sliced K/V views into callify. It is an attribution/lifecycle skeleton, not a speed path.
   """
+  use_vdot2 = bool(getenv("DECODE_ATTN_SCORE_VDOT2", 0))
+  if use_vdot2: os.environ.setdefault("V_DOT2_LOWERING", "1")
   W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
   q_f = q.reshape(Hq * Hd)
   cache_f = cache_kv.reshape(2 * Hkv * MAXC * Hd)
   score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f,
-    fxn=flash_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u))[0]
+    fxn=flash_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u, use_vdot2=use_vdot2))[0]
   pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
   prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
   po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, cache_f,

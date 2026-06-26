@@ -18,6 +18,7 @@ Source of truth:
 - `docs/decode-attention-a3-baseline-result.md`
 - `docs/decode-attention-a3-1-vdot2-score-lowering-scope.md`
 - `docs/decode-attention-a3-1-vdot2-probe-result.md`
+- `docs/decode-attention-a3-1-vdot2-score-result.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
@@ -48,7 +49,8 @@ Current baseline snapshot:
 - Decode attention A3 baseline: complete. Verdict `DECODE_ATTENTION_A3_BASELINE_CAPTURED` (`extra/qk_decode_attention_a3_baseline.py`, `bench/qk-decode-attention-a3-baseline/latest.json`). A2 is lifecycle-clean but runs at `74.4 / 73.1 / 69.0 / 63.1%` of owned W==D at ctx `512 / 1024 / 2048 / 4096`.
 - Decode attention A3.1 scope: ready (`docs/decode-attention-a3-1-vdot2-score-lowering-scope.md`). It uses the owned route as the flatline oracle and scopes the smallest generated primitive step: expose `v_dot2` in `flash_score_whole_cache_32_128` without losing A2 lifecycle cleanliness.
 - Decode attention A3.1 v_dot2 probe: complete. Verdict `A3_1_RENDERER_VDOT2_PROBE_PASS` (`extra/qk_decode_attention_a3_1_vdot2_probe.py`, `bench/qk-decode-attention-a3-1-vdot2/latest.json`). Existing opt-in `V_DOT2_LOWERING=1` can render `__builtin_amdgcn_fdot2` in generated tinygrad code and returns the expected dot result.
-- Next executable step: wire `DECODE_ATTN_SCORE_VDOT2=1` into the A2 score path as `flash_score_whole_cache_vdot2_32_128`, then run route/token/`E_49152`/W==D transfer gates.
+- Decode attention A3.1 score wiring: complete. Artifact `bench/qk-decode-attention-a3-1-vdot2-score/latest.json`, doc `docs/decode-attention-a3-1-vdot2-score-result.md`. Route stays clean, tokens match, owned flash stays off, `E_49152` stays absent, and `flash_score_whole_cache_vdot2_32_128` is captured. W==D is flat versus A2 (`100.3 / 100.0 / 100.1 / 99.8%`), so there is no material transfer and nothing to promote.
+- Next executable step: A3.2 cross-lane reduction/cooperation, because score vdot2 alone did not close the owned flatline gap.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
