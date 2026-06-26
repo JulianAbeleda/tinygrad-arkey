@@ -1,10 +1,10 @@
 {
   "date": "2026-06-26",
-  "timestamp": "20260626-005041",
-  "verdict": "FUSED_TILE_LIFECYCLE_GLOBAL_G_NUMERIC_PASS__ATTENTION_REPRO_STRONGER",
+  "timestamp": "20260626-005210",
+  "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT",
   "minimal_repro": {
     "checked": true,
-    "verdict": "FUSED_TILE_LIFECYCLE_GLOBAL_G_NUMERIC_PASS__ATTENTION_REPRO_STRONGER",
+    "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT",
     "classified": true,
     "source": "attention_builder_blocker_artifact",
     "synthetic": {
@@ -32,6 +32,22 @@
         "D": 4,
         "J": 3,
         "E": 5,
+        "W": 6
+      }
+    },
+    "synthetic_attention_index": {
+      "checked": true,
+      "compiled": true,
+      "pass": true,
+      "max_abs": 2.384185791015625e-07,
+      "rmse": 5.739043018593293e-08,
+      "shape": {
+        "T": 2,
+        "G": 3,
+        "D": 4,
+        "J": 3,
+        "E": 5,
+        "MAXC": 8,
         "W": 6
       }
     },
@@ -66,5 +82,5 @@
       "W==D promotion"
     ]
   },
-  "next_step": "Global+G synthetic lifecycle passes; next isolator should add attention-like cache indexing and Hd=128/W=130 scale."
+  "next_step": "Attention-like indexing passes at small shape; next isolator should scale D/E/W toward Hd=128/W=130 to locate the size/resource threshold."
 }

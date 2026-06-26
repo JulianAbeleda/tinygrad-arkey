@@ -183,14 +183,121 @@ def _synthetic_global_g_repro() -> dict[str, Any]:
             "has_pop_from_empty_list": "pop from empty list" in tb,
             "has_uop_verify": "UOp verification failed" in tb, "traceback_tail": tb[-5000:]}
 
+def _synthetic_attention_index_kernel(T:int, G:int, D:int, J:int, E:int, MAXC:int):
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, UOp
+  F32 = dtypes.float32
+  W = D + 2
+  def kernel(out:UOp, q:UOp, cache:UOp) -> UOp:
+    kvh = UOp.range(T, 0, AxisType.GLOBAL)
+    split = UOp.range(1, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)
+    is_v = d < D
+    is_l = d.eq(D)
+    j = UOp.range(J, 3, axis_type=AxisType.REDUCE)
+    e = UOp.range(E, 4, axis_type=AxisType.REDUCE)
+    g = UOp.range(G, 5)
+    h = kvh * G + g
+    t = split * J + j
+    dot = UOp.placeholder((G,), F32, 270, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 6)
+    dot_init = dot.after(kvh, split, d, j)[zi].store(0.0).end(zi)
+    dot = dot.after(dot_init)
+    qv = q[h * E + e].cast(F32)
+    kv = cache[((0 * T + kvh) * MAXC + t) * E + e].cast(F32)
+    dot_upd = dot[g].store(dot.after(e)[g] + qv * kv).end(g).end(e)
+    dot_f = dot.after(dot_upd)
+    acc = UOp.placeholder((G,), F32, 271, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((G,), F32, 272, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((G,), F32, 273, addrspace=AddrSpace.REG)
+    za = UOp.range(G, 7)
+    init = acc.after(kvh, split, d)[za].store(0.0).end(za)
+    zl = UOp.range(G, 8)
+    init = den.after(init)[zl].store(0.0).end(zl)
+    zm = UOp.range(G, 9)
+    init = mx.after(init)[zm].store(-float("inf")).end(zm)
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    g2 = UOp.range(G, 10)
+    old_m = mx.after(j)[g2]
+    sc = dot_f[g2]
+    new_m = old_m.maximum(sc)
+    corr = (old_m - new_m).exp2()
+    p = (sc - new_m).exp2()
+    vd = is_v.where(cache[((1 * T + kvh) * MAXC + t) * E + is_v.where(d, d.const_like(0))].cast(F32), UOp.const(F32, 1.0))
+    upd = acc[g2].store(acc.after(j)[g2] * corr + p * vd)
+    upd = den.after(upd)[g2].store(den.after(j)[g2] * corr + p)
+    upd = mx.after(upd)[g2].store(new_m).end(g2).end(j)
+    go = UOp.range(G, 11)
+    af, lf, mf = acc.after(upd), den.after(upd), mx.after(upd)
+    val = is_v.where(af[go], is_l.where(lf[go], mf[go]))
+    return out[((kvh * G + go) * W + d)].store(val).end(go).end(kvh, split, d).sink(
+      arg=KernelInfo(name="synthetic_attention_index_fused_tile_lifecycle", opts_to_apply=()))
+  return kernel
+
+def _synthetic_attention_index_repro() -> dict[str, Any]:
+  try:
+    import numpy as np
+    from tinygrad import Tensor, dtypes
+    T, G, D, J, E, MAXC = 2, 3, 4, 3, 5, 8
+    W = D + 2
+    rng = np.random.default_rng(20260628)
+    q = rng.normal(0, 0.25, size=(T * G, E)).astype(np.float32)
+    cache = np.zeros((2, T, MAXC, E), dtype=np.float32)
+    cache[0, :, :J, :] = rng.normal(0, 0.25, size=(T, J, E)).astype(np.float32)
+    cache[1, :, :J, :D] = rng.normal(0, 0.25, size=(T, J, D)).astype(np.float32)
+    got = Tensor.empty(T * G * W, dtype=dtypes.float32).custom_kernel(
+      Tensor(q.reshape(-1)), Tensor(cache.reshape(-1)), fxn=_synthetic_attention_index_kernel(T, G, D, J, E, MAXC))[0].realize().numpy().reshape(T, G, W)
+    ref = np.zeros((T, G, W), dtype=np.float32)
+    for kvh in range(T):
+      for g in range(G):
+        h = kvh * G + g
+        m, l = -np.inf, np.float32(0.0)
+        acc = np.zeros(D, dtype=np.float32)
+        for j in range(J):
+          sc = np.float32((q[h] * cache[0, kvh, j]).sum())
+          mn = max(m, sc)
+          corr = np.exp2(np.float32(m - mn))
+          p = np.exp2(np.float32(sc - mn))
+          acc = acc * corr + p * cache[1, kvh, j, :D]
+          l = l * corr + p
+          m = mn
+        ref[kvh, g, :D], ref[kvh, g, D], ref[kvh, g, D + 1] = acc, l, m
+    diff = got - ref
+    max_abs = float(np.max(np.abs(diff)))
+    rmse = float(np.sqrt(np.mean(diff * diff)))
+    return {"checked": True, "compiled": True, "pass": bool(max_abs <= 1e-5), "max_abs": max_abs, "rmse": rmse,
+            "shape": {"T": T, "G": G, "D": D, "J": J, "E": E, "MAXC": MAXC, "W": W}}
+  except Exception as e:
+    tb = traceback.format_exc()
+    if "pop from empty list" in tb and "Estimates.from_uops" in tb:
+      verdict = "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_BLOCKED__ESTIMATE_SCOPE_STACK"
+    elif "UOp verification failed" in tb:
+      verdict = "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_BLOCKED__UOP_VERIFY"
+    else:
+      verdict = "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_FAIL__EXCEPTION"
+    return {"checked": True, "compiled": False, "pass": False, "verdict": verdict, "exception_type": type(e).__name__,
+            "exception": str(e), "has_estimates_from_uops": "Estimates.from_uops" in tb,
+            "has_pop_from_empty_list": "pop from empty list" in tb,
+            "has_uop_verify": "UOp verification failed" in tb, "traceback_tail": tb[-5000:]}
+
 
 def _minimal_repro() -> dict[str, Any]:
   synthetic = _synthetic_repro()
   global_g = _synthetic_global_g_repro()
+  attention_index = _synthetic_attention_index_repro()
   attn = _read_json(ATTN_BLOCKER)
   numeric = attn.get("standalone_numeric", {}) if attn.get("available") else {}
   tb = numeric.get("traceback_tail", "")
-  if global_g.get("verdict") == "FUSED_TILE_LIFECYCLE_GLOBAL_G_BLOCKED__ESTIMATE_SCOPE_STACK":
+  if attention_index.get("verdict") == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_BLOCKED__ESTIMATE_SCOPE_STACK":
+    verdict = "FUSED_TILE_LIFECYCLE_BLOCKED__ATTENTION_INDEX_ESTIMATE_SCOPE_STACK"
+    classified = True
+  elif attention_index.get("verdict") == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_BLOCKED__UOP_VERIFY":
+    verdict = "FUSED_TILE_LIFECYCLE_BLOCKED__ATTENTION_INDEX_UOP_VERIFY"
+    classified = True
+  elif attention_index.get("compiled") and attention_index.get("pass"):
+    verdict = "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT"
+    classified = True
+  elif global_g.get("verdict") == "FUSED_TILE_LIFECYCLE_GLOBAL_G_BLOCKED__ESTIMATE_SCOPE_STACK":
     verdict = "FUSED_TILE_LIFECYCLE_BLOCKED__GLOBAL_G_ESTIMATE_SCOPE_STACK"
     classified = True
   elif global_g.get("verdict") == "FUSED_TILE_LIFECYCLE_GLOBAL_G_BLOCKED__UOP_VERIFY":
@@ -221,6 +328,7 @@ def _minimal_repro() -> dict[str, Any]:
     "source": "synthetic_repro" if verdict.startswith("FUSED_TILE_LIFECYCLE_BLOCKED__SYNTHETIC") else "attention_builder_blocker_artifact",
     "synthetic": synthetic,
     "synthetic_global_g": global_g,
+    "synthetic_attention_index": attention_index,
     "known_failure_signature": {
       "exception": numeric.get("exception"),
       "exception_type": numeric.get("exception_type"),
@@ -232,7 +340,11 @@ def _minimal_repro() -> dict[str, Any]:
 
 def build() -> dict[str, Any]:
   repro = _minimal_repro()
-  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_GLOBAL_G_NUMERIC_PASS__ATTENTION_REPRO_STRONGER":
+  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT":
+    next_step = "Attention-like indexing passes at small shape; next isolator should scale D/E/W toward Hd=128/W=130 to locate the size/resource threshold."
+  elif repro["verdict"] in ("FUSED_TILE_LIFECYCLE_BLOCKED__ATTENTION_INDEX_ESTIMATE_SCOPE_STACK", "FUSED_TILE_LIFECYCLE_BLOCKED__ATTENTION_INDEX_UOP_VERIFY"):
+    next_step = "Attention-like indexing captured the lowering wall; fix or encapsulate flattened Q/K/V indexing with nested lifecycle state."
+  elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_GLOBAL_G_NUMERIC_PASS__ATTENTION_REPRO_STRONGER":
     next_step = "Global+G synthetic lifecycle passes; next isolator should add attention-like cache indexing and Hd=128/W=130 scale."
   elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_SYNTHETIC_NUMERIC_PASS__ATTENTION_REPRO_STRONGER":
     next_step = "Synthetic single-tile lifecycle passes; build the next isolator with GLOBAL tile axes and G-vector recurrence state to find the attention-specific lowering delta."
