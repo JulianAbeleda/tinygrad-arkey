@@ -637,6 +637,40 @@
         "manual_oracle"
       ],
       "historical_note": "Added after x-lane route correctness fix; W==D perf is the authority for whether this becomes a promotion lane."
+    },
+    {
+      "id": "decode_attention_split_xlane",
+      "family": "attention_split",
+      "description": "Default-off generated whole-cache decode-attention split-state x-lane route. Computes split max once with the proven scalar max kernel, emits augmented x-lane PV with denominator column, then reuses existing gmax/den/combine. This tests whether removing per-output-column online-state recurrence fixes the prior x-lane W==D collapse.",
+      "env": {
+        "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+        "DECODE_ATTN_ONLINE_STATE_SPLIT_XLANE": "1"
+      },
+      "rungs": [
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "correctness_req": "p15_numeric_plus_wd",
+      "historical_expected_verdict": null,
+      "compare_artifact": "bench/qk-decode-attention-split-xlane-output/latest.json",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_attention_online_softmax_pv_tile_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "generated_route_numeric_clean_perf_pending",
+      "excluded_primitives": [
+        "manual_oracle"
+      ],
+      "historical_note": "P15 numeric gate passes; W==D decides if this replaces the refuted per-d online-state x-lane route."
     }
   ],
   "suites": {
@@ -658,6 +692,10 @@
     "decode_attention_xlane_wd": [
       "baseline_default",
       "decode_attention_online_state_pv_xlane"
+    ],
+    "decode_attention_split_xlane_wd": [
+      "baseline_default",
+      "decode_attention_split_xlane"
     ]
   }
 }

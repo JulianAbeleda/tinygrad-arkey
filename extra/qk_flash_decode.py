@@ -392,6 +392,224 @@ def flash_online_state_pv_tile_xlane_whole_cache_kernel(Hd:int, Hq:int, Hkv:int,
       arg=_fki(f"flash_online_state_pv_tile_xlane_whole_cache_{Hq}_{Hd}"))
   return kernel
 
+def flash_xlane_state_ml_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Token-sharded per-split online-softmax state only.
+
+  Output state layout: state[(h*S+s)*2 + 0] = l, state[(h*S+s)*2 + 1] = m.
+  This computes (m,l) once per (head, split), not once per output column.
+  """
+  G = Hq // Hkv; LANES = 32; R = _ceildiv(L, LANES)
+  def kernel(state:UOp, score:UOp) -> UOp:
+    from extra.amd_warp_reduce import warp_reduce_max
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    r = UOp.range(R, 2, axis_type=AxisType.REDUCE)
+    j = r * LANES + lane
+    t = s * L + j
+    in_r = (j < L) & (t < Tc)
+    t_safe = in_r.where(t, t.const_like(0))
+    l = UOp.placeholder((G,), _F32, 139, addrspace=AddrSpace.REG)
+    m = UOp.placeholder((G,), _F32, 140, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 3)
+    init = l[zi].store(0.0).end(zi)
+    zi2 = UOp.range(G, 4)
+    init = m.after(init)[zi2].store(-float("inf")).end(zi2)
+    l, m = l.after(init), m.after(init)
+    g = UOp.range(G, 5)
+    h = kvh * G + g
+    old_m = m.after(r)[g]
+    sc = in_r.where(score[h * MAXC + t_safe], old_m)
+    mn = in_r.where(old_m.maximum(sc), old_m)
+    corr = in_r.where(_fexp(old_m - mn), _fc(1.0))
+    p = in_r.where(_fexp(sc - mn), _fc(0.0))
+    upd = l[g].store(l.after(r)[g] * corr + p)
+    upd = m.after(upd)[g].store(mn).end(g).end(r)
+    g2 = UOp.range(G, 6)
+    lf, mf = l.after(upd), m.after(upd)
+    gm = warp_reduce_max(mf[g2], lane, LANES, 90)
+    w = _fexp(mf[g2] - gm)
+    l_all = _warp_reduce_sum_staged(lf[g2] * w, lane, LANES, 96)
+    hs = (kvh * G + g2) * S + s
+    col = UOp.range(2, 7, AxisType.GLOBAL)
+    val = col.eq(0).where(l_all, gm)
+    return state[hs * 2 + col].store(val, lane.eq(0)).end(col, g2).end(kvh, s).sink(
+      arg=_fki(f"flash_xlane_state_ml_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
+def flash_xlane_pv_from_state_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Token-sharded PV partial that reuses precomputed per-split m.
+
+  Output layout: pv[(h*S+s)*Hd + d] = sum_t exp(score[h,t]-m[h,s]) * V[kv,t,d].
+  """
+  G = Hq // Hkv; LANES = 32; R = _ceildiv(L, LANES)
+  def kernel(pv:UOp, state:UOp, score:UOp, cache:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(Hd, 2, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    r = UOp.range(R, 3, axis_type=AxisType.REDUCE)
+    j = r * LANES + lane
+    t = s * L + j
+    in_r = (j < L) & (t < Tc)
+    t_safe = in_r.where(t, t.const_like(0))
+    g = UOp.range(G, 4)
+    h = kvh * G + g
+    m_s = state[(h * S + s) * 2 + 1]
+    p = in_r.where(_fexp(score[h * MAXC + t_safe] - m_s), _fc(0.0))
+    vd = cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + d].cast(_F32)
+    acc = UOp.placeholder((G * Hd,), _F32, 144, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 5)
+    init = acc[zi * Hd + d].store(0.0).end(zi)
+    acc = acc.after(init)
+    gd = g * Hd + d
+    upd = acc[gd].store(acc.after(r)[gd] + p * vd).end(g).end(r)
+    g2 = UOp.range(G, 6)
+    part = _warp_reduce_sum_staged(acc.after(upd)[g2 * Hd + d], lane, LANES, 90)
+    h2 = kvh * G + g2
+    return pv[(h2 * S + s) * Hd + d].store(part, lane.eq(0)).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_xlane_pv_from_state_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
+def flash_xlane_split_m_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  G = Hq // Hkv; LANES = 32; R = _ceildiv(L, LANES)
+  def kernel(pm:UOp, score:UOp) -> UOp:
+    from extra.amd_warp_reduce import warp_reduce_max
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    r = UOp.range(R, 2, axis_type=AxisType.REDUCE)
+    j = r * LANES + lane
+    t = s * L + j
+    in_r = (j < L) & (t < Tc)
+    t_safe = in_r.where(t, t.const_like(0))
+    g = UOp.range(G, 3)
+    h = kvh * G + g
+    sc = in_r.where(score[h * MAXC + t_safe], _fc(-float("inf")))
+    m = UOp.placeholder((G,), _F32, 145, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4)
+    init = m[zi].store(-float("inf")).end(zi)
+    m = m.after(init)
+    upd = m[g].store(m.after(r)[g].maximum(sc)).end(g).end(r)
+    g2 = UOp.range(G, 5)
+    gm = warp_reduce_max(m.after(upd)[g2], lane, LANES, 90)
+    h2 = kvh * G + g2
+    return pm[h2 * S + s].store(gm, lane.eq(0)).end(g2).end(kvh, s).sink(arg=_fki(f"flash_xlane_split_m_{Hq}_{Hd}"))
+  return kernel
+
+def flash_xlane_split_l_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  G = Hq // Hkv; LANES = 32; R = _ceildiv(L, LANES)
+  def kernel(pl:UOp, pm:UOp, score:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    r = UOp.range(R, 2, axis_type=AxisType.REDUCE)
+    j = r * LANES + lane
+    t = s * L + j
+    in_r = (j < L) & (t < Tc)
+    t_safe = in_r.where(t, t.const_like(0))
+    g = UOp.range(G, 3)
+    h = kvh * G + g
+    p = in_r.where(_fexp(score[h * MAXC + t_safe] - pm[h * S + s]), _fc(0.0))
+    acc = UOp.placeholder((G,), _F32, 146, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4)
+    init = acc[zi].store(0.0).end(zi)
+    acc = acc.after(init)
+    upd = acc[g].store(acc.after(r)[g] + p).end(g).end(r)
+    g2 = UOp.range(G, 5)
+    l_all = _warp_reduce_sum_staged(acc.after(upd)[g2], lane, LANES, 90)
+    h2 = kvh * G + g2
+    return pl[h2 * S + s].store(l_all, lane.eq(0)).end(g2).end(kvh, s).sink(arg=_fki(f"flash_xlane_split_l_{Hq}_{Hd}"))
+  return kernel
+
+def flash_xlane_pv_from_m_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  G = Hq // Hkv; W = Hd + 1; LANES = 32; R = _ceildiv(L, LANES)
+  def kernel(pv:UOp, pm:UOp, score:UOp, cache:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    is_v = d < Hd
+    r = UOp.range(R, 3, axis_type=AxisType.REDUCE)
+    j = r * LANES + lane
+    t = s * L + j
+    in_r = (j < L) & (t < Tc)
+    t_safe = in_r.where(t, t.const_like(0))
+    g = UOp.range(G, 4)
+    h = kvh * G + g
+    p = in_r.where(_fexp(score[h * MAXC + t_safe] - pm[h * S + s]), _fc(0.0))
+    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    acc = UOp.placeholder((G * W,), _F32, 147, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 5)
+    init = acc[zi * W + d].store(0.0).end(zi)
+    acc = acc.after(init)
+    gd = g * W + d
+    upd = acc[gd].store(acc.after(r)[gd] + p * vd).end(g).end(r)
+    g2 = UOp.range(G, 6)
+    part = _warp_reduce_sum_staged(acc.after(upd)[g2 * W + d], lane, LANES, 90)
+    h2 = kvh * G + g2
+    return pv[(h2 * S + s) * W + d].store(part, lane.eq(0)).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_xlane_pv_from_m_{Hq}_{Hd}"))
+  return kernel
+
+def flash_split_ml_gmax_kernel(Hq:int, S):
+  def kernel(gm:UOp, pm:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, axis_type=AxisType.REDUCE)
+    g = UOp.placeholder((1,), _F32, 148, addrspace=AddrSpace.REG)
+    g = g.after(h)[0].set(-1e30)
+    g = g[0].set(g.after(s)[0].maximum(pm[h * S + s]), end=s)
+    return gm[h].store(g[0]).end(h).sink(arg=_fki(f"flash_split_ml_gmax_{Hq}"))
+  return kernel
+
+def flash_split_ml_combine_kernel(Hd:int, Hq:int, S):
+  def kernel(out:UOp, pv:UOp, pm:UOp, pl:UOp, gm:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    d = UOp.range(Hd, 1, AxisType.GLOBAL)
+    gm_h = gm[h]
+    s = UOp.range(S, 2, axis_type=AxisType.REDUCE)
+    w = _fexp(pm[h * S + s] - gm_h)
+    num = UOp.placeholder((1,), _F32, 149, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 150, addrspace=AddrSpace.REG)
+    num = num.after(h, d)[0].set(0.0)
+    den = den.after(h, d)[0].set(0.0)
+    upd = num[0].store(num.after(s)[0] + w * pv[(h * S + s) * Hd + d])
+    upd = den.after(upd)[0].store(den.after(s)[0] + w * pl[h * S + s]).end(s)
+    nf, df = num.after(upd)[0], den.after(upd)[0]
+    return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_split_ml_combine_{Hq}_{Hd}"))
+  return kernel
+
+def flash_split_state_gmax_kernel(Hq:int, S):
+  def kernel(gm:UOp, state:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, axis_type=AxisType.REDUCE)
+    g = UOp.placeholder((1,), _F32, 141, addrspace=AddrSpace.REG)
+    g = g.after(h)[0].set(-1e30)
+    g = g[0].set(g.after(s)[0].maximum(state[(h * S + s) * 2 + 1]), end=s)
+    return gm[h].store(g[0]).end(h).sink(arg=_fki(f"flash_split_state_gmax_{Hq}"))
+  return kernel
+
+def flash_split_state_combine_kernel(Hd:int, Hq:int, S):
+  def kernel(out:UOp, pv:UOp, state:UOp, gm:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    d = UOp.range(Hd, 1, AxisType.GLOBAL)
+    gm_h = gm[h]
+    s = UOp.range(S, 2, axis_type=AxisType.REDUCE)
+    w = _fexp(state[(h * S + s) * 2 + 1] - gm_h)
+    num = UOp.placeholder((1,), _F32, 142, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 143, addrspace=AddrSpace.REG)
+    num = num.after(h, d)[0].set(0.0)
+    den = den.after(h, d)[0].set(0.0)
+    upd = num[0].store(num.after(s)[0] + w * pv[(h * S + s) * Hd + d])
+    upd = den.after(upd)[0].store(den.after(s)[0] + w * state[(h * S + s) * 2 + 0]).end(s)
+    nf, df = num.after(upd)[0], den.after(upd)[0]
+    return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_split_state_combine_{Hq}_{Hd}"))
+  return kernel
+
 def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
   def kernel(pm:UOp, score:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -609,6 +827,16 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f, fxn=score_kernel)[0]
   if getenv("DECODE_ATTN_TILE_PLACEHOLDER", 0):
     score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(score_f, fxn=flash_tile_placeholder_kernel(Hd, Hq, MAXC, Tc_u))[0]
+  if getenv("DECODE_ATTN_ONLINE_STATE_SPLIT_XLANE", 0):
+    W = Hd + 1
+    pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f,
+      fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, cache_f,
+      fxn=flash_xlane_pv_from_m_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
+    dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
+    return out.reshape(Hq, Hd)
   use_online_state_pv_tile_xlane = getenv("DECODE_ATTN_ONLINE_STATE_PV_TILE_XLANE", 0)
   use_online_state_pv_tile = getenv("DECODE_ATTN_ONLINE_STATE_PV_TILE", 0) or use_online_state_pv_tile_xlane
   use_tile_score_max = getenv("DECODE_ATTN_TILE_SCORE_MAX", 0) or getenv("DECODE_ATTN_TILE_PROB", 0)
