@@ -700,3 +700,10 @@ DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_b4_combine_tax.py
 ```
 
 Use `docs/README.md` for older arcs; do not reintroduce old handoff material here unless it is again current.
+### Decode attention pure-search next scope — primitive-complete online-softmax+PV tile
+
+Canonical scope: `docs/decode-attention-primitive-complete-online-softmax-pv-scope.md`. Core issue is now named: A2 solved generated whole-cache lifecycle hygiene, and A3.6/A3.7/A3.9/A3.10 refuted metadata/simple-fusion as the main lever. The missing pure-search primitive is a generated/search-owned split-KV online-softmax+PV tile with whole-cache KV identity, T=1 parallelism, v_dot2/packed dot, cross-lane reduction, register-resident `(m,l,acc[D])`, and TILE+COMBINE lifecycle accounting. First executable task is the search-space manifest `bench/qk-search-spaces/decode_attention_online_softmax_pv_tile_v1.json` plus a checker proving the manifest names the full primitive boundary before more codegen work.
+### Decode attention primitive-complete manifest/checker
+
+Implemented the first executable task from `docs/decode-attention-primitive-complete-online-softmax-pv-scope.md`: `bench/qk-search-spaces/decode_attention_online_softmax_pv_tile_v1.json` declares the full online-softmax+PV tile primitive boundary and classifies the current state as `SEARCH_SPACE_INCOMPLETE`; `extra/qk_search_space_manifest_check.py` validates that the manifest names whole-cache identity, T=1 split-KV parallelism, query/GQA lane ownership, packed dot, cross-lane reduction, register-resident `(m,l,acc[D])`, PV accumulation, TILE+COMBINE lifecycle accounting, A3.10 as negative control, and owned tile/combine as oracle/fallback only. Next executable step is P2: build the opt-in structural generated tile skeleton, not another metadata-only fusion.
+
