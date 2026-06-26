@@ -40,6 +40,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-a1-generated-skeleton-result.md` | A1 result: generated route is token-correct and owned-free, but reintroduces `E_49152` |
 | `docs/decode-attention-a2-wholecache-skeleton-result.md` | A2 result: generated whole-cache route is token-correct, owned-free, and `E_49152`-free |
 | `docs/decode-attention-a3-performance-primitive-lowering-scope.md` | A3 execution scope for turning the A2 clean skeleton into a speed candidate |
+| `docs/decode-attention-a3-baseline-result.md` | A3 baseline result: A2 is lifecycle-clean but 63-74% of owned W==D |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture

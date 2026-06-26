@@ -15,6 +15,7 @@ Source of truth:
 - `docs/decode-attention-a1-generated-skeleton-result.md`
 - `docs/decode-attention-a2-wholecache-skeleton-result.md`
 - `docs/decode-attention-a3-performance-primitive-lowering-scope.md`
+- `docs/decode-attention-a3-baseline-result.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
@@ -31,6 +32,7 @@ Current baseline snapshot:
 - Latest decode attention purity capture: `bench/qk-decode-attention-purity/latest.json` (`DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE`).
 - Latest decode attention A1 generated skeleton gate: `bench/qk-decode-attention-generated-skeleton/latest.json` (`DECODE_ATTENTION_A1_FAIL__E_49152_REINTRODUCED`).
 - Latest decode attention A2 whole-cache skeleton gate: `bench/qk-decode-attention-wholecache-skeleton/latest.json` (`DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN`).
+- Latest decode attention A3 baseline: `bench/qk-decode-attention-a3-baseline/latest.json` (`DECODE_ATTENTION_A3_BASELINE_CAPTURED`).
 - GEMV generated skeleton: `q4k_gemv_generated_skeleton` (`Q4K_GEMV_SCHEDULER=2`) is registered for attribution only; expected to fail W==D speed until codegen representation lands.
 - GEMV G2.0-G2.2 representation result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` (`extra/qk_gemv_g2_lanemap.py`, `extra/qk_gemv_g2_representation_probe.py`, `bench/qk-gemv-g2-representation-probe/latest.json`). UOp/RANGE can express `lane = block_group * 8 + word_col`, the minimal Q4_K LaneMap is bridge-independent/serializable, and the generated packed-word index matches the numeric reference.
 - GEMV G2.3 runtime binding result: `SEARCH_GENERATED_WD_FAIL` (`Q4K_GEMV_SCHEDULER=5`, `q4k_scheduler_matvec_lanemap`). It is token-correct and route-clean, but only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`.
@@ -41,7 +43,8 @@ Current baseline snapshot:
 - Decode attention A0 purity capture: complete. Verdict `DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE` (`extra/qk_decode_attention_purity_capture.py`, `bench/qk-decode-attention-purity/latest.json`). Current default route fires `owned_flash_tile_gqa_whole` + `owned_flash_combine`, keeps buffer identity, and avoids `E_49152`.
 - Decode attention A1 generated skeleton: complete with precise blocker. Verdict `DECODE_ATTENTION_A1_FAIL__E_49152_REINTRODUCED` (`extra/qk_decode_attention_purity_capture.py --a1`, `bench/qk-decode-attention-generated-skeleton/latest.json`). Generated flash programs fire and tokens match, but sliced KV inputs reintroduce `E_49152_32_3`; not promotable.
 - Decode attention A2 generated whole-cache skeleton: complete. Verdict `DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN` (`extra/qk_decode_attention_purity_capture.py --a2`, `bench/qk-decode-attention-wholecache-skeleton/latest.json`). Generated flash programs fire, owned tile/combine do not fire, tokens match, and `E_49152` is absent. This is attribution-only, not a speed promotion.
-- Decode attention A3 scope: ready (`docs/decode-attention-a3-performance-primitive-lowering-scope.md`). Next executable step is the A3 baseline profiler over the A2 lifecycle-clean skeleton, then one primitive at a time: `v_dot2`, cross-lane reduction, LDS-staged tile layout, TILE+COMBINE lifecycle controls.
+- Decode attention A3 baseline: complete. Verdict `DECODE_ATTENTION_A3_BASELINE_CAPTURED` (`extra/qk_decode_attention_a3_baseline.py`, `bench/qk-decode-attention-a3-baseline/latest.json`). A2 is lifecycle-clean but runs at `74.4 / 73.1 / 69.0 / 63.1%` of owned W==D at ctx `512 / 1024 / 2048 / 4096`.
+- Next executable step: A3.1 whole-cache score `v_dot2` lowering against `flash_score_whole_cache_32_128`, preserving generated route, no owned flash, no `E_49152`, and token match.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
