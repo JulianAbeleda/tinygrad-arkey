@@ -60,6 +60,8 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-online-pv-tile-p2-result.md` | P2 structural generated online-softmax+PV tile route gate |
 | `docs/decode-attention-online-pv-tile-p3-lanemap-scope.md` | P3 scope for lane/work ownership and reduction attribution |
 | `docs/decode-attention-online-pv-tile-p3-lanemap-result.md` | P3 lane-map artifact result for the structural online-PV tile |
+| `docs/decode-attention-online-pv-tile-p4-codegen-decision-scope.md` | P4 exhaustive decision scope for reduction/dot codegen targets |
+| `docs/decode-attention-online-pv-tile-p4-codegen-decision-result.md` | P4 result: classify bindable target vs dataflow rewrite/codegen block |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
