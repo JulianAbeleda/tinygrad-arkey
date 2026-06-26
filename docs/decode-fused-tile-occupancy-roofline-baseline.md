@@ -79,3 +79,12 @@ tile but enlarges the combine, so `S ≈ 48` is the balance the owned route alre
 2. **Port:** wire the validated tile into `qk_flash_decode.py` (raw `cache_kv` 5D, `S=48`), run the route
    gate + attribution economics pre-gate (expect `wg/CU ≈ 4.0`, `has_v_dot2`/`has_lds` true).
 3. **W==D:** only if economics clears; the roofline above is the floor to compare against.
+
+## Outcome (2026-06-26): occupancy is necessary but NOT sufficient
+
+The S=48 tile was run through W==D (`docs/decode-fused-xlane-score-pv-tile-wd-result.md`). At ctx 4096 the
+occupancy was near-matched (3.58 wg/CU) yet the route was still 99× slower (~1665× over the roofline per
+layer) — **compute-bound on generated ISA, not memory-bound**. Occupancy is a real, necessary lever (this
+baseline stands), but the binding constraint is generated-codegen *code quality*, not occupancy or lane
+layout. This baseline remains the correct split-count reference for any future tile whose ISA is made
+efficient enough to become memory-bound.
