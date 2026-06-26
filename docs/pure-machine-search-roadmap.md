@@ -73,6 +73,9 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-online-state-pv-tile-p10-xlane-output-result.md` | P10 isolated x-lane final-output numeric result |
 | `docs/decode-attention-online-state-pv-tile-p11-xlane-merge-result.md` | P11 synthetic x-lane online-softmax merge microproof |
 | `docs/decode-attention-online-state-pv-tile-p12-xlane-components-result.md` | P12 component test for max/sum/gated-store/LSE x-lane merge |
+| `docs/decode-generated-tile-codegen-scope.md` | Current generated decode tile codegen scope: vector loads, LDS/block tiling, and scheduling residuals |
+| `docs/decode-generated-tile-codex-prompt.md` | Self-contained execution prompt for the generated decode tile codegen lane |
+| `bench/qk-decode-cache-identity-index/latest.json` | Latest cache-index/coalescing isolation artifact for the generated decode tile |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
@@ -195,6 +198,31 @@ Immediate work:
 2. Add a generated skeleton candidate with separate route attribution. Complete: A1/A2, with A2 as the clean whole-cache skeleton.
 3. Expose or classify the missing primitive lowerings: `v_dot2`, cross-lane reduction, LDS tile layout, and TILE+COMBINE lifecycle. `v_dot2` and direct x-lane score are classified as no-transfer; global cross-lane lowering is blocked; generated LDS attention exists standalone but is not decode-route-bound; TILE+COMBINE has a bundle manifest; the minimal tile placeholder binds but does not transfer; tile-max removes `flash_max_32` but is flat/slightly negative; tile-prob removes max+prob but still does not transfer.
 4. Next: execute `docs/decode-attention-primitive-complete-online-softmax-pv-scope.md`. A3.11 remains optional for exhaustion, but A3.10 makes the better next move the primitive-complete online-softmax+PV tile path. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
+
+## Latest Decode Attention Codegen Blocker
+
+Current generated fused-xlane route status:
+
+- `FUSED_XLANE_SCORE_PV_ROUTE_CLEAN__ECONOMICS_NEXT`: token match, owned route absent, no full-cache materialization, generated tile/gmax/combine fire.
+- `ISA_DIFF_PINNED`: owned tile has LDS 8192 B, `global_load_d16=22`, `cross_lane=5`; generated tile has LDS 256 B, `global_load_d16=0`, `cross_lane=20`.
+- New isolation gate: `extra/qk_decode_cache_identity_index_gate.py`, artifact `bench/qk-decode-cache-identity-index/latest.json`.
+
+Latest blocker label:
+
+`SEARCH_BLOCKED_BY_CODEGEN__DYNAMIC_UPCAST_REG_STORE_AND_PTRCAT_PLACEMENT`
+
+What the gate proves:
+
+- Raw 5D `cache_kv[2,1,Hkv,MAXC,Hd]` indexing works.
+- Static UPCAST indexing works.
+- Dynamic scalar `t` indexing works.
+- K UPCAST into LDS works in isolation.
+- Dynamic V reduce + UPCAST accumulator emits invalid C: `make_float4(...) = make_float4(...)`.
+- Direct authoring of `PTRCAT` vector loads fails the tensor/spec verifier; the vector-load transformation must happen at the correct late-codegen point.
+
+Next executable milestone:
+
+Build an env-gated codegen/lowering pass that coalesces generated decode cache loads while keeping register accumulator stores scalar. Acceptance: cache gate passes, fused-xlane microgate passes, route gate remains clean, ISA diff shows generated `global_load_d16 > 0` or `global_load_dwordx4 > 0`, and W==D is re-run only after those pass.
 
 ## Non-Goals
 

@@ -1,19 +1,7 @@
 # Roadmap
 
-Starter roadmap for `<PROJECT>`.
+Canonical roadmap:
 
-Use this file for:
+- `docs/pure-machine-search-roadmap.md`
 
-- near-term milestones
-- sequencing of work
-- what is blocked
-- what matters next
-
-## Default Shape
-
-- Now
-- Next
-- Later
-
-Keep it short and decision-oriented.
-
+Use that document for project sequencing, blockers, and pure machine-search status. This file is intentionally only a pointer so roadmap state does not drift across multiple docs.
