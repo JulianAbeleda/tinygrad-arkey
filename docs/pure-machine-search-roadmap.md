@@ -58,6 +58,8 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-a3-10-tile-prob-partial-pv-result.md` | A3.10 result: fused prob+partial removes two stages but regresses W==D |
 | `docs/decode-attention-primitive-complete-online-softmax-pv-scope.md` | Next primitive-complete decode-attention scope: generated online-softmax+PV tile with full lifecycle gates |
 | `docs/decode-attention-online-pv-tile-p2-result.md` | P2 structural generated online-softmax+PV tile route gate |
+| `docs/decode-attention-online-pv-tile-p3-lanemap-scope.md` | P3 scope for lane/work ownership and reduction attribution |
+| `docs/decode-attention-online-pv-tile-p3-lanemap-result.md` | P3 lane-map artifact result for the structural online-PV tile |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
