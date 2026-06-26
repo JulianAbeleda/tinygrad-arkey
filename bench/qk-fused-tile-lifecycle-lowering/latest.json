@@ -1,0 +1,42 @@
+{
+  "date": "2026-06-26",
+  "timestamp": "20260626-004621",
+  "verdict": "FUSED_TILE_LIFECYCLE_BLOCKED__ESTIMATE_SCOPE_STACK",
+  "minimal_repro": {
+    "checked": true,
+    "verdict": "FUSED_TILE_LIFECYCLE_BLOCKED__ESTIMATE_SCOPE_STACK",
+    "classified": true,
+    "source": "attention_builder_blocker_artifact",
+    "known_failure_signature": {
+      "exception": "pop from empty list",
+      "exception_type": "IndexError",
+      "has_estimates_from_uops": true,
+      "has_pop_from_empty_list": true
+    }
+  },
+  "attention_blocker_artifact": {
+    "available": true,
+    "path": "bench/qk-decode-attention-fused-score-state-pv-tile/latest.json",
+    "verdict": "FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE",
+    "standalone_numeric": {
+      "checked": true,
+      "pass": false,
+      "blocked": true,
+      "verdict": "FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE",
+      "exception_type": "IndexError",
+      "exception": "pop from empty list",
+      "traceback_tail": "ret = fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 224, in realize\n    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 254, in run_linear\n    if not jit: linear = compile_linear(linear, validate=VALIDATE_WITH_CPU)\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 247, in compile_linear\n    linear = graph_rewrite(linear, pm_compile, name=\"precompile kernels\", walk=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1581, in walk_rewrite\n    if self.pm is not None and (rewritten:=self.pm_rewrite(new_n)) is not None: new_n = rewritten\n                                           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 228, in <lambda>\n    call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 253, in to_program\n    if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)\n                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1438, in __wrapper\n    ret = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 245, in do_to_program\n    prg = graph_rewrite(prg, pm_to_program, ctx=renderer, name=\"linearize/render\")\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1630, in unified_rewrite\n    if self.pm is None or (new_src_n:=self.pm_rewrite(new_n)) is None:\n                                      ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1364, in lazy_compile\n    return entry[1](uop, ctx)\n           ^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 193, in do_estimates\n    return prg.replace(src=(sink.replace(arg=replace(sink.arg, estimates=Estimates.from_uops(lin.src, ignore_indexing=True))),)+prg.src[1:])\n                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/renderer/__init__.py\", line 40, in from_uops\n    elif u.op is Ops.END: mults = mult_stack.pop(-1)\n                                  ^^^^^^^^^^^^^^^^^^\nIndexError: pop from empty list\n"
+    }
+  },
+  "required_lowering_capability": {
+    "generic_shape": "nested reduce + recurrence tuple + local output axis + compact metadata store",
+    "attention_shape": "q.k score reduce inside token recurrence with local-d PV and l/m metadata columns",
+    "first_fix_target": "scope-balanced lowering/estimation for nested END scopes",
+    "not_yet": [
+      "LDS tuning",
+      "v_dot2 lowering",
+      "W==D promotion"
+    ]
+  },
+  "next_step": "Build a smaller synthetic repro that fails without attention-specific code, then fix or encapsulate the lowering pattern."
+}
