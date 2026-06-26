@@ -290,9 +290,10 @@ def flash_online_state_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:
     c, l, m = c.after(init), l.after(init), m.after(init)
     g = UOp.range(G, 7)
     h = kvh * G + g
-    sc = in_r.where(score[h * MAXC + t_safe], _fc(-float("inf")))
-    mn = m.after(j)[g].maximum(sc)
-    corr = _fexp(m.after(j)[g] - mn)
+    old_m = m.after(j)[g]
+    sc = in_r.where(score[h * MAXC + t_safe], old_m)
+    mn = in_r.where(old_m.maximum(sc), old_m)
+    corr = in_r.where(_fexp(old_m - mn), _fc(1.0))
     p = in_r.where(_fexp(sc - mn), _fc(0.0))
     upd = c[g].store(c.after(j)[g] * corr + p * vd)
     upd = l.after(upd)[g].store(l.after(j)[g] * corr + p)
