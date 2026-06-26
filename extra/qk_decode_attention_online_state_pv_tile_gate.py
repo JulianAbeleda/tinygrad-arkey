@@ -17,7 +17,7 @@ def _env_for_arm(arm: str) -> dict[str, str]:
             "DECODE_ATTN_SCORE_XLANE", "DECODE_ATTN_LDS_TILE", "DECODE_ATTN_TILE_PLACEHOLDER",
             "DECODE_ATTN_TILE_SCORE_MAX", "DECODE_ATTN_TILE_PROB", "DECODE_ATTN_TILE_PARTIAL_PV",
             "DECODE_ATTN_TILE_PROB_PARTIAL_PV", "DECODE_ATTN_ONLINE_PV_TILE", "DECODE_ATTN_ONLINE_STATE_PV_TILE",
-            "WARP_REDUCE_LOWERING"):
+            "V_DOT2_LOWERING", "WARP_REDUCE_LOWERING"):
     env[k] = "0"
   if arm == "online_state_pv_tile":
     env["DECODE_ATTN_GENERATED_WHOLECACHE"] = "1"

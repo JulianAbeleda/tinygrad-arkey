@@ -23,6 +23,7 @@ def _fexp(x: UOp) -> UOp: return (x * 1.4426950408889634).exp2()
 def component_kernel():
   def kernel(out: UOp, m_in: UOp, x_in: UOp, l_in: UOp, acc_in: UOp) -> UOp:
     c = UOp.range(CASES, 0, AxisType.GLOBAL)
+    col = UOp.range(4, 1, AxisType.GLOBAL)
     lane = UOp.special(LANES, "lidx0")
     m = m_in[c * LANES + lane]
     x = x_in[c * LANES + lane]
@@ -33,11 +34,8 @@ def component_kernel():
     w = _fexp(m - gm)
     den = _warp_reduce_sum_staged(l * w, lane, LANES)
     num = _warp_reduce_sum_staged(acc * w, lane, LANES)
-    stores = out[c * 4 + 0].store(gm, lane.eq(0))
-    stores = out[c * 4 + 1].store(sx, lane.eq(0)).after(stores)
-    stores = out[c * 4 + 2].store(den, lane.eq(0)).after(stores)
-    stores = out[c * 4 + 3].store(num / den, lane.eq(0)).after(stores)
-    return stores.end(c).sink(arg=_fki("p12_xlane_components_32"))
+    val = col.eq(0).where(gm, col.eq(1).where(sx, col.eq(2).where(den, num / den)))
+    return out[c * 4 + col].store(val, lane.eq(0)).end(c, col).sink(arg=_fki("p12_xlane_components_32"))
   return kernel
 
 
