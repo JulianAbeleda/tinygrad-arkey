@@ -94,13 +94,112 @@ def _synthetic_repro() -> dict[str, Any]:
             "exception": str(e), "has_estimates_from_uops": "Estimates.from_uops" in tb,
             "has_pop_from_empty_list": "pop from empty list" in tb, "traceback_tail": tb[-5000:]}
 
+def _synthetic_global_g_kernel(T:int, G:int, D:int, J:int, E:int):
+  from tinygrad import dtypes
+  from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, UOp
+  F32 = dtypes.float32
+  W = D + 2
+  def kernel(out:UOp, a:UOp, v:UOp) -> UOp:
+    tile = UOp.range(T, 0, AxisType.GLOBAL)
+    d = UOp.range(W, 1, AxisType.LOCAL)
+    is_v = d < D
+    is_l = d.eq(D)
+    j = UOp.range(J, 2, axis_type=AxisType.REDUCE)
+    e = UOp.range(E, 3, axis_type=AxisType.REDUCE)
+    g = UOp.range(G, 4)
+    dot = UOp.placeholder((G,), F32, 260, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 5)
+    dot_init = dot.after(tile, d, j)[zi].store(0.0).end(zi)
+    dot = dot.after(dot_init)
+    dot_upd = dot[g].store(dot.after(e)[g] + a[((tile * G + g) * J + j) * E + e]).end(g).end(e)
+    dot_f = dot.after(dot_upd)
+    acc = UOp.placeholder((G,), F32, 261, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((G,), F32, 262, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((G,), F32, 263, addrspace=AddrSpace.REG)
+    za = UOp.range(G, 6)
+    init = acc.after(tile, d)[za].store(0.0).end(za)
+    zl = UOp.range(G, 7)
+    init = den.after(init)[zl].store(0.0).end(zl)
+    zm = UOp.range(G, 8)
+    init = mx.after(init)[zm].store(-float("inf")).end(zm)
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    g2 = UOp.range(G, 9)
+    old_m = mx.after(j)[g2]
+    sc = dot_f[g2]
+    new_m = old_m.maximum(sc)
+    corr = (old_m - new_m).exp2()
+    p = (sc - new_m).exp2()
+    vd = is_v.where(v[((tile * G + g2) * J + j) * D + is_v.where(d, d.const_like(0))], UOp.const(F32, 1.0))
+    upd = acc[g2].store(acc.after(j)[g2] * corr + p * vd)
+    upd = den.after(upd)[g2].store(den.after(j)[g2] * corr + p)
+    upd = mx.after(upd)[g2].store(new_m).end(g2).end(j)
+    go = UOp.range(G, 10)
+    af, lf, mf = acc.after(upd), den.after(upd), mx.after(upd)
+    val = is_v.where(af[go], is_l.where(lf[go], mf[go]))
+    return out[((tile * G + go) * W + d)].store(val).end(go).end(tile, d).sink(
+      arg=KernelInfo(name="synthetic_global_g_fused_tile_lifecycle", opts_to_apply=()))
+  return kernel
+
+def _synthetic_global_g_repro() -> dict[str, Any]:
+  try:
+    import numpy as np
+    from tinygrad import Tensor, dtypes
+    T, G, D, J, E = 2, 3, 4, 3, 5
+    W = D + 2
+    rng = np.random.default_rng(20260627)
+    a = rng.normal(0, 0.25, size=(T, G, J, E)).astype(np.float32)
+    v = rng.normal(0, 0.25, size=(T, G, J, D)).astype(np.float32)
+    got = Tensor.empty(T * G * W, dtype=dtypes.float32).custom_kernel(
+      Tensor(a.reshape(-1)), Tensor(v.reshape(-1)), fxn=_synthetic_global_g_kernel(T, G, D, J, E))[0].realize().numpy().reshape(T, G, W)
+    ref = np.zeros((T, G, W), dtype=np.float32)
+    for t in range(T):
+      for g in range(G):
+        m, l = -np.inf, np.float32(0.0)
+        acc = np.zeros(D, dtype=np.float32)
+        for j in range(J):
+          sc = np.float32(a[t, g, j].sum())
+          mn = max(m, sc)
+          corr = np.exp2(np.float32(m - mn))
+          p = np.exp2(np.float32(sc - mn))
+          acc = acc * corr + p * v[t, g, j]
+          l = l * corr + p
+          m = mn
+        ref[t, g, :D], ref[t, g, D], ref[t, g, D + 1] = acc, l, m
+    diff = got - ref
+    max_abs = float(np.max(np.abs(diff)))
+    rmse = float(np.sqrt(np.mean(diff * diff)))
+    return {"checked": True, "compiled": True, "pass": bool(max_abs <= 1e-5), "max_abs": max_abs, "rmse": rmse,
+            "shape": {"T": T, "G": G, "D": D, "J": J, "E": E, "W": W}}
+  except Exception as e:
+    tb = traceback.format_exc()
+    if "pop from empty list" in tb and "Estimates.from_uops" in tb:
+      verdict = "FUSED_TILE_LIFECYCLE_GLOBAL_G_BLOCKED__ESTIMATE_SCOPE_STACK"
+    elif "UOp verification failed" in tb:
+      verdict = "FUSED_TILE_LIFECYCLE_GLOBAL_G_BLOCKED__UOP_VERIFY"
+    else:
+      verdict = "FUSED_TILE_LIFECYCLE_GLOBAL_G_FAIL__EXCEPTION"
+    return {"checked": True, "compiled": False, "pass": False, "verdict": verdict, "exception_type": type(e).__name__,
+            "exception": str(e), "has_estimates_from_uops": "Estimates.from_uops" in tb,
+            "has_pop_from_empty_list": "pop from empty list" in tb,
+            "has_uop_verify": "UOp verification failed" in tb, "traceback_tail": tb[-5000:]}
+
 
 def _minimal_repro() -> dict[str, Any]:
   synthetic = _synthetic_repro()
+  global_g = _synthetic_global_g_repro()
   attn = _read_json(ATTN_BLOCKER)
   numeric = attn.get("standalone_numeric", {}) if attn.get("available") else {}
   tb = numeric.get("traceback_tail", "")
-  if synthetic.get("verdict") == "FUSED_TILE_LIFECYCLE_SYNTHETIC_BLOCKED__ESTIMATE_SCOPE_STACK":
+  if global_g.get("verdict") == "FUSED_TILE_LIFECYCLE_GLOBAL_G_BLOCKED__ESTIMATE_SCOPE_STACK":
+    verdict = "FUSED_TILE_LIFECYCLE_BLOCKED__GLOBAL_G_ESTIMATE_SCOPE_STACK"
+    classified = True
+  elif global_g.get("verdict") == "FUSED_TILE_LIFECYCLE_GLOBAL_G_BLOCKED__UOP_VERIFY":
+    verdict = "FUSED_TILE_LIFECYCLE_BLOCKED__GLOBAL_G_UOP_VERIFY"
+    classified = True
+  elif global_g.get("compiled") and global_g.get("pass"):
+    verdict = "FUSED_TILE_LIFECYCLE_GLOBAL_G_NUMERIC_PASS__ATTENTION_REPRO_STRONGER"
+    classified = True
+  elif synthetic.get("verdict") == "FUSED_TILE_LIFECYCLE_SYNTHETIC_BLOCKED__ESTIMATE_SCOPE_STACK":
     verdict = "FUSED_TILE_LIFECYCLE_BLOCKED__SYNTHETIC_ESTIMATE_SCOPE_STACK"
     classified = True
   elif synthetic.get("compiled") and synthetic.get("pass"):
@@ -121,6 +220,7 @@ def _minimal_repro() -> dict[str, Any]:
     "classified": classified,
     "source": "synthetic_repro" if verdict.startswith("FUSED_TILE_LIFECYCLE_BLOCKED__SYNTHETIC") else "attention_builder_blocker_artifact",
     "synthetic": synthetic,
+    "synthetic_global_g": global_g,
     "known_failure_signature": {
       "exception": numeric.get("exception"),
       "exception_type": numeric.get("exception_type"),
@@ -132,8 +232,12 @@ def _minimal_repro() -> dict[str, Any]:
 
 def build() -> dict[str, Any]:
   repro = _minimal_repro()
-  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_SYNTHETIC_NUMERIC_PASS__ATTENTION_REPRO_STRONGER":
+  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_GLOBAL_G_NUMERIC_PASS__ATTENTION_REPRO_STRONGER":
+    next_step = "Global+G synthetic lifecycle passes; next isolator should add attention-like cache indexing and Hd=128/W=130 scale."
+  elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_SYNTHETIC_NUMERIC_PASS__ATTENTION_REPRO_STRONGER":
     next_step = "Synthetic single-tile lifecycle passes; build the next isolator with GLOBAL tile axes and G-vector recurrence state to find the attention-specific lowering delta."
+  elif repro["verdict"] in ("FUSED_TILE_LIFECYCLE_BLOCKED__GLOBAL_G_ESTIMATE_SCOPE_STACK", "FUSED_TILE_LIFECYCLE_BLOCKED__GLOBAL_G_UOP_VERIFY"):
+    next_step = "Global+G synthetic repro captured the lowering wall; fix or encapsulate this axis/state pattern before returning to attention."
   elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_BLOCKED__SYNTHETIC_ESTIMATE_SCOPE_STACK":
     next_step = "Synthetic repro is sufficient; fix or encapsulate the generic nested lifecycle lowering pattern."
   else:
