@@ -157,6 +157,18 @@ def flash_tile_score_max_kernel(Hd:int, Hq:int, MAXC:int, L:int, S:int, Tc):
     return pm[h * S + s].store(m[0]).end(h, s).sink(arg=_fki(f"flash_tile_score_max_{Hq}_{Hd}"))
   return kernel
 
+def flash_tile_prob_kernel(Hd:int, Hq:int, MAXC:int, L:int, S:int, Tc):
+  def kernel(prob:UOp, pm:UOp, score:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    j = UOp.range(L, 2, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    p = in_r.where(_fexp(score[h * MAXC + t_safe] - pm[h * S + s]), UOp.const(_F32, 0.0))
+    return prob[h * MAXC + t_safe].store(p, in_r).end(h, s, j).sink(arg=_fki(f"flash_tile_prob_{Hq}_{Hd}"))
+  return kernel
+
 def flash_partial_coop_vec_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
   G = Hq // Hkv; W = Hd + 1
   def kernel(pout:UOp, prob:UOp, cache:UOp) -> UOp:
@@ -395,11 +407,15 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f, fxn=score_kernel)[0]
   if getenv("DECODE_ATTN_TILE_PLACEHOLDER", 0):
     score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(score_f, fxn=flash_tile_placeholder_kernel(Hd, Hq, MAXC, Tc_u))[0]
-  if getenv("DECODE_ATTN_TILE_SCORE_MAX", 0):
+  use_tile_score_max = getenv("DECODE_ATTN_TILE_SCORE_MAX", 0) or getenv("DECODE_ATTN_TILE_PROB", 0)
+  if use_tile_score_max:
     pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_tile_score_max_kernel(Hd, Hq, MAXC, L, S, Tc_u))[0]
   else:
     pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
-  prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
+  if getenv("DECODE_ATTN_TILE_PROB", 0):
+    prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_tile_prob_kernel(Hd, Hq, MAXC, L, S, Tc_u))[0]
+  else:
+    prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
   po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, cache_f,
     fxn=flash_partial_coop_vec_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
