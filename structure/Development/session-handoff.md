@@ -736,4 +736,7 @@ P9 complete. `extra/qk_decode_attention_online_state_pv_p9_scalar_numeric.py` pr
 ### Decode attention P10 x-lane final-output numeric gate
 
 P10 complete. `extra/qk_decode_attention_online_state_pv_p10_xlane_output.py` produced `ONLINE_STATE_PV_P10_FAIL__XLANE_REF`, artifact `bench/qk-decode-attention-online-state-pv-p10-xlane-output/latest.json`. Scalar final output matches NumPy tightly (`<=3.73e-08`) for Tc 32/128/130/256. X-lane output is finite but wrong by about 1.0 (`0.997-1.051`) against both NumPy and scalar. This localizes the blocker to `flash_online_state_pv_tile_xlane_whole_cache_32_128`: x-lane merge math/staged cross-lane usage/lane-store ownership/per-lane token-shard recurrence. Next step is P11 x-lane merge microproof using synthetic per-lane `(m,l,acc[D])` states before changing the full attention tile.
+### Decode attention P11 synthetic x-lane merge
+
+P11 complete. `extra/qk_decode_attention_online_state_pv_p11_xlane_merge.py` produced `ONLINE_STATE_PV_P11_FAIL__MERGE`, artifact `bench/qk-decode-attention-online-state-pv-p11-xlane-merge/latest.json`. Synthetic per-lane `(m,l,acc)` merge is finite but wrong: generated `[0.8264, 1.0, 1.0, -2.1273]` vs NumPy `[0.0864, 1.4706, 0.9045, -0.0241]`, max error `2.1032`. This isolates the blocker below the full attention tile: staged x-lane merge primitive is wrong in generated UOp context. Next step is P12 component repair: independently test `warp_reduce_max`, `_warp_reduce_sum_staged`, `lane==0` gated store, then full LSE merge. Do not debug P7 per-token state until P12 passes.
 
