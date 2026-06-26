@@ -65,5 +65,16 @@
     "tool": "extra/qk_decode_attention_purity_capture.py",
     "artifact": "bench/qk-decode-attention-purity/latest.json",
     "decision": "Decode attention remains the next pure-machine-search target after GEMV completion."
+  },
+  "generated_skeleton_a1_2026_06_25": {
+    "candidate_id": "decode_attention_generated_skeleton",
+    "flag": "DECODE_ATTN_GENERATED_SKELETON=1",
+    "tool": "extra/qk_decode_attention_purity_capture.py --a1",
+    "artifact": "bench/qk-decode-attention-generated-skeleton/latest.json",
+    "verdict": "DECODE_ATTENTION_A1_FAIL__E_49152_REINTRODUCED",
+    "search_generation_status": "generated_skeleton",
+    "promotion_status": "attribution_only",
+    "decision_rule": "Pass only if generated flash programs fire, owned_flash_* programs do not fire, E_49152 is absent, KV buffer identity is preserved, and tokens match the owned baseline.",
+    "decision": "Do not promote. A1 proves generated route ownership and token correctness, but it reintroduces E_49152 through sliced KV inputs. Next target is generated whole-cache KV skeleton."
   }
 }

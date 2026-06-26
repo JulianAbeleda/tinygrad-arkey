@@ -1039,9 +1039,19 @@ class TransformerBlock(FFNBlock):
       try: _amdgcn_ctx = start_pos.unbind()[1] + T if isinstance(start_pos, UOp) else -1
       except Exception: _amdgcn_ctx = -1
       out = None
+      if getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
+         and (Hq // Hkv) == 4:
+        # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
+        # owned AMDGCN tile. This is an attribution/correctness candidate, not a speed candidate. It intentionally
+        # reuses the generated UOp flash kernels so the gate can prove whether a generated route can stay route-clean
+        # without reintroducing full-KV materialization.
+        out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
+                                     start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
+                                     variant=str(getenv("DECODE_ATTN_GENERATED_SKELETON_VARIANT",
+                                                        getenv("FLASH_VARIANT", "gqa_coop_vec"))))
       # DEFAULT-ON (2026-06-23) for the validated gfx1100 / Qwen3-8B / B=1 / T=1 / Hq=32 / Hkv=8 / Hd=128 / ctx>=512
       # shape; strict guards keep every other shape/device on gqa. DECODE_ATTN_AMDGCN_TILE=0 disables.
-      if getenv("DECODE_ATTN_AMDGCN_TILE", 1) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
+      if out is None and getenv("DECODE_ATTN_AMDGCN_TILE", 1) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
          and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 512):
         try:
           from extra.qk_owned_flash_decode_graph_node import amdgcn_flash_decode

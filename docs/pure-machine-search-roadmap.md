@@ -36,6 +36,8 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/gemv-g2-minimal-codegen-representation-scope.md` | Next executable GEMV step: prove or block the minimal Q4_K lane-map/codegen representation |
 | `docs/gemv-g3-codegen-lowering-scope.md` | Current GEMV step: lower the LaneMap route into one-word-per-lane generated code |
 | `docs/decode-attention-pure-search-scope.md` | Decode attention execution scope for replacing owned tile+combine with generated/search-owned code |
+| `docs/decode-attention-a1-generated-skeleton-scope.md` | Next executable attention step: route-clean generated skeleton before speed work |
+| `docs/decode-attention-a1-generated-skeleton-result.md` | A1 result: generated route is token-correct and owned-free, but reintroduces `E_49152` |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture
@@ -106,6 +108,7 @@ Tasks:
 - Expose `v_dot2` lowering.
 - Expose cross-lane reduction.
 - Expose LDS-staged tile layout/search knobs.
+- First fix generated whole-cache KV access so generated attention can avoid `E_49152` without the owned tile.
 - Represent TILE + COMBINE as one primitive lifecycle in the search artifact, even if it remains two programs.
 - Compare the generated candidate against the owned attention route.
 
