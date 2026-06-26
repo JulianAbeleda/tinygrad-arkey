@@ -11,6 +11,31 @@ Two kernels:
 from __future__ import annotations
 import os
 
+_SCORE_BROADCAST_SCRATCH = {}
+_SCORE_BROADCAST_NO_GRAPH_PREFIXES = (
+  "flash_pall_score_once_state_",
+  "flash_pall_score_broadcast_pv_cols_",
+  "flash_pall_score_broadcast_combine4_",
+)
+
+def _install_score_broadcast_no_graph_prefixes():
+  existing = [p for p in os.environ.get("JIT_NO_GRAPH_KERNEL_PREFIXES", "").split(",") if p]
+  merged = existing + [p for p in _SCORE_BROADCAST_NO_GRAPH_PREFIXES if p not in existing]
+  os.environ["JIT_NO_GRAPH_KERNEL_PREFIXES"] = ",".join(merged)
+
+def _score_broadcast_scratch(device, Hq:int, Hd:int, Hkv:int, MAXC:int, L:int, Smax:int):
+  # Stable, realized scratch for the multi-kernel score-broadcast chain. These
+  # buffers are intentionally kept out of TinyJit memory planning; the route is
+  # effect-ordered through AFTER(custom_kernel) dependencies and reuses scratch
+  # sequentially across block calls. This is not a throughput optimization.
+  key = (device, Hq, Hd, Hkv, MAXC, L, Smax)
+  if key not in _SCORE_BROADCAST_SCRATCH:
+    state = Tensor.empty(Hq * Smax * 2, dtype=_F32, device=device).contiguous().realize()
+    pvs = tuple(Tensor.empty(Hq * Smax * 32, dtype=_F32, device=device).contiguous().realize() for _ in range(4))
+    out = Tensor.empty(Hq * Hd, dtype=_F32, device=device).contiguous().realize()
+    _SCORE_BROADCAST_SCRATCH[key] = (state, *pvs, out)
+  return _SCORE_BROADCAST_SCRATCH[key]
+
 _HDR = '''
 extern "C" __attribute__((device, const)) unsigned long __ockl_get_group_id(unsigned int);
 extern "C" __attribute__((device, const)) unsigned int __ockl_get_local_id(unsigned int);
@@ -82,7 +107,7 @@ void flash_reduce(float* out, float* pout, float* pm, float* pl) {{
 # Buffers are Smax-sized (concrete, for placeholder_like); ranges/strides use the symbolic S<=Smax.
 from tinygrad import Tensor, dtypes  # noqa: E402
 from tinygrad.helpers import getenv  # noqa: E402
-from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, UOp  # noqa: E402
+from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, Ops, UOp  # noqa: E402
 
 _LOG2E = 1.4426950408889634
 _F32 = dtypes.float32
@@ -131,6 +156,133 @@ def flash_score_whole_cache_xlane_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc):
     total = lane_partition_reduce_sum(acc[0], LanePartition(lane))
     return score[h * MAXC + t].store(total * (1.0 / (Hd ** 0.5)), lane.eq(0)).end(h, t).sink(
       arg=_fki(f"flash_score_whole_cache_xlane_{Hq}_{Hd}"))
+  return kernel
+
+
+def flash_p1_crosslane_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc):
+  """Generated route-level P1 score kernel: lanes shard Hd and ds_bpermute-reduce q.k.
+
+  This integrates the LaneMap/CrossLane primitive into the actual generated whole-cache decode route.
+  It intentionally does not claim LDS or v_dot2; the primitive gap gate must verify emitted ISA before promotion.
+  """
+  if Hd % 32 != 0: raise ValueError(f"P1 crosslane score requires Hd divisible by 32, got {Hd}")
+  G = Hq // Hkv; R = Hd // 32
+  def kernel(score:UOp, q:UOp, cache:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    t = UOp.range(Tc, 1, AxisType.GLOBAL)
+    lane = UOp.special(32, "lidx0")
+    r = UOp.range(R, 2, axis_type=AxisType.REDUCE)
+    e = lane * R + r
+    kvh = h // G
+    acc = UOp.placeholder((1,), _F32, 171, addrspace=AddrSpace.REG)
+    acc_init = acc.after(h, t)[0].store(0.0)
+    acc = acc.after(acc_init)
+    qv = q[h * Hd + e].cast(_F32)
+    kv = cache[((0 * Hkv + kvh) * MAXC + t) * Hd + e].cast(_F32)
+    acc_upd = acc[0].store(acc.after(r)[0] + qv * kv).end(r)
+    total = _warp_reduce_sum_staged(acc.after(acc_upd)[0], lane, 32)
+    return score[h * MAXC + t].store(total * (1.0 / (Hd ** 0.5)), lane.eq(0)).end(h, t).sink(
+      arg=_fki(f"flash_p1_crosslane_score_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
+def flash_pall_lds_crosslane_fdot2_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc):
+  """Generated route-level PALL score kernel: LDS-staged K + lane-sharded/cross-lane q.k + fdot2.
+
+  This is the composed physical score hot path. It does not claim full decode lifecycle fusion; online state and PV
+  still run through the existing generated split pipeline until a full physical-tile lifecycle route is built.
+  """
+  if Hd % 64 != 0: raise ValueError(f"PALL score requires Hd divisible by 64, got {Hd}")
+  G = Hq // Hkv; R = Hd // 32; RP = Hd // 64
+  def kernel(score:UOp, q:UOp, cache:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    t = UOp.range(Tc, 1, AxisType.GLOBAL)
+    lane = UOp.special(32, "lidx0")
+    r = UOp.range(R, 2, axis_type=AxisType.REDUCE)
+    e = lane * R + r
+    kvh = h // G
+    klds = UOp.placeholder((Hd,), dtypes.half, 172, addrspace=AddrSpace.LOCAL)
+    kstage = klds[e].store(cache[((0 * Hkv + kvh) * MAXC + t) * Hd + e].cast(dtypes.half)).end(r)
+    bar = UOp.barrier(UOp.group(kstage))
+    rp = UOp.range(RP, 3, axis_type=AxisType.REDUCE)
+    e2 = rp * 64 + lane * 2
+    acc = UOp.placeholder((1,), _F32, 173, addrspace=AddrSpace.REG)
+    init = acc.after(h, t)[0].store(0.0)
+    acc = acc.after(init)
+    qpair = UOp(Ops.STACK, dtypes.half.vec(2), (q[h * Hd + e2].cast(dtypes.half), q[h * Hd + e2 + 1].cast(dtypes.half)))
+    kpair = UOp(Ops.STACK, dtypes.half.vec(2), (klds.after(bar)[e2], klds.after(bar)[e2 + 1]))
+    dot2 = UOp(Ops.CUSTOMI, _F32, (acc.after(rp)[0], qpair, kpair), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
+    upd = acc[0].store(dot2).end(rp)
+    total = _warp_reduce_sum_staged(acc.after(upd)[0], lane, 32)
+    return score[h * MAXC + t].store(total * (1.0 / (Hd ** 0.5)), lane.eq(0)).end(h, t).sink(
+      arg=_fki(f"flash_pall_lds_crosslane_score_{Hq}_{Hd}"))
+  return kernel
+
+def flash_pall_score_state_pv_lifecycle_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Generated PALL lifecycle route: physical q.k score + online state + PV in one tile.
+
+  This keeps the route default-off. It proves generated lifecycle fusion with LDS, cross-lane reduction, and fdot2, but
+  still recomputes q.k per output column because score reuse across the PV column axis is not expressible yet.
+  """
+  if Hd % 64 != 0: raise ValueError(f"PALL lifecycle requires Hd divisible by 64, got {Hd}")
+  G = Hq // Hkv; W = Hd + 2; R = Hd // 32; RP = Hd // 64
+  def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.GLOBAL)
+    lane = UOp.special(32, "lidx0")
+    is_v = d < Hd
+    is_l = d.eq(Hd)
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    r = UOp.range(R, 4, axis_type=AxisType.REDUCE)
+    e = lane * R + r
+    klds = UOp.placeholder((Hd,), dtypes.half, 174, addrspace=AddrSpace.LOCAL)
+    kstage = klds[e].store(cache[((0 * Hkv + kvh) * MAXC + t_safe) * Hd + e].cast(dtypes.half), in_r).end(r)
+    bar = UOp.barrier(UOp.group(kstage))
+    rp = UOp.range(RP, 5, axis_type=AxisType.REDUCE)
+    e2 = rp * 64 + lane * 2
+    g_dot = UOp.range(G, 6)
+    h_dot = kvh * G + g_dot
+    dot = UOp.placeholder((G,), _F32, 175, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 7)
+    dot_init = dot.after(kvh, s, d, j)[zi].store(0.0).end(zi)
+    dot = dot.after(dot_init)
+    qpair = UOp(Ops.STACK, dtypes.half.vec(2), (q[h_dot * Hd + e2].cast(dtypes.half), q[h_dot * Hd + e2 + 1].cast(dtypes.half)))
+    kpair = UOp(Ops.STACK, dtypes.half.vec(2), (klds.after(bar)[e2], klds.after(bar)[e2 + 1]))
+    dot2 = UOp(Ops.CUSTOMI, _F32, (dot.after(rp)[g_dot], qpair, kpair), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
+    dot_upd = dot[g_dot].store(dot2).end(g_dot).end(rp)
+    dot_f = dot.after(dot_upd)
+    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    acc = UOp.placeholder((G,), _F32, 176, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((G,), _F32, 177, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((G,), _F32, 178, addrspace=AddrSpace.REG)
+    za = UOp.range(G, 8)
+    init = acc.after(kvh, s, d)[za].store(0.0).end(za)
+    zl = UOp.range(G, 9)
+    init = den.after(init)[zl].store(0.0).end(zl)
+    zm = UOp.range(G, 10)
+    init = mx.after(init)[zm].store(-float("inf")).end(zm)
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    g_state = UOp.range(G, 11)
+    old_m = mx.after(j)[g_state]
+    sc_lane = in_r.where(dot_f[g_state] * (1.0 / (Hd ** 0.5)), _fc(-float("inf")))
+    sc = _warp_reduce_sum_staged(sc_lane, lane, 32)
+    new_m = old_m.maximum(sc)
+    corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
+    p = in_r.where(_fexp(sc - new_m), _fc(0.0))
+    upd = acc[g_state].store(acc.after(j)[g_state] * corr + p * vd, lane.eq(0))
+    upd = den.after(upd)[g_state].store(den.after(j)[g_state] * corr + p, lane.eq(0))
+    upd = mx.after(upd)[g_state].store(new_m, lane.eq(0)).end(g_state).end(j)
+    g2 = UOp.range(G, 12)
+    af, lf, mf = acc.after(upd), den.after(upd), mx.after(upd)
+    val = is_v.where(af[g2], is_l.where(lf[g2], mf[g2]))
+    return pout[((kvh * G + g2) * S + s) * W + d].store(val, lane.eq(0)).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_pall_score_state_pv_lifecycle_{Hq}_{Hd}"))
   return kernel
 
 def flash_tile_placeholder_kernel(Hd:int, Hq:int, MAXC:int, Tc):
@@ -332,6 +484,32 @@ def flash_state_combine_kernel(Hd:int, Hq:int, S):
     upd = den.after(upd)[0].store(den.after(s)[0] + w * pout[(h * S + s) * W + L_COL]).end(s)
     nf, df = num.after(upd)[0], den.after(upd)[0]
     return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_state_combine_{Hq}_{Hd}"))
+  return kernel
+
+def flash_pall_score_broadcast_combine4_kernel(Hd:int, Hq:int, S):
+  CH = 32
+  def kernel(out:UOp, state:UOp, pv0:UOp, pv1:UOp, pv2:UOp, pv3:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    d = UOp.range(Hd, 1, AxisType.GLOBAL)
+    s = UOp.range(S, 2, axis_type=AxisType.REDUCE)
+    gm = UOp.placeholder((1,), _F32, 179, addrspace=AddrSpace.REG)
+    gm = gm.after(h)[0].set(-float("inf"))
+    gm = gm[0].set(gm.after(s)[0].maximum(state[(h * S + s) * 2 + 1]), end=s)
+    gm_f = gm[0]
+    num = UOp.placeholder((1,), _F32, 180, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 181, addrspace=AddrSpace.REG)
+    num = num.after(h, d)[0].set(0.0)
+    den = den.after(h, d)[0].set(0.0)
+    s2 = UOp.range(S, 3, axis_type=AxisType.REDUCE)
+    c = d % CH
+    pv = (d < CH).where(pv0[(h * S + s2) * CH + c],
+      (d < CH * 2).where(pv1[(h * S + s2) * CH + c],
+      (d < CH * 3).where(pv2[(h * S + s2) * CH + c], pv3[(h * S + s2) * CH + c])))
+    w = _fexp(state[(h * S + s2) * 2 + 1] - gm_f)
+    upd = num[0].store(num.after(s2)[0] + w * pv)
+    upd = den.after(upd)[0].store(den.after(s2)[0] + w * state[(h * S + s2) * 2]).end(s2)
+    return out[h * Hd + d].store(num.after(upd)[0] / den.after(upd)[0]).end(h, d).sink(
+      arg=_fki(f"flash_pall_score_broadcast_combine4_{Hq}_{Hd}"))
   return kernel
 
 def flash_online_state_pv_tile_xlane_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
@@ -630,10 +808,10 @@ def flash_fused_score_state_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, 
     dot_init = dot.after(kvh, s, d, j)[zi].store(0.0).end(zi)
     dot = dot.after(dot_init)
     qv = q[h_dot * Hd + e].cast(_F32)
-    kvv = cache[((0 * Hkv + kvh) * MAXC + t_safe) * Hd + e].cast(_F32)
+    kvv = cache[0, 0, kvh, t_safe, e].cast(_F32)
     dot_upd = dot[g_dot].store(dot.after(e)[g_dot] + qv * kvv).end(g_dot).end(e)
     dot_f = dot.after(dot_upd)
-    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    vd = is_v.where(cache[1, 0, kvh, t_safe, is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
     acc = UOp.placeholder((G,), _F32, 153, addrspace=AddrSpace.REG)
     den = UOp.placeholder((G,), _F32, 154, addrspace=AddrSpace.REG)
     mx = UOp.placeholder((G,), _F32, 155, addrspace=AddrSpace.REG)
@@ -658,6 +836,158 @@ def flash_fused_score_state_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, 
     val = is_v.where(af[g2], is_l.where(lf[g2], mf[g2]))
     return pout[((kvh * G + g2) * S + s) * W + d].store(val).end(g2).end(kvh, s, d).sink(
       arg=_fki(f"flash_fused_score_state_pv_tile_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
+def flash_fused_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Fused score(once) + online-state + d-sharded PV tile (the physically-fast fused tile).
+
+  One 32-lane warp owns one (kvh, split). Per token: lanes e-shard the q.k dot (LDS-staged K + fdot2 +
+  cross-lane reduce -> ONE score per token, reused across all PV columns), online-softmax update, then the
+  same lanes d-shard the PV (each owns Hd/32 output columns). Buffer-identity clean: indexes the raw
+  [2,1,Hkv,MAXC,Hd] cache, no full-cache copy. Output W=Hd+2: [0:Hd) PV partial, Hd l, Hd+1 m -- consumed
+  by flash_state_gmax + flash_state_combine. Occupancy is set by the split count S (see
+  docs/decode-fused-tile-occupancy-roofline-baseline.md); layout validated by
+  extra/qk_decode_attention_fused_xlane_score_pv_microgate.py.
+  """
+  if Hd % 64 != 0: raise ValueError(f"fused xlane score+PV requires Hd%%64==0, got {Hd}")
+  G = Hq // Hkv; W = Hd + 2; LANES = 32; R = Hd // LANES; RP = Hd // 64
+  scale = 1.0 / (Hd ** 0.5)
+  def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    acc = UOp.placeholder((G * R,), _F32, 220, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((G,), _F32, 221, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((G,), _F32, 222, addrspace=AddrSpace.REG)
+    za = UOp.range(G * R, 2)
+    init = acc.after(kvh, s)[za].store(0.0).end(za)
+    zl = UOp.range(G, 3)
+    init = den.after(init)[zl].store(0.0).end(zl)
+    zm = UOp.range(G, 4)
+    init = mx.after(init)[zm].store(-float("inf")).end(zm)
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    j = UOp.range(L, 5, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    klds = UOp.placeholder((Hd,), dtypes.half, 225, addrspace=AddrSpace.LOCAL)
+    k_upcast = bool(getenv("REG_STORE_DEVEC"))
+    rk = UOp.range(R, 6, axis_type=AxisType.UPCAST if k_upcast else AxisType.REDUCE)
+    ek = lane * R + rk
+    kstage_val = cache[0, 0, kvh, t_safe, ek].cast(dtypes.half)
+    kstage = (klds[ek].store(kstage_val).end(rk) if k_upcast else klds[ek].store(kstage_val, in_r).end(rk))
+    bar = UOp.barrier(UOp.group(kstage))
+    g = UOp.range(G, 7)
+    h = kvh * G + g
+    dotp = UOp.placeholder((1,), _F32, 226, addrspace=AddrSpace.REG)
+    dinit = dotp.after(kvh, s, j, g)[0].store(0.0)
+    dotp = dotp.after(dinit)
+    rp = UOp.range(RP, 8, axis_type=AxisType.REDUCE)
+    e2 = rp * 64 + lane * 2
+    qpair = UOp(Ops.STACK, dtypes.half.vec(2), (q[h * Hd + e2].cast(dtypes.half), q[h * Hd + e2 + 1].cast(dtypes.half)))
+    kpair = UOp(Ops.STACK, dtypes.half.vec(2), (klds.after(bar)[e2], klds.after(bar)[e2 + 1]))
+    dot2 = UOp(Ops.CUSTOMI, _F32, (dotp.after(rp)[0], qpair, kpair), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
+    dupd = dotp[0].store(dot2).end(rp)
+    partial = dotp.after(dupd)[0]
+    sc_full = _warp_reduce_sum_staged(partial, lane, LANES) * scale
+    sc = in_r.where(sc_full, _fc(-float("inf")))
+    old_m = mx.after(j)[g]
+    new_m = old_m.maximum(sc)
+    corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
+    p = in_r.where(_fexp(sc - new_m), _fc(0.0))
+    dd = UOp.range(R, 9, axis_type=AxisType.UPCAST if getenv("REG_STORE_DEVEC") else AxisType.REDUCE)
+    d = lane * R + dd
+    vd = cache[1, 0, kvh, t_safe, d].cast(_F32)
+    accu = acc[g * R + dd].store(acc.after(j)[g * R + dd] * corr + p * vd).end(dd)
+    denu = den.after(accu)[g].store(den.after(j)[g] * corr + p)
+    mxu = mx.after(denu)[g].store(new_m).end(g).end(j)
+    af, lf, mf = acc.after(mxu), den.after(mxu), mx.after(mxu)
+    g2 = UOp.range(G, 10)
+    base = ((kvh * G + g2) * S + s) * W
+    dd2 = UOp.range(R, 11)
+    d2 = lane * R + dd2
+    pv = pout[base + d2].store(af[g2 * R + dd2]).end(dd2)
+    ls = pout.after(pv)[base + Hd].store(lf[g2], lane.eq(0))
+    ms = pout.after(ls)[base + (Hd + 1)].store(mf[g2], lane.eq(0)).end(g2)
+    return ms.end(kvh, s).sink(arg=_fki(f"flash_fused_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
+def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Block-tiled generated decode candidate.
+
+  Mirrors the owned tile's topology at the UOp level: one workgroup per (kvh, split), 4 warps per
+  workgroup, one warp per GQA query head, TK=16 K/V rows staged in LDS, then online softmax + d-sharded PV.
+  This is default-off and guarded by extra/qk_decode_attention_block_tile_microgate.py before route use.
+  """
+  if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%%64==0, got {Hd}")
+  G = Hq // Hkv; W = Hd + 2; LANES = 32; WARPS = 4; THREADS = LANES * WARPS; TK = 16
+  if G != WARPS: raise ValueError(f"block tile expects G=={WARPS}, got {G}")
+  R = Hd // LANES; RP = Hd // 64; STAGES = _ceildiv(TK * Hd, THREADS); NB = _ceildiv(L, TK)
+  scale = 1.0 / (Hd ** 0.5)
+  def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
+    from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    warp = UOp.special(WARPS, "lidx1")
+    h = kvh * G + warp
+    tid = warp * LANES + lane
+    ksh = UOp.placeholder((TK * Hd,), dtypes.half, 230, addrspace=AddrSpace.LOCAL)
+    vsh = UOp.placeholder((TK * Hd,), dtypes.half, 231, addrspace=AddrSpace.LOCAL)
+    acc = UOp.placeholder((R,), _F32, 232, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 233, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((1,), _F32, 234, addrspace=AddrSpace.REG)
+    za = UOp.range(R, 2)
+    init = acc.after(kvh, s)[za].store(0.0).end(za)
+    init = den.after(init)[0].store(0.0)
+    init = mx.after(init)[0].store(-float("inf"))
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    b = UOp.range(NB, 3, axis_type=AxisType.REDUCE)
+    st = UOp.range(STAGES, 4, axis_type=AxisType.REDUCE)
+    i = st * THREADS + tid
+    tt_stage = i // Hd
+    e_stage = i % Hd
+    t_stage = s * L + b * TK + tt_stage
+    in_stage = (tt_stage < TK) & (t_stage < Tc)
+    t_safe_stage = in_stage.where(t_stage, t_stage.const_like(0))
+    kstore = ksh[i].store(cache[0, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), i < (TK * Hd))
+    vstore = vsh.after(kstore)[i].store(cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), i < (TK * Hd))
+    bar = UOp.barrier(UOp.group(vstore.end(st)))
+    tt = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
+    t = s * L + b * TK + tt
+    in_r = t < Tc
+    dotp = UOp.placeholder((1,), _F32, 235, addrspace=AddrSpace.REG)
+    dinit = dotp.after(b, tt)[0].store(0.0)
+    dotp = dotp.after(dinit)
+    rp = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
+    e2 = rp * 64 + lane * 2
+    qpair = UOp(Ops.STACK, dtypes.half.vec(2), (q[h * Hd + e2].cast(dtypes.half), q[h * Hd + e2 + 1].cast(dtypes.half)))
+    kbase = tt * Hd + e2
+    kpair = UOp(Ops.STACK, dtypes.half.vec(2), (ksh.after(bar)[kbase], ksh.after(bar)[kbase + 1]))
+    dot2 = UOp(Ops.CUSTOMI, _F32, (dotp.after(rp)[0], qpair, kpair), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
+    dupd = dotp[0].store(dot2).end(rp)
+    partial = dotp.after(dupd)[0]
+    sc_full = _warp_reduce_sum_staged(partial, lane, LANES) * scale
+    sc = in_r.where(sc_full, _fc(-float("inf")))
+    old_m = mx.after(tt)[0]
+    new_m = old_m.maximum(sc)
+    corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
+    p = in_r.where(_fexp(sc - new_m), _fc(0.0))
+    dd = UOp.range(R, 7)
+    d = lane * R + dd
+    vd = vsh.after(bar)[tt * Hd + d].cast(_F32)
+    accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
+    denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
+    mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
+    af, lf, mf = acc.after(mxu), den.after(mxu), mx.after(mxu)
+    base = (h * S + s) * W
+    dd2 = UOp.range(R, 8)
+    d2 = lane * R + dd2
+    pv = pout[base + d2].store(af[dd2]).end(dd2)
+    ls = pout.after(pv)[base + Hd].store(lf[0], lane.eq(0))
+    ms = pout.after(ls)[base + (Hd + 1)].store(mf[0], lane.eq(0))
+    return ms.end(kvh, s).sink(arg=_fki(f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
   return kernel
 
 def flash_split_ml_gmax_kernel(Hq:int, S):
@@ -926,8 +1256,76 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
   q_f = q.reshape(Hq * Hd)
   cache_f = cache_kv.reshape(2 * Hkv * MAXC * Hd)
-  score_kernel = flash_score_whole_cache_xlane_kernel(Hd, Hq, Hkv, MAXC, Tc_u) if use_xlane else \
-    flash_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u, use_vdot2=use_vdot2)
+  if getenv("DECODE_ATTN_PHYSICAL_TILE_SCORE_BROADCAST_LIFECYCLE", 0):
+    from extra.qk_decode_physical_tile_score_broadcast_kernels import score_once_state_kernel, score_broadcast_pv_cols_kernel
+    if getenv("DECODE_ATTN_SCORE_BROADCAST_NO_GRAPH", 1): _install_score_broadcast_no_graph_prefixes()
+    chunks = getenv("DECODE_ATTN_SCORE_BROADCAST_CHUNKS", 4)
+    if chunks not in (1, 2, 3, 4): raise ValueError(f"DECODE_ATTN_SCORE_BROADCAST_CHUNKS must be 1, 2, 3, or 4, got {chunks}")
+    if chunks != 4 and not getenv("DECODE_ATTN_SCORE_BROADCAST_DIAGNOSTIC_CHUNKS", 0):
+      raise RuntimeError("DECODE_ATTN_SCORE_BROADCAST_CHUNKS<4 is diagnostic-only and cannot produce a full-width correct route")
+    Tc_route = Tc_u
+    S_route = Smax
+    if getenv("DECODE_ATTN_SCORE_BROADCAST_SCRATCH", 1):
+      state_s, pv0_s, pv1_s, pv2_s, pv3_s, out_s = _score_broadcast_scratch(q.device, Hq, Hd, Hkv, MAXC, L, Smax)
+    else:
+      state_s = Tensor.empty(Hq * Smax * 2, dtype=_F32, device=q.device)
+      pv0_s = Tensor.empty(Hq * Smax * 32, dtype=_F32, device=q.device)
+      pv1_s = Tensor.empty(Hq * Smax * 32, dtype=_F32, device=q.device)
+      pv2_s = Tensor.empty(Hq * Smax * 32, dtype=_F32, device=q.device)
+      pv3_s = Tensor.empty(Hq * Smax * 32, dtype=_F32, device=q.device)
+      out_s = Tensor.empty(Hq * Hd, dtype=_F32, device=q.device)
+    state = state_s.custom_kernel(q_f, cache_f,
+      fxn=score_once_state_kernel(Hd, Hq, Hkv, MAXC, L, S_route, Tc_route))[0]
+    pv0 = pv0_s.custom_kernel(state, q_f, cache_f,
+      fxn=score_broadcast_pv_cols_kernel(Hd, Hq, Hkv, MAXC, L, S_route, Tc_route, 32, 0))[0]
+    pv1 = pv1_s.custom_kernel(state, q_f, cache_f,
+      fxn=score_broadcast_pv_cols_kernel(Hd, Hq, Hkv, MAXC, L, S_route, Tc_route, 32, 32))[0] if chunks >= 2 else pv0
+    pv2 = pv2_s.custom_kernel(state, q_f, cache_f,
+      fxn=score_broadcast_pv_cols_kernel(Hd, Hq, Hkv, MAXC, L, S_route, Tc_route, 32, 64))[0] if chunks >= 3 else pv1
+    pv3 = pv3_s.custom_kernel(state, q_f, cache_f,
+      fxn=score_broadcast_pv_cols_kernel(Hd, Hq, Hkv, MAXC, L, S_route, Tc_route, 32, 96))[0] if chunks >= 4 else pv2
+    out = out_s.custom_kernel(state, pv0, pv1, pv2, pv3,
+      fxn=flash_pall_score_broadcast_combine4_kernel(Hd, Hq, S_route))[0]
+    return out.reshape(Hq, Hd)
+  if getenv("DECODE_ATTN_PHYSICAL_TILE_PALL_LIFECYCLE", 0):
+    W = Hd + 2
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(q_f, cache_f,
+      fxn=flash_pall_score_state_pv_lifecycle_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, S))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, S))[0]
+    return out.reshape(Hq, Hd)
+  if getenv("DECODE_ATTN_FUSED_SCORE_STATE_PV_TILE", 0):
+    W = Hd + 2
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(q_f, cache_kv,
+      fxn=flash_fused_score_state_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, S))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, S))[0]
+    return out.reshape(Hq, Hd)
+  if getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE", 0):
+    # physically-fast fused tile: score-once (e-shard fdot2 + cross-lane) + d-shard PV, buffer-identity
+    # raw cache_kv. Split count S sets occupancy (docs/decode-fused-tile-occupancy-roofline-baseline.md):
+    # default 48 == 4*CU/Hkv == owned route's DECODE_ATTN_AMDGCN_S -> ~4 workgroups/CU.
+    W2 = Hd + 2
+    # L is concrete (from MAXC + target split count); S is symbolic in Tc_u (mirrors the other routes,
+    # which must not Python-eval the JIT-bound context length). target_s=48 == owned DECODE_ATTN_AMDGCN_S.
+    target_s = getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_S", 48)
+    l_route = max(1, _ceildiv(MAXC, target_s))
+    s_route = (Tc_u + l_route - 1) // l_route
+    smax_route = _ceildiv(MAXC, l_route)
+    tile_builder = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel if getenv("DECODE_ATTN_BLOCK_TILE", 0) else \
+      flash_fused_xlane_score_pv_tile_whole_cache_kernel
+    po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,
+      fxn=tile_builder(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, s_route))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, s_route))[0]
+    return out.reshape(Hq, Hd)
+  if getenv("DECODE_ATTN_PHYSICAL_TILE_PALL_SCORE", 0):
+    score_kernel = flash_pall_lds_crosslane_fdot2_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u)
+  elif getenv("DECODE_ATTN_PHYSICAL_TILE_P1_SCORE", 0):
+    score_kernel = flash_p1_crosslane_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u)
+  else:
+    score_kernel = flash_score_whole_cache_xlane_kernel(Hd, Hq, Hkv, MAXC, Tc_u) if use_xlane else \
+      flash_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u, use_vdot2=use_vdot2)
   score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f, fxn=score_kernel)[0]
   if getenv("DECODE_ATTN_TILE_PLACEHOLDER", 0):
     score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(score_f, fxn=flash_tile_placeholder_kernel(Hd, Hq, MAXC, Tc_u))[0]

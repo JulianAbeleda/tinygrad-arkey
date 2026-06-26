@@ -15,7 +15,8 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-decode-attention-fused-xlane-score-pv-route"
-TARGET = "flash_fused_xlane_score_pv_tile_whole_cache_32_128"
+TARGET = "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128" if os.environ.get("DECODE_ATTN_BLOCK_TILE", "0") != "0" else \
+  "flash_fused_xlane_score_pv_tile_whole_cache_32_128"
 CU_COUNT = 96
 HKV = 8
 
