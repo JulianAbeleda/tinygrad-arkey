@@ -727,4 +727,7 @@ P7 attempted `flash_online_state_pv_tile_xlane_whole_cache_32_128`. Verdict: `ON
 ### Decode attention P8 isolated numeric gate
 
 P8 complete. `extra/qk_decode_attention_online_state_pv_p8_numeric.py` produced `ONLINE_STATE_PV_P8_FAIL__NAN`, artifact `bench/qk-decode-attention-online-state-pv-p8-numeric/latest.json`. The microgate compared P5 scalar-state tile vs P7 x-lane tile on deterministic tensors. Both scalar and x-lane active outputs showed NaNs; errors were `m=0.0394`, `l=115589.55`, `pv=112063.36`, `out=1.0282` at `Tc=128,L=64`. During P8, invalid-token guards were added to scalar and x-lane online updates, and the microcase was changed to exact split length to avoid tail invalids; NaNs still appear. Conclusion: do not rerun P7/W==D. Next step is P9 scalar online-state tile standalone numeric proof against NumPy reference, before returning to x-lane.
+### Decode attention P9 scalar numeric proof scope
+
+Scoped P9 in `docs/decode-attention-online-state-pv-tile-p9-scalar-numeric-scope.md`. Purpose: prove `flash_online_state_pv_tile_whole_cache_32_128` against NumPy before any more x-lane/W==D work. Required cases: exact split `Tc=128,L=64`, tail split `Tc=130,L=64`, one split `Tc=32,L=64`, multi split `Tc=256,L=64` at target shape `Hq=32,Hkv=8,Hd=128,MAXC=512`. Compare generated score, per-split `m`, `l`, PV, and final output. Failure labels distinguish score/state/output/NaN. If P9 fails, fix scalar online-state recurrence first; if P9 passes, return to x-lane numeric debugging.
 

@@ -68,6 +68,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-online-state-pv-tile-p7-xlane-result.md` | P7 token-sharded x-lane online-state+PV route result |
 | `docs/decode-attention-online-state-pv-tile-p8-numeric-scope.md` | P8 scope for isolated scalar vs x-lane numeric gate |
 | `docs/decode-attention-online-state-pv-tile-p8-numeric-result.md` | P8 isolated numeric result for x-lane online merge |
+| `docs/decode-attention-online-state-pv-tile-p9-scalar-numeric-scope.md` | P9 exhaustive scalar online-state numeric proof scope |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
