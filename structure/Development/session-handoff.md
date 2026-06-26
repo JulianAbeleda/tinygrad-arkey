@@ -25,6 +25,7 @@ Source of truth:
 - `docs/decode-attention-a3-2b-xlane-score-result.md`
 - `docs/decode-attention-a3-3-lds-tile-lifecycle-result.md`
 - `docs/decode-attention-a3-4-tile-combine-lifecycle-result.md`
+- `docs/decode-attention-a3-5-minimal-tile-placeholder-result.md`
 - `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
@@ -46,6 +47,7 @@ Current baseline snapshot:
 - Latest decode attention A3.2b x-lane score gate: `bench/qk-decode-attention-a3-2b-xlane-score/latest.json` (`A3_2B_CROSS_LANE_NO_TRANSFER`).
 - Latest decode attention A3.3 LDS/tile lifecycle gate: `bench/qk-decode-attention-a3-3-lds-tile/latest.json` (`A3_3_BLOCKED_BY_ROUTE_BINDING`).
 - Latest decode attention A3.4 TILE+COMBINE lifecycle gate: `bench/qk-decode-attention-a3-4-tile-combine/latest.json` (`A3_4_ROUTE_BINDING_MISSING`).
+- Latest decode attention A3.5 minimal tile placeholder gate: `bench/qk-decode-attention-a3-5-tile-placeholder/latest.json` (`A3_5_TILE_PLACEHOLDER_NO_TRANSFER`).
 - GEMV generated skeleton: `q4k_gemv_generated_skeleton` (`Q4K_GEMV_SCHEDULER=2`) is registered for attribution only; expected to fail W==D speed until codegen representation lands.
 - GEMV G2.0-G2.2 representation result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` (`extra/qk_gemv_g2_lanemap.py`, `extra/qk_gemv_g2_representation_probe.py`, `bench/qk-gemv-g2-representation-probe/latest.json`). UOp/RANGE can express `lane = block_group * 8 + word_col`, the minimal Q4_K LaneMap is bridge-independent/serializable, and the generated packed-word index matches the numeric reference.
 - GEMV G2.3 runtime binding result: `SEARCH_GENERATED_WD_FAIL` (`Q4K_GEMV_SCHEDULER=5`, `q4k_scheduler_matvec_lanemap`). It is token-correct and route-clean, but only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`.
@@ -66,7 +68,8 @@ Current baseline snapshot:
 - Decode attention A3.2b x-lane score wiring: complete. Verdict `A3_2B_CROSS_LANE_NO_TRANSFER` (`extra/qk_decode_attention_a3_2b_xlane_score_gate.py`, `bench/qk-decode-attention-a3-2b-xlane-score/latest.json`, `docs/decode-attention-a3-2b-xlane-score-result.md`). `DECODE_ATTN_SCORE_XLANE=1` captures `flash_score_whole_cache_xlane_32_128` and keeps the A2 route clean, but W==D collapses to `6.0 / 3.2 / 1.5 / 0.7` tok/s at ctx `512 / 1024 / 2048 / 4096`; no promotion.
 - Decode attention A3.3 LDS/tile lifecycle gate: complete. Verdict `A3_3_BLOCKED_BY_ROUTE_BINDING` (`extra/qk_decode_attention_a3_3_lds_tile_gate.py`, `bench/qk-decode-attention-a3-3-lds-tile/latest.json`, `docs/decode-attention-a3-3-lds-tile-lifecycle-result.md`). The repo has standalone generated LDS flash-attention evidence in `extra/gemm/amd_flash_attention.py` (`AddrSpace.LOCAL`, barriers, `SHAPED_WMMA`, cross-lane), but `DECODE_ATTN_LDS_TILE=1` still routes the same A2 programs and no decode-bound `flash_*lds*`/`flash_*tile*` candidate appears. No W==D candidate benchmark was run because no LDS/tile route was bound.
 - Decode attention A3.4 TILE+COMBINE lifecycle gate: complete. Verdict `A3_4_ROUTE_BINDING_MISSING` (`extra/qk_decode_attention_a3_4_tile_combine_gate.py`, `bench/qk-decode-attention-a3-4-tile-combine/latest.json`, `docs/decode-attention-a3-4-tile-combine-lifecycle-result.md`, manifest `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json`). The manifest now treats tile program, combine program, split policy, intermediates, materialization guarantees, and primitive requirements as one searchable candidate bundle. A3.4 still routes A2 programs: score/metadata/partial/combine are present, but no generated `flash_*tile*` program is bound, so W==D candidate benchmark is skipped.
-- Next executable step: A3.5 build the minimal generated tile placeholder route. It does not need to be fast first; it must create a named generated tile program, preserve A2 whole-cache/no-`E_49152` hygiene, match tokens, and let the lifecycle gate move from route-binding missing to measurable transfer/no-transfer.
+- Decode attention A3.5 minimal tile placeholder: complete. Verdict `A3_5_TILE_PLACEHOLDER_NO_TRANSFER` (`extra/qk_decode_attention_a3_5_tile_placeholder_gate.py`, `bench/qk-decode-attention-a3-5-tile-placeholder/latest.json`, `docs/decode-attention-a3-5-minimal-tile-placeholder-result.md`). `DECODE_ATTN_TILE_PLACEHOLDER=1` inserts `flash_tile_placeholder_32_128`; route remains clean, tokens match, and the TILE+COMBINE bundle is bound. W==D is slower than A2: `77.6 / 74.5 / 68.0 / 58.1` tok/s vs A2 `78.5 / 75.9 / 69.9 / 60.7` at ctx `512 / 1024 / 2048 / 4096`.
+- Next executable step: A3.6 replace the identity placeholder with the smallest real generated tile payload. It should fuse at least score plus one downstream lifecycle responsibility, such as local max/metadata or partial PV production, while preserving A2 hygiene and bundle attribution.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
