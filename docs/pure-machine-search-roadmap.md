@@ -72,6 +72,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-online-state-pv-tile-p9-scalar-numeric-result.md` | P9 scalar online-state numeric proof result |
 | `docs/decode-attention-online-state-pv-tile-p10-xlane-output-result.md` | P10 isolated x-lane final-output numeric result |
 | `docs/decode-attention-online-state-pv-tile-p11-xlane-merge-result.md` | P11 synthetic x-lane online-softmax merge microproof |
+| `docs/decode-attention-online-state-pv-tile-p12-xlane-components-result.md` | P12 component test for max/sum/gated-store/LSE x-lane merge |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
