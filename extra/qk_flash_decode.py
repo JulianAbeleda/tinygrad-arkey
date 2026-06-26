@@ -880,6 +880,16 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
     dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
     out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
     return out.reshape(Hq, Hd)
+  if getenv("DECODE_ATTN_FUSED_PV_TILE", 0):
+    W = Hd + 1
+    pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f,
+      fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
+    po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, cache_f,
+      fxn=flash_fused_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
+    dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
+    return out.reshape(Hq, Hd)
   use_online_state_pv_tile_xlane = getenv("DECODE_ATTN_ONLINE_STATE_PV_TILE_XLANE", 0)
   use_online_state_pv_tile = getenv("DECODE_ATTN_ONLINE_STATE_PV_TILE", 0) or use_online_state_pv_tile_xlane
   use_tile_score_max = getenv("DECODE_ATTN_TILE_SCORE_MAX", 0) or getenv("DECODE_ATTN_TILE_PROB", 0)
