@@ -1,12 +1,25 @@
 {
   "date": "2026-06-26",
-  "timestamp": "20260626-004621",
-  "verdict": "FUSED_TILE_LIFECYCLE_BLOCKED__ESTIMATE_SCOPE_STACK",
+  "timestamp": "20260626-004913",
+  "verdict": "FUSED_TILE_LIFECYCLE_SYNTHETIC_NUMERIC_PASS__ATTENTION_REPRO_STRONGER",
   "minimal_repro": {
     "checked": true,
-    "verdict": "FUSED_TILE_LIFECYCLE_BLOCKED__ESTIMATE_SCOPE_STACK",
+    "verdict": "FUSED_TILE_LIFECYCLE_SYNTHETIC_NUMERIC_PASS__ATTENTION_REPRO_STRONGER",
     "classified": true,
     "source": "attention_builder_blocker_artifact",
+    "synthetic": {
+      "checked": true,
+      "compiled": true,
+      "pass": true,
+      "max_abs": 1.862645149230957e-09,
+      "rmse": 7.604217255874346e-10,
+      "shape": {
+        "D": 4,
+        "J": 3,
+        "E": 5,
+        "W": 6
+      }
+    },
     "known_failure_signature": {
       "exception": "pop from empty list",
       "exception_type": "IndexError",
@@ -38,5 +51,5 @@
       "W==D promotion"
     ]
   },
-  "next_step": "Build a smaller synthetic repro that fails without attention-specific code, then fix or encapsulate the lowering pattern."
+  "next_step": "Synthetic single-tile lifecycle passes; build the next isolator with GLOBAL tile axes and G-vector recurrence state to find the attention-specific lowering delta."
 }
