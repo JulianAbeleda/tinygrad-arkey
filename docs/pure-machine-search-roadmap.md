@@ -65,6 +65,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-online-state-pv-tile-p5-result.md` | P5 structural online-state+PV tile route result |
 | `docs/decode-attention-online-state-pv-tile-p6-lowering-bind-scope.md` | P6 scope for binding cross-lane/packed-dot lowerings to online-state tile |
 | `docs/decode-attention-online-state-pv-tile-p6-lowering-bind-result.md` | P6 result: lowering-bind decision after P5 dataflow rewrite |
+| `docs/decode-attention-online-state-pv-tile-p7-xlane-result.md` | P7 token-sharded x-lane online-state+PV route result |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
