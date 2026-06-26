@@ -46,6 +46,11 @@ def linearize(sink:UOp) -> list[UOp]:
       if out_degree[v] == 0: heapq.heappush(heap, (-nkey[v],v))
   newlst = newlst[::-1]
 
+  if getenv("SCHED_LIST"):
+    # latency-aware list-scheduling post-pass (default-off codegen scheduling capability)
+    from extra.qk_codegen_list_scheduler import list_schedule
+    newlst = list_schedule(newlst)
+
   if getenv("DEBUG_LINEARIZE"):
     for i,u in enumerate(newlst):
       print(f"{i:4d} {str(u.op):20s} {multirange_str(u.ranges, color=True, pad=10)} {priorities[u]}")
