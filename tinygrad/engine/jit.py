@@ -1,5 +1,5 @@
 from typing import TypeVar, Generic, Callable, Any
-import functools, collections
+import functools, collections, os
 from tinygrad.tensor import Tensor
 from tinygrad.helpers import flatten, merge_dicts, DEBUG, Context, BEAM, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ
 from tinygrad.device import Buffer, Compiled, Device, MultiBuffer
@@ -28,6 +28,16 @@ def create_graph_call(batch:list[UOp]) -> UOp:
   cf = UOp(Ops.CUSTOM_FUNCTION, dtypes.void, src=(UOp(Ops.LINEAR, src=tuple(batch)),), arg="graph")
   return cf.call(*input_list, metadata=tuple(m for si in batch for m in si.arg.metadata))
 
+def _jit_no_graph_kernel_prefixes() -> tuple[str, ...]:
+  # Read fresh: helpers.getenv is cached, while route-local graph barriers are installed after process start.
+  prefixes = os.environ.get("JIT_NO_GRAPH_KERNEL_PREFIXES", "")
+  return tuple(p for p in str(prefixes).split(",") if p)
+
+def _should_skip_graph_for_prefix(si:UOp) -> bool:
+  if si.src[0].op is not Ops.PROGRAM: return False
+  prefixes = _jit_no_graph_kernel_prefixes()
+  return bool(prefixes and si.src[0].arg.name.startswith(prefixes))
+
 def graph_split_rewrite(linear:UOp, max_batch_size:int=0) -> UOp:
   new_src: list[UOp] = []
   current_batch: list[UOp] = []
@@ -44,6 +54,11 @@ def graph_split_rewrite(linear:UOp, max_batch_size:int=0) -> UOp:
 
   for si in linear.src:
     if si.src[0].op is Ops.SLICE: continue
+    if _should_skip_graph_for_prefix(si):
+      flush_batch()
+      new_src.append(si)
+      current_batch_devs = []
+      continue
 
     devs = dedup([Device[x] for b in si.src[1:] if b.op is not Ops.BIND for x in (b.device if isinstance(b.device, tuple) else (b.device,))])
     graph_t = graph_class(devs[0]) if devs[0].graph is not None else None

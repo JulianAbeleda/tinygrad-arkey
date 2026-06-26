@@ -2,7 +2,7 @@ import time, inspect
 from collections import deque
 from tinygrad.uop.ops import UOp, Ops, UOpMetaClass, track_rewrites, graph_rewrite, gate_kernel_sink, KernelInfo
 from tinygrad.uop.spec import type_verify, spec_tensor
-from tinygrad.helpers import DEBUG, cpu_profile, TracingKey, SPEC, pluralize, SCACHE, BASEDIR, partition
+from tinygrad.helpers import DEBUG, cpu_profile, TracingKey, SPEC, pluralize, SCACHE, BASEDIR, partition, getenv
 
 # **** schedule linearizer
 
@@ -130,7 +130,8 @@ def create_linear_with_vars(big_sink:UOp) -> tuple[UOp, dict[str, int]]:
   used_vars = set().union(*[{v.expr for v in si.src[0].variables()} for si in linear.src])
   # get var_vals
   var_vals: dict[str, int] = {}
-  for b in big_sink.src[1:]:
+  bind_source = big_sink.toposort() if getenv("SCHEDULE_BIND_TOPOSORT", 0) else big_sink.src[1:]
+  for b in bind_source:
     if b.op is Ops.BIND:
       nm = b.src[0].expr
       if nm not in used_vars: continue
