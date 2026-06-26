@@ -1,13 +1,39 @@
 {
   "date": "2026-06-26",
-  "timestamp": "20260626-002809",
-  "verdict": "FUSED_PV_TILE_BLOCKED__NO_GENERATED_TILE_BUILDER",
+  "timestamp": "20260626-003020",
+  "verdict": "FUSED_PV_TILE_STANDALONE_NUMERIC_PASS__ROUTE_GATE_REQUIRED",
   "target": {
     "builder": "flash_fused_pv_tile_whole_cache_kernel",
     "program": "flash_fused_pv_tile_whole_cache_32_128",
-    "exists": false,
-    "marker_counts": {},
-    "selected_source_lines": []
+    "exists": true,
+    "marker_counts": {
+      "axis_global": 2,
+      "axis_local": 1,
+      "axis_reduce": 1,
+      "special_lane": 0,
+      "warp_reduce_sum": 0,
+      "warp_reduce_max": 0,
+      "reg_placeholder": 1,
+      "local_placeholder": 0,
+      "d_global_refuted_shape": 0,
+      "d_local_required_shape": 1,
+      "sink": 1
+    },
+    "selected_source_lines": [
+      "1: def flash_fused_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):",
+      "21:   def kernel(pout:UOp, pm:UOp, score:UOp, cache:UOp) -> UOp:",
+      "22:     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)",
+      "23:     s = UOp.range(S, 1, AxisType.GLOBAL)",
+      "24:     d = UOp.range(W, 2, AxisType.LOCAL)",
+      "26:     j = UOp.range(L, 3, axis_type=AxisType.REDUCE)",
+      "31:     c = UOp.placeholder((G,), _F32, 151, addrspace=AddrSpace.REG)",
+      "32:     zi = UOp.range(G, 4)",
+      "33:     c = c.after(c[zi].store(0.0).end(zi))",
+      "34:     g = UOp.range(G, 5)",
+      "37:     acc = c[g].store(c.after(j)[g] + p * vd).end(g).end(j)",
+      "38:     g2 = UOp.range(G, 6)",
+      "40:     return pout[((kvh * G + g2) * S + s) * W + d].store(fin[g2]).end(g2).end(kvh, s, d).sink("
+    ]
   },
   "refuted_current_route": {
     "builder": "flash_xlane_pv_from_m_kernel",
@@ -55,6 +81,27 @@
       "cross-lane score reduction",
       "vectorized loads or packed-dot lowering"
     ]
+  },
+  "standalone_numeric": {
+    "checked": true,
+    "shape": {
+      "Hq": 32,
+      "Hkv": 8,
+      "Hd": 128,
+      "MAXC": 256,
+      "L": 128,
+      "Tc": 192,
+      "S": 2,
+      "W": 129
+    },
+    "max_abs": 1.9073486328125e-05,
+    "rmse": 5.607625439552066e-07,
+    "rel_rmse": 1.7886482402309317e-07,
+    "pass": true,
+    "thresholds": {
+      "max_abs": 0.0005,
+      "rel_rmse": 5e-05
+    }
   },
   "owned_oracle_facts": {
     "available": true,
@@ -105,5 +152,5 @@
       "W==D artifact shows catastrophic candidate tok/s collapse, so this is not async timing noise"
     ]
   },
-  "decision": "Do not route or W==D yet. Build the generated fused PV tile builder first, then extend this gate with standalone numeric comparison."
+  "decision": "Standalone generated fused PV tile passed numeric gate. Next step is default-off model route wiring and route/materialization gate."
 }

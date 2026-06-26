@@ -556,6 +556,49 @@ def flash_xlane_pv_from_m_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc
       arg=_fki(f"flash_xlane_pv_from_m_{Hq}_{Hd}"))
   return kernel
 
+def flash_fused_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Generated fused PV tile candidate.
+
+  This is the first standalone rung for the pure-generated fused-PV project. It
+  is deliberately not wired into decode routing yet. Compared with the refuted
+  split x-lane PV route, the important structural change is that output column
+  d is LOCAL/cooperative, not a GLOBAL output-column grid axis. The kernel owns
+  a whole (kv-head, split) tile, reuses V for the G query heads in registers,
+  and emits compact augmented PV partials: columns [0:Hd) are PV, column Hd is
+  the denominator contribution.
+
+  Inputs:
+    pm    : [Hq, S] per-split max
+    score : [Hq, MAXC] precomputed q.k scores
+    cache : whole cache [2, 1, Hkv, MAXC, Hd] flattened
+
+  Output:
+    pout  : [Hq, S, Hd+1]
+  """
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(pout:UOp, pm:UOp, score:UOp, cache:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)
+    is_v = d < Hd
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    c = UOp.placeholder((G,), _F32, 151, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4)
+    c = c.after(c[zi].store(0.0).end(zi))
+    g = UOp.range(G, 5)
+    h = kvh * G + g
+    p = in_r.where(_fexp(score[h * MAXC + t_safe] - pm[h * S + s]), _fc(0.0))
+    acc = c[g].store(c.after(j)[g] + p * vd).end(g).end(j)
+    g2 = UOp.range(G, 6)
+    fin = c.after(acc)
+    return pout[((kvh * G + g2) * S + s) * W + d].store(fin[g2]).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_fused_pv_tile_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
 def flash_split_ml_gmax_kernel(Hq:int, S):
   def kernel(gm:UOp, pm:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
