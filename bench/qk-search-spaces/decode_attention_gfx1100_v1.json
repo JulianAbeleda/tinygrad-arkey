@@ -76,5 +76,15 @@
     "promotion_status": "attribution_only",
     "decision_rule": "Pass only if generated flash programs fire, owned_flash_* programs do not fire, E_49152 is absent, KV buffer identity is preserved, and tokens match the owned baseline.",
     "decision": "Do not promote. A1 proves generated route ownership and token correctness, but it reintroduces E_49152 through sliced KV inputs. Next target is generated whole-cache KV skeleton."
+  },
+  "wholecache_skeleton_a2_2026_06_25": {
+    "candidate_id": "decode_attention_generated_wholecache_skeleton",
+    "flag": "DECODE_ATTN_GENERATED_WHOLECACHE=1",
+    "tool": "extra/qk_decode_attention_purity_capture.py --a2",
+    "artifact": "bench/qk-decode-attention-wholecache-skeleton/latest.json",
+    "verdict": "DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN",
+    "search_generation_status": "generated_skeleton",
+    "promotion_status": "attribution_only",
+    "decision": "A2 is the lifecycle-clean generated decode-attention baseline: generated flash programs fire, owned_flash_* programs do not fire, E_49152 is absent, selected-route buffer identity is preserved, and tokens match. Do not promote for speed; use for A3 primitive lowering."
   }
 }

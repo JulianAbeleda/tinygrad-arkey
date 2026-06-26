@@ -15,6 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-decode-attention-purity"
 A1_OUT = ROOT / "bench/qk-decode-attention-generated-skeleton"
+A2_OUT = ROOT / "bench/qk-decode-attention-wholecache-skeleton"
 
 
 def _program_names(captured) -> list[str]:
@@ -28,11 +29,16 @@ def capture(mode: str="baseline") -> dict[str, Any]:
 
   os.environ.setdefault("DECODE_ATTN_KV_IDENTITY", "1")
   os.environ.setdefault("DECODE_ATTN_AMDGCN_TILE", "1")
-  if mode == "a1":
+  if mode == "a2":
+    os.environ["DECODE_ATTN_GENERATED_WHOLECACHE"] = "1"
+    os.environ["DECODE_ATTN_GENERATED_SKELETON"] = "0"
+  elif mode == "a1":
     os.environ["DECODE_ATTN_GENERATED_SKELETON"] = "1"
+    os.environ["DECODE_ATTN_GENERATED_WHOLECACHE"] = "0"
     os.environ.setdefault("DECODE_ATTN_GENERATED_SKELETON_VARIANT", "gqa_coop_vec")
   else:
     os.environ["DECODE_ATTN_GENERATED_SKELETON"] = "0"
+    os.environ["DECODE_ATTN_GENERATED_WHOLECACHE"] = "0"
   m, tok = _setup_model()
   toks, captured, _step, _v, _temp = capture_decode(m, tok)
   names = _program_names(captured)
@@ -40,21 +46,22 @@ def capture(mode: str="baseline") -> dict[str, Any]:
   owned_tile = sum(n == "owned_flash_tile_gqa_whole" or n.startswith("owned_flash_tile_gqa_whole") for n in names)
   owned_combine = sum(n.startswith("owned_flash_combine") for n in names)
   generated_attention = sum(n.startswith("flash_") for n in names)
-  generated_skeleton_selected = mode == "a1" and os.environ.get("DECODE_ATTN_GENERATED_SKELETON") == "1"
+  generated_skeleton_selected = mode in ("a1", "a2") and (
+    os.environ.get("DECODE_ATTN_GENERATED_SKELETON") == "1" or os.environ.get("DECODE_ATTN_GENERATED_WHOLECACHE") == "1")
   materialization = check_materialization(captured)
   route_fire = check_route_fire(captured, "owned_flash_tile_gqa_whole")
   selected_route_buffer_identity = not materialization["E_49152_present"] and len(materialization.get("full_maxc_copy_kernels", [])) == 0
-  if mode == "a1":
+  if mode in ("a1", "a2"):
     if materialization["E_49152_present"]:
-      verdict = "DECODE_ATTENTION_A1_FAIL__E_49152_REINTRODUCED"
+      verdict = f"DECODE_ATTENTION_{mode.upper()}_FAIL__E_49152_REINTRODUCED"
     elif owned_tile > 0:
-      verdict = "DECODE_ATTENTION_A1_FAIL__OWNED_TILE_STILL_FIRES"
+      verdict = f"DECODE_ATTENTION_{mode.upper()}_FAIL__OWNED_TILE_STILL_FIRES"
     elif owned_combine > 0:
-      verdict = "DECODE_ATTENTION_A1_PARTIAL__OWNED_COMBINE_REMAINS"
+      verdict = f"DECODE_ATTENTION_{mode.upper()}_PARTIAL__OWNED_COMBINE_REMAINS"
     elif generated_attention > 0:
-      verdict = "DECODE_ATTENTION_A1_GENERATED_SKELETON_ROUTE_CLEAN"
+      verdict = "DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN" if mode == "a2" else "DECODE_ATTENTION_A1_GENERATED_SKELETON_ROUTE_CLEAN"
     else:
-      verdict = "DECODE_ATTENTION_A1_FAIL__GENERATED_ROUTE_NOT_CAPTURED"
+      verdict = f"DECODE_ATTENTION_{mode.upper()}_FAIL__GENERATED_ROUTE_NOT_CAPTURED"
   elif owned_tile > 0 and owned_combine > 0 and not materialization["E_49152_present"]:
     verdict = "DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE"
   elif generated_attention > 0 and owned_tile == 0 and owned_combine == 0 and not materialization["E_49152_present"]:
@@ -66,7 +73,8 @@ def capture(mode: str="baseline") -> dict[str, Any]:
     "timestamp": time.strftime("%Y%m%d-%H%M%S"),
     "mode": mode,
     "verdict": verdict,
-    "selected_candidate": "decode_attention_generated_skeleton" if generated_skeleton_selected else "owned_flash_tile_gqa_whole",
+    "selected_candidate": (("decode_attention_generated_wholecache_skeleton" if mode == "a2" else "decode_attention_generated_skeleton")
+                           if generated_skeleton_selected else "owned_flash_tile_gqa_whole"),
     "tokens_sample": toks,
     "route_counts": {
       "owned_flash_tile_gqa_whole": owned_tile,
@@ -76,7 +84,8 @@ def capture(mode: str="baseline") -> dict[str, Any]:
     "route_fire": route_fire,
     "materialization": {**materialization, "selected_route_buffer_identity": selected_route_buffer_identity},
     "top_program_counts": counts.most_common(40),
-    "classification": ("A1 generated skeleton route capture." if mode == "a1" else
+    "classification": (("A2 generated whole-cache skeleton route capture." if mode == "a2" else
+                        "A1 generated skeleton route capture.") if mode in ("a1", "a2") else
       "Decode attention is still backed by owned AMDGCN tile + combine programs; GEMV purity is complete, attention purity is next."),
   }
 
@@ -86,9 +95,14 @@ def _run_child(mode: str) -> dict[str, Any]:
          "QK_DECODE_ATTENTION_CAPTURE_MODE": mode}
   if mode == "a1":
     env["DECODE_ATTN_GENERATED_SKELETON"] = "1"
+    env["DECODE_ATTN_GENERATED_WHOLECACHE"] = "0"
     env.setdefault("DECODE_ATTN_GENERATED_SKELETON_VARIANT", "gqa_coop_vec")
+  elif mode == "a2":
+    env["DECODE_ATTN_GENERATED_SKELETON"] = "0"
+    env["DECODE_ATTN_GENERATED_WHOLECACHE"] = "1"
   else:
     env["DECODE_ATTN_GENERATED_SKELETON"] = "0"
+    env["DECODE_ATTN_GENERATED_WHOLECACHE"] = "0"
   r = subprocess.run([sys.executable, str(Path(__file__).resolve())], cwd=ROOT, env=env,
                      capture_output=True, text=True)
   if r.returncode != 0:
@@ -99,31 +113,33 @@ def _run_child(mode: str) -> dict[str, Any]:
   raise RuntimeError(f"{mode} capture did not emit JSON\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}")
 
 
-def capture_a1_gate() -> dict[str, Any]:
+def capture_generated_gate(mode: str) -> dict[str, Any]:
   baseline = _run_child("baseline")
-  a1 = _run_child("a1")
-  token_match = baseline["tokens_sample"] == a1["tokens_sample"]
+  arm = _run_child(mode)
+  token_match = baseline["tokens_sample"] == arm["tokens_sample"]
   if not token_match:
-    verdict = "DECODE_ATTENTION_A1_FAIL__TOKEN_MISMATCH"
+    verdict = f"DECODE_ATTENTION_{mode.upper()}_FAIL__TOKEN_MISMATCH"
   else:
-    verdict = a1["verdict"]
+    verdict = arm["verdict"]
+  cid = "decode_attention_generated_wholecache_skeleton" if mode == "a2" else "decode_attention_generated_skeleton"
   return {
     "date": "2026-06-25",
     "timestamp": time.strftime("%Y%m%d-%H%M%S"),
     "verdict": verdict,
     "search_space_id": "decode_attention_gfx1100_v1",
     "candidate": {
-      "id": "decode_attention_generated_skeleton",
+      "id": cid,
       "search_generation_status": "generated_skeleton",
       "promotion_status": "attribution_only",
       "blocked_primitives": ["v_dot2", "cross_lane_reduction", "lds_staged_tile_layout", "tile_combine_lifecycle"],
     },
     "token_byte_identical_to_baseline": token_match,
     "baseline": baseline,
-    "a1": a1,
-    "decision": ("A1 route-clean generated skeleton captured; speed work remains blocked on missing primitives."
-                 if verdict == "DECODE_ATTENTION_A1_GENERATED_SKELETON_ROUTE_CLEAN" else
-                 "A1 did not reach route-clean generated skeleton; use verdict to classify the next blocker."),
+    mode: arm,
+    "decision": (f"{mode.upper()} route-clean generated skeleton captured; speed work remains blocked on missing primitives."
+                 if verdict in ("DECODE_ATTENTION_A1_GENERATED_SKELETON_ROUTE_CLEAN",
+                                 "DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN") else
+                 f"{mode.upper()} did not reach route-clean generated skeleton; use verdict to classify the next blocker."),
   }
 
 
@@ -133,13 +149,17 @@ def main() -> int:
     return 0
   ap = argparse.ArgumentParser()
   ap.add_argument("--a1", action="store_true", help="run baseline + generated-skeleton A1 gate")
+  ap.add_argument("--a2", action="store_true", help="run baseline + generated whole-cache skeleton A2 gate")
   args = ap.parse_args()
   os.chdir(ROOT)
-  if args.a1:
-    A1_OUT.mkdir(parents=True, exist_ok=True)
-    out = capture_a1_gate()
-    latest = A1_OUT / "latest.json"
-    stamped = A1_OUT / f"decode-attention-generated-skeleton-{out['timestamp']}.json"
+  if args.a1 or args.a2:
+    mode = "a2" if args.a2 else "a1"
+    out_dir = A2_OUT if args.a2 else A1_OUT
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = capture_generated_gate(mode)
+    latest = out_dir / "latest.json"
+    stem = "decode-attention-wholecache-skeleton" if args.a2 else "decode-attention-generated-skeleton"
+    stamped = out_dir / f"{stem}-{out['timestamp']}.json"
   else:
     OUT.mkdir(parents=True, exist_ok=True)
     out = capture()
@@ -150,7 +170,9 @@ def main() -> int:
   print(json.dumps(out, indent=2))
   fail_verdicts = ("DECODE_ATTENTION_PURITY_CAPTURE_FAIL", "DECODE_ATTENTION_A1_FAIL__TOKEN_MISMATCH",
                    "DECODE_ATTENTION_A1_FAIL__E_49152_REINTRODUCED", "DECODE_ATTENTION_A1_FAIL__OWNED_TILE_STILL_FIRES",
-                   "DECODE_ATTENTION_A1_FAIL__GENERATED_ROUTE_NOT_CAPTURED")
+                   "DECODE_ATTENTION_A1_FAIL__GENERATED_ROUTE_NOT_CAPTURED", "DECODE_ATTENTION_A2_FAIL__TOKEN_MISMATCH",
+                   "DECODE_ATTENTION_A2_FAIL__E_49152_REINTRODUCED", "DECODE_ATTENTION_A2_FAIL__OWNED_TILE_STILL_FIRES",
+                   "DECODE_ATTENTION_A2_FAIL__GENERATED_ROUTE_NOT_CAPTURED")
   return 0 if out["verdict"] not in fail_verdicts else 1
 
 

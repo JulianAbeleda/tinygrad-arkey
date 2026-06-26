@@ -38,6 +38,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-pure-search-scope.md` | Decode attention execution scope for replacing owned tile+combine with generated/search-owned code |
 | `docs/decode-attention-a1-generated-skeleton-scope.md` | Next executable attention step: route-clean generated skeleton before speed work |
 | `docs/decode-attention-a1-generated-skeleton-result.md` | A1 result: generated route is token-correct and owned-free, but reintroduces `E_49152` |
+| `docs/decode-attention-a2-wholecache-skeleton-result.md` | A2 result: generated whole-cache route is token-correct, owned-free, and `E_49152`-free |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
 ## End-State Architecture
@@ -108,7 +109,8 @@ Tasks:
 - Expose `v_dot2` lowering.
 - Expose cross-lane reduction.
 - Expose LDS-staged tile layout/search knobs.
-- First fix generated whole-cache KV access so generated attention can avoid `E_49152` without the owned tile.
+- Generated whole-cache KV access is fixed by A2; use it as the lifecycle-clean generated skeleton.
+- Add/search the missing performance primitives against the A2 skeleton.
 - Represent TILE + COMBINE as one primitive lifecycle in the search artifact, even if it remains two programs.
 - Compare the generated candidate against the owned attention route.
 

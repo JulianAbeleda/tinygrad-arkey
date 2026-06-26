@@ -94,6 +94,43 @@ def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
 FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop", "gqa_coop_vec")
 FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop_vec"
 
+def flash_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc):
+  G = Hq // Hkv
+  def kernel(score:UOp, q:UOp, cache:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    t = UOp.range(Tc, 1, AxisType.GLOBAL)
+    e = UOp.range(Hd, 2, axis_type=AxisType.REDUCE)
+    kv = h // G
+    acc = UOp.placeholder((1,), _F32, 120, addrspace=AddrSpace.REG)
+    acc = acc.after(h, t)[0].set(0.0)
+    qv = q[h * Hd + e].cast(_F32)
+    kvv = cache[((0 * Hkv + kv) * MAXC + t) * Hd + e].cast(_F32)
+    acc = acc[0].set(acc.after(e)[0] + qv * kvv, end=e)
+    return score[h * MAXC + t].store(acc[0] * (1.0 / (Hd ** 0.5))).end(h, t).sink(
+      arg=_fki(f"flash_score_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
+def flash_partial_coop_vec_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  G = Hq // Hkv; W = Hd + 1
+  def kernel(pout:UOp, prob:UOp, cache:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)
+    is_v = d < Hd
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j; in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    c = UOp.placeholder((G,), _F32, 121, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4); c = c.after(c[zi].store(0.0).end(zi))
+    g = UOp.range(G, 5)
+    p = in_r.where(prob[(kvh * G + g) * MAXC + t], _fc(0.0))
+    acc = c[g].store(c.after(j)[g] + p * vd).end(g).end(j)
+    g2 = UOp.range(G, 6); fin = c.after(acc)
+    return pout[((kvh * G + g2) * S + s) * W + d].store(fin[g2]).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_partial_coop_vec_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
 def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
   def kernel(pm:UOp, score:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -289,6 +326,26 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
     po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, vc_f, fxn=_partial(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   else:
     po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, vc_f, fxn=flash_partial_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
+  dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
+  return out.reshape(Hq, Hd)
+
+def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
+                                       Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=256) -> Tensor:
+  """Generated decode-attention skeleton over the whole [2,1,Hkv,MAXC,Hd] KV cache.
+
+  This avoids passing sliced K/V views into callify. It is an attribution/lifecycle skeleton, not a speed path.
+  """
+  W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
+  q_f = q.reshape(Hq * Hd)
+  cache_f = cache_kv.reshape(2 * Hkv * MAXC * Hd)
+  score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f,
+    fxn=flash_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u))[0]
+  pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
+  prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
+  po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, cache_f,
+    fxn=flash_partial_coop_vec_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
   dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
   out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]

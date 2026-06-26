@@ -1039,7 +1039,14 @@ class TransformerBlock(FFNBlock):
       try: _amdgcn_ctx = start_pos.unbind()[1] + T if isinstance(start_pos, UOp) else -1
       except Exception: _amdgcn_ctx = -1
       out = None
-      if getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
+      if getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
+         and (Hq // Hkv) == 4:
+        # A2 pure-search skeleton (default-off): generated flash-decode route that reads the whole assigned_kv cache
+        # buffer directly. This targets lifecycle cleanliness: generated route + no owned tile + no E_49152.
+        from extra.qk_flash_decode import flash_decode_attention_whole_cache
+        out = flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                                 Hd, Hq, Hkv, MAXC, L)
+      if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
         # owned AMDGCN tile. This is an attribution/correctness candidate, not a speed candidate. It intentionally
