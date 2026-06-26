@@ -51,6 +51,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-a3-3-lds-tile-lifecycle-result.md` | A3.3 result: generated LDS attention code exists standalone, but no decode-bound LDS/tile lifecycle candidate is routed |
 | `docs/decode-attention-a3-4-tile-combine-lifecycle-result.md` | A3.4 result: TILE+COMBINE lifecycle manifest exists, but no generated tile program is route-bound |
 | `docs/decode-attention-a3-5-minimal-tile-placeholder-result.md` | A3.5 result: generated tile placeholder binds the lifecycle bundle, but adds overhead and does not transfer |
+| `docs/decode-attention-a3-6-tile-score-max-result.md` | A3.6 result: tile-max payload replaces `flash_max_32`, but W==D is flat/slightly negative versus A2 |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 
@@ -171,8 +172,8 @@ Immediate work:
 
 1. Capture the current owned tile + combine attention lifecycle. Complete: A0.
 2. Add a generated skeleton candidate with separate route attribution. Complete: A1/A2, with A2 as the clean whole-cache skeleton.
-3. Expose or classify the missing primitive lowerings: `v_dot2`, cross-lane reduction, LDS tile layout, and TILE+COMBINE lifecycle. `v_dot2` and direct x-lane score are classified as no-transfer; global cross-lane lowering is blocked; generated LDS attention exists standalone but is not decode-route-bound; TILE+COMBINE has a bundle manifest; the minimal generated tile placeholder binds but does not transfer.
-4. Next: replace the A3.5 identity placeholder with an A3.6 real generated tile payload. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
+3. Expose or classify the missing primitive lowerings: `v_dot2`, cross-lane reduction, LDS tile layout, and TILE+COMBINE lifecycle. `v_dot2` and direct x-lane score are classified as no-transfer; global cross-lane lowering is blocked; generated LDS attention exists standalone but is not decode-route-bound; TILE+COMBINE has a bundle manifest; the minimal tile placeholder binds but does not transfer; tile-max removes `flash_max_32` but is flat/slightly negative.
+4. Next: build an A3.7 larger tile payload, likely score+probability metadata or partial PV production. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
 
 ## Non-Goals
 
