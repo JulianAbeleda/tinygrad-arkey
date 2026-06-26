@@ -22,6 +22,7 @@ Source of truth:
 - `docs/decode-attention-a3-2-cross-lane-result.md`
 - `docs/decode-attention-a3-2b-scoped-lane-map-scope.md`
 - `docs/decode-attention-a3-2b-lane-map-probe-result.md`
+- `docs/decode-attention-a3-2b-xlane-score-result.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
@@ -39,6 +40,7 @@ Current baseline snapshot:
 - Latest decode attention A1 generated skeleton gate: `bench/qk-decode-attention-generated-skeleton/latest.json` (`DECODE_ATTENTION_A1_FAIL__E_49152_REINTRODUCED`).
 - Latest decode attention A2 whole-cache skeleton gate: `bench/qk-decode-attention-wholecache-skeleton/latest.json` (`DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN`).
 - Latest decode attention A3 baseline: `bench/qk-decode-attention-a3-baseline/latest.json` (`DECODE_ATTENTION_A3_BASELINE_CAPTURED`).
+- Latest decode attention A3.2b x-lane score gate: `bench/qk-decode-attention-a3-2b-xlane-score/latest.json` (`A3_2B_CROSS_LANE_NO_TRANSFER`).
 - GEMV generated skeleton: `q4k_gemv_generated_skeleton` (`Q4K_GEMV_SCHEDULER=2`) is registered for attribution only; expected to fail W==D speed until codegen representation lands.
 - GEMV G2.0-G2.2 representation result: `G2_LANEMAP_ADDRESS_BUILDER_PASS` (`extra/qk_gemv_g2_lanemap.py`, `extra/qk_gemv_g2_representation_probe.py`, `bench/qk-gemv-g2-representation-probe/latest.json`). UOp/RANGE can express `lane = block_group * 8 + word_col`, the minimal Q4_K LaneMap is bridge-independent/serializable, and the generated packed-word index matches the numeric reference.
 - GEMV G2.3 runtime binding result: `SEARCH_GENERATED_WD_FAIL` (`Q4K_GEMV_SCHEDULER=5`, `q4k_scheduler_matvec_lanemap`). It is token-correct and route-clean, but only `14.2 / 14.2 / 14.1 / 14.0` tok/s @ctx512/1024/2048/4096 versus owned `103.4 / 101.5 / 98.8 / 94.2`.
@@ -56,7 +58,8 @@ Current baseline snapshot:
 - Decode attention A3.2 cross-lane gate: complete with blocker. Verdict `A3_2_BLOCKED_BY_CODEGEN_GLOBAL_WARP_REDUCE` (`extra/qk_decode_attention_a3_2_cross_lane_gate.py`, `bench/qk-decode-attention-a3-2-cross-lane/latest.json`). Global `WARP_REDUCE_LOWERING=1` fails UOp verification during decode capture (`Ops.UNROLL dtypes.float ... ((4, 4),)`) before W==D can run.
 - Decode attention A3.2b scope: ready (`docs/decode-attention-a3-2b-scoped-lane-map-scope.md`). Cross-lane lowering must be applied only to the generated attention candidate/reductions intended for explicit lane ownership, not globally across the model.
 - Decode attention A3.2b lane-map probe: complete. Verdict `A3_2B_ATTENTION_LANE_MAP_NOT_WIRED` (`extra/qk_decode_attention_a3_2b_lane_map_probe.py`, `bench/qk-decode-attention-a3-2b-lane-map/latest.json`). A2 route is clean and lane primitives exist, but only `flash_score_whole_cache_32_128` is present; no x-lane score program is wired.
-- Next executable step: implement `DECODE_ATTN_SCORE_XLANE=1` with explicit `UOp.special(32, "lidx0")` and `lane_partition_reduce_sum` as `flash_score_whole_cache_xlane_32_128`.
+- Decode attention A3.2b x-lane score wiring: complete. Verdict `A3_2B_CROSS_LANE_NO_TRANSFER` (`extra/qk_decode_attention_a3_2b_xlane_score_gate.py`, `bench/qk-decode-attention-a3-2b-xlane-score/latest.json`, `docs/decode-attention-a3-2b-xlane-score-result.md`). `DECODE_ATTN_SCORE_XLANE=1` captures `flash_score_whole_cache_xlane_32_128` and keeps the A2 route clean, but W==D collapses to `6.0 / 3.2 / 1.5 / 0.7` tok/s at ctx `512 / 1024 / 2048 / 4096`; no promotion.
+- Next executable step: scope and implement or block A3.3 generated LDS/tile-lifecycle attention. Do not keep tuning the direct x-lane score kernel unless a new lifecycle hypothesis changes the shape.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->

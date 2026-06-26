@@ -112,6 +112,27 @@ def flash_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc, use_vd
       arg=_fki(f"flash_score_whole_cache{'_vdot2' if use_vdot2 else ''}_{Hq}_{Hd}"))
   return kernel
 
+def flash_score_whole_cache_xlane_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc):
+  if Hd % 32 != 0: raise ValueError(f"x-lane score requires Hd divisible by 32, got {Hd}")
+  G = Hq // Hkv; elems_per_lane = Hd // 32
+  def kernel(score:UOp, q:UOp, cache:UOp) -> UOp:
+    from extra.qk_lane_partition_reduce import LanePartition, lane_partition_reduce_sum
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    t = UOp.range(Tc, 1, AxisType.GLOBAL)
+    lane = UOp.special(32, "lidx0")
+    r = UOp.range(elems_per_lane, 2, axis_type=AxisType.REDUCE)
+    kv = h // G
+    e = lane * elems_per_lane + r
+    acc = UOp.placeholder((1,), _F32, 122, addrspace=AddrSpace.REG)
+    acc = acc.after(h, t)[0].set(0.0)
+    qv = q[h * Hd + e].cast(_F32)
+    kvv = cache[((0 * Hkv + kv) * MAXC + t) * Hd + e].cast(_F32)
+    acc = acc[0].set(acc.after(r)[0] + qv * kvv, end=r)
+    total = lane_partition_reduce_sum(acc[0], LanePartition(lane))
+    return score[h * MAXC + t].store(total * (1.0 / (Hd ** 0.5)), lane.eq(0)).end(h, t).sink(
+      arg=_fki(f"flash_score_whole_cache_xlane_{Hq}_{Hd}"))
+  return kernel
+
 def flash_partial_coop_vec_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
   G = Hq // Hkv; W = Hd + 1
   def kernel(pout:UOp, prob:UOp, cache:UOp) -> UOp:
@@ -340,12 +361,14 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   This avoids passing sliced K/V views into callify. It is an attribution/lifecycle skeleton, not a speed path.
   """
   use_vdot2 = bool(getenv("DECODE_ATTN_SCORE_VDOT2", 0))
+  use_xlane = bool(getenv("DECODE_ATTN_SCORE_XLANE", 0))
   if use_vdot2: os.environ.setdefault("V_DOT2_LOWERING", "1")
   W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
   q_f = q.reshape(Hq * Hd)
   cache_f = cache_kv.reshape(2 * Hkv * MAXC * Hd)
-  score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f,
-    fxn=flash_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u, use_vdot2=use_vdot2))[0]
+  score_kernel = flash_score_whole_cache_xlane_kernel(Hd, Hq, Hkv, MAXC, Tc_u) if use_xlane else \
+    flash_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u, use_vdot2=use_vdot2)
+  score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f, fxn=score_kernel)[0]
   pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
   prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
   po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, cache_f,
