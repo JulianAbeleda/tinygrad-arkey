@@ -62,6 +62,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-online-pv-tile-p3-lanemap-result.md` | P3 lane-map artifact result for the structural online-PV tile |
 | `docs/decode-attention-online-pv-tile-p4-codegen-decision-scope.md` | P4 exhaustive decision scope for reduction/dot codegen targets |
 | `docs/decode-attention-online-pv-tile-p4-codegen-decision-result.md` | P4 result: classify bindable target vs dataflow rewrite/codegen block |
+| `docs/decode-attention-online-state-pv-tile-p5-result.md` | P5 structural online-state+PV tile route result |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
 

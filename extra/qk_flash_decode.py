@@ -261,6 +261,78 @@ def flash_online_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L
       arg=_fki(f"flash_online_pv_tile_whole_cache_{Hq}_{Hd}"))
   return kernel
 
+def flash_online_state_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """P5 structural online-state+PV tile.
+
+  Output width W=Hd+2: [0:Hd)=unnormalized PV, Hd=per-split l, Hd+1=per-split m. This moves per-split m/l state
+  into the tile lifecycle so later cross-lane/dot lowerings have a real in-tile dataflow site to bind.
+  """
+  G = Hq // Hkv; W = Hd + 2
+  def kernel(pout:UOp, score:UOp, cache:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)
+    is_v = d < Hd
+    is_l = d.eq(Hd)
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j; in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    c = UOp.placeholder((G,), _F32, 130, addrspace=AddrSpace.REG)
+    l = UOp.placeholder((G,), _F32, 131, addrspace=AddrSpace.REG)
+    m = UOp.placeholder((G,), _F32, 132, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4)
+    init = c[zi].store(0.0).end(zi)
+    zi2 = UOp.range(G, 5)
+    init = l.after(init)[zi2].store(0.0).end(zi2)
+    zi3 = UOp.range(G, 6)
+    init = m.after(init)[zi3].store(-float("inf")).end(zi3)
+    c, l, m = c.after(init), l.after(init), m.after(init)
+    g = UOp.range(G, 7)
+    h = kvh * G + g
+    sc = in_r.where(score[h * MAXC + t_safe], _fc(-float("inf")))
+    mn = m.after(j)[g].maximum(sc)
+    corr = _fexp(m.after(j)[g] - mn)
+    p = in_r.where(_fexp(sc - mn), _fc(0.0))
+    upd = c[g].store(c.after(j)[g] * corr + p * vd)
+    upd = l.after(upd)[g].store(l.after(j)[g] * corr + p)
+    upd = m.after(upd)[g].store(mn).end(g).end(j)
+    g2 = UOp.range(G, 8)
+    cf, lf, mf = c.after(upd), l.after(upd), m.after(upd)
+    val = is_v.where(cf[g2], is_l.where(lf[g2], mf[g2]))
+    return pout[((kvh * G + g2) * S + s) * W + d].store(val).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_online_state_pv_tile_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
+def flash_state_gmax_kernel(Hd:int, Hq:int, S):
+  W = Hd + 2; M_COL = Hd + 1
+  def kernel(gm:UOp, pout:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, axis_type=AxisType.REDUCE)
+    g = UOp.placeholder((1,), _F32, 133, addrspace=AddrSpace.REG)
+    g = g.after(h)[0].set(-1e30)
+    g = g[0].set(g.after(s)[0].maximum(pout[(h * S + s) * W + M_COL]), end=s)
+    return gm[h].store(g[0]).end(h).sink(arg=_fki(f"flash_state_gmax_{Hq}_{Hd}"))
+  return kernel
+
+def flash_state_combine_kernel(Hd:int, Hq:int, S):
+  W = Hd + 2; L_COL = Hd; M_COL = Hd + 1
+  def kernel(out:UOp, pout:UOp, gm:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    d = UOp.range(Hd, 1, AxisType.GLOBAL)
+    gm_h = gm[h]
+    s = UOp.range(S, 2, axis_type=AxisType.REDUCE)
+    w = _fexp(pout[(h * S + s) * W + M_COL] - gm_h)
+    num = UOp.placeholder((1,), _F32, 134, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 135, addrspace=AddrSpace.REG)
+    num = num.after(h, d)[0].set(0.0)
+    den = den.after(h, d)[0].set(0.0)
+    upd = num[0].store(num.after(s)[0] + w * pout[(h * S + s) * W + d])
+    upd = den.after(upd)[0].store(den.after(s)[0] + w * pout[(h * S + s) * W + L_COL]).end(s)
+    nf, df = num.after(upd)[0], den.after(upd)[0]
+    return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_state_combine_{Hq}_{Hd}"))
+  return kernel
+
 def flash_max_kernel(Hq:int, MAXC:int, L:int, S, Tc):
   def kernel(pm:UOp, score:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -478,7 +550,14 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(q_f, cache_f, fxn=score_kernel)[0]
   if getenv("DECODE_ATTN_TILE_PLACEHOLDER", 0):
     score_f = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(score_f, fxn=flash_tile_placeholder_kernel(Hd, Hq, MAXC, Tc_u))[0]
+  use_online_state_pv_tile = getenv("DECODE_ATTN_ONLINE_STATE_PV_TILE", 0)
   use_tile_score_max = getenv("DECODE_ATTN_TILE_SCORE_MAX", 0) or getenv("DECODE_ATTN_TILE_PROB", 0)
+  if use_online_state_pv_tile:
+    po = Tensor.empty(Hq * Smax * (Hd + 2), dtype=_F32).custom_kernel(score_f, cache_f,
+      fxn=flash_online_state_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, S))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, S))[0]
+    return out.reshape(Hq, Hd)
   if use_tile_score_max:
     pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_tile_score_max_kernel(Hd, Hq, MAXC, L, S, Tc_u))[0]
   else:
