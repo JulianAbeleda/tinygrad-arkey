@@ -1,6 +1,6 @@
 {
   "date": "2026-06-21",
-  "git_commit": "eb1f07d85f62bfb9c52293606415bc90651c2060",
+  "git_commit": "5b2aadc3b064aaae330fe0f2a40739324a7cf700",
   "rows": [
     {
       "candidate": "baseline_default",
@@ -8,9 +8,9 @@
       "expected": "REST",
       "match": true,
       "wd_repro_band_pct": {
-        "128": 0.24,
-        "512": 0.1,
-        "1024": 0.1,
+        "128": 0.0,
+        "512": 0.0,
+        "1024": 0.0,
         "4096": 0.0
       },
       "stop_reason": "baseline curve; not a promotion candidate"
@@ -21,7 +21,7 @@
       "expected": null,
       "match": true,
       "wd_repro_band_pct": {
-        "128": 0.24,
+        "128": 0.0,
         "512": 0.0,
         "1024": 0.0,
         "4096": 0.0
