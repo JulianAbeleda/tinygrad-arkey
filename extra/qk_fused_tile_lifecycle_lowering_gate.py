@@ -19,7 +19,9 @@ ATTN_BLOCKER = ROOT / "bench/qk-decode-attention-fused-score-state-pv-tile/lates
 def _read_json(path: pathlib.Path) -> dict[str, Any]:
   if not path.exists(): return {"available": False, "path": str(path.relative_to(ROOT))}
   d = json.loads(path.read_text())
-  return {"available": True, "path": str(path.relative_to(ROOT)), "verdict": d.get("verdict"), "standalone_numeric": d.get("standalone_numeric", {})}
+  return {"available": True, "path": str(path.relative_to(ROOT)), "verdict": d.get("verdict"),
+          "standalone_numeric": d.get("standalone_numeric", {}), "route_gate": d.get("route_gate", {}),
+          "wd_summary": d.get("wd_summary", {})}
 
 def _synthetic_lifecycle_kernel(D:int, J:int, E:int):
   from tinygrad import dtypes
@@ -343,7 +345,14 @@ def _minimal_repro() -> dict[str, Any]:
 
 def build() -> dict[str, Any]:
   repro = _minimal_repro()
-  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS":
+  attn = _read_json(ATTN_BLOCKER)
+  attn_verdict = attn.get("verdict", "")
+  wd = attn.get("wd_summary", {})
+  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS" and wd.get("available") and not wd.get("promotion_gate_passed"):
+    next_step = "Attention target builder lowers, passes standalone numeric, and has a clean default-off route, but W==D failed; attribute the generated fused tile slowdown before further promotion work."
+  elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS" and attn_verdict.startswith("FUSED_SCORE_STATE_PV_TILE_ROUTE_CLEAN"):
+    next_step = "Attention target builder lowers, passes standalone numeric, and has a clean default-off route; run W==D before any promotion decision."
+  elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS":
     next_step = "Attention target builder now lowers and passes standalone numeric; proceed to default-off route/materialization/lifecycle gate."
   elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT":
     next_step = "Attention-like indexing passes at small shape; next isolator should scale D/E/W toward Hd=128/W=130 to locate the size/resource threshold."
@@ -364,7 +373,7 @@ def build() -> dict[str, Any]:
     "timestamp": time.strftime("%Y%m%d-%H%M%S"),
     "verdict": repro["verdict"],
     "minimal_repro": repro,
-    "attention_blocker_artifact": _read_json(ATTN_BLOCKER),
+    "attention_blocker_artifact": attn,
     "required_lowering_capability": {
       "generic_shape": "nested reduce + recurrence tuple + local output axis + compact metadata store",
       "attention_shape": "q.k score reduce inside token recurrence with local-d PV and l/m metadata columns",

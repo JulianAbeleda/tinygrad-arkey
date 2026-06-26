@@ -705,6 +705,201 @@
         "manual_oracle"
       ],
       "historical_note": "Added after FUSED_PV_TILE_ROUTE_CLEAN__WD_REQUIRED; W==D is the first speed authority."
+    },
+    {
+      "id": "decode_attention_fused_score_state_pv_tile",
+      "family": "attention_split",
+      "description": "Default-off generated whole-cache decode-attention route that fuses q.k score reduce, online split state (l/m), and PV accumulation into one generated tile, then runs generated state gmax/combine. Standalone numeric and route/materialization gates are clean; W==D decides whether this pure-generated route is promotable.",
+      "env": {
+        "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+        "DECODE_ATTN_FUSED_SCORE_STATE_PV_TILE": "1"
+      },
+      "rungs": [
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        128,
+        512,
+        1024,
+        4096
+      ],
+      "correctness_req": "standalone_numeric_and_route_gate",
+      "historical_expected_verdict": null,
+      "compare_artifact": "bench/qk-decode-attention-fused-score-state-pv-tile/latest.json",
+      "historical_note": "Route gate clean: flash_fused_score_state_pv_tile_whole_cache_32_128 + flash_state_gmax_32_128 + flash_state_combine_32_128, old score/max/den/combine absent. Standalone numeric max_abs 5.34e-05, rel_rmse 1.95e-07. Do not promote without W==D.",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_attention_gfx1100_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "pure_search_candidate_under_evaluation",
+      "excluded_primitives": []
+    },
+    {
+      "id": "decode_attention_physical_tile_p1_route",
+      "family": "attention_split",
+      "description": "Default-off generated whole-cache decode-attention route using the P1 LaneMap/CrossLane q.k score kernel (DECODE_ATTN_PHYSICAL_TILE_P1_SCORE=1). This is partial physical-primitive route integration: cross-lane score reduction is in-route; v_dot2 and LDS remain probe-visible but not in this route.",
+      "env": {
+        "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+        "DECODE_ATTN_PHYSICAL_TILE_P1_SCORE": "1"
+      },
+      "rungs": [
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        128,
+        512,
+        1024,
+        4096
+      ],
+      "correctness_req": "route_gate_and_score_numeric",
+      "historical_expected_verdict": null,
+      "compare_artifact": "bench/qk-decode-primitive-space/route_p1_latest.json",
+      "historical_note": "P1 route gate clean; score numeric max_abs 4.47e-08; ISA has cross-lane ds_bpermute. Partial primitive integration only; do not promote without W==D and full primitive accounting.",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_attention_gfx1100_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "pure_search_candidate_under_evaluation",
+      "excluded_primitives": [
+        "lds_tile",
+        "v_dot2"
+      ]
+    },
+    {
+      "id": "decode_attention_physical_tile_pall_route",
+      "family": "attention_split",
+      "description": "Default-off generated whole-cache decode-attention route using the PALL physical score kernel (DECODE_ATTN_PHYSICAL_TILE_PALL_SCORE=1). The score stage composes LDS-staged K, LaneMap/CrossLane reduction, and fdot2; full online state + PV lifecycle integration remains required before promotion.",
+      "env": {
+        "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+        "DECODE_ATTN_PHYSICAL_TILE_PALL_SCORE": "1",
+        "V_DOT2_LOWERING": "1"
+      },
+      "rungs": [
+        {
+          "rung": "route_gate",
+          "runner": "script",
+          "script": "extra/qk_decode_physical_tile_pall_route_integration_gate.py",
+          "result_json": "bench/qk-decode-primitive-space/route_pall_integration_latest.json"
+        }
+      ],
+      "contexts": [
+        128,
+        512,
+        1024,
+        4096
+      ],
+      "correctness_req": "route_gate_and_score_numeric",
+      "historical_expected_verdict": "PALL_SCORE_ROUTE_CLEAN__FULL_LIFECYCLE_NEXT",
+      "compare_artifact": "bench/qk-decode-primitive-space/route_pall_integration_latest.json",
+      "historical_note": "Score route gate clean when artifact verdict is PALL_SCORE_ROUTE_CLEAN__FULL_LIFECYCLE_NEXT. This is not W==D promotion-ready until online state and PV share the same physical tile lifecycle.",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_attention_gfx1100_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "pure_search_candidate_under_evaluation",
+      "excluded_primitives": [
+        "online_state_pv_lifecycle_fusion"
+      ]
+    },
+    {
+      "id": "decode_attention_physical_tile_pall_lifecycle",
+      "family": "attention_lifecycle",
+      "description": "Default-off generated whole-cache decode-attention route using the PALL physical lifecycle kernel (DECODE_ATTN_PHYSICAL_TILE_PALL_LIFECYCLE=1). It composes physical q.k score, online state, and PV in one generated lifecycle with LDS, cross-lane reduction, and fdot2. Known limitation: q.k is recomputed per output column.",
+      "env": {
+        "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+        "DECODE_ATTN_PHYSICAL_TILE_PALL_LIFECYCLE": "1",
+        "V_DOT2_LOWERING": "1"
+      },
+      "rungs": [
+        {
+          "rung": "route_gate",
+          "runner": "script",
+          "script": "extra/qk_decode_physical_tile_pall_lifecycle_route_gate.py",
+          "result_json": "bench/qk-decode-primitive-space/pall_lifecycle_route_latest.json"
+        },
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        128,
+        512,
+        1024,
+        4096
+      ],
+      "correctness_req": "lifecycle_gate_and_route_gate",
+      "historical_expected_verdict": "PALL_LIFECYCLE_ROUTE_CLEAN__WD_NEXT",
+      "compare_artifact": "bench/qk-decode-primitive-space/pall_lifecycle_route_latest.json",
+      "historical_note": "Full generated lifecycle route is clean only after standalone lifecycle gate passes; speed is expected risky because q.k is still recomputed per output column.",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_attention_gfx1100_v1",
+      "search_generation_status": "search_generated",
+      "purity_status": "pure_search_candidate_under_evaluation",
+      "excluded_primitives": [
+        "score_reuse_across_pv_columns"
+      ]
+    },
+    {
+      "id": "decode_attention_physical_tile_score_broadcast_lifecycle",
+      "family": "attention_lifecycle",
+      "description": "REFUTED diagnostic-only chunked score-broadcast PALL lifecycle route. It computes split state once for final combine, then runs four 32-column PV chunks that recompute q.k per chunk and is W==D non-promotable.",
+      "env": {
+        "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+        "DECODE_ATTN_PHYSICAL_TILE_SCORE_BROADCAST_LIFECYCLE": "1",
+        "V_DOT2_LOWERING": "1"
+      },
+      "rungs": [
+        {
+          "rung": "route_gate",
+          "runner": "script",
+          "script": "extra/qk_decode_physical_tile_score_broadcast_route_gate.py",
+          "result_json": "bench/qk-decode-primitive-space/score_broadcast_route_latest.json"
+        },
+        {
+          "rung": "wd",
+          "runner": "runtime_overhead",
+          "repeats": 3
+        }
+      ],
+      "contexts": [
+        128,
+        512,
+        1024,
+        4096
+      ],
+      "correctness_req": "route_gate",
+      "historical_expected_verdict": "REST",
+      "compare_artifact": "bench/qk-decode-primitive-space/score_broadcast_route_latest.json",
+      "historical_note": "Refuted by decode score-broadcast lifecycle audit: correctness/capture-clean diagnostic route, but whole-cache six-kernel lifecycle is W==D non-promotable and must not be promoted. Stale FAIL_CORRECTNESS evaluator artifacts before the chunks=4 route-gate fix are superseded by this refutation.",
+      "default_eligible": false,
+      "default_on": false,
+      "search_space_id": "decode_attention_gfx1100_v1",
+      "search_generation_status": "manual_diagnostic_refuted",
+      "purity_status": "refuted_diagnostic_only",
+      "excluded_primitives": [
+        "FusedScorePVLifecycle",
+        "CrossLaneReduceStore"
+      ],
+      "refutation_docs": [
+        "docs/decode-score-broadcast-lifecycle-audit.md",
+        "docs/decode-score-broadcast-lifecycle-resolution-plan.md"
+      ],
+      "refutation_label": "SCORE_BROADCAST_WHOLECACHE_LIFECYCLE_WD_REFUTED",
+      "refutation": "Unfused whole-cache score-broadcast decode route is correctness/capture-clean but W==D-refuted: GPU-bound, 6 attention kernels/token, recomputes q.k per PV chunk, plus full-cache materialization risk; do not promote or tune this route.",
+      "next_dependency": "CrossLaneReduceStore microgate before any FusedScorePVLifecycle attention route work",
+      "search_blocker_label": "SEARCH_BLOCKED_BY_CODEGEN_UNTIL_CROSS_LANE_REDUCER_PROVEN",
+      "forward_plan": "Do not write another score-broadcast/whole-cache attention route. First prove the cross-lane reduction/store primitive in isolation; only then rebuild the fused tile and run split-KV economics before W==D."
     }
   ],
   "suites": {
@@ -734,6 +929,21 @@
     "decode_attention_fused_pv_tile_wd": [
       "baseline_default",
       "decode_attention_fused_pv_tile"
+    ],
+    "decode_attention_generated_fused_score_state_pv_tile": [
+      "decode_attention_fused_score_state_pv_tile"
+    ],
+    "decode_attention_physical_tile_p1_route": [
+      "decode_attention_physical_tile_p1_route"
+    ],
+    "decode_attention_physical_tile_pall_route": [
+      "decode_attention_physical_tile_pall_route"
+    ],
+    "decode_attention_physical_tile_pall_lifecycle": [
+      "decode_attention_physical_tile_pall_lifecycle"
+    ],
+    "decode_attention_physical_tile_score_broadcast_lifecycle": [
+      "decode_attention_physical_tile_score_broadcast_lifecycle"
     ]
   }
 }

@@ -1,7 +1,7 @@
 {
   "date": "2026-06-26",
-  "timestamp": "20260626-005611",
-  "verdict": "FUSED_SCORE_STATE_PV_TILE_STANDALONE_NUMERIC_PASS__ROUTE_GATE_REQUIRED",
+  "timestamp": "20260626-151048",
+  "verdict": "FUSED_SCORE_STATE_PV_TILE_ROUTE_CLEAN__WD_REQUIRED",
   "target": {
     "builder": "flash_fused_score_state_pv_tile_whole_cache_kernel",
     "program": "flash_fused_score_state_pv_tile_whole_cache_32_128",
@@ -37,9 +37,9 @@
       "28:     zi = UOp.range(G, 6)",
       "29:     dot_init = dot.after(kvh, s, d, j)[zi].store(0.0).end(zi)",
       "31:     qv = q[h_dot * Hd + e].cast(_F32)",
-      "32:     kvv = cache[((0 * Hkv + kvh) * MAXC + t_safe) * Hd + e].cast(_F32)",
+      "32:     kvv = cache[0, 0, kvh, t_safe, e].cast(_F32)",
       "33:     dot_upd = dot[g_dot].store(dot.after(e)[g_dot] + qv * kvv).end(g_dot).end(e)",
-      "35:     vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))",
+      "35:     vd = is_v.where(cache[1, 0, kvh, t_safe, is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))",
       "36:     acc = UOp.placeholder((G,), _F32, 153, addrspace=AddrSpace.REG)",
       "37:     den = UOp.placeholder((G,), _F32, 154, addrspace=AddrSpace.REG)",
       "38:     mx = UOp.placeholder((G,), _F32, 155, addrspace=AddrSpace.REG)",
@@ -76,7 +76,7 @@
       "local_placeholder": 0,
       "q_load_hint": 0,
       "cache_k_load_hint": 0,
-      "cache_v_load_hint": 1,
+      "cache_v_load_hint": 0,
       "online_m_hint": 0,
       "online_l_hint": 0,
       "den_col_hint": 0,
@@ -165,6 +165,503 @@
       "rel_rmse": 1e-05
     }
   },
+  "route_gate": {
+    "checked": true,
+    "pass": true,
+    "verdict": "FUSED_SCORE_STATE_PV_TILE_ROUTE_CLEAN__WD_REQUIRED",
+    "token_match": true,
+    "materialization_clean": true,
+    "owned_absent": true,
+    "generated_clean": true,
+    "lifecycle_complete": true,
+    "old_lifecycle_absent": true,
+    "baseline": {
+      "arm": "baseline",
+      "route": {
+        "date": "2026-06-25",
+        "timestamp": "20260626-151013",
+        "mode": "baseline",
+        "verdict": "DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE",
+        "selected_candidate": "owned_flash_tile_gqa_whole",
+        "tokens_sample": [
+          315,
+          24231,
+          6009,
+          979,
+          220,
+          576
+        ],
+        "route_counts": {
+          "owned_flash_tile_gqa_whole": 1,
+          "owned_flash_combine": 1,
+          "generated_attention_programs": 0
+        },
+        "route_fire": {
+          "program_node_names": [
+            "E_16_4_2_8_16_2_4_4",
+            "E_2n7",
+            "r_32_32_4_32_4",
+            "E_1187_32_4",
+            "r_16_256",
+            "E_32_32_4",
+            "r_1024_16_4_2_32",
+            "q4k_gemv_warp_4096_4096",
+            "q6k_gemv_partial_1024_4096_4",
+            "r_8_16_8",
+            "r_2_8_4_4_16",
+            "r_8_8_16_2_4",
+            "E_4_4_8_16_2",
+            "owned_flash_tile_gqa_whole",
+            "owned_flash_combine",
+            "E_32_32_4n1",
+            "r_16_256n1",
+            "E_32_32_4n2",
+            "q4k_gemv_warp_12288_4096",
+            "E_128_32_3",
+            "E_128_32_3n1",
+            "q6k_coop_partial_4096_12288",
+            "r_32_32_4_16",
+            "r_2_8_128_16_4_2_32",
+            "q4k_gemv_warp_4096_12288",
+            "E_32_32_4n3",
+            "r_16_256n2",
+            "E_32_32_4n4",
+            "q6k_coop_partial_151936_4096",
+            "r_1187_32_4_16",
+            "r_32_4_1187",
+            "r_16_8",
+            "r_32_4_1187n1",
+            "r_16_8n1"
+          ],
+          "candidate_kernel_present": true,
+          "slice_route_absent": true
+        },
+        "materialization": {
+          "E_49152_present": false,
+          "full_maxc_copy_kernels": [],
+          "buffer_identity_inputs": true,
+          "selected_route_buffer_identity": true
+        },
+        "top_program_counts": [
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m16\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90mn7\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m1024\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "q4k_gemv_warp_4096_4096",
+            1
+          ],
+          [
+            "q6k_gemv_partial_1024_4096_4",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[91m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m16\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "owned_flash_tile_gqa_whole",
+            1
+          ],
+          [
+            "owned_flash_combine",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn2\u001b[0m",
+            1
+          ],
+          [
+            "q4k_gemv_warp_12288_4096",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "q6k_coop_partial_4096_12288",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "q4k_gemv_warp_4096_12288",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn3\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn2\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn4\u001b[0m",
+            1
+          ],
+          [
+            "q6k_coop_partial_151936_4096",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ]
+        ],
+        "classification": "Decode attention is still backed by owned AMDGCN tile + combine programs; GEMV purity is complete, attention purity is next."
+      },
+      "signature": {
+        "generated_attention_programs": [],
+        "has_target_program": false,
+        "has_previous_program": false,
+        "has_old_score": false,
+        "has_old_max": false,
+        "has_state_gmax": false,
+        "has_state_combine": false,
+        "has_legacy_den": false,
+        "has_legacy_combine": false
+      }
+    },
+    "fused_score_state_pv_tile": {
+      "arm": "fused_score_state_pv_tile",
+      "route": {
+        "date": "2026-06-25",
+        "timestamp": "20260626-151047",
+        "mode": "a2",
+        "verdict": "DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN",
+        "selected_candidate": "decode_attention_generated_wholecache_skeleton",
+        "tokens_sample": [
+          315,
+          24231,
+          6009,
+          979,
+          220,
+          576
+        ],
+        "route_counts": {
+          "owned_flash_tile_gqa_whole": 0,
+          "owned_flash_combine": 0,
+          "generated_attention_programs": 3
+        },
+        "route_fire": {
+          "program_node_names": [
+            "E_16_4_2_8_16_2_4_4",
+            "E_2n7",
+            "r_32_32_4_32_4",
+            "E_1187_32_4",
+            "r_16_256",
+            "E_32_32_4",
+            "r_1024_16_4_2_32",
+            "q4k_gemv_warp_4096_4096",
+            "q6k_gemv_partial_1024_4096_4",
+            "r_8_16_8",
+            "r_2_8_4_4_16",
+            "r_8_8_16_2_4",
+            "E_4_4_8_16_2",
+            "flash_fused_score_state_pv_tile_whole_cache_32_128",
+            "flash_state_gmax_32_128",
+            "flash_state_combine_32_128",
+            "E_32_32_4n1",
+            "r_16_256n1",
+            "E_32_32_4n2",
+            "q4k_gemv_warp_12288_4096",
+            "E_128_32_3",
+            "E_128_32_3n1",
+            "q6k_coop_partial_4096_12288",
+            "r_32_32_4_16",
+            "r_2_8_128_16_4_2_32",
+            "q4k_gemv_warp_4096_12288",
+            "E_32_32_4n3",
+            "r_16_256n2",
+            "E_32_32_4n4",
+            "q6k_coop_partial_151936_4096",
+            "r_1187_32_4_16",
+            "r_32_4_1187",
+            "r_16_8",
+            "r_32_4_1187n1",
+            "r_16_8n1"
+          ],
+          "candidate_kernel_present": false,
+          "slice_route_absent": true
+        },
+        "materialization": {
+          "E_49152_present": false,
+          "full_maxc_copy_kernels": [],
+          "buffer_identity_inputs": false,
+          "selected_route_buffer_identity": true
+        },
+        "top_program_counts": [
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m16\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90mn7\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m1024\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "q4k_gemv_warp_4096_4096",
+            1
+          ],
+          [
+            "q6k_gemv_partial_1024_4096_4",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[91m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m16\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "flash_fused_score_state_pv_tile_whole_cache_32_128",
+            1
+          ],
+          [
+            "flash_state_gmax_32_128",
+            1
+          ],
+          [
+            "flash_state_combine_32_128",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn2\u001b[0m",
+            1
+          ],
+          [
+            "q4k_gemv_warp_12288_4096",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "q6k_coop_partial_4096_12288",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "q4k_gemv_warp_4096_12288",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn3\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn2\u001b[0m",
+            1
+          ],
+          [
+            "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn4\u001b[0m",
+            1
+          ],
+          [
+            "q6k_coop_partial_151936_4096",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ],
+          [
+            "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90mn1\u001b[0m",
+            1
+          ]
+        ],
+        "classification": "A2 generated whole-cache skeleton route capture."
+      },
+      "signature": {
+        "generated_attention_programs": [
+          "flash_fused_score_state_pv_tile_whole_cache_32_128",
+          "flash_state_gmax_32_128",
+          "flash_state_combine_32_128"
+        ],
+        "has_target_program": true,
+        "has_previous_program": false,
+        "has_old_score": false,
+        "has_old_max": false,
+        "has_state_gmax": true,
+        "has_state_combine": true,
+        "has_legacy_den": false,
+        "has_legacy_combine": false
+      }
+    }
+  },
+  "wd_summary": {
+    "available": true,
+    "path": "bench/qk-decode-eval/runs/20260626T102834-decode_attention_fused_score_state_pv_tile.json",
+    "verdict": "REST",
+    "stop_reason": "no rung cleared a promotion gate",
+    "rows": [
+      {
+        "ctx": 128,
+        "baseline_tok_s": 82.5,
+        "candidate_tok_s": 82.5,
+        "delta_pct": 0.0,
+        "repro_band_pct": 0.0
+      },
+      {
+        "ctx": 512,
+        "baseline_tok_s": 103.8,
+        "candidate_tok_s": 47.7,
+        "delta_pct": -54.05,
+        "repro_band_pct": 0.0
+      },
+      {
+        "ctx": 1024,
+        "baseline_tok_s": 102.0,
+        "candidate_tok_s": 47.6,
+        "delta_pct": -53.33,
+        "repro_band_pct": 0.21
+      },
+      {
+        "ctx": 4096,
+        "baseline_tok_s": 94.7,
+        "candidate_tok_s": 34.9,
+        "delta_pct": -63.15,
+        "repro_band_pct": 0.29
+      }
+    ],
+    "promotion_gate_passed": false,
+    "repro_band_ok": true,
+    "authority": "clean W==D PROFILE-off AUTO-clock (promotion authority)"
+  },
   "kill_gate": "If UOp cannot express q.k score reduce + token online recurrence + local-d PV in one builder, classify as FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE.",
   "supporting_artifacts": {
     "fused_pv_tile_gate": {
@@ -221,5 +718,5 @@
       "wd": {}
     }
   },
-  "decision": "Standalone numeric passed. Next step is default-off model route wiring and route/materialization/lifecycle gate."
+  "decision": "W==D failed the promotion gate; do not promote. Next work is attribution for why the pure generated fused tile is slower."
 }

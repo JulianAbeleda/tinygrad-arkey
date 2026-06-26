@@ -169,6 +169,7 @@ def flash_p1_crosslane_score_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:in
   G = Hq // Hkv; R = Hd // 32
   def kernel(score:UOp, q:UOp, cache:UOp) -> UOp:
     from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    from extra.amd_warp_reduce import warp_reduce_sum
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
     t = UOp.range(Tc, 1, AxisType.GLOBAL)
     lane = UOp.special(32, "lidx0")
@@ -854,6 +855,7 @@ def flash_fused_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, 
   scale = 1.0 / (Hd ** 0.5)
   def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
     from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    from extra.amd_warp_reduce import warp_reduce_sum
     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
     s = UOp.range(S, 1, AxisType.GLOBAL)
     lane = UOp.special(LANES, "lidx0")
@@ -890,7 +892,8 @@ def flash_fused_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, 
     dot2 = UOp(Ops.CUSTOMI, _F32, (dotp.after(rp)[0], qpair, kpair), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
     dupd = dotp[0].store(dot2).end(rp)
     partial = dotp.after(dupd)[0]
-    sc_full = _warp_reduce_sum_staged(partial, lane, LANES) * scale
+    sc_full = (warp_reduce_sum(partial, lane, LANES) if getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)
+               else _warp_reduce_sum_staged(partial, lane, LANES)) * scale
     sc = in_r.where(sc_full, _fc(-float("inf")))
     old_m = mx.after(j)[g]
     new_m = old_m.maximum(sc)
@@ -927,6 +930,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
   scale = 1.0 / (Hd ** 0.5)
   def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
     from extra.qk_warp_reduce_lowering import _warp_reduce_sum_staged
+    from extra.amd_warp_reduce import warp_reduce_sum
     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
     s = UOp.range(S, 1, AxisType.GLOBAL)
     lane = UOp.special(LANES, "lidx0")
@@ -968,7 +972,8 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     dot2 = UOp(Ops.CUSTOMI, _F32, (dotp.after(rp)[0], qpair, kpair), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
     dupd = dotp[0].store(dot2).end(rp)
     partial = dotp.after(dupd)[0]
-    sc_full = _warp_reduce_sum_staged(partial, lane, LANES) * scale
+    sc_full = (warp_reduce_sum(partial, lane, LANES) if getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)
+               else _warp_reduce_sum_staged(partial, lane, LANES)) * scale
     sc = in_r.where(sc_full, _fc(-float("inf")))
     old_m = mx.after(tt)[0]
     new_m = old_m.maximum(sc)
@@ -1309,9 +1314,17 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
     # L is concrete (from MAXC + target split count); S is symbolic in Tc_u (mirrors the other routes,
     # which must not Python-eval the JIT-bound context length). target_s=48 == owned DECODE_ATTN_AMDGCN_S.
     target_s = getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_S", 48)
-    l_route = max(1, _ceildiv(MAXC, target_s))
-    s_route = (Tc_u + l_route - 1) // l_route
-    smax_route = _ceildiv(MAXC, l_route)
+    if getenv("DECODE_ATTN_BLOCK_TILE_FIXED_S", 0) and getenv("DECODE_ATTN_BLOCK_TILE", 0):
+      # H2 occupancy experiment: keep the block-tile route at a concrete S grid for the measured ctx.
+      # The UOp tile still needs concrete loop bounds, so L is provided explicitly by the gate/harness.
+      # Example ctx512: S=48, L=ceildiv(512,48)=11 -> 384 workgroups instead of the current 48.
+      smax_route = target_s
+      s_route = target_s
+      l_route = getenv("DECODE_ATTN_BLOCK_TILE_L", max(1, _ceildiv(MAXC, target_s)))
+    else:
+      l_route = max(1, _ceildiv(MAXC, target_s))
+      s_route = (Tc_u + l_route - 1) // l_route
+      smax_route = _ceildiv(MAXC, l_route)
     tile_builder = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel if getenv("DECODE_ATTN_BLOCK_TILE", 0) else \
       flash_fused_xlane_score_pv_tile_whole_cache_kernel
     po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,

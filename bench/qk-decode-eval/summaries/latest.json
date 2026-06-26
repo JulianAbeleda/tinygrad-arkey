@@ -1,32 +1,15 @@
 {
-  "date": "2026-06-21",
-  "git_commit": "f5f3a7f274bd77f836177c241b2429a8a3f46054",
+  "date": "2026-06-26",
+  "git_commit": "65150e89fef17d692455a0b1cb1fbfa940f5c9f8",
   "rows": [
     {
-      "candidate": "baseline_default",
-      "verdict": "REST",
-      "expected": "REST",
-      "match": true,
-      "wd_repro_band_pct": {
-        "128": 0.0,
-        "512": 0.0,
-        "1024": 0.0,
-        "4096": 0.0
-      },
-      "stop_reason": "baseline curve; not a promotion candidate"
-    },
-    {
-      "candidate": "decode_attention_split_xlane",
+      "candidate": "decode_attention_physical_tile_score_broadcast_lifecycle",
       "verdict": "REST",
       "expected": null,
-      "match": true,
-      "wd_repro_band_pct": {
-        "128": 0.0,
-        "512": 0.0,
-        "1024": 0.0,
-        "4096": 0.0
-      },
-      "stop_reason": "no rung cleared a promotion gate"
+      "match": false,
+      "route_gate_verdict": null,
+      "wd_repro_band_pct": null,
+      "stop_reason": "runner error: W==D run failed: ctx   128 : W  12.12ms (82.5 tok/s) | D  12.30ms (ceiling 81.3) | host-sync 0.00ms (0.0%) | progs 6\n"
     }
   ]
 }

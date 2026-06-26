@@ -1,7 +1,7 @@
 {
   "date": "2026-06-25",
-  "timestamp": "20260625-233037",
-  "verdict": "ONLINE_STATE_PV_XLANE_STRUCTURAL_ROUTE_CLEAN",
+  "timestamp": "20260626-151812",
+  "verdict": "ONLINE_STATE_PV_XLANE_FAIL__ROUTE_OR_MATERIALIZATION",
   "search_space_id": "decode_attention_online_softmax_pv_tile_v1",
   "candidate_id": "decode_attention_online_state_pv_xlane_p7",
   "flags": {
@@ -9,12 +9,12 @@
     "DECODE_ATTN_ONLINE_STATE_PV_TILE_XLANE": "1"
   },
   "token_match": true,
-  "route_clean": true,
+  "route_clean": false,
   "owned": {
     "arm": "owned",
     "route": {
       "date": "2026-06-25",
-      "timestamp": "20260625-233036",
+      "timestamp": "20260626-151811",
       "mode": "baseline",
       "verdict": "DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE",
       "selected_candidate": "owned_flash_tile_gqa_whole",
@@ -79,31 +79,31 @@
       },
       "top_program_counts": [
         [
-          "E_16_4_2_8_16_2_4_4",
+          "E\u001b[90m_\u001b[0m\u001b[34m16\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_2n7",
+          "E\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90mn7\u001b[0m",
           1
         ],
         [
-          "r_32_32_4_32_4",
+          "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_1187_32_4",
+          "E\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_16_256",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_32_32_4",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_1024_16_4_2_32",
+          "r\u001b[90m_\u001b[0m\u001b[34m1024\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
@@ -115,19 +115,19 @@
           1
         ],
         [
-          "r_8_16_8",
+          "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_2_8_4_4_16",
+          "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[91m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m16\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_8_8_16_2_4",
+          "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_4_4_8_16_2",
+          "E\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
@@ -139,15 +139,15 @@
           1
         ],
         [
-          "E_32_32_4n1",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
-          "r_16_256n1",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
-          "E_32_32_4n2",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn2\u001b[0m",
           1
         ],
         [
@@ -155,11 +155,11 @@
           1
         ],
         [
-          "E_128_32_3",
+          "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_128_32_3n1",
+          "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
@@ -167,11 +167,11 @@
           1
         ],
         [
-          "r_32_32_4_16",
+          "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_2_8_128_16_4_2_32",
+          "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
@@ -179,15 +179,15 @@
           1
         ],
         [
-          "E_32_32_4n3",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn3\u001b[0m",
           1
         ],
         [
-          "r_16_256n2",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn2\u001b[0m",
           1
         ],
         [
-          "E_32_32_4n4",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn4\u001b[0m",
           1
         ],
         [
@@ -195,23 +195,23 @@
           1
         ],
         [
-          "r_1187_32_4_16",
+          "r\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_32_4_1187",
+          "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_16_8",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_32_4_1187n1",
+          "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
-          "r_16_8n1",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ]
       ],
@@ -234,7 +234,7 @@
     "arm": "xlane",
     "route": {
       "date": "2026-06-25",
-      "timestamp": "20260625-233002",
+      "timestamp": "20260626-151738",
       "mode": "a2",
       "verdict": "DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN",
       "selected_candidate": "decode_attention_generated_wholecache_skeleton",
@@ -296,37 +296,39 @@
       },
       "materialization": {
         "E_49152_present": false,
-        "full_maxc_copy_kernels": [],
+        "full_maxc_copy_kernels": [
+          "E_98304_32_3"
+        ],
         "buffer_identity_inputs": false,
-        "selected_route_buffer_identity": true
+        "selected_route_buffer_identity": false
       },
       "top_program_counts": [
         [
-          "E_16_4_2_8_16_2_4_4",
+          "E\u001b[90m_\u001b[0m\u001b[34m16\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_2n7",
+          "E\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90mn7\u001b[0m",
           1
         ],
         [
-          "r_32_32_4_32_4",
+          "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_1187_32_4",
+          "E\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_16_256",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_32_32_4",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_1024_16_4_2_32",
+          "r\u001b[90m_\u001b[0m\u001b[34m1024\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
@@ -338,23 +340,23 @@
           1
         ],
         [
-          "r_8_16_8",
+          "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_2_8_4_4_16",
+          "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[91m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m4\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m16\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_8_8_16_2_4",
+          "r\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m_\u001b[0m\u001b[35m4\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_4_4_8_16_2",
+          "E\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[34m4\u001b[0m\u001b[90m_\u001b[0m\u001b[36m8\u001b[0m\u001b[90m_\u001b[0m\u001b[36m16\u001b[0m\u001b[90m_\u001b[0m\u001b[33m2\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_98304_32_3",
+          "E\u001b[90m_\u001b[0m\u001b[34m98304\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
@@ -374,15 +376,15 @@
           1
         ],
         [
-          "E_32_32_4n1",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
-          "r_16_256n1",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
-          "E_32_32_4n2",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn2\u001b[0m",
           1
         ],
         [
@@ -390,11 +392,11 @@
           1
         ],
         [
-          "E_128_32_3",
+          "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "E_128_32_3n1",
+          "E\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m3\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
@@ -402,11 +404,11 @@
           1
         ],
         [
-          "r_32_32_4_16",
+          "r\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_2_8_128_16_4_2_32",
+          "r\u001b[90m_\u001b[0m\u001b[34m2\u001b[0m\u001b[90m_\u001b[0m\u001b[34m8\u001b[0m\u001b[90m_\u001b[0m\u001b[34m128\u001b[0m\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m2\u001b[0m\u001b[90m_\u001b[0m\u001b[31m32\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
@@ -414,15 +416,15 @@
           1
         ],
         [
-          "E_32_32_4n3",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn3\u001b[0m",
           1
         ],
         [
-          "r_16_256n2",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m256\u001b[0m\u001b[90mn2\u001b[0m",
           1
         ],
         [
-          "E_32_32_4n4",
+          "E\u001b[90m_\u001b[0m\u001b[34m32\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90mn4\u001b[0m",
           1
         ],
         [
@@ -430,23 +432,23 @@
           1
         ],
         [
-          "r_1187_32_4_16",
+          "r\u001b[90m_\u001b[0m\u001b[34m1187\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[35m16\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_32_4_1187",
+          "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_16_8",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90m\u001b[0m",
           1
         ],
         [
-          "r_32_4_1187n1",
+          "r\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_\u001b[0m\u001b[31m1187\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ],
         [
-          "r_16_8n1",
+          "r\u001b[90m_\u001b[0m\u001b[91m16\u001b[0m\u001b[90m_\u001b[0m\u001b[31m8\u001b[0m\u001b[90mn1\u001b[0m",
           1
         ]
       ],

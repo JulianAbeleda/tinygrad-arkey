@@ -33,8 +33,14 @@ def check_route_fire(captured, candidate_kernel=CANDIDATE_KERNEL):
 
 def check_materialization(captured):
   names = _program_names(captured)
-  copies = [n for n in names if "4915" in n or "49152" in n]   # E_49152 = full-MAXC K/V materialization
-  return {"E_49152_present": len(copies) > 0, "full_maxc_copy_kernels": copies,
+  def _copy_elems(name: str) -> int:
+    m = re.match(r"^E_([0-9]+)", name)
+    return int(m.group(1)) if m else 0
+  # E_49152 is one full MAXC K or V tensor for Qwen3-8B decode; E_98304 is combined K+V.
+  literal_copies = [n for n in names if "4915" in n or "49152" in n]
+  large_e_copies = [n for n in names if _copy_elems(n) >= 49152]
+  copies = sorted(set(literal_copies + large_e_copies), key=names.index)
+  return {"E_49152_present": len(literal_copies) > 0, "full_maxc_copy_kernels": copies,
           # buffer-identity holds iff the whole-cache kernel fired AND no full-MAXC copy is present
           "buffer_identity_inputs": (any(CANDIDATE_KERNEL in n for n in names) and len(copies) == 0)}
 
@@ -126,7 +132,7 @@ def evaluate(cand_id, oracle_tokens=None):
 
 def _cheap_reject(res):
   if not res["route_fire"]["candidate_kernel_present"]: return "route_not_firing"
-  if res["materialization"]["E_49152_present"]: return "E_49152_returned"
+  if res["materialization"]["full_maxc_copy_kernels"]: return "full_maxc_materialization_returned"
   if not res["materialization"]["buffer_identity_inputs"]: return "sliced_view_not_buffer_identity"
   if not res["token_byte_identical"]: return "token_correctness_failed"
   return None

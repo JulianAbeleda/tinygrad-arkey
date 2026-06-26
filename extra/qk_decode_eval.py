@@ -33,16 +33,23 @@ HEARTBEAT = ROOT / "bench/qk-decode-eval/heartbeat.json"
 from extra.qk_harness_contract import git_commit, dirty_tree, perf_state, hardware, child_env, DEFAULT_MODEL  # noqa: E402
 MODEL = os.environ.get("QK_MODEL", DEFAULT_MODEL)
 def now_ts(): return time.strftime("%Y%m%dT%H%M%S")
+def now_date(): return time.strftime("%Y-%m-%d")
 
 # ---- runners (each spawns a subprocess, returns parsed numbers + the exact command) -----------------------------
 def run_wd(env: dict, repeats: int) -> dict:
   """N repeats of the clean W==D script with `env`; returns per-ctx tok_s_W samples + median/band. AUTO clock."""
   cmd = [sys.executable, "extra/qk_decode_runtime_overhead.py"]
   samples: dict[int, list[float]] = {}
+  log_dir = ROOT / "bench/qk-decode-eval/wd-logs"
+  log_dir.mkdir(parents=True, exist_ok=True)
   for rep in range(repeats):
     started = time.time()
-    p = subprocess.Popen(cmd, cwd=ROOT, env=child_env(env), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    log_path = log_dir / f"{now_ts()}-wd-repeat{rep + 1}.log"
+    if WD_RESULT.exists(): WD_RESULT.unlink()
+    log_f = log_path.open("w")
+    p = subprocess.Popen(cmd, cwd=ROOT, env=child_env(env), text=True, stdout=log_f, stderr=subprocess.STDOUT)
     last_hb, out = 0.0, ""
+    timeout_s, timed_out = int(os.environ.get("QK_DECODE_EVAL_WD_TIMEOUT_S", "1800")), False
     try:
       while p.poll() is None:
         time.sleep(5)
@@ -50,27 +57,45 @@ def run_wd(env: dict, repeats: int) -> dict:
         if elapsed - last_hb >= 30:
           last_hb = elapsed
           hb = {"status": "running", "pid": p.pid, "elapsed_s": round(elapsed, 1), "repeat": rep + 1,
-                "repeats": repeats, "command": " ".join(cmd), "env": env, "result_json": str(WD_RESULT)}
+                "repeats": repeats, "command": " ".join(cmd), "env": env, "result_json": str(WD_RESULT),
+                "output_log": str(log_path)}
           HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
           HEARTBEAT.write_text(json.dumps(hb, indent=2, sort_keys=True) + "\n")
           print(f"[wd heartbeat] pid={p.pid} repeat={rep + 1}/{repeats} elapsed={elapsed:.0f}s env={env}", file=sys.stderr, flush=True)
-      out = p.stdout.read() if p.stdout is not None else ""
+        if elapsed >= timeout_s:
+          timed_out = True
+          p.terminate()
+          try: p.wait(timeout=10)
+          except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+          break
+      log_f.close()
+      out = log_path.read_text(errors="replace")
     except KeyboardInterrupt:
       p.terminate()
+      log_f.close()
       hb = {"status": "interrupted", "pid": p.pid, "elapsed_s": round(time.time() - started, 1),
             "repeat": rep + 1, "repeats": repeats, "command": " ".join(cmd), "env": env,
-            "result_json": str(WD_RESULT)}
+            "result_json": str(WD_RESULT), "output_log": str(log_path)}
       HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
       HEARTBEAT.write_text(json.dumps(hb, indent=2, sort_keys=True) + "\n")
       raise
-    hb = {"status": "completed", "pid": p.pid, "elapsed_s": round(time.time() - started, 1),
+    finally:
+      if not log_f.closed: log_f.close()
+    hb = {"status": "timeout" if timed_out else "completed", "pid": p.pid, "elapsed_s": round(time.time() - started, 1),
           "repeat": rep + 1, "repeats": repeats, "returncode": p.returncode, "command": " ".join(cmd),
-          "env": env, "result_json": str(WD_RESULT)}
+          "env": env, "result_json": str(WD_RESULT), "output_log": str(log_path), "timeout_s": timeout_s}
     HEARTBEAT.parent.mkdir(parents=True, exist_ok=True)
     HEARTBEAT.write_text(json.dumps(hb, indent=2, sort_keys=True) + "\n")
-    if "@@DONE@@" not in (out or "") or not WD_RESULT.exists():
-      raise RuntimeError(f"W==D run failed: {(out or '')[-500:]}")
+    if not WD_RESULT.exists():
+      raise RuntimeError(f"W==D run {'timed out' if timed_out else 'failed'} without result.json: {(out or '')[-500:]}")
     rows = json.loads(WD_RESULT.read_text())["rows"]
+    expected_ctxs = [128, 512, 1024, 4096]
+    if sorted(int(r["ctx"]) for r in rows) != expected_ctxs:
+      raise RuntimeError(f"W==D incomplete rows: got {[r.get('ctx') for r in rows]}, expected {expected_ctxs}; {(out or '')[-500:]}")
+    if "@@DONE@@" not in (out or ""):
+      print(f"[wd warning] pid={p.pid} wrote complete result without @@DONE@@; accepting complete result_json={WD_RESULT}", file=sys.stderr, flush=True)
     for r in rows: samples.setdefault(int(r["ctx"]), []).append(float(r["tok_s_W"]))
   out = {"command": "DEV=AMD JIT=1 " + " ".join(f"{k}={v}" for k, v in env.items()) + f" python3 {cmd[1]} (x{repeats})",
          "repeats": repeats, "samples": samples, "median": {}, "band_pct": {}}
@@ -122,6 +147,16 @@ def run_ab_script(script: str, result_json: str) -> dict:
     child_contract = {"conformance": "UNKNOWN", "missing": [f"audit_error:{e}"], "present": [], "n_present": 0, "n_total": 13}
   return {"command": "DEV=AMD JIT=1 " + " ".join(cmd[1:]), "first_gate_pass": d.get("first_gate_pass"),
           "speedup_ctx1024": best, "max_err": err, "phase": d.get("phase"), "child_contract": child_contract}
+
+def run_route_gate_script(script: str, result_json: str, env: dict) -> dict:
+  cmd = [sys.executable, script]
+  p = subprocess.run(cmd, cwd=ROOT, env=child_env(env), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+  rj = ROOT / result_json
+  if not rj.exists(): raise RuntimeError(f"route gate script failed before artifact: {(p.stdout or '')[-800:]}")
+  d = json.loads(rj.read_text())
+  return {"command": "DEV=AMD JIT=1 " + " ".join(f"{k}={v}" for k, v in env.items()) + " " + " ".join(cmd[1:]),
+          "artifact_path": result_json, "returncode": p.returncode, "passed": p.returncode == 0,
+          "verdict": d.get("verdict"), "output_tail": (p.stdout or "")[-1200:], "artifact_json": d}
 
 def run_flash_l_local() -> dict:
   """Self-spawned child: flash_decode_attention L=64 vs L=128 at decode shape, clock-pinned, byte-exact vs numpy."""
@@ -196,15 +231,16 @@ def classify(cand: dict, th: dict, corr: dict, local: dict, wd: dict) -> tuple[V
 def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, dry: bool, dirty_tree_at_start: bool | None = None) -> dict:
   th = {**reg["thresholds_default"]}
   res = {"schema": "decode_eval_run_v1", "candidate_id": cand["id"], "candidate_family": cand["family"],
-         "candidate_description": cand["description"], "date": "2026-06-21", "git_commit": git_commit(),
+         "candidate_description": cand["description"], "date": now_date(), "git_commit": git_commit(),
          "dirty_tree": dirty_tree() if dirty_tree_at_start is None else dirty_tree_at_start, "hardware": hardware(), "perf_state_before": perf_state(),
          "clock_pin_mode": "auto", "env": cand.get("env", {}), "commands": [], "contexts": cand["contexts"],
          "repeats": 0, "warmups": 8, "thresholds": th, "verdict_expected": cand.get("historical_expected_verdict"),
          "linked_ledger_entry": cand.get("compare_artifact"), "default_behavior_changed": False,
          "source_files": ["extra/qk_decode_eval.py", "bench/qk-decode-eval/candidates.json"], "notes": [],
-         "correctness": {"checked": False, "passed": None, "metric": None, "value": None, "threshold": None, "note": None},
-         "local_ab": {"checked": False, "passed": None, "speedup_ctx1024": None, "threshold_min": None, "authority": None, "note": None},
-         "wd": {"checked": False, "authority": "clean W==D PROFILE-off AUTO-clock (promotion authority)"}}
+           "correctness": {"checked": False, "passed": None, "metric": None, "value": None, "threshold": None, "note": None},
+           "local_ab": {"checked": False, "passed": None, "speedup_ctx1024": None, "threshold_min": None, "authority": None, "note": None},
+           "route_gate": {"checked": False, "passed": None, "artifact_path": None, "artifact_verdict": None, "returncode": None, "note": None},
+           "wd": {"checked": False, "authority": "clean W==D PROFILE-off AUTO-clock (promotion authority)"}}
   if dry:
     res["verdict"] = Verdict.REST; res["stop_reason"] = "dry-run (no GPU)"; res["perf_state_after"] = perf_state()
     res["verdict_matches_expected"] = None
@@ -229,6 +265,18 @@ def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, d
                             f"({cc.get('n_present')}/{cc.get('n_total')} fields); missing: {', '.join(cc.get('missing', [])[:6])}")
       if cand.get("correctness_req") == "byte_exact":
         res["correctness"] = {"checked": True, "metric": "max_err", "value": d["max_err"], "threshold": th["correctness_tol"], "passed": d["max_err"] <= th["correctness_tol"], "note": "byte-exact vs numpy ref"}
+    elif r == "route_gate" and runner == "script":
+      d = run_route_gate_script(rung["script"], rung["result_json"], cand.get("env", {})); res["commands"].append(d["command"])
+      res["source_files"].append(rung["script"])
+      res["route_gate"] = {"checked": True, "passed": bool(d["passed"]), "artifact_path": rung["result_json"],
+                           "artifact_verdict": d.get("verdict"), "returncode": d.get("returncode"),
+                           "note": "route gate passed; W==D is allowed to run" if d["passed"] else "route gate failed; W==D blocked"}
+      if cand.get("correctness_req") in ("route_gate", "route_gate_and_score_numeric", "lifecycle_gate_and_route_gate"):
+        res["correctness"] = {"checked": True, "metric": "route_gate", "value": 1.0 if d["passed"] else 0.0,
+                              "threshold": 1.0, "passed": bool(d["passed"]), "note": d.get("verdict")}
+      if not d["passed"]:
+        res["notes"].append(f"route_gate blocked W==D: {rung['result_json']} verdict={d.get('verdict')} returncode={d.get('returncode')}")
+        break
     elif r == "wd" and runner == "runtime_overhead":
       reps = repeats_override or rung.get("repeats", 3); res["repeats"] = reps
       wd = run_wd(cand.get("env", {}), reps); res["commands"].append(wd["command"])
@@ -264,6 +312,8 @@ def evaluate(cand: dict, reg: dict, cache: dict, repeats_override: int | None, d
       res["commands"].append(f"[binding selftest: no GPU; binding_template_id={rung.get('binding_template_id')}]")
       res["notes"].append("binding-plumbing selftest; SELFTEST_PASS is not a performance pass")
       res["source_files"].append("bench/qk-decode-eval/binding_templates.json")
+    else:
+      raise RuntimeError(f"unknown rung/runner pair: rung={r!r} runner={runner!r}")
   v, reason = classify(cand, th, res["correctness"], res["local_ab"], res["wd"])
   res["verdict"], res["stop_reason"] = v, reason
   res["verdict_matches_expected"] = (cand.get("historical_expected_verdict") in (None, v)) or (v == cand.get("historical_expected_verdict"))
@@ -314,8 +364,9 @@ def main() -> int:
     vstr = res['verdict'].value if isinstance(res['verdict'], Verdict) else res['verdict']  # .value: str(enum) is the repr
     print(f"  -> {vstr} (expected {res.get('verdict_expected')}, match={res.get('verdict_matches_expected')}) | {res.get('stop_reason','')[:90]}\n  artifact: {rel}", file=sys.stderr)
   SUMMARIES.mkdir(parents=True, exist_ok=True)
-  summ = {"date": "2026-06-21", "git_commit": git_commit(), "rows": [{"candidate": r["candidate_id"], "verdict": r["verdict"],
+  summ = {"date": now_date(), "git_commit": git_commit(), "rows": [{"candidate": r["candidate_id"], "verdict": r["verdict"],
           "expected": r.get("verdict_expected"), "match": r.get("verdict_matches_expected"),
+          "route_gate_verdict": r.get("route_gate", {}).get("artifact_verdict"),
           "wd_repro_band_pct": r.get("wd", {}).get("repro_band_pct"), "stop_reason": r.get("stop_reason")} for r in results]}
   (SUMMARIES / "latest.json").write_text(json.dumps(summ, indent=2) + "\n")
   print(json.dumps(summ, indent=2))
