@@ -1,12 +1,12 @@
 {
   "date": "2026-06-26",
-  "timestamp": "20260626-005210",
-  "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT",
+  "timestamp": "20260626-005725",
+  "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS",
   "minimal_repro": {
     "checked": true,
-    "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT",
+    "verdict": "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS",
     "classified": true,
-    "source": "attention_builder_blocker_artifact",
+    "source": "attention_builder_fixed",
     "synthetic": {
       "checked": true,
       "compiled": true,
@@ -52,24 +52,37 @@
       }
     },
     "known_failure_signature": {
-      "exception": "pop from empty list",
-      "exception_type": "IndexError",
-      "has_estimates_from_uops": true,
-      "has_pop_from_empty_list": true
+      "exception": null,
+      "exception_type": null,
+      "has_estimates_from_uops": false,
+      "has_pop_from_empty_list": false
     }
   },
   "attention_blocker_artifact": {
     "available": true,
     "path": "bench/qk-decode-attention-fused-score-state-pv-tile/latest.json",
-    "verdict": "FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE",
+    "verdict": "FUSED_SCORE_STATE_PV_TILE_STANDALONE_NUMERIC_PASS__ROUTE_GATE_REQUIRED",
     "standalone_numeric": {
       "checked": true,
-      "pass": false,
-      "blocked": true,
-      "verdict": "FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE",
-      "exception_type": "IndexError",
-      "exception": "pop from empty list",
-      "traceback_tail": "ret = fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 224, in realize\n    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 254, in run_linear\n    if not jit: linear = compile_linear(linear, validate=VALIDATE_WITH_CPU)\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 247, in compile_linear\n    linear = graph_rewrite(linear, pm_compile, name=\"precompile kernels\", walk=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1581, in walk_rewrite\n    if self.pm is not None and (rewritten:=self.pm_rewrite(new_n)) is not None: new_n = rewritten\n                                           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 228, in <lambda>\n    call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 253, in to_program\n    if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)\n                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1438, in __wrapper\n    ret = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 245, in do_to_program\n    prg = graph_rewrite(prg, pm_to_program, ctx=renderer, name=\"linearize/render\")\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1630, in unified_rewrite\n    if self.pm is None or (new_src_n:=self.pm_rewrite(new_n)) is None:\n                                      ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1364, in lazy_compile\n    return entry[1](uop, ctx)\n           ^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 193, in do_estimates\n    return prg.replace(src=(sink.replace(arg=replace(sink.arg, estimates=Estimates.from_uops(lin.src, ignore_indexing=True))),)+prg.src[1:])\n                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/renderer/__init__.py\", line 40, in from_uops\n    elif u.op is Ops.END: mults = mult_stack.pop(-1)\n                                  ^^^^^^^^^^^^^^^^^^\nIndexError: pop from empty list\n"
+      "shape": {
+        "Hq": 32,
+        "Hkv": 8,
+        "Hd": 128,
+        "MAXC": 256,
+        "L": 128,
+        "Tc": 192,
+        "S": 2,
+        "W": 130
+      },
+      "finite": true,
+      "max_abs": 5.340576171875e-05,
+      "rmse": 1.5343736095019267e-06,
+      "rel_rmse": 1.951986663556442e-07,
+      "pass": true,
+      "thresholds": {
+        "max_abs": 0.001,
+        "rel_rmse": 1e-05
+      }
     }
   },
   "required_lowering_capability": {
@@ -82,5 +95,5 @@
       "W==D promotion"
     ]
   },
-  "next_step": "Attention-like indexing passes at small shape; next isolator should scale D/E/W toward Hd=128/W=130 to locate the size/resource threshold."
+  "next_step": "Attention target builder now lowers and passes standalone numeric; proceed to default-off route/materialization/lifecycle gate."
 }

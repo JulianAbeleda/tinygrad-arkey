@@ -288,7 +288,10 @@ def _minimal_repro() -> dict[str, Any]:
   attn = _read_json(ATTN_BLOCKER)
   numeric = attn.get("standalone_numeric", {}) if attn.get("available") else {}
   tb = numeric.get("traceback_tail", "")
-  if attention_index.get("verdict") == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_BLOCKED__ESTIMATE_SCOPE_STACK":
+  if numeric.get("pass"):
+    verdict = "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS"
+    classified = True
+  elif attention_index.get("verdict") == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_BLOCKED__ESTIMATE_SCOPE_STACK":
     verdict = "FUSED_TILE_LIFECYCLE_BLOCKED__ATTENTION_INDEX_ESTIMATE_SCOPE_STACK"
     classified = True
   elif attention_index.get("verdict") == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_BLOCKED__UOP_VERIFY":
@@ -325,7 +328,7 @@ def _minimal_repro() -> dict[str, Any]:
     "checked": True,
     "verdict": verdict,
     "classified": classified,
-    "source": "synthetic_repro" if verdict.startswith("FUSED_TILE_LIFECYCLE_BLOCKED__SYNTHETIC") else "attention_builder_blocker_artifact",
+    "source": "attention_builder_fixed" if verdict == "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS" else "synthetic_repro" if verdict.startswith("FUSED_TILE_LIFECYCLE_BLOCKED__SYNTHETIC") else "attention_builder_blocker_artifact",
     "synthetic": synthetic,
     "synthetic_global_g": global_g,
     "synthetic_attention_index": attention_index,
@@ -340,7 +343,9 @@ def _minimal_repro() -> dict[str, Any]:
 
 def build() -> dict[str, Any]:
   repro = _minimal_repro()
-  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT":
+  if repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_TARGET_NUMERIC_PASS":
+    next_step = "Attention target builder now lowers and passes standalone numeric; proceed to default-off route/materialization/lifecycle gate."
+  elif repro["verdict"] == "FUSED_TILE_LIFECYCLE_ATTENTION_INDEX_NUMERIC_PASS__SCALE_REPRO_NEXT":
     next_step = "Attention-like indexing passes at small shape; next isolator should scale D/E/W toward Hd=128/W=130 to locate the size/resource threshold."
   elif repro["verdict"] in ("FUSED_TILE_LIFECYCLE_BLOCKED__ATTENTION_INDEX_ESTIMATE_SCOPE_STACK", "FUSED_TILE_LIFECYCLE_BLOCKED__ATTENTION_INDEX_UOP_VERIFY"):
     next_step = "Attention-like indexing captured the lowering wall; fix or encapsulate flattened Q/K/V indexing with nested lifecycle state."

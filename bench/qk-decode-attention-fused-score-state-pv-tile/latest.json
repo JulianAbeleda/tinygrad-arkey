@@ -1,7 +1,7 @@
 {
   "date": "2026-06-26",
-  "timestamp": "20260626-004401",
-  "verdict": "FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE",
+  "timestamp": "20260626-005611",
+  "verdict": "FUSED_SCORE_STATE_PV_TILE_STANDALONE_NUMERIC_PASS__ROUTE_GATE_REQUIRED",
   "target": {
     "builder": "flash_fused_score_state_pv_tile_whole_cache_kernel",
     "program": "flash_fused_score_state_pv_tile_whole_cache_32_128",
@@ -21,7 +21,7 @@
       "online_m_hint": 3,
       "online_l_hint": 0,
       "den_col_hint": 1,
-      "max_col_hint": 1,
+      "max_col_hint": 0,
       "sink": 1
     },
     "selected_source_lines": [
@@ -30,34 +30,35 @@
       "15:     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)",
       "16:     s = UOp.range(S, 1, AxisType.GLOBAL)",
       "17:     d = UOp.range(W, 2, AxisType.LOCAL)",
-      "21:     j = UOp.range(L, 3, axis_type=AxisType.REDUCE)",
-      "25:     e = UOp.range(Hd, 4, axis_type=AxisType.REDUCE)",
-      "26:     g = UOp.range(G, 5)",
-      "28:     dot = UOp.placeholder((G,), _F32, 152, addrspace=AddrSpace.REG)",
-      "29:     zi = UOp.range(G, 6)",
-      "30:     dot = dot.after(dot[zi].store(0.0).end(zi))",
-      "31:     qv = q[h * Hd + e].cast(_F32)",
+      "20:     j = UOp.range(L, 3, axis_type=AxisType.REDUCE)",
+      "24:     e = UOp.range(Hd, 4, axis_type=AxisType.REDUCE)",
+      "25:     g_dot = UOp.range(G, 5)",
+      "27:     dot = UOp.placeholder((G,), _F32, 152, addrspace=AddrSpace.REG)",
+      "28:     zi = UOp.range(G, 6)",
+      "29:     dot_init = dot.after(kvh, s, d, j)[zi].store(0.0).end(zi)",
+      "31:     qv = q[h_dot * Hd + e].cast(_F32)",
       "32:     kvv = cache[((0 * Hkv + kvh) * MAXC + t_safe) * Hd + e].cast(_F32)",
-      "33:     dot_upd = dot[g].store(dot.after(e)[g] + qv * kvv).end(g).end(e)",
-      "36:     vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))",
-      "37:     acc = UOp.placeholder((G,), _F32, 153, addrspace=AddrSpace.REG)",
-      "38:     den = UOp.placeholder((G,), _F32, 154, addrspace=AddrSpace.REG)",
-      "39:     mx = UOp.placeholder((G,), _F32, 155, addrspace=AddrSpace.REG)",
-      "40:     za = UOp.range(G, 7)",
-      "41:     init = acc[za].store(0.0).end(za)",
-      "42:     zl = UOp.range(G, 8)",
-      "43:     init = den.after(init)[zl].store(0.0).end(zl)",
-      "44:     zm = UOp.range(G, 9)",
-      "45:     init = mx.after(init)[zm].store(-float(\"inf\")).end(zm)",
-      "47:     old_m = mx.after(j)[g]",
-      "48:     new_m = old_m.maximum(sc)",
-      "49:     corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))",
-      "50:     p = in_r.where(_fexp(sc - new_m), _fc(0.0))",
-      "51:     upd = acc[g].store(acc.after(j)[g] * corr + p * vd)",
-      "52:     upd = den.after(upd)[g].store(den.after(j)[g] * corr + p)",
-      "53:     upd = mx.after(upd)[g].store(new_m).end(g).end(j)",
-      "54:     g2 = UOp.range(G, 10)",
-      "57:     return pout[((kvh * G + g2) * S + s) * W + d].store(val).end(g2).end(kvh, s, d).sink("
+      "33:     dot_upd = dot[g_dot].store(dot.after(e)[g_dot] + qv * kvv).end(g_dot).end(e)",
+      "35:     vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))",
+      "36:     acc = UOp.placeholder((G,), _F32, 153, addrspace=AddrSpace.REG)",
+      "37:     den = UOp.placeholder((G,), _F32, 154, addrspace=AddrSpace.REG)",
+      "38:     mx = UOp.placeholder((G,), _F32, 155, addrspace=AddrSpace.REG)",
+      "39:     za = UOp.range(G, 7)",
+      "40:     init = acc.after(kvh, s, d)[za].store(0.0).end(za)",
+      "41:     zl = UOp.range(G, 8)",
+      "42:     init = den.after(init)[zl].store(0.0).end(zl)",
+      "43:     zm = UOp.range(G, 9)",
+      "44:     init = mx.after(init)[zm].store(-float(\"inf\")).end(zm)",
+      "46:     g_state = UOp.range(G, 10)",
+      "47:     old_m = mx.after(j)[g_state]",
+      "49:     new_m = old_m.maximum(sc)",
+      "50:     corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))",
+      "51:     p = in_r.where(_fexp(sc - new_m), _fc(0.0))",
+      "52:     upd = acc[g_state].store(acc.after(j)[g_state] * corr + p * vd)",
+      "53:     upd = den.after(upd)[g_state].store(den.after(j)[g_state] * corr + p)",
+      "54:     upd = mx.after(upd)[g_state].store(new_m).end(g_state).end(j)",
+      "55:     g2 = UOp.range(G, 11)",
+      "58:     return pout[((kvh * G + g2) * S + s) * W + d].store(val).end(g2).end(kvh, s, d).sink("
     ]
   },
   "previous_fused_pv_only": {
@@ -144,12 +145,25 @@
   },
   "standalone_numeric": {
     "checked": true,
-    "pass": false,
-    "blocked": true,
-    "verdict": "FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE",
-    "exception_type": "IndexError",
-    "exception": "pop from empty list",
-    "traceback_tail": "ret = fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/tensor.py\", line 224, in realize\n    run_linear(*Tensor.linear_with_vars(*to_realize), update_stats=do_update_stats)\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 254, in run_linear\n    if not jit: linear = compile_linear(linear, validate=VALIDATE_WITH_CPU)\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 247, in compile_linear\n    linear = graph_rewrite(linear, pm_compile, name=\"precompile kernels\", walk=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1581, in walk_rewrite\n    if self.pm is not None and (rewritten:=self.pm_rewrite(new_n)) is not None: new_n = rewritten\n                                           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/engine/realize.py\", line 228, in <lambda>\n    call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 253, in to_program\n    if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)\n                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1438, in __wrapper\n    ret = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 245, in do_to_program\n    prg = graph_rewrite(prg, pm_to_program, ctx=renderer, name=\"linearize/render\")\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1474, in wrap_profile_matches\n    return fxn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1654, in graph_rewrite\n    return rewrite_ctx.walk_rewrite(sink) if walk else rewrite_ctx.unified_rewrite(sink)\n                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1630, in unified_rewrite\n    if self.pm is None or (new_src_n:=self.pm_rewrite(new_n)) is None:\n                                      ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1553, in pm_rewrite\n    def pm_rewrite(self, x:UOp) -> UOp|None: return unwrap(self.pm).rewrite(x, self.ctx)\n                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1390, in rewrite\n    if (ret:=match(uop, ctx)) is not None and ret is not uop: return ret\n             ^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/uop/ops.py\", line 1364, in lazy_compile\n    return entry[1](uop, ctx)\n           ^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 3, in compiled_match\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/codegen/__init__.py\", line 193, in do_estimates\n    return prg.replace(src=(sink.replace(arg=replace(sink.arg, estimates=Estimates.from_uops(lin.src, ignore_indexing=True))),)+prg.src[1:])\n                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/renderer/__init__.py\", line 40, in from_uops\n    elif u.op is Ops.END: mults = mult_stack.pop(-1)\n                                  ^^^^^^^^^^^^^^^^^^\nIndexError: pop from empty list\n"
+    "shape": {
+      "Hq": 32,
+      "Hkv": 8,
+      "Hd": 128,
+      "MAXC": 256,
+      "L": 128,
+      "Tc": 192,
+      "S": 2,
+      "W": 130
+    },
+    "finite": true,
+    "max_abs": 5.340576171875e-05,
+    "rmse": 1.5343736095019267e-06,
+    "rel_rmse": 1.951986663556442e-07,
+    "pass": true,
+    "thresholds": {
+      "max_abs": 0.001,
+      "rel_rmse": 1e-05
+    }
   },
   "kill_gate": "If UOp cannot express q.k score reduce + token online recurrence + local-d PV in one builder, classify as FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE.",
   "supporting_artifacts": {
@@ -207,5 +221,5 @@
       "wd": {}
     }
   },
-  "decision": "Target builder exists but standalone numeric failed. Fix kernel semantics before route wiring."
+  "decision": "Standalone numeric passed. Next step is default-off model route wiring and route/materialization/lifecycle gate."
 }
