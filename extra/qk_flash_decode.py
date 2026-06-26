@@ -599,6 +599,66 @@ def flash_fused_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:
       arg=_fki(f"flash_fused_pv_tile_whole_cache_{Hq}_{Hd}"))
   return kernel
 
+def flash_fused_score_state_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Generated fused score + online-state + PV tile candidate.
+
+  Standalone rung only. This intentionally has a distinct program identity from
+  the route-clean fused-PV-only candidate so the gates can prove whether score
+  and split max/state were actually pulled into the tile lifecycle.
+
+  Output width W=Hd+2:
+    [0:Hd) -> unnormalized PV accumulator
+    Hd     -> split denominator l
+    Hd+1   -> split max m
+  """
+  G = Hq // Hkv; W = Hd + 2
+  def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)
+    is_v = d < Hd
+    is_l = d.eq(Hd)
+    is_m = d.eq(Hd + 1)
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j
+    in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    e = UOp.range(Hd, 4, axis_type=AxisType.REDUCE)
+    g = UOp.range(G, 5)
+    h = kvh * G + g
+    dot = UOp.placeholder((G,), _F32, 152, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 6)
+    dot = dot.after(dot[zi].store(0.0).end(zi))
+    qv = q[h * Hd + e].cast(_F32)
+    kvv = cache[((0 * Hkv + kvh) * MAXC + t_safe) * Hd + e].cast(_F32)
+    dot_upd = dot[g].store(dot.after(e)[g] + qv * kvv).end(g).end(e)
+    dot_f = dot.after(dot_upd)
+    sc = in_r.where(dot_f[g] * (1.0 / (Hd ** 0.5)), _fc(-float("inf")))
+    vd = is_v.where(cache[((1 * Hkv + kvh) * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))].cast(_F32), _fc(1.0))
+    acc = UOp.placeholder((G,), _F32, 153, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((G,), _F32, 154, addrspace=AddrSpace.REG)
+    mx = UOp.placeholder((G,), _F32, 155, addrspace=AddrSpace.REG)
+    za = UOp.range(G, 7)
+    init = acc[za].store(0.0).end(za)
+    zl = UOp.range(G, 8)
+    init = den.after(init)[zl].store(0.0).end(zl)
+    zm = UOp.range(G, 9)
+    init = mx.after(init)[zm].store(-float("inf")).end(zm)
+    acc, den, mx = acc.after(init), den.after(init), mx.after(init)
+    old_m = mx.after(j)[g]
+    new_m = old_m.maximum(sc)
+    corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
+    p = in_r.where(_fexp(sc - new_m), _fc(0.0))
+    upd = acc[g].store(acc.after(j)[g] * corr + p * vd)
+    upd = den.after(upd)[g].store(den.after(j)[g] * corr + p)
+    upd = mx.after(upd)[g].store(new_m).end(g).end(j)
+    g2 = UOp.range(G, 10)
+    af, lf, mf = acc.after(upd), den.after(upd), mx.after(upd)
+    val = is_v.where(af[g2], is_l.where(lf[g2], mf[g2]))
+    return pout[((kvh * G + g2) * S + s) * W + d].store(val).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_fused_score_state_pv_tile_whole_cache_{Hq}_{Hd}"))
+  return kernel
+
 def flash_split_ml_gmax_kernel(Hq:int, S):
   def kernel(gm:UOp, pm:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)

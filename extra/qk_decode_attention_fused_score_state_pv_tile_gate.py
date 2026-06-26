@@ -8,6 +8,7 @@ score computation, online softmax state, and PV accumulation.
 from __future__ import annotations
 
 import inspect, json, pathlib, time
+import traceback
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -81,6 +82,73 @@ def _fused_pv_wd_summary() -> dict[str, Any]:
     "promotion_gate_passed": d.get("promotion_gate_passed"),
   }
 
+def _standalone_numeric() -> dict[str, Any]:
+  import numpy as np
+  from tinygrad import Tensor, dtypes
+  from extra.qk_flash_decode import flash_fused_score_state_pv_tile_whole_cache_kernel
+
+  Hq, Hkv, Hd, MAXC, L, Tc = 32, 8, 128, 256, 128, 192
+  G, S, W = Hq // Hkv, (Tc + L - 1) // L, Hd + 2
+  rng = np.random.default_rng(20260626)
+  q = rng.normal(0.0, 0.25, size=(Hq, Hd)).astype(np.float32)
+  cache = np.zeros((2, Hkv, MAXC, Hd), dtype=np.float32)
+  cache[0] = rng.normal(0.0, 0.25, size=(Hkv, MAXC, Hd)).astype(np.float32)
+  cache[1] = rng.normal(0.0, 0.25, size=(Hkv, MAXC, Hd)).astype(np.float32)
+
+  got = Tensor.empty(Hq * S * W, dtype=dtypes.float32).custom_kernel(
+    Tensor(q.reshape(-1)), Tensor(cache.reshape(-1)),
+    fxn=flash_fused_score_state_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc))[0].realize().numpy().reshape(Hq, S, W)
+
+  ref = np.zeros((Hq, S, W), dtype=np.float32)
+  scale = 1.0 / np.sqrt(Hd)
+  for kvh in range(Hkv):
+    for s in range(S):
+      t0, t1 = s * L, min((s + 1) * L, Tc)
+      for g in range(G):
+        h = kvh * G + g
+        scores = (cache[0, kvh, t0:t1, :] @ q[h]) * scale
+        m = np.max(scores).astype(np.float32)
+        p = np.exp(scores - m).astype(np.float32)
+        ref[h, s, :Hd] = p @ cache[1, kvh, t0:t1, :]
+        ref[h, s, Hd] = p.sum()
+        ref[h, s, Hd + 1] = m
+
+  diff = got - ref
+  finite = bool(np.isfinite(got).all())
+  max_abs = float(np.max(np.abs(diff)))
+  rmse = float(np.sqrt(np.mean(diff * diff)))
+  ref_scale = float(np.sqrt(np.mean(ref * ref)) + 1e-12)
+  rel_rmse = float(rmse / ref_scale)
+  return {
+    "checked": True,
+    "shape": {"Hq": Hq, "Hkv": Hkv, "Hd": Hd, "MAXC": MAXC, "L": L, "Tc": Tc, "S": S, "W": W},
+    "finite": finite,
+    "max_abs": max_abs,
+    "rmse": rmse,
+    "rel_rmse": rel_rmse,
+    "pass": bool(finite and max_abs <= 1e-3 and rel_rmse <= 1e-5),
+    "thresholds": {"max_abs": 1e-3, "rel_rmse": 1e-5},
+  }
+
+def _standalone_numeric_or_blocker() -> dict[str, Any]:
+  try:
+    return _standalone_numeric()
+  except Exception as e:
+    tb = traceback.format_exc()
+    if "pop from empty list" in tb and "Estimates.from_uops" in tb:
+      verdict = "FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE"
+    else:
+      verdict = "FUSED_SCORE_STATE_PV_TILE_FAIL__STANDALONE_EXCEPTION"
+    return {
+      "checked": True,
+      "pass": False,
+      "blocked": verdict.startswith("FUSED_SCORE_STATE_PV_TILE_BLOCKED"),
+      "verdict": verdict,
+      "exception_type": type(e).__name__,
+      "exception": str(e),
+      "traceback_tail": tb[-5000:],
+    }
+
 
 def build() -> dict[str, Any]:
   target_src = _builder_source(TARGET_BUILDER)
@@ -90,6 +158,7 @@ def build() -> dict[str, Any]:
   target_exists = target_src is not None
   previous_exists = previous_src is not None
 
+  numeric = {"checked": False, "reason": "target builder missing or structurally blocked"}
   if not target_exists:
     verdict = "FUSED_SCORE_STATE_PV_TILE_BLOCKED__NO_GENERATED_TILE_BUILDER"
   elif target_markers.get("axis_reduce", 0) < 2:
@@ -99,7 +168,9 @@ def build() -> dict[str, Any]:
   elif target_markers.get("q_load_hint", 0) == 0 or target_markers.get("cache_k_load_hint", 0) == 0 or target_markers.get("cache_v_load_hint", 0) == 0:
     verdict = "FUSED_SCORE_STATE_PV_TILE_BLOCKED__INCOMPLETE_QKV_LIFECYCLE"
   else:
-    verdict = "FUSED_SCORE_STATE_PV_TILE_STRUCTURAL_BUILDER_PRESENT__NUMERIC_GATE_REQUIRED"
+    numeric = _standalone_numeric_or_blocker()
+    verdict = ("FUSED_SCORE_STATE_PV_TILE_STANDALONE_NUMERIC_PASS__ROUTE_GATE_REQUIRED" if numeric.get("pass") else
+               numeric.get("verdict", "FUSED_SCORE_STATE_PV_TILE_FAIL__NUMERIC"))
 
   return {
     "date": "2026-06-26",
@@ -131,6 +202,7 @@ def build() -> dict[str, Any]:
       "d_eq_Hd": "split denominator l",
       "d_eq_Hd_plus_1": "split max m",
     },
+    "standalone_numeric": numeric,
     "kill_gate": "If UOp cannot express q.k score reduce + token online recurrence + local-d PV in one builder, classify as FUSED_SCORE_STATE_PV_TILE_BLOCKED__MULTI_REDUCTION_STORE_SHAPE.",
     "supporting_artifacts": {
       "fused_pv_tile_gate": _latest_json("bench/qk-decode-attention-fused-pv-tile/latest.json"),
@@ -139,7 +211,9 @@ def build() -> dict[str, Any]:
     "decision": (
       "Do not route or W==D yet. Build the target generated score+state+PV tile builder, then add standalone numeric comparison."
       if not target_exists else
-      "Target builder exists structurally; next step is standalone numeric comparison before route wiring."
+      ("Standalone numeric passed. Next step is default-off model route wiring and route/materialization/lifecycle gate."
+       if numeric.get("pass") else
+       "Target builder exists but standalone numeric failed. Fix kernel semantics before route wiring.")
     ),
   }
 
