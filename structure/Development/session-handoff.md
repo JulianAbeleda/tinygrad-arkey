@@ -14,6 +14,7 @@ Source of truth:
 - `docs/decode-attention-a1-generated-skeleton-scope.md`
 - `docs/decode-attention-a1-generated-skeleton-result.md`
 - `docs/decode-attention-a2-wholecache-skeleton-result.md`
+- `docs/decode-attention-a3-performance-primitive-lowering-scope.md`
 - Update derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py`.
 - Check derived docs with `PYTHONPATH=. .venv/bin/python extra/qk_update_benchmark_refs.py --check`.
 
@@ -40,7 +41,7 @@ Current baseline snapshot:
 - Decode attention A0 purity capture: complete. Verdict `DECODE_ATTENTION_NOT_PURE__OWNED_TILE_COMBINE` (`extra/qk_decode_attention_purity_capture.py`, `bench/qk-decode-attention-purity/latest.json`). Current default route fires `owned_flash_tile_gqa_whole` + `owned_flash_combine`, keeps buffer identity, and avoids `E_49152`.
 - Decode attention A1 generated skeleton: complete with precise blocker. Verdict `DECODE_ATTENTION_A1_FAIL__E_49152_REINTRODUCED` (`extra/qk_decode_attention_purity_capture.py --a1`, `bench/qk-decode-attention-generated-skeleton/latest.json`). Generated flash programs fire and tokens match, but sliced KV inputs reintroduce `E_49152_32_3`; not promotable.
 - Decode attention A2 generated whole-cache skeleton: complete. Verdict `DECODE_ATTENTION_A2_GENERATED_WHOLECACHE_ROUTE_CLEAN` (`extra/qk_decode_attention_purity_capture.py --a2`, `bench/qk-decode-attention-wholecache-skeleton/latest.json`). Generated flash programs fire, owned tile/combine do not fire, tokens match, and `E_49152` is absent. This is attribution-only, not a speed promotion.
-- Next pure-machine-search target: decode attention A3 performance primitive lowering against the A2 lifecycle-clean skeleton (`v_dot2`, cross-lane reduction, LDS-staged tile layout, TILE+COMBINE lifecycle controls).
+- Decode attention A3 scope: ready (`docs/decode-attention-a3-performance-primitive-lowering-scope.md`). Next executable step is the A3 baseline profiler over the A2 lifecycle-clean skeleton, then one primitive at a time: `v_dot2`, cross-lane reduction, LDS-staged tile layout, TILE+COMBINE lifecycle controls.
 
 Do not hand-edit benchmark numbers in derived docs; change the manifest and rerun the updater.
 <!-- CANONICAL_BENCHMARKS:END -->
