@@ -55,6 +55,12 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     from extra.qk_codegen_recurrence_unroll import unroll_recurrence
     ast = unroll_recurrence(ast, _u)
+  if (_kb:=getenv("DECODE_OUTER_B_SPLIT")) > 1 and ren.target.device == "AMD":
+    # outer-b independent split-combine primitive: split the serial block loop into K independent LDS-staged
+    # online-softmax partitions + flash combine (default-off, declines unrecognized structure). See
+    # extra/qk_codegen_outer_b_lds_split.py + docs/decode-attention-outer-b-lds-split-combine-scope-20260627.md.
+    from extra.qk_codegen_outer_b_lds_split import outer_b_split
+    ast = outer_b_split(ast, _kb)
   if SPEC: type_verify(ast, spec_tensor)
 
   # preprocess
@@ -267,6 +273,6 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"))
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"), getenv("DECODE_OUTER_B_SPLIT"))
   if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
   return prg
