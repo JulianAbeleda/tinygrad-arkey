@@ -267,6 +267,6 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"))
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"))
   if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
   return prg
