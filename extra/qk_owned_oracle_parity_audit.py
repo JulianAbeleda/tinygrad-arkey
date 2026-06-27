@@ -56,6 +56,13 @@ def main() -> int:
   o_tile = isad.get("owned_tile", {})
   o_res, o_mark = o_tile.get("resources", {}), o_tile.get("markers", {})
   g_occ = {k: v.get("value") for k, v in occ.get("checks", {}).items()}   # generated block-tile resources
+  g_mark = (isav.get("capture", {}).get("tile", {}) or {}).get("markers", {})   # generated block-tile EVIDENCE (markers)
+  def prim_status(o, g):   # primitive parity: MATCH only when BOTH owned and generated evidence show it present
+    if g is None: return "UNKNOWN"      # no generated evidence captured -> cannot claim MATCH (do not trust prose)
+    if (g or 0) > 0 and (o or 0) > 0: return "MATCH"
+    return "MISSING"
+  g_wide = sum((g_mark.get(k) or 0) for k in
+               ("global_load_dwordx4", "global_load_b128", "global_load_b96", "global_load_b64", "global_load_d16"))
   cmp = hot.get("comparison", {})
   route = isav.get("route_cleanliness", {}).get("occupancy", {})
   arms = {a["arm"]: a for a in tr.get("arms", [])}
@@ -71,23 +78,27 @@ def main() -> int:
   sf_o, sf_g = cmp.get("ds_bpermute_shadow_fill_owned_vs_generated", [None, None])
 
   rows = [
-    # PRIMITIVE parity: the known owned primitives must be expressed by the generated path.
-    row("primitive", "v_dot2_score", "v_dot2 packed dot", o_mark.get("v_dot2"), "fdot2 in block tile (CUSTOMI)",
-        "MATCH" if o_mark.get("v_dot2") else "UNKNOWN", None, ISADIFF, "none (present)", "V_DOT2_LOWERING",
-        "isa_diff shows fdot2"),
-    row("primitive", "cross_lane_reduce", "ds_bpermute cross-lane", o_mark.get("cross_lane"),
-        f"ds_bpermute present (loop {ds_g})", "MATCH" if o_mark.get("cross_lane") and ds_g else "UNKNOWN",
-        None, ISADIFF, "none (present)", None, "isa_diff shows ds_bpermute"),
+    # PRIMITIVE parity: the known owned primitives must be expressed by the generated path -- judged from GENERATED
+    # EVIDENCE (isa_vectorization markers), not a prose assertion. No generated evidence -> UNKNOWN (not MATCH).
+    row("primitive", "v_dot2_score", "v_dot2 packed dot", o_mark.get("v_dot2"), g_mark.get("v_dot2"),
+        prim_status(o_mark.get("v_dot2"), g_mark.get("v_dot2")), None if g_mark.get("v_dot2") else "MISSING_PRIMITIVE",
+        ISAVT, "none if present; else expose v_dot2 lowering", "V_DOT2_LOWERING", "isa_vectorization v_dot2 > 0"),
+    row("primitive", "cross_lane_reduce", "ds_bpermute cross-lane", o_mark.get("cross_lane"), g_mark.get("cross_lane"),
+        prim_status(o_mark.get("cross_lane"), g_mark.get("cross_lane")),
+        None if g_mark.get("cross_lane") else "MISSING_PRIMITIVE", ISAVT, "none if present", None,
+        "isa_vectorization cross_lane > 0"),
     row("primitive", "lds_kv_staging", "8 KB LDS K/V tile", o_res.get("lds"), g_occ.get("lds"),
         st(o_res.get("lds"), g_occ.get("lds")), None, ISADIFF, "none (present)", "DECODE_STAGE_COALESCE",
         "isa shows LDS tile"),
 
-    # PLACEMENT parity: do primitives land in owned-equivalent layout/vectorization? Generated block-tile markers
-    # are not captured by isa_diff (which diffs the xlane route) -> UNKNOWN; improve instrumentation before search.
-    row("placement", "load_vectorization", "global_load_d16 x22 (owned)", o_mark.get("global_load_d16"),
-        "generated block-tile load markers NOT captured by isa_diff (xlane route only)", "UNKNOWN",
-        "INSTRUMENTATION_GAP", ISAVT, "capture block-tile load-WIDTH markers and compare to owned d16/dwordx4",
-        "COALESCED_LOAD_LOWERING", "block-tile load-width parity"),
+    # PLACEMENT parity: do primitives land in owned-equivalent layout/vectorization? Now judged from generated
+    # isa_vectorization load markers (b64/dwordx4/d16). MATCH iff generated emits vectorized (wide) loads.
+    row("placement", "load_vectorization", "owned vectorized loads (d16 x22)", f"d16={o_mark.get('global_load_d16')}",
+        f"b64={g_mark.get('global_load_b64')} dwordx4={g_mark.get('global_load_dwordx4')} d16={g_mark.get('global_load_d16')}",
+        ("UNKNOWN" if not g_mark else "MATCH" if g_wide > 0 else "MISMATCH"),
+        None if g_wide > 0 else "PRIMITIVE_PLACEMENT_BUG", ISAVT,
+        "generated must emit wide/vectorized loads (b64/dwordx4); if scalar-only, fix coalescing placement",
+        "COALESCED_LOAD_LOWERING", "generated emits vectorized loads"),
     row("placement", "reduce_placement", f"cross_lane {ds_o} per owned loop", ds_o,
         f"cross_lane {ds_g} per generated loop (loop-size-confounded)", "UNKNOWN", "INSTRUMENTATION_GAP", ISADIFF,
         "normalize cross-lane per logical reduction (owned/gen loop bodies differ) before judging placement",
@@ -139,14 +150,24 @@ def main() -> int:
   unknown = [r for r in rows if r["status"] == "UNKNOWN"]
   wd_match = next((r for r in rows if r["row"] == "wd_tok_s"), {}).get("status") == "MATCH"
 
+  searchable = [r for r in failed if r["candidate_axis"]]
+  unk = [r["row"] for r in unknown]
   if not failed and not unknown and wd_match:
     verdict = "PARITY_CLOSED__PROMOTABLE_PENDING_WD_TOKEN_MATCH"
+    rec = "run W==D + token-match to confirm PROMOTABLE"
   elif not failed and not wd_match:
     verdict = "INSTRUMENTATION_INCOMPLETE__ALL_VISIBLE_ROWS_MATCH_BUT_WD_FAILS"
-  elif unknown:
-    verdict = "PARITY_OPEN__UNKNOWN_ROWS_PRESENT__IMPROVE_INSTRUMENTATION_BEFORE_SEARCH"
-  else:
+    rec = "all visible rows MATCH but W==D fails -> a hidden delta is unmeasured; improve attribution"
+  elif searchable:
     verdict = "PARITY_OPEN__FAILED_ROWS_TARGETABLE"
+    rec = (f"search failed rows {[r['row'] for r in searchable]} via generator --failed-rows"
+           + (f"; IN PARALLEL instrument UNKNOWN rows {unk} (they only block candidates that target them)" if unk else ""))
+  elif unknown:
+    verdict = "PARITY_OPEN__ONLY_UNKNOWN_ROWS__IMPROVE_INSTRUMENTATION"
+    rec = f"no searchable failed row; instrument UNKNOWN rows {unk} first"
+  else:
+    verdict = "PARITY_OPEN__FAILED_ROWS_HAVE_NO_SEARCHABLE_AXIS"
+    rec = f"failed rows {[r['row'] for r in failed]} have no knob axis -> add a capability (work-removal/primitive/topology), NOT more search"
 
   out = {
     "schema": "qk_owned_oracle_parity_audit_v1",
@@ -156,6 +177,10 @@ def main() -> int:
     "summary": summ,
     "failed_rows": [r["row"] for r in failed],
     "unknown_rows": [r["row"] for r in unknown],
+    "recommended_next": rec,
+    "decision_unknown_rows": ("UNKNOWN rows block ONLY candidates that target them (they are excluded from "
+                              "searchable_failed_rows). Measurable failed rows remain searchable. Prefer closing "
+                              "instrumentation gaps for trust, but UNKNOWN is NOT a global hard block."),
     # the loop drives candidate generation off THESE: only a candidate whose targets_delta is a searchable failed row may run.
     "searchable_failed_rows": [{"row": r["row"], "candidate_axis": r["candidate_axis"], "gate_to_close": r["gate_to_close"]}
                                for r in failed if r["candidate_axis"]],

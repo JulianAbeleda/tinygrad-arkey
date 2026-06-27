@@ -7,8 +7,8 @@
   },
   "wd_threshold_pct_of_owned": 90.0,
   "summary": {
-    "MATCH": 6,
-    "UNKNOWN": 2,
+    "MATCH": 7,
+    "UNKNOWN": 1,
     "MISMATCH": 5
   },
   "failed_rows": [
@@ -19,9 +19,10 @@
     "wd_tok_s"
   ],
   "unknown_rows": [
-    "load_vectorization",
     "reduce_placement"
   ],
+  "recommended_next": "search failed rows ['waitcnt', 'latency_shadow_fill', 'split_kv_combine'] via generator --failed-rows; IN PARALLEL instrument UNKNOWN rows ['reduce_placement'] (they only block candidates that target them)",
+  "decision_unknown_rows": "UNKNOWN rows block ONLY candidates that target them (they are excluded from searchable_failed_rows). Measurable failed rows remain searchable. Prefer closing instrumentation gaps for trust, but UNKNOWN is NOT a global hard block.",
   "searchable_failed_rows": [
     {
       "row": "waitcnt",
@@ -52,26 +53,26 @@
       "row": "v_dot2_score",
       "owned_property": "v_dot2 packed dot",
       "owned_observation": 2,
-      "generated_observation": "fdot2 in block tile (CUSTOMI)",
+      "generated_observation": 12,
       "status": "MATCH",
       "blocker_kind": null,
-      "responsible_tool": "qk_decode_attention_isa_diff_gate.py",
-      "required_action": "none (present)",
+      "responsible_tool": "qk_decode_isa_vectorization_gate.py",
+      "required_action": "none if present; else expose v_dot2 lowering",
       "candidate_axis": "V_DOT2_LOWERING",
-      "gate_to_close": "isa_diff shows fdot2"
+      "gate_to_close": "isa_vectorization v_dot2 > 0"
     },
     {
       "layer": "primitive",
       "row": "cross_lane_reduce",
       "owned_property": "ds_bpermute cross-lane",
       "owned_observation": 5,
-      "generated_observation": "ds_bpermute present (loop 40)",
+      "generated_observation": 40,
       "status": "MATCH",
       "blocker_kind": null,
-      "responsible_tool": "qk_decode_attention_isa_diff_gate.py",
-      "required_action": "none (present)",
+      "responsible_tool": "qk_decode_isa_vectorization_gate.py",
+      "required_action": "none if present",
       "candidate_axis": null,
-      "gate_to_close": "isa_diff shows ds_bpermute"
+      "gate_to_close": "isa_vectorization cross_lane > 0"
     },
     {
       "layer": "primitive",
@@ -89,15 +90,15 @@
     {
       "layer": "placement",
       "row": "load_vectorization",
-      "owned_property": "global_load_d16 x22 (owned)",
-      "owned_observation": 22,
-      "generated_observation": "generated block-tile load markers NOT captured by isa_diff (xlane route only)",
-      "status": "UNKNOWN",
-      "blocker_kind": "INSTRUMENTATION_GAP",
+      "owned_property": "owned vectorized loads (d16 x22)",
+      "owned_observation": "d16=22",
+      "generated_observation": "b64=10 dwordx4=0 d16=0",
+      "status": "MATCH",
+      "blocker_kind": null,
       "responsible_tool": "qk_decode_isa_vectorization_gate.py",
-      "required_action": "capture block-tile load-WIDTH markers and compare to owned d16/dwordx4",
+      "required_action": "generated must emit wide/vectorized loads (b64/dwordx4); if scalar-only, fix coalescing placement",
       "candidate_axis": "COALESCED_LOAD_LOWERING",
-      "gate_to_close": "block-tile load-width parity"
+      "gate_to_close": "generated emits vectorized loads"
     },
     {
       "layer": "placement",
@@ -223,5 +224,5 @@
       "gate_to_close": "W==D >= 90.0% of owned AND token-match"
     }
   ],
-  "verdict": "PARITY_OPEN__UNKNOWN_ROWS_PRESENT__IMPROVE_INSTRUMENTATION_BEFORE_SEARCH"
+  "verdict": "PARITY_OPEN__FAILED_ROWS_TARGETABLE"
 }

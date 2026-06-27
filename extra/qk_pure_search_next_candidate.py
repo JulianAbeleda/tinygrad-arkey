@@ -25,8 +25,10 @@ SPACE = ROOT / "bench/qk-search-spaces/decode_attention_loop_search_space.json"
 LEDGER = ROOT / "bench/qk-pure-search-loop/decode_attention_loop_ledger.jsonl"
 
 # Outcomes the loop may record. PROMOTABLE is reserved for W==D + token-match (never local gates).
+# SEARCH_SPACE_BUG/TOOLING_BUG/INSTRUMENTATION_GAP are recorded when a candidate fails to MOVE its target parity row
+# (search/metric is the bug, not the candidate) or the move is unobservable (the tool is the bug).
 VALID_OUTCOMES = {"FAIL_CORRECTNESS", "REFUTED_OCCUPANCY", "REFUTED_NO_SLOPE", "LOCAL_PASS_WD_REQUIRED",
-                  "REFUTED_WD", "PROMOTABLE"}
+                  "REFUTED_WD", "PROMOTABLE", "SEARCH_SPACE_BUG", "TOOLING_BUG", "INSTRUMENTATION_GAP"}
 
 def _key(delta: dict) -> str:
   return ",".join(f"{k}={v}" for k, v in sorted(delta.items()))

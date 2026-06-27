@@ -3,37 +3,117 @@
   "principle": "The owned AMDGCN decode-attention tile is the ORACLE. Every loop iteration is DELTA CLOSURE against it -- not open-ended lever search. A candidate must target a NAMED owned-vs-generated delta. 'Search got deep but the delta did not move' is a SEARCH_SPACE_BUG, not a reason to try more.",
   "oracle": {
     "kernel": "owned AMDGCN decode-attention tile: LDS K/V staging + v_dot2 + cross-lane reduction",
-    "refs": ["docs/pure-machine-search.md:44-49", "docs/pure-machine-search-roadmap.md:16-24"],
+    "refs": [
+      "docs/pure-machine-search.md:44-49",
+      "docs/pure-machine-search-roadmap.md:16-24"
+    ],
     "promotion_authority": "W==D + token-match (extra/qk_decode_runtime_overhead.py + extra/qk_decode_token_match_check.py). Isolated timing is DIAGNOSTIC ONLY (docs/decode-attention-pure-search-state-and-learnings-20260627.md:54-61)."
   },
   "blocker_kinds": [
-    {"kind": "MISSING_PRIMITIVE",
-     "meaning": "owned uses a semantic/codegen primitive the generated path cannot express",
-     "action": "add IR/lowering/search axis; PROVE codegen can express it",
-     "classified_by": ["extra/qk_decode_attention_isa_diff_gate.py", "extra/qk_decode_isa_vectorization_gate.py"]},
-    {"kind": "PRIMITIVE_PLACEMENT_BUG",
-     "meaning": "primitive exists but lands in the wrong place/layout/vectorization, fails the verifier, or is not route-bound",
-     "action": "fix lowering/scheduler/verifier/route binding; verify it lands in the owned-equivalent position",
-     "classified_by": ["extra/qk_decode_attention_isa_diff_gate.py", "extra/qk_decode_isa_vectorization_gate.py", "extra/qk_decode_attention_block_tile_microgate.py"]},
-    {"kind": "TIMING_TRIGGER",
-     "meaning": "generated expresses the semantics but loses time",
-     "action": "attribute to an EXACT trigger (occupancy, VGPR, LDS, scratch, waitcnt, memory coalescing, dependency chain, instruction selection, launch/combine lifecycle), change that trigger, and PROVE it moved",
-     "classified_by": ["extra/qk_decode_hotloop_schedule_diff.py", "extra/qk_decode_occupancy_guardrail.py", "extra/qk_split_kv_economics_audit.py"]},
-    {"kind": "SEARCH_SPACE_BUG",
-     "meaning": "candidate search is looping but the measured owned-vs-generated delta does NOT move",
-     "action": "STOP candidate search; fix the generator/search-space/metric so candidates target the named delta. Deep looping without movement is a BUG.",
-     "classified_by": ["the loop itself: the named delta is unchanged across the searched candidates"]},
-    {"kind": "INSTRUMENTATION_GAP",
-     "meaning": "the auditor cannot explain why owned still wins after the visible diffs are closed",
-     "action": "improve ISA/lifecycle/timing attribution until it NAMES the hidden delta",
-     "classified_by": ["meta: no existing tool can name the residual delta"]}
+    {
+      "kind": "MISSING_PRIMITIVE",
+      "meaning": "owned uses a semantic/codegen primitive the generated path cannot express",
+      "action": "add IR/lowering/search axis; PROVE codegen can express it",
+      "classified_by": [
+        "extra/qk_decode_attention_isa_diff_gate.py",
+        "extra/qk_decode_isa_vectorization_gate.py"
+      ]
+    },
+    {
+      "kind": "PRIMITIVE_PLACEMENT_BUG",
+      "meaning": "primitive exists but lands in the wrong place/layout/vectorization, fails the verifier, or is not route-bound",
+      "action": "fix lowering/scheduler/verifier/route binding; verify it lands in the owned-equivalent position",
+      "classified_by": [
+        "extra/qk_decode_attention_isa_diff_gate.py",
+        "extra/qk_decode_isa_vectorization_gate.py",
+        "extra/qk_decode_attention_block_tile_microgate.py"
+      ]
+    },
+    {
+      "kind": "TIMING_TRIGGER",
+      "meaning": "generated expresses the semantics but loses time",
+      "action": "attribute to an EXACT trigger (occupancy, VGPR, LDS, scratch, waitcnt, memory coalescing, dependency chain, instruction selection, launch/combine lifecycle), change that trigger, and PROVE it moved",
+      "classified_by": [
+        "extra/qk_decode_hotloop_schedule_diff.py",
+        "extra/qk_decode_occupancy_guardrail.py",
+        "extra/qk_split_kv_economics_audit.py"
+      ]
+    },
+    {
+      "kind": "SEARCH_SPACE_BUG",
+      "meaning": "candidate search is looping but the measured owned-vs-generated delta does NOT move",
+      "action": "STOP candidate search; fix the generator/search-space/metric so candidates target the named delta. Deep looping without movement is a BUG.",
+      "classified_by": [
+        "the loop itself: the named delta is unchanged across the searched candidates"
+      ]
+    },
+    {
+      "kind": "INSTRUMENTATION_GAP",
+      "meaning": "the auditor cannot explain why owned still wins after the visible diffs are closed",
+      "action": "improve ISA/lifecycle/timing attribution until it NAMES the hidden delta",
+      "classified_by": [
+        "meta: no existing tool can name the residual delta"
+      ]
+    }
   ],
   "named_deltas": [
-    {"id": "lds_kv_staging", "owned": "8 KB LDS K/V tile", "generated": "present (block tile)", "kind": "TIMING_TRIGGER", "status": "present"},
-    {"id": "v_dot2_score", "owned": "v_dot2 packed dot", "generated": "fdot2 present (default-off)", "kind": "MISSING_PRIMITIVE", "status": "closed_present"},
-    {"id": "cross_lane_reduce", "owned": "ds_bpermute (~5 in loop)", "generated": "ds_bpermute (~40 in loop)", "kind": "TIMING_TRIGGER", "status": "per_token_parity_truth4_loop_size_artifact"},
-    {"id": "outer_b_serial_carry", "owned": "pressure-aware structure hides the carry", "generated": "serial b-carry = the ctx-slope", "kind": "TIMING_TRIGGER", "status": "OPEN; within-warp split refuted (occupancy tax); knobs do NOT move it (SEARCH_SPACE_BUG if searched without targeting it)"},
-    {"id": "split_kv_combine_lifecycle", "owned": "efficient many-split combine", "generated": "separate combine kernel (in-model tax)", "kind": "TIMING_TRIGGER", "status": "OPEN; combine-economics-capped; W==D-gated topology axis added"}
+    {
+      "id": "v_dot2_score",
+      "layer": "primitive",
+      "kind": "MISSING_PRIMITIVE"
+    },
+    {
+      "id": "cross_lane_reduce",
+      "layer": "primitive",
+      "kind": "TIMING_TRIGGER"
+    },
+    {
+      "id": "lds_kv_staging",
+      "layer": "primitive",
+      "kind": "TIMING_TRIGGER"
+    },
+    {
+      "id": "load_vectorization",
+      "layer": "placement",
+      "kind": "PRIMITIVE_PLACEMENT_BUG"
+    },
+    {
+      "id": "reduce_placement",
+      "layer": "placement",
+      "kind": "INSTRUMENTATION_GAP"
+    },
+    {
+      "id": "workgroup_count",
+      "layer": "topology",
+      "kind": "TIMING_TRIGGER"
+    },
+    {
+      "id": "vgpr",
+      "layer": "resource",
+      "kind": "TIMING_TRIGGER",
+      "note": "no knob axis; needs work-removal capability"
+    },
+    {
+      "id": "waitcnt",
+      "layer": "schedule",
+      "kind": "TIMING_TRIGGER"
+    },
+    {
+      "id": "latency_shadow_fill",
+      "layer": "schedule",
+      "kind": "TIMING_TRIGGER"
+    },
+    {
+      "id": "split_kv_combine",
+      "layer": "lifecycle",
+      "kind": "TIMING_TRIGGER"
+    },
+    {
+      "id": "wd_tok_s",
+      "layer": "wd_token",
+      "kind": "TIMING_TRIGGER",
+      "note": "bottom-line; closes only when others close"
+    }
   ],
   "rules": [
     "Owned kernel is the oracle.",
@@ -43,5 +123,6 @@
     "PROMOTABLE requires W==D + token-match; isolated timing is diagnostic only.",
     "Exhaustion is valid ONLY when every owned-vs-generated delta is closed, proven unrepresentable, or blocked by a named INSTRUMENTATION_GAP.",
     "Keep generator-only candidate authority and the append-only JSONL ledger."
-  ]
+  ],
+  "named_deltas_authority": "the PARITY MATRIX rows (bench/qk-owned-oracle-parity/latest.json) are the single source of truth for row IDs. Search-space axes' targets_delta and the generator --failed-rows MUST use these exact IDs."
 }

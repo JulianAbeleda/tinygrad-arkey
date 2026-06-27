@@ -27,7 +27,7 @@ delta exposes it.
 - `.claude/loop.md` + `.claude/commands/pure-search-loop.md`: the `reconstruct_owned_kernel` state machine
   (compare → classify → handle-by-kind), W==D-only `PROMOTABLE`, generator-only authority, append-only JSONL ledger.
 - `extra/qk_pure_search_next_candidate.py`: candidates now carry `targets_delta` + `blocker_kind` (verified: the
-  topology candidate emits `targets_delta=split_kv_combine_lifecycle, blocker_kind=TIMING_TRIGGER, requires_wd=true`).
+  topology candidate emits `targets_delta=split_kv_combine, blocker_kind=TIMING_TRIGGER, requires_wd=true`).
 - `bench/qk-search-spaces/decode_attention_loop_search_space.json` (v3): every axis declares its target delta.
 
 ## Rules (now enforced by framing)
@@ -52,19 +52,25 @@ existing instruments and emits a 7-layer owned-vs-generated matrix; each row has
 `owned_observation`, `generated_observation`, `status` (MATCH|MISMATCH|MISSING|UNKNOWN), `blocker_kind`,
 `responsible_tool`, `required_action`, `candidate_axis`, `gate_to_close`.
 
-**Current matrix (grounded in `isa_diff` owned_tile + hotloop/occupancy/transfer):** 6 MATCH, 5 MISMATCH, 2 UNKNOWN.
+**Current matrix (owned from `isa_diff` owned_tile; generated from `isa_vectorization` markers + hotloop/occupancy/transfer):**
+7 MATCH, 5 MISMATCH, 1 UNKNOWN. Primitive/placement rows are judged from GENERATED EVIDENCE, not prose.
 
 | layer.row | owned | generated | status |
 |---|---|---|---|
+| primitive.v_dot2_score | v_dot2 ×2 | v_dot2 ×12 (isa_vec) | MATCH |
+| primitive.cross_lane_reduce | ds_bpermute ×5 | ×40 (isa_vec) | MATCH |
+| placement.load_vectorization | d16 ×22 | b64 ×10 (wide loads) | MATCH |
 | resource.vgpr | 64 | 88 | **MISMATCH** (generated uses 24 more — work-removal target, NO knob axis) |
 | schedule.waitcnt | 21 | 50 | **MISMATCH** |
-| schedule.shadow_fill | 0.2 | 3.75 | **MISMATCH** |
+| schedule.latency_shadow_fill | 0.2 | 3.75 | **MISMATCH** |
 | lifecycle.split_kv_combine | — | COMBINE_TAX_DOMINATES | **MISMATCH** |
 | wd_token.wd_tok_s | 103/94 | 33/6 (6.6%) | **MISMATCH** (the bottom line) |
-| placement.load_vectorization / reduce_placement | — | not block-tile-captured / loop-size-confounded | **UNKNOWN** |
-| primitive ×3, topology, lds, scratch | — | — | MATCH |
+| placement.reduce_placement | cross_lane ×5 | ×40 (loop-size-confounded) | **UNKNOWN** |
 
-Verdict: `PARITY_OPEN__UNKNOWN_ROWS_PRESENT__IMPROVE_INSTRUMENTATION_BEFORE_SEARCH`.
+Verdict: `PARITY_OPEN__FAILED_ROWS_TARGETABLE`. **Decision (encoded):** UNKNOWN rows block ONLY candidates that target
+them (excluded from `searchable_failed_rows`); measurable failed rows stay searchable; prefer closing instrumentation
+gaps for trust, but UNKNOWN is not a global hard block. `recommended_next` names both the searchable rows and the
+parallel instrumentation TODO.
 
 **The loop is now parity-driven** (`.claude/loop.md`, `/pure-search-loop`): run the parity audit → if `unknown_rows`,
 improve that instrument first (don't search) → else
