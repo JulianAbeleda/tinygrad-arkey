@@ -66,3 +66,25 @@ All three: microgate authority (PASS at max_abs 1.526e-05), default-off byte-ide
 (no broken state), exhaustive failure reports with attack + diagnosis plans. Isolated timing is not promotion
 authority — the in-model W==D + ctx-slope remain the gate; the closed `FAST_EXP2` is a foundation increment, not
 a shipped default.
+
+## Self-review corrections (2026-06-27)
+
+An adversarial self-review of the session flagged three claim inaccuracies; corrected here:
+
+- **Occupancy is config-dependent, not contradictory.** `decode-tile-structural-deltas-scope` reports vgpr56 /
+  "occupancy matched" — that is the **staging+coalesced baseline** tile (isa-vectorization json). The
+  occupancy-bound finding here (vgpr88) is specifically the **`SCHED_UNROLL=8` stack** (the unroll adds the live
+  per-copy state). Both are correct for their config; the occupancy-bound conclusion applies to the *unroll*
+  stack, which is where the partial-state levers were attacked.
+- **ds_permute parity is STATIC-count only.** Owned and generated emit the same per-token 5 `ds_bpermute`; that
+  is a static-instruction-count parity. The *dynamic* structural-floor risk (the staged-`ds_bpermute` REG
+  round-trip with `lgkmcnt(0)` per step) was **not fully settled** — the hotloop-diff was inconclusive
+  (`PARITY_OR_STRUCTURAL`). "No cross-lane primitive warranted" stands on the static parity + the fact that
+  owned does the identical thing, but a register-resident (`ds_swizzle`/`v_permlane`) reduce remains an open
+  *possible* lever if a future audit shows the REG round-trip is the floor (it would have to beat, not match,
+  owned).
+- **The in-model 1.75× / 3–15× are measured** (the transfer run, `qk_decode_runtime_overhead.py`: 19.0/3.5 →
+  32.8/6.2 vs owned 103.2/93.8) but the bench artifact is overwritten per run — the numbers live in
+  `docs/decode-cooperative-stage-lanemap-result` / this campaign, not a pinned json. In-model **token
+  correctness** is separately verified (`extra/qk_decode_token_match_check.py`: full stack == baseline tokens
+  @ctx4096).
