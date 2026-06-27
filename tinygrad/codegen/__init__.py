@@ -80,6 +80,14 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # ** expander (expand_rewrite) **
   sink = graph_rewrite(sink, sym+pm_move_where_on_load, name="postopt symbolic")
 
+  # opt-in (COALESCED_LOAD_LOWERING): predicate-driven promotion of unit-stride load axes to UPCAST so the
+  # existing expander+devectorizer vectorize the load (codegen realization of the layout-IR OptOps.COALESCE).
+  # Pairs with REG_STORE_DEVEC (fired below) to keep accumulator stores scalar. See
+  # extra/qk_coalesced_load_lowering.py + docs/decode-coalesced-load-primitive-scope-20260626.md.
+  if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
+    from extra.qk_coalesced_load_lowering import coalesce_loads
+    sink = coalesce_loads(sink)
+
   # expand
   # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE
   # pm_group_for_reduce claims it for the LDS tree. Milestone 5 of the generic-low-level-search goal -- makes the
@@ -113,7 +121,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # devectorize
   sink = graph_rewrite(sink, sym+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
-  if getenv("REG_STORE_DEVEC") and ren.target.device == "AMD":
+  if (getenv("REG_STORE_DEVEC") or getenv("COALESCED_LOAD_LOWERING")) and ren.target.device == "AMD":
     from extra.qk_reg_store_devec import pm_reg_store_devec
     sink = graph_rewrite(sink, pm_reg_store_devec, name="reg store devec")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
@@ -259,6 +267,6 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"))
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"))
   if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
   return prg
