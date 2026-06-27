@@ -14,7 +14,8 @@ from tinygrad.uop.symbolic import symbolic
 def axis_stride(idx:UOp, rng:UOp) -> int | None:
   """Stride of `rng` in the symbolic index expr `idx` = idx[rng=1] - idx[rng=0]. None if data-dependent."""
   d = graph_rewrite(idx.substitute({rng: rng.const_like(1)}) - idx.substitute({rng: rng.const_like(0)}), symbolic)
-  return int(d.arg) if d.op is Ops.CONST else None
+  # data-dependent / masked (PAD->Invalid) indices are not a constant stride -> decline (don't crash on int(Invalid))
+  return int(d.arg) if d.op is Ops.CONST and isinstance(d.arg, int) else None
 
 def is_coalesced(idx:UOp, thread_rng:UOp) -> bool:
   """Coalesced for `thread_rng` iff consecutive lanes hit consecutive addresses (unit stride)."""
