@@ -23,15 +23,23 @@ Only if **none** of the above fired do you proceed to run one iteration.
 
 ## STEP 1 — run ONE iteration (the `.claude/commands/pure-search-loop.md` protocol, single pass)
 - **DIAGNOSE**: `qk_pure_search_gap_audit.py` (+ `qk_decode_hotloop_schedule_diff.py`, `qk_decode_occupancy_guardrail.py`).
-- **PICK LEVER**: rank-1 from the audit; **skip any lever already in `ledger` as refuted** — if no new lever
-  exists, set this iteration's outcome `NO_NEW_LEVER` and stop.
+- **GENERATE LEVER** (do NOT hand-pick — this is the machine-search "generate + prune" step):
+  ```
+  PYTHONPATH=. .venv/bin/python extra/qk_pure_search_next_candidate.py
+  ```
+  If it prints `SEARCH_SPACE_EXHAUSTED` → outcome `NO_NEW_LEVER`, stop. Otherwise take its `candidate` + `env_flags`
+  (the next untried one-factor delta over the declared space, with refuted candidates already pruned). The audit's
+  prose `next_actions` are only a hint; the **generator over the manifest is the source of truth** so the loop
+  covers the space instead of repeating one static suggestion.
 - **SOLVE**: default-off + cache-keyed change.
 - **GATE** (authority order, timeout every GPU call ≈540s, a hang = failed gate):
   microgate correctness (`BLOCK_TILE_MICROGATE_PASS`, max_abs ≤ 5e-3) → occupancy guardrail (no regress) →
   hotloop/isolated-timing (did it move the right loop / bend the slope, diagnostic only).
-- **RECORD**: update the relevant contract artifact (`built`/`bends_slope`/`refuted` + measured ms/resources),
-  re-run the audit, **commit** (`[codegen]`/`[nn]`/`[test]`/`[docs]`, no Co-Authored-By) **or revert clean**.
-  Surface SHA + title. Never leave the tree dirty.
+- **RECORD (remember)**: **append `{candidate, outcome, gate, why}` to the manifest ledger**
+  (`bench/qk-search-spaces/decode_attention_loop_search_space.json` → `ledger`; `git add -f` it — `bench/**` is
+  ignored) so the generator prunes it next time. Update any relevant contract artifact, re-run the audit, **commit**
+  (`[codegen]`/`[nn]`/`[test]`/`[docs]`, no Co-Authored-By) **or revert clean**. Surface SHA + title. Never leave the
+  tree dirty. (A win — bends slope + gates pass — is a PROMOTABLE outcome, not just a ledger row.)
 - **CLASSIFY OUTCOME**: `PROMOTABLE` | `REFUTED` | `HARD_WALL` | `DEGRADED` | `NO_NEW_LEVER`.
 
 ## STEP 2 — update state + decide whether to continue

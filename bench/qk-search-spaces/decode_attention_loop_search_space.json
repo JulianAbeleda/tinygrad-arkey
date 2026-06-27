@@ -1,0 +1,32 @@
+{
+  "schema": "qk_decode_attention_loop_search_space_v1",
+  "what": "Declared candidate space + durable refutation ledger for the /pure-search-loop. The generator (extra/qk_pure_search_next_candidate.py) enumerates one-factor-at-a-time deltas from the baseline best-stack, prunes anything in `ledger`, and emits the next untried candidate -- so NO_NEW_LEVER only fires when this space is genuinely exhausted, not when a human runs out of ideas.",
+  "baseline_stack": {
+    "DECODE_ATTN_BLOCK_TILE": 1,
+    "DECODE_STAGE_COALESCE": 4,
+    "COALESCED_LOAD_LOWERING": 1,
+    "SCHED_UNROLL": 8,
+    "SCHED_LIST": 1,
+    "DECODE_FAST_EXP2": 1
+  },
+  "axes": [
+    {"flag": "DECODE_STAGE_COALESCE", "values": [2, 8], "kind": "knob", "cost": "cheap", "priority": 1,
+     "hypothesis": "stage width changes the coalesced global-load vectorization; may trade occupancy vs bandwidth"},
+    {"flag": "SCHED_UNROLL", "values": [4, 16], "kind": "knob", "cost": "cheap", "priority": 2,
+     "hypothesis": "unroll depth trades ILP vs VGPR; 16 may overflow occupancy, 4 may underhide the tt-carry"},
+    {"flag": "DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", "values": [1], "kind": "knob", "cost": "cheap", "priority": 3,
+     "hypothesis": "ds_bpermute inline vs LDS-staged reduce trades cross-lane vs waitcnt"},
+    {"flag": "DECODE_OUTER_B_SPLIT", "values": [4], "kind": "primitive", "cost": "med", "priority": 4,
+     "hypothesis": "K=4 independent b-partitions; predicted refuted (same occupancy class as K=2: VGPR/LDS scale with K)",
+     "predicted": "refuted_occupancy_class"}
+  ],
+  "exploration": "one_factor_at_a_time_from_baseline; then pairs of cheap knobs; primitives last",
+  "stop": "emit SEARCH_SPACE_EXHAUSTED only when every priority-ordered single-factor candidate is in `ledger` (and pairs, if enabled)",
+  "ledger": [
+    {"candidate": "DECODE_OUTER_B_SPLIT=2", "outcome": "REFUTED", "gate": "microgate PASS; isolated +18%; VGPR 88->176, LDS 8192->16384", "why": "occupancy tax > ILP gain (ILP-via-state); see docs/decode-attention-outer-b-split-build-refutation-result-20260627.md"},
+    {"candidate": "DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE=1", "outcome": "REFUTED", "gate": "microgate PASS; isolated ~2x slower (0.40->0.78 ctx512, 2.84->5.60 ctx4096)", "why": "staged LDS reduce already better; see docs/pure-search-loop-run-result-20260627.md"},
+    {"candidate": "SCHED_UNROLL_SPLIT=1", "outcome": "REFUTED", "gate": "VGPR 88->144", "why": "ILP-via-state on occupancy-bound tile (diagnostic truth #2)"},
+    {"candidate": "DECODE_Q_HOIST=1", "outcome": "REFUTED", "gate": "lost comgr pressure-aware LICM", "why": "diagnostic truth #2"},
+    {"candidate": "ds_permute_primitive", "outcome": "REFUTED", "gate": "per-token parity with owned", "why": "diagnostic truth #4 -- a new cross-lane primitive would only match, not beat"}
+  ]
+}

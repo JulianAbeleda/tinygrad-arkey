@@ -30,4 +30,25 @@ Audit score unchanged: **60/100** (`PURE_SEARCH_PARTIAL...NOT_PROMOTABLE_YET`); 
 split-KV combine** — gated by **W==D**, not isolated timing (the combine tax only appears in-model). This is capped
 by the split-KV combine economics already characterized in
 `docs/split-kv-economics-audit-result-20260621.md` (`COMBINE_TAX_DOMINATES` / `COMBINE_SMALL_AMDAHL_LIMIT`). It is a
-larger structural effort, not a knob — so the bounded loop correctly stops here rather than grinding refutations.
+larger structural effort, not a knob.
+
+## CORRECTION (add-on): the `NO_NEW_LEVER` above was PREMATURE
+
+Reviewing what happened, the loop **stopped too early**. It was a *refutation cycle, not a search*: it took the
+audit's one static `next_action` (the refuted outer-b lever) + a hand-picked knob (`INLINE_REDUCE`), and when that
+refuted it declared exhaustion — but it had **no generator and no enumerable space**, so "no new lever" really meant
+"the human ran out of ideas." This is exactly the repo's warning: *if a candidate cannot be generated, evaluated,
+pruned, and remembered, it is still a manual experiment, not a machine-search row.*
+
+Fix (this add-on):
+- **Declared search space + durable ledger**: `bench/qk-search-spaces/decode_attention_loop_search_space.json`
+  (baseline best-stack, axes×values, priority, and the 5 known refutations).
+- **Deterministic generator (generate + prune)**: `extra/qk_pure_search_next_candidate.py` — enumerates
+  one-factor-at-a-time deltas in priority order, prunes ledger entries, emits the next untried candidate or
+  `SEARCH_SPACE_EXHAUSTED`.
+- **Loop wiring** (`.claude/loop.md`): the PICK-LEVER step now CALLS the generator (no hand-picking), and RECORD
+  appends each outcome to the manifest ledger. `NO_NEW_LEVER` now fires only on real `SEARCH_SPACE_EXHAUSTED`.
+
+Running the generator now shows **5 untried single-factor candidates** (13 with pairs) — next =
+`DECODE_STAGE_COALESCE=2`. So the prior stop was premature; the corrected loop has real candidates queued.
+
