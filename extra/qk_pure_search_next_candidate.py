@@ -50,11 +50,16 @@ def load_ledger_keys() -> tuple[set[str], int]:
   return keys, n
 
 def active_candidates(space: dict, include_pairs: bool) -> list[dict]:
-  """Priority-ordered one-factor singles, then (default) pairs of cheap knobs. This IS the declared active space."""
+  """Priority-ordered one-factor singles, then (default) pairs of cheap knobs. This IS the declared active space.
+
+  An axis may carry `enable` (extra flags that must be set for it to take effect, e.g. a topology axis enabling
+  DECODE_ATTN_BLOCK_TILE_FIXED_S=1) and `requires_wd` (its cost is in-model only -> the loop must gate it with W==D,
+  not isolated timing). Topology axes are singles only (they don't pair with knobs)."""
   axes = sorted(space.get("axes", []), key=lambda a: a.get("priority", 99))
-  out = [{"delta": {a["flag"]: v}, "axis": a, "kind": "single"} for a in axes for v in a["values"]]
+  out = [{"delta": {**a.get("enable", {}), a["flag"]: v}, "axis": a, "kind": a.get("kind", "single")}
+         for a in axes for v in a["values"]]
   if include_pairs:
-    cheap = [a for a in axes if a.get("cost") == "cheap"]
+    cheap = [a for a in axes if a.get("cost") == "cheap"]   # only cheap KNOBS pair; topology axes stay single
     for a, b in itertools.combinations(cheap, 2):
       for va, vb in itertools.product(a["values"], b["values"]):
         out.append({"delta": {a["flag"]: va, b["flag"]: vb}, "axis": None, "kind": "pair"})
@@ -102,9 +107,12 @@ def main() -> int:
   for c in cands:                            # priority order (singles before pairs)
     k = _key(c["delta"])
     if k in tried_keys: continue
+    requires_wd = bool((c["axis"] or {}).get("requires_wd"))
     print(json.dumps({
       "verdict": "NEXT_CANDIDATE", "candidate": k, "kind": c["kind"], "delta": c["delta"],
       "env_flags": _flags(baseline, c["delta"]),
+      "requires_wd": requires_wd,
+      "gate": "W==D (cost is in-model only; isolated timing MISLEADS)" if requires_wd else "isolated-then-W==D",
       "hypothesis": (c["axis"] or {}).get("hypothesis"), "predicted": (c["axis"] or {}).get("predicted"),
       **counts,
     }, indent=2))

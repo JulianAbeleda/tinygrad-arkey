@@ -29,6 +29,8 @@ self-end. Full spec: `docs/pure-machine-search-xyz-loop-codex-handoff-20260627.m
 3. Else implement `cand.env_flags` as a **default-off, cache-keyed** change, then GATE (timeout every GPU call):
    - microgate fail → `--record {outcome:"FAIL_CORRECTNESS"}`, **revert clean**, end fire.
    - occupancy guardrail fail → `--record {outcome:"REFUTED_OCCUPANCY"}`, **revert clean**, end fire.
+   - **if `cand.requires_wd` (topology axis): SKIP the isolated gate — it MISLEADS** (the cost is the in-model
+     split-KV combine tax). Record `LOCAL_PASS_WD_REQUIRED` and go straight to W==D (next bullet).
    - isolated slope does NOT bend → `--record {outcome:"REFUTED_NO_SLOPE"}`, commit-or-revert, end fire.
    - isolated slope bends → `--record {outcome:"LOCAL_PASS_WD_REQUIRED"}`, then run **W==D**
      (`QK_CKPTS=512,4096 extra/qk_decode_runtime_overhead.py` + `extra/qk_decode_token_match_check.py`):
