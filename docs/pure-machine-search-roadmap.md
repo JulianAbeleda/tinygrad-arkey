@@ -77,6 +77,8 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-generated-tile-codex-prompt.md` | Self-contained execution prompt for the generated decode tile codegen lane |
 | `docs/decode-attention-pure-search-gap-audit-result.md` | Canonical decode-attention pure-search gap audit: time delta plus primitive/search-vocabulary attribution |
 | `bench/qk-pure-search-gap/latest.json` | Machine-readable pure-search gap verdict for decode attention |
+| `docs/pure-machine-search-gap-audit-result.md` | Top-level decode + prefill pure machine-search gap audit |
+| `bench/qk-pure-machine-search-gap/latest.json` | Machine-readable top-level pure machine-search gap verdict |
 | `bench/qk-decode-cache-identity-index/latest.json` | Latest cache-index/coalescing isolation artifact for the generated decode tile |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
@@ -202,6 +204,14 @@ Immediate work:
 4. Next: execute `docs/decode-attention-primitive-complete-online-softmax-pv-scope.md`. A3.11 remains optional for exhaustion, but A3.10 makes the better next move the primitive-complete online-softmax+PV tile path. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
 
 ## Latest Decode Attention Codegen Blocker
+
+Top-level pure-machine-search audit:
+
+- Tool: `extra/qk_pure_machine_search_gap_audit.py`.
+- Artifact: `bench/qk-pure-machine-search-gap/latest.json`.
+- Verdict: `PURE_MACHINE_SEARCH_PARTIAL__DECODE_GEMV_CLOSE__DECODE_ATTENTION_AND_PREFILL_STILL_NOT_FULLY_SEARCH_OWNED`.
+- Score: 67 / 100 overall.
+- Meaning: decode GEMV is close/pure for tracked Q4_K roles, decode attention generated code transfers but is not promotable, and prefill/eightwave remains fast/stable but needs explicit search-provenance binding.
 
 Current pure-search audit:
 
