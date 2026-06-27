@@ -75,6 +75,8 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-attention-online-state-pv-tile-p12-xlane-components-result.md` | P12 component test for max/sum/gated-store/LSE x-lane merge |
 | `docs/decode-generated-tile-codegen-scope.md` | Current generated decode tile codegen scope: vector loads, LDS/block tiling, and scheduling residuals |
 | `docs/decode-generated-tile-codex-prompt.md` | Self-contained execution prompt for the generated decode tile codegen lane |
+| `docs/decode-attention-pure-search-gap-audit-result.md` | Canonical decode-attention pure-search gap audit: time delta plus primitive/search-vocabulary attribution |
+| `bench/qk-pure-search-gap/latest.json` | Machine-readable pure-search gap verdict for decode attention |
 | `bench/qk-decode-cache-identity-index/latest.json` | Latest cache-index/coalescing isolation artifact for the generated decode tile |
 | `bench/qk-search-spaces/decode_attention_tile_combine_a3_4.json` | A3.4 lifecycle bundle manifest for generated/search-owned decode attention |
 | `bench/canonical-benchmarks.json` | Benchmark source of truth |
@@ -200,6 +202,21 @@ Immediate work:
 4. Next: execute `docs/decode-attention-primitive-complete-online-softmax-pv-scope.md`. A3.11 remains optional for exhaustion, but A3.10 makes the better next move the primitive-complete online-softmax+PV tile path. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
 
 ## Latest Decode Attention Codegen Blocker
+
+Current pure-search audit:
+
+- Tool: `extra/qk_pure_search_gap_audit.py`.
+- Artifact: `bench/qk-pure-search-gap/latest.json`.
+- Verdict: `PURE_SEARCH_PARTIAL__TIME_DELTA_EXPLAINED__VOCAB_GAPS_IDENTIFIED__NOT_PROMOTABLE_YET`.
+- Score: 60 / 100 for decode attention pure machine search.
+- Meaning: generated decode attention transfers in-model, but the remaining gap is still not pure-search promotable because outer-`b` split/combine, occupancy-aware scoring, and pressure-aware scheduling are not search-owned.
+
+Next canonical actions:
+
+1. Build an occupancy guardrail gate.
+2. Make the hot-loop schedule diff split-aware.
+3. Add/search an LDS-staged outer-`b` split-combine primitive.
+4. Bind manual winning flags into BubbleBeam/FutureSight provenance.
 
 Current generated fused-xlane route status:
 
