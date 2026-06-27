@@ -15,6 +15,9 @@ DECODE_ATT = ROOT / "bench/qk-pure-search-gap/latest.json"
 PREFILL_READINESS = ROOT / "bench/qk-prefill-search/prefill_search_readiness.json"
 PREFILL_LONGCTX_DOC = ROOT / "docs/archive/prefill-long-context-integration-hardening-result-20260624.md"
 GEMV_SCOPE = ROOT / "docs/gemv-pure-search-generated-route-scope.md"
+OCC_GUARD = ROOT / "bench/qk-decode-occupancy-guardrail/latest.json"
+OUTER_B = ROOT / "bench/qk-decode-outer-b-split-combine/latest.json"
+PRESSURE_OWN = ROOT / "bench/qk-decode-pressure-search-ownership/latest.json"
 
 def load_json(path: pathlib.Path, default: Any=None) -> Any:
   if not path.exists(): return default
@@ -41,6 +44,9 @@ def main() -> int:
   prefill_readiness = load_json(PREFILL_READINESS, {})
   prefill_longctx_doc = load_text(PREFILL_LONGCTX_DOC)
   gemv_scope = load_text(GEMV_SCOPE)
+  occ_guard = load_json(OCC_GUARD, {})
+  outer_b = load_json(OUTER_B, {})
+  pressure_own = load_json(PRESSURE_OWN, {})
 
   decode = canon.get("decode", {})
   prefill = canon.get("prefill", {})
@@ -150,14 +156,17 @@ def main() -> int:
       "prefill_search_readiness": str(PREFILL_READINESS.relative_to(ROOT)),
       "prefill_long_context_hardening_doc": str(PREFILL_LONGCTX_DOC.relative_to(ROOT)),
       "gemv_scope": str(GEMV_SCOPE.relative_to(ROOT)),
+      "occupancy_guardrail": str(OCC_GUARD.relative_to(ROOT)),
+      "outer_b_split_contract": str(OUTER_B.relative_to(ROOT)),
+      "pressure_search_ownership": str(PRESSURE_OWN.relative_to(ROOT)),
     },
     "overall_score_0_to_100": overall_score,
     "weights": {"decode_attention": 0.35, "decode_gemv": 0.25, "prefill": 0.40},
     "sections": sections,
     "ctx_regression_explanation": ctx_explanation,
     "next_actions": [
-      {"rank": 1, "area": "decode_attention", "action": "occupancy guardrail + split-aware hotloop audit"},
-      {"rank": 2, "area": "decode_attention", "action": "LDS-staged outer-b split-combine primitive"},
+      {"rank": 1, "area": "decode_attention", "action": "implement LDS-staged outer-b split-combine lowering behind the new search contract"},
+      {"rank": 2, "area": "decode_attention", "action": "bind pressure-aware/manual flags into BubbleBeam/FutureSight candidate ownership"},
       {"rank": 3, "area": "prefill", "action": "bind eightwave/current baseline to explicit search provenance"},
       {"rank": 4, "area": "shared", "action": "put manual flags/primitives into BubbleBeam/FutureSight candidate provenance"},
     ],

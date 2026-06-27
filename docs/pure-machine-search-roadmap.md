@@ -76,6 +76,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | `docs/decode-generated-tile-codegen-scope.md` | Current generated decode tile codegen scope: vector loads, LDS/block tiling, and scheduling residuals |
 | `docs/decode-generated-tile-codex-prompt.md` | Self-contained execution prompt for the generated decode tile codegen lane |
 | `docs/decode-attention-pure-search-gap-audit-result.md` | Canonical decode-attention pure-search gap audit: time delta plus primitive/search-vocabulary attribution |
+| `docs/decode-attention-control-plane-closure-result.md` | Decode attention guardrail/search-vocab control-plane closure result |
 | `bench/qk-pure-search-gap/latest.json` | Machine-readable pure-search gap verdict for decode attention |
 | `docs/pure-machine-search-gap-audit-result.md` | Top-level decode + prefill pure machine-search gap audit |
 | `bench/qk-pure-machine-search-gap/latest.json` | Machine-readable top-level pure machine-search gap verdict |
@@ -224,7 +225,7 @@ Current pure-search audit:
 Next canonical actions:
 
 1. Build an occupancy guardrail gate.
-2. Make the hot-loop schedule diff split-aware.
+2. Use the split-aware hot-loop schedule diff as the preflight for split candidates.
 3. Add/search an LDS-staged outer-`b` split-combine primitive.
 4. Bind manual winning flags into BubbleBeam/FutureSight provenance.
 

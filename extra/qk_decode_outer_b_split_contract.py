@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Emit the decode-attention outer-b split/combine search contract.
+
+This does not claim the lowering is implemented. It makes the missing primitive first-class and machine-readable so
+BubbleBeam/FutureSight can reason about candidates and the audit can stop calling the vocabulary absent.
+"""
+from __future__ import annotations
+import json, pathlib, datetime
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+OUTDIR = ROOT / "bench/qk-decode-outer-b-split-combine"
+
+def main() -> int:
+  contract = {
+    "schema": "qk_decode_outer_b_split_combine_contract_v1",
+    "date": datetime.date.today().isoformat(),
+    "primitive": "OuterBlockLoop.lds_staged_split_combine",
+    "goal": "Split the outer b-block online-softmax carry into K independent block partitions, stage partial (m, den, pv) state in LDS, then combine once without increasing VGPR pressure.",
+    "why": "ctx slope is dominated by the outer b-block carry; inner tt split was refuted and raised VGPR pressure.",
+    "search_knobs": {
+      "split_k": [1, 2, 4],
+      "partial_state_location": ["lds"],
+      "combine_order": ["tree", "linear"],
+      "state_dtype": ["fp32_m_den", "fp32_pv_acc"],
+      "vgpr_budget": ["<=88"],
+      "scratch_budget": [0],
+      "lds_budget_bytes": [8192, 12288, 16384]
+    },
+    "candidate_templates": [
+      {"candidate_id": "outer_b_split_k1_baseline", "split_k": 1, "status": "baseline"},
+      {"candidate_id": "outer_b_split_k2_lds_tree", "split_k": 2, "status": "search_vocab_present_lowering_required"},
+      {"candidate_id": "outer_b_split_k4_lds_tree", "split_k": 4, "status": "search_vocab_present_lowering_required"}
+    ],
+    "required_gates": [
+      "BLOCK_TILE_MICROGATE_PASS",
+      "OCCUPANCY_GUARDRAIL_PASS",
+      "HOTLOOP_SELECTED_LOOP_CLASS_MOVES_OR_COUNTERS_IMPROVE",
+      "ctx4096_slope_improves_without_ctx512_regression",
+      "route_clean_no_owned_no_materialization",
+      "W_equals_D"
+    ],
+    "kill_conditions": [
+      "VGPR rises above 88 or wg/CU drops below 4.0",
+      "scratch becomes nonzero",
+      "selected outer-loop ds_bpermute or waitcnt count does not improve",
+      "ctx4096 does not improve after correctness and route-clean gates",
+      "candidate falls back to owned/manual attention route"
+    ],
+    "verdict": "OUTER_B_SPLIT_COMBINE_SEARCH_VOCAB_PRESENT__LOWERING_NOT_BUILT"
+  }
+  OUTDIR.mkdir(parents=True, exist_ok=True)
+  (OUTDIR / "search_contract.json").write_text(json.dumps(contract, indent=2) + "\n")
+  (OUTDIR / "latest.json").write_text(json.dumps(contract, indent=2) + "\n")
+  print(json.dumps(contract, indent=2))
+  return 0
+
+if __name__ == "__main__":
+  raise SystemExit(main())

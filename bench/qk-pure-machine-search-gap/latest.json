@@ -6,7 +6,10 @@
     "decode_attention_child_audit": "bench/qk-pure-search-gap/latest.json",
     "prefill_search_readiness": "bench/qk-prefill-search/prefill_search_readiness.json",
     "prefill_long_context_hardening_doc": "docs/archive/prefill-long-context-integration-hardening-result-20260624.md",
-    "gemv_scope": "docs/gemv-pure-search-generated-route-scope.md"
+    "gemv_scope": "docs/gemv-pure-search-generated-route-scope.md",
+    "occupancy_guardrail": "bench/qk-decode-occupancy-guardrail/latest.json",
+    "outer_b_split_contract": "bench/qk-decode-outer-b-split-combine/latest.json",
+    "pressure_search_ownership": "bench/qk-decode-pressure-search-ownership/latest.json"
   },
   "overall_score_0_to_100": 67,
   "weights": {
@@ -27,7 +30,7 @@
         "ctx512_full_stack_pct_of_owned": 31.8,
         "ctx4096_full_stack_pct_of_owned": 6.6
       },
-      "primitive_vocab": "VOCAB_PARTIAL__FOUNDATION_PRIMITIVES_VISIBLE__OUTER_B_SPLIT_AND_OCCUPANCY_SEARCH_MISSING",
+      "primitive_vocab": "VOCAB_PARTIAL__GUARDRAIL_AND_OUTER_B_SEARCH_VOCAB_PRESENT__LOWERING_AND_SEARCH_BINDING_REMAIN",
       "provenance": {
         "generated_transfers": true,
         "search_owned": false,
@@ -37,18 +40,18 @@
       "next_actions": [
         {
           "rank": 1,
-          "action": "build occupancy guardrail gate",
-          "gate": "abort candidates that raise VGPR or lower waves/CU versus the best stack"
+          "action": "implement LDS-staged outer-b split-combine lowering",
+          "gate": "must bend ctx4096 slope and pass occupancy guardrail"
         },
         {
           "rank": 2,
-          "action": "make hot-loop schedule diff split-aware",
-          "gate": "separate inner tt loop from outer b-block loop before implementing more splits"
+          "action": "bind manual winning flags into BubbleBeam/FutureSight candidates",
+          "gate": "selection provenance changes from manual flags to search-owned"
         },
         {
           "rank": 3,
-          "action": "add/search LDS-staged outer-b split-combine primitive",
-          "gate": "must bend ctx4096 slope without increasing VGPR occupancy cost"
+          "action": "use split-aware hot-loop and occupancy guardrail as mandatory preflight",
+          "gate": "selected loop counters improve without VGPR/scratch regression"
         },
         {
           "rank": 4,
@@ -76,10 +79,10 @@
           "4096": 94.4
         },
         "bubblebeam_pct_of_baseline": {
-          "512": 101.9,
-          "4096": 101.8,
           "1024": 101.8,
-          "2048": 101.8
+          "512": 101.9,
+          "2048": 101.8,
+          "4096": 101.8
         }
       },
       "primitive_vocab": {
@@ -122,18 +125,18 @@
           "8192": 2869.33
         },
         "aggressive_pct_of_baseline": {
-          "4096": 100.4,
           "1024": 125.6,
-          "8192": 80.4,
+          "512": 128.5,
           "2048": 117.2,
-          "512": 128.5
+          "4096": 100.4,
+          "8192": 80.4
         },
         "baseline_over_aggressive_ratio": {
-          "4096": 1.0,
           "1024": 0.8,
-          "8192": 1.24,
+          "512": 0.78,
           "2048": 0.85,
-          "512": 0.78
+          "4096": 1.0,
+          "8192": 1.24
         },
         "long_context_status": "flat_512_to_8192"
       },
@@ -190,12 +193,12 @@
     {
       "rank": 1,
       "area": "decode_attention",
-      "action": "occupancy guardrail + split-aware hotloop audit"
+      "action": "implement LDS-staged outer-b split-combine lowering behind the new search contract"
     },
     {
       "rank": 2,
       "area": "decode_attention",
-      "action": "LDS-staged outer-b split-combine primitive"
+      "action": "bind pressure-aware/manual flags into BubbleBeam/FutureSight candidate ownership"
     },
     {
       "rank": 3,

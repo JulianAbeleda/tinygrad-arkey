@@ -45,7 +45,7 @@ It is also not "flash attention is bad" in general. The regression is the genera
 
 | Area | Missing or not search-owned |
 |---|---|
-| Decode attention | Occupancy guardrail, split-aware hotloop audit, LDS-staged outer-`b` split-combine primitive, pressure-aware scheduling. |
+| Decode attention | Occupancy guardrail and split-aware hotloop audit are present; LDS-staged outer-`b` split-combine lowering and pressure-aware search binding remain. |
 | Prefill | Search provenance binding for eightwave/current baseline, aggressive-bound proof, attention/copy decomposition blind spot. |
 | Shared | Manual flags need BubbleBeam/FutureSight candidate provenance before they count as pure machine search. |
 
@@ -53,7 +53,7 @@ It is also not "flash attention is bad" in general. The regression is the genera
 
 | Rank | Action |
 |---:|---|
-| 1 | Build decode-attention occupancy guardrail and split-aware hotloop audit. |
-| 2 | Add/search LDS-staged outer-`b` split-combine primitive. |
+| 1 | Implement LDS-staged outer-`b` split-combine lowering behind the new search contract. |
+| 2 | Bind pressure-aware/manual flags into BubbleBeam/FutureSight candidate ownership. |
 | 3 | Bind prefill eightwave/current baseline to explicit search provenance. |
 | 4 | Put manual flags/primitives into BubbleBeam/FutureSight candidate provenance. |

@@ -18,8 +18,8 @@ The existing fine-tuning audit (`extra/qk_decode_hotloop_schedule_diff.py`, comm
 | Transfer | Full generated stack is +72.6% at ctx512 and +77.1% at ctx4096 versus the block-tile route without the stack. |
 | Prior generated gap | Full stack is 5.05x / 6.89x faster than the prior fused-xlane route at ctx512 / ctx4096. |
 | Remaining gap | Owned is still 3.15x faster at ctx512 and 15.13x faster at ctx4096. |
-| Schedule verdict | `HOTLOOP_SCHEDULE_DIFF__SCHEDULING_BOUND` from the scheduler capability scope. |
-| Current hotloop JSON status | `SPLIT_AWARENESS_GAP__CURRENT_JSON_MISIDENTIFIED_GENERATED_LOOP`; the current extractor can lock onto the wrong generated loop and must not be treated as final for split experiments. |
+| Schedule verdict | `HOTLOOP_SCHEDULE_DIFF__GENERATED_CROSSLANE_OVERHEAD_BOUND` from the split-aware hotloop tool. |
+| Current hotloop JSON status | `SPLIT_AWARE_HOTLOOP_READY`; the extractor now selects the real outer loop on both owned and generated disassembly. |
 | Primitive/vocab verdict | `VOCAB_PARTIAL__FOUNDATION_PRIMITIVES_VISIBLE__OUTER_B_SPLIT_AND_OCCUPANCY_SEARCH_MISSING`. |
 | Pure-search score | 60 / 100 for decode attention. |
 
@@ -41,14 +41,14 @@ The existing fine-tuning audit (`extra/qk_decode_hotloop_schedule_diff.py`, comm
 | `OuterBlockLoop.lds_staged_split_combine` | missing search vocab | The ctx slope is the outer `b`-block online-softmax carry; current unroll targets inner `tt` only. |
 | `ResourceModel.occupancy_guardrail` | missing search scoring | The tile is VGPR/occupancy-bound; pressure-increasing changes regress. |
 | `Scheduler.pressure_aware_latency_hiding` | partial, not search-owned | Generated code still has the scheduling/pipelining residual versus owned hand-shaped code. |
-| `Audit.split_aware_hotloop_oracle` | missing tooling | The current backward-branch heuristic can select the wrong loop under split experiments. |
+| `Audit.split_aware_hotloop_oracle` | present | Backward branches are target-parsed, loop candidates are enumerated, and owned/generated selected loops are classified. |
 
 ## Next actions
 
 | Rank | Action | Gate |
 |---:|---|---|
 | 1 | Build occupancy guardrail gate | Abort candidates that raise VGPR or lower waves/CU versus the best stack. |
-| 2 | Make hot-loop schedule diff split-aware | Separate inner `tt` loop from outer `b` block loop before implementing more splits. |
+| 2 | Use the split-aware hot-loop audit as the preflight for new split candidates | Require selected-loop class and counters to move before implementation. |
 | 3 | Add/search LDS-staged outer-`b` split-combine primitive | Must bend ctx4096 slope without increasing VGPR occupancy cost. |
 | 4 | Bind manual winning flags into BubbleBeam/FutureSight | Candidate provenance must change from manual flags to search-owned selection. |
 

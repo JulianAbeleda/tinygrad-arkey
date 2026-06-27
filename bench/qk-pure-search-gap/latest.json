@@ -9,7 +9,10 @@
     "search_contract": "bench/qk-decode-primitive-space/search_contract.json",
     "isa_vectorization": "bench/qk-decode-isa-vectorization/latest.json",
     "delta_attack_result": "docs/decode-tile-delta-attack-result-20260627.md",
-    "scheduler_capability_scope": "docs/decode-codegen-scheduler-capability-scope.md"
+    "scheduler_capability_scope": "docs/decode-codegen-scheduler-capability-scope.md",
+    "occupancy_guardrail": "bench/qk-decode-occupancy-guardrail/latest.json",
+    "outer_b_split_contract": "bench/qk-decode-outer-b-split-combine/latest.json",
+    "pressure_search_ownership": "bench/qk-decode-pressure-search-ownership/latest.json"
   },
   "time_delta_explanation": {
     "authority": "W_equals_D_in_model",
@@ -53,9 +56,9 @@
       "ctx512_full_stack_over_prior_fused": 5.05,
       "ctx4096_full_stack_over_prior_fused": 6.89
     },
-    "schedule_oracle": "HOTLOOP_SCHEDULE_DIFF__SCHEDULING_BOUND",
-    "current_hotloop_json_verdict": "PARITY_OR_STRUCTURAL__shadow_fill_similar",
-    "hotloop_tool_status": "SPLIT_AWARENESS_GAP__CURRENT_JSON_MISIDENTIFIED_GENERATED_LOOP",
+    "schedule_oracle": "HOTLOOP_SCHEDULE_DIFF__GENERATED_CROSSLANE_OVERHEAD_BOUND",
+    "current_hotloop_json_verdict": "HOTLOOP_SCHEDULE_DIFF__GENERATED_CROSSLANE_OVERHEAD_BOUND",
+    "hotloop_tool_status": "SPLIT_AWARE_HOTLOOP_READY",
     "isa_resource_snapshot": {
       "vgpr": 88,
       "sgpr": 8,
@@ -85,6 +88,7 @@
       "v_mul": 42,
       "v_add": 76
     },
+    "occupancy_guardrail": "OCCUPANCY_GUARDRAIL_PASS",
     "closed_deltas": [
       "DECODE_FAST_EXP2"
     ],
@@ -129,31 +133,41 @@
         "primitive": "Sched.recurrence_unroll_list",
         "status": "present_manual_flag_not_search_owned",
         "evidence": "SCHED_UNROLL/SCHED_LIST transfer but are manually selected"
+      },
+      {
+        "primitive": "Audit.split_aware_hotloop_oracle",
+        "status": "present_tooling",
+        "evidence": "branch-target parsing enumerates owned/generated loops and selects the real outer block loop"
+      },
+      {
+        "primitive": "ResourceModel.occupancy_guardrail",
+        "status": "present_tooling",
+        "evidence": "OCCUPANCY_GUARDRAIL_PASS"
+      },
+      {
+        "primitive": "OuterBlockLoop.lds_staged_split_combine.search_contract",
+        "status": "present_search_vocab",
+        "evidence": "OUTER_B_SPLIT_COMBINE_SEARCH_VOCAB_PRESENT__LOWERING_NOT_BUILT"
+      },
+      {
+        "primitive": "Scheduler.pressure_search_ownership_audit",
+        "status": "present_tooling",
+        "evidence": "PRESSURE_SEARCH_OWNERSHIP_PARTIAL__GUARDRAIL_AND_VOCAB_PRESENT__LOWERING_AND_FLAG_BINDING_REMAIN"
       }
     ],
     "missing_or_not_search_owned": [
       {
-        "primitive": "OuterBlockLoop.lds_staged_split_combine",
-        "status": "missing_search_vocab",
-        "why": "ctx slope is the outer b-block online-softmax carry; current unroll targets inner tt only"
+        "primitive": "OuterBlockLoop.lds_staged_split_combine.lowering",
+        "status": "lowering_not_built",
+        "why": "search vocabulary exists, but no generated candidate yet bends ctx4096 slope"
       },
       {
-        "primitive": "ResourceModel.occupancy_guardrail",
-        "status": "missing_search_scoring",
-        "why": "tile is VGPR/occupancy-bound; pressure-increasing levers regress"
-      },
-      {
-        "primitive": "Scheduler.pressure_aware_latency_hiding",
+        "primitive": "Scheduler.pressure_aware_latency_hiding.search_binding",
         "status": "partial_not_search_owned",
-        "why": "generated reduces still show scheduling/pipelining residual versus owned hand-shaped code"
-      },
-      {
-        "primitive": "Audit.split_aware_hotloop_oracle",
-        "status": "missing_tooling",
-        "why": "current hot-loop heuristic can lock onto the wrong loop under split experiments"
+        "why": "guardrails exist, but winning manual flags are not BubbleBeam-owned"
       }
     ],
-    "verdict": "VOCAB_PARTIAL__FOUNDATION_PRIMITIVES_VISIBLE__OUTER_B_SPLIT_AND_OCCUPANCY_SEARCH_MISSING"
+    "verdict": "VOCAB_PARTIAL__GUARDRAIL_AND_OUTER_B_SEARCH_VOCAB_PRESENT__LOWERING_AND_SEARCH_BINDING_REMAIN"
   },
   "pure_search_score": {
     "decode_attention_pure_machine_search_score_0_to_100": 60,
@@ -162,24 +176,24 @@
       "foundation primitives compose and produce material speedup",
       "remaining gap is now attributed, not existential",
       "manual flags and owned baseline still required for default performance",
-      "outer-b split, occupancy scoring, and pressure-aware scheduling are not BubbleBeam-owned yet"
+      "outer-b lowering and pressure-aware scheduling/search binding are not BubbleBeam-owned yet"
     ]
   },
   "next_actions": [
     {
       "rank": 1,
-      "action": "build occupancy guardrail gate",
-      "gate": "abort candidates that raise VGPR or lower waves/CU versus the best stack"
+      "action": "implement LDS-staged outer-b split-combine lowering",
+      "gate": "must bend ctx4096 slope and pass occupancy guardrail"
     },
     {
       "rank": 2,
-      "action": "make hot-loop schedule diff split-aware",
-      "gate": "separate inner tt loop from outer b-block loop before implementing more splits"
+      "action": "bind manual winning flags into BubbleBeam/FutureSight candidates",
+      "gate": "selection provenance changes from manual flags to search-owned"
     },
     {
       "rank": 3,
-      "action": "add/search LDS-staged outer-b split-combine primitive",
-      "gate": "must bend ctx4096 slope without increasing VGPR occupancy cost"
+      "action": "use split-aware hot-loop and occupancy guardrail as mandatory preflight",
+      "gate": "selected loop counters improve without VGPR/scratch regression"
     },
     {
       "rank": 4,

@@ -21,6 +21,9 @@ SEARCH_CONTRACT = ROOT / "bench/qk-decode-primitive-space/search_contract.json"
 ISA_VEC = ROOT / "bench/qk-decode-isa-vectorization/latest.json"
 DELTA_RESULT = ROOT / "docs/decode-tile-delta-attack-result-20260627.md"
 SCHED_SCOPE = ROOT / "docs/decode-codegen-scheduler-capability-scope.md"
+OCC_GUARD = ROOT / "bench/qk-decode-occupancy-guardrail/latest.json"
+OUTER_B = ROOT / "bench/qk-decode-outer-b-split-combine/latest.json"
+PRESSURE_OWN = ROOT / "bench/qk-decode-pressure-search-ownership/latest.json"
 
 def load(path: pathlib.Path, default: Any=None) -> Any:
   if not path.exists(): return default
@@ -45,6 +48,9 @@ def main() -> int:
   isa = load(ISA_VEC, {})
   delta_doc = load(DELTA_RESULT, "")
   sched_scope = load(SCHED_SCOPE, "")
+  occ_guard = load(OCC_GUARD, {})
+  outer_b = load(OUTER_B, {})
+  pressure_own = load(PRESSURE_OWN, {})
 
   arms = arm_map(transfer)
   owned = arms.get("owned_baseline", {})
@@ -53,11 +59,13 @@ def main() -> int:
   fused = arms.get("prior_fused_xlane_route", {})
 
   hotloop_verdict = hotloop.get("verdict", "missing")
-  gen_mix = hotloop.get("generated", {}).get("mix", {})
+  gen_mix = (hotloop.get("generated", {}).get("selected_loop", {}).get("metrics", {}).get("mix")
+             or hotloop.get("generated", {}).get("mix", {}))
+  selected_loop_valid = hotloop.get("comparison", {}).get("selected_loop_valid")
   generated_long_latency_seen = any(gen_mix.get(k, 0) for k in ("ds_bpermute", "global_load", "ds_read"))
-  schedule_verdict = "HOTLOOP_SCHEDULE_DIFF__SCHEDULING_BOUND" if "HOTLOOP_SCHEDULE_DIFF__SCHEDULING_BOUND" in sched_scope else hotloop_verdict
-  hotloop_tool_status = ("SPLIT_AWARENESS_GAP__CURRENT_JSON_MISIDENTIFIED_GENERATED_LOOP"
-                         if not generated_long_latency_seen else "CURRENT_JSON_USABLE")
+  schedule_verdict = hotloop_verdict if selected_loop_valid else ("HOTLOOP_SCHEDULE_DIFF__SCHEDULING_BOUND" if "HOTLOOP_SCHEDULE_DIFF__SCHEDULING_BOUND" in sched_scope else hotloop_verdict)
+  hotloop_tool_status = ("SPLIT_AWARE_HOTLOOP_READY" if selected_loop_valid and generated_long_latency_seen
+                         else "SPLIT_AWARENESS_GAP__CURRENT_JSON_MISIDENTIFIED_GENERATED_LOOP")
 
   time_delta = {
     "authority": transfer.get("authority", "unknown"),
@@ -81,6 +89,7 @@ def main() -> int:
     "hotloop_tool_status": hotloop_tool_status,
     "isa_resource_snapshot": isa.get("capture", {}).get("tile", {}).get("resources", {}),
     "isa_marker_snapshot": isa.get("capture", {}).get("tile", {}).get("markers", {}),
+    "occupancy_guardrail": occ_guard.get("verdict", "missing"),
     "closed_deltas": ["DECODE_FAST_EXP2" if "DECODE_FAST_EXP2" in delta_doc else None],
     "refuted_deltas": [x for x in ["ds_permute", "SCHED_UNROLL_SPLIT", "DECODE_Q_HOIST"] if x in delta_doc or x == "ds_permute"],
     "verdict": "TIME_DELTA_PARTIAL_EXPLAINED__GENERATED_STACK_TRANSFERS__LONG_CTX_GAP_REMAINS",
@@ -98,14 +107,16 @@ def main() -> int:
       {"primitive": "LaneMap.cooperative_stage", "status": "present_generated_default_off", "evidence": "cooperative-staging LaneMap composes with coalesced-load lowering"},
       {"primitive": "Math.fast_exp2_valid_domain", "status": "present_manual_flag_not_search_owned", "evidence": "DECODE_FAST_EXP2 closes +8-9% by removing dead range-reduction work"},
       {"primitive": "Sched.recurrence_unroll_list", "status": "present_manual_flag_not_search_owned", "evidence": "SCHED_UNROLL/SCHED_LIST transfer but are manually selected"},
+      {"primitive": "Audit.split_aware_hotloop_oracle", "status": "present_tooling", "evidence": "branch-target parsing enumerates owned/generated loops and selects the real outer block loop"},
+      {"primitive": "ResourceModel.occupancy_guardrail", "status": "present_tooling", "evidence": occ_guard.get("verdict", "missing")},
+      {"primitive": "OuterBlockLoop.lds_staged_split_combine.search_contract", "status": "present_search_vocab", "evidence": outer_b.get("verdict", "missing")},
+      {"primitive": "Scheduler.pressure_search_ownership_audit", "status": "present_tooling", "evidence": pressure_own.get("verdict", "missing")},
     ],
     "missing_or_not_search_owned": [
-      {"primitive": "OuterBlockLoop.lds_staged_split_combine", "status": "missing_search_vocab", "why": "ctx slope is the outer b-block online-softmax carry; current unroll targets inner tt only"},
-      {"primitive": "ResourceModel.occupancy_guardrail", "status": "missing_search_scoring", "why": "tile is VGPR/occupancy-bound; pressure-increasing levers regress"},
-      {"primitive": "Scheduler.pressure_aware_latency_hiding", "status": "partial_not_search_owned", "why": "generated reduces still show scheduling/pipelining residual versus owned hand-shaped code"},
-      {"primitive": "Audit.split_aware_hotloop_oracle", "status": "missing_tooling", "why": "current hot-loop heuristic can lock onto the wrong loop under split experiments"},
+      {"primitive": "OuterBlockLoop.lds_staged_split_combine.lowering", "status": "lowering_not_built", "why": "search vocabulary exists, but no generated candidate yet bends ctx4096 slope"},
+      {"primitive": "Scheduler.pressure_aware_latency_hiding.search_binding", "status": "partial_not_search_owned", "why": "guardrails exist, but winning manual flags are not BubbleBeam-owned"},
     ],
-    "verdict": "VOCAB_PARTIAL__FOUNDATION_PRIMITIVES_VISIBLE__OUTER_B_SPLIT_AND_OCCUPANCY_SEARCH_MISSING",
+    "verdict": "VOCAB_PARTIAL__GUARDRAIL_AND_OUTER_B_SEARCH_VOCAB_PRESENT__LOWERING_AND_SEARCH_BINDING_REMAIN",
   }
 
   score = {
@@ -115,14 +126,14 @@ def main() -> int:
       "foundation primitives compose and produce material speedup",
       "remaining gap is now attributed, not existential",
       "manual flags and owned baseline still required for default performance",
-      "outer-b split, occupancy scoring, and pressure-aware scheduling are not BubbleBeam-owned yet",
+      "outer-b lowering and pressure-aware scheduling/search binding are not BubbleBeam-owned yet",
     ],
   }
 
   next_actions = [
-    {"rank": 1, "action": "build occupancy guardrail gate", "gate": "abort candidates that raise VGPR or lower waves/CU versus the best stack"},
-    {"rank": 2, "action": "make hot-loop schedule diff split-aware", "gate": "separate inner tt loop from outer b-block loop before implementing more splits"},
-    {"rank": 3, "action": "add/search LDS-staged outer-b split-combine primitive", "gate": "must bend ctx4096 slope without increasing VGPR occupancy cost"},
+    {"rank": 1, "action": "implement LDS-staged outer-b split-combine lowering", "gate": "must bend ctx4096 slope and pass occupancy guardrail"},
+    {"rank": 2, "action": "bind manual winning flags into BubbleBeam/FutureSight candidates", "gate": "selection provenance changes from manual flags to search-owned"},
+    {"rank": 3, "action": "use split-aware hot-loop and occupancy guardrail as mandatory preflight", "gate": "selected loop counters improve without VGPR/scratch regression"},
     {"rank": 4, "action": "bind manual winning flags into BubbleBeam/FutureSight search space", "gate": "candidate provenance changes from manual flags to search-owned selection"},
   ]
 
@@ -138,6 +149,9 @@ def main() -> int:
       "isa_vectorization": str(ISA_VEC.relative_to(ROOT)),
       "delta_attack_result": str(DELTA_RESULT.relative_to(ROOT)),
       "scheduler_capability_scope": str(SCHED_SCOPE.relative_to(ROOT)),
+      "occupancy_guardrail": str(OCC_GUARD.relative_to(ROOT)),
+      "outer_b_split_contract": str(OUTER_B.relative_to(ROOT)),
+      "pressure_search_ownership": str(PRESSURE_OWN.relative_to(ROOT)),
     },
     "time_delta_explanation": time_delta,
     "primitive_vocabulary_attribution": primitive_vocab,

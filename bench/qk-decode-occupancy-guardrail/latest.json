@@ -1,0 +1,51 @@
+{
+  "schema": "qk_decode_occupancy_guardrail_v1",
+  "date": "2026-06-27",
+  "inputs": {
+    "isa": "/home/ubuntu/tinygrad-arkey/bench/qk-decode-isa-vectorization/latest.json",
+    "hotloop": "/home/ubuntu/tinygrad-arkey/bench/qk-decode-hotloop-schedule-diff/latest.json"
+  },
+  "baseline_policy": {
+    "vgpr_max": 88,
+    "scratch_max": 0,
+    "lds_max": 8192,
+    "min_wg_per_cu": 4.0,
+    "cross_lane_max": 40,
+    "waitcnt_max": 50
+  },
+  "checks": {
+    "vgpr": {
+      "value": 88,
+      "max": 88,
+      "pass": true
+    },
+    "scratch": {
+      "value": 0,
+      "max": 0,
+      "pass": true
+    },
+    "lds": {
+      "value": 8192,
+      "max": 8192,
+      "pass": true
+    },
+    "wg_per_cu": {
+      "value": 4.0,
+      "min": 4.0,
+      "pass": true
+    },
+    "cross_lane": {
+      "value": 40,
+      "max": 40,
+      "pass": true
+    },
+    "selected_loop_waitcnt": {
+      "value": 50,
+      "max": 50,
+      "pass": true
+    }
+  },
+  "decision_rule": "Abort pressure-increasing candidates before W==D unless an explicit override records why occupancy loss is expected to win.",
+  "verdict": "OCCUPANCY_GUARDRAIL_PASS",
+  "pass": true
+}
