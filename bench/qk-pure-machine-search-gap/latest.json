@@ -36,7 +36,7 @@
       "primitive_vocab": "VOCAB_PARTIAL__GUARDRAIL_AND_OUTER_B_SEARCH_VOCAB_PRESENT__LOWERING_AND_SEARCH_BINDING_REMAIN",
       "live_gates": {
         "occupancy_guardrail": "OCCUPANCY_GUARDRAIL_PASS",
-        "outer_b_split_contract": "OUTER_B_SPLIT_COMBINE_SEARCH_VOCAB_PRESENT__LOWERING_NOT_BUILT",
+        "outer_b_split_contract": "OUTER_B_SPLIT_COMBINE_LOWERING_BUILT__REFUTED_ON_SPEED__OCCUPANCY_TAX",
         "pressure_search_ownership": "PRESSURE_SEARCH_OWNERSHIP_PARTIAL__GUARDRAIL_AND_VOCAB_PRESENT__LOWERING_AND_FLAG_BINDING_REMAIN"
       },
       "provenance": {
@@ -75,10 +75,10 @@
       "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV",
       "gate_evidence": {
         "bubblebeam_pct_of_baseline": {
-          "4096": 101.8,
           "1024": 101.8,
-          "512": 101.9,
-          "2048": 101.8
+          "4096": 101.8,
+          "2048": 101.8,
+          "512": 101.9
         },
         "parity_min_pct": 99.0,
         "parity_holds": true,
@@ -98,10 +98,10 @@
           "4096": 94.4
         },
         "bubblebeam_pct_of_baseline": {
-          "4096": 101.8,
           "1024": 101.8,
-          "512": 101.9,
-          "2048": 101.8
+          "4096": 101.8,
+          "2048": 101.8,
+          "512": 101.9
         }
       },
       "primitive_vocab": {
@@ -152,16 +152,16 @@
         "aggressive_pct_of_baseline": {
           "4096": 100.4,
           "8192": 80.4,
-          "512": 128.5,
           "1024": 125.6,
-          "2048": 117.2
+          "2048": 117.2,
+          "512": 128.5
         },
         "baseline_over_aggressive_ratio": {
           "4096": 1.0,
           "8192": 1.24,
-          "512": 0.78,
           "1024": 0.8,
-          "2048": 0.85
+          "2048": 0.85,
+          "512": 0.78
         },
         "aggressive_proven_whole_prefill": false,
         "long_context_status": "flat_512_to_8192"

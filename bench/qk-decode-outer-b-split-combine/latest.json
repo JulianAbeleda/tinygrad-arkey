@@ -40,9 +40,9 @@
       "status": "baseline"
     },
     {
-      "candidate_id": "outer_b_split_k2_lds_tree",
+      "candidate_id": "outer_b_split_k2_independent_combine",
       "split_k": 2,
-      "status": "search_vocab_present_lowering_required"
+      "status": "lowering_built_refuted_on_speed"
     },
     {
       "candidate_id": "outer_b_split_k4_lds_tree",
@@ -50,6 +50,41 @@
       "status": "search_vocab_present_lowering_required"
     }
   ],
+  "lowering_built": true,
+  "bends_slope": false,
+  "refuted": true,
+  "lowering": {
+    "flag": "DECODE_OUTER_B_SPLIT=<K>",
+    "module": "extra/qk_codegen_outer_b_lds_split.py",
+    "what": "splits the serial b REDUCE loop into K independent partitions (private state + private LDS tile) + flash log-sum-exp combine; default-off, cache-keyed, byte-identical when unset",
+    "correctness": "BLOCK_TILE_MICROGATE_PASS (max_abs <= 1.14e-05) at K=2, full best-stack",
+    "measured_k2": {
+      "isolated_ms_ctx512_baseline_vs_split": [
+        0.4022,
+        0.471
+      ],
+      "isolated_ms_ctx4096_baseline_vs_split": [
+        2.84016,
+        3.38528
+      ],
+      "isolated_regression_pct": {
+        "ctx512": 17.1,
+        "ctx4096": 19.2
+      },
+      "resources_baseline_vs_split": {
+        "vgpr": [
+          88,
+          176
+        ],
+        "lds": [
+          8192,
+          16384
+        ]
+      }
+    },
+    "refutation": "Partition independence requires privatizing the online-softmax state + transient compute regs (VGPR 88->176) and the K/V tile (LDS 8192->16384). The occupancy tax outweighs the ILP/latency-overlap gain on this occupancy-bound, HBM-leaning tile -> ~18% slower at both ctx. Same failure class as the refuted SCHED_UNROLL_SPLIT (ILP-via-state); confirms diagnostic-truth-#2. LDS-staging the partials does not escape it: the hot online-softmax accumulators must be register-resident in the inner tt loop, and independence requires private registers either way.",
+    "next_layer": "b-parallelism must come from MORE WORKGROUPS (more s-splits / smaller L), not within-warp split -- that lever is capped by the split-KV combine economics (already characterized). The within-tile lever is work-REMOVAL, not ILP-via-state."
+  },
   "required_gates": [
     "BLOCK_TILE_MICROGATE_PASS",
     "OCCUPANCY_GUARDRAIL_PASS",
@@ -65,5 +100,5 @@
     "ctx4096 does not improve after correctness and route-clean gates",
     "candidate falls back to owned/manual attention route"
   ],
-  "verdict": "OUTER_B_SPLIT_COMBINE_SEARCH_VOCAB_PRESENT__LOWERING_NOT_BUILT"
+  "verdict": "OUTER_B_SPLIT_COMBINE_LOWERING_BUILT__REFUTED_ON_SPEED__OCCUPANCY_TAX"
 }

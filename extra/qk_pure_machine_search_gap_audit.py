@@ -96,7 +96,9 @@ def main() -> int:
   occ_verdict = occ_guard.get("verdict", "missing")
   outer_b_verdict = outer_b.get("verdict", "missing")
   pressure_verdict = pressure_own.get("verdict", "missing")
-  outer_b_lowering_built = outer_b_verdict != "missing" and "LOWERING_NOT_BUILT" not in outer_b_verdict
+  # search-owned only when the outer-b lowering actually BENDS the slope (replaces owned), not when it merely exists:
+  # a built-but-refuted-on-speed lowering must not flip provenance to search-owned.
+  outer_b_bends_slope = bool(outer_b.get("bends_slope"))
 
   sections = []
   sections.append({
@@ -115,9 +117,9 @@ def main() -> int:
     },
     "provenance": {
       "generated_transfers": bool(decode_att),
-      "search_owned": outer_b_lowering_built,
-      "manual_flags": not outer_b_lowering_built,
-      "owned_kernel_required_for_default_perf": not outer_b_lowering_built,
+      "search_owned": outer_b_bends_slope,
+      "manual_flags": not outer_b_bends_slope,
+      "owned_kernel_required_for_default_perf": not outer_b_bends_slope,
     },
     "next_actions": decode_att.get("next_actions", []),
   })
@@ -206,7 +208,7 @@ def main() -> int:
   degraded = bool(inputs_missing)
   if degraded:
     verdict = "PURE_MACHINE_SEARCH_DEGRADED__INPUTS_MISSING__" + ",".join(inputs_missing)
-  elif decode_gemv_pure and outer_b_lowering_built and prefill_aggressive_proven:
+  elif decode_gemv_pure and outer_b_bends_slope and prefill_aggressive_proven:
     verdict = "PURE_MACHINE_SEARCH_CLOSE__DECODE_AND_PREFILL_SEARCH_OWNED"
   else:
     verdict = "PURE_MACHINE_SEARCH_PARTIAL__DECODE_GEMV_CLOSE__DECODE_ATTENTION_AND_PREFILL_STILL_NOT_FULLY_SEARCH_OWNED"

@@ -91,9 +91,11 @@ def main() -> int:
   occ_verdict = occ_guard.get("verdict", "missing")
   occ_pass = bool(occ_guard.get("pass"))
   outer_b_verdict = outer_b.get("verdict", "missing")
-  # Drive lowering-built detection from the contract artifact instead of hardcoding: shipping the lowering
-  # (which updates the contract verdict) flips this from False to True.
-  outer_b_lowering_built = outer_b_verdict != "missing" and "LOWERING_NOT_BUILT" not in outer_b_verdict
+  # Drive lowering state from the contract artifact instead of hardcoding. A lowering that exists but does NOT bend
+  # the ctx slope (built + refuted on speed) is NOT progress -- only `bends_slope` earns the slope-component points,
+  # so a correct-but-slower lowering keeps the score honest rather than awarding it for mere existence.
+  outer_b_lowering_present = bool(outer_b.get("lowering_built")) or (outer_b_verdict != "missing" and "NOT_BUILT" not in outer_b_verdict)
+  outer_b_bends_slope = bool(outer_b.get("bends_slope"))
   # Manual flags are search-owned only when a provenance artifact says so (today the snapshot rows are flagged
   # generated_manual_route_flag* => not search-owned).
   provenances = {a.get("provenance", "") for a in transfer.get("arms", []) if a.get("arm") != "owned_baseline"}
@@ -153,7 +155,7 @@ def main() -> int:
     "generated_route_correct_and_transfers": 30 if route_transfers else 0,
     "foundation_primitives_compose": 15 if isa_markers_present else 0,
     "gap_attributed_not_existential": 15 if gap_attributed else 0,
-    "outer_b_lowering_built_bends_slope": 20 if (outer_b_lowering_built and gap_attributed) else 0,
+    "outer_b_lowering_built_bends_slope": 20 if (outer_b_bends_slope and gap_attributed) else 0,
     "flags_search_owned_and_wd_parity": 20 if (flags_search_owned and wd_promotable) else 0,
   }
   decode_attention_score = sum(score_components.values())
@@ -172,7 +174,7 @@ def main() -> int:
       "generated route is correct and transfers in-model (measured: full-stack > no-stack at ctx512 and ctx4096)",
       "foundation primitives compose and produce material speedup (ISA marker/resource snapshot present)",
       "remaining gap is attributed, not existential (hot-loop selected-loop valid + occupancy + outer-b vocab present)",
-      "outer-b LDS split-combine lowering not built yet => 20-pt slope component withheld",
+      "outer-b split-combine lowering BUILT + correct but REFUTED on speed (occupancy tax) => 20-pt slope component withheld",
       "manual flags + owned baseline still required for default performance => search-owned component withheld",
     ],
   }
@@ -202,21 +204,26 @@ def main() -> int:
     ],
     "missing_or_not_search_owned": [
       {"primitive": "OuterBlockLoop.lds_staged_split_combine.lowering",
-       "status": "lowering_built" if outer_b_lowering_built else "lowering_not_built",
-       "why": "search vocabulary exists, but no generated candidate yet bends ctx4096 slope" if not outer_b_lowering_built else "outer-b contract reports the lowering present"},
+       "status": ("lowering_bends_slope" if outer_b_bends_slope else
+                  "lowering_built_refuted_on_speed" if outer_b_lowering_present else "lowering_not_built"),
+       "why": ("outer-b lowering built + correct (microgate PASS) but REFUTED on speed: partition independence costs "
+               "VGPR 88->176 + LDS 8192->16384, occupancy tax > ILP gain (~18% slower); same class as SCHED_UNROLL_SPLIT"
+               if outer_b_lowering_present and not outer_b_bends_slope else
+               "outer-b lowering bends the ctx slope" if outer_b_bends_slope else
+               "search vocabulary exists, but no generated candidate yet bends ctx4096 slope")},
       {"primitive": "Scheduler.pressure_aware_latency_hiding.search_binding",
        "status": "search_owned" if flags_search_owned else "partial_not_search_owned",
        "why": "guardrails exist, but winning manual flags are not BubbleBeam-owned" if not flags_search_owned else "flags bound to search provenance"},
     ],
     "verdict": "VOCAB_PARTIAL__GUARDRAIL_AND_OUTER_B_SEARCH_VOCAB_PRESENT__LOWERING_AND_SEARCH_BINDING_REMAIN"
-               if not (outer_b_lowering_built and flags_search_owned)
+               if not (outer_b_bends_slope and flags_search_owned)
                else "VOCAB_SEARCH_OWNED__OUTER_B_LOWERING_AND_FLAG_BINDING_PRESENT",
   }
 
   # DERIVED verdict: PARTIAL today, becomes PROMOTABLE only when the build clears the gates; degraded if inputs absent.
   if degraded:
     verdict = "PURE_SEARCH_DEGRADED__INPUTS_MISSING__" + ",".join(inputs_missing)
-  elif outer_b_lowering_built and flags_search_owned and wd_promotable:
+  elif outer_b_bends_slope and flags_search_owned and wd_promotable:
     verdict = "PURE_SEARCH_PROMOTABLE__GENERATED_SEARCH_OWNED__WD_AT_OWNED_THRESHOLD"
   else:
     verdict = "PURE_SEARCH_PARTIAL__TIME_DELTA_EXPLAINED__VOCAB_GAPS_IDENTIFIED__NOT_PROMOTABLE_YET"
