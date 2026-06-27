@@ -3,6 +3,13 @@
 
 This wraps workload-specific audits into one decode+prefill verdict. It is intentionally conservative:
 if a workload has performance evidence but incomplete search provenance, it says so rather than claiming purity.
+
+Scores are DERIVED from the loaded artifacts, not literals:
+  - decode_attention: read from the child audit's derived score;
+  - decode_gemv: gated on a MEASURED canonical comparator (bubblebeam vs baseline tok/s), with the scope marker as
+    corroboration only -- a prose substring alone can no longer manufacture a "pure" verdict;
+  - prefill: derived from the loaded prefill readiness + canonical aggressive-vs-baseline rows.
+Absent inputs are recorded in `inputs_missing` and mark the verdict degraded.
 """
 from __future__ import annotations
 import json, pathlib, datetime
@@ -18,6 +25,9 @@ GEMV_SCOPE = ROOT / "docs/gemv-pure-search-generated-route-scope.md"
 OCC_GUARD = ROOT / "bench/qk-decode-occupancy-guardrail/latest.json"
 OUTER_B = ROOT / "bench/qk-decode-outer-b-split-combine/latest.json"
 PRESSURE_OWN = ROOT / "bench/qk-decode-pressure-search-ownership/latest.json"
+
+GEMV_PURE_MARKER = "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV"
+GEMV_PARITY_MIN_PCT = 99.0   # bubblebeam decode route must be at/above this % of baseline to count as pure
 
 def load_json(path: pathlib.Path, default: Any=None) -> Any:
   if not path.exists(): return default
@@ -39,6 +49,11 @@ def ratio_of(baseline: dict[str, float], candidate: dict[str, float]) -> dict[st
   return {k: round(baseline[k] / candidate[k], 2) for k in candidate.keys() & baseline.keys() if candidate[k]}
 
 def main() -> int:
+  critical = {"canonical_benchmarks": CANON, "decode_attention_child_audit": DECODE_ATT,
+              "prefill_search_readiness": PREFILL_READINESS, "occupancy_guardrail": OCC_GUARD,
+              "outer_b_split_contract": OUTER_B}
+  inputs_missing = sorted(name for name, p in critical.items() if not p.exists())
+
   canon = load_json(CANON, {})
   decode_att = load_json(DECODE_ATT, {})
   prefill_readiness = load_json(PREFILL_READINESS, {})
@@ -56,9 +71,32 @@ def main() -> int:
   prefill_aggressive = tok_map(prefill, "aggressive_target")
 
   decode_attention_score = decode_att.get("pure_search_score", {}).get("decode_attention_pure_machine_search_score_0_to_100", 0)
-  decode_gemv_pure = "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV" in gemv_scope
-  decode_gemv_score = 85 if decode_gemv_pure else 65
-  prefill_score = 62
+
+  # decode_gemv: MEASURED comparator is the gate. The scope marker only corroborates -- it can no longer flip the
+  # verdict on its own (the old `marker in scope` substring let a negating sentence manufacture a false "pure").
+  decode_bubble_pct = pct_of(decode_bubble, decode_baseline)
+  gemv_parity_holds = bool(decode_bubble_pct) and all(v >= GEMV_PARITY_MIN_PCT for v in decode_bubble_pct.values())
+  gemv_marker_present = GEMV_PURE_MARKER in gemv_scope
+  decode_gemv_pure = gemv_parity_holds and gemv_marker_present
+  decode_gemv_score = 85 if decode_gemv_pure else (75 if (gemv_parity_holds or gemv_marker_present) else 65)
+
+  # prefill: derived from loaded readiness + canonical aggressive-vs-baseline (no longer a literal 62).
+  prefill_longctx_flat = "NO_GROWTH_CONFIRMED" in prefill_longctx_doc
+  prefill_ready = "READY" in str(prefill_readiness.get("verdict", "")).upper()
+  prefill_aggressive_proven = bool(prefill_aggressive) and bool(prefill_baseline) and all(
+    prefill_aggressive.get(k, 0) >= prefill_baseline[k] for k in prefill_baseline)
+  prefill_components = {
+    "eightwave_baseline_stable": 40 if prefill_baseline else 0,
+    "long_context_no_growth": 12 if prefill_longctx_flat else 0,
+    "search_readiness_present": 10 if prefill_ready else 0,
+    "aggressive_bound_proven_whole_prefill": 18 if prefill_aggressive_proven else 0,
+  }
+  prefill_score = sum(prefill_components.values())
+
+  occ_verdict = occ_guard.get("verdict", "missing")
+  outer_b_verdict = outer_b.get("verdict", "missing")
+  pressure_verdict = pressure_own.get("verdict", "missing")
+  outer_b_lowering_built = outer_b_verdict != "missing" and "LOWERING_NOT_BUILT" not in outer_b_verdict
 
   sections = []
   sections.append({
@@ -69,27 +107,41 @@ def main() -> int:
     "verdict": decode_att.get("verdict", "missing"),
     "time_delta": decode_att.get("time_delta_explanation", {}).get("remaining_gap_to_owned", {}),
     "primitive_vocab": decode_att.get("primitive_vocabulary_attribution", {}).get("verdict", "missing"),
+    # The three formerly-dead loads are now consumed here so the audit's declared inputs match what it inspects.
+    "live_gates": {
+      "occupancy_guardrail": occ_verdict,
+      "outer_b_split_contract": outer_b_verdict,
+      "pressure_search_ownership": pressure_verdict,
+    },
     "provenance": {
-      "generated_transfers": True,
-      "search_owned": False,
-      "manual_flags": True,
-      "owned_kernel_required_for_default_perf": True,
+      "generated_transfers": bool(decode_att),
+      "search_owned": outer_b_lowering_built,
+      "manual_flags": not outer_b_lowering_built,
+      "owned_kernel_required_for_default_perf": not outer_b_lowering_built,
     },
     "next_actions": decode_att.get("next_actions", []),
   })
   sections.append({
     "workload": "decode_gemv",
     "score_0_to_100": decode_gemv_score,
-    "authority": "canonical_benchmark_plus_gemv_scope",
-    "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV" if decode_gemv_pure else "GEMV_PROVENANCE_NEEDS_AUDIT",
+    "authority": "canonical_benchmark_measured_comparator_plus_scope_marker",
+    "verdict": (GEMV_PURE_MARKER if decode_gemv_pure else
+                ("GEMV_PARITY_MEASURED_BUT_PROVENANCE_MARKER_ABSENT" if gemv_parity_holds else
+                 "GEMV_PROVENANCE_AND_PARITY_NEEDS_AUDIT")),
+    "gate_evidence": {
+      "bubblebeam_pct_of_baseline": decode_bubble_pct,
+      "parity_min_pct": GEMV_PARITY_MIN_PCT,
+      "parity_holds": gemv_parity_holds,
+      "scope_marker_present": gemv_marker_present,
+    },
     "time_delta": {
       "baseline_tok_s": decode_baseline,
       "bubblebeam_futuresight_tok_s": decode_bubble,
-      "bubblebeam_pct_of_baseline": pct_of(decode_bubble, decode_baseline),
+      "bubblebeam_pct_of_baseline": decode_bubble_pct,
     },
     "primitive_vocab": {
       "present": ["Q4_K LaneMap G3 generated route", "BubbleBeam/FutureSight selector"],
-      "missing_or_partial": ["none for tracked Q4_K GEMV roles" if decode_gemv_pure else "provenance gate incomplete"],
+      "missing_or_partial": ["none for tracked Q4_K GEMV roles" if decode_gemv_pure else "measured-parity or provenance gate incomplete"],
     },
     "provenance": {
       "generated": decode_gemv_pure,
@@ -97,19 +149,23 @@ def main() -> int:
       "manual_flags": False,
       "owned_kernel_required_for_tracked_q4k_roles": not decode_gemv_pure,
     },
-    "next_actions": ["keep GEMV purity gate in periodic regression bundle"],
+    "next_actions": ["keep GEMV measured-parity purity gate in periodic regression bundle"],
   })
   sections.append({
     "workload": "prefill",
     "score_0_to_100": prefill_score,
     "authority": "canonical_benchmark_plus_prefill_search_readiness",
-    "verdict": "PREFILL_PARTIAL__EIGHTWAVE_BASELINE_STABLE__SEARCH_PROVENANCE_AND_AGGRESSIVE_BOUND_NOT_CLOSED",
+    "verdict": "PREFILL_PARTIAL__EIGHTWAVE_BASELINE_STABLE__SEARCH_PROVENANCE_AND_AGGRESSIVE_BOUND_NOT_CLOSED"
+               if not prefill_aggressive_proven
+               else "PREFILL_AGGRESSIVE_BOUND_PROVEN__SEARCH_PROVENANCE_REVIEW",
+    "score_components": prefill_components,
     "time_delta": {
       "baseline_tok_s": prefill_baseline,
       "aggressive_target_tok_s": prefill_aggressive,
       "aggressive_pct_of_baseline": pct_of(prefill_aggressive, prefill_baseline),
       "baseline_over_aggressive_ratio": ratio_of(prefill_baseline, prefill_aggressive),
-      "long_context_status": "flat_512_to_8192" if "NO_GROWTH_CONFIRMED" in prefill_longctx_doc else "unknown",
+      "aggressive_proven_whole_prefill": prefill_aggressive_proven,
+      "long_context_status": "flat_512_to_8192" if prefill_longctx_flat else "unknown",
     },
     "primitive_vocab": {
       "present": ["eightwave graph-GEMM default", "whole-prefill synced authority", "long-context hardening"],
@@ -139,7 +195,7 @@ def main() -> int:
     "answer": "Partially: it is decode-attention-specific and tied to the generated flash-style online-softmax/split-KV block loop, not to flash attention as a concept.",
     "evidence": [
       "Prefill graph/eightwave baseline is flat across 512..8192 in canonical benchmarks and long-context hardening.",
-      "Generated decode attention full stack falls from 32.8 tok/s at ctx512 to 6.2 tok/s at ctx4096 while owned stays 103.2 to 93.8 tok/s.",
+      "Generated decode attention full stack falls from ctx512 to ctx4096 while owned stays near parity (see child transfer rows).",
       "Delta campaign identifies the outer b-block online-softmax carry as the ctx-slope source; inner tt split was refuted.",
       "Owned/tuned kernels are good because they use a pressure-aware structure that controls this recurrence/scheduling cost.",
     ],
@@ -147,6 +203,14 @@ def main() -> int:
   }
 
   overall_score = round((decode_attention_score * 0.35) + (decode_gemv_score * 0.25) + (prefill_score * 0.40))
+  degraded = bool(inputs_missing)
+  if degraded:
+    verdict = "PURE_MACHINE_SEARCH_DEGRADED__INPUTS_MISSING__" + ",".join(inputs_missing)
+  elif decode_gemv_pure and outer_b_lowering_built and prefill_aggressive_proven:
+    verdict = "PURE_MACHINE_SEARCH_CLOSE__DECODE_AND_PREFILL_SEARCH_OWNED"
+  else:
+    verdict = "PURE_MACHINE_SEARCH_PARTIAL__DECODE_GEMV_CLOSE__DECODE_ATTENTION_AND_PREFILL_STILL_NOT_FULLY_SEARCH_OWNED"
+
   out = {
     "schema": "qk_pure_machine_search_gap_audit_v1",
     "date": datetime.date.today().isoformat(),
@@ -160,7 +224,10 @@ def main() -> int:
       "outer_b_split_contract": str(OUTER_B.relative_to(ROOT)),
       "pressure_search_ownership": str(PRESSURE_OWN.relative_to(ROOT)),
     },
+    "inputs_missing": inputs_missing,
+    "degraded": degraded,
     "overall_score_0_to_100": overall_score,
+    "score_provenance": "derived_from_live_artifacts",
     "weights": {"decode_attention": 0.35, "decode_gemv": 0.25, "prefill": 0.40},
     "sections": sections,
     "ctx_regression_explanation": ctx_explanation,
@@ -170,7 +237,7 @@ def main() -> int:
       {"rank": 3, "area": "prefill", "action": "bind eightwave/current baseline to explicit search provenance"},
       {"rank": 4, "area": "shared", "action": "put manual flags/primitives into BubbleBeam/FutureSight candidate provenance"},
     ],
-    "verdict": "PURE_MACHINE_SEARCH_PARTIAL__DECODE_GEMV_CLOSE__DECODE_ATTENTION_AND_PREFILL_STILL_NOT_FULLY_SEARCH_OWNED",
+    "verdict": verdict,
   }
   OUTDIR.mkdir(parents=True, exist_ok=True)
   (OUTDIR / "latest.json").write_text(json.dumps(out, indent=2) + "\n")

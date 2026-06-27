@@ -11,7 +11,10 @@
     "outer_b_split_contract": "bench/qk-decode-outer-b-split-combine/latest.json",
     "pressure_search_ownership": "bench/qk-decode-pressure-search-ownership/latest.json"
   },
+  "inputs_missing": [],
+  "degraded": false,
   "overall_score_0_to_100": 67,
+  "score_provenance": "derived_from_live_artifacts",
   "weights": {
     "decode_attention": 0.35,
     "decode_gemv": 0.25,
@@ -31,6 +34,11 @@
         "ctx4096_full_stack_pct_of_owned": 6.6
       },
       "primitive_vocab": "VOCAB_PARTIAL__GUARDRAIL_AND_OUTER_B_SEARCH_VOCAB_PRESENT__LOWERING_AND_SEARCH_BINDING_REMAIN",
+      "live_gates": {
+        "occupancy_guardrail": "OCCUPANCY_GUARDRAIL_PASS",
+        "outer_b_split_contract": "OUTER_B_SPLIT_COMBINE_SEARCH_VOCAB_PRESENT__LOWERING_NOT_BUILT",
+        "pressure_search_ownership": "PRESSURE_SEARCH_OWNERSHIP_PARTIAL__GUARDRAIL_AND_VOCAB_PRESENT__LOWERING_AND_FLAG_BINDING_REMAIN"
+      },
       "provenance": {
         "generated_transfers": true,
         "search_owned": false,
@@ -55,16 +63,27 @@
         },
         {
           "rank": 4,
-          "action": "bind manual winning flags into BubbleBeam/FutureSight search space",
-          "gate": "candidate provenance changes from manual flags to search-owned selection"
+          "action": "regenerate transfer snapshot from a real model.generate W==D run",
+          "gate": "wd_authority becomes harness_measured_w_equals_d"
         }
       ]
     },
     {
       "workload": "decode_gemv",
       "score_0_to_100": 85,
-      "authority": "canonical_benchmark_plus_gemv_scope",
+      "authority": "canonical_benchmark_measured_comparator_plus_scope_marker",
       "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV",
+      "gate_evidence": {
+        "bubblebeam_pct_of_baseline": {
+          "4096": 101.8,
+          "1024": 101.8,
+          "512": 101.9,
+          "2048": 101.8
+        },
+        "parity_min_pct": 99.0,
+        "parity_holds": true,
+        "scope_marker_present": true
+      },
       "time_delta": {
         "baseline_tok_s": {
           "512": 101.6,
@@ -79,10 +98,10 @@
           "4096": 94.4
         },
         "bubblebeam_pct_of_baseline": {
+          "4096": 101.8,
           "1024": 101.8,
           "512": 101.9,
-          "2048": 101.8,
-          "4096": 101.8
+          "2048": 101.8
         }
       },
       "primitive_vocab": {
@@ -101,7 +120,7 @@
         "owned_kernel_required_for_tracked_q4k_roles": false
       },
       "next_actions": [
-        "keep GEMV purity gate in periodic regression bundle"
+        "keep GEMV measured-parity purity gate in periodic regression bundle"
       ]
     },
     {
@@ -109,6 +128,12 @@
       "score_0_to_100": 62,
       "authority": "canonical_benchmark_plus_prefill_search_readiness",
       "verdict": "PREFILL_PARTIAL__EIGHTWAVE_BASELINE_STABLE__SEARCH_PROVENANCE_AND_AGGRESSIVE_BOUND_NOT_CLOSED",
+      "score_components": {
+        "eightwave_baseline_stable": 40,
+        "long_context_no_growth": 12,
+        "search_readiness_present": 10,
+        "aggressive_bound_proven_whole_prefill": 0
+      },
       "time_delta": {
         "baseline_tok_s": {
           "512": 3574.0,
@@ -125,19 +150,20 @@
           "8192": 2869.33
         },
         "aggressive_pct_of_baseline": {
-          "1024": 125.6,
-          "512": 128.5,
-          "2048": 117.2,
           "4096": 100.4,
-          "8192": 80.4
+          "8192": 80.4,
+          "512": 128.5,
+          "1024": 125.6,
+          "2048": 117.2
         },
         "baseline_over_aggressive_ratio": {
-          "1024": 0.8,
-          "512": 0.78,
-          "2048": 0.85,
           "4096": 1.0,
-          "8192": 1.24
+          "8192": 1.24,
+          "512": 0.78,
+          "1024": 0.8,
+          "2048": 0.85
         },
+        "aggressive_proven_whole_prefill": false,
         "long_context_status": "flat_512_to_8192"
       },
       "primitive_vocab": {
@@ -183,7 +209,7 @@
     "answer": "Partially: it is decode-attention-specific and tied to the generated flash-style online-softmax/split-KV block loop, not to flash attention as a concept.",
     "evidence": [
       "Prefill graph/eightwave baseline is flat across 512..8192 in canonical benchmarks and long-context hardening.",
-      "Generated decode attention full stack falls from 32.8 tok/s at ctx512 to 6.2 tok/s at ctx4096 while owned stays 103.2 to 93.8 tok/s.",
+      "Generated decode attention full stack falls from ctx512 to ctx4096 while owned stays near parity (see child transfer rows).",
       "Delta campaign identifies the outer b-block online-softmax carry as the ctx-slope source; inner tt split was refuted.",
       "Owned/tuned kernels are good because they use a pressure-aware structure that controls this recurrence/scheduling cost."
     ],

@@ -14,8 +14,12 @@
     "outer_b_split_contract": "bench/qk-decode-outer-b-split-combine/latest.json",
     "pressure_search_ownership": "bench/qk-decode-pressure-search-ownership/latest.json"
   },
+  "inputs_missing": [],
+  "degraded": false,
   "time_delta_explanation": {
     "authority": "W_equals_D_in_model",
+    "wd_authority": "session_reported_not_harness_measured",
+    "transfer_snapshot": "transfer_snapshot_20260627.json",
     "rows": [
       {
         "arm": "owned_baseline",
@@ -93,10 +97,13 @@
       "DECODE_FAST_EXP2"
     ],
     "refuted_deltas": [
-      "ds_permute",
+      "DECODE_Q_HOIST",
       "SCHED_UNROLL_SPLIT",
-      "DECODE_Q_HOIST"
+      "ds_permute"
     ],
+    "refutation_reasons": {
+      "ds_permute": "ds_bpermute cross-lane reduce is at per-token parity with owned; no new primitive warranted"
+    },
     "verdict": "TIME_DELTA_PARTIAL_EXPLAINED__GENERATED_STACK_TRANSFERS__LONG_CTX_GAP_REMAINS"
   },
   "primitive_vocabulary_attribution": {
@@ -171,12 +178,25 @@
   },
   "pure_search_score": {
     "decode_attention_pure_machine_search_score_0_to_100": 60,
+    "score_provenance": "derived_from_live_artifacts",
+    "score_components": {
+      "generated_route_correct_and_transfers": 30,
+      "foundation_primitives_compose": 15,
+      "gap_attributed_not_existential": 15,
+      "outer_b_lowering_built_bends_slope": 0,
+      "flags_search_owned_and_wd_parity": 0
+    },
+    "score_max": 100,
+    "wd_pct_of_owned_avg": 19.2,
+    "wd_promotion_threshold_pct": 90.0,
+    "inputs_missing": [],
+    "degraded": false,
     "basis": [
-      "generated route is correct and transfers in-model",
-      "foundation primitives compose and produce material speedup",
-      "remaining gap is now attributed, not existential",
-      "manual flags and owned baseline still required for default performance",
-      "outer-b lowering and pressure-aware scheduling/search binding are not BubbleBeam-owned yet"
+      "generated route is correct and transfers in-model (measured: full-stack > no-stack at ctx512 and ctx4096)",
+      "foundation primitives compose and produce material speedup (ISA marker/resource snapshot present)",
+      "remaining gap is attributed, not existential (hot-loop selected-loop valid + occupancy + outer-b vocab present)",
+      "outer-b LDS split-combine lowering not built yet => 20-pt slope component withheld",
+      "manual flags + owned baseline still required for default performance => search-owned component withheld"
     ]
   },
   "next_actions": [
@@ -197,8 +217,8 @@
     },
     {
       "rank": 4,
-      "action": "bind manual winning flags into BubbleBeam/FutureSight search space",
-      "gate": "candidate provenance changes from manual flags to search-owned selection"
+      "action": "regenerate transfer snapshot from a real model.generate W==D run",
+      "gate": "wd_authority becomes harness_measured_w_equals_d"
     }
   ],
   "verdict": "PURE_SEARCH_PARTIAL__TIME_DELTA_EXPLAINED__VOCAB_GAPS_IDENTIFIED__NOT_PROMOTABLE_YET"
