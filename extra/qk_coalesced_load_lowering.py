@@ -53,6 +53,7 @@ def coalesce_loads(sink: UOp, max_width: int = 4) -> UOp:
     for r in idx.ranges:
       if r.op is not Ops.RANGE or r in promote or r in acc_axes: continue   # skip accumulator axes
       if r.arg[-1] not in (AxisType.LOOP, AxisType.REDUCE): continue
+      if r.src[0].op is not Ops.CONST or not isinstance(r.src[0].arg, int): continue  # constant bound only (no symbolic)
       n = int(r.vmax) + 1
       if n <= 1 or n > max_width or max_width % n != 0: continue
       if axis_stride(idx, r) != 1: continue            # the coalescing predicate -- steers the decision

@@ -83,12 +83,23 @@ def _unroll_one_range(sink: UOp, U: int) -> UOp | None:
     if u.op is Ops.END:
       for r in u.src[1:]:
         if r.op is Ops.RANGE: end_of.setdefault(r, u)
-  cands = [r for r in carry_afters if r.arg[-1] is AxisType.REDUCE and r in end_of and (int(r.vmax) + 1) % U == 0
-           and int(r.vmax) + 1 > U]
+  # SAFETY (self-review 2026-06-27): only CONSTANT-bound REDUCE ranges. A symbolic/dynamic bound makes int(r.vmax)
+  # resolve to the static upper bound and r2=const_like(N//U) bake a wrong size -> silent miscompile on any
+  # symbolic-seqlen kernel the gates don't cover. Decline (fall through to the unchanged kernel) like axis_stride.
+  def _const_size(r): return r.src[0].op is Ops.CONST and isinstance(r.src[0].arg, int)
+  cands = [r for r in carry_afters if r.arg[-1] is AxisType.REDUCE and r in end_of and _const_size(r)
+           and (int(r.vmax) + 1) % U == 0 and int(r.vmax) + 1 > U]
   if not cands: return None
-  r = max(cands, key=lambda x: x.arg[0])   # innermost (highest axis id)
+  # Prefer the recurrence loop that is NOT nested inside another candidate's body (so we unroll the token loop,
+  # not an inner dot loop with a higher axis id); tie-break to highest id among those. (Old `max(arg[0])` could
+  # pick an inner REDUCE for head dims where it also divides U -- a silent intent/perf regression.)
+  _outer = [c for c in cands if not any(o is not c and c in end_of[o].src[0].toposort() for o in cands)]
+  r = max(_outer or cands, key=lambda x: x.arg[0])
   N = int(r.vmax) + 1
   end_r = end_of[r]
+  # SAFETY: decline the untested multi-range-END recurrence (END closes >1 range): the per-copy reconstruction of
+  # a shared sibling range across the U embedded copies is the exact one-range-in-U-places hazard, unexercised.
+  if len(end_r.src) > 2: return None
   final_state = end_r.src[0]                # the per-iteration store-chain result
   all_afters = carry_afters[r]
   afters = _true_carry_afters(tl, all_afters)
@@ -155,22 +166,13 @@ def _unroll_one_range(sink: UOp, U: int) -> UOp | None:
     carry = {a: _after_with_replaced_range(a, r, _last_store_to_root(state, _root_buf(a)))
              for a in afters}  # next copy reads after its matching prior-copy store
 
-  # rebuild the END to close r2 over copy U-1's state; if it closed multiple ranges, swap only r->r2
-  if len(end_r.src) > 2:
-    new_end = UOp(Ops.END, end_r.dtype, (state,) + tuple(r2 if s is r else s for s in end_r.src[1:]), end_r.arg)
-  else:
-    new_end = UOp(Ops.END, end_r.dtype, (state, r2), end_r.arg)
+  # rebuild the END to close r2 over copy U-1's state (single-range END -- multi-range was declined above)
+  new_end = UOp(Ops.END, end_r.dtype, (state, r2), end_r.arg)
   return sink.substitute({end_r: new_end})
 
 
 def unroll_recurrence(sink: UOp, U: int) -> UOp:
+  # v1: unroll only the single hot recurrence loop per call site (the token loop)
   if U <= 1: return sink
-  prev = None
-  out = sink
-  # unroll one recurrence range per pass until none remain (handles a single innermost loop per call site)
-  for _ in range(8):
-    nxt = _unroll_one_range(out, U)
-    if nxt is None or nxt is out: break
-    out = nxt
-    break   # v1: unroll only the innermost recurrence loop (the hot one); generalize later
-  return out
+  nxt = _unroll_one_range(sink, U)
+  return nxt if nxt is not None else sink

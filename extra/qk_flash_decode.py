@@ -118,7 +118,7 @@ def _fexp(x:UOp) -> UOp:
   # guarding the large-magnitude/denormal range) is dead weight ON the serial carry. Emit a bare v_exp_f32 via
   # the AMDGCN builtin -- 2^arg with no range reduction. For arg<<0 the instruction underflows to 0 (correct for
   # masked/saturated tokens, which are additionally where()-guarded), and arg>0 never occurs on this path.
-  if getenv("DECODE_FAST_EXP2", 0): return UOp(Ops.CUSTOMI, _F32, (arg,), arg="__builtin_amdgcn_exp2f({0})")
+  if getenv("DECODE_FAST_EXP2", 0): return UOp(Ops.CUSTOMI, arg.dtype, (arg,), arg="__builtin_amdgcn_exp2f({0})")
   return arg.exp2()
 def _fc(v:float) -> UOp: return UOp.const(_F32, v)
 def _fki(name:str) -> KernelInfo: return KernelInfo(name=name, opts_to_apply=())
@@ -961,12 +961,16 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     # COALESCED_LOAD_LOWERING folds to a vectorized load (global_load_dwordx4). Default-off: original
     # one-element-per-thread staging is byte-identical. See extra/qk_cooperative_stage_lanemap.py.
     _stage_w = getenv("DECODE_STAGE_COALESCE")
-    if _stage_w:
-      from extra.qk_cooperative_stage_lanemap import CooperativeStageLaneMap
-      _lm = CooperativeStageLaneMap(total=TK * Hd, threads=THREADS, width=_stage_w, base_axis=60)
-      st, wv = _lm.axes()
-      i = _lm.elem_index(st, tid, wv)
-    else:
+    try:
+      if _stage_w:
+        from extra.qk_cooperative_stage_lanemap import CooperativeStageLaneMap
+        _lm = CooperativeStageLaneMap(total=TK * Hd, threads=THREADS, width=_stage_w, base_axis=60)
+        _lm.validate()   # raise here (bad width / non-dividing total) -> fall through to the original staging
+        st, wv = _lm.axes()
+        i = _lm.elem_index(st, tid, wv)
+    except ValueError:
+      _stage_w = 0   # unsupported shape/width: fall back to the byte-identical one-element-per-thread staging
+    if not _stage_w:
       st = UOp.range(STAGES, 4, axis_type=AxisType.REDUCE)
       i = st * THREADS + tid
     tt_stage = i // Hd
