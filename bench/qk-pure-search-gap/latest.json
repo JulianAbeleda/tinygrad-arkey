@@ -64,12 +64,12 @@
     "current_hotloop_json_verdict": "HOTLOOP_SCHEDULE_DIFF__GENERATED_CROSSLANE_OVERHEAD_BOUND",
     "hotloop_tool_status": "SPLIT_AWARE_HOTLOOP_READY",
     "isa_resource_snapshot": {
-      "vgpr": 176,
+      "vgpr": 80,
       "sgpr": 8,
-      "lds": 16384,
+      "lds": 8192,
       "scratch": 0,
       "kernarg": 28,
-      "rsrc1": "0xc0af0015"
+      "rsrc1": "0xc0af0009"
     },
     "isa_marker_snapshot": {
       "global_load_dwordx4": 0,
@@ -78,19 +78,19 @@
       "global_load_d16": 0,
       "global_load_b128": 0,
       "global_load_b96": 0,
-      "global_load_b64": 20,
+      "global_load_b64": 10,
       "global_load_b32": 0,
-      "ds_read": 24,
-      "ds_write": 8,
-      "s_barrier": 2,
-      "s_waitcnt": 70,
-      "v_dot2": 24,
-      "cross_lane": 80,
+      "ds_read": 12,
+      "ds_write": 4,
+      "s_barrier": 1,
+      "s_waitcnt": 39,
+      "v_dot2": 12,
+      "cross_lane": 40,
       "scratch": 0,
-      "v_fma": 67,
-      "v_exp": 34,
-      "v_mul": 82,
-      "v_add": 116
+      "v_fma": 26,
+      "v_exp": 16,
+      "v_mul": 40,
+      "v_add": 62
     },
     "occupancy_guardrail": "OCCUPANCY_GUARDRAIL_PASS",
     "closed_deltas": [
