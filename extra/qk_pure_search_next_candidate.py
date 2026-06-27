@@ -79,7 +79,12 @@ def main() -> int:
   ap = argparse.ArgumentParser()
   ap.add_argument("--no-pairs", action="store_true", help="singles only (default: include pairs of cheap knobs)")
   ap.add_argument("--record", metavar="JSON", help="append an outcome line to the ledger and exit")
+  ap.add_argument("--failed-rows", metavar="r1,r2", default=None,
+                  help="parity-closure mode: only emit a candidate whose axis targets_delta is in this set of "
+                       "FAILED parity rows (from qk_owned_oracle_parity_audit.py searchable_failed_rows). No "
+                       "candidate may run unless it targets a failed row.")
   args = ap.parse_args()
+  failed_rows = set(x.strip() for x in args.failed_rows.split(",") if x.strip()) if args.failed_rows else None
 
   if not SPACE.exists():
     print(json.dumps({"verdict": "SEARCH_SPACE_MISSING", "path": str(SPACE.relative_to(ROOT))})); return 2
@@ -107,23 +112,34 @@ def main() -> int:
   for c in cands:                            # priority order (singles before pairs)
     k = _key(c["delta"])
     if k in tried_keys: continue
-    requires_wd = bool((c["axis"] or {}).get("requires_wd"))
+    ax = c["axis"] or {}
+    # parity-closure gate: in --failed-rows mode, ONLY a candidate that targets a FAILED parity row may run.
+    if failed_rows is not None and ax.get("targets_delta") not in failed_rows: continue
+    requires_wd = bool(ax.get("requires_wd"))
     print(json.dumps({
       "verdict": "NEXT_CANDIDATE", "candidate": k, "kind": c["kind"], "delta": c["delta"],
       "env_flags": _flags(baseline, c["delta"]),
+      # owned-oracle reconstruction: every candidate must target a NAMED owned-vs-generated delta (taxonomy:
+      # bench/qk-search-spaces/owned_delta_taxonomy.json). A candidate with no targets_delta is a SEARCH_SPACE_BUG
+      # smell -- knobs may only be searched when the auditor predicts which delta they move.
+      "targets_delta": ax.get("targets_delta"),
+      "blocker_kind": ax.get("blocker_kind"),
       "requires_wd": requires_wd,
       "gate": "W==D (cost is in-model only; isolated timing MISLEADS)" if requires_wd else "isolated-then-W==D",
-      "hypothesis": (c["axis"] or {}).get("hypothesis"), "predicted": (c["axis"] or {}).get("predicted"),
+      "hypothesis": ax.get("hypothesis"), "predicted": ax.get("predicted"),
       **counts,
     }, indent=2))
     return 0
 
-  print(json.dumps({
-    "verdict": "SEARCH_SPACE_EXHAUSTED",
-    "note": "every candidate in the declared active space (singles" + ("+pairs" if include_pairs else "") +
-            ") is in the ledger. NO_NEW_LEVER is now genuine -> hand to Y (interpret exhaustion), not stop.",
-    **counts,
-  }, indent=2))
+  verdict = ("NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW" if failed_rows is not None else "SEARCH_SPACE_EXHAUSTED")
+  note = ("no untried candidate targets a failed parity row " + str(sorted(failed_rows)) +
+          " -> SEARCH_SPACE_BUG (the failed rows have no searchable axis, or their axes are exhausted): improve "
+          "the search space or escalate to an instrumentation/primitive gap, do NOT loosen the parity gate."
+          if failed_rows is not None else
+          "every candidate in the declared active space (singles" + ("+pairs" if include_pairs else "") +
+          ") is in the ledger -> exhaustion is genuine.")
+  print(json.dumps({"verdict": verdict, "failed_rows_filter": sorted(failed_rows) if failed_rows else None,
+                    "note": note, **counts}, indent=2))
   return 0
 
 if __name__ == "__main__":
