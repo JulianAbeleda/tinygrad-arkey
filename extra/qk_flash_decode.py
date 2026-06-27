@@ -948,16 +948,28 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     init = mx.after(init)[0].store(-float("inf"))
     acc, den, mx = acc.after(init), den.after(init), mx.after(init)
     b = UOp.range(NB, 3, axis_type=AxisType.REDUCE)
-    st = UOp.range(STAGES, 4, axis_type=AxisType.REDUCE)
-    i = st * THREADS + tid
+    # opt-in (DECODE_STAGE_COALESCE=<W>): cooperative-staging LaneMap -- each thread owns a contiguous W-chunk
+    # of the TK*Hd LDS tile, so the global cache load presents a unit-stride W loop axis that
+    # COALESCED_LOAD_LOWERING folds to a vectorized load (global_load_dwordx4). Default-off: original
+    # one-element-per-thread staging is byte-identical. See extra/qk_cooperative_stage_lanemap.py.
+    _stage_w = getenv("DECODE_STAGE_COALESCE")
+    if _stage_w:
+      from extra.qk_cooperative_stage_lanemap import CooperativeStageLaneMap
+      _lm = CooperativeStageLaneMap(total=TK * Hd, threads=THREADS, width=_stage_w, base_axis=60)
+      st, wv = _lm.axes()
+      i = _lm.elem_index(st, tid, wv)
+    else:
+      st = UOp.range(STAGES, 4, axis_type=AxisType.REDUCE)
+      i = st * THREADS + tid
     tt_stage = i // Hd
     e_stage = i % Hd
     t_stage = s * L + b * TK + tt_stage
     in_stage = (tt_stage < TK) & (t_stage < Tc)
     t_safe_stage = in_stage.where(t_stage, t_stage.const_like(0))
-    kstore = ksh[i].store(cache[0, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), i < (TK * Hd))
-    vstore = vsh.after(kstore)[i].store(cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), i < (TK * Hd))
-    bar = UOp.barrier(UOp.group(vstore.end(st)))
+    _gate = () if _stage_w else (i < (TK * Hd),)   # W|TK*Hd divides evenly -> no bounds gate needed
+    kstore = ksh[i].store(cache[0, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
+    vstore = vsh.after(kstore)[i].store(cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
+    bar = UOp.barrier(UOp.group(vstore.end(wv).end(st) if _stage_w else vstore.end(st)))
     tt = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
     t = s * L + b * TK + tt
     in_r = t < Tc

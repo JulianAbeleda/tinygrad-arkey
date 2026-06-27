@@ -34,8 +34,14 @@ def coalesce_loads(sink: UOp, max_width: int = 4) -> UOp:
   # At this (pre-expander) stage buffer reads are bare Ops.INDEX; Ops.LOAD is added later in devectorize.
   # A load-INDEX is any INDEX into a non-REG ptr buffer that is NOT a STORE target.
   store_targets: set[UOp] = set()
+  acc_axes: set[UOp] = set()   # ranges that index a REG store -> accumulator/carry axes; never coalesce
   for u in tl:
-    if u.op is Ops.STORE and len(u.src) >= 1: store_targets.add(u.src[0])
+    if u.op is Ops.STORE and len(u.src) >= 1:
+      store_targets.add(u.src[0])
+      tgt = u.src[0]
+      if tgt.op is Ops.INDEX and len(tgt.src) >= 2 and isinstance((tb := _buf_of(tgt)).dtype, PtrDType) \
+         and tb.dtype.addrspace == AddrSpace.REG:
+        acc_axes.update(r for r in tgt.src[1].ranges if r.op is Ops.RANGE)
 
   promote: dict[UOp, UOp] = {}
   for idxn in tl:
@@ -45,7 +51,7 @@ def coalesce_loads(sink: UOp, max_width: int = 4) -> UOp:
     if not isinstance(buf.dtype, PtrDType) or buf.dtype.addrspace == AddrSpace.REG: continue
     idx = idxn.src[1]
     for r in idx.ranges:
-      if r.op is not Ops.RANGE or r in promote: continue
+      if r.op is not Ops.RANGE or r in promote or r in acc_axes: continue   # skip accumulator axes
       if r.arg[-1] not in (AxisType.LOOP, AxisType.REDUCE): continue
       n = int(r.vmax) + 1
       if n <= 1 or n > max_width or max_width % n != 0: continue
