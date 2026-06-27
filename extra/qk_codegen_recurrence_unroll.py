@@ -11,7 +11,19 @@ previous copy's state (copy0 -> AFTER(X, r2)); END now closes r2 over copy U-1's
 """
 from __future__ import annotations
 from collections import defaultdict
+from tinygrad.helpers import getenv
 from tinygrad.uop.ops import Ops, UOp, AxisType
+
+
+def _ax(r: UOp) -> str:
+  return f"axis={r.arg[0]} {r.arg[-1].name if hasattr(r.arg[-1], 'name') else r.arg[-1]} size={int(r.vmax)+1}"
+
+
+def _short(u: UOp) -> str:
+  if u.op is Ops.END: return f"END[{','.join(_ax(s) for s in u.src[1:] if s.op is Ops.RANGE)}]"
+  if u.op is Ops.RANGE: return f"RANGE[{_ax(u)}]"
+  if u.op in (Ops.DEFINE_REG, Ops.DEFINE_LOCAL): return f"{u.op.name}({u.arg})"
+  return u.op.name
 
 
 def _root_buf(u: UOp) -> UOp:
@@ -86,9 +98,37 @@ def _unroll_one_range(sink: UOp, U: int) -> UOp | None:
   base_id = max((rr.arg[0] for rr in tl if rr.op is Ops.RANGE), default=0)
   # fresh outer range r2 of size N//U, same REDUCE axis-type, unique axis id
   r2 = UOp(Ops.RANGE, r.dtype, (r.src[0].const_like(N // U),), (base_id + 1000, AxisType.REDUCE))
-  # inner ranges nested inside r's body must be DUPLICATED per copy (fresh ids) so the U copies are
-  # independent loops -- otherwise the control-flow pass sees one inner range used in U places (CFG cycle).
-  inner_ranges = [u for u in final_state.toposort() if u.op is Ops.RANGE and u is not r and r in u.ranges]
+
+  # Inner ranges nested inside r's body must be DUPLICATED per copy (fresh ids) so the U copies are
+  # independent loops -- otherwise the control-flow pass sees one inner range END nested as a sibling of
+  # itself (linearizer CFG assertion). The correct set is the ranges whose END lives inside final_state AND
+  # whose END *body depends on r* (i.e. is re-executed every r iteration): the inner dot loop `rp` and the
+  # acc-update loop `dd`. One-time prologue loops referenced via the carry chain (acc init `za`, LDS staging
+  # `st`) also have their END inside final_state but their body does NOT depend on r, so they stay shared.
+  # NOTE: `r in ir.ranges` is wrong here -- an inner RANGE's own .ranges is just {ir}, never the outer r.
+  inner_ranges: list[UOp] = []
+  for e in final_state.toposort():
+    if e.op is Ops.END and r in e.ranges:
+      for ir in e.src[1:]:
+        if ir.op is Ops.RANGE and ir is not r and ir not in inner_ranges: inner_ranges.append(ir)
+
+  # Per-iteration re-init REG/LOCAL accumulators (e.g. `dotp`): their non-carry AFTER resets the register at
+  # the top of each r iteration and the dot result is read out before the next iteration. Across unrolled
+  # copies they must be PRIVATE: a single shared register would carry copy u-1's accumulation into copy u
+  # (shared reset runs once) -> wrong numerics, and would serialise the copies' dot products. Duplicate them.
+  reinit_roots: list[UOp] = []
+  for a in noncarry_afters:
+    root = _root_buf(a)
+    if root.op in (Ops.DEFINE_REG, Ops.DEFINE_LOCAL) and root not in reinit_roots: reinit_roots.append(root)
+  base_reg = max((u.arg for u in tl if u.op in (Ops.DEFINE_REG, Ops.DEFINE_LOCAL) and isinstance(u.arg, int)),
+                 default=0)
+
+  if getenv("SCHED_UNROLL_DEBUG"):
+    print(f"[SCHED_UNROLL] U={U} selected range {_ax(r)}  N={N} -> outer r2 {_ax(r2)}")
+    print(f"[SCHED_UNROLL]   true carries:  {[_short(_root_buf(a)) for a in afters]}")
+    print(f"[SCHED_UNROLL]   re-inits:      {[_short(_root_buf(a)) for a in noncarry_afters]}"
+          f"  (duplicated: {[_short(x) for x in reinit_roots]})")
+    print(f"[SCHED_UNROLL]   inner ranges duplicated per copy: {[_ax(x) for x in inner_ranges]}")
 
   # thread the carry across U copies
   carry = {a: _after_with_replaced_range(a, r, r2) for a in afters}   # u=0: AFTER(X, ..., r2)
@@ -96,17 +136,30 @@ def _unroll_one_range(sink: UOp, U: int) -> UOp | None:
   for u in range(U):
     dvars: dict[UOp, UOp] = {r: r2 * U + u}
     for a in afters: dvars[a] = carry[a]
-    for a in noncarry_afters: dvars[a] = _after_with_replaced_range(a, r, r2)
     for k, ir in enumerate(inner_ranges):   # fresh inner range per copy
       dvars[ir] = UOp(Ops.RANGE, ir.dtype, ir.src, (base_id + 2000 + u * 100 + k, ir.arg[-1]))
+    # fresh private re-init register per copy, and rewrite each non-carry AFTER onto it (keeping r->r2 for
+    # ordering, not r2*U+u which would put an index expr in an ordering slot).
+    regdup = {root: UOp(root.op, root.dtype, root.src, base_reg + 1000 + u * 100 + j)
+              for j, root in enumerate(reinit_roots)}
+    dvars |= regdup
+    for a in noncarry_afters:
+      dup = regdup.get(_root_buf(a))
+      src0 = a.src[0].substitute({_root_buf(a): dup}) if dup is not None else a.src[0]
+      dvars[a] = UOp(Ops.AFTER, a.dtype, (src0,) + tuple(r2 if s is r else s for s in a.src[1:]), a.arg)
     state = final_state.substitute(dvars)
+    if getenv("SCHED_UNROLL_DEBUG"):
+      for a in afters:
+        print(f"[SCHED_UNROLL]   copy{u} carry-out for {_short(_root_buf(a))}: "
+              f"{_short(_last_store_to_root(state, _root_buf(a)))}")
     carry = {a: _after_with_replaced_range(a, r, _last_store_to_root(state, _root_buf(a)))
              for a in afters}  # next copy reads after its matching prior-copy store
 
-  new_end = UOp(Ops.END, end_r.dtype, (state,) + end_r.src[1:] if len(end_r.src) > 2 else (state, r2), end_r.arg)
-  # if the END closed only r, replace with one closing r2; if it closed multiple ranges, swap r->r2 in them
+  # rebuild the END to close r2 over copy U-1's state; if it closed multiple ranges, swap only r->r2
   if len(end_r.src) > 2:
     new_end = UOp(Ops.END, end_r.dtype, (state,) + tuple(r2 if s is r else s for s in end_r.src[1:]), end_r.arg)
+  else:
+    new_end = UOp(Ops.END, end_r.dtype, (state, r2), end_r.arg)
   return sink.substitute({end_r: new_end})
 
 
