@@ -1,0 +1,5 @@
+{"candidate": "DECODE_OUTER_B_SPLIT=2", "outcome": "REFUTED_OCCUPANCY", "gate": "microgate PASS; isolated +18%; VGPR 88->176, LDS 8192->16384", "why": "occupancy tax > ILP gain (ILP-via-state); docs/decode-attention-outer-b-split-build-refutation-result-20260627.md", "in_space": false}
+{"candidate": "DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE=1", "outcome": "REFUTED_NO_SLOPE", "gate": "microgate PASS; isolated ~2x slower (0.40->0.78 ctx512, 2.84->5.60 ctx4096)", "why": "staged LDS reduce already better; docs/pure-search-loop-run-result-20260627.md", "in_space": true}
+{"candidate": "SCHED_UNROLL_SPLIT=1", "outcome": "REFUTED_OCCUPANCY", "gate": "VGPR 88->144", "why": "ILP-via-state on occupancy-bound tile (diagnostic truth #2)", "in_space": false}
+{"candidate": "DECODE_Q_HOIST=1", "outcome": "REFUTED_NO_SLOPE", "gate": "lost comgr pressure-aware LICM", "why": "diagnostic truth #2", "in_space": false}
+{"candidate": "ds_permute_primitive", "outcome": "REFUTED_NO_SLOPE", "gate": "per-token parity with owned", "why": "diagnostic truth #4 -- a new cross-lane primitive would only match, not beat", "in_space": false}

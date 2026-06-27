@@ -1,87 +1,60 @@
 ---
-description: Run the measure-first pure-search decode loop (diagnose→solve→gate→decide) with a hard escape hatch
-argument-hint: "[max_iterations=3] [optional: starting lever, e.g. 'work-removal exp on PV']"
+description: Run the pure-machine-search X→Y→Z state machine in one turn (bounded), generator-driven, W==D-gated
+argument-hint: "[max_meta=3] [--no-pairs]"
 ---
 
-You are running the **pure-machine-search decode loop** in `/home/ubuntu/tinygrad-arkey` (AMD gfx1100,
-Qwen3-8B-Q4_K_M). This is a measure-first, bounded loop. **The escape hatch below is non-negotiable — never run
-indefinitely.**
+Run the pure-machine-search loop in `/home/ubuntu/tinygrad-arkey` (AMD gfx1100, Qwen3-8B-Q4_K_M) as a **strict
+executable state machine**, in ONE turn (no scheduling). For the `/loop`-paced one-step-per-fire variant, a bare
+`/loop` runs `.claude/loop.md`. Full spec: `docs/pure-machine-search-xyz-loop-codex-handoff-20260627.md`.
 
-**Two entry modes (one protocol):** this command runs the **whole bounded loop in ONE turn** (up to `$1`
-iterations, no scheduling). To run it **paced across turns via the built-in `/loop`** instead, use a bare `/loop`
-(which executes `.claude/loop.md` — one iteration per fire, persistent state file as the cross-fire cap, Esc to
-cancel) or `/loop <interval> /pure-search-loop <max>`. Either way the escape hatch below governs.
+**Hard rules (make the loop hard to fool):**
+- **Candidate authority = `extra/qk_pure_search_next_candidate.py` ONLY** (pairs on by default unless `--no-pairs`).
+  No human lever-picking. Audit `next_actions` are **advisory only**.
+- **`PROMOTABLE` requires W==D.** Local gates (microgate + occupancy + isolated-slope) only yield
+  `LOCAL_PASS_WD_REQUIRED`. Only `token_match and pct_of_owned >= 90` → `PROMOTABLE`; a miss → `REFUTED_WD`.
+- **Exhaustion is explicit:** `SEARCH_SPACE_EXHAUSTED` (X) → ask instruments (Y) → improve the tool (Z). Stop only
+  when X **and** Y **and** Z all fail, or `meta >= max_meta`.
+- **Ledger writes** go through the generator `--record '<json>'` (append-only JSONL).
 
-## Arguments
-- `$1` = max iterations (default **3** if absent). **Hard ceiling: 6** — refuse to exceed it regardless of input.
-- `$2..` = optional starting lever hint. If absent, take the rank-1 lever from the audit.
+```python
+def loop(max_meta=$1 or 3, include_pairs=(not "--no-pairs")):
+    for meta in range(max_meta):                         # absolute ceiling 6
+        if run_gap_audit().degraded: return stop("DEGRADED")     # broken instrument → fix harness first
 
-## Read first (don't re-derive)
-- `docs/pure-machine-search-roadmap.md` (authoritative live state)
-- `docs/decode-attention-pure-search-state-and-learnings-20260627.md` (diagnostic truths + refuted levers)
-- The latest `docs/*-result-*.md` for the active lever.
+        # ---- X: solve the declared space ----
+        while True:
+            cand = next_candidate(include_pairs)                 # the generator is the ONLY authority
+            if cand.verdict == "SEARCH_SPACE_EXHAUSTED": break   # → Y
+            impl = implement_default_off_cache_keyed(cand)       # flag unset ⇒ byte-identical
+            if not microgate(impl):            record(cand,"FAIL_CORRECTNESS");   revert_clean(); continue
+            if not occupancy_guardrail(impl):  record(cand,"REFUTED_OCCUPANCY");  revert_clean(); continue
+            if not isolated_bends_slope(impl): record(cand,"REFUTED_NO_SLOPE");   commit_or_revert(); continue
+            record(cand,"LOCAL_PASS_WD_REQUIRED")
+            wd = run_wd_and_token_match(impl, ckpts=[512,4096])   # the ONLY promotion authority
+            if wd.token_match and wd.pct_of_owned >= 90:
+                record(cand,"PROMOTABLE");  return stop("PROMOTABLE")   # hand off; do NOT auto-default
+            record(cand,"REFUTED_WD");  commit_or_revert()
 
-## Pre-flight (once, before iterating)
-1. `git status` must be clean (or stash/commit first). Confirm you're in `tinygrad-arkey` on `master`.
-2. Run the diagnose tool and the smoke; if either is broken, **STOP** (fix the harness first — a broken
-   instrument poisons the loop):
-   ```
-   DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_pure_search_gap_audit.py   # must NOT be DEGRADED
-   ```
+        # ---- Y: interpret exhaustion ----
+        answers = synthesize(hotloop_diff(), occupancy_guardrail(), split_kv_economics(), top_level_gap_audit())
+        lever = infer_new_searchable_lever(answers, ledger)       # a lever NOT in the ledger, addable as an axis
+        if lever: add_axis_to_space(lever); continue              # reopens X
 
-## One iteration (repeat until an escape condition fires)
-
-**1. DIAGNOSE** — run the audit; read its `verdict`, `pure_search_score`, rank-1 `next_actions`, and live gates:
+        # ---- Z: improve the auditor/searcher itself ----
+        gap = highest_value_tool_gap(answers)                     # Level-2 topology axes / W==D-in-loop / etc.
+        if not gap: return stop("GENUINE_EXHAUSTION")             # X∧Y∧Z all dry → real wall
+        close_tool_gap(gap)                                       # default-off / new axes / new gate
+        if not tool_now_surfaces_new_options_or_answers(gap):
+            return stop("TOOL_IMPROVEMENT_DID_NOT_REOPEN_SEARCH")
+        # meta += 1 happens via the for-loop; continue reopens X/Y with better tooling
+    return stop("META_CAP_REACHED")
 ```
-DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_pure_search_gap_audit.py
-DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk_decode_hotloop_schedule_diff.py   # what's the bound
-DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_decode_occupancy_guardrail.py            # headroom
-```
-Pick the lever: `$2` if given on the first iteration, else the audit's rank-1 action. **Check the refutation
-ledger** (the `*-result-*.md` docs + the outer-b contract `refuted` flags): if the lever is already recorded as
-refuted, **do not re-chase it** — pick the next-layer lever it names, or if none, escape (no-new-lever).
 
-**2. SOLVE** — implement the lever as a **default-off, cache-keyed** codegen/work-removal change (flag unset ⇒
-byte-identical; add the flag to the `to_program` cache key in `tinygrad/codegen/__init__.py`). Prefer
-**work-removal** levers (no new state) — they strictly dominate on this occupancy-bound tile. Decline the
-unverifiable (non-const bounds, untested shapes).
+Tools (the only authorities; timeout every GPU call, a hang = failed gate):
+`microgate=extra/qk_decode_attention_block_tile_microgate.py` · `occupancy=extra/qk_decode_occupancy_guardrail.py` ·
+`isolated=extra/qk_decode_block_tile_isolated_timing.py` (diagnostic, NEVER promotion) ·
+`W==D=extra/qk_decode_runtime_overhead.py`+`extra/qk_decode_token_match_check.py` ·
+`generator/ledger=extra/qk_pure_search_next_candidate.py`.
 
-**3. GATE** (authority order — stop at the first failure, revert clean):
-```
-# a. correctness (authority): must print BLOCK_TILE_MICROGATE_PASS, max_abs <= 5e-3
-DEV=AMD JIT=1 <FLAGS> PYTHONPATH=. .venv/bin/python extra/qk_decode_attention_block_tile_microgate.py
-# b. occupancy: capture ISA then guardrail — must NOT regress vgpr/scratch/wg-per-CU vs baseline
-DEV=AMD JIT=1 <FLAGS> PYTHONPATH=. .venv/bin/python extra/qk_decode_isa_vectorization_gate.py
-DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_decode_occupancy_guardrail.py
-# c. did it move the RIGHT loop / bend the slope? (diagnostic, NOT promotion authority)
-DEV=AMD JIT=1 <FLAGS> PYTHONPATH=. .venv/bin/python extra/qk_decode_block_tile_isolated_timing.py
-```
-where `<FLAGS>` = the best stack + your new flag:
-`DECODE_ATTN_BLOCK_TILE=1 DECODE_STAGE_COALESCE=4 COALESCED_LOAD_LOWERING=1 SCHED_UNROLL=8 SCHED_LIST=1 DECODE_FAST_EXP2=1 <YOUR_FLAG>`.
-Give every GPU command a timeout (e.g. 540s); a hang counts as a failed gate.
-
-**4. RECORD** — update the relevant contract artifact (`built` / `bends_slope` / `refuted` + measured ms/resources),
-re-run the audit to confirm the score moves (or honestly stays), and write/update a dated `docs/*-result-*.md`.
-Then **commit** the iteration (subsystem prefix `[codegen]`/`[nn]`/`[test]`/`[docs]`, **no Co-Authored-By**) or
-**revert clean** on failure. Surface the SHA + title. **Never leave the tree dirty between iterations.**
-
-**5. DECIDE** — classify the outcome and either escape or continue:
-- **PROMOTABLE** (correctness PASS + occupancy no-regress + bends slope) → run W==D
-  (`QK_CKPTS=512,4096 ... extra/qk_decode_runtime_overhead.py` + token-match). **ESCAPE** (hand off; do not auto-promote a default).
-- **REFUTED** (correct but doesn't bend slope, or occupancy regresses) → record the refutation + the next-layer
-  lever it implies, then **continue** to the next iteration with that lever.
-- **HARD WALL** (`SEARCH_BLOCKED_BY_CODEGEN`/`_RUNTIME` with no tractable lever) → **ESCAPE** and report.
-
-## ESCAPE HATCH (any one fires → stop the loop and write a final summary)
-1. **Iteration cap reached** (`$1`, default 3, hard max 6).
-2. **PROMOTABLE** candidate found (hand off to W==D — do not loop further on it).
-3. **HARD WALL**: audit/gates report a codegen/runtime block with no tractable next lever.
-4. **DEGRADED**: the audit reports `DEGRADED` / missing inputs (instrument is broken — fix harness, don't loop).
-5. **No new lever / loop-until-dry**: the only available lever is already in the refutation ledger, or two
-   consecutive iterations produce no new lever or no score movement.
-6. **Dirty/again-failing**: a gate fails to revert clean, or correctness can't be restored — stop and report.
-
-## Final summary (always, on escape)
-State: iterations run, levers tried, each outcome (promotable/refuted/walled), the current audit score + verdict,
-the commits made (SHA + title), and the single recommended next lever. Be honest — a refutation is a result.
-**Do not push** unless explicitly asked.
+Every change: default-off, cache-keyed, revert-clean, `[codegen]`/`[nn]`/`[test]`/`[docs]` commits (no
+Co-Authored-By), surface SHA. **Do not push.** On stop, print the ledger counts and the single recommended next step.
