@@ -7,6 +7,11 @@ You are running the **pure-machine-search decode loop** in `/home/ubuntu/tinygra
 Qwen3-8B-Q4_K_M). This is a measure-first, bounded loop. **The escape hatch below is non-negotiable — never run
 indefinitely.**
 
+**Two entry modes (one protocol):** this command runs the **whole bounded loop in ONE turn** (up to `$1`
+iterations, no scheduling). To run it **paced across turns via the built-in `/loop`** instead, use a bare `/loop`
+(which executes `.claude/loop.md` — one iteration per fire, persistent state file as the cross-fire cap, Esc to
+cancel) or `/loop <interval> /pure-search-loop <max>`. Either way the escape hatch below governs.
+
 ## Arguments
 - `$1` = max iterations (default **3** if absent). **Hard ceiling: 6** — refuse to exceed it regardless of input.
 - `$2..` = optional starting lever hint. If absent, take the rank-1 lever from the audit.
