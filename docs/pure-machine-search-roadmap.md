@@ -251,14 +251,23 @@ latency**, NOT a missing primitive, combine, occupancy, or coalescing. Cycle bud
 cyc/token ≈ 5 fully-exposed bpermute (owned overlaps them across tokens). `flash_block_tiled` is 3711µs vs the
 combine's ~30µs @ctx4096 (124× — the combine is a red herring; see `docs/decode-attention-tile-vs-combine-breakdown-20260627.md`).
 
-Next executable milestone:
+Next executable milestone (revised 2026-06-28 — the modulo scheduler was built + refuted; see below):
 
-Build the **codegen modulo scheduler (Layer 3)** — `docs/decode-codegen-scheduler-capability-scope-v2-references-20260627.md`:
-overlap iteration N+1's independent dot+reduce into iteration N's serial-merge shadow, on the existing `SCHED_LIST`
-(Layer 1) + recurrence unroll (Layer 2), preserving the unroll. Acceptance: microgate PASS (token-match), the
-hotloop diff's exposed-latency drops toward owned, and route-bound W==D rises from 35.0/6.7. Generality proof: the
-same pass moves the prefill-GEMM hot loop. (sqtt instruction-level confirmation is wired — decoder vendored in repo,
-`ROCPROF_PATH`; occupancy decodes; per-instruction itrace is a follow-on.)
+A codegen modulo scheduler was built and measured on both architectural arms, and **both are blocked** — the real
+missing capability is a **native AMD/rdna3 ISA backend** (`docs/decode-codegen-scheduler-arm-a-result-20260628.md`,
+`docs/decode-codegen-scheduler-arm-b-result-20260628.md`):
+- **Arm A** (UOp reorder in `linearizer.py`, flags `SCHED_MODULO`/`SCHED_MODULO_PROBE`, default-off): wirable, but
+  **LLVM owns the schedule** — every reorder stays in LLVM's 42–52 `s_waitcnt` envelope, never owned's 21. The block
+  tile compiles via HIPRenderer (C → comgr → LLVM); LLVM's MachineScheduler re-derives the schedule from the dep DAG.
+- **Arm B** (bypass LLVM via `Ops.INS → assemble_linear`): **no UOp→`Ops.INS` AMD backend exists** — `renderer/isa/`
+  has only `x86.py`; all AMD renderers route through LLVM; the block tile won't even render `fdot2` on `DEV=AMD:LLVM`;
+  the assemble substrate serves only hand-emitted `Inst` (prefill GEMM).
+
+**The precisely-named blocker: build a native AMD/rdna3 ISA backend** (UOp→`Ops.INS` instruction selection + regalloc
+for the tile's ops, templated on `tinygrad/renderer/isa/x86.py`), then a latency scheduler on that `Inst` stream
+(mature `extra/qk_asm_scheduler.py` + `tinygrad/renderer/amd/schedule.py`). It owns the instruction schedule instead
+of handing source to LLVM — the only lever that can reach owned's 21. Major multi-increment build; one foundation
+that also serves prefill GEMM's residual. Until then LLVM's envelope is the ceiling (35.0/6.7) and owned ships.
 
 ## Non-Goals
 
