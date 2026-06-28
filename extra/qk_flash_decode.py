@@ -495,6 +495,31 @@ def flash_state_combine_kernel(Hd:int, Hq:int, S):
     return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_state_combine_{Hq}_{Hd}"))
   return kernel
 
+def flash_fused_state_combine_kernel(Hd:int, Hq:int, S):
+  """P5 missing-primitive: fuse the global-max into the combine -> ONE dispatch instead of gmax+combine, and no gm
+  buffer round-trip. Each (h,d) thread computes gm[h]=max_s M[s] inline (pass 1) then the log-sum-exp rescale
+  (pass 2). M is read twice but in-kernel (no global gm buffer). Default-off (DECODE_ATTN_FUSED_COMBINE=1).
+  docs/decode-attention-owned-lifecycle-missing-primitives-scope-20260627.md."""
+  W = Hd + 2; L_COL = Hd; M_COL = Hd + 1
+  def kernel(out:UOp, pout:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    d = UOp.range(Hd, 1, AxisType.GLOBAL)
+    s1 = UOp.range(S, 2, axis_type=AxisType.REDUCE)
+    g = UOp.placeholder((1,), _F32, 136, addrspace=AddrSpace.REG)
+    g = g.after(h, d)[0].set(-1e30)
+    g = g[0].set(g.after(s1)[0].maximum(pout[(h * S + s1) * W + M_COL]), end=s1)   # pass 1: inline gmax
+    gm_h = g[0]
+    s2 = UOp.range(S, 3, axis_type=AxisType.REDUCE)
+    w = _fexp(pout[(h * S + s2) * W + M_COL] - gm_h)
+    num = UOp.placeholder((1,), _F32, 137, addrspace=AddrSpace.REG)
+    den = UOp.placeholder((1,), _F32, 138, addrspace=AddrSpace.REG)
+    num = num.after(g)[0].set(0.0); den = den.after(g)[0].set(0.0)
+    upd = num[0].store(num.after(s2)[0] + w * pout[(h * S + s2) * W + d])
+    upd = den.after(upd)[0].store(den.after(s2)[0] + w * pout[(h * S + s2) * W + L_COL]).end(s2)   # pass 2: rescale+norm
+    nf, df = num.after(upd)[0], den.after(upd)[0]
+    return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_fused_state_combine_{Hq}_{Hd}"))
+  return kernel
+
 def flash_pall_score_broadcast_combine4_kernel(Hd:int, Hq:int, S):
   CH = 32
   def kernel(out:UOp, state:UOp, pv0:UOp, pv1:UOp, pv2:UOp, pv3:UOp) -> UOp:
@@ -1353,8 +1378,11 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
       flash_fused_xlane_score_pv_tile_whole_cache_kernel
     po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,
       fxn=tile_builder(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
-    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, s_route))[0]
-    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, s_route))[0]
+    if getenv("DECODE_ATTN_FUSED_COMBINE", 0):   # P5: one fused dispatch (inline gmax) instead of gmax+combine
+      out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_state_combine_kernel(Hd, Hq, s_route))[0]
+    else:
+      gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, s_route))[0]
+      out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, s_route))[0]
     return out.reshape(Hq, Hd)
   if getenv("DECODE_ATTN_PHYSICAL_TILE_PALL_SCORE", 0):
     score_kernel = flash_pall_lds_crosslane_fdot2_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u)
