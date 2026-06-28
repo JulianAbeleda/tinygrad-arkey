@@ -216,7 +216,7 @@ def main() -> None:
 
   with args.profile.open("rb") as f: profile = pickle.load(f)
 
-  viz.get_profile(profile, data=data)
+  viz.get_profile(data, profile)   # signature is get_profile(data, profile, sort_fn) -- positional order
 
   # List all kernels
   if args.kernel is None:
