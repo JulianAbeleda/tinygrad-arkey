@@ -41,6 +41,11 @@ CANDIDATE_FLAGS = {
   "DECODE_STAGE_COALESCE": "4", "COALESCED_LOAD_LOWERING": "1", "SCHED_UNROLL": "8",
   "SCHED_LIST": "1", "DECODE_FAST_EXP2": "1",
 }
+# QK_CANDIDATE_ADD lets the loop test a specific candidate delta (e.g. a topology knob) on top of the base stack:
+#   QK_CANDIDATE_ADD="DECODE_ATTN_BLOCK_TILE_FIXED_S=1 DECODE_ATTN_FUSED_XLANE_SCORE_PV_S=96"
+for _kv in os.environ.get("QK_CANDIDATE_ADD", "").split():
+  if "=" in _kv: _k, _v = _kv.split("=", 1); CANDIDATE_FLAGS[_k] = _v
+CANDIDATE_ID = "block_tile" + ("__" + "_".join(sorted(os.environ.get("QK_CANDIDATE_ADD", "").split())) if os.environ.get("QK_CANDIDATE_ADD") else "")
 COMPARATOR_FLAGS = {"DECODE_ATTN_AMDGCN_TILE": "1"}   # owned hand-AMDGCN tile = the shipped default / oracle
 
 def _git():
