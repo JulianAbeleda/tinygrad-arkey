@@ -55,13 +55,18 @@ transfer snapshot is harness-measured (not `session_reported`). Verified: with n
 is now `UNKNOWN` (was MISMATCH from the phantom 32.8/6.2). The loop can no longer reason from phantom W==D.
 **Remaining for the harness (2d):** produce that `route_attribution.json`.
 
-### 2d. Make the W==D harness persist route attribution (Codex MEDIUM — required)
-Today `extra/qk_decode_runtime_overhead.py:56` captures DEBUG=2 only to count programs, and the saved row
-(`:63`) omits kernel names, flags, token-match, and route identity — so a "harness_measured" snapshot is still
-unverifiable. The harness/artifact schema MUST emit, per run: `route_bound` (bool), `kernels` (the matched decode
-kernel names incl. `flash_block_tiled*`), `effective_env_flags`, and `token_match` (bool, vs owned/gqa). Write that
-to `bench/qk-owned-oracle-parity/route_attribution.json` (consumed by 2c) AND embed it in the new
-`transfer_snapshot_*.json` (`authority=harness_measured`), replacing the session-reported one the generator globs.
+### 2d. Route-attributed W==D harness — BUILT (this commit): `extra/qk_decode_route_attribution_wd.py`
+Built to the "Harnesses Are Performance Primitives Too" bar (a *valid benchmark artifact*, not a bare timer). It
+measures the owned comparator and the candidate **in the same session** (fresh model load per route — the KV-cache
+dtype gate depends on `AMDGCN_TILE`), and emits all required fields: workload (ckpts/maxc/nmeas/ntok/warmup),
+candidate id + primitive class + exact env flags, comparator id + why (owned = shipped default/oracle), git
+commit/dirty, hardware, repeats + median + **stdev (noise band)**, a **correctness gate (in-model token-match** vs
+the comparator), the **in-model W==D timing authority**, **route attribution** (the decode-attention kernel that
+fired → `route_bound`), the `WD_PROMOTION_PCT` threshold, and a verdict + stop reason. Outputs:
+`bench/qk-owned-oracle-parity/route_attribution.json` (consumed by 2c) and a harness-measured
+`transfer_snapshot_<ts>.json` (`authority=harness_measured`, replacing the session-reported one the generator globs).
+Verdicts: `NOT_ROUTE_BOUND…` / `ROUTE_BOUND_BUT_TOKEN_MISMATCH` / `ROUTE_BOUND__TOKEN_MATCH__WD_{AT,BELOW}_THRESHOLD`.
+Smoke: `QK_NMEAS=8 QK_NTOK=8 QK_CKPTS=512`.
 
 ### 2e. Hybrid fail-loud preflight guard — IMPLEMENTED (this commit)
 Keeps (b)'s explicit flags but makes the partial-stack mistake **impossible to pass silently**. `tinygrad/llm/model.py`
