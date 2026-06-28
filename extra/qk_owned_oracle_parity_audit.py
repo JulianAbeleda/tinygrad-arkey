@@ -74,8 +74,13 @@ def main() -> int:
   # Until a route-attribution artifact proves flash_block_tiled* fired AND the snapshot is harness-measured (not
   # session-reported), wd_tok_s is UNKNOWN -- the loop must NOT reason from phantom W==D.
   route_attr = load(ROUTE_ATTR)
-  snap_session = ("session" in str(tr.get("source", "")).lower()) or (tr.get("authority") != "W_equals_D_in_model")
-  route_bound = bool(route_attr.get("route_bound")) and bool(route_attr.get("token_match")) and not snap_session
+  # The snapshot is trusted only when it is HARNESS-measured (matching the regenerated snapshot's label in the
+  # scope) and NOT session-reported. The stale snapshot is rejected by BOTH its source ("session-reported...") and
+  # its authority ("W_equals_D_in_model", which is not a harness-measured label).
+  _src = str(tr.get("source", "")).lower()
+  _auth = str(tr.get("authority", "") or tr.get("wd_authority", ""))
+  snap_harness_measured = ("session" not in _src) and (_auth in ("harness_measured", "harness_measured_w_equals_d"))
+  route_bound = bool(route_attr.get("route_bound")) and bool(route_attr.get("token_match")) and snap_harness_measured
   def wd_pct(c):
     o, g = o_wd.get(f"ctx{c}_tok_s"), g_wd.get(f"ctx{c}_tok_s")
     return round(g / o * 100.0, 1) if o and g else None
@@ -165,13 +170,19 @@ def main() -> int:
         None, f"route_bound AND W==D >= {WD_THRESHOLD}% of owned AND token-match"),
   ]
 
+  # Rows whose candidate is W==D-gated (requires_wd) can only be evaluated once the route is bound. Until then they
+  # are NOT searchable -- their promotion gate is unobservable -- so they must be dropped from searchable_failed_rows.
+  for r in rows:
+    if r["row"] == "split_kv_combine": r["requires_route_bound"] = True
+
   from collections import Counter
   summ = dict(Counter(r["status"] for r in rows))
   failed = [r for r in rows if r["status"] in ("MISMATCH", "MISSING")]
   unknown = [r for r in rows if r["status"] == "UNKNOWN"]
   wd_match = next((r for r in rows if r["row"] == "wd_tok_s"), {}).get("status") == "MATCH"
 
-  searchable = [r for r in failed if r["candidate_axis"]]
+  # exclude W==D-gated rows while route is not bound (their candidate is unobservable as a promotion gate)
+  searchable = [r for r in failed if r["candidate_axis"] and not (r.get("requires_route_bound") and not route_bound)]
   unk = [r["row"] for r in unknown]
   if not failed and not unknown and wd_match:
     verdict = "PARITY_CLOSED__PROMOTABLE_PENDING_WD_TOKEN_MATCH"
@@ -204,7 +215,8 @@ def main() -> int:
                               "instrumentation gaps for trust, but UNKNOWN is NOT a global hard block."),
     # the loop drives candidate generation off THESE: only a candidate whose targets_delta is a searchable failed row may run.
     "searchable_failed_rows": [{"row": r["row"], "candidate_axis": r["candidate_axis"], "gate_to_close": r["gate_to_close"]}
-                               for r in failed if r["candidate_axis"]],
+                               for r in searchable],
+    "route_bound": route_bound,
     "rules": [
       "every candidate must target a FAILED parity row (status MISMATCH/MISSING with a candidate_axis)",
       "a candidate that does not MOVE its target row -> SEARCH_SPACE_BUG (or TOOLING_BUG if unobservable)",

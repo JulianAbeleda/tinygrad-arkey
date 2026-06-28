@@ -22,7 +22,7 @@
     "route_bound",
     "wd_tok_s"
   ],
-  "recommended_next": "search failed rows ['waitcnt', 'latency_shadow_fill', 'split_kv_combine'] via generator --failed-rows; IN PARALLEL instrument UNKNOWN rows ['reduce_placement', 'route_bound', 'wd_tok_s'] (they only block candidates that target them)",
+  "recommended_next": "search failed rows ['waitcnt', 'latency_shadow_fill'] via generator --failed-rows; IN PARALLEL instrument UNKNOWN rows ['reduce_placement', 'route_bound', 'wd_tok_s'] (they only block candidates that target them)",
   "decision_unknown_rows": "UNKNOWN rows block ONLY candidates that target them (they are excluded from searchable_failed_rows). Measurable failed rows remain searchable. Prefer closing instrumentation gaps for trust, but UNKNOWN is NOT a global hard block.",
   "searchable_failed_rows": [
     {
@@ -34,13 +34,9 @@
       "row": "latency_shadow_fill",
       "candidate_axis": "SCHED_LIST",
       "gate_to_close": "hotloop shadow-fill within owned band"
-    },
-    {
-      "row": "split_kv_combine",
-      "candidate_axis": "DECODE_ATTN_FUSED_XLANE_SCORE_PV_S",
-      "gate_to_close": "combine economics not dominating"
     }
   ],
+  "route_bound": false,
   "rules": [
     "every candidate must target a FAILED parity row (status MISMATCH/MISSING with a candidate_axis)",
     "a candidate that does not MOVE its target row -> SEARCH_SPACE_BUG (or TOOLING_BUG if unobservable)",
@@ -203,7 +199,8 @@
       "responsible_tool": "qk_split_kv_economics_audit.py",
       "required_action": "run split-KV economics for the block-tile route; then pursue a cheaper/fused combine (W==D-gated)",
       "candidate_axis": "DECODE_ATTN_FUSED_XLANE_SCORE_PV_S",
-      "gate_to_close": "combine economics not dominating"
+      "gate_to_close": "combine economics not dominating",
+      "requires_route_bound": true
     },
     {
       "layer": "wd_token",
