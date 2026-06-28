@@ -1007,33 +1007,51 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     kstore = ksh[i].store(cache[0, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
     vstore = vsh.after(kstore)[i].store(cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
     bar = UOp.barrier(UOp.group(vstore.end(wv).end(st) if _stage_w else vstore.end(st)))
-    tt = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
-    t = s * L + b * TK + tt
-    in_r = t < Tc
-    dotp = UOp.placeholder((1,), _F32, 235, addrspace=AddrSpace.REG)
-    dinit = dotp.after(b, tt)[0].store(0.0)
-    dotp = dotp.after(dinit)
-    rp = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
-    e2 = rp * 64 + lane * 2
-    qpair = UOp(Ops.STACK, dtypes.half.vec(2), (q[h * Hd + e2].cast(dtypes.half), q[h * Hd + e2 + 1].cast(dtypes.half)))
-    kbase = tt * Hd + e2
-    kpair = UOp(Ops.STACK, dtypes.half.vec(2), (ksh.after(bar)[kbase], ksh.after(bar)[kbase + 1]))
-    dot2 = UOp(Ops.CUSTOMI, _F32, (dotp.after(rp)[0], qpair, kpair), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
-    dupd = dotp[0].store(dot2).end(rp)
-    partial = dotp.after(dupd)[0]
-    sc_full = (warp_reduce_sum(partial, lane, LANES) if getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)
-               else _warp_reduce_sum_staged(partial, lane, LANES)) * scale
-    sc = in_r.where(sc_full, _fc(-float("inf")))
-    old_m = mx.after(tt)[0]
-    new_m = old_m.maximum(sc)
-    corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
-    p = in_r.where(_fexp(sc - new_m), _fc(0.0))
-    dd = UOp.range(R, 7)
-    d = lane * R + dd
-    vd = vsh.after(bar)[tt * Hd + d].cast(_F32)
-    accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
-    denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
-    mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
+    def _dot_reduce(_tt):   # one token's dot (rp loop) -> warp-reduce -> scaled, masked score (the INDEPENDENT work)
+      _dotp = UOp.placeholder((1,), _F32, 235, addrspace=AddrSpace.REG)
+      _di = _dotp.after(b, _tt)[0].store(0.0); _dotp = _dotp.after(_di)
+      _rp = UOp.range(RP, 6, axis_type=AxisType.REDUCE)
+      _e2 = _rp * 64 + lane * 2
+      _qp = UOp(Ops.STACK, dtypes.half.vec(2), (q[h * Hd + _e2].cast(dtypes.half), q[h * Hd + _e2 + 1].cast(dtypes.half)))
+      _kp = UOp(Ops.STACK, dtypes.half.vec(2), (ksh.after(bar)[_tt * Hd + _e2], ksh.after(bar)[_tt * Hd + _e2 + 1]))
+      _d2 = UOp(Ops.CUSTOMI, _F32, (_dotp.after(_rp)[0], _qp, _kp), arg="__builtin_amdgcn_fdot2({1}, {2}, {0}, false)")
+      _du = _dotp[0].store(_d2).end(_rp)
+      return ((warp_reduce_sum(_dotp.after(_du)[0], lane, LANES) if getenv("DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE", 0)
+               else _warp_reduce_sum_staged(_dotp.after(_du)[0], lane, LANES)) * scale)
+    if getenv("DECODE_ATTN_TILE_SPLIT_SCORE", 0):
+      # REFACTOR (kernel-level recurrence pipelining): PASS 1 computes all TK independent dot+reduce scores into an
+      # LDS score buffer (the ds_bpermute reduces pipeline back-to-back, no per-token serial merge stalling each),
+      # PASS 2 runs the serial online-softmax merges reading the buffer. Lane 0 writes; lgkmcnt makes it warp-visible
+      # (wave32 lockstep -> no barrier). Default-off (DECODE_ATTN_TILE_SPLIT_SCORE=1). Gated by the microgate + W==D.
+      scsh = UOp.placeholder((WARPS * TK,), _F32, 236, addrspace=AddrSpace.LOCAL)
+      tt1 = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
+      in_r1 = (s * L + b * TK + tt1) < Tc
+      scst = scsh.after(b)[warp * TK + tt1].store(in_r1.where(_dot_reduce(tt1), _fc(-float("inf"))), lane.eq(0)).end(tt1)
+      scsh = scsh.after(scst)
+      tt = UOp.range(TK, 12, axis_type=AxisType.REDUCE)
+      sc = scsh[warp * TK + tt]
+      old_m = mx.after(tt)[0]; new_m = old_m.maximum(sc)
+      corr = _fexp(old_m - new_m); p = _fexp(sc - new_m)   # sc=-inf for OOB -> corr=1, p=0 (mask folded in pass 1)
+      dd = UOp.range(R, 7)
+      d = lane * R + dd
+      vd = vsh.after(bar)[tt * Hd + d].cast(_F32)
+      accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
+      denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
+      mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
+    else:
+      tt = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
+      in_r = (s * L + b * TK + tt) < Tc
+      sc = in_r.where(_dot_reduce(tt), _fc(-float("inf")))
+      old_m = mx.after(tt)[0]
+      new_m = old_m.maximum(sc)
+      corr = in_r.where(_fexp(old_m - new_m), _fc(1.0))
+      p = in_r.where(_fexp(sc - new_m), _fc(0.0))
+      dd = UOp.range(R, 7)
+      d = lane * R + dd
+      vd = vsh.after(bar)[tt * Hd + d].cast(_F32)
+      accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
+      denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
+      mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
     af, lf, mf = acc.after(mxu), den.after(mxu), mx.after(mxu)
     base = (h * S + s) * W
     dd2 = UOp.range(R, 8)
