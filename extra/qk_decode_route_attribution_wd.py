@@ -50,14 +50,24 @@ def _git():
     return sha, dirty
   except Exception: return "unknown", None
 
-def _set_env(flags):
-  # only set the route flags; leave everything else as the process default. Set BEFORE model load.
-  for k in list(CANDIDATE_FLAGS) + list(COMPARATOR_FLAGS): os.environ.pop(k, None)
-  for k, v in flags.items(): os.environ[k] = v
+def _spawn(flags, label):
+  """Measure one route in a FRESH SUBPROCESS. Required: tinygrad's getenv memoizes on first read, so two route
+  configs cannot coexist in one process (the second silently inherits the first's cached flags -> fallback). Process
+  isolation is the only correct way to compare two route configs -- a harness best practice (clean lifecycle)."""
+  env = dict(os.environ)
+  for k in set(CANDIDATE_FLAGS) | set(COMPARATOR_FLAGS): env.pop(k, None)   # clear all route flags
+  env.update({k: str(v) for k, v in flags.items()})                         # set this route's flags
+  env["QK_MEASURE_ONE"] = "1"
+  p = subprocess.run([sys.executable, str(pathlib.Path(__file__))], env=env, capture_output=True, text=True, cwd=str(ROOT))
+  for line in p.stdout.splitlines():
+    if line.startswith("@@RESULT@@"):
+      rows = json.loads(line[len("@@RESULT@@"):])
+      for ck, r in rows.items(): print(f"  [{label}] ctx{ck}: {r['tok_s']} tok/s (+-{r['w_ms_stdev']}ms) attn={r['attn_kernels']}", file=sys.__stderr__)
+      return {int(k): v for k, v in rows.items()}
+  raise RuntimeError(f"[{label}] measure-one subprocess produced no @@RESULT@@:\n{p.stderr[-2500:]}")
 
-def measure_route(flags, label):
-  """Fresh model load + per-ctx: warmup, W==D tok/s (median+stdev), greedy tokens, and decode-attention kernel name."""
-  _set_env(flags)
+def measure_one():
+  """Runs in the isolated subprocess (env flags already set by the parent). Loads the model ONCE, measures all ctx."""
   from extra.qk_harness_contract import DEFAULT_MODEL
   from tinygrad import Tensor, UOp, TinyJit, Context, GlobalCounters
   from extra.llm_generate import load_model_and_tokenizer
@@ -80,25 +90,26 @@ def measure_route(flags, label):
       t0 = time.perf_counter(); out = step(out, v_sp.bind(ck + i), temp); tid = int(out.item())
       W.append(time.perf_counter() - t0)
       if i < NTOK: toks.append(tid)
-    buf = io.StringIO()   # DEBUG=2 single step -> route attribution (which attention kernel fired)
-    with contextlib.redirect_stdout(buf), Context(DEBUG=2):
-      GlobalCounters.reset(); step(out, v_sp.bind(ck + NMEAS), temp).realize()
+    buf = io.StringIO()   # route attribution: an EAGER forward (NOT the jit replay, which shows graph nodes, not
+    with contextlib.redirect_stdout(buf), Context(DEBUG=2):   # individual kernel names) so DEBUG=2 emits flash_*/owned_* lines
+      GlobalCounters.reset(); m.forward(Tensor([[tokid]], dtype="int32").contiguous(), v_sp.bind(ck), temp).realize()
     kernels = sorted({_ANSI.sub("", l) for l in buf.getvalue().splitlines()})
     attn = sorted({mm.group(1) for l in kernels if (mm := _ATTN.search(l))})
     w_ms = statistics.median(W) * 1e3
     rows[ck] = {"tok_s": round(1000 / w_ms, 1), "w_ms_median": round(w_ms, 3),
                 "w_ms_stdev": round(statistics.pstdev(W) * 1e3, 3), "nmeas": NMEAS,
                 "tokens": toks, "attn_kernels": attn}
-    print(f"  [{label}] ctx{ck}: {rows[ck]['tok_s']} tok/s (+-{rows[ck]['w_ms_stdev']}ms) attn={attn}", file=sys.__stderr__)
   del m
-  return rows
+  print("@@RESULT@@" + json.dumps(rows))   # consumed by the parent _spawn()
 
 def main() -> int:
+  if os.environ.get("QK_MEASURE_ONE"):   # isolated child: env flags already set; measure one route and emit
+    measure_one(); return 0
   sha, dirty = _git()
-  print("== comparator (owned oracle) ==", file=sys.__stderr__)
-  comp = measure_route(COMPARATOR_FLAGS, "owned")
-  print("== candidate (generated block tile, full stack) ==", file=sys.__stderr__)
-  cand = measure_route(CANDIDATE_FLAGS, "block_tile")
+  print("== comparator (owned oracle) [subprocess] ==", file=sys.__stderr__)
+  comp = _spawn(COMPARATOR_FLAGS, "owned")
+  print("== candidate (generated block tile, full stack) [subprocess] ==", file=sys.__stderr__)
+  cand = _spawn(CANDIDATE_FLAGS, "block_tile")
 
   per_ctx, all_bound, all_match = [], True, True
   for ck in CKPTS:
