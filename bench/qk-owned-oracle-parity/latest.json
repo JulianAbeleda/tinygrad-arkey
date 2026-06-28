@@ -7,22 +7,21 @@
   },
   "wd_threshold_pct_of_owned": 90.0,
   "summary": {
-    "MATCH": 7,
-    "UNKNOWN": 3,
-    "MISMATCH": 4
+    "MATCH": 8,
+    "UNKNOWN": 1,
+    "MISMATCH": 5
   },
   "failed_rows": [
     "vgpr",
     "waitcnt",
     "latency_shadow_fill",
-    "split_kv_combine"
-  ],
-  "unknown_rows": [
-    "reduce_placement",
-    "route_bound",
+    "split_kv_combine",
     "wd_tok_s"
   ],
-  "recommended_next": "search failed rows ['waitcnt', 'latency_shadow_fill'] via generator --failed-rows; IN PARALLEL instrument UNKNOWN rows ['reduce_placement', 'route_bound', 'wd_tok_s'] (they only block candidates that target them)",
+  "unknown_rows": [
+    "reduce_placement"
+  ],
+  "recommended_next": "search failed rows ['waitcnt', 'latency_shadow_fill', 'split_kv_combine'] via generator --failed-rows; IN PARALLEL instrument UNKNOWN rows ['reduce_placement'] (they only block candidates that target them)",
   "decision_unknown_rows": "UNKNOWN rows block ONLY candidates that target them (they are excluded from searchable_failed_rows). Measurable failed rows remain searchable. Prefer closing instrumentation gaps for trust, but UNKNOWN is NOT a global hard block.",
   "searchable_failed_rows": [
     {
@@ -34,9 +33,14 @@
       "row": "latency_shadow_fill",
       "candidate_axis": "SCHED_LIST",
       "gate_to_close": "hotloop shadow-fill within owned band"
+    },
+    {
+      "row": "split_kv_combine",
+      "candidate_axis": "DECODE_ATTN_FUSED_XLANE_SCORE_PV_S",
+      "gate_to_close": "combine economics not dominating"
     }
   ],
-  "route_bound": false,
+  "route_bound": true,
   "rules": [
     "every candidate must target a FAILED parity row (status MISMATCH/MISSING with a candidate_axis)",
     "a candidate that does not MOVE its target row -> SEARCH_SPACE_BUG (or TOOLING_BUG if unobservable)",
@@ -207,30 +211,32 @@
       "row": "route_bound",
       "owned_property": "block-tile route fires in model.generate decode",
       "owned_observation": "owned_flash_tile_gqa_whole",
-      "generated_observation": "NOT CAPTURED (no route_attribution.json)",
-      "status": "UNKNOWN",
-      "blocker_kind": "PRIMITIVE_PLACEMENT_BUG",
+      "generated_observation": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128"
+      ],
+      "status": "MATCH",
+      "blocker_kind": null,
       "responsible_tool": "qk_decode_runtime_overhead.py (route attribution)",
-      "required_action": "block tile NOT route-bound: needs full flag stack (GENERATED_WHOLECACHE + FUSED_XLANE_SCORE_PV_TILE + BLOCK_TILE + AMDGCN_TILE=0) and a harness-captured route_attribution.json",
+      "required_action": "none",
       "candidate_axis": null,
       "gate_to_close": "DEBUG=2 shows flash_block_tiled* fires in model.generate + token-match"
     },
     {
       "layer": "wd_token",
       "row": "wd_tok_s",
-      "owned_property": "owned 103.2/93.8 tok/s",
+      "owned_property": "owned 103.8/94.6 tok/s",
       "owned_observation": [
-        103.2,
-        93.8
+        103.8,
+        94.6
       ],
       "generated_observation": [
-        32.8,
-        6.2
+        35.0,
+        6.7
       ],
-      "status": "UNKNOWN",
-      "blocker_kind": "INSTRUMENTATION_GAP",
+      "status": "MISMATCH",
+      "blocker_kind": "TIMING_TRIGGER",
       "responsible_tool": "qk_decode_runtime_overhead.py + qk_decode_token_match_check.py",
-      "required_action": "ROUTE NOT BOUND -> phantom W==D: route-bind the block tile and capture route_attribution before trusting these tok/s",
+      "required_action": "the bottom-line parity; closes only when schedule+resource+lifecycle close",
       "candidate_axis": null,
       "gate_to_close": "route_bound AND W==D >= 90.0% of owned AND token-match"
     }

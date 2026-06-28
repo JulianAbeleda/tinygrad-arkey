@@ -1,0 +1,36 @@
+{
+  "schema": "qk_route_attribution_v1",
+  "timestamp": "20260627-224000",
+  "git_commit": "0f0b699ec",
+  "route_bound": true,
+  "token_match": true,
+  "kernels": [
+    "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128"
+  ],
+  "flags": {
+    "DECODE_ATTN_AMDGCN_TILE": "0",
+    "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
+    "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE": "1",
+    "DECODE_ATTN_BLOCK_TILE": "1",
+    "DECODE_STAGE_COALESCE": "4",
+    "COALESCED_LOAD_LOWERING": "1",
+    "SCHED_UNROLL": "8",
+    "SCHED_LIST": "1",
+    "DECODE_FAST_EXP2": "1"
+  },
+  "per_ctx": [
+    {
+      "ctx": 512,
+      "route_bound": true,
+      "token_match": true,
+      "candidate_tok_s": 35.0
+    },
+    {
+      "ctx": 4096,
+      "route_bound": true,
+      "token_match": true,
+      "candidate_tok_s": 6.7
+    }
+  ],
+  "source": "harness-measured (qk_decode_route_attribution_wd.py)"
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "qk_decode_attention_pure_search_transfer_snapshot_v1",
+  "timestamp": "20260627-224000",
+  "source": "harness-measured (qk_decode_route_attribution_wd.py)",
+  "authority": "harness_measured",
+  "wd_authority": "harness_measured_w_equals_d",
+  "git_commit": "0f0b699ec",
+  "route_bound": true,
+  "token_match": true,
+  "arms": [
+    {
+      "arm": "owned_baseline",
+      "ctx512_tok_s": 103.8,
+      "ctx4096_tok_s": 94.6,
+      "provenance": "owned_hand_asm_default"
+    },
+    {
+      "arm": "block_tile_route_full_stack",
+      "ctx512_tok_s": 35.0,
+      "ctx4096_tok_s": 6.7,
+      "provenance": "generated_route_bound_harness_measured"
+    }
+  ],
+  "stack_flags": [
+    "DECODE_ATTN_AMDGCN_TILE=0",
+    "DECODE_ATTN_GENERATED_WHOLECACHE=1",
+    "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1",
+    "DECODE_ATTN_BLOCK_TILE=1",
+    "DECODE_STAGE_COALESCE=4",
+    "COALESCED_LOAD_LOWERING=1",
+    "SCHED_UNROLL=8",
+    "SCHED_LIST=1",
+    "DECODE_FAST_EXP2=1"
+  ]
+}
