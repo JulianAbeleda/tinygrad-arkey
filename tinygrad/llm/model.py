@@ -1039,6 +1039,18 @@ class TransformerBlock(FFNBlock):
       try: _amdgcn_ctx = start_pos.unbind()[1] + T if isinstance(start_pos, UOp) else -1
       except Exception: _amdgcn_ctx = -1
       out = None
+      # Hybrid route-binding guard (fail-loud, default-inert): DECODE_ATTN_BLOCK_TILE only binds in-model via the
+      # whole-cache fused-xlane route. Set WITHOUT its enabling flags, the selection silently falls back to
+      # owned/gqa_coop_vec -> phantom W==D (docs/decode-attention-block-tile-route-binding-scope-20260627.md). Catch
+      # the partial stack HERE, before any W==D run, instead of after via the route_bound precheck. BLOCK_TILE off
+      # => guard inert => byte-identical owned default. DECODE_ATTN_BLOCK_TILE_STRICT=1 (default) raises; =0 warns.
+      if getenv("DECODE_ATTN_BLOCK_TILE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
+         and not (getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE", 0)):
+        _bt_msg = ("DECODE_ATTN_BLOCK_TILE=1 does not bind in-model without DECODE_ATTN_GENERATED_WHOLECACHE=1 and "
+                   "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1 -- it would silently fall back to owned/gqa_coop_vec "
+                   "(phantom W==D). Set the full stack (also DECODE_ATTN_AMDGCN_TILE=0) or unset DECODE_ATTN_BLOCK_TILE.")
+        if getenv("DECODE_ATTN_BLOCK_TILE_STRICT", 1): raise RuntimeError(_bt_msg)
+        if getenv("DEBUG", 0): print("WARN:", _bt_msg)
       if getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A2 pure-search skeleton (default-off): generated flash-decode route that reads the whole assigned_kv cache

@@ -63,6 +63,16 @@ kernel names incl. `flash_block_tiled*`), `effective_env_flags`, and `token_matc
 to `bench/qk-owned-oracle-parity/route_attribution.json` (consumed by 2c) AND embed it in the new
 `transfer_snapshot_*.json` (`authority=harness_measured`), replacing the session-reported one the generator globs.
 
+### 2e. Hybrid fail-loud preflight guard — IMPLEMENTED (this commit)
+Keeps (b)'s explicit flags but makes the partial-stack mistake **impossible to pass silently**. `tinygrad/llm/model.py`
+(right after `out = None` in the decode-attention selection) now checks: if `DECODE_ATTN_BLOCK_TILE=1` on the
+supported shape but the enabling flags (`GENERATED_WHOLECACHE` + `FUSED_XLANE_SCORE_PV_TILE`) are not set, it
+**raises** (`DECODE_ATTN_BLOCK_TILE_STRICT=1`, default) or **warns** (`=0`) — catching the phantom *before* a W==D run,
+where the `route_bound` precheck only catches it after. Default-inert: `BLOCK_TILE` unset ⇒ guard skipped ⇒
+byte-identical owned default. **Verified:** `BLOCK_TILE=1` alone raises with an actionable message; the full stack
+passes the guard and **`flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128` fires in-model** (×36) — the route
+binds. (Remaining: harness `route_attribution.json` + token-match + harness-measured snapshot, §2c/§2d.)
+
 ## 3. Big picture — how this solves the issue
 
 The pure-search loop's only promotion authority is **in-model W==D + token-match**. Today that authority is
