@@ -4,48 +4,42 @@ For Codex audit. Fixes the foundational gap found by the parity-closure run
 (`docs/pure-search-loop-parity-run-route-binding-finding-20260627.md`): the generated block-tile route is **never
 exercised by the model W==D path**, so every in-model number we have for it is a phantom.
 
-## 1. The problem (exact)
+## 1. The problem (exact — corrected per Codex audit)
 
-The decode-attention route selection in `tinygrad/llm/model.py` (~lines 1050–1092) builds `out` from exactly three
-branches:
-1. **A1 generated skeleton** (`DECODE_ATTN_GENERATED_SKELETON...`) → `flash_decode_attention(...)`
-2. **Owned AMDGCN tile** (`DECODE_ATTN_AMDGCN_TILE`, default 1) → `amdgcn_flash_decode(...)`
-3. **Fallback** → `flash_decode_attention(..., variant="gqa_coop_vec")`
+The in-model generated whole-cache branch **already exists**: `tinygrad/llm/model.py:1042` (gated by
+`DECODE_ATTN_GENERATED_WHOLECACHE`) calls `flash_decode_attention_whole_cache` at `:1047` with the known-good
+signature. Inside that function the block tile is selected only when **the fused-tile branch is active** —
+`qk_flash_decode.py:1333` (`DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE`) → `:1352`
+(`tile_builder = flash_block_tiled_... if DECODE_ATTN_BLOCK_TILE`).
 
-**No branch calls `flash_decode_attention_whole_cache` (`extra/qk_flash_decode.py:1276`)** — the function that
-dispatches the block tile (`tile_builder = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel if
-getenv("DECODE_ATTN_BLOCK_TILE")`, line 1352) and the `FIXED_S` topology (line 1341). `model.py` references neither
-`DECODE_ATTN_BLOCK_TILE` nor `flash_block_tiled`. So:
-- `DECODE_ATTN_BLOCK_TILE=1` is a **no-op in-model**; the block tile is only reachable from isolated harnesses
-  (microgate, isolated timing) that call the kernel directly.
-- In the W==D harness it **silently falls back**: `AMDGCN_TILE=1` → owned fires; `AMDGCN_TILE=0` → gqa_coop_vec fires.
-- Verified by `DEBUG=2`: `owned_flash_tile_gqa_whole` (×36) fired for the "block-tile" run; never `flash_block_tiled`.
+So the bug is **a flag contract, NOT a missing branch.** `DECODE_ATTN_BLOCK_TILE=1` alone does not bind the route —
+the whole-cache branch (`GENERATED_WHOLECACHE`) and the fused-tile branch (`FUSED_XLANE_SCORE_PV_TILE`) were never
+set, so in-model the selection **fell through** to owned (`AMDGCN_TILE=1`) or gqa_coop_vec (`AMDGCN_TILE=0`).
+Verified by `DEBUG=2`: `owned_flash_tile_gqa_whole` (×36) fired for the "block-tile" run; never `flash_block_tiled`.
 
-Consequence: the transfer snapshot's `block_tile_route_full_stack` W==D (32.8/6.2 tok/s; "~1.75× in-model") is
-**unverified** — `wd_authority=session_reported_not_harness_measured`. The search loop has been targeting a route
-that does not run where promotion is decided.
-
-## 2. The fix
-
-### 2a. Add a default-off block-tile branch in `model.py` decode-attention selection
-Between the A1 skeleton and the owned-tile branch (or right after owned, guarded so it takes precedence only when
-its flag is set), add:
+The block tile binds in-model **only** with the full stack:
 ```
-if out is None and getenv("DECODE_ATTN_BLOCK_TILE", 0) and DECODE_ATTN_AMDGCN_ARCH_OK and <same shape guards: B==1,
-   Hd==128, Hq==32, Hkv==8, (Hq//Hkv)==4, _amdgcn_ctx >= min_ctx>:
-    try:
-        from extra.qk_flash_decode import flash_decode_attention_whole_cache
-        out = flash_decode_attention_whole_cache(q.reshape(Hq,Hd)<.cast(dtype per the cache contract)>, assigned_kv,
-                                                 start_pos+T, vsp+T, Hd, Hq, Hkv, MAXC, L)   # whole-cache, buffer-identity
-    except Exception as e:
-        if getenv("DEBUG",0): print(f"DECODE_ATTN_BLOCK_TILE fallback: {e}"); out = None
+DECODE_ATTN_GENERATED_WHOLECACHE=1  DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1  DECODE_ATTN_BLOCK_TILE=1  DECODE_ATTN_AMDGCN_TILE=0
 ```
-- **Default-off** (`DECODE_ATTN_BLOCK_TILE` default 0): the owned route stays the shipped default; byte-identical
-  when the flag is unset.
-- **Output contract:** must return the same shape the owned branch does (reshaped to `(B,Hq,T,Hd)` at line 1093).
-- **Confirm the exact `flash_decode_attention_whole_cache` signature** (`extra/qk_flash_decode.py:1276`) and pass
-  `assigned_kv` (the whole `cache_kv.after(store)` buffer — preserve buffer-identity, no slice/reshape; the same
-  rule that gave owned its win, `[[owned-tile-buffer-identity]]`).
+Consequence: the transfer snapshot's `block_tile_route_full_stack` W==D (32.8/6.2; "~1.75× in-model") is **unverified**
+(`wd_authority=session_reported`). The search loop targeted a route that does not run where promotion is decided.
+
+## 2. The fix — flag contract, NOT a new branch (corrected per Codex)
+
+**Do NOT add a second branch.** Reuse the existing in-model path at `model.py:1042-1048` (known-good `assigned_kv`,
+`start_pos+T`, `vsp+T`, reshape contract). Two acceptable shapes:
+
+- **(a) Flag implication (preferred for the search):** make `DECODE_ATTN_BLOCK_TILE=1` imply the route — i.e. when
+  it is set, treat `GENERATED_WHOLECACHE` and `FUSED_XLANE_SCORE_PV_TILE` as on (a single documented place that
+  ORs them into the existing branch conditions at `model.py:1042` / `qk_flash_decode.py:1333`). One flag, no
+  divergence.
+- **(b) Explicit stack (already applied to the search):** require the candidate/W==D stack to carry the full set.
+  `bench/qk-search-spaces/decode_attention_loop_search_space.json` `baseline_stack` now includes
+  `DECODE_ATTN_GENERATED_WHOLECACHE=1 DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1 DECODE_ATTN_AMDGCN_TILE=0`, and a
+  `route_binding_contract` field documents it; the generator emits the full stack. No `model.py` change.
+
+Either way: **default route is unchanged** (with the flags unset, owned ships byte-identical); the only requirement
+is that a W==D candidate carries the full stack and proves attribution.
 
 ### 2b. dtype/cache contract (the correctness trap to audit)
 The owned route forces an **fp16 cache** (`model.py:1129`: `_kv_dtype = fp16 if DECODE_ATTN_AMDGCN_TILE`). The block
@@ -54,18 +48,20 @@ tile reads fp32 cache and casts to half internally (microgate uses fp32 cache). 
 cache for the block-tile route and ensure the kernel's internal cast is correct. Mismatch = NaN K = garbage tokens
 (the exact bug the owned dtype-contract comment at `model.py:1065-1067` warns about). **Token-match is the gate.**
 
-### 2c. Add a `route_bound` precheck to the parity matrix
-`extra/qk_owned_oracle_parity_audit.py`: add a row (or a global gate) that asserts the generated route **actually
-fires in-model** before any `wd_tok_s` / `split_kv_combine` row is trusted — e.g. a captured DEBUG=2 kernel-name
-attribution showing `flash_block_tiled*` present (not `owned_flash_tile`/`gqa_coop`). If not route-bound →
-`wd_tok_s` status = `UNKNOWN` (blocked: route not bound), not MISMATCH/MATCH. This makes the loop structurally
-incapable of repeating the false-positive.
+### 2c. `route_bound` precheck in the parity matrix — IMPLEMENTED (this commit)
+`extra/qk_owned_oracle_parity_audit.py` now has a `wd_token.route_bound` row and gates `wd_tok_s`: both are
+`UNKNOWN` unless `bench/qk-owned-oracle-parity/route_attribution.json` proves `route_bound && token_match` AND the
+transfer snapshot is harness-measured (not `session_reported`). Verified: with no attribution artifact, `wd_tok_s`
+is now `UNKNOWN` (was MISMATCH from the phantom 32.8/6.2). The loop can no longer reason from phantom W==D.
+**Remaining for the harness (2d):** produce that `route_attribution.json`.
 
-### 2d. Regenerate a harness-measured transfer snapshot
-After 2a–2c pass, run the real W==D (`extra/qk_decode_runtime_overhead.py`, `QK_CKPTS=512,4096`) with
-`DECODE_ATTN_AMDGCN_TILE=0 DECODE_ATTN_BLOCK_TILE=1 <stack>`, confirm `flash_block_tiled` fires + token-match, and
-write a new `transfer_snapshot_*.json` with `authority=harness_measured` (replacing the session-reported one the
-generator picks up by glob).
+### 2d. Make the W==D harness persist route attribution (Codex MEDIUM — required)
+Today `extra/qk_decode_runtime_overhead.py:56` captures DEBUG=2 only to count programs, and the saved row
+(`:63`) omits kernel names, flags, token-match, and route identity — so a "harness_measured" snapshot is still
+unverifiable. The harness/artifact schema MUST emit, per run: `route_bound` (bool), `kernels` (the matched decode
+kernel names incl. `flash_block_tiled*`), `effective_env_flags`, and `token_match` (bool, vs owned/gqa). Write that
+to `bench/qk-owned-oracle-parity/route_attribution.json` (consumed by 2c) AND embed it in the new
+`transfer_snapshot_*.json` (`authority=harness_measured`), replacing the session-reported one the generator globs.
 
 ## 3. Big picture — how this solves the issue
 

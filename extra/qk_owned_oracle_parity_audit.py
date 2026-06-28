@@ -29,6 +29,7 @@ HOTLOOP = ROOT / "bench/qk-decode-hotloop-schedule-diff/latest.json"
 OCC = ROOT / "bench/qk-decode-occupancy-guardrail/latest.json"
 ISA_VEC = ROOT / "bench/qk-decode-isa-vectorization/latest.json"
 ECON = ROOT / "bench/qk-split-kv-economics-audit/latest.json"
+ROUTE_ATTR = ROOT / "bench/qk-owned-oracle-parity/route_attribution.json"   # {route_bound, kernels[], flags, token_match}
 WD_THRESHOLD = 90.0
 
 def load(p):
@@ -67,6 +68,14 @@ def main() -> int:
   route = isav.get("route_cleanliness", {}).get("occupancy", {})
   arms = {a["arm"]: a for a in tr.get("arms", [])}
   o_wd, g_wd = arms.get("owned_baseline", {}), arms.get("block_tile_route_full_stack", {})
+  # ROUTE_BOUND PRECHECK: W==D is meaningful ONLY if the generated block-tile route actually FIRES in-model. The
+  # block tile binds only with the full flag stack (DECODE_ATTN_GENERATED_WHOLECACHE=1 + FUSED_XLANE_SCORE_PV_TILE=1
+  # + BLOCK_TILE=1 + AMDGCN_TILE=0); otherwise it falls back to owned/gqa_coop_vec and W==D measures the WRONG kernel.
+  # Until a route-attribution artifact proves flash_block_tiled* fired AND the snapshot is harness-measured (not
+  # session-reported), wd_tok_s is UNKNOWN -- the loop must NOT reason from phantom W==D.
+  route_attr = load(ROUTE_ATTR)
+  snap_session = ("session" in str(tr.get("source", "")).lower()) or (tr.get("authority") != "W_equals_D_in_model")
+  route_bound = bool(route_attr.get("route_bound")) and bool(route_attr.get("token_match")) and not snap_session
   def wd_pct(c):
     o, g = o_wd.get(f"ctx{c}_tok_s"), g_wd.get(f"ctx{c}_tok_s")
     return round(g / o * 100.0, 1) if o and g else None
@@ -135,13 +144,25 @@ def main() -> int:
         "run split-KV economics for the block-tile route; then pursue a cheaper/fused combine (W==D-gated)",
         "DECODE_ATTN_FUSED_XLANE_SCORE_PV_S", "combine economics not dominating"),
 
-    # W==D / token parity: the bottom line; only the W==D harness + token-match can produce PROMOTABLE.
+    # ROUTE_BOUND: does flash_block_tiled* actually fire in-model? (gates whether wd_tok_s can be trusted at all)
+    row("wd_token", "route_bound", "block-tile route fires in model.generate decode",
+        "owned_flash_tile_gqa_whole", (route_attr.get("kernels") or "NOT CAPTURED (no route_attribution.json)"),
+        "MATCH" if route_bound else "UNKNOWN", None if route_bound else "PRIMITIVE_PLACEMENT_BUG",
+        "qk_decode_runtime_overhead.py (route attribution)",
+        ("none" if route_bound else "block tile NOT route-bound: needs full flag stack (GENERATED_WHOLECACHE + "
+         "FUSED_XLANE_SCORE_PV_TILE + BLOCK_TILE + AMDGCN_TILE=0) and a harness-captured route_attribution.json"),
+        None, "DEBUG=2 shows flash_block_tiled* fires in model.generate + token-match"),
+
+    # W==D / token parity: the bottom line. UNKNOWN until route_bound -- otherwise the snapshot is a phantom (the
+    # route fell back to owned/gqa in-model, so the tok/s are NOT the generated route's).
     row("wd_token", "wd_tok_s", f"owned {o_wd.get('ctx512_tok_s')}/{o_wd.get('ctx4096_tok_s')} tok/s",
         [o_wd.get("ctx512_tok_s"), o_wd.get("ctx4096_tok_s")], [g_wd.get("ctx512_tok_s"), g_wd.get("ctx4096_tok_s")],
-        "MATCH" if (wd_pct(4096) or 0) >= WD_THRESHOLD else "MISMATCH", "TIMING_TRIGGER",
+        ("UNKNOWN" if not route_bound else "MATCH" if (wd_pct(4096) or 0) >= WD_THRESHOLD else "MISMATCH"),
+        ("INSTRUMENTATION_GAP" if not route_bound else "TIMING_TRIGGER"),
         "qk_decode_runtime_overhead.py + qk_decode_token_match_check.py",
-        "the bottom-line parity; closes only when schedule+resource+lifecycle rows close", None,
-        f"W==D >= {WD_THRESHOLD}% of owned AND token-match"),
+        ("ROUTE NOT BOUND -> phantom W==D: route-bind the block tile and capture route_attribution before trusting "
+         "these tok/s" if not route_bound else "the bottom-line parity; closes only when schedule+resource+lifecycle close"),
+        None, f"route_bound AND W==D >= {WD_THRESHOLD}% of owned AND token-match"),
   ]
 
   from collections import Counter
