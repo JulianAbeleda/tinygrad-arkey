@@ -45,6 +45,15 @@ single capability that lets pure machine search produce competitive AMD kernels 
   identity + reorder-correctness proofs, inc0–3 tests) + `renderer/amd/schedule.py` (latency-class/wait-group/
   LDS-stage metadata).
 
+## Foundation verified (2026-06-28) — the build is de-risked
+Ran `extra/qk_asm_scheduler_inc0_test.py` on this gfx1100: **all pass**. `P1 IDENTITY_BYTE_IDENTICAL` (assemble
+reproduces the `Inst` stream bit-for-bit), **`P5 IDENTITY_RUNS_CORRECT` (rmse 2e-4 — the assembled kernel runs
+correct on-GPU)**, **`P6 LEGAL_REORDER_RUNS_CORRECT` (a dependency-respecting `Inst`-stream reorder still runs
+correct)**. So the **entire back half** — `assemble_linear` → runnable ELF, plus the reg-DAG reorder/scheduler
+substrate — is **proven working**. The only missing piece is the **front half**: UOp→`Ops.INS` instruction selection
+for *generated* kernels (today only `build_gemm_lds2` hand-emits the `Inst` stream). That is exactly what inc-0+
+build, on a proven foundation.
+
 ## Staged build (each increment: gate before the next)
 
 **Inc 0 — minimal end-to-end path (THIS increment).** New `tinygrad/renderer/isa/amd.py` with `AMDISARenderer(ISARenderer)`:
