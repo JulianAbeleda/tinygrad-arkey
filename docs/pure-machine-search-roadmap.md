@@ -18,7 +18,7 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 | Area | Status | Pure-search blocker |
 |---|---|---|
 | Decode GEMV | Tracked Q4_K GEMV roles are pure/generated under BubbleBeam G3 | None for tracked Q4_K gate/up, down, and 4096x4096 projection |
-| Decode attention | Hand AMDGCN tile + separate combine ships | `v_dot2`, cross-lane, and LDS-staged attention lifecycle are not generated/search-owned |
+| Decode attention | Hand AMDGCN tile ships; generated **block tile** is route-bound + token-correct at **33.7%/7.1% of owned** (35.0/6.7 vs 103.8/94.6, harness W==D) | Primitives now MATCH (`v_dot2`, cross-lane, LDS 8192 staging all present); the gap is **codegen scheduling** — exposed cross-iteration reduce latency, needs a modulo scheduler (Layer 3) |
 | Prefill | `eightwave` default; emit search exists | Deeper schedule/codegen controls are incomplete, but this is not the first purity blocker |
 | Benchmark authority | Centralized in `bench/canonical-benchmarks.json` | Search-vs-manual provenance must be attached to candidates |
 | BubbleBeam | Exists as FutureSight static selector + route layer | Needs generalized candidate registry/search-space binding |
@@ -202,11 +202,15 @@ Immediate work:
 1. Capture the current owned tile + combine attention lifecycle. Complete: A0.
 2. Add a generated skeleton candidate with separate route attribution. Complete: A1/A2, with A2 as the clean whole-cache skeleton.
 3. Expose or classify the missing primitive lowerings: `v_dot2`, cross-lane reduction, LDS tile layout, and TILE+COMBINE lifecycle. `v_dot2` and direct x-lane score are classified as no-transfer; global cross-lane lowering is blocked; generated LDS attention exists standalone but is not decode-route-bound; TILE+COMBINE has a bundle manifest; the minimal tile placeholder binds but does not transfer; tile-max removes `flash_max_32` but is flat/slightly negative; tile-prob removes max+prob but still does not transfer.
-4. Next: execute `docs/decode-attention-primitive-complete-online-softmax-pv-scope.md`. A3.11 remains optional for exhaustion, but A3.10 makes the better next move the primitive-complete online-softmax+PV tile path. Promote only if generated attention passes route, materialization, correctness, and W==D gates.
+4. Done (2026-06-28): the primitive-complete path landed as the **block tile** — route-bound, token-correct, and
+   harness-measured at **33.7%/7.1% of owned**, with `v_dot2` / cross-lane / LDS-8192 staging all MATCH. The lever
+   search (combine, occupancy, topology, coalescing) is **exhausted**; the single remaining blocker is the codegen
+   **modulo scheduler (Layer 3)**. See "Latest Decode Attention Status" below.
 
-## Latest Decode Attention Codegen Blocker
+## Latest Decode Attention Status (2026-06-28)
 
-Top-level pure-machine-search audit:
+Top-level pure-machine-search audit (scores from the 2026-06-27 audit artifacts; the block-tile refinement and the
+pinpointed scheduling blocker below are the current state):
 
 - Tool: `extra/qk_pure_machine_search_gap_audit.py`.
 - Artifact: `bench/qk-pure-machine-search-gap/latest.json`.
@@ -222,35 +226,39 @@ Current pure-search audit:
 - Score: 60 / 100 for decode attention pure machine search.
 - Meaning: generated decode attention transfers in-model, but the remaining gap is still not pure-search promotable because outer-`b` split/combine, occupancy-aware scoring, and pressure-aware scheduling are not search-owned.
 
-Next canonical actions:
+Next canonical action (2026-06-28): **build the codegen modulo scheduler (Layer 3)** —
+`docs/decode-codegen-scheduler-capability-scope-v2-references-20260627.md`. The four older actions are now closed:
+(1) occupancy is REFUTED as the lever (no-unroll vgpr 80→40 made W==D worse 22.9/3.8); (2) the split-aware hot-loop
+diff is built + run (`HOTLOOP_SCHEDULE_DIFF__SPLIT_AWARE_PARITY_OR_STRUCTURAL`); (3) the split-combine primitive is
+REFUTED (combine is 0.8% of the tile — see below); (4) the route-binding flag stack + route-attributed W==D harness
+(`extra/qk_decode_route_attribution_wd.py`) are built.
 
-1. Build an occupancy guardrail gate.
-2. Use the split-aware hot-loop schedule diff as the preflight for split candidates.
-3. Add/search an LDS-staged outer-`b` split-combine primitive.
-4. Bind manual winning flags into BubbleBeam/FutureSight provenance.
+Current generated **block-tile** route status (2026-06-28 — supersedes the fused-xlane status above):
 
-Current generated fused-xlane route status:
+- **Route-bound + token-correct + harness-measured**: `flash_block_tiled_xlane_score_pv_tile_whole_cache` fires
+  in-model (no owned fallback), greedy-token-identical to owned, **35.0/6.7 tok/s = 33.7%/7.1% of owned** at
+  ctx512/4096 (`extra/qk_decode_route_attribution_wd.py`, `bench/qk-owned-oracle-parity/route_attribution.json`).
+- **Parity** (`bench/qk-owned-oracle-parity/latest.json`): 8 MATCH / 5 MISMATCH / 1 UNKNOWN. The old `ISA_DIFF_PINNED`
+  "LDS 256 B, cross_lane=20" is RETIRED — the block tile has **LDS 8192 (MATCHES owned)**, with `v_dot2`, cross-lane,
+  and coalesced loads all MATCH. The MISMATCH rows are scheduling-driven: `vgpr` 88 vs 64, `waitcnt` 50 vs 21, `wd_tok_s`.
+- The old `...PTRCAT_PLACEMENT` coalescing blocker is RESOLVED (the coalescing lowering shipped:
+  `COALESCED_LOAD_LOWERING` + `DECODE_STAGE_COALESCE`).
 
-- `FUSED_XLANE_SCORE_PV_ROUTE_CLEAN__ECONOMICS_NEXT`: token match, owned route absent, no full-cache materialization, generated tile/gmax/combine fire.
-- `ISA_DIFF_PINNED`: owned tile has LDS 8192 B, `global_load_d16=22`, `cross_lane=5`; generated tile has LDS 256 B, `global_load_d16=0`, `cross_lane=20`.
-- New isolation gate: `extra/qk_decode_cache_identity_index_gate.py`, artifact `bench/qk-decode-cache-identity-index/latest.json`.
+Latest blocker label (2026-06-28):
 
-Latest blocker label:
-
-`SEARCH_BLOCKED_BY_CODEGEN__DYNAMIC_UPCAST_REG_STORE_AND_PTRCAT_PLACEMENT`
-
-What the gate proves:
-
-- Raw 5D `cache_kv[2,1,Hkv,MAXC,Hd]` indexing works.
-- Static UPCAST indexing works.
-- Dynamic scalar `t` indexing works.
-- K UPCAST into LDS works in isolation.
-- Dynamic V reduce + UPCAST accumulator emits invalid C: `make_float4(...) = make_float4(...)`.
-- Direct authoring of `PTRCAT` vector loads fails the tensor/spec verifier; the vector-load transformation must happen at the correct late-codegen point.
+`SEARCH_BLOCKED_BY_CODEGEN__SCHEDULING` — the 12.8× tile gap is **exposed cross-iteration `ds_bpermute` reduce
+latency**, NOT a missing primitive, combine, occupancy, or coalescing. Cycle budget: gen **281** vs owned **22**
+cyc/token ≈ 5 fully-exposed bpermute (owned overlaps them across tokens). `flash_block_tiled` is 3711µs vs the
+combine's ~30µs @ctx4096 (124× — the combine is a red herring; see `docs/decode-attention-tile-vs-combine-breakdown-20260627.md`).
 
 Next executable milestone:
 
-Build an env-gated codegen/lowering pass that coalesces generated decode cache loads while keeping register accumulator stores scalar. Acceptance: cache gate passes, fused-xlane microgate passes, route gate remains clean, ISA diff shows generated `global_load_d16 > 0` or `global_load_dwordx4 > 0`, and W==D is re-run only after those pass.
+Build the **codegen modulo scheduler (Layer 3)** — `docs/decode-codegen-scheduler-capability-scope-v2-references-20260627.md`:
+overlap iteration N+1's independent dot+reduce into iteration N's serial-merge shadow, on the existing `SCHED_LIST`
+(Layer 1) + recurrence unroll (Layer 2), preserving the unroll. Acceptance: microgate PASS (token-match), the
+hotloop diff's exposed-latency drops toward owned, and route-bound W==D rises from 35.0/6.7. Generality proof: the
+same pass moves the prefill-GEMM hot loop. (sqtt instruction-level confirmation is wired — decoder vendored in repo,
+`ROCPROF_PATH`; occupancy decodes; per-instruction itrace is a follow-on.)
 
 ## Non-Goals
 
