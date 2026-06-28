@@ -21,6 +21,7 @@ Hook (mirrors V_DOT2_LOWERING): in tinygrad/codegen/late/linearizer.py `lineariz
 from __future__ import annotations
 from collections import defaultdict
 from tinygrad.uop.ops import Ops, UOp
+from tinygrad.helpers import getenv
 
 # instruction latency model (relative cycles; only ordering matters, not absolute values)
 _LAT_LOAD = 8        # global/buffer load
@@ -90,4 +91,8 @@ def list_schedule(lst: list[UOp]) -> list[UOp]:
   if block: out.extend(_schedule_block(block))
   # safety: must be a permutation of the input
   if len(out) != len(lst) or set(out) != set(lst): return lst
+  if getenv("SCHED_LIST_REPORT"):
+    import sys as _sys
+    _nd = sum(1 for a,b in zip(lst, out) if a is not b)
+    print(f"SCHED_LIST: reordered {_nd}/{len(lst)} within-block positions", file=_sys.stderr, flush=True)
   return out

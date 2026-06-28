@@ -51,6 +51,82 @@ def linearize(sink:UOp) -> list[UOp]:
     from extra.qk_codegen_list_scheduler import list_schedule
     newlst = list_schedule(newlst)
 
+  if getenv("SCHED_MODULO_PROBE"):
+    # PREFLIGHT probe (default-off): WITHIN-BLOCK maximally-different VALID reorder. Partitions on structural ops
+    # (so loop-nesting/scoping stays valid C) and re-toposorts each block preferring highest-original-index ready
+    # op first (reverses as far as intra-block deps allow). Tests whether a valid UOp reorder reaches the emitted
+    # ISA, or whether LLVM (HIP/AMDLLVM renderer) reschedules from the dep DAG regardless of source order. Identical
+    # ISA despite a large reorder => the linearizer (Arm A) cannot control the schedule -> SCHEDULER_NOT_WIRABLE.
+    import sys as _sys
+    from extra.qk_codegen_list_scheduler import _STRUCTURAL
+    def _revtopo(block:list[UOp]) -> list[UOp]:
+      bset = set(block); idx = {u:i for i,u in enumerate(block)}
+      indeg = {u: sum(1 for s in u.src if s in bset) for u in block}
+      cons:defaultdict[UOp,list[UOp]] = defaultdict(list)
+      for w in block:
+        for s in w.src:
+          if s in bset: cons[s].append(w)
+      ready = sorted([u for u in block if indeg[u]==0], key=lambda u: idx[u])
+      out:list[UOp] = []
+      while ready:
+        u = ready.pop()   # highest original index among ready (max perturbation)
+        out.append(u)
+        for w in cons[u]:
+          indeg[w] -= 1
+          if indeg[w]==0:
+            ready.append(w); ready.sort(key=lambda u: idx[u])
+      return out if len(out)==len(block) else block
+    out2:list[UOp] = []; blk:list[UOp] = []
+    for u in newlst:
+      if u.op in _STRUCTURAL:
+        if blk: out2.extend(_revtopo(blk)); blk = []
+        out2.append(u)
+      else: blk.append(u)
+    if blk: out2.extend(_revtopo(blk))
+    ndiff = sum(1 for a,b in zip(newlst, out2) if a is not b)
+    print(f"SCHED_MODULO_PROBE: within-block reorder {ndiff}/{len(newlst)} positions", file=_sys.stderr, flush=True)
+    newlst = out2
+
+  if getenv("SCHED_MODULO"):
+    # Arm-A minimal latency/modulo scheduler (default-off, cache-keyed): within each basic block (valid C scope),
+    # critical-path list-schedule with a latency model so independent work issues into the shadow of high-latency
+    # ops (LDS/global LOAD, cross-lane). Tests whether a SMART UOp reorder can push the block tile's exposed
+    # ds_bpermute/recurrence latency toward owned, or whether it plateaus inside LLVM's scheduling envelope.
+    import sys as _sys, heapq as _hq
+    from extra.qk_codegen_list_scheduler import _STRUCTURAL
+    def _lat(u:UOp) -> int:
+      if u.op is Ops.LOAD: return 40 if (u.src and getattr(u.src[0], 'addrspace', None) is not None and 'LOCAL' not in str(getattr(u.src[0],'addrspace',''))) else 20
+      return 1
+    def _sched(block:list[UOp]) -> list[UOp]:
+      bset = set(block); idxm = {u:i for i,u in enumerate(block)}
+      cons:defaultdict[UOp,list[UOp]] = defaultdict(list)
+      indeg:dict[UOp,int] = {}
+      for w in block:
+        indeg[w] = sum(1 for s in w.src if s in bset)
+        for s in w.src:
+          if s in bset: cons[s].append(w)
+      cp:dict[UOp,int] = {}
+      for u in reversed(block): cp[u] = _lat(u) + max([cp[w] for w in cons[u]], default=0)
+      rt:dict[UOp,int] = {u:0 for u in block}
+      ready = [(-cp[u], idxm[u], u) for u in block if indeg[u]==0]; _hq.heapify(ready)
+      out:list[UOp] = []
+      while ready:
+        _,_,u = _hq.heappop(ready); out.append(u); fin = rt[u] + _lat(u)
+        for w in cons[u]:
+          rt[w] = max(rt[w], fin); indeg[w] -= 1
+          if indeg[w]==0: _hq.heappush(ready, (-cp[w], idxm[w], w))
+      return out if len(out)==len(block) else block
+    out3:list[UOp] = []; blk3:list[UOp] = []
+    for u in newlst:
+      if u.op in _STRUCTURAL:
+        if blk3: out3.extend(_sched(blk3)); blk3 = []
+        out3.append(u)
+      else: blk3.append(u)
+    if blk3: out3.extend(_sched(blk3))
+    nd3 = sum(1 for a,b in zip(newlst, out3) if a is not b)
+    if getenv("SCHED_LIST_REPORT"): print(f"SCHED_MODULO: critical-path reordered {nd3}/{len(newlst)} positions", file=_sys.stderr, flush=True)
+    newlst = out3
+
   if getenv("DEBUG_LINEARIZE"):
     for i,u in enumerate(newlst):
       print(f"{i:4d} {str(u.op):20s} {multirange_str(u.ranges, color=True, pad=10)} {priorities[u]}")
