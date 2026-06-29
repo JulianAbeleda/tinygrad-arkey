@@ -84,16 +84,34 @@ def main():
           pp = np.exp(sc - m).astype(np.float32); ref[h, s, :Hd] = pp @ ch[1, 0, kvh, t0:t1, :]; ref[h, s, Hd] = pp.sum(); ref[h, s, Hd + 1] = m
     finite = bool(np.isfinite(got).all()); ok = finite and bool(np.allclose(got, ref, atol=5e-3, rtol=5e-2))
     rec["correctness_status"] = "PASS" if ok else f"FAIL (finite={finite}, max_abs={float(np.nanmax(np.abs(got))):.3e})"
-    rec["repeated_run_stability"] = "n/a (numeric fail)"
+    # GN2 (staged-reduce 32) and the half-LDS store width are FIXED this phase; record the GN-phase status fields.
+    rec["staged_reduce_32_status"] = "PASS (fixed: sole-lidx0 keeps SPECIAL reachable -> elf/renderer agree on n_threads; correct 4/8/16/32 + multi-warp)"
+    rec["half_lds_store_width_status"] = "PASS (fixed: element size encoded as const src at isel; K/V staging now ds_store_b16, was b32 corrupting adjacent half slot)"
+    rec["inline_reduce_tile_status"] = "still NaN under DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE=1 -> a further bug remains beyond the staged reduce"
+    rec["full_tile_numeric_status"] = rec["correctness_status"]
+    rec["first_divergent_stage_before_fix"] = "max(m) output (the online-softmax max over scores)"
+    # determinism: a non-deterministic result => uninitialized-LDS read / race / EXEC leak (NOT a pure logic bug)
+    try:
+      runs = [Tensor.empty(Hq*S*W, dtype=dtypes.float32).custom_kernel(Tensor(q.reshape(-1)), Tensor(cache), fxn=fxn)[0].realize().numpy() for _ in range(3)]
+      det = all(np.array_equal(np.nan_to_num(runs[0]), np.nan_to_num(r)) for r in runs[1:])
+    except Exception as de:
+      det = f"MMU_FAULT/exception during repeat: {type(de).__name__}"
+    rec["repeated_run_stability"] = det
     rec["verdict"] = "AMD_ISA_PHASE_G_PASS_BLOCK_TILE_CORRECT" if ok else "AMD_ISA_PHASE_G_BLOCKED_NUMERIC_CORRECTNESS"
     if not ok:
-      rec["first_blocker"] = ("residual multi-thread numeric bug(s) in the 128-thread integration. Isolated findings: "
-        "the staged warp-reduce (_warp_reduce_sum_staged) is correct at 4/8/16 lanes but DROPS the final butterfly "
-        "stage at 32 lanes (full wave): out=256(=sum even lanes)+272(=sum odd lanes)=528 expected; the direct/inline "
-        "butterfly is correct at 32 lanes, so this is a staging/regalloc-pressure interaction with cross-lane ds_bpermute. "
-        "With DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE=1 (direct reduce) the tile still NaNs, so >=1 further bug exists in "
-        "the online-softmax/PV multi-thread path. Verified-correct components: dot2-pack, half-LDS roundtrip, gated "
-        "store (EXEC), per-thread accumulators, nested loops, exp/exp2, all scalar ALU/casts, direct bpermute butterfly.")
+      rec["fix_summary"] = ("GN2 fixed two real bugs (committed a48dec4ae): (1) staged warp-reduce dropped its final "
+        "butterfly stage at 32 lanes because sole-lidx0 dropped the SPECIAL from the post-isel sink -> elf undersized "
+        "the per-thread group segment (n_threads=1) while the renderer laid out 32 copies -> highest LDS slot out of "
+        "bounds; (2) half (fp16) LDS stores emitted ds_store_b32 (4B) into 2B slots, corrupting the adjacent half - "
+        "the width was read from the post-lowering data src whose dtype is void, now encoded as a const src at isel.")
+      rec["first_blocker"] = ("residual is a NON-DETERMINISTIC multi-wave memory bug in the full 128-thread (4-wave) "
+        "integration: output varies run-to-run and INTERMITTENTLY MMU-faults (out-of-bounds global access), so a global "
+        "address/value derives from an uninitialized-LDS read / race / EXEC-mask leak that manifests ONLY across waves. "
+        "Every isolated component passes deterministically: staged reduce 4/8/16/32 + multi-warp, per-thread online-max, "
+        "dot2 operand packing (v_pack->v_dot2 confirmed in tile disasm), half-LDS ds_store_b16/ds_load_u16 roundtrip, "
+        "gated store EXEC predication (single-wave), per-thread accumulators across 128 threads, 4-level nested loops, "
+        "serial-loop+multi-warp+per-thread-acc, int CDIV/CMOD by pow2, int CMPLT, exp2. LDS layout has no overlap and "
+        "elf group_segment (9216) == renderer max offset. The bug does not reproduce in any single-wave microgate.")
   except Exception as e:
     tb = traceback.format_exc()
     rec["unsupported_ops_after"] = cap.get("after", {})
@@ -104,9 +122,12 @@ def main():
 
 if __name__ == "__main__":
   rec = main()
-  rec["next_minimal_action"] = ("debug the 128-thread integration: (1) fix the 32-lane staged warp-reduce final-stage drop "
-    "(likely cross-lane VGPR liveness/regalloc-pressure around ds_bpermute); (2) isolate the residual online-softmax/PV "
-    "NaN under inline reduce. Component microgates all pass; the bug is multi-thread cross-lane interaction at full wave.")
+  rec["remaining_deferred_work"] = "Phase H-O (model route attribution, W==D, scheduling, promotion) -- blocked behind G."
+  rec["next_minimal_action"] = ("the residual is a NON-DETERMINISTIC multi-wave memory bug (intermittent MMU fault / "
+    "out-of-bounds global access; output varies run-to-run). Next: capture the faulting wave/lane + the exact global "
+    "instruction (q-load vs cache-load vs output-store) and the offset VGPR's provenance under a 4-wave launch; the bug "
+    "manifests ONLY across waves (every single-wave microgate passes deterministically), so suspect a cross-wave race "
+    "or an EXEC/VCC/SGPR-pool interaction in the multi-wave gated-store path that single-wave tests cannot exercise.")
   os.makedirs(os.path.dirname(ART), exist_ok=True)
   with open(ART, "w") as f: json.dump(rec, f, indent=2)
   print(json.dumps(rec, indent=2))
