@@ -1,0 +1,28 @@
+{
+  "verdict": "AMD_ISA_PHASE_N3D_BLOCKED_PC_MAPPING",
+  "scope": "N3D audit-before-coding: select the cross-lane (or other) reduction target from N2's hottest dynamic stall PC",
+  "blocker": "N2 (AMD_ISA_PHASE_N2_PASS_DEGRADED_TIMING_ATTRIBUTION) produced occupancy + wave-residency timing only, NOT a per-PC stall table. The vendored rocprof-trace-decoder (0.1.6) returns wave events with instructions_size==0; a prior dedicated effort (bench/amd-scheduler-tooling-backend) hit ATT_DECODER_REPAIR_BLOCKED and ROCPROFILER_ATT_MISSING_PROFILED_HSA_AQL_PATH_IN_HCQ -- per-instruction ATT decode is not achievable through tinygrad's HCQ submission path. The other vendored .so's are symlinks to librocprofiler-sdk / libatt_plugin, not the trace decoder.",
+  "n3d_audit_fields": {
+    "exact_stalled_instruction": "UNAVAILABLE (no per-PC decode)",
+    "nearby_disassembly_context": "UNAVAILABLE",
+    "source_lowering": "UNAVAILABLE at PC granularity",
+    "which_reduce_path_score_softmax_pv_or_gated_store": "UNRESOLVED -- cannot attribute without per-PC stall",
+    "dependency_chain_length": "UNAVAILABLE",
+    "owned_cross_lane_comparison": "static only: N0 cross_lane owned=5 native=5 (equal count); placement/shape diff not measurable dynamically",
+    "stalled_op_loop_trip_count": "UNAVAILABLE"
+  },
+  "best_available_evidence": {
+    "n2_wave_residency": {"median_wave_cycles_owned": 14434, "median_wave_cycles_native": 372999, "ratio": 25.8},
+    "n2_tile_ms_in_capture": {"owned": 1202, "native": 19305, "ratio": 16.0},
+    "occupancy": {"active_cu_owned": 48, "active_cu_native": 48, "traced_waves_owned": 1536, "traced_waves_native": 1536, "note": "equal occupancy -> not occupancy-bound (consistent with Phase M)"},
+    "static": {"total_instr_owned": 557, "total_instr_native": 324, "valu_owned": 219, "valu_native": 197, "note": "native does LESS static work yet waves live ~16-26x longer -> latency/stall-bound"},
+    "prior_block_tile_sqtt_hint": "extra/qk_decode_block_tile_sqtt_capture.py docstring: per-token ds_bpermute reduce latency EXPOSED (281 vs 22 cyc/token) -- SUGGESTIVE of cross-lane, but NOT a per-PC confirmation",
+    "conclusion": "native is per-wave latency/stall-bound at equal occupancy; the STALL CATEGORY (VMEM vs LDS vs waitcnt vs cross-lane) is UNRESOLVED. Cannot legally select N3D (or N3A/N3B/N3C) without category-level attribution."
+  },
+  "discipline": "N3 branch selection requires a PC/stall row (user rule). The ds_bpermute hint is not sufficient -> implementing a cross-lane rewrite now would be premature and is rejected.",
+  "feasible_unblock": {
+    "path": "N2.1 category-level attribution via tinygrad NATIVE PMC (PMC ContextVar -> pmc_start writes SQ_PERFCOUNTER registers directly via HCQ; NO rocprof/HSA-AQL dependency, so it BYPASSES the ATT decoder wall).",
+    "counters_to_capture": "SQ wait/stall + issue counters split by unit: e.g. SQ_WAIT_INST_VMEM / SQ_WAIT_INST_LDS / SQ_WAIT_ANY (waitcnt+mem stall), SQ_INSTS_VMEM / SQ_INSTS_LDS, VALU/SALU busy, GL2C/TCC for L2/mem traffic, LDS bank-conflict proxy. Compare owned vs native per-kernel to pin the dominant stall unit.",
+    "then": "category -> N3A (VMEM/coalescing) | N3B (LDS/bank) | N3C (waitcnt/load-use) | N3D (cross-lane) | N3D-overlap"
+  }
+}
