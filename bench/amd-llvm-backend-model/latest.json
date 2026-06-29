@@ -1,0 +1,49 @@
+{
+  "verdict": "LLVM_MODEL_READY_FOR_INC0",
+  "kernel": "E_4_4 (elementwise add, 16 elem, LLVM vectorized to b128 x4 threads)",
+  "abi": {
+    "kernarg_ptr": "s[0:1] at entry",
+    "kernarg_layout": "buffer ptrs at offsets 0,8,16 (out,a,b)",
+    "workitem_id_x": "v0",
+    "load_kernarg": "s_load_b128/b64 then s_waitcnt lgkmcnt(0)",
+    "s_entry": "s[0:1]=kernarg base ptr",
+    "v_entry": "v0=workitem_id.x",
+    "descriptor": "assemble_linear builds .rodata kd: scans insts for max vgpr/sgpr, sink for lds/kernarg size"
+  },
+  "isel_map_inc0": {
+    "index": "v_lshlrev_b32 v_off, log2(bytes_per_thread), v0",
+    "LOAD(global)": "global_load_b32/b128 v_dst, v_off, s_ptr[0:1]",
+    "ADD(f32)": "v_add_f32 v_dst, v_a, v_b",
+    "STORE(global)": "global_store_b32/b128 v_off, v_val, s_ptr[0:1]",
+    "end": "s_endpgm"
+  },
+  "waitcnt_model": {
+    "after_s_load": "s_waitcnt lgkmcnt(0)",
+    "after_global_load": "s_waitcnt vmcnt(0)"
+  },
+  "source": "llc/comgr disasm of tinygrad HIPRenderer output (AMD LLVM 22.0.0git gfx1100)",
+  "note": "Inc0 target = scalar b32 variant (simplest isel): 1 elem/thread, global_load_b32/v_add_f32/global_store_b32",
+  "llvm_full_sequence_b128": [
+    "s_load_b128 s[4:7], s[0:1], null   ; kernarg: out=s[4:5], a=s[6:7]",
+    "s_load_b64 s[0:1], s[0:1], 0x10    ; kernarg: b=s[0:1]",
+    "v_lshlrev_b32 v8, 4, v0            ; byte offset = tid*16",
+    "s_waitcnt lgkmcnt(0)",
+    "global_load_b128 v[0:3], v8, s[6:7] ; a",
+    "global_load_b128 v[4:7], v8, s[0:1] ; b",
+    "s_waitcnt vmcnt(0)",
+    "v_add_f32 (x4)                     ; a+b",
+    "global_store_b128 v8, v[0:3], s[4:5]",
+    "s_endpgm"
+  ],
+  "inc0_scalar_target": [
+    "s_load_b64/b128 kernarg ptrs (out,a,b)",
+    "v_lshlrev_b32 v_off, 2, v0  ; tid*4",
+    "s_waitcnt lgkmcnt(0)",
+    "global_load_b32 v_a, v_off, s_a",
+    "global_load_b32 v_b, v_off, s_b",
+    "s_waitcnt vmcnt(0)",
+    "v_add_f32 v_a, v_a, v_b",
+    "global_store_b32 v_off, v_a, s_out",
+    "s_endpgm"
+  ]
+}

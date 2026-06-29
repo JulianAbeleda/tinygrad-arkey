@@ -1,0 +1,15 @@
+{
+  "verdict": "AMD_ISA_INC0_BLOCKED_REGISTER_OR_ABI",
+  "phase0": "LLVM_MODEL_READY_FOR_INC0 (bench/amd-llvm-backend-model/latest.json)",
+  "built": "tinygrad/renderer/isa/amd.py (AMDISARenderer), wired opt-in DEV=AMD:ISA in ops_amd.py:1026",
+  "gates": {
+    "gate1_foundation": "PASS (qk_asm_scheduler_inc0_test INC0 ALL_PASS)",
+    "default_path_unchanged": "PASS (default renderer=HIPRenderer; default add correct)",
+    "gate2_compiles_through_AMDISARenderer": "PARTIAL (isel completes, reaches regalloc)",
+    "gate3_runs_correct": "NOT REACHED"
+  },
+  "progress": "isel COMPLETE for scalar elementwise: PARAM->s_load kernarg, SPECIAL->v0, CAST passthrough, INDEX->v_lshlrev offset, LOAD->global_load, ADD->v_add, STORE->global_store, SINK->s_endpgm; immediates rtag'd; fixed regs (TID=v0) seeded as constrained vregs. Reaches LinearScanRegallocContext.",
+  "exact_blocker": "regalloc.py:118 ndefs=tuple(ctx.reals[i][v] for v in x.tag) -> KeyError: 4 (program point 4 has a def with no reals entry). Root cause: register-model/live-range integration with the framework allocator is incomplete -- the fixed-register (TID/KARG) + multi-SGPR pointer model does not yet map cleanly onto the single-register live-range analysis.",
+  "downstream_gap": "the REAL generated elementwise kernel is VECTORIZED (vec4/STACK/b128 + CAST) -> needs vec isel + CONSECUTIVE-register allocation (b128=4 aligned VGPRs) which the framework single-register allocator does not provide. Inc 0 needs BOTH the regalloc integration AND vec support.",
+  "next": "inc0a: faithfully integrate the AMD register model (fixed entry regs + SGPR/VGPR multi-reg) with LinearScanRegallocContext (study how reals is keyed per program point); inc0b: vec/STACK isel + consecutive-reg alloc."
+}

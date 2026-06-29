@@ -1023,7 +1023,8 @@ class AMDDevice(HCQCompiled):
     self.sdma_queues:dict = {}
     self.has_sdma_queue = self.sdma_queue(0) is not None
 
-    super().__init__(device, AMDAllocator(self), [HIPRenderer, AMDLLVMRenderer, HIPCCRenderer], functools.partial(AMDProgram, self), AMDSignal,
+    from tinygrad.renderer.isa.amd import AMDISARenderer  # opt-in native AMD ISA backend (DEV=AMD:ISA); default unchanged
+    super().__init__(device, AMDAllocator(self), [HIPRenderer, AMDLLVMRenderer, HIPCCRenderer, AMDISARenderer], functools.partial(AMDProgram, self), AMDSignal,
                      functools.partial(AMDComputeAQLQueue if self.is_aql else AMDComputeQueue, self),
                      functools.partial(AMDCopyQueue, self, max_copy_size=self.max_copy_size) if self.has_sdma_queue else None,
                      kernargs_size=self.remote_alloc_size(16 << 20, 8 << 10), sigalloc_size=0x100 if self.is_usb() else 0x1000,
