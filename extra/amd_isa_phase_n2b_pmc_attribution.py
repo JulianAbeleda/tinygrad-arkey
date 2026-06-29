@@ -44,7 +44,7 @@ from tinygrad.device import Compiled, ProfileProgramEvent
 from tinygrad.runtime.ops_amd import ProfilePMCEvent
 from extra.qk_harness_contract import DEFAULT_MODEL
 from extra.llm_generate import load_model_and_tokenizer
-TILE = os.environ["N2B_TILE"]; MAXC, CTX = 4608, 512
+TILE = os.environ["N2B_TILE"]; MAXC, CTX = 4608, int(os.environ.get("N2B_CTX","512"))
 m, tok = load_model_and_tokenizer(DEFAULT_MODEL, MAXC, seed=20260617)
 for lin in (getattr(m,"_q4k_linears",None).linears if getattr(m,"_q4k_linears",None) else []): lin.decode_enabled=True
 for b in m.blk: b._use_flash, b._prefill_v2 = True, False
