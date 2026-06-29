@@ -552,7 +552,79 @@ class AMDISARenderer(ISARenderer):
     from tinygrad.renderer.amd.elf import assemble_linear
     # Phase J: consumer-only waitcnt BEFORE label resolution (inserting waits shifts byte positions -> branch offsets
     # must be resolved after).
-    return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(list(lin.src))))), self.target.arch)
+    insts = list(lin.src)
+    from tinygrad.helpers import getenv
+    if getenv("AMD_ISA_SCHED", 0): insts = self._schedule(insts)   # Phase K: opt-in list scheduler (default-off)
+    return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts)))), self.target.arch)
+
+  # ---- Phase K: legality-preserving list scheduler (latency-hiding). Reorders within basic blocks only. ----
+  @staticmethod
+  def _sched_lat(m:str) -> int:
+    if m.startswith(("global_load", "s_load")): return 200      # VMEM/SMEM (long)
+    if m.startswith(("ds_load", "ds_bpermute")): return 20      # LDS
+    if m.startswith("v_dot2"): return 16
+    if m.startswith("v_"): return 4                             # VALU
+    return 1
+
+  def _schedule(self, uops:list[UOp]) -> list[UOp]:
+    out, block = [], []
+    for u in uops:
+      if isinstance(u.arg, tuple):                              # label/branch -> basic-block boundary
+        out.extend(self._sched_block(block)); block = []; out.append(u)
+      else: block.append(u)
+    out.extend(self._sched_block(block))
+    return out
+
+  def _sched_block(self, block:list[UOp]) -> list[UOp]:
+    n = len(block)
+    if n < 3: return block
+    MEM = ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")
+    def _is_ctrl(m): return m.startswith(("v_cmp", "v_cndmask", "s_and_saveexec", "s_cmp", "s_cbranch", "s_branch", "s_add_i32")) or m == "s_mov_b32" or m == "s_barrier"
+    mn = [str(u.arg).split("(", 1)[0] for u in block]
+    regs = [self._inst_regs(u.arg) for u in block]
+    is_store = [m.startswith(("ds_store", "global_store")) for m in mn]
+    defs = [(regs[i][0].offset if (regs[i] and not is_store[i]) else None) for i in range(n)]   # first reg = dst (non-store)
+    uses = [{r.offset for r in regs[i]} - ({defs[i]} if defs[i] is not None else set()) for i in range(n)]
+    is_mem = [m.startswith(MEM) for m in mn]; is_ctrl = [_is_ctrl(m) for m in mn]
+    # Full scheduling barriers: s_barrier AND every EXEC-affecting op (s_and_saveexec, s_mov to EXEC=126). EXEC-predicated
+    # regions (gated stores) must stay intact -- reordering any op across the saveexec/restore boundary would change
+    # which lanes execute it. Pinning these boundaries keeps each EXEC scope (and its store) self-contained.
+    is_bar = [(mn[i] == "s_barrier" or mn[i].startswith("s_and_saveexec") or 126 in {r.offset for r in regs[i]}) for i in range(n)]
+    # dependency DAG (edges i->j, i must precede j)
+    adj = [[] for _ in range(n)]; indeg = [0] * n
+    def edge(i, j):
+      if j not in adj[i]: adj[i].append(j); indeg[j] += 1
+    last_def = {}; last_mem = last_ctrl = last_bar = -1
+    for j in range(n):
+      for r in uses[j]:                                         # RAW
+        if r in last_def: edge(last_def[r], j)
+      if is_mem[j] and last_mem >= 0: edge(last_mem, j)         # conservative memory order
+      if is_ctrl[j] and last_ctrl >= 0: edge(last_ctrl, j)      # predicate/control (VCC/EXEC/SCC, mostly implicit) order
+      if last_bar >= 0: edge(last_bar, j)                       # nothing moves above a barrier
+      if is_bar[j]:
+        for k in range(j): edge(k, j)                           # ...or below it
+      if defs[j] is not None:
+        if defs[j] in last_def: edge(last_def[defs[j]], j)      # WAW
+        for k in range(j):                                      # WAR: j overwrites a reg an earlier op read
+          if defs[j] in uses[k]: edge(k, j)
+        last_def[defs[j]] = j
+      if is_mem[j]: last_mem = j
+      if is_ctrl[j]: last_ctrl = j
+      if is_bar[j]: last_bar = j
+    # critical-path height (latency-weighted) for priority
+    height = [0] * n
+    for i in range(n - 1, -1, -1):
+      h = 0
+      for j in adj[i]: h = max(h, height[j])
+      height[i] = h + self._sched_lat(mn[i])
+    # list schedule: among ready (indeg 0), pick highest height, then lowest original index (stable)
+    ready = [i for i in range(n) if indeg[i] == 0]; order = []
+    while ready:
+      ready.sort(key=lambda i: (-height[i], i)); i = ready.pop(0); order.append(i)
+      for j in adj[i]:
+        indeg[j] -= 1
+        if indeg[j] == 0: ready.append(j)
+    return [block[i] for i in order] if len(order) == n else block   # fall back to original if DAG was cyclic (shouldn't be)
 
   @staticmethod
   def _inst_regs(inst) -> list:

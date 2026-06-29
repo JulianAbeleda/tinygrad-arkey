@@ -1,0 +1,24 @@
+{
+  "verdict": "AMD_ISA_PHASE_K_NO_PERFORMANCE_MOVEMENT",
+  "command": "DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_phase_k_gate.py",
+  "scheduler": "list scheduler (renderer/isa/amd.py:_schedule, opt-in AMD_ISA_SCHED=1): dependency DAG (reg RAW/WAR/WAW + memory order + VCC/SCC chain + EXEC-region/barrier) + latency-weighted critical-path priority",
+  "block_tile_counters": {
+    "waitcnt_off": 36,
+    "waitcnt_on": 35,
+    "reordered_insts_on": 280,
+    "correct_on": true,
+    "deterministic_on": true
+  },
+  "wd_ctx512_tok_s": {
+    "sched_off": 0.518,
+    "sched_on": 0.528,
+    "delta_pct": 1.9
+  },
+  "analysis": "scheduler is sound (block tile + Phase F/G correct) but has little freedom: the tile is heavily serialized by memory + predicate(VCC/SCC) + EXEC-region hazards. W==D is grid-bound (Phase I: grid=[1,1,1], 1 workgroup on 1 CU, ~40 idle) -- instruction scheduling within a workgroup cannot recover idle CUs. Grid parallelism (map RANGE(GLOBAL) -> workgroup dims) is the prerequisite lever; the scheduler is built + ready for it.",
+  "regression_sched_on": {
+    "phase_f": "PASS",
+    "phase_g": "PASS",
+    "phase_b": "PASS",
+    "phase_c": "PASS"
+  }
+}
