@@ -131,7 +131,9 @@ def isel_special(ctx:IselContext, x:UOp):
   keep = x.replace(tag=_vreg_def(ctx))   # ignored src so the SPECIAL stays reachable for elf.py's id-dim scan
   if kind == "lidx":
     # sole x dim -> v0 holds it directly (fast path, no packing). Multi-dim -> extract bits [d*10 +: 10] from packed v0.
-    if _n_workitem_dims(ctx) == 1: return x.replace(op=Ops.INS, arg=AMDOps.MOV, src=(), tag=(TID,))
+    # In BOTH cases the SPECIAL node is kept reachable (ignored src) so elf.py's per-thread/group-segment scan sees the
+    # workitem-id dim+range -- it must agree with the renderer's _n_threads (which reads ctx.uses, pre-isel).
+    if _n_workitem_dims(ctx) == 1: return x.ins(AMDOps.MOV, src=(keep,), tag=(TID,))
     return x.ins(AMDOps.WI_ID, src=(keep, UOp.const(dtypes.int32, d*10).rtag()), tag=_vreg_def(ctx))
   if kind == "gidx": return x.ins(AMDOps.WG_ID, src=(keep, UOp.const(dtypes.int32, WGID_S0 + d).rtag()), tag=_vreg_def(ctx))
   raise NotImplementedError(f"AMD:ISA: unsupported SPECIAL {x.arg!r} (expected lidx*/gidx*)")
@@ -197,9 +199,10 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   # expands to N scalar global_store_b32 in post_regalloc (offset=lane*itemsize). Single INS (not a NOOP wrapper) so
   # no pseudo-op survives into assemble_linear, and regalloc allocates every lane value as a normal use.
   if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset) or LDS carrier
-  if a.arg == "lds":                          # LDS store -> ds_store_b32 to the carrier's address VGPR (a.src[0]); a.src[1]=order
+  if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
+    esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
     if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
-    return UOp(Ops.INS, dtypes.void, src=(a.src[0], b, a.src[1]), arg=AMDOps.DS_STORE)   # addr, data, order
+    return UOp(Ops.INS, dtypes.void, src=(a.src[0], b, a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.DS_STORE)  # addr,data,order,esz
   base, off = a.src[0], a.src[1]
   vals = b.src if (b.op is Ops.NOOP and not isinstance(b.dtype, PtrDType)) else (b,)   # STACK lane-carrier -> per-lane vals
   isz = vals[0].dtype.scalar().itemsize
@@ -262,10 +265,11 @@ def isel_divmod(ctx:IselContext, x:UOp, mod:bool):  # only constant power-of-two
 def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
   # store(addr, val, gate) -> EXEC-predicated store: only lanes with gate!=0 write. kind const: 1=LDS, 0=global.
   if a.op is not Ops.NOOP: return None
+  esz = b.dtype.itemsize   # element width (half=2/float=4) from the value dtype, known here (lowered INS srcs are void)
   gate, val = _tov(ctx, g), _tov(ctx, b)
-  if a.arg == "lds":   # src = (gate, addr_vgpr, val, kind=1, order)
-    return UOp(Ops.INS, dtypes.void, src=(gate, a.src[0], val, UOp.const(dtypes.int32, 1).rtag(), a.src[1]), arg=AMDOps.GATED_STORE)
-  return UOp(Ops.INS, dtypes.void, src=(gate, a.src[1], val, UOp.const(dtypes.int32, 0).rtag(), a.src[0]), arg=AMDOps.GATED_STORE)  # (gate, off, val, kind=0, base)
+  if a.arg == "lds":   # src = (gate, addr_vgpr, val, kind=1, order, esz)
+    return UOp(Ops.INS, dtypes.void, src=(gate, a.src[0], val, UOp.const(dtypes.int32, 1).rtag(), a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)
+  return UOp(Ops.INS, dtypes.void, src=(gate, a.src[1], val, UOp.const(dtypes.int32, 0).rtag(), a.src[0], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)  # (gate,off,val,kind=0,base,esz)
 
 def isel_gep(x:UOp):
   # lane extract from a scalarized-load lane-carrier -> the lane's scalar load INS directly (no real GEP instruction)
@@ -371,8 +375,8 @@ def lower_inst(x:UOp):
     ldfn = ds_load_u16 if x.dtype.itemsize == 2 else ds_load_b32
     ld = _ins(ldfn(vdst=_Vr(x.reg), addr=_Vr(src[0].reg)), x.tag)
     return (ld, [ld, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
-  if a is AMDOps.DS_STORE:                           # LDS store: 16-bit for half data (else b32). addr=src[0], data=src[1]
-    stfn = ds_store_b16 if src[1].dtype.itemsize == 2 else ds_store_b32
+  if a is AMDOps.DS_STORE:                           # LDS store: 16-bit for half tiles (else b32). addr=src[0], data=src[1], esz=src[3]
+    stfn = ds_store_b16 if src[3].arg == 2 else ds_store_b32
     st = UOp(Ops.INS, arg=stfn(addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)))
     return (st, [st, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
@@ -427,8 +431,8 @@ def lower_inst(x:UOp):
     gate, addr, val, kind = _Vr(src[0].reg), _Vr(src[1].reg), _Vr(src[2].reg), src[3].arg
     cmp = UOp(Ops.INS, arg=v_cmp_ne_u32_e32(0, gate))         # VCC = gate != 0
     save = UOp(Ops.INS, arg=s_and_saveexec_b32(_S[5], VCC))   # s5 = EXEC; EXEC = VCC & EXEC  (s5 reserved: not in any pool)
-    st = UOp(Ops.INS, arg=((ds_store_b16 if src[2].dtype.itemsize == 2 else ds_store_b32)(addr=addr, data0=val) if kind == 1
-                           else global_store_b32(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))
+    st = UOp(Ops.INS, arg=((ds_store_b16 if src[5].arg == 2 else ds_store_b32)(addr=addr, data0=val) if kind == 1
+                           else global_store_b32(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))   # src[5]=element size
     wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))
     restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))        # restore EXEC
     return (restore, [cmp, save, st, wt, restore])
