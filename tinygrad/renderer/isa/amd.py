@@ -554,7 +554,7 @@ class AMDISARenderer(ISARenderer):
     # must be resolved after).
     insts = list(lin.src)
     from tinygrad.helpers import getenv
-    if getenv("AMD_ISA_SCHED", 0): insts = self._schedule(insts)   # Phase K: opt-in list scheduler (default-off)
+    if getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)   # Phase K list scheduler; DEFAULT-ON (Phase L: +4.6% W==D with grid, token_match preserved). AMD_ISA_SCHED=0 disables.
     return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts)))), self.target.arch)
 
   # ---- Phase K: legality-preserving list scheduler (latency-hiding). Reorders within basic blocks only. ----
