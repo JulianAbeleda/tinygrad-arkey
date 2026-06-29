@@ -1,0 +1,35 @@
+{
+  "verdict": "AMD_ISA_PHASE_H_KEYSTONE_PASS_NATIVE_TILE_INJECTION",
+  "command": "DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_phase_h_gate.py",
+  "scope": "Phase H: native-ISA decode block tile route-binding",
+  "selected_renderer_device": "HIPRenderer",
+  "tile_compiled_via": "AMDISARenderer",
+  "tile_elf_bytes": 4311,
+  "tile_group_segment": 14336,
+  "tile_grid": [
+    1,
+    1,
+    1
+  ],
+  "tile_block": [
+    32,
+    4,
+    1
+  ],
+  "keystone_native_elf_runs_under_hip": true,
+  "keystone_correctness": "PASS",
+  "keystone_deterministic": true,
+  "no_hidden_fallback": "tile is a precompiled Ops.PROGRAM with the AMDISARenderer ELF (no HIP/LLVM/owned compile)",
+  "cast_blocker_reclassified": "CAST ulong->float is in the 64-bit RNG/sampling path (threefry: hi*2^32+lo, AND 0x3FFFFFFFFFFFFFFF), NOT decode attention. Whole-model DEV=AMD:ISA is blocked by broad model op coverage (real 64-bit arithmetic + optimized matmul/norm/etc.) -> AMD_ISA_PHASE_H_BLOCKED_MODEL_OP_COVERAGE. The tile-only native route (this keystone) avoids it.",
+  "remaining_for_full_pass": "(1) DEFINE_VAR/start_pos runtime-scalar coverage in AMDISARenderer (isel_var scaffolded + fires, unresolved regalloc desync: store-value reg None); (2) wire native_isa_block_tile into the FUSED_XLANE block-tile route (extra/qk_flash_decode.py:1397) under a flag, keeping gmax+combine on HIP; (3) in-model route-attribution + token-match gate via extra/qk_decode_route_attribution_wd.py.",
+  "regression_gates_status": {
+    "inc0": "PASS",
+    "inc1": "PASS",
+    "inc2": "PASS",
+    "inc3": "PASS",
+    "phase_b": "PASS",
+    "phase_c": "PASS",
+    "phase_f": "PASS",
+    "phase_g": "PASS"
+  }
+}

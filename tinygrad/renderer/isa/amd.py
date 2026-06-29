@@ -16,7 +16,7 @@ from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import ISARenderer, IselContext, Register
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
-  s_load_b64, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
+  s_load_b64, s_load_b32, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
   s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
@@ -64,6 +64,7 @@ class AMDOps(FastEnum):
   V_WHERE = 33                           # select: cond(0/1) ? t : f  -> v_cmp_ne(cond,0) + v_cndmask
   V_PACK = 34                            # pack two f16 into a b32 (v_pack_b32_f16) for v_dot2 operands
   GATED_STORE = 35                       # EXEC-predicated store (store(addr,val,gate)) -> saveexec/store/restore
+  S_LOAD_VAR = 36                        # DEFINE_VAR (e.g. start_pos) -> s_load_b32 the runtime scalar from kernarg (Phase H)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -122,6 +123,17 @@ def isel_param(ctx:IselContext, x:UOp):
   if isinstance(x.tag, tuple): return None
   i = ctx.func_args.index(x)
   return x.ins(AMDOps.S_LOAD_PTR, src=(UOp.const(dtypes.int32, i*8).rtag(), x.replace(tag=_sptr_def(ctx))), tag=_sptr_def(ctx))
+
+def isel_var(ctx:IselContext, x:UOp):
+  # Phase H: a runtime scalar var (e.g. 'start_pos') -> s_load_b32 from kernarg, then MOV_S2V so consumers see a VGPR.
+  # kernarg layout (renderer/isa/__init__.py arg_order + elf.py): n_params 8-byte ptrs first, then 4-byte vars.
+  # KEEP the DEFINE_VAR reachable (retagged ignored src) so elf.py's n_vars scan sizes the kernarg segment.
+  if isinstance(x.tag, tuple): return None
+  n_params = sum(1 for u in ctx.func_args if u.op is Ops.PARAM)
+  off = n_params * 8 + (ctx.func_args.index(x) - n_params) * 4
+  sld = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, off).rtag(), x.replace(tag=(ctx.vreg(SCNT_POOL),))),
+            arg=AMDOps.S_LOAD_VAR, tag=(ctx.vreg(SCNT_POOL),))
+  return UOp(Ops.INS, dtypes.int32, src=(sld,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx))
 
 def isel_special(ctx:IselContext, x:UOp):
   # Inc 3: multi-dim ids. workitem-id lidx{d} -> v{d} (fixed at entry; rsrc2 ENABLE_VGPR_WORKITEM_ID = max lidx dim).
@@ -284,6 +296,7 @@ def isel_gep(x:UOp):
 
 isel_matcher = PatternMatcher([
   (UPat(Ops.PARAM, name="x"), isel_param),
+  (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
   (UPat(Ops.SPECIAL, name="x"), isel_special),
   (UPat(Ops.CAST, name="x"), lambda ctx, x: isel_cast(ctx, x)),
   (UPat(Ops.BITCAST, name="x"), lambda x: x.src[0]),   # same VGPR bits -> passthrough (int<->float reinterpret)
@@ -365,6 +378,9 @@ def lower_inst(x:UOp):
     ld = _ins(s_load_b64(sdata=_S2(x.reg), sbase=_S[0:1], offset=off, soffset=NULL), x.tag)
     wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))     # drain (lgkmcnt) - conservative/correct for Inc 0
     return (ld, [ld, wt])
+  if a is AMDOps.S_LOAD_VAR:                        # Phase H: runtime scalar var -> s_load_b32 from kernarg into 1 SGPR
+    ld = _ins(s_load_b32(sdata=_S[x.reg.index], sbase=_S[0:1], offset=src[0].arg, soffset=NULL), x.tag)
+    return (ld, [ld, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
   if a is AMDOps.MOV:                               # tid passthrough (v0) - emit nothing
     return (x.replace(op=Ops.NOOP, src=()), [])
   if a is AMDOps.WG_ID:                             # workgroup id.{x,y,z}: copy system SGPR s{2+d} into a VGPR for index math
@@ -489,7 +505,7 @@ post_regalloc_matcher = PatternMatcher([
   (UPat(Ops.SINK, name="x"), lower_sink),
   # drop leftover non-instruction nodes (rtag'd immediate CONSTs read via .arg; carrier NOOPs/AFTER ordering; PARAM kept
   # for the kernarg-segment scan, SPECIAL gidx0 for the workgroup-id descriptor scan, DEFINE_REG for group-segment sizing)
-  (UPat((Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.PARAM, Ops.SPECIAL, Ops.DEFINE_REG), name="x"), lambda x: (x, [])),
+  (UPat((Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_REG), name="x"), lambda x: (x, [])),
 ])
 
 # ============================ the renderer ============================
