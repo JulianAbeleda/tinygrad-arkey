@@ -14,12 +14,17 @@ from tinygrad.uop import FastEnum
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import ISARenderer, IselContext, Register
-from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL
+from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
   s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, s_barrier,
-  ds_bpermute_b32, v_dot2_f32_f16)
+  ds_bpermute_b32, v_dot2_f32_f16,
+  # Phase G: full block-tile ALU/control surface
+  v_xor_b32_e32, v_and_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
+  v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32,
+  v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
+  ds_store_b16, ds_load_u16)
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
@@ -51,6 +56,14 @@ class AMDOps(FastEnum):
   BARRIER = 18                           # workgroup barrier -> s_barrier (Phase F, multi-lane LDS staging)
   DS_BPERMUTE = 19                       # cross-lane exchange -> ds_bpermute_b32 (Phase F.2)
   V_DOT2 = 20                            # packed fp16 dot -> v_dot2_f32_f16 (Phase F.3)
+  # Phase G full block-tile surface
+  V_XOR = 21; V_AND = 22; V_MAX = 23     # bitwise/min-max VALU (XOR/AND/MAX); CMOD-by-pow2 reuses V_AND with a mask
+  V_LSHR = 24                            # logical shift right (CDIV-by-pow2 -> v_lshrrev)
+  V_CVT_F2H = 25; V_CVT_H2F = 26; V_CVT_F2I = 27; V_CVT_I2F = 28   # numeric casts (v_cvt_*)
+  V_CMPLT_F = 29; V_CMPLT_I = 30; V_CMPNE_F = 31; V_CMPNE_I = 32   # compares -> 0/1 bool VGPR (via VCC + v_cndmask)
+  V_WHERE = 33                           # select: cond(0/1) ? t : f  -> v_cmp_ne(cond,0) + v_cndmask
+  V_PACK = 34                            # pack two f16 into a b32 (v_pack_b32_f16) for v_dot2 operands
+  GATED_STORE = 35                       # EXEC-predicated store (store(addr,val,gate)) -> saveexec/store/restore
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -65,12 +78,34 @@ def _sptr_def(ctx:IselContext): return (ctx.vreg(SPTR_POOL),)
 def _reg_base(u:UOp) -> UOp:
   while u.op is Ops.AFTER and u.src: u = u.src[0]   # AFTER(DEFINE_REG, ...) chain -> the DEFINE_REG
   return u
+def _lid_ranges(ctx:IselContext) -> dict[int, int]:
+  if (r:=getattr(ctx, "_lidr", None)) is None:
+    r = ctx._lidr = {int(str(u.arg)[-1]): u.src[0].arg for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
+  return r
+def _n_threads(ctx:IselContext) -> int:
+  n = 1
+  for v in _lid_ranges(ctx).values(): n *= v
+  return n
+def _tid(ctx:IselContext) -> UOp:
+  # flat workgroup thread id = sum_d lidx_d * (product of lower-dim ranges); all lidx_d extracted from packed v0.
+  if (t:=getattr(ctx, "_tidins", None)) is not None: return t
+  r = _lid_ranges(ctx); ndim = (max(r) + 1) if r else 1
+  acc, stride = None, 1
+  for d in range(ndim):
+    lid = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, 0).rtag(), UOp.const(dtypes.int32, d*10).rtag()), arg=AMDOps.WI_ID, tag=_vreg_def(ctx))
+    term = lid if stride == 1 else UOp(Ops.INS, dtypes.int32, src=(lid, UOp.const(dtypes.int32, stride).rtag()), arg=AMDOps.V_IMUL, tag=_vreg_def(ctx))
+    acc = term if acc is None else UOp(Ops.INS, dtypes.int32, src=(acc, term), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    stride *= r.get(d, 1)
+  t = ctx._tidins = acc
+  return t
 def _lds_byte_offset(ctx:IselContext, dreg:UOp) -> int:
+  # allocate an LDS region: DEFINE_REG (addrspace REG) is PER-THREAD (THREADS copies); DEFINE_LOCAL is shared (1 copy).
   d = getattr(ctx, "_lds", None)
   if d is None: d = ctx._lds = {}
   if dreg not in d:
     d[dreg] = getattr(ctx, "_lds_top", 0)
-    ctx._lds_top = d[dreg] + dreg.dtype.size * dreg.dtype.base.itemsize
+    per = dreg.dtype.size * dreg.dtype.base.itemsize
+    ctx._lds_top = d[dreg] + per * (_n_threads(ctx) if dreg.dtype.addrspace == AddrSpace.REG else 1)
   return d[dreg]
 
 # ============================ instruction selection ============================
@@ -112,14 +147,24 @@ def isel_index(ctx:IselContext, x:UOp):
   # address VGPR (tile_base + idx*itemsize) and the AFTER/order node so the LDS read-modify-write / staging stays live
   # and ordered. idx may be CONST (accumulator), a RANGE counter, or a runtime VGPR value (e.g. lidx-derived, Phase F).
   if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
-    base_off, isz = _lds_byte_offset(ctx, _reg_base(base)), base.dtype.base.itemsize
+    dreg = _reg_base(base)
+    base_off, isz = _lds_byte_offset(ctx, dreg), base.dtype.base.itemsize
     shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
-    if idx.op is Ops.CONST:
-      addr = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, base_off + idx.arg*isz).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
+    addends = []                                                     # runtime (VGPR) byte-offset terms
+    const_off = base_off
+    if dreg.dtype.addrspace == AddrSpace.REG and _n_threads(ctx) > 1:   # per-thread accumulator slot: + tid*per_thread_bytes
+      per = dreg.dtype.size * isz
+      addends.append(UOp(Ops.INS, dtypes.int32, src=(_tid(ctx), UOp.const(dtypes.int32, per).rtag()), arg=AMDOps.V_IMUL, tag=_vreg_def(ctx)))
+    if idx.op is Ops.CONST: const_off += idx.arg * isz
     else:
       vidx = UOp(Ops.INS, dtypes.int32, src=(idx,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx)) if idx.op is Ops.RANGE else idx
-      off = UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx))
-      addr = off if base_off == 0 else UOp(Ops.INS, dtypes.int32, src=(off, UOp.const(dtypes.int32, base_off).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+      addends.append(UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)))
+    if not addends:
+      addr = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, const_off).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
+    else:
+      addr = addends[0]
+      for nxt in addends[1:]: addr = UOp(Ops.INS, dtypes.int32, src=(addr, nxt), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+      if const_off: addr = UOp(Ops.INS, dtypes.int32, src=(addr, UOp.const(dtypes.int32, const_off).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
     return UOp(Ops.NOOP, x.dtype, src=(addr, base), arg="lds")
   isz = base.dtype.itemsize if isinstance(base.dtype, PtrDType) else 4
   shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
@@ -160,14 +205,67 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   isz = vals[0].dtype.scalar().itemsize
   return UOp(Ops.INS, dtypes.void, src=(off, base) + tuple(vals) + (UOp.const(dtypes.int32, isz).rtag(),), arg=AMDOps.GLOBAL_STORE)
 
+def _tov(ctx:IselContext, u:UOp):
+  # ensure an operand is in a VGPR: CONST -> v_mov, RANGE loop counter (SGPR) -> v_mov s->v, else already an INS VGPR
+  if u.op is Ops.CONST: return UOp(Ops.INS, u.dtype, src=(u.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))
+  if u.op is Ops.RANGE: return UOp(Ops.INS, dtypes.int32, src=(u,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx))
+  return u
+
 def isel_customi(ctx:IselContext, x:UOp):
-  # Phase F primitive markers injected into a hand-built AST (srcs are isel'd to VGPRs bottom-up first).
-  def _v(u): return UOp(Ops.INS, u.dtype, src=(u.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx)) if u.op is Ops.CONST else u
-  if x.arg == "bpermute":   # cross-lane exchange: src=(addr_byte_vgpr, data_vgpr) -> ds_bpermute_b32
-    return UOp(Ops.INS, x.dtype, src=(_v(x.src[0]), _v(x.src[1])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx))
-  if x.arg == "fdot2":      # packed fp16 dot: src=(acc, a_packed, b_packed) -> v_dot2_f32_f16
-    return UOp(Ops.INS, x.dtype, src=(_v(x.src[0]), _v(x.src[1]), _v(x.src[2])), arg=AMDOps.V_DOT2, tag=_vreg_def(ctx))
-  return None
+  # CUSTOMI markers: Phase F hand-built markers ("bpermute"/"fdot2") AND the generated tile's HIP-builtin strings
+  # ("__builtin_amdgcn_fdot2(...)", "...__builtin_amdgcn_ds_bpermute(...)"). NOTE operand order differs between them.
+  arg = str(x.arg)
+  def pack(u):   # a half.vec(2) STACK/NOOP carrier -> a packed b32 (2 halves) for v_dot2; plain INS pass through.
+    # NOTE: match STACK directly (rewrite order can present it before the STACK->NOOP rule fires); its two half
+    # children become children of V_PACK and are isel'd (cast -> v_cvt_f16_f32) by the bottom-up rewrite.
+    if u.op in (Ops.STACK, Ops.NOOP) and not isinstance(u.dtype, PtrDType) and u.dtype.count == 2:
+      return UOp(Ops.INS, dtypes.int32, src=(u.src[0], u.src[1]), arg=AMDOps.V_PACK, tag=_vreg_def(ctx))
+    return _tov(ctx, u)
+  if "fdot2" in arg:        # src=(acc, a, b); a/b may be packed b32 (F.3 marker) or half2 carriers (tile builtin)
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), pack(x.src[1]), pack(x.src[2])), arg=AMDOps.V_DOT2, tag=_vreg_def(ctx))
+  if "ds_bpermute" in arg:  # tile builtin: src=(data, addr) -> ds_bpermute_b32(addr, data)
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[1]), _tov(ctx, x.src[0])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx))
+  if arg == "bpermute":     # F.2 marker: src=(addr, data)
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx))
+  raise NotImplementedError(f"AMD:ISA CUSTOMI unmapped arg: {arg[:70]}")
+
+# ---- Phase G ALU/control isel ----
+def isel_cast(ctx:IselContext, x:UOp):
+  if isinstance(x.dtype, PtrDType): return x.src[0]                 # pointer cast: no-op
+  s, d = x.src[0].dtype.scalar(), x.dtype.scalar()
+  if s == d: return x.src[0]
+  # value-preserving register reinterprets for our index ranges (64-bit treated as 32-bit; bool is 0/1)
+  if (s, d) in {(dtypes.long, dtypes.int), (dtypes.int, dtypes.long), (dtypes.bool, dtypes.int), (dtypes.int, dtypes.bool)}:
+    return x.src[0]
+  cvt = {(dtypes.float32, dtypes.half): AMDOps.V_CVT_F2H, (dtypes.half, dtypes.float32): AMDOps.V_CVT_H2F,
+         (dtypes.float32, dtypes.int): AMDOps.V_CVT_F2I, (dtypes.int, dtypes.float32): AMDOps.V_CVT_I2F,
+         (dtypes.bool, dtypes.float32): AMDOps.V_CVT_I2F}.get((s, d))
+  if cvt is None: raise NotImplementedError(f"AMD:ISA CAST {s} -> {d} unsupported")
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=cvt, tag=_vreg_def(ctx))
+
+def isel_cmp(ctx:IselContext, x:UOp, ne:bool):
+  flt = x.src[0].dtype.scalar() in dtypes.floats
+  op = (AMDOps.V_CMPNE_F if flt else AMDOps.V_CMPNE_I) if ne else (AMDOps.V_CMPLT_F if flt else AMDOps.V_CMPLT_I)
+  one = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, 1).rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1]), one), arg=op, tag=_vreg_def(ctx))
+
+def isel_where(ctx:IselContext, x:UOp):  # cond(0/1) ? t : f
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1]), _tov(ctx, x.src[2])), arg=AMDOps.V_WHERE, tag=_vreg_def(ctx))
+
+def isel_divmod(ctx:IselContext, x:UOp, mod:bool):  # only constant power-of-two divisors (verified: tile uses /2, %2)
+  b = x.src[1]
+  if not (b.op is Ops.CONST and b.arg > 0 and (b.arg & (b.arg - 1)) == 0):
+    raise NotImplementedError(f"AMD:ISA {'CMOD' if mod else 'CDIV'} non-pow2 divisor {b.arg if b.op is Ops.CONST else b.op}")
+  if mod: return UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, b.arg - 1).rtag()), arg=AMDOps.V_AND, tag=None)
+  return UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, b.arg.bit_length() - 1).rtag()), arg=AMDOps.V_LSHR, tag=None)
+
+def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
+  # store(addr, val, gate) -> EXEC-predicated store: only lanes with gate!=0 write. kind const: 1=LDS, 0=global.
+  if a.op is not Ops.NOOP: return None
+  gate, val = _tov(ctx, g), _tov(ctx, b)
+  if a.arg == "lds":   # src = (gate, addr_vgpr, val, kind=1, order)
+    return UOp(Ops.INS, dtypes.void, src=(gate, a.src[0], val, UOp.const(dtypes.int32, 1).rtag(), a.src[1]), arg=AMDOps.GATED_STORE)
+  return UOp(Ops.INS, dtypes.void, src=(gate, a.src[1], val, UOp.const(dtypes.int32, 0).rtag(), a.src[0]), arg=AMDOps.GATED_STORE)  # (gate, off, val, kind=0, base)
 
 def isel_gep(x:UOp):
   # lane extract from a scalarized-load lane-carrier -> the lane's scalar load INS directly (no real GEP instruction)
@@ -178,11 +276,22 @@ def isel_gep(x:UOp):
 isel_matcher = PatternMatcher([
   (UPat(Ops.PARAM, name="x"), isel_param),
   (UPat(Ops.SPECIAL, name="x"), isel_special),
-  (UPat(Ops.CAST, name="x"), lambda x: x.src[0] if isinstance(x.dtype, PtrDType) else None),
+  (UPat(Ops.CAST, name="x"), lambda ctx, x: isel_cast(ctx, x)),
+  (UPat(Ops.BITCAST, name="x"), lambda x: x.src[0]),   # same VGPR bits -> passthrough (int<->float reinterpret)
   (UPat(Ops.INDEX, name="x"), isel_index),
   (UPat(Ops.LOAD, name="x"), isel_load),
   (UPat(Ops.GEP, name="x"), isel_gep),
   (UPat(Ops.STACK, name="x"), lambda x: UOp(Ops.NOOP, x.dtype, src=x.src)),   # vec gather -> lane-carrier (scalarized)
+  # Phase G ALU/control: bitwise, max, compares->bool, select, const-pow2 div/mod, gated store
+  (UPat(Ops.XOR, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_XOR)),
+  (UPat(Ops.AND, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_AND)),
+  (UPat(Ops.MAX, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_MAX)),
+  (UPat(Ops.CMPLT, name="x"), lambda ctx, x: isel_cmp(ctx, x, ne=False)),
+  (UPat(Ops.CMPNE, name="x"), lambda ctx, x: isel_cmp(ctx, x, ne=True)),
+  (UPat(Ops.WHERE, name="x"), lambda ctx, x: isel_where(ctx, x)),
+  (UPat(Ops.CDIV, name="x"), lambda ctx, x: isel_divmod(ctx, x, mod=False)),
+  (UPat(Ops.CMOD, name="x"), lambda ctx, x: isel_divmod(ctx, x, mod=True)),
+  (UPat.var("a").store(UPat.var("b"), UPat.var("g"), name="x"), lambda ctx, a, b, g, x: isel_gated_store(ctx, a, b, g, x)),
   # RANGE (counted reduction loop): tag with a uniform SGPR counter; lowered to init/label/cmp/branch in post_regalloc.
   (UPat(Ops.RANGE, name="x"), lambda ctx, x: x.replace(tag=(ctx.vreg(SCNT_POOL),)) if not isinstance(x.tag, tuple) else None),
   # DEFINE_LOCAL (LDS tile, Phase F) -> route through the uniform LDS path (same as DEFINE_REG); elf.py sizes both into
@@ -258,11 +367,13 @@ def lower_inst(x:UOp):
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
-  if a is AMDOps.DS_LOAD:                            # LDS accumulator load: addr VGPR (src[0]) -> ds_load_b32 + drain
-    ld = _ins(ds_load_b32(vdst=_Vr(x.reg), addr=_Vr(src[0].reg)), x.tag)
+  if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap
+    ldfn = ds_load_u16 if x.dtype.itemsize == 2 else ds_load_b32
+    ld = _ins(ldfn(vdst=_Vr(x.reg), addr=_Vr(src[0].reg)), x.tag)
     return (ld, [ld, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
-  if a is AMDOps.DS_STORE:                           # LDS accumulator store: addr VGPR (src[0]), data VGPR (src[1])
-    st = UOp(Ops.INS, arg=ds_store_b32(addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)))   # keyword: leading vdst field is unused
+  if a is AMDOps.DS_STORE:                           # LDS store: 16-bit for half data (else b32). addr=src[0], data=src[1]
+    stfn = ds_store_b16 if src[1].dtype.itemsize == 2 else ds_store_b32
+    st = UOp(Ops.INS, arg=stfn(addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)))
     return (st, [st, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
     return _ins(v_mov_b32_e32(_Vr(x.reg), src[0].arg), x.tag)
@@ -286,6 +397,41 @@ def lower_inst(x:UOp):
   if a is AMDOps.V_IADD:                            # u32 add (VOP2); a CONST goes in src0 since vsrc1 must be a VGPR
     if src[1].op is Ops.CONST: return _ins(v_add_nc_u32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
     return _ins(v_add_nc_u32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
+  # ---- Phase G ALU/control lowerings ----
+  if a is AMDOps.V_XOR:                             # b32 xor (VOP2); CONST -> src0
+    if src[1].op is Ops.CONST: return _ins(v_xor_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
+    return _ins(v_xor_b32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
+  if a is AMDOps.V_AND:                             # b32 and (VOP2); used directly and for CMOD-by-pow2 mask
+    if src[1].op is Ops.CONST: return _ins(v_and_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
+    return _ins(v_and_b32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
+  if a is AMDOps.V_MAX: return _ins(_vop2_f(v_max_f32_e32, x, src), x.tag)   # f32 max (VOP2)
+  if a is AMDOps.V_LSHR:                            # logical >> k (CDIV-by-pow2); shift imm in src[1], value in src[0]
+    return _ins(v_lshrrev_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_CVT_F2H: return _ins(v_cvt_f16_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_CVT_H2F: return _ins(v_cvt_f32_f16_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_CVT_F2I: return _ins(v_cvt_i32_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_CVT_I2F: return _ins(v_cvt_f32_i32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_PACK: return _ins(v_pack_b32_f16(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)  # 2 f16 -> b32
+  if a in (AMDOps.V_CMPLT_F, AMDOps.V_CMPLT_I, AMDOps.V_CMPNE_F, AMDOps.V_CMPNE_I):
+    # compare -> VCC, then materialize 0/1 into a VGPR via v_cndmask (src[2] holds a VGPR with constant 1)
+    cmpfn = {AMDOps.V_CMPLT_F: v_cmp_lt_f32_e32, AMDOps.V_CMPLT_I: v_cmp_lt_i32_e32,
+             AMDOps.V_CMPNE_F: v_cmp_neq_f32_e32, AMDOps.V_CMPNE_I: v_cmp_ne_u32_e32}[a]
+    cmp = UOp(Ops.INS, arg=cmpfn(_Vr(src[0].reg), _Vr(src[1].reg)))           # VCC = (s0 <cmp> s1)
+    sel = _ins(v_cndmask_b32_e32(_Vr(x.reg), 0, _Vr(src[2].reg)), x.tag)      # VCC ? 1 : 0
+    return (sel, [cmp, sel])
+  if a is AMDOps.V_WHERE:                            # cond(0/1) ? t(src1) : f(src2)
+    cmp = UOp(Ops.INS, arg=v_cmp_ne_u32_e32(0, _Vr(src[0].reg)))              # VCC = (cond != 0)
+    sel = _ins(v_cndmask_b32_e32(_Vr(x.reg), _Vr(src[2].reg), _Vr(src[1].reg)), x.tag)  # VCC ? t : f
+    return (sel, [cmp, sel])
+  if a is AMDOps.GATED_STORE:                        # EXEC-predicated store: only lanes with gate!=0 write
+    gate, addr, val, kind = _Vr(src[0].reg), _Vr(src[1].reg), _Vr(src[2].reg), src[3].arg
+    cmp = UOp(Ops.INS, arg=v_cmp_ne_u32_e32(0, gate))         # VCC = gate != 0
+    save = UOp(Ops.INS, arg=s_and_saveexec_b32(_S[5], VCC))   # s5 = EXEC; EXEC = VCC & EXEC  (s5 reserved: not in any pool)
+    st = UOp(Ops.INS, arg=((ds_store_b16 if src[2].dtype.itemsize == 2 else ds_store_b32)(addr=addr, data0=val) if kind == 1
+                           else global_store_b32(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))
+    wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))
+    restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))        # restore EXEC
+    return (restore, [cmp, save, st, wt, restore])
   if a is AMDOps.GLOBAL_STORE:
     # SCALARIZED: one INS -> N scalar stores, lane l at immediate offset l*itemsize. src=(off, base, val0..valN-1, isz)
     off_r, ptr_r, isz = src[0].reg, src[1].reg, src[-1].arg

@@ -2,6 +2,7 @@
 import ctypes
 from tinygrad.helpers import ceildiv, round_up
 from tinygrad.uop.ops import UOp, Ops
+from tinygrad.dtype import AddrSpace
 from tinygrad.runtime.autogen import amdgpu_kd, hsa, libc
 from tinygrad.renderer.amd.dsl import Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.common import OpType
@@ -35,14 +36,22 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
 
   # ** scan sink for metadata
   sink, n_bufs, n_vars, lds_size, gids, lids = prg.src[0], 0, 0, 0, set(), set()
+  reg_bytes, lid_threads = 0, {}
   for u in sink.toposort():
     if u.op is Ops.PARAM: n_bufs += 1
     elif u.op is Ops.DEFINE_VAR: n_vars += 1
-    elif u.op is Ops.DEFINE_LOCAL: lds_size += u.ptrdtype.size * u.ptrdtype.base.itemsize
-    # AMD ISA backend (DEV=AMD:ISA) backs reduction accumulators (Ops.DEFINE_REG) in LDS; size the group segment for them
-    elif u.op is Ops.DEFINE_REG: lds_size += u.ptrdtype.size * u.ptrdtype.base.itemsize
+    # AMD ISA backend (DEV=AMD:ISA) backs both LDS tiles and reduction accumulators via DEFINE_LOCAL/DEFINE_REG in LDS.
+    # Distinguish by ADDRSPACE (not op): LOCAL = shared tile (1 copy); REG = per-thread accumulator (THREADS copies).
+    # Matches the renderer's per-thread LDS layout (renderer/isa/amd.py:_lds_byte_offset).
+    elif u.op in (Ops.DEFINE_LOCAL, Ops.DEFINE_REG):
+      nbytes = u.ptrdtype.size * u.ptrdtype.base.itemsize
+      if u.ptrdtype.addrspace == AddrSpace.REG: reg_bytes += nbytes
+      else: lds_size += nbytes
     elif u.op is Ops.SPECIAL and u.arg.startswith("gidx"): gids.add(int(u.arg[-1]))
-    elif u.op is Ops.SPECIAL and u.arg.startswith("lidx"): lids.add(int(u.arg[-1]))
+    elif u.op is Ops.SPECIAL and u.arg.startswith("lidx"): lids.add(int(u.arg[-1])); lid_threads[u.arg] = u.src[0].arg
+  n_threads = 1
+  for v in lid_threads.values(): n_threads *= v
+  lds_size += reg_bytes * n_threads   # per-thread accumulators
   code_bytes = b"".join(inst.to_bytes() for inst in insts)
   arch = next(v for k, v in _arch_map.items() if arch.startswith(k))
   is_cdna, is_rdna4 = arch == "cdna", arch == "rdna4"
