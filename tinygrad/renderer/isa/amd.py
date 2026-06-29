@@ -18,13 +18,14 @@ from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, Fi
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
-  s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, s_barrier,
+  s_mov_b32, s_add_i32, s_mul_i32, s_lshl_b32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
   # Phase G: full block-tile ALU/control surface
   v_xor_b32_e32, v_and_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
   v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32,
   v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
   ds_store_b16, ds_load_u16, v_exp_f32_e32)
+from tinygrad.helpers import getenv
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
@@ -32,6 +33,7 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
 KARG = Register("s0", 0)                                           # kernarg base ptr s[0:1] (fixed at entry)
 SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 40, 2))   # even SGPRs s6..s38 -> 64-bit ptr pairs (s2-s5 = workgroup ids)
 SCNT_POOL = tuple(Register(f"s{i}", i) for i in range(40, 64))     # single SGPRs s40..s63 -> uniform loop counters (Phase B)
+SCALAR_TMP = tuple(Register(f"s{i}", i) for i in range(64, 104))   # single SGPRs s64..s103 -> Phase N1B uniform address-math temps
 VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0 reserved for packed workitem ids
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
 WGID_S0 = 2                                                        # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1); .y/.z -> s3/s4
@@ -66,11 +68,34 @@ class AMDOps(FastEnum):
   GATED_STORE = 35                       # EXEC-predicated store (store(addr,val,gate)) -> saveexec/store/restore
   S_LOAD_VAR = 36                        # DEFINE_VAR (e.g. start_pos) -> s_load_b32 the runtime scalar from kernarg (Phase H)
   V_EXP = 37                             # hardware exp2: 2^x -> v_exp_f32_e32 (Phase N1A; replaces the VALU polynomial)
+  S_IMUL = 38                            # Phase N1B: wave-uniform integer mul -> s_mul_i32 (scalar pipe, frees VALU issue)
+  S_IADD = 39                            # Phase N1B: wave-uniform integer add -> s_add_i32
+  S_ISHL = 40                            # Phase N1B: wave-uniform integer shl -> s_lshl_b32
+  S_WGID = 41                            # Phase N1B: workgroup id s{2+d} as a scalar source (s_mov into a scalar temp)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
 def _vreg_def(ctx:IselContext): return (ctx.vreg(_vpool(ctx)),)
 def _sptr_def(ctx:IselContext): return (ctx.vreg(SPTR_POOL),)
+def _sreg_def(ctx:IselContext): return (ctx.vreg(SCALAR_TMP),)     # Phase N1B: a scalar (SGPR) result
+
+# ---- Phase N1B: wave-uniform integer address/index math -> scalar pipe (SALU), MOV_S2V at the vector boundary ----
+_N1B_UNI = ("n1b_uni",)                            # marker set on int ADD/MUL/SHL whose inputs are all wave-uniform
+def _is_sgpr(u:UOp) -> bool:
+  # a value that currently lives in an SGPR (so a vector consumer must MOV_S2V it first)
+  if u.op is Ops.RANGE: return True                                            # loop counter (SCNT)
+  return u.op is Ops.INS and isinstance(u.arg, AMDOps) and u.arg in (AMDOps.S_IMUL, AMDOps.S_IADD, AMDOps.S_ISHL, AMDOps.S_WGID)
+def _movs2v(ctx:IselContext, u:UOp) -> UOp:
+  return UOp(Ops.INS, dtypes.int32, src=(u,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx))
+def _tos(ctx:IselContext, u:UOp):
+  # scalar-operand form of a uniform value: CONST->immediate, RANGE/S_*->SGPR as-is, gidx WG_ID->S_WGID, MOV_S2V->unwrap.
+  if u.op is Ops.CONST: return u.rtag()
+  if u.op is Ops.RANGE or _is_sgpr(u): return u
+  if u.op is Ops.INS and u.arg is AMDOps.WG_ID:                                 # gidx in a VGPR -> bring s{2+d} into a scalar temp
+    if getenv("AMD_ISA_N1B_GIDX", 1) == 0: return None
+    return UOp(Ops.INS, dtypes.int32, src=(u.src[1].rtag(),), arg=AMDOps.S_WGID, tag=_sreg_def(ctx))
+  if u.op is Ops.INS and u.arg is AMDOps.MOV_S2V: return _tos(ctx, u.src[0])    # unwrap a S2V bridge back to its SGPR source
+  return None                                                                   # not scalarizable -> caller falls back to VALU
 
 # ---- LDS-backed reduction accumulator (Ops.DEFINE_REG, addrspace REG). Phase B keeps the accumulator in LDS so the
 # read-modify-write across loop iterations is plain memory (no SSA/regalloc conflict). Each DEFINE_REG gets a fixed LDS
@@ -177,7 +202,7 @@ def isel_index(ctx:IselContext, x:UOp):
       addends.append(UOp(Ops.INS, dtypes.int32, src=(_tid(ctx), UOp.const(dtypes.int32, per).rtag()), arg=AMDOps.V_IMUL, tag=_vreg_def(ctx)))
     if idx.op is Ops.CONST: const_off += idx.arg * isz
     else:
-      vidx = UOp(Ops.INS, dtypes.int32, src=(idx,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx)) if idx.op is Ops.RANGE else idx
+      vidx = _movs2v(ctx, idx) if _is_sgpr(idx) else idx     # SGPR-resident (counter / N1B uniform) -> VGPR
       addends.append(UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)))
     if not addends:
       addr = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, const_off).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
@@ -191,9 +216,7 @@ def isel_index(ctx:IselContext, x:UOp):
   if idx.op is Ops.CONST:
     off = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, idx.arg << shift).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
   else:
-    vidx = idx
-    if idx.op is Ops.RANGE:   # uniform loop counter lives in an SGPR -> move into a VGPR for VALU address math
-      vidx = UOp(Ops.INS, dtypes.int32, src=(idx,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx))
+    vidx = _movs2v(ctx, idx) if _is_sgpr(idx) else idx   # SGPR-resident (loop counter / N1B uniform result) -> VGPR
     off = UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx))
   # tag the INDEX result as a pair (base_ptr, byte_offset) via a NOOP carrier
   return UOp(Ops.NOOP, x.dtype, src=(base, off))
@@ -230,7 +253,7 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
 def _tov(ctx:IselContext, u:UOp):
   # ensure an operand is in a VGPR: CONST -> v_mov, RANGE loop counter (SGPR) -> v_mov s->v, else already an INS VGPR
   if u.op is Ops.CONST: return UOp(Ops.INS, u.dtype, src=(u.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))
-  if u.op is Ops.RANGE: return UOp(Ops.INS, dtypes.int32, src=(u,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx))
+  if _is_sgpr(u): return _movs2v(ctx, u)   # RANGE loop counter or N1B uniform scalar result (SGPR) -> v_mov s->v
   return u
 
 def isel_customi(ctx:IselContext, x:UOp):
@@ -334,8 +357,10 @@ isel_matcher = PatternMatcher([
   ((UPat(dtype=dtypes.float32) * UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_MUL)),
   # integer index arithmetic (Inc 1): address math derived from SPECIAL/workitem id -> u32 VALU. v_lshlrev for the
   # byte scale stays in isel_index. Both share _binop: everything is in VGPRs (v0=workitem id), CONST -> immediate.
-  (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_IMUL)),
-  (UPat(Ops.ADD, dtype=dtypes.ints, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_IADD)),
+  # Phase N1B: wave-uniform int address math -> scalar pipe (s_mul/s_add/s_lshl). Else per-lane VALU (v_mul_lo/v_add_nc).
+  (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_IMUL) if x.arg == _N1B_UNI else _binop(ctx, x, AMDOps.V_IMUL)),
+  (UPat(Ops.ADD, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_IADD) if x.arg == _N1B_UNI else _binop(ctx, x, AMDOps.V_IADD)),
+  (UPat(Ops.SHL, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_ISHL) if x.arg == _N1B_UNI else None),
   # catch-all register allocation seed (x86 alloc_vregs analog): tag None -> fresh vreg; physical -> constrained vreg
   (UPat(Ops.INS, name="x"), lambda ctx, x: alloc_vregs(ctx, x)),
 ])
@@ -343,12 +368,22 @@ isel_matcher = PatternMatcher([
 def _binop(ctx:IselContext, x:UOp, op:AMDOps):
   # binary op -> src=(reg_operand, const_or_reg_operand); a CONST becomes an immediate (rtag'd, skipped by regalloc).
   # add/mul are commutative so a leading CONST can move to src[1]; lowering places the literal where the ISA allows it.
-  # A RANGE operand (uniform loop counter, lives in an SGPR) is copied into a VGPR first so VALU sees only VGPRs.
-  def _v(u): return UOp(Ops.INS, dtypes.int32, src=(u,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx)) if u.op is Ops.RANGE else u
+  # An SGPR-resident operand (loop counter, or a Phase N1B uniform scalar result) is copied into a VGPR first.
+  def _v(u): return _movs2v(ctx, u) if _is_sgpr(u) else u
   a, b = _v(x.src[0]), _v(x.src[1])
   if b.op is Ops.CONST: return x.ins(op, src=(a, b.rtag()), tag=None)
   if a.op is Ops.CONST: return x.ins(op, src=(b, a.rtag()), tag=None)
   return x.ins(op, src=(a, b), tag=None)
+
+def _sbinop(ctx:IselContext, x:UOp, op:AMDOps):
+  # Phase N1B: emit a scalar (SALU) op for a wave-uniform int ADD/MUL/SHL; result lives in a scalar temp (SGPR).
+  # If any source can't be expressed as a scalar operand, fall back to the vector path (conservative, never wrong).
+  a, b = _tos(ctx, x.src[0]), _tos(ctx, x.src[1])
+  if a is None or b is None:
+    return _binop(ctx, x, {AMDOps.S_IMUL: AMDOps.V_IMUL, AMDOps.S_IADD: AMDOps.V_IADD}.get(op, AMDOps.V_IMUL))
+  if b.op is Ops.CONST: return UOp(Ops.INS, dtypes.int32, src=(a, b), arg=op, tag=_sreg_def(ctx))
+  if a.op is Ops.CONST: return UOp(Ops.INS, dtypes.int32, src=(b, a), arg=op, tag=_sreg_def(ctx))
+  return UOp(Ops.INS, dtypes.int32, src=(a, b), arg=op, tag=_sreg_def(ctx))
 
 def alloc_vregs(ctx:IselContext, x:UOp):
   if x.dtype is dtypes.void: return None                                  # stores etc: no def
@@ -358,7 +393,26 @@ def alloc_vregs(ctx:IselContext, x:UOp):
     return x.replace(tag=(ctx.vreg(SPTR_POOL if isinstance(x.dtype, PtrDType) else _vpool(ctx)),))
   return None
 
-pre_isel_matcher = PatternMatcher([])
+def _mark_uniform(x:UOp):
+  # Phase N1B: bottom-up, tag an int ADD/MUL/SHL whose inputs are ALL wave-uniform so isel routes it to the scalar pipe.
+  # uniform leaves: CONST, RANGE (loop counter), DEFINE_VAR (runtime scalar), gidx/workgroup-id SPECIAL. Lane-varying:
+  # lidx SPECIAL, LOAD, anything derived from them. A marked child ADD/MUL/SHL is itself uniform.
+  if x.arg is not None: return None
+  def uni(s:UOp) -> bool:
+    if s.op in (Ops.CONST, Ops.RANGE, Ops.DEFINE_VAR): return True
+    if s.op is Ops.SPECIAL: return not str(s.arg).startswith("lidx")
+    if s.op is Ops.CAST: return uni(s.src[0])
+    if s.op in (Ops.ADD, Ops.MUL, Ops.SHL): return s.arg == _N1B_UNI
+    return False
+  if all(uni(s) for s in x.src): return x.replace(arg=_N1B_UNI)
+  return None
+
+# Phase N1B is OPT-IN (AMD_ISA_N1B=1). Default-off: the uniform address prefixes in the decode tile sit behind a
+# vector OOB-clamp (where()->v_cndmask), so the live addresses use the clamped VGPR index; scalarizing the pre-clamp
+# uniform value yields DEAD scalar ops (no live VALU removed) and triggers an SGPR-datapath fault. See phase-n1b gate.
+pre_isel_matcher = PatternMatcher([
+  (UPat((Ops.ADD, Ops.MUL, Ops.SHL), dtype=dtypes.ints, name="x"), lambda ctx, x: _mark_uniform(x) if getenv("AMD_ISA_N1B", 0) else None),
+])
 
 # ============================ post-regalloc: build real rdna3 Insts + waitcnts ============================
 def _S2(r:Register): return _S[r.index:r.index+1]   # SGPR pair s[i:i+1]
@@ -398,6 +452,12 @@ def lower_inst(x:UOp):
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_EXP:                              # Phase N1A: hardware exp2 (2^x) -> one VALU op instead of a polynomial
     return _ins(v_exp_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a in (AMDOps.S_IMUL, AMDOps.S_IADD, AMDOps.S_ISHL):   # Phase N1B: uniform int math on the scalar pipe (SGPR result)
+    def _ssop(s): return s.arg if s.op is Ops.CONST else _S[s.reg.index]
+    sfn = {AMDOps.S_IMUL: s_mul_i32, AMDOps.S_IADD: s_add_i32, AMDOps.S_ISHL: s_lshl_b32}[a]
+    return _ins(sfn(_S[x.reg.index], _ssop(src[0]), _ssop(src[1])), x.tag)
+  if a is AMDOps.S_WGID:                             # workgroup id s{2+d} -> scalar temp (src[0].arg = 2+d)
+    return _ins(s_mov_b32(_S[x.reg.index], _S[src[0].arg]), x.tag)
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
   if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap
