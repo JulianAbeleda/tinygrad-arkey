@@ -17,7 +17,7 @@ from tinygrad.renderer.isa import ISARenderer, IselContext, Register
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
-  v_lshlrev_b32_e32, v_mov_b32_e32, s_waitcnt, s_endpgm)
+  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, s_waitcnt, s_endpgm)
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
@@ -28,7 +28,8 @@ VPOOL = tuple(Register(f"v{i}", i) for i in range(1, 256))         # v1.. (v0 = 
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
 
 class AMDOps(FastEnum):
-  S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8; V_MOVK = 9
+  S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
+  V_MOVK = 9; V_IADD = 10; V_IMUL = 11   # integer index arithmetic (u32 address math from SPECIAL/workitem id)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -46,8 +47,14 @@ def isel_param(ctx:IselContext, x:UOp):
   return x.ins(AMDOps.S_LOAD_PTR, src=(UOp.const(dtypes.int32, i*8).rtag(), x.replace(tag=_sptr_def(ctx))), tag=_sptr_def(ctx))
 
 def isel_special(ctx:IselContext, x:UOp):
-  # workitem id -> v0 (fixed). Represent as a NOOP-into-v0 so consumers read v0.
+  # Inc 1: workitem-id x (lidx0) -> v0 (fixed at kernel entry; rsrc2 ENABLE_VGPR_WORKITEM_ID=0 puts id.x in v0).
+  # Represent as a MOV-into-v0 that lowers to nothing so consumers read v0. VPOOL starts at v1 so v0 stays reserved.
+  # DEFERRED: workgroup-id (gidx*, needs SGPR workgroup-id ABI + descriptor enable) and lidx1/lidx2 (v1/v2). Fail
+  # loudly rather than silently compute wrong addresses (those kernels are out of Inc 1 scope).
   if isinstance(x.tag, tuple): return None
+  if x.arg != "lidx0":
+    raise NotImplementedError(f"AMD:ISA Inc 1 supports workitem-id lidx0 only; got SPECIAL {x.arg!r} "
+                              "(workgroup-id gidx* / lidx1+ SGPR ABI deferred to a later increment)")
   return x.replace(op=Ops.INS, arg=AMDOps.MOV, src=(), tag=(TID,))
 
 def isel_index(ctx:IselContext, x:UOp):
@@ -102,11 +109,24 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.GEP, name="x"), isel_gep),
   (UPat(Ops.STACK, name="x"), lambda x: UOp(Ops.NOOP, x.dtype, src=x.src)),   # vec gather -> lane-carrier (scalarized)
   (UPat.var("a").store(UPat.var("b"), name="x"), isel_store),
-  ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda x: x.ins(AMDOps.V_ADD, tag=None)),
-  ((UPat(dtype=dtypes.float32) * UPat()).named("x"), lambda x: x.ins(AMDOps.V_MUL, tag=None)),
+  # float elementwise ALU (commutative add/mul); a CONST operand is folded to a literal (e.g. a-b == a + b*-1.0)
+  ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda x: _binop(x, AMDOps.V_ADD)),
+  ((UPat(dtype=dtypes.float32) * UPat()).named("x"), lambda x: _binop(x, AMDOps.V_MUL)),
+  # integer index arithmetic (Inc 1): address math derived from SPECIAL/workitem id -> u32 VALU. v_lshlrev for the
+  # byte scale stays in isel_index. Both share _binop: everything is in VGPRs (v0=workitem id), CONST -> immediate.
+  (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda x: _binop(x, AMDOps.V_IMUL)),
+  (UPat(Ops.ADD, dtype=dtypes.ints, name="x"), lambda x: _binop(x, AMDOps.V_IADD)),
   # catch-all register allocation seed (x86 alloc_vregs analog): tag None -> fresh vreg; physical -> constrained vreg
   (UPat(Ops.INS, name="x"), lambda ctx, x: alloc_vregs(ctx, x)),
 ])
+
+def _binop(x:UOp, op:AMDOps):
+  # binary op -> src=(reg_operand, const_or_reg_operand); a CONST becomes an immediate (rtag'd, skipped by regalloc).
+  # add/mul are commutative so a leading CONST can move to src[1]; lowering places the literal where the ISA allows it.
+  a, b = x.src[0], x.src[1]
+  if b.op is Ops.CONST: return x.ins(op, src=(a, b.rtag()), tag=None)
+  if a.op is Ops.CONST: return x.ins(op, src=(b, a.rtag()), tag=None)
+  return x.ins(op, src=(a, b), tag=None)
 
 def alloc_vregs(ctx:IselContext, x:UOp):
   if x.dtype is dtypes.void: return None                                  # stores etc: no def
@@ -126,6 +146,11 @@ def _Vr(r:Register): return _V[r.index]
 # its producer's allocated reg via src[].reg, but line_rewrite has already replaced the src with its (tagless) lowered
 # form -- so every value-producing representative keeps tag=x.tag (the real def Register) to preserve .reg downstream.
 def _ins(arg, tag): return UOp(Ops.INS, arg=arg, tag=tag)
+
+def _vop2_f(mk, x:UOp, src):
+  # float VOP2: vsrc1 must be a VGPR; a CONST operand (folded to src[1] by _binop) becomes a float literal in src0
+  if src[1].op is Ops.CONST: return mk(_Vr(x.reg), float(src[1].arg), _Vr(src[0].reg))
+  return mk(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg))
 
 def lower_inst(x:UOp):
   a = x.arg
@@ -147,9 +172,16 @@ def lower_inst(x:UOp):
     ld = _ins(global_load_b32(vdst=_Vr(x.reg), addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
     wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))     # drain (vmcnt)
     return (ld, [ld, wt])
-  if a is AMDOps.V_ADD: return _ins(v_add_f32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
-  if a is AMDOps.V_MUL: return _ins(v_mul_f32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
+  # float VOP2 (add/mul): src0 may be a 32-bit float literal, vsrc1 must be a VGPR -> a CONST operand goes in src0.
+  if a is AMDOps.V_ADD: return _ins(_vop2_f(v_add_f32_e32, x, src), x.tag)
+  if a is AMDOps.V_MUL: return _ins(_vop2_f(v_mul_f32_e32, x, src), x.tag)
   if a is AMDOps.V_SUB: return _ins(v_sub_f32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
+  if a is AMDOps.V_IMUL:                            # u32 mul (VOP3); src1 may be a reg or an integer immediate
+    o1 = src[1].arg if src[1].op is Ops.CONST else _Vr(src[1].reg)
+    return _ins(v_mul_lo_u32(_Vr(x.reg), _Vr(src[0].reg), o1), x.tag)
+  if a is AMDOps.V_IADD:                            # u32 add (VOP2); a CONST goes in src0 since vsrc1 must be a VGPR
+    if src[1].op is Ops.CONST: return _ins(v_add_nc_u32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
+    return _ins(v_add_nc_u32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
   if a is AMDOps.GLOBAL_STORE:
     # SCALARIZED: one INS -> N scalar stores, lane l at immediate offset l*itemsize. src=(off, base, val0..valN-1, isz)
     off_r, ptr_r, isz = src[0].reg, src[1].reg, src[-1].arg

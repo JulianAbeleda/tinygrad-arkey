@@ -1,0 +1,43 @@
+{
+  "verdict": "AMD_ISA_INC1_PASS_WORKITEM_ELEMENTWISE_RUNS",
+  "command": "DEV=AMD:ISA PYTHONPATH=. .venv/bin/python extra/amd_isa_inc1_gate.py",
+  "scope": "Inc 1: workitem(lidx0/v0)-indexed elementwise, n=64",
+  "selected_renderer": "AMDISARenderer",
+  "no_hidden_fallback": "PASS (selected AMDISARenderer, not HIP/LLVM)",
+  "regalloc": "PASS (no regalloc.py:118 KeyError; no raw INDEX/GEP/STACK/MUL survived isel)",
+  "special_v0_used": true,
+  "integer_index_alu": {
+    "v_mul_lo_u32": 1,
+    "v_lshlrev_b32_e32": 3,
+    "v_add_nc_u32_e32": 0
+  },
+  "instruction_counts": {
+    "global_load_b32": 8,
+    "global_store_b32": 4,
+    "v_add_f32_e32": 4,
+    "b128_used": false
+  },
+  "assemble": "PASS (assemble_linear produced rdna3 INS stream)",
+  "runtime": "PASS (kernel launched on gfx1100)",
+  "op_coverage": {
+    "sub": true,
+    "mul": true,
+    "scale+bias": true
+  },
+  "correctness": {
+    "result": "PASS",
+    "got_head": [
+      -0.6713221073150635,
+      -0.03458203375339508,
+      -0.3429514169692993,
+      0.08732627332210541
+    ],
+    "expected_head": [
+      -0.6713221073150635,
+      -0.03458203375339508,
+      -0.3429514169692993,
+      0.08732627332210541
+    ]
+  },
+  "deferred": "workgroup-id gidx*/lidx1+ (SGPR workgroup-id ABI + descriptor enable) -> fails loudly, not silently wrong; real b128/global_load_b128 + consecutive-VGPR alloc; RANGE/END reduction loops; GEMV/decode-tile; v_dot2/LDS/barriers; waitcnt/scheduler optimization"
+}
