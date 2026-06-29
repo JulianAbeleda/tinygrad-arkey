@@ -39,6 +39,8 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
     if u.op is Ops.PARAM: n_bufs += 1
     elif u.op is Ops.DEFINE_VAR: n_vars += 1
     elif u.op is Ops.DEFINE_LOCAL: lds_size += u.ptrdtype.size * u.ptrdtype.base.itemsize
+    # AMD ISA backend (DEV=AMD:ISA) backs reduction accumulators (Ops.DEFINE_REG) in LDS; size the group segment for them
+    elif u.op is Ops.DEFINE_REG: lds_size += u.ptrdtype.size * u.ptrdtype.base.itemsize
     elif u.op is Ops.SPECIAL and u.arg.startswith("gidx"): gids.add(int(u.arg[-1]))
     elif u.op is Ops.SPECIAL and u.arg.startswith("lidx"): lids.add(int(u.arg[-1]))
   code_bytes = b"".join(inst.to_bytes() for inst in insts)

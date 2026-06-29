@@ -12,19 +12,21 @@ s_waitcnt drains after memory ops.
 from __future__ import annotations
 from tinygrad.uop import FastEnum
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
-from tinygrad.dtype import dtypes, PtrDType
+from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import ISARenderer, IselContext, Register
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
-  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm)
+  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
+  s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32)
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
 # the framework's single-register allocator never overlaps a pair (Inc 0 uses SGPRs only for pointers).
 KARG = Register("s0", 0)                                           # kernarg base ptr s[0:1] (fixed at entry)
-SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 102, 2))  # even SGPRs s6.. -> 64-bit ptr pairs (s2-s5 reserved for workgroup ids)
-VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0..v(ndim-1) reserved for workitem ids per-kernel
+SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 40, 2))   # even SGPRs s6..s38 -> 64-bit ptr pairs (s2-s5 = workgroup ids)
+SCNT_POOL = tuple(Register(f"s{i}", i) for i in range(40, 64))     # single SGPRs s40..s63 -> uniform loop counters (Phase B)
+VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0 reserved for packed workitem ids
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
 WGID_S0 = 2                                                        # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1); .y/.z -> s3/s4
 
@@ -42,11 +44,30 @@ class AMDOps(FastEnum):
   V_MOVK = 9; V_IADD = 10; V_IMUL = 11   # integer index arithmetic (u32 address math from SPECIAL/workitem id)
   WG_ID = 12                             # workgroup id.{x,y,z}: v_mov a VGPR <- s{2+d} (global indexing ABI)
   WI_ID = 13                             # workitem id.{x,y,z} extracted from packed v0 via v_bfe_u32 (multi-dim local)
+  MOV_S2V = 14                           # copy a uniform SGPR (e.g. loop counter) into a VGPR for address math (Phase B)
+  DS_LOAD = 15; DS_STORE = 16            # LDS-backed reduction accumulator load/store (Phase B)
+  V_CONST = 17                           # materialize a CONST (float/int) into a VGPR (e.g. accumulator init 0.0)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
 def _vreg_def(ctx:IselContext): return (ctx.vreg(_vpool(ctx)),)
 def _sptr_def(ctx:IselContext): return (ctx.vreg(SPTR_POOL),)
+
+# ---- LDS-backed reduction accumulator (Ops.DEFINE_REG, addrspace REG). Phase B keeps the accumulator in LDS so the
+# read-modify-write across loop iterations is plain memory (no SSA/regalloc conflict). Each DEFINE_REG gets a fixed LDS
+# byte offset (assigned here, matched by elf.py's group-segment sizing which scans DEFINE_REG). NOOPT reductions are
+# single-thread (local_size=1) so one slot per accumulator suffices; multi-thread (GROUPTOP) cross-lane reduction is
+# out of scope for Phase B. ----
+def _reg_base(u:UOp) -> UOp:
+  while u.op is Ops.AFTER and u.src: u = u.src[0]   # AFTER(DEFINE_REG, ...) chain -> the DEFINE_REG
+  return u
+def _lds_byte_offset(ctx:IselContext, dreg:UOp) -> int:
+  d = getattr(ctx, "_lds", None)
+  if d is None: d = ctx._lds = {}
+  if dreg not in d:
+    d[dreg] = getattr(ctx, "_lds_top", 0)
+    ctx._lds_top = d[dreg] + dreg.dtype.size * dreg.dtype.base.itemsize
+  return d[dreg]
 
 # ============================ instruction selection ============================
 def isel_param(ctx:IselContext, x:UOp):
@@ -79,15 +100,25 @@ def isel_special(ctx:IselContext, x:UOp):
 def isel_index(ctx:IselContext, x:UOp):
   # INDEX(ptr, idx) -> byte offset VGPR = idx << log2(itemsize). Carries (ptr_ins, offset_vgpr) for the mem op.
   # Inc 0: idx is a compile-time CONST (fully-upcast trivial kernel) -> materialize byte offset via v_mov.
-  # General path (idx in a VGPR, e.g. SPECIAL/tid) -> v_lshlrev. Both produce ONE byte-offset VGPR shared by all
-  # vec lanes; the per-lane element offset is folded into the global_load/store immediate field (see isel_load/store).
+  # General path (idx in a VGPR, e.g. SPECIAL/tid) -> v_lshlrev. Phase B: idx may be a RANGE loop counter (uniform SGPR)
+  # -> copy s->v first. Both produce ONE byte-offset VGPR shared by all vec lanes; the per-lane element offset is folded
+  # into the global_load/store immediate field (see isel_load/store).
   base, idx = x.src[0], x.src[1]
+  # accumulator access (DEFINE_REG, addrspace != GLOBAL) -> LDS carrier holding the compile-time LDS byte address
+  if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
+    assert idx.op is Ops.CONST, f"Phase B accumulator index must be CONST, got {idx.op}"
+    addr = _lds_byte_offset(ctx, _reg_base(base)) + idx.arg * base.dtype.base.itemsize
+    # carry `base` (the AFTER/DEFINE_REG ordering node) so the read-modify-write chain through LDS stays live and ordered
+    return UOp(Ops.NOOP, x.dtype, src=(UOp.const(dtypes.int32, addr).rtag(), base), arg="lds")
   isz = base.dtype.itemsize if isinstance(base.dtype, PtrDType) else 4
   shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
   if idx.op is Ops.CONST:
     off = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, idx.arg << shift).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
   else:
-    off = UOp(Ops.INS, dtypes.int32, src=(idx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx))
+    vidx = idx
+    if idx.op is Ops.RANGE:   # uniform loop counter lives in an SGPR -> move into a VGPR for VALU address math
+      vidx = UOp(Ops.INS, dtypes.int32, src=(idx,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx))
+    off = UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx))
   # tag the INDEX result as a pair (base_ptr, byte_offset) via a NOOP carrier
   return UOp(Ops.NOOP, x.dtype, src=(base, off))
 
@@ -96,7 +127,10 @@ def isel_load(ctx:IselContext, x:UOp):
   # per-lane element offset folded into the load's immediate (offset=lane*itemsize). vec4/b128 + consecutive-VGPR
   # allocation are deferred to Inc 1+. The N loads are wrapped in a NOOP lane-carrier consumed by GEP (lane extract).
   if x.src[0].op is not Ops.NOOP: return None
-  idxc = x.src[0]                            # NOOP(base_ptr, byte_offset)
+  idxc = x.src[0]                            # NOOP(base_ptr, byte_offset) or LDS carrier (arg=="lds")
+  if idxc.arg == "lds":                      # LDS accumulator load -> ds_load_b32 from a materialized address VGPR
+    addr = UOp(Ops.INS, dtypes.int32, src=(idxc.src[0],), arg=AMDOps.V_MOVK, tag=(ctx.vreg(_vpool(ctx)),))
+    return UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]), arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))  # src[1]=order
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
   loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()),
@@ -107,7 +141,11 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   # SCALARIZED vec store (Inc 0): STORE(addr, vec(N) values) -> ONE GLOBAL_STORE INS carrying all N lane values; it
   # expands to N scalar global_store_b32 in post_regalloc (offset=lane*itemsize). Single INS (not a NOOP wrapper) so
   # no pseudo-op survives into assemble_linear, and regalloc allocates every lane value as a normal use.
-  if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset)
+  if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset) or LDS carrier
+  if a.arg == "lds":                          # LDS accumulator store -> ds_store_b32 to a materialized address VGPR
+    addr = UOp(Ops.INS, dtypes.int32, src=(a.src[0],), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
+    if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # acc init e.g. 0.0
+    return UOp(Ops.INS, dtypes.void, src=(addr, b, a.src[1]), arg=AMDOps.DS_STORE)   # src[2]=order
   base, off = a.src[0], a.src[1]
   vals = b.src if (b.op is Ops.NOOP and not isinstance(b.dtype, PtrDType)) else (b,)   # STACK lane-carrier -> per-lane vals
   isz = vals[0].dtype.scalar().itemsize
@@ -127,22 +165,26 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.LOAD, name="x"), isel_load),
   (UPat(Ops.GEP, name="x"), isel_gep),
   (UPat(Ops.STACK, name="x"), lambda x: UOp(Ops.NOOP, x.dtype, src=x.src)),   # vec gather -> lane-carrier (scalarized)
+  # RANGE (counted reduction loop): tag with a uniform SGPR counter; lowered to init/label/cmp/branch in post_regalloc.
+  (UPat(Ops.RANGE, name="x"), lambda ctx, x: x.replace(tag=(ctx.vreg(SCNT_POOL),)) if not isinstance(x.tag, tuple) else None),
   (UPat.var("a").store(UPat.var("b"), name="x"), isel_store),
   # float elementwise ALU (commutative add/mul); a CONST operand is folded to a literal (e.g. a-b == a + b*-1.0)
-  ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda x: _binop(x, AMDOps.V_ADD)),
-  ((UPat(dtype=dtypes.float32) * UPat()).named("x"), lambda x: _binop(x, AMDOps.V_MUL)),
+  ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_ADD)),
+  ((UPat(dtype=dtypes.float32) * UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_MUL)),
   # integer index arithmetic (Inc 1): address math derived from SPECIAL/workitem id -> u32 VALU. v_lshlrev for the
   # byte scale stays in isel_index. Both share _binop: everything is in VGPRs (v0=workitem id), CONST -> immediate.
-  (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda x: _binop(x, AMDOps.V_IMUL)),
-  (UPat(Ops.ADD, dtype=dtypes.ints, name="x"), lambda x: _binop(x, AMDOps.V_IADD)),
+  (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_IMUL)),
+  (UPat(Ops.ADD, dtype=dtypes.ints, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_IADD)),
   # catch-all register allocation seed (x86 alloc_vregs analog): tag None -> fresh vreg; physical -> constrained vreg
   (UPat(Ops.INS, name="x"), lambda ctx, x: alloc_vregs(ctx, x)),
 ])
 
-def _binop(x:UOp, op:AMDOps):
+def _binop(ctx:IselContext, x:UOp, op:AMDOps):
   # binary op -> src=(reg_operand, const_or_reg_operand); a CONST becomes an immediate (rtag'd, skipped by regalloc).
   # add/mul are commutative so a leading CONST can move to src[1]; lowering places the literal where the ISA allows it.
-  a, b = x.src[0], x.src[1]
+  # A RANGE operand (uniform loop counter, lives in an SGPR) is copied into a VGPR first so VALU sees only VGPRs.
+  def _v(u): return UOp(Ops.INS, dtypes.int32, src=(u,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx)) if u.op is Ops.RANGE else u
+  a, b = _v(x.src[0]), _v(x.src[1])
   if b.op is Ops.CONST: return x.ins(op, src=(a, b.rtag()), tag=None)
   if a.op is Ops.CONST: return x.ins(op, src=(b, a.rtag()), tag=None)
   return x.ins(op, src=(a, b), tag=None)
@@ -186,8 +228,19 @@ def lower_inst(x:UOp):
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[1].arg]), x.tag)
   if a is AMDOps.WI_ID:                             # workitem id.{x,y,z}: extract 10 bits at offset src[1] from packed v0
     return _ins(v_bfe_u32(_Vr(x.reg), _V[0], src[1].arg, 10), x.tag)
+  if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
+    return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
+  if a is AMDOps.DS_LOAD:                            # LDS accumulator load: addr VGPR (src[0]) -> ds_load_b32 + drain
+    ld = _ins(ds_load_b32(vdst=_Vr(x.reg), addr=_Vr(src[0].reg)), x.tag)
+    return (ld, [ld, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
+  if a is AMDOps.DS_STORE:                           # LDS accumulator store: addr VGPR (src[0]), data VGPR (src[1])
+    st = UOp(Ops.INS, arg=ds_store_b32(addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)))   # keyword: leading vdst field is unused
+    return (st, [st, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
     return _ins(v_mov_b32_e32(_Vr(x.reg), src[0].arg), x.tag)
+  if a is AMDOps.V_CONST:                           # materialize a CONST value (float or int) into a VGPR
+    val = float(src[0].arg) if src[0].dtype in dtypes.floats else int(src[0].arg)
+    return _ins(v_mov_b32_e32(_Vr(x.reg), val), x.tag)
   if a is AMDOps.V_OFFSET:
     return _ins(v_lshlrev_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
   if a is AMDOps.GLOBAL_LOAD:
@@ -215,6 +268,22 @@ def lower_inst(x:UOp):
     return (stores[-1], stores + [wt])
   return None
 
+# ---- counted-loop control flow (Phase B). Labels are (kind, counter_index) tuples; resolved to PC-relative simm16
+# dword offsets by AMDISARenderer.asm() before assemble_linear. Each loop is keyed by its unique counter SGPR. ----
+def _label(lid): return UOp(Ops.INS, arg=("label", lid))        # 0-byte marker, dropped after offset resolution
+def _branch(kind, lid): return UOp(Ops.INS, arg=("branch", kind, lid))   # resolved to s_branch / s_cbranch_scc0
+
+def lower_range(x:UOp):
+  cnt, bound = x.reg, x.src[0].arg                # counter SGPR; loop bound (CONST)
+  init = _ins(s_mov_b32(_S[cnt.index], 0), x.tag)  # representative carries the counter reg for END/MOV_S2V consumers
+  cmp = UOp(Ops.INS, arg=s_cmp_lt_i32(_S[cnt.index], bound))   # SCC = (counter < bound)
+  return (init, [init, _label(("top", cnt.index)), cmp, _branch("s_cbranch_scc0", ("out", cnt.index))])
+
+def lower_end(x:UOp):
+  cnt = x.src[1].reg                              # END(STORE, RANGE) -> RANGE's counter (RANGE lowered to its init rep)
+  inc = _ins(s_add_i32(_S[cnt.index], _S[cnt.index], 1), None)
+  return (inc, [inc, _branch("s_branch", ("top", cnt.index)), _label(("out", cnt.index))])
+
 def lower_sink(x:UOp):
   end = UOp(Ops.INS, arg=s_endpgm())
   return (x.replace(op=Ops.NOOP, src=()), [end])
@@ -226,10 +295,12 @@ def _lower_inst(x:UOp):
 
 post_regalloc_matcher = PatternMatcher([
   (UPat(Ops.INS, name="x"), _lower_inst),
+  (UPat(Ops.RANGE, name="x"), lower_range),
+  (UPat(Ops.END, name="x"), lower_end),
   (UPat(Ops.SINK, name="x"), lower_sink),
-  # drop leftover non-instruction nodes (rtag'd immediate CONSTs read via .arg; carrier NOOPs; PARAM kept only for the
-  # kernarg-segment scan, SPECIAL gidx0 kept only for the workgroup-id descriptor-enable scan) so LINEAR is all-INS.
-  (UPat((Ops.CONST, Ops.NOOP, Ops.PARAM, Ops.SPECIAL), name="x"), lambda x: (x, [])),
+  # drop leftover non-instruction nodes (rtag'd immediate CONSTs read via .arg; carrier NOOPs/AFTER ordering; PARAM kept
+  # for the kernarg-segment scan, SPECIAL gidx0 for the workgroup-id descriptor scan, DEFINE_REG for group-segment sizing)
+  (UPat((Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.PARAM, Ops.SPECIAL, Ops.DEFINE_REG), name="x"), lambda x: (x, [])),
 ])
 
 # ============================ the renderer ============================
@@ -250,8 +321,31 @@ class AMDISARenderer(ISARenderer):
   def asm_str(self, uops:list[UOp], function_name:str) -> str:
     lines = [f"{function_name}:"]
     for u in uops:
-      if u.op is Ops.INS and not isinstance(u.arg, AMDOps): lines.append("  " + str(u.arg))
+      if u.op is Ops.INS and not isinstance(u.arg, (AMDOps, tuple)): lines.append("  " + str(u.arg))
     return "\n".join(lines)
+  def _resolve_labels(self, insts:list[UOp]) -> list[UOp]:
+    # resolve ("label", id) / ("branch", kind, target) markers into PC-relative simm16 dword offsets, then drop labels.
+    # RDNA3 scalar branch: target_pc = branch_pc + 4 + simm16*4  ->  simm16 = (target_byte - branch_byte - 4)//4.
+    pos, labels = [], {}                            # byte position of each inst; label -> byte position
+    off = 0
+    for u in insts:
+      pos.append(off)
+      a = u.arg
+      if isinstance(a, tuple) and a[0] == "label": labels[a[1]] = off
+      elif isinstance(a, tuple) and a[0] == "branch": off += 4
+      else: off += len(a.to_bytes())
+    out = []
+    for u, p in zip(insts, pos):
+      a = u.arg
+      if isinstance(a, tuple) and a[0] == "label": continue                  # 0-byte marker, drop
+      if isinstance(a, tuple) and a[0] == "branch":
+        _, kind, target = a
+        simm = (labels[target] - p - 4) // 4
+        if not (-0x8000 <= simm <= 0x7fff): raise RuntimeError(f"AMD:ISA branch offset {simm} out of simm16 range for {target}")
+        ins = {"s_branch": s_branch, "s_cbranch_scc0": s_cbranch_scc0}[kind](simm16=simm & 0xffff)
+        out.append(UOp(Ops.INS, arg=ins))
+      else: out.append(u)
+    return out
   def asm(self, prg:UOp, lin:UOp) -> bytes:
     from tinygrad.renderer.amd.elf import assemble_linear
-    return assemble_linear(prg, lin, self.target.arch)
+    return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(list(lin.src)))), self.target.arch)
