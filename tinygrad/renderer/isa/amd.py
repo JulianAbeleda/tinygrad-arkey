@@ -86,6 +86,11 @@ def _n_threads(ctx:IselContext) -> int:
   n = 1
   for v in _lid_ranges(ctx).values(): n *= v
   return n
+
+def _next_loop_label(ctx:IselContext) -> int:
+  # monotonic, unique per RANGE -> stable loop-label key (the counter SGPR is reused across non-overlapping loops)
+  n = getattr(ctx, "_loop_label_n", 0); ctx._loop_label_n = n + 1
+  return n
 def _tid(ctx:IselContext) -> UOp:
   # flat workgroup thread id = sum_d lidx_d * (product of lower-dim ranges); all lidx_d extracted from packed v0.
   if (t:=getattr(ctx, "_tidins", None)) is not None: return t
@@ -296,8 +301,10 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.CDIV, name="x"), lambda ctx, x: isel_divmod(ctx, x, mod=False)),
   (UPat(Ops.CMOD, name="x"), lambda ctx, x: isel_divmod(ctx, x, mod=True)),
   (UPat.var("a").store(UPat.var("b"), UPat.var("g"), name="x"), lambda ctx, a, b, g, x: isel_gated_store(ctx, a, b, g, x)),
-  # RANGE (counted reduction loop): tag with a uniform SGPR counter; lowered to init/label/cmp/branch in post_regalloc.
-  (UPat(Ops.RANGE, name="x"), lambda ctx, x: x.replace(tag=(ctx.vreg(SCNT_POOL),)) if not isinstance(x.tag, tuple) else None),
+  # RANGE (counted loop): tag with a uniform SGPR counter + a UNIQUE loop-label id. The counter VREG is regalloc'd and
+  # its physical SGPR is REUSED across non-overlapping loops, so loop labels (top/out) MUST be keyed by the unique label
+  # id, not the counter index -- else sequential loops collide and branch into each other. The id rides in arg[2].
+  (UPat(Ops.RANGE, name="x"), lambda ctx, x: x.replace(tag=(ctx.vreg(SCNT_POOL),), arg=(x.arg[0], x.arg[1], _next_loop_label(ctx))) if not isinstance(x.tag, tuple) else None),
   # DEFINE_LOCAL (LDS tile, Phase F) -> route through the uniform LDS path (same as DEFINE_REG); elf.py sizes both into
   # the group segment. The tile is shared across the workgroup; the access INDEX provides the per-lane/per-iter offset.
   (UPat(Ops.DEFINE_LOCAL, name="x"), lambda x: x.replace(op=Ops.DEFINE_REG) if x.op is Ops.DEFINE_LOCAL else None),
@@ -452,15 +459,17 @@ def _label(lid): return UOp(Ops.INS, arg=("label", lid))        # 0-byte marker,
 def _branch(kind, lid): return UOp(Ops.INS, arg=("branch", kind, lid))   # resolved to s_branch / s_cbranch_scc0
 
 def lower_range(x:UOp):
-  cnt, bound = x.reg, x.src[0].arg                # counter SGPR; loop bound (CONST)
-  init = _ins(s_mov_b32(_S[cnt.index], 0), x.tag)  # representative carries the counter reg for END/MOV_S2V consumers
+  cnt, bound, lbl = x.reg, x.src[0].arg, x.arg[2]   # counter SGPR; loop bound (CONST); unique loop-label id (arg[2])
+  init = _ins(s_mov_b32(_S[cnt.index], 0), (cnt, lbl))  # rep carries (counter, label id) for END/MOV_S2V consumers
   cmp = UOp(Ops.INS, arg=s_cmp_lt_i32(_S[cnt.index], bound))   # SCC = (counter < bound)
-  return (init, [init, _label(("top", cnt.index)), cmp, _branch("s_cbranch_scc0", ("out", cnt.index))])
+  return (init, [init, _label(("top", lbl)), cmp, _branch("s_cbranch_scc0", ("out", lbl))])
 
 def lower_end(x:UOp):
-  cnt = x.src[1].reg                              # END(STORE, RANGE) -> RANGE's counter (RANGE lowered to its init rep)
+  src = x.src[1]                                  # END(STORE, RANGE) -> RANGE (op=RANGE w/ arg[2]) or its lowered rep (tag[1])
+  cnt = src.reg                                   # RANGE's counter
+  lbl = src.arg[2] if (src.op is Ops.RANGE and len(src.arg) > 2) else src.tag[1]   # SAME unique label id as lower_range
   inc = _ins(s_add_i32(_S[cnt.index], _S[cnt.index], 1), None)
-  return (inc, [inc, _branch("s_branch", ("top", cnt.index)), _label(("out", cnt.index))])
+  return (inc, [inc, _branch("s_branch", ("top", lbl)), _label(("out", lbl))])
 
 def lower_sink(x:UOp):
   end = UOp(Ops.INS, arg=s_endpgm())
