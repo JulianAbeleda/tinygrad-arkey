@@ -17,25 +17,35 @@ from tinygrad.renderer.isa import ISARenderer, IselContext, Register
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
-  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, s_waitcnt, s_endpgm)
+  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm)
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
 # the framework's single-register allocator never overlaps a pair (Inc 0 uses SGPRs only for pointers).
 KARG = Register("s0", 0)                                           # kernarg base ptr s[0:1] (fixed at entry)
-SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(4, 102, 2))  # even SGPRs -> 64-bit ptr pairs
-VPOOL = tuple(Register(f"v{i}", i) for i in range(1, 256))         # v1.. (v0 = workitem id)
+SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 102, 2))  # even SGPRs s6.. -> 64-bit ptr pairs (s2-s5 reserved for workgroup ids)
+VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0..v(ndim-1) reserved for workitem ids per-kernel
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
-WGID_X = 2                                                         # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1)
+WGID_S0 = 2                                                        # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1); .y/.z -> s3/s4
+
+def _n_workitem_dims(ctx:IselContext) -> int:
+  # number of workitem-id dims used = (max lidx dim + 1), at least 1. NOTE: x/y/z are PACKED into v0 (AMDGPU ABI:
+  # x=bits[9:0], y=[19:10], z=[29:20]) -- not separate VGPRs -- so only v0 is reserved regardless of dim count.
+  if (n:=getattr(ctx, "_n_lid", None)) is None:
+    lids = {int(str(u.arg)[-1]) for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
+    ctx._n_lid = n = (max(lids) + 1) if lids else 1
+  return n
+def _vpool(ctx:IselContext): return VBASE[1:]   # reserve only v0 (workitem ids x/y/z are packed into it)
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
   V_MOVK = 9; V_IADD = 10; V_IMUL = 11   # integer index arithmetic (u32 address math from SPECIAL/workitem id)
-  WG_ID = 12                             # workgroup id.x: v_mov a VGPR <- s2 (Inc 2, global indexing ABI)
+  WG_ID = 12                             # workgroup id.{x,y,z}: v_mov a VGPR <- s{2+d} (global indexing ABI)
+  WI_ID = 13                             # workitem id.{x,y,z} extracted from packed v0 via v_bfe_u32 (multi-dim local)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
-def _vreg_def(ctx:IselContext): return (ctx.vreg(VPOOL),)
+def _vreg_def(ctx:IselContext): return (ctx.vreg(_vpool(ctx)),)
 def _sptr_def(ctx:IselContext): return (ctx.vreg(SPTR_POOL),)
 
 # ============================ instruction selection ============================
@@ -49,17 +59,22 @@ def isel_param(ctx:IselContext, x:UOp):
   return x.ins(AMDOps.S_LOAD_PTR, src=(UOp.const(dtypes.int32, i*8).rtag(), x.replace(tag=_sptr_def(ctx))), tag=_sptr_def(ctx))
 
 def isel_special(ctx:IselContext, x:UOp):
-  # Inc 1: workitem-id x (lidx0) -> v0 (fixed at kernel entry; rsrc2 ENABLE_VGPR_WORKITEM_ID=0 puts id.x in v0).
-  #   MOV-into-v0 that lowers to nothing so consumers read v0. VPOOL starts at v1 so v0 stays reserved.
-  # Inc 2: workgroup-id x (gidx0) -> s2 (system SGPR after the 2 user SGPRs = kernarg ptr s0:1; enabled in the kernel
-  #   descriptor because elf.py scans the sink for a gidx* SPECIAL). Lower to v_mov VGPR <- s2 so downstream integer
-  #   index math stays VGPR-only. KEEP the SPECIAL node reachable (retagged, ignored src) so that descriptor scan fires.
-  # DEFERRED: gidx1/gidx2 (s3/s4 workgroup-id y/z) and lidx1/lidx2 (v1/v2). Fail loudly rather than mis-map to v0/s2.
+  # Inc 3: multi-dim ids. workitem-id lidx{d} -> v{d} (fixed at entry; rsrc2 ENABLE_VGPR_WORKITEM_ID = max lidx dim).
+  #   MOV-into-v{d} that lowers to nothing so consumers read v{d}; _vpool reserves v0..v(ndim-1) so they aren't reused.
+  # workgroup-id gidx{d} -> s{2+d} (system SGPRs after the 2 user SGPRs = kernarg ptr s0:1; descriptor enable bits set by
+  #   elf.py scanning the sink for gidx* SPECIALs). Lowered to v_mov VGPR <- s{2+d} so index math stays VGPR-only.
+  # The SPECIAL node is KEPT reachable (retagged, ignored src) so the elf.py descriptor scan sees every id dim used.
+  # Only x/y/z (dim 0/1/2) exist on gfx1100 -> fail loudly for any higher dim rather than mis-map.
   if isinstance(x.tag, tuple): return None
-  if x.arg == "lidx0": return x.replace(op=Ops.INS, arg=AMDOps.MOV, src=(), tag=(TID,))
-  if x.arg == "gidx0": return x.ins(AMDOps.WG_ID, src=(x.replace(tag=_vreg_def(ctx)),), tag=_vreg_def(ctx))
-  raise NotImplementedError(f"AMD:ISA Inc 2 supports workitem-id lidx0 + workgroup-id gidx0 only; got SPECIAL {x.arg!r} "
-                            "(gidx1/2 + lidx1/2 multi-dim SGPR/VGPR ABI deferred to a later increment)")
+  kind, d = str(x.arg)[:4], int(str(x.arg)[-1])
+  if d > 2: raise NotImplementedError(f"AMD:ISA: SPECIAL {x.arg!r} has dim {d}>2; gfx1100 only has id x/y/z (dim 0/1/2)")
+  keep = x.replace(tag=_vreg_def(ctx))   # ignored src so the SPECIAL stays reachable for elf.py's id-dim scan
+  if kind == "lidx":
+    # sole x dim -> v0 holds it directly (fast path, no packing). Multi-dim -> extract bits [d*10 +: 10] from packed v0.
+    if _n_workitem_dims(ctx) == 1: return x.replace(op=Ops.INS, arg=AMDOps.MOV, src=(), tag=(TID,))
+    return x.ins(AMDOps.WI_ID, src=(keep, UOp.const(dtypes.int32, d*10).rtag()), tag=_vreg_def(ctx))
+  if kind == "gidx": return x.ins(AMDOps.WG_ID, src=(keep, UOp.const(dtypes.int32, WGID_S0 + d).rtag()), tag=_vreg_def(ctx))
+  raise NotImplementedError(f"AMD:ISA: unsupported SPECIAL {x.arg!r} (expected lidx*/gidx*)")
 
 def isel_index(ctx:IselContext, x:UOp):
   # INDEX(ptr, idx) -> byte offset VGPR = idx << log2(itemsize). Carries (ptr_ins, offset_vgpr) for the mem op.
@@ -85,7 +100,7 @@ def isel_load(ctx:IselContext, x:UOp):
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
   loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()),
-                    arg=AMDOps.GLOBAL_LOAD, tag=(ctx.vreg(VPOOL),)) for l in range(n))
+                    arg=AMDOps.GLOBAL_LOAD, tag=(ctx.vreg(_vpool(ctx)),)) for l in range(n))
   return loads[0] if n == 1 else UOp(Ops.NOOP, x.dtype, src=loads)
 
 def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
@@ -137,7 +152,7 @@ def alloc_vregs(ctx:IselContext, x:UOp):
   if isinstance(x.tag, tuple) and x.tag[0]._cons: return None             # already a constrained vreg
   if isinstance(x.tag, tuple): return x.replace(tag=(ctx.vreg(x.tag),))   # physical (TID) -> constrained vreg
   if x.tag is None:
-    return x.replace(tag=(ctx.vreg(SPTR_POOL if isinstance(x.dtype, PtrDType) else VPOOL),))
+    return x.replace(tag=(ctx.vreg(SPTR_POOL if isinstance(x.dtype, PtrDType) else _vpool(ctx)),))
   return None
 
 pre_isel_matcher = PatternMatcher([])
@@ -167,8 +182,10 @@ def lower_inst(x:UOp):
     return (ld, [ld, wt])
   if a is AMDOps.MOV:                               # tid passthrough (v0) - emit nothing
     return (x.replace(op=Ops.NOOP, src=()), [])
-  if a is AMDOps.WG_ID:                             # workgroup id.x: copy system SGPR s2 into a VGPR for index math
-    return _ins(v_mov_b32_e32(_Vr(x.reg), _S[WGID_X]), x.tag)
+  if a is AMDOps.WG_ID:                             # workgroup id.{x,y,z}: copy system SGPR s{2+d} into a VGPR for index math
+    return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[1].arg]), x.tag)
+  if a is AMDOps.WI_ID:                             # workitem id.{x,y,z}: extract 10 bits at offset src[1] from packed v0
+    return _ins(v_bfe_u32(_Vr(x.reg), _V[0], src[1].arg, 10), x.tag)
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
     return _ins(v_mov_b32_e32(_Vr(x.reg), src[0].arg), x.tag)
   if a is AMDOps.V_OFFSET:

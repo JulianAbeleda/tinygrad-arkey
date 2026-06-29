@@ -1,0 +1,72 @@
+{
+  "verdict": "AMD_ISA_INC3_PASS_MULTIDIM_INDEXING",
+  "command": "DEV=AMD:ISA PYTHONPATH=. .venv/bin/python extra/amd_isa_inc3_gate.py",
+  "scope": "Inc 3: multi-dim (gidx0/1/2, lidx0/1/2) indexing correctness",
+  "selected_renderer": "AMDISARenderer",
+  "no_hidden_fallback": "PASS (selected AMDISARenderer, not HIP/LLVM)",
+  "per_case": {
+    "contig(64, 64)": {
+      "ok": true,
+      "specials": [
+        "gidx0",
+        "lidx0"
+      ]
+    },
+    "contig(256, 256)": {
+      "ok": true,
+      "specials": [
+        "gidx0",
+        "lidx0"
+      ]
+    },
+    "contig(16, 16, 16)": {
+      "ok": true,
+      "specials": [
+        "gidx0",
+        "lidx0"
+      ]
+    },
+    "transpose2d": {
+      "ok": true,
+      "specials": [
+        "gidx0",
+        "lidx0",
+        "lidx1"
+      ]
+    },
+    "transpose48x80": {
+      "ok": true,
+      "specials": [
+        "gidx0",
+        "gidx1",
+        "lidx0",
+        "lidx1"
+      ]
+    },
+    "permute3d": {
+      "ok": true,
+      "specials": [
+        "gidx0",
+        "gidx1",
+        "gidx2",
+        "lidx0",
+        "lidx1",
+        "lidx2"
+      ]
+    }
+  },
+  "max_id_dim_exercised": 2,
+  "multidim_exercised": true,
+  "correctness": {
+    "result": "PASS",
+    "per_case_ok": {
+      "contig(64, 64)": true,
+      "contig(256, 256)": true,
+      "contig(16, 16, 16)": true,
+      "transpose2d": true,
+      "transpose48x80": true,
+      "permute3d": true
+    }
+  },
+  "deferred": "reductions/RANGE-END; GEMV; real b128/consecutive-VGPR alloc; v_dot2/LDS/barriers; scheduler/waitcnt"
+}
