@@ -22,7 +22,25 @@ from tinygrad.codegen import to_program
 from tinygrad.renderer.amd.elf import group_segment_fixed_size_from_elf
 from extra.qk_flash_decode import flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel
 
-from tinygrad.helpers import Context
+from tinygrad.uop.ops import UOp, Ops, AxisType, UPat, PatternMatcher, graph_rewrite
+from tinygrad.helpers import Context, getenv
+
+# ---- grid parallelism: map the tile's RANGE(GLOBAL) axes to a real launch grid (one workgroup per global point)
+# instead of serializing them in one workgroup (grid=[1,1,1]). Done as an AST rewrite BEFORE to_program: convert each
+# RANGE(GLOBAL) -> SPECIAL(gidx{axis_id}) and drop them from their END. Then from_sink sets global_size, isel_special
+# lowers gidx -> workgroup-id SGPR, and elf.py enables the workgroup-id descriptor bits -- all via the working gidx path.
+def _is_global(s:UOp) -> bool:
+  return (s.op is Ops.RANGE and s.arg[1] is AxisType.GLOBAL) or (s.op is Ops.SPECIAL and str(s.arg).startswith("gidx"))
+def _range_global_to_grid(sink:UOp) -> UOp:
+  def _conv_range(x:UOp):
+    if x.arg[1] is AxisType.GLOBAL: return UOp.special(x.src[0].arg, f"gidx{x.arg[0]}", dtype=x.dtype)
+  def _conv_end(x:UOp):
+    keep = [s for s in x.src[1:] if not _is_global(s)]    # a global axis is a grid dim, not a loop -> drop from END
+    if len(keep) != len(x.src) - 1:
+      return x.src[0] if not keep else x.replace(src=(x.src[0],) + tuple(keep))
+  return graph_rewrite(sink, PatternMatcher([(UPat(Ops.RANGE, name="x"), _conv_range), (UPat(Ops.END, name="x"), _conv_end)]),
+                       name="range_global_to_grid")
+
 _ISA_REN = None
 def _isa_renderer():
   # reuse the AMD device's target (arch gfx1100) so the ELF matches the runtime; the device itself stays on HIP.
@@ -47,7 +65,9 @@ def _compile(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
   phs = [UOp.placeholder((Hq*S*W,), dtypes.float32, 0),          # slot 0: out (partials)
          UOp.placeholder((Hq*Hd,), dtypes.float32, 1),           # slot 1: q (flat)
          UOp.placeholder((2,1,Hkv,MAXC,Hd), dtypes.float32, 2)]  # slot 2: cache (5D)
-  prg = to_program(fxn(*phs), _isa_renderer())
+  sink = fxn(*phs)
+  if not getenv("AMD_ISA_NO_GRID", 0): sink = _range_global_to_grid(sink)   # RANGE(GLOBAL) -> grid (default-on)
+  prg = to_program(sink, _isa_renderer())
   elf = next(s.arg for s in prg.src if s.op is Ops.BINARY)
   p = prg.arg
   return elf, p.global_size, p.local_size, p.vars, group_segment_fixed_size_from_elf(elf)

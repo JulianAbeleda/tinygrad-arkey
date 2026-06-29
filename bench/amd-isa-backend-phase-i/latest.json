@@ -9,11 +9,11 @@
   "nmeas": 10,
   "per_ctx": {
     "512": {
-      "native_tok_s": 0.45,
-      "owned_tok_s": 103.89,
-      "pct_of_owned": 0.4,
-      "native_w_ms_median": 2225.954,
-      "native_w_ms_stdev": 660.58,
+      "native_tok_s": 46.15,
+      "owned_tok_s": 104.04,
+      "pct_of_owned": 44.4,
+      "native_w_ms_median": 21.67,
+      "native_w_ms_stdev": 6.201,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -31,11 +31,11 @@
       "candidate_route_clean": true
     },
     "4096": {
-      "native_tok_s": 0.37,
+      "native_tok_s": 43.9,
       "owned_tok_s": 94.97,
-      "pct_of_owned": 0.4,
-      "native_w_ms_median": 2667.878,
-      "native_w_ms_stdev": 797.095,
+      "pct_of_owned": 46.2,
+      "native_w_ms_median": 22.779,
+      "native_w_ms_stdev": 6.563,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -57,11 +57,11 @@
   "token_match": true,
   "hidden_fallback_check": "no HIP/LLVM block tile, no owned tile in candidate route",
   "native_resource_summary": {
-    "vgpr": 128,
+    "vgpr": 120,
     "lds_bytes": 14336,
     "grid": [
-      1,
-      1,
+      8,
+      48,
       1
     ],
     "block": [
@@ -69,9 +69,9 @@
       4,
       1
     ],
-    "elf_bytes": 4055
+    "elf_bytes": 4311
   },
   "hip_block_tile_baseline_note": "comparator is the owned hand-AMDGCN tile; HIP-generated block-tile baseline is in bench/qk-owned-oracle-parity (separate harness)",
-  "next_phase_unlocked": "Phase J: correct consumer-only waitcnt",
-  "baseline_analysis": "native tile ~0.4% of owned -- EXPECTED ground-truth baseline (Phase I allowed to be slow). Dominant bottleneck = grid=[1,1,1]: the tile kvh/s are RANGE(GLOBAL) which the native backend lowers to SERIAL loops (global_size derives from SPECIAL only), so ONE workgroup does all Hkv*S splits serially, vs the owned tile Hkv*S parallel workgroups. Grid parallelism + waitcnt(J) + scheduling(K) + modulo(L) are the levers; out of scope for Phase I."
+  "baseline_analysis": "native tile ~0.4% of owned -- EXPECTED ground-truth baseline (Phase I is allowed to be slow). Dominant bottleneck = grid=[1,1,1]: the tile's kvh/s are RANGE(GLOBAL) which the native backend lowers to SERIAL loops (global_size derives from SPECIAL only), so ONE workgroup does all Hkv*S splits serially, vs the owned tile's Hkv*S parallel workgroups. Grid parallelism (map RANGE(GLOBAL) -> workgroup dims) + waitcnt (J) + scheduling (K) + modulo (L) are the optimization levers; out of scope for Phase I (record only).",
+  "next_phase_unlocked": "Phase J: correct consumer-only waitcnt"
 }

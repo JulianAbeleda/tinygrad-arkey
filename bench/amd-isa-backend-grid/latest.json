@@ -1,0 +1,77 @@
+{
+  "verdict": "AMD_ISA_GRID_PARALLELISM_PASS_NATIVE_TILE_GRID_BOUND",
+  "command": "DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_grid_gate.py",
+  "mechanism": "RANGE(GLOBAL) -> SPECIAL(gidx) AST rewrite in the native injector (before to_program); gidx ABI -> workgroup-id SGPRs + elf enable bits + from_sink grid",
+  "grid_before": [
+    1,
+    1,
+    1
+  ],
+  "grid_after": [
+    8,
+    48,
+    1
+  ],
+  "block": [
+    32,
+    4,
+    1
+  ],
+  "range_end_before": {
+    "range": 9,
+    "end": 9
+  },
+  "range_end_after": {
+    "range": 7,
+    "end": 7
+  },
+  "workgroups_before": 1,
+  "workgroups_after": 384,
+  "wd_before_phase_i_baseline": {
+    "ctx512_native_tok_s": 0.45,
+    "ctx4096_native_tok_s": 0.37,
+    "pct_of_owned": "~0.4%",
+    "note": "Phase I baseline commit 7c0a3bad1 (grid=[1,1,1])"
+  },
+  "wd_after": {
+    "512": {
+      "native_tok_s": 46.15,
+      "owned_tok_s": 104.04,
+      "pct_of_owned": 44.4,
+      "token_match": true
+    },
+    "4096": {
+      "native_tok_s": 43.9,
+      "owned_tok_s": 94.97,
+      "pct_of_owned": 46.2,
+      "token_match": true
+    }
+  },
+  "wd_after_route_bound": true,
+  "wd_after_resources": {
+    "vgpr": 120,
+    "lds_bytes": 14336,
+    "grid": [
+      8,
+      48,
+      1
+    ],
+    "block": [
+      32,
+      4,
+      1
+    ],
+    "elf_bytes": 4311
+  },
+  "in_model_token_match": true,
+  "in_model_repeated_run_stability": true,
+  "in_model_route_attribution": {
+    "native_block_tile_fired": true,
+    "hip_llvm_block_tile_absent": true,
+    "owned_tile_absent": true,
+    "gmax_hip_present": true,
+    "combine_hip_present": true
+  },
+  "hidden_fallback_check": "candidate route attn kernels = native tile + HIP gmax/combine only",
+  "next_phase_unlocked": "Phase L (modulo) / M (occupancy) now meaningful (tile occupies the GPU; ~44-46% of owned)"
+}
