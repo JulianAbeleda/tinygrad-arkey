@@ -26,10 +26,12 @@ KARG = Register("s0", 0)                                           # kernarg bas
 SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(4, 102, 2))  # even SGPRs -> 64-bit ptr pairs
 VPOOL = tuple(Register(f"v{i}", i) for i in range(1, 256))         # v1.. (v0 = workitem id)
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
+WGID_X = 2                                                         # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1)
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
   V_MOVK = 9; V_IADD = 10; V_IMUL = 11   # integer index arithmetic (u32 address math from SPECIAL/workitem id)
+  WG_ID = 12                             # workgroup id.x: v_mov a VGPR <- s2 (Inc 2, global indexing ABI)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -48,14 +50,16 @@ def isel_param(ctx:IselContext, x:UOp):
 
 def isel_special(ctx:IselContext, x:UOp):
   # Inc 1: workitem-id x (lidx0) -> v0 (fixed at kernel entry; rsrc2 ENABLE_VGPR_WORKITEM_ID=0 puts id.x in v0).
-  # Represent as a MOV-into-v0 that lowers to nothing so consumers read v0. VPOOL starts at v1 so v0 stays reserved.
-  # DEFERRED: workgroup-id (gidx*, needs SGPR workgroup-id ABI + descriptor enable) and lidx1/lidx2 (v1/v2). Fail
-  # loudly rather than silently compute wrong addresses (those kernels are out of Inc 1 scope).
+  #   MOV-into-v0 that lowers to nothing so consumers read v0. VPOOL starts at v1 so v0 stays reserved.
+  # Inc 2: workgroup-id x (gidx0) -> s2 (system SGPR after the 2 user SGPRs = kernarg ptr s0:1; enabled in the kernel
+  #   descriptor because elf.py scans the sink for a gidx* SPECIAL). Lower to v_mov VGPR <- s2 so downstream integer
+  #   index math stays VGPR-only. KEEP the SPECIAL node reachable (retagged, ignored src) so that descriptor scan fires.
+  # DEFERRED: gidx1/gidx2 (s3/s4 workgroup-id y/z) and lidx1/lidx2 (v1/v2). Fail loudly rather than mis-map to v0/s2.
   if isinstance(x.tag, tuple): return None
-  if x.arg != "lidx0":
-    raise NotImplementedError(f"AMD:ISA Inc 1 supports workitem-id lidx0 only; got SPECIAL {x.arg!r} "
-                              "(workgroup-id gidx* / lidx1+ SGPR ABI deferred to a later increment)")
-  return x.replace(op=Ops.INS, arg=AMDOps.MOV, src=(), tag=(TID,))
+  if x.arg == "lidx0": return x.replace(op=Ops.INS, arg=AMDOps.MOV, src=(), tag=(TID,))
+  if x.arg == "gidx0": return x.ins(AMDOps.WG_ID, src=(x.replace(tag=_vreg_def(ctx)),), tag=_vreg_def(ctx))
+  raise NotImplementedError(f"AMD:ISA Inc 2 supports workitem-id lidx0 + workgroup-id gidx0 only; got SPECIAL {x.arg!r} "
+                            "(gidx1/2 + lidx1/2 multi-dim SGPR/VGPR ABI deferred to a later increment)")
 
 def isel_index(ctx:IselContext, x:UOp):
   # INDEX(ptr, idx) -> byte offset VGPR = idx << log2(itemsize). Carries (ptr_ins, offset_vgpr) for the mem op.
@@ -163,6 +167,8 @@ def lower_inst(x:UOp):
     return (ld, [ld, wt])
   if a is AMDOps.MOV:                               # tid passthrough (v0) - emit nothing
     return (x.replace(op=Ops.NOOP, src=()), [])
+  if a is AMDOps.WG_ID:                             # workgroup id.x: copy system SGPR s2 into a VGPR for index math
+    return _ins(v_mov_b32_e32(_Vr(x.reg), _S[WGID_X]), x.tag)
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
     return _ins(v_mov_b32_e32(_Vr(x.reg), src[0].arg), x.tag)
   if a is AMDOps.V_OFFSET:
@@ -205,8 +211,8 @@ post_regalloc_matcher = PatternMatcher([
   (UPat(Ops.INS, name="x"), _lower_inst),
   (UPat(Ops.SINK, name="x"), lower_sink),
   # drop leftover non-instruction nodes (rtag'd immediate CONSTs read via .arg; carrier NOOPs; PARAM kept only for the
-  # kernarg-segment metadata scan in assemble_linear) so the final LINEAR is all-INS for the assemble path.
-  (UPat((Ops.CONST, Ops.NOOP, Ops.PARAM), name="x"), lambda x: (x, [])),
+  # kernarg-segment scan, SPECIAL gidx0 kept only for the workgroup-id descriptor-enable scan) so LINEAR is all-INS.
+  (UPat((Ops.CONST, Ops.NOOP, Ops.PARAM, Ops.SPECIAL), name="x"), lambda x: (x, [])),
 ])
 
 # ============================ the renderer ============================

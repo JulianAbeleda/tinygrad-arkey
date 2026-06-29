@@ -1,0 +1,40 @@
+{
+  "verdict": "AMD_ISA_INC2_PASS_GLOBAL_INDEX_ELEMENTWISE_RUNS",
+  "command": "DEV=AMD:ISA PYTHONPATH=. .venv/bin/python extra/amd_isa_inc2_gate.py",
+  "scope": "Inc 2: workgroup/global-indexed elementwise, n in [256, 1024, 4096]",
+  "selected_renderer": "AMDISARenderer",
+  "no_hidden_fallback": "PASS (selected AMDISARenderer, not HIP/LLVM)",
+  "per_size": {
+    "256": {
+      "ok": true,
+      "wgid_path": true,
+      "v_mul_lo_u32": 2,
+      "v_add_nc_u32_e32": 1
+    },
+    "1024": {
+      "ok": true,
+      "wgid_path": true,
+      "v_mul_lo_u32": 2,
+      "v_add_nc_u32_e32": 1
+    },
+    "4096": {
+      "ok": true,
+      "wgid_path": true,
+      "v_mul_lo_u32": 2,
+      "v_add_nc_u32_e32": 1
+    }
+  },
+  "regalloc": "PASS (no regalloc.py:118 KeyError; no raw INDEX/GEP/STACK/MUL survived isel)",
+  "workgroup_id_path_used": true,
+  "assemble": "PASS (assemble_linear produced rdna3 INS; descriptor ENABLE_SGPR_WORKGROUP_ID_X set via gidx0 scan)",
+  "runtime": "PASS (multi-workgroup grid launched on gfx1100)",
+  "correctness": {
+    "result": "PASS",
+    "per_size_ok": {
+      "256": true,
+      "1024": true,
+      "4096": true
+    }
+  },
+  "deferred": "gidx1/gidx2 + lidx1/lidx2 multi-dim ids (fail loud, not silently wrong); reductions / RANGE-END; GEMV; real b128/consecutive-VGPR alloc; v_dot2/LDS/barriers; scheduler/waitcnt performance"
+}
