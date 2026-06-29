@@ -1394,8 +1394,18 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
       smax_route = _ceildiv(MAXC, l_route)
     tile_builder = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel if getenv("DECODE_ATTN_BLOCK_TILE", 0) else \
       flash_fused_xlane_score_pv_tile_whole_cache_kernel
-    po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,
-      fxn=tile_builder(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
+    if getenv("DECODE_ATTN_NATIVE_ISA_BLOCK_TILE", 0) and getenv("DECODE_ATTN_BLOCK_TILE", 0):
+      # Phase H: the block tile is compiled by the NATIVE AMD ISA backend (AMDISARenderer) and injected as a
+      # precompiled Ops.PROGRAM graph node; gmax + combine stay on HIP. Default-off. Needs a CONCRETE S/L grid
+      # (the native renderer needs concrete RANGE bounds) -> pair with DECODE_ATTN_BLOCK_TILE_FIXED_S=1.
+      if not isinstance(s_route, int) or not isinstance(l_route, int):
+        raise RuntimeError("DECODE_ATTN_NATIVE_ISA_BLOCK_TILE needs a concrete S/L grid; set DECODE_ATTN_BLOCK_TILE_FIXED_S=1")
+      from extra.qk_native_isa_block_tile_graph_node import native_isa_block_tile
+      po = native_isa_block_tile(Tensor.empty(Hq * smax_route * W2, dtype=_F32), q_f, cache_kv,
+                                 Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u)
+    else:
+      po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,
+        fxn=tile_builder(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
     if getenv("DECODE_ATTN_FUSED_COMBINE", 0):   # P5: one fused dispatch (inline gmax) instead of gmax+combine
       out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_state_combine_kernel(Hd, Hq, s_route))[0]
     else:

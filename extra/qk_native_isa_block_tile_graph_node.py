@@ -26,29 +26,39 @@ def _isa_renderer():
   # reuse the AMD device's target (arch gfx1100) so the ELF matches the runtime; the device itself stays on HIP.
   return AMDISARenderer(Device["AMD"].renderer.target)
 
-def compile_block_tile_isa(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
-  """Compile the block tile via AMDISARenderer. Returns (elf_bytes, ProgramInfo, group_segment_size)."""
+import functools
+
+@functools.lru_cache(maxsize=None)
+def _compile(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """Compile the block tile via AMDISARenderer (cached: the runtime var keeps Tc symbolic -> one compile).
+  Tc may be an int (fixed context, keystone) or a UOp expression (e.g. vsp+T, runtime start_pos). Returns
+  (elf_bytes, global_size, local_size, vars, group_segment_size)."""
   W = Hd + 2
   fxn = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc)
-  srcs = [Tensor.empty(Hq*S*W, dtype=dtypes.float32).uop.contiguous(),     # slot 0: out
+  srcs = [Tensor.empty(Hq*S*W, dtype=dtypes.float32).uop.contiguous(),     # slot 0: out (partials)
           Tensor.empty(Hq*Hd, dtype=dtypes.float32).uop.contiguous(),      # slot 1: q (flat)
           Tensor.empty((2,1,Hkv,MAXC,Hd), dtype=dtypes.float32).uop.contiguous()]  # slot 2: cache (5D)
   phs = [UOp.placeholder_like(s, slot=i) for i,s in enumerate(srcs)]
   prg = to_program(fxn(*phs), _isa_renderer())
   elf = next(s.arg for s in prg.src if s.op is Ops.BINARY)
-  return elf, prg.arg, group_segment_fixed_size_from_elf(elf)
+  p = prg.arg
+  return elf, p.global_size, p.local_size, p.vars, group_segment_fixed_size_from_elf(elf)
+
+def compile_block_tile_isa(Hd, Hq, Hkv, MAXC, L, S, Tc):
+  elf, g, b, v, gseg = _compile(Hd, Hq, Hkv, MAXC, L, S, Tc)
+  return elf, g, b, gseg   # back-compat (keystone gate)
 
 def native_isa_block_tile(out_t:Tensor, q_t:Tensor, cache_t:Tensor, Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
   """Run the native-ISA-compiled block tile via Ops.PROGRAM injection (DEV=AMD / HIP runtime). out_t:[Hq*S*(Hd+2)]
-  fp32, q_t:[Hq*Hd] fp32, cache_t:[2,1,Hkv,MAXC,Hd] fp32. Returns the per-split partials tensor (slot 0)."""
-  W = Hd + 2
-  elf, pinfo, gseg = compile_block_tile_isa(Hd, Hq, Hkv, MAXC, L, S, Tc)
+  fp32 partials, q_t:[Hq*Hd] fp32, cache_t:[2,1,Hkv,MAXC,Hd] fp32. Tc int (fixed) or UOp (runtime start_pos var).
+  Returns the per-split partials tensor (slot 0). gmax + combine stay on HIP (caller)."""
+  elf, gsize, lsize, varz, gseg = _compile(Hd, Hq, Hkv, MAXC, L, S, Tc)
   def inject(*ph):
     return UOp(Ops.PROGRAM,
-               src=(UOp.sink(*ph, arg=KernelInfo(name="native_block_tile",
-                                                 estimates=Estimates(ops=Hq*MAXC*Hd*2, mem=Hkv*MAXC*Hd*4))),
+               src=(UOp.sink(*ph, *varz, arg=KernelInfo(name="native_block_tile",
+                                                        estimates=Estimates(ops=Hq*MAXC*Hd*2, mem=Hkv*MAXC*Hd*4))),
                     UOp(Ops.DEVICE, arg="AMD"), UOp(Ops.LINEAR, src=()), UOp(Ops.SOURCE, arg=""),
                     UOp(Ops.BINARY, arg=elf)),
-               arg=ProgramInfo(name="native_block_tile", global_size=pinfo.global_size, local_size=pinfo.local_size,
-                               vars=(), globals=(0,1,2), outs=(0,), ins=(1,2), aux=()))
+               arg=ProgramInfo(name="native_block_tile", global_size=gsize, local_size=lsize,
+                               vars=varz, globals=(0,1,2), outs=(0,), ins=(1,2), aux=()))
   return out_t.custom_kernel(q_t, cache_t, fxn=inject)[0]
