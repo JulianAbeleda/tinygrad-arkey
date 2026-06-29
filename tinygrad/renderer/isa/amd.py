@@ -223,6 +223,7 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   base, off = a.src[0], a.src[1]
   vals = b.src if (b.op is Ops.NOOP and not isinstance(b.dtype, PtrDType)) else (b,)   # STACK lane-carrier -> per-lane vals
   isz = vals[0].dtype.scalar().itemsize
+  vals = tuple(_tov(ctx, v) for v in vals)   # CONST value (e.g. Tensor.ones stores 1.0) -> V_CONST; RANGE -> MOV_S2V
   return UOp(Ops.INS, dtypes.void, src=(off, base) + tuple(vals) + (UOp.const(dtypes.int32, isz).rtag(),), arg=AMDOps.GLOBAL_STORE)
 
 def _tov(ctx:IselContext, u:UOp):
