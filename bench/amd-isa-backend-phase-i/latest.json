@@ -1,0 +1,77 @@
+{
+  "verdict": "AMD_ISA_PHASE_I_PASS_NATIVE_WD_BASELINE",
+  "command": "DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_phase_i_gate.py",
+  "selected_route_mode": "tile-only native injection (model on HIP, attention tile via AMDISARenderer)",
+  "ckpts": [
+    512,
+    4096
+  ],
+  "nmeas": 10,
+  "per_ctx": {
+    "512": {
+      "native_tok_s": 0.45,
+      "owned_tok_s": 103.89,
+      "pct_of_owned": 0.4,
+      "native_w_ms_median": 2225.954,
+      "native_w_ms_stdev": 660.58,
+      "token_match": true,
+      "native_attn": [
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128",
+        "native_block_tile",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "owned_attn": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "candidate_route_clean": true
+    },
+    "4096": {
+      "native_tok_s": 0.37,
+      "owned_tok_s": 94.97,
+      "pct_of_owned": 0.4,
+      "native_w_ms_median": 2667.878,
+      "native_w_ms_stdev": 797.095,
+      "token_match": true,
+      "native_attn": [
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128",
+        "native_block_tile",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "owned_attn": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "candidate_route_clean": true
+    }
+  },
+  "route_bound": true,
+  "token_match": true,
+  "hidden_fallback_check": "no HIP/LLVM block tile, no owned tile in candidate route",
+  "native_resource_summary": {
+    "vgpr": 128,
+    "lds_bytes": 14336,
+    "grid": [
+      1,
+      1,
+      1
+    ],
+    "block": [
+      32,
+      4,
+      1
+    ],
+    "elf_bytes": 4055
+  },
+  "hip_block_tile_baseline_note": "comparator is the owned hand-AMDGCN tile; HIP-generated block-tile baseline is in bench/qk-owned-oracle-parity (separate harness)",
+  "next_phase_unlocked": "Phase J: correct consumer-only waitcnt",
+  "baseline_analysis": "native tile ~0.4% of owned -- EXPECTED ground-truth baseline (Phase I allowed to be slow). Dominant bottleneck = grid=[1,1,1]: the tile kvh/s are RANGE(GLOBAL) which the native backend lowers to SERIAL loops (global_size derives from SPECIAL only), so ONE workgroup does all Hkv*S splits serially, vs the owned tile Hkv*S parallel workgroups. Grid parallelism + waitcnt(J) + scheduling(K) + modulo(L) are the levers; out of scope for Phase I."
+}
