@@ -1,0 +1,31 @@
+{
+  "verdict": "AMD_ISA_PHASE_J_PASS_CONSUMER_WAITCNT",
+  "command": "DEV=AMD:ISA PYTHONPATH=. .venv/bin/python extra/amd_isa_phase_j_gate.py",
+  "model": "consumer-only waitcnt (drain only before consumers/RMW-ds_load/barrier/endpgm/loop-branches); full-drain s_waitcnt(0)",
+  "block_tile_waitcnt": {
+    "conservative_baseline": 46,
+    "consumer_only": 36,
+    "reduction": 10,
+    "pct_reduction": 21.7,
+    "n_insts": 509
+  },
+  "memory_classes_tracked": {
+    "vmcnt": "global_load/global_store",
+    "lgkmcnt": "ds_load/ds_store/ds_bpermute/s_load"
+  },
+  "correctness_status": "PASS (block tile numerically correct vs reference)",
+  "nondeterminism_check": "PASS (3 repeated runs identical)",
+  "waitcnt_baseline_comparison": "conservative native baseline = 1 drain per memory op (toggle AMD_ISA_WAITCNT_CONSERVATIVE=1). LLVM-generated / owned hand-ASM waitcnt counts are in separate routes (not disassembled here); the meaningful native A/B is conservative vs consumer-only.",
+  "next_phase_unlocked": "Phase K: inst-stream scheduler",
+  "regression_gates_status": {
+    "inc0": "PASS",
+    "inc1": "PASS",
+    "inc2": "PASS",
+    "inc3": "PASS",
+    "phase_b": "PASS",
+    "phase_c": "PASS",
+    "phase_f": "PASS",
+    "phase_g": "PASS"
+  },
+  "in_model_wd_token_match": "PASS (Phase H in-model gate re-run with consumer-only waitcnt: AMD_ISA_PHASE_H_PASS_MODEL_ROUTE_BOUND, token_match=true, repeated_run_stability=true)"
+}

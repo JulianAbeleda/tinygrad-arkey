@@ -14,7 +14,7 @@ from tinygrad.uop import FastEnum
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import ISARenderer, IselContext, Register
-from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC
+from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
@@ -377,11 +377,10 @@ def lower_inst(x:UOp):
   if a is AMDOps.S_LOAD_PTR:
     off = src[0].arg
     ld = _ins(s_load_b64(sdata=_S2(x.reg), sbase=_S[0:1], offset=off, soffset=NULL), x.tag)
-    wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))     # drain (lgkmcnt) - conservative/correct for Inc 0
-    return (ld, [ld, wt])
+    return (ld, [ld])    # waitcnt inserted by the consumer-only pass (_insert_waitcnt)
   if a is AMDOps.S_LOAD_VAR:                        # Phase H: runtime scalar var -> s_load_b32 from kernarg into 1 SGPR
     ld = _ins(s_load_b32(sdata=_S[x.reg.index], sbase=_S[0:1], offset=src[0].arg, soffset=NULL), x.tag)
-    return (ld, [ld, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
+    return (ld, [ld])
   if a is AMDOps.MOV:                               # tid passthrough (v0) - emit nothing
     return (x.replace(op=Ops.NOOP, src=()), [])
   if a is AMDOps.WG_ID:                             # workgroup id.{x,y,z}: copy system SGPR s{2+d} into a VGPR for index math
@@ -390,7 +389,7 @@ def lower_inst(x:UOp):
     return _ins(v_bfe_u32(_Vr(x.reg), _V[0], src[1].arg, 10), x.tag)
   if a is AMDOps.DS_BPERMUTE:                        # cross-lane: vdst[lane] = data0[ addr[lane]>>2 ]; drain after
     bp = _ins(ds_bpermute_b32(vdst=_Vr(x.reg), addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)), x.tag)
-    return (bp, [bp, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
+    return (bp, [bp])
   if a is AMDOps.V_DOT2:                             # packed fp16 dot: acc=src[0], a_packed=src[1], b_packed=src[2]
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
@@ -398,11 +397,11 @@ def lower_inst(x:UOp):
   if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap
     ldfn = ds_load_u16 if x.dtype.itemsize == 2 else ds_load_b32
     ld = _ins(ldfn(vdst=_Vr(x.reg), addr=_Vr(src[0].reg)), x.tag)
-    return (ld, [ld, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
+    return (ld, [ld])
   if a is AMDOps.DS_STORE:                           # LDS store: 16-bit for half tiles (else b32). addr=src[0], data=src[1], esz=src[3]
     stfn = ds_store_b16 if src[3].arg == 2 else ds_store_b32
     st = UOp(Ops.INS, arg=stfn(addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)))
-    return (st, [st, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
+    return (st, [st])
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
     return _ins(v_mov_b32_e32(_Vr(x.reg), src[0].arg), x.tag)
   if a is AMDOps.V_CONST:                           # materialize a CONST value (float or int) into a VGPR
@@ -413,8 +412,7 @@ def lower_inst(x:UOp):
   if a is AMDOps.GLOBAL_LOAD:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg    # imm = per-lane element byte offset
     ld = _ins(global_load_b32(vdst=_Vr(x.reg), addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
-    wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))     # drain (vmcnt)
-    return (ld, [ld, wt])
+    return (ld, [ld])
   # float VOP2 (add/mul): src0 may be a 32-bit float literal, vsrc1 must be a VGPR -> a CONST operand goes in src0.
   if a is AMDOps.V_ADD: return _ins(_vop2_f(v_add_f32_e32, x, src), x.tag)
   if a is AMDOps.V_MUL: return _ins(_vop2_f(v_mul_f32_e32, x, src), x.tag)
@@ -457,17 +455,15 @@ def lower_inst(x:UOp):
     save = UOp(Ops.INS, arg=s_and_saveexec_b32(_S[5], VCC))   # s5 = EXEC; EXEC = VCC & EXEC  (s5 reserved: not in any pool)
     st = UOp(Ops.INS, arg=((ds_store_b16 if src[5].arg == 2 else ds_store_b32)(addr=addr, data0=val) if kind == 1
                            else global_store_b32(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))   # src[5]=element size
-    wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))
-    restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))        # restore EXEC
-    return (restore, [cmp, save, st, wt, restore])
+    restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))        # restore EXEC (store ordering -> _insert_waitcnt)
+    return (restore, [cmp, save, st, restore])
   if a is AMDOps.GLOBAL_STORE:
     # SCALARIZED: one INS -> N scalar stores, lane l at immediate offset l*itemsize. src=(off, base, val0..valN-1, isz)
     off_r, ptr_r, isz = src[0].reg, src[1].reg, src[-1].arg
     vals = src[2:-1]
     stores = [UOp(Ops.INS, arg=global_store_b32(addr=_Vr(off_r), data=_Vr(v.reg), saddr=_S2(ptr_r), offset=l*isz))
               for l,v in enumerate(vals)]
-    wt = UOp(Ops.INS, arg=s_waitcnt(simm16=0))     # drain (vmcnt) before endpgm so stores complete
-    return (stores[-1], stores + [wt])
+    return (stores[-1], stores)    # vmcnt drain before endpgm inserted by _insert_waitcnt
   return None
 
 # ---- counted-loop control flow (Phase B). Labels are (kind, counter_index) tuples; resolved to PC-relative simm16
@@ -554,4 +550,64 @@ class AMDISARenderer(ISARenderer):
     return out
   def asm(self, prg:UOp, lin:UOp) -> bytes:
     from tinygrad.renderer.amd.elf import assemble_linear
-    return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(list(lin.src)))), self.target.arch)
+    # Phase J: consumer-only waitcnt BEFORE label resolution (inserting waits shifts byte positions -> branch offsets
+    # must be resolved after).
+    return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(list(lin.src))))), self.target.arch)
+
+  @staticmethod
+  def _inst_regs(inst) -> list:
+    # ordered GPR operands of an rdna3 Inst (first = destination for loads/VALU). Offsets are globally unique:
+    # VGPRs 256..511, SGPRs 0..105 (VCC/EXEC/etc. 106..255 never match a memory-loaded reg).
+    out = []
+    for name, field in inst._fields:
+      if isinstance(field, FixedBitField): continue
+      v = getattr(inst, name)
+      if isinstance(v, Reg): out.append(v)
+    return out
+
+  def _insert_waitcnt(self, uops:list[UOp]) -> list[UOp]:
+    # Correct CONSUMER-ONLY waitcnt: replaces the conservative drain-after-every-memory-op model. Track regs defined by
+    # outstanding VMEM (vmcnt) and LDS/SMEM (lgkmcnt) loads + whether a store of each class is outstanding. Insert a
+    # single full-drain s_waitcnt(0) only before: a consumer that touches a pending load's reg (RAW/WAR), a ds_load
+    # that may alias a pending LDS store (RMW), s_barrier (LDS visibility), s_endpgm, and every branch (loop-sound:
+    # backedges/exits drain so cross-iteration store->load hazards can't slip past). Labels start a clean block.
+    # Full-drain (simm16=0) is always correct; the count drop comes from batching loads + dropping needless store waits.
+    from tinygrad.helpers import getenv
+    if getenv("AMD_ISA_WAITCNT_CONSERVATIVE", 0):   # baseline (Phase J A/B): drain after every memory op (old model)
+      out: list[UOp] = []
+      for u in uops:
+        out.append(u)
+        if not isinstance(u.arg, tuple) and str(u.arg).split("(", 1)[0].startswith(
+            ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")):
+          out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=0)))
+      return out
+    out = []
+    pend_vm:set[int] = set(); pend_lgkm:set[int] = set(); vm_store = lgkm_store = False
+    def _drain():
+      nonlocal vm_store, lgkm_store
+      out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=0)))
+      pend_vm.clear(); pend_lgkm.clear(); vm_store = lgkm_store = False
+    for u in uops:
+      a = u.arg
+      if isinstance(a, tuple):                                   # ("label"|"branch", ...) control marker
+        # Drain before EVERY branch (backedge/exit) so a store in iter N completes before iter N+1 reads it
+        # (cross-iteration RMW). Do NOT clear at labels: a value loaded BEFORE a loop (e.g. the kernarg ptr) is
+        # consumed INSIDE it -- that pending must flow across the loop-top label or the in-loop consumer misses its wait.
+        if a[0] == "branch" and (pend_vm or pend_lgkm or vm_store or lgkm_store): _drain()
+        out.append(u)
+        continue
+      m = str(a).split("(", 1)[0]
+      offs = {v.offset for v in self._inst_regs(a)}
+      need = bool(offs & pend_vm) or bool(offs & pend_lgkm)
+      if m == "s_barrier": need = need or lgkm_store or bool(pend_lgkm)
+      elif m == "s_endpgm": need = need or vm_store or lgkm_store or bool(pend_vm) or bool(pend_lgkm)
+      elif m.startswith("ds_load") and lgkm_store: need = True    # RMW: a ds_load may alias a pending ds_store
+      if need: _drain()
+      out.append(u)
+      regs = self._inst_regs(a)
+      if m.startswith("global_load"): pend_vm.add(regs[0].offset)
+      elif m.startswith(("ds_load", "s_load", "ds_bpermute")):
+        if regs: pend_lgkm.add(regs[0].offset)
+      elif m.startswith("global_store"): vm_store = True
+      elif m.startswith("ds_store"): lgkm_store = True
+    return out
