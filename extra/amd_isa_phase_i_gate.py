@@ -27,6 +27,7 @@ _NATIVE, _OWNED, _HIPBLK = "native_block_tile", "owned_flash_tile_gqa", "flash_b
 
 CAND = {"DECODE_ATTN_AMDGCN_TILE":"0","DECODE_ATTN_GENERATED_WHOLECACHE":"1","DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE":"1",
         "DECODE_ATTN_BLOCK_TILE":"1","DECODE_ATTN_BLOCK_TILE_FIXED_S":"1","DECODE_ATTN_NATIVE_ISA_BLOCK_TILE":"1"}
+if os.environ.get("QK_I_DYNAMIC_S"): CAND.pop("DECODE_ATTN_BLOCK_TILE_FIXED_S", None)   # N3F: native dynamic-S grid (cdiv(Tc,L) splits)
 COMP = {"DECODE_ATTN_AMDGCN_TILE":"1"}
 ALLFLAGS = set(CAND) | set(COMP)
 

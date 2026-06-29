@@ -9,11 +9,11 @@
   "nmeas": 20,
   "per_ctx": {
     "512": {
-      "native_tok_s": 61.09,
-      "owned_tok_s": 103.77,
-      "pct_of_owned": 58.9,
-      "native_w_ms_median": 16.37,
-      "native_w_ms_stdev": 4.024,
+      "native_tok_s": 66.91,
+      "owned_tok_s": 103.4,
+      "pct_of_owned": 64.7,
+      "native_w_ms_median": 14.945,
+      "native_w_ms_stdev": 4.375,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -31,11 +31,11 @@
       "candidate_route_clean": true
     },
     "4096": {
-      "native_tok_s": 57.92,
-      "owned_tok_s": 94.84,
+      "native_tok_s": 57.61,
+      "owned_tok_s": 94.26,
       "pct_of_owned": 61.1,
-      "native_w_ms_median": 17.265,
-      "native_w_ms_stdev": 3.8,
+      "native_w_ms_median": 17.358,
+      "native_w_ms_stdev": 4.108,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",

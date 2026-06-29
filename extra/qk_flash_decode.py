@@ -466,56 +466,58 @@ def flash_online_state_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:
       arg=_fki(f"flash_online_state_pv_tile_whole_cache_{Hq}_{Hd}"))
   return kernel
 
-def flash_state_gmax_kernel(Hd:int, Hq:int, S):
-  W = Hd + 2; M_COL = Hd + 1
+def flash_state_gmax_kernel(Hd:int, Hq:int, S, stride=None):
+  # N3F: stride (partials layout, = compiled Smax) is decoupled from S (reduce count, = dynamic valid splits).
+  W = Hd + 2; M_COL = Hd + 1; stride = S if stride is None else stride
   def kernel(gm:UOp, pout:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
     s = UOp.range(S, 1, axis_type=AxisType.REDUCE)
     g = UOp.placeholder((1,), _F32, 133, addrspace=AddrSpace.REG)
     g = g.after(h)[0].set(-1e30)
-    g = g[0].set(g.after(s)[0].maximum(pout[(h * S + s) * W + M_COL]), end=s)
+    g = g[0].set(g.after(s)[0].maximum(pout[(h * stride + s) * W + M_COL]), end=s)
     return gm[h].store(g[0]).end(h).sink(arg=_fki(f"flash_state_gmax_{Hq}_{Hd}"))
   return kernel
 
-def flash_state_combine_kernel(Hd:int, Hq:int, S):
-  W = Hd + 2; L_COL = Hd; M_COL = Hd + 1
+def flash_state_combine_kernel(Hd:int, Hq:int, S, stride=None):
+  # N3F: stride (partials layout, = compiled Smax) is decoupled from S (reduce count, = dynamic valid splits).
+  W = Hd + 2; L_COL = Hd; M_COL = Hd + 1; stride = S if stride is None else stride
   def kernel(out:UOp, pout:UOp, gm:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
     d = UOp.range(Hd, 1, AxisType.GLOBAL)
     gm_h = gm[h]
     s = UOp.range(S, 2, axis_type=AxisType.REDUCE)
-    w = _fexp(pout[(h * S + s) * W + M_COL] - gm_h)
+    w = _fexp(pout[(h * stride + s) * W + M_COL] - gm_h)
     num = UOp.placeholder((1,), _F32, 134, addrspace=AddrSpace.REG)
     den = UOp.placeholder((1,), _F32, 135, addrspace=AddrSpace.REG)
     num = num.after(h, d)[0].set(0.0)
     den = den.after(h, d)[0].set(0.0)
-    upd = num[0].store(num.after(s)[0] + w * pout[(h * S + s) * W + d])
-    upd = den.after(upd)[0].store(den.after(s)[0] + w * pout[(h * S + s) * W + L_COL]).end(s)
+    upd = num[0].store(num.after(s)[0] + w * pout[(h * stride + s) * W + d])
+    upd = den.after(upd)[0].store(den.after(s)[0] + w * pout[(h * stride + s) * W + L_COL]).end(s)
     nf, df = num.after(upd)[0], den.after(upd)[0]
     return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_state_combine_{Hq}_{Hd}"))
   return kernel
 
-def flash_fused_state_combine_kernel(Hd:int, Hq:int, S):
+def flash_fused_state_combine_kernel(Hd:int, Hq:int, S, stride=None):
   """P5 missing-primitive: fuse the global-max into the combine -> ONE dispatch instead of gmax+combine, and no gm
   buffer round-trip. Each (h,d) thread computes gm[h]=max_s M[s] inline (pass 1) then the log-sum-exp rescale
   (pass 2). M is read twice but in-kernel (no global gm buffer). Default-off (DECODE_ATTN_FUSED_COMBINE=1).
   docs/decode-attention-owned-lifecycle-missing-primitives-scope-20260627.md."""
-  W = Hd + 2; L_COL = Hd; M_COL = Hd + 1
+  W = Hd + 2; L_COL = Hd; M_COL = Hd + 1; stride = S if stride is None else stride
   def kernel(out:UOp, pout:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
     d = UOp.range(Hd, 1, AxisType.GLOBAL)
     s1 = UOp.range(S, 2, axis_type=AxisType.REDUCE)
     g = UOp.placeholder((1,), _F32, 136, addrspace=AddrSpace.REG)
     g = g.after(h, d)[0].set(-1e30)
-    g = g[0].set(g.after(s1)[0].maximum(pout[(h * S + s1) * W + M_COL]), end=s1)   # pass 1: inline gmax
+    g = g[0].set(g.after(s1)[0].maximum(pout[(h * stride + s1) * W + M_COL]), end=s1)   # pass 1: inline gmax
     gm_h = g[0]
     s2 = UOp.range(S, 3, axis_type=AxisType.REDUCE)
-    w = _fexp(pout[(h * S + s2) * W + M_COL] - gm_h)
+    w = _fexp(pout[(h * stride + s2) * W + M_COL] - gm_h)
     num = UOp.placeholder((1,), _F32, 137, addrspace=AddrSpace.REG)
     den = UOp.placeholder((1,), _F32, 138, addrspace=AddrSpace.REG)
     num = num.after(g)[0].set(0.0); den = den.after(g)[0].set(0.0)
-    upd = num[0].store(num.after(s2)[0] + w * pout[(h * S + s2) * W + d])
-    upd = den.after(upd)[0].store(den.after(s2)[0] + w * pout[(h * S + s2) * W + L_COL]).end(s2)   # pass 2: rescale+norm
+    upd = num[0].store(num.after(s2)[0] + w * pout[(h * stride + s2) * W + d])
+    upd = den.after(upd)[0].store(den.after(s2)[0] + w * pout[(h * stride + s2) * W + L_COL]).end(s2)   # pass 2: rescale+norm
     nf, df = num.after(upd)[0], den.after(upd)[0]
     return out[h * Hd + d].store(nf / df).end(h, d).sink(arg=_fki(f"flash_fused_state_combine_{Hq}_{Hd}"))
   return kernel
@@ -1394,23 +1396,27 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
       smax_route = _ceildiv(MAXC, l_route)
     tile_builder = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel if getenv("DECODE_ATTN_BLOCK_TILE", 0) else \
       flash_fused_xlane_score_pv_tile_whole_cache_kernel
+    combine_stride = s_route   # HIP tile packs partials at S=s_route stride; gmax/combine read at the same stride
     if getenv("DECODE_ATTN_NATIVE_ISA_BLOCK_TILE", 0) and getenv("DECODE_ATTN_BLOCK_TILE", 0):
       # Phase H: the block tile is compiled by the NATIVE AMD ISA backend (AMDISARenderer) and injected as a
-      # precompiled Ops.PROGRAM graph node; gmax + combine stay on HIP. Default-off. Needs a CONCRETE S/L grid
-      # (the native renderer needs concrete RANGE bounds) -> pair with DECODE_ATTN_BLOCK_TILE_FIXED_S=1.
-      if not isinstance(s_route, int) or not isinstance(l_route, int):
-        raise RuntimeError("DECODE_ATTN_NATIVE_ISA_BLOCK_TILE needs a concrete S/L grid; set DECODE_ATTN_BLOCK_TILE_FIXED_S=1")
+      # precompiled Ops.PROGRAM graph node; gmax + combine stay on HIP. Default-off. L must be a concrete loop bound.
+      # Phase N3F (dynamic-S): compile ONCE at the concrete Smax (partials stride + RANGE->gidx grid bound) but launch
+      # only s_route = cdiv(Tc,L) split-workgroups (symbolic grid resolved at launch). With FIXED_S, s_route==smax_route
+      # (static grid, unchanged). Partials are packed at the Smax stride; gmax/combine read s_route splits at Smax stride.
+      if not isinstance(l_route, int):
+        raise RuntimeError("DECODE_ATTN_NATIVE_ISA_BLOCK_TILE needs a concrete L loop bound; set DECODE_ATTN_BLOCK_TILE_FIXED_S/_L")
       from extra.qk_native_isa_block_tile_graph_node import native_isa_block_tile
       po = native_isa_block_tile(Tensor.empty(Hq * smax_route * W2, dtype=_F32), q_f, cache_kv,
-                                 Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u)
+                                 Hd, Hq, Hkv, MAXC, l_route, smax_route, Tc_u, s_grid=s_route)
+      combine_stride = smax_route   # native tile compiled at Smax -> partials packed at Smax stride
     else:
       po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,
         fxn=tile_builder(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
     if getenv("DECODE_ATTN_FUSED_COMBINE", 0):   # P5: one fused dispatch (inline gmax) instead of gmax+combine
-      out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_state_combine_kernel(Hd, Hq, s_route))[0]
+      out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_state_combine_kernel(Hd, Hq, s_route, stride=combine_stride))[0]
     else:
-      gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, s_route))[0]
-      out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, s_route))[0]
+      gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, s_route, stride=combine_stride))[0]
+      out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, s_route, stride=combine_stride))[0]
     return out.reshape(Hq, Hd)
   if getenv("DECODE_ATTN_PHYSICAL_TILE_PALL_SCORE", 0):
     score_kernel = flash_pall_lds_crosslane_fdot2_score_whole_cache_kernel(Hd, Hq, Hkv, MAXC, Tc_u)

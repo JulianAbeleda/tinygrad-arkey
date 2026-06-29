@@ -76,11 +76,18 @@ def compile_block_tile_isa(Hd, Hq, Hkv, MAXC, L, S, Tc):
   elf, g, b, v, gseg = _compile(Hd, Hq, Hkv, MAXC, L, S, Tc)
   return elf, g, b, gseg   # back-compat (keystone gate)
 
-def native_isa_block_tile(out_t:Tensor, q_t:Tensor, cache_t:Tensor, Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+def native_isa_block_tile(out_t:Tensor, q_t:Tensor, cache_t:Tensor, Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, s_grid=None):
   """Run the native-ISA-compiled block tile via Ops.PROGRAM injection (DEV=AMD / HIP runtime). out_t:[Hq*S*(Hd+2)]
   fp32 partials, q_t:[Hq*Hd] fp32, cache_t:[2,1,Hkv,MAXC,Hd] fp32. Tc int (fixed) or UOp (runtime start_pos var).
-  Returns the per-split partials tensor (slot 0). gmax + combine stay on HIP (caller)."""
+  Returns the per-split partials tensor (slot 0). gmax + combine stay on HIP (caller).
+
+  Phase N3F (dynamic-S): the kernel is compiled ONCE at the concrete S=Smax (partials stride + RANGE->gidx grid bound
+  + elf), but only `s_grid` split-workgroups are launched. s_grid may be a symbolic UOp = cdiv(Tc,L); the AMD runtime
+  resolves the global_size split dim per launch from the bound start_pos. The kernel is grid-agnostic (each workgroup
+  handles split=gidx1, masked by Tc); splits >= s_grid are not launched (their partials unwritten, and gmax/combine
+  read only s_grid splits at the Smax stride). s_grid=None -> static grid (= compiled S)."""
   elf, gsize, lsize, varz, gseg = _compile(Hd, Hq, Hkv, MAXC, L, S, Tc)
+  gsize = (gsize[0], gsize[1] if s_grid is None else s_grid, gsize[2])   # N3F: override split-grid dim (may be symbolic)
   def inject(*ph):
     return UOp(Ops.PROGRAM,
                src=(UOp.sink(*ph, *varz, arg=KernelInfo(name="native_block_tile",
