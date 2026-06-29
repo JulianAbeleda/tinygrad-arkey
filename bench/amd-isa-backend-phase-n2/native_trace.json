@@ -1,0 +1,22 @@
+{
+  "route": "native",
+  "arch": "gfx1100",
+  "route_bound": true,
+  "prog_names_sample": [
+    "flash_state_combine_32_128",
+    "flash_state_gmax_32_128",
+    "native_block_tile"
+  ],
+  "tile_kernel_present": true,
+  "tile_itrace_launches": 72,
+  "non_tile_attn_kernels": [],
+  "kernel_gpu_ms_total_capture": 19305.48,
+  "tile_launches_in_capture": 72,
+  "per_pc_stall_available": false,
+  "traced_waves": 1536,
+  "traced_cus": 48,
+  "occ_wave_samples": 36864,
+  "median_wave_cycles": 372999,
+  "mean_wave_cycles": 367753,
+  "max_wave_cycles": 437566
+}

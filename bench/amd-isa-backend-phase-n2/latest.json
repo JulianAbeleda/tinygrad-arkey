@@ -1,0 +1,123 @@
+{
+  "verdict": "AMD_ISA_PHASE_N2_PASS_DEGRADED_TIMING_ATTRIBUTION",
+  "profiling_backend": "sqtt",
+  "ctx_profiled": 512,
+  "note": "SQTT_ITRACE_SE_MASK=1 -> instruction trace sampled on ONE shader engine; occupancy/CU counts are per-sampled-SE, stall ratios are representative.",
+  "owned": {
+    "route_bound": true,
+    "kernel_gpu_ms_total_capture": 1202.0,
+    "tile_launches_in_capture": 72,
+    "per_pc_stall_available": false,
+    "traced_waves": 1536,
+    "traced_cus": 48,
+    "occ_wave_samples": 36864,
+    "median_wave_cycles": 14434,
+    "mean_wave_cycles": 14172,
+    "max_wave_cycles": 19975,
+    "non_tile_attn_kernels": []
+  },
+  "native": {
+    "route_bound": true,
+    "kernel_gpu_ms_total_capture": 19305.48,
+    "tile_launches_in_capture": 72,
+    "per_pc_stall_available": false,
+    "traced_waves": 1536,
+    "traced_cus": 48,
+    "occ_wave_samples": 36864,
+    "median_wave_cycles": 372999,
+    "mean_wave_cycles": 367753,
+    "max_wave_cycles": 437566,
+    "non_tile_attn_kernels": []
+  },
+  "token_match": true,
+  "route_bound_wd": true,
+  "deterministic": true,
+  "hidden_fallback_check": "candidate route attn kernels = native tile + HIP gmax/combine only",
+  "wd": {
+    "512": {
+      "native_tok_s": 61.09,
+      "owned_tok_s": 103.77,
+      "pct_of_owned": 58.9
+    },
+    "4096": {
+      "native_tok_s": 57.92,
+      "owned_tok_s": 94.84,
+      "pct_of_owned": 61.1
+    }
+  },
+  "per_pc_stall_attribution": "UNAVAILABLE: the vendored rocprof-trace-decoder (0.1.6) build returns wave events with instructions_size==0 (occupancy-only; verified roc.py --kernel yields OCC but no per-PC Stall table). Dynamic attribution is therefore OCCUPANCY + WAVE-CYCLE timing (degraded), not per-instruction stall categories.",
+  "dynamic_diff_rows": [
+    {
+      "row": "total_kernel_time_gpu_ms_capture",
+      "owned": 1202.0,
+      "native": 19305.48,
+      "delta": 18103.48,
+      "ratio": 16.06,
+      "confidence": "high",
+      "evidence": "PROFILE per-kernel GPU ms summed over all tile launches in the captured forward",
+      "candidate_lever": "lower wall time"
+    },
+    {
+      "row": "active_cu_count_sampledSE",
+      "owned": 48,
+      "native": 48,
+      "delta": 0,
+      "ratio": 1.0,
+      "confidence": "medium",
+      "evidence": "distinct (SE,CU) occupied in the sampled shader engine",
+      "candidate_lever": "occupancy/CU coverage (N3-occupancy)"
+    },
+    {
+      "row": "traced_waves_sampledSE",
+      "owned": 1536,
+      "native": 1536,
+      "delta": 0,
+      "ratio": 1.0,
+      "confidence": "medium",
+      "evidence": "distinct waves with occupancy events in sampled SE",
+      "candidate_lever": "grid/wave mapping"
+    },
+    {
+      "row": "median_wave_cycles",
+      "owned": 14434,
+      "native": 372999,
+      "delta": 358565,
+      "ratio": 25.84,
+      "confidence": "high",
+      "evidence": "median wave lifetime in shader cycles (occupancy start->end)",
+      "candidate_lever": "reduce per-wave latency"
+    },
+    {
+      "row": "mean_wave_cycles",
+      "owned": 14172,
+      "native": 367753,
+      "delta": 353581,
+      "ratio": 25.95,
+      "confidence": "high",
+      "evidence": "mean wave lifetime in shader cycles",
+      "candidate_lever": "reduce per-wave latency"
+    },
+    {
+      "row": "vmem_stall / lds_stall / waitcnt_stall (per-PC categories)",
+      "owned": "unavailable",
+      "native": "unavailable",
+      "confidence": "low",
+      "evidence": "decoder build returns occupancy-only (instructions_size==0); per-PC stall category not decodable",
+      "candidate_lever": "needs PMC counters or a fixed itrace decoder to split VMEM vs LDS vs waitcnt"
+    },
+    {
+      "row": "lane_utilization",
+      "owned": "unavailable",
+      "native": "unavailable",
+      "confidence": "low",
+      "evidence": "EXEC/lane occupancy not exposed by this decoder build",
+      "candidate_lever": "\u2014"
+    }
+  ],
+  "hot_pc_rows": [],
+  "hot_pc_note": "per-PC stall unavailable (decoder occupancy-only) -> no hot_pc_rows. Top stall PC requires a working itrace decoder build.",
+  "wave_cycles_ratio_native_over_owned": 25.84,
+  "interpretation": "native median wave lifetime 372999 cyc vs owned 14434 cyc (x25.84); native occupies 48 CUs vs owned 48 (sampled SE). With native doing FEWER static instructions (N0: 324 vs 557) but its waves living LONGER, the gap is per-wave LATENCY/STALL-bound, not instruction-count or occupancy. The exact stall source (VMEM vs LDS vs waitcnt) is NOT resolved (decoder occupancy-only). CAVEAT: median_wave_cycles is a wave-RESIDENCY proxy (occupancy start->end) pooled over launches; it can include occupancy-overlap idle, so the absolute ratio overstates pure-compute cycles -- the DIRECTION (native waves live much longer => latency/stall-bound) is robust, the magnitude is approximate. End-to-end W==D gap is 1.6-1.7x (attention is one of many decode kernels), consistent with a much slower attention tile that is a fraction of the decode.",
+  "strongest_suspected_bottleneck": "per-wave latency: native waves take 25.84x owned's cycles despite fewer static instructions -> stall-bound (exposed load-use / memory latency). Category unresolved by occupancy-only decode.",
+  "next_implementation_phase": "N2.1 (finer counters): get a working itrace/PMC decode to split VMEM vs LDS vs waitcnt stall, THEN N3A (memory/coalescing) or N3C (waitcnt/load-use scheduling). Strong prior hint: per-token ds_bpermute reduce latency exposed."
+}
