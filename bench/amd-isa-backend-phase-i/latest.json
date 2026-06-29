@@ -9,11 +9,11 @@
   "nmeas": 10,
   "per_ctx": {
     "512": {
-      "native_tok_s": 46.15,
-      "owned_tok_s": 104.04,
-      "pct_of_owned": 44.4,
-      "native_w_ms_median": 21.67,
-      "native_w_ms_stdev": 6.201,
+      "native_tok_s": 48.25,
+      "owned_tok_s": 103.47,
+      "pct_of_owned": 46.6,
+      "native_w_ms_median": 20.725,
+      "native_w_ms_stdev": 5.968,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -31,11 +31,11 @@
       "candidate_route_clean": true
     },
     "4096": {
-      "native_tok_s": 43.9,
-      "owned_tok_s": 94.97,
-      "pct_of_owned": 46.2,
-      "native_w_ms_median": 22.779,
-      "native_w_ms_stdev": 6.563,
+      "native_tok_s": 45.77,
+      "owned_tok_s": 94.38,
+      "pct_of_owned": 48.5,
+      "native_w_ms_median": 21.851,
+      "native_w_ms_stdev": 6.361,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -57,8 +57,8 @@
   "token_match": true,
   "hidden_fallback_check": "no HIP/LLVM block tile, no owned tile in candidate route",
   "native_resource_summary": {
-    "vgpr": 120,
-    "lds_bytes": 14336,
+    "vgpr": 112,
+    "lds_bytes": 12288,
     "grid": [
       8,
       48,
@@ -69,7 +69,7 @@
       4,
       1
     ],
-    "elf_bytes": 4311
+    "elf_bytes": 3543
   },
   "hip_block_tile_baseline_note": "comparator is the owned hand-AMDGCN tile; HIP-generated block-tile baseline is in bench/qk-owned-oracle-parity (separate harness)",
   "baseline_analysis": "native tile ~0.4% of owned -- EXPECTED ground-truth baseline (Phase I is allowed to be slow). Dominant bottleneck = grid=[1,1,1]: the tile's kvh/s are RANGE(GLOBAL) which the native backend lowers to SERIAL loops (global_size derives from SPECIAL only), so ONE workgroup does all Hkv*S splits serially, vs the owned tile's Hkv*S parallel workgroups. Grid parallelism (map RANGE(GLOBAL) -> workgroup dims) + waitcnt (J) + scheduling (K) + modulo (L) are the optimization levers; out of scope for Phase I (record only).",
