@@ -61,21 +61,21 @@
   },
   "native": {
     "resources": {
-      "vgpr": 112,
+      "vgpr": 56,
       "sgpr": 8,
       "lds": 12288,
       "scratch": 0,
       "kernarg": 28,
-      "rsrc1": "0x40ac000d"
+      "rsrc1": "0x40ac0006"
     },
     "hist": {
-      "total": 504,
-      "valu": 377,
+      "total": 324,
+      "valu": 197,
       "s_inst": 84,
       "vmem_load": 4,
       "vmem_store": 3,
       "ds": 36,
-      "exp": 0,
+      "exp": 2,
       "fma_dot": 1,
       "cross_lane": 5,
       "scratch": 0,
@@ -83,7 +83,7 @@
     },
     "markers": {
       "v_dot2": 1,
-      "v_exp": 0,
+      "v_exp": 2,
       "cross_lane": 5,
       "s_waitcnt": 35,
       "s_barrier": 1,
@@ -97,7 +97,7 @@
       "salu": 84,
       "branch": 14
     },
-    "asm_lines": 504,
+    "asm_lines": 324,
     "tile_program_ms": 0
   },
   "grid_block": {
@@ -130,18 +130,18 @@
     {
       "row": "total_instructions",
       "owned": 557,
-      "native": 504,
-      "delta": -53,
-      "ratio": 0.9,
+      "native": 324,
+      "delta": -233,
+      "ratio": 0.58,
       "suspected_cause": "more static work per tile invocation",
       "candidate_lever": "reduce emitted ops / fuse"
     },
     {
       "row": "VALU",
       "owned": 219,
-      "native": 377,
-      "delta": 158,
-      "ratio": 1.72,
+      "native": 197,
+      "delta": -22,
+      "ratio": 0.9,
       "suspected_cause": "more vector ALU per token (e.g. index math, unfused ops)",
       "candidate_lever": "fuse/strength-reduce VALU; FMA"
     },
@@ -193,9 +193,9 @@
     {
       "row": "v_exp",
       "owned": 2,
-      "native": 0,
-      "delta": -2,
-      "ratio": 0.0,
+      "native": 2,
+      "delta": 0,
+      "ratio": 1.0,
       "suspected_cause": "more transcendentals (exp/exp2) per token",
       "candidate_lever": "fewer exp (online-softmax fusion / FAST_EXP2)"
     },
@@ -238,9 +238,9 @@
     {
       "row": "VGPR",
       "owned": 64,
-      "native": 112,
-      "delta": 48,
-      "ratio": 1.75,
+      "native": 56,
+      "delta": -8,
+      "ratio": 0.88,
       "suspected_cause": "higher register pressure",
       "candidate_lever": "lower VGPR if occupancy-limiting (Phase M: not limiting)"
     },
@@ -265,14 +265,14 @@
   ],
   "wd": {
     "512": {
-      "native_tok_s": 48.25,
-      "owned_tok_s": 103.47,
-      "pct_of_owned": 46.6
+      "native_tok_s": 61.09,
+      "owned_tok_s": 103.77,
+      "pct_of_owned": 58.9
     },
     "4096": {
-      "native_tok_s": 45.77,
-      "owned_tok_s": 94.38,
-      "pct_of_owned": 48.5
+      "native_tok_s": 57.92,
+      "owned_tok_s": 94.84,
+      "pct_of_owned": 61.1
     }
   },
   "token_match": true,
@@ -293,20 +293,6 @@
       "ratio": 1.5
     },
     {
-      "row": "VALU",
-      "owned": 219,
-      "native": 377,
-      "delta": 158,
-      "ratio": 1.72
-    },
-    {
-      "row": "VGPR",
-      "owned": 64,
-      "native": 112,
-      "delta": 48,
-      "ratio": 1.75
-    },
-    {
       "row": "waitcnt",
       "owned": 21,
       "native": 35,
@@ -319,12 +305,16 @@
       "native": 36,
       "delta": 8,
       "ratio": 1.29
+    },
+    {
+      "row": "VMEM_stores",
+      "owned": 2,
+      "native": 3,
+      "delta": 1,
+      "ratio": 1.5
     }
   ],
-  "strongest_suspected_bottleneck": "VALU: native 377 vs owned 219 (x1.72) -- more vector ALU per token (e.g. index math, unfused ops)",
-  "next_implementation_lever": "add exp2 -> v_exp_f32 (hardware transcendental) lowering to AMDISARenderer + scalarize uniform address math (VALU 377 vs owned 219; v_exp 0 vs 2)",
-  "valu_excess_causes": [
-    "EXP via POLYNOMIAL: native v_exp=0 vs owned 2 -- AMDISARenderer has no hardware v_exp_f32 lowering, so exp2 expands to a VALU polynomial (tinygrad TRANSCENDENTAL) -> many extra v_fma/v_mul per token. LEVER: add exp2 -> v_exp_f32 lowering to AMDISARenderer.",
-    "PER-LANE VECTOR address math: native VALU=377/SALU=84 vs owned VALU=219/SALU=283 -- owned hoists uniform/loop-invariant address math to SCALAR; native recomputes per-lane in VECTOR (v_mul_lo/v_add_nc). LEVER: scalarize uniform index/address math (emit s_* for wave-uniform terms) / strength-reduce + FMA-fuse."
-  ]
+  "strongest_suspected_bottleneck": "DS_ops: native 36 vs owned 28 (x1.29) -- more LDS traffic (staging + accumulators in LDS vs owned registers)",
+  "valu_excess_causes": [],
+  "next_implementation_lever": "register accumulators / fewer LDS round-trips"
 }

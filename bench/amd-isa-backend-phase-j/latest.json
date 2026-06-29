@@ -7,7 +7,7 @@
     "consumer_only": 36,
     "reduction": 10,
     "pct_reduction": 21.7,
-    "n_insts": 509
+    "n_insts": 321
   },
   "memory_classes_tracked": {
     "vmcnt": "global_load/global_store",
@@ -26,6 +26,5 @@
     "phase_c": "PASS",
     "phase_f": "PASS",
     "phase_g": "PASS"
-  },
-  "in_model_wd_token_match": "PASS (Phase H in-model gate re-run with consumer-only waitcnt: AMD_ISA_PHASE_H_PASS_MODEL_ROUTE_BOUND, token_match=true, repeated_run_stability=true)"
+  }
 }

@@ -24,7 +24,7 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
   v_xor_b32_e32, v_and_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
   v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32,
   v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
-  ds_store_b16, ds_load_u16)
+  ds_store_b16, ds_load_u16, v_exp_f32_e32)
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
@@ -65,6 +65,7 @@ class AMDOps(FastEnum):
   V_PACK = 34                            # pack two f16 into a b32 (v_pack_b32_f16) for v_dot2 operands
   GATED_STORE = 35                       # EXEC-predicated store (store(addr,val,gate)) -> saveexec/store/restore
   S_LOAD_VAR = 36                        # DEFINE_VAR (e.g. start_pos) -> s_load_b32 the runtime scalar from kernarg (Phase H)
+  V_EXP = 37                             # hardware exp2: 2^x -> v_exp_f32_e32 (Phase N1A; replaces the VALU polynomial)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -244,6 +245,8 @@ def isel_customi(ctx:IselContext, x:UOp):
     return _tov(ctx, u)
   if "fdot2" in arg:        # src=(acc, a, b); a/b may be packed b32 (F.3 marker) or half2 carriers (tile builtin)
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), pack(x.src[1]), pack(x.src[2])), arg=AMDOps.V_DOT2, tag=_vreg_def(ctx))
+  if "exp2" in arg:         # Phase N1A: __builtin_amdgcn_exp2f({0}) -> hardware v_exp_f32 (2^x), no VALU polynomial
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx))
   if "ds_bpermute" in arg:  # tile builtin: src=(data, addr) -> ds_bpermute_b32(addr, data)
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[1]), _tov(ctx, x.src[0])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx))
   if arg == "bpermute":     # F.2 marker: src=(addr, data)
@@ -324,6 +327,7 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.DEFINE_LOCAL, name="x"), lambda x: x.replace(op=Ops.DEFINE_REG) if x.op is Ops.DEFINE_LOCAL else None),
   # decode-attention primitives injected as CUSTOMI markers (Phase F.2/F.3): cross-lane exchange + packed fp16 dot
   (UPat(Ops.CUSTOMI, name="x"), lambda ctx, x: isel_customi(ctx, x)),
+  (UPat(Ops.EXP2, name="x"), lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx))),  # N1A: hardware exp2
   (UPat.var("a").store(UPat.var("b"), name="x"), isel_store),
   # float elementwise ALU (commutative add/mul); a CONST operand is folded to a literal (e.g. a-b == a + b*-1.0)
   ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_ADD)),
@@ -392,6 +396,8 @@ def lower_inst(x:UOp):
     return (bp, [bp])
   if a is AMDOps.V_DOT2:                             # packed fp16 dot: acc=src[0], a_packed=src[1], b_packed=src[2]
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_EXP:                              # Phase N1A: hardware exp2 (2^x) -> one VALU op instead of a polynomial
+    return _ins(v_exp_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
   if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap
@@ -512,7 +518,9 @@ class AMDISARenderer(ISARenderer):
   pre_isel_matcher = pre_isel_matcher
   isel_matcher = isel_matcher
   post_regalloc_matcher = post_regalloc_matcher
-  code_for_op = {op: (lambda: None) for op in (Ops.ADD, Ops.MUL, Ops.SUB, Ops.LOAD, Ops.STORE)}
+  # EXP2 listed as natively supported -> the shared transcendental pass leaves Ops.EXP2 intact (no VALU polynomial)
+  # so isel can lower it to hardware v_exp_f32 (Phase N1A).
+  code_for_op = {op: (lambda: None) for op in (Ops.ADD, Ops.MUL, Ops.SUB, Ops.LOAD, Ops.STORE, Ops.EXP2)}
 
   def is_two_address(self, x:UOp) -> bool: return False    # AMD VALU is 3-address
   def stack_pointer(self) -> UOp: raise NotImplementedError("Inc 0: no spills")
