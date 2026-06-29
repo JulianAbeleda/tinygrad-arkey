@@ -22,9 +22,16 @@ from tinygrad.codegen import to_program
 from tinygrad.renderer.amd.elf import group_segment_fixed_size_from_elf
 from extra.qk_flash_decode import flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel
 
+from tinygrad.helpers import Context
+_ISA_REN = None
 def _isa_renderer():
   # reuse the AMD device's target (arch gfx1100) so the ELF matches the runtime; the device itself stays on HIP.
-  return AMDISARenderer(Device["AMD"].renderer.target)
+  # Cached + ALLOW_DEVICE_USAGE-wrapped: the injector runs during the model's forward graph build (device usage
+  # disallowed), but reading the already-initialized device's renderer target allocates nothing.
+  global _ISA_REN
+  if _ISA_REN is None:
+    with Context(ALLOW_DEVICE_USAGE=1): _ISA_REN = AMDISARenderer(Device["AMD"].renderer.target)
+  return _ISA_REN
 
 import functools
 
@@ -35,10 +42,11 @@ def _compile(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
   (elf_bytes, global_size, local_size, vars, group_segment_size)."""
   W = Hd + 2
   fxn = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc)
-  srcs = [Tensor.empty(Hq*S*W, dtype=dtypes.float32).uop.contiguous(),     # slot 0: out (partials)
-          Tensor.empty(Hq*Hd, dtype=dtypes.float32).uop.contiguous(),      # slot 1: q (flat)
-          Tensor.empty((2,1,Hkv,MAXC,Hd), dtype=dtypes.float32).uop.contiguous()]  # slot 2: cache (5D)
-  phs = [UOp.placeholder_like(s, slot=i) for i,s in enumerate(srcs)]
+  # build PARAM placeholders directly (NOT Tensor.empty) -- the injector runs during the model's forward graph build,
+  # where device usage is disallowed; UOp.placeholder is a pure UOp (no buffer), and to_program only renders.
+  phs = [UOp.placeholder((Hq*S*W,), dtypes.float32, 0),          # slot 0: out (partials)
+         UOp.placeholder((Hq*Hd,), dtypes.float32, 1),           # slot 1: q (flat)
+         UOp.placeholder((2,1,Hkv,MAXC,Hd), dtypes.float32, 2)]  # slot 2: cache (5D)
   prg = to_program(fxn(*phs), _isa_renderer())
   elf = next(s.arg for s in prg.src if s.op is Ops.BINARY)
   p = prg.arg

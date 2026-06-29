@@ -33,10 +33,10 @@ def main():
   G, W, S = Hq // Hkv, Hd + 2, (Tc + L - 1) // L
   try:
     from extra.qk_native_isa_block_tile_graph_node import native_isa_block_tile, compile_block_tile_isa
-    elf, pinfo, gseg = compile_block_tile_isa(Hd, Hq, Hkv, MAXC, L, S, Tc)
+    elf, gsize, lsize, gseg = compile_block_tile_isa(Hd, Hq, Hkv, MAXC, L, S, Tc)
     rec["tile_compiled_via"] = "AMDISARenderer"
     rec["tile_elf_bytes"] = len(elf); rec["tile_group_segment"] = gseg
-    rec["tile_grid"] = list(pinfo.global_size); rec["tile_block"] = list(pinfo.local_size)
+    rec["tile_grid"] = list(gsize); rec["tile_block"] = list(lsize)
     rng = np.random.default_rng(20260626 + Tc + L)
     q = rng.normal(0, 0.25, size=(Hq, Hd)).astype(np.float32)
     cache = np.zeros((2, 1, Hkv, MAXC, Hd), dtype=np.float32); cache[:, 0] = rng.normal(0, 0.25, size=(2, Hkv, MAXC, Hd)).astype(np.float32)
