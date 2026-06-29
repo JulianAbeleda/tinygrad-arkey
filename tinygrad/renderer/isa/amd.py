@@ -18,7 +18,8 @@ from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
-  s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32)
+  s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, s_barrier,
+  ds_bpermute_b32, v_dot2_f32_f16)
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
@@ -47,6 +48,9 @@ class AMDOps(FastEnum):
   MOV_S2V = 14                           # copy a uniform SGPR (e.g. loop counter) into a VGPR for address math (Phase B)
   DS_LOAD = 15; DS_STORE = 16            # LDS-backed reduction accumulator load/store (Phase B)
   V_CONST = 17                           # materialize a CONST (float/int) into a VGPR (e.g. accumulator init 0.0)
+  BARRIER = 18                           # workgroup barrier -> s_barrier (Phase F, multi-lane LDS staging)
+  DS_BPERMUTE = 19                       # cross-lane exchange -> ds_bpermute_b32 (Phase F.2)
+  V_DOT2 = 20                            # packed fp16 dot -> v_dot2_f32_f16 (Phase F.3)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -104,12 +108,19 @@ def isel_index(ctx:IselContext, x:UOp):
   # -> copy s->v first. Both produce ONE byte-offset VGPR shared by all vec lanes; the per-lane element offset is folded
   # into the global_load/store immediate field (see isel_load/store).
   base, idx = x.src[0], x.src[1]
-  # accumulator access (DEFINE_REG, addrspace != GLOBAL) -> LDS carrier holding the compile-time LDS byte address
+  # LDS access (DEFINE_REG accumulator or DEFINE_LOCAL tile; addrspace != GLOBAL). The carrier holds a full LDS byte-
+  # address VGPR (tile_base + idx*itemsize) and the AFTER/order node so the LDS read-modify-write / staging stays live
+  # and ordered. idx may be CONST (accumulator), a RANGE counter, or a runtime VGPR value (e.g. lidx-derived, Phase F).
   if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
-    assert idx.op is Ops.CONST, f"Phase B accumulator index must be CONST, got {idx.op}"
-    addr = _lds_byte_offset(ctx, _reg_base(base)) + idx.arg * base.dtype.base.itemsize
-    # carry `base` (the AFTER/DEFINE_REG ordering node) so the read-modify-write chain through LDS stays live and ordered
-    return UOp(Ops.NOOP, x.dtype, src=(UOp.const(dtypes.int32, addr).rtag(), base), arg="lds")
+    base_off, isz = _lds_byte_offset(ctx, _reg_base(base)), base.dtype.base.itemsize
+    shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
+    if idx.op is Ops.CONST:
+      addr = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, base_off + idx.arg*isz).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
+    else:
+      vidx = UOp(Ops.INS, dtypes.int32, src=(idx,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx)) if idx.op is Ops.RANGE else idx
+      off = UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx))
+      addr = off if base_off == 0 else UOp(Ops.INS, dtypes.int32, src=(off, UOp.const(dtypes.int32, base_off).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    return UOp(Ops.NOOP, x.dtype, src=(addr, base), arg="lds")
   isz = base.dtype.itemsize if isinstance(base.dtype, PtrDType) else 4
   shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
   if idx.op is Ops.CONST:
@@ -128,9 +139,8 @@ def isel_load(ctx:IselContext, x:UOp):
   # allocation are deferred to Inc 1+. The N loads are wrapped in a NOOP lane-carrier consumed by GEP (lane extract).
   if x.src[0].op is not Ops.NOOP: return None
   idxc = x.src[0]                            # NOOP(base_ptr, byte_offset) or LDS carrier (arg=="lds")
-  if idxc.arg == "lds":                      # LDS accumulator load -> ds_load_b32 from a materialized address VGPR
-    addr = UOp(Ops.INS, dtypes.int32, src=(idxc.src[0],), arg=AMDOps.V_MOVK, tag=(ctx.vreg(_vpool(ctx)),))
-    return UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]), arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))  # src[1]=order
+  if idxc.arg == "lds":                      # LDS load -> ds_load_b32 from the carrier's address VGPR (src[0]); src[1]=order
+    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
   loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()),
@@ -142,14 +152,22 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   # expands to N scalar global_store_b32 in post_regalloc (offset=lane*itemsize). Single INS (not a NOOP wrapper) so
   # no pseudo-op survives into assemble_linear, and regalloc allocates every lane value as a normal use.
   if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset) or LDS carrier
-  if a.arg == "lds":                          # LDS accumulator store -> ds_store_b32 to a materialized address VGPR
-    addr = UOp(Ops.INS, dtypes.int32, src=(a.src[0],), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
-    if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # acc init e.g. 0.0
-    return UOp(Ops.INS, dtypes.void, src=(addr, b, a.src[1]), arg=AMDOps.DS_STORE)   # src[2]=order
+  if a.arg == "lds":                          # LDS store -> ds_store_b32 to the carrier's address VGPR (a.src[0]); a.src[1]=order
+    if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
+    return UOp(Ops.INS, dtypes.void, src=(a.src[0], b, a.src[1]), arg=AMDOps.DS_STORE)   # addr, data, order
   base, off = a.src[0], a.src[1]
   vals = b.src if (b.op is Ops.NOOP and not isinstance(b.dtype, PtrDType)) else (b,)   # STACK lane-carrier -> per-lane vals
   isz = vals[0].dtype.scalar().itemsize
   return UOp(Ops.INS, dtypes.void, src=(off, base) + tuple(vals) + (UOp.const(dtypes.int32, isz).rtag(),), arg=AMDOps.GLOBAL_STORE)
+
+def isel_customi(ctx:IselContext, x:UOp):
+  # Phase F primitive markers injected into a hand-built AST (srcs are isel'd to VGPRs bottom-up first).
+  def _v(u): return UOp(Ops.INS, u.dtype, src=(u.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx)) if u.op is Ops.CONST else u
+  if x.arg == "bpermute":   # cross-lane exchange: src=(addr_byte_vgpr, data_vgpr) -> ds_bpermute_b32
+    return UOp(Ops.INS, x.dtype, src=(_v(x.src[0]), _v(x.src[1])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx))
+  if x.arg == "fdot2":      # packed fp16 dot: src=(acc, a_packed, b_packed) -> v_dot2_f32_f16
+    return UOp(Ops.INS, x.dtype, src=(_v(x.src[0]), _v(x.src[1]), _v(x.src[2])), arg=AMDOps.V_DOT2, tag=_vreg_def(ctx))
+  return None
 
 def isel_gep(x:UOp):
   # lane extract from a scalarized-load lane-carrier -> the lane's scalar load INS directly (no real GEP instruction)
@@ -167,6 +185,11 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.STACK, name="x"), lambda x: UOp(Ops.NOOP, x.dtype, src=x.src)),   # vec gather -> lane-carrier (scalarized)
   # RANGE (counted reduction loop): tag with a uniform SGPR counter; lowered to init/label/cmp/branch in post_regalloc.
   (UPat(Ops.RANGE, name="x"), lambda ctx, x: x.replace(tag=(ctx.vreg(SCNT_POOL),)) if not isinstance(x.tag, tuple) else None),
+  # DEFINE_LOCAL (LDS tile, Phase F) -> route through the uniform LDS path (same as DEFINE_REG); elf.py sizes both into
+  # the group segment. The tile is shared across the workgroup; the access INDEX provides the per-lane/per-iter offset.
+  (UPat(Ops.DEFINE_LOCAL, name="x"), lambda x: x.replace(op=Ops.DEFINE_REG) if x.op is Ops.DEFINE_LOCAL else None),
+  # decode-attention primitives injected as CUSTOMI markers (Phase F.2/F.3): cross-lane exchange + packed fp16 dot
+  (UPat(Ops.CUSTOMI, name="x"), lambda ctx, x: isel_customi(ctx, x)),
   (UPat.var("a").store(UPat.var("b"), name="x"), isel_store),
   # float elementwise ALU (commutative add/mul); a CONST operand is folded to a literal (e.g. a-b == a + b*-1.0)
   ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_ADD)),
@@ -228,6 +251,11 @@ def lower_inst(x:UOp):
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[1].arg]), x.tag)
   if a is AMDOps.WI_ID:                             # workitem id.{x,y,z}: extract 10 bits at offset src[1] from packed v0
     return _ins(v_bfe_u32(_Vr(x.reg), _V[0], src[1].arg, 10), x.tag)
+  if a is AMDOps.DS_BPERMUTE:                        # cross-lane: vdst[lane] = data0[ addr[lane]>>2 ]; drain after
+    bp = _ins(ds_bpermute_b32(vdst=_Vr(x.reg), addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)), x.tag)
+    return (bp, [bp, UOp(Ops.INS, arg=s_waitcnt(simm16=0))])
+  if a is AMDOps.V_DOT2:                             # packed fp16 dot: acc=src[0], a_packed=src[1], b_packed=src[2]
+    return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
   if a is AMDOps.DS_LOAD:                            # LDS accumulator load: addr VGPR (src[0]) -> ds_load_b32 + drain
@@ -297,6 +325,8 @@ post_regalloc_matcher = PatternMatcher([
   (UPat(Ops.INS, name="x"), _lower_inst),
   (UPat(Ops.RANGE, name="x"), lower_range),
   (UPat(Ops.END, name="x"), lower_end),
+  # workgroup barrier -> s_barrier (preceding ds-store waitcnt already drained lgkmcnt, so this is conservative+correct)
+  (UPat(Ops.BARRIER, name="x"), lambda x: (b:=UOp(Ops.INS, arg=s_barrier()), [b])),
   (UPat(Ops.SINK, name="x"), lower_sink),
   # drop leftover non-instruction nodes (rtag'd immediate CONSTs read via .arg; carrier NOOPs/AFTER ordering; PARAM kept
   # for the kernarg-segment scan, SPECIAL gidx0 for the workgroup-id descriptor scan, DEFINE_REG for group-segment sizing)
