@@ -20,6 +20,13 @@ claim is blocked by decode attention.
 - Grid parallelism passed after `RANGE(GLOBAL)` was mapped to launch grid axes: native attention moved from ~0.4% to
   ~45% of owned.
 - Phase L/M tested scheduler/latency and occupancy/LDS pressure. Both were not the dominant remaining lever.
+- Phase N0-N3F complete (see "Completed N Results To Preserve"): static diff -> VALU; N1A hardware exp (+27%, 61.09/57.92);
+  N1B uniform-scalar refuted/dead; N2 per-PC ATT walled (degraded); N2B PMC pinned dynamic loop VOLUME (FIXED_S sweep);
+  N3F.0 ctx4096 confirmed valid-S-bound; N3F dynamic-S landed (+9.5% ctx512, flat ctx4096), proving the attention tile
+  is only ~10% of the decode step.
+- REMAINING (this pass = "all of N"): N4 whole-step attribution -> N5 branch by the dominant whole-step kernel -> N6
+  search-space binding -> N7 pre-promotion package. Then Phase O (promotion). N4->N7 are SEQUENTIAL: each is selected by
+  the prior's artifact-backed row, and per-kernel timing must run on an uncontended GPU (serial captures).
 - Phase N0/N1/N2/N3F progressed through evidence-backed performance closure:
   - N0 pinned the first static gap to VALU excess.
   - N1A lowered `exp2` to hardware `v_exp_f32`, moving W==D to about `61.09/57.92 tok/s`.

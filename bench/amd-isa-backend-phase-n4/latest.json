@@ -1,0 +1,413 @@
+{
+  "verdict": "AMD_ISA_PHASE_N4_PASS_WHOLE_STEP_ATTRIBUTION_PINNED",
+  "scope": "Phase N4: whole-decode-step per-kernel attribution (native dynamic-S vs owned)",
+  "ckpts": [
+    512,
+    4096
+  ],
+  "raw": {
+    "native_dyn_s_ctx512": {
+      "total_step_dur": 17027.6375,
+      "by_owner": [
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7108.87,
+          "pct_of_step": 41.7,
+          "n_kernels": 6
+        },
+        {
+          "owner": "native_attn_tile",
+          "dur": 5791.68,
+          "pct_of_step": 34.0,
+          "n_kernels": 1
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2811.66,
+          "pct_of_step": 16.5,
+          "n_kernels": 15
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 893.3,
+          "pct_of_step": 5.2,
+          "n_kernels": 11
+        },
+        {
+          "owner": "attn_combine",
+          "dur": 228.67,
+          "pct_of_step": 1.3,
+          "n_kernels": 1
+        },
+        {
+          "owner": "attn_gmax",
+          "dur": 155.15,
+          "pct_of_step": 0.9,
+          "n_kernels": 1
+        },
+        {
+          "owner": "other",
+          "dur": 38.3075,
+          "pct_of_step": 0.2,
+          "n_kernels": 1
+        }
+      ]
+    },
+    "owned_ctx512": {
+      "total_step_dur": 11532.065,
+      "by_owner": [
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7156.92,
+          "pct_of_step": 62.1,
+          "n_kernels": 6
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2815.55,
+          "pct_of_step": 24.4,
+          "n_kernels": 15
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 904.05,
+          "pct_of_step": 7.8,
+          "n_kernels": 11
+        },
+        {
+          "owner": "owned_attn_tile",
+          "dur": 381.02,
+          "pct_of_step": 3.3,
+          "n_kernels": 1
+        },
+        {
+          "owner": "other",
+          "dur": 274.525,
+          "pct_of_step": 2.4,
+          "n_kernels": 2
+        }
+      ]
+    },
+    "native_dyn_s_ctx4096": {
+      "total_step_dur": 19641.8775,
+      "by_owner": [
+        {
+          "owner": "native_attn_tile",
+          "dur": 7722.9,
+          "pct_of_step": 39.3,
+          "n_kernels": 1
+        },
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7100.16,
+          "pct_of_step": 36.1,
+          "n_kernels": 6
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2807.23,
+          "pct_of_step": 14.3,
+          "n_kernels": 15
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 891.38,
+          "pct_of_step": 4.5,
+          "n_kernels": 11
+        },
+        {
+          "owner": "attn_combine",
+          "dur": 715.26,
+          "pct_of_step": 3.6,
+          "n_kernels": 1
+        },
+        {
+          "owner": "attn_gmax",
+          "dur": 368.7,
+          "pct_of_step": 1.9,
+          "n_kernels": 1
+        },
+        {
+          "owner": "other",
+          "dur": 36.2475,
+          "pct_of_step": 0.2,
+          "n_kernels": 1
+        }
+      ]
+    },
+    "owned_ctx4096": {
+      "total_step_dur": 12660.24,
+      "by_owner": [
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7210.54,
+          "pct_of_step": 57.0,
+          "n_kernels": 6
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2846.85,
+          "pct_of_step": 22.5,
+          "n_kernels": 15
+        },
+        {
+          "owner": "owned_attn_tile",
+          "dur": 1413.6,
+          "pct_of_step": 11.2,
+          "n_kernels": 1
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 911.75,
+          "pct_of_step": 7.2,
+          "n_kernels": 11
+        },
+        {
+          "owner": "other",
+          "dur": 277.5,
+          "pct_of_step": 2.2,
+          "n_kernels": 2
+        }
+      ]
+    }
+  },
+  "gates": {
+    "ctx512_token_match": true,
+    "ctx4096_token_match": true
+  },
+  "native_step_breakdown": {
+    "ctx512": {
+      "total_step_dur": 17027.6375,
+      "by_owner": [
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7108.87,
+          "pct_of_step": 41.7,
+          "n_kernels": 6
+        },
+        {
+          "owner": "native_attn_tile",
+          "dur": 5791.68,
+          "pct_of_step": 34.0,
+          "n_kernels": 1
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2811.66,
+          "pct_of_step": 16.5,
+          "n_kernels": 15
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 893.3,
+          "pct_of_step": 5.2,
+          "n_kernels": 11
+        },
+        {
+          "owner": "attn_combine",
+          "dur": 228.67,
+          "pct_of_step": 1.3,
+          "n_kernels": 1
+        },
+        {
+          "owner": "attn_gmax",
+          "dur": 155.15,
+          "pct_of_step": 0.9,
+          "n_kernels": 1
+        },
+        {
+          "owner": "other",
+          "dur": 38.3075,
+          "pct_of_step": 0.2,
+          "n_kernels": 1
+        }
+      ]
+    },
+    "ctx4096": {
+      "total_step_dur": 19641.8775,
+      "by_owner": [
+        {
+          "owner": "native_attn_tile",
+          "dur": 7722.9,
+          "pct_of_step": 39.3,
+          "n_kernels": 1
+        },
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7100.16,
+          "pct_of_step": 36.1,
+          "n_kernels": 6
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2807.23,
+          "pct_of_step": 14.3,
+          "n_kernels": 15
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 891.38,
+          "pct_of_step": 4.5,
+          "n_kernels": 11
+        },
+        {
+          "owner": "attn_combine",
+          "dur": 715.26,
+          "pct_of_step": 3.6,
+          "n_kernels": 1
+        },
+        {
+          "owner": "attn_gmax",
+          "dur": 368.7,
+          "pct_of_step": 1.9,
+          "n_kernels": 1
+        },
+        {
+          "owner": "other",
+          "dur": 36.2475,
+          "pct_of_step": 0.2,
+          "n_kernels": 1
+        }
+      ]
+    }
+  },
+  "owned_step_breakdown": {
+    "ctx512": {
+      "total_step_dur": 11532.065,
+      "by_owner": [
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7156.92,
+          "pct_of_step": 62.1,
+          "n_kernels": 6
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2815.55,
+          "pct_of_step": 24.4,
+          "n_kernels": 15
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 904.05,
+          "pct_of_step": 7.8,
+          "n_kernels": 11
+        },
+        {
+          "owner": "owned_attn_tile",
+          "dur": 381.02,
+          "pct_of_step": 3.3,
+          "n_kernels": 1
+        },
+        {
+          "owner": "other",
+          "dur": 274.525,
+          "pct_of_step": 2.4,
+          "n_kernels": 2
+        }
+      ]
+    },
+    "ctx4096": {
+      "total_step_dur": 12660.24,
+      "by_owner": [
+        {
+          "owner": "q4k_gemv_ffn",
+          "dur": 7210.54,
+          "pct_of_step": 57.0,
+          "n_kernels": 6
+        },
+        {
+          "owner": "generated_reduce",
+          "dur": 2846.85,
+          "pct_of_step": 22.5,
+          "n_kernels": 15
+        },
+        {
+          "owner": "owned_attn_tile",
+          "dur": 1413.6,
+          "pct_of_step": 11.2,
+          "n_kernels": 1
+        },
+        {
+          "owner": "generated_elementwise",
+          "dur": 911.75,
+          "pct_of_step": 7.2,
+          "n_kernels": 11
+        },
+        {
+          "owner": "other",
+          "dur": 277.5,
+          "pct_of_step": 2.2,
+          "n_kernels": 2
+        }
+      ]
+    }
+  },
+  "top_owner_native": {
+    "ctx512": {
+      "owner": "q4k_gemv_ffn",
+      "dur": 7108.87,
+      "pct_of_step": 41.7,
+      "n_kernels": 6
+    },
+    "ctx4096": {
+      "owner": "native_attn_tile",
+      "dur": 7722.9,
+      "pct_of_step": 39.3,
+      "n_kernels": 1
+    }
+  },
+  "native_minus_owned_by_owner_ctx512": [
+    {
+      "owner": "native_attn_tile",
+      "native": 5791.68,
+      "owned": 0,
+      "delta": 5791.68
+    },
+    {
+      "owner": "attn_combine",
+      "native": 228.67,
+      "owned": 0,
+      "delta": 228.67
+    },
+    {
+      "owner": "attn_gmax",
+      "native": 155.15,
+      "owned": 0,
+      "delta": 155.15
+    },
+    {
+      "owner": "generated_reduce",
+      "native": 2811.66,
+      "owned": 2815.55,
+      "delta": -3.89
+    },
+    {
+      "owner": "generated_elementwise",
+      "native": 893.3,
+      "owned": 904.05,
+      "delta": -10.75
+    },
+    {
+      "owner": "q4k_gemv_ffn",
+      "native": 7108.87,
+      "owned": 7156.92,
+      "delta": -48.05
+    },
+    {
+      "owner": "other",
+      "native": 38.307,
+      "owned": 274.525,
+      "delta": -236.217
+    },
+    {
+      "owner": "owned_attn_tile",
+      "native": 0,
+      "owned": 381.02,
+      "delta": -381.02
+    }
+  ],
+  "selected_n5_branch": "N5A",
+  "top_bottleneck": "largest native-vs-owned GPU-compute delta at ctx512: native_attn_tile (native 5791.68 vs owned 0, delta 5791.68). Native top single owner: q4k_gemv_ffn 41.7% of native GPU-compute.",
+  "caveat": "eager per-kernel GPU-COMPUTE share != JIT W==D WALL share (N3F: tile ~10% of wall step). The delta selects WHERE native does more GPU work than owned; verify W==D moves in N5."
+}
