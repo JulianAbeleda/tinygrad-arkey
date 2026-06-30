@@ -1,25 +1,27 @@
-# Current Project State — Handoff (2026-06-24)
+# Current Project State — Handoff (2026-06-30 refresh)
 
 Canonical, high-signal snapshot. If anything elsewhere contradicts this file, this file wins.
 Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M. Supersedes the 2026-06-21 handoff (now in
 `docs/archive/`), whose `~67% llama` decode baseline and "bounded decode RESTED / capped at backend
-ceiling" frontier were overturned by the 06-22→06-24 campaign (owned attention tile + buffer-identity fix).
+ceiling" frontier were overturned by the 06-22→06-30 campaign (owned attention tile + buffer-identity fix,
+generated G3 Q4_K route parity, Q6_K direct-route refutation, and prefill pipe promotion).
 
 ## 1. Canonical numbers (clean-wall, PROFILE=0, auto clock, W==D)
 
 | metric | value | source |
 |---|---|---|
-| decode @ctx 512 / 1024 / 2048 / 4096 | **101.6 / 99.8 / 97.3 / 92.7 tok/s** (≈ **100.4-104.0% of llama** — at/above parity) | `bench/canonical-benchmarks.json` |
-| decode full-stack envelope (non-search) | 104.0 / 102.1 / 99.6 / 95.1 tok/s | `bench/canonical-benchmarks.json` |
+| decode @ctx 512 / 1024 / 2048 / 4096 | **103.9 / 102.0 / 99.7 / 94.4 tok/s** (G3 speed-equivalent to owned Q4_K; Q6_K direct route refuted/default-off) | `bench/amd-isa-backend-g3-weight-promotion/latest.json`, `bench/amd-isa-backend-q6k-direct-speed/latest.json` |
+| decode practical ceiling | **~110-130 tok/s** for this model/GPU/quant stack; further weight-kernel tuning is closed absent representation/primitive changes | system-residual and Q6K-3 audits |
 | llama reference (same ctx) | 97.71 / 97.39 / 95.00 / 92.37 tok/s | `bench/canonical-benchmarks.json` |
-| prefill @ctx 512 / 1024 / 2048 / 4096 / 8192 | **3574 / 3573 / 3572 / 3571 / 3569 tok/s** (`eightwave` promoted; long-context stable) | `bench/canonical-benchmarks.json` |
+| prefill @ctx 512 / 1024 / 2048 / 4096 / 8192 | **4291 / 4089 / 3711 / 3137 / 2423 tok/s** (`pipe_tm2_tn2` promoted default; rollback `PREFILL_GEMM_PIPELINE=0`) | `bench/qk-prefill-pipe-promotion/latest.json` |
 | q8 FFN opt-in | ~+7% decode, **default-OFF, dNLL-gated** | `Q8_FFN_HANDWRITTEN=1` |
 | VRAM | default ~5–6 GB; **`PREFILL_V2` adds ~+14 GB fp16** (≈19–21 GB), resident through decode | handoff history |
 
-**⚠ Flag-stack caveat (do not mis-state the parity claim).** The at/above-llama decode numbers above are the
-**canonical default stack with `Q4K_GEMV_WARP*` enabled** (promoted default 2026-06-24). A fresh *default-off*
-run reads **below** llama — the two families are reconciled in `decode-parity-no-regression-audit-result-20260623.md`.
-Always quote the canonical-stack number with the stack stated, not bare.
+**Decode caveat (do not mis-state the current result).** Generated G3 is promoted/hardened as the Q4_K
+speed-equivalent route; it replaces the owned warp route where eligible but does not exceed it. The Q6_K direct
+half-warp/lane-map route was wired correctly and token-correct, then refuted by W==D (-6.1/-5.8/-5.1/-4.8% across
+ctx512→4096), so it remains default-off. Current decode max-out is practical-ceiling/documentation work, not another
+Q4_K/Q6_K route search.
 
 ## 2. Decided policies (do not re-open)
 
@@ -30,8 +32,9 @@ Always quote the canonical-stack number with the stack stated, not bare.
 - **`PREFILL_SERVER_PROFILE=1`**: opt-in (⇒ `PREFILL_V2=auto` + concrete-KV precompile; server/long-prompt profile).
 - **`PREFILL_REMAINDER_FIX`**: default-ON but only active under `PREFILL_V2`; byte-identical (kills the 32-token trap).
 - **q8 FFN (`Q8_FFN_HANDWRITTEN=1`)**: opt-in, default-off.
-- **`Q4K_GEMV_WARP*`**: promoted **default-ON** (the warp GEMV that lands decode weight-GEMV at/below llama).
-- **`eightwave` prefill**: promoted default.
+- **Q4_K G3 LaneMap**: promoted/hardened as the **speed-equivalent generated route** for eligible Q4_K decode roles.
+- **Q6_K direct route**: refuted by W==D, default-off; current coop/default route remains.
+- **`pipe_tm2_tn2` prefill**: promoted default (`PREFILL_GEMM_PIPELINE=1`, `TM=2`, `TN=2`); rollback with `PREFILL_GEMM_PIPELINE=0`.
 
 ## 3. What changed since the 06-21 handoff (the parity win)
 
@@ -42,13 +45,12 @@ closable only by a deep, separately-funded codegen capability." The 06-22→06-2
   patch) added +12–22% and entered the decode path — see `decode-campaign-final-synthesis-20260623.md` and
   `post-owned-attention-promotion-synthesis-20260623.md`.
 - **Buffer identity was the actual wall**, not a runtime-KV core block; resolving it unblocked W==D promotion.
-- **Weight-GEMV** reached at/below llama via the `Q4K_GEMV_WARP` warp kernel (promoted default,
-  `decode-q4k-gemv-warp-promotion-result-20260624.md`).
-- **Prefill** held no-regression and promoted `eightwave` (`prefill-long-context-no-regression-audit-result-20260623.md`,
-  `prefill-eightwave-promotion-result-20260624.md`).
+- **Weight-GEMV** reached at/below llama, then generated G3 LaneMap matched the owned Q4_K route under BubbleBeam/FutureSight.
+- **Q6_K direct routing** was tested after the system-residual audit and refuted; the apparent lm_head reduce win was gumbel/sampling attribution, not removable GEMV work.
+- **Prefill** moved from `eightwave` to the validated `pipe_tm2_tn2` route: +19.3/+16.8/+14.2/+11.3/+8.5% across ctx512→8192, output-equivalent, rollback available.
 
-Net: tinygrad decode now runs at/above llama parity across ctx 512–4096 as the **default** route; prefill ~114% of
-llama pp512. Coverage map: `gpu-lifecycle-primitive-coverage-tracker-20260624.md`.
+Net: decode is effectively closed under the current representation/primitive set; prefill now carries the live promoted
+TIER_A win and is the more promising frontier for further role-selective pipeline/search work.
 
 ## 4. Where to start
 
