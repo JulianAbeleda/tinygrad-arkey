@@ -1,0 +1,48 @@
+{
+  "assumptions": {
+    "hbm_bw_GBs_peak": 960.0,
+    "model_bytes": 5027783488,
+    "kv_dtype_bytes": 4,
+    "note": "decode is weight-memory-bound; weight read dominates the per-token wall. peak bw => optimistic ceiling (real ~80% => ~0.8x tok/s)."
+  },
+  "weight_read_floor": {
+    "bytes_per_token": 5027783488,
+    "seconds_per_token": 0.005237274466666666,
+    "tok_s_ceiling_peak_bw": 190.9,
+    "tok_s_ceiling_real_80pct": 152.8
+  },
+  "per_ctx": {
+    "512": {
+      "kv_read_bytes": 4194304,
+      "kv_read_seconds": 4.369066666666667e-06,
+      "attn_macs": 4194304,
+      "attn_floor_pct_of_weight_floor": 0.083,
+      "decode_floor_seconds": 0.005241643533333333,
+      "decode_tok_s_ceiling_peak": 190.8
+    },
+    "1024": {
+      "kv_read_bytes": 8388608,
+      "kv_read_seconds": 8.738133333333334e-06,
+      "attn_macs": 8388608,
+      "attn_floor_pct_of_weight_floor": 0.167,
+      "decode_floor_seconds": 0.0052460126,
+      "decode_tok_s_ceiling_peak": 190.6
+    },
+    "2048": {
+      "kv_read_bytes": 16777216,
+      "kv_read_seconds": 1.7476266666666667e-05,
+      "attn_macs": 16777216,
+      "attn_floor_pct_of_weight_floor": 0.334,
+      "decode_floor_seconds": 0.005254750733333333,
+      "decode_tok_s_ceiling_peak": 190.3
+    },
+    "4096": {
+      "kv_read_bytes": 33554432,
+      "kv_read_seconds": 3.4952533333333335e-05,
+      "attn_macs": 33554432,
+      "attn_floor_pct_of_weight_floor": 0.667,
+      "decode_floor_seconds": 0.005272227,
+      "decode_tok_s_ceiling_peak": 189.7
+    }
+  }
+}
