@@ -50,14 +50,15 @@ def _kernel(out_f: int, in_f: int):
   plra  = _envint("PREFILL_GEMM_PLRA", plra)
   plrab = _envint("PREFILL_GEMM_PLRAB", plrab)
   leanaddr = _envint("PREFILL_GEMM_LEANADDR", 0)
-  # PROMOTED default-on: pipe_tm2_tn2 is the default prefill GEMM route (hardened TIER_A: +19.3%@ctx512 -> +8.5%@ctx8192,
-  # output-equivalent, no long-ctx regression). Rollback to the old lds2 default: PREFILL_GEMM_PIPELINE=0.
+  # PROMOTED DEFAULT = the ROLE-SELECTIVE pipe (both flags below default-on). The software-pipelined route is on for the
+  # latency-bound roles (attn q/o, attn k/v, ffn-down) and OFF for the already-saturated ffn gate/up (the pipe regressed
+  # that one ~17%), so gate/up keeps its faster lds path. Net: beats the all-roles "global pipe" by ~3% and the old lds
+  # default by ~12-23% through ctx8192, output-equivalent. Rollback chain: PREFILL_PIPE_ROLE_SELECTIVE=0 -> global pipe
+  # (all roles); then PREFILL_GEMM_PIPELINE=0 -> old lds default.
   pipe_mode = bool(_envint("PREFILL_GEMM_PIPELINE", 1))
   pipe_tm = _envint("PREFILL_GEMM_PIPELINE_TM", 2)
   pipe_tn = _envint("PREFILL_GEMM_PIPELINE_TN", 2)
-  # ROLE-SELECTIVE pipe (opt-in PREFILL_PIPE_ROLE_SELECTIVE=1, default-off): pipe LIFTS the latency-bound sub-BLAS roles
-  # (attn_kv/qo, ffn_down) but REGRESSES the already-saturated ffn_gate_up -17% (107->89% of BLAS). Give gate_up
-  # (uniquely out_f==12288) its faster lds2 path while the rest stay on the promoted pipe. Default-off => global pipe.
+  # default-ON: exclude ffn gate/up (uniquely out_f==12288) from the pipe -> it takes the faster lds path; the rest stay piped.
   if _envint("PREFILL_PIPE_ROLE_SELECTIVE", 1) and out_f == 12288:
     pipe_mode = False
   pad = _envint("PREFILL_GEMM_PAD", pad)

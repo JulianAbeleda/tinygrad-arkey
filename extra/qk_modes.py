@@ -50,8 +50,10 @@ class Verdict(str, Enum):
   """decode_eval per-run verdicts (single source of truth; .value == the legacy string -> NFC).
 
   The set is exactly what extra/qk_decode_eval.py:classify() emits. The JSON schema enum, the lifecycle
-  search_policy map, the evaluator contract, and the bench README are asserted == this enum by
-  test/unit/test_verdict_ssot.py, so the four cannot drift from the producer again.
+  search_policy map, the evaluator contract, and the bench README should stay == this enum. (NOTE: the enforcing test
+  test/unit/test_verdict_ssot.py was removed in a cleanup and is not currently present; restoring it — plus an
+  enum-backed verdict for the newer table-driven evaluator — is scoped in
+  docs/qk-consolidate-r1-config-code-decoupling-scope-20260630.md, Phase 2.)
   """
   PASS_PROMOTE = "PASS_PROMOTE"
   PASS_OPT_IN = "PASS_OPT_IN"

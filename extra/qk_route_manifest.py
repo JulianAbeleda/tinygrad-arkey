@@ -122,7 +122,7 @@ ROUTES = {
     "purity_status": "owned_default",
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/model.py:1091-1106 (DECODE_ATTN_AMDGCN_TILE default 1, ctx>=512); writer extra/qk_owned_flash_decode_graph_node.py amdgcn_flash_decode (HIP .co split tile + separate combine, two Ops.PROGRAM graph nodes).",
-    "note": "shipped decode attention: hand HIP split tile + separate combine. Combine/fused-lifecycle exhausted; ceiling audit (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION) says attention wall-share is ~10%@ctx512 ->~0%@ctx4096; low-leverage."},
+    "note": "shipped decode attention: hand HIP split tile + separate combine. Combine/fused-lifecycle exhausted; ceiling audit (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION) says attention wall-share is ~10%@ctx512 ->~3%@ctx4096 (measured tile_wall_share in bench/amd-isa-backend-decode-attention-ceiling/latest.json); low-leverage."},
   "decode_attention_native_correct_not_fast": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "correct_not_fast",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
