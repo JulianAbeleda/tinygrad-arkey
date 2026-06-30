@@ -15,8 +15,8 @@ Mechanized index of 43 project files: **0 ● live** (runtime/tooling/library), 
 | `Development/performance-primitive-research-principles.md` | ◐ | KEEP_DOC_AUTHORITY | 832 | Performance Primitive Research Principles |
 | `Development/purpose-template.md` | ◐ | KEEP_DOC_AUTHORITY | 54 | Purpose Template |
 | `Development/release-strategy.md` | ◐ | KEEP_DOC_AUTHORITY | 19 | Release Strategy |
-| `Development/roadmap.md` | ◐ | KEEP_DOC_AUTHORITY | 20 | Roadmap |
-| `Development/session-handoff.md` | ◐ | KEEP_DOC_AUTHORITY | 615 | Session Handoff |
+| `Development/roadmap.md` | ◐ | KEEP_DOC_AUTHORITY | 8 | Roadmap |
+| `Development/session-handoff.md` | ◐ | KEEP_DOC_AUTHORITY | 756 | Session Handoff |
 | `Development/structure-convention.md` | ◐ | KEEP_DOC_AUTHORITY | 69 | Structure Convention |
 | `Development/tinygrad-coding-overrides.md` | ◐ | KEEP_DOC_AUTHORITY | 78 | tinygrad-arkey Coding Overrides |
 | `HOW_TO_USE.md` | ◐ | KEEP_DOC_AUTHORITY | 123 | How To Use This Structure |

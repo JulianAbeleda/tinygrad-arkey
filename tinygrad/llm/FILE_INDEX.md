@@ -9,4 +9,4 @@ Mechanized index of 6 project files: **6 ● live** (runtime/tooling/library), *
 | `chat.html` | ● | KEEP_CORE | 39 | HTML |
 | `cli.py` | ● | KEEP_CORE | 279 | (no docstring; def remote_pressure_snapshot (+5 more)) |
 | `gguf.py` | ● | KEEP_CORE | 188 | ggml packs each iq grid entry as N bytes (N=4 for uint32 grids, N=8 for uint64 grids) in a single word. See ggml-common.h. |
-| `model.py` | ● | KEEP_CORE | 1497 | Prefill v2 (opt-in, default off; decode 100% untouched when off). Concrete-ubatch fp16 prefill that lets |
+| `model.py` | ● | KEEP_CORE | 1598 | Prefill v2 (opt-in, default off; decode 100% untouched when off). Concrete-ubatch fp16 prefill that lets |

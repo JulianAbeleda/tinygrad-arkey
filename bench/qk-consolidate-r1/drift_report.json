@@ -1,0 +1,60 @@
+{
+  "verdict": "INVENTORY_REFRESHED",
+  "scope": "QK-CONSOLIDATE-R1 Phase 0 — post-refactor drift report. Confirms the multi-source divergences the principles audit (wf_b9e3896e-e4a) found are now single-source. Audit-only.",
+  "resolved": [
+    {
+      "defect": "tier promotion thresholds in 2 diverged sources (profile 5.0/2.0 vs evaluator 2.0/0.5, false 'mirrors' note)",
+      "now": "SINGLE SOURCE = the profile descriptor; qk_candidate_evaluator.evaluate() loads thresholds by profile_id; DEFAULT_THRESHOLDS corrected to the documented 5.0/2.0 as the matching fallback",
+      "resolved_by": "Phase 2",
+      "consequence": "role-selective prefill corrected PROMOTE_TIER_A -> PROMOTE_TIER_B (+3% over global pipe is a TIER_B residual under the 5% bar); promotion unchanged"
+    },
+    {
+      "defect": "refuted axes in 3 sources with 3 different disposition strings (manifest REFUTED / search_profiles do_not_search / quant known_refuted)",
+      "now": "SINGLE SOURCE = qk_route_manifest.REFUTED; dump_refuted() generates the canonical list; qk_search_space_manifest_check.check_refuted_axis_drift() asserts the 3 agree on (key, disposition-class) and fails on intentional drift",
+      "resolved_by": "Phase 3"
+    },
+    {
+      "defect": "Q4_K quant facts in 2 sources (hardcoded QK_K/Q4K_WORDS_PER_BLOCK/Q4K_QUANT_WORD_BASE imported by the TG2 author vs the data library the library was built to be)",
+      "now": "SINGLE SOURCE = quant_spec_fields('Q4_K') (the TG3 data library); TG2 author reads it (values identical 256/36/4/32, output byte-identical)",
+      "resolved_by": "Phase 5"
+    },
+    {
+      "defect": "policy constants baked in code: EXPLOSION_LIMIT=64 (x2), GROUPINGS dict (x2)",
+      "now": "EXPLOSION_LIMIT -> topology_grammar_v1.json max_candidates (data, read by both authors); GROUPINGS -> one constant in qk_search_util",
+      "resolved_by": "Phase 5"
+    },
+    {
+      "defect": "ledger candidate_id reader diverged: d['candidate_id'] (KeyError) vs d.get(...) (bug #5)",
+      "now": "SINGLE reader qk_search_util.ledger_candidate_ids(path); both tools call it on their own ledger files",
+      "resolved_by": "Phase 5"
+    },
+    {
+      "defect": "qk_artifact_cache fully built but wired to nothing (dead code; 'none wrapped yet')",
+      "now": "LIVE via qk_artifact_cache.emit_artifact; 3+ artifacts now carry cache_meta; derived artifacts keyed on inputs+code so a threshold/grammar change invalidates them",
+      "resolved_by": "Phase 4"
+    },
+    {
+      "defect": "evaluator baseline_route_id hardcoded in the REPLAYS tuple (not in the manifest)",
+      "now": "baseline_route_id lives in the manifest ROUTES; evaluate() reads it (REPLAYS tuple is the fallback); 3 routes unchanged",
+      "resolved_by": "Phase 6"
+    },
+    {
+      "defect": "codegen north-star (v_dot2 / cross-lane lowering) conflated with refuted; attention reopen-gate used a hand-maintained name list",
+      "now": "'deferred' status + qk_route_manifest.DEFERRED_CAPABILITIES (blocked-but-open frontier, distinct from refuted); attention refuted rows tagged domain='attention' and the reopen gate filters on the tag",
+      "resolved_by": "Phase 6"
+    },
+    {
+      "defect": "verdict-SSOT enforcement test deleted but still mandated by 3 docs; evaluator verdicts off-enum",
+      "now": "enum-backed TierVerdict added; test/unit/test_verdict_ssot.py restored asserting BOTH Verdict and TierVerdict == their producers (PASS)",
+      "resolved_by": "Phase 2"
+    }
+  ],
+  "deferred_followups": [
+    "burst() (2 GPU authority-harness copies) NOT extracted — below the 3-site bar + unverifiable without GPU",
+    "the two factorizers (factor_pairs vs factor_pos_lanes) NOT merged — genuinely different functions (wrong abstraction)",
+    "~10 remaining hand-rolled IO tools NOT migrated to emit_artifact — mechanical follow-on (helper exists)",
+    "attention ledger rows NOT renamed by dataflow (perf-F5) — recorded-row churn, low value; convention applies going forward"
+  ],
+  "file_index": "regenerated (build_repo_inventory.py + build_folder_indexes.py); 145 live files; qk_search_util + qk_artifact_cache now indexed",
+  "checks": "policy consistency PASS, search-space manifest+drift check PASS, verdict SSOT test PASS after every phase; no live route default changed; no recorded disposition changed except the role-selective tier-label correction"
+}
