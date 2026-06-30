@@ -207,6 +207,7 @@ class RuntimeState:
     self.target = _device_target()
     self.warmup_done = False
     self.last_warmup_s: float|None = None
+    self.last_warmup_compiles: int|None = None
     self.load_count = 0
     self.request_count = 0
     self.last_error: str|None = None
@@ -243,12 +244,12 @@ class RuntimeState:
       if row.get("quant") is None: row["quant"] = self.quant
 
   def adopt(self, model:Transformer, kv:dict, tok:SimpleTokenizer, model_id:str, model_name:str, source:str,
-            warmup_done:bool=False, warmup_s:float|None=None):
+            warmup_done:bool=False, warmup_s:float|None=None, warmup_compiles:int|None=None):
     """Take ownership of an already-loaded model (used by startup preload and by load())."""
     self.model, self.tok = model, tok
     self.model_id, self.model_name, self.path = model_id, model_name, source
     self.max_context = model.max_context
-    self.warmup_done, self.last_warmup_s = warmup_done, warmup_s
+    self.warmup_done, self.last_warmup_s, self.last_warmup_compiles = warmup_done, warmup_s, warmup_compiles
     self.last_error = None
     self.load_count += 1
     self.metrics = {k: None for k in self.metrics}
@@ -266,9 +267,9 @@ class RuntimeState:
       model, kv = Transformer.from_gguf(src, mc)
       model_name = kv.get('general.name') or kv.get('general.basename') or (model_ref or pathlib.Path(source).stem)
       tok = SimpleTokenizer.from_gguf_kv(kv)
-      warm_s = self._do_warmup(model) if warmup else None
+      warm_s, warm_compiles = self._do_warmup(model) if warmup else (None, None)
       mid = model_ref if (model_ref and model_ref in self.registry) else (model_ref or pathlib.Path(source).stem)
-      self.adopt(model, kv, tok, mid, model_name, str(source), warmup_done=warmup, warmup_s=warm_s)
+      self.adopt(model, kv, tok, mid, model_name, str(source), warmup_done=warmup, warmup_s=warm_s, warmup_compiles=warm_compiles)
     except RuntimeFault: raise
     except Exception as e:
       self.last_error = str(e)
@@ -277,18 +278,21 @@ class RuntimeState:
     return self.status()
 
   @staticmethod
-  def _do_warmup(model:Transformer) -> float:
+  def _do_warmup(model:Transformer) -> tuple[float, int]:
+    from tinygrad.device import Compiler
+    compiles_before = Compiler.cache_misses
     st = time.perf_counter()
     # run 2 tokens through the model twice to capture the JIT before serving requests
     with Context(DEBUG=max(DEBUG.value, 1)):
       for _ in range(2): list(zip(range(2), model.generate([0])))
-    return time.perf_counter() - st
+    return time.perf_counter() - st, Compiler.cache_misses - compiles_before
 
   def warmup(self) -> dict:
     if not self.loaded: raise RuntimeFault("model_not_loaded", "no model loaded")
-    self.last_warmup_s = self._do_warmup(self.model)
+    self.last_warmup_s, self.last_warmup_compiles = self._do_warmup(self.model)
     self.warmup_done = True
-    return {"warmup_done": True, "warmup_s": self.last_warmup_s, "model": self.model_id}
+    return {"warmup_done": True, "warmup_s": self.last_warmup_s, "warmup_compiles": self.last_warmup_compiles,
+            "model": self.model_id}
 
   def unload(self) -> dict:
     mid = self.model_id
@@ -296,7 +300,7 @@ class RuntimeState:
     self.model = self.tok = None
     self.model_id = self.model_name = self.path = None
     self.max_context = self.architecture = self.quant = None
-    self.warmup_done, self.last_warmup_s = False, None
+    self.warmup_done, self.last_warmup_s, self.last_warmup_compiles = False, None, None
     self.metrics = {k: None for k in self.metrics}
     gc.collect()   # best-effort: drop tinygrad buffer refs so GPU memory can be released
     return {"loaded": False, "unloaded": mid}
@@ -318,6 +322,7 @@ class RuntimeState:
       "backend": self.backend, "target": self.target,
       "prefill_v2": bool(_M.PREFILL_V2), "prefill_concrete_kv": bool(_M.PREFILL_CONCRETE_KV),
       "warmup_done": self.warmup_done, "last_warmup_s": self.last_warmup_s,
+      "last_warmup_compiles": self.last_warmup_compiles,
       "busy": self.gen_lock.locked(), "load_count": self.load_count, "request_count": self.request_count,
       "last_prefill_tok_s": m["last_prefill_tok_s"], "last_decode_tok_s": m["last_decode_tok_s"],
       "last_finish_reason": m["last_finish_reason"], "last_error": self.last_error,
@@ -330,13 +335,21 @@ class RuntimeState:
   def cache_dict(self) -> dict:
     # Phase R8: report the runtime-owned caches so the client can avoid needless reload/recompile.
     from tinygrad.helpers import CACHEDB
+    from tinygrad.device import Compiler
     cdb = pathlib.Path(CACHEDB)
     model_file = None
     if self.path and (p := pathlib.Path(self.path)).exists():
       model_file = {"path": str(p), "size_bytes": p.stat().st_size}
     cached_toks = len(self.model._cached_tokens) if self.loaded and getattr(self.model, "_cached_tokens", None) else 0
+    hits, misses = Compiler.cache_hits, Compiler.cache_misses
     return {
+      # on-disk compiled-kernel cache (sqlite); size grows as new kernels are compiled across runs
       "kernel_cache": {"path": str(cdb), "exists": cdb.exists(), "size_bytes": cdb.stat().st_size if cdb.exists() else 0},
+      # live process compile counters: a hit reused a cached compiled kernel, a miss compiled a fresh one.
+      # kernels_compiled (== misses) is the compiled-kernel count proxy; last_warmup_compiles tells the client
+      # whether the last warmup actually did compile work (0 -> kernels were already cached).
+      "compile_cache": {"hits": hits, "misses": misses, "total": hits + misses,
+                        "kernels_compiled": misses, "last_warmup_compiles": self.last_warmup_compiles},
       "model_file_cache": model_file,
       "prefix_cache": {"cached_tokens": cached_toks, "last_cached_prefix_tokens": self.metrics["last_cached_prefix_tokens"]},
       "warmup_done": self.warmup_done, "last_warmup_s": self.last_warmup_s,
@@ -608,12 +621,13 @@ def main():
   tok = SimpleTokenizer.from_gguf_kv(kv)
 
   # warmup the JIT
-  warm_s = None
+  warm_s, warm_compiles = None, None
   if args.warmup or args.serve:
-    warm_s = RuntimeState._do_warmup(model)
+    warm_s, warm_compiles = RuntimeState._do_warmup(model)
 
   # adopt the preloaded model into the runtime state (centralized for /runtime/* and /v1/*)
-  state.adopt(model, kv, tok, model_id, model_name, str(source), warmup_done=bool(args.warmup or args.serve), warmup_s=warm_s)
+  state.adopt(model, kv, tok, model_id, model_name, str(source), warmup_done=bool(args.warmup or args.serve),
+              warmup_s=warm_s, warmup_compiles=warm_compiles)
 
   # start server
   if args.serve: LLMServer(('', args.serve), state).serve_forever()
