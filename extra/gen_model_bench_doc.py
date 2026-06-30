@@ -52,6 +52,37 @@ def main():
              f"| {ts.get('median') or '—'} | {band} | {spread} | {d.get('gb_s') or '—'} "
              f"| {pp if pp is not None else '—'} | {r.get('vram_used_gb')} GB | {r.get('load_s')} |")
   L.append("")
+  # llama.cpp comparison (same GGUF, same GPU) -- only if any artifact has llama numbers
+  if any(r.get("llama_cpp") for r in rows):
+    L.append("## vs llama.cpp (same GGUF, same GPU)")
+    L.append("")
+    L.append("Reference: `llama-bench` (ROCm/HIP build) on the identical GGUF file and GPU. `tg128` = decode, "
+             "`pp512` = prefill. **Decode ratio** is tinygrad median ÷ llama.cpp — the headline parity number.")
+    L.append("")
+    L.append("| Model | Quant | tinygrad decode | llama.cpp decode | decode ratio | tinygrad pp512 | llama.cpp pp512 | prefill ratio |")
+    L.append("|---|---|---|---|---|---|---|---|")
+    for r in rows:
+      lc = r.get("llama_cpp")
+      if not lc:
+        L.append(f"| {r.get('id')} | {r.get('quant') or '?'} | {r.get('decode',{}).get('tok_s',{}).get('median') or '—'} "
+                 f"| — | — | {(r.get('prefill') or {}).get('prefill_tok_s') or '—'} | — | — |")
+        continue
+      tg_t = r.get("decode", {}).get("tok_s", {}).get("median")
+      lc_t = lc.get("decode_tg_tok_s")
+      ratio = r.get("decode_ratio_tinygrad_over_llama")
+      tg_pp = (r.get("prefill") or {}).get("prefill_tok_s")
+      lc_pp = lc.get("prefill_pp_tok_s")
+      pp_ratio = round(tg_pp / lc_pp, 3) if (tg_pp and lc_pp) else None
+      L.append(f"| {r.get('id')} | {r.get('quant') or '?'} | {tg_t or '—'} | {lc_t} ±{lc.get('decode_tg_stddev')} "
+               f"| **{round(ratio*100)}%** | {tg_pp or '—'} | {lc_pp} | {round(pp_ratio*100)}% |"
+               if ratio is not None else
+               f"| {r.get('id')} | {r.get('quant') or '?'} | {tg_t or '—'} | {lc_t} | — | {tg_pp or '—'} | {lc_pp} | — |")
+    L.append("")
+    lc_build = next((r["llama_cpp"].get("build_commit") for r in rows if r.get("llama_cpp")), None)
+    L.append(f"llama.cpp build `{lc_build or '?'}`, `llama-bench` defaults (warmup + repeats). Decode is the fair "
+             "comparison; tinygrad's default prefill path is the universal (long-prompt-slow) one unless "
+             "`PREFILL_V2`/server profile is enabled, so the prefill ratio understates a tuned-prefill config.")
+    L.append("")
   L.append("## Notes")
   L.append("")
   L.append("- **Decode tok/s** is the steady-state median (clock-ramp/first tokens dropped). High **spread** on the "
