@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from collections import defaultdict
-from typing import Any, Generic, TypeVar, Iterator, Generator, TYPE_CHECKING
+from typing import Any, ClassVar, Generic, TypeVar, Iterator, Generator, TYPE_CHECKING
 import importlib, inspect, functools, pathlib, os, contextlib, re, atexit, pickle, decimal
 from tinygrad.helpers import LRU, getenv, diskcache_get, diskcache_put, DEBUG, GlobalCounters, flat_mv, PROFILE, temp, colored
 from tinygrad.helpers import Context, CCACHE, ALLOW_DEVICE_USAGE, MAX_BUFFER_SIZE, cpu_events, ProfileEvent, ProfilePointEvent, suppress_finalizing
@@ -274,13 +274,19 @@ class LRUAllocator(Allocator, Generic[DeviceType]):
 class CompileError(Exception): pass
 
 class Compiler:
+  # process-wide compiled-kernel cache counters (a cache hit reused a compiled lib; a miss actually compiled one)
+  cache_hits: ClassVar[int] = 0
+  cache_misses: ClassVar[int] = 0
   def __init__(self, cachekey:str|None=None): self.cachekey = cachekey if CCACHE else None
   def compile(self, src:str) -> bytes: return src.encode()   # NOTE: empty compiler is the default
   def compile_cached(self, src:str) -> bytes:
-    if self.cachekey is None or (lib := diskcache_get(self.cachekey, src)) is None:
-      assert not getenv("ASSERT_COMPILE"), f"tried to compile with ASSERT_COMPILE set\n{src}"
-      lib = self.compile(src)
-      if self.cachekey is not None: diskcache_put(self.cachekey, src, lib)
+    if self.cachekey is not None and (lib := diskcache_get(self.cachekey, src)) is not None:
+      Compiler.cache_hits += 1
+      return lib
+    assert not getenv("ASSERT_COMPILE"), f"tried to compile with ASSERT_COMPILE set\n{src}"
+    lib = self.compile(src)
+    if self.cachekey is not None: diskcache_put(self.cachekey, src, lib)
+    Compiler.cache_misses += 1
     return lib
   def disassemble(self, lib:bytes): pass
 
