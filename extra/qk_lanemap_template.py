@@ -41,6 +41,10 @@ from extra.amd_warp_reduce import WARP
 from extra.qk_gemv_g2_lanemap import Q4KGateUpLaneMap, QK_K, Q4K_WORDS_PER_BLOCK, Q4K_QUANT_WORD_BASE
 from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
 from extra.q4_k_gemv_primitive import _q4k_block_dot_packed_load
+# TG3: quant facts are DATA now. The Q4_K QuantSpec defaults are sourced from the quant semantics library
+# (the G2/G3 hardcoded 256/36/4 are the derived Q4_K library row), not from Python constants.
+from extra.qk_quant_semantics import quant_spec_fields
+_Q4K_LIB = quant_spec_fields("Q4_K")
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-lanemap-template-ir"
@@ -69,12 +73,23 @@ class TopologySpec:
 
 @dataclass(frozen=True)
 class QuantSpec:
-  """Quant-format DATA inputs (not topology). TG3 makes these data-driven across formats."""
-  qk_k: int = QK_K
-  q4k_words_per_block: int = Q4K_WORDS_PER_BLOCK
-  q4k_quant_word_base: int = Q4K_QUANT_WORD_BASE
+  """Quant-format DATA inputs (not topology). TG3: these now READ from extra/qk_quant_semantics.py.
+
+  The defaults are the Q4_K library row (block_elems=256, words_per_block=36, quant_word_base=4), DERIVED from
+  the Q4_K byte layout -- not the formerly-hardcoded G2 constants. Use `from_library(name)` to build a spec for a
+  named quant; it raises QuantLayoutUnknown for formats whose layout is not a metadata-first uint32 packing
+  (Q6_K/Q8_0/fp16), which the Q4_K-shaped IR does not express."""
+  qk_k: int = _Q4K_LIB["block_elems"]
+  q4k_words_per_block: int = _Q4K_LIB["words_per_block"]
+  q4k_quant_word_base: int = _Q4K_LIB["quant_word_base"]
   name: str = "Q4_K"
   dequant_body: Callable = _q4k_block_dot_packed_load
+
+  @classmethod
+  def from_library(cls, name: str = "Q4_K", dequant_body: Callable = _q4k_block_dot_packed_load) -> "QuantSpec":
+    f = quant_spec_fields(name)  # raises QuantLayoutUnknown for non-(metadata-first uint32) formats
+    return cls(qk_k=f["block_elems"], q4k_words_per_block=f["words_per_block"],
+               q4k_quant_word_base=f["quant_word_base"], name=name, dequant_body=dequant_body)
 
 
 @dataclass(frozen=True)
@@ -209,7 +224,7 @@ def g3_template(role: str, rows: int, k: int) -> LaneMapTemplate:
                       axis_roles=LaneMapTemplate.axis_roles_of(lm),
                       reduction_pattern=CROSS_LANE_WAVE_REDUCE,
                       lane_ownership_index=G3_LANE_OWNERSHIP_INDEX)
-  return LaneMapTemplate(topology=topo, quant=QuantSpec(), target=TargetSpec(),
+  return LaneMapTemplate(topology=topo, quant=QuantSpec.from_library("Q4_K"), target=TargetSpec(),
                          shape=ShapeSpec(rows=rows, k=k, role=role))
 
 

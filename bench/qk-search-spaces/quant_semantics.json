@@ -1,0 +1,322 @@
+{
+  "_schema": "TG3 quant semantics library (extra/qk_quant_semantics.py)",
+  "scope": "quant FORMATS as DATA for the topology search (block layout, payload vs metadata bytes, scale/min layout, dequant ops, accum/dot dtypes, quality class, known good/refuted route families).",
+  "audit_only": "no GPU kernel, no default change, no live-route repoint.",
+  "formats": {
+    "Q4_K": {
+      "name": "Q4_K",
+      "ggml_type": 12,
+      "block_elems": 256,
+      "block_bytes": 144,
+      "packing_word_bytes": 4,
+      "packing_word_dtype": "uint32",
+      "segments": [
+        {
+          "name": "d",
+          "bytes": 2,
+          "role": "block_scale"
+        },
+        {
+          "name": "dmin",
+          "bytes": 2,
+          "role": "block_min"
+        },
+        {
+          "name": "scales",
+          "bytes": 12,
+          "role": "sub_scale_min"
+        },
+        {
+          "name": "qs",
+          "bytes": 128,
+          "role": "payload"
+        }
+      ],
+      "metadata_first": true,
+      "symmetric": false,
+      "sub_blocks": 8,
+      "natural_lane_extent": 8,
+      "dequant_ops": [
+        "load_d_dmin_fp16",
+        "unpack_6bit_scale_min(grp)",
+        "load_packed_uint32_qs",
+        "unpack_4bit_nibble(grp,pos)",
+        "w = d*sc*q - dmin*mn"
+      ],
+      "legal_accum_dtypes": [
+        "fp32"
+      ],
+      "preferred_dot_dtype": "fp32_or_q8_1_int8",
+      "quality_class": "lossy_4bit_kquant",
+      "known_good_route_families": [
+        "lanemap",
+        "coop",
+        "owned_reference"
+      ],
+      "known_refuted_route_families": [
+        {
+          "route_family": "lanemap_layout_reshuffle",
+          "route_id": "q4k_offline_layout_reshuffle",
+          "disposition": "deprioritized: G3 (generic lanemap) matches owned, no offline-reshuffle gap to recover",
+          "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"
+        }
+      ],
+      "quality_constraints": "none (dequant is exact up to fp reassoc; lossless vs the GGUF reference)",
+      "impl_citation": "extra/q4_k_gemv_primitive.py (_q4k_block_dot_packed_load); gguf ggml_type 12",
+      "notes": "natural_lane_extent=8 = the within-block packed-word index lane4 (pos//4) the coop/G3 routes coalesce; G3 owns 8 words/group x 4 block_groups = wave32.",
+      "derived": {
+        "metadata_bytes": 16,
+        "weight_payload_bytes": 128,
+        "other_bytes": 0,
+        "words_per_block": 36,
+        "quant_word_base": 4,
+        "quant_words_per_block": 32,
+        "payload_bits_per_weight": 4.0,
+        "sub_block_elems": 32
+      }
+    },
+    "Q5_K": {
+      "name": "Q5_K",
+      "ggml_type": 13,
+      "block_elems": 256,
+      "block_bytes": 176,
+      "packing_word_bytes": 4,
+      "packing_word_dtype": "uint32",
+      "segments": [
+        {
+          "name": "d",
+          "bytes": 2,
+          "role": "block_scale"
+        },
+        {
+          "name": "dmin",
+          "bytes": 2,
+          "role": "block_min"
+        },
+        {
+          "name": "scales",
+          "bytes": 12,
+          "role": "sub_scale_min"
+        },
+        {
+          "name": "qh",
+          "bytes": 32,
+          "role": "payload_high"
+        },
+        {
+          "name": "qs",
+          "bytes": 128,
+          "role": "payload_low"
+        }
+      ],
+      "metadata_first": true,
+      "symmetric": false,
+      "sub_blocks": 8,
+      "natural_lane_extent": 8,
+      "dequant_ops": [
+        "load_d_dmin_fp16",
+        "unpack_6bit_scale_min(grp)",
+        "load_qh_highbit",
+        "load_packed_uint32_qs",
+        "unpack_5bit = (qs_nibble | qh_bit<<4)",
+        "w = d*sc*q - dmin*mn"
+      ],
+      "legal_accum_dtypes": [
+        "fp32"
+      ],
+      "preferred_dot_dtype": "fp32",
+      "quality_class": "lossy_5bit_kquant",
+      "known_good_route_families": [
+        "lanemap",
+        "coop",
+        "owned_reference"
+      ],
+      "known_refuted_route_families": [],
+      "quality_constraints": "none (exact dequant). NOTE: the qh high-bit plane sits BETWEEN metadata and qs, so the packed-word lane index is NOT the Q4_K formula -- a Q5_K lanemap needs its own index.",
+      "impl_citation": "tinygrad/llm/gguf.py ggml_type 13 (shares the Q4_K scale/min unpack; adds qh<<4)",
+      "notes": "no shipped Q5_K route on the current profile; descriptor row for new-profile openers.",
+      "derived": {
+        "metadata_bytes": 16,
+        "weight_payload_bytes": 160,
+        "other_bytes": 0,
+        "words_per_block": 44,
+        "quant_word_base": 4,
+        "quant_words_per_block": 40,
+        "payload_bits_per_weight": 5.0,
+        "sub_block_elems": 32
+      }
+    },
+    "Q6_K": {
+      "name": "Q6_K",
+      "ggml_type": 14,
+      "block_elems": 256,
+      "block_bytes": 210,
+      "packing_word_bytes": 2,
+      "packing_word_dtype": "uint16",
+      "segments": [
+        {
+          "name": "ql",
+          "bytes": 128,
+          "role": "payload_low"
+        },
+        {
+          "name": "qh",
+          "bytes": 64,
+          "role": "payload_high"
+        },
+        {
+          "name": "scales",
+          "bytes": 16,
+          "role": "sub_scale"
+        },
+        {
+          "name": "d",
+          "bytes": 2,
+          "role": "block_scale"
+        }
+      ],
+      "metadata_first": false,
+      "symmetric": true,
+      "sub_blocks": 16,
+      "natural_lane_extent": 16,
+      "dequant_ops": [
+        "load_ql_4bit",
+        "load_qh_2bit",
+        "q = (ql | qh<<4) - 32",
+        "load_int8_subscale",
+        "load_d_fp16",
+        "w = d * q * scale"
+      ],
+      "legal_accum_dtypes": [
+        "fp32"
+      ],
+      "preferred_dot_dtype": "fp32",
+      "quality_class": "lossy_6bit_kquant",
+      "known_good_route_families": [
+        "coop",
+        "owned_reference"
+      ],
+      "known_refuted_route_families": [
+        {
+          "route_family": "coop_halfwarp_direct",
+          "route_id": "decode_q6k_direct_refuted",
+          "disposition": "refuted as built: W==D -4.77..-6.06% (median -5.44%); 2 rows x 16-lane half-warp partition",
+          "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json"
+        }
+      ],
+      "quality_constraints": "none (exact dequant). PAYLOAD-FIRST + symmetric (no dmin/min) + int8 sub-scales -> a different lane-map shape than Q4_K; the metadata-first packed-word index does NOT apply.",
+      "impl_citation": "extra/q6_k_gemv_primitive.py (q6k_coop_partial_kernel shipped; q6k_halfwarp_partition refuted); gguf ggml_type 14",
+      "notes": "shipped route = decode_q6k_coop_shipped (pos 0..15 LOCAL lane + stage-2 .sum). natural_lane_extent=16.",
+      "derived": {
+        "metadata_bytes": 18,
+        "weight_payload_bytes": 192,
+        "other_bytes": 0,
+        "words_per_block": 105,
+        "quant_word_base": null,
+        "quant_words_per_block": null,
+        "payload_bits_per_weight": 6.0,
+        "sub_block_elems": 16
+      }
+    },
+    "Q8_0": {
+      "name": "Q8_0",
+      "ggml_type": 8,
+      "block_elems": 32,
+      "block_bytes": 34,
+      "packing_word_bytes": 1,
+      "packing_word_dtype": "int8",
+      "segments": [
+        {
+          "name": "d",
+          "bytes": 2,
+          "role": "block_scale"
+        },
+        {
+          "name": "qs",
+          "bytes": 32,
+          "role": "payload"
+        }
+      ],
+      "metadata_first": true,
+      "symmetric": true,
+      "sub_blocks": 1,
+      "natural_lane_extent": 32,
+      "dequant_ops": [
+        "load_d_fp16",
+        "load_int8_q",
+        "w = q * d"
+      ],
+      "legal_accum_dtypes": [
+        "int32",
+        "fp32"
+      ],
+      "preferred_dot_dtype": "int8_vdot4",
+      "quality_class": "near_lossless_8bit",
+      "known_good_route_families": [
+        "int_dot_activation_pairing",
+        "owned_reference"
+      ],
+      "known_refuted_route_families": [],
+      "quality_constraints": "near-lossless (8-bit). block_bytes=34 is NOT uint32 word-aligned -> no clean uint32 packed-word factorization; pack 4 int8 into uint32 only for v_dot4_i32_i8.",
+      "impl_citation": "tinygrad/llm/gguf.py ggml_type 8; activation pairing extra/q4_k_gemv_primitive.py q8_1 path",
+      "notes": "on this profile Q8_0/q8_1 appears as the ACTIVATION quant for the int-dot Q4_K weight GEMV, not a standalone weight tensor.",
+      "derived": {
+        "metadata_bytes": 2,
+        "weight_payload_bytes": 32,
+        "other_bytes": 0,
+        "words_per_block": 34,
+        "quant_word_base": 2,
+        "quant_words_per_block": 32,
+        "payload_bits_per_weight": 8.0,
+        "sub_block_elems": 32
+      }
+    },
+    "fp16": {
+      "name": "fp16",
+      "ggml_type": null,
+      "block_elems": 1,
+      "block_bytes": 2,
+      "packing_word_bytes": 2,
+      "packing_word_dtype": "fp16",
+      "segments": [
+        {
+          "name": "v",
+          "bytes": 2,
+          "role": "payload"
+        }
+      ],
+      "metadata_first": true,
+      "symmetric": true,
+      "sub_blocks": 1,
+      "natural_lane_extent": 1,
+      "dequant_ops": [
+        "direct_load_fp16"
+      ],
+      "legal_accum_dtypes": [
+        "fp32",
+        "fp16"
+      ],
+      "preferred_dot_dtype": "fp16_wmma",
+      "quality_class": "lossless_fp16",
+      "known_good_route_families": [
+        "graph_gemm_pipe",
+        "owned_reference",
+        "native_isa_attention"
+      ],
+      "known_refuted_route_families": [],
+      "quality_constraints": "none (no quantization).",
+      "impl_citation": "extra/qk_prefill_graph_gemm_route.py (prefill GEMM); extra/qk_owned_flash_decode_graph_node.py (attention)",
+      "notes": "not a packed-quant format; no unpack. Used by prefill GEMM + decode attention.",
+      "derived": {
+        "metadata_bytes": 0,
+        "weight_payload_bytes": 2,
+        "other_bytes": 0,
+        "words_per_block": 1,
+        "quant_word_base": 0,
+        "quant_words_per_block": 1,
+        "payload_bits_per_weight": 16.0,
+        "sub_block_elems": 1
+      }
+    }
+  }
+}
