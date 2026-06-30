@@ -1,0 +1,21 @@
+{
+  "verdict": "AMD_ISA_PHASE_N5A_BLOCKED_REGALLOC",
+  "scope": "Phase N5A: move the native decode tile's per-token reduction accumulators (acc[R]/den/mx/_dotp) from LDS to pinned VGPRs (register accumulators) to cut the ~6x LDS / ~3.8x VALU per-wave excess vs owned (N2B/N3F.0); N4 selected this (native attn tile = the native-vs-owned GPU-compute delta).",
+  "target_confirmed": {
+    "n4": "native_attn_tile is the dominant native-vs-owned delta (native 5791 vs owned 381 GPU-compute units/step ctx512); FFN GEMVs/reduce are shared (cancel).",
+    "n2b_n3f0": "native does ~6x LDS-inst and ~3.8x VALU-inst per wave vs owned (ctx4096); source = LDS-backed accumulators RMW'd every token where owned keeps them in registers.",
+    "tile_accumulators": "extra/qk_flash_decode.py flash_block_tiled_xlane... uses UOp.placeholder(addrspace=AddrSpace.REG) for acc[R=4]/den/mx/_dotp; the native backend maps DEFINE_REG(REG) to per-thread LDS (renderer/isa/amd.py _lds_byte_offset)."
+  },
+  "attempted": "Pinned-VGPR accumulators behind AMD_ISA_REG_ACCUM (default-off): reserve v240..255 out of _vpool; map (DEFINE_REG, compile-time idx) -> fixed physical VGPR; lower per-token load=read-pin, store=write-pin (v_add/v_mov), bypassing LDS. Scaffolding reverted (non-functional) after the audit hit the walls below; tree is byte-identical to the passing N4 state (amd.py == commit 0a6b33b30).",
+  "blocker_mechanism": "The native ISA backend's accumulator is a STATEFUL DEFINE_REG (read-modify-write across the token loop), intentionally mapped to LDS so the loop RMW is plain memory (renderer/isa/amd.py:100-104 comment). Putting it in a pinned VGPR requires a fixed physical register that is READ and WRITTEN MANY TIMES across the loop, which the single-def linear-scan regalloc cannot represent. THREE concrete walls (all code-cited):",
+  "walls": [
+    "1) SINGLE-DEF ASSERT: tinygrad/codegen/late/regalloc.py def-loop asserts each tagged def has `lr[v][0] == i` (one definition point per register). A pinned accumulator written every iteration (each store tags the pinned reg as a def) trips this on the 2nd write.",
+    "2) NO FIXED-REG-OPERAND-WITHOUT-DEF: reading the pinned reg as an operand needs a node whose .reg is the fixed physical reg but is NOT a tracked def. alloc_vregs (renderer/isa/amd.py:357-360) re-wraps any tag whose _cons is empty into a fresh vreg; the regalloc tracks every tuple-tag as a def/live-range. There is no 'reference this physical reg, don't allocate/track it' class.",
+    "3) NO GENERAL v_mov vgpr->vgpr: AMDOps.MOV is a coalescing no-op (renderer/isa/amd.py:461-462 returns NOOP, emit nothing); writing a pinned reg from a value vreg would need a new v_mov_b32(dst_pin, src_vgpr) op. Plus the regalloc loop live-in/live-out machinery (regalloc.py:90-108) would have to carry the pinned reg across the loop boundary.",
+    "Combined: this is a stateful-physical-accumulator REGALLOC FEATURE (untracked pinned class, multi-write, loop-carried), not a local isel change. The standing constraint forbids rewriting regalloc.py unless proven backend-generic (this is a special case, not generic). The only alternative is rewriting the tile to SSA REDUCE accumulators (lowerer-native register reduce) -- an explicit non-goal (tile-algorithm rewrite)."
+  ],
+  "wd_measured": "none -- blocked before a working implementation. Per N3F the tile is ~10% of WALL, so even a successful reg-accum had a bounded ~10% wall ceiling (native ~62% -> ~70% of owned at best).",
+  "correctness": "tree reverted to passing N4 state (amd.py unchanged from commit 0a6b33b30); default LDS accumulator path untouched. token_match/determinism unaffected.",
+  "recommendation": "DEFER N5A. Cost (regalloc feature or tile-algo rewrite, both risky/large) vastly exceeds the measured ~10% wall ceiling. Higher-value remaining work: N6 search-binding of the PROVEN levers (dynamic-S, hardware-exp) + N7 pre-promotion package, toward Phase O. Revisit reg-accum only if a search/regalloc capability lands that makes loop-carried physical accumulators backend-generic.",
+  "next": "N6 (bind proven levers to BubbleBeam) -> N7 (pre-promotion package). Record N5A as a refuted/deferred lever in the search ledger; do not include reg-accum as a search axis (no working implementation)."
+}
