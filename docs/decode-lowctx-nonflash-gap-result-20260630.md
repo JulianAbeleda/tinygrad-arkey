@@ -2,8 +2,30 @@
 
 Date: 2026-06-30
 
-Status: measured candidate, correctness-proven. Recommendation only — no default flipped (promotion is an owner
-decision per `bench/qk-decode-eval/HARNESS_GUIDE.md`). Model: Qwen3-8B-Q4_K_M, RX 7900 XTX (gfx1100).
+Status: part PROMOTED (the ctx≥512 crossover fix, shipped), part candidate (the sub-512 owned-tile-S4).
+Correctness-proven. Model: Qwen3-8B-Q4_K_M, RX 7900 XTX (gfx1100).
+
+## PROMOTED (shipped commit): the flash crossover was never wired in generate
+
+A bigger issue surfaced while chasing the sub-512 gap: `generate()` always called the decode forward with
+`use_flash=False`, so a generation that STARTS short baked the SDPA graph and **never crossed over to the
+flash/owned-tile graph even past ctx512**. Real-generate decode for short-prompt sessions SDPA-degraded the whole
+way — measured **85 → 54 tok/s by ctx512 (~55% of llama) and worse beyond** — while the authority harness (which
+sets the flash flag per ctx) showed 104 at ctx512. The two numbers disagreed because real generate wasn't honoring
+the flash policy.
+
+Fix (shipped): `generate` now passes `use_flash=should_use_flash_decode(sp, ntv)` per decode token, so it switches
+graphs at the threshold as the centralized policy intends. Real-generate ctx≥512 decode goes **54 → 104 tok/s
+(~105% of llama)**, byte-identical greedy (40 tok sub-512 + 560 tok crossing 512, same MD5). Added
+`Transformer.warmup_flash_decode()` + a cli warmup call so the first crossover doesn't stall inline. This also
+fixes a latent capture-order hazard (rollout_jit's baked attention depended on whichever generation captured it
+first). Sub-512 still uses SDPA — that is the candidate below.
+
+---
+
+## Remaining candidate: the sub-512 SDPA path itself (owned-tile S=4)
+
+Recommendation only — no default flipped (promotion is an owner decision per `bench/qk-decode-eval/HARNESS_GUIDE.md`).
 
 ## The gap
 
