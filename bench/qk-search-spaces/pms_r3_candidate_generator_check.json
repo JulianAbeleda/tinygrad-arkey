@@ -1,0 +1,109 @@
+{
+  "scope": "PMS-R3 manifest-driven candidate generator",
+  "verdict": "PMS_R3_PASS_MANIFEST_DRIVEN_CANDIDATES",
+  "generator": "extra/qk_pure_search_next_candidate.py --profile-driven / --request",
+  "checker": "extra/qk_search_space_manifest_check.py (validates search_profiles.json contract)",
+  "profiles": "bench/qk-search-spaces/search_profiles.json",
+  "dimensions": [
+    "workload",
+    "role",
+    "quant",
+    "shape",
+    "target=AMD_gfx1100",
+    "route_family"
+  ],
+  "next_candidate": {
+    "verdict": "NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW",
+    "note": "no role in the declared profiles has status open|failed -> every hot-kernel role is already promoted or shipped (or its only alternative is refuted/do_not_search). The search does NOT wander into promoted/shipped roles; reopening requires a ceiling/attribution audit (PMS-R7) or a new profile (PMS-R8) introducing an open role.",
+    "declared_rows": 11,
+    "open_failed_rows": [],
+    "promoted_or_shipped_rows": 11,
+    "do_not_search_axes": 7
+  },
+  "refusal_demonstrations": {
+    "out_of_profile_family": {
+      "verdict": "REFUSED_OUT_OF_PROFILE",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "reason": "route_family 'wmma' is not a declared family ['lanemap', 'coop', 'graph_gemm_pipe', 'native_isa_attention', 'owned_reference', 'lanemap_layout_reshuffle', 'coop_halfwarp_direct']",
+      "request": {
+        "workload": "decode",
+        "role": "ffn_gate_up",
+        "quant": "Q4_K",
+        "route_family": "wmma"
+      }
+    },
+    "do_not_search_q6k_direct": {
+      "verdict": "REFUSED_DO_NOT_SEARCH",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "role": "lm_head",
+      "route_family": "coop_halfwarp_direct",
+      "do_not_search": {
+        "axis": "q6k_direct_half_warp_route",
+        "route_family": "coop_halfwarp_direct",
+        "role": "lm_head",
+        "disposition": "refuted: W==D regression -4.77..-6.06% (median -5.44%)",
+        "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json",
+        "route_id": "decode_q6k_direct_refuted"
+      },
+      "reason": "(role=lm_head, route_family=coop_halfwarp_direct) is a refuted/closed axis: refuted: W==D regression -4.77..-6.06% (median -5.44%)"
+    },
+    "do_not_search_layout_reshuffle": {
+      "verdict": "REFUSED_DO_NOT_SEARCH",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "role": "ffn_gate_up",
+      "route_family": "lanemap_layout_reshuffle",
+      "do_not_search": {
+        "axis": "q4k_offline_layout_reshuffle",
+        "route_family": "lanemap_layout_reshuffle",
+        "role": "ffn_gate_up",
+        "disposition": "deprioritized: G3 (generic lanemap) matches owned; the refuted axis is the OFFLINE LAYOUT RESHUFFLE variant, not the promoted lanemap route",
+        "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"
+      },
+      "reason": "(role=ffn_gate_up, route_family=lanemap_layout_reshuffle) is a refuted/closed axis: deprioritized: G3 (generic lanemap) matches owned; the refuted axis is the OFFLINE LAYOUT RESHUFFLE variant, not the promoted lanemap route"
+    },
+    "do_not_search_native_attention": {
+      "verdict": "REFUSED_DO_NOT_SEARCH",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "role": "attention_tile",
+      "route_family": "native_isa_attention",
+      "do_not_search": {
+        "axis": "scheduler_only_attention_tuning",
+        "route_family": "native_isa_attention",
+        "role": "attention_tile",
+        "disposition": "small/no movement",
+        "citation": "bench/amd-isa-backend-phase-k/latest.json"
+      },
+      "reason": "(role=attention_tile, route_family=native_isa_attention) is a refuted/closed axis: small/no movement"
+    },
+    "in_profile_promoted": {
+      "verdict": "CANDIDATE_IN_PROFILE",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "role": "ffn_gate_up",
+      "quant": "Q4_K",
+      "route_family": "lanemap",
+      "shape": {
+        "K": 4096,
+        "N": 12288
+      },
+      "role_status": "promoted",
+      "note": "request is inside the declared profile; status tells whether it is a live search target"
+    },
+    "in_profile_shipped": {
+      "verdict": "CANDIDATE_IN_PROFILE",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "role": "lm_head",
+      "quant": "Q6_K",
+      "route_family": "coop",
+      "shape": {
+        "N": ">=100000"
+      },
+      "role_status": "shipped",
+      "note": "request is inside the declared profile; status tells whether it is a live search target"
+    }
+  },
+  "key_findings": [
+    "generator refuses any route_family not declared for the role (REFUSED_OUT_OF_PROFILE)",
+    "generator refuses every refuted/do_not_search (role,route_family) carried from the route manifest REFUTED axes",
+    "next-candidate emits NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW: all 11 declared roles are promoted/shipped, 0 open|failed -> no wandering"
+  ]
+}

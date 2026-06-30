@@ -23,6 +23,11 @@ import json, pathlib, argparse, itertools
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SPACE = ROOT / "bench/qk-search-spaces/decode_attention_loop_search_space.json"
 LEDGER = ROOT / "bench/qk-pure-search-loop/decode_attention_loop_ledger.jsonl"
+# PMS-R3 manifest-driven mode (workload x role x quant x shape x target x route_family).
+PROFILES = ROOT / "bench/qk-search-spaces/search_profiles.json"
+PROJECT_LEDGER = ROOT / "bench/qk-project-search-ledger/ledger.jsonl"
+# a role is a searchable failed/open row ONLY if its status is open|failed; promoted/shipped/refuted are NOT targets.
+_SEARCHABLE_STATUS = {"open", "failed"}
 
 # Outcomes the loop may record. PROMOTABLE is reserved for W==D + token-match (never local gates).
 # SEARCH_SPACE_BUG/TOOLING_BUG/INSTRUMENTATION_GAP are recorded when a candidate fails to MOVE its target parity row
@@ -77,16 +82,122 @@ def record(line_json: str) -> int:
   print(json.dumps({"recorded": obj, "ledger": str(LEDGER.relative_to(ROOT))}))
   return 0
 
+# ----------------------------------------------------------------------------------------------------------------
+# PMS-R3: manifest/profile-driven candidate generation.
+# Candidates are (workload, role, quant, shape, target, route_family). The generator (a) REFUSES any candidate whose
+# route_family is not declared allowed for the role -> REFUSED_OUT_OF_PROFILE; (b) REFUSES any (role,route_family)
+# carried in profiles.do_not_search (the manifest's refuted axes) -> REFUSED_DO_NOT_SEARCH; (c) when asked for the
+# NEXT untried candidate, only targets a role whose status is open|failed and emits
+# NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW otherwise (it never wanders into promoted/shipped roles).
+# ----------------------------------------------------------------------------------------------------------------
+def load_profiles() -> dict:
+  return json.loads(PROFILES.read_text())
+
+def _dns_index(prof: dict) -> dict:
+  """(role, route_family) -> do_not_search row."""
+  return {(d.get("role"), d.get("route_family")): d for d in prof.get("do_not_search", [])}
+
+def _project_ledger_candidate_ids() -> set[str]:
+  if not PROJECT_LEDGER.exists(): return set()
+  out = set()
+  for line in PROJECT_LEDGER.read_text().splitlines():
+    line = line.strip()
+    if not line: continue
+    try: out.add(json.loads(line).get("candidate_id", ""))
+    except Exception: pass
+  return out
+
+def profile_request(prof: dict, workload: str, role: str, quant: str, route_family: str) -> dict:
+  """Validate ONE explicit candidate request against the declared profile (the refusal contract)."""
+  pid = next((p for p, v in prof["profiles"].items() if v.get("workload") == workload), None)
+  if pid is None:
+    return {"verdict": "REFUSED_OUT_OF_PROFILE", "reason": f"no profile for workload {workload!r}",
+            "request": {"workload": workload, "role": role, "quant": quant, "route_family": route_family}}
+  profile = prof["profiles"][pid]
+  if route_family not in prof.get("route_families", []):
+    return {"verdict": "REFUSED_OUT_OF_PROFILE", "profile_id": pid,
+            "reason": f"route_family {route_family!r} is not a declared family {prof.get('route_families')}",
+            "request": {"workload": workload, "role": role, "quant": quant, "route_family": route_family}}
+  rmeta = profile.get("roles", {}).get(role)
+  if rmeta is None:
+    return {"verdict": "REFUSED_OUT_OF_PROFILE", "profile_id": pid,
+            "reason": f"role {role!r} not declared in profile (known: {sorted(profile.get('roles', {}))})",
+            "request": {"workload": workload, "role": role, "quant": quant, "route_family": route_family}}
+  dns = _dns_index(prof).get((role, route_family))
+  if dns is not None:
+    return {"verdict": "REFUSED_DO_NOT_SEARCH", "profile_id": pid, "role": role, "route_family": route_family,
+            "do_not_search": dns,
+            "reason": f"(role={role}, route_family={route_family}) is a refuted/closed axis: {dns.get('disposition')}"}
+  if route_family not in rmeta.get("allowed_route_families", []):
+    return {"verdict": "REFUSED_OUT_OF_PROFILE", "profile_id": pid, "role": role, "route_family": route_family,
+            "allowed_route_families": rmeta.get("allowed_route_families"),
+            "reason": f"route_family {route_family!r} is not allowed for role {role!r}"}
+  if quant != rmeta.get("quant"):
+    return {"verdict": "REFUSED_OUT_OF_PROFILE", "profile_id": pid, "role": role,
+            "reason": f"quant {quant!r} != declared {rmeta.get('quant')!r} for role {role!r}"}
+  return {"verdict": "CANDIDATE_IN_PROFILE", "profile_id": pid, "role": role, "quant": quant,
+          "route_family": route_family, "shape": rmeta.get("shape"), "role_status": rmeta.get("status"),
+          "note": "request is inside the declared profile; status tells whether it is a live search target"}
+
+def profile_next(prof: dict) -> dict:
+  """Emit the next untried candidate targeting an open|failed role, else NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW."""
+  tried = _project_ledger_candidate_ids()
+  rows, searchable = [], []
+  for pid, profile in prof["profiles"].items():
+    for role, rmeta in profile.get("roles", {}).items():
+      rows.append({"profile_id": pid, "role": role, "status": rmeta.get("status")})
+      if rmeta.get("status") in _SEARCHABLE_STATUS:
+        for fam in rmeta.get("allowed_route_families", []):
+          if (role, fam) in _dns_index(prof): continue          # never a do_not_search family
+          if fam == "owned_reference": continue                  # owned is the oracle, not a search candidate
+          cid = f"{profile['workload']}/{role}/{fam}"
+          if cid in tried: continue
+          searchable.append({"profile_id": pid, "workload": profile["workload"], "role": role,
+                             "quant": rmeta.get("quant"), "shape": rmeta.get("shape"), "route_family": fam,
+                             "candidate_id": cid})
+  counts = {"declared_rows": len(rows),
+            "open_failed_rows": [r for r in rows if r["status"] in _SEARCHABLE_STATUS],
+            "promoted_or_shipped_rows": len([r for r in rows if r["status"] not in _SEARCHABLE_STATUS]),
+            "do_not_search_axes": len(prof.get("do_not_search", []))}
+  if searchable:
+    return {"verdict": "NEXT_CANDIDATE", "candidate": searchable[0], "remaining": len(searchable), **counts}
+  return {"verdict": "NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW",
+          "note": ("no role in the declared profiles has status open|failed -> every hot-kernel role is already "
+                   "promoted or shipped (or its only alternative is refuted/do_not_search). The search does NOT "
+                   "wander into promoted/shipped roles; reopening requires a ceiling/attribution audit (PMS-R7) or a "
+                   "new profile (PMS-R8) introducing an open role."),
+          **counts}
+
 def main() -> int:
   ap = argparse.ArgumentParser()
   ap.add_argument("--no-pairs", action="store_true", help="singles only (default: include pairs of cheap knobs)")
   ap.add_argument("--record", metavar="JSON", help="append an outcome line to the ledger and exit")
+  ap.add_argument("--profile-driven", action="store_true",
+                  help="PMS-R3: emit the next manifest/profile-driven candidate (open|failed role) or "
+                       "NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW")
+  ap.add_argument("--request", metavar="workload,role,quant,route_family",
+                  help="PMS-R3: validate ONE explicit candidate request against the declared profile (refusal test)")
   ap.add_argument("--failed-rows", metavar="r1,r2", default=None,
                   help="parity-closure mode: only emit a candidate whose axis targets_delta is in this set of "
                        "FAILED parity rows (from qk_owned_oracle_parity_audit.py searchable_failed_rows). No "
                        "candidate may run unless it targets a failed row.")
   args = ap.parse_args()
   failed_rows = set(x.strip() for x in args.failed_rows.split(",") if x.strip()) if args.failed_rows else None
+
+  # PMS-R3 manifest/profile-driven mode (independent of the attention-loop SPACE).
+  if args.request is not None:
+    if not PROFILES.exists():
+      print(json.dumps({"verdict": "PROFILES_MISSING", "path": str(PROFILES.relative_to(ROOT))})); return 2
+    parts = [p.strip() for p in args.request.split(",")]
+    if len(parts) != 4:
+      print(json.dumps({"error": "--request needs 'workload,role,quant,route_family'"})); return 2
+    print(json.dumps(profile_request(load_profiles(), *parts), indent=2))
+    return 0
+  if args.profile_driven:
+    if not PROFILES.exists():
+      print(json.dumps({"verdict": "PROFILES_MISSING", "path": str(PROFILES.relative_to(ROOT))})); return 2
+    print(json.dumps(profile_next(load_profiles()), indent=2))
+    return 0
 
   if not SPACE.exists():
     print(json.dumps({"verdict": "SEARCH_SPACE_MISSING", "path": str(SPACE.relative_to(ROOT))})); return 2
