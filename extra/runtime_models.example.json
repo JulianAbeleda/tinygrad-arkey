@@ -1,0 +1,23 @@
+{
+  "_comment": "Phase R3 example model registry. Copy to ~/.config/tinygrad/runtime_models.json (or point the server at it with --registry / TINYGRAD_RUNTIME_MODELS). Rows here extend or override the built-in aliases in tinygrad/llm/cli.py. 'path' may be a local GGUF file or an https URL (fetched + cached on load).",
+  "models": [
+    {
+      "id": "qwen3-8b-q4k",
+      "path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "architecture": "qwen3",
+      "quant": "Q4_K_M",
+      "default_context": 4096,
+      "tags": ["chat", "qwen", "q4_k", "local"],
+      "enabled": true
+    },
+    {
+      "id": "qwen3-0.6b",
+      "path": "/home/ubuntu/models/Qwen3-0.6B-Q8_0.gguf",
+      "architecture": "qwen3",
+      "quant": "Q8_0",
+      "default_context": 2048,
+      "tags": ["chat", "qwen", "small", "local"],
+      "enabled": true
+    }
+  ]
+}
