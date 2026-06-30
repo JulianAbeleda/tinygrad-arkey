@@ -1,0 +1,47 @@
+{
+  "512": {
+    "ctx": 512,
+    "tok_s": 219.6,
+    "median_ms": 2331.638,
+    "spread_pct": 45.6,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "1024": {
+    "ctx": 1024,
+    "tok_s": 216.8,
+    "median_ms": 4723.726,
+    "spread_pct": 5.0,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "2048": {
+    "ctx": 2048,
+    "tok_s": 212.0,
+    "median_ms": 9658.922,
+    "spread_pct": 2.8,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "4096": {
+    "ctx": 4096,
+    "tok_s": 216.8,
+    "median_ms": 18895.107,
+    "spread_pct": 1.0,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "8192": {
+    "ctx": 8192,
+    "tok_s": 122.6,
+    "median_ms": 66831.058,
+    "spread_pct": 53.2,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  }
+}

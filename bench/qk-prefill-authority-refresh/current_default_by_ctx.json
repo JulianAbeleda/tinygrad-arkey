@@ -1,0 +1,47 @@
+{
+  "512": {
+    "ctx": 512,
+    "tok_s": 217.3,
+    "median_ms": 2355.853,
+    "spread_pct": 50.3,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "1024": {
+    "ctx": 1024,
+    "tok_s": 222.9,
+    "median_ms": 4594.55,
+    "spread_pct": 4.6,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "2048": {
+    "ctx": 2048,
+    "tok_s": 212.2,
+    "median_ms": 9650.898,
+    "spread_pct": 2.1,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "4096": {
+    "ctx": 4096,
+    "tok_s": 221.6,
+    "median_ms": 18487.723,
+    "spread_pct": 1.3,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  },
+  "8192": {
+    "ctx": 8192,
+    "tok_s": 127.3,
+    "median_ms": 64355.424,
+    "spread_pct": 53.2,
+    "route_kernels": [],
+    "tensile_fallback": false,
+    "graph_gemm": false
+  }
+}
