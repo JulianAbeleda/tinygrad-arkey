@@ -1,0 +1,72 @@
+{
+  "verdict": "AMD_ISA_Q6K_DIRECT_SPEED_REGRESSION",
+  "tier_of_best": "REGRESSION",
+  "best_delta_pct": -4.77,
+  "median_delta_pct": -5.44,
+  "worst_ctx_delta_pct": -6.06,
+  "token_match_all_ctx": true,
+  "route_bound_all_ctx": true,
+  "wd": {
+    "512": {
+      "baseline_tok_s": 103.63,
+      "candidate_tok_s": 97.35,
+      "delta_pct": -6.06,
+      "baseline_spread_pct": 53.4,
+      "candidate_spread_pct": 50.15,
+      "token_match": true,
+      "candidate_halfwarp_fired": [
+        "q6k_halfwarp_partition_151936_4096"
+      ],
+      "candidate_coop_lmhead_fired": []
+    },
+    "1024": {
+      "baseline_tok_s": 101.68,
+      "candidate_tok_s": 95.76,
+      "delta_pct": -5.82,
+      "baseline_spread_pct": 49.98,
+      "candidate_spread_pct": 47.04,
+      "token_match": true,
+      "candidate_halfwarp_fired": [
+        "q6k_halfwarp_partition_151936_4096"
+      ],
+      "candidate_coop_lmhead_fired": []
+    },
+    "2048": {
+      "baseline_tok_s": 99.21,
+      "candidate_tok_s": 94.19,
+      "delta_pct": -5.06,
+      "baseline_spread_pct": 47.63,
+      "candidate_spread_pct": 44.13,
+      "token_match": true,
+      "candidate_halfwarp_fired": [
+        "q6k_halfwarp_partition_151936_4096"
+      ],
+      "candidate_coop_lmhead_fired": []
+    },
+    "4096": {
+      "baseline_tok_s": 94.5,
+      "candidate_tok_s": 89.99,
+      "delta_pct": -4.77,
+      "baseline_spread_pct": 44.95,
+      "candidate_spread_pct": 42.65,
+      "token_match": true,
+      "candidate_halfwarp_fired": [
+        "q6k_halfwarp_partition_151936_4096"
+      ],
+      "candidate_coop_lmhead_fired": []
+    }
+  },
+  "amdahl_vs_measured": {
+    "q6k0_prediction": "+2.4% TIER_B (lm_head coop-reduce removal)",
+    "refinement": "r_32_4_1187 is the gumbel-argmax (intrinsic), not the coop reduce; firm removable = q6k_coop_partial_151936 + r_1187_32_4_16 partials-sum",
+    "measured_best_delta_pct": -4.77,
+    "measured_median_delta_pct": -5.44,
+    "per_ctx_delta_pct": {
+      "512": -6.06,
+      "1024": -5.82,
+      "2048": -5.06,
+      "4096": -4.77
+    }
+  },
+  "caveat": "W==D wall spread is large (auto-clock confound; candidate spreads [50.15, 47.04, 44.13, 42.65]%). Verdict rests on median across 4 ctx + token/route gates, not any single delta. baseline arm == flag-off == shipped coop route; rollback = unset flag."
+}
