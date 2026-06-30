@@ -1,5 +1,24 @@
 # Decode-Attention Two-Kernel Problem — Audit Result (2026-06-25)
 
+## Update (2026-06-30): verdict reinforced; current state
+
+Since this audit, two later results confirm the conclusion (the owned two-kernel tile+combine remains the shipped
+default; do not spend broad search on attention):
+
+- **Native generated attention exists, but is correct-not-fast.** The native AMD-ISA backend closed the primitive gaps
+  this audit flagged as "a capability, not a speed lever" (vector dot, cross-lane reduce, LDS, barriers, grid
+  parallelism, hardware exp, dynamic split count, register accumulators). The generated attention tile is token-correct
+  and route-bound but lands ~60–68% of the owned tile's per-token speed, so it is not promoted.
+- **Ceiling audit says attention is low-leverage.** A whole-decode ceiling audit found decode is weight-memory-bound:
+  the attention KV-read floor is under 1% of the per-token weight-read floor, so even a perfect attention tile barely
+  moves whole-decode tokens/s. Decode is near its practical ceiling.
+- **The leverage the audit said was "outside attention" materialized in the weight path.** The Q4_K weight matrix-vector
+  kernels are now search-generated and speed-equivalent to the owned hand-tuned ones (promoted); a Q6_K direct-route
+  variant was tried and refuted (no speedup, stays default-off). The remaining decode headroom is structural, not a
+  tile/combine lever.
+
+The rest of this document (the original audit) stands as written.
+
 ## Decision: **`TWO_KERNEL_PROBLEM_EXHAUSTED_CURRENT_ROUTE`**
 
 The decode-attention split-KV route (TILE `owned_flash_tile_gqa_whole` + a **separate** log-sum-exp COMBINE

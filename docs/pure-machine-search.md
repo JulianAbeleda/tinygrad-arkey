@@ -11,7 +11,7 @@ We are not fully pure yet, but the current boundary is narrower than the old "tw
 
 - Tracked Q4_K decode GEMV is generated under BubbleBeam G3 and speed-equivalent to the old owned warp route.
 - Q6_K direct/lane-map routing was implemented and token-correct, then W==D-refuted; the shipped Q6_K coop route stays.
-- Prefill defaults to the generated/search-selected `pipe_tm2_tn2` graph-GEMM route.
+- Prefill defaults to a search-selected graph-GEMM route: the `pipe_tm2_tn2` pipeline applied role-selectively (pipeline on for the latency-bound projection and FFN-down roles, off for the already-saturated FFN gate/up). This role-selective default is promoted — it beats the plain global pipeline by ~3% and the prior default by ~12–23% through ctx 8192. Rollback: `PREFILL_PIPE_ROLE_SELECTIVE=0` (global pipeline), `PREFILL_GEMM_PIPELINE=0` (prior default).
 - Decode attention still ships the owned two-kernel tile+combine route. A native AMD-ISA generated attention tile exists
   and is correct/route-bound, but it is not fast enough to promote and the ceiling audit says further attention work is
   low-leverage for whole-decode tok/s.
@@ -155,5 +155,5 @@ whole-decode ceiling audit says attention parity would only move tok/s modestly.
 2. keep Q6_K direct default-off unless a future route beats coop in W==D;
 3. keep owned attention as the default until a generated route clears promotion, but do not spend broad search there
    unless the ceiling changes;
-4. push pure-search work where the wall still moves: prefill role-selective graph-GEMM/search and future
-   quant/shape-agnostic route generation.
+4. push pure-search work where the wall still moves: prefill role-selective graph-GEMM is now promoted (done — it is
+   the shipped prefill default); next is quant/shape-agnostic route generation.
