@@ -93,6 +93,11 @@ class Gate:
   def c_metrics(self):
     st, j = self._req("GET", "/runtime/metrics")
     return (st == 200 and "last_decode_tok_s" in j, f"decode_tok_s={j.get('last_decode_tok_s')} prefill={j.get('last_prefill_tok_s')}")
+  def c_cache(self):
+    st, j = self._req("GET", "/runtime/cache")
+    cc = j.get("compile_cache", {}) if isinstance(j, dict) else {}
+    ok = st == 200 and "compile_cache" in j and "hits" in cc and "kernels_compiled" in cc and "kernel_cache" in j
+    return (ok, f"compile hits={cc.get('hits')} misses={cc.get('misses')} warmup_compiles={cc.get('last_warmup_compiles')}")
   def c_load(self, model, load_path):
     st, j = self._req("POST", "/runtime/load", {"model": model, "path": load_path, "warmup": True}, timeout=600)
     return (st == 200 and j.get("loaded") and j.get("model") == model, f"loaded={j.get('loaded')} model={j.get('model')} warm={j.get('last_warmup_s')}")
@@ -123,6 +128,7 @@ def main():
   g.check("context overflow -> context_length_exceeded", lambda: g.c_context_overflow(args.model))
   g.check("POST /v1/completions", lambda: g.c_completions(args.model))
   g.check("GET /runtime/metrics", g.c_metrics)
+  g.check("GET /runtime/cache (compile hit/miss observability)", g.c_cache)
   if not args.skip_lifecycle:
     g.check("POST /runtime/load", lambda: g.c_load(args.model, args.load_path))
     g.check("POST /v1/chat/completions (after load)", lambda: g.c_chat_after_load(args.model))

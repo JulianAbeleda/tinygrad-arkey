@@ -37,6 +37,7 @@ def static_audit() -> dict:
     ("models_ctrl",      "GET /runtime/models control",                 '"/runtime/models"' in src,            "runtime"),
     ("metrics_ctrl",     "GET /runtime/metrics control",                '"/runtime/metrics"' in src,           "runtime"),
     ("cache_ctrl",       "GET /runtime/cache control",                  '"/runtime/cache"' in src,             "runtime"),
+    ("compile_counters", "compile-cache hit/miss + kernel-count observability", "compile_cache" in inspect.getsource(cli.RuntimeState.cache_dict), "runtime"),
     ("load_ctrl",        "POST /runtime/load control",                  '"/runtime/load"' in src,              "runtime"),
     ("unload_ctrl",      "POST /runtime/unload control",                '"/runtime/unload"' in src,            "runtime"),
     ("warmup_ctrl",      "POST /runtime/warmup control",                '"/runtime/warmup"' in src,            "runtime"),
