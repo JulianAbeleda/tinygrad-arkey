@@ -24,9 +24,11 @@ claim is blocked by decode attention.
   N1B uniform-scalar refuted/dead; N2 per-PC ATT walled (degraded); N2B PMC pinned dynamic loop VOLUME (FIXED_S sweep);
   N3F.0 ctx4096 confirmed valid-S-bound; N3F dynamic-S landed (+9.5% ctx512, flat ctx4096), proving the attention tile
   is only ~10% of the decode step.
-- REMAINING (this pass = "all of N"): N4 whole-step attribution -> N5 branch by the dominant whole-step kernel -> N6
-  search-space binding -> N7 pre-promotion package. Then Phase O (promotion). N4->N7 are SEQUENTIAL: each is selected by
-  the prior's artifact-backed row, and per-kernel timing must run on an uncontended GPU (serial captures).
+- N4-N7 DONE (all of N complete): N4 whole-step attribution (tile = native-vs-owned delta); N5A register accumulators
+  BLOCKED_REGALLOC (single-def regalloc vs stateful loop-carried accumulator; ~10% ceiling; deferred); N6 BubbleBeam
+  binding PASS (search-owned native axis); N7 pre-promotion package READY (native 61-66% of owned, multi-ctx).
+- REMAINING: Phase O (promotion gate) ONLY. Expected O verdict = CORRECT_BUT_NOT_FAST (native correct/bound/search-owned
+  but 61-66% of owned < 90% threshold). Closing the residual needs register accumulators (regalloc-blocked) -> structural.
 - Phase N0/N1/N2/N3F progressed through evidence-backed performance closure:
   - N0 pinned the first static gap to VALU excess.
   - N1A lowered `exp2` to hardware `v_exp_f32`, moving W==D to about `61.09/57.92 tok/s`.
