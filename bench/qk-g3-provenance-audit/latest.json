@@ -105,5 +105,19 @@
     "extra/qk_gemv_g2_lanemap.py (the human-designed lane map)",
     "extra/qk_gemv_g3_codegen_lowering.py (the emitter)"
   ],
-  "caveat": "audit-only / static. 'still_human' = design choices, not correctness claims. block_groups/words_per_group are constrained (product == lane_extent) but the specific 4x8 split + the axis-role assignment were a person's decision, which is exactly the surface TG2 must search."
+  "caveat": "audit-only / static. 'still_human' = design choices, not correctness claims. block_groups/words_per_group are constrained (product == lane_extent) but the specific 4x8 split + the axis-role assignment were a person's decision, which is exactly the surface TG2 must search.",
+  "cache": {
+    "schema": "qk_artifact_cache_v1",
+    "class": "A_static",
+    "cache_key": "80e9c734e5871242c8688aab9d92027a1f197ae815b441d23621f2684b6f3b31",
+    "inputs_hash": "1b1589a3970cd0cd432a1e874454e1315e0468244a6bdbc2470b33ba06ee9a25",
+    "code_hash": "70dfaca2db2e1e275e21ead0fbfb167829cc46125a851eeba18ad52244d12abc",
+    "runtime_hash": null,
+    "profile_id": null,
+    "route_id": null,
+    "target_id": null,
+    "generated_at": "2026-06-30T16:42:16.245939+00:00",
+    "validity": "fresh",
+    "artifact_kind": "derived_artifact"
+  }
 }

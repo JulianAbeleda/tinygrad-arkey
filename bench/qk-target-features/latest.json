@@ -129,5 +129,19 @@
     "no default change",
     "no live-route repoint",
     "do not claim NVIDIA/Metal portability (descriptors only)"
-  ]
+  ],
+  "cache": {
+    "schema": "qk_artifact_cache_v1",
+    "class": "A_static",
+    "cache_key": "d1480bf2454fc0db9f510acd25d9777804fb4774399c4c975ed85bf6a454d02a",
+    "inputs_hash": "5965accbbe34eaa0ac48da8490e3f2cea6683850e4550c04ef3132edaa70707f",
+    "code_hash": "a7ae2c4c1a12f0e93b0b19fe26b7a2a56fe032978007f52a0e69fc922152d1ec",
+    "runtime_hash": null,
+    "profile_id": null,
+    "route_id": null,
+    "target_id": null,
+    "generated_at": "2026-06-30T16:42:16.448202+00:00",
+    "validity": "fresh",
+    "artifact_kind": "derived_artifact"
+  }
 }

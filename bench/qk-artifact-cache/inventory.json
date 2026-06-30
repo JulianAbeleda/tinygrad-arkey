@@ -1,12 +1,12 @@
 {
   "verdict": "C0_PASS_CACHE_INVENTORY_PINNED",
-  "total_artifacts": 38,
+  "total_artifacts": 39,
   "class_counts": {
-    "A_static": 28,
+    "A_static": 29,
     "B_correctness": 3,
     "C_speed": 7
   },
-  "need_wrapping": 38,
+  "need_wrapping": 36,
   "unclassified": [],
   "note": "No artifact currently carries cache metadata (none wrapped yet) -> all need wrapping in C2 (A_static) / C3 (B/C). C0 is inventory+classification only; the wrapping + skip logic is C2-C3.",
   "rows": [
@@ -105,7 +105,7 @@
       "class": "A_static",
       "has_cache_meta": false,
       "has_speed_evidence": true,
-      "has_correctness_evidence": false,
+      "has_correctness_evidence": true,
       "needs_wrapping": true,
       "wrap_phase": "C2"
     },
@@ -123,7 +123,7 @@
       "class": "A_static",
       "has_cache_meta": false,
       "has_speed_evidence": true,
-      "has_correctness_evidence": false,
+      "has_correctness_evidence": true,
       "needs_wrapping": true,
       "wrap_phase": "C2"
     },
@@ -133,6 +133,15 @@
       "has_cache_meta": false,
       "has_speed_evidence": true,
       "has_correctness_evidence": false,
+      "needs_wrapping": true,
+      "wrap_phase": "C2"
+    },
+    {
+      "path": "bench/qk-search-spaces/refuted_axes.json",
+      "class": "A_static",
+      "has_cache_meta": false,
+      "has_speed_evidence": true,
+      "has_correctness_evidence": true,
       "needs_wrapping": true,
       "wrap_phase": "C2"
     },
@@ -202,10 +211,10 @@
     {
       "path": "bench/qk-topology-author/latest.json",
       "class": "A_static",
-      "has_cache_meta": false,
+      "has_cache_meta": true,
       "has_speed_evidence": true,
       "has_correctness_evidence": true,
-      "needs_wrapping": true,
+      "needs_wrapping": false,
       "wrap_phase": "C2"
     },
     {
@@ -220,10 +229,10 @@
     {
       "path": "bench/qk-profile-opener/latest.json",
       "class": "A_static",
-      "has_cache_meta": false,
+      "has_cache_meta": true,
       "has_speed_evidence": true,
       "has_correctness_evidence": false,
-      "needs_wrapping": true,
+      "needs_wrapping": false,
       "wrap_phase": "C2"
     },
     {
@@ -247,10 +256,10 @@
     {
       "path": "bench/qk-target-features/latest.json",
       "class": "A_static",
-      "has_cache_meta": false,
+      "has_cache_meta": true,
       "has_speed_evidence": true,
       "has_correctness_evidence": false,
-      "needs_wrapping": true,
+      "needs_wrapping": false,
       "wrap_phase": "C2"
     },
     {

@@ -16,6 +16,7 @@ Audit-only; no kernels, no GPU. Run: PYTHONPATH=. python3 extra/qk_g3_provenance
 Writes: bench/qk-g3-provenance-audit/{latest.json,summary.md}
 """
 import json, pathlib
+from extra.qk_artifact_cache import emit_artifact
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-g3-provenance-audit"
 
@@ -69,7 +70,8 @@ def main():
     "citations": ["bench/qk-lanemap-template-audit/latest.json (R5 lossless template)", "extra/qk_gemv_g2_lanemap.py (the human-designed lane map)", "extra/qk_gemv_g3_codegen_lowering.py (the emitter)"],
     "caveat": "audit-only / static. 'still_human' = design choices, not correctness claims. block_groups/words_per_group are constrained (product == lane_extent) but the specific 4x8 split + the axis-role assignment were a person's decision, which is exactly the surface TG2 must search.",
   }
-  json.dump(rec, open(OUT/"latest.json", "w"), indent=2)
+  emit_artifact(OUT, rec, kind="derived_artifact", inputs={"audit": "g3_provenance"},
+                code_paths=["extra/qk_g3_provenance_audit.py"])
   md = [f"# TG0 — G3 provenance audit\n\n**Verdict:** {rec['verdict']}\n\n{rec['headline']}\n",
         "## Provenance buckets\n| bucket | count | meaning |", "|---|---|---|",
         "| generated | %d | tinygrad codegen (automatic) |" % rec["bucket_counts"].get("generated",0),

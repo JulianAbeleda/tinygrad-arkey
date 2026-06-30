@@ -41,6 +41,7 @@ from extra.qk_lanemap_template import (TopologySpec, TOPOLOGY_FACTORS, CROSS_LAN
 # Q4_K: qk_k=256 elems/superblock, 36 uint32 words/block of which the first 4 are scale/min -> 32 packed quant words.
 from extra.qk_quant_semantics import quant_spec_fields
 from extra.qk_search_util import GROUPINGS, grammar_max_candidates
+from extra.qk_artifact_cache import emit_artifact
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-topology-author"
@@ -316,7 +317,10 @@ def main() -> int:
                "no route_id branch / no hardcoded (4,8) / no hardcoded axis-roles in generation"],
     "stop": "TG2 only. Do NOT build TG3 (quant semantics library) or beyond.",
   }
-  json.dump(result, open(OUT / "latest.json", "w"), indent=2)
+  emit_artifact(OUT, result, kind="derived_artifact",
+                inputs={"profile": "qwen3_8b_q4_k_m_gfx1100", "grammar": "topology_grammar_v1"},
+                code_paths=["extra/qk_topology_candidate_author.py", "bench/qk-search-spaces/topology_grammar_v1.json",
+                            "bench/qk-search-spaces/profiles/qwen3_8b_q4_k_m_gfx1100.json"])
 
   md = [f"# TG2 Candidate Topology Author -- verdict: **{verdict}**", "",
         f"The machine authors lane-map topologies for Q4_K decode GEMV on `{PROFILE_ID}` from a bounded "

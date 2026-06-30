@@ -101,6 +101,22 @@ def write_artifact(path: str, payload: dict, meta: dict) -> None:
   out = dict(payload); out["cache"] = meta
   json.dump(out, open(p, "w"), indent=2)
 
+def emit_artifact(out_dir, payload: dict, md_lines=None, *, kind: str = "derived_artifact",
+                  inputs: dict | None = None, code_paths: list[str] | None = None, runtime: bool = False, **ids):
+  """The ONE writer for a tool's latest.json (+ optional summary.md): writes the payload with a stamped cache block so
+  the artifact carries provenance and can be reused/invalidated. kind = 'input_artifact' (a config/descriptor the human
+  edits) | 'derived_artifact' (generated; keyed on inputs + code_paths so a threshold/grammar/source change invalidates
+  it). Output is byte-identical to a hand-rolled json.dump(...indent=2) EXCEPT the added top-level 'cache' block."""
+  d = pathlib.Path(out_dir)
+  if not d.is_absolute(): d = ROOT / d
+  d.mkdir(parents=True, exist_ok=True)
+  meta = cache_meta("A_static", inputs or {}, code_paths or [], runtime=runtime, **ids)
+  meta["artifact_kind"] = kind
+  write_artifact(d / "latest.json", payload, meta)
+  if md_lines is not None:
+    (d / "summary.md").write_text("\n".join(md_lines) if isinstance(md_lines, (list, tuple)) else md_lines)
+  return d / "latest.json"
+
 def _selftest() -> int:
   import tempfile
   ok = True

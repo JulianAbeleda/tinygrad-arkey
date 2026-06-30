@@ -85,5 +85,19 @@
     "no GPU kernel",
     "no default change",
     "no live-route repoint"
-  ]
+  ],
+  "cache": {
+    "schema": "qk_artifact_cache_v1",
+    "class": "A_static",
+    "cache_key": "6cc52d139e3e03847f43053010fce9db375aaf8ecb938c64f9123041541d1bc3",
+    "inputs_hash": "000f3743432ae9deb52bca718fe84573ab57c02f2eba2919a51e9fbacbe9b75b",
+    "code_hash": "f967b6caa83511718294e8fb1b93bae2a72b3396a6108033b15a28af99e530a2",
+    "runtime_hash": null,
+    "profile_id": null,
+    "route_id": null,
+    "target_id": null,
+    "generated_at": "2026-06-30T16:42:16.557624+00:00",
+    "validity": "fresh",
+    "artifact_kind": "derived_artifact"
+  }
 }

@@ -22,6 +22,7 @@ Run: PYTHONPATH=. python3 extra/qk_profile_opener.py
 """
 from __future__ import annotations
 import json, pathlib
+from extra.qk_artifact_cache import emit_artifact
 from extra.qk_quant_semantics import quant_row, QuantLayoutUnknown
 from extra.qk_profile_regenerate_check import derive_decode_shapes
 from extra.qk_route_manifest import ROUTES, REFUTED
@@ -324,7 +325,8 @@ def main() -> int:
                 "bench/qk-search-spaces/profiles/qwen3_8b_q5_k_m_gfx1100.json (DRAFT)"],
     "do_not": ["no GPU kernel", "no default change", "no live-route repoint"],
   }
-  json.dump(result, open(OUT / "latest.json", "w"), indent=2)
+  emit_artifact(OUT, result, kind="derived_artifact", inputs={"opener": "profile_census"},
+                code_paths=["extra/qk_profile_opener.py"])
 
   md = [f"# TG4 New-Profile Opener -- verdict: **{verdict}**", "",
         "The opener runs the 9-step new-profile flow (model/shape, quant-mix, GPU features, route census, ceiling, "

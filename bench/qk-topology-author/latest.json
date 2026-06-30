@@ -826,5 +826,19 @@
     "no reopened refuted route",
     "no route_id branch / no hardcoded (4,8) / no hardcoded axis-roles in generation"
   ],
-  "stop": "TG2 only. Do NOT build TG3 (quant semantics library) or beyond."
+  "stop": "TG2 only. Do NOT build TG3 (quant semantics library) or beyond.",
+  "cache": {
+    "schema": "qk_artifact_cache_v1",
+    "class": "A_static",
+    "cache_key": "d39f74f8de61f13e9c5e7dd82a0003db98f51f192df5fd1a9f9607a16019269b",
+    "inputs_hash": "47afeced3ff50b1dbb34dedadf749d80d94918c7b82380a003360f6ca8d86067",
+    "code_hash": "fe06b2c7c4d5464accee1540057eeca50830aa69fcc57f31331e8e9d095d3f39",
+    "runtime_hash": null,
+    "profile_id": null,
+    "route_id": null,
+    "target_id": null,
+    "generated_at": "2026-06-30T16:42:16.340624+00:00",
+    "validity": "fresh",
+    "artifact_kind": "derived_artifact"
+  }
 }

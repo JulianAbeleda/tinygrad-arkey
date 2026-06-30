@@ -23,6 +23,7 @@ Run: PYTHONPATH=. python3 extra/qk_target_features.py
 """
 from __future__ import annotations
 import json, pathlib
+from extra.qk_artifact_cache import emit_artifact
 from dataclasses import dataclass, field, asdict
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -228,7 +229,8 @@ def main() -> int:
     "do_not": ["no GPU kernel", "no default change", "no live-route repoint",
                "do not claim NVIDIA/Metal portability (descriptors only)"],
   }
-  json.dump(result, open(OUT / "latest.json", "w"), indent=2)
+  emit_artifact(OUT, result, kind="derived_artifact", inputs={"targets": "amd_gfx1100+nvidia_sm89+apple_metal_m3"},
+                code_paths=["extra/qk_target_features.py"])
 
   md = [f"# TG5 Cross-Target Feature Model -- verdict: **{verdict}**", "",
         "Target features as DATA (wave/subgroup, vector-dot/matrix-core, LDS, barrier, registers, occupancy, "
