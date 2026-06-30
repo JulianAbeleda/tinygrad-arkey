@@ -144,12 +144,44 @@ def check_search_profiles(path: pathlib.Path) -> list[str]:
   return errors
 
 
+def check_refuted_axis_drift() -> list[str]:
+  """Assert the 3 refuted-axis sources agree: qk_route_manifest.REFUTED is the SINGLE SOURCE, and both
+  search_profiles.json do_not_search and the quant known_refuted_route_families must be a subset of it that agrees on
+  (key, disposition-class). key = route_id when present else axis; disposition compared by class token (refuted /
+  deprioritized / exhausted / ...). Catches the drift where a route was refuted/classified differently in two places."""
+  errors: list[str] = []
+  try:
+    from extra.qk_route_manifest import refuted_index, disposition_class
+    from extra.qk_quant_semantics import QUANT_LIBRARY
+  except Exception as e:  # pragma: no cover
+    return [f"refuted-axis drift: cannot import sources: {e}"]
+  canon = refuted_index()  # key -> disposition_class (the single source)
+  if SEARCH_PROFILES.exists():
+    for d in json.load(open(SEARCH_PROFILES)).get("do_not_search", []):
+      key = d.get("route_id") or d.get("axis")
+      dc = disposition_class(d.get("disposition", ""))
+      if key not in canon:
+        errors.append(f"do_not_search axis {key!r} not backed by manifest REFUTED (single source)")
+      elif dc != canon[key]:
+        errors.append(f"do_not_search {key!r} disposition class {dc!r} != REFUTED {canon[key]!r}")
+  for fmt, q in QUANT_LIBRARY.items():
+    for fam in getattr(q, "known_refuted_route_families", ()) or ():
+      key = fam.get("route_id") or fam.get("route_family")
+      dc = disposition_class(fam.get("disposition", ""))
+      if key not in canon:
+        errors.append(f"quant {fmt} known_refuted {key!r} not backed by manifest REFUTED (single source)")
+      elif dc != canon[key]:
+        errors.append(f"quant {fmt} {key!r} disposition class {dc!r} != REFUTED {canon[key]!r}")
+  return errors
+
+
 def main(argv: list[str]) -> int:
   paths = [ROOT / a if not pathlib.Path(a).is_absolute() else pathlib.Path(a) for a in argv[1:]] or DEFAULT_MANIFESTS
   errors: list[str] = []
-  # always validate the PMS-R3 search_profiles.json contract when present (default-run)
+  # always validate the PMS-R3 search_profiles.json contract + refuted-axis single-source agreement (default-run)
   if not argv[1:] and SEARCH_PROFILES.exists():
     errors.extend(check_search_profiles(SEARCH_PROFILES))
+    errors.extend(check_refuted_axis_drift())
   for path in paths:
     if path.name == "search_profiles.json":
       errors.extend(check_search_profiles(path)); continue

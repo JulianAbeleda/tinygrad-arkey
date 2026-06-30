@@ -235,9 +235,32 @@ def dump(out_path: str | None = None) -> str:
   json.dump(to_manifest_dict(), open(p, "w"), indent=2)
   return str(p)
 
+# ---- refuted axes: REFUTED is the SINGLE SOURCE; do_not_search (search_profiles.json) and the quant
+#      known_refuted_route_families must agree with it (enforced by qk_search_space_manifest_check). ----
+def disposition_class(disp: str) -> str:
+  """Normalize a disposition to its class token (refuted / deprioritized / exhausted / correct_not_fast / small / ...)."""
+  return (disp or "").split(":")[0].split("/")[0].split()[0].lower()
+
+def refuted_index() -> dict[str, str]:
+  """{key -> disposition_class} for every refuted axis, keyed by route_id when present else axis."""
+  return {(r.get("route_id") or r["axis"]): disposition_class(r["disposition"]) for r in REFUTED}
+
+def dump_refuted(out_path: str | None = None) -> str:
+  """Write the canonical refuted-axes json FROM REFUTED (the single source for do_not_search / quant known_refuted)."""
+  root = pathlib.Path(__file__).resolve().parents[1]
+  p = pathlib.Path(out_path) if out_path else (root / "bench/qk-search-spaces/refuted_axes.json")
+  p.parent.mkdir(parents=True, exist_ok=True)
+  json.dump({"_schema": "canonical refuted axes (generated FROM qk_route_manifest.REFUTED)",
+             "generated_by": "extra/qk_route_manifest.py:dump_refuted",
+             "agreement_key": "route_id when present else axis; disposition compared by class token",
+             "refuted_axes": REFUTED}, open(p, "w"), indent=2)
+  return str(p)
+
 if __name__ == "__main__":
   path = dump()
+  rpath = dump_refuted()
   print(f"wrote default route manifest to {path}")
+  print(f"wrote canonical refuted axes to {rpath}")
   print("default routes:", default_routes())
   print("promoted (generated/search-selected) defaults:", routes_by_status("promoted_default"))
   print(f"{len(ROUTES)} routes, {len(REFUTED)} refuted axes")
