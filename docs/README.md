@@ -25,6 +25,7 @@ in `docs/archive/` as provenance, not current state.
 - **`decode-q4k-gemv-warp-promotion-result-20260624.md`** — `Q4K_GEMV_WARP*` promoted default-on (weight-GEMV at/below llama).
 - **`amd-isa-g3-weight-promotion-hardening-scope-20260629.md`** — generated G3 LaneMap is the speed-equivalent Q4_K route under BubbleBeam/FutureSight.
 - **`amd-isa-q6k-direct-route-full-scope-20260629.md`** — Q6_K direct-route work; later Q6K-3 refuted the half-warp direct route, so current Q6_K stays on coop/default.
+- **`decode-two-kernel-problem-audit-result-20260625.md`** — attention tile+combine audit; combine/fused lifecycle is exhausted for the current route.
 - **`decode-parity-no-regression-audit-result-20260623.md`** — parity reconciliation + the flag-stack caveat
   (102+ requires `Q4K_GEMV_WARP*` on; a fresh default-off run reads below llama).
 - **`post-owned-attention-promotion-synthesis-20260623.md`** — owned hand-AMDGCN decode-attention tile promoted into the decode path.

@@ -17,28 +17,32 @@ The goal is not to run more search over the current exposed knobs. The goal is t
 
 | Area | Status | Pure-search blocker |
 |---|---|---|
-| Decode GEMV | Tracked Q4_K GEMV roles are pure/generated under BubbleBeam G3 | None for tracked Q4_K gate/up, down, and 4096x4096 projection |
-| Decode attention | Hand AMDGCN tile ships; generated **block tile** is route-bound + token-correct at **33.7%/7.1% of owned** (35.0/6.7 vs 103.8/94.6, harness W==D) | Primitives now MATCH (`v_dot2`, cross-lane, LDS 8192 staging all present). UOp-level modulo scheduling was built/refuted because LLVM/comgr still owns the final schedule. Current blocker: **native AMD ISA backend** (`UOp -> Ops.INS -> assemble_linear`) so scheduling/regalloc/waitcnt decisions become machine-owned and searchable. |
-| Prefill | `eightwave` default; emit search exists | Deeper schedule/codegen controls are incomplete, but this is not the first purity blocker |
-| Benchmark authority | Centralized in `bench/canonical-benchmarks.json` | Search-vs-manual provenance must be attached to candidates |
-| BubbleBeam | Exists as FutureSight static selector + route layer | Needs generalized candidate registry/search-space binding |
+| Decode Q4_K GEMV | **Pure/generated and promoted**. BubbleBeam/FutureSight G3 LaneMap is speed-equivalent to owned for gate/up, down, and Q/O roles. | None for tracked Q4_K decode roles; owned warp remains fallback/reference. |
+| Decode Q6_K | Direct/lane-map route was designed, wired, token-correct, and W==D-refuted (~5-6% regression). | No active route lever under current Q6_K representation; shipped coop/default remains. |
+| Decode attention two-kernel route | Owned tile+combine still ships. Native AMD-ISA generated tile is route-bound/token-correct and improved through grid, hardware exp, dynamic-S, reg-accum, and LDS reclaim, but remains **correct-not-fast** (~60-68% of owned attention). | Not the current max-out target. Two-kernel combine is refuted/low-leverage; attention parity has small whole-decode upside compared with weight/prefill paths. |
+| Decode system ceiling | Current decode is ~103.9 / 102.0 / 99.7 / 94.4 tok/s; practical ceiling documented around ~110-130 tok/s for this model/GPU/quant stack. | Further Q4_K/Q6_K route tuning is closed unless representation, quant, or primitive assumptions change. |
+| Prefill | **Generated/search-selected route promoted**. `pipe_tm2_tn2` is default and TIER_A through ctx8192. | Remaining work is role-selective graph-GEMM/search, not proving the global pipe route. |
+| Benchmark authority | Decode/prefill authority harnesses exist (`qk_decode_runtime_overhead.py`, `qk_prefill_whole_synced.py`) with route attribution artifacts. | Keep provenance and route attribution attached to every promotion. |
+| BubbleBeam | Exists as FutureSight static selector + route layer; G3 Q4_K and prefill pipe show search-selected routes can promote. | Generalize the registry across quant shapes, GPUs, and role-specific policies. |
 
 ## Path To Machine Search
 
 | Step | Goal | What must exist | Status |
 |---|---|---|---|
-| 1. Ground truth | Know what "good" is | Owned ASM oracle, W==D harness, token-match, route attribution, ISA counters | Mostly done for decode attention |
-| 2. Primitive parity | Prove generated code has the same ingredients as owned | `v_dot2`, cross-lane reduction, LDS staging, coalesced/cache-correct loads | Done for decode block tile |
-| 3. Final-mile control | Stop LLVM/comgr from owning the decisions search must change | Native AMD ISA backend: `UOp -> Ops.INS -> assemble_linear` | Current blocker |
-| 4. Correct native backend | Make generated kernels run through tinygrad-owned AMD assembly | LLVM-as-map audit, `AMDISARenderer`, trivial kernel, GEMV/reduce coverage, decode-tile op coverage | Not built yet |
-| 5. Searchable scheduler | Turn schedule quality into a search surface | `Inst` scheduler, waitcnt policy, register/occupancy policy, spill policy, pipeline-depth choices | Not built yet |
-| 6. Machine-owned candidates | Let BubbleBeam generate/select backend variants | Candidate registry for scheduler, regalloc, waitcnt, and pipeline decisions | Not bound yet |
-| 7. Closed evaluator loop | Automatically accept, reject, or classify candidates | Compile, correctness, route attribution, W==D, ISA-counter diff, durable ledger | Partially exists; needs backend integration |
-| 8. Decode attention parity | Replace the owned attention default | Generated route reaches the promotion threshold against owned ASM | Not yet |
-| 9. Generalize | Apply the same backend/search surface beyond decode attention | GEMV, prefill, and other kernels use the same native backend and evaluator loop | Future |
-| 10. Pure default | Make hand kernels references/fallbacks, not required defaults | BubbleBeam-selected generated routes pass authority gates for the current profile | End state |
+| 1. Ground truth | Know what "good" is | Owned oracle, W==D harness, token-match, route attribution, ISA/PMC counters | Done for decode; done for prefill authority; keep extending to new quants/GPUs |
+| 2. Primitive parity | Prove generated code has the same ingredients as owned | `v_dot2`, cross-lane reduction, LDS staging, barriers, hardware exp, route-bound graph node | Done for native decode attention primitives |
+| 3. Final-mile control | Stop LLVM/comgr from owning decisions search must change | Native AMD ISA backend: `UOp -> Ops.INS -> assemble_linear` | Built through attention tile correctness and W==D gates |
+| 4. Correct native backend | Make generated kernels run through tinygrad-owned AMD assembly | Inc0-3, reductions, attention primitives, block-tile op coverage, in-model native injection | Done enough for the decode-attention campaign |
+| 5. Searchable scheduler/resources | Turn schedule/resource choices into measurable candidates | waitcnt pass, list scheduler, grid parallelism, hardware exp, dynamic-S, register accumulators, LDS reclaim | Built and measured; most levers refuted or banked |
+| 6. Machine-owned candidates | Let BubbleBeam generate/select backend variants | Candidate registry, route labels, rollback flags, refuted-axis ledger | Done for G3 Q4_K and native-attention candidate binding; needs generalization |
+| 7. Closed evaluator loop | Automatically accept, reject, or classify candidates | Compile, correctness, route attribution, W==D, counters, durable ledger | Operational for decode/P0-P2 prefill; keep as promotion standard |
+| 8. Decode attention parity | Replace the owned attention default | Generated route reaches promotion threshold against owned ASM | Not reached; classified `CORRECT_BUT_NOT_FAST` and low-leverage by ceiling audit |
+| 9. Generalize | Apply the same backend/search surface beyond one model/quant/GPU | Quant-shape roles, prefill role-selective routes, other GPU backends | Current future work |
+| 10. Pure default | Make hand kernels references/fallbacks where generated routes pass | BubbleBeam-selected generated routes pass authority gates | Achieved for Q4_K G3 and prefill pipe; not achieved for attention |
 
-Shortest path: owned oracle -> primitive parity -> native AMD ISA backend -> searchable scheduler/regalloc/waitcnt -> BubbleBeam candidate selection -> evaluator loop -> generated default promotion.
+Shortest current path: keep the promotion loop, but point it at measured wall-share. Decode attention is documented
+correct-not-fast/low-leverage; Q4_K decode and prefill pipe are promoted; next pure-search work should generalize route
+generation and attack prefill/shape/quant targets with authority gates.
 
 ## Canonical Supporting Docs
 
@@ -46,7 +50,12 @@ Shortest path: owned oracle -> primitive parity -> native AMD ISA backend -> sea
 |---|---|
 | `docs/generic-low-level-search-goal-scope.md` | Generic search-space goal, vocabulary, and labels |
 | `bench/qk-search-spaces/README.md` | Current search-space manifests and blocked primitives |
-| `docs/pure-machine-search.md` | Narrative of current hand-written kernels and why they exist |
+| `docs/pure-machine-search.md` | Narrative of current generated/default/fallback kernel boundaries |
+| `docs/decode-two-kernel-problem-audit-result-20260625.md` | Why the attention tile+combine route is exhausted and combine is not the active lever |
+| `docs/amd-isa-g3-weight-promotion-hardening-scope-20260629.md` | Generated G3 Q4_K promotion package |
+| `docs/amd-isa-system-residual-to-bandwidth-ceiling-scope-20260629.md` | Decode residual/ceiling audit after G3 parity |
+| `docs/amd-isa-q6k-direct-route-full-scope-20260629.md` | Q6_K direct-route scope and refuted default-off outcome |
+| `docs/prefill-pure-machine-search-roadmap-20260629.md` | Prefill roadmap and P0-P2/Pipe authority chain |
 | `docs/low-level-wall-exposure-audit-goal.md` | How to classify missing primitive/codegen walls |
 | `docs/layout-codegen-full-scope-20260625.md` | Existing execution plan for layout/codegen exposure |
 | `docs/gemv-pure-search-generated-route-scope.md` | GEMV-only execution scope for replacing the FutureSight custom bridge with generated code |
@@ -148,7 +157,22 @@ prefill, and future kernels without adding one-off manual oracle paths.
 
 ## Current Implementation Target
 
-Build the native AMD/rdna3 ISA backend as the missing control surface for pure machine search.
+Do not keep treating the native AMD/rdna3 ISA backend as the missing first step. It was built far enough to answer the
+decode-attention question. The current target is to generalize the proven promotion loop:
+
+- generated route proposal;
+- route attribution;
+- token/logit correctness;
+- W==D or whole-prefill authority;
+- counter/ceiling attribution;
+- durable promote/refute/rollback ledger.
+
+That loop should now be applied to role-selective prefill and future quant/shape/GPU targets, not broad attention
+retuning.
+
+## Retired Implementation Target: Native AMD ISA For Decode Attention
+
+The native AMD backend track replaced the older modulo-scheduler target and ran to a measured conclusion.
 
 Why this replaced the previous modulo-scheduler target:
 
@@ -161,70 +185,36 @@ Why this replaced the previous modulo-scheduler target:
 4. Therefore the missing primitive class is not another high-level UOp transform. It is ownership of the final mile:
    instruction selection, register allocation, waitcnt placement, and scheduling.
 
-Active track:
+Outcome:
 
-- **Phase 0 — LLVM-as-map audit.** Extract LLVM AMDGPU's solved model for isel, regalloc, spill/fill/copy, LDS mapping,
-  waitcnt semantics, and scheduler behavior. Output: `bench/amd-llvm-backend-model/latest.json`.
-- **Inc 0 — AMD ISA renderer foothold.** Add an opt-in `AMDISARenderer` (`DEV=AMD:ISA` or equivalent) that lowers a
-  trivial generated kernel through `UOp -> Ops.INS -> assemble_linear` and runs correct on gfx1100.
-- **Inc 1 — useful op coverage.** Add casts, ALU, comparisons/select, range/reduce basics, and enough addressing to run
-  small GEMV/reduction kernels.
-- **Inc 2 — decode-tile op coverage.** Add `v_dot2`, `ds_bpermute`, LDS staging, barriers, and waitcnt insertion.
-  Gate: block-tile microgate passes through the ISA backend.
-- **Inc 3 — searchable scheduler.** Mature `extra/qk_asm_scheduler.py` + `tinygrad/renderer/amd/schedule.py` into a
-  latency/modulo scheduler on the `Inst` stream. Gate: block-tile `s_waitcnt` moves toward owned's 21 and route-bound
-  W==D rises from 35.0/6.7.
-- **Inc 4 — BubbleBeam binding.** Expose schedule, regalloc, waitcnt, spill/occupancy, and pipeline-depth decisions as
-  a declared candidate space. Gate: BubbleBeam/FutureSight selects candidates and the evaluator closes the loop with
-  correctness, route attribution, W==D, ISA counters, and ledger updates.
+- AMD ISA renderer foothold, reductions, attention primitives, block-tile op coverage, in-model native route injection,
+  waitcnt insertion, scheduler, grid parallelism, hardware exp, dynamic-S, register accumulators, and LDS reclaim were
+  implemented and gated.
+- The generated/native attention tile became correct, route-bound, deterministic, and search-owned, but W==D stayed below
+  promotion: about 60-68% of owned attention after the banked wins.
+- Whole-decode attribution/ceiling audits showed attention parity would move whole tok/s only modestly; Q4_K/G3 and
+  prefill pipe were higher-value wins.
+- The native-attention route remains valuable as infrastructure and fallback research, not as the current max-out target.
 
-## Latest Decode Attention Status (2026-06-28)
+## Latest Decode Attention Status (2026-06-30)
 
-Top-level pure-machine-search audit (scores from the 2026-06-27 audit artifacts; the block-tile refinement and the
-pinpointed scheduling blocker below are the current state):
+Current conclusion:
 
-- Tool: `extra/qk_pure_machine_search_gap_audit.py`.
-- Artifact: `bench/qk-pure-machine-search-gap/latest.json`.
-- Verdict: `PURE_MACHINE_SEARCH_PARTIAL__DECODE_GEMV_CLOSE__DECODE_ATTENTION_AND_PREFILL_STILL_NOT_FULLY_SEARCH_OWNED`.
-- Score: 67 / 100 overall.
-- Meaning: decode GEMV is close/pure for tracked Q4_K roles, decode attention generated code transfers but is not promotable, and prefill/eightwave remains fast/stable but needs explicit search-provenance binding.
+- **Two-kernel attention route:** `TWO_KERNEL_PROBLEM_EXHAUSTED_CURRENT_ROUTE`. The shipped owned tile+combine route is
+  correct and useful; the combine/fused-lifecycle lever was built or bounded and does not justify more broad search.
+- **Native generated attention route:** correct, route-bound, deterministic, and search-owned, but not promotable. The
+  best banked route reached roughly 60-68% of owned attention; whole-decode W==D gains from perfect attention are now
+  bounded and small relative to prefill/weight paths.
+- **Ceiling:** `AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION`. Decode is weight/route-ceiling bound for this
+  model/quant/GPU stack; attention is not the next max-out target.
+- **Decode weight path:** Q4_K G3 is promoted/speed-equivalent to owned; Q6_K direct is refuted/default-off.
+- **Prefill:** `pipe_tm2_tn2` is promoted/default and remains the live search frontier for role-selective improvement.
 
-Current pure-search audit:
+Latest blocker label:
 
-- Tool: `extra/qk_pure_search_gap_audit.py`.
-- Artifact: `bench/qk-pure-search-gap/latest.json`.
-- Verdict: `PURE_SEARCH_PARTIAL__TIME_DELTA_EXPLAINED__VOCAB_GAPS_IDENTIFIED__NOT_PROMOTABLE_YET`.
-- Score: 60 / 100 for decode attention pure machine search.
-- Meaning: generated decode attention transfers in-model, but the remaining gap is still not pure-search promotable
-  because final-mile AMD scheduling/regalloc/waitcnt decisions are not search-owned. The prior outer-`b`
-  split/combine, occupancy, and coalescing hypotheses are closed/refuted.
-
-Next canonical action (2026-06-29): **build the native AMD ISA backend**, starting with the audit-first LLVM-as-map plan
-in `docs/codex-brief-amd-isa-backend-llvm-as-map-20260628.md`. The four older actions are closed:
-(1) occupancy is REFUTED as the lever (no-unroll vgpr 80->40 made W==D worse 22.9/3.8); (2) the split-aware hot-loop
-diff is built + run (`HOTLOOP_SCHEDULE_DIFF__SPLIT_AWARE_PARITY_OR_STRUCTURAL`); (3) the split-combine primitive is
-REFUTED (combine is 0.8% of the tile); (4) the route-binding flag stack + route-attributed W==D harness
-(`extra/qk_decode_route_attribution_wd.py`) are built. The modulo scheduler was also built/refuted as an LLVM-owned
-schedule path, so it is no longer the active next milestone.
-
-Current generated **block-tile** route status (2026-06-28 — supersedes the fused-xlane status above):
-
-- **Route-bound + token-correct + harness-measured**: `flash_block_tiled_xlane_score_pv_tile_whole_cache` fires
-  in-model (no owned fallback), greedy-token-identical to owned, **35.0/6.7 tok/s = 33.7%/7.1% of owned** at
-  ctx512/4096 (`extra/qk_decode_route_attribution_wd.py`, `bench/qk-owned-oracle-parity/route_attribution.json`).
-- **Parity** (`bench/qk-owned-oracle-parity/latest.json`): 8 MATCH / 5 MISMATCH / 1 UNKNOWN. The old `ISA_DIFF_PINNED`
-  "LDS 256 B, cross_lane=20" is RETIRED — the block tile has **LDS 8192 (MATCHES owned)**, with `v_dot2`, cross-lane,
-  and coalesced loads all MATCH. The MISMATCH rows are scheduling-driven: `vgpr` 88 vs 64, `waitcnt` 50 vs 21, `wd_tok_s`.
-- The old `...PTRCAT_PLACEMENT` coalescing blocker is RESOLVED (the coalescing lowering shipped:
-  `COALESCED_LOAD_LOWERING` + `DECODE_STAGE_COALESCE`).
-
-Latest blocker label (2026-06-29):
-
-`SEARCH_BLOCKED_BY_CODEGEN__AMD_ISA_BACKEND_MISSING` — the measured 12.8× tile gap is exposed cross-iteration
-`ds_bpermute` reduce latency in the final AMDGCN schedule, not a missing high-level primitive, combine, occupancy, or
-coalescing. The immediate executable milestone is the native AMD/rdna3 ISA backend described in **Current Implementation
-Target**; without it, LLVM/comgr remains the owner of instruction selection, register allocation, waitcnt placement, and
-scheduling, so BubbleBeam cannot search the lever that separates generated code from owned ASM.
+`NO_ACTIVE_DECODE_ATTENTION_LEVER_UNDER_CURRENT_CEILING` — not because primitives are unknown, but because the remaining
+attention delta is structurally expensive and low-leverage at whole-decode scale. Re-open attention only if the model,
+context, quant mix, or promotion target changes enough to make attention wall-share dominant again.
 
 ## Non-Goals
 
@@ -232,3 +222,6 @@ scheduling, so BubbleBeam cannot search the lever that separates generated code 
 - Do not claim pure search from a manual oracle or hand-owned kernel.
 - Do not run broader search over a space that excludes the known winning primitive.
 - Do not use upstream tinygrad BEAM terminology for BubbleBeam.
+- Do not treat Q6_K direct routing as an open win; it was token-correct and W==D-refuted.
+- Do not use the old 33.7%/7.1% native-attention baseline as current; the native route improved but still did not
+  promote, and attention was moved out of the critical path by the ceiling audit.
