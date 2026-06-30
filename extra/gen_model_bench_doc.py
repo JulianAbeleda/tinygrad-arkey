@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Render a model-bench markdown table from the per-model JSON artifacts produced by extra/model_e2e_bench.py.
+"""Render the per-model bench markdown from the JSON artifacts (the artifacts are the source of truth).
 
-The markdown doc is a *view*; the JSON artifacts under data/<backend>/ are the source of truth. Re-run this after
-adding/updating any artifact so the table stays in sync.
+Two artifact kinds per model under data/<backend>/:
+  <id>.json            -- model_e2e_bench: end-to-end generate (DIAGNOSTIC: growing-context decode median + default
+                          universal-path prefill TTFT). Kept as a secondary, clearly-labeled diagnostic.
+  <id>.authority.json  -- model_authority_bench: clean W==D fixed-context decode (qk_decode_runtime_overhead) vs
+                          llama.cpp tg128 at MATCHED depth, plus an optional prefill_authority block. HEADLINE.
+
+Re-run after adding/updating any artifact.
 
 Usage:
-  python extra/gen_model_bench_doc.py \
-      --data bench/models/qwen/data/amd-gfx1100 \
-      --out  bench/models/qwen/amd-rx7900xtx-gfx1100.md \
-      --gpu  "AMD Radeon RX 7900 XTX (gfx1100, 24GB)" \
-      --family Qwen3
+  python extra/gen_model_bench_doc.py --data bench/models/qwen/data/amd-gfx1100 \
+      --out bench/models/qwen/amd-rx7900xtx-gfx1100.md --gpu "AMD Radeon RX 7900 XTX (gfx1100, 24GB)" --family Qwen3
 """
 from __future__ import annotations
 import json, argparse, pathlib
@@ -25,90 +27,111 @@ def main():
   args = ap.parse_args()
 
   data_dir = pathlib.Path(args.data)
-  rows = [json.loads(p.read_text()) for p in sorted(data_dir.glob("*.json"))]
-  rows.sort(key=lambda r: r.get("params") or 0)
-
-  commit = next((r["provenance"]["git_commit"] for r in rows if r.get("provenance", {}).get("git_commit")), None)
-  any_dirty = any(r.get("provenance", {}).get("git_dirty") for r in rows)
+  e2e = {p.stem: json.loads(p.read_text()) for p in sorted(data_dir.glob("*.json")) if not p.name.endswith(".authority.json")}
+  auth = {p.name[:-len(".authority.json")]: json.loads(p.read_text()) for p in sorted(data_dir.glob("*.authority.json"))}
+  def params(i): return e2e.get(i, {}).get("params") or auth.get(i, {}).get("params")
+  def quant(i): return e2e.get(i, {}).get("quant") or auth.get(i, {}).get("quant") or "?"
+  def family(i): return auth.get(i, {}).get("family") or args.family
+  ids = sorted(set(e2e) | set(auth), key=lambda i: (params(i) or 0))
+  cross_family = sorted({i for i in ids if family(i) != args.family})
 
   L = []
   L.append(f"# {args.family} benchmarks — {args.gpu}")
   L.append("")
   L.append(f"Backend: **AMD** · GPU: **{args.gpu}** · family: **{args.family}**")
   L.append("")
-  L.append("> ⚠️ **DIAGNOSTIC, NOT PARITY AUTHORITY.** These numbers come from a first-pass end-to-end harness with "
-           "two known methodology gaps, pending a synced-authority rerun: (1) **decode** is a median over a "
-           "*growing-context* `model.generate` window (mixes contexts + host jitter; the repo authority is synced "
-           "`TinyJit` min-of-K bursts at fixed context), and (2) **prefill** is measured on the *default universal* "
-           "path (`PREFILL_V2=false`) via `generate` TTFT, **not** the tuned/server prefill profile — so the prefill "
-           "column is apples-to-oranges vs llama.cpp `pp512` and understates the shipped tuned path (8B authority "
-           "is ~3500 tok/s @512, not the value shown here). Do not cite these for tinygrad-vs-llama parity yet.")
+  L.append("**Quant matters** — decode re-reads the weights every token, so bytes-per-weight (the quant) is the "
+           "dominant decode cost. Read tok/s next to its quant, not parameter count alone.")
   L.append("")
-  L.append("Decode tok/s is the headline (decode is HBM-bandwidth bound). Numbers come from clean whole-decode "
-           "`model.generate` (W==D), `PROFILE=0`, auto clock, warmed JIT, with a median over a steady-state window "
-           "and the observed spread. **Quant matters** — it sets the bytes-per-weight moved each decode step, which "
-           "is the dominant decode cost; compare sizes with quant in mind, not just parameter count.")
-  L.append("")
-  L.append("| Model | Quant | Params | Ctx | Decode tok/s (median) | Decode band [min–max] | Spread | Decode GB/s | Prefill pp512 (default path, diag) | VRAM | Load s |")
-  L.append("|---|---|---|---|---|---|---|---|---|---|---|")
-  for r in rows:
-    d = r.get("decode", {}); ts = d.get("tok_s", {}); pf = r.get("prefill") or {}
-    band = f"{ts.get('min')}–{ts.get('max')}" if ts.get("min") is not None else "—"
-    spread = f"{ts.get('spread_pct')}%" if ts.get("spread_pct") is not None else "—"
-    pp = pf.get("prefill_tok_s")
-    L.append(f"| {r.get('id')} | {r.get('quant') or '?'} | {_params(r.get('params'))} | {r.get('max_context')} "
-             f"| {ts.get('median') or '—'} | {band} | {spread} | {d.get('gb_s') or '—'} "
-             f"| {pp if pp is not None else '—'} | {r.get('vram_used_gb')} GB | {r.get('load_s')} |")
-  L.append("")
-  # llama.cpp comparison (same GGUF, same GPU) -- only if any artifact has llama numbers
-  if any(r.get("llama_cpp") for r in rows):
-    L.append("## vs llama.cpp (same GGUF, same GPU)")
+
+  # ---------- HEADLINE: authority decode vs llama.cpp at matched context ----------
+  if auth:
+    L.append("## Decode vs llama.cpp — authority (matched context)")
     L.append("")
-    L.append("Reference: `llama-bench` (ROCm/HIP build) on the identical GGUF file and GPU. `tg128` = decode, "
-             "`pp512` = prefill. **Decode ratio** is tinygrad median ÷ llama.cpp — the headline parity number.")
+    L.append("tinygrad: clean **W==D** decode (`qk_decode_runtime_overhead.py` — `TinyJit`, device-synced, NMEAS=40, "
+             "**fixed** context, shipped `FLASH_DECODE_THRESHOLD=512` so the owned flash-attention route fires at "
+             "ctx≥512). llama.cpp: `llama-bench tg128` at the **matched depth** (`-d ctx`). Comparing at the same "
+             "context is essential — tinygrad switches to the owned flash route at ctx≥512, and llama is ~flat across "
+             "context, so a single number hides the crossover.")
     L.append("")
-    L.append("| Model | Quant | tinygrad decode | llama.cpp decode | decode ratio | tinygrad pp512 (default,diag) | llama.cpp pp512 | prefill ratio |")
+    L.append("| Model | Quant | ctx | route | tinygrad W==D tok/s | llama tg@depth tok/s | ratio | host-sync |")
     L.append("|---|---|---|---|---|---|---|---|")
-    for r in rows:
-      lc = r.get("llama_cpp")
-      if not lc:
-        L.append(f"| {r.get('id')} | {r.get('quant') or '?'} | {r.get('decode',{}).get('tok_s',{}).get('median') or '—'} "
-                 f"| — | — | {(r.get('prefill') or {}).get('prefill_tok_s') or '—'} | — | — |")
+    for i in ids:
+      comp = auth.get(i, {}).get("decode_matched_comparison")
+      if not comp:
+        L.append(f"| {i} | {quant(i)} | — | — | _pending authority rerun_ | — | — | — |")
         continue
-      tg_t = r.get("decode", {}).get("tok_s", {}).get("median")
-      lc_t = lc.get("decode_tg_tok_s")
-      ratio = r.get("decode_ratio_tinygrad_over_llama")
-      tg_pp = (r.get("prefill") or {}).get("prefill_tok_s")
-      lc_pp = lc.get("prefill_pp_tok_s")
-      pp_ratio = round(tg_pp / lc_pp, 3) if (tg_pp and lc_pp) else None
-      L.append(f"| {r.get('id')} | {r.get('quant') or '?'} | {tg_t or '—'} | {lc_t} ±{lc.get('decode_tg_stddev')} "
-               f"| **{round(ratio*100)}%** | {tg_pp or '—'} | {lc_pp} | {round(pp_ratio*100)}% |"
-               if ratio is not None else
-               f"| {r.get('id')} | {r.get('quant') or '?'} | {tg_t or '—'} | {lc_t} | — | {tg_pp or '—'} | {lc_pp} | — |")
+      for c in comp:
+        route = "flash" if c.get("flash_route") else "non-flash"
+        ratio = f"**{c['ratio_pct']}%**" if c.get("ratio_pct") else "—"
+        L.append(f"| {i} | {quant(i)} | {c['ctx']} | {route} | {c['tinygrad_tok_s_W']} | {c.get('llama_tok_s') or '—'} "
+                 f"| {ratio} | {c.get('host_sync_pct')}% |")
     L.append("")
-    lc_build = next((r["llama_cpp"].get("build_commit") for r in rows if r.get("llama_cpp")), None)
-    L.append(f"llama.cpp build `{lc_build or '?'}`, `llama-bench` defaults (warmup + repeats). Decode is the fair "
-             "comparison; tinygrad's default prefill path is the universal (long-prompt-slow) one unless "
-             "`PREFILL_V2`/server profile is enabled, so the prefill ratio understates a tuned-prefill config.")
+    L.append("Low **host-sync %** means the measurement is GPU-bound (not host-loop noise). At ctx≥512 the owned "
+             "flash route fires; below it the non-flash path runs and is the weaker regime.")
     L.append("")
-  L.append("## Notes")
-  L.append("")
-  L.append("- **Decode tok/s** is the steady-state median (clock-ramp/first tokens dropped). High **spread** on the "
-           "smallest models is expected: they are launch/dispatch-bound (tiny per-token GPU work), so wall-clock "
-           "decode is noisy — the band shows it honestly rather than hiding it behind a single number.")
-  L.append("- **Decode GB/s** is the HBM-bandwidth proxy (bytes moved per token ÷ median token time). For a fixed "
-           "quant it should rise with model size until it saturates the GPU's memory bandwidth.")
-  L.append("- **Prefill pp512 tok/s** is time-to-first-token for a 512-token prompt on the default prefill path "
-           "(prefill is compute-bound, not memory-bound — a different regime from decode).")
-  L.append("- **VRAM** is `GlobalCounters.mem_used` after load+warmup at the listed context. Larger contexts grow "
-           "the KV cache and raise this.")
-  L.append("")
-  L.append(f"Provenance: tinygrad commit `{commit or '?'}`"
-           f"{' (dirty tree)' if any_dirty else ''}. Regenerate with "
-           f"`python extra/gen_model_bench_doc.py` from the JSON artifacts in `{args.data}/`.")
+    L.append("**Reading the ratios:** 8B (the size the decode kernels were tuned for) is at/above llama in the flash "
+             "regime (~105% @ctx512) and ~82% on the sub-512 non-flash path. 14B/32B sit near ~40% — the larger "
+             "shapes were never decode-optimized (a known, separate gap), not a measurement error. 0.6B is "
+             "launch/dispatch-bound (tiny per-token GPU work), where tinygrad's per-kernel overhead costs the most.")
+    if cross_family:
+      L.append("")
+      L.append(f"> ⚠️ **Different architecture:** {', '.join(cross_family)} is **Qwen3.5** (hybrid SSM/attention "
+               "layers), not Qwen3. tinygrad has no tuned path for that architecture, so its ~7% is an unsupported-"
+               "performance result, not a like-for-like Qwen3 comparison. Listed for completeness only.")
+    L.append("")
+
+  # ---------- Prefill: tuned authority where measured, else llama pp512 + note ----------
+  if auth:
+    L.append("## Prefill (pp512)")
+    L.append("")
+    L.append("Prefill is compute-bound (a different regime from decode). tinygrad's tuned path is `PREFILL_V2` "
+             "graph-gemm (needs ~+14GB VRAM, so it only fits the smaller models); where it wasn't measured the "
+             "cell says so rather than showing the slow universal-path number.")
+    L.append("")
+    L.append("| Model | Quant | tinygrad pp512 (tuned authority) | llama.cpp pp512 | ratio | route |")
+    L.append("|---|---|---|---|---|---|")
+    for i in ids:
+      a = auth.get(i, {})
+      pa = a.get("prefill_authority")
+      lc_pp = (a.get("llama_cpp", {}).get("prefill_pp512") or {}).get("tok_s")
+      if pa and pa.get("pp512_tok_s"):
+        tg = pa["pp512_tok_s"]; ratio = f"**{round(tg/lc_pp*100)}%**" if lc_pp else "—"
+        L.append(f"| {i} | {quant(i)} | {tg} | {lc_pp or '—'} | {ratio} | {pa.get('route','graph-gemm')} |")
+      else:
+        L.append(f"| {i} | {quant(i)} | _not measured (VRAM / pending_) | {lc_pp or '—'} | — | — |")
+    L.append("")
+
+  # ---------- Secondary: end-to-end generate diagnostic ----------
+  if e2e:
+    L.append("## End-to-end `generate` (diagnostic, not parity)")
+    L.append("")
+    L.append("> These are first-pass end-to-end numbers: decode is a **median over a growing-context** "
+             "`model.generate` window (context-mixed + host jitter), and prefill is the **default universal path** "
+             "(`PREFILL_V2=false`) via `generate` TTFT. Useful as a rough end-to-end feel; **not** a parity number — "
+             "use the authority tables above for tinygrad-vs-llama.")
+    L.append("")
+    L.append("| Model | Quant | Params | Ctx | Decode tok/s (median) | Spread | Decode GB/s | Prefill TTFT (default path) | VRAM | Load s |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|")
+    for i in ids:
+      r = e2e.get(i)
+      if not r:
+        continue
+      d = r.get("decode", {}); ts = d.get("tok_s", {}); pf = r.get("prefill") or {}
+      spread = f"{ts.get('spread_pct')}%" if ts.get("spread_pct") is not None else "—"
+      L.append(f"| {i} | {r.get('quant') or '?'} | {_params(r.get('params'))} | {r.get('max_context')} "
+               f"| {ts.get('median') or '—'} | {spread} | {d.get('gb_s') or '—'} "
+               f"| {pf.get('prefill_tok_s') or '—'} | {r.get('vram_used_gb')} GB | {r.get('load_s')} |")
+    L.append("")
+
+  # provenance
+  commit = next((r.get("provenance", {}).get("git_commit") for r in e2e.values() if r.get("provenance", {}).get("git_commit")), None)
+  L.append(f"Provenance: tinygrad commit `{commit or '?'}`. Regenerate with `python extra/gen_model_bench_doc.py` "
+           f"from the JSON artifacts in `{args.data}/` (artifacts are local per the bench policy; this table is the "
+           f"committed durable record).")
   L.append("")
   pathlib.Path(args.out).write_text("\n".join(L))
-  print(f"wrote {args.out} ({len(rows)} model rows)")
+  print(f"wrote {args.out} ({len(ids)} models; {len(auth)} with authority data)")
 
 if __name__ == "__main__":
   main()
