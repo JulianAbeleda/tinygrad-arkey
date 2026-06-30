@@ -50,15 +50,17 @@ def _kernel(out_f: int, in_f: int):
   plra  = _envint("PREFILL_GEMM_PLRA", plra)
   plrab = _envint("PREFILL_GEMM_PLRAB", plrab)
   leanaddr = _envint("PREFILL_GEMM_LEANADDR", 0)
-  pipe_mode = bool(_envint("PREFILL_GEMM_PIPELINE", 0))
-  pipe_tm = _envint("PREFILL_GEMM_PIPELINE_TM", 4)
-  pipe_tn = _envint("PREFILL_GEMM_PIPELINE_TN", 4)
+  # PROMOTED default-on: pipe_tm2_tn2 is the default prefill GEMM route (hardened TIER_A: +19.3%@ctx512 -> +8.5%@ctx8192,
+  # output-equivalent, no long-ctx regression). Rollback to the old lds2 default: PREFILL_GEMM_PIPELINE=0.
+  pipe_mode = bool(_envint("PREFILL_GEMM_PIPELINE", 1))
+  pipe_tm = _envint("PREFILL_GEMM_PIPELINE_TM", 2)
+  pipe_tn = _envint("PREFILL_GEMM_PIPELINE_TN", 2)
   pad = _envint("PREFILL_GEMM_PAD", pad)
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
   if m % bm or n % bn or k % bk: return None
   if pipe_mode:
-    # Pipeline option (explicitly OFF by default): software-pipeline-style compute kernel, not LDS-staged.
-    # This is a structural frontier probe, not the default path.
+    # Pipeline route (PROMOTED, default-on @ tm2_tn2): software-pipeline-style compute kernel, not LDS-staged.
+    # TIER_A win from higher ILP on the latency-bound sub-BLAS roles (attn_kv/qo, ffn_down). Rollback: PREFILL_GEMM_PIPELINE=0.
     insts = ref.build_gemm_pipe(m, n, k, pipe_tm, pipe_tn)
     lds_bytes = 1
   else:
