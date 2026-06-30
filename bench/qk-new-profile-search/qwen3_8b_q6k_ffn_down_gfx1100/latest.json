@@ -1,0 +1,352 @@
+{
+  "scope": "TG7 first new-profile search on Q6_K decode ffn_down GEMV (gfx1100). Runs author (quant-parameterized by TG3) + TG5 target gate + TG6 evaluator end-to-end. HONEST report; no manufactured win; no GPU.",
+  "verdict": "TG7_PASS_FIRST_NEW_PROFILE_SEARCH_RESULT",
+  "search_result": "SEARCH_EXHAUSTED_SPACE",
+  "profile": {
+    "profile_id": "qwen3_8b_q6k_ffn_down_decode_gfx1100",
+    "quant": "Q6_K",
+    "role": "ffn_down",
+    "K": 12288,
+    "N": 4096,
+    "target_id": "amd_gfx1100"
+  },
+  "justification": "Q6_K (payload-first, symmetric, uint16, natural_lane_extent=16) != Q4_K; its shipped route is OWNED (no generated route) -> authoring a Q6_K topology is genuinely new; replayable artifacts (shipped coop + refuted half-warp) let the evaluator reach an honest verdict.",
+  "quant_facts_used": {
+    "block_elems": 256,
+    "block_bytes": 210,
+    "packing": "uint16",
+    "symmetric": true,
+    "natural_lane_extent": 16,
+    "payload_first": true,
+    "k_blocks": 48
+  },
+  "candidate_count": 18,
+  "bounded": true,
+  "explosion_limit": 64,
+  "all_candidates_target_ok_gfx1100": true,
+  "grouping_dispositions": {
+    "half_warp": "EXCLUDED (refuted: decode_q6k_direct_refuted, W==D -5.44% median; Q6_K known_refuted_route_families)",
+    "subgroup": "FOLDED into 1row_per_warp (subgroup==wave on wave32)"
+  },
+  "refuted_excluded_by_grammar": [
+    "decode_q6k_direct_refuted"
+  ],
+  "structural_rediscoveries_of_shipped_owned_routes": [
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg2_pos16_cross_lane_wave_reduce",
+      "rediscovers_shipped_owned_route": "decode_q6k_owned_warp (q6k_gemv_warp_kernel, owned_reference)",
+      "block_groups": 2,
+      "pos_lanes": 16,
+      "reduction_pattern": "cross_lane_wave_reduce"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg1_pos16_lds_partial_reduce",
+      "rediscovers_shipped_owned_route": "decode_q6k_coop_shipped (q6k_coop_partial_kernel, owned_default)",
+      "block_groups": 1,
+      "pos_lanes": 16,
+      "reduction_pattern": "partials_plus_reduce"
+    }
+  ],
+  "representative_candidate_gate": {
+    "candidate_id": "q6k_ffn_down_1row_per_warp_bg2_pos16_cross_lane_wave_reduce",
+    "target": "amd_gfx1100",
+    "verdict": "CORRECT_NOT_FAST_OR_UNMEASURED",
+    "ladder": {
+      "gate0_target": {
+        "verdict": "TARGET_OK",
+        "reason": "runs on validated target amd_gfx1100 (wave32)"
+      },
+      "map": {
+        "route_id": null,
+        "reason": "no measured authority artifact maps to this topology"
+      },
+      "gate1_schema": {
+        "valid": "N/A_IR_SHAPE",
+        "note": "Q4_K-shaped LaneMapTemplate IR does not express this topology; authority is the measured-artifact replay (refuted control)."
+      },
+      "gate2_builds": {
+        "emitted": false,
+        "note": "no Q4_K IR emission; replay-only refuted control."
+      },
+      "gate3_7_evaluator": {
+        "status": "UNMAPPED",
+        "note": "no measured authority artifact"
+      }
+    },
+    "explanation": "authored topology has no measured authority artifact; needs a fresh W==D before promotion"
+  },
+  "refuted_halfwarp_replay_confirms_refutation": {
+    "verdict": "REFUTED_REGRESSION",
+    "mapped_route_id": "decode_q6k_direct_refuted",
+    "decision_reproduced": true
+  },
+  "search_explanation": "The grammar AUTHORED 18 bounded Q6_K ffn_down topology candidates (quant-parameterized from TG3 Q6_K facts; all wave32 TARGET_OK). 2 of them STRUCTURALLY rediscover the shipped OWNED Q6_K routes (q6k_gemv_warp / q6k_coop_partial) -- an equivalent-to-shipped rediscovery, not a new topology. The refuted half-warp direct is EXCLUDED by the grammar's refuted-axis gate (and, if forced, still refutes: REFUTED_REGRESSION -> decode_q6k_direct_refuted). No authored candidate has a generated-promotion authority artifact; promoting a GENERATED Q6_K replacement for the owned route would require a fresh W==D measurement, which this AUDIT scope does not run. Honest verdict: the bounded space is authored end-to-end but contains NO new promotable topology beyond the shipped owned route under the current ceiling -> SEARCH_EXHAUSTED_SPACE.",
+  "candidates": [
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg16_pos2_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 16,
+      "pos_lanes": 2,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg16_pos2_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 16,
+      "pos_lanes": 2,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg8_pos4_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 8,
+      "pos_lanes": 4,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg8_pos4_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 8,
+      "pos_lanes": 4,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg4_pos8_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 4,
+      "pos_lanes": 8,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg4_pos8_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 4,
+      "pos_lanes": 8,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg2_pos16_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 2,
+      "pos_lanes": 16,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_1row_per_warp_bg2_pos16_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 2,
+      "pos_lanes": 16,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg16_pos1_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 16,
+      "pos_lanes": 1,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg16_pos1_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 16,
+      "pos_lanes": 1,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg8_pos2_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 8,
+      "pos_lanes": 2,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg8_pos2_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 8,
+      "pos_lanes": 2,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg4_pos4_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 4,
+      "pos_lanes": 4,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg4_pos4_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 4,
+      "pos_lanes": 4,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg2_pos8_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 2,
+      "pos_lanes": 8,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg2_pos8_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 2,
+      "pos_lanes": 8,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg1_pos16_cross_lane_wave_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 1,
+      "pos_lanes": 16,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "reduction_grammar_value": "cross_lane_wave_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    },
+    {
+      "candidate_id": "q6k_ffn_down_2rows_per_warp_bg1_pos16_lds_partial_reduce",
+      "quant": "Q6_K",
+      "lane_ownership_axis": "packed_byte_position",
+      "lane_grouping": "2rows_per_warp",
+      "block_groups": 1,
+      "pos_lanes": 16,
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "target_feature_required": "wave32",
+      "load_pattern": "coalesced_within_block_position",
+      "dequant_placement": "per_lane_in_register"
+    }
+  ],
+  "honest_summary": {
+    "authored_new_topology_family": true,
+    "viable_NEW_topology_beyond_shipped": false,
+    "equivalent_to_shipped_rediscovery": true,
+    "refuted_axis_preserved": true,
+    "no_promotable_candidate_reason": "rediscovers shipped OWNED route / refuted half-warp excluded; a generated Q6_K promotion needs a fresh W==D not run in this audit"
+  },
+  "do_not": [
+    "no GPU kernel",
+    "no GPU re-measure",
+    "no default change",
+    "no live-route repoint",
+    "no reopened refuted route"
+  ]
+}
