@@ -298,3 +298,35 @@ Allowed verdicts:
 Do not optimize anything. This is an audit-only decision tool.
 ```
 
+
+## Result
+
+Verdict: `AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION`
+(tool `extra/amd_isa_decode_attention_ceiling_audit.py`; artifacts under `bench/amd-isa-backend-decode-attention-ceiling/`).
+
+Decode is **weight-memory-bound**. Streaming all Qwen3-8B-Q4_K_M weights (5.03 GB) once per token at the XTX peak
+~960 GB/s = 5.24 ms/token, a ~191 tok/s ceiling (real ~80% bw ≈ 153). The attention KV-read floor is **< 1%** of that
+(ctx4096: ~35 µs vs 5.24 ms, 0.67%).
+
+| route | ctx512 | ctx4096 | % of weight floor (512/4096) |
+|---|---:|---:|---|
+| native (reg-accum + LDS reclaim) | 70.74 | 56.70 | 37% / 30% |
+| owned | 103.5 | 94.4 | 54% / 50% |
+
+Amdahl on the **measured** N3F dynamic-S cut (not eager GPU-compute, which overstates via no overlap) puts the attention
+tile wall-share at ~10% @ctx512 and ~0 @ctx4096. So:
+
+- Matching owned's tile → **+10.5% @ctx512 (borderline), +2.9% @ctx4096 (< 5%)**.
+- Hitting the attention math floor → same bound (the floor is even cheaper than owned's tile).
+- And it would now require an **owned-level algorithmic rewrite**, because every tile *resource* lever is exhausted or
+  refuted (grid, hardware exp, dynamic-S, scheduler/waitcnt, occupancy/LDS, address scalarization, register
+  accumulators, LDS reclaim, FMA/mov cleanup).
+
+Decision: **move search to the non-attention FFN / weight-memory path.** The FFN/projection GEMVs dominate the wall, are
+**shared and identical** between the native and owned routes (N4: `q4k_gemv` 7109 vs 7157), and sit at only ~50–54% of
+the weight floor (~2× headroom) — versus attention's diminishing ~10% / ~0. The native AMD-ISA attention route is
+complete, correct, and net-positive (~60–68% of owned) and is now at its practical ceiling; further attention-tile work
+is low-leverage.
+
+Caveats: peak HBM bw gives optimistic ceilings (real ~80%); the math floor is a conservative lower-bound work model;
+tile wall-share is from the measured dynamic-S Amdahl, not hardware per-PC stalls (ATT per-PC is walled under HCQ).
