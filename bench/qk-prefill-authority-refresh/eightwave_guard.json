@@ -1,47 +1,20 @@
 {
-  "512": {
-    "ctx": 512,
-    "tok_s": 219.6,
-    "median_ms": 2331.638,
-    "spread_pct": 45.6,
-    "route_kernels": [],
-    "tensile_fallback": false,
-    "graph_gemm": false
+  "current_default": {
+    "512": 3596.9,
+    "1024": 3504.8,
+    "2048": 3251.7,
+    "4096": 2818.9
   },
-  "1024": {
-    "ctx": 1024,
-    "tok_s": 216.8,
-    "median_ms": 4723.726,
-    "spread_pct": 5.0,
-    "route_kernels": [],
-    "tensile_fallback": false,
-    "graph_gemm": false
+  "eightwave_off": {
+    "512": 3489.5,
+    "1024": 3408.0,
+    "2048": 3171.7,
+    "4096": 2766.4
   },
-  "2048": {
-    "ctx": 2048,
-    "tok_s": 212.0,
-    "median_ms": 9658.922,
-    "spread_pct": 2.8,
-    "route_kernels": [],
-    "tensile_fallback": false,
-    "graph_gemm": false
-  },
-  "4096": {
-    "ctx": 4096,
-    "tok_s": 216.8,
-    "median_ms": 18895.107,
-    "spread_pct": 1.0,
-    "route_kernels": [],
-    "tensile_fallback": false,
-    "graph_gemm": false
-  },
-  "8192": {
-    "ctx": 8192,
-    "tok_s": 122.6,
-    "median_ms": 66831.058,
-    "spread_pct": 53.2,
-    "route_kernels": [],
-    "tensile_fallback": false,
-    "graph_gemm": false
+  "eightwave_gain_pct": {
+    "512": 3.1,
+    "1024": 2.8,
+    "2048": 2.5,
+    "4096": 1.9
   }
 }

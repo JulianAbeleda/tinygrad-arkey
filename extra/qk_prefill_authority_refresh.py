@@ -1,101 +1,133 @@
-"""Prefill P1: authority baseline refresh. BUILT IN THE P0 TURN, NOT YET RUN.
+"""Prefill P1 — authority baseline refresh, REBUILT on the synced whole-prefill methodology (extra/qk_prefill_whole_synced.py,
+the recovered authority that reproduces ~3595/3503/3252/2822 @512/1024/2048/4096).
 
-⚠ RUN ONLY ON A FREE GPU. This is a GPU-timing campaign; running it concurrently with a decode W==D campaign corrupts
-both. Re-measure the current default prefill baseline under one clean authority harness across ctx 512/1024/2048/4096/8192,
-plus the eightwave-off guard and (if safe) the pipe_tm2_tn2 candidate, with route attribution + noise/spread + determinism.
+Methodology (NOT end-to-end generate, NOT a non-JIT eager loop): per arm (env flags set in a FRESH subprocess, since the
+graph-gemm route is chosen at compile time), TinyJit(m.forward) + synced bursts (dev.synchronize, K=8, min-of-3) at
+concrete start_pos {0,512,1024,2048,3584}; whole-prefill@L = sum of (interpolated) chunk times for chunks 0..L step 512.
 
-Arms (env):
-  current_default        : (no flags)                                  -> graph_gemm default (eightwave is the promoted default)
-  eightwave_off          : PREFILL_GEMM_8WAVE=0                         -> guard that eightwave-off doesn't beat default
-  pipe_tm2_tn2           : PREFILL_GEMM_PIPELINE=1 TM=2 TN=2            -> re-validate the +11-19% aggressive candidate
+Arms: current_default (PREFILL_V2=1), eightwave_off (PREFILL_GEMM_8WAVE=0), pipe_tm2_tn2 (PREFILL_GEMM_PIPELINE=1 TM=2 TN=2).
+ctx8192 exceeds the harness max_context=4608 (would need start_pos 7680) -> recorded unsupported, not measured.
 
-Whole-prefill measure: feed the prompt in M=512-token chunks over the causal start_pos schedule [0,512,...,C-512];
-tok_s = C / total_wall_ms. Median over repeats; record spread. Route attribution = dev.runtime kernel-name capture
-(graph_gemm vs tensile/BLAS fallback). Equivalence: logits/argmax match vs current_default (accepted prefill gate).
-
-Run (FREE GPU): DEV=AMD PYTHONPATH=. python3 extra/qk_prefill_authority_refresh.py
-Writes: bench/qk-prefill-authority-refresh/{latest,current_default_by_ctx,eightwave_guard,noise_profile,route_attribution}.json + summary.md
+Run: DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_prefill_authority_refresh.py
+Writes: bench/qk-prefill-authority-refresh/{latest,summary.md,current_default_by_ctx,eightwave_guard,noise_profile,route_attribution}.json
 """
-import os, sys, json, pathlib, subprocess, statistics
+import os, sys, json, subprocess, pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-prefill-authority-refresh"
-CTXS = [512, 1024, 2048, 4096, 8192]
-M = 512
 ARMS = {
   "current_default": {},
   "eightwave_off": {"PREFILL_GEMM_8WAVE": "0"},
   "pipe_tm2_tn2": {"PREFILL_GEMM_PIPELINE": "1", "PREFILL_GEMM_PIPELINE_TM": "2", "PREFILL_GEMM_PIPELINE_TN": "2"},
 }
-REPEATS = 3
+CTXS = [512, 1024, 2048, 4096]   # 8192 needs max_context>=8192 (harness loads 4608) -> unsupported here
 
-# CHILD: load model, run whole-prefill in M-chunks for one ctx, capture per-kernel route names, return median tok_s + spread.
-CHILD = r'''
-import os, json, time, statistics
-from tinygrad import Tensor, TinyJit, Context
-from tinygrad.uop.ops import UOp
+# TIMING child: clean synced bursts, NO profiling (profiling inflates tok/s).
+TIMING_CHILD = r'''
+import os, json, time, bisect
+os.environ.setdefault("PREFILL_V2","1")
+from tinygrad import Tensor, Device, TinyJit
+from extra.llm_generate import load_model_and_tokenizer
+from extra.qk_harness_contract import DEFAULT_MODEL
+from tinygrad.llm.model import PREFILL_GRAPH_GEMM, PREFILL_TENSILE_GEMM
+dev=Device["AMD"]
+m,tok=load_model_and_tokenizer(DEFAULT_MODEL,4608,seed=20260617)
+for b in m.blk: b._use_flash,b._prefill_v2=True,True
+temp=Tensor([0.0]); N=512
+chunk=Tensor([[(i*7)%1000 for i in range(N)]],dtype="int32").contiguous()
+chunk_ms={}; spreads={}
+for sp in [0,512,1024,2048,3584]:
+  j=TinyJit(m.forward)
+  for _ in range(4): j(chunk, sp, temp).realize()
+  dev.synchronize()
+  ts=[]
+  for _ in range(3):
+    dev.synchronize(); t0=time.perf_counter()
+    for _ in range(8): j(chunk, sp, temp).realize()
+    dev.synchronize(); ts.append((time.perf_counter()-t0)/8*1e3)
+  chunk_ms[sp]=min(ts); spreads[sp]=round((max(ts)-min(ts))/min(ts)*100,1)
+pts=sorted(chunk_ms.items()); xs=[p[0] for p in pts]; ys=[p[1] for p in pts]
+def interp(s):
+  if s<=xs[0]: return ys[0]
+  if s>=xs[-1]: return ys[-1]
+  i=bisect.bisect_right(xs,s)-1; return ys[i]+(ys[i+1]-ys[i])*(s-xs[i])/(xs[i+1]-xs[i])
+whole={L:round(L/sum(interp(s) for s in range(0,L,512))*1e3,1) for L in [512,1024,2048,4096]}
+print("@@"+json.dumps({"graph_gemm":bool(PREFILL_GRAPH_GEMM),"tensile":bool(PREFILL_TENSILE_GEMM),
+  "chunk_ms":{str(k):round(v,2) for k,v in chunk_ms.items()},"chunk_spread_pct":{str(k):spreads[k] for k in spreads},
+  "whole_prefill_tok_s":{str(k):v for k,v in whole.items()}}))
+'''
+# ROUTE child: PROFILE=1 (env, set at launch) -> ProfileRangeEvent kernel names for one warmed chunk forward.
+ROUTE_CHILD = r'''
+import os, json
+os.environ.setdefault("PREFILL_V2","1")
+from tinygrad import Tensor, Device
+from extra.llm_generate import load_model_and_tokenizer
+from extra.qk_harness_contract import DEFAULT_MODEL
+import tinygrad.runtime.ops_amd  # noqa
 from tinygrad.device import Compiled
 from tinygrad.helpers import ProfileRangeEvent
-from extra.qk_harness_contract import DEFAULT_MODEL
-from extra.llm_generate import load_model_and_tokenizer
-MAXC=8192; C=int(os.environ["P1_CTX"]); REP=int(os.environ.get("P1_REP","3")); M=512
-m,tok=load_model_and_tokenizer(DEFAULT_MODEL, MAXC, seed=20260617)
-for b in m.blk: b._use_flash, b._prefill_v2 = True, True   # prefill path (NOTE: validate prefill-mode flags vs harness)
-# whole-prefill = chunks over causal start_pos schedule [0, M, 2M, ... C-M]
-def run_once():
-  t0=time.perf_counter()
-  for sp in range(0, C, M):
-    toks=Tensor([[100]*M], dtype="int32").contiguous()
-    m.forward(toks, UOp.variable("start_pos",0,MAXC-1).bind(sp), Tensor([0.0])).realize()
-  return (time.perf_counter()-t0)*1e3
-run_once()  # warmup
-times=[run_once() for _ in range(REP)]
-ms=statistics.median(times); spread=(max(times)-min(times))/ms if ms else 0
-# route capture (one eager profiled pass)
-Compiled.profile_events=[]; names={}
-with Context(PROFILE=1):
-  for sp in range(0, C, M):
-    toks=Tensor([[100]*M], dtype="int32").contiguous()
-    m.forward(toks, UOp.variable("start_pos",0,MAXC-1).bind(sp), Tensor([0.0])).realize()
-for e in Compiled.profile_events:
-  if isinstance(e,ProfileRangeEvent):
-    nm=getattr(e.name,"name",None) or str(e.name); names[nm]=names.get(nm,0)+1
-print("@@"+json.dumps({"ctx":C,"tok_s":round(C/(ms/1e3),1),"median_ms":round(ms,3),"spread_pct":round(100*spread,1),
-  "route_kernels":sorted(names, key=lambda k:-names[k])[:25],
-  "tensile_fallback":any("tensile" in k.lower() or "Cijk" in k for k in names),
-  "graph_gemm":any("gemm" in k.lower() for k in names)}))
+dev=Device["AMD"]
+m,tok=load_model_and_tokenizer(DEFAULT_MODEL,4608,seed=20260617)
+for b in m.blk: b._use_flash,b._prefill_v2=True,True
+temp=Tensor([0.0]); chunk=Tensor([[(i*7)%1000 for i in range(512)]],dtype="int32").contiguous()
+m.forward(chunk,0,temp).realize(); dev.synchronize()      # warm/compile
+Compiled.profile_events=[]
+m.forward(chunk,0,temp).realize(); dev.synchronize()
+names=sorted({(getattr(e.name,"name",None) or str(e.name)) for e in Compiled.profile_events if isinstance(e,ProfileRangeEvent)})
+names=[n for n in names if not n.startswith("TracingKey")]
+print("@@"+json.dumps({"route_kernels":names,"n_route_kernels":len(names),"tensile_fallback":any("tensile" in n.lower() or "rocblas" in n.lower() for n in names)}))
 '''
 
-def measure(ctx, arm_env):
-  env = {**os.environ, "DEV": "AMD", "PYTHONPATH": str(ROOT), "P1_CTX": str(ctx), "P1_REP": str(REPEATS), **arm_env}
-  out = subprocess.run([sys.executable, "-c", CHILD], cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=1200).stdout
-  ln = [l for l in out.splitlines() if l.startswith("@@")]
-  if not ln: raise RuntimeError("P1 measure failed: " + out[-1500:])
-  return json.loads(ln[-1][2:])
+def _run(code, env_extra, profile):
+  env = {**os.environ, "DEV": "AMD", "PYTHONPATH": str(ROOT), "PREFILL_V2": "1", **env_extra}
+  if profile: env["PROFILE"] = "1"
+  r = subprocess.run([sys.executable, "-c", code], cwd=str(ROOT), env=env, capture_output=True, text=True, timeout=1800)
+  ln = [l for l in r.stdout.splitlines() if l.startswith("@@")]
+  return json.loads(ln[-1][2:]) if ln else {"error": "no @@ line", "stderr_tail": r.stderr[-700:]}
+
+def run_arm(arm, env_extra):
+  t = _run(TIMING_CHILD, env_extra, profile=False)
+  rt = _run(ROUTE_CHILD, env_extra, profile=True)
+  return {**t, **{k: rt.get(k) for k in ("route_kernels", "n_route_kernels", "tensile_fallback")}}
 
 def main():
   OUT.mkdir(parents=True, exist_ok=True)
-  results = {arm: {} for arm in ARMS}
-  for arm, env in ARMS.items():
-    for ctx in CTXS:
-      try: results[arm][str(ctx)] = measure(ctx, env)
-      except Exception as e: results[arm][str(ctx)] = {"error": str(e)[:200]}
-  cur = {c: results["current_default"].get(c, {}) for c in map(str, CTXS)}
-  # verdicts
-  noisy = any(isinstance(r, dict) and r.get("spread_pct", 0) > 30 for r in results["current_default"].values())
-  fallback = any(isinstance(r, dict) and r.get("tensile_fallback") for r in cur.values())
-  verdict = ("PREFILL_P1_BLOCKED_NOISY_OR_STALE" if noisy else
-             "PREFILL_P1_BLOCKED_ROUTE_ATTRIBUTION" if fallback else
-             "PREFILL_P1_PASS_AUTHORITY_BASELINE_PINNED")
-  rec = {"verdict": verdict, "arms": list(ARMS), "contexts": CTXS, "repeats": REPEATS, "results": results,
-    "current_default_tok_s": {c: cur[c].get("tok_s") for c in cur},
-    "note": "BUILT in P0 turn; validate prefill-mode flags (_prefill_v2/start_pos schedule) against the authoritative whole-prefill harness before trusting numbers"}
+  res = {arm: run_arm(arm, env) for arm, env in ARMS.items()}
+  cur = res.get("current_default", {})
+  cur512 = cur.get("whole_prefill_tok_s", {}).get("512")
+  sane = isinstance(cur512, (int, float)) and cur512 >= 3000   # must be ~3595-scale, not ~217/~150
+  route_nonempty = all(res[a].get("n_route_kernels", 0) > 0 for a in res if "error" not in res[a])
+  reval = {}
+  for L in CTXS:
+    c = cur.get("whole_prefill_tok_s", {}).get(str(L)); p = res.get("pipe_tm2_tn2", {}).get("whole_prefill_tok_s", {}).get(str(L))
+    reval[str(L)] = {"current": c, "pipe_tm2_tn2": p, "delta_pct": (round((p-c)/c*100, 1) if (c and p) else None)}
+  if not sane: verdict = "PREFILL_P1_BLOCKED_NOISY_OR_STALE"
+  elif not route_nonempty: verdict = "PREFILL_P1_BLOCKED_ROUTE_ATTRIBUTION"
+  else: verdict = "PREFILL_P1_PASS_AUTHORITY_BASELINE_PINNED"
+  rec = {"verdict": verdict, "methodology": "synced whole-prefill (qk_prefill_whole_synced) per-arm subprocess; TinyJit+synced bursts K=8 min-of-3; whole@L=sum interpolated chunk times",
+    "ctx_note": "8192 unsupported: harness max_context=4608 (start_pos 7680 > 4607)", "authority_ref": {"512":3597,"1024":3504,"2048":3248,"4096":2803},
+    "current_default_sane_vs_3595": sane, "route_attribution_nonempty": route_nonempty,
+    "by_arm": res, "pipe_tm2_tn2_revalidation_vs_current": reval}
   json.dump(rec, open(OUT/"latest.json","w"), indent=2)
-  json.dump({c: cur[c] for c in cur}, open(OUT/"current_default_by_ctx.json","w"), indent=2)
-  json.dump(results.get("eightwave_off"), open(OUT/"eightwave_guard.json","w"), indent=2)
-  json.dump({arm: {c: results[arm].get(c, {}).get("spread_pct") for c in map(str, CTXS)} for arm in ARMS}, open(OUT/"noise_profile.json","w"), indent=2)
-  json.dump({arm: {c: results[arm].get(c, {}).get("route_kernels") for c in map(str, CTXS)} for arm in ARMS}, open(OUT/"route_attribution.json","w"), indent=2)
-  (OUT/"summary.md").write_text(f"# Prefill P1 authority refresh\n\n**Verdict:** {verdict}\n\ncurrent_default tok/s by ctx: {rec['current_default_tok_s']}\n\n(arms: {list(ARMS)}; {REPEATS} repeats; spread + route in artifacts)\n")
+  json.dump({"by_ctx": cur.get("whole_prefill_tok_s", {}), "chunk_ms": cur.get("chunk_ms", {})}, open(OUT/"current_default_by_ctx.json","w"), indent=2)
+  ew = res.get("eightwave_off", {})
+  json.dump({"current_default": cur.get("whole_prefill_tok_s",{}), "eightwave_off": ew.get("whole_prefill_tok_s",{}),
+    "eightwave_gain_pct": {str(L): (round((cur.get("whole_prefill_tok_s",{}).get(str(L),0)-ew.get("whole_prefill_tok_s",{}).get(str(L),0))/ew.get("whole_prefill_tok_s",{}).get(str(L),1)*100,1) if ew.get("whole_prefill_tok_s",{}).get(str(L)) else None) for L in CTXS}}, open(OUT/"eightwave_guard.json","w"), indent=2)
+  json.dump({arm: res[arm].get("chunk_spread_pct") for arm in res}, open(OUT/"noise_profile.json","w"), indent=2)
+  json.dump({arm: {"n":res[arm].get("n_route_kernels"),"kernels":res[arm].get("route_kernels",[])[:40]} for arm in res}, open(OUT/"route_attribution.json","w"), indent=2)
+  lines = [f"# Prefill P1 authority baseline refresh\n\n**Verdict:** {verdict}\n",
+    "## Whole-prefill tok/s (synced authority)\n| arm | ctx512 | ctx1024 | ctx2048 | ctx4096 | route kernels |", "|---|---|---|---|---|---|"]
+  for arm in res:
+    w = res[arm].get("whole_prefill_tok_s", {})
+    lines.append(f"| {arm} | {w.get('512','—')} | {w.get('1024','—')} | {w.get('2048','—')} | {w.get('4096','—')} | {res[arm].get('n_route_kernels','—')} |")
+  lines += ["\n## pipe_tm2_tn2 re-validation vs current_default\n| ctx | current | pipe_tm2_tn2 | Δ% |", "|---|---|---|---|"]
+  for L in CTXS:
+    r = reval[str(L)]; lines.append(f"| {L} | {r['current']} | {r['pipe_tm2_tn2']} | {r['delta_pct']} |")
+  lines.append(f"\nsanity (current_default@512 >= 3000): {sane} (got {cur512}); route attribution non-empty: {route_nonempty}; 8192 unsupported (max_context=4608).")
+  (OUT/"summary.md").write_text("\n".join(lines))
   return rec
 
 if __name__ == "__main__":
-  print(json.dumps(main(), indent=2)[:1500])
+  rec = main()
+  print(json.dumps({"verdict": rec["verdict"], "current_default": rec["by_arm"].get("current_default",{}).get("whole_prefill_tok_s"),
+    "pipe_reval": rec["pipe_tm2_tn2_revalidation_vs_current"], "sane": rec["current_default_sane_vs_3595"]}, indent=2))
+  print("\nP1", rec["verdict"])
