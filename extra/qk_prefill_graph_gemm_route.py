@@ -58,7 +58,7 @@ def _kernel(out_f: int, in_f: int):
   # ROLE-SELECTIVE pipe (opt-in PREFILL_PIPE_ROLE_SELECTIVE=1, default-off): pipe LIFTS the latency-bound sub-BLAS roles
   # (attn_kv/qo, ffn_down) but REGRESSES the already-saturated ffn_gate_up -17% (107->89% of BLAS). Give gate_up
   # (uniquely out_f==12288) its faster lds2 path while the rest stay on the promoted pipe. Default-off => global pipe.
-  if _envint("PREFILL_PIPE_ROLE_SELECTIVE", 0) and out_f == 12288:
+  if _envint("PREFILL_PIPE_ROLE_SELECTIVE", 1) and out_f == 12288:
     pipe_mode = False
   pad = _envint("PREFILL_GEMM_PAD", pad)
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
