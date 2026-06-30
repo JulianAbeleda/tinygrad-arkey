@@ -49,7 +49,7 @@ bench/amd-isa-backend-system-residual-ceiling/probe_matrix.json
 bench/amd-isa-backend-g3-weight-promotion/latest.json
 bench/amd-isa-backend-weight-path-ceiling/route_attribution.json
 bench/amd-isa-backend-weight-path-ceiling/latest.json
-docs/amd-isa-q6k-residual-amdahl-math-20260629.md
+docs/archive/amd-isa-q6k-residual-amdahl-math-20260629.md
 ```
 
 ## Phase Q6K-0: Residual Proof Gate
@@ -371,8 +371,8 @@ You are working in /home/ubuntu/tinygrad-arkey.
 Task: execute the next Q6_K track in stages. Start with Q6K-0 only. Do not implement kernels unless Q6K-0 returns PASS_DIRECT_ROUTE_JUSTIFIED.
 
 Read first:
-- docs/amd-isa-q6k-residual-amdahl-math-20260629.md
-- docs/amd-isa-q6k-next-task-scope-20260629.md
+- docs/archive/amd-isa-q6k-residual-amdahl-math-20260629.md
+- docs/archive/amd-isa-q6k-next-task-scope-20260629.md
 
 Inputs:
 - bench/amd-isa-backend-system-residual-ceiling/latest.json

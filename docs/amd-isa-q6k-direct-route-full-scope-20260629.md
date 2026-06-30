@@ -650,8 +650,8 @@ Task: execute Q6K-1 only: direct/warp Q6_K route design. Do not implement kernel
 
 Read:
 - docs/amd-isa-q6k-direct-route-full-scope-20260629.md
-- docs/amd-isa-q6k-next-task-scope-20260629.md
-- docs/amd-isa-q6k-residual-amdahl-math-20260629.md
+- docs/archive/amd-isa-q6k-next-task-scope-20260629.md
+- docs/archive/amd-isa-q6k-residual-amdahl-math-20260629.md
 
 Source artifacts:
 - bench/amd-isa-backend-q6k-residual-math/latest.json

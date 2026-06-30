@@ -236,7 +236,7 @@ You are working in /home/ubuntu/tinygrad-arkey.
 
 Read and follow:
 
-  docs/amd-isa-decode-attention-ceiling-audit-scope-20260629.md
+  docs/archive/amd-isa-decode-attention-ceiling-audit-scope-20260629.md
 
 Task:
 Build an audit-only ceiling/decomposition tool:

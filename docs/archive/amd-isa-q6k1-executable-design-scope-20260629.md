@@ -196,9 +196,9 @@ Read docs:
 
 ```text
 docs/amd-isa-q6k-direct-route-full-scope-20260629.md
-docs/amd-isa-lm-head-q6k-route-scope-20260629.md
-docs/amd-isa-q6k-next-task-scope-20260629.md
-docs/amd-isa-q6k-residual-amdahl-math-20260629.md
+docs/archive/amd-isa-lm-head-q6k-route-scope-20260629.md
+docs/archive/amd-isa-q6k-next-task-scope-20260629.md
+docs/archive/amd-isa-q6k-residual-amdahl-math-20260629.md
 ```
 
 ## Q6K-1 Required Analysis
@@ -428,10 +428,10 @@ You are working in /home/ubuntu/tinygrad-arkey.
 Task: execute Q6K-1 only: exhaustive direct/warp Q6_K route design. Do not implement kernels.
 
 Read:
-- docs/amd-isa-q6k1-executable-design-scope-20260629.md
+- docs/archive/amd-isa-q6k1-executable-design-scope-20260629.md
 - docs/amd-isa-q6k-direct-route-full-scope-20260629.md
-- docs/amd-isa-lm-head-q6k-route-scope-20260629.md
-- docs/amd-isa-q6k-residual-amdahl-math-20260629.md
+- docs/archive/amd-isa-lm-head-q6k-route-scope-20260629.md
+- docs/archive/amd-isa-q6k-residual-amdahl-math-20260629.md
 
 Inputs:
 - bench/amd-isa-backend-q6k-residual-math/latest.json

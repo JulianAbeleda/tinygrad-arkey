@@ -39,7 +39,7 @@ Load these before implementing:
 | G3 Q4_K promotion/parity | `bench/amd-isa-backend-g3-weight-promotion/summary.md`, `bench/amd-isa-backend-g3-weight-promotion/latest.json`, `docs/amd-isa-g3-weight-promotion-hardening-scope-20260629.md` |
 | Q6_K direct route refutation | `bench/amd-isa-backend-q6k-direct-speed/summary.md`, `bench/amd-isa-backend-q6k-direct-speed/latest.json`, `docs/amd-isa-q6k-direct-route-full-scope-20260629.md` |
 | Decode attention two-kernel exhaustion | `docs/decode-two-kernel-problem-audit-result-20260625.md`, `bench/qk-decode-two-kernel-problem-audit-20260625/decision.json` |
-| Decode attention ceiling/low leverage | `bench/amd-isa-backend-decode-attention-ceiling/summary.md`, `bench/amd-isa-backend-decode-attention-ceiling/latest.json`, `docs/amd-isa-decode-attention-ceiling-audit-scope-20260629.md` |
+| Decode attention ceiling/low leverage | `bench/amd-isa-backend-decode-attention-ceiling/summary.md`, `bench/amd-isa-backend-decode-attention-ceiling/latest.json`, `docs/archive/amd-isa-decode-attention-ceiling-audit-scope-20260629.md` |
 | Native attention generated route history | `docs/pure-machine-search-roadmap.md`, `bench/amd-isa-backend-phase-n7/latest.json` |
 | Prefill global pipe promotion | `bench/qk-prefill-pipe-promotion/summary.md`, `bench/qk-prefill-pipe-promotion/latest.json` |
 | Prefill role-selective promotion | `bench/qk-prefill-pipe-role-selective/summary.md`, `bench/qk-prefill-pipe-role-selective/latest.json`, `extra/qk_prefill_pipe_role_selective.py` |

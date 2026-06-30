@@ -13,7 +13,7 @@ generated G3 Q4_K route parity, Q6_K direct-route refutation, and prefill pipe p
 | decode @ctx 512 / 1024 / 2048 / 4096 | **103.9 / 102.0 / 99.7 / 94.4 tok/s** (G3 speed-equivalent to owned Q4_K; Q6_K direct route refuted/default-off) | `bench/amd-isa-backend-g3-weight-promotion/latest.json`, `bench/amd-isa-backend-q6k-direct-speed/latest.json` |
 | decode practical ceiling | **~110-130 tok/s** for this model/GPU/quant stack; further weight-kernel tuning is closed absent representation/primitive changes | system-residual and Q6K-3 audits |
 | llama reference (same ctx) | 97.71 / 97.39 / 95.00 / 92.37 tok/s | `bench/canonical-benchmarks.json` |
-| prefill @ctx 512 / 1024 / 2048 / 4096 / 8192 | **4291 / 4089 / 3711 / 3137 / 2423 tok/s** (`pipe_tm2_tn2` promoted default; rollback `PREFILL_GEMM_PIPELINE=0`) | `bench/qk-prefill-pipe-promotion/latest.json` |
+| prefill @ctx 512 / 1024 / 2048 / 4096 / 8192 | **4434 / 4236 / 3846 / 3192 / 2532 tok/s** (**role-selective** pipe promoted default — pipe on attn_qo/attn_kv/ffn_down, gate/up kept on its faster path; rollback `PREFILL_PIPE_ROLE_SELECTIVE=0` → global pipe, then `PREFILL_GEMM_PIPELINE=0` → old lds2) | `bench/qk-prefill-pipe-role-selective/latest.json` |
 | q8 FFN opt-in | ~+7% decode, **default-OFF, dNLL-gated** | `Q8_FFN_HANDWRITTEN=1` |
 | VRAM | default ~5–6 GB; **`PREFILL_V2` adds ~+14 GB fp16** (≈19–21 GB), resident through decode | handoff history |
 
@@ -32,9 +32,9 @@ Q4_K/Q6_K route search.
 - **`PREFILL_SERVER_PROFILE=1`**: opt-in (⇒ `PREFILL_V2=auto` + concrete-KV precompile; server/long-prompt profile).
 - **`PREFILL_REMAINDER_FIX`**: default-ON but only active under `PREFILL_V2`; byte-identical (kills the 32-token trap).
 - **q8 FFN (`Q8_FFN_HANDWRITTEN=1`)**: opt-in, default-off.
-- **Q4_K G3 LaneMap**: promoted/hardened as the **speed-equivalent generated route** for eligible Q4_K decode roles.
+- **Q4_K G3 LaneMap**: now the **default** Q4_K decode GEMV route (`BUBBLEBEAM_FUTURESIGHT` default-on, model.py:255); speed-equivalent to the owned warp kernel, which is the rollback (`BUBBLEBEAM_FUTURESIGHT=0`).
 - **Q6_K direct route**: refuted by W==D, default-off; current coop/default route remains.
-- **`pipe_tm2_tn2` prefill**: promoted default (`PREFILL_GEMM_PIPELINE=1`, `TM=2`, `TN=2`); rollback with `PREFILL_GEMM_PIPELINE=0`.
+- **Prefill role-selective pipe**: promoted default (`PREFILL_GEMM_PIPELINE=1` + `PREFILL_PIPE_ROLE_SELECTIVE=1`, pipe on attn_qo/attn_kv/ffn_down, gate/up on its faster lds2 path); rollback `PREFILL_PIPE_ROLE_SELECTIVE=0` → global pipe, then `PREFILL_GEMM_PIPELINE=0` → old lds2. (Global `pipe_tm2_tn2` is now the A/B rollback comparator.)
 
 ## 3. What changed since the 06-21 handoff (the parity win)
 
@@ -47,7 +47,7 @@ closable only by a deep, separately-funded codegen capability." The 06-22→06-2
 - **Buffer identity was the actual wall**, not a runtime-KV core block; resolving it unblocked W==D promotion.
 - **Weight-GEMV** reached at/below llama, then generated G3 LaneMap matched the owned Q4_K route under BubbleBeam/FutureSight.
 - **Q6_K direct routing** was tested after the system-residual audit and refuted; the apparent lm_head reduce win was gumbel/sampling attribution, not removable GEMV work.
-- **Prefill** moved from `eightwave` to the validated `pipe_tm2_tn2` route: +19.3/+16.8/+14.2/+11.3/+8.5% across ctx512→8192, output-equivalent, rollback available.
+- **Prefill** moved from `eightwave` → global `pipe_tm2_tn2` (+19.3/+16.8/+14.2/+11.3/+8.5% across ctx512→8192) → then the **role-selective** pipe (excludes the saturated gate/up where the pipe regressed ~17%): a further +2.9..3.7% over global pipe (+11.7..23.4% over old lds2), output-equivalent, rollback chain available. Role-selective is the current promoted default; global pipe is the rollback comparator.
 
 Net: decode is effectively closed under the current representation/primitive set; prefill now carries the live promoted
 TIER_A win and is the more promising frontier for further role-selective pipeline/search work.

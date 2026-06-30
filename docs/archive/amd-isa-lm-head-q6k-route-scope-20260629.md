@@ -439,9 +439,9 @@ You are working in /home/ubuntu/tinygrad-arkey.
 Task: execute LH0 only: lm_head/Q6_K route audit. Do not implement kernels.
 
 Read:
-- docs/amd-isa-lm-head-q6k-route-scope-20260629.md
+- docs/archive/amd-isa-lm-head-q6k-route-scope-20260629.md
 - docs/amd-isa-q6k-direct-route-full-scope-20260629.md
-- docs/amd-isa-q6k-residual-amdahl-math-20260629.md
+- docs/archive/amd-isa-q6k-residual-amdahl-math-20260629.md
 
 Inputs:
 - bench/amd-isa-backend-q6k-residual-math/latest.json

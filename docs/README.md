@@ -11,9 +11,10 @@ in `docs/archive/` as provenance, not current state.
 - **`claude-active-work-audit-and-agnostic-search-scope-20260630.md`** — Claude-ready consolidated handoff for active-work
   audit, residual tracing/probe tooling, and quant/shape/target agnostic search.
 - **`current-project-state-handoff-20260624.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). Current numbers
-  (decode **103.9 / 102.0 / 99.7 / 94.4 tok/s** @ctx512/1024/2048/4096 on the G3/owned-equivalent decode stack;
-  prefill **4291 / 4089 / 3711 / 3137 / 2423 tok/s** @ctx512/1024/2048/4096/8192 on the promoted `pipe_tm2_tn2`
-  graph-GEMM route), decided policies, and the closed decode weight-kernel result. Guardrail:
+  (decode **103.9 / 102.0 / 99.7 / 94.4 tok/s** @ctx512/1024/2048/4096 on the current generated weight-math kernel —
+  at/above llama.cpp; prefill **4434 / 4236 / 3846 / 3192 / 2532 tok/s** @ctx512/1024/2048/4096/8192 on the current
+  optimized matrix-multiply route), the decided policies (with the exact flags + rollbacks), and the closed
+  decode weight-kernel result. Guardrail:
   `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens a closed question.
 - **`decode-campaign-final-synthesis-20260623.md`** — how decode reached llama parity (attention not exhausted;
   buffer identity was the wall; owned AMDGCN tile + `Q4K_GEMV_WARP` weight-GEMV).

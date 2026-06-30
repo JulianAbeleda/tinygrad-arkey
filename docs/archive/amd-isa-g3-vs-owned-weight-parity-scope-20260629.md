@@ -190,7 +190,7 @@ You are working in /home/ubuntu/tinygrad-arkey.
 
 Read and follow:
 
-  docs/amd-isa-g3-vs-owned-weight-parity-scope-20260629.md
+  docs/archive/amd-isa-g3-vs-owned-weight-parity-scope-20260629.md
 
 Context:
 The weight-path ceiling audit passed with:

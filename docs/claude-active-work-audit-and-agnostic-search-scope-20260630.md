@@ -43,7 +43,7 @@ Load-bearing current artifacts and files:
 | G3 speed-equivalent Q4_K route | `bench/amd-isa-backend-g3-weight-promotion/summary.md`, `bench/amd-isa-backend-g3-weight-promotion/latest.json`, scope `docs/amd-isa-g3-weight-promotion-hardening-scope-20260629.md` |
 | Q6_K direct route refuted | `bench/amd-isa-backend-q6k-direct-speed/summary.md`, `bench/amd-isa-backend-q6k-direct-speed/latest.json`, scope `docs/amd-isa-q6k-direct-route-full-scope-20260629.md` |
 | Attention two-kernel combine exhausted | `docs/decode-two-kernel-problem-audit-result-20260625.md`, `bench/qk-decode-two-kernel-problem-audit-20260625/decision.json` |
-| Attention ceiling moved search away from attention | `bench/amd-isa-backend-decode-attention-ceiling/latest.json`, `bench/amd-isa-backend-decode-attention-ceiling/summary.md`, scope `docs/amd-isa-decode-attention-ceiling-audit-scope-20260629.md` |
+| Attention ceiling moved search away from attention | `bench/amd-isa-backend-decode-attention-ceiling/latest.json`, `bench/amd-isa-backend-decode-attention-ceiling/summary.md`, scope `docs/archive/amd-isa-decode-attention-ceiling-audit-scope-20260629.md` |
 | Native attention route/candidate ledger | `bench/qk-pure-search-loop/decode_attention_loop_ledger.jsonl`, `bench/amd-isa-backend-phase-n6/latest.json`, `bench/amd-isa-backend-phase-n7/latest.json` |
 | Prefill global pipe promoted | `bench/qk-prefill-pipe-promotion/summary.md`, `bench/qk-prefill-pipe-promotion/latest.json`, `extra/qk_prefill_graph_gemm_route.py` |
 | Prefill role-selective beats global | `bench/qk-prefill-pipe-role-selective/summary.md`, `bench/qk-prefill-pipe-role-selective/latest.json`, `extra/qk_prefill_pipe_role_selective.py` |

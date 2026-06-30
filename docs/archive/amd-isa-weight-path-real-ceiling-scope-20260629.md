@@ -365,7 +365,7 @@ You are working in /home/ubuntu/tinygrad-arkey.
 
 Read and follow:
 
-  docs/amd-isa-weight-path-real-ceiling-scope-20260629.md
+  docs/archive/amd-isa-weight-path-real-ceiling-scope-20260629.md
 
 Context:
 The decode-attention ceiling audit closed the attention track with:
