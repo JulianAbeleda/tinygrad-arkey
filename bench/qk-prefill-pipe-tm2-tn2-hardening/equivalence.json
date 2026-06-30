@@ -1,0 +1,25 @@
+{
+  "verdict": "PASS_EQUIVALENT",
+  "method": "deterministic m.logits(chunk,0)[:,-1,:] argmax+sum+max, default vs pipe @ctx512",
+  "default": {
+    "argmax": 198,
+    "sum": 524309.75,
+    "max": 14.3638,
+    "shape": [
+      1,
+      151936
+    ]
+  },
+  "pipe": {
+    "argmax": 198,
+    "sum": 524309.75,
+    "max": 14.3638,
+    "shape": [
+      1,
+      151936
+    ]
+  },
+  "identical": true,
+  "route_bound": "graph_gemm fires, tensile=false (P1)",
+  "note": "m.forward returns a GUMBEL-sampled token (rand_like noise even at temp=0); its [1,1] fingerprint diverged (198 vs 151936) as SAMPLING noise, NOT a logit difference. The deterministic m.logits are byte-identical -> output-equivalent."
+}

@@ -1,0 +1,35 @@
+{
+  "target_candidate": "B_q6k_lanemap_g3_like",
+  "files_to_edit": [
+    "extra/q6_k_gemv_primitive.py (ADD q6k_direct_lanemap_kernel: reuse _q6k_block_dot body + in-warp lane_partition_reduce_sum, store out[row])",
+    "tinygrad/llm/model.py:447-461 (ADD Q6K_DIRECT_ROUTE branch BEFORE use_coop; default-off; same shape guards)"
+  ],
+  "new_flags": {
+    "Q6K_DIRECT_ROUTE": "1 = route covered Q6_K roles through the new direct kernel (default 0)",
+    "rollback": "Q6K_DIRECT_ROUTE=0 -> existing coop_partial+sum"
+  },
+  "route_guards": [
+    "quant==Q6_K",
+    "self.parts==1",
+    "out>=100000 (lm_head) OR (out==4096 and in==12288) (ffn_down)",
+    "out % lane_extent == 0"
+  ],
+  "labels": [
+    "q6k_direct_lanemap_{rows}_{k}"
+  ],
+  "correctness_gates": [
+    "single-role microgate: q6k_direct vs q6k_coop_partial+sum, token/byte-identical (fp-reassoc-tol exact)",
+    "ctx512 full-model token gate (Q6K_DIRECT_ROUTE=1) token_match vs baseline",
+    "ctx512/1024/2048/4096 route-bound token gate: q6k_direct_lanemap fires for covered roles, NO coop_partial/sum leak, no hidden fallback"
+  ],
+  "rollback_path": "Q6K_DIRECT_ROUTE unset/0 -> byte-identical to current route",
+  "expected_artifacts": [
+    "bench/amd-isa-backend-q6k-direct-correctness/{latest,summary,route_attribution,token_gate}.json"
+  ],
+  "first_microgate": "extra/amd_isa_q6k_direct_microgate.py: one Q6_K role (ffn_down 4096x12288), q6k_direct vs coop_partial+sum, assert max-abs-diff within fp-reassoc tol + route-bound",
+  "stop_conditions": [
+    "token mismatch -> BLOCKED_TOKEN_MISMATCH (stop, do not go to speed)",
+    "coop/fallback leak for covered role -> BLOCKED_ROUTE_BINDING",
+    "warp-lane mapping of pos(16) cannot be expressed -> BLOCKED (record exact lowering gap)"
+  ]
+}

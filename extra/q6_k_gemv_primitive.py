@@ -115,6 +115,37 @@ def q6k_gemv_warp_kernel(rows:int, k:int):
 
   return kernel
 
+def q6k_halfwarp_partition_kernel(rows:int, k:int):
+  # Q6K-2 HALF-WARP 2-ROW PARTITION (distinct from q6k_gemv_warp_kernel, which packs 2 K-groups of ONE row into a full
+  # 32-lane warp). Here TWO INDEPENDENT rows share one 32-lane wave as two 16-lane partitions:
+  #   half = lane // 16   (0 -> row A, 1 -> row B);   pos = lane % 16  (within-block byte index 0..15, coalesced)
+  # Each lane FP-accumulates ITS row over ALL k_blocks (pos is the only within-row lane axis, no K-split), then a
+  # HALF-WARP reduce -- warp_reduce_sum(acc, lane, width=16) with the FULL 32-lane `lane`: the xor ladder {8,4,2,1}
+  # never crosses the 16-boundary (lane^8 keeps 0..15 in 0..15 and 16..31 in 16..31), so each half independently sums
+  # its 16 pos lanes. Lane stores out[row] (rows A/B independent). NO partials buffer, NO external r_* reduce.
+  # Decode/dequant byte-identical to the default (_q6k_weight verbatim; exact up to fp reassoc). rows must be even.
+  from tinygrad.dtype import AddrSpace
+  from extra.amd_warp_reduce import warp_reduce_sum
+  if rows % 2 != 0: raise ValueError(f"rows={rows} must be even (2 rows per half-warp)")
+  k_blocks = k // Q6_K_BLOCK_ELEMS
+
+  def kernel(out:UOp, halfs:UOp, x:UOp) -> UOp:
+    row_pair = UOp.special(rows // 2, "gidx0")    # one warp per row-pair
+    lane = UOp.special(32, "lidx0")
+    half = lane // 16                              # 0 -> row A, 1 -> row B
+    pos = lane % 16                                # within-block pos 0..15 (coalesced)
+    row = row_pair * 2 + half
+    lblk = UOp.range(k_blocks, 0, axis_type=AxisType.REDUCE)
+    base = (row * k_blocks + lblk) * Q6K_HALFWORDS_PER_BLOCK
+    contrib = _q6k_block_dot(halfs, x, base, lblk, pos)
+    acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
+    total = warp_reduce_sum(acc[0], lane, 16)      # HALF-warp: each 16-lane half holds its own row's sum
+    return out[row].store(total).sink(arg=_kernel_info(f"q6k_halfwarp_partition_{rows}_{k}", ()))
+
+  return kernel
+
 def q6k_gemv_partial_kernel(rows:int, k:int, parts:int, opts:tuple[Opt, ...]):
   k_blocks = k // Q6_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)

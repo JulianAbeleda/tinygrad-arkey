@@ -1,0 +1,26 @@
+{
+  "512": {
+    "candidate_halfwarp": [
+      "q6k_halfwarp_partition_151936_4096"
+    ],
+    "candidate_coop_lmhead": []
+  },
+  "1024": {
+    "candidate_halfwarp": [
+      "q6k_halfwarp_partition_151936_4096"
+    ],
+    "candidate_coop_lmhead": []
+  },
+  "2048": {
+    "candidate_halfwarp": [
+      "q6k_halfwarp_partition_151936_4096"
+    ],
+    "candidate_coop_lmhead": []
+  },
+  "4096": {
+    "candidate_halfwarp": [
+      "q6k_halfwarp_partition_151936_4096"
+    ],
+    "candidate_coop_lmhead": []
+  }
+}

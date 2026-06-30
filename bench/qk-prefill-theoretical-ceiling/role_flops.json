@@ -1,0 +1,50 @@
+{
+  "ffn_gate_up": {
+    "m": 512,
+    "n": 12288,
+    "k": 4096,
+    "flop": 51539607552,
+    "blas_ceiling_tflops": 69.8,
+    "blas_lib": "hipblaslt",
+    "tg_ref_tflops": 40.8,
+    "floor_ms_per_call": 0.7383,
+    "tg_ms_per_call": 1.2632,
+    "gemm_ceiling_speedup": 1.711
+  },
+  "ffn_down": {
+    "m": 512,
+    "n": 4096,
+    "k": 12288,
+    "flop": 51539607552,
+    "blas_ceiling_tflops": 70.9,
+    "blas_lib": "rocblas",
+    "tg_ref_tflops": 40.8,
+    "floor_ms_per_call": 0.7265,
+    "tg_ms_per_call": 1.2632,
+    "gemm_ceiling_speedup": 1.739
+  },
+  "qo_proj": {
+    "m": 512,
+    "n": 4096,
+    "k": 4096,
+    "flop": 17179869184,
+    "blas_ceiling_tflops": 76.7,
+    "blas_lib": "rocblas",
+    "tg_ref_tflops": 40.8,
+    "floor_ms_per_call": 0.224,
+    "tg_ms_per_call": 0.4211,
+    "gemm_ceiling_speedup": 1.88
+  },
+  "kv_proj": {
+    "m": 512,
+    "n": 1024,
+    "k": 4096,
+    "flop": 4294967296,
+    "blas_ceiling_tflops": 51.8,
+    "blas_lib": "rocblas",
+    "tg_ref_tflops": 40.8,
+    "floor_ms_per_call": 0.0829,
+    "tg_ms_per_call": 0.1053,
+    "gemm_ceiling_speedup": 1.27
+  }
+}

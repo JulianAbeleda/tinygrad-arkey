@@ -1,0 +1,33 @@
+{
+  "512": {
+    "old": 3598,
+    "new": 4289,
+    "delta_pct": 19.2,
+    "tier": "TIER_A_MAJOR"
+  },
+  "1024": {
+    "old": 3506,
+    "new": 4095,
+    "delta_pct": 16.8,
+    "tier": "TIER_A_MAJOR"
+  },
+  "2048": {
+    "old": 3253,
+    "new": 3708,
+    "delta_pct": 14.0,
+    "tier": "TIER_A_MAJOR"
+  },
+  "4096": {
+    "old": 2821,
+    "new": 3137,
+    "delta_pct": 11.2,
+    "tier": "TIER_A_MAJOR"
+  },
+  "8192": {
+    "old": 2234,
+    "new": 2423,
+    "delta_pct": 8.5,
+    "tier": "TIER_A_MAJOR",
+    "src": "hardening d3f869b1a (same pipe kernel; not re-run here, synced harness max 4096)"
+  }
+}

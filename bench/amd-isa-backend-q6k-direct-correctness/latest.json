@@ -1,0 +1,33 @@
+{
+  "verdict": "Q6K2_PASS_HALFWARP_PARTITION",
+  "tensor": "blk.0.ffn_down.weight",
+  "shape": [
+    4096,
+    12288
+  ],
+  "rows_tested": 256,
+  "k": 12288,
+  "k_blocks": 48,
+  "halfwarp_mapping": {
+    "lanes_0_15": "row A (row_pair*2), pos 0..15",
+    "lanes_16_31": "row B (row_pair*2+1), pos 0..15",
+    "reduce": "warp_reduce_sum(acc, lane, width=16) with the FULL 32-lane lidx0; xor ladder {8,4,2,1} stays within each 16-lane half (lane^8 never crosses the 16-boundary) -> 2 INDEPENDENT half-warp sums",
+    "store": "out[row].store(total) per half -> out[rowA], out[rowB] independent. NO partials buffer, NO external r_* reduce.",
+    "primitive": "q6k_halfwarp_partition_kernel (NEW, extra/q6_k_gemv_primitive.py)",
+    "why_not_lanepartition": "LanePartition/lane_partition_reduce_sum reduces the WHOLE 32-lane wave to ONE value (words_per_group is only the ADDRESS split, not independent partitions) -> wrong for 2 independent rows. The half-warp reduce is warp_reduce_sum(width=16) over the full lane."
+  },
+  "microgate": {
+    "rowA_vs_coop_max_abs": 4.76837158203125e-07,
+    "rowB_vs_coop_max_abs": 4.76837158203125e-07,
+    "rowA_vs_ref_max_abs": 0.0009715557098388672,
+    "rowB_vs_ref_max_abs": 0.0008963942527770996,
+    "coop_vs_ref_max_abs": 0.0009715557098388672,
+    "tol": 0.01
+  },
+  "route_label": "q6k_halfwarp_partition_256_12288",
+  "no_external_reduce": "out[row] stored in-kernel; no .sum/r_* for this route",
+  "dequant_unchanged": "_q6k_weight reused verbatim (same bits/scale/dtype); only the cross-pos reduction moves in-kernel (half-warp)",
+  "flag_off_rollback": "new kernel is NOT wired into model.py (Q6K-2 scope = no model wiring) -> the model's Q6_K route is byte-identical by construction; rollback is trivial (kernel unreferenced by the decode path).",
+  "vs_prior_full_warp": "supersedes the prior full-warp proof (q6k_gemv_warp_kernel = 2 K-groups of ONE row/warp). THIS gate proves the DIFFERENT foundational mapping: 2 independent rows sharing a warp as two 16-lane partitions.",
+  "scope": "Q6K-2: half-warp 2-row partition correctness ONLY. No model wiring, no full decode, no W==D (Q6K-3)."
+}

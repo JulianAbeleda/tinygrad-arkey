@@ -1,0 +1,12 @@
+{
+  "q6k0_prediction": "+2.4% TIER_B (lm_head coop-reduce removal)",
+  "refinement": "r_32_4_1187 is the gumbel-argmax (intrinsic), not the coop reduce; firm removable = q6k_coop_partial_151936 + r_1187_32_4_16 partials-sum",
+  "measured_best_delta_pct": -4.77,
+  "measured_median_delta_pct": -5.44,
+  "per_ctx_delta_pct": {
+    "512": -6.06,
+    "1024": -5.82,
+    "2048": -5.06,
+    "4096": -4.77
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "current_branch": "q6k-direct-route",
+  "created_from": "local master HEAD (6f7aa00a7)",
+  "policy": [
+    "commit Q6K-1/Q6K-2/Q6K-3 on q6k-direct-route",
+    "merge to LOCAL master ONLY after correctness (Q6K-2) AND speed (Q6K-3) gates pass",
+    "do NOT merge stale psp-top-table (behind 1638, unrelated)",
+    "if sharing externally, push q6k-direct-route; do NOT force-push master",
+    "keep Q6K_DIRECT_ROUTE default-off through merge; flip default only after a clean TIER_A/TIER_B promotion gate"
+  ],
+  "do_not": [
+    "no default change pre-speed-gate",
+    "no Q4_K G3 changes (parity holds)",
+    "no Q6_K quant demotion",
+    "no autogen edits"
+  ]
+}

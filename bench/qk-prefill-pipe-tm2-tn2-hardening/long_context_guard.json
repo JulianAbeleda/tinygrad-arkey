@@ -1,0 +1,39 @@
+{
+  "verdict": "PASS_LONGCTX_HOLDS_TIER_A",
+  "max_feasible_ctx": 8192,
+  "oom_at_8192": false,
+  "harness": "extra/qk_prefill_pipe_hardening.py (recovered synced methodology, max_context bumped to 8704)",
+  "table": {
+    "512": {
+      "default": 3596,
+      "pipe": 4291,
+      "delta_pct": 19.3,
+      "tier": "TIER_A_MAJOR"
+    },
+    "1024": {
+      "default": 3502,
+      "pipe": 4089,
+      "delta_pct": 16.8,
+      "tier": "TIER_A_MAJOR"
+    },
+    "2048": {
+      "default": 3249,
+      "pipe": 3711,
+      "delta_pct": 14.2,
+      "tier": "TIER_A_MAJOR"
+    },
+    "4096": {
+      "default": 2818,
+      "pipe": 3137,
+      "delta_pct": 11.3,
+      "tier": "TIER_A_MAJOR"
+    },
+    "8192": {
+      "default": 2234.5,
+      "pipe": 2423.5,
+      "delta_pct": 8.5,
+      "tier": "TIER_A_MAJOR"
+    }
+  },
+  "finding": "pipe holds TIER_A at EVERY ctx incl. 8192 (+8.5%); delta erodes monotonically +19.3->+8.5% as non-GEMM softmax/reduction share grows (P2: 42.6% @sp3584), but NEVER regresses. 8192 feasible on 24GB, no OOM."
+}

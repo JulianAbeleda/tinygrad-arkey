@@ -1,0 +1,96 @@
+{
+  "0": {
+    "total_dur_us": 139532.6,
+    "buckets": {
+      "norm_rope_elementwise": {
+        "pct_gpu": 15.05,
+        "dur_us": 20999.36,
+        "calls": 801,
+        "n_kernels": 26
+      },
+      "attn_qo": {
+        "pct_gpu": 16.91,
+        "dur_us": 23588.2,
+        "calls": 72,
+        "n_kernels": 1,
+        "eff_tflops": 52.4,
+        "blas_ceiling": 76.7,
+        "pct_of_blas": 68.4
+      },
+      "attn_kv": {
+        "pct_gpu": 8.29,
+        "dur_us": 11565.16,
+        "calls": 72,
+        "n_kernels": 1,
+        "eff_tflops": 26.7,
+        "blas_ceiling": 51.8,
+        "pct_of_blas": 51.6
+      },
+      "ffn_gate_up": {
+        "pct_gpu": 35.29,
+        "dur_us": 49236.88,
+        "calls": 72,
+        "n_kernels": 1,
+        "eff_tflops": 75.4,
+        "blas_ceiling": 69.8,
+        "pct_of_blas": 108.0
+      },
+      "ffn_down": {
+        "pct_gpu": 24.47,
+        "dur_us": 34143.0,
+        "calls": 36,
+        "n_kernels": 1,
+        "eff_tflops": 54.3,
+        "blas_ceiling": 70.9,
+        "pct_of_blas": 76.6
+      }
+    }
+  },
+  "3584": {
+    "total_dur_us": 204201.8,
+    "buckets": {
+      "norm_rope_elementwise": {
+        "pct_gpu": 42.61,
+        "dur_us": 87016.88,
+        "calls": 801,
+        "n_kernels": 26
+      },
+      "attn_qo": {
+        "pct_gpu": 11.54,
+        "dur_us": 23559.92,
+        "calls": 72,
+        "n_kernels": 1,
+        "eff_tflops": 52.5,
+        "blas_ceiling": 76.7,
+        "pct_of_blas": 68.5
+      },
+      "attn_kv": {
+        "pct_gpu": 5.63,
+        "dur_us": 11490.12,
+        "calls": 72,
+        "n_kernels": 1,
+        "eff_tflops": 26.9,
+        "blas_ceiling": 51.8,
+        "pct_of_blas": 52.0
+      },
+      "ffn_gate_up": {
+        "pct_gpu": 23.65,
+        "dur_us": 48303.48,
+        "calls": 72,
+        "n_kernels": 1,
+        "eff_tflops": 76.8,
+        "blas_ceiling": 69.8,
+        "pct_of_blas": 110.1
+      },
+      "ffn_down": {
+        "pct_gpu": 16.57,
+        "dur_us": 33831.44,
+        "calls": 36,
+        "n_kernels": 1,
+        "eff_tflops": 54.8,
+        "blas_ceiling": 70.9,
+        "pct_of_blas": 77.4
+      }
+    }
+  }
+}
