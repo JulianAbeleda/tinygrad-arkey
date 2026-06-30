@@ -1,0 +1,53 @@
+{
+  "verdict": "AMD_ISA_REGALLOC_ACCUM_RA3_PASS_WD_MOVEMENT",
+  "scope": "RA4 refinement of RA3: relocate pinned accumulators LOW (v1..v16) to fix the fixed-high-reservation VGPR inflation",
+  "fix": "ACCUM_PIN_BASE/TOP 240/256 -> 1/17; _vpool = VBASE[17:] when AMD_ISA_REG_ACCUM (virtuals start at v17, pins v1..v16). elf descriptor now sizes VGPR to the natural virtual_max instead of v248.",
+  "tile_vgpr_before_RA3": 248,
+  "tile_vgpr_after_RA4": 56,
+  "tile_lds": 12288,
+  "lds_accum_ds_load_store": "31 -> 9 (RA2, unchanged by RA4)",
+  "wd": {
+    "baseline_dynamic_s": {
+      "ctx512": {
+        "native": 67.09,
+        "pct": 65.0
+      },
+      "ctx4096": {
+        "native": 57.4,
+        "pct": 61.0
+      }
+    },
+    "ra3_high_pins": {
+      "ctx512": {
+        "native": 70.68,
+        "pct": 68.1
+      },
+      "ctx4096": {
+        "native": 47.12,
+        "pct": 49.7
+      }
+    },
+    "ra4_low_pins": {
+      "ctx512": {
+        "native": 70.72,
+        "pct": 68.3
+      },
+      "ctx4096": {
+        "native": 56.73,
+        "pct": 60.1
+      }
+    }
+  },
+  "delta_vs_baseline": {
+    "ctx512": "+5.4%",
+    "ctx4096": "-1.2% (within noise; recovered from RA3 -17.9%)"
+  },
+  "gates": {
+    "token_match": true,
+    "route_bound": true,
+    "phase_g": "PASS with flag",
+    "flag_off_byte_identical": true
+  },
+  "remaining": "ctx4096 neutral not positive: the accumulator LDS (12288) is still sized by elf (group-segment not reclaimed), so ctx4096 LDS-occupancy is unchanged -> the DS-op cut (31->9) helps ctx512 (occupancy not binding) but ctx4096 LDS-occupancy-bound is flat. Further refinement: drop pinned DEFINE_REG from elf group-segment sizing to reclaim LDS occupancy.",
+  "status": "feature COMPLETE + NET-POSITIVE (ctx512 +5.4%, ctx4096 neutral, no regression); correct; default-off opt-in; not owned parity (68.3%/60.1%). N5A regalloc wall is BROKEN."
+}

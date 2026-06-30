@@ -35,7 +35,10 @@ SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 40, 2))   # even SGPRs 
 SCNT_POOL = tuple(Register(f"s{i}", i) for i in range(40, 64))     # single SGPRs s40..s63 -> uniform loop counters (Phase B)
 SCALAR_TMP = tuple(Register(f"s{i}", i) for i in range(64, 104))   # single SGPRs s64..s103 -> Phase N1B uniform address-math temps
 VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0 reserved for packed workitem ids
-ACCUM_PIN_BASE, ACCUM_PIN_TOP = 240, 256                            # RA1: v240..v255 RESERVED for loop-carried pinned accumulators (out of _vpool)
+ACCUM_PIN_BASE, ACCUM_PIN_TOP = 1, 17                               # RA4: v1..v16 RESERVED (LOW) for loop-carried pinned accumulators.
+# RA4 fix vs RA3: pins placed LOW (v1..v16) not high (v240+). The elf descriptor sizes VGPR to the HIGHEST reg used,
+# so high pins forced ~248 VGPRs -> ctx4096 occupancy collapse (RA3 -18%). Low pins sit under virtual_max (~64) so the
+# descriptor sizes naturally (~64), no VGPR inflation, no post-regalloc renumber. v0 (packed workitem ids) stays reserved.
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
 WGID_S0 = 2                                                        # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1); .y/.z -> s3/s4
 
@@ -47,9 +50,9 @@ def _n_workitem_dims(ctx:IselContext) -> int:
     ctx._n_lid = n = (max(lids) + 1) if lids else 1
   return n
 def _vpool(ctx:IselContext):
-  # reserve v0 (packed workitem ids). RA1: when AMD_ISA_REG_ACCUM, also reserve v240..v255 for pinned accumulators
-  # (kept OUT of the normal allocation pool so regalloc never assigns a virtual reg to a pinned accumulator).
-  return VBASE[1:ACCUM_PIN_BASE] if getenv("AMD_ISA_REG_ACCUM", 0) else VBASE[1:]
+  # reserve v0 (packed workitem ids). RA4: when AMD_ISA_REG_ACCUM, also reserve the LOW pin range v1..v16 for pinned
+  # accumulators (kept OUT of the normal pool so regalloc never assigns a virtual to a pin); virtuals start at v17.
+  return VBASE[ACCUM_PIN_TOP:] if getenv("AMD_ISA_REG_ACCUM", 0) else VBASE[1:]
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
