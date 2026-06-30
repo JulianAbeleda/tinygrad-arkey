@@ -273,18 +273,18 @@ PASS_SPEED:
   token_match true at all contexts
   route_bound true at all contexts
   hidden_fallback false
-  median W==D improves >=5% at ctx512 or ctx4096
-  no context regresses >2%
+  TIER_A_MAJOR: >=5.0% median W==D improvement, no context regresses >2.0%
+  TIER_B_RESIDUAL: >=2.0% and <5.0% median W==D improvement, mechanism proof clean, no context regresses >1.0%
 
 PASS_SPEED_EQUIVALENT:
-  route is pure/search-owned but within +/-5% of baseline
-  useful only if it retires owned/hand code or simplifies search
+  TIER_C_EQUIVALENT_CLEANUP: -1.0% to +2.0% median W==D movement
+  useful only if it retires owned/hand code, removes a known residual, or simplifies search
 
 CORRECT_BUT_NOT_FAST:
-  correctness passes but W==D movement <5%
+  correctness passes but does not clear TIER_B_RESIDUAL and has no TIER_C cleanup value
 
 REGRESSION:
-  any context loses >2% median W==D or token mismatch/fallback appears
+  any context loses beyond the selected tier's allowed regression or token mismatch/fallback appears
 ```
 
 ## Phase Q6K-4: Search Binding / Promotion
@@ -403,4 +403,3 @@ Discipline:
 - Do not reopen Q4_K layout while G3 parity holds.
 - Stop after Q6K-0 and report the verdict, Amdahl table, exact route candidates, and whether implementation is justified.
 ```
-

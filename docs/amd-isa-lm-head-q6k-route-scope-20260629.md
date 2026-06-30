@@ -184,7 +184,7 @@ implementation target selected
 Stop condition:
 
 ```text
-If LH0 cannot prove lm_head reduce ownership or if standalone upside is <5%, do not implement a standalone lm_head route. Fold lm_head back into the broader Q6_K direct route.
+If LH0 cannot prove lm_head reduce ownership, do not implement a standalone lm_head route. If standalone upside is below the residual-tier threshold in the promotion policy, fold lm_head back into the broader Q6_K direct route.
 ```
 
 ## Phase LH1: Route Design
@@ -365,13 +365,14 @@ Promotion threshold:
 
 ```text
 standalone lm_head route:
-  >=5% W==D improvement OR
-  speed-equivalent but materially simplifies/removes firm reduce route for broader Q6_K promotion
+  TIER_A_MAJOR: >=5.0% W==D improvement
+  TIER_B_RESIDUAL: >=2.0% and <5.0% W==D improvement with firm reduce removal proven and no protected context regression >1.0%
+  TIER_C_EQUIVALENT_CLEANUP: -1.0% to +2.0% W==D only if it materially simplifies/removes firm reduce route for broader Q6_K promotion
 
-no context regression >2%
+no context regression beyond the selected tier
 ```
 
-Important: because lm_head firm reduce is roughly 3.2-3.4% GPU-time, a standalone lm_head-only speedup may not clear 5% W==D unless it also improves the GEMV route or unlocks the general Q6_K route. If it does not clear 5%, do not promote standalone; fold it into the broader Q6_K direct route.
+Important: because lm_head firm reduce is roughly 2.2-2.4% GPU-time in the standalone LH0 audit, a perfect standalone lm_head-only speedup is a residual-tier win at best. Do not reject it solely for missing the old 5% bar. Promote standalone only if it cleanly removes the firm reduce and clears TIER_B_RESIDUAL; otherwise fold it into the broader Q6_K direct route.
 
 ## Phase LH4: Promotion / Integration
 
@@ -413,7 +414,7 @@ lm_head can be handled in three ways:
 
 ```text
 Option A: standalone lm_head route
-  Use if LH3 shows >=5% W==D or strong simplification with no regression.
+  Use if LH3 clears TIER_A_MAJOR or TIER_B_RESIDUAL, or if TIER_C cleanup materially simplifies the broader Q6_K route with no regression.
 
 Option B: fold into general Q6_K direct route
   Use if standalone lm_head is correct but too small by itself.
@@ -475,4 +476,3 @@ Verdicts:
 
 Stop after LH0 and report whether lm_head gets its own route or folds into Q6K-1.
 ```
-

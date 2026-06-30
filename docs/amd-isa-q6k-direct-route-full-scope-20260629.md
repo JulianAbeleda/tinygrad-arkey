@@ -196,9 +196,9 @@ firm_removable_pct_gpu:
   ctx512  = 6.53%
   ctx4096 = 5.98%
 
-required expected W==D:
-  ctx512  >= +5%
-  ctx4096 >= +5%
+expected W==D:
+  ctx512  ~= +7.0%
+  ctx4096 ~= +6.4%
 ```
 
 8. What is the smallest correctness-first implementation?
@@ -231,7 +231,7 @@ exact candidate route named
 firm removable rows mapped to implementation mechanism
 quant semantics preserved
 rollback flags identified
-predicted Amdahl gain >= 5%
+predicted Amdahl gain clears the tiered promotion policy below
 minimal Q6K-2 implementation plan written
 ```
 
@@ -345,6 +345,58 @@ Stop condition:
 If correctness fails, stop. Do not run speed promotion.
 ```
 
+## Promotion Threshold Policy
+
+The old flat `>=5% W==D` threshold was useful while the search was finding large structural misses. At this stage, the route is near the practical model/GPU ceiling and remaining wins will often be smaller. Promotion should now use a tiered rule that combines wall movement with mechanism proof.
+
+Promotion tiers:
+
+```text
+TIER_A_MAJOR:
+  >=5.0% median W==D improvement
+  ordinary PASS_SPEED if correctness/route gates pass
+
+TIER_B_RESIDUAL:
+  >=2.0% and <5.0% median W==D improvement
+  can promote only if:
+    mechanism counter moves in the predicted direction
+    targeted kernel/reduce time drops by enough to explain the wall gain
+    no protected context regresses >1.0%
+    route is simpler, more search-owned, or removes a known residual
+    rollback flag works
+
+TIER_C_EQUIVALENT_CLEANUP:
+  -1.0% to +2.0% median W==D movement
+  can promote only if it retires owned/current special-case code or materially improves search purity
+  cannot be sold as a speed win
+
+REJECT_OR_DEFER:
+  any protected context regresses >1.0% for residual-tier work
+  or mechanism counters do not explain the measured gain
+  or wall movement is inside noise with no structural simplification
+```
+
+For Q6_K specifically:
+
+```text
+Q6K-0 predicted conservative gain:
+  ctx512  +7.0%
+  ctx4096 +6.4%
+
+So Q6_K direct route should still target TIER_A_MAJOR.
+But if implementation captures only a firm subset, TIER_B_RESIDUAL is acceptable if the q6k/reduce mechanism proof is clean.
+```
+
+This policy prevents two failure modes:
+
+```text
+false negative:
+  rejecting a real 2-4% residual win after the large levers are exhausted
+
+false positive:
+  promoting noisy wall movement with no route/mechanism proof
+```
+
 ## Q6K-3: Speed And Attribution Gate
 
 Only start if Q6K-2 returns `AMD_ISA_Q6K_DIRECT_PASS_CORRECTNESS`.
@@ -414,21 +466,21 @@ PASS_SPEED:
   token_match true all contexts
   route_bound true all contexts
   hidden_fallback false
-  median W==D improves >=5% at ctx512 or ctx4096
-  no protected context regresses >2%
+  TIER_A_MAJOR or TIER_B_RESIDUAL by the promotion threshold policy
+  no protected context regresses beyond the tier's allowed threshold
   q6k/reduce bucket moves in predicted direction
 
 PASS_SPEED_EQUIVALENT:
   correctness passes
-  W==D within +/-5%
+  TIER_C_EQUIVALENT_CLEANUP by the promotion threshold policy
   only useful if route is more pure/search-owned or retires owned/current special route
 
 CORRECT_BUT_NOT_FAST:
   correctness passes
-  W==D movement <5%
+  W==D movement does not clear TIER_B_RESIDUAL and no TIER_C cleanup value exists
 
 REGRESSION:
-  any protected context regresses >2%
+  any protected context regresses beyond the tier's allowed threshold
   or token_match/fallback/determinism fails
 ```
 
@@ -500,8 +552,8 @@ route:
   rollback works
 
 speed:
-  >=5% median W==D gain at ctx512 or ctx4096
-  no protected context regression >2%
+  clears TIER_A_MAJOR or TIER_B_RESIDUAL
+  no protected context regression beyond the selected tier
   measured mechanism matches Q6K-0/Q6K-3
 
 search:
@@ -626,7 +678,7 @@ Required:
 - Do not credit ambiguous prod==4096 reduces unless role attribution proves they are Q6_K-owned.
 - Propose the minimal Q6K-2 route: which role first, which kernels replaced, which flags, which rollback.
 - Preserve quant semantics; no bit demotion.
-- Compute predicted Amdahl gain and ensure it remains >=5%.
+- Compute predicted Amdahl gain and classify it under TIER_A_MAJOR / TIER_B_RESIDUAL / TIER_C_EQUIVALENT_CLEANUP.
 
 Verdicts:
 - AMD_ISA_Q6K_DIRECT_DESIGN_PASS_READY
@@ -637,4 +689,3 @@ Verdicts:
 
 Stop after Q6K-1 and report the verdict. Do not implement Q6K-2 in this phase.
 ```
-
