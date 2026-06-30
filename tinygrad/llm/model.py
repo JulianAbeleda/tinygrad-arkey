@@ -254,9 +254,16 @@ class Q4KPrimitiveLinear:
     # generated route, keep owned warp one flag away. Rollback to owned warp: BUBBLEBEAM_FUTURESIGHT=0.
     bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1) or getenv("BEAM_COALESCE")
     g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
-    if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and g3_bubblebeam_shape:
+    # Q1432-4 (default-off; rollback = DECODE_Q4K_G3_ANYSHAPE=0): bind the generated G3 lanemap by STRUCTURAL shape
+    # eligibility ((in//256)%4==0 and out%32==0) rather than the hardcoded 8B dims, so larger dense Q4_K decode
+    # shapes (14B/32B FFN gate/up/down + attn_q/o) take the generated route instead of the slow lazy-dequant
+    # fallback. Microgate-correct for those shapes (rel_rmse ~4e-4). This is a structural class, not a model-dim
+    # hardcode -- the G3 topology generalizes to it. See docs/qwen-14b-32b-true-generation-kernel-authoring-scope.
+    g3_anyshape = bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 0)) and DECODE_ATTN_AMDGCN_ARCH_OK \
+      and (self.in_features // 256) % 4 == 0 and self.out_features % 32 == 0
+    if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and (g3_bubblebeam_shape or g3_anyshape):
       from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
-      if should_route_q4k_lane_partition(self.out_features, self.in_features):
+      if g3_anyshape or should_route_q4k_lane_partition(self.out_features, self.in_features):
         from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
         _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
