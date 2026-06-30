@@ -1,0 +1,31 @@
+{
+  "_schema": "PMS-R8 profile descriptor (see ./_schema.json)",
+  "profile_id": "qwen3_8b_q4_k_m_gfx1100",
+  "decode_profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+  "prefill_profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
+  "model": {"family": "qwen3", "params": "8b", "layers": 36, "hidden": 4096, "ffn": 12288, "heads": 32, "kv_heads": 8, "head_dim": 128, "vocab": 151936},
+  "quant_mix": {
+    "Q4_K": ["ffn_gate_up", "ffn_down", "attn_qo"],
+    "Q6_K": ["ffn_down", "lm_head"],
+    "fp16": ["attention_tile", "attention_combine", "prefill_gemm_all_roles"]
+  },
+  "quant_mix_note": "Qwen3-8B-Q4_K_M is a mixed GGUF: ffn_down appears under BOTH Q4_K (G3 decode GEMV) and Q6_K (coop) across layers; lm_head is Q6_K; attention KV cache + prefill GEMM run fp16.",
+  "gpu": {"vendor": "AMD", "arch": "gfx1100", "wave": 32, "vram_gb": 24, "measured_copy_gbps": 820,
+          "copy_gbps_note": "820 GB/s measured device-copy (scope PMS-R8 pin). The decode ceiling audit separately uses 960 peak / ~768 real for the weight-read roofline; 820 is the measured copy bandwidth used for profile-level planning."},
+  "authority_contexts": [512, 1024, 2048, 4096, 8192],
+  "threshold_policy": "tiered_residual",
+  "thresholds": {"tier_a_pct": 5.0, "tier_b_pct": 2.0, "equiv_band_pct": 1.0, "regression_pct": -2.0,
+                 "note": "tiered_residual; mirrors extra/qk_candidate_evaluator.DEFAULT_THRESHOLDS (TIER_A prefill bar 5%)"},
+  "role_shape_derivation": {
+    "prefill_ubatch": 512,
+    "decode": {
+      "attn_qo":     {"K": "hidden", "N": "heads*head_dim"},
+      "attn_kv":     {"K": "hidden", "N": "kv_heads*head_dim"},
+      "ffn_gate_up": {"K": "hidden", "N": "ffn"},
+      "ffn_down":    {"K": "ffn", "N": "hidden"},
+      "lm_head":     {"N": "vocab"}
+    }
+  },
+  "regenerates_routes": ["decode_q4k_g3_generated", "decode_q6k_coop_shipped", "prefill_pipe_role_selective_default"],
+  "new_target_bootstrap": "to add a new <model>_<quant>_<gpu>: fill model/quant_mix/gpu/authority_contexts, derive role shapes from model dims (role_shape_derivation), then run the census (extra/pure_machine_search_default_path_census.py), the ceiling/attribution audit, and the candidate evaluator -- do NOT hand-edit route flags."
+}

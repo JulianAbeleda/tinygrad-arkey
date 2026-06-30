@@ -1,0 +1,206 @@
+{
+  "scope": "PMS-R8 profile-driven search readiness (routes regenerate from the profile descriptor)",
+  "verdict": "PMS_R8_PASS_PROFILE_DRIVEN_SEARCH_READY",
+  "profile": "bench/qk-search-spaces/profiles/qwen3_8b_q4_k_m_gfx1100.json",
+  "model_dims": {
+    "family": "qwen3",
+    "params": "8b",
+    "layers": 36,
+    "hidden": 4096,
+    "ffn": 12288,
+    "heads": 32,
+    "kv_heads": 8,
+    "head_dim": 128,
+    "vocab": 151936
+  },
+  "derived_decode_shapes": {
+    "attn_qo": {
+      "K": 4096,
+      "N": 4096
+    },
+    "attn_kv": {
+      "K": 4096,
+      "N": 1024
+    },
+    "ffn_gate_up": {
+      "K": 4096,
+      "N": 12288
+    },
+    "ffn_down": {
+      "K": 12288,
+      "N": 4096
+    },
+    "lm_head": {
+      "N": 151936
+    }
+  },
+  "authority_contexts": [
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "threshold_policy": "tiered_residual",
+  "gpu": {
+    "vendor": "AMD",
+    "arch": "gfx1100",
+    "wave": 32,
+    "vram_gb": 24,
+    "measured_copy_gbps": 820,
+    "copy_gbps_note": "820 GB/s measured device-copy (scope PMS-R8 pin). The decode ceiling audit separately uses 960 peak / ~768 real for the weight-read roofline; 820 is the measured copy bandwidth used for profile-level planning."
+  },
+  "quant_mix": {
+    "Q4_K": [
+      "ffn_gate_up",
+      "ffn_down",
+      "attn_qo"
+    ],
+    "Q6_K": [
+      "ffn_down",
+      "lm_head"
+    ],
+    "fp16": [
+      "attention_tile",
+      "attention_combine",
+      "prefill_gemm_all_roles"
+    ]
+  },
+  "regeneration_checks": [
+    {
+      "route": "decode_q4k_g3_generated",
+      "role": "ffn_gate_up",
+      "derived": {
+        "K": 4096,
+        "N": 12288
+      },
+      "guard": {
+        "role": "ffn_gate_up",
+        "K": 4096,
+        "N": 12288
+      },
+      "match": true
+    },
+    {
+      "route": "decode_q4k_g3_generated",
+      "role": "ffn_down",
+      "derived": {
+        "K": 12288,
+        "N": 4096
+      },
+      "guard": {
+        "role": "ffn_down",
+        "K": 12288,
+        "N": 4096
+      },
+      "match": true
+    },
+    {
+      "route": "decode_q4k_g3_generated",
+      "role": "attn_qo",
+      "derived": {
+        "K": 4096,
+        "N": 4096
+      },
+      "guard": {
+        "role": "attn_qo",
+        "K": 4096,
+        "N": 4096
+      },
+      "match": true
+    },
+    {
+      "route": "decode_q6k_coop_shipped",
+      "role": "ffn_down",
+      "derived": {
+        "K": 12288,
+        "N": 4096
+      },
+      "guard": {
+        "role": "ffn_down",
+        "K": 12288,
+        "N": 4096
+      },
+      "match": true
+    },
+    {
+      "route": "decode_q6k_coop_shipped",
+      "role": "lm_head",
+      "derived": {
+        "N": 151936
+      },
+      "guard": {
+        "role": "lm_head",
+        "N": ">=100000"
+      },
+      "match": true
+    },
+    {
+      "route": "prefill_pipe_role_selective_default",
+      "role": "attn_qo",
+      "derived": {
+        "M": 512,
+        "K": 4096,
+        "N": 4096
+      },
+      "guard": {
+        "M": 512,
+        "N": 4096,
+        "K": 4096
+      },
+      "match": true
+    },
+    {
+      "route": "prefill_pipe_role_selective_default",
+      "role": "attn_kv",
+      "derived": {
+        "M": 512,
+        "K": 4096,
+        "N": 1024
+      },
+      "guard": {
+        "M": 512,
+        "N": 1024,
+        "K": 4096
+      },
+      "match": true
+    },
+    {
+      "route": "prefill_pipe_role_selective_default",
+      "role": "ffn_down",
+      "derived": {
+        "M": 512,
+        "K": 12288,
+        "N": 4096
+      },
+      "guard": {
+        "M": 512,
+        "N": 4096,
+        "K": 12288
+      },
+      "match": true
+    },
+    {
+      "route": "prefill_pipe_role_selective_default",
+      "role": "ffn_gate_up",
+      "derived": {
+        "M": 512,
+        "K": 4096,
+        "N": 12288
+      },
+      "guard": {
+        "M": 512,
+        "N": 12288,
+        "K": 4096
+      },
+      "match": true
+    }
+  ],
+  "errors": [],
+  "routes_regenerated": [
+    "decode_q4k_g3_generated",
+    "decode_q6k_coop_shipped",
+    "prefill_pipe_role_selective_default"
+  ],
+  "new_target_bootstrap": "to add a new <model>_<quant>_<gpu>: fill model/quant_mix/gpu/authority_contexts, derive role shapes from model dims (role_shape_derivation), then run the census (extra/pure_machine_search_default_path_census.py), the ceiling/attribution audit, and the candidate evaluator -- do NOT hand-edit route flags."
+}

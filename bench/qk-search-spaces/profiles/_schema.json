@@ -1,0 +1,43 @@
+{
+  "_schema": "PMS-R8 GPU/quant/shape profile descriptor schema for <model>_<quant>_<gpu>.json",
+  "scope_doc": "docs/pure-machine-search-remaining-hot-kernels-scope-20260630.md (PMS-R8)",
+  "purpose": "Make the search agnostic: a future win is found by PROFILE (model dims + quant mix + GPU descriptor + ceiling + attribution), not by Qwen3/gfx1100 assumptions or hand-edited flags. The existing Qwen3-8B/gfx1100 routes REGENERATE from this descriptor (role shapes are derived from model dims, not copied); a new quant/model/GPU starts from census + ceiling + attribution.",
+  "filename_convention": "<model_family><params>_<quant>_<gpu_arch>.json  e.g. qwen3_8b_q4_k_m_gfx1100.json",
+  "required_top_level": ["profile_id", "model", "quant_mix", "gpu", "authority_contexts", "threshold_policy", "role_shape_derivation", "regenerates_routes"],
+  "model": {
+    "required": ["family", "params", "layers", "hidden", "ffn", "heads", "kv_heads", "head_dim"],
+    "optional": ["vocab"]
+  },
+  "quant_mix": {
+    "doc": "map quant -> list of roles carrying that quant in the GGUF/checkpoint (a role may appear under >1 quant in a *_K_M mix)"
+  },
+  "gpu": {
+    "required": ["vendor", "arch", "wave", "vram_gb", "measured_copy_gbps"]
+  },
+  "authority_contexts": "list[int] -- the ctx set the authority gates measure (decode W==D / whole-prefill)",
+  "threshold_policy": {
+    "doc": "tiered_residual: candidate-vs-baseline % deltas classified into tiers",
+    "tiers": {
+      "tier_a_pct": ">= promote major (default 5.0 prefill / TIER_A)",
+      "tier_b_pct": ">= residual promote with mechanism proof (default 2.0)",
+      "equiv_band_pct": "abs(median) < band -> speed-equivalent pass (default 1.0)",
+      "regression_pct": "median <= this -> refuted (default -2.0)"
+    },
+    "note": "matches extra/qk_candidate_evaluator.DEFAULT_THRESHOLDS"
+  },
+  "role_shape_derivation": {
+    "doc": "role (M/N/K) MUST be derivable from model dims so a route is regenerated, not hand-edited",
+    "decode": {
+      "attn_qo": {"K": "hidden", "N": "heads*head_dim"},
+      "attn_kv": {"K": "hidden", "N": "kv_heads*head_dim"},
+      "ffn_gate_up": {"K": "hidden", "N": "ffn"},
+      "ffn_down": {"K": "ffn", "N": "hidden"},
+      "lm_head": {"N": "vocab"}
+    },
+    "prefill": {
+      "_note": "same N/K as decode with M = prefill ubatch (512)",
+      "M": "prefill_ubatch (512)"
+    }
+  },
+  "regenerates_routes": "list[route_id] from the route manifest whose shape_guards must match the derived role shapes"
+}
