@@ -32,7 +32,7 @@ Runtime controls (`/runtime/*`):
 GET  /runtime/status             # loaded model, max_context, backend/target, warmup, busy, last metrics
 GET  /runtime/models             # full registry rows
 GET  /runtime/metrics            # last prefill/decode tok/s, prompt/completion tokens, counts
-GET  /runtime/cache              # kernel cache db, model file, prefix cache observability
+GET  /runtime/cache              # kernel-cache db, model file, prefix cache, live compile hit/miss + kernel-count proxy
 POST /runtime/load               # {model, path?, max_context?, warmup?}
 POST /runtime/unload
 POST /runtime/warmup
@@ -52,8 +52,8 @@ POST /runtime/cache/clear        # clears the prompt/KV prefix cache
 | R5 | streaming compatibility + cancel | **R5_PASS_STREAMING_COMPAT** |
 | R6 | client context envelope spec (`tinygrad-client-context-envelope-v1.md`) | **R6_PASS_CONTEXT_ENVELOPE_SPEC** |
 | R7 | repo-index adapter boundary (`tinygrad-repo-index-adapter-boundary-v1.md`) | **R7_PASS_REPO_CONTEXT_BOUNDARY** |
-| R8 | runtime cache observability (`/runtime/cache`) | **R8_PASS_RUNTIME_CACHE_OBSERVABILITY** |
-| R9 | provider compat gate (`extra/tinygrad_provider_compat_gate.py`) | **R9_PASS_PROVIDER_COMPAT** (11/11) |
+| R8 | runtime cache observability (`/runtime/cache`) | **R8_PASS_RUNTIME_CACHE_OBSERVABILITY** (real compile hit/miss counters + kernel-count proxy) |
+| R9 | provider compat gate (`extra/tinygrad_provider_compat_gate.py`) | **R9_PASS_PROVIDER_COMPAT** (12/12) |
 | R10 | operational policy (`tinygrad-runtime-operational-policy-r10.md`) | **R10_PASS_OPERATIONAL_POLICY** |
 
 ## How to run
@@ -93,15 +93,22 @@ Point a client (OpenCode) at it:
 
 ## Validation performed (2026-06-30)
 
-Live-tested against a server preloaded with `Qwen3-0.6B-Q8_0` on AMD gfx1100:
+Live-tested on AMD gfx1100:
 
-- R9 gate: **11/11 PASS** (models list, non-stream chat, stream chat, max_tokens→length, context overflow error,
-  completions, metrics, load, chat-after-load, unload).
+- R9 gate (Qwen3-0.6B-Q8_0): **12/12 PASS** (models list, non-stream chat, stream chat, max_tokens→length,
+  context overflow error, completions, metrics, **compile hit/miss cache observability**, load, chat-after-load,
+  unload).
 - Error contract: `model_not_loaded` (409), `unknown_model` (404), `context_length_exceeded` (400),
   `runtime_busy` (429), `invalid_request` (400) all return structured JSON.
 - Concurrency: `/runtime/status` responsive during generation; concurrent generation → 429; `/runtime/cancel`
   stops generation and leaves the runtime usable.
-- R0 audit: **19/19** surface checks present, no client-concern leakage.
+- R0 audit: **20/20** surface checks present, no client-concern leakage.
+- Compile-cache counters: `Compiler.cache_hits/cache_misses` (in `tinygrad/device.py::compile_cached`) surface
+  through `/runtime/cache`. On a warm host, warmup reports `last_warmup_compiles=0` with all-hits (kernels already
+  cached) — the intended signal that warmup did no fresh compile work.
+- **Production-size 8B smoke (Qwen3-8B-Q4_K_M, loaded via `/runtime/load`):** load (5.0GB, warmup ~28s) →
+  `/status` loaded → `/v1/chat/completions` (max_tokens=1) → `/runtime/cache` (model 5.0GB, kernel-db 1.1GB,
+  compile hits=77/misses=0, prefix 15 tok) → `/unload` → `/status` unloaded. All pass.
 
 ## What is intentionally NOT in the runtime
 

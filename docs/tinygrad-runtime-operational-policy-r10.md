@@ -92,8 +92,9 @@ in `cli.py` always seed the registry as a fallback, so the file is optional.
 Per-request lines go to stderr (prefill tok/s, decode tok/s, in/out token counts, total time). Structured metrics
 are available as JSON at `/runtime/metrics` (last prefill/decode tok/s, last prompt/completion tokens, cached
 prefix tokens, load/request counts) and at `/runtime/status` (loaded model, max_context, backend/target, warmup
-state, busy flag). Cache observability is at `/runtime/cache` (kernel cache db path/size, model file size, prefix
-cache token count).
+state, busy flag). Cache observability is at `/runtime/cache` (kernel-cache db path/size, model file size, prefix
+cache token count, and live compiled-kernel cache counters: `compile_cache.hits/misses/kernels_compiled` plus
+`last_warmup_compiles` so the client can tell whether the last warmup actually compiled anything).
 
 ## Error contract
 
