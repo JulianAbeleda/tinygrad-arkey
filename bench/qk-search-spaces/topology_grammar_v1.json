@@ -2,6 +2,7 @@
   "grammar_id": "topology_grammar_v1",
   "scope": "TG2 candidate-topology grammar over the 5 still-human topology DOF (TG0 bench/qk-g3-provenance-audit) for packed-quant decode GEMV. The candidate author (extra/qk_topology_candidate_author.py) enumerates a BOUNDED set of TopologySpecs (TG1 IR, extra/qk_lanemap_template.py) from {profile facts x this grammar x refuted-axis exclusions}. NO route_id, NO hardcoded (block_groups,words_per_group), NO hardcoded axis-roles.",
   "audit_only": "AUDIT/RESEARCH. No GPU kernel, no default change, no live-route repoint. Enumerates + spec-matches only.",
+  "max_candidates": 64,
   "dimensions": {
     "lane_ownership_axis": {
       "values": ["packed_word", "block_group", "output_row", "token", "split"],

@@ -19,6 +19,7 @@ Usage:
 """
 from __future__ import annotations
 import json, pathlib, argparse, itertools
+from extra.qk_search_util import ledger_candidate_ids
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SPACE = ROOT / "bench/qk-search-spaces/decode_attention_loop_search_space.json"
@@ -98,14 +99,7 @@ def _dns_index(prof: dict) -> dict:
   return {(d.get("role"), d.get("route_family")): d for d in prof.get("do_not_search", [])}
 
 def _project_ledger_candidate_ids() -> set[str]:
-  if not PROJECT_LEDGER.exists(): return set()
-  out = set()
-  for line in PROJECT_LEDGER.read_text().splitlines():
-    line = line.strip()
-    if not line: continue
-    try: out.add(json.loads(line).get("candidate_id", ""))
-    except Exception: pass
-  return out
+  return ledger_candidate_ids(PROJECT_LEDGER)  # shared safe reader (this tool keeps its OWN ledger file; see bug #5)
 
 def profile_request(prof: dict, workload: str, role: str, quant: str, route_family: str) -> dict:
   """Validate ONE explicit candidate request against the declared profile (the refusal contract)."""

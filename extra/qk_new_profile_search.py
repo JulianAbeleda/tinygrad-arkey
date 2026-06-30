@@ -30,6 +30,7 @@ from extra.qk_quant_semantics import quant_row
 from extra.qk_target_features import target, gate_candidate_on_target, TARGET_OK
 from extra.qk_lanemap_template import CROSS_LANE_WAVE_REDUCE, PARTIALS_PLUS_REDUCE
 from extra.qk_template_candidate_gate import gate_candidate
+from extra.qk_search_util import GROUPINGS, grammar_max_candidates
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-new-profile-search/qwen3_8b_q6k_ffn_down_gfx1100"
@@ -73,7 +74,7 @@ def author_q6k_candidates() -> tuple[list[dict], dict]:
   natural = fmt.natural_lane_extent             # 16 within-block byte positions (coalesced)
 
   # lane_grouping: half_warp is REFUTED for Q6_K (decode_q6k_direct_refuted) -> EXCLUDED by the grammar gate.
-  groupings = {"1row_per_warp": 1, "2rows_per_warp": 2}
+  groupings = GROUPINGS
   grouping_dispositions = {
     "half_warp": "EXCLUDED (refuted: decode_q6k_direct_refuted, W==D -5.44% median; "
                  "Q6_K known_refuted_route_families)",
@@ -117,7 +118,7 @@ def structural_rediscovery(cand: dict) -> str | None:
 def main() -> int:
   OUT.mkdir(parents=True, exist_ok=True)
   candidates, meta = author_q6k_candidates()
-  EXPLOSION_LIMIT = 64
+  EXPLOSION_LIMIT = grammar_max_candidates()   # data: topology_grammar_v1.json max_candidates
   bounded = len(candidates) <= EXPLOSION_LIMIT
 
   # all authored candidates pass the TG5 target gate (gfx1100 wave32)

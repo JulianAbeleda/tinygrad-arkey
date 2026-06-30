@@ -17,6 +17,7 @@ Run:  PYTHONPATH=. python3 extra/qk_ledger_seed_pms_r4.py            # append mi
 from __future__ import annotations
 import json, pathlib, sys
 from extra.qk_route_manifest import route
+from extra.qk_search_util import ledger_candidate_ids
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LEDGER = ROOT / "bench/qk-project-search-ledger/ledger.jsonl"
@@ -132,14 +133,7 @@ def rows() -> list[dict]:
 
 
 def existing_ids() -> set[str]:
-  if not LEDGER.exists(): return set()
-  out = set()
-  for line in LEDGER.read_text().splitlines():
-    line = line.strip()
-    if line:
-      try: out.add(json.loads(line)["candidate_id"])
-      except Exception: pass
-  return out
+  return ledger_candidate_ids(LEDGER)  # shared safe reader (was an unsafe d["candidate_id"] -> bug #5)
 
 
 def main() -> int:

@@ -37,9 +37,10 @@ from dataclasses import asdict
 # (We import g3_template ONLY for the post-hoc verification step, never for generation.)
 from extra.qk_lanemap_template import (TopologySpec, TOPOLOGY_FACTORS, CROSS_LANE_WAVE_REDUCE,
                                        PARTIALS_PLUS_REDUCE, G3_LANE_OWNERSHIP_INDEX, g3_template)
-# Quant-format DATA inputs (NOT topology; TG3 makes these data-driven). qk_k=256 elems/superblock,
-# 36 uint32 words/block of which the first 4 are scale/min -> 32 packed quant words/block.
-from extra.qk_gemv_g2_lanemap import QK_K, Q4K_WORDS_PER_BLOCK, Q4K_QUANT_WORD_BASE
+# Quant-format DATA inputs (NOT topology) — sourced from the data-driven quant library (TG3), the single source.
+# Q4_K: qk_k=256 elems/superblock, 36 uint32 words/block of which the first 4 are scale/min -> 32 packed quant words.
+from extra.qk_quant_semantics import quant_spec_fields
+from extra.qk_search_util import GROUPINGS, grammar_max_candidates
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-topology-author"
@@ -107,12 +108,13 @@ def load_profile_facts() -> dict:
   # eligible roles = decode Q4_K GEMV roles in this profile (quant fact, not a route_id reference)
   q4k_roles = {r: cfg["shape"] for r, cfg in decode.items() if cfg.get("quant") == "Q4_K"}
   lane_extent = int(prof["gpu"]["wave"])           # target feature (TG5 substrate): wave32 -> 32
+  q4k = quant_spec_fields("Q4_K")                  # data-driven quant facts (TG3 library), the single source
   return {
     "lane_extent": lane_extent,
     "vendor": prof["gpu"]["vendor"], "arch": prof["gpu"]["arch"],
     "quant": "Q4_K",
-    "qk_k": QK_K, "q4k_words_per_block": Q4K_WORDS_PER_BLOCK, "q4k_quant_word_base": Q4K_QUANT_WORD_BASE,
-    "quant_words_per_block": Q4K_WORDS_PER_BLOCK - Q4K_QUANT_WORD_BASE,   # 36-4 = 32
+    "qk_k": q4k["block_elems"], "q4k_words_per_block": q4k["words_per_block"], "q4k_quant_word_base": q4k["quant_word_base"],
+    "quant_words_per_block": q4k["quant_words_per_block"],   # 36-4 = 32
     "eligible_roles": q4k_roles,
   }
 
@@ -129,9 +131,9 @@ def enumerate_candidates(facts: dict) -> tuple[list[dict], dict]:
   qwpb = facts["quant_words_per_block"]
   k_blocks = {role: shp["K"] // facts["qk_k"] for role, shp in facts["eligible_roles"].items()}
 
-  # lane_grouping -> rows-per-wave. half_warp REFUTED (coop_halfwarp_direct). subgroup==wave on
+  # lane_grouping -> rows-per-wave (shared GROUPINGS). half_warp REFUTED (coop_halfwarp_direct). subgroup==wave on
   # wave32 -> folds into 1row_per_warp (target-redundant, not a separate point).
-  groupings = {"1row_per_warp": 1, "2rows_per_warp": 2}
+  groupings = GROUPINGS
   grouping_dispositions = {
     "half_warp": "EXCLUDED (refuted: coop_halfwarp_direct / decode_q6k_direct_refuted)",
     "subgroup": "FOLDED into 1row_per_warp (subgroup==wave on wave32; not a distinct point)",
@@ -260,7 +262,7 @@ def main() -> int:
   antihardcode = assert_no_hardcode_shortcut(candidates)
 
   count = len(candidates)
-  EXPLOSION_LIMIT = 64   # a real grammar over these DOF, properly pruned, is well under this
+  EXPLOSION_LIMIT = grammar_max_candidates()   # data: topology_grammar_v1.json max_candidates (a real grammar, pruned, is well under)
   matched = verify["num_grammar_candidates_matching_g3"] == 1
   bounded = count <= EXPLOSION_LIMIT
   honest = (antihardcode["no_route_id_branch_in_source"]
