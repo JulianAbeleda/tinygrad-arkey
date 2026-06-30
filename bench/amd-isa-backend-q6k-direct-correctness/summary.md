@@ -1,17 +1,19 @@
-# Q6K-2 (narrow) microgate
+# Q6K-2 half-warp 2-row partition microgate
 
-**Verdict:** Q6K2_PASS_PACKING_AND_MICROGATE
+**Verdict:** Q6K2_PASS_HALFWARP_PARTITION
 
-pos16->warp32 packing: lane = block_group(0..1)*16 + pos(0..15): 2 K-parallel block-groups packed into one 32-lane wave; warp_reduce_sum (ds_bpermute) over 32 lanes -> out[row]. No partials buffer, no external r_* sum.
+## Mapping
+lanes 0..15 = row A pos 0..15; lanes 16..31 = row B pos 0..15. Half-warp reduce = warp_reduce_sum(width=16) over the FULL 32-lane lidx0 (xor {8,4,2,1} stays within each 16-lane half). Store out[rowA]/out[rowB] independent; no partials, no external r_* reduce.
 
-LanePartition extent16 'blocker': MOOT -- the route uses warp_reduce_sum over the FULL 32-lane wave via the 2-group pack, not LanePartition(extent=16)
+Why not LanePartition: it reduces the WHOLE wave to one value (words_per_group is the address split, not independent partitions).
 
-## ffn_down microgate (blk.0.ffn_down.weight, 256 rows of (4096, 12288))
+## Microgate (blk.0.ffn_down.weight, 256 rows of (4096, 12288), both halves)
 | comparison | max_abs | tol |
 |---|---|---|
-| warp vs fp32 ref | 0.000973 | 0.01 |
-| warp vs coop+sum | 2.21e-06 | 0.01 |
+| row A (even) vs coop+sum | 4.77e-07 | 0.01 |
+| row B (odd) vs coop+sum | 4.77e-07 | 0.01 |
+| row A vs fp32 ref | 0.000972 | 0.01 |
+| row B vs fp32 ref | 0.000896 | 0.01 |
 | coop vs ref | 0.000972 | 0.01 |
 
-## W==D note
-q6k_gemv_warp (ffn_down) is correct+byte-identical but model.py:434-436 records it as ~1.09x / no W==D gain for ffn_down ALONE (down already coop-routed ~51% peak). The Q6K-0 firm-removable W==D win is the lm_head coop reduce (r_32_4_1187), which this ffn_down-only warp route does NOT cover -> Q6K-3 must extend the warp route to lm_head (151936x4096), the folded-in target.
+route label: q6k_halfwarp_partition_256_12288; no external r_* reduce; new kernel unwired (model route byte-identical).
