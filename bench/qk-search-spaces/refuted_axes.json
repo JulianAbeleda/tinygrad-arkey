@@ -16,27 +16,32 @@
     },
     {
       "axis": "attention_combine_fused_lifecycle",
+      "domain": "attention",
       "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
       "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"
     },
     {
       "axis": "native_attention_as_default",
+      "domain": "attention",
       "disposition": "correct_not_fast (~60-68% of owned)",
       "citation": "bench/amd-isa-backend-phase-n7/latest.json",
       "route_id": "decode_attention_native_correct_not_fast"
     },
     {
       "axis": "n1b_scalar_address_path",
+      "domain": "attention",
       "disposition": "refuted/dead",
       "citation": "bench/amd-isa-backend-phase-n1b/latest.json"
     },
     {
       "axis": "occupancy_lds_only_attention_tuning",
+      "domain": "attention",
       "disposition": "refuted: no W==D movement",
       "citation": "bench/amd-isa-backend-phase-m/latest.json"
     },
     {
       "axis": "scheduler_only_attention_tuning",
+      "domain": "attention",
       "disposition": "small/no movement",
       "citation": "bench/amd-isa-backend-phase-k/latest.json"
     }

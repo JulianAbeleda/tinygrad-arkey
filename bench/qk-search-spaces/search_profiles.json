@@ -10,6 +10,7 @@
     "shipped": "owned/hand route is the shipped default for this role (no generated replacement promoted; not an open search target unless a ceiling audit reopens it)",
     "shipped_owned": "owned route shipped; a generated alt exists but is correct_not_fast (research, not a failed-row search target)",
     "refuted": "a candidate was built+measured and lost; do not re-search as built",
+    "deferred": "blocked-but-OPEN: a capability gap (e.g. renderer lowering of v_dot2 / cross-lane) prevents building this now, but it is NOT refuted on merits -> reopen when the capability lands. The codegen north-star frontier lives in qk_route_manifest.DEFERRED_CAPABILITIES (distinct from refuted/failed).",
     "open": "no promoted/shipped route yet -> a searchable failed/open row",
     "failed": "a tracked candidate row failed its gate and the role still needs a route -> searchable"
   },

@@ -26,10 +26,9 @@ PROFILE_ID = "qwen3_8b_q4_k_m_gfx1100_decode"
 ACTIVE_THRESHOLD_PCT = 5.0   # whole-decode gain bar to justify reopening a hot kernel (matches the TIER_A leverage bar)
 MODEL_ARCH = {"family": "qwen3", "params": "8b", "Hq": 32, "Hkv": 8, "Hd": 128, "kv_dtype_bytes": 4,
               "decode_bound": "weight-memory-bound (HBM); weight read dominates the per-token wall"}
-# the attention search axes already refuted/exhausted (carried from the route manifest) -> no realizable candidate
-ATTENTION_REFUTED_AXES = [r for r in REFUTED if "attention" in r["axis"] or r["axis"] in
-                          ("native_attention_as_default", "n1b_scalar_address_path",
-                           "occupancy_lds_only_attention_tuning", "scheduler_only_attention_tuning")]
+# the attention search axes already refuted/exhausted (carried from the route manifest) -> no realizable candidate.
+# Filter on the manifest's domain tag (domain=="attention"), not a hand-maintained name list (bugs-F8).
+ATTENTION_REFUTED_AXES = [r for r in REFUTED if r.get("domain") == "attention" or "attention" in r["axis"]]
 
 
 def main() -> int:

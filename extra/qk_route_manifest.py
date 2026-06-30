@@ -48,6 +48,7 @@ ROUTES = {
       {"role": "attn_qo", "K": 4096, "N": 4096}],
     "env": {},  # DEFAULT-ON: model.py:255 getenv("BUBBLEBEAM_FUTURESIGHT", 1). No flag needed.
     "rollback": {"BUBBLEBEAM_FUTURESIGHT": "0"},  # -> owned warp (decode_q4k_owned_warp)
+    "baseline_route_id": "decode_q4k_owned_warp",  # the oracle/baseline the evaluator measures against (== rollback target)
     "strict_fallback": True,
     "expected_kernels": ["q4k_g3_lanemap_gemv_*"],
     "forbidden_kernels": ["q4k_gemv_warp_kernel (on the eligible roles)", "q4k_lane_partition_gemv_*", "fallback_graph"],
@@ -97,6 +98,7 @@ ROUTES = {
     "quant": ["Q6_K"],
     "shape_guards": [{"role": "lm_head", "N": ">=100000"}],
     "env": {"Q6K_DIRECT_ROUTE": "1"}, "rollback": {"Q6K_DIRECT_ROUTE": "0"},
+    "baseline_route_id": "decode_q6k_coop_shipped",  # the oracle/baseline the evaluator measures against
     "strict_fallback": True,
     "expected_kernels": ["q6k_halfwarp_partition_151936_4096"],
     "authority_gate": "extra/qk_decode_runtime_overhead.py",
@@ -147,6 +149,7 @@ ROUTES = {
     "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "graph-GEMM prefill ubatch=512; gate/up out_f==12288 kept on lds2"}],
     "env": {},  # PREFILL_GEMM_PIPELINE=1 and PREFILL_PIPE_ROLE_SELECTIVE=1 are BOTH the default now
     "rollback": {"PREFILL_PIPE_ROLE_SELECTIVE": "0"},  # -> global pipe (prefill_pipe_global_rollback)
+    "baseline_route_id": "prefill_pipe_global_rollback",  # the oracle/baseline the evaluator measures against (== rollback target)
     "strict_fallback": True,
     "expected_roles_pipe": ["attn_qo", "attn_kv", "ffn_down"], "excluded_roles_pipe": ["ffn_gate_up"],
     "authority_gate": "extra/qk_prefill_whole_synced.py",
@@ -179,13 +182,25 @@ REFUTED = [
    "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json", "route_id": "decode_q6k_direct_refuted"},
   {"axis": "q4k_offline_layout_reshuffle", "disposition": "deprioritized: G3 matches owned, no layout gap to recover",
    "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"},
-  {"axis": "attention_combine_fused_lifecycle", "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
+  {"axis": "attention_combine_fused_lifecycle", "domain": "attention", "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
    "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"},
-  {"axis": "native_attention_as_default", "disposition": "correct_not_fast (~60-68% of owned)",
+  {"axis": "native_attention_as_default", "domain": "attention", "disposition": "correct_not_fast (~60-68% of owned)",
    "citation": "bench/amd-isa-backend-phase-n7/latest.json", "route_id": "decode_attention_native_correct_not_fast"},
-  {"axis": "n1b_scalar_address_path", "disposition": "refuted/dead", "citation": "bench/amd-isa-backend-phase-n1b/latest.json"},
-  {"axis": "occupancy_lds_only_attention_tuning", "disposition": "refuted: no W==D movement", "citation": "bench/amd-isa-backend-phase-m/latest.json"},
-  {"axis": "scheduler_only_attention_tuning", "disposition": "small/no movement", "citation": "bench/amd-isa-backend-phase-k/latest.json"},
+  {"axis": "n1b_scalar_address_path", "domain": "attention", "disposition": "refuted/dead", "citation": "bench/amd-isa-backend-phase-n1b/latest.json"},
+  {"axis": "occupancy_lds_only_attention_tuning", "domain": "attention", "disposition": "refuted: no W==D movement", "citation": "bench/amd-isa-backend-phase-m/latest.json"},
+  {"axis": "scheduler_only_attention_tuning", "domain": "attention", "disposition": "small/no movement", "citation": "bench/amd-isa-backend-phase-k/latest.json"},
+]
+
+# ---- DEFERRED capability frontier: blocked-but-OPEN, NOT refuted on merits. The pure-search north-star (replace the
+#      two hand-written decode kernels with a fully searched native route) is gated on renderer lowering of these
+#      primitives; reopen each when the capability lands. Distinct from REFUTED (lost on its merits) and from shipped. ----
+DEFERRED_CAPABILITIES = [
+  {"capability": "v_dot2_lowering", "status": "deferred", "domain": "codegen",
+   "blocks": "native packed-fp16 dot in a searched decode-attention / GEMV kernel",
+   "reopen_when": "the renderer lowers v_dot2 (packed fp16 dot) so the search space can emit it natively"},
+  {"capability": "cross_lane_mixed_reduce", "status": "deferred", "domain": "codegen",
+   "blocks": "native cross-lane reduction lowering for a searched tile (LDS path already native; ds_bpermute tree TODO)",
+   "reopen_when": "the renderer lowers the cross-lane reduction so a searched kernel can own the reduction topology"},
 ]
 
 # ---- tiny helpers (no side effects unless you call apply_route) ----

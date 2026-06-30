@@ -137,6 +137,7 @@ def evaluate(route_id: str, contexts: list[int] | None = None, thresholds: dict 
   rel, adapter, authority_type, baseline_id, expected_disp = REPLAYS[route_id]
   art = ROOT / rel
   rmeta = route(route_id)
+  baseline_id = rmeta.get("baseline_route_id", baseline_id)  # manifest is the source; REPLAYS tuple is the fallback
   # thresholds: profile descriptor (single source) over code fallback, caller override last.
   thresholds = {**DEFAULT_THRESHOLDS, **_profile_thresholds(rmeta.get("profile_id")), **(thresholds or {})}
   if not art.exists():
