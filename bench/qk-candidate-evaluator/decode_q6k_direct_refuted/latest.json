@@ -13,8 +13,8 @@
     4096
   ],
   "thresholds": {
-    "tier_a_pct": 2.0,
-    "tier_b_pct": 0.5,
+    "tier_a_pct": 5.0,
+    "tier_b_pct": 2.0,
     "equiv_band_pct": 1.0,
     "regression_pct": -2.0,
     "per_ctx_regression_guard_pct": -2.0

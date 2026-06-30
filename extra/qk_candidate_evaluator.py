@@ -23,7 +23,8 @@ Produces (bench/qk-candidate-evaluator/<route_id>/):
 Replays the three known decisions:
   decode_q4k_g3_generated            -> SPEED_EQUIVALENT_PASS  (reproduces AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT)
   decode_q6k_direct_refuted          -> REFUTED_REGRESSION     (preserves AMD_ISA_Q6K_DIRECT_SPEED_REGRESSION)
-  prefill_pipe_role_selective_default-> PROMOTE_TIER_A         (reproduces ROLE_SELECTIVE_PASS_BEATS_GLOBAL)
+  prefill_pipe_role_selective_default-> PROMOTE_TIER_B         (reproduces ROLE_SELECTIVE_PASS_BEATS_GLOBAL; +3% over
+                                                                global pipe is a TIER_B residual under the documented 5% bar)
 
 Run:  PYTHONPATH=. python3 extra/qk_candidate_evaluator.py
 """
@@ -34,9 +35,24 @@ from extra.qk_route_manifest import route, rollback_env, route_env
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/qk-candidate-evaluator"
 
-# Default tiered threshold policy (candidate-vs-baseline % delta; positive = candidate faster).
-DEFAULT_THRESHOLDS = {"tier_a_pct": 2.0, "tier_b_pct": 0.5, "equiv_band_pct": 1.0, "regression_pct": -2.0,
+# Tiered threshold policy (candidate-vs-baseline % delta; positive = candidate faster). The PROFILE descriptor is the
+# SINGLE SOURCE (qwen3_8b_q4_k_m_gfx1100.json "thresholds"); evaluate() loads it by profile_id. DEFAULT_THRESHOLDS is the
+# matching code fallback for routes without a profile thresholds block (documented tiered policy: TIER_A 5%, TIER_B 2%).
+DEFAULT_THRESHOLDS = {"tier_a_pct": 5.0, "tier_b_pct": 2.0, "equiv_band_pct": 1.0, "regression_pct": -2.0,
                       "per_ctx_regression_guard_pct": -2.0}
+PROFILES_DIR = ROOT / "bench/qk-search-spaces/profiles"
+
+def _profile_thresholds(profile_id: str | None) -> dict:
+  """Load the promotion thresholds from the route's profile descriptor (the single source). The manifest profile_id
+  carries a workload suffix (..._decode / ..._prefill); the descriptor file is the base id. Returns {} if absent."""
+  if not profile_id: return {}
+  base = profile_id
+  for suf in ("_decode", "_prefill"):
+    if base.endswith(suf): base = base[: -len(suf)]
+  p = PROFILES_DIR / f"{base}.json"
+  if not p.exists(): return {}
+  thr = json.load(open(p)).get("thresholds") or {}
+  return {k: v for k, v in thr.items() if k.endswith("_pct")}
 
 # ---- authority-artifact adapters: normalize each artifact into a per-ctx table ----
 # Each adapter returns: {ctx_str: {baseline_tok_s, candidate_tok_s, delta_pct, token_match, route_bound,
@@ -105,7 +121,7 @@ def classify(tab: dict, correct: bool, thresholds: dict) -> tuple[str, str, dict
   stats = {"median_pct": med, "worst_pct": worst, "best_pct": best}
   if med <= thresholds["regression_pct"]:
     return "REFUTED_REGRESSION", "refute", stats
-  if worst <= thresholds["per_ctx_regression_guard_pct"] and med < thresholds["tier_b_pct"]:
+  if worst <= thresholds["per_ctx_regression_guard_pct"]:  # any ctx at/below the guard refutes, regardless of median
     return "REFUTED_REGRESSION", "refute", stats
   if med >= thresholds["tier_a_pct"]:
     return "PROMOTE_TIER_A", "promote", stats
@@ -120,8 +136,9 @@ def evaluate(route_id: str, contexts: list[int] | None = None, thresholds: dict 
     raise KeyError(f"no replay adapter for {route_id!r}; known: {sorted(REPLAYS)}")
   rel, adapter, authority_type, baseline_id, expected_disp = REPLAYS[route_id]
   art = ROOT / rel
-  thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
   rmeta = route(route_id)
+  # thresholds: profile descriptor (single source) over code fallback, caller override last.
+  thresholds = {**DEFAULT_THRESHOLDS, **_profile_thresholds(rmeta.get("profile_id")), **(thresholds or {})}
   if not art.exists():
     return {"route_id": route_id, "verdict": "PMS_R2_BLOCKED_AUTHORITY_HARNESS_INCOMPLETE",
             "missing_artifact": str(rel), "authority_gate": rmeta.get("authority_gate")}

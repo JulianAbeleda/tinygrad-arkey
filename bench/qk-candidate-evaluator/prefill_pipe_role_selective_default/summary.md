@@ -2,7 +2,7 @@
 
 Verdict: **PMS_R2_PASS_EVALUATOR_REPLAYS_KNOWN_DECISIONS**
 
-Tier: **PROMOTE_TIER_A** (disposition `promote`); reproduces artifact `ROLE_SELECTIVE_PASS_BEATS_GLOBAL` -> decision_reproduced=**True**
+Tier: **PROMOTE_TIER_B** (disposition `promote`); reproduces artifact `ROLE_SELECTIVE_PASS_BEATS_GLOBAL` -> decision_reproduced=**True**
 
 Baseline: `prefill_pipe_global_rollback` | authority: `prefill_whole` (bench/qk-prefill-pipe-role-selective/latest.json)
 

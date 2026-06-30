@@ -15,7 +15,7 @@
   "authority_contexts": [512, 1024, 2048, 4096, 8192],
   "threshold_policy": "tiered_residual",
   "thresholds": {"tier_a_pct": 5.0, "tier_b_pct": 2.0, "equiv_band_pct": 1.0, "regression_pct": -2.0,
-                 "note": "tiered_residual; mirrors extra/qk_candidate_evaluator.DEFAULT_THRESHOLDS (TIER_A prefill bar 5%)"},
+                 "note": "tiered_residual; SINGLE SOURCE for promotion thresholds. qk_candidate_evaluator.evaluate() loads these by profile_id; DEFAULT_THRESHOLDS is the matching code fallback (TIER_A 5%, TIER_B 2%)."},
   "role_shape_derivation": {
     "prefill_ubatch": 512,
     "decode": {

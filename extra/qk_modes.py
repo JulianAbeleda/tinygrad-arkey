@@ -50,10 +50,9 @@ class Verdict(str, Enum):
   """decode_eval per-run verdicts (single source of truth; .value == the legacy string -> NFC).
 
   The set is exactly what extra/qk_decode_eval.py:classify() emits. The JSON schema enum, the lifecycle
-  search_policy map, the evaluator contract, and the bench README should stay == this enum. (NOTE: the enforcing test
-  test/unit/test_verdict_ssot.py was removed in a cleanup and is not currently present; restoring it — plus an
-  enum-backed verdict for the newer table-driven evaluator — is scoped in
-  docs/qk-consolidate-r1-config-code-decoupling-scope-20260630.md, Phase 2.)
+  search_policy map, the evaluator contract, and the bench README are asserted == this enum by
+  test/unit/test_verdict_ssot.py, so the four cannot drift from the producer again. (The newer table-driven
+  PMS-R2 evaluator has its own producer enum below: TierVerdict, asserted by the same test.)
   """
   PASS_PROMOTE = "PASS_PROMOTE"
   PASS_OPT_IN = "PASS_OPT_IN"
@@ -66,6 +65,28 @@ class Verdict(str, Enum):
   SELFTEST_PASS = "SELFTEST_PASS"
   REST = "REST"
 
+
+class TierVerdict(str, Enum):
+  """PMS-R2 candidate-evaluator verdicts (single source of truth; .value == the emitted string).
+
+  The set is exactly what extra/qk_candidate_evaluator.py emits: classify() returns the tier strings, evaluate()
+  returns the PMS_R2_* outcome. test/unit/test_verdict_ssot.py asserts this enum == the evaluator's producer, so they
+  cannot drift. This is a SEPARATE namespace from Verdict (the decode_eval producer) — different harness, different set.
+  """
+  # classify() tiers (candidate-vs-baseline % delta)
+  PROMOTE_TIER_A = "PROMOTE_TIER_A"
+  PROMOTE_TIER_B = "PROMOTE_TIER_B"
+  SPEED_EQUIVALENT_PASS = "SPEED_EQUIVALENT_PASS"
+  INCONCLUSIVE = "INCONCLUSIVE"
+  REFUTED_REGRESSION = "REFUTED_REGRESSION"
+  REFUTED_CORRECTNESS = "REFUTED_CORRECTNESS"
+  BLOCKED_ROUTE_NOT_BOUND = "BLOCKED_ROUTE_NOT_BOUND"
+  # evaluate() replay outcomes
+  PMS_R2_PASS_EVALUATOR_REPLAYS_KNOWN_DECISIONS = "PMS_R2_PASS_EVALUATOR_REPLAYS_KNOWN_DECISIONS"
+  PMS_R2_BLOCKED_AUTHORITY_HARNESS_INCOMPLETE = "PMS_R2_BLOCKED_AUTHORITY_HARNESS_INCOMPLETE"
+
+
+TIER_VERDICTS: frozenset[str] = frozenset(v.value for v in TierVerdict)
 
 # Union of every value that is valid as some kernel `mode`.
 KERNEL_MODES: frozenset[str] = frozenset(

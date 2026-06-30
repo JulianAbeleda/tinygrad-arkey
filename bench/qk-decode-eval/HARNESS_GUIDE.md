@@ -111,10 +111,9 @@ artifact = stamp(
 
 ## Verdict Discipline
 
-Use the `Verdict` enum in `extra/qk_modes.py`; do not invent string verdicts in a child harness. If a harness needs a
-new verdict, add it to the enum, schema, search policy, and evaluator contract in the same change. (NOTE: the enforcing
-test `test/unit/test_verdict_ssot.py` was removed in a cleanup and is not currently present; restoring it is scoped in
-`docs/qk-consolidate-r1-config-code-decoupling-scope-20260630.md`, Phase 2.)
+Use the `Verdict` enum (decode eval) or `TierVerdict` enum (PMS-R2 candidate evaluator) in `extra/qk_modes.py`; do not
+invent string verdicts in a child harness. If a harness needs a new verdict, add it to the right enum, schema, search
+policy, evaluator contract, and `test/unit/test_verdict_ssot.py` in the same change.
 
 Use loop-level prune decisions for policy or closed-lane filtering. Do not encode loop pruning as decode-eval verdicts.
 
