@@ -1,0 +1,22 @@
+{
+  "512": {
+    "owned_default": null,
+    "generated_g3_bubblebeam": {},
+    "generated_g3_forced": {}
+  },
+  "1024": {
+    "owned_default": null,
+    "generated_g3_bubblebeam": {},
+    "generated_g3_forced": {}
+  },
+  "2048": {
+    "owned_default": null,
+    "generated_g3_bubblebeam": {},
+    "generated_g3_forced": {}
+  },
+  "4096": {
+    "owned_default": null,
+    "generated_g3_bubblebeam": {},
+    "generated_g3_forced": {}
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "scope": "G3-vs-owned Q4_K weight-path parity gate (measurement + decision only)",
+  "command": "DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_g3_vs_owned_weight_parity.py",
+  "ckpts": [
+    512,
+    1024,
+    2048,
+    4096
+  ],
+  "nmeas": 12,
+  "parity_pct": 5.0,
+  "arms": [
+    "owned_default",
+    "generated_g3_bubblebeam",
+    "generated_g3_forced"
+  ],
+  "verdict": "AMD_ISA_G3_PARITY_PASS_MATCHES_OWNED",
+  "per_ctx": {
+    "512": {
+      "owned_tok_s": 103.95,
+      "owned_spread_pct": 52.07,
+      "arms": {
+        "generated_g3_bubblebeam": {
+          "tok_s": 103.64,
+          "lag_pct": 0.3,
+          "spread_pct": 53.25,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 3,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        },
+        "generated_g3_forced": {
+          "tok_s": 104.13,
+          "lag_pct": -0.17,
+          "spread_pct": 52.29,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 1,
+            "owned_warp": 2,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        }
+      }
+    },
+    "1024": {
+      "owned_tok_s": 102.27,
+      "owned_spread_pct": 48.61,
+      "arms": {
+        "generated_g3_bubblebeam": {
+          "tok_s": 101.85,
+          "lag_pct": 0.41,
+          "spread_pct": 50.54,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 3,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        },
+        "generated_g3_forced": {
+          "tok_s": 102.13,
+          "lag_pct": 0.14,
+          "spread_pct": 49.49,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 1,
+            "owned_warp": 2,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        }
+      }
+    },
+    "2048": {
+      "owned_tok_s": 99.63,
+      "owned_spread_pct": 48.23,
+      "arms": {
+        "generated_g3_bubblebeam": {
+          "tok_s": 99.36,
+          "lag_pct": 0.27,
+          "spread_pct": 48.36,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 3,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        },
+        "generated_g3_forced": {
+          "tok_s": 99.88,
+          "lag_pct": -0.25,
+          "spread_pct": 47.57,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 1,
+            "owned_warp": 2,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        }
+      }
+    },
+    "4096": {
+      "owned_tok_s": 94.9,
+      "owned_spread_pct": 44.83,
+      "arms": {
+        "generated_g3_bubblebeam": {
+          "tok_s": 94.61,
+          "lag_pct": 0.31,
+          "spread_pct": 48.0,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 3,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        },
+        "generated_g3_forced": {
+          "tok_s": 94.95,
+          "lag_pct": -0.05,
+          "spread_pct": 45.76,
+          "token_match": true,
+          "route_counts": {
+            "g3_lanemap": 1,
+            "owned_warp": 2,
+            "q6k": 3
+          },
+          "g3_fired": true,
+          "leaked_routes": {},
+          "roles_not_g3": {},
+          "per_route_gpu_ms": {},
+          "route_clean": true
+        }
+      }
+    }
+  },
+  "lag_rows": [],
+  "route_blocked": [],
+  "worst_lag_pct": 0.0,
+  "noisy_lag_rows": [],
+  "measurement_note": "W==D wall spread is LARGE (owned spread up to 52% over NMEAS=12 on ~10ms decode steps -- the documented AMD auto-clock-ramp/wall confound, not a per-arm signal). Parity is NOT claimed from any single delta. The evidence is the bubblebeam-arm median tracking owned within 0.41% at ALL 4 independent contexts with sign-flips (sometimes faster, sometimes slower) -- the signature of equal speed, not a hidden regression. A real >5% G3 penalty could not land within <1% of owned at four independent contexts by chance. The gate's burden was to find a >5% lag justifying the expensive offline layout reshuffle; none exists.",
+  "decision": {
+    "start_layout_reshuffle": false,
+    "next": "Do NOT start the offline Q4_K weight-layout reshuffle. G3 is the pure speed-equivalent replacement for the owned warp custom-kernel. Next = generated-G3 promotion / search-binding hardening so BubbleBeam picks G3 without manual flags."
+  }
+}
