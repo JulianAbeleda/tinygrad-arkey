@@ -1,0 +1,830 @@
+{
+  "scope": "TG2 candidate topology author: the machine AUTHORS lane-map TopologySpecs from a bounded grammar x profile facts x refuted-axis exclusions, then a SEPARATE step checks whether the grammar-generated set rediscovers the promoted G3 topology by spec-equality (TG1 IR). AUDIT/RESEARCH: no GPU kernel, no default change, no live-route repoint, no reopened refuted route.",
+  "verdict": "TG2_PASS_G3_REDISCOVERED_BY_GRAMMAR",
+  "profile_id": "qwen3_8b_q4_k_m_gfx1100",
+  "grammar": "bench/qk-search-spaces/topology_grammar_v1.json",
+  "ir": "extra/qk_lanemap_template.TopologySpec (TG1)",
+  "author": "extra/qk_topology_candidate_author.py",
+  "candidate_count": 20,
+  "explosion_limit": 64,
+  "bounded": true,
+  "profile_facts_used": {
+    "lane_extent": 32,
+    "vendor": "AMD",
+    "arch": "gfx1100",
+    "quant": "Q4_K",
+    "qk_k": 256,
+    "q4k_words_per_block": 36,
+    "q4k_quant_word_base": 4,
+    "quant_words_per_block": 32,
+    "eligible_roles": {
+      "ffn_gate_up": {
+        "K": 4096,
+        "N": 12288
+      },
+      "ffn_down": {
+        "K": 12288,
+        "N": 4096
+      },
+      "attn_qo": {
+        "K": 4096,
+        "N": 4096
+      }
+    }
+  },
+  "pruning_that_kept_it_bounded": [
+    "target gate: profile gpu=wave32 -> lane_extent=32; wave64/subgroup_simdgroup pruned (target-mismatch).",
+    "refuted-axis exclusions: lane_grouping=half_warp, load_pattern=strided_packed_word, load_pattern=scalar_fallback removed (see refuted_axis_exclusions).",
+    "load_pattern/dequant_placement collapse to a single legal value each (do not multiply count).",
+    "lane_ownership_axis: only packed_word emits TopologySpecs; output_row is a distinct-IR family, block_group/token/split are shape-pruned.",
+    "factorization: only integer factor pairs of per_row_lanes, pruned by quant validity (words_per_group | quant_words_per_block) and shape validity (block_groups | k_blocks all roles)."
+  ],
+  "refuted_axis_exclusions_applied": [
+    {
+      "grammar_value": "lane_grouping=half_warp",
+      "axis": "q6k_direct_half_warp_route / coop_halfwarp_direct",
+      "disposition": "refuted: W==D -4.77..-6.06%",
+      "route_id": "decode_q6k_direct_refuted",
+      "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json"
+    },
+    {
+      "grammar_value": "load_pattern=strided_packed_word",
+      "axis": "q4k_offline_layout_reshuffle / lanemap_layout_reshuffle",
+      "disposition": "deprioritized: G3 matches owned, no layout gap to recover",
+      "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"
+    },
+    {
+      "grammar_value": "load_pattern=scalar_fallback",
+      "axis": "n1b_scalar_address_path",
+      "disposition": "refuted/dead",
+      "citation": "bench/amd-isa-backend-phase-n1b/latest.json"
+    },
+    {
+      "grammar_value": "(not a GEMV topology axis)",
+      "axis": "scheduler_only_attention_tuning",
+      "disposition": "small/no movement (attention-only, N/A to decode GEMV)",
+      "citation": "bench/amd-isa-backend-phase-k/latest.json"
+    },
+    {
+      "grammar_value": "(not a GEMV topology axis)",
+      "axis": "occupancy_lds_only_attention_tuning",
+      "disposition": "refuted: no W==D movement (attention-only, N/A to decode GEMV)",
+      "citation": "bench/amd-isa-backend-phase-m/latest.json"
+    },
+    {
+      "grammar_value": "(not a GEMV topology axis)",
+      "axis": "attention_combine_fused_lifecycle",
+      "disposition": "exhausted/low-leverage (attention-only, N/A to decode GEMV)",
+      "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"
+    },
+    {
+      "grammar_value": "(not a GEMV topology axis)",
+      "axis": "native_attention_as_default",
+      "disposition": "correct_not_fast (attention-only, N/A to decode GEMV)",
+      "citation": "bench/amd-isa-backend-phase-n7/latest.json"
+    }
+  ],
+  "ownership_dispositions": {
+    "packed_word": "ACTIVE: 20 TopologySpec candidates (factorization sub-grammar).",
+    "output_row": "DISTINCT FAMILY (owned_reference): lane-per-output-row, serial-K, no cross-lane combine. Its lane map is NOT a (block_groups x words_per_group) packed-word factorization -> a different IR shape, out of TG1-v1 TopologySpec scope. Not pruned by validity, but not expressible as a packed_word TopologySpec; never matches G3.",
+    "block_group": "SHAPE-PRUNED: one block-group/lane needs lane_extent=32 | k_blocks; k_blocks={'ffn_gate_up': 16, 'ffn_down': 48, 'attn_qo': 16} -> 32 divides none.",
+    "token": "SHAPE-PRUNED: decode is single-token (M=1) -> no token axis to own.",
+    "split": "SHAPE-PRUNED: hybrid/split ownership adds wave divergence with no reuse at decode M=1 (single output row per wave); also a distinct IR shape."
+  },
+  "grouping_dispositions": {
+    "half_warp": "EXCLUDED (refuted: coop_halfwarp_direct / decode_q6k_direct_refuted)",
+    "subgroup": "FOLDED into 1row_per_warp (subgroup==wave on wave32; not a distinct point)"
+  },
+  "fixed_single_value_axes": {
+    "load_pattern": "coalesced_packed_word",
+    "dequant_placement": "per_lane_in_register",
+    "target_features": "wave32 (lane_extent=32); wave64/subgroup_simdgroup target-pruned"
+  },
+  "factor_audit": [
+    {
+      "lane_grouping": "1row_per_warp",
+      "per_row_lanes": 32,
+      "block_groups": 1,
+      "words_per_group": 32,
+      "group_pairs": 1,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "1row_per_warp",
+      "per_row_lanes": 32,
+      "block_groups": 2,
+      "words_per_group": 16,
+      "group_pairs": 2,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "1row_per_warp",
+      "per_row_lanes": 32,
+      "block_groups": 4,
+      "words_per_group": 8,
+      "group_pairs": 4,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "1row_per_warp",
+      "per_row_lanes": 32,
+      "block_groups": 8,
+      "words_per_group": 4,
+      "group_pairs": 8,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "1row_per_warp",
+      "per_row_lanes": 32,
+      "block_groups": 16,
+      "words_per_group": 2,
+      "group_pairs": 16,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "1row_per_warp",
+      "per_row_lanes": 32,
+      "block_groups": 32,
+      "words_per_group": 1,
+      "group_pairs": 32,
+      "kept": false,
+      "prune_reasons": [
+        "shape: block_groups=32 does not divide k_blocks {'ffn_gate_up': 16, 'ffn_down': 48, 'attn_qo': 16}"
+      ]
+    },
+    {
+      "lane_grouping": "2rows_per_warp",
+      "per_row_lanes": 16,
+      "block_groups": 1,
+      "words_per_group": 16,
+      "group_pairs": 2,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "2rows_per_warp",
+      "per_row_lanes": 16,
+      "block_groups": 2,
+      "words_per_group": 8,
+      "group_pairs": 4,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "2rows_per_warp",
+      "per_row_lanes": 16,
+      "block_groups": 4,
+      "words_per_group": 4,
+      "group_pairs": 8,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "2rows_per_warp",
+      "per_row_lanes": 16,
+      "block_groups": 8,
+      "words_per_group": 2,
+      "group_pairs": 16,
+      "kept": true,
+      "prune_reasons": []
+    },
+    {
+      "lane_grouping": "2rows_per_warp",
+      "per_row_lanes": 16,
+      "block_groups": 16,
+      "words_per_group": 1,
+      "group_pairs": 32,
+      "kept": true,
+      "prune_reasons": []
+    }
+  ],
+  "g3_rediscovery": {
+    "g3_topology_spec": {
+      "block_groups": 4,
+      "words_per_group": 8,
+      "axis_roles": {
+        "row": "GLOBAL",
+        "block_group": "LOCAL",
+        "word_col": "LOCAL",
+        "local_block": "REDUCE",
+        "group_pair": "REDUCE"
+      },
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+    },
+    "num_grammar_candidates_matching_g3": 1,
+    "matching_candidate": {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "block_groups": 4,
+      "words_per_group": 8,
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "reduction_grammar_value": "ds_bpermute_tree"
+    },
+    "derived_index_coincides_with_g3_constant": true
+  },
+  "anti_hardcode_audit": {
+    "no_route_id_branch_in_source": true,
+    "forbidden_patterns_found_in_generation_source": [],
+    "block_groups_words_per_group_pairs_produced": [
+      [
+        1,
+        16
+      ],
+      [
+        1,
+        32
+      ],
+      [
+        2,
+        8
+      ],
+      [
+        2,
+        16
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        8,
+        2
+      ],
+      [
+        8,
+        4
+      ],
+      [
+        16,
+        1
+      ],
+      [
+        16,
+        2
+      ]
+    ],
+    "g3_point_4_8_is_one_of_many_enumerated_pairs": true,
+    "generation_inputs": "profile facts (quant/shape/target) x topology_grammar_v1 x refuted_axis_exclusions",
+    "verification_inputs": "g3_template(...).topology (TG1 IR) read ONLY in verify_g3_rediscovered()"
+  },
+  "candidates": [
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 1,
+      "words_per_group": 32,
+      "group_pairs": 1,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 1,
+        "words_per_group": 32,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (1x32); words_per_group | 32 quant words (group_pairs=1); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 1,
+      "words_per_group": 32,
+      "group_pairs": 1,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 1,
+        "words_per_group": 32,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (1x32); words_per_group | 32 quant words (group_pairs=1); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 2,
+      "words_per_group": 16,
+      "group_pairs": 2,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 2,
+        "words_per_group": 16,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (2x16); words_per_group | 32 quant words (group_pairs=2); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 2,
+      "words_per_group": 16,
+      "group_pairs": 2,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 2,
+        "words_per_group": 16,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (2x16); words_per_group | 32 quant words (group_pairs=2); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 4,
+      "words_per_group": 8,
+      "group_pairs": 4,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 4,
+        "words_per_group": 8,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (4x8); words_per_group | 32 quant words (group_pairs=4); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 4,
+      "words_per_group": 8,
+      "group_pairs": 4,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 4,
+        "words_per_group": 8,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (4x8); words_per_group | 32 quant words (group_pairs=4); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 8,
+      "words_per_group": 4,
+      "group_pairs": 8,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 8,
+        "words_per_group": 4,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (8x4); words_per_group | 32 quant words (group_pairs=8); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 8,
+      "words_per_group": 4,
+      "group_pairs": 8,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 8,
+        "words_per_group": 4,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (8x4); words_per_group | 32 quant words (group_pairs=8); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 16,
+      "words_per_group": 2,
+      "group_pairs": 16,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 16,
+        "words_per_group": 2,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (16x2); words_per_group | 32 quant words (group_pairs=16); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "1row_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 16,
+      "words_per_group": 2,
+      "group_pairs": 16,
+      "per_row_lanes": 32,
+      "topology_spec": {
+        "block_groups": 16,
+        "words_per_group": 2,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=32 factored (16x2); words_per_group | 32 quant words (group_pairs=16); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 1,
+      "words_per_group": 16,
+      "group_pairs": 2,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 1,
+        "words_per_group": 16,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (1x16); words_per_group | 32 quant words (group_pairs=2); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 1,
+      "words_per_group": 16,
+      "group_pairs": 2,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 1,
+        "words_per_group": 16,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (1x16); words_per_group | 32 quant words (group_pairs=2); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 2,
+      "words_per_group": 8,
+      "group_pairs": 4,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 2,
+        "words_per_group": 8,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (2x8); words_per_group | 32 quant words (group_pairs=4); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 2,
+      "words_per_group": 8,
+      "group_pairs": 4,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 2,
+        "words_per_group": 8,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (2x8); words_per_group | 32 quant words (group_pairs=4); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 4,
+      "words_per_group": 4,
+      "group_pairs": 8,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 4,
+        "words_per_group": 4,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (4x4); words_per_group | 32 quant words (group_pairs=8); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 4,
+      "words_per_group": 4,
+      "group_pairs": 8,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 4,
+        "words_per_group": 4,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (4x4); words_per_group | 32 quant words (group_pairs=8); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 8,
+      "words_per_group": 2,
+      "group_pairs": 16,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 8,
+        "words_per_group": 2,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (8x2); words_per_group | 32 quant words (group_pairs=16); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 8,
+      "words_per_group": 2,
+      "group_pairs": 16,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 8,
+        "words_per_group": 2,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (8x2); words_per_group | 32 quant words (group_pairs=16); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "ds_bpermute_tree",
+      "reduction_pattern": "cross_lane_wave_reduce",
+      "output": "direct_out",
+      "block_groups": 16,
+      "words_per_group": 1,
+      "group_pairs": 32,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 16,
+        "words_per_group": 1,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "cross_lane_wave_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (16x1); words_per_group | 32 quant words (group_pairs=32); block_groups | k_blocks for all roles; ds_bpermute_tree reduction."
+    },
+    {
+      "lane_ownership_axis": "packed_word",
+      "lane_grouping": "2rows_per_warp",
+      "load_pattern": "coalesced_packed_word",
+      "dequant_placement": "per_lane_in_register",
+      "reduction_grammar_value": "lds_partial_reduce",
+      "reduction_pattern": "partials_plus_reduce",
+      "output": "partials_plus_sum",
+      "block_groups": 16,
+      "words_per_group": 1,
+      "group_pairs": 32,
+      "per_row_lanes": 16,
+      "topology_spec": {
+        "block_groups": 16,
+        "words_per_group": 1,
+        "axis_roles": {
+          "row": "GLOBAL",
+          "block_group": "LOCAL",
+          "word_col": "LOCAL",
+          "local_block": "REDUCE",
+          "group_pair": "REDUCE"
+        },
+        "reduction_pattern": "partials_plus_reduce",
+        "lane_ownership_index": "(row * k_blocks + (block_group * blocks_per_group + local_block)) * q4k_words_per_block + q4k_quant_word_base + group_pair * words_per_group + word_col"
+      },
+      "legal_because": "packed_word coalesced load; per_row_lanes=16 factored (16x1); words_per_group | 32 quant words (group_pairs=32); block_groups | k_blocks for all roles; lds_partial_reduce reduction."
+    }
+  ],
+  "do_not": [
+    "no GPU kernel",
+    "no default change",
+    "no live-route repoint",
+    "no reopened refuted route",
+    "no route_id branch / no hardcoded (4,8) / no hardcoded axis-roles in generation"
+  ],
+  "stop": "TG2 only. Do NOT build TG3 (quant semantics library) or beyond."
+}
