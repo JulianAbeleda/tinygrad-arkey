@@ -1,0 +1,17 @@
+{
+  "scope": "RL1: ELF descriptor reclaims pinned-accumulator LDS (opt-in)",
+  "group_segment": {
+    "flag_off": 12288,
+    "flag_on": 10240
+  },
+  "reclaimed_bytes": 2048,
+  "expected_reclaim_bytes": 2048,
+  "ds_load_store": {
+    "flag_off": 31,
+    "flag_on": 9
+  },
+  "phase_g_flag_on": true,
+  "flag_off_group_unchanged": true,
+  "correctness_note": "RL1 is descriptor-only: kernel instructions identical, only declared LDS size drops; the reclaimed region is unused (pinned accumulators are in VGPRs). token_match/route-bound preserved from RA2 (same kernel).",
+  "verdict": "AMD_ISA_REG_ACCUM_LDS_RL1_PASS_DESCRIPTOR_RECLAIM"
+}
