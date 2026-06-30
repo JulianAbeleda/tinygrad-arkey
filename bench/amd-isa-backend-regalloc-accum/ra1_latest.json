@@ -1,0 +1,64 @@
+{
+  "scope": "RA1 loop-carried pinned register accumulator microgates",
+  "lds_baseline_off": {
+    "k_sum": {
+      "correct": true,
+      "v_pin_refs": 0,
+      "ds_load": 2,
+      "ds_store": 2,
+      "sample": [
+        0.9878093600273132
+      ]
+    },
+    "k_two": {
+      "correct": true,
+      "v_pin_refs": 0,
+      "ds_load": 4,
+      "ds_store": 4,
+      "sample": [
+        0.9878093600273132,
+        0.5938286781311035
+      ]
+    },
+    "k_nested": {
+      "correct": true,
+      "v_pin_refs": 0,
+      "ds_load": 2,
+      "ds_store": 2,
+      "sample": [
+        -5.033562183380127
+      ]
+    }
+  },
+  "pinned_on": {
+    "k_sum": {
+      "correct": true,
+      "v_pin_refs": 4,
+      "ds_load": 0,
+      "ds_store": 0,
+      "sample": [
+        0.9878093600273132
+      ]
+    },
+    "k_two": {
+      "correct": true,
+      "v_pin_refs": 8,
+      "ds_load": 0,
+      "ds_store": 0,
+      "sample": [
+        0.9878093600273132,
+        0.5938286781311035
+      ]
+    },
+    "k_nested": {
+      "correct": true,
+      "v_pin_refs": 4,
+      "ds_load": 0,
+      "ds_store": 0,
+      "sample": [
+        -5.033562183380127
+      ]
+    }
+  },
+  "verdict": "AMD_ISA_REGALLOC_ACCUM_RA1_PASS_MICROGATES"
+}

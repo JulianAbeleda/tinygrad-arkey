@@ -35,6 +35,7 @@ SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 40, 2))   # even SGPRs 
 SCNT_POOL = tuple(Register(f"s{i}", i) for i in range(40, 64))     # single SGPRs s40..s63 -> uniform loop counters (Phase B)
 SCALAR_TMP = tuple(Register(f"s{i}", i) for i in range(64, 104))   # single SGPRs s64..s103 -> Phase N1B uniform address-math temps
 VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0 reserved for packed workitem ids
+ACCUM_PIN_BASE, ACCUM_PIN_TOP = 240, 256                            # RA1: v240..v255 RESERVED for loop-carried pinned accumulators (out of _vpool)
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
 WGID_S0 = 2                                                        # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1); .y/.z -> s3/s4
 
@@ -45,7 +46,10 @@ def _n_workitem_dims(ctx:IselContext) -> int:
     lids = {int(str(u.arg)[-1]) for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
     ctx._n_lid = n = (max(lids) + 1) if lids else 1
   return n
-def _vpool(ctx:IselContext): return VBASE[1:]   # reserve only v0 (workitem ids x/y/z are packed into it)
+def _vpool(ctx:IselContext):
+  # reserve v0 (packed workitem ids). RA1: when AMD_ISA_REG_ACCUM, also reserve v240..v255 for pinned accumulators
+  # (kept OUT of the normal allocation pool so regalloc never assigns a virtual reg to a pinned accumulator).
+  return VBASE[1:ACCUM_PIN_BASE] if getenv("AMD_ISA_REG_ACCUM", 0) else VBASE[1:]
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
@@ -72,6 +76,8 @@ class AMDOps(FastEnum):
   S_IADD = 39                            # Phase N1B: wave-uniform integer add -> s_add_i32
   S_ISHL = 40                            # Phase N1B: wave-uniform integer shl -> s_lshl_b32
   S_WGID = 41                            # Phase N1B: workgroup id s{2+d} as a scalar source (s_mov into a scalar temp)
+  ACCUM_READ = 42                        # RA1: read a pinned loop-carried accumulator -> v_mov vvirt, v[pin] (src[-1].arg=pin)
+  ACCUM_WRITE = 43                       # RA1: write a pinned accumulator from a VGPR -> v_mov v[pin], vsrc (in-place loop-carried state)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -140,6 +146,23 @@ def _lds_byte_offset(ctx:IselContext, dreg:UOp) -> int:
     ctx._lds_top = d[dreg] + per * (_n_threads(ctx) if dreg.dtype.addrspace == AddrSpace.REG else 1)
   return d[dreg]
 
+# ---- RA1: loop-carried pinned accumulator (opt-in AMD_ISA_REG_ACCUM). A per-thread DEFINE_REG accumulator ELEMENT with
+# a COMPILE-TIME index becomes ONE reserved physical VGPR (v240+). A SIMD VGPR already holds per-lane values and each
+# warp has wave-private VGPRs -> one VGPR == the full per-(warp,lane) accumulator (NOT one reg per workitem). The pinned
+# reg is referenced as a fixed Reg in lowering and carries no virtual tag, so the single-def linear-scan regalloc never
+# tracks/allocates it (clears the 3 N5A walls without weakening single-def for ordinary vregs). ----
+def _accum_enabled() -> bool: return bool(getenv("AMD_ISA_REG_ACCUM", 0))
+def _accum_pin(ctx:IselContext, dreg:UOp, elem:int):
+  # returns the pinned VGPR index for (accumulator, element), or None if the pool (16 regs) is exhausted -> LDS fallback.
+  d = getattr(ctx, "_accum", None)
+  if d is None: d = ctx._accum = {}
+  k = (id(dreg), elem)
+  if k not in d:
+    nxt = ACCUM_PIN_BASE + len(d)
+    if nxt >= ACCUM_PIN_TOP: return None
+    d[k] = nxt
+  return d[k]
+
 # ============================ instruction selection ============================
 def isel_param(ctx:IselContext, x:UOp):
   # buffer pointer arg -> s_load_b64 from kernarg[i*8] into a fresh SGPR pair. i = position among PARAMs.
@@ -193,6 +216,10 @@ def isel_index(ctx:IselContext, x:UOp):
   # and ordered. idx may be CONST (accumulator), a RANGE counter, or a runtime VGPR value (e.g. lidx-derived, Phase F).
   if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
     dreg = _reg_base(base)
+    # RA1 pinned accumulator: per-thread REG accumulator element with a COMPILE-TIME index -> a reserved VGPR carrier.
+    if _accum_enabled() and dreg.dtype.addrspace == AddrSpace.REG and idx.op is Ops.CONST and \
+       (pin := _accum_pin(ctx, dreg, idx.arg)) is not None:
+      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, pin).rtag()), arg="accum")   # (order, pin)
     base_off, isz = _lds_byte_offset(ctx, dreg), base.dtype.base.itemsize
     shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
     addends = []                                                     # runtime (VGPR) byte-offset terms
@@ -227,6 +254,8 @@ def isel_load(ctx:IselContext, x:UOp):
   # allocation are deferred to Inc 1+. The N loads are wrapped in a NOOP lane-carrier consumed by GEP (lane extract).
   if x.src[0].op is not Ops.NOOP: return None
   idxc = x.src[0]                            # NOOP(base_ptr, byte_offset) or LDS carrier (arg=="lds")
+  if idxc.arg == "accum":                    # RA1: read pinned accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
+    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
   if idxc.arg == "lds":                      # LDS load -> ds_load_b32 from the carrier's address VGPR (src[0]); src[1]=order
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
   base, off = idxc.src[0], idxc.src[1]
@@ -240,6 +269,8 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   # expands to N scalar global_store_b32 in post_regalloc (offset=lane*itemsize). Single INS (not a NOOP wrapper) so
   # no pseudo-op survives into assemble_linear, and regalloc allocates every lane value as a normal use.
   if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset) or LDS carrier
+  if a.arg == "accum":                        # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
+    return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
     esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
     if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
@@ -460,6 +491,11 @@ def lower_inst(x:UOp):
     return _ins(s_mov_b32(_S[x.reg.index], _S[src[0].arg]), x.tag)
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
+  if a is AMDOps.ACCUM_READ:                        # RA1: read pinned accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
+    return _ins(v_mov_b32_e32(_Vr(x.reg), _V[src[1].arg]), x.tag)
+  if a is AMDOps.ACCUM_WRITE:                       # RA1: write pinned accumulator <- vsrc -> v_mov v[pin], vsrc. src=(vsrc, order, pin)
+    w = _ins(v_mov_b32_e32(_V[src[2].arg], _Vr(src[0].reg)), x.tag)
+    return (w, [w])
   if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap
     ldfn = ds_load_u16 if x.dtype.itemsize == 2 else ds_load_b32
     ld = _ins(ldfn(vdst=_Vr(x.reg), addr=_Vr(src[0].reg)), x.tag)
