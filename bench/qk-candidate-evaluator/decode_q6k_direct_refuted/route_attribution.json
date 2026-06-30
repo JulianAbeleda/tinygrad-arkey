@@ -1,0 +1,16 @@
+{
+  "route_id": "decode_q6k_direct_refuted",
+  "route_attribution": "tinygrad/llm/model.py:455-464 (Q6K_DIRECT_ROUTE default-off); refuted vs decode_q6k_coop_shipped baseline.",
+  "expected_kernels": [
+    "q6k_halfwarp_partition_151936_4096"
+  ],
+  "forbidden_kernels": null,
+  "route_bound_all_ctx": true,
+  "no_hidden_fallback": true,
+  "route_evidence_from_artifact": {
+    "correctness_gate": "token_match_all_ctx",
+    "route_gate": "candidate_halfwarp_fired non-empty (route_bound_all_ctx)",
+    "baseline": "flag-off == shipped coop route"
+  },
+  "strict_fallback": true
+}

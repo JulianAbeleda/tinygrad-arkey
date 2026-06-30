@@ -1,0 +1,52 @@
+{
+  "candidate_id": "decode/decode_q6k_direct_refuted",
+  "lane": "decode",
+  "primitive_class": "GEMM",
+  "knobs": {
+    "env_to_force": {
+      "Q6K_DIRECT_ROUTE": "1"
+    },
+    "rollback": {
+      "Q6K_DIRECT_ROUTE": "0"
+    }
+  },
+  "oracle": "decode_q6k_coop_shipped",
+  "correctness": "byte-identical/token-match",
+  "route_identity": "tinygrad/llm/model.py:455-464 (Q6K_DIRECT_ROUTE default-off); refuted vs decode_q6k_coop_shipped baseline.",
+  "materialization_abi": "n/a",
+  "isa": "tier=REFUTED_REGRESSION",
+  "local_diagnostic": "median -5.44% / worst -6.06% / best -4.77% candidate-vs-baseline",
+  "authority_benchmark": {
+    "authority_type": "decode_wd",
+    "per_ctx_tok_s": {
+      "512": {
+        "baseline": 103.63,
+        "candidate": 97.35,
+        "delta_pct": -6.06
+      },
+      "1024": {
+        "baseline": 101.68,
+        "candidate": 95.76,
+        "delta_pct": -5.82
+      },
+      "2048": {
+        "baseline": 99.21,
+        "candidate": 94.19,
+        "delta_pct": -5.06
+      },
+      "4096": {
+        "baseline": 94.5,
+        "candidate": 89.99,
+        "delta_pct": -4.77
+      }
+    }
+  },
+  "verdict": "REFUTED_REGRESSION (reproduces AMD_ISA_Q6K_DIRECT_SPEED_REGRESSION)",
+  "stop_reason": "replay of cited authority artifact; no GPU re-run (audit-first)",
+  "artifact_links": [
+    "bench/amd-isa-backend-q6k-direct-speed/latest.json",
+    "extra/qk_route_manifest.py",
+    "extra/qk_candidate_evaluator.py"
+  ],
+  "learned_rule": "decode_q6k_direct_refuted: REFUTED_REGRESSION vs decode_q6k_coop_shipped on decode_wd; rollback {'Q6K_DIRECT_ROUTE': '0'}."
+}
