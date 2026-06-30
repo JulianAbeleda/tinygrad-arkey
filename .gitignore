@@ -90,6 +90,8 @@ bench/**
 !bench/**/profile-report.md
 !bench/**/decision.json
 !bench/qk-shared-storage-20260612/**/policy.json
+# durable per-model benchmark docs (rendered tables); raw data/*.json stay local (regenerable timing outputs)
+!bench/models/**/*.md
 
 # PSP boot/trace captures are local provenance (backed up outside the repo), not code.
 # The durable record lives in docs/amd-linux-psp-good-trace.md; raw captures stay local.
