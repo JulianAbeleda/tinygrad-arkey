@@ -282,9 +282,11 @@ class RuntimeState:
     from tinygrad.device import Compiler
     compiles_before = Compiler.cache_misses
     st = time.perf_counter()
-    # run 2 tokens through the model twice to capture the JIT before serving requests
+    # run 2 tokens through the model twice to capture the SDPA (short-ctx) decode jit before serving requests,
+    # then pre-capture the flash (ctx>=threshold) decode jit so the in-generation crossover doesn't stall inline.
     with Context(DEBUG=max(DEBUG.value, 1)):
       for _ in range(2): list(zip(range(2), model.generate([0])))
+      model.warmup_flash_decode()
     return time.perf_counter() - st, Compiler.cache_misses - compiles_before
 
   def warmup(self) -> dict:

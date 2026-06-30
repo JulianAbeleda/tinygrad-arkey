@@ -1552,6 +1552,19 @@ class Transformer:
     prefix_len = sum(1 for _ in itertools.takewhile(lambda ab: ab[0] == ab[1], zip(tokens[:-1], self._cached_tokens)))
     return min(block._reusable_prefix_len(prefix_len, len(self._cached_tokens)) for block in self.blk)
 
+  def warmup_flash_decode(self):
+    # Pre-capture rollout_jit_flash so the in-generation crossover at ctx>=FLASH_DECODE_THRESHOLD does not pay the
+    # one-time jit-compile stall inline (the first long generation would otherwise pause ~once at the boundary).
+    # Dummy single-token decode at a high symbolic start_pos; cache contents are irrelevant for graph capture.
+    if self.has_recurrent_block: return
+    ctx = min(max(self.max_context // 2, getenv("FLASH_DECODE_THRESHOLD", 512)), self.max_context - 1)
+    if ctx < 1: return
+    v_sp = UOp.variable("start_pos", 0, self.max_context - 1)
+    dummy, temp = Tensor([[0]], dtype="int32"), Tensor([0.0])
+    for _ in range(3):
+      try: self(dummy, v_sp.bind(ctx), temp, use_flash=True).realize()
+      except Exception: return
+
   def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0):
     if self.has_recurrent_block: chunk_size = 1
     v_start_pos = UOp.variable("start_pos", 0, self.max_context-1)
@@ -1588,7 +1601,12 @@ class Transformer:
       else:
         sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
         ntv = nt.val
-        out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp).realize()
+        # Select the flash-decode graph (rollout_jit_flash) vs SDPA graph (rollout_jit) per-token by context, so a
+        # generation that STARTS short still crosses over to flash once ctx reaches the threshold. Without this the
+        # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
+        # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
+        out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp,
+                   use_flash=should_use_flash_decode(sp, ntv)).realize()
       start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
