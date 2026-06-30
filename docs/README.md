@@ -8,6 +8,8 @@ in `docs/archive/` as provenance, not current state.
 ## ⭐ Start here (canonical)
 
 - **`pure-machine-search-roadmap.md`** — stable roadmap for replacing hand-owned decode kernels with BubbleBeam-selected generated routes.
+- **`claude-active-work-audit-and-agnostic-search-scope-20260630.md`** — Claude-ready consolidated handoff for active-work
+  audit, residual tracing/probe tooling, and quant/shape/target agnostic search.
 - **`current-project-state-handoff-20260624.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). Current numbers
   (decode **103.9 / 102.0 / 99.7 / 94.4 tok/s** @ctx512/1024/2048/4096 on the G3/owned-equivalent decode stack;
   prefill **4291 / 4089 / 3711 / 3137 / 2423 tok/s** @ctx512/1024/2048/4096/8192 on the promoted `pipe_tm2_tn2`

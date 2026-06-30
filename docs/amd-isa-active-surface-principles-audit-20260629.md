@@ -1,5 +1,9 @@
 # AMD ISA Active-Surface Principles Audit — 2026-06-29
 
+> Superseded for active Claude handoff by
+> `docs/claude-active-work-audit-and-agnostic-search-scope-20260630.md`. Keep this file as provenance for the original
+> active-surface audit.
+
 Audit scope: the active AMD ISA / decode machine-search surface, not the whole historical repo. Evidence came from the
 current H-N artifacts, `tinygrad/llm/model.py`, `tinygrad/renderer/isa/amd.py`, native tile injection tools, and the
 repo's own principles in `structure/Development/*`.
