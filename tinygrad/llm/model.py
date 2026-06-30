@@ -444,6 +444,21 @@ class Q6KPrimitiveLinear:
         return got.reshape(1, 1, self.out_features)
       except Exception as e:
         if getenv("DEBUG", 0): print(f"Q6K_GEMV_WARP down fallback: {e}")
+    # Q6K-2/3 direct/warp lm_head route (research flag Q6K_DIRECT_ROUTE, default-off). lm_head currently uses
+    # Q6K_LM_HEAD_COOP = coop_partial + external .sum (the r_32_4_1187 reduce). The half-warp 2-row partition route
+    # (q6k_halfwarp_partition_kernel: 2 independent rows per 32-lane wave as two 16-lane partitions, in-warp
+    # warp_reduce_sum(width=16)) writes out[row] DIRECTLY -> no partials buffer, no external r_* reduce. Dequant
+    # (_q6k_weight) is byte-identical to coop. lm_head shape only (out>=100000, even rows). Flag-off => coop unchanged.
+    if getenv("Q6K_DIRECT_ROUTE") and self.parts == 1 and self.out_features >= 100000 \
+       and self.out_features % 2 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
+      try:
+        from extra.q6_k_gemv_primitive import q6k_halfwarp_partition_kernel
+        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+        got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
+                                fxn=q6k_halfwarp_partition_kernel(self.out_features, self.in_features))[0]
+        return got.reshape(1, 1, self.out_features)
+      except Exception as e:
+        if getenv("DEBUG", 0): print(f"Q6K_DIRECT_ROUTE lm_head fallback: {e}")
     rt = getenv("Q6K_COOP_RT", 4)
     use_coop = self.parts == 1 and self.out_features % rt == 0 and (
       (getenv("Q6K_LM_HEAD_COOP", 1) and self.out_features >= 100000) or
