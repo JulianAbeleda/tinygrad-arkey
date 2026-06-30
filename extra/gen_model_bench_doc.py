@@ -36,12 +36,20 @@ def main():
   L.append("")
   L.append(f"Backend: **AMD** · GPU: **{args.gpu}** · family: **{args.family}**")
   L.append("")
+  L.append("> ⚠️ **DIAGNOSTIC, NOT PARITY AUTHORITY.** These numbers come from a first-pass end-to-end harness with "
+           "two known methodology gaps, pending a synced-authority rerun: (1) **decode** is a median over a "
+           "*growing-context* `model.generate` window (mixes contexts + host jitter; the repo authority is synced "
+           "`TinyJit` min-of-K bursts at fixed context), and (2) **prefill** is measured on the *default universal* "
+           "path (`PREFILL_V2=false`) via `generate` TTFT, **not** the tuned/server prefill profile — so the prefill "
+           "column is apples-to-oranges vs llama.cpp `pp512` and understates the shipped tuned path (8B authority "
+           "is ~3500 tok/s @512, not the value shown here). Do not cite these for tinygrad-vs-llama parity yet.")
+  L.append("")
   L.append("Decode tok/s is the headline (decode is HBM-bandwidth bound). Numbers come from clean whole-decode "
            "`model.generate` (W==D), `PROFILE=0`, auto clock, warmed JIT, with a median over a steady-state window "
            "and the observed spread. **Quant matters** — it sets the bytes-per-weight moved each decode step, which "
            "is the dominant decode cost; compare sizes with quant in mind, not just parameter count.")
   L.append("")
-  L.append("| Model | Quant | Params | Ctx | Decode tok/s (median) | Decode band [min–max] | Spread | Decode GB/s | Prefill pp512 tok/s | VRAM | Load s |")
+  L.append("| Model | Quant | Params | Ctx | Decode tok/s (median) | Decode band [min–max] | Spread | Decode GB/s | Prefill pp512 (default path, diag) | VRAM | Load s |")
   L.append("|---|---|---|---|---|---|---|---|---|---|---|")
   for r in rows:
     d = r.get("decode", {}); ts = d.get("tok_s", {}); pf = r.get("prefill") or {}
@@ -59,7 +67,7 @@ def main():
     L.append("Reference: `llama-bench` (ROCm/HIP build) on the identical GGUF file and GPU. `tg128` = decode, "
              "`pp512` = prefill. **Decode ratio** is tinygrad median ÷ llama.cpp — the headline parity number.")
     L.append("")
-    L.append("| Model | Quant | tinygrad decode | llama.cpp decode | decode ratio | tinygrad pp512 | llama.cpp pp512 | prefill ratio |")
+    L.append("| Model | Quant | tinygrad decode | llama.cpp decode | decode ratio | tinygrad pp512 (default,diag) | llama.cpp pp512 | prefill ratio |")
     L.append("|---|---|---|---|---|---|---|---|")
     for r in rows:
       lc = r.get("llama_cpp")

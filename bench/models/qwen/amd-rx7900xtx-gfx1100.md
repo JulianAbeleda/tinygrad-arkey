@@ -2,9 +2,11 @@
 
 Backend: **AMD** · GPU: **AMD Radeon RX 7900 XTX (gfx1100, 24GB)** · family: **Qwen3**
 
+> ⚠️ **DIAGNOSTIC, NOT PARITY AUTHORITY.** These numbers come from a first-pass end-to-end harness with two known methodology gaps, pending a synced-authority rerun: (1) **decode** is a median over a *growing-context* `model.generate` window (mixes contexts + host jitter; the repo authority is synced `TinyJit` min-of-K bursts at fixed context), and (2) **prefill** is measured on the *default universal* path (`PREFILL_V2=false`) via `generate` TTFT, **not** the tuned/server prefill profile — so the prefill column is apples-to-oranges vs llama.cpp `pp512` and understates the shipped tuned path (8B authority is ~3500 tok/s @512, not the value shown here). Do not cite these for tinygrad-vs-llama parity yet.
+
 Decode tok/s is the headline (decode is HBM-bandwidth bound). Numbers come from clean whole-decode `model.generate` (W==D), `PROFILE=0`, auto clock, warmed JIT, with a median over a steady-state window and the observed spread. **Quant matters** — it sets the bytes-per-weight moved each decode step, which is the dominant decode cost; compare sizes with quant in mind, not just parameter count.
 
-| Model | Quant | Params | Ctx | Decode tok/s (median) | Decode band [min–max] | Spread | Decode GB/s | Prefill pp512 tok/s | VRAM | Load s |
+| Model | Quant | Params | Ctx | Decode tok/s (median) | Decode band [min–max] | Spread | Decode GB/s | Prefill pp512 (default path, diag) | VRAM | Load s |
 |---|---|---|---|---|---|---|---|---|---|---|
 | qwen3-0.6b | Q8_0 | 752M | 2048 | 220.38 | 194.03–257.98 | 28.15% | 153.4 | 1509.1 | 1.12 GB | 2.64 |
 | qwen3-8b | Q4_K_M | 8.19B | 2048 | 90.58 | 84.59–98.36 | 14.99% | 436.6 | 68.1 | 5.36 GB | 6.56 |
@@ -15,7 +17,7 @@ Decode tok/s is the headline (decode is HBM-bandwidth bound). Numbers come from 
 
 Reference: `llama-bench` (ROCm/HIP build) on the identical GGUF file and GPU. `tg128` = decode, `pp512` = prefill. **Decode ratio** is tinygrad median ÷ llama.cpp — the headline parity number.
 
-| Model | Quant | tinygrad decode | llama.cpp decode | decode ratio | tinygrad pp512 | llama.cpp pp512 | prefill ratio |
+| Model | Quant | tinygrad decode | llama.cpp decode | decode ratio | tinygrad pp512 (default,diag) | llama.cpp pp512 | prefill ratio |
 |---|---|---|---|---|---|---|---|
 | qwen3-0.6b | Q8_0 | 220.38 | 279.34 ±0.67 | **79%** | 1509.1 | 21130.0 | 7% |
 | qwen3-8b | Q4_K_M | 90.58 | 99.51 ±0.15 | **91%** | 68.1 | 3069.3 | 2% |
