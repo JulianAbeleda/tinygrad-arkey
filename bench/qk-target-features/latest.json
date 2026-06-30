@@ -1,0 +1,133 @@
+{
+  "scope": "TG5 cross-target feature model: separate algorithmic route families from target lowering. AMD gfx1100 is the validated target; NVIDIA/Metal are descriptors only (TARGET_BACKEND_INCOMPLETE). AUDIT only.",
+  "verdict": "TG5_PASS_TARGET_FEATURE_MODEL_READY",
+  "module": "extra/qk_target_features.py",
+  "target_descriptors": [
+    "bench/qk-search-spaces/targets/amd_gfx1100.json",
+    "bench/qk-search-spaces/targets/nvidia_sm89.json",
+    "bench/qk-search-spaces/targets/apple_metal_m3.json"
+  ],
+  "targets": {
+    "amd_gfx1100": {
+      "target_id": "amd_gfx1100",
+      "vendor": "AMD",
+      "arch": "gfx1100",
+      "wave_size": 32,
+      "subgroup_model": "wave32",
+      "coalescing_granularity_bytes": 128,
+      "vector_dot": [
+        "v_dot4_i32_i8",
+        "v_dot4_u32_u8",
+        "v_dot2_f32_f16"
+      ],
+      "matrix_core": "WMMA_rdna3",
+      "lds_bytes": 65536,
+      "barrier_model": "workgroup_barrier_s_barrier",
+      "register_file_vgprs": 256,
+      "occupancy_model": "vgpr_lds_bound",
+      "native_isa_backend_available": true,
+      "external_compiler_ownership": "HIP/comgr (tinygrad owns UOp->AMDGCN lowering)",
+      "profiling_available": true,
+      "backend_validated": true,
+      "allowed_route_families": [
+        "lanemap",
+        "coop",
+        "graph_gemm_pipe",
+        "native_isa_attention",
+        "owned_reference"
+      ],
+      "notes": "validated: native-ISA backend + HIP + W==D/whole-prefill profiling all present. Reproduces the current route permissions (the manifest routes run here)."
+    },
+    "nvidia_sm89": {
+      "target_id": "nvidia_sm89",
+      "vendor": "NVIDIA",
+      "arch": "sm_89",
+      "wave_size": 32,
+      "subgroup_model": "subgroup32",
+      "coalescing_granularity_bytes": 128,
+      "vector_dot": [
+        "dp4a",
+        "mma_m16n8k16"
+      ],
+      "matrix_core": "TensorCore_ada",
+      "lds_bytes": 49152,
+      "barrier_model": "__syncthreads_bar",
+      "register_file_vgprs": 255,
+      "occupancy_model": "regs_smem_bound",
+      "native_isa_backend_available": false,
+      "external_compiler_ownership": "ptxas (closed)",
+      "profiling_available": false,
+      "backend_validated": false,
+      "allowed_route_families": [
+        "lanemap",
+        "coop",
+        "graph_gemm_pipe",
+        "owned_reference"
+      ],
+      "notes": "DESCRIPTOR ONLY (no backend to run here). subgroup32 is algorithmically close to wave32, but lowering + profiling are absent -> candidates gate TARGET_BACKEND_INCOMPLETE. Do NOT claim portability."
+    },
+    "apple_metal_m3": {
+      "target_id": "apple_metal_m3",
+      "vendor": "Apple",
+      "arch": "metal3_m3",
+      "wave_size": 32,
+      "subgroup_model": "simdgroup",
+      "coalescing_granularity_bytes": 64,
+      "vector_dot": [
+        "simd_shuffle"
+      ],
+      "matrix_core": "simdgroup_matrix",
+      "lds_bytes": 32768,
+      "barrier_model": "threadgroup_barrier",
+      "register_file_vgprs": 128,
+      "occupancy_model": "threadgroup_mem_bound",
+      "native_isa_backend_available": false,
+      "external_compiler_ownership": "metal (closed)",
+      "profiling_available": false,
+      "backend_validated": false,
+      "allowed_route_families": [
+        "lanemap",
+        "coop",
+        "owned_reference"
+      ],
+      "notes": "DESCRIPTOR ONLY. simdgroup==32 width but distinct shuffle/matrix primitives + no in-repo backend/profiling -> TARGET_BACKEND_INCOMPLETE."
+    }
+  },
+  "acceptance_1_gfx1100_reproduces_route_permissions": {
+    "lane_extent_match_32": true,
+    "all_author_candidates_TARGET_OK": true,
+    "candidate_count": 20,
+    "route_permissions_cover_manifest_families": true
+  },
+  "acceptance_2_wave64_subgroup_pruned_on_gfx1100": {
+    "wave64_verdict": "TARGET_PRUNED_FEATURE_MISMATCH",
+    "wave64_pruned": true,
+    "reason": "candidate needs wave64 (wave_size=64) but target amd_gfx1100 has wave_size=32",
+    "subgroup_simdgroup_verdict": "TARGET_PRUNED_FEATURE_MISMATCH",
+    "subgroup_simdgroup_pruned": true
+  },
+  "acceptance_3_nvidia_metal_backend_incomplete": {
+    "nvidia_sm89": {
+      "verdicts": [
+        "TARGET_BACKEND_INCOMPLETE"
+      ],
+      "all_backend_incomplete": true,
+      "backend_validated": false,
+      "sample_reason": "algorithmically plausible on nvidia_sm89 (subgroup32) but target lowering/profiling missing: ['native_isa_backend', 'W==D/whole-prefill profiling']"
+    },
+    "apple_metal_m3": {
+      "verdicts": [
+        "TARGET_BACKEND_INCOMPLETE"
+      ],
+      "all_backend_incomplete": true,
+      "backend_validated": false,
+      "sample_reason": "algorithmically plausible on apple_metal_m3 (simdgroup) but target lowering/profiling missing: ['native_isa_backend', 'W==D/whole-prefill profiling']"
+    }
+  },
+  "do_not": [
+    "no GPU kernel",
+    "no default change",
+    "no live-route repoint",
+    "do not claim NVIDIA/Metal portability (descriptors only)"
+  ]
+}

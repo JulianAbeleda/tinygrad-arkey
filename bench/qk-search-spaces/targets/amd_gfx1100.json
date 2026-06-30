@@ -1,0 +1,31 @@
+{
+  "_schema": "TG5 target feature descriptor (extra/qk_target_features.py)",
+  "target_id": "amd_gfx1100",
+  "vendor": "AMD",
+  "arch": "gfx1100",
+  "wave_size": 32,
+  "subgroup_model": "wave32",
+  "coalescing_granularity_bytes": 128,
+  "vector_dot": [
+    "v_dot4_i32_i8",
+    "v_dot4_u32_u8",
+    "v_dot2_f32_f16"
+  ],
+  "matrix_core": "WMMA_rdna3",
+  "lds_bytes": 65536,
+  "barrier_model": "workgroup_barrier_s_barrier",
+  "register_file_vgprs": 256,
+  "occupancy_model": "vgpr_lds_bound",
+  "native_isa_backend_available": true,
+  "external_compiler_ownership": "HIP/comgr (tinygrad owns UOp->AMDGCN lowering)",
+  "profiling_available": true,
+  "backend_validated": true,
+  "allowed_route_families": [
+    "lanemap",
+    "coop",
+    "graph_gemm_pipe",
+    "native_isa_attention",
+    "owned_reference"
+  ],
+  "notes": "validated: native-ISA backend + HIP + W==D/whole-prefill profiling all present. Reproduces the current route permissions (the manifest routes run here)."
+}

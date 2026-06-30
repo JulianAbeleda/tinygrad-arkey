@@ -1,0 +1,29 @@
+{
+  "_schema": "TG5 target feature descriptor (extra/qk_target_features.py)",
+  "target_id": "nvidia_sm89",
+  "vendor": "NVIDIA",
+  "arch": "sm_89",
+  "wave_size": 32,
+  "subgroup_model": "subgroup32",
+  "coalescing_granularity_bytes": 128,
+  "vector_dot": [
+    "dp4a",
+    "mma_m16n8k16"
+  ],
+  "matrix_core": "TensorCore_ada",
+  "lds_bytes": 49152,
+  "barrier_model": "__syncthreads_bar",
+  "register_file_vgprs": 255,
+  "occupancy_model": "regs_smem_bound",
+  "native_isa_backend_available": false,
+  "external_compiler_ownership": "ptxas (closed)",
+  "profiling_available": false,
+  "backend_validated": false,
+  "allowed_route_families": [
+    "lanemap",
+    "coop",
+    "graph_gemm_pipe",
+    "owned_reference"
+  ],
+  "notes": "DESCRIPTOR ONLY (no backend to run here). subgroup32 is algorithmically close to wave32, but lowering + profiling are absent -> candidates gate TARGET_BACKEND_INCOMPLETE. Do NOT claim portability."
+}

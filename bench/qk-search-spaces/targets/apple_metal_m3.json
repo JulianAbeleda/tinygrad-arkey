@@ -1,0 +1,27 @@
+{
+  "_schema": "TG5 target feature descriptor (extra/qk_target_features.py)",
+  "target_id": "apple_metal_m3",
+  "vendor": "Apple",
+  "arch": "metal3_m3",
+  "wave_size": 32,
+  "subgroup_model": "simdgroup",
+  "coalescing_granularity_bytes": 64,
+  "vector_dot": [
+    "simd_shuffle"
+  ],
+  "matrix_core": "simdgroup_matrix",
+  "lds_bytes": 32768,
+  "barrier_model": "threadgroup_barrier",
+  "register_file_vgprs": 128,
+  "occupancy_model": "threadgroup_mem_bound",
+  "native_isa_backend_available": false,
+  "external_compiler_ownership": "metal (closed)",
+  "profiling_available": false,
+  "backend_validated": false,
+  "allowed_route_families": [
+    "lanemap",
+    "coop",
+    "owned_reference"
+  ],
+  "notes": "DESCRIPTOR ONLY. simdgroup==32 width but distinct shuffle/matrix primitives + no in-repo backend/profiling -> TARGET_BACKEND_INCOMPLETE."
+}
