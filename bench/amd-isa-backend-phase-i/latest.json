@@ -4,16 +4,62 @@
   "selected_route_mode": "tile-only native injection (model on HIP, attention tile via AMDISARenderer)",
   "ckpts": [
     512,
+    1024,
+    2048,
     4096
   ],
   "nmeas": 20,
   "per_ctx": {
     "512": {
-      "native_tok_s": 66.91,
-      "owned_tok_s": 103.4,
-      "pct_of_owned": 64.7,
-      "native_w_ms_median": 14.945,
-      "native_w_ms_stdev": 4.375,
+      "native_tok_s": 67.09,
+      "owned_tok_s": 103.15,
+      "pct_of_owned": 65.0,
+      "native_w_ms_median": 14.904,
+      "native_w_ms_stdev": 4.058,
+      "token_match": true,
+      "native_attn": [
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128",
+        "native_block_tile",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "owned_attn": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "candidate_route_clean": true
+    },
+    "1024": {
+      "native_tok_s": 66.72,
+      "owned_tok_s": 101.22,
+      "pct_of_owned": 65.9,
+      "native_w_ms_median": 14.989,
+      "native_w_ms_stdev": 3.985,
+      "token_match": true,
+      "native_attn": [
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128",
+        "native_block_tile",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "owned_attn": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole",
+        "q6k_coop_partial_151936_4096",
+        "q6k_coop_partial_4096_12288"
+      ],
+      "candidate_route_clean": true
+    },
+    "2048": {
+      "native_tok_s": 64.46,
+      "owned_tok_s": 98.92,
+      "pct_of_owned": 65.2,
+      "native_w_ms_median": 15.513,
+      "native_w_ms_stdev": 3.954,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -31,11 +77,11 @@
       "candidate_route_clean": true
     },
     "4096": {
-      "native_tok_s": 57.61,
-      "owned_tok_s": 94.26,
-      "pct_of_owned": 61.1,
-      "native_w_ms_median": 17.358,
-      "native_w_ms_stdev": 4.108,
+      "native_tok_s": 57.4,
+      "owned_tok_s": 94.1,
+      "pct_of_owned": 61.0,
+      "native_w_ms_median": 17.422,
+      "native_w_ms_stdev": 4.719,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
