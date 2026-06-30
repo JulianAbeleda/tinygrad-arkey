@@ -4,62 +4,16 @@
   "selected_route_mode": "tile-only native injection (model on HIP, attention tile via AMDISARenderer)",
   "ckpts": [
     512,
-    1024,
-    2048,
     4096
   ],
   "nmeas": 20,
   "per_ctx": {
     "512": {
-      "native_tok_s": 67.09,
-      "owned_tok_s": 103.15,
-      "pct_of_owned": 65.0,
-      "native_w_ms_median": 14.904,
-      "native_w_ms_stdev": 4.058,
-      "token_match": true,
-      "native_attn": [
-        "flash_state_combine_32_128",
-        "flash_state_gmax_32_128",
-        "native_block_tile",
-        "q6k_coop_partial_151936_4096",
-        "q6k_coop_partial_4096_12288"
-      ],
-      "owned_attn": [
-        "owned_flash_combine",
-        "owned_flash_tile_gqa_whole",
-        "q6k_coop_partial_151936_4096",
-        "q6k_coop_partial_4096_12288"
-      ],
-      "candidate_route_clean": true
-    },
-    "1024": {
-      "native_tok_s": 66.72,
-      "owned_tok_s": 101.22,
-      "pct_of_owned": 65.9,
-      "native_w_ms_median": 14.989,
-      "native_w_ms_stdev": 3.985,
-      "token_match": true,
-      "native_attn": [
-        "flash_state_combine_32_128",
-        "flash_state_gmax_32_128",
-        "native_block_tile",
-        "q6k_coop_partial_151936_4096",
-        "q6k_coop_partial_4096_12288"
-      ],
-      "owned_attn": [
-        "owned_flash_combine",
-        "owned_flash_tile_gqa_whole",
-        "q6k_coop_partial_151936_4096",
-        "q6k_coop_partial_4096_12288"
-      ],
-      "candidate_route_clean": true
-    },
-    "2048": {
-      "native_tok_s": 64.46,
-      "owned_tok_s": 98.92,
-      "pct_of_owned": 65.2,
-      "native_w_ms_median": 15.513,
-      "native_w_ms_stdev": 3.954,
+      "native_tok_s": 70.68,
+      "owned_tok_s": 103.84,
+      "pct_of_owned": 68.1,
+      "native_w_ms_median": 14.148,
+      "native_w_ms_stdev": 3.992,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -77,11 +31,11 @@
       "candidate_route_clean": true
     },
     "4096": {
-      "native_tok_s": 57.4,
-      "owned_tok_s": 94.1,
-      "pct_of_owned": 61.0,
-      "native_w_ms_median": 17.422,
-      "native_w_ms_stdev": 4.719,
+      "native_tok_s": 47.12,
+      "owned_tok_s": 94.85,
+      "pct_of_owned": 49.7,
+      "native_w_ms_median": 21.222,
+      "native_w_ms_stdev": 4.465,
       "token_match": true,
       "native_attn": [
         "flash_state_combine_32_128",
@@ -103,7 +57,7 @@
   "token_match": true,
   "hidden_fallback_check": "no HIP/LLVM block tile, no owned tile in candidate route",
   "native_resource_summary": {
-    "vgpr": 56,
+    "vgpr": 248,
     "lds_bytes": 12288,
     "grid": [
       8,
@@ -115,7 +69,7 @@
       4,
       1
     ],
-    "elf_bytes": 3223
+    "elf_bytes": 2519
   },
   "hip_block_tile_baseline_note": "comparator is the owned hand-AMDGCN tile; HIP-generated block-tile baseline is in bench/qk-owned-oracle-parity (separate harness)",
   "baseline_analysis": "native tile ~0.4% of owned -- EXPECTED ground-truth baseline (Phase I is allowed to be slow). Dominant bottleneck = grid=[1,1,1]: the tile's kvh/s are RANGE(GLOBAL) which the native backend lowers to SERIAL loops (global_size derives from SPECIAL only), so ONE workgroup does all Hkv*S splits serially, vs the owned tile's Hkv*S parallel workgroups. Grid parallelism (map RANGE(GLOBAL) -> workgroup dims) + waitcnt (J) + scheduling (K) + modulo (L) are the optimization levers; out of scope for Phase I (record only).",

@@ -1,0 +1,41 @@
+{
+  "verdict": "AMD_ISA_REGALLOC_ACCUM_RA3_BLOCKED_VGPR_INFLATION_CTX4096_REGRESSION",
+  "scope": "RA3: native W==D with AMD_ISA_REG_ACCUM=1 (pinned loop-carried accumulators)",
+  "correctness": {
+    "token_match": true,
+    "route_bound": true,
+    "hidden_fallback": "no HIP/LLVM block tile, no owned tile in candidate route",
+    "deterministic": "true (W==D token_match held across warmup+measurement)"
+  },
+  "wd_before_baseline_dynamic_s": {
+    "ctx512": {
+      "native": 67.09,
+      "pct": 65.0
+    },
+    "ctx4096": {
+      "native": 57.4,
+      "pct": 61.0
+    }
+  },
+  "wd_after_reg_accum": {
+    "512": {
+      "native": 70.68,
+      "owned": 103.84,
+      "pct_of_owned": 68.1
+    },
+    "4096": {
+      "native": 47.12,
+      "owned": 94.85,
+      "pct_of_owned": 49.7
+    }
+  },
+  "wd_delta_pct": {
+    "ctx512": 5.4,
+    "ctx4096": -17.9
+  },
+  "root_cause": "the fixed pin reservation v240..v255 forces the kernel descriptor to allocate VGPRs up to the highest pinned reg used: native tile VGPR 56 -> 248 (granulated). At ctx512 (few split-workgroups) occupancy is not binding, so the per-token LDS-op reduction (RA2: DS 31->9) yields +5.3%. At ctx4096 (~43 splits, many workgroups) occupancy IS binding, and VGPR=248 collapses waves/CU -> -17.9%.",
+  "ra2_lds_reduction_holds": "DS load/store 31->9 (lds_accum_stage), token-correct -- the accumulator state IS off LDS; the regression is a SECONDARY VGPR-count side effect, not a correctness or LDS failure.",
+  "secondary_issue": "elf still sizes the (now-unused) accumulator LDS (group_segment 12288 unchanged) because the DEFINE_REG stays reachable for ordering -> LDS occupancy not reclaimed either.",
+  "fix_direction": "occupancy-aware pin placement: instead of a FIXED high base (v240), renumber pinned accumulators CONTIGUOUS with the virtual high-water mark (virtual_max+1 .. +N) in a post-regalloc pass, so the descriptor VGPR count = virtual_max + n_pins (e.g. ~56+12=68) instead of 248; and drop the pinned DEFINE_REG from elf group-segment sizing. Both are refinements to the RA1 reservation model, deferred (out of the staged RA0-RA3 design which used a fixed reserved range).",
+  "disposition": "feature is CORRECT and RA0/RA1/RA2 PASS; default AMD_ISA_REG_ACCUM=0 unchanged. NOT promotable as-is due to the ctx4096 VGPR-inflation regression. Net across ctx is negative -> do not enable by default until the contiguous-placement refinement lands."
+}
