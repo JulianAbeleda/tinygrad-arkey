@@ -1,91 +1,105 @@
 {
-  "schema": "qk_decode_attention_loop_search_space_v3",
-  "what": "DECLARED (immutable) candidate space for the owned-oracle reconstruction loop: axes x values + baseline best-stack. Each axis declares which NAMED owned-vs-generated delta it targets (bench/qk-search-spaces/owned_delta_taxonomy.json). Outcomes live in a SEPARATE append-only ledger (bench/qk-pure-search-loop/decode_attention_loop_ledger.jsonl). The generator (extra/qk_pure_search_next_candidate.py) is the SINGLE source of truth for candidate selection.",
-  "active_space": "one-factor singles (axis x value) PLUS pairs of cheap knobs (pairs ON by default). SEARCH_SPACE_EXHAUSTED => every single AND pair is in the ledger.",
-  "owned_oracle": "the owned AMDGCN decode-attention tile. Every candidate targets a named delta; if candidates do not MOVE the named delta, classify SEARCH_SPACE_BUG (not 'try more'). PROMOTABLE requires W==D + token-match.",
-  "wd_promotion_threshold_pct_of_owned": 90.0,
-  "baseline_stack": {
-    "DECODE_ATTN_BLOCK_TILE": 1,
-    "DECODE_STAGE_COALESCE": 4,
-    "COALESCED_LOAD_LOWERING": 1,
-    "SCHED_UNROLL": 8,
-    "SCHED_LIST": 1,
-    "DECODE_FAST_EXP2": 1,
-    "DECODE_ATTN_GENERATED_WHOLECACHE": 1,
-    "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE": 1,
-    "DECODE_ATTN_AMDGCN_TILE": 0
+ "schema": "qk_decode_attention_loop_search_space_v3",
+ "what": "DECLARED (immutable) candidate space for the owned-oracle reconstruction loop: axes x values + baseline best-stack. Each axis declares which NAMED owned-vs-generated delta it targets (bench/qk-search-spaces/owned_delta_taxonomy.json). Outcomes live in a SEPARATE append-only ledger (bench/qk-pure-search-loop/decode_attention_loop_ledger.jsonl). The generator (extra/qk_pure_search_next_candidate.py) is the SINGLE source of truth for candidate selection.",
+ "active_space": "one-factor singles (axis x value) PLUS pairs of cheap knobs (pairs ON by default). SEARCH_SPACE_EXHAUSTED => every single AND pair is in the ledger.",
+ "owned_oracle": "the owned AMDGCN decode-attention tile. Every candidate targets a named delta; if candidates do not MOVE the named delta, classify SEARCH_SPACE_BUG (not 'try more'). PROMOTABLE requires W==D + token-match.",
+ "wd_promotion_threshold_pct_of_owned": 90.0,
+ "baseline_stack": {
+  "DECODE_ATTN_BLOCK_TILE": 1,
+  "DECODE_STAGE_COALESCE": 4,
+  "COALESCED_LOAD_LOWERING": 1,
+  "SCHED_UNROLL": 8,
+  "SCHED_LIST": 1,
+  "DECODE_FAST_EXP2": 1,
+  "DECODE_ATTN_GENERATED_WHOLECACHE": 1,
+  "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE": 1,
+  "DECODE_ATTN_AMDGCN_TILE": 0
+ },
+ "axes": [
+  {
+   "flag": "DECODE_STAGE_COALESCE",
+   "values": [
+    2,
+    8
+   ],
+   "kind": "knob",
+   "cost": "cheap",
+   "priority": 1,
+   "targets_delta": "load_vectorization",
+   "blocker_kind": "TIMING_TRIGGER",
+   "hypothesis": "memory-coalescing trigger on the LDS K/V staging load; does NOT target the open outer_b slope -> expect no slope movement (a SEARCH_SPACE_BUG smell for the slope)"
   },
-  "axes": [
-    {
-      "flag": "DECODE_STAGE_COALESCE",
-      "values": [
-        2,
-        8
-      ],
-      "kind": "knob",
-      "cost": "cheap",
-      "priority": 1,
-      "targets_delta": "load_vectorization",
-      "blocker_kind": "TIMING_TRIGGER",
-      "hypothesis": "memory-coalescing trigger on the LDS K/V staging load; does NOT target the open outer_b slope -> expect no slope movement (a SEARCH_SPACE_BUG smell for the slope)"
-    },
-    {
-      "flag": "SCHED_UNROLL",
-      "values": [
-        4,
-        16
-      ],
-      "kind": "knob",
-      "cost": "cheap",
-      "priority": 2,
-      "targets_delta": "waitcnt",
-      "blocker_kind": "TIMING_TRIGGER",
-      "hypothesis": "dependency-chain/ILP trigger -- but unroll reaches the INNER tt-carry, not the outer b-carry that is the ctx-slope; proven not to move the slope delta"
-    },
-    {
-      "flag": "DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE",
-      "values": [
-        1
-      ],
-      "kind": "knob",
-      "cost": "cheap",
-      "priority": 3,
-      "targets_delta": "waitcnt",
-      "blocker_kind": "TIMING_TRIGGER",
-      "hypothesis": "cross-lane vs waitcnt trigger; cross_lane is already at owned per-token parity (truth #4) -> not the open delta"
-    },
-    {
-      "flag": "DECODE_OUTER_B_SPLIT",
-      "values": [
-        4
-      ],
-      "kind": "primitive",
-      "cost": "med",
-      "priority": 4,
-      "targets_delta": "latency_shadow_fill",
-      "blocker_kind": "TIMING_TRIGGER",
-      "hypothesis": "directly targets the open slope delta via independent b-partitions; K=2 refuted (occupancy tax), K=4 degenerate",
-      "predicted": "refuted_occupancy_class"
-    },
-    {
-      "flag": "DECODE_ATTN_FUSED_XLANE_SCORE_PV_S",
-      "values": [
-        64,
-        96
-      ],
-      "kind": "topology",
-      "cost": "high",
-      "priority": 10,
-      "enable": {
-        "DECODE_ATTN_BLOCK_TILE_FIXED_S": 1
-      },
-      "requires_wd": true,
-      "targets_delta": "split_kv_combine",
-      "blocker_kind": "TIMING_TRIGGER",
-      "hypothesis": "the 'more workgroups' (Level-2) lever targeting the combine/lifecycle delta: higher split count S -> more workgroups (S=48 gives 384 wg). Its cost is the split-KV COMBINE tax, IN-MODEL only -> isolated MISLEADS; W==D-gated. Predicted combine-economics-capped but untried for the generated tile.",
-      "added_by": "Z (loop self-improvement 2026-06-27): knob space exhausted; topology + W==D gate added"
-    }
-  ],
-  "ledger": "MOVED -> bench/qk-pure-search-loop/decode_attention_loop_ledger.jsonl (append-only JSONL; the generator reads it to prune)",
-  "route_binding_contract": "the generated block tile binds in-model ONLY with GENERATED_WHOLECACHE=1 + FUSED_XLANE_SCORE_PV_TILE=1 + BLOCK_TILE=1 + AMDGCN_TILE=0 (model.py:1042 -> qk_flash_decode.py:1333 -> :1352). BLOCK_TILE=1 alone falls back to owned/gqa. W==D candidates MUST carry this stack and a route_attribution proof."
+  {
+   "flag": "SCHED_UNROLL",
+   "values": [
+    4,
+    16
+   ],
+   "kind": "knob",
+   "cost": "cheap",
+   "priority": 2,
+   "targets_delta": "waitcnt",
+   "blocker_kind": "TIMING_TRIGGER",
+   "hypothesis": "dependency-chain/ILP trigger -- but unroll reaches the INNER tt-carry, not the outer b-carry that is the ctx-slope; proven not to move the slope delta"
+  },
+  {
+   "flag": "DECODE_ATTN_BLOCK_TILE_INLINE_REDUCE",
+   "values": [
+    1
+   ],
+   "kind": "knob",
+   "cost": "cheap",
+   "priority": 3,
+   "targets_delta": "waitcnt",
+   "blocker_kind": "TIMING_TRIGGER",
+   "hypothesis": "cross-lane vs waitcnt trigger; cross_lane is already at owned per-token parity (truth #4) -> not the open delta"
+  },
+  {
+   "flag": "DECODE_OUTER_B_SPLIT",
+   "values": [
+    4
+   ],
+   "kind": "primitive",
+   "cost": "med",
+   "priority": 4,
+   "targets_delta": "latency_shadow_fill",
+   "blocker_kind": "TIMING_TRIGGER",
+   "hypothesis": "directly targets the open slope delta via independent b-partitions; K=2 refuted (occupancy tax), K=4 degenerate",
+   "predicted": "refuted_occupancy_class"
+  },
+  {
+   "flag": "DECODE_ATTN_FUSED_XLANE_SCORE_PV_S",
+   "values": [
+    64,
+    96
+   ],
+   "kind": "topology",
+   "cost": "high",
+   "priority": 10,
+   "enable": {
+    "DECODE_ATTN_BLOCK_TILE_FIXED_S": 1
+   },
+   "requires_wd": true,
+   "targets_delta": "split_kv_combine",
+   "blocker_kind": "TIMING_TRIGGER",
+   "hypothesis": "the 'more workgroups' (Level-2) lever targeting the combine/lifecycle delta: higher split count S -> more workgroups (S=48 gives 384 wg). Its cost is the split-KV COMBINE tax, IN-MODEL only -> isolated MISLEADS; W==D-gated. Predicted combine-economics-capped but untried for the generated tile.",
+   "added_by": "Z (loop self-improvement 2026-06-27): knob space exhausted; topology + W==D gate added"
+  },
+  {
+   "flag": "DECODE_ATTN_NATIVE_ISA_BLOCK_TILE",
+   "values": [
+    1
+   ],
+   "kind": "topology",
+   "cost": "high",
+   "priority": 11,
+   "enable": {},
+   "requires_wd": true,
+   "targets_delta": "native_attn_tile_route",
+   "hypothesis": "PROVEN native AMD ISA levers bound as a search axis: N1A hardware exp2->v_exp_f32 (+27% W==D) + N3F dynamic-S valid-split launch (+9.5% ctx512), scheduler default-on. Compiles the decode attention tile via AMDISARenderer (Ops.PROGRAM injection); gmax+combine stay HIP. Measured W==D 64.7%/61.1% of owned @ctx512/4096, token-match + route-bound + deterministic, no fallback. Below the 90% promotion threshold (N5A register-accum to close the residual is regalloc-blocked).",
+   "added_by": "N6 (BubbleBeam binding 2026-06-29): bind the proven, non-refuted native-ISA levers as a search-owned axis."
+  }
+ ],
+ "ledger": "MOVED -> bench/qk-pure-search-loop/decode_attention_loop_ledger.jsonl (append-only JSONL; the generator reads it to prune)",
+ "route_binding_contract": "the generated block tile binds in-model ONLY with GENERATED_WHOLECACHE=1 + FUSED_XLANE_SCORE_PV_TILE=1 + BLOCK_TILE=1 + AMDGCN_TILE=0 (model.py:1042 -> qk_flash_decode.py:1333 -> :1352). BLOCK_TILE=1 alone falls back to owned/gqa. W==D candidates MUST carry this stack and a route_attribution proof."
 }
