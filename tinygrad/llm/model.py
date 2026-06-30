@@ -249,7 +249,10 @@ class Q4KPrimitiveLinear:
       out = partials.custom_kernel(words, x_batch.reshape(K*self.in_features),
         fxn=q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
       return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
-    bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT") or getenv("BEAM_COALESCE")
+    # PROMOTED default-on: the generated G3 LaneMap is the default Q4_K decode GEMV route (speed-equivalent to the owned
+    # warp kernel, <0.5% across ctx 512-4096; token-matched, route-clean). Directional pure-machine-search move: ship the
+    # generated route, keep owned warp one flag away. Rollback to owned warp: BUBBLEBEAM_FUTURESIGHT=0.
+    bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1) or getenv("BEAM_COALESCE")
     g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
     if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and g3_bubblebeam_shape:
       from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition

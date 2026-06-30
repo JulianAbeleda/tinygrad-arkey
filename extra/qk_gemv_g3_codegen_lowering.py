@@ -18,9 +18,10 @@ from extra.qk_lane_partition_reduce import LanePartition, lane_partition_reduce_
 def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP):
   """Named wave32 UOp kernel generated from Q4KGateUpLaneMap.
 
-  This is a lowering probe, not a default route. The important distinction from
-  the FutureSight bridge is provenance and attribution: this path is bound to the
-  G2 LaneMap representation and has its own program name, so the capture/gates can
+  PROMOTED: this is now the default Q4_K decode GEMV route (BUBBLEBEAM_FUTURESIGHT
+  defaults on), speed-equivalent to the owned warp kernel and token-identical.
+  Rollback to owned warp: BUBBLEBEAM_FUTURESIGHT=0. The path is bound to the G2
+  LaneMap representation and has its own program name, so the capture/gates can
   distinguish it from qk_q4k_lane_partition_gemv_*.
   """
   lm = Q4KGateUpLaneMap(k=k, n=rows, lane_extent=lanes)
