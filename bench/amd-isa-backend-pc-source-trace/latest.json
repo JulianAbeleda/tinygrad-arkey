@@ -454,14 +454,14 @@
   ],
   "static_inst_total": 338,
   "category_static_breakdown": {
-    "VMEM": 7,
-    "SMEM": 4,
-    "VALU": 197,
-    "WAIT": 35,
+    "OTHER": 28,
     "SALU": 26,
-    "BARRIER": 5,
     "LDS": 36,
-    "OTHER": 28
+    "WAIT": 35,
+    "BARRIER": 5,
+    "VALU": 197,
+    "VMEM": 7,
+    "SMEM": 4
   },
   "whole_step_reference": "bench/amd-isa-backend-phase-n4/latest.json",
   "token_match": true,

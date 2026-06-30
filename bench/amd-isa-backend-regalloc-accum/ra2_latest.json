@@ -1,0 +1,48 @@
+{
+  "scope": "RA2: native tile DEFINE_REG accumulators -> pinned VGPR (AMD_ISA_REG_ACCUM=1)",
+  "tile_ds_off": {
+    "ds_load": 16,
+    "ds_store": 15,
+    "v_pin": 0,
+    "total_ins": 324
+  },
+  "tile_ds_on": {
+    "ds_load": 5,
+    "ds_store": 4,
+    "v_pin": 22,
+    "total_ins": 270
+  },
+  "ds_total_off": 31,
+  "ds_total_on": 9,
+  "in_model_with_flag": {
+    "verdict": "AMD_ISA_PHASE_H_PASS_MODEL_ROUTE_BOUND",
+    "token_match": true,
+    "deterministic": true,
+    "route_attribution": {
+      "native_block_tile_fired": true,
+      "hip_llvm_block_tile_absent": true,
+      "owned_tile_absent": true,
+      "gmax_hip_present": true,
+      "combine_hip_present": true
+    },
+    "regression_ladder": {
+      "inc0": "PASS",
+      "inc1": "PASS",
+      "inc2": "PASS",
+      "inc3": "PASS",
+      "phase_b": "PASS",
+      "phase_c": "PASS",
+      "phase_f": "PASS",
+      "phase_g": "PASS",
+      "phase_h_keystone": "PASS",
+      "default_amd_smoke": "PASS"
+    }
+  },
+  "flag_off_byte_identical": "verified: _vpool + isel pinned branch gated on AMD_ISA_REG_ACCUM; INC0/Phase B PASS flag-off",
+  "verdict": "AMD_ISA_REGALLOC_ACCUM_RA2_PASS_DEFINE_REG_OPT_IN",
+  "pc_source_lds_accum_stage_static": {
+    "off": 31,
+    "on": 9,
+    "source": "extra/amd_isa_pc_source_trace.py with/without the flag"
+  }
+}
