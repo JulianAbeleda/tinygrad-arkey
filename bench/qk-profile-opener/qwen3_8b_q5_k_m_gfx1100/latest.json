@@ -1,0 +1,273 @@
+{
+  "profile_id": "qwen3_8b_q5_k_m_gfx1100",
+  "verdict": "TG4_PASS_NEW_PROFILE_OPENER_READY",
+  "step1_model_shape_census": {
+    "model_dims": {
+      "family": "qwen3",
+      "params": "8b",
+      "layers": 36,
+      "hidden": 4096,
+      "ffn": 12288,
+      "heads": 32,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "vocab": 151936
+    },
+    "decode_role_shapes": {
+      "attn_qo": {
+        "K": 4096,
+        "N": 4096
+      },
+      "attn_kv": {
+        "K": 4096,
+        "N": 1024
+      },
+      "ffn_gate_up": {
+        "K": 4096,
+        "N": 12288
+      },
+      "ffn_down": {
+        "K": 12288,
+        "N": 4096
+      },
+      "lm_head": {
+        "N": 151936
+      }
+    }
+  },
+  "step2_quant_mix_census": {
+    "quant_rows": {
+      "Q5_K": {
+        "roles": [
+          "ffn_gate_up",
+          "ffn_down",
+          "attn_qo"
+        ],
+        "block_elems": 256,
+        "block_bytes": 176,
+        "packing": "uint32",
+        "symmetric": false,
+        "quality_class": "lossy_5bit_kquant",
+        "known_good": [
+          "lanemap",
+          "coop",
+          "owned_reference"
+        ],
+        "known_refuted": [],
+        "metadata_bytes": 16,
+        "weight_payload_bytes": 160,
+        "other_bytes": 0,
+        "words_per_block": 44,
+        "quant_word_base": 4,
+        "quant_words_per_block": 40,
+        "payload_bits_per_weight": 5.0,
+        "sub_block_elems": 32
+      },
+      "Q6_K": {
+        "roles": [
+          "lm_head"
+        ],
+        "block_elems": 256,
+        "block_bytes": 210,
+        "packing": "uint16",
+        "symmetric": true,
+        "quality_class": "lossy_6bit_kquant",
+        "known_good": [
+          "coop",
+          "owned_reference"
+        ],
+        "known_refuted": [
+          "decode_q6k_direct_refuted"
+        ],
+        "metadata_bytes": 18,
+        "weight_payload_bytes": 192,
+        "other_bytes": 0,
+        "words_per_block": 105,
+        "quant_word_base": null,
+        "quant_words_per_block": null,
+        "payload_bits_per_weight": 6.0,
+        "sub_block_elems": 16
+      },
+      "fp16": {
+        "roles": [
+          "attention_tile",
+          "attention_combine",
+          "prefill_gemm_all_roles"
+        ],
+        "block_elems": 1,
+        "block_bytes": 2,
+        "packing": "fp16",
+        "symmetric": true,
+        "quality_class": "lossless_fp16",
+        "known_good": [
+          "graph_gemm_pipe",
+          "owned_reference",
+          "native_isa_attention"
+        ],
+        "known_refuted": [],
+        "metadata_bytes": 0,
+        "weight_payload_bytes": 2,
+        "other_bytes": 0,
+        "words_per_block": 1,
+        "quant_word_base": 0,
+        "quant_words_per_block": 1,
+        "payload_bits_per_weight": 16.0,
+        "sub_block_elems": 1
+      }
+    }
+  },
+  "step3_gpu_target_feature_census": {
+    "gpu": {
+      "vendor": "AMD",
+      "arch": "gfx1100",
+      "wave": 32,
+      "vram_gb": 24,
+      "measured_copy_gbps": 820,
+      "copy_gbps_note": "820 GB/s measured device-copy (scope PMS-R8 pin). The decode ceiling audit separately uses 960 peak / ~768 real for the weight-read roofline; 820 is the measured copy bandwidth used for profile-level planning."
+    },
+    "lane_extent": 32,
+    "vendor": "AMD",
+    "arch": "gfx1100",
+    "target_id": "amd_gfx1100"
+  },
+  "step4_default_path_route_census": {
+    "routes": [],
+    "promoted_or_shipped": []
+  },
+  "step5_theoretical_ceiling": {
+    "measured_copy_gbps": 820,
+    "per_role_weight_read_roofline": {
+      "attn_qo": {
+        "quant": "Q5_K",
+        "N": 4096,
+        "K": 4096,
+        "weight_bytes": 11534336,
+        "roofline_ms_at_measured_bw": 0.0141,
+        "roofline_gbps": 5.5
+      },
+      "ffn_gate_up": {
+        "quant": "Q5_K",
+        "N": 12288,
+        "K": 4096,
+        "weight_bytes": 34603008,
+        "roofline_ms_at_measured_bw": 0.0422,
+        "roofline_gbps": 5.5
+      },
+      "ffn_down": {
+        "quant": "Q5_K",
+        "N": 4096,
+        "K": 12288,
+        "weight_bytes": 34603008,
+        "roofline_ms_at_measured_bw": 0.0422,
+        "roofline_gbps": 5.5
+      }
+    },
+    "note": "HBM weight-read speed-of-light per decode GEMV role; decode is weight-mem-bound so this bounds the search."
+  },
+  "step6_wall_share_attribution": {
+    "source": null,
+    "status": "PENDING_MEASURE",
+    "note": "no prior wall-share audit for this profile; a W==D attribution must be measured before promotion."
+  },
+  "step7_declared_search_rows": {
+    "source": "derived_from_quant_known_good",
+    "rows": {
+      "ffn_gate_up__Q5_K": {
+        "quant": "Q5_K",
+        "status": "open",
+        "allowed_route_families": [
+          "lanemap",
+          "coop",
+          "owned_reference"
+        ]
+      },
+      "ffn_down__Q5_K": {
+        "quant": "Q5_K",
+        "status": "open",
+        "allowed_route_families": [
+          "lanemap",
+          "coop",
+          "owned_reference"
+        ]
+      },
+      "attn_qo__Q5_K": {
+        "quant": "Q5_K",
+        "status": "open",
+        "allowed_route_families": [
+          "lanemap",
+          "coop",
+          "owned_reference"
+        ]
+      },
+      "lm_head__Q6_K": {
+        "quant": "Q6_K",
+        "status": "open",
+        "allowed_route_families": [
+          "coop",
+          "owned_reference"
+        ]
+      }
+    }
+  },
+  "step8_do_not_search_inherited": {
+    "manifest_refuted_axes": [
+      {
+        "axis": "q6k_direct_half_warp_route",
+        "disposition": "refuted: W==D regression -4.77..-6.06% (median -5.44%)",
+        "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json",
+        "route_id": "decode_q6k_direct_refuted"
+      },
+      {
+        "axis": "q4k_offline_layout_reshuffle",
+        "disposition": "deprioritized: G3 matches owned, no layout gap to recover",
+        "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"
+      },
+      {
+        "axis": "attention_combine_fused_lifecycle",
+        "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
+        "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"
+      },
+      {
+        "axis": "native_attention_as_default",
+        "disposition": "correct_not_fast (~60-68% of owned)",
+        "citation": "bench/amd-isa-backend-phase-n7/latest.json",
+        "route_id": "decode_attention_native_correct_not_fast"
+      },
+      {
+        "axis": "n1b_scalar_address_path",
+        "disposition": "refuted/dead",
+        "citation": "bench/amd-isa-backend-phase-n1b/latest.json"
+      },
+      {
+        "axis": "occupancy_lds_only_attention_tuning",
+        "disposition": "refuted: no W==D movement",
+        "citation": "bench/amd-isa-backend-phase-m/latest.json"
+      },
+      {
+        "axis": "scheduler_only_attention_tuning",
+        "disposition": "small/no movement",
+        "citation": "bench/amd-isa-backend-phase-k/latest.json"
+      }
+    ],
+    "quant_known_refuted": {
+      "Q6_K": [
+        {
+          "route_family": "coop_halfwarp_direct",
+          "route_id": "decode_q6k_direct_refuted",
+          "disposition": "refuted as built: W==D -4.77..-6.06% (median -5.44%); 2 rows x 16-lane half-warp partition",
+          "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json"
+        }
+      ]
+    }
+  },
+  "step9_first_candidate_recommendation": {
+    "action": "AUTHOR_CANDIDATES_FOR_OPEN_ROWS",
+    "open_rows": [
+      "attn_qo__Q5_K",
+      "ffn_down__Q5_K",
+      "ffn_gate_up__Q5_K",
+      "lm_head__Q6_K"
+    ],
+    "note": "open weight-GEMV rows exist; run the TG2 author (quant-parameterized) per row -> TG6 evaluator."
+  }
+}
