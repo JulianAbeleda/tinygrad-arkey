@@ -1,0 +1,58 @@
+{
+  "verdict": "AMD_ISA_REG_ACCUM_LDS_RL2_PASS_RESOURCE_RECLAIM_NO_WD_MOVEMENT",
+  "scope": "RL2: W==D with reg-accum + LDS reclaim (group_segment 10240)",
+  "wd": {
+    "baseline_dynamic_s": {
+      "ctx512": {
+        "native": 67.09,
+        "pct": 65.0
+      },
+      "ctx4096": {
+        "native": 57.4,
+        "pct": 61.0
+      }
+    },
+    "ra4_reg_accum_no_reclaim": {
+      "ctx512": {
+        "native": 70.72,
+        "pct": 68.3
+      },
+      "ctx4096": {
+        "native": 56.73,
+        "pct": 60.1
+      }
+    },
+    "rl2_reg_accum_with_reclaim": {
+      "ctx512": {
+        "native": 70.74,
+        "pct": 68.1
+      },
+      "ctx4096": {
+        "native": 56.7,
+        "pct": 59.8
+      }
+    }
+  },
+  "resources": {
+    "vgpr": 56,
+    "group_segment_off": 12288,
+    "group_segment_on": 10240,
+    "reclaimed_bytes": 2048,
+    "lds_accum_ds_load_store": "31 -> 9",
+    "occupancy_wg_per_cu": "5 -> 6"
+  },
+  "gates": {
+    "token_match": true,
+    "route_bound": true,
+    "deterministic": true,
+    "hidden_fallback": false,
+    "phase_g_flag_on": true,
+    "flag_off_byte_identical": true
+  },
+  "wd_delta_vs_baseline": {
+    "ctx512": "+5.4%",
+    "ctx4096": "-1.2% (flat/noise; UNCHANGED by the LDS reclaim)"
+  },
+  "finding": "The LDS reclaim (group 12288->10240, 5->6 wg/CU) is RESOURCE-CORRECT but moves W==D ~0 at both ctx. ctx4096's neutrality was therefore NOT caused by the over-sized group_segment -- it is deeper: the tile is ~10% of decode wall (N3F) and is not 5->6-wg/CU occupancy-bound (consistent with Phase M's 4->5 wg/CU = ~0). Net feature state: ctx512 +5.4%, ctx4096 neutral, resource-correct (VGPR 56, LDS 10240, DS 31->9). PC/source lds_accum DS 31->9 confirms the attribution row moved; full N4 re-run not required (W==D is the decisive metric and shows no further movement).",
+  "next": "reg-accum is correct + resource-correct + net-positive but NOT owned parity (68.1%/59.8%). Remaining ctx4096 gap is wall-share/algorithmic, not a tile resource knob. Feature stays default-off opt-in."
+}
