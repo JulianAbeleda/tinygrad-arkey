@@ -1308,6 +1308,19 @@ class TransformerBlock(FFNBlock):
         _g5_staging = "K_ONLY" if (_g5_policy_selected or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
         out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
                                          Hd, Hq, Hkv, MAXC, L, staging=_g5_staging)
+      # TG-P5: generalize the generated G5 block-tile flash decode to the 8B geometry (Hq=32/Hkv=8, G=4). Same
+      # generated UOp route as the 14B G=5 default (WARPS=G is parameterized). Opt-in for the A/B vs the owned HIP
+      # tile: DECODE_FLASH_BLOCK_TILE_G5_8B, or BoltBeam QK_ROUTE_POLICY selecting decode_flash_block_tile_g5_konly
+      # for the Hq=32 shape. Fires BEFORE the owned tile so the generated route preempts owned when selected.
+      _g5_8b_shape = B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 and (Hq // Hkv) == 4
+      _g5_8b_policy = _qk_route_policy_selected("decode_flash_block_tile_g5_konly",
+                                                {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_8b_shape else False
+      _g5_8b_enabled = _g5_8b_policy if _QK_ROUTE_POLICY is not None else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5_8B", 0))
+      if out is None and _g5_8b_shape and _g5_8b_enabled:
+        from extra.qk_flash_decode import flash_decode_g5_block_tile
+        _g5_8b_staging = "K_ONLY" if (_g5_8b_policy or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
+        out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                         Hd, Hq, Hkv, MAXC, L, staging=_g5_8b_staging)
       if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
