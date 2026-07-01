@@ -24,17 +24,17 @@ Machine: RX 7900 XTX (24 GB), AMD gfx1100. Decode numbers below are authority-st
 
 | Model | Quant | Decode ctx512 | Decode ctx4096 | Prefill pp512 | Notes |
 |---|---:|---:|---:|---:|---|
-| Qwen3-8B | Q4_K_M | 107.6 tok/s | 97.9 tok/s | 4434 tok/s | Current default uses owned HIP attention at long context. Generated attention is 104.0 / 93.3 tok/s and remains default-off. |
-| Qwen3-14B | Q4_K_M | 53.8 tok/s | refresh needed | not measured | Current generated G=5 K-only attention route, validated at ctx512/2048. |
-| Qwen3-32B | Q4_K_M | refresh needed | refresh needed | not measured | Existing committed table predates the latest route set. |
+| Qwen3-8B | Q4_K_M | 107.6 tok/s | 97.6 tok/s | 4420 tok/s | Current default uses owned HIP attention at long context. Generated attention is 104.0 / 93.3 tok/s and remains default-off. |
+| Qwen3-14B | Q4_K_M | 54.0 tok/s | 53.7 tok/s | not measured | Current generated G=5 K-only attention route. |
+| Qwen3-32B | Q4_K_M | 24.8 tok/s | 22.1 tok/s | not measured | Current route set; 24 GB card fit confirmed. |
 
 ### llama.cpp reference
 
 | Model | Quant | Decode ctx512 | Decode ctx4096 | Prefill pp512 | Notes |
 |---|---:|---:|---:|---:|---|
-| Qwen3-8B | Q4_K_M | 98.35 tok/s | 92.4 tok/s | 3000.9 tok/s | Same GGUF / RX 7900 XTX reference from the local benchmark notes. |
-| Qwen3-14B | Q4_K_M | 64.92 tok/s | not recorded here | 1633.1 tok/s | Same local llama-bench reference. |
-| Qwen3-32B | Q4_K_M | 30.74 tok/s | not recorded here | 722.7 tok/s | Same local llama-bench reference. |
+| Qwen3-8B | Q4_K_M | 98.2 tok/s | 92.0 tok/s | 3045 tok/s | Same GGUF / RX 7900 XTX via local llama-bench. |
+| Qwen3-14B | Q4_K_M | 64.9 tok/s | 60.9 tok/s | 1676 tok/s | Same GGUF / RX 7900 XTX via local llama-bench. |
+| Qwen3-32B | Q4_K_M | 30.9 tok/s | 29.6 tok/s | 751 tok/s | Same GGUF / RX 7900 XTX via local llama-bench. |
 
 Read these as current working numbers, not a universal claim. The multi-model table in `bench/models/qwen/` is useful provenance but may lag the latest route changes. The current purity state is in `bench/pure-machine-search-default-path-census/summary.md`; the final 8B attention blocker is in `bench/tg-p10-reg-scalar-combine-lowering/summary.md` and `docs/tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`.
 
