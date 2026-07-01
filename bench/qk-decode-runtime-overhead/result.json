@@ -1,27 +1,72 @@
 {
-  "model_id": "Qwen3-8B-Q4_K_M",
+  "model_id": "Qwen3-14B-Q4_K_M",
   "hardware": "RX 7900 XTX / gfx1100",
   "ckpts": [
-    512
+    128,
+    512,
+    1024,
+    4096
   ],
   "nmeas": 40,
   "method": "W=real decode (.item/token), D=dispatch-only (no per-token sync, 1 final sync); host_sync=W-D",
   "rows": [
     {
+      "ctx": 128,
+      "flash": false,
+      "wall_ms_W": 19.138,
+      "dispatch_ms_D": 19.348,
+      "host_sync_residual_ms": 0.0,
+      "host_sync_pct_of_wall": 0.0,
+      "tok_s_W": 52.3,
+      "tok_s_D_ceiling": 51.7,
+      "programs_per_token": 6,
+      "debug2_unbatched_gpu_ms": 19.89,
+      "item_syncs_per_token_W": 1,
+      "item_syncs_per_token_D": 0
+    },
+    {
       "ctx": 512,
       "flash": true,
-      "wall_ms_W": 67.328,
-      "dispatch_ms_D": 62.795,
-      "host_sync_residual_ms": 4.533,
-      "host_sync_pct_of_wall": 6.7,
-      "tok_s_W": 14.9,
-      "tok_s_D_ceiling": 15.9,
+      "wall_ms_W": 18.595,
+      "dispatch_ms_D": 18.844,
+      "host_sync_residual_ms": 0.0,
+      "host_sync_pct_of_wall": 0.0,
+      "tok_s_W": 53.8,
+      "tok_s_D_ceiling": 53.1,
       "programs_per_token": 6,
-      "debug2_unbatched_gpu_ms": 67.57,
+      "debug2_unbatched_gpu_ms": 18.94,
+      "item_syncs_per_token_W": 1,
+      "item_syncs_per_token_D": 0
+    },
+    {
+      "ctx": 1024,
+      "flash": true,
+      "wall_ms_W": 18.568,
+      "dispatch_ms_D": 18.857,
+      "host_sync_residual_ms": 0.0,
+      "host_sync_pct_of_wall": 0.0,
+      "tok_s_W": 53.9,
+      "tok_s_D_ceiling": 53.0,
+      "programs_per_token": 6,
+      "debug2_unbatched_gpu_ms": 18.96,
+      "item_syncs_per_token_W": 1,
+      "item_syncs_per_token_D": 0
+    },
+    {
+      "ctx": 4096,
+      "flash": true,
+      "wall_ms_W": 18.676,
+      "dispatch_ms_D": 18.977,
+      "host_sync_residual_ms": 0.0,
+      "host_sync_pct_of_wall": 0.0,
+      "tok_s_W": 53.5,
+      "tok_s_D_ceiling": 52.7,
+      "programs_per_token": 6,
+      "debug2_unbatched_gpu_ms": 19.06,
       "item_syncs_per_token_W": 1,
       "item_syncs_per_token_D": 0
     }
   ],
-  "median_host_sync_pct": 6.7,
+  "median_host_sync_pct": 0.0,
   "verdict": "runtime NOT the main target (host-sync <10-20%): GPU-bound, stop"
 }

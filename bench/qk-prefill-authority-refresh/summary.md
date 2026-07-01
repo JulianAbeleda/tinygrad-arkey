@@ -5,16 +5,16 @@
 ## Whole-prefill tok/s (synced authority)
 | arm | ctx512 | ctx1024 | ctx2048 | ctx4096 | route kernels |
 |---|---|---|---|---|---|
-| current_default | 3596.9 | 3504.8 | 3251.7 | 2818.9 | 30 |
-| eightwave_off | 3489.5 | 3408.0 | 3171.7 | 2766.4 | 30 |
-| pipe_tm2_tn2 | 4294.6 | 4097.6 | 3711.9 | 3139.9 | 30 |
+| current_default | 4441.5 | 4243.8 | 3850.2 | 3242.7 | 30 |
+| eightwave_off | 5615.9 | 5371.0 | 4772.1 | 3873.2 | 30 |
+| pipe_tm2_tn2 | 4432.8 | 4248.8 | 3846.1 | 3241.7 | 30 |
 
 ## pipe_tm2_tn2 re-validation vs current_default
 | ctx | current | pipe_tm2_tn2 | Δ% |
 |---|---|---|---|
-| 512 | 3596.9 | 4294.6 | 19.4 |
-| 1024 | 3504.8 | 4097.6 | 16.9 |
-| 2048 | 3251.7 | 3711.9 | 14.2 |
-| 4096 | 2818.9 | 3139.9 | 11.4 |
+| 512 | 4441.5 | 4432.8 | -0.2 |
+| 1024 | 4243.8 | 4248.8 | 0.1 |
+| 2048 | 3850.2 | 3846.1 | -0.1 |
+| 4096 | 3242.7 | 3241.7 | -0.0 |
 
-sanity (current_default@512 >= 3000): True (got 3596.9); route attribution non-empty: True; 8192 unsupported (max_context=4608).
+sanity (current_default@512 >= 3000): True (got 4441.5); route attribution non-empty: True; 8192 unsupported (max_context=4608).
