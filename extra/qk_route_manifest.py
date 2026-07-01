@@ -96,24 +96,42 @@ ROUTES = {
     "route_attribution": "tinygrad/llm/model.py:318 (Q4K_GEMV_WARP_PROJ default 1, q/o) + :360 (Q4K_GEMV_WARP default 1, gate/up+down); reached only when BUBBLEBEAM_FUTURESIGHT=0 short-circuits the G3 branch. Writer extra/q4_k_gemv_primitive.py q4k_gemv_warp_kernel",
     "note": "hand-written owned warp GEMV. The Q4K_GEMV_WARP* guards still default to 1, but the G3 branch intercepts first for the eligible shapes when BUBBLEBEAM_FUTURESIGHT is on (the default). So owned warp is the rollback/reference, not the live default."},
   # ---------------- decode weight GEMV: Q6_K ----------------
-  "decode_q6k_coop_shipped": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "default_shipped",
+  "decode_q6k_coop_generated": {
+    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "promoted_default",
     "roles": ["ffn_down", "lm_head", "attn_v"], "excluded_roles": [],
     "quant": ["Q6_K"],
     "shape_guards": [{"role": "ffn_down", "K": 12288, "N": 4096}, {"role": "ffn_down_longk", "K": ">=8192", "N": "<100000"},
                      {"role": "lm_head", "N": ">=100000"}, {"role": "attn_v", "enabled_by": "Q6K_COVER_MORE=1"}],
-    "env": {},  # Q6K_LM_HEAD_COOP / Q6K_FFN_DOWN_COOP / DECODE_Q6K_FFN_DOWN_LONGK / Q6K_COVER_MORE default to 1
-    "rollback": {},  # no rollback flag: this is the shipped baseline; Q6_K direct (refuted) is the only alt route
+    "env": {},  # DEFAULT-ON: model.py getenv("DECODE_Q6K_GENERATED", 1). BoltBeam QK_ROUTE_POLICY can select per tensor.
+    "rollback": {"DECODE_Q6K_GENERATED": "0"},  # -> shipped hand kernels (decode_q6k_coop_shipped)
+    "baseline_route_id": "decode_q6k_coop_shipped",
+    "strict_fallback": True,
+    "expected_kernels": ["q6k_gen_coop_*", "q6k_gen_partial_*"],
+    "forbidden_kernels": ["q6k_coop_partial_* (on the default path)", "q6k_gemv_partial_* (on the default path)"],
+    "authority_gate": "extra/qk_q6k_generated_coop_gate.py",
+    "promotion_artifacts": ["bench/tg-p3-q6k-generated-coop/latest.json", "bench/tg-p3-q6k-generated-coop/summary.md"],
+    "purity_status": "search_generated_promoted",
+    "provenance": "machine_authored_generated",
+    "selector": "BoltBeam_route_policy_or_env_default",
+    "route_attribution": "tinygrad/llm/model.py Q6_K generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/qk_q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
+    "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/qk_q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."},
+  "decode_q6k_coop_shipped": {
+    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "rollback_reference",
+    "roles": ["ffn_down", "lm_head", "attn_v"], "excluded_roles": [],
+    "quant": ["Q6_K"],
+    "shape_guards": [{"role": "ffn_down", "K": 12288, "N": 4096}, {"role": "ffn_down_longk", "K": ">=8192", "N": "<100000"},
+                     {"role": "lm_head", "N": ">=100000"}, {"role": "attn_v", "enabled_by": "Q6K_COVER_MORE=1"}],
+    "env": {"DECODE_Q6K_GENERATED": "0"},  # SET this to force the shipped hand kernels (the rollback for the generated route)
+    "rollback": {},  # this IS the rollback target
     "strict_fallback": True,
     "expected_kernels": ["q6k_coop_partial_*", "q6k_gemv_partial_*"],
-    "authority_gate": "extra/qk_decode_runtime_overhead.py",
-    "promotion_artifacts": [],
-    "purity_status": "owned_default",
-    "provenance": "hand_authored_uop_template",
-    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p3-generate-q6_k-coop-from-a-route-spec",
-    "selector": "hardcoded_default",
-    "route_attribution": "tinygrad/llm/model.py:500-514 (Q6K_LM_HEAD_COOP, Q6K_FFN_DOWN_COOP, DECODE_Q6K_FFN_DOWN_LONGK default 1); writer extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
-    "note": "shipped Q6_K primitive route family for ffn_down / lm_head / long-K down / covered attn_v. Correct and useful, but the UOp route bodies are hand-authored templates; final pure-search replacement must be generated from a Q6_K route spec."},
+    "authority_gate": "extra/qk_q6k_generated_coop_gate.py",
+    "promotion_artifacts": ["bench/tg-p3-q6k-generated-coop/latest.json"],
+    "purity_status": "owned_reference",
+    "provenance": "rollback_oracle",
+    "selector": "env_guard",
+    "route_attribution": "tinygrad/llm/model.py Q6_K shipped branch (reached only when DECODE_Q6K_GENERATED=0); writer extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
+    "note": "hand-authored Q6_K coop/partial UOp templates. Byte-identical to the generated route (decode_q6k_coop_generated), retained as the rollback/oracle one flag away (DECODE_Q6K_GENERATED=0)."},
   "decode_q6k_direct_refuted": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "refuted",
     "roles": ["lm_head"], "excluded_roles": [],

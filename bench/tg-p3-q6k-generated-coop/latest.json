@@ -1,0 +1,122 @@
+{
+  "scope": "TG-P3: generate Q6_K coop from a route spec (provenance conversion hand_authored_uop_template -> machine_authored_generated)",
+  "verdict": "TG_P3_PASS_Q6K_GENERATED_COOP",
+  "policy_schema": "boltbeam.route_policy.v1",
+  "selected_route": "decode_q6k_coop_generated",
+  "lossless_emit": true,
+  "worst_gen_over_shipped": 1.0106,
+  "speed_equivalent_tol": 1.05,
+  "route_bound": true,
+  "hidden_fallback": false,
+  "rollback_available": true,
+  "wd_basis": "per-kernel microgate (byte-identical output, worst gen/shipped wall-time 1.011 over 30 iters, 3 tracked Q6_K shapes) \u2014 math+structure identical so this is provenance-equivalent, not a speed change; full-model greedy generation token-IDENTICAL generated(DECODE_Q6K_GENERATED=1) vs shipped(=0) over 24 tokens",
+  "gates": {
+    "lossless_emit": "PASS (all_identical_bytes=True; ffn_down coop, lm_head coop, attn_v partial)",
+    "route_identity": "PASS (generated q6k_gen_coop_*/q6k_gen_partial_* distinct from shipped q6k_coop_partial_*/q6k_gemv_partial_*)",
+    "policy_emit": "PASS (BoltBeam emits per-tensor decode_q6k_coop_generated rows for Q6_K roles ffn_down/attn_kv/lm_head)",
+    "strict_fallback": "PASS (strict + policy-selected + DECODE_Q6K_GENERATED=0 raises TG_P3_BLOCKED_HIDDEN_FALLBACK)",
+    "route_bound_default": "PASS (DECODE_Q6K_GENERATED default-on -> generated kernel fires)",
+    "rollback_smoke": "PASS (DECODE_Q6K_GENERATED=0 -> shipped hand kernels fire)",
+    "wd": "PASS (microgate speed-equivalent, worst 1.011)",
+    "census": "PASS (PMS_R0_PASS_CENSUS_PINNED; decode_q6k_coop_* no longer a hand_authored_uop_template selected default; generated route is machine_authored_generated)",
+    "token_match_full_model": "PASS (24/24 tokens identical, Qwen3-8B-Q4_K_M)"
+  },
+  "ownership_change": "Q6_K decode route selection moved from model-side hardcoded coop gate to a spec-driven generated route owned by BoltBeam; shipped hand kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0).",
+  "remaining_purity_debt": [
+    "decode_attention_owned_two_kernel",
+    "prefill_pipe_role_selective_default"
+  ],
+  "cases": [
+    {
+      "role": "ffn_down",
+      "rows": 4096,
+      "k": 12288,
+      "route_family": "q6k_coop",
+      "identical_bytes": true,
+      "shipped_ms": 6.4817,
+      "generated_ms": 6.3838,
+      "gen_over_shipped": 0.9849,
+      "spec": {
+        "quant": "Q6_K",
+        "rows": 4096,
+        "k": 12288,
+        "role": "ffn_down",
+        "route_family": "q6k_coop",
+        "target": "amd_gfx1100",
+        "row_tile": 4,
+        "lane_extent": 16,
+        "parts": 1,
+        "pos_axis": "local",
+        "block_axis": "reduce",
+        "reduction": "external_sum",
+        "storage": "packed_u16"
+      },
+      "kernel_name": "q6k_gen_coop_4096_12288"
+    },
+    {
+      "role": "lm_head",
+      "rows": 151936,
+      "k": 4096,
+      "route_family": "q6k_coop",
+      "identical_bytes": true,
+      "shipped_ms": 7.1364,
+      "generated_ms": 7.1727,
+      "gen_over_shipped": 1.0051,
+      "spec": {
+        "quant": "Q6_K",
+        "rows": 151936,
+        "k": 4096,
+        "role": "lm_head",
+        "route_family": "q6k_coop",
+        "target": "amd_gfx1100",
+        "row_tile": 4,
+        "lane_extent": 16,
+        "parts": 1,
+        "pos_axis": "local",
+        "block_axis": "reduce",
+        "reduction": "external_sum",
+        "storage": "packed_u16"
+      },
+      "kernel_name": "q6k_gen_coop_151936_4096"
+    },
+    {
+      "role": "attn_v",
+      "rows": 1024,
+      "k": 4096,
+      "route_family": "q6k_partial",
+      "identical_bytes": true,
+      "shipped_ms": 6.4192,
+      "generated_ms": 6.4874,
+      "gen_over_shipped": 1.0106,
+      "spec": {
+        "quant": "Q6_K",
+        "rows": 1024,
+        "k": 4096,
+        "role": "attn_v",
+        "route_family": "q6k_partial",
+        "target": "amd_gfx1100",
+        "row_tile": 4,
+        "lane_extent": 16,
+        "parts": 4,
+        "pos_axis": "reduce",
+        "block_axis": "reduce",
+        "reduction": "external_sum",
+        "storage": "packed_u16"
+      },
+      "kernel_name": "q6k_gen_partial_1024_4096_4"
+    }
+  ],
+  "artifacts": {
+    "route_policy": "route_policy.json (machine-emitted)",
+    "route_bound": "route_bound.json",
+    "microgate": "microgate.json",
+    "wd": "wd.json"
+  },
+  "token_match_full_model": {
+    "model": "Qwen3-8B-Q4_K_M",
+    "prompt": "The capital of France is",
+    "max_tokens": 24,
+    "generated_default_vs_shipped_rollback": "identical",
+    "tokens": 24
+  }
+}

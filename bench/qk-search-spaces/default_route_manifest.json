@@ -69,8 +69,8 @@
       ],
       "purity_status": "search_generated_promoted",
       "provenance": "machine_authored_generated",
-      "selector": "BubbleBeam",
-      "route_attribution": "tinygrad/llm/model.py:255-299 (g3 fires first for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility); writer extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
+      "selector": "BoltBeam_route_policy_or_env_default",
+      "route_attribution": "tinygrad/llm/model.py:255-311 (QK_ROUTE_POLICY selects decode_q4k_g3_generated per tensor when present, else g3 fires by default for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility; strict mode fails loud on hidden fallback); writer extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
       "note": "generated wave32 UOp program lowered from the G2 Q4_K LaneMap (extra/qk_gemv_g2_lanemap.py). Speed-equivalent to owned warp (-0.13..+0.41% across ctx 512-4096), token-identical, route-clean. DECODE_Q4K_G3_ANYSHAPE extends it structurally to larger dense Q4_K shapes (including attn_k when policy installs it). This is the positive-control pure-search default decode kernel."
     },
     "decode_q4k_owned_warp": {
@@ -122,10 +122,10 @@
       "route_attribution": "tinygrad/llm/model.py:318 (Q4K_GEMV_WARP_PROJ default 1, q/o) + :360 (Q4K_GEMV_WARP default 1, gate/up+down); reached only when BUBBLEBEAM_FUTURESIGHT=0 short-circuits the G3 branch. Writer extra/q4_k_gemv_primitive.py q4k_gemv_warp_kernel",
       "note": "hand-written owned warp GEMV. The Q4K_GEMV_WARP* guards still default to 1, but the G3 branch intercepts first for the eligible shapes when BUBBLEBEAM_FUTURESIGHT is on (the default). So owned warp is the rollback/reference, not the live default."
     },
-    "decode_q6k_coop_shipped": {
+    "decode_q6k_coop_generated": {
       "workload": "decode",
       "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
-      "status": "default_shipped",
+      "status": "promoted_default",
       "roles": [
         "ffn_down",
         "lm_head",
@@ -156,20 +156,81 @@
         }
       ],
       "env": {},
+      "rollback": {
+        "DECODE_Q6K_GENERATED": "0"
+      },
+      "baseline_route_id": "decode_q6k_coop_shipped",
+      "strict_fallback": true,
+      "expected_kernels": [
+        "q6k_gen_coop_*",
+        "q6k_gen_partial_*"
+      ],
+      "forbidden_kernels": [
+        "q6k_coop_partial_* (on the default path)",
+        "q6k_gemv_partial_* (on the default path)"
+      ],
+      "authority_gate": "extra/qk_q6k_generated_coop_gate.py",
+      "promotion_artifacts": [
+        "bench/tg-p3-q6k-generated-coop/latest.json",
+        "bench/tg-p3-q6k-generated-coop/summary.md"
+      ],
+      "purity_status": "search_generated_promoted",
+      "provenance": "machine_authored_generated",
+      "selector": "BoltBeam_route_policy_or_env_default",
+      "route_attribution": "tinygrad/llm/model.py Q6_K generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/qk_q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
+      "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/qk_q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."
+    },
+    "decode_q6k_coop_shipped": {
+      "workload": "decode",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "status": "rollback_reference",
+      "roles": [
+        "ffn_down",
+        "lm_head",
+        "attn_v"
+      ],
+      "excluded_roles": [],
+      "quant": [
+        "Q6_K"
+      ],
+      "shape_guards": [
+        {
+          "role": "ffn_down",
+          "K": 12288,
+          "N": 4096
+        },
+        {
+          "role": "ffn_down_longk",
+          "K": ">=8192",
+          "N": "<100000"
+        },
+        {
+          "role": "lm_head",
+          "N": ">=100000"
+        },
+        {
+          "role": "attn_v",
+          "enabled_by": "Q6K_COVER_MORE=1"
+        }
+      ],
+      "env": {
+        "DECODE_Q6K_GENERATED": "0"
+      },
       "rollback": {},
       "strict_fallback": true,
       "expected_kernels": [
         "q6k_coop_partial_*",
         "q6k_gemv_partial_*"
       ],
-      "authority_gate": "extra/qk_decode_runtime_overhead.py",
-      "promotion_artifacts": [],
-      "purity_status": "owned_default",
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p3-generate-q6_k-coop-from-a-route-spec",
-      "selector": "hardcoded_default",
-      "route_attribution": "tinygrad/llm/model.py:500-514 (Q6K_LM_HEAD_COOP, Q6K_FFN_DOWN_COOP, DECODE_Q6K_FFN_DOWN_LONGK default 1); writer extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
-      "note": "shipped Q6_K primitive route family for ffn_down / lm_head / long-K down / covered attn_v. Correct and useful, but the UOp route bodies are hand-authored templates; final pure-search replacement must be generated from a Q6_K route spec."
+      "authority_gate": "extra/qk_q6k_generated_coop_gate.py",
+      "promotion_artifacts": [
+        "bench/tg-p3-q6k-generated-coop/latest.json"
+      ],
+      "purity_status": "owned_reference",
+      "provenance": "rollback_oracle",
+      "selector": "env_guard",
+      "route_attribution": "tinygrad/llm/model.py Q6_K shipped branch (reached only when DECODE_Q6K_GENERATED=0); writer extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
+      "note": "hand-authored Q6_K coop/partial UOp templates. Byte-identical to the generated route (decode_q6k_coop_generated), retained as the rollback/oracle one flag away (DECODE_Q6K_GENERATED=0)."
     },
     "decode_q6k_direct_refuted": {
       "workload": "decode",
@@ -477,25 +538,25 @@
   ],
   "default_routes": [
     "decode_q4k_g3_generated",
-    "decode_q6k_coop_shipped",
+    "decode_q6k_coop_generated",
     "decode_attention_owned_two_kernel",
     "decode_flash_block_tile_g5_konly",
     "prefill_pipe_role_selective_default"
   ],
   "promoted_defaults": [
     "decode_q4k_g3_generated",
+    "decode_q6k_coop_generated",
     "decode_flash_block_tile_g5_konly",
     "prefill_pipe_role_selective_default"
   ],
   "owned_defaults": [
-    "decode_q6k_coop_shipped",
     "decode_attention_owned_two_kernel"
   ],
   "default_purity": {
     "verdict": "TINYGRAD_DEFAULT_PURITY_FAIL",
     "default_routes": [
       "decode_q4k_g3_generated",
-      "decode_q6k_coop_shipped",
+      "decode_q6k_coop_generated",
       "decode_attention_owned_two_kernel",
       "decode_flash_block_tile_g5_konly",
       "prefill_pipe_role_selective_default"
@@ -509,11 +570,11 @@
         "final_default_allowed": true
       },
       {
-        "route_id": "decode_q6k_coop_shipped",
-        "status": "default_shipped",
-        "provenance": "hand_authored_uop_template",
-        "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p3-generate-q6_k-coop-from-a-route-spec",
-        "final_default_allowed": false
+        "route_id": "decode_q6k_coop_generated",
+        "status": "promoted_default",
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
       },
       {
         "route_id": "decode_attention_owned_two_kernel",
@@ -541,9 +602,7 @@
       "decode_attention_owned_two_kernel",
       "prefill_pipe_role_selective_default"
     ],
-    "transitional_default_routes": [
-      "decode_q6k_coop_shipped"
-    ],
+    "transitional_default_routes": [],
     "final_default_allowed_provenance": [
       "machine_authored_generated",
       "tinygrad_scheduler_generated"

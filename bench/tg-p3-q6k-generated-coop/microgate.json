@@ -1,0 +1,83 @@
+{
+  "cases": [
+    {
+      "role": "ffn_down",
+      "rows": 4096,
+      "k": 12288,
+      "route_family": "q6k_coop",
+      "identical_bytes": true,
+      "shipped_ms": 6.4817,
+      "generated_ms": 6.3838,
+      "gen_over_shipped": 0.9849,
+      "spec": {
+        "quant": "Q6_K",
+        "rows": 4096,
+        "k": 12288,
+        "role": "ffn_down",
+        "route_family": "q6k_coop",
+        "target": "amd_gfx1100",
+        "row_tile": 4,
+        "lane_extent": 16,
+        "parts": 1,
+        "pos_axis": "local",
+        "block_axis": "reduce",
+        "reduction": "external_sum",
+        "storage": "packed_u16"
+      },
+      "kernel_name": "q6k_gen_coop_4096_12288"
+    },
+    {
+      "role": "lm_head",
+      "rows": 151936,
+      "k": 4096,
+      "route_family": "q6k_coop",
+      "identical_bytes": true,
+      "shipped_ms": 7.1364,
+      "generated_ms": 7.1727,
+      "gen_over_shipped": 1.0051,
+      "spec": {
+        "quant": "Q6_K",
+        "rows": 151936,
+        "k": 4096,
+        "role": "lm_head",
+        "route_family": "q6k_coop",
+        "target": "amd_gfx1100",
+        "row_tile": 4,
+        "lane_extent": 16,
+        "parts": 1,
+        "pos_axis": "local",
+        "block_axis": "reduce",
+        "reduction": "external_sum",
+        "storage": "packed_u16"
+      },
+      "kernel_name": "q6k_gen_coop_151936_4096"
+    },
+    {
+      "role": "attn_v",
+      "rows": 1024,
+      "k": 4096,
+      "route_family": "q6k_partial",
+      "identical_bytes": true,
+      "shipped_ms": 6.4192,
+      "generated_ms": 6.4874,
+      "gen_over_shipped": 1.0106,
+      "spec": {
+        "quant": "Q6_K",
+        "rows": 1024,
+        "k": 4096,
+        "role": "attn_v",
+        "route_family": "q6k_partial",
+        "target": "amd_gfx1100",
+        "row_tile": 4,
+        "lane_extent": 16,
+        "parts": 4,
+        "pos_axis": "reduce",
+        "block_axis": "reduce",
+        "reduction": "external_sum",
+        "storage": "packed_u16"
+      },
+      "kernel_name": "q6k_gen_partial_1024_4096_4"
+    }
+  ],
+  "worst_gen_over_shipped": 1.0106
+}

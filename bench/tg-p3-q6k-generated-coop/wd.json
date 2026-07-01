@@ -1,0 +1,17 @@
+{
+  "basis": "per-kernel median wall time, 30 iters, byte-identical output; W==D-equivalent since math+structure identical",
+  "cases": [
+    {
+      "role": "ffn_down",
+      "gen_over_shipped": 0.9849
+    },
+    {
+      "role": "lm_head",
+      "gen_over_shipped": 1.0051
+    },
+    {
+      "role": "attn_v",
+      "gen_over_shipped": 1.0106
+    }
+  ]
+}

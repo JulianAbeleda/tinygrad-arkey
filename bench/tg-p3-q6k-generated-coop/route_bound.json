@@ -1,0 +1,35 @@
+{
+  "scope": "TG-P3 Q6_K route-bound proof (gfx1100)",
+  "scenarios": [
+    {
+      "scenario": "default_generated",
+      "env": {},
+      "gen_fired": true,
+      "shipped_fired": false,
+      "raised": null,
+      "proves": "DECODE_Q6K_GENERATED default-on -> spec-driven generated coop kernel fires"
+    },
+    {
+      "scenario": "rollback_shipped",
+      "env": {
+        "DECODE_Q6K_GENERATED": "0"
+      },
+      "gen_fired": false,
+      "shipped_fired": true,
+      "raised": null,
+      "proves": "shipped hand kernels retained one rollback flag away"
+    },
+    {
+      "scenario": "strict_rollback_raises",
+      "env": {
+        "DECODE_Q6K_GENERATED": "0"
+      },
+      "policy": "selects decode_q6k_coop_generated",
+      "strict": true,
+      "gen_fired": false,
+      "shipped_fired": false,
+      "raised": "TG_P3_BLOCKED_HIDDEN_FALLBACK",
+      "proves": "strict mode fails loud when a policy-selected Q6_K tensor is rolled back to the hand template"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import pytest
 from extra.pure_machine_search_default_path_census import build_census
 from extra.qk_route_manifest import default_purity_report, route_provenance, validate_manifest
 from tinygrad.llm.model import (_load_qk_route_policy, _qk_route_policy_selected, _set_qk_route_policy,
-                                _qk_route_policy_selects_q4k_g3)
+                                _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated)
 
 
 def _write_q4k_g3_policy(tmp_path, rows):
@@ -31,7 +31,10 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
   assert route_provenance("decode_q4k_g3_generated") == "machine_authored_generated"
   assert route_provenance("decode_flash_block_tile_g5_konly") == "machine_authored_generated"
-  assert set(report["transitional_default_routes"]) == {"decode_q6k_coop_shipped"}
+  # TG-P3: Q6_K default is now the generated route; the hand template is rollback-only, no longer transitional debt.
+  assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
+  assert route_provenance("decode_q6k_coop_shipped") == "rollback_oracle"
+  assert set(report["transitional_default_routes"]) == set()
   assert set(report["forbidden_default_routes"]) == {
     "decode_attention_owned_two_kernel",
     "prefill_pipe_role_selective_default",
@@ -45,7 +48,10 @@ def test_default_path_census_uses_manifest_provenance():
   by_route = {row["route_id"]: row for row in census["default_route_table"]}
   assert by_route["decode_q4k_g3_generated"]["final_default_allowed"] is True
   assert by_route["decode_flash_block_tile_g5_konly"]["final_default_allowed"] is True
-  assert by_route["decode_q6k_coop_shipped"]["provenance"] == "hand_authored_uop_template"
+  # TG-P3: the generated Q6_K route is the default; the hand template is no longer on the default path.
+  assert by_route["decode_q6k_coop_generated"]["provenance"] == "machine_authored_generated"
+  assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True
+  assert "decode_q6k_coop_shipped" not in by_route
   assert by_route["decode_attention_owned_two_kernel"]["provenance"] == "external_handwritten_kernel"
   assert by_route["prefill_pipe_role_selective_default"]["provenance"] == "external_handwritten_kernel"
 
@@ -97,6 +103,44 @@ def test_qk_route_policy_selects_q4k_g3_per_tensor(tmp_path):
 def test_qk_route_policy_selects_nothing_when_absent():
   _set_qk_route_policy(None)
   assert not _qk_route_policy_selects_q4k_g3(12288, 4096)
+  assert not _qk_route_policy_selects_q6k_generated(4096, 12288)
+
+
+def _write_q6k_gen_policy(tmp_path, rows):
+  policy_path = tmp_path / "q6k_policy.json"
+  policy_path.write_text(json.dumps({
+    "schema": "boltbeam.route_policy.v1", "model_id": "qwen8q6", "architecture_class": "dense_decoder",
+    "authorized": True,
+    "routes": [{"role": role, "shape": {"rows": rows_n, "cols": cols_k}, "quant": "Q6_K",
+                "selected_route": "decode_q6k_coop_generated", "status": "promoted",
+                "provenance": "machine_authored_generated", "route_family": "q6k_route",
+                "route_params": {"DECODE_Q6K_GENERATED": "1"}, "rollback": {"DECODE_Q6K_GENERATED": "0"}}
+               for role, rows_n, cols_k in rows]}))
+  return policy_path
+
+
+def test_qk_route_policy_selects_q6k_generated_per_tensor(tmp_path):
+  policy_path = _write_q6k_gen_policy(tmp_path, [("ffn_down", 4096, 12288), ("lm_head", 151936, 4096)])
+  policy = _load_qk_route_policy(str(policy_path))
+  assert len(policy["q6k_gen"]) == 2
+  _set_qk_route_policy(policy)
+  try:
+    assert _qk_route_policy_selects_q6k_generated(4096, 12288)     # ffn_down
+    assert _qk_route_policy_selects_q6k_generated(151936, 4096)    # lm_head
+    assert not _qk_route_policy_selects_q6k_generated(1024, 4096)  # not selected
+    assert not _qk_route_policy_selects_q4k_g3(4096, 12288)        # G3 helper stays independent
+  finally:
+    _set_qk_route_policy(None)
+
+
+def test_qk_route_policy_rejects_unsupported_q6k_params(tmp_path):
+  policy_path = tmp_path / "bad_q6k.json"
+  policy_path.write_text(json.dumps({
+    "schema": "boltbeam.route_policy.v1", "routes": [{
+      "selected_route": "decode_q6k_coop_generated", "shape": {"rows": 4096, "cols": 12288},
+      "route_params": {"BUBBLEBEAM_FUTURESIGHT": "1"}}]}))
+  with pytest.raises(ValueError, match="unsupported params"):
+    _load_qk_route_policy(str(policy_path))
 
 
 def test_qk_route_policy_rejects_unsupported_g3_params(tmp_path):
