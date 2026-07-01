@@ -1014,6 +1014,8 @@ class FFNBlock:
     if getenv("Q4K_UNFUSE"):  # run FFN matmuls in fp16 so RDNA3 WMMA tensor cores can apply (minimal-overhead)
       xh = x.cast(dtypes.float16)
       return self.ffn_down((self.ffn_gate(xh).silu().contiguous() * self.ffn_up(xh)).cast(dtypes.float16))
+    if getenv("DECODE_FUSE_SILU_GATE", 0):
+      return self.ffn_down(self.ffn_gate(x).silu() * self.ffn_up(x))
     return self.ffn_down(self.ffn_gate(x).silu().contiguous() * self.ffn_up(x))
 
   # given the token-prefix match, return how much cached state this block can still reuse

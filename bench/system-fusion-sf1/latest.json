@@ -1,0 +1,21 @@
+{
+  "schema": "boltbeam.system_fusion_sf1.v1",
+  "phase": "SF1_FUSEABILITY_CLASSIFICATION",
+  "date": "2026-07-01",
+  "model_id": "Qwen3-14B-Q4_K_M",
+  "hardware": "RX 7900 XTX / gfx1100",
+  "selected_candidate": "decode_silu_gate_fusion",
+  "reachable_now_total_pct": 4.90,
+  "emitter_blocked_pct": 6.69,
+  "fragments": [
+    {"kernel": "E_49152_32_3", "pct": 6.69, "class": "EMITTER_BLOCKED"},
+    {"kernel": "E_5_2_2_16_4_4n1", "pct": 1.46, "class": "REACHABLE_NOW", "projected_amdahl_pct": 1.46},
+    {"kernel": "E_1920_32_3", "pct": 0.75, "class": "LOW_AMDAHL"},
+    {"kernel": "E_136_32_4+E_136_32_4n1", "pct": 1.26, "class": "REACHABLE_NOW", "projected_amdahl_pct": 1.26, "mechanism": "remove .contiguous() on model.py:1017"},
+    {"kernel": "E_40_32_4+E_40_32_4n2", "pct": 1.28, "class": "REACHABLE_NOW", "projected_amdahl_pct": 1.28},
+    {"kernel": "E_40_32_4n1+E_40_32_4n3", "pct": 0.90, "class": "REACHABLE_NOW", "projected_amdahl_pct": 0.90},
+    {"kernel": "TracingKey+E_2n7+E_20_...", "pct": 0.34, "class": "NOT_FUSEABLE"},
+    {"kernel": "E_1187_32_4", "pct": 0.07, "class": "LOW_AMDAHL"},
+    {"kernel": "E_40_32_4n4", "pct": 0.01, "class": "LOW_AMDAHL"}
+  ]
+}
