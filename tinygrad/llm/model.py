@@ -1119,6 +1119,8 @@ class TransformerBlock(FFNBlock):
          and (Hq // Hkv) == 4:
         # A2 pure-search skeleton (default-off): generated flash-decode route that reads the whole assigned_kv cache
         # buffer directly. This targets lifecycle cleanliness: generated route + no owned tile + no E_49152.
+        # NOTE: relaxing this guard to 14B (Hq=40,G=5) was tried — token-correct but REGRESSES ctx512 -10%
+        # (the score-broadcast variant is 8B-tuned); kept 8B-scoped. See attention-combine result doc.
         from extra.qk_flash_decode import flash_decode_attention_whole_cache
         out = flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
                                                  Hd, Hq, Hkv, MAXC, L)
