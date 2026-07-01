@@ -12,14 +12,14 @@ tinygrad: clean **W==D** decode (`qk_decode_runtime_overhead.py` — `TinyJit`, 
 |---|---|---|---|---|---|---|---|
 | qwen3-0.6b | Q8_0 | 128 | non-flash | 183.2 | 279.96 | **65.4%** | 2.3% |
 | qwen3-0.6b | Q8_0 | 512 | flash | 194.3 | 274.09 | **70.9%** | 1.8% |
-| qwen3-8b | Q4_K_M | 128 | non-flash | 82.0 | 99.78 | **82.2%** | 0.0% |
-| qwen3-8b | Q4_K_M | 512 | flash | 103.5 | 98.7 | **104.9%** | 0.0% |
-| qwen3-14b | Q4_K_M | 128 | non-flash | 25.5 | 65.85 | **38.7%** | 0.0% |
-| qwen3-14b | Q4_K_M | 512 | flash | 25.0 | 65.08 | **38.4%** | 0.0% |
+| qwen3-8b | Q4_K_M | 128 | non-flash | 85.1 | 99.4 | **85.6%** | 0.0% |
+| qwen3-8b | Q4_K_M | 512 | flash | 107.4 | 98.35 | **109.2%** | 0.0% |
+| qwen3-14b | Q4_K_M | 128 | non-flash | 44.5 | 65.72 | **67.7%** | 0.0% |
+| qwen3-14b | Q4_K_M | 512 | flash | 42.9 | 64.92 | **66.1%** | 0.0% |
 | qwen3.5-27b | Q4_K_M | 128 | non-flash | 2.3 | 32.8 | **7.0%** | 0.0% |
 | qwen3.5-27b | Q4_K_M | 512 | flash | 2.3 | 32.74 | **7.0%** | 0.0% |
-| qwen3-32b | Q4_K_M | 128 | non-flash | 12.2 | 31.2 | **39.1%** | 0.0% |
-| qwen3-32b | Q4_K_M | 512 | flash | 11.8 | 30.78 | **38.3%** | 0.0% |
+| qwen3-32b | Q4_K_M | 128 | non-flash | 22.4 | 31.09 | **72.0%** | 0.0% |
+| qwen3-32b | Q4_K_M | 512 | flash | 21.0 | 30.74 | **68.3%** | 0.0% |
 
 Low **host-sync %** means the measurement is GPU-bound (not host-loop noise). At ctx≥512 the owned flash route fires; below it the non-flash path runs and is the weaker regime.
 
@@ -34,10 +34,10 @@ Prefill is compute-bound (a different regime from decode). tinygrad's tuned path
 | Model | Quant | tinygrad pp512 (tuned authority) | llama.cpp pp512 | ratio | route |
 |---|---|---|---|---|---|
 | qwen3-0.6b | Q8_0 | _not measured (VRAM / pending_) | 19263.5 | — | — |
-| qwen3-8b | Q4_K_M | 4441.5 | 3003.3 | **148%** | graph-gemm (PREFILL_V2) |
-| qwen3-14b | Q4_K_M | _not measured (VRAM / pending_) | 1632.0 | — | — |
+| qwen3-8b | Q4_K_M | _not measured (VRAM / pending_) | 3000.9 | — | — |
+| qwen3-14b | Q4_K_M | _not measured (VRAM / pending_) | 1633.1 | — | — |
 | qwen3.5-27b | Q4_K_M | _not measured (VRAM / pending_) | 835.2 | — | — |
-| qwen3-32b | Q4_K_M | _not measured (VRAM / pending_) | 736.2 | — | — |
+| qwen3-32b | Q4_K_M | _not measured (VRAM / pending_) | 722.7 | — | — |
 
 ## End-to-end `generate` (diagnostic, not parity)
 
