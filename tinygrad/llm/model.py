@@ -1317,10 +1317,19 @@ class TransformerBlock(FFNBlock):
                                                 {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_8b_shape else False
       _g5_8b_enabled = _g5_8b_policy if _QK_ROUTE_POLICY is not None else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5_8B", 0))
       if out is None and _g5_8b_shape and _g5_8b_enabled:
-        from extra.qk_flash_decode import flash_decode_g5_block_tile
+        # TG-P9.2: DECODE_ATTN_LIVE_SPLIT_GENERATED=1 uses the live-context split geometry tile (fixed S splits, per-
+        # split length scaled to the live Tc) instead of the fixed-L whole-cache tile -- byte-identical output, but
+        # the tile block-work scales with ctx (ctx512 tile ~4.6x faster; TG-P8 SPLIT_GEOMETRY fix). S = the fixed
+        # occupancy split count (= the fixed-L smax_route). Default-off pending the combine primitive (TG-P9.3/9.4).
         _g5_8b_staging = "K_ONLY" if (_g5_8b_policy or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
-        out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                         Hd, Hq, Hkv, MAXC, L, staging=_g5_8b_staging)
+        if getenv("DECODE_ATTN_LIVE_SPLIT_GENERATED", 0):
+          from extra.qk_live_split_geometry import flash_decode_live_split_block_tile
+          out = flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
+                                                   MAXC // L, staging=_g5_8b_staging)
+        else:
+          from extra.qk_flash_decode import flash_decode_g5_block_tile
+          out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                           Hd, Hq, Hkv, MAXC, L, staging=_g5_8b_staging)
       if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
