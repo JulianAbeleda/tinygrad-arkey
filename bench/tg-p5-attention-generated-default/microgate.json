@@ -1,0 +1,14 @@
+{
+  "note": "token-match correctness gate vs owned oracle",
+  "all_token_match": true,
+  "per_ctx": [
+    {
+      "ctx": 512,
+      "token_match": true
+    },
+    {
+      "ctx": 4096,
+      "token_match": true
+    }
+  ]
+}

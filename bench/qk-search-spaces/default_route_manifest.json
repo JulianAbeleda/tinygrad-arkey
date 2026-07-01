@@ -359,6 +359,50 @@
       "route_attribution": "tinygrad/llm/model.py:1129-1140 (QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly, else DECODE_FLASH_BLOCK_TILE_G5 default 1; K_ONLY staging default 1). Writer extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp kernel.",
       "note": "G=5 block tile for 14B Hq=40/Hkv=8/Hd=128. GP0 purity gate PASS (generated UOps, no handwritten kernel); GP3 microgate PASS; GP4 W==D ctx512 +3.9 tok/s (+7.8%), ctx2048 +6.9 tok/s (+14.7%). Rollback DECODE_FLASH_BLOCK_TILE_G5=0. The next pure-search step is making BoltBeam QK_ROUTE_POLICY the required selector authority."
     },
+    "decode_flash_block_tile_g5_8b_refuted": {
+      "workload": "decode",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
+      "status": "correct_not_fast",
+      "roles": [
+        "attention_tile",
+        "attention_combine"
+      ],
+      "excluded_roles": [],
+      "quant": [
+        "fp16"
+      ],
+      "shape_guards": [
+        {
+          "B": 1,
+          "Hq": 32,
+          "Hkv": 8,
+          "Hd": 128,
+          "G": 4,
+          "ctx": ">=512"
+        }
+      ],
+      "env": {
+        "DECODE_FLASH_BLOCK_TILE_G5_8B": "1"
+      },
+      "rollback": {},
+      "baseline_route_id": "decode_attention_owned_two_kernel",
+      "strict_fallback": true,
+      "expected_kernels": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_state_gmax_32_128",
+        "flash_state_combine_32_128"
+      ],
+      "authority_gate": "extra/qk_tg_p5_attention_wd.py",
+      "promotion_artifacts": [
+        "bench/tg-p5-attention-generated-default/latest.json",
+        "bench/tg-p5-attention-generated-default/summary.md"
+      ],
+      "purity_status": "correct_not_fast",
+      "provenance": "machine_authored_generated",
+      "selector": "env_guard_or_policy",
+      "route_attribution": "tinygrad/llm/model.py TG-P5 8B G5 branch (DECODE_FLASH_BLOCK_TILE_G5_8B or QK_ROUTE_POLICY decode_flash_block_tile_g5_konly for Hq=32); writer extra/qk_flash_decode.py flash_decode_g5_block_tile (WARPS=G=4).",
+      "note": "TG-P5: the generated G5 block-tile flash decode generalizes correctly to the 8B geometry (Hq=32/Hkv=8, G=4) and is route-bound + token-identical to the owned oracle, but it is SLOWER: 87.6% of owned tok/s @ctx512, 95.6% @ctx4096 (in-model W==D, extra/qk_tg_p5_attention_wd.py TG_P5_REFUTE_GENERATED_ATTENTION_SLOWER). Per the stop rule, owned HIP stays the 8B default; this generated route is kept default-off as a correct-but-slower alternative. The 8B owned attention therefore remains external_handwritten_kernel purity debt: full default purity is not achievable here without an attention slowdown."
+    },
     "decode_attention_native_correct_not_fast": {
       "workload": "decode",
       "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
@@ -565,6 +609,13 @@
       "disposition": "correct_not_fast (~60-68% of owned)",
       "citation": "bench/amd-isa-backend-phase-n7/latest.json",
       "route_id": "decode_attention_native_correct_not_fast"
+    },
+    {
+      "axis": "g5_block_tile_8b_as_default",
+      "domain": "attention",
+      "disposition": "correct_not_fast: token-identical + route-bound but 87.6% of owned @ctx512 / 95.6% @ctx4096 (TG-P5)",
+      "citation": "bench/tg-p5-attention-generated-default/latest.json",
+      "route_id": "decode_flash_block_tile_g5_8b_refuted"
     },
     {
       "axis": "n1b_scalar_address_path",

@@ -1,0 +1,42 @@
+{
+  "per_ctx": [
+    {
+      "ctx": 512,
+      "candidate_tok_s": 94.4,
+      "owned_tok_s": 107.8,
+      "pct_of_owned": 87.6,
+      "token_match": true,
+      "route_bound": true,
+      "candidate_attn_kernels": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128"
+      ],
+      "owned_attn_kernels": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole"
+      ],
+      "candidate_w_ms": 10.592,
+      "owned_w_ms": 9.28
+    },
+    {
+      "ctx": 4096,
+      "candidate_tok_s": 93.6,
+      "owned_tok_s": 97.9,
+      "pct_of_owned": 95.6,
+      "token_match": true,
+      "route_bound": true,
+      "candidate_attn_kernels": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128"
+      ],
+      "owned_attn_kernels": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole"
+      ],
+      "candidate_w_ms": 10.68,
+      "owned_w_ms": 10.219
+    }
+  ]
+}

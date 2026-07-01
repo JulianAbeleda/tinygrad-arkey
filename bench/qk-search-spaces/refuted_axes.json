@@ -28,6 +28,13 @@
       "route_id": "decode_attention_native_correct_not_fast"
     },
     {
+      "axis": "g5_block_tile_8b_as_default",
+      "domain": "attention",
+      "disposition": "correct_not_fast: token-identical + route-bound but 87.6% of owned @ctx512 / 95.6% @ctx4096 (TG-P5)",
+      "citation": "bench/tg-p5-attention-generated-default/latest.json",
+      "route_id": "decode_flash_block_tile_g5_8b_refuted"
+    },
+    {
       "axis": "n1b_scalar_address_path",
       "domain": "attention",
       "disposition": "refuted/dead",
