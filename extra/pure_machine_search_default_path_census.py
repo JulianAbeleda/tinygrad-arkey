@@ -31,9 +31,9 @@ OUT = ROOT / "bench/pure-machine-search-default-path-census"
 CENSUS_ROWS = [
   # ----- decode Q4_K weight GEMV -----
   {"route_id": "decode_q4k_g3_generated", "workload": "decode", "role": "ffn_gate_up,ffn_down,attn_qo,attn_k", "quant": "Q4_K",
-   "shape_guard": "g3_bubblebeam_shape OR DECODE_Q4K_G3_ANYSHAPE structural guard ((in//256)%4==0 and out%32==0)",
-   "writer": "generated", "selector": "BubbleBeam",
-   "route_guard": "tinygrad/llm/model.py:255 getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + :262 DECODE_Q4K_G3_ANYSHAPE default-on -> :264-299 q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards",
+   "shape_guard": "QK_ROUTE_POLICY decode_q4k_g3_generated per tensor OR g3_bubblebeam_shape OR DECODE_Q4K_G3_ANYSHAPE structural guard ((in//256)%4==0 and out%32==0)",
+   "writer": "generated", "selector": "BoltBeam_route_policy_or_env_default",
+   "route_guard": "tinygrad/llm/model.py:255 getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + _qk_route_policy_selects_q4k_g3 (BoltBeam QK_ROUTE_POLICY) + :262 DECODE_Q4K_G3_ANYSHAPE default-on -> q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards; strict policy fails loud on hidden fallback",
    "kernel_source": "extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel (UOp program from extra/qk_gemv_g2_lanemap.py Q4KGateUpLaneMap)",
    "authority_artifact": "bench/amd-isa-backend-g3-weight-promotion/latest.json (AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT)",
    "rollback_flag": "BUBBLEBEAM_FUTURESIGHT=0 -> decode_q4k_owned_warp",

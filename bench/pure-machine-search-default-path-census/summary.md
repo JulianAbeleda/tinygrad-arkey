@@ -10,7 +10,7 @@ Headline: 5 kernels on the default path are non-tinygrad-generated. 2 are machin
 
 | route_id | workload | provenance | final default? | selector | quant | authority | rollback |
 |---|---|---|---|---|---|---|---|
-| decode_q4k_g3_generated | decode | machine_authored_generated | yes | BubbleBeam | Q4_K | bench/amd-isa-backend-g3-weight-promotion/latest.json | BUBBLEBEAM_FUTURESIGHT=0 -> decode_q4k_owned_warp |
+| decode_q4k_g3_generated | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | Q4_K | bench/amd-isa-backend-g3-weight-promotion/latest.json | BUBBLEBEAM_FUTURESIGHT=0 -> decode_q4k_owned_warp |
 | decode_q6k_coop_shipped | decode | hand_authored_uop_template | no | hardcoded_default | Q6_K | extra/qk_decode_runtime_overhead.py | none (shipped baseline; Q6K_DIRECT_ROUTE alt is refuted/default-off) |
 | decode_attention_owned_two_kernel | decode | external_handwritten_kernel | no | env_guard | fp16 | bench/amd-isa-backend-decode-attention-ceiling/latest.json | DECODE_ATTN_AMDGCN_TILE=0 -> generated tinygrad flash decode |
 | decode_flash_block_tile_g5_konly | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/gp-track/gp4_latest.json | DECODE_FLASH_BLOCK_TILE_G5=0 |
@@ -33,7 +33,7 @@ Headline: 5 kernels on the default path are non-tinygrad-generated. 2 are machin
 
 ## Route attribution (cited guards)
 
-- **decode_q4k_g3_generated** (default): tinygrad/llm/model.py:255 getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + :262 DECODE_Q4K_G3_ANYSHAPE default-on -> :264-299 q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards
+- **decode_q4k_g3_generated** (default): tinygrad/llm/model.py:255 getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + _qk_route_policy_selects_q4k_g3 (BoltBeam QK_ROUTE_POLICY) + :262 DECODE_Q4K_G3_ANYSHAPE default-on -> q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards; strict policy fails loud on hidden fallback
 - **decode_q4k_owned_warp** (fallback): tinygrad/llm/model.py:318 getenv('Q4K_GEMV_WARP_PROJ', 1) (q/o) + :360 getenv('Q4K_GEMV_WARP', 1) (gate/up+down). Guards still default 1 but the G3 branch intercepts first on the default path.
 - **decode_q6k_coop_shipped** (default): tinygrad/llm/model.py:500 Q6K_COOP_RT + :501-508 Q6K_LM_HEAD_COOP/Q6K_FFN_DOWN_COOP/DECODE_Q6K_FFN_DOWN_LONGK default-on -> :510-518 q6k_coop_partial_kernel or q6k_gemv_partial_kernel
 - **decode_q6k_direct_refuted** (fallback): tinygrad/llm/model.py:455-464 getenv('Q6K_DIRECT_ROUTE') (default-off)

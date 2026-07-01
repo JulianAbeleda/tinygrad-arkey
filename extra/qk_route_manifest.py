@@ -74,8 +74,8 @@ ROUTES = {
                             "bench/amd-isa-backend-g3-weight-promotion/summary.md"],
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
-    "selector": "BubbleBeam",
-    "route_attribution": "tinygrad/llm/model.py:255-299 (g3 fires first for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility); writer extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
+    "selector": "BoltBeam_route_policy_or_env_default",
+    "route_attribution": "tinygrad/llm/model.py:255-311 (QK_ROUTE_POLICY selects decode_q4k_g3_generated per tensor when present, else g3 fires by default for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility; strict mode fails loud on hidden fallback); writer extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
     "note": "generated wave32 UOp program lowered from the G2 Q4_K LaneMap (extra/qk_gemv_g2_lanemap.py). Speed-equivalent to owned warp (-0.13..+0.41% across ctx 512-4096), token-identical, route-clean. DECODE_Q4K_G3_ANYSHAPE extends it structurally to larger dense Q4_K shapes (including attn_k when policy installs it). This is the positive-control pure-search default decode kernel."},
   "decode_q4k_owned_warp": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "rollback_reference",

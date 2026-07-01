@@ -1,0 +1,45 @@
+{
+  "scope": "TG-P2 route-bound proof (gfx1100, one process per scenario; getenv @cache -> env fixed at import)",
+  "harness": "scratchpad tg_p2_route_bound.py: builds a real Q4KPrimitiveLinear, spies q4k_g3_lanemap_gemv_kernel vs q4k_gemv_warp_kernel",
+  "scenarios": [
+    {
+      "scenario": "policy_anyshape_off",
+      "env": {
+        "DECODE_Q4K_G3_ANYSHAPE": "0"
+      },
+      "policy": "selects decode_q4k_g3_generated for 4096x4096",
+      "strict": true,
+      "g3_fired": true,
+      "warp_fired": false,
+      "raised": null,
+      "proves": "QK_ROUTE_POLICY is the selector authority: G3 fires even with the DECODE_Q4K_G3_ANYSHAPE default disabled"
+    },
+    {
+      "scenario": "rollback_futuresight",
+      "env": {
+        "BUBBLEBEAM_FUTURESIGHT": "0"
+      },
+      "policy": null,
+      "strict": false,
+      "g3_fired": false,
+      "warp_fired": true,
+      "raised": null,
+      "proves": "owned warp remains one rollback flag away (BUBBLEBEAM_FUTURESIGHT=0 -> reference path)"
+    },
+    {
+      "scenario": "strict_ineligible",
+      "env": {},
+      "policy": "selects decode_q4k_g3_generated for 4096x512 (structurally ineligible)",
+      "strict": true,
+      "g3_fired": false,
+      "warp_fired": false,
+      "raised": "ValueError: TG_P2_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q4k_g3_generated for Q4_K tensor 'blk.0.route_bound_4096_512.weight' (out=4096, in=512) but it did not bind to the G3 route",
+      "proves": "strict mode fails loud on hidden fallback for a policy-selected tensor that cannot bind to G3"
+    }
+  ],
+  "token_identity": {
+    "basis": "no-policy default vs policy-selected G3 on 4096x4096, identical words/x",
+    "identical_bytes": true,
+    "note": "same generated G3 kernel both ways -> bit-identical output; no-policy default byte-unchanged"
+  }
+}

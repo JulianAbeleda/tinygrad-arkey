@@ -1,0 +1,86 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "model_id": "qwen3_8b_q4k_synth",
+  "architecture_class": "dense_decoder",
+  "authorized": true,
+  "routes": [
+    {
+      "role": "attn_qo",
+      "shape": {
+        "rows": 4096,
+        "cols": 4096
+      },
+      "quant": "Q4_K",
+      "selected_route": "decode_q4k_g3_generated",
+      "status": "promoted",
+      "tier": "TIER_A",
+      "provenance": "machine_authored_generated",
+      "route_family": "q4k_g3_lanemap",
+      "route_params": {
+        "BUBBLEBEAM_FUTURESIGHT": "1"
+      },
+      "rollback": {
+        "BUBBLEBEAM_FUTURESIGHT": "0"
+      },
+      "evidence_refs": [
+        "bench/amd-isa-backend-g3-weight-promotion/latest.json",
+        "bench/amd-isa-backend-g3-weight-promotion/summary.md"
+      ],
+      "candidates": [
+        "q4k_g3_lanemap"
+      ]
+    },
+    {
+      "role": "ffn_down",
+      "shape": {
+        "rows": 4096,
+        "cols": 12288
+      },
+      "quant": "Q4_K",
+      "selected_route": "decode_q4k_g3_generated",
+      "status": "promoted",
+      "tier": "TIER_A",
+      "provenance": "machine_authored_generated",
+      "route_family": "q4k_g3_lanemap",
+      "route_params": {
+        "BUBBLEBEAM_FUTURESIGHT": "1"
+      },
+      "rollback": {
+        "BUBBLEBEAM_FUTURESIGHT": "0"
+      },
+      "evidence_refs": [
+        "bench/amd-isa-backend-g3-weight-promotion/latest.json",
+        "bench/amd-isa-backend-g3-weight-promotion/summary.md"
+      ],
+      "candidates": [
+        "q4k_g3_lanemap"
+      ]
+    },
+    {
+      "role": "ffn_gate_up",
+      "shape": {
+        "rows": 12288,
+        "cols": 4096
+      },
+      "quant": "Q4_K",
+      "selected_route": "decode_q4k_g3_generated",
+      "status": "promoted",
+      "tier": "TIER_A",
+      "provenance": "machine_authored_generated",
+      "route_family": "q4k_g3_lanemap",
+      "route_params": {
+        "BUBBLEBEAM_FUTURESIGHT": "1"
+      },
+      "rollback": {
+        "BUBBLEBEAM_FUTURESIGHT": "0"
+      },
+      "evidence_refs": [
+        "bench/amd-isa-backend-g3-weight-promotion/latest.json",
+        "bench/amd-isa-backend-g3-weight-promotion/summary.md"
+      ],
+      "candidates": [
+        "q4k_g3_lanemap"
+      ]
+    }
+  ]
+}
