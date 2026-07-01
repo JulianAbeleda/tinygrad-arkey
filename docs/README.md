@@ -7,15 +7,12 @@ in `docs/archive/` as provenance, not current state.
 
 ## ⭐ Start here (canonical)
 
-- **`pure-machine-search-roadmap.md`** — stable roadmap for replacing hand-owned decode kernels with BubbleBeam-selected generated routes.
-- **`claude-active-work-audit-and-agnostic-search-scope-20260630.md`** — Claude-ready consolidated handoff for active-work
-  audit, residual tracing/probe tooling, and quant/shape/target agnostic search.
-- **`current-project-state-handoff-20260624.md`** — ⭐⭐ CANONICAL CURRENT STATE (read first). Current numbers
-  (decode **103.9 / 102.0 / 99.7 / 94.4 tok/s** @ctx512/1024/2048/4096 on the current generated weight-math kernel —
-  at/above llama.cpp; prefill **4434 / 4236 / 3846 / 3192 / 2532 tok/s** @ctx512/1024/2048/4096/8192 on the current
-  optimized matrix-multiply route), the decided policies (with the exact flags + rollbacks), and the closed
-  decode weight-kernel result. Guardrail:
-  `extra/qk_policy_consistency_check.py` fails if a canonical doc re-opens a closed question.
+- **`pure-machine-search-roadmap.md`** — roadmap for replacing hand-owned decode kernels with generated/search-owned routes.
+- **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`** — current north-star scope: the final 8B attention purity blocker is a generic reduce/upcast accumulator-lowering invariant.
+- **`claude-active-work-audit-and-agnostic-search-scope-20260630.md`** — older consolidated handoff for active-work audit and quant/shape/target agnostic search; useful background, but not the current route-state authority.
+- **Current route-state authority:** `bench/pure-machine-search-default-path-census/summary.md`,
+  `bench/tg-p10-reg-scalar-combine-lowering/summary.md`, and `extra/qk_route_manifest.py`. These supersede the
+  June 24 state handoff for default-route and purity status.
 - **`decode-campaign-final-synthesis-20260623.md`** — how decode reached llama parity (attention not exhausted;
   buffer identity was the wall; owned AMDGCN tile + `Q4K_GEMV_WARP` weight-GEMV).
 - **`gpu-lifecycle-primitive-coverage-tracker-20260624.md`** — per-primitive coverage vs llama (decode ~101.7–105%,
@@ -25,15 +22,13 @@ in `docs/archive/` as provenance, not current state.
 
 ## Decode (current)
 
-- **`decode-q4k-gemv-warp-promotion-result-20260624.md`** — `Q4K_GEMV_WARP*` promoted default-on (weight-GEMV at/below llama).
 - **`amd-isa-g3-weight-promotion-hardening-scope-20260629.md`** — generated G3 LaneMap is the speed-equivalent Q4_K route under BubbleBeam/FutureSight.
 - **`amd-isa-q6k-direct-route-full-scope-20260629.md`** — Q6_K direct-route work; later Q6K-3 refuted the half-warp direct route, so current Q6_K stays on coop/default.
-- **`decode-two-kernel-problem-audit-result-20260625.md`** — attention tile+combine audit; combine/fused lifecycle is exhausted for the current route.
-- **`decode-parity-no-regression-audit-result-20260623.md`** — parity reconciliation + the flag-stack caveat
-  (102+ requires `Q4K_GEMV_WARP*` on; a fresh default-off run reads below llama).
-- **`post-owned-attention-promotion-synthesis-20260623.md`** — owned hand-AMDGCN decode-attention tile promoted into the decode path.
-- **`three-lane-completion-result-20260623.md`** — the three-lane completion.
-- **`decode-aggressive-target-proof-scope-20260624.md`** — aggressive-target proof (planning).
+- **`tg-p8-generated-8b-attention-parity-scope-20260701.md`**, **`tg-p9-pure-attention-primitive-route-scope-20260701.md`**, and
+  **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`** — the current 8B attention purity chain:
+  generated live-split solved the short-context tile gap; the remaining blocker is split-preserving combine lowering.
+- **`decode-two-kernel-problem-audit-result-20260625.md`** — historical attention tile+combine audit; still useful provenance, but superseded for current purity work by TG-P8/TG-P9/TG-P10/TG-P11.
+- **`post-owned-attention-promotion-synthesis-20260623.md`** — provenance for the owned HIP decode-attention tile that remains the 8B default/rollback oracle.
 
 ## Prefill (current)
 
@@ -45,16 +40,14 @@ in `docs/archive/` as provenance, not current state.
 
 ## Decided policies (do not re-open — see handoff §2)
 
-Global `PREFILL_V2` default **OFF**; `PREFILL_V2=auto` / `PREFILL_SERVER_PROFILE=1` / q8 FFN are **opt-in**;
-Q4_K decode uses generated G3 where eligible, Q6_K direct is refuted/default-off, and `pipe_tm2_tn2` prefill is promoted
-**default-on** with rollback `PREFILL_GEMM_PIPELINE=0`. Enforced by `extra/qk_policy_consistency_check.py`.
+Q4_K decode uses generated G3 where eligible. Q6_K direct half-warp is refuted; Q6_K generated coop is the default generated route with shipped kernels retained as rollback. The generated G=5 K-only attention route is promoted for the validated 14B shape. 8B long-context attention still uses the owned HIP two-kernel route because the generated route is close but below the 98% promotion bar. Prefill uses the generated role-selective schedule by default with rollback via `PREFILL_GENERATED_SCHEDULE=0` or the older pipeline flags described in the route manifest.
 
 ## Live tooling
 
 - **Machine-search:** `extra/qk_decode_eval.py` (lifecycle evaluator), `extra/qk_lifecycle_search_loop.py`
   (generate→evaluate→prune), `extra/qk_search_spec.py` (schema authority), `extra/qk_nll_eval.py` (dNLL gate),
   `extra/qk_demote_search.py` (demotion orchestrator). Benches: `bench/README.md`.
-- **Benchmark harnesses + numbers:** `bench/README.md` (read its "Which harness READ FIRST" before quoting decode tok/s).
+- **Benchmark harnesses + numbers:** use the phase-specific authority artifacts before quoting a number. The committed multi-model table under `bench/models/qwen/` is useful provenance but may lag the latest route changes.
 
 ## References
 
