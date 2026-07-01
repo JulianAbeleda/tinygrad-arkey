@@ -77,6 +77,15 @@ CENSUS_ROWS = [
    "rollback_flag": "DECODE_ATTN_AMDGCN_TILE=0 -> generated tinygrad flash decode",
    "purity_status": "owned_default",
    "next_action": "keep shipped; low-leverage (wall-share ~10%@512 ->~0%@4096); do NOT make attention the max-out target"},
+  {"route_id": "decode_flash_block_tile_g5_konly", "workload": "decode", "role": "attention_tile,attention_combine", "quant": "fp16",
+   "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
+   "writer": "generated", "selector": "BoltBeam_route_policy_or_env_default",
+   "route_guard": "tinygrad/llm/model.py:1129-1140 QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; DECODE_FLASH_BLOCK_TILE_G5_KONLY default 1",
+   "kernel_source": "extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel (staging='K_ONLY')",
+   "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); bench/gp-track/gp3_microgate.json",
+   "rollback_flag": "DECODE_FLASH_BLOCK_TILE_G5=0",
+   "purity_status": "search_generated_promoted",
+   "next_action": "keep promoted for the validated G=5 shape; make BoltBeam QK_ROUTE_POLICY the selector authority before adding more shapes"},
   {"route_id": "decode_attention_native_correct_not_fast", "workload": "decode", "role": "attention_tile,attention_combine", "quant": "fp16",
    "shape_guard": "same shapes; opt-in",
    "writer": "generated", "selector": "env_guard",
@@ -162,7 +171,7 @@ def build_census() -> dict:
     "of_which_forbidden_final_default": [r["route_id"] for r in forbidden_default],
     "interpretation": (
       f"{len(non_tinygrad_default)} kernels on the default path are non-tinygrad-generated. "
-      f"{len(generated_default)} is machine-authored/generated (G3 Q4_K GEMV); "
+      f"{len(generated_default)} are machine-authored/generated ({', '.join(r['route_id'] for r in generated_default)}); "
       f"{len(final_purity_debt)} are final-default purity debt "
       f"({', '.join(r['route_id'] for r in final_purity_debt)}). "
       "Everything else in the model is tinygrad_scheduler-generated."),

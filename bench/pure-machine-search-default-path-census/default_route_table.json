@@ -60,6 +60,26 @@
     "final_default_allowed": false
   },
   {
+    "route_id": "decode_flash_block_tile_g5_konly",
+    "workload": "decode",
+    "role": "attention_tile,attention_combine",
+    "quant": "fp16",
+    "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
+    "writer": "generated",
+    "selector": "BoltBeam_route_policy_or_env_default",
+    "route_guard": "tinygrad/llm/model.py:1129-1140 QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; DECODE_FLASH_BLOCK_TILE_G5_KONLY default 1",
+    "kernel_source": "extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel (staging='K_ONLY')",
+    "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); bench/gp-track/gp3_microgate.json",
+    "rollback_flag": "DECODE_FLASH_BLOCK_TILE_G5=0",
+    "purity_status": "search_generated_promoted",
+    "next_action": "keep promoted for the validated G=5 shape; make BoltBeam QK_ROUTE_POLICY the selector authority before adding more shapes",
+    "current_default": true,
+    "in_manifest": true,
+    "provenance": "machine_authored_generated",
+    "replacement_scope": "",
+    "final_default_allowed": true
+  },
+  {
     "route_id": "prefill_pipe_role_selective_default",
     "workload": "prefill",
     "role": "attn_qo,attn_kv,ffn_down (ffn_gate_up excluded)",

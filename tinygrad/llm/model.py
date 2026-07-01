@@ -610,6 +610,59 @@ def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, na
   if name is not None and (entry:=policy.get("by_tensor", {}).get((name, typ, rows, cols))) is not None: return entry
   return policy.get("by_shape", {}).get((typ, rows, cols))
 
+_QK_ROUTE_POLICY: dict|None = None
+_QK_ROUTE_POLICY_STRICT = False
+_QK_ROUTE_POLICY_DEBUG = False
+_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly"}
+
+def _load_qk_route_policy(path:str) -> dict:
+  policy_path = pathlib.Path(path).expanduser()
+  data = json.loads(policy_path.read_text())
+  if data.get("schema") != "boltbeam.route_policy.v1":
+    raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
+  selected: dict[str, dict] = {}
+  for row in data.get("routes", []):
+    route_id = row.get("selected_route")
+    if not route_id: continue
+    if route_id not in _SUPPORTED_QK_ROUTE_IDS:
+      raise ValueError(f"{policy_path} selects unsupported route {route_id!r}; supported={sorted(_SUPPORTED_QK_ROUTE_IDS)}")
+    params = dict(row.get("route_params", {}))
+    allowed = {"DECODE_FLASH_BLOCK_TILE_G5", "DECODE_FLASH_BLOCK_TILE_G5_KONLY"}
+    if set(params) - allowed:
+      raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
+    if route_id == "decode_flash_block_tile_g5_konly" and params != {
+      "DECODE_FLASH_BLOCK_TILE_G5": "1", "DECODE_FLASH_BLOCK_TILE_G5_KONLY": "1"}:
+      raise ValueError(f"{policy_path} route {route_id!r} must select K-only G5 flags, got {params}")
+    selected[route_id] = row
+  return {"path": str(policy_path), "selected": selected}
+
+def _set_qk_route_policy(policy:dict|None, strict:bool=False, debug:bool=False) -> None:
+  global _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG
+  _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG = policy, strict, debug
+
+def _qk_route_policy_selected(route_id:str, shape:dict[str, int]|None=None) -> bool:
+  if _QK_ROUTE_POLICY is None: return False
+  row = _QK_ROUTE_POLICY.get("selected", {}).get(route_id)
+  if row is None: return False
+  if shape is not None:
+    policy_shape = dict(row.get("shape", {}))
+    for k, v in shape.items():
+      if k in policy_shape and int(policy_shape[k]) != int(v): return False
+  return True
+
+def _validate_qk_route_policy_for_config(policy:dict|None, config:TransformerConfig) -> None:
+  if policy is None: return
+  row = policy.get("selected", {}).get("decode_flash_block_tile_g5_konly")
+  if row is None: return
+  shape = dict(row.get("shape", {}))
+  expected = {"Hq": config.n_heads, "Hkv": config.n_kv_heads, "Hd": config.head_dim}
+  mismatches = {k: (shape.get(k), v) for k, v in expected.items() if k in shape and int(shape[k]) != int(v)}
+  if mismatches and _QK_ROUTE_POLICY_STRICT:
+    raise ValueError(f"QK_ROUTE_POLICY selects decode_flash_block_tile_g5_konly for incompatible model shape: {mismatches}")
+  if _QK_ROUTE_POLICY_DEBUG:
+    print(f"QK_ROUTE_POLICY_DEBUG path={policy.get('path')} selected={sorted(policy.get('selected', {}))} "
+          f"shape={shape} model={expected} compatible={not mismatches}")
+
 def _qk_storage_cap_from_env() -> int|None:
   raw = getenv("QK_PRIMITIVE_MAX_STORAGE_MB", "")
   if raw == "": return None
@@ -1126,13 +1179,18 @@ class TransformerBlock(FFNBlock):
         from extra.qk_flash_decode import flash_decode_attention_whole_cache
         out = flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
                                                  Hd, Hq, Hkv, MAXC, L)
-      if out is None and getenv("DECODE_FLASH_BLOCK_TILE_G5", 1) and B == 1 and Hd == 128 and Hq == 40 and Hkv == 8:
+      _g5_shape_ok = B == 1 and Hd == 128 and Hq == 40 and Hkv == 8
+      _g5_policy_selected = _qk_route_policy_selected("decode_flash_block_tile_g5_konly",
+                                                       {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_shape_ok else False
+      _g5_enabled = _g5_policy_selected if _QK_ROUTE_POLICY is not None else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5", 1))
+      if out is None and _g5_enabled and _g5_shape_ok:
         # G=5 block tile for 14B (Hq=40/Hkv=8): one warp per GQA group, TK=16 K rows staged in LDS,
         # online softmax + d-sharded PV. Sliced path: l_route=L, grid=Hkv×ceildiv(ctx,L)=32 wg at ctx=512.
-        # Default-on (TIER_A +3.9 tok/s ctx512). Rollback: DECODE_FLASH_BLOCK_TILE_G5=0.
+        # Default-on (TIER_A +3.9 tok/s ctx512). BoltBeam QK_ROUTE_POLICY selects this route by shape when
+        # present; without a policy, rollback remains DECODE_FLASH_BLOCK_TILE_G5=0.
         # DECODE_FLASH_BLOCK_TILE_G5_KONLY=1 (default-on): K_ONLY staging (4KB LDS, V from global/L2).
         from extra.qk_flash_decode import flash_decode_g5_block_tile
-        _g5_staging = "K_ONLY" if getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1) else "KV_BOTH"
+        _g5_staging = "K_ONLY" if (_g5_policy_selected or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
         out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
                                          Hd, Hq, Hkv, MAXC, L, staging=_g5_staging)
       if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
@@ -1493,19 +1551,22 @@ class Transformer:
     use_q6k_primitive = bool(getenv("Q6K_PRIMITIVE", 1 if use_q4k_primitive else 0))
     qk_generated_policy_path = getenv("QK_GENERATED_POLICY", "")
     use_qk_generated_policy = bool(qk_generated_policy_path)
-    if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy) and isinstance(gguf, Tensor):
+    qk_route_policy_path = getenv("QK_ROUTE_POLICY", "")
+    use_qk_route_policy = bool(qk_route_policy_path)
+    if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy) and isinstance(gguf, Tensor):
       raise ValueError("quant primitive paths require a GGUF path, not a preloaded Tensor")
     # QK primitive/generated linears are backed by AMD-targeted custom kernels. Auto-enable is already
     # AMD-only (q4k_auto), so this only catches an *explicit* Q4K_PRIMITIVE/Q6K_PRIMITIVE/QK_GENERATED_POLICY
     # on another backend -- fail fast with a clear message instead of an obscure later kernel failure.
-    if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy) and Device.DEFAULT != "AMD":
-      raise ValueError(f"QK quant primitive paths (Q4K_PRIMITIVE/Q6K_PRIMITIVE/QK_GENERATED_POLICY) require "
+    if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy) and Device.DEFAULT != "AMD":
+      raise ValueError(f"QK quant primitive paths (Q4K_PRIMITIVE/Q6K_PRIMITIVE/QK_GENERATED_POLICY/QK_ROUTE_POLICY) require "
                        f"DEV=AMD; the kernels are AMD-targeted. Got Device.DEFAULT={Device.DEFAULT!r}.")
-    if use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy:
+    if use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
     else:
       kv, state_dict = gguf_load(gguf.to(None).realize() if isinstance(gguf, Tensor) else gguf)
       q4k_meta = None
+    qk_route_policy = _load_qk_route_policy(qk_route_policy_path) if use_qk_route_policy else None
 
     # all state items should be float16, not float32
     state_dict = {k:v.cast('float16') if getenv("HALF", 1) else v for k,v in state_dict.items()}
@@ -1562,6 +1623,9 @@ class Transformer:
       full_attention_interval=kv.get(f'{arch}.full_attention_interval', 0),
       qkv_bias='blk.0.attn_q.bias' in state_dict,
       expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict)
+    _set_qk_route_policy(qk_route_policy, bool(getenv("QK_ROUTE_POLICY_STRICT", 0)),
+                         bool(getenv("QK_ROUTE_POLICY_DEBUG", 0)))
+    _validate_qk_route_policy_for_config(qk_route_policy, config)
     # Prefill policy auto-resolution, BEFORE Transformer() (its __init__ reads PREFILL_V2 to build the warmstart,
     # and the concrete-KV precompile + generate() read PREFILL_CONCRETE_KV). Explicit 0/1 skip these.
     # PREFILL_SERVER_PROFILE=1 implies PREFILL_V2=auto (when V2 unset) + concrete-KV on (when V2 ends up on).

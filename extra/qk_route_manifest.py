@@ -25,6 +25,7 @@ from __future__ import annotations
 import json, os, pathlib
 
 PROFILE_DECODE = "qwen3_8b_q4_k_m_gfx1100_decode"
+PROFILE_DECODE_LARGE = "qwen3_14b_32b_q4_k_m_gfx1100_decode"
 PROFILE_PREFILL = "qwen3_8b_q4_k_m_gfx1100_prefill"
 
 # status vocabulary:
@@ -149,6 +150,25 @@ ROUTES = {
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/model.py:1091-1106 (DECODE_ATTN_AMDGCN_TILE default 1, ctx>=512); writer extra/qk_owned_flash_decode_graph_node.py amdgcn_flash_decode (HIP .co split tile + separate combine, two Ops.PROGRAM graph nodes).",
     "note": "shipped decode attention: hand HIP split tile + separate combine. Combine/fused-lifecycle exhausted; ceiling audit (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION) says attention wall-share is ~10%@ctx512 ->~3%@ctx4096 (measured tile_wall_share in bench/amd-isa-backend-decode-attention-ceiling/latest.json); low-leverage."},
+  "decode_flash_block_tile_g5_konly": {
+    "workload": "decode", "profile_id": PROFILE_DECODE_LARGE, "status": "promoted_default",
+    "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
+    "quant": ["fp16"],
+    "shape_guards": [{"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
+    "env": {},  # DEFAULT-ON for the validated G=5 shape; BoltBeam QK_ROUTE_POLICY can select it by shape.
+    "rollback": {"DECODE_FLASH_BLOCK_TILE_G5": "0"},
+    "baseline_route_id": "decode_attention_owned_two_kernel",
+    "strict_fallback": True,
+    "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel"],
+    "forbidden_kernels": ["owned_flash_tile_gqa_whole", "fallback_graph"],
+    "authority_gate": "extra/qk_decode_runtime_overhead.py",
+    "promotion_artifacts": ["bench/gp-track/gp4_latest.json", "bench/gp-track/gp3_microgate.json",
+                            "docs/gp5-final-report.md"],
+    "purity_status": "search_generated_promoted",
+    "provenance": "machine_authored_generated",
+    "selector": "BoltBeam_route_policy_or_env_default",
+    "route_attribution": "tinygrad/llm/model.py:1129-1140 (QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly, else DECODE_FLASH_BLOCK_TILE_G5 default 1; K_ONLY staging default 1). Writer extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp kernel.",
+    "note": "G=5 block tile for 14B Hq=40/Hkv=8/Hd=128. GP0 purity gate PASS (generated UOps, no handwritten kernel); GP3 microgate PASS; GP4 W==D ctx512 +3.9 tok/s (+7.8%), ctx2048 +6.9 tok/s (+14.7%). Rollback DECODE_FLASH_BLOCK_TILE_G5=0. The next pure-search step is making BoltBeam QK_ROUTE_POLICY the required selector authority."},
   "decode_attention_native_correct_not_fast": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "correct_not_fast",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
