@@ -1,0 +1,45 @@
+{
+  "scope": "TG-P9 terminal: pure generated 8B decode-attention primitive route",
+  "verdict": "TG_P9_BLOCKED_SPLIT_PRESERVING_COMBINE",
+  "north_star": "TINYGRAD_DEFAULT_PURITY_PASS remains blocked, but the final impurity is now pinned to ONE concrete compiler primitive gap (not 'attention is slower').",
+  "phase_results": {
+    "TG_P9_0": "PASS_PRIMITIVE_BACKLOG_PINNED",
+    "TG_P9_1": "PASS_LIVE_TC_SPLIT_IR (the live-split geometry TG-P8 expected EMITTER_BLOCKED is expressible in generated UOp; a typed-const bug, not a capability gap)",
+    "TG_P9_2": "PASS_LIVE_SPLIT_TILE (live-split tile byte-identical; ctx512 tile 36.6->8.0us, 4.6x; full-model ctx512 87.7%->96.7% of owned, token-identical, route-bound)",
+    "TG_P9_3_4": "BLOCKED_EMITTER (split-preserving combine: every weight-sharing/gmax-fusing shape mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) = ...; REG_STORE_DEVEC=1 compiles but NaNs). The per-d fexp redundancy -- the ctx4096 556us cap -- cannot be removed in current AMD codegen.",
+    "TG_P9_5": "REFUTE_STILL_SLOW (full candidate = live-split tile + existing combine: ctx512 96.7%, ctx4096 95.3%; improved from 87.7%/95.9% but <98% at both -- combine-capped)"
+  },
+  "achieved": {
+    "live_split_tile": {
+      "status": "PASS, shipped default-off (DECODE_ATTN_LIVE_SPLIT_GENERATED)",
+      "per_ctx": {
+        "512": {
+          "owned_tok_s": 107.6,
+          "gen_tok_s": 104.0,
+          "pct_of_owned": 96.7,
+          "token_match": true
+        },
+        "4096": {
+          "owned_tok_s": 97.9,
+          "gen_tok_s": 93.3,
+          "pct_of_owned": 95.3,
+          "token_match": true
+        }
+      },
+      "note": "closes the ctx512 SPLIT_GEOMETRY half of the TG-P8 blocker; byte-identical, route-bound"
+    }
+  },
+  "remaining_blocker": {
+    "class": "EMITTER_BLOCKED (compiler primitive gap)",
+    "what": "a split-preserving generated LSE combine that de-duplicates the softmax-weight fexp across d (or fuses the gmax max-reduce) so the combine lifecycle drops from ~763us/fwd to ~owned 224us",
+    "why": "tinygrad AMD codegen vectorizes the reduction-accumulator REG into a non-assignable make_float4(...) store for any combine shape beyond the shipped single-reduce per-d combine; REG_STORE_DEVEC=1 compiles but the max-reduce mis-lowers to NaN",
+    "reopen_condition": "a tinygrad codegen fix keeping the reduction-accumulator REG scalar (or a correct DEVEC max-reduce lowering) for a multi-reduce / LDS-weight-sharing combine kernel; then re-run TG-P9.4/9.5",
+    "do_not_retry": [
+      "Hq-only fused combine (refuted)",
+      "Hq*Hd-collapsing merged combine (refuted)",
+      "L geometry tuning (TG-P8.2 refuted)"
+    ]
+  },
+  "owned_remains_default": true,
+  "no_hip_asm": true
+}
