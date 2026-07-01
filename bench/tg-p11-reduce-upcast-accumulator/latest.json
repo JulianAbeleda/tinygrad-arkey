@@ -1,0 +1,31 @@
+{
+  "scope": "TG-P11 terminal: reduce/upcast accumulator widening",
+  "verdict": "TG_P11_8_BLOCKED_REGRESSION_SURFACE_TOO_BROAD",
+  "blocker_class": "LOWERING_STILL_WRONG + REGRESSION_SURFACE_TOO_BROAD",
+  "progress": {
+    "TG_P11_0": "PASS_BASELINE_PINNED (TG-P10 repro still fails; classifier EMITTER_BLOCKED; owned default unchanged)",
+    "TG_P11_1": "PASS_INVARIANT_TEST_READY (minimal attention-free microgate extra/qk_tg_p11_reduce_upcast_microgate.py reproduces the invariant: a scalar-REG END-accumulator + a foldable contiguous load in the reduce body mis-lowers)",
+    "TG_P11_2": "BLOCKED_LOWERING_STILL_WRONG (a correct, generic, safe fix could not be landed in-session)"
+  },
+  "refined_root_cause": {
+    "mechanism": "The hand flash/gemv kernels express reductions with a MANUAL END/AFTER accumulator idiom (acc.set(acc.after(s)+v, end=s)), NOT Ops.REDUCE. So reduce_to_acc / horizontal_reduce (which correctly folds upcast reduce lanes) never runs on them. When a contiguous load in the reduce body is folded to float4 (coalesced), the scalar-REG accumulate `acc + float4` broadcasts acc to a vector and emits an invalid `make_float4(acc,acc,acc,acc) = make_float4(acc+v0,..,acc+v3)` store; REG_STORE_DEVEC aliases the 4 lanes into slot 0 -> NaN.",
+    "why_shipped_kernels_compile": "gmax uses a STRIDED load (not folded -> stays scalar); flash_state_combine's inline fexp blocks the fold. Verified: 0 invalid stores in the shipped combine, >0 in every fexp-free / weight-sharing shape and in the minimal microgate.",
+    "confirmed": "the manual accumulator produces END=2/AFTER=4/STORE=3, Ops.REDUCE=0 -> bypasses the horizontal-reduce path entirely."
+  },
+  "candidate_fixes": [
+    {
+      "approach": "horizontal-reduce the vectorized END-accumulator value",
+      "where": "a gated (REDUCE_ACC_UPCAST_FIX) devectorizer PatternMatcher rule matching STORE(INDEX(REG_scalar), ALU(op, broadcast(acc), contrib_vec)) -> STORE(INDEX(REG_scalar), op(acc, horizontal_reduce(contrib_vec, op)))",
+      "risk": "op-specific correctness (max = plain HREDUCE; add = HREDUCE - (n-1)*acc); fragile broadcast/contrib detection in the post-devectorize graph"
+    },
+    {
+      "approach": "prevent the load-fold in a scalar-REG reduce body",
+      "where": "gate load_store_folding to skip a contiguous load whose consumer is a scalar-REG END-accumulator, keeping the reduce scalar (like gmax)",
+      "risk": "perf regression (scalar loads) for legit cases; must be measured to confirm the combine is still faster than the shipped fexp path"
+    }
+  ],
+  "why_not_landed": "both fixes touch core reduce/devectorize lowering used by EVERY kernel (Q4_K G3 GEMV, Q6_K coop, prefill GEMM, all attention tiles). A subtle regression would silently corrupt outputs model-wide. Landing either responsibly needs reliable UOp-graph pattern detection (which requires deeper interception than achieved here) plus a full model-wide token-parity + W==D regression pass -- a dedicated compiler-engineering effort beyond a single session's safe scope.",
+  "owned_remains_default": true,
+  "distance_to_north_star": "one gated core fix (horizontal-reduce the manual END-accumulator under load-fold, op-specific) + model-wide regression validation. Then the TG-P9 live-split tile + the unblocked fexp-free combine run TG-P11.5/6/7 and should clear >=98% at ctx512/4096.",
+  "reopen": "land one of the two candidate fixes behind REDUCE_ACC_UPCAST_FIX with the route regression ladder green, re-emit reg_scalar_lowering.v1 (BoltBeam flips REACHABLE), then TG-P11.5/6/7."
+}
