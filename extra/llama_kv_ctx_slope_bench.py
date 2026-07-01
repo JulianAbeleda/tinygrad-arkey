@@ -119,6 +119,9 @@ def main() -> None:
   ap.add_argument("--cache-type-k", default="f16", choices=sorted(_DTYPE_BYTES))
   ap.add_argument("--cache-type-v", default="f16", choices=sorted(_DTYPE_BYTES))
   ap.add_argument("--flash-attn", default=None, choices=("on", "off", "auto"))
+  ap.add_argument("--target-id", default="amd_gfx1100")
+  ap.add_argument("--baseline-json", default=None,
+                  help="Optional f16/f16 slope artifact; used to compute storage-only B and quant residual.")
   ap.add_argument("--llama-bench", default=DEFAULT_LLAMA_BENCH)
   ap.add_argument("--ngl", type=int, default=99)
   ap.add_argument("--gen", type=int, default=128)
@@ -140,6 +143,24 @@ def main() -> None:
   if b is not None and b > 0:
     implied_bw = meta["kv_bytes_per_ctx_token"] / (b / 1000.0) / 1e9
 
+  residual:dict[str, Any] = {}
+  if args.baseline_json:
+    base = json.loads(pathlib.Path(args.baseline_json).read_text())
+    base_b = base.get("fit", {}).get("b_ms_per_ctx")
+    base_bytes = base.get("meta", {}).get("kv_bytes_per_ctx_token")
+    if base_b is None or base_bytes is None:
+      raise ValueError("--baseline-json must contain fit.b_ms_per_ctx and meta.kv_bytes_per_ctx_token")
+    storage_b = float(base_b) * float(meta["kv_bytes_per_ctx_token"]) / float(base_bytes)
+    residual = {
+      "baseline_path": str(pathlib.Path(args.baseline_json)),
+      "baseline_b_ms_per_ctx": float(base_b),
+      "baseline_kv_bytes_per_ctx_token": float(base_bytes),
+      "baseline_cache_type_k": base.get("meta", {}).get("cache_type_k"),
+      "baseline_cache_type_v": base.get("meta", {}).get("cache_type_v"),
+      "storage_only_b_ms_per_ctx": storage_b,
+      "quant_residual_b_ms_per_ctx": (float(b) - storage_b) if b is not None else None,
+    }
+
   for r in rows:
     if not r["ok"]: continue
     ctx = int(r["ctx"])
@@ -155,12 +176,14 @@ def main() -> None:
   artifact = {
     "schema": "tinygrad.llama_kv_ctx_slope.v1",
     "model_id": model_id,
+    "target_id": args.target_id,
     "model_path": str(model_path),
     "meta": meta,
     "config": {"depths": depths, "cache_type_k": args.cache_type_k, "cache_type_v": args.cache_type_v,
                "flash_attn": args.flash_attn or "default", "gen": args.gen, "reps": args.reps},
     "rows": rows,
     "fit": {**fit, "implied_kv_bandwidth_gb_s": implied_bw},
+    "residual": residual,
     "verdict": "LLAMA_CTX_DECLINE_LINEAR_KV_SLOPE" if linear else "LLAMA_CTX_DECLINE_NEEDS_RESIDUAL_ANALYSIS",
     "interpretation_hint": ("quantized KV has a linear context slope, but storage bytes alone may not predict speed; "
                             "compare against an f16/bf16 baseline for quant/dequant or kernel overhead")
@@ -182,6 +205,10 @@ def main() -> None:
     f"- fit: `ms/token = {fit['a_ms']:.6f} + {fit['b_ms_per_ctx']:.9f} * ctx`" if fit["a_ms"] is not None else "- fit: unavailable",
     f"- R^2: `{fit['r2']:.4f}`" if fit["r2"] is not None else "- R^2: unavailable",
     f"- implied KV bandwidth: `{implied_bw:.1f} GB/s`" if implied_bw else "- implied KV bandwidth: unavailable",
+    *((
+      f"- storage-only B from baseline: `{residual['storage_only_b_ms_per_ctx']:.9f} ms/ctx`",
+      f"- quant residual B: `{residual['quant_residual_b_ms_per_ctx']:.9f} ms/ctx`",
+    ) if residual and residual.get("quant_residual_b_ms_per_ctx") is not None else ()),
     "",
     "| ctx | ok | tok/s | ms/token | KV read/token | fit residual ms |",
     "|---:|:---:|---:|---:|---:|---:|",
