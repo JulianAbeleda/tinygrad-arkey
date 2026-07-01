@@ -253,13 +253,18 @@ class Q4KPrimitiveLinear:
     # warp kernel, <0.5% across ctx 512-4096; token-matched, route-clean). Directional pure-machine-search move: ship the
     # generated route, keep owned warp one flag away. Rollback to owned warp: BUBBLEBEAM_FUTURESIGHT=0.
     bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1) or getenv("BEAM_COALESCE")
+    # TG-P2: BoltBeam QK_ROUTE_POLICY route ownership. When the policy selects decode_q4k_g3_generated for this
+    # tensor's dims, G3 is the authorized route (regardless of the DECODE_Q4K_G3_ANYSHAPE default). This does not
+    # change no-policy behavior; it moves selection authority from the model-side default into BoltBeam. Owned warp
+    # stays one rollback flag away (BUBBLEBEAM_FUTURESIGHT=0). Strict mode fails loud on any silent fallback.
+    g3_policy_selected = _qk_route_policy_selects_q4k_g3(self.out_features, self.in_features)
     g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
     # PROMOTED default-ON 2026-06-30 (rollback = DECODE_Q4K_G3_ANYSHAPE=0): bind the generated G3 lanemap by
     # STRUCTURAL shape eligibility ((in//256)%4==0 and out%32==0) rather than the hardcoded 8B dims, so larger
     # dense Q4_K decode shapes (14B/32B FFN gate/up/down + attn_q/k/o) take the generated route instead of the slow
     # lazy-dequant fallback. Byte-identical (token-matched 8B/14B); W==D 8B +4%, 14B +60%, 32B +78% (paired with
     # DECODE_ROUTE_ATTN_K). Structural class, not a model-dim hardcode. See docs/qwen-14b-32b-attn-k-route-miss-result.
-    g3_anyshape = bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 1)) and DECODE_ATTN_AMDGCN_ARCH_OK \
+    g3_anyshape = (bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 1)) or g3_policy_selected) and DECODE_ATTN_AMDGCN_ARCH_OK \
       and (self.in_features // 256) % 4 == 0 and self.out_features % 32 == 0
     if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and (g3_bubblebeam_shape or g3_anyshape):
       from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
@@ -297,6 +302,13 @@ class Q4KPrimitiveLinear:
         from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
         _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
+    # TG-P2 strict hidden-fallback guard: a QK_ROUTE_POLICY-selected tensor must bind to G3. If we reach here with the
+    # policy selecting G3 and futuresight on (not an explicit BUBBLEBEAM_FUTURESIGHT=0 rollback, not a scheduler
+    # research override), G3 did not bind -> fail loud instead of silently taking the owned warp / coop fallback.
+    if g3_policy_selected and _QK_ROUTE_POLICY_STRICT and bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
+      raise ValueError(f"TG_P2_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q4k_g3_generated for Q4_K "
+                       f"tensor {self.name!r} (out={self.out_features}, in={self.in_features}) but it did not bind to "
+                       f"the G3 route (structural eligibility (in//256)%4==0 and out%32==0 not met, or arch unsupported)")
     if (getenv("Q4K_GEMV_SCHEDULER") or bubblebeam_futuresight) and self.in_features == 4096 and self.out_features == 12288:
       # M5/M6 research lever (default-off): scheduler-GENERATED matvec for FFN gate/up instead of the owned warp
       # custom_kernel. Two modes:
@@ -613,7 +625,7 @@ def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, na
 _QK_ROUTE_POLICY: dict|None = None
 _QK_ROUTE_POLICY_STRICT = False
 _QK_ROUTE_POLICY_DEBUG = False
-_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly"}
+_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_q4k_g3_generated"}
 
 def _load_qk_route_policy(path:str) -> dict:
   policy_path = pathlib.Path(path).expanduser()
@@ -621,20 +633,38 @@ def _load_qk_route_policy(path:str) -> dict:
   if data.get("schema") != "boltbeam.route_policy.v1":
     raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
   selected: dict[str, dict] = {}
+  q4k_g3_rows: list[dict] = []
   for row in data.get("routes", []):
     route_id = row.get("selected_route")
     if not route_id: continue
     if route_id not in _SUPPORTED_QK_ROUTE_IDS:
       raise ValueError(f"{policy_path} selects unsupported route {route_id!r}; supported={sorted(_SUPPORTED_QK_ROUTE_IDS)}")
     params = dict(row.get("route_params", {}))
-    allowed = {"DECODE_FLASH_BLOCK_TILE_G5", "DECODE_FLASH_BLOCK_TILE_G5_KONLY"}
-    if set(params) - allowed:
-      raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-    if route_id == "decode_flash_block_tile_g5_konly" and params != {
-      "DECODE_FLASH_BLOCK_TILE_G5": "1", "DECODE_FLASH_BLOCK_TILE_G5_KONLY": "1"}:
-      raise ValueError(f"{policy_path} route {route_id!r} must select K-only G5 flags, got {params}")
-    selected[route_id] = row
-  return {"path": str(policy_path), "selected": selected}
+    if route_id == "decode_flash_block_tile_g5_konly":
+      allowed = {"DECODE_FLASH_BLOCK_TILE_G5", "DECODE_FLASH_BLOCK_TILE_G5_KONLY"}
+      if set(params) - allowed:
+        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
+      if params != {"DECODE_FLASH_BLOCK_TILE_G5": "1", "DECODE_FLASH_BLOCK_TILE_G5_KONLY": "1"}:
+        raise ValueError(f"{policy_path} route {route_id!r} must select K-only G5 flags, got {params}")
+      selected[route_id] = row
+    elif route_id == "decode_q4k_g3_generated":
+      allowed = {"BUBBLEBEAM_FUTURESIGHT"}
+      if set(params) - allowed:
+        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
+      if params and params != {"BUBBLEBEAM_FUTURESIGHT": "1"}:
+        raise ValueError(f"{policy_path} route {route_id!r} must select the generated G3 route (BUBBLEBEAM_FUTURESIGHT=1), got {params}")
+      shape = row.get("shape", {})
+      try:
+        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
+      except (KeyError, TypeError, ValueError):
+        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
+      if rows_i <= 0 or cols_i <= 0:
+        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
+      q4k_g3_rows.append(row)
+      selected.setdefault(route_id, row)
+    else:
+      selected[route_id] = row
+  return {"path": str(policy_path), "selected": selected, "q4k_g3": q4k_g3_rows}
 
 def _set_qk_route_policy(policy:dict|None, strict:bool=False, debug:bool=False) -> None:
   global _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG
@@ -649,6 +679,17 @@ def _qk_route_policy_selected(route_id:str, shape:dict[str, int]|None=None) -> b
     for k, v in shape.items():
       if k in policy_shape and int(policy_shape[k]) != int(v): return False
   return True
+
+def _qk_route_policy_selects_q4k_g3(out_features:int, in_features:int) -> bool:
+  """True if the loaded QK_ROUTE_POLICY selects decode_q4k_g3_generated for a Q4_K weight tensor with these GEMV
+  dims (rows=out_features=N, cols=in_features=K). Per-tensor: matches any selected G3 row whose shape equals the
+  tensor's real dims. BoltBeam owns this selection; when it fires, G3 is the authorized route for the tensor."""
+  if _QK_ROUTE_POLICY is None: return False
+  for row in _QK_ROUTE_POLICY.get("q4k_g3", []):
+    shape = row.get("shape", {})
+    if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
+      return True
+  return False
 
 def _validate_qk_route_policy_for_config(policy:dict|None, config:TransformerConfig) -> None:
   if policy is None: return
