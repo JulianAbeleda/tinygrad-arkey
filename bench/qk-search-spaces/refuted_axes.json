@@ -35,6 +35,18 @@
       "route_id": "decode_flash_block_tile_g5_8b_refuted"
     },
     {
+      "axis": "g5_block_tile_8b_L_geometry",
+      "domain": "attention",
+      "disposition": "refuted: L=128 is the geometry optimum (87.7%/95.9%); larger L monotonically worse (69%/75.6% at L=576, occupancy-starved) -- the generated route needs ~36 splits for parallelism so it over-launches at low ctx (TG-P8.2)",
+      "citation": "bench/tg-p8-generated-8b-attention-parity/geometry_search.json"
+    },
+    {
+      "axis": "g5_block_tile_8b_combine_lifecycle_cap",
+      "domain": "attention",
+      "disposition": "blocking: the generated 3-kernel gmax+combine lifecycle is 556us/fwd (83% of the ctx4096 attention delta) vs owned's fused 224us -> BINDING cap at ctx4096 (95.9%); a perfect tile saves only 112us. Combine COLLAPSE is refuted (guardrail #3); reopen only with a NEW non-collapse coordination primitive (TG-P8.1/P8.2)",
+      "citation": "bench/tg-p8-generated-8b-attention-parity/latest.json"
+    },
+    {
       "axis": "n1b_scalar_address_path",
       "domain": "attention",
       "disposition": "refuted/dead",

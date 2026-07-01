@@ -123,6 +123,14 @@ Stop if the evidence cannot reproduce TG-P8's two blockers.
 
 Purpose: represent owned-like split geometry in generated code.
 
+Current status update, 2026-07-01:
+
+- A first generated-UOp coverage primitive exists in `extra/qk_live_split_geometry.py`.
+- The microgate exists in `extra/qk_tg_p9_live_split_microgate.py`.
+- Running it currently returns `TG_P9_1_BLOCKED_SYMBOLIC_BOUNDS`.
+- The failure is before attention math: `RuntimeError: UOp verification failed ... Ops.CONST dtypes.weakint 0 [] 1`.
+- This means the next implementation task is not yet "wire the attention tile"; it is to make tinygrad's symbolic live split bound expressible and verifiable.
+
 Required capability:
 
 ```text
@@ -158,6 +166,39 @@ Verdicts:
 - `TG_P9_1_BLOCKED_SYMBOLIC_BOUNDS`
 
 Do not proceed to full W==D until the split-range microgate passes.
+
+### Phase TG-P9.1A: Symbolic Bound Lowering Fix
+
+Purpose: unblock TG-P9.1 without adding attention-specific code.
+
+Starting evidence:
+
+- `PYTHONPATH=. python3 extra/qk_tg_p9_live_split_microgate.py`
+- current verdict: `TG_P9_1_BLOCKED_SYMBOLIC_BOUNDS`
+- failure signature: UOp verifier rejects a weak-int constant in the symbolic `range(nb)` path.
+
+Allowed fixes:
+
+- generic UOp construction/type fix in `extra/qk_live_split_geometry.py`;
+- generic tinygrad UOp verifier/lowering fix if the primitive is valid but the compiler rejects it;
+- replacing weak-int constants with typed index constants if that is the true issue;
+- adding a smaller symbolic-range microgate if needed to isolate verifier vs renderer behavior.
+
+Not allowed:
+
+- hardcoding Qwen3-8B split ranges;
+- unrolling `Tc` cases into static kernels;
+- falling back to handwritten HIP/ASM;
+- making the generated attention route default before the primitive proves correctness.
+
+Acceptance:
+
+1. `extra/qk_tg_p9_live_split_microgate.py` passes for all listed `(S, Tc)` cases.
+2. The output artifact records `TG_P9_1_PASS_LIVE_TC_SPLIT_IR`.
+3. The generated coverage proves `[0,Tc)` is covered exactly once and `[Tc,MAXC)` remains untouched.
+4. The grid remains fixed `S`, not `ceildiv(MAXC,L)`.
+
+If this cannot be fixed generically, stop with `TG_P9_1A_BLOCKED_UOP_SYMBOLIC_RANGE_CAPABILITY` and ledger the primitive as `EMITTER_BLOCKED`.
 
 ## Phase TG-P9.2: Generated Tile Using Live Split Geometry
 
@@ -371,4 +412,3 @@ with:
 - owned/handwritten kernels retained only as rollback/oracle.
 
 If unsuccessful, the project still improves because the final impurity is reduced to a precise compiler primitive gap rather than a vague performance problem.
-
