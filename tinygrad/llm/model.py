@@ -1127,12 +1127,14 @@ class TransformerBlock(FFNBlock):
         out = flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
                                                  Hd, Hq, Hkv, MAXC, L)
       if out is None and getenv("DECODE_FLASH_BLOCK_TILE_G5", 0) and B == 1 and Hd == 128 and Hq == 40 and Hkv == 8:
-        # G=5 block tile for 14B (Hq=40/Hkv=8): one warp per GQA group, TK=16 K+V rows staged in LDS,
+        # G=5 block tile for 14B (Hq=40/Hkv=8): one warp per GQA group, TK=16 K rows staged in LDS,
         # online softmax + d-sharded PV. Sliced path: l_route=L, grid=Hkv×ceildiv(ctx,L)=32 wg at ctx=512.
         # Default-off. Rollback: DECODE_FLASH_BLOCK_TILE_G5=0.
+        # DECODE_FLASH_BLOCK_TILE_G5_KONLY=1 (default-off): K_ONLY staging (4KB LDS, V from global/L2).
         from extra.qk_flash_decode import flash_decode_g5_block_tile
+        _g5_staging = "K_ONLY" if getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 0) else "KV_BOTH"
         out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                         Hd, Hq, Hkv, MAXC, L)
+                                         Hd, Hq, Hkv, MAXC, L, staging=_g5_staging)
       if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the

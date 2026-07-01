@@ -951,11 +951,13 @@ def flash_fused_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, 
     return ms.end(kvh, s).sink(arg=_fki(f"flash_fused_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
   return kernel
 
-def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH"):
   """Block-tiled generated decode candidate.
 
-  Mirrors the owned tile's topology at the UOp level: one workgroup per (kvh, split), 4 warps per
-  workgroup, one warp per GQA query head, TK=16 K/V rows staged in LDS, then online softmax + d-sharded PV.
+  Mirrors the owned tile's topology at the UOp level: one workgroup per (kvh, split), G warps per
+  workgroup, one warp per GQA query head, TK=16 K rows staged in LDS, then online softmax + d-sharded PV.
+  staging="KV_BOTH" (default): both K and V staged in LDS (original behavior, 8KB LDS).
+  staging="K_ONLY": K staged in LDS (4KB), V read directly from global cache (L2-warmed by E_49152).
   This is default-off and guarded by extra/qk_decode_attention_block_tile_microgate.py before route use.
   """
   if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%%64==0, got {Hd}")
@@ -967,12 +969,15 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     from extra.amd_warp_reduce import warp_reduce_sum
     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
     s = UOp.range(S, 1, AxisType.GLOBAL)
-    lane = UOp.special(LANES, "lidx0")
-    warp = UOp.special(WARPS, "lidx1")
+    # Use LOCAL ranges (not UOp.special) so add_gpudims can run and emit gidx for kvh/s.
+    # UOp.special blocks add_gpudims via the any(Ops.SPECIAL) guard in gpudims.py:61.
+    # AxisType.LOCAL → lidx0/lidx1 (real thread dims), correct for ds_bpermute lane addressing.
+    lane = UOp.range(LANES, 10, AxisType.LOCAL)
+    warp = UOp.range(WARPS, 11, AxisType.LOCAL)
     h = kvh * G + warp
     tid = warp * LANES + lane
     ksh = UOp.placeholder((TK * Hd,), dtypes.half, 230, addrspace=AddrSpace.LOCAL)
-    vsh = UOp.placeholder((TK * Hd,), dtypes.half, 231, addrspace=AddrSpace.LOCAL)
+    vsh = UOp.placeholder((TK * Hd,), dtypes.half, 231, addrspace=AddrSpace.LOCAL) if staging == "KV_BOTH" else None
     acc = UOp.placeholder((R,), _F32, 232, addrspace=AddrSpace.REG)
     den = UOp.placeholder((1,), _F32, 233, addrspace=AddrSpace.REG)
     mx = UOp.placeholder((1,), _F32, 234, addrspace=AddrSpace.REG)
@@ -1006,8 +1011,12 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     t_safe_stage = in_stage.where(t_stage, t_stage.const_like(0))
     _gate = () if _stage_w else (i < (TK * Hd),)   # W|TK*Hd divides evenly -> no bounds gate needed
     kstore = ksh[i].store(cache[0, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
-    vstore = vsh.after(kstore)[i].store(cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
-    bar = UOp.barrier(UOp.group(vstore.end(wv).end(st) if _stage_w else vstore.end(st)))
+    if staging == "KV_BOTH":
+      vstore = vsh.after(kstore)[i].store(cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
+      bar = UOp.barrier(UOp.group(vstore.end(wv).end(st) if _stage_w else vstore.end(st)))
+    else:
+      # K_ONLY: barrier after K staging only; V read from global (L2-warmed by E_49152)
+      bar = UOp.barrier(UOp.group(kstore.end(wv).end(st) if _stage_w else kstore.end(st)))
     def _dot_reduce(_tt):   # one token's dot (rp loop) -> warp-reduce -> scaled, masked score (the INDEPENDENT work)
       _dotp = UOp.placeholder((1,), _F32, 235, addrspace=AddrSpace.REG)
       _di = _dotp.after(b, _tt)[0].store(0.0); _dotp = _dotp.after(_di)
@@ -1035,7 +1044,8 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       corr = _fexp(old_m - new_m); p = _fexp(sc - new_m)   # sc=-inf for OOB -> corr=1, p=0 (mask folded in pass 1)
       dd = UOp.range(R, 7)
       d = lane * R + dd
-      vd = vsh.after(bar)[tt * Hd + d].cast(_F32)
+      vd = (vsh.after(bar)[tt * Hd + d] if staging == "KV_BOTH" else
+            cache.after(bar)[1, 0, kvh, s * L + b * TK + tt, d]).cast(_F32)
       accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
       denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
       mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
@@ -1049,7 +1059,8 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       p = in_r.where(_fexp(sc - new_m), _fc(0.0))
       dd = UOp.range(R, 7)
       d = lane * R + dd
-      vd = vsh.after(bar)[tt * Hd + d].cast(_F32)
+      vd = (vsh.after(bar)[tt * Hd + d] if staging == "KV_BOTH" else
+            cache.after(bar)[1, 0, kvh, s * L + b * TK + tt, d]).cast(_F32)
       accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
       denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
       mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
@@ -1060,7 +1071,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     pv = pout[base + d2].store(af[dd2]).end(dd2)
     ls = pout.after(pv)[base + Hd].store(lf[0], lane.eq(0))
     ms = pout.after(ls)[base + (Hd + 1)].store(mf[0], lane.eq(0))
-    return ms.end(kvh, s).sink(arg=_fki(f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
+    return ms.end(kvh, s, lane, warp).sink(arg=_fki(f"flash_block_tiled_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
   return kernel
 
 def flash_split_ml_gmax_kernel(Hq:int, S):
@@ -1418,23 +1429,25 @@ def flash_decode_attention_kv_flat(q:Tensor, k_full:Tensor, kv_flat:Tensor, Tc_b
   return out.reshape(Hq, Hd)
 
 def flash_decode_g5_block_tile(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
-                               Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=128) -> Tensor:
-  """G=5 block tile flash decode for 14B (Hq=40, Hkv=8, G=5). Sliced path: l_route=L, S=ceildiv(ctx,L).
+                               Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=128, staging:str="KV_BOTH") -> Tensor:
+  """G=5 block tile flash decode for 14B (Hq=40, Hkv=8, G=5). Sliced path: l_route=L, S=smax_route.
 
-  Directly invokes flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel without env-var dispatch.
-  Grid = Hkv × S = 8 × ceildiv(ctx, L) workgroups. At ctx=512 with L=128: 32 workgroups = same as gqa_coop_vec.
+  Grid = Hkv × smax_route workgroups (concrete, using smax_route=ceildiv(MAXC,L) not symbolic s_route).
+  Using symbolic s_route as S collapses the global axis to a serial inner loop (verified: single-WG
+  serialization, 3 GB/s vs 960 GB/s peak). smax_route fixes this: all splits launch in parallel, OOB
+  positions are masked by the existing in_stage < Tc check in the kernel body.
   Requires WARPS=G (already parameterized in the block tile kernel). Default-off: DECODE_FLASH_BLOCK_TILE_G5=0.
+  staging="K_ONLY" (DECODE_FLASH_BLOCK_TILE_G5_KONLY=1): stage only K in LDS, read V from global (L2-warm).
   """
   W2 = Hd + 2
-  l_route = L                          # use FLASH_L directly (= ceildiv(MAXC, ceildiv(MAXC,L)) for integer L)
-  s_route = (Tc_u + l_route - 1) // l_route  # symbolic ceildiv(ctx, L)
-  smax_route = _ceildiv(MAXC, l_route)        # concrete upper bound for buffer allocation
+  l_route = L
+  smax_route = _ceildiv(MAXC, l_route)   # concrete grid bound; OOB positions masked by in_stage < Tc
   q_f = q.reshape(Hq * Hd)
   po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(
     q_f, cache_kv,
-    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
-  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, s_route, stride=s_route))[0]
-  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, s_route, stride=s_route))[0]
+    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, l_route, smax_route, Tc_u, staging=staging))[0]
+  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
   return out.reshape(Hq, Hd)
 
 def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
