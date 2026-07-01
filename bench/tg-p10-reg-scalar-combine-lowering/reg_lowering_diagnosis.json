@@ -1,0 +1,20 @@
+{
+  "scope": "TG-P10.3 generic REG scalar lowering fix \u2014 diagnosis",
+  "verdict": "TG_P10_3_BLOCKED_REG_LOWERING_STILL_WRONG",
+  "status": "root cause pinned to the exact pass + mechanism; fix identified but NOT landed (core reduce-lowering change with a full-model regression surface \u2014 deferred for safety, not unknown)",
+  "root_cause": {
+    "mechanism": "When the optimizer UPCASTs an output axis (the combine's d, by 4), reduce_to_acc still creates a size-(1,) scalar REG accumulator. num = sum_s w*pv[d] VARIES along the upcast d, so it needs one accumulator slot per upcast lane; the devectorizer instead emits an invalid make_float4(acc,acc,acc,acc) = <4 distinct partials> store (non-assignable in C). den = sum_s w*l is INVARIANT in d and should stay scalar.",
+    "why_shipped_combine_compiles": "the shipped flash_state_combine computes w=fexp(m-gm) inline; the fexp op-weight suppresses the d-axis upcast, so its accumulator stays scalar and no make_float4 acc store is emitted (verified: 0 invalid stores vs >0 in every fexp-free / weight-sharing shape).",
+    "reg_store_devec": "REG_STORE_DEVEC=1 (extra/qk_reg_store_devec.py) scalarizes the STACK REG store to per-lane stores, but for a size-1 accumulator the 4 lanes collide on slot 0 (last-writer-wins) and the max-reduce state is not combined -> NaN.",
+    "fix_location": "tinygrad/codegen/late/expander.py fix_reduce_unroll / tinygrad/codegen/late/devectorizer.py reduce_to_acc (line 311-328): the reduce accumulator must be WIDENED to the upcast factor for axes the accumulator varies along (one slot per upcast lane), and kept scalar for invariant axes; equivalently, the expander must replicate the reduce per upcast lane instead of producing one vectorized accumulator."
+  },
+  "generic_fix_spec": "In reduce_to_acc, size the REG accumulator placeholder to prod(upcast factors of the output axes the reduce output varies along) instead of always (1,); the devectorizer then emits per-lane scalar stores into distinct slots (correct), and invariant axes stay scalar. No kernel-name or shape special-casing. Validate against the FULL decode+prefill+generated-kernel suite (every reduce kernel is affected) before landing.",
+  "why_not_landed_here": "the change touches the core reduce->DEFINE_ACC lowering used by every kernel (Q4_K G3 GEMV, Q6_K coop, prefill GEMM, all attention tiles). A subtle accumulator-sizing regression would silently corrupt outputs model-wide. Landing it responsibly needs a dedicated regression pass (token-parity across all shipped routes + the W==D gates), beyond a single session's safe scope.",
+  "downstream_blocked": [
+    "TG-P10.4 split-preserving combine microgate",
+    "TG-P10.5 full generated attention W==D",
+    "TG-P10.6 promotion + final purity"
+  ],
+  "owned_remains_default": true,
+  "reopen": "land the reduce+upcast accumulator-sizing fix with full-model regression validation, then re-emit the reg_scalar_lowering.v1 artifact (BoltBeam flips it to REACHABLE) and run TG-P10.4/5/6."
+}
