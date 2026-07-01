@@ -513,6 +513,11 @@ def _q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
   if ".ffn_gate.weight" in name or ".ffn_up.weight" in name: return 1, ("LOCAL:0:64",)
   if ".ffn_down.weight" in name: return 4, ("LOCAL:0:32",)
   if ".attn_q.weight" in name or ".attn_output.weight" in name: return 1, ("LOCAL:0:64",)
+  # RSR: attn_k is Q4_K (same as attn_q) but was omitted here, so it fell to a plain nn.Linear -> the slow generic
+  # lazy-dequant GEMV (kernel r_8_32_4_20_4_2_32), measured 38% of 14B decode. Cover it (default-off rollback
+  # DECODE_ROUTE_ATTN_K=0) so it takes the same primitive/generated route as attn_q. See
+  # docs/qwen-14b-32b-reduce-source-resolution-scope-20260630.md.
+  if ".attn_k.weight" in name and getenv("DECODE_ROUTE_ATTN_K", 0): return 1, ("LOCAL:0:64",)
   return None
 
 def _q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
