@@ -486,7 +486,12 @@ class Q6KPrimitiveLinear:
     rt = getenv("Q6K_COOP_RT", 4)
     use_coop = self.parts == 1 and self.out_features % rt == 0 and (
       (getenv("Q6K_LM_HEAD_COOP", 1) and self.out_features >= 100000) or
-      (getenv("Q6K_FFN_DOWN_COOP", 1) and self.out_features == 4096 and self.in_features == 12288))
+      (getenv("Q6K_FFN_DOWN_COOP", 1) and self.out_features == 4096 and self.in_features == 12288) or
+      # L3 (rollback = DECODE_Q6K_FFN_DOWN_LONGK=0): route LARGE-IN Q6_K ffn_down (14B 17408->5120,
+      # 32B 25600->5120) through the same coop-partial route the 8B ffn_down already uses. The shipped gate
+      # above hardcodes the 8B dims (4096/12288), so 14B/32B Q6_K ffn_down falls to the slower generic partial
+      # path (~253 GB/s). Structural class (long in-features, moderate out, not lm_head), not a model-dim hardcode.
+      (getenv("DECODE_Q6K_FFN_DOWN_LONGK", 1) and self.in_features >= 8192 and self.out_features < 100000))
     if use_coop:
       from extra.q6_k_gemv_primitive import q6k_coop_partial_kernel
       partials = Tensor.empty(self.out_features, 16, dtype=dtypes.float32, device=x.device)
