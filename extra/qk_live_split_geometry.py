@@ -51,15 +51,16 @@ def live_split_coverage_kernel(geo: LiveSplitGeometry, MAXC: int, Tc: UOp):
   geometry with a SYMBOLIC inner-loop bound. `Tc` is a symbolic index-dtype UOp (a bound DEFINE_VAR, exactly as the
   model passes the live context to flash decode). Correct geometry => cov==1 on [0,Tc) exactly once, cov==0 on
   [Tc,MAXC). Minimal proof that the symbolic per-split loop lowers correctly (no full attention needed)."""
-  S, TK = geo.S, geo.TK
+  S = geo.S
   def kernel(cov: UOp) -> UOp:
     s = UOp.range(S, 0, AxisType.GLOBAL)           # fixed S splits (grid), occupancy preserved
-    nb = geo.nb(Tc)                                # SYMBOLIC block count for this split
-    blk = UOp.range(nb, 1)                         # <-- the load-bearing symbolic-bound range
-    tt = UOp.range(TK, 2)
-    t = geo.token(s, blk, tt, Tc)
+    per = geo.per(Tc)                              # SYMBOLIC per-split length = ceildiv(Tc, S)
+    j = UOp.range(per, 1)                          # <-- the load-bearing symbolic live-Tc-bound range
+    t = geo.split_start(s, Tc) + j
     in_r = t < Tc
     t_safe = in_r.where(t, t.const_like(0))
-    return cov[t_safe].store(cov.const_like(1), in_r).end(s, blk, tt).sink(
-      arg=KernelInfo(name=f"live_split_coverage_S{S}_TK{TK}"))
+    # NB typed index const for the mark value: cov.const_like(1) lowers to a weak-int const the verifier rejects
+    # inside the symbolic-range program (TG-P9.1A). An explicit dtypes.int32 const is required.
+    return cov[t_safe].store(UOp.const(dtypes.int32, 1), in_r).end(s, j).sink(
+      arg=KernelInfo(name=f"live_split_coverage_S{S}"))
   return kernel

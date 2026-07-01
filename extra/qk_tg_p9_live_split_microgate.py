@@ -28,7 +28,7 @@ CASES = [
 
 def main():
   OUT.mkdir(parents=True, exist_ok=True)
-  from tinygrad import Tensor, Device, dtypes, TinyJit
+  from tinygrad import Tensor, Device, dtypes
   from tinygrad.uop.ops import UOp
   from extra.qk_live_split_geometry import LiveSplitGeometry, live_split_coverage_kernel
 
@@ -36,18 +36,17 @@ def main():
   for c in CASES:
     S, MAXC = c["S"], c["MAXC"]
     geo = LiveSplitGeometry(S=S, TK=16)
-    # UNBOUND symbolic Tc in the kernel graph; TinyJit supplies the value per call (exactly as the model binds
-    # start_pos at JIT replay). This is the only valid way to keep the symbolic per-split loop in the compiled kernel.
-    tc_var = UOp.variable("Tc", 1, MAXC)
-    kfn = live_split_coverage_kernel(geo, MAXC, tc_var)
-    def run(tc_bound, _kfn=kfn, _M=MAXC):
-      cov = Tensor.zeros(_M, dtype=dtypes.int32, device=Device.DEFAULT).contiguous()
-      return cov.custom_kernel(fxn=_kfn)[0]
-    jit = TinyJit(run)
+    # start_pos as an UNBOUND symbolic var; Tc = start_pos + 1 flows into the kernel unbound. The bound value is
+    # threaded via a carry term (out + ones[0:vsp.bind(Tc-1)].sum()*0) so realize infers var_vals -- the standalone
+    # equivalent of the model's JIT-replay binding (see extra/qk_decode_block_tile_isolated_timing.py).
+    vsp = UOp.variable("start_pos", 0, MAXC - 1)
+    kfn = live_split_coverage_kernel(geo, MAXC, vsp + 1)
     for Tc in c["tcs"]:
       try:
-        for _ in range(2): outt = jit(tc_var.bind(Tc))   # first call traces, second replays with binding
-        out = outt.realize().numpy()
+        cov = Tensor.zeros(MAXC, dtype=dtypes.int32, device=Device.DEFAULT).contiguous()
+        outt = cov.custom_kernel(fxn=kfn)[0]
+        carry = Tensor.ones(MAXC, dtype=dtypes.int32)[0:vsp.bind(Tc - 1)].sum().reshape(1) * 0
+        out = (outt + carry).realize().numpy()
       except Exception as e:
         blocked = f"{type(e).__name__}: {str(e)[:200]}"
         results.append({"S": S, "MAXC": MAXC, "Tc": Tc, "error": blocked})
