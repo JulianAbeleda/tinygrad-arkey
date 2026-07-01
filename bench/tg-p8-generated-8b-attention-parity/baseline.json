@@ -1,0 +1,112 @@
+{
+  "scope": "TG-P8.0 evidence refresh: owned vs generated-G4 8B decode attention",
+  "verdict": "TG_P8_0_PASS_BASELINE_PINNED",
+  "geometry": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "G": 4
+  },
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "nmeas": 40,
+  "all_token_match": true,
+  "all_route_bound": true,
+  "per_ctx": [
+    {
+      "ctx": 512,
+      "owned_tok_s": 107.4,
+      "generated_tok_s": 94.4,
+      "pct_of_owned": 87.9,
+      "token_match": true,
+      "route_bound": true,
+      "owned_attn_total_us": 592.92,
+      "generated_attn_total_us": 2184.52,
+      "owned_attn_split": {
+        "owned_flash_combine": {
+          "total_us_per_forward": 224.48,
+          "occurrences": 36,
+          "us_per_occurrence": 6.236
+        },
+        "owned_flash_tile_gqa_whole": {
+          "total_us_per_forward": 368.44,
+          "occurrences": 36,
+          "us_per_occurrence": 10.234
+        }
+      },
+      "generated_attn_split": {
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": {
+          "total_us_per_forward": 1402.64,
+          "occurrences": 36,
+          "us_per_occurrence": 38.962
+        },
+        "flash_state_combine_32_128": {
+          "total_us_per_forward": 584.8,
+          "occurrences": 36,
+          "us_per_occurrence": 16.244
+        },
+        "flash_state_gmax_32_128": {
+          "total_us_per_forward": 197.08,
+          "occurrences": 36,
+          "us_per_occurrence": 5.474
+        }
+      },
+      "owned_attn_kernels": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole"
+      ],
+      "generated_attn_kernels": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128"
+      ]
+    },
+    {
+      "ctx": 4096,
+      "owned_tok_s": 97.7,
+      "generated_tok_s": 93.7,
+      "pct_of_owned": 95.9,
+      "token_match": true,
+      "route_bound": true,
+      "owned_attn_total_us": 1577.84,
+      "generated_attn_total_us": 2245.88,
+      "owned_attn_split": {
+        "owned_flash_combine": {
+          "total_us_per_forward": 224.16,
+          "occurrences": 36,
+          "us_per_occurrence": 6.227
+        },
+        "owned_flash_tile_gqa_whole": {
+          "total_us_per_forward": 1353.68,
+          "occurrences": 36,
+          "us_per_occurrence": 37.602
+        }
+      },
+      "generated_attn_split": {
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": {
+          "total_us_per_forward": 1466.08,
+          "occurrences": 36,
+          "us_per_occurrence": 40.724
+        },
+        "flash_state_combine_32_128": {
+          "total_us_per_forward": 583.28,
+          "occurrences": 36,
+          "us_per_occurrence": 16.202
+        },
+        "flash_state_gmax_32_128": {
+          "total_us_per_forward": 196.52,
+          "occurrences": 36,
+          "us_per_occurrence": 5.459
+        }
+      },
+      "owned_attn_kernels": [
+        "owned_flash_combine",
+        "owned_flash_tile_gqa_whole"
+      ],
+      "generated_attn_kernels": [
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
+        "flash_state_combine_32_128",
+        "flash_state_gmax_32_128"
+      ]
+    }
+  ]
+}
