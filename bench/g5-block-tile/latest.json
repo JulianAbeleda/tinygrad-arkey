@@ -1,0 +1,17 @@
+{
+  "date": "2026-07-01",
+  "model": "Qwen3-14B-Q4_K_M",
+  "hardware": "RX 7900 XTX / gfx1100",
+  "flag": "DECODE_FLASH_BLOCK_TILE_G5",
+  "correctness": "PASS",
+  "ctx512_baseline_tok_s": 50.2,
+  "ctx512_g5_tok_s": 10.0,
+  "ctx512_delta_tok_s": -40.2,
+  "ctx512_delta_pct": -80.1,
+  "kernel_baseline_us": 26.76,
+  "kernel_g5_us": 1915.0,
+  "kernel_slowdown_x": 71.6,
+  "verdict": "G5_REFUTED_WD_REGRESSION",
+  "root_cause": "flash_decode_attention_whole_cache with MAXC=4608 produces only 6 splits at ctx=512 (8*6=48 workgroups vs baseline 8*48=384). Grid is 8x under-occupied. Baseline gqa_coop_vec slices KV to actual ctx length; block tile reads full MAXC cache regardless of ctx.",
+  "reopen_condition": "decode_flash_block_tile_g5_native_context: route the G=5 block tile through the standard flash path (sliced KV to actual ctx), not flash_decode_attention_whole_cache. Needs a flash_partial variant that accepts (q, k_slice, v_slice) instead of whole-cache, with grid Hkv*ceildiv(ctx,L) matching baseline occupancy."
+}

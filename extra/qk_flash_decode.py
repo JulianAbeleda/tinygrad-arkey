@@ -959,8 +959,7 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
   This is default-off and guarded by extra/qk_decode_attention_block_tile_microgate.py before route use.
   """
   if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%%64==0, got {Hd}")
-  G = Hq // Hkv; W = Hd + 2; LANES = 32; WARPS = 4; THREADS = LANES * WARPS; TK = 16
-  if G != WARPS: raise ValueError(f"block tile expects G=={WARPS}, got {G}")
+  G = Hq // Hkv; W = Hd + 2; LANES = 32; WARPS = G; THREADS = LANES * WARPS; TK = 16
   R = Hd // LANES; RP = Hd // 64; STAGES = _ceildiv(TK * Hd, THREADS); NB = _ceildiv(L, TK)
   scale = 1.0 / (Hd ** 0.5)
   def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
