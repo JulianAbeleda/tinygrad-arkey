@@ -8,7 +8,8 @@ in `docs/archive/` as provenance, not current state.
 ## ⭐ Start here (canonical)
 
 - **`pure-machine-search-roadmap.md`** — roadmap for replacing hand-owned decode kernels with generated/search-owned routes.
-- **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`** — current north-star scope: the final 8B attention purity blocker is a generic reduce/upcast accumulator-lowering invariant.
+- **`tg-p12-manual-end-accumulator-fold-guard-scope-20260701.md`** — current north-star scope: fix the final 8B attention purity blocker by safely handling manual `END/AFTER` scalar-REG accumulators under load folding.
+- **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`** — provenance scope that diagnosed the generic reduce/upcast accumulator-lowering invariant.
 - **`claude-active-work-audit-and-agnostic-search-scope-20260630.md`** — older consolidated handoff for active-work audit and quant/shape/target agnostic search; useful background, but not the current route-state authority.
 - **Current route-state authority:** `bench/pure-machine-search-default-path-census/summary.md`,
   `bench/tg-p10-reg-scalar-combine-lowering/summary.md`, and `extra/qk_route_manifest.py`. These supersede the
@@ -24,9 +25,10 @@ in `docs/archive/` as provenance, not current state.
 
 - **`amd-isa-g3-weight-promotion-hardening-scope-20260629.md`** — generated G3 LaneMap is the speed-equivalent Q4_K route under BubbleBeam/FutureSight.
 - **`amd-isa-q6k-direct-route-full-scope-20260629.md`** — Q6_K direct-route work; later Q6K-3 refuted the half-warp direct route, so current Q6_K stays on coop/default.
-- **`tg-p8-generated-8b-attention-parity-scope-20260701.md`**, **`tg-p9-pure-attention-primitive-route-scope-20260701.md`**, and
-  **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`** — the current 8B attention purity chain:
-  generated live-split solved the short-context tile gap; the remaining blocker is split-preserving combine lowering.
+- **`tg-p8-generated-8b-attention-parity-scope-20260701.md`**, **`tg-p9-pure-attention-primitive-route-scope-20260701.md`**,
+  **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`**, and
+  **`tg-p12-manual-end-accumulator-fold-guard-scope-20260701.md`** — the current 8B attention purity chain:
+  generated live-split solved the short-context tile gap; the remaining blocker is a manual accumulator/load-fold lowering fix.
 - **`decode-two-kernel-problem-audit-result-20260625.md`** — historical attention tile+combine audit; still useful provenance, but superseded for current purity work by TG-P8/TG-P9/TG-P10/TG-P11.
 - **`post-owned-attention-promotion-synthesis-20260623.md`** — provenance for the owned HIP decode-attention tile that remains the 8B default/rollback oracle.
 
