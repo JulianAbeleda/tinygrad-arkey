@@ -1,0 +1,213 @@
+{
+  "schema": "boltbeam.normalized_evidence.v1",
+  "evidence_id": "sha256:b77466d3cb9303286fc34bef9eb50d546b4edeaa738f6767f8d26e81c876aabc",
+  "source": {
+    "producer": "tinygrad",
+    "tool": "tinygrad.compiler_pathology.v1",
+    "path": "/home/ubuntu/tinygrad-arkey/bench/g5-block-tile/compiler_pathology_v1_ingest.json",
+    "fingerprint": "sha256:014af24dcd0bc9878f78b95c23f52ae543a4d58a9c8cb57ea101077ff1977d54",
+    "raw_summary": {
+      "candidate_id": "decode_flash_block_tile_g5_native_context",
+      "kernel_count": 1
+    }
+  },
+  "model_id": "qwen3-14b-q4km",
+  "target_id": "amd_gfx1100",
+  "workload": "decode",
+  "contexts": [
+    512
+  ],
+  "rows": [
+    {
+      "kind": "compiler_pathology",
+      "metric": "time_us_per_workgroup",
+      "value": 2090.0,
+      "unit": "us/workgroup",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "baseline_time_us_per_workgroup",
+      "value": 27.0,
+      "unit": "us/workgroup",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "time_ratio_vs_baseline",
+      "value": 77.4074074074074,
+      "unit": "ratio",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "vgpr",
+      "value": 91.0,
+      "unit": "registers",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "sgpr",
+      "value": 25.0,
+      "unit": "registers",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "scratch_bytes",
+      "value": 0.0,
+      "unit": "bytes",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "lds_bytes",
+      "value": 8192.0,
+      "unit": "bytes",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "static_instr",
+      "value": 1610.0,
+      "unit": "instructions",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "lds_instr",
+      "value": 130.0,
+      "unit": "instructions",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    },
+    {
+      "kind": "compiler_pathology",
+      "metric": "barrier_count",
+      "value": 1.0,
+      "unit": "instructions",
+      "confidence": "measured",
+      "role": "candidate",
+      "context": 512,
+      "extra": {
+        "kernel": "flash_block_tiled",
+        "candidate_id": "decode_flash_block_tile_g5_native_context",
+        "baseline_kernel": "flash_partial_coop_vec_whole_cache_40_128",
+        "baseline_time_us_per_workgroup": 27.0,
+        "sources": {
+          "oracle": "extra/qk_g5_resource_oracle.py",
+          "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack"
+        }
+      }
+    }
+  ],
+  "flags": {}
+}

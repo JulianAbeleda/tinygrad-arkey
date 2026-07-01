@@ -40,5 +40,17 @@
         "root_hypothesis": "NOT barrier_flood (G=5 has fewer barriers). NOT layout_mismatch (WARPS=5=G is correct). Likely: LDS staging of BOTH K+V creates 32x more LDS traffic than baseline (K-only), or VGPR pressure from maintaining online softmax state across 5 GQA heads simultaneously."
       }
     }
-  ]
+  ],
+  "barrier_count": 1,
+  "static_inst_count": 1610,
+  "math_op_count": 141,
+  "measurement_method": "llvm-objdump-17_hsaco_elf_note_msgpack",
+  "vgpr_count": 91,
+  "sgpr_count": 25,
+  "scratch_bytes": 0,
+  "lds_bytes": 8192,
+  "classified_pathology": "INSTRUCTION_BLOAT",
+  "classification_reason": "static_inst_count=1610 / math_op_count=141 = 11.4\u00d7 (threshold >10\u00d7); kernel is fully unrolled (branch_count=0)",
+  "instruction_bloat_ratio": 11.42,
+  "fully_unrolled": false
 }
