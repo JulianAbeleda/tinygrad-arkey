@@ -1279,6 +1279,43 @@ def flash_combine_kernel(Hd:int, Hq:int, S):
     return out[h * Hd + d].store(num[0] / den_h).end(h, d).sink(arg=_fki(f"flash_combine_{Hq}_{Hd}"))
   return kernel
 
+
+def flash_combine_merged_kernel(Hd:int, Hq:int, S):
+  """SPLIT-PRESERVING merge of flash_gmax + flash_den + flash_combine into ONE generated kernel per head.
+
+  Does NOT touch flash_partial (the Hq*S partial phase stays fully parallel) — it only collapses the 3 small
+  combine reduce kernels into one launch, eliminating the gm/dn global buffers and 2 kernel dispatches. gm (max
+  over s), then den (sum over s), then out[h,d] (sum over s), sequential in one kernel; d is lane-sharded.
+  Generated UOp, no handwritten kernel. See BoltBeam docs/attention-combine-reachability-audit-20260701.md."""
+  W = Hd + 1
+  LANES = 32
+  if Hd % LANES != 0: raise ValueError(f"need Hd%{LANES}==0, got {Hd}")
+  R = Hd // LANES
+
+  def kernel(out:UOp, pout:UOp, pm:UOp) -> UOp:
+    h = UOp.range(Hq, 0, AxisType.GLOBAL)
+    lane = UOp.special(LANES, "lidx0")
+    s1 = UOp.range(S, 1, axis_type=AxisType.REDUCE)
+    g = UOp.placeholder((1,), _F32, 100, addrspace=AddrSpace.REG)
+    g = g.after(h)[0].set(-1e30)
+    g = g[0].set(g.after(s1)[0].maximum(pm[h * S + s1]), end=s1)
+    gm = g[0]
+    s2 = UOp.range(S, 2, axis_type=AxisType.REDUCE)
+    dd = UOp.placeholder((1,), _F32, 101, addrspace=AddrSpace.REG)
+    dd = dd.after(g)[0].set(0.0)
+    dd = dd[0].set(dd.after(s2)[0] + _fexp(pm[h * S + s2] - gm) * pout[(h * S + s2) * W + Hd], end=s2)
+    den = dd[0]
+    rr = UOp.range(R, 3)
+    d = lane * R + rr
+    s3 = UOp.range(S, 4, axis_type=AxisType.REDUCE)
+    num = UOp.placeholder((1,), _F32, 102, addrspace=AddrSpace.REG)
+    num = num.after(dd, rr)[0].set(0.0)
+    num = num[0].set(num.after(s3)[0] + _fexp(pm[h * S + s3] - gm) * pout[(h * S + s3) * W + d], end=s3)
+    return out[h * Hd + d].store(num[0] / den).end(rr).end(h).sink(
+      arg=_fki(f"flash_combine_merged_{Hq}_{Hd}"))
+
+  return kernel
+
 def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
                            Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=256, variant:str="v1") -> Tensor:
   """Batch-1 GQA decode attention via Flash-Decoding. Exact vs SDPA (up to fp reassociation).
@@ -1313,6 +1350,12 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
     po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(prob, vc_f, fxn=_partial(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   else:
     po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(pm, score_f, vc_f, fxn=flash_partial_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
+  # SPLIT-PRESERVING combine merge (rollback = DECODE_ATTN_COMBINE_MERGED=0, default-off): flash_partial above
+  # (Hq*S workgroups) is untouched; only the 3 small combine reduce kernels merge into one launch (drops the
+  # gm/dn global buffers + 2 dispatches). This is NOT the refuted Hq-only fused route (that collapsed the partial).
+  if getenv("DECODE_ATTN_COMBINE_MERGED", 0):
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, fxn=flash_combine_merged_kernel(Hd, Hq, S))[0]
+    return out.reshape(Hq, Hd)
   gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
   dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
   out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
