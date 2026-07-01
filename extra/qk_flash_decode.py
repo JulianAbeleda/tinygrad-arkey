@@ -1417,6 +1417,26 @@ def flash_decode_attention_kv_flat(q:Tensor, k_full:Tensor, kv_flat:Tensor, Tc_b
   out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
   return out.reshape(Hq, Hd)
 
+def flash_decode_g5_block_tile(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
+                               Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=128) -> Tensor:
+  """G=5 block tile flash decode for 14B (Hq=40, Hkv=8, G=5). Sliced path: l_route=L, S=ceildiv(ctx,L).
+
+  Directly invokes flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel without env-var dispatch.
+  Grid = Hkv × S = 8 × ceildiv(ctx, L) workgroups. At ctx=512 with L=128: 32 workgroups = same as gqa_coop_vec.
+  Requires WARPS=G (already parameterized in the block tile kernel). Default-off: DECODE_FLASH_BLOCK_TILE_G5=0.
+  """
+  W2 = Hd + 2
+  l_route = L                          # use FLASH_L directly (= ceildiv(MAXC, ceildiv(MAXC,L)) for integer L)
+  s_route = (Tc_u + l_route - 1) // l_route  # symbolic ceildiv(ctx, L)
+  smax_route = _ceildiv(MAXC, l_route)        # concrete upper bound for buffer allocation
+  q_f = q.reshape(Hq * Hd)
+  po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(
+    q_f, cache_kv,
+    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
+  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, s_route, stride=s_route))[0]
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, s_route, stride=s_route))[0]
+  return out.reshape(Hq, Hd)
+
 def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
                                        Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=256) -> Tensor:
   """Generated decode-attention skeleton over the whole [2,1,Hkv,MAXC,Hd] KV cache.
