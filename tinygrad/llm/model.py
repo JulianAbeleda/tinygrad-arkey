@@ -264,9 +264,23 @@ class Q4KPrimitiveLinear:
     if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and (g3_bubblebeam_shape or g3_anyshape):
       from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
       if g3_anyshape or should_route_q4k_lane_partition(self.out_features, self.in_features):
-        from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
         _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
+        # L2 (rollback = DECODE_Q4K_SPLIT_K_KV=0): split-K decode for OCCUPANCY-STARVED G3 GEMVs. A generated
+        # kernel that launches only `out_features` workgroups underutilizes the GPU when out_features is small
+        # (the KV projections 5120->1024 sit at ~26% occupancy). Split-K launches out_features*parts workgroups
+        # and finalizes with a sum over parts. GENERIC: parts = the largest divisor of blocks_per_group
+        # ((in//256)//4) that keeps out_features*parts under a workgroup cap; no model/shape hardcode.
+        if getenv("DECODE_Q4K_SPLIT_K_KV", 0) and self.out_features <= getenv("DECODE_SPLIT_K_MAX_ROWS", 2048):
+          _bpg = (self.in_features // 256) // 4
+          _cap = getenv("DECODE_SPLIT_K_TARGET_WG", 8192)
+          _parts = max((p for p in range(1, _bpg + 1) if _bpg % p == 0 and self.out_features * p <= _cap), default=1)
+          if _parts > 1:
+            from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_splitk_kernel
+            _p = Tensor.empty(self.out_features * _parts, dtype=dtypes.float32, device=x.device)
+            _p = _p.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_splitk_kernel(self.out_features, self.in_features, _parts))[0]
+            return _p.reshape(self.out_features, _parts).sum(axis=1).reshape(1, 1, self.out_features)
+        from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
         _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
     if (getenv("Q4K_GEMV_SCHEDULER") or bubblebeam_futuresight) and self.in_features == 4096 and self.out_features == 12288:

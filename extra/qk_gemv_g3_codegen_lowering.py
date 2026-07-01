@@ -42,3 +42,38 @@ def q4k_g3_lanemap_gemv_kernel(rows:int, k:int, lanes:int=WARP):
     return out[row].store(total).sink(arg=KernelInfo(name=f"q4k_g3_lanemap_gemv_{rows}_{k}", opts_to_apply=()))
 
   return kernel
+
+
+def q4k_g3_lanemap_gemv_splitk_kernel(rows:int, k:int, parts:int, lanes:int=WARP):
+  """Split-K variant of the generated G3 Q4_K GEMV (L2 parity lever).
+
+  Generic, not model/shape-specific: adds a SECOND global axis (gidx1) over `parts` K-slices so each output row
+  is computed by `parts` workgroups instead of one. This raises occupancy for row-starved GEMVs (e.g. the KV
+  projections 5120->1024, which otherwise launch only `rows` workgroups). The per-lane block reduce
+  (blocks_per_group) is partitioned across the K-parts; each (row, kpart) writes a partial to out[row*parts+kpart]
+  and the caller finalizes with a sum over parts. `parts` must divide blocks_per_group (checked here).
+  """
+  lm = Q4KGateUpLaneMap(k=k, n=rows, lane_extent=lanes)
+  lm.validate()
+  bpg = lm.blocks_per_group
+  if parts < 1 or bpg % parts != 0:
+    raise ValueError(f"parts={parts} must be a positive divisor of blocks_per_group={bpg} (k={k}, rows={rows})")
+  sub = bpg // parts
+
+  def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.special(rows, "gidx0")
+    kpart = UOp.special(parts, "gidx1")
+    lane = UOp.special(lanes, "lidx0")
+    part = LanePartition(lane, lane_extent=lm.lane_extent, words_per_group=lm.words_per_group)
+    lblk = UOp.range(sub, 0, axis_type=AxisType.REDUCE)
+    blk = part.block_group * bpg + kpart * sub + lblk
+    base = (row * lm.k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = _q4k_block_dot_packed_load(words, x, base, blk, part.word_col)
+    acc = UOp.placeholder((1,), dtypes.float32, 20, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(lblk)[0] + contrib).end(lblk))
+    total = lane_partition_reduce_sum(acc[0], part)
+    return out[row * parts + kpart].store(total).sink(
+      arg=KernelInfo(name=f"q4k_g3_lanemap_gemv_splitk_{rows}_{k}_{parts}", opts_to_apply=()))
+
+  return kernel
