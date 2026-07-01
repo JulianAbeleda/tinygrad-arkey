@@ -1,0 +1,19 @@
+{
+  "schema": "boltbeam.emitter_blocked_eb4.v1",
+  "date": "2026-07-01",
+  "model": "Qwen3-14B-Q4_K_M",
+  "candidate": "decode_bypass_kv_slice",
+  "flag": "DECODE_BYPASS_KV_SLICE",
+  "eb3_correctness": "PASS",
+  "eb3_rel_rmse": 0.0,
+  "eb3_steps": 5,
+  "eb3_flash_forced": true,
+  "eb4_wd": {
+    "ctx128": {"baseline_tok_s": 52.3, "bypass_tok_s": 52.3, "delta_tok_s": 0.0, "delta_pct": 0.0},
+    "ctx512": {"baseline_tok_s": 50.1, "bypass_tok_s": 45.3, "delta_tok_s": -4.8, "delta_pct": -9.6}
+  },
+  "verdict": "EB4_REFUTED_WD_REGRESSION",
+  "regression_mechanism": "E_49152_32_3 is beneficial cache-warming: copies V to L2-warm buffer before flash_partial reads it. Without the copy, flash_partial reads cold V from persistent KV cache (MAXC=4608, ~9.4MB V buffer), increasing HBM latency. The copy cost (6.69% GPU) is more than offset by improved flash_partial V read latency.",
+  "reopen_condition": "LDS-staged flash_partial_coop_vec that prefetches V into on-chip shared memory per workgroup. Would achieve equivalent cache-warming without the global copy. Requires LDS allocation in the tinygrad emitter (PRIMITIVE_MISSING for LDS-alloc UOp).",
+  "do_not_retry": false
+}
