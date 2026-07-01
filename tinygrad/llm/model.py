@@ -518,6 +518,24 @@ class Q6KPrimitiveLinear:
       # above hardcodes the 8B dims (4096/12288), so 14B/32B Q6_K ffn_down falls to the slower generic partial
       # path (~253 GB/s). Structural class (long in-features, moderate out, not lm_head), not a model-dim hardcode.
       (getenv("DECODE_Q6K_FFN_DOWN_LONGK", 1) and self.in_features >= 8192 and self.out_features < 100000))
+    # TG-P3: spec-driven GENERATED Q6_K route (extra/qk_q6k_route_spec.py). Byte-identical to the shipped coop/partial
+    # hand templates -- a provenance conversion (hand_authored_uop_template -> machine_authored_generated). Default-on;
+    # BoltBeam QK_ROUTE_POLICY can also select it per tensor. Rollback to the shipped kernels: DECODE_Q6K_GENERATED=0.
+    q6k_gen_selected = _qk_route_policy_selects_q6k_generated(self.out_features, self.in_features)
+    q6k_generated = bool(getenv("DECODE_Q6K_GENERATED", 1))
+    if q6k_generated:
+      from extra.qk_q6k_route_spec import spec_for_role, emit_q6k_gemv_kernel
+      spec = spec_for_role(self.out_features, self.in_features, role=self.name, parts=self.parts,
+                           row_tile=rt, use_coop=use_coop, opts=self.opts)
+      partials = Tensor.empty(self.out_features, spec.partial_axis_extent, dtype=dtypes.float32, device=x.device)
+      partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec, fxn=emit_q6k_gemv_kernel(spec))[0]
+      return partial.sum(axis=1).reshape(1, 1, self.out_features)
+    # strict hidden-fallback guard: a policy-selected Q6_K tensor must bind to the generated route. Reaching the
+    # shipped hand kernels here means the generated route was rolled back (DECODE_Q6K_GENERATED=0) -> fail loud.
+    if q6k_gen_selected and _QK_ROUTE_POLICY_STRICT:
+      raise ValueError(f"TG_P3_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q6k_coop_generated for Q6_K "
+                       f"tensor {self.name!r} (out={self.out_features}, in={self.in_features}) but DECODE_Q6K_GENERATED "
+                       f"is off -> it fell back to the shipped hand template")
     if use_coop:
       from extra.q6_k_gemv_primitive import q6k_coop_partial_kernel
       partials = Tensor.empty(self.out_features, 16, dtype=dtypes.float32, device=x.device)
@@ -625,7 +643,7 @@ def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, na
 _QK_ROUTE_POLICY: dict|None = None
 _QK_ROUTE_POLICY_STRICT = False
 _QK_ROUTE_POLICY_DEBUG = False
-_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_q4k_g3_generated"}
+_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_q4k_g3_generated", "decode_q6k_coop_generated"}
 
 def _load_qk_route_policy(path:str) -> dict:
   policy_path = pathlib.Path(path).expanduser()
@@ -634,6 +652,7 @@ def _load_qk_route_policy(path:str) -> dict:
     raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
   selected: dict[str, dict] = {}
   q4k_g3_rows: list[dict] = []
+  q6k_gen_rows: list[dict] = []
   for row in data.get("routes", []):
     route_id = row.get("selected_route")
     if not route_id: continue
@@ -662,9 +681,24 @@ def _load_qk_route_policy(path:str) -> dict:
         raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
       q4k_g3_rows.append(row)
       selected.setdefault(route_id, row)
+    elif route_id == "decode_q6k_coop_generated":
+      allowed = {"DECODE_Q6K_GENERATED"}
+      if set(params) - allowed:
+        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
+      if params and params != {"DECODE_Q6K_GENERATED": "1"}:
+        raise ValueError(f"{policy_path} route {route_id!r} must select the generated Q6_K route (DECODE_Q6K_GENERATED=1), got {params}")
+      shape = row.get("shape", {})
+      try:
+        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
+      except (KeyError, TypeError, ValueError):
+        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
+      if rows_i <= 0 or cols_i <= 0:
+        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
+      q6k_gen_rows.append(row)
+      selected.setdefault(route_id, row)
     else:
       selected[route_id] = row
-  return {"path": str(policy_path), "selected": selected, "q4k_g3": q4k_g3_rows}
+  return {"path": str(policy_path), "selected": selected, "q4k_g3": q4k_g3_rows, "q6k_gen": q6k_gen_rows}
 
 def _set_qk_route_policy(policy:dict|None, strict:bool=False, debug:bool=False) -> None:
   global _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG
@@ -686,6 +720,17 @@ def _qk_route_policy_selects_q4k_g3(out_features:int, in_features:int) -> bool:
   tensor's real dims. BoltBeam owns this selection; when it fires, G3 is the authorized route for the tensor."""
   if _QK_ROUTE_POLICY is None: return False
   for row in _QK_ROUTE_POLICY.get("q4k_g3", []):
+    shape = row.get("shape", {})
+    if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
+      return True
+  return False
+
+def _qk_route_policy_selects_q6k_generated(out_features:int, in_features:int) -> bool:
+  """True if the loaded QK_ROUTE_POLICY selects decode_q6k_coop_generated for a Q6_K weight tensor with these GEMV
+  dims (rows=out_features, cols=in_features). BoltBeam owns this selection; when it fires, the spec-driven generated
+  Q6_K route (extra/qk_q6k_route_spec.py) is the authorized route for the tensor."""
+  if _QK_ROUTE_POLICY is None: return False
+  for row in _QK_ROUTE_POLICY.get("q6k_gen", []):
     shape = row.get("shape", {})
     if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
       return True
