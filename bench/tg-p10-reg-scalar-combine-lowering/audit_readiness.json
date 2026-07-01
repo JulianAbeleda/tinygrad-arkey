@@ -1,0 +1,18 @@
+{
+  "scope": "TG-P10.0 BoltBeam audit readiness for the REG-scalar combine-lowering blocker",
+  "verdict": "TG_P10_0_PASS_BOLTBEAM_READY_WITH_SMALL_EXTENSION",
+  "has": {
+    "reachability_EMITTER_BLOCKED": "boltbeam/vocab.py Reachability.EMITTER_BLOCKED",
+    "row_kind_compiler_pathology": "boltbeam/vocab.py RowKind.COMPILER_PATHOLOGY",
+    "pathology_classifier": "boltbeam/diagnostics/pathology.py (threshold-driven; REGALLOC_SPILL/BARRIER/LDS/LOOP/VECTOR/WAITCNT/...)",
+    "tinygrad_pathology_adapter": "boltbeam/artifacts/tinygrad.py _adapt_compiler_pathology (tinygrad.compiler_pathology.v1)",
+    "candidate_ledger_reopen": "boltbeam/data/candidates.json decode_attention_g5_8b_refuted (prose reopen)"
+  },
+  "missing_small_extension": {
+    "typed_schema": "tinygrad.reg_scalar_lowering.v1 (compiler-lowering artifact distinct from compiler_pathology, which is resource/timing)",
+    "row_kind": "compiler_lowering (or reuse COMPILER_PATHOLOGY with a lowering sub-kind)",
+    "adapter": "boltbeam/artifacts/tinygrad.py adapter for the new schema",
+    "classifier": "map the REG-scalar failure signature (invalid_reg_vector_store | nan_output under REG_STORE_DEVEC) to Reachability.EMITTER_BLOCKED, NOT REGALLOC_SPILL/PRIMITIVE_MISSING/REFUTED"
+  },
+  "conclusion": "Enough for ledger/reachability/evaluation. Needs a small typed compiler-lowering artifact + classifier extension for REG scalar combine lowering (TG-P10.2)."
+}
