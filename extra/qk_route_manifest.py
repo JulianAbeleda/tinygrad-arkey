@@ -37,15 +37,31 @@ PROFILE_PREFILL = "qwen3_8b_q4_k_m_gfx1100_prefill"
 #
 # purity_status vocabulary (docs/pure-machine-search.md definitions):
 #   search_generated_promoted | owned_reference | owned_default | search_selected_specialized_route | refuted | research
+#
+# provenance vocabulary (strict default-purity audit):
+#   machine_authored_generated  -> emitted from profile/grammar/search-owned lowering; allowed as final default
+#   tinygrad_scheduler_generated -> ordinary tinygrad graph lowering; allowed as final default
+#   hand_authored_uop_template  -> Python UOp custom_kernel body written by humans; transitional default only
+#   external_handwritten_kernel -> HIP/ASM/C++/precompiled binary or explicit instruction emitter; not final default
+#   rollback_oracle            -> handwritten/specialized route retained only as rollback/reference
+ROUTE_PROVENANCE = (
+  "machine_authored_generated", "tinygrad_scheduler_generated", "hand_authored_uop_template",
+  "external_handwritten_kernel", "rollback_oracle",
+)
+FINAL_DEFAULT_PROVENANCE = {"machine_authored_generated", "tinygrad_scheduler_generated"}
+TRANSITIONAL_DEFAULT_PROVENANCE = {"hand_authored_uop_template"}
+FORBIDDEN_DEFAULT_PROVENANCE = {"external_handwritten_kernel", "rollback_oracle"}
+
 ROUTES = {
   # ---------------- decode weight GEMV: Q4_K ----------------
   "decode_q4k_g3_generated": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "promoted_default",
-    "roles": ["ffn_gate_up", "ffn_down", "attn_qo"], "excluded_roles": [],
+    "roles": ["ffn_gate_up", "ffn_down", "attn_qo", "attn_k"], "excluded_roles": [],
     "quant": ["Q4_K"],
     "shape_guards": [
       {"role": "ffn_gate_up", "K": 4096, "N": 12288}, {"role": "ffn_down", "K": 12288, "N": 4096},
-      {"role": "attn_qo", "K": 4096, "N": 4096}],
+      {"role": "attn_qo", "K": 4096, "N": 4096},
+      {"role": "anyshape", "condition": "DECODE_Q4K_G3_ANYSHAPE=1 and (K//256)%4==0 and N%32==0"}],
     "env": {},  # DEFAULT-ON: model.py:255 getenv("BUBBLEBEAM_FUTURESIGHT", 1). No flag needed.
     "rollback": {"BUBBLEBEAM_FUTURESIGHT": "0"},  # -> owned warp (decode_q4k_owned_warp)
     "baseline_route_id": "decode_q4k_owned_warp",  # the oracle/baseline the evaluator measures against (== rollback target)
@@ -56,9 +72,10 @@ ROUTES = {
     "promotion_artifacts": ["bench/amd-isa-backend-g3-weight-promotion/latest.json",
                             "bench/amd-isa-backend-g3-weight-promotion/summary.md"],
     "purity_status": "search_generated_promoted",
+    "provenance": "machine_authored_generated",
     "selector": "BubbleBeam",
-    "route_attribution": "tinygrad/llm/model.py:255-264 (g3 fires first for g3_bubblebeam_shape); writer extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
-    "note": "generated wave32 UOp program lowered from the G2 Q4_K LaneMap (extra/qk_gemv_g2_lanemap.py). Speed-equivalent to owned warp (-0.13..+0.41% across ctx 512-4096), token-identical, route-clean. This is the closest thing to a pure-search default decode kernel."},
+    "route_attribution": "tinygrad/llm/model.py:255-299 (g3 fires first for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility); writer extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
+    "note": "generated wave32 UOp program lowered from the G2 Q4_K LaneMap (extra/qk_gemv_g2_lanemap.py). Speed-equivalent to owned warp (-0.13..+0.41% across ctx 512-4096), token-identical, route-clean. DECODE_Q4K_G3_ANYSHAPE extends it structurally to larger dense Q4_K shapes (including attn_k when policy installs it). This is the positive-control pure-search default decode kernel."},
   "decode_q4k_owned_warp": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "rollback_reference",
     "roles": ["ffn_gate_up", "ffn_down", "attn_qo"], "excluded_roles": [],
@@ -73,25 +90,29 @@ ROUTES = {
     "authority_gate": "extra/amd_isa_g3_weight_promotion_gate.py",
     "promotion_artifacts": ["docs/decode-q4k-gemv-warp-promotion-result-20260624.md"],
     "purity_status": "owned_reference",
+    "provenance": "rollback_oracle",
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/model.py:318 (Q4K_GEMV_WARP_PROJ default 1, q/o) + :360 (Q4K_GEMV_WARP default 1, gate/up+down); reached only when BUBBLEBEAM_FUTURESIGHT=0 short-circuits the G3 branch. Writer extra/q4_k_gemv_primitive.py q4k_gemv_warp_kernel",
     "note": "hand-written owned warp GEMV. The Q4K_GEMV_WARP* guards still default to 1, but the G3 branch intercepts first for the eligible shapes when BUBBLEBEAM_FUTURESIGHT is on (the default). So owned warp is the rollback/reference, not the live default."},
   # ---------------- decode weight GEMV: Q6_K ----------------
   "decode_q6k_coop_shipped": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "default_shipped",
-    "roles": ["ffn_down", "lm_head"], "excluded_roles": [],
+    "roles": ["ffn_down", "lm_head", "attn_v"], "excluded_roles": [],
     "quant": ["Q6_K"],
-    "shape_guards": [{"role": "ffn_down", "K": 12288, "N": 4096}, {"role": "lm_head", "N": ">=100000"}],
-    "env": {},  # Q6K_LM_HEAD_COOP / Q6K_FFN_DOWN_COOP both default to 1
+    "shape_guards": [{"role": "ffn_down", "K": 12288, "N": 4096}, {"role": "ffn_down_longk", "K": ">=8192", "N": "<100000"},
+                     {"role": "lm_head", "N": ">=100000"}, {"role": "attn_v", "enabled_by": "Q6K_COVER_MORE=1"}],
+    "env": {},  # Q6K_LM_HEAD_COOP / Q6K_FFN_DOWN_COOP / DECODE_Q6K_FFN_DOWN_LONGK / Q6K_COVER_MORE default to 1
     "rollback": {},  # no rollback flag: this is the shipped baseline; Q6_K direct (refuted) is the only alt route
     "strict_fallback": True,
-    "expected_kernels": ["q6k_coop_partial_*"],
+    "expected_kernels": ["q6k_coop_partial_*", "q6k_gemv_partial_*"],
     "authority_gate": "extra/qk_decode_runtime_overhead.py",
     "promotion_artifacts": [],
     "purity_status": "owned_default",
+    "provenance": "hand_authored_uop_template",
+    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p3-generate-q6_k-coop-from-a-route-spec",
     "selector": "hardcoded_default",
-    "route_attribution": "tinygrad/llm/model.py:465-473 (Q6K_LM_HEAD_COOP@467, Q6K_FFN_DOWN_COOP@468 default 1); writer extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel",
-    "note": "shipped Q6_K route (coop partial + external .sum reduce) for FFN down / lm_head. Baseline the refuted direct route was measured against."},
+    "route_attribution": "tinygrad/llm/model.py:500-514 (Q6K_LM_HEAD_COOP, Q6K_FFN_DOWN_COOP, DECODE_Q6K_FFN_DOWN_LONGK default 1); writer extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
+    "note": "shipped Q6_K primitive route family for ffn_down / lm_head / long-K down / covered attn_v. Correct and useful, but the UOp route bodies are hand-authored templates; final pure-search replacement must be generated from a Q6_K route spec."},
   "decode_q6k_direct_refuted": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "refuted",
     "roles": ["lm_head"], "excluded_roles": [],
@@ -105,6 +126,7 @@ ROUTES = {
     "promotion_artifacts": ["bench/amd-isa-backend-q6k-direct-speed/latest.json",
                             "bench/amd-isa-backend-q6k-direct-speed/summary.md"],
     "purity_status": "refuted",
+    "provenance": "hand_authored_uop_template",
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/model.py:455-464 (Q6K_DIRECT_ROUTE default-off); refuted vs decode_q6k_coop_shipped baseline.",
     "note": "half-warp direct Q6_K lm_head route: token-correct + route-bound, but W==D regressed -4.77..-6.06% (median -5.44%). Default-off. Do NOT re-chase as built (only reopen with a different topology than the half-warp partition)."},
@@ -122,6 +144,8 @@ ROUTES = {
     "promotion_artifacts": ["docs/decode-two-kernel-problem-audit-result-20260625.md",
                             "bench/amd-isa-backend-decode-attention-ceiling/latest.json"],
     "purity_status": "owned_default",
+    "provenance": "external_handwritten_kernel",
+    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route",
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/model.py:1091-1106 (DECODE_ATTN_AMDGCN_TILE default 1, ctx>=512); writer extra/qk_owned_flash_decode_graph_node.py amdgcn_flash_decode (HIP .co split tile + separate combine, two Ops.PROGRAM graph nodes).",
     "note": "shipped decode attention: hand HIP split tile + separate combine. Combine/fused-lifecycle exhausted; ceiling audit (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION) says attention wall-share is ~10%@ctx512 ->~3%@ctx4096 (measured tile_wall_share in bench/amd-isa-backend-decode-attention-ceiling/latest.json); low-leverage."},
@@ -138,6 +162,7 @@ ROUTES = {
     "promotion_artifacts": ["bench/amd-isa-backend-phase-n7/latest.json",
                             "bench/amd-isa-backend-decode-attention-ceiling/latest.json"],
     "purity_status": "research",
+    "provenance": "machine_authored_generated",
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/model.py:1076-1085 (DECODE_ATTN_GENERATED_WHOLECACHE generated whole-cache flash decode) selected when DECODE_ATTN_AMDGCN_TILE=0.",
     "note": "native AMD-ISA / generated attention tile: correct + route-bound but ~60-68% of owned speed (native_vs_owned 68.3%@512, 60.1%@4096). Infrastructure/capability, not shipped. Low-leverage per ceiling audit."},
@@ -156,6 +181,8 @@ ROUTES = {
     "promotion_artifacts": ["bench/qk-prefill-pipe-role-selective/latest.json",
                             "bench/qk-prefill-pipe-role-selective/summary.md"],
     "purity_status": "search_selected_specialized_route",
+    "provenance": "external_handwritten_kernel",
+    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p4-generate-prefill-gemm-schedule",
     "selector": "manifest",
     "route_attribution": "extra/qk_prefill_graph_gemm_route.py:55 (PREFILL_GEMM_PIPELINE default 1) + :61 (PREFILL_PIPE_ROLE_SELECTIVE default 1 -> gate/up out_f==12288 forced pipe_mode=False); entry tinygrad/llm/model.py:145-147 route_pf16_graph_gemm.",
     "note": "shipped prefill default: software-pipelined assembly GEMM (build_gemm_pipe tm2/tn2) applied role-selectively (gate/up kept on its faster lds2 path). ROLE_SELECTIVE_PASS_BEATS_GLOBAL: +2.9..3.7% over global pipe, +11.7..23.4% over old lds2 default, through ctx8192. Output-equivalent, spread <=0.3%."},
@@ -171,6 +198,7 @@ ROUTES = {
     "promotion_artifacts": ["bench/qk-prefill-pipe-promotion/latest.json",
                             "bench/qk-prefill-pipe-promotion/summary.md"],
     "purity_status": "search_selected_specialized_route",
+    "provenance": "rollback_oracle",
     "selector": "env_guard",
     "route_attribution": "extra/qk_prefill_graph_gemm_route.py:55 (pipe on for all roles when PREFILL_PIPE_ROLE_SELECTIVE=0).",
     "note": "global pipe (all roles): was TIER_A vs old lds2 default (+8.5..19.2%), superseded by role-selective (which excludes the saturated gate/up where pipe regressed ~17%). Kept as the A/B rollback comparator and the rollback target of role-selective."},
@@ -234,13 +262,55 @@ def default_routes() -> list[str]:
 def routes_by_status(status: str) -> list[str]:
   return [rid for rid, r in ROUTES.items() if r["status"] == status]
 
+def route_provenance(route_id: str) -> str:
+  prov = str(route(route_id).get("provenance", ""))
+  if prov not in ROUTE_PROVENANCE:
+    raise ValueError(f"route {route_id!r} has invalid provenance {prov!r}; expected one of {ROUTE_PROVENANCE}")
+  return prov
+
+def default_purity_report() -> dict:
+  """Strict final-default purity report. This is intentionally allowed to FAIL today.
+
+  A generated/search route can be fast and correct but still fail final-default purity if its implementation is an
+  external handwritten kernel. A hand-authored UOp route is reported as transitional debt: allowed to keep shipping
+  only while its replacement scope is explicit.
+  """
+  defaults = default_routes()
+  rows, forbidden, transitional = [], [], []
+  for rid in defaults:
+    r, prov = route(rid), route_provenance(rid)
+    row = {"route_id": rid, "status": r["status"], "provenance": prov,
+           "replacement_scope": r.get("replacement_scope", ""), "final_default_allowed": prov in FINAL_DEFAULT_PROVENANCE}
+    rows.append(row)
+    if prov in FORBIDDEN_DEFAULT_PROVENANCE: forbidden.append(rid)
+    if prov in TRANSITIONAL_DEFAULT_PROVENANCE: transitional.append(rid)
+  verdict = "TINYGRAD_DEFAULT_PURITY_PASS" if not forbidden and not transitional else "TINYGRAD_DEFAULT_PURITY_FAIL"
+  return {"verdict": verdict, "default_routes": defaults, "rows": rows,
+          "forbidden_default_routes": forbidden, "transitional_default_routes": transitional,
+          "final_default_allowed_provenance": sorted(FINAL_DEFAULT_PROVENANCE)}
+
+def validate_manifest() -> list[str]:
+  errors: list[str] = []
+  for rid, r in ROUTES.items():
+    prov = r.get("provenance")
+    if prov not in ROUTE_PROVENANCE:
+      errors.append(f"{rid}: invalid or missing provenance {prov!r}")
+    if r["status"] in ("promoted_default", "default_shipped"):
+      if prov == "rollback_oracle":
+        errors.append(f"{rid}: default route cannot be provenance=rollback_oracle")
+      if prov in ("hand_authored_uop_template", "external_handwritten_kernel") and not r.get("replacement_scope"):
+        errors.append(f"{rid}: non-pure default provenance={prov} requires replacement_scope")
+  return errors
+
 def to_manifest_dict() -> dict:
   return {"_schema": "default route manifest (PMS-R1)", "generated_by": "extra/qk_route_manifest.py",
           "profiles": {"decode": PROFILE_DECODE, "prefill": PROFILE_PREFILL},
+          "provenance_vocabulary": list(ROUTE_PROVENANCE),
           "routes": ROUTES, "refuted_axes": REFUTED,
           "default_routes": default_routes(),
           "promoted_defaults": routes_by_status("promoted_default"),
-          "owned_defaults": routes_by_status("default_shipped")}
+          "owned_defaults": routes_by_status("default_shipped"),
+          "default_purity": default_purity_report()}
 
 def dump(out_path: str | None = None) -> str:
   """Write the canonical manifest json (bench/qk-search-spaces/default_route_manifest.json by default)."""
@@ -272,10 +342,13 @@ def dump_refuted(out_path: str | None = None) -> str:
   return str(p)
 
 if __name__ == "__main__":
+  if (errs := validate_manifest()):
+    raise SystemExit("manifest validation failed:\n- " + "\n- ".join(errs))
   path = dump()
   rpath = dump_refuted()
   print(f"wrote default route manifest to {path}")
   print(f"wrote canonical refuted axes to {rpath}")
   print("default routes:", default_routes())
   print("promoted (generated/search-selected) defaults:", routes_by_status("promoted_default"))
+  print("default purity:", default_purity_report()["verdict"])
   print(f"{len(ROUTES)} routes, {len(REFUTED)} refuted axes")

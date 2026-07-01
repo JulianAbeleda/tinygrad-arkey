@@ -14,7 +14,10 @@
     "purity_status": "owned_reference",
     "next_action": "keep as rollback/oracle; do not delete",
     "current_default": false,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "rollback_oracle",
+    "replacement_scope": "",
+    "final_default_allowed": true
   },
   {
     "route_id": "decode_q6k_direct_refuted",
@@ -31,7 +34,10 @@
     "purity_status": "refuted",
     "next_action": "do NOT reopen as built (-5.44% median W==D); only with a different topology than half-warp",
     "current_default": false,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "hand_authored_uop_template",
+    "replacement_scope": "",
+    "final_default_allowed": true
   },
   {
     "route_id": "decode_attention_native_correct_not_fast",
@@ -48,7 +54,10 @@
     "purity_status": "research",
     "next_action": "infrastructure/research only (~60-68% of owned); reopen only if attention wall-share becomes dominant",
     "current_default": false,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "machine_authored_generated",
+    "replacement_scope": "",
+    "final_default_allowed": true
   },
   {
     "route_id": "prefill_pipe_global_rollback",
@@ -65,6 +74,9 @@
     "purity_status": "superseded_rollback",
     "next_action": "keep as A/B comparator and the rollback target of role-selective",
     "current_default": false,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "rollback_oracle",
+    "replacement_scope": "",
+    "final_default_allowed": true
   }
 ]

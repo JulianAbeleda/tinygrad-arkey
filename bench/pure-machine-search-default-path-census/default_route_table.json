@@ -2,36 +2,42 @@
   {
     "route_id": "decode_q4k_g3_generated",
     "workload": "decode",
-    "role": "ffn_gate_up,ffn_down,attn_qo",
+    "role": "ffn_gate_up,ffn_down,attn_qo,attn_k",
     "quant": "Q4_K",
-    "shape_guard": "in=4096 out in {4096,12288} | in=12288 out=4096 (g3_bubblebeam_shape)",
+    "shape_guard": "g3_bubblebeam_shape OR DECODE_Q4K_G3_ANYSHAPE structural guard ((in//256)%4==0 and out%32==0)",
     "writer": "generated",
     "selector": "BubbleBeam",
-    "route_guard": "tinygrad/llm/model.py:255 getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) -> :257-264 q4k_g3_lanemap_gemv_kernel fires FIRST for g3_bubblebeam_shape, short-circuiting the owned-warp guards",
+    "route_guard": "tinygrad/llm/model.py:255 getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + :262 DECODE_Q4K_G3_ANYSHAPE default-on -> :264-299 q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards",
     "kernel_source": "extra/qk_gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel (UOp program from extra/qk_gemv_g2_lanemap.py Q4KGateUpLaneMap)",
     "authority_artifact": "bench/amd-isa-backend-g3-weight-promotion/latest.json (AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT)",
     "rollback_flag": "BUBBLEBEAM_FUTURESIGHT=0 -> decode_q4k_owned_warp",
     "purity_status": "search_generated_promoted",
-    "next_action": "keep promoted; PMS-R5 turn into reusable LaneMapTemplate; do NOT reopen Q4_K layout reshuffle while parity holds",
+    "next_action": "keep promoted; make BoltBeam-generated policy the selector authority; do NOT reopen Q4_K layout reshuffle while parity holds",
     "current_default": true,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "machine_authored_generated",
+    "replacement_scope": "",
+    "final_default_allowed": true
   },
   {
     "route_id": "decode_q6k_coop_shipped",
     "workload": "decode",
-    "role": "ffn_down,lm_head",
+    "role": "ffn_down,lm_head,attn_v",
     "quant": "Q6_K",
-    "shape_guard": "ffn_down 12288->4096 | lm_head out>=100000",
+    "shape_guard": "ffn_down 12288->4096 | long-K ffn_down in>=8192/out<100000 | lm_head out>=100000 | Q6K_COVER_MORE attn_v",
     "writer": "codegen_emitter",
     "selector": "hardcoded_default",
-    "route_guard": "tinygrad/llm/model.py:467 getenv('Q6K_LM_HEAD_COOP', 1) | :468 getenv('Q6K_FFN_DOWN_COOP', 1) -> :470-473 q6k_coop_partial_kernel",
-    "kernel_source": "extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel (coop partial + external .sum reduce)",
+    "route_guard": "tinygrad/llm/model.py:500 Q6K_COOP_RT + :501-508 Q6K_LM_HEAD_COOP/Q6K_FFN_DOWN_COOP/DECODE_Q6K_FFN_DOWN_LONGK default-on -> :510-518 q6k_coop_partial_kernel or q6k_gemv_partial_kernel",
+    "kernel_source": "extra/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel (hand-authored UOp route templates)",
     "authority_artifact": "extra/qk_decode_runtime_overhead.py (W==D harness); baseline for bench/amd-isa-backend-q6k-direct-speed/latest.json",
     "rollback_flag": "none (shipped baseline; Q6K_DIRECT_ROUTE alt is refuted/default-off)",
     "purity_status": "owned_default",
-    "next_action": "keep shipped; no active pure replacement (direct route refuted)",
+    "next_action": "keep shipped; generate Q6_K route spec that losslessly re-emits this route, then use W==D gates before reclassifying as generated",
     "current_default": true,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "hand_authored_uop_template",
+    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p3-generate-q6_k-coop-from-a-route-spec",
+    "final_default_allowed": false
   },
   {
     "route_id": "decode_attention_owned_two_kernel",
@@ -48,7 +54,10 @@
     "purity_status": "owned_default",
     "next_action": "keep shipped; low-leverage (wall-share ~10%@512 ->~0%@4096); do NOT make attention the max-out target",
     "current_default": true,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "external_handwritten_kernel",
+    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route",
+    "final_default_allowed": false
   },
   {
     "route_id": "prefill_pipe_role_selective_default",
@@ -65,6 +74,9 @@
     "purity_status": "search_selected_specialized_route",
     "next_action": "keep promoted; PMS-R6 encode role policy as manifest template",
     "current_default": true,
-    "in_manifest": true
+    "in_manifest": true,
+    "provenance": "external_handwritten_kernel",
+    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p4-generate-prefill-gemm-schedule",
+    "final_default_allowed": false
   }
 ]
