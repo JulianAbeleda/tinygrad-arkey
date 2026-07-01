@@ -34,11 +34,11 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   # TG-P3: Q6_K default is now the generated route; the hand template is rollback-only, no longer transitional debt.
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
   assert route_provenance("decode_q6k_coop_shipped") == "rollback_oracle"
+  # TG-P4: prefill default is now the spec-generated schedule; the legacy fixed emit is rollback-only.
+  assert route_provenance("prefill_pipe_role_selective_generated") == "machine_authored_generated"
+  assert route_provenance("prefill_pipe_role_selective_default") == "rollback_oracle"
   assert set(report["transitional_default_routes"]) == set()
-  assert set(report["forbidden_default_routes"]) == {
-    "decode_attention_owned_two_kernel",
-    "prefill_pipe_role_selective_default",
-  }
+  assert set(report["forbidden_default_routes"]) == {"decode_attention_owned_two_kernel"}
 
 
 def test_default_path_census_uses_manifest_provenance():
@@ -53,7 +53,10 @@ def test_default_path_census_uses_manifest_provenance():
   assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True
   assert "decode_q6k_coop_shipped" not in by_route
   assert by_route["decode_attention_owned_two_kernel"]["provenance"] == "external_handwritten_kernel"
-  assert by_route["prefill_pipe_role_selective_default"]["provenance"] == "external_handwritten_kernel"
+  # TG-P4: generated prefill schedule is the default; legacy fixed emit is off the default path.
+  assert by_route["prefill_pipe_role_selective_generated"]["provenance"] == "machine_authored_generated"
+  assert by_route["prefill_pipe_role_selective_generated"]["final_default_allowed"] is True
+  assert "prefill_pipe_role_selective_default" not in by_route
 
 
 def test_qk_route_policy_selects_g5_by_shape(tmp_path):

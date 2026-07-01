@@ -1,0 +1,112 @@
+{
+  "schema": "boltbeam.route_policy.v1",
+  "model_id": "qwen3_8b_prefill_synth",
+  "architecture_class": "dense_decoder",
+  "authorized": true,
+  "routes": [
+    {
+      "role": "attn_kv",
+      "shape": {
+        "rows": 1024,
+        "cols": 4096
+      },
+      "quant": "Q6_K",
+      "selected_route": "prefill_pipe_role_selective_generated",
+      "status": "promoted",
+      "tier": "TIER_A",
+      "provenance": "machine_authored_generated",
+      "route_family": "prefill_gemm_schedule_spec",
+      "route_params": {
+        "PREFILL_GENERATED_SCHEDULE": "1"
+      },
+      "rollback": {
+        "PREFILL_GENERATED_SCHEDULE": "0"
+      },
+      "evidence_refs": [
+        "bench/tg-p4-prefill-generated-schedule/latest.json",
+        "bench/tg-p4-prefill-generated-schedule/summary.md"
+      ],
+      "candidates": [
+        "prefill_gemm_schedule_spec"
+      ]
+    },
+    {
+      "role": "attn_qo",
+      "shape": {
+        "rows": 4096,
+        "cols": 4096
+      },
+      "quant": "Q4_K",
+      "selected_route": "prefill_pipe_role_selective_generated",
+      "status": "promoted",
+      "tier": "TIER_A",
+      "provenance": "machine_authored_generated",
+      "route_family": "prefill_gemm_schedule_spec",
+      "route_params": {
+        "PREFILL_GENERATED_SCHEDULE": "1"
+      },
+      "rollback": {
+        "PREFILL_GENERATED_SCHEDULE": "0"
+      },
+      "evidence_refs": [
+        "bench/tg-p4-prefill-generated-schedule/latest.json",
+        "bench/tg-p4-prefill-generated-schedule/summary.md"
+      ],
+      "candidates": [
+        "prefill_gemm_schedule_spec"
+      ]
+    },
+    {
+      "role": "ffn_down",
+      "shape": {
+        "rows": 4096,
+        "cols": 12288
+      },
+      "quant": "Q6_K",
+      "selected_route": "prefill_pipe_role_selective_generated",
+      "status": "promoted",
+      "tier": "TIER_A",
+      "provenance": "machine_authored_generated",
+      "route_family": "prefill_gemm_schedule_spec",
+      "route_params": {
+        "PREFILL_GENERATED_SCHEDULE": "1"
+      },
+      "rollback": {
+        "PREFILL_GENERATED_SCHEDULE": "0"
+      },
+      "evidence_refs": [
+        "bench/tg-p4-prefill-generated-schedule/latest.json",
+        "bench/tg-p4-prefill-generated-schedule/summary.md"
+      ],
+      "candidates": [
+        "prefill_gemm_schedule_spec"
+      ]
+    },
+    {
+      "role": "ffn_gate_up",
+      "shape": {
+        "rows": 12288,
+        "cols": 4096
+      },
+      "quant": "Q4_K",
+      "selected_route": "prefill_pipe_role_selective_generated",
+      "status": "promoted",
+      "tier": "TIER_A",
+      "provenance": "machine_authored_generated",
+      "route_family": "prefill_gemm_schedule_spec",
+      "route_params": {
+        "PREFILL_GENERATED_SCHEDULE": "1"
+      },
+      "rollback": {
+        "PREFILL_GENERATED_SCHEDULE": "0"
+      },
+      "evidence_refs": [
+        "bench/tg-p4-prefill-generated-schedule/latest.json",
+        "bench/tg-p4-prefill-generated-schedule/summary.md"
+      ],
+      "candidates": [
+        "prefill_gemm_schedule_spec"
+      ]
+    }
+  ]
+}

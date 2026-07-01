@@ -80,23 +80,23 @@
     "final_default_allowed": true
   },
   {
-    "route_id": "prefill_pipe_role_selective_default",
+    "route_id": "prefill_pipe_role_selective_generated",
     "workload": "prefill",
-    "role": "attn_qo,attn_kv,ffn_down (ffn_gate_up excluded)",
+    "role": "attn_qo,attn_kv,ffn_down,ffn_gate_up",
     "quant": "Q4_K,Q6_K,fp16",
-    "shape_guard": "graph-GEMM ubatch=512; gate/up out_f==12288 kept on lds2",
-    "writer": "owned_asm",
-    "selector": "manifest",
-    "route_guard": "extra/qk_prefill_graph_gemm_route.py:55 PREFILL_GEMM_PIPELINE default 1 + :61 PREFILL_PIPE_ROLE_SELECTIVE default 1 (out_f==12288 -> pipe_mode=False); entry tinygrad/llm/model.py:145-147 route_pf16_graph_gemm",
-    "kernel_source": "extra/qk_prefill_graph_gemm_route.py build_gemm_pipe (software-pipelined assembly GEMM, tm2/tn2)",
-    "authority_artifact": "bench/qk-prefill-pipe-role-selective/latest.json (ROLE_SELECTIVE_PASS_BEATS_GLOBAL)",
-    "rollback_flag": "PREFILL_PIPE_ROLE_SELECTIVE=0 -> global pipe; PREFILL_GEMM_PIPELINE=0 -> old lds2",
-    "purity_status": "search_selected_specialized_route",
-    "next_action": "keep promoted; PMS-R6 encode role policy as manifest template",
+    "shape_guard": "graph-GEMM ubatch=512; spec role_policy: pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288",
+    "writer": "generated",
+    "selector": "BoltBeam_route_policy_or_env_default",
+    "route_guard": "extra/qk_prefill_graph_gemm_route.py route_pf16_graph_gemm: getenv('PREFILL_GENERATED_SCHEDULE', 1) or QK_ROUTE_POLICY prefill_pipe_role_selective_generated -> describe_prefill_schedule + emit_prefill_gemm_from_spec",
+    "kernel_source": "extra/qk_prefill_schedule_spec.py emit_prefill_gemm_from_spec (PrefillGEMMScheduleSpec lowered via the parameterized RDNA3 WMMA schedule generator ref.build_gemm_pipe/build_gemm_lds2 -> prefill_gen_sched_gemm_*)",
+    "authority_artifact": "bench/tg-p4-prefill-generated-schedule/latest.json (TG_P4_PASS_PREFILL_GENERATED_SCHEDULE: all instructions identical, role policy preserved)",
+    "rollback_flag": "PREFILL_GENERATED_SCHEDULE=0 -> prefill_pipe_role_selective_default (legacy fixed emit)",
+    "purity_status": "search_generated_promoted",
+    "next_action": "keep promoted; BoltBeam owns prefill schedule selection; TG-P5 (attention) remains",
     "current_default": true,
     "in_manifest": true,
-    "provenance": "external_handwritten_kernel",
-    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p4-generate-prefill-gemm-schedule",
-    "final_default_allowed": false
+    "provenance": "machine_authored_generated",
+    "replacement_scope": "",
+    "final_default_allowed": true
   }
 ]

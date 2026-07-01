@@ -1,0 +1,10 @@
+{
+  "basis": "qk_prefill_whole_synced.py, generated schedule (byte-identical instructions to legacy so equal to the shipped route)",
+  "whole_prefill_tok_s": {
+    "pp512": 4413,
+    "pp1024": 4243,
+    "pp2048": 3848,
+    "pp4096": 3247
+  },
+  "note": "generated and legacy emit byte-identical RDNA3 instruction streams (extra/qk_prefill_generated_schedule_gate.py), so W==D is provenance-equivalent, not a speed change"
+}

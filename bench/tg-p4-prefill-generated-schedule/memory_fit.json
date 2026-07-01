@@ -1,0 +1,35 @@
+{
+  "vram_budget_bytes": 25769803776,
+  "policy": "select prefill generated schedule only if the fp16 A/Bt/C realization fits VRAM",
+  "all_fit": true,
+  "shapes": [
+    {
+      "role": "attn_qo",
+      "out_f": 4096,
+      "in_f": 4096,
+      "fp16_realization_bytes": 41943040,
+      "fits_vram": true
+    },
+    {
+      "role": "attn_kv",
+      "out_f": 1024,
+      "in_f": 4096,
+      "fp16_realization_bytes": 13631488,
+      "fits_vram": true
+    },
+    {
+      "role": "ffn_down",
+      "out_f": 4096,
+      "in_f": 12288,
+      "fp16_realization_bytes": 117440512,
+      "fits_vram": true
+    },
+    {
+      "role": "ffn_gate_up",
+      "out_f": 12288,
+      "in_f": 4096,
+      "fp16_realization_bytes": 117440512,
+      "fits_vram": true
+    }
+  ]
+}
