@@ -1,0 +1,25 @@
+{
+  "note": "protected-context W==D evidence for each hot route; no protected-context regression on the converted routes",
+  "routes": {
+    "decode_q4k_g3_generated": {
+      "basis": "bench/amd-isa-backend-g3-weight-promotion/latest.json",
+      "result": "token-identical, speed-equivalent (-0.13..+0.41% ctx512-4096)"
+    },
+    "decode_q6k_coop_generated": {
+      "basis": "bench/tg-p3-q6k-generated-coop/latest.json",
+      "result": "byte-identical, worst gen/shipped 1.011; full-model token-identical 24/24"
+    },
+    "prefill_pipe_role_selective_generated": {
+      "basis": "bench/tg-p4-prefill-generated-schedule/latest.json",
+      "result": "instruction byte-identical; route fires 504/504; whole-prefill 4413/4243/3848/3247 tok/s pp512..4096 (==legacy)"
+    },
+    "decode_flash_block_tile_g5_konly": {
+      "basis": "bench/gp-track/gp4_latest.json",
+      "result": "14B G=5 TIER_A (already generated default)"
+    },
+    "decode_attention_owned_two_kernel": {
+      "basis": "bench/tg-p5-attention-generated-default/latest.json",
+      "result": "REFUTE: generated G5-8B correct+route-bound but 87.6% owned @ctx512, 95.6% @ctx4096 -> owned kept, remains external_handwritten debt"
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "scope": "TG-P7: final default flip + strict census pass (packaging/gating phase)",
+  "verdict": "TG_P7_BLOCKED_PURITY_DEBT_REMAINING",
+  "strict_default_purity": "TINYGRAD_DEFAULT_PURITY_FAIL",
+  "prerequisites": {
+    "TG_P2": "PASS (Q4_K G3 policy-driven)",
+    "TG_P3": "PASS (Q6_K generated coop)",
+    "TG_P4": "PASS (prefill generated schedule)",
+    "TG_P5": "REFUTE (generated 8B attention correct but slower; owned kept)",
+    "TG_P6": "PASS (pure-search diagnostic mode)"
+  },
+  "flipped_to_generated_default": [
+    "decode_q4k_g3_generated",
+    "decode_q6k_coop_generated",
+    "decode_flash_block_tile_g5_konly",
+    "prefill_pipe_role_selective_generated"
+  ],
+  "remaining_purity_debt": [
+    "decode_attention_owned_two_kernel"
+  ],
+  "blocker": "decode_attention_owned_two_kernel is external_handwritten_kernel and the only generated replacement (G5-8B) is slower (TG-P5 refute). Per the stop rule, owned HIP stays the 8B attention default -> TINYGRAD_DEFAULT_PURITY_PASS is not reachable without a decode regression.",
+  "strict_census_exit": 2,
+  "gates": {
+    "census_check": "PASS (PMS_R0_PASS_CENSUS_PINNED)",
+    "strict_final_default": "FAIL by design (exit 2: 1 external_handwritten default remains = decode_attention_owned_two_kernel)",
+    "unit_tests": "PASS (test/unit/test_qk_route_purity.py 10 passed)",
+    "rollback_matrix": "PASS (every generated default has an env rollback to its handwritten oracle)",
+    "wd_protected": "PASS on converted routes (Q4_K/Q6_K/prefill no regression); attention refuted (no regression forced)",
+    "pure_search_only": "consistent: PURE_MACHINE_SEARCH_ONLY=1 raises on the normal default (attention), passes when generated attention forced"
+  },
+  "outcome": "4 of 5 hot default routes are now machine_authored_generated and BoltBeam-selectable, with handwritten oracles one rollback flag away. The 5th (8B decode attention) is honestly blocked on speed. This is the correct terminal state given TG-P5; the north-star PASS would require a faster generated attention route (a future capability, not a packaging step).",
+  "final_default_purity_report": {
+    "verdict": "TINYGRAD_DEFAULT_PURITY_FAIL",
+    "default_routes": [
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "decode_attention_owned_two_kernel",
+      "decode_flash_block_tile_g5_konly",
+      "prefill_pipe_role_selective_generated"
+    ],
+    "rows": [
+      {
+        "route_id": "decode_q4k_g3_generated",
+        "status": "promoted_default",
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
+      },
+      {
+        "route_id": "decode_q6k_coop_generated",
+        "status": "promoted_default",
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
+      },
+      {
+        "route_id": "decode_attention_owned_two_kernel",
+        "status": "default_shipped",
+        "provenance": "external_handwritten_kernel",
+        "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route",
+        "final_default_allowed": false
+      },
+      {
+        "route_id": "decode_flash_block_tile_g5_konly",
+        "status": "promoted_default",
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
+      },
+      {
+        "route_id": "prefill_pipe_role_selective_generated",
+        "status": "promoted_default",
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
+      }
+    ],
+    "forbidden_default_routes": [
+      "decode_attention_owned_two_kernel"
+    ],
+    "transitional_default_routes": [],
+    "final_default_allowed_provenance": [
+      "machine_authored_generated",
+      "tinygrad_scheduler_generated"
+    ]
+  }
+}
