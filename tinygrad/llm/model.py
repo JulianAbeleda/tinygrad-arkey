@@ -643,7 +643,8 @@ def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, na
 _QK_ROUTE_POLICY: dict|None = None
 _QK_ROUTE_POLICY_STRICT = False
 _QK_ROUTE_POLICY_DEBUG = False
-_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_q4k_g3_generated", "decode_q6k_coop_generated"}
+_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_q4k_g3_generated", "decode_q6k_coop_generated",
+                           "prefill_pipe_role_selective_generated"}
 
 def _load_qk_route_policy(path:str) -> dict:
   policy_path = pathlib.Path(path).expanduser()
@@ -653,6 +654,7 @@ def _load_qk_route_policy(path:str) -> dict:
   selected: dict[str, dict] = {}
   q4k_g3_rows: list[dict] = []
   q6k_gen_rows: list[dict] = []
+  prefill_gen_rows: list[dict] = []
   for row in data.get("routes", []):
     route_id = row.get("selected_route")
     if not route_id: continue
@@ -696,9 +698,25 @@ def _load_qk_route_policy(path:str) -> dict:
         raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
       q6k_gen_rows.append(row)
       selected.setdefault(route_id, row)
+    elif route_id == "prefill_pipe_role_selective_generated":
+      allowed = {"PREFILL_GENERATED_SCHEDULE"}
+      if set(params) - allowed:
+        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
+      if params and params != {"PREFILL_GENERATED_SCHEDULE": "1"}:
+        raise ValueError(f"{policy_path} route {route_id!r} must select the generated prefill schedule (PREFILL_GENERATED_SCHEDULE=1), got {params}")
+      shape = row.get("shape", {})
+      try:
+        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
+      except (KeyError, TypeError, ValueError):
+        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
+      if rows_i <= 0 or cols_i <= 0:
+        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
+      prefill_gen_rows.append(row)
+      selected.setdefault(route_id, row)
     else:
       selected[route_id] = row
-  return {"path": str(policy_path), "selected": selected, "q4k_g3": q4k_g3_rows, "q6k_gen": q6k_gen_rows}
+  return {"path": str(policy_path), "selected": selected, "q4k_g3": q4k_g3_rows, "q6k_gen": q6k_gen_rows,
+          "prefill_gen": prefill_gen_rows}
 
 def _set_qk_route_policy(policy:dict|None, strict:bool=False, debug:bool=False) -> None:
   global _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG
@@ -731,6 +749,17 @@ def _qk_route_policy_selects_q6k_generated(out_features:int, in_features:int) ->
   Q6_K route (extra/qk_q6k_route_spec.py) is the authorized route for the tensor."""
   if _QK_ROUTE_POLICY is None: return False
   for row in _QK_ROUTE_POLICY.get("q6k_gen", []):
+    shape = row.get("shape", {})
+    if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
+      return True
+  return False
+
+def _qk_route_policy_selects_prefill_generated(out_features:int, in_features:int) -> bool:
+  """True if the loaded QK_ROUTE_POLICY selects prefill_pipe_role_selective_generated for a prefill GEMM weight with
+  these dims (rows=out_features, cols=in_features). BoltBeam owns this selection; when it fires, the spec-driven
+  generated prefill schedule (extra/qk_prefill_schedule_spec.py) is authorized for the tensor."""
+  if _QK_ROUTE_POLICY is None: return False
+  for row in _QK_ROUTE_POLICY.get("prefill_gen", []):
     shape = row.get("shape", {})
     if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
       return True
