@@ -1,35 +1,19 @@
 """W1: weight-path route attribution + wall share. Per-kernel GPU time (eager PROFILE -> one ProfileRangeEvent per
 kernel with GPU HW timestamps; the JIT graph profiles as one opaque range, so eager is required -- same method as
-extra/amd_isa_phase_n4_whole_step_attribution.py). Classifies each kernel by NAME -> role / quant / route_class, and
-computes bytes_estimate (from the shape in the name) + effective_bandwidth. Audit-only.
+extra/amd_isa_phase_n4_whole_step_attribution.py). Classifies each kernel through extra.qk_decode_role_profile, which
+derives role / quant / shape facts from the selected GGUF tensor table instead of Qwen3-8B constants. Audit-only.
 
 Run: DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_weight_path_route_attribution.py
+Run another model: QK_MODEL=/path/to/model.gguf DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_weight_path_route_attribution.py
 Writes: bench/amd-isa-backend-weight-path-ceiling/route_attribution.json
 """
-import os, sys, json, re, pathlib, subprocess
+import os, sys, json, pathlib, subprocess
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/amd-isa-backend-weight-path-ceiling"
 CKPTS = [int(x) for x in os.environ.get("QK_CKPTS", "512,4096").split(",")]
 NSTEPS = int(os.environ.get("QK_W1_STEPS", "4"))
-Q_BPW = {"q4k": 4.5, "q6k": 6.5, "q8": 8.0, "fp16": 16.0}   # bits per weight (Q4_K_M avg ~4.5, Q6_K ~6.5)
-
-def classify(name):
-  nm = name.lower()
-  quant = "q4k" if nm.startswith("q4k") else "q6k" if nm.startswith("q6k") else "q8" if nm.startswith("q8") else "fp16" if ("half" in nm or "f16" in nm) else "unknown"
-  rc = ("owned_warp" if "warp" in nm else "coop" if "coop" in nm else "scheduler" if ("sched" in nm or "lanemap" in nm or "_g3" in nm) else
-        "generated_g3" if ("lanemap" in nm or "futuresight" in nm) else ("gemv" if "gemv" in nm or "mmvq" in nm else None))
-  dims = [int(x) for x in re.findall(r"_(\d+)", nm)]
-  mn = [d for d in dims if d in (4096, 12288, 151936, 1024)]   # weight matrix dims of interest
-  role = "other"
-  if len(mn) >= 2:
-    a, b = mn[0], mn[1]
-    if {a, b} == {4096, 12288}: role = "ffn_gate_up" if b == 12288 else "ffn_down"
-    elif a == 4096 and b == 4096: role = "attn_qkvo_proj"
-    elif 151936 in (a, b): role = "lm_head"
-  is_weight = quant in ("q4k", "q6k", "q8") and ("gemv" in nm or "mmvq" in nm or "coop" in nm) and len(mn) >= 2
-  bytes_est = int(mn[0] * mn[1] * Q_BPW.get(quant, 16) / 8) if (is_weight and len(mn) >= 2) else 0
-  return {"role": role, "quant": quant, "route_class": rc or "fallback_graph", "is_weight": is_weight,
-          "matdims": mn[:2], "bytes_per_call": bytes_est}
+sys.path.insert(0, str(ROOT))
+from extra.qk_decode_role_profile import classify_kernel, profile_from_gguf, summarize_profile
 
 CHILD = r'''
 import os, json, re
@@ -37,10 +21,11 @@ from tinygrad import Tensor, TinyJit, Context
 from tinygrad.uop.ops import UOp
 from tinygrad.device import Compiled
 from tinygrad.helpers import ProfileRangeEvent
-from extra.qk_harness_contract import DEFAULT_MODEL
 from extra.llm_generate import load_model_and_tokenizer
-MAXC=4608; CTX=int(os.environ["W1_CTX"]); NSTEPS=int(os.environ["W1_STEPS"])
-m,tok=load_model_and_tokenizer(DEFAULT_MODEL,MAXC,seed=20260617)
+from extra.qk_harness_contract import DEFAULT_MODEL
+MODEL=os.environ.get("QK_MODEL", DEFAULT_MODEL)
+MAXC=int(os.environ.get("W1_MAX_CONTEXT", "4608")); CTX=int(os.environ["W1_CTX"]); NSTEPS=int(os.environ["W1_STEPS"])
+m,tok=load_model_and_tokenizer(MODEL,MAXC,seed=20260617)
 for lin in (getattr(m,"_q4k_linears",None).linears if getattr(m,"_q4k_linears",None) else []): lin.decode_enabled=True
 for b in m.blk: b._use_flash,b._prefill_v2=True,False
 v=UOp.variable("start_pos",0,MAXC-1); temp=Tensor([0.0]); jit=TinyJit(m.forward); tk=Tensor([[100]],dtype="int32").contiguous()
@@ -64,12 +49,12 @@ def capture(route_flags, ctx):
   line = [l for l in out.splitlines() if l.startswith("@@")]
   return json.loads(line[-1][2:]) if line else {"failed": True}
 
-def attribute(cap, ctx):
+def attribute(cap, ctx, profile):
   pk = cap["per_kernel"]; tot = sum(v["dur_per_step"] for v in pk.values()) or 1e-9
   # device-clock units: scale so total matches the measured decode wall (1/tok_s). Use unit-normalized % + relative.
   rows = []
   for nm, v in pk.items():
-    c = classify(nm); dur = v["dur_per_step"]
+    c = classify_kernel(nm, profile); dur = v["dur_per_step"]
     eff_bw = None
     if c["is_weight"] and c["bytes_per_call"]:
       eff_bw = "see W2 (needs dur->seconds scale)"  # effective bw computed in W2 with the wall-time scale
@@ -87,12 +72,17 @@ def attribute(cap, ctx):
 
 def main():
   OUT.mkdir(parents=True, exist_ok=True)
+  from extra.qk_harness_contract import DEFAULT_MODEL
+  model_path = os.environ.get("QK_MODEL", DEFAULT_MODEL)
+  profile = profile_from_gguf(model_path, pathlib.Path(model_path).stem)
   # shipped/default route = owned-warp Q4_K (Q4K_GEMV_WARP default-on). Capture per ctx.
   rec = {"scope": "W1 weight-path route attribution (eager PROFILE per-kernel GPU time, classified by name)",
-         "route": "shipped_default (Q4K_GEMV_WARP owned-warp)", "per_ctx": {}}
+         "route": "shipped_default (Q4K_GEMV_WARP owned-warp)", "model_profile": summarize_profile(profile),
+         "classifier": "extra.qk_decode_role_profile (GGUF tensor-table driven; no 8B dimension constants)",
+         "per_ctx": {}}
   for ctx in CKPTS:
     cap = capture({}, ctx)
-    rec["per_ctx"][str(ctx)] = attribute(cap, ctx) if "per_kernel" in cap else {"failed": cap}
+    rec["per_ctx"][str(ctx)] = attribute(cap, ctx, profile) if "per_kernel" in cap else {"failed": cap}
   ok = all("by_role" in rec["per_ctx"][str(c)] for c in CKPTS)
   rec["verdict"] = "AMD_ISA_WEIGHT_W1_PASS_WALL_ATTRIBUTED" if ok else "AMD_ISA_WEIGHT_W1_BLOCKED_ROUTE_ATTRIBUTION"
   json.dump(rec, open(OUT / "route_attribution.json", "w"), indent=2)
