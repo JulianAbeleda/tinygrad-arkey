@@ -1,0 +1,262 @@
+{
+  "scope": "TG-P8.2 geometry search over L (split length) for generated 8B decode attention",
+  "verdict": "TG_P8_2_REFUTE_GEOMETRY_SPACE",
+  "promote_pct": 98.0,
+  "L_grid": [
+    128,
+    256,
+    384,
+    512,
+    576
+  ],
+  "selected": null,
+  "best_effort": {
+    "L": 128,
+    "splits": 36,
+    "worst_pct_of_owned": 87.7,
+    "correct_and_bound": true,
+    "passes_bar": false,
+    "per_ctx": [
+      {
+        "ctx": 512,
+        "owned_tok_s": 107.7,
+        "gen_tok_s": 94.5,
+        "pct_of_owned": 87.7,
+        "token_match": true,
+        "route_bound": true,
+        "gen_attn_us": 2179.9,
+        "owned_attn_us": 592.3,
+        "gen_attn_split": {
+          "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 1399.2,
+          "flash_state_gmax_32_128": 196.8,
+          "flash_state_combine_32_128": 583.9
+        },
+        "splits": 36
+      },
+      {
+        "ctx": 4096,
+        "owned_tok_s": 97.8,
+        "gen_tok_s": 93.8,
+        "pct_of_owned": 95.9,
+        "token_match": true,
+        "route_bound": true,
+        "gen_attn_us": 2246.2,
+        "owned_attn_us": 1585.5,
+        "gen_attn_split": {
+          "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 1466.7,
+          "flash_state_gmax_32_128": 195.9,
+          "flash_state_combine_32_128": 583.6
+        },
+        "splits": 36
+      }
+    ]
+  },
+  "candidates": [
+    {
+      "L": 128,
+      "splits": 36,
+      "worst_pct_of_owned": 87.7,
+      "correct_and_bound": true,
+      "passes_bar": false,
+      "per_ctx": [
+        {
+          "ctx": 512,
+          "owned_tok_s": 107.7,
+          "gen_tok_s": 94.5,
+          "pct_of_owned": 87.7,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 2179.9,
+          "owned_attn_us": 592.3,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 1399.2,
+            "flash_state_gmax_32_128": 196.8,
+            "flash_state_combine_32_128": 583.9
+          },
+          "splits": 36
+        },
+        {
+          "ctx": 4096,
+          "owned_tok_s": 97.8,
+          "gen_tok_s": 93.8,
+          "pct_of_owned": 95.9,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 2246.2,
+          "owned_attn_us": 1585.5,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 1466.7,
+            "flash_state_gmax_32_128": 195.9,
+            "flash_state_combine_32_128": 583.6
+          },
+          "splits": 36
+        }
+      ]
+    },
+    {
+      "L": 256,
+      "splits": 18,
+      "worst_pct_of_owned": 82.6,
+      "correct_and_bound": true,
+      "passes_bar": false,
+      "per_ctx": [
+        {
+          "ctx": 512,
+          "owned_tok_s": 107.7,
+          "gen_tok_s": 89.0,
+          "pct_of_owned": 82.6,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 2716.7,
+          "owned_attn_us": 592.3,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 2319.6,
+            "flash_state_gmax_32_128": 138.8,
+            "flash_state_combine_32_128": 258.3
+          },
+          "splits": 18
+        },
+        {
+          "ctx": 4096,
+          "owned_tok_s": 97.8,
+          "gen_tok_s": 88.4,
+          "pct_of_owned": 90.4,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 2774.4,
+          "owned_attn_us": 1585.5,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 2377.9,
+            "flash_state_gmax_32_128": 137.9,
+            "flash_state_combine_32_128": 258.7
+          },
+          "splits": 18
+        }
+      ]
+    },
+    {
+      "L": 384,
+      "splits": 12,
+      "worst_pct_of_owned": 77.0,
+      "correct_and_bound": true,
+      "passes_bar": false,
+      "per_ctx": [
+        {
+          "ctx": 512,
+          "owned_tok_s": 107.7,
+          "gen_tok_s": 82.9,
+          "pct_of_owned": 77.0,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 3545.2,
+          "owned_attn_us": 592.3,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 3206.2,
+            "flash_state_gmax_32_128": 128.1,
+            "flash_state_combine_32_128": 210.9
+          },
+          "splits": 12
+        },
+        {
+          "ctx": 4096,
+          "owned_tok_s": 97.8,
+          "gen_tok_s": 82.3,
+          "pct_of_owned": 84.2,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 3601.6,
+          "owned_attn_us": 1585.5,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 3263.7,
+            "flash_state_gmax_32_128": 127.8,
+            "flash_state_combine_32_128": 210.1
+          },
+          "splits": 12
+        }
+      ]
+    },
+    {
+      "L": 512,
+      "splits": 9,
+      "worst_pct_of_owned": 71.0,
+      "correct_and_bound": true,
+      "passes_bar": false,
+      "per_ctx": [
+        {
+          "ctx": 512,
+          "owned_tok_s": 107.7,
+          "gen_tok_s": 76.5,
+          "pct_of_owned": 71.0,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 4482.9,
+          "owned_attn_us": 592.3,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 4153.0,
+            "flash_state_gmax_32_128": 126.4,
+            "flash_state_combine_32_128": 203.6
+          },
+          "splits": 9
+        },
+        {
+          "ctx": 4096,
+          "owned_tok_s": 97.8,
+          "gen_tok_s": 76.3,
+          "pct_of_owned": 78.0,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 4515.5,
+          "owned_attn_us": 1585.5,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 4185.7,
+            "flash_state_gmax_32_128": 126.4,
+            "flash_state_combine_32_128": 203.4
+          },
+          "splits": 9
+        }
+      ]
+    },
+    {
+      "L": 576,
+      "splits": 8,
+      "worst_pct_of_owned": 69.0,
+      "correct_and_bound": true,
+      "passes_bar": false,
+      "per_ctx": [
+        {
+          "ctx": 512,
+          "owned_tok_s": 107.7,
+          "gen_tok_s": 74.3,
+          "pct_of_owned": 69.0,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 4956.8,
+          "owned_attn_us": 592.3,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 4650.0,
+            "flash_state_gmax_32_128": 121.4,
+            "flash_state_combine_32_128": 185.4
+          },
+          "splits": 8
+        },
+        {
+          "ctx": 4096,
+          "owned_tok_s": 97.8,
+          "gen_tok_s": 73.9,
+          "pct_of_owned": 75.6,
+          "token_match": true,
+          "route_bound": true,
+          "gen_attn_us": 5029.8,
+          "owned_attn_us": 1585.5,
+          "gen_attn_split": {
+            "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128": 4724.6,
+            "flash_state_gmax_32_128": 120.5,
+            "flash_state_combine_32_128": 184.6
+          },
+          "splits": 8
+        }
+      ]
+    }
+  ],
+  "note": "L is the only generated geometry knob that scales the concrete split count (S=ceildiv(MAXC,L)); owned unaffected (uses DECODE_ATTN_AMDGCN_S). Larger L -> fewer splits -> cheaper combine + fewer masked tile workgroups, traded against high-ctx occupancy."
+}

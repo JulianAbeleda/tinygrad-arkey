@@ -1,29 +1,21 @@
-# TG-P8.0 8B Attention Baseline
+# TG-P8 Terminal: Generated 8B Attention Parity
 
-Verdict: **TG_P8_0_PASS_BASELINE_PINNED**
+Verdict: **TG_P8_BLOCKED_ATTENTION_PARITY**
 
-| ctx | owned tok/s | gen tok/s | % owned | owned attn us/fwd | gen attn us/fwd | token_match | route_bound |
-|---|---|---|---|---|---|---|---|
-| 512 | 107.4 | 94.4 | 87.9% | 592.92 | 2184.52 | True | True |
-| 4096 | 97.7 | 93.7 | 95.9% | 1577.84 | 2245.88 | True | True |
+Owned HIP stays the 8B decode-attention default. No generated candidate reaches >=98% of owned at BOTH ctx512 and ctx4096 within the guardrails.
 
-## Per-kernel attention wall split (us per forward, summed over layers)
+## Phases
+- TG-P8.0 PASS: baseline pinned (per-kernel wall split, token-identical, route-bound).
+- TG-P8.1 PASS: delta classified SPLIT_GEOMETRY_MISMATCH (generated tile ctx-flat 1.05x vs owned ctx-proportional 3.67x).
+- TG-P8.2 REFUTE: geometry search over L — L=128 optimal (87.7%/95.9%); larger L monotonically worse (occupancy-starved).
 
-### ctx 512
-owned:
-- owned_flash_combine: 224.48us (36x, 6.236us/occ)
-- owned_flash_tile_gqa_whole: 368.44us (36x, 10.234us/occ)
-generated:
-- flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128: 1402.64us (36x, 38.962us/occ)
-- flash_state_combine_32_128: 584.8us (36x, 16.244us/occ)
-- flash_state_gmax_32_128: 197.08us (36x, 5.474us/occ)
+## Dual blocker (both must clear 98%; neither can within guardrails)
+| ctx | best %own | class | binding | fix requires |
+|---|---|---|---|---|
+| 512 | 87.7% | SPLIT_GEOMETRY | needs occupancy splits | owned's runtime per-split length (fixed S, len=ceildiv(Tc,S)) — codegen capability |
+| 4096 | 95.9% | COMBINE_OVERHEAD | **yes** | new combine primitive (collapse is refuted, guardrail #3) |
 
-### ctx 4096
-owned:
-- owned_flash_combine: 224.16us (36x, 6.227us/occ)
-- owned_flash_tile_gqa_whole: 1353.68us (36x, 37.602us/occ)
-generated:
-- flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128: 1466.08us (36x, 40.724us/occ)
-- flash_state_combine_32_128: 583.28us (36x, 16.202us/occ)
-- flash_state_gmax_32_128: 196.52us (36x, 5.459us/occ)
+ctx4096 is the binding cap: to reach 98% the generated wall must drop 228us/tok, but a perfect tile saves only 112us — the 556us combine lifecycle (83% of the delta) dominates, and collapsing it is refuted.
 
+## Outcome
+Owned remains default. TINYGRAD_DEFAULT_PURITY_PASS stays blocked on 8B attention, now with a precise mechanistic blocker (geometry-optimal + combine-capped) rather than TG-P5's coarse 'slower'. Reopen only with a symbolic-per-split-length generated tile AND a genuinely new (non-collapse) combine primitive.
