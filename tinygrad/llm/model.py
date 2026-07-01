@@ -1754,6 +1754,12 @@ class Transformer:
     _set_qk_route_policy(qk_route_policy, bool(getenv("QK_ROUTE_POLICY_STRICT", 0)),
                          bool(getenv("QK_ROUTE_POLICY_DEBUG", 0)))
     _validate_qk_route_policy_for_config(qk_route_policy, config)
+    # TG-P6: PURE_MACHINE_SEARCH_ONLY diagnostic mode. Fail loud (naming route + replacement scope) if any hot
+    # default route is not machine-authored/generated. Rollback/oracle routes are tolerated only when explicitly
+    # requested (PURE_MACHINE_SEARCH_ALLOW_ROLLBACK=1). No-op unless PURE_MACHINE_SEARCH_ONLY=1.
+    if getenv("PURE_MACHINE_SEARCH_ONLY", 0):
+      from extra.qk_pure_search_guard import assert_pure_machine_search
+      assert_pure_machine_search()
     # Prefill policy auto-resolution, BEFORE Transformer() (its __init__ reads PREFILL_V2 to build the warmstart,
     # and the concrete-KV precompile + generate() read PREFILL_CONCRETE_KV). Explicit 0/1 skip these.
     # PREFILL_SERVER_PROFILE=1 implies PREFILL_V2=auto (when V2 unset) + concrete-KV on (when V2 ends up on).
