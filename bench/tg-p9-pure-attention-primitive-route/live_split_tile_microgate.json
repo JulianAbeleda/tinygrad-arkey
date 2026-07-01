@@ -1,0 +1,41 @@
+{
+  "scope": "TG-P9.2 live-split generated tile parity + timing (standalone)",
+  "verdict": "TG_P9_2_PASS_LIVE_SPLIT_TILE",
+  "geometry": {
+    "Hq": 32,
+    "Hkv": 8,
+    "Hd": 128,
+    "MAXC": 4608,
+    "S_fixed": 36
+  },
+  "all_correct": true,
+  "any_low_ctx_movement": true,
+  "blocked": null,
+  "cases": [
+    {
+      "ctx": 512,
+      "max_rel_err": 4.360934724445542e-07,
+      "correct": true,
+      "fixed_tile_us": 36.6,
+      "live_tile_us": 8.0,
+      "live_tile_over_fixed": 0.2186,
+      "fixed_total_us": 57.48,
+      "live_total_us": 28.88,
+      "S_fixed": 36,
+      "per_aligned_at_ctx": 16
+    },
+    {
+      "ctx": 4096,
+      "max_rel_err": 0.0,
+      "correct": true,
+      "fixed_tile_us": 36.6,
+      "live_tile_us": 36.72,
+      "live_tile_over_fixed": 1.0033,
+      "fixed_total_us": 57.48,
+      "live_total_us": 57.36,
+      "S_fixed": 36,
+      "per_aligned_at_ctx": 128
+    }
+  ],
+  "finding": "live-split tile scales with Tc: ctx512 tile 36.6->8.0us (4.6x, byte-identical), ctx4096 unchanged. Live-split tile now FASTER than owned tile at ctx512 (8.0 vs 10.2us). The gmax+combine lifecycle (~21us flat) is now the sole remaining gap -> TG-P9.3/9.4."
+}

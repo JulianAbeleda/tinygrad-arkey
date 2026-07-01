@@ -64,3 +64,35 @@ def live_split_coverage_kernel(geo: LiveSplitGeometry, MAXC: int, Tc: UOp):
     return cov[t_safe].store(UOp.const(dtypes.int32, 1), in_r).end(s, j).sink(
       arg=KernelInfo(name=f"live_split_coverage_S{S}"))
   return kernel
+
+
+def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv: int, MAXC: int, S: int,
+                                       staging: str = "K_ONLY"):
+  """TG-P9.2: the generated block-tile flash decode with LIVE-CONTEXT split geometry.
+
+  Identical body to flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel, but the per-split length is the runtime
+  per = ceildiv(Tc, S) (symbolic) instead of a fixed L. S is a FIXED occupancy split count (grid = Hkv x S), so
+  parallelism is preserved while the tile block-work scales with the live context Tc (owned's decomposition). No
+  MAXC over-launch: at ctx512 each split covers ~Tc/S tokens (~1 block) instead of L/TK (~8) blocks.
+
+  Returns out:[Hq, Hd]. gmax/combine reduce over the same S splits (unchanged lifecycle -- the combine cost is
+  addressed separately by TG-P9.3/9.4).
+  """
+  from tinygrad import Tensor, dtypes
+  from extra.qk_flash_decode import (flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel,
+                                     flash_state_gmax_kernel, flash_state_combine_kernel)
+  _F32 = dtypes.float32
+  TK = 16                                    # the tile's K-block size (kernel-internal constant)
+  W2 = Hd + 2
+  # per-split length = ceildiv(Tc, S), ROUNDED UP to a multiple of TK. Alignment is required because the tile covers
+  # each split in whole TK blocks; an unaligned per would make block NB*TK overshoot the split slot and overlap the
+  # next split (double-counting in the softmax). Aligned splits stay disjoint and their union >= Tc (tail masked by
+  # t < Tc). At ctx512 per->16 (1 block/split); at ctx4096 per->128 (8 blocks/split == fixed L=128).
+  per = ceildiv_uop(ceildiv_uop(Tc_u, S), TK) * TK
+  q_f = q.reshape(Hq * Hd)
+  po = Tensor.empty(Hq * S * W2, dtype=_F32).custom_kernel(
+    q_f, cache_kv,
+    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging))[0]
+  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, S, stride=S))[0]
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, S, stride=S))[0]
+  return out.reshape(Hq, Hd)
