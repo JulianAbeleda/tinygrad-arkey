@@ -1242,6 +1242,34 @@ def flash_partial_coop_vec_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, T
       arg=_fki(f"flash_partial_coop_vec_{Hq}_{Hd}"))
   return kernel
 
+def flash_partial_coop_vec_kv_flat_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc):
+  """gqa_coop_vec variant that reads V from a combined flat [2*Hkv*MAXC*Hd] KV buffer.
+  V starts at index Hkv*MAXC*Hd in the flat buffer. Eliminates the V-slice materialization
+  copy (E_49152_32_3) by accepting assigned_kv.reshape(...) instead of assigned_kv[1,0].reshape(...).
+  The [1,0] indexing creates a non-contiguous view that tinygrad's callify cannot alias to the source
+  buffer; the full reshape is aliasable. Route flag: DECODE_BYPASS_KV_SLICE=1. (EB-track)"""
+  G = Hq // Hkv; W = Hd + 1
+  V_OFF = Hkv * MAXC * Hd  # byte offset into combined [2, Hkv, MAXC, Hd] flat buffer
+  def kernel(pout:UOp, prob:UOp, kv_flat:UOp) -> UOp:
+    kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
+    s = UOp.range(S, 1, AxisType.GLOBAL)
+    d = UOp.range(W, 2, AxisType.LOCAL)
+    is_v = d < Hd
+    j = UOp.range(L, 3, axis_type=AxisType.REDUCE)
+    t = s * L + j; in_r = t < Tc
+    t_safe = in_r.where(t, t.const_like(0))
+    v_idx = V_OFF + (kvh * MAXC + t_safe) * Hd + is_v.where(d, d.const_like(0))
+    vd = is_v.where(kv_flat[v_idx].cast(_F32), _fc(1.0))
+    c = UOp.placeholder((G,), _F32, 111, addrspace=AddrSpace.REG)
+    zi = UOp.range(G, 4); c = c.after(c[zi].store(0.0).end(zi))
+    g = UOp.range(G, 5)
+    p = in_r.where(prob[(kvh * G + g) * MAXC + t], _fc(0.0))
+    acc = c[g].store(c.after(j)[g] + p * vd).end(g).end(j)
+    g2 = UOp.range(G, 6); fin = c.after(acc)
+    return pout[((kvh * G + g2) * S + s) * W + d].store(fin[g2]).end(g2).end(kvh, s, d).sink(
+      arg=_fki(f"flash_partial_coop_vec_kv_flat_{Hq}_{Hd}"))
+  return kernel
+
 def flash_gmax_kernel(Hq:int, S):
   def kernel(gm:UOp, pm:UOp) -> UOp:
     h = UOp.range(Hq, 0, AxisType.GLOBAL)
@@ -1353,6 +1381,35 @@ def flash_decode_attention(q:Tensor, k_full:Tensor, v_full:Tensor, Tc_b, Tc_u,
   # SPLIT-PRESERVING combine merge (rollback = DECODE_ATTN_COMBINE_MERGED=0, default-off): flash_partial above
   # (Hq*S workgroups) is untouched; only the 3 small combine reduce kernels merge into one launch (drops the
   # gm/dn global buffers + 2 dispatches). This is NOT the refuted Hq-only fused route (that collapsed the partial).
+  if getenv("DECODE_ATTN_COMBINE_MERGED", 0):
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, fxn=flash_combine_merged_kernel(Hd, Hq, S))[0]
+    return out.reshape(Hq, Hd)
+  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(pm, fxn=flash_gmax_kernel(Hq, S))[0]
+  dn = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, pm, gm, fxn=flash_den_kernel(Hd, Hq, S))[0]
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, gm, dn, fxn=flash_combine_kernel(Hd, Hq, S))[0]
+  return out.reshape(Hq, Hd)
+
+def flash_decode_attention_kv_flat(q:Tensor, k_full:Tensor, kv_flat:Tensor, Tc_b, Tc_u,
+                                    Hd:int, Hq:int, Hkv:int, MAXC:int, L:int=256) -> Tensor:
+  """gqa_coop_vec flash-decode that eliminates the E_49152 V-slice materialization copy.
+
+  K still uses k_full [Hkv,MAXC,Hd] for the score matmul (unchanged path).
+  V is read from kv_flat [2*Hkv*MAXC*Hd] at offset Hkv*MAXC*Hd inside flash_partial_coop_vec_kv_flat.
+  kv_flat = assigned_kv.reshape(2*Hkv*MAXC*Hd) — a contiguous reshape tinygrad can alias to cache_kv,
+  avoiding the [1,0] indexing that forced the E_49152 copy. Route flag: DECODE_BYPASS_KV_SLICE=1. (EB-track)
+  """
+  G = Hq // Hkv; W = Hd + 1; Smax = _ceildiv(MAXC, L); S = (Tc_u + L - 1) // L
+  scale = 1.0 / (Hd ** 0.5)
+  qg = q.reshape(Hkv, G, Hd)
+  ks = k_full[:, 0:Tc_b, :]
+  scores = (qg @ ks.transpose(-1, -2)).reshape(Hq, Tc_b) * scale
+  score_buf = Tensor.empty(Hq, MAXC, dtype=_F32)
+  score_a = Tensor(score_buf.uop.after(score_buf[:, 0:Tc_b].uop.store(scores.cast(_F32).uop)))
+  score_f = score_a.reshape(Hq * MAXC)
+  pm = Tensor.empty(Hq * Smax, dtype=_F32).custom_kernel(score_f, fxn=flash_max_kernel(Hq, MAXC, L, S, Tc_u))[0]
+  prob = Tensor.empty(Hq * MAXC, dtype=_F32).custom_kernel(pm, score_f, fxn=flash_prob_kernel(Hq, MAXC, L, S, Tc_u))[0]
+  po = Tensor.empty(Hq * Smax * W, dtype=_F32).custom_kernel(
+    prob, kv_flat, fxn=flash_partial_coop_vec_kv_flat_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc_u))[0]
   if getenv("DECODE_ATTN_COMBINE_MERGED", 0):
     out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, pm, fxn=flash_combine_merged_kernel(Hd, Hq, S))[0]
     return out.reshape(Hq, Hd)

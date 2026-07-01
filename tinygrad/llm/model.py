@@ -1174,6 +1174,18 @@ class TransformerBlock(FFNBlock):
         except Exception as e:
           if getenv("DEBUG", 0): print(f"DECODE_ATTN_AMDGCN_TILE fallback to gqa_coop_vec: {e}")
           out = None
+      # EB-track (DECODE_BYPASS_KV_SLICE, default-off): eliminate E_49152_32_3 V-slice materialization.
+      # The default path passes assigned_kv[1,0] (a [1,0]-indexed view with uop.after ordering) as vc_f
+      # to flash_partial_coop_vec via custom_kernel. tinygrad's callify cannot alias the [1,0]-indexed
+      # view back to cache_kv, so it inserts a copy kernel (E_49152_32_3, 6.69% GPU at ctx512). This flag
+      # passes assigned_kv.reshape(2*Hkv*MAXC*Hd) instead -- a contiguous reshape that callify CAN alias --
+      # and updates flash_partial_coop_vec to index V at offset Hkv*MAXC*Hd. K path unchanged.
+      # Rollback: DECODE_BYPASS_KV_SLICE=0. Reopen: if E_49152 eliminated and W==D improves.
+      if out is None and getenv("DECODE_BYPASS_KV_SLICE", 0) and B == 1 and (getenv("FLASH_VARIANT", "gqa_coop_vec") == "gqa_coop_vec"):
+        from extra.qk_flash_decode import flash_decode_attention_kv_flat
+        kv_flat = assigned_kv.reshape(2 * Hkv * MAXC * Hd)
+        out = flash_decode_attention_kv_flat(q.reshape(Hq, Hd), assigned_kv[0, 0], kv_flat,
+                                             start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
       if out is None:
         out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
                                      start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
