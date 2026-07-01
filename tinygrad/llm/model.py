@@ -271,6 +271,20 @@ class Q4KPrimitiveLinear:
         # (the KV projections 5120->1024 sit at ~26% occupancy). Split-K launches out_features*parts workgroups
         # and finalizes with a sum over parts. GENERIC: parts = the largest divisor of blocks_per_group
         # ((in//256)//4) that keeps out_features*parts under a workgroup cap; no model/shape hardcode.
+        # L2b (rollback = DECODE_Q4K_INKERNEL_COMBINE_KV=0): in-kernel-combine decode for OCCUPANCY-STARVED G3
+        # GEMVs. Same occupancy motivation as split-K, but instead of launching more workgroups + an EXTERNAL
+        # .sum (L2, which was speed-flat because the added combine reduce offset the gain), it uses a WIDER
+        # workgroup (`parts` waves per row) and combines the per-wave partials IN-KERNEL via LDS+barrier ->
+        # out[row] directly (no external reduce). GENERIC: parts = largest divisor of blocks_per_group under a
+        # workgroup cap; no model/shape hardcode. Takes precedence over the split-K path when enabled.
+        if getenv("DECODE_Q4K_INKERNEL_COMBINE_KV", 0) and self.out_features <= getenv("DECODE_SPLIT_K_MAX_ROWS", 2048):
+          _bpg = (self.in_features // 256) // 4
+          _cap = getenv("DECODE_SPLIT_K_TARGET_WG", 8192)
+          _parts = max((p for p in range(1, _bpg + 1) if _bpg % p == 0 and self.out_features * p <= _cap), default=1)
+          if _parts > 1:
+            from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_inkernel_combine_kernel
+            _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
+            return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_inkernel_combine_kernel(self.out_features, self.in_features, _parts))[0].reshape(1, 1, self.out_features)
         if getenv("DECODE_Q4K_SPLIT_K_KV", 0) and self.out_features <= getenv("DECODE_SPLIT_K_MAX_ROWS", 2048):
           _bpg = (self.in_features // 256) // 4
           _cap = getenv("DECODE_SPLIT_K_TARGET_WG", 8192)
