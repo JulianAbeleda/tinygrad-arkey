@@ -1134,6 +1134,14 @@ class TransformerBlock(FFNBlock):
                                      start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
                                      variant=str(getenv("DECODE_ATTN_GENERATED_SKELETON_VARIANT",
                                                         getenv("FLASH_VARIANT", "gqa_coop_vec"))))
+      # Attention-combine parity lever (rollback = DECODE_ATTN_FUSED_COMBINE=0, default-off): a GENERATED fused
+      # flash-decode kernel that puts the S splits as WAVES in one workgroup per head and does the online-softmax
+      # LSE combine IN LDS -> out[h,:], removing the 3 external flash_gmax/den/combine reduce kernels (the ~12-24%
+      # attention_combine bucket). Structural shape class (Hkv==8, Hq%Hkv==0, Hd==128), not a model-dim hardcode.
+      if out is None and getenv("DECODE_ATTN_FUSED_COMBINE", 0) and B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0:
+        from extra.qk_flash_decode_fused_combine import flash_decode_fused_combine
+        out = flash_decode_fused_combine(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                         Hd, Hq, Hkv, MAXC, getenv("FLASH_COMBINE_L", 256))
       # DEFAULT-ON (2026-06-23) for the validated gfx1100 / Qwen3-8B / B=1 / T=1 / Hq=32 / Hkv=8 / Hd=128 / ctx>=512
       # shape; strict guards keep every other shape/device on gqa. DECODE_ATTN_AMDGCN_TILE=0 disables.
       if out is None and getenv("DECODE_ATTN_AMDGCN_TILE", 1) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
