@@ -254,12 +254,12 @@ class Q4KPrimitiveLinear:
     # generated route, keep owned warp one flag away. Rollback to owned warp: BUBBLEBEAM_FUTURESIGHT=0.
     bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1) or getenv("BEAM_COALESCE")
     g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
-    # Q1432-4 (default-off; rollback = DECODE_Q4K_G3_ANYSHAPE=0): bind the generated G3 lanemap by STRUCTURAL shape
-    # eligibility ((in//256)%4==0 and out%32==0) rather than the hardcoded 8B dims, so larger dense Q4_K decode
-    # shapes (14B/32B FFN gate/up/down + attn_q/o) take the generated route instead of the slow lazy-dequant
-    # fallback. Microgate-correct for those shapes (rel_rmse ~4e-4). This is a structural class, not a model-dim
-    # hardcode -- the G3 topology generalizes to it. See docs/qwen-14b-32b-true-generation-kernel-authoring-scope.
-    g3_anyshape = bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 0)) and DECODE_ATTN_AMDGCN_ARCH_OK \
+    # PROMOTED default-ON 2026-06-30 (rollback = DECODE_Q4K_G3_ANYSHAPE=0): bind the generated G3 lanemap by
+    # STRUCTURAL shape eligibility ((in//256)%4==0 and out%32==0) rather than the hardcoded 8B dims, so larger
+    # dense Q4_K decode shapes (14B/32B FFN gate/up/down + attn_q/k/o) take the generated route instead of the slow
+    # lazy-dequant fallback. Byte-identical (token-matched 8B/14B); W==D 8B +4%, 14B +60%, 32B +78% (paired with
+    # DECODE_ROUTE_ATTN_K). Structural class, not a model-dim hardcode. See docs/qwen-14b-32b-attn-k-route-miss-result.
+    g3_anyshape = bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 1)) and DECODE_ATTN_AMDGCN_ARCH_OK \
       and (self.in_features // 256) % 4 == 0 and self.out_features % 32 == 0
     if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and (g3_bubblebeam_shape or g3_anyshape):
       from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
@@ -513,11 +513,12 @@ def _q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
   if ".ffn_gate.weight" in name or ".ffn_up.weight" in name: return 1, ("LOCAL:0:64",)
   if ".ffn_down.weight" in name: return 4, ("LOCAL:0:32",)
   if ".attn_q.weight" in name or ".attn_output.weight" in name: return 1, ("LOCAL:0:64",)
-  # RSR: attn_k is Q4_K (same as attn_q) but was omitted here, so it fell to a plain nn.Linear -> the slow generic
-  # lazy-dequant GEMV (kernel r_8_32_4_20_4_2_32), measured 38% of 14B decode. Cover it (default-off rollback
-  # DECODE_ROUTE_ATTN_K=0) so it takes the same primitive/generated route as attn_q. See
-  # docs/qwen-14b-32b-reduce-source-resolution-scope-20260630.md.
-  if ".attn_k.weight" in name and getenv("DECODE_ROUTE_ATTN_K", 0): return 1, ("LOCAL:0:64",)
+  # PROMOTED default-ON 2026-06-30 (rollback DECODE_ROUTE_ATTN_K=0): attn_k is Q4_K (same as attn_q) but was
+  # omitted here, so it fell to a plain nn.Linear -> the slow generic lazy-dequant GEMV (kernel r_8_32_4_20_4_2_32),
+  # measured 38% of 14B decode. Cover it so it takes the same primitive/generated route as attn_q. Byte-identical;
+  # W==D 14B 27.8->44.5 (+60%), 32B 11.8->21.0 (+78%), 8B 103.5->107.6 (+4%). See
+  # docs/qwen-14b-32b-attn-k-route-miss-result-20260630.md.
+  if ".attn_k.weight" in name and getenv("DECODE_ROUTE_ATTN_K", 1): return 1, ("LOCAL:0:64",)
   return None
 
 def _q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
