@@ -1,0 +1,40 @@
+{
+  "env": {
+    "BUBBLEBEAM_FUTURESIGHT": "1",
+    "DECODE_Q6K_GENERATED": "1",
+    "PREFILL_GENERATED_SCHEDULE": "1",
+    "DECODE_FLASH_BLOCK_TILE_G5_8B": "1"
+  },
+  "effective_routes": [
+    {
+      "family": "decode_q4k_gemv",
+      "effective_route": "decode_q4k_g3_generated",
+      "provenance": "machine_authored_generated",
+      "rolled_back_to_oracle": false,
+      "pure": true
+    },
+    {
+      "family": "decode_q6k_gemv",
+      "effective_route": "decode_q6k_coop_generated",
+      "provenance": "machine_authored_generated",
+      "rolled_back_to_oracle": false,
+      "pure": true
+    },
+    {
+      "family": "prefill_gemm",
+      "effective_route": "prefill_pipe_role_selective_generated",
+      "provenance": "machine_authored_generated",
+      "rolled_back_to_oracle": false,
+      "pure": true
+    },
+    {
+      "family": "decode_attention",
+      "effective_route": "decode_flash_block_tile_g5_8b_refuted",
+      "provenance": "machine_authored_generated",
+      "rolled_back_to_oracle": false,
+      "pure": true
+    }
+  ],
+  "violations": [],
+  "expected": "pure (all hot families machine_authored_generated)"
+}
