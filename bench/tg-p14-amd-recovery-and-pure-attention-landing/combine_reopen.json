@@ -1,0 +1,52 @@
+{
+  "scope": "TG-P14.8 split-preserving combine reopen",
+  "geometry": {
+    "Hq": 32,
+    "Hd": 128,
+    "S": 36
+  },
+  "all_compile": true,
+  "all_numeric_ok": true,
+  "shapes": {
+    "shipped_per_d": {
+      "compile_ok": true,
+      "nan": false,
+      "inf": false,
+      "rel_err": 1.1521923681812041e-07,
+      "numeric_ok": true,
+      "kernel_count": 2,
+      "fexp_count": 147456,
+      "uses_reg_store_devec": false,
+      "directional_us_per_call": 1346.31
+    },
+    "fused_lds_warp": {
+      "compile_ok": true,
+      "nan": false,
+      "inf": false,
+      "rel_err": 1.1521923681812041e-07,
+      "numeric_ok": true,
+      "kernel_count": 1,
+      "fexp_count": 1152,
+      "uses_reg_store_devec": false,
+      "directional_us_per_call": 1085.13
+    },
+    "two_stage_fexpfree": {
+      "compile_ok": true,
+      "nan": false,
+      "inf": false,
+      "rel_err": 1.4402405668079155e-07,
+      "numeric_ok": true,
+      "kernel_count": 2,
+      "fexp_count": 1152,
+      "uses_reg_store_devec": false,
+      "directional_us_per_call": 1463.54
+    }
+  },
+  "fexp_reduction_vs_shipped": {
+    "shipped_per_d": 1.0,
+    "fused_lds_warp": 128.0,
+    "two_stage_fexpfree": 128.0
+  },
+  "timing_authority_note": "directional_us_per_call is an isolated micro-timing and is NOT the promotion authority (launch/clock-ramp confounds). The authoritative speed test is the full W==D at TG-P14.9 (generated attention integrated into model.generate).",
+  "verdict": "TG_P14_8_PASS_COMBINE_REOPENED"
+}

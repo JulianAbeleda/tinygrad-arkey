@@ -107,3 +107,24 @@ Two findings during this phase:
 refactor + `opts_to_apply=()`) makes it numerically correct. Reverting the latter regresses P10 shared-weight/fused to
 `numeric_ok=False`, so both are committed together. The default model is unaffected (bit-identical NLL; model uses only
 the unchanged live-split block-tile kernel).
+
+## Split-Preserving Combine Reopen (P14.8)
+
+Verdict: **TG_P14_8_PASS_COMBINE_REOPENED**
+
+The emitter block is lifted: `qk_tg_p9_combine_microgate.py` with the fix on returns `TG_P9_4_PASS_COMBINE_MICROGATE`
+(all shapes compile; was `TG_P9_4_BLOCKED_EMITTER`). `qk_tg_p14_combine_reopen.py` confirms all three generated-UOp
+combine shapes are **compile + numerically correct** (generated-UOp only, no `REG_STORE_DEVEC`), including the
+previously-unverified two-stage fexp-free weighted-sum:
+
+| shape | kernels | fexp | numeric | directional µs (non-authoritative) |
+|---|---|---|---|---|
+| shipped per-d | 2 | Hq·Hd·S = 147456 | ok | 1346 |
+| fused lds-warp | 1 | Hq·S = 1152 | ok | 1085 (~19% faster) |
+| two-stage fexp-free | 2 | Hq·S = 1152 | ok | 1463 |
+
+**128× fexp reduction** vs shipped. The fused single-kernel combine is directionally faster; the 128× fexp cut does
+not linearize into wall-clock (combine is lifecycle/launch-bound, not fexp-bound), consistent with the ctx4096
+combine-overhead cap. Per methodology, isolated combine micro-timing is **not** the promotion authority — the
+authoritative speed test is the full W==D at P14.9. Not a speed refute (fused shape is faster + 3→1 kernels + 128×
+fexp), so P14.8 passes and P14.9 is warranted.
