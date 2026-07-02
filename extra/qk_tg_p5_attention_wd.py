@@ -93,9 +93,13 @@ def main():
     pct = round(100 * c["tok_s"] / o["tok_s"], 1)
     worst_pct = min(worst_pct, pct)
     all_match = all_match and match; all_bound = all_bound and bound
+    # surface the per-step spread (noise floor) so a sub-spread win is not credited as a real pass
+    cstd, ostd = c.get("w_ms_stdev"), o.get("w_ms_stdev")
+    spread_pct = round(100 * ((cstd or 0) / c["w_ms_median"] + (ostd or 0) / o["w_ms_median"]), 2)
     per_ctx.append({"ctx": ck, "candidate_tok_s": c["tok_s"], "owned_tok_s": o["tok_s"], "pct_of_owned": pct,
                     "token_match": match, "route_bound": bound, "candidate_attn_kernels": c["attn_kernels"],
-                    "owned_attn_kernels": o["attn_kernels"], "candidate_w_ms": c["w_ms_median"], "owned_w_ms": o["w_ms_median"]})
+                    "owned_attn_kernels": o["attn_kernels"], "candidate_w_ms": c["w_ms_median"], "owned_w_ms": o["w_ms_median"],
+                    "candidate_w_ms_stdev": cstd, "owned_w_ms_stdev": ostd, "spread_pct": spread_pct})
   if not all_bound: verdict = "TG_P5_BLOCKED_HIDDEN_OWNED_FALLBACK"
   elif not all_match: verdict = "TG_P5_REFUTE_GENERATED_ATTENTION_TOKEN_MISMATCH"
   elif worst_pct >= WD_PCT: verdict = "TG_P5_PASS_ATTENTION_GENERATED_DEFAULT"
