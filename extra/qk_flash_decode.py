@@ -1446,8 +1446,15 @@ def flash_decode_g5_block_tile(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(
     q_f, cache_kv,
     fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, l_route, smax_route, Tc_u, staging=staging))[0]
-  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
-  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
+  # Combine: opt-in single-kernel machine-search fused split-preserving combine (TG-P9/P14.8 generated UOp), which
+  # replaces the 2-kernel flash_state_gmax + flash_state_combine lifecycle and removes the Hd-fold fexp redundancy
+  # (Hq*Hd*S -> Hq*S). Needs REDUCE_ACC_UPCAST_FIX to lower the manual-END accumulator. Rollback = flag off.
+  if getenv("DECODE_G5_FUSED_COMBINE"):
+    from extra.qk_live_split_geometry import flash_fused_gmax_combine_kernel
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_gmax_combine_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
+  else:
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
   return out.reshape(Hq, Hd)
 
 def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
