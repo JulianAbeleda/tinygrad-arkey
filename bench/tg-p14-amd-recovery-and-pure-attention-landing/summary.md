@@ -152,3 +152,20 @@ is a harness artifact, not a route error; the combine shapes are numerically cor
 
 Per scope (refute → ledger and stop, do not promote): kept default-off. The route family is **not refuted on merits**
 — it is 0.5–2.6% from parity and reopenable if the residual ctx4096 gap is closed.
+
+## BoltBeam Audit (machine-confirmed)
+
+Ran the P14.9 W==D result through BoltBeam. The refuted candidate `decode_attention_g5_8b_refuted` is excluded from
+the search space, so plain `evaluate` mis-attributed the evidence to the nearest authorized candidate. This exposed a
+real BoltBeam gap, so I **added a `reopen-check` command** (audits a named candidate — including refuted — directly,
+bypassing the search-space gate; downgrades a would-be promote to `candidate` so an audit can't authorize a
+promotion). BoltBeam commit `66e47fc`, full suite 258 pass.
+
+`boltbeam reopen-check --candidate decode_attention_g5_8b_refuted` (artifact `boltbeam_reopen_audit.json`):
+- **verdict: `refute`** — "protected-context regression of -2.5% at ctx4096 (refuted axis `g5_block_tile_8b_L_geometry`)"
+- guardrails: correctness **pass**, route_bound **pass**, speed **fail**
+- next_action: **"record refuted axis; reopen on a new primitive"**
+
+So BoltBeam independently confirms: the route is correct + route-bound, refuted only on the ~2.5% ctx4096 speed gap,
+and that gap will **not** close by tuning this route — it needs a new PV/tile primitive. TG-P14 closes here; the
+generated attention is near-parity and default-off, and the reopen is a future new-primitive effort, not a re-tune.
