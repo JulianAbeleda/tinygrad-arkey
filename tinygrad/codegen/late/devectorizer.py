@@ -3,7 +3,7 @@ import functools, itertools
 from collections import defaultdict
 from dataclasses import dataclass
 from tinygrad.dtype import dtypes, ImageDType, DType, AddrSpace, Invalid, PtrDType
-from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, identity_element
+from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, identity_element, AxisType
 from tinygrad.uop.symbolic import uop_given_valid, parse_valid, invalid_gate
 from tinygrad.helpers import getenv, flatten, prod
 from tinygrad.renderer import Renderer
@@ -354,6 +354,198 @@ pm_reduce = PatternMatcher([
   # tensor core built in accumulate
   (UPat(Ops.WMMA, name="wmma") + UPat.var("add"),
     lambda add, wmma: UOp(wmma.op, wmma.dtype, (wmma.src[0], wmma.src[1], wmma.src[2]+add), wmma.arg)),
+])
+
+# *** REDUCE_ACC_UPCAST_FIX: manual END/AFTER scalar-REG accumulator widening (opt-in) ***
+#
+# Hand-written reductions (flash/gemv kernels) use a manual loop-carried accumulator
+# `acc.index(0).store(op(acc.after(reduce_range).index(0), contrib)).end(reduce_range)` rather than Ops.REDUCE, so
+# reduce_to_acc/horizontal_reduce never runs on them. When the optimizer UPCAST/UNROLLs the reduce or an output axis,
+# the reduce body becomes a vector and this idiom broadcasts the size-1 scalar slot: the store target becomes
+# `make_floatN(acc,...,acc) = <N partials>`, which is not assignable (and REG_STORE_DEVEC aliases the lanes -> NaN).
+#
+# This gated rewrite gives the manual accumulator the same treatment Ops.REDUCE gets: it sizes the REG to the true
+# output width W (= the init-store width; how many distinct output lanes the accumulator feeds) and horizontally
+# reduces the N/W reduce-axis lanes with the accumulator's own op before the (now genuine) width-W store. The rebuilt
+# accumulator mirrors reduce_to_acc's SSA form exactly (input ranges on the init, single after on the read, bare store
+# target, one mergeable END per accumulator merged by merge_reduce_ends). It is exact and fail-closed: it only touches
+# stores whose target is a broadcast of a scalar-REG slot-0 index fed by `op(broadcast(acc), contrib)` for a supported
+# op, and leaves everything else unchanged.
+_reduce_acc_ops = {Ops.ADD, Ops.MAX, Ops.MUL}
+
+def _reg_index(u:UOp) -> tuple[UOp, UOp]|None:
+  # the DEFINE_REG and slot index that INDEX(after-chain(DEFINE_REG in REG space), idx) targets, else None
+  if u.op is not Ops.INDEX or not isinstance(u.src[0].dtype, PtrDType) or u.src[0].dtype.addrspace != AddrSpace.REG: return None
+  if len(u.src) < 2: return None
+  b = u.src[0]
+  while b.op is Ops.AFTER: b = b.src[0]
+  return (b, u.src[1]) if b.op is Ops.DEFINE_REG else None
+
+def _is_const_zero(u:UOp) -> bool:
+  return u.op is Ops.CONST and u.arg == 0
+
+def _reg_slot0(u:UOp) -> UOp|None:
+  # the DEFINE_REG that INDEX(after-chain(DEFINE_REG in REG space), CONST 0) targets, else None
+  ri = _reg_index(u)
+  return ri[0] if ri is not None and _is_const_zero(ri[1]) else None
+
+def _broadcast_elem(u:UOp) -> UOp|None:
+  # the repeated element of a same-lane broadcast STACK, else None
+  return u.src[0] if u.op is Ops.STACK and len(u.src) > 1 and len(set(u.src)) == 1 else None
+
+def _manual_acc_store(store:UOp):
+  # STORE(broadcast(reg slot0), op(broadcast(acc_read), contrib)) -> (reg, op, target_idx, acc_read_idx, contrib, N)
+  # else None. target_idx can carry ordering deps, for example den.after(num_update)[0].
+  data = store.src[1]
+  te = _broadcast_elem(store.src[0])
+  if te is None: te = store.src[0]
+  if (tri:=_reg_index(te)) is None: return None
+  reg, target_idx = tri
+  target_count = len(store.src[0].src) if store.src[0].op is Ops.STACK else data.dtype.count
+  if data.dtype.count != target_count: return None
+
+  def _split_acc_contrib(u:UOp) -> tuple[UOp, UOp]|None:
+    acc = contrib = None
+    for s in u.src:
+      se = _broadcast_elem(s)
+      if se is None: se = s
+      sri = _reg_index(se)
+      if sri is not None and sri[0] is reg and sri[1] is target_idx and s.dtype.count in {1, data.dtype.count}: acc = se
+      else: contrib = s
+    return (acc, contrib) if acc is not None and contrib is not None else None
+
+  if data.op in _reduce_acc_ops and len(data.src) == 2:
+    if (sp:=_split_acc_contrib(data)) is None: return None
+    acc, contrib = sp
+  elif data.op is Ops.STACK and len(data.src) > 1 and data.src[0].op in _reduce_acc_ops and all(x.op is data.src[0].op and len(x.src) == 2 for x in data.src):
+    accs, contribs = [], []
+    for x in data.src:
+      if (sp:=_split_acc_contrib(x)) is None: return None
+      accs.append(sp[0]); contribs.append(sp[1])
+    acc, contrib = accs[0], UOp(Ops.STACK, data.dtype, tuple(contribs))
+    data = data.replace(op=data.src[0].op, src=(acc.broadcast(len(contribs)), contrib))
+  else: return None
+  if acc is None or contrib is None or contrib.dtype.count not in {1, data.dtype.count}: return None
+  return reg, data.op, te, acc, contrib, data.dtype.count
+
+def _acc_after_chain(idx:UOp):
+  # (all after-srcs above the DEFINE_REG, the AFTER node holding the reg's input ranges)
+  b, reg_gpu, extra = idx.src[0], None, []
+  while b.op is Ops.AFTER:
+    extra += list(b.src[1:])
+    if b.src[0].op is Ops.DEFINE_REG: reg_gpu = b
+    b = b.src[0]
+  return extra, reg_gpu
+
+def _is_manual_acc_init(reg:UOp, store:UOp) -> bool:
+  if store.op is not Ops.STORE or len(store.src) < 2: return False
+  if store.src[0].op is Ops.STACK: tgts = store.src[0].src
+  else:
+    te = _broadcast_elem(store.src[0])
+    tgts = (te if te is not None else store.src[0],)
+  return any((ri:=_reg_index(t)) is not None and ri[0] is reg for t in tgts) and reg not in store.src[1].backward_slice
+
+def _manual_acc_init_width(reg:UOp, sink:UOp) -> int|None:
+  # width of the accumulator's init store (a store to reg whose data does not depend on reg)
+  for u in sink.backward_slice:
+    if _is_manual_acc_init(reg, u): return u.src[1].dtype.count
+  return None
+
+def reduce_acc_upcast_fix(sink:UOp) -> UOp|None:
+  subs: dict[UOp, UOp] = {}
+  wide: dict[UOp, UOp] = {}
+  reduce_by_reg: dict[UOp, tuple[UOp, ...]] = {}
+  matches = [(store, sp) for store in sink.backward_slice if store.op is Ops.STORE and (sp:=_manual_acc_store(store)) is not None]
+  match_stores = {store for store,_ in matches}
+  # Process producers first. Mixed manual accumulators often encode `den.after(num_update)`, and replacements are not
+  # recursively substituted inside later replacement UOps.
+  matches.sort(key=lambda x: len([s for s in match_stores if s is not x[0] and s in x[0].backward_slice]))
+  for store, sp in matches:
+    reg, op, target, acc, contrib, N = sp
+    acc_extra, reg_gpu = _acc_after_chain(acc)
+    target_extra, _ = _acc_after_chain(target)
+    reduce_range = tuple(r for r in acc_extra if r.op is Ops.RANGE and r.arg[1] is AxisType.REDUCE)
+    _, target_idx = _reg_index(target) or (None, None)
+    if target_idx is None: continue
+    if not reduce_range: continue                              # fail closed: can't identify the reduce axis
+    if (W:=_manual_acc_init_width(reg, sink)) is None or W < 1: continue
+    if not _is_const_zero(target_idx): W = 1                   # dynamic REG slot: reduce lanes into that slot
+    if N % W != 0 or (W > 1 and not _is_const_zero(target_idx)): continue
+    sdt = reg.dtype.base
+    if sdt.count != 1: continue                                # fail closed: only widen genuine scalar-REG accumulators
+    elem_dt = sdt.vec(W) if W > 1 else sdt
+    reg_wide = reg if W == 1 else wide.setdefault(reg, reg.replace(dtype=sdt.ptr(W, addrspace=AddrSpace.REG)))
+    czero = UOp.const(dtypes.weakint, 0)
+    def _wide_read(*deps:UOp) -> UOp:
+      base = reg_wide.after(*deps) if deps else reg_wide
+      return base.index(target_idx) if W == 1 else UOp(Ops.STACK, elem_dt, tuple(base.index(UOp.const(dtypes.weakint, i)) for i in range(W)))
+    reduce_by_reg[reg] = reduce_range
+    # canonical accumulator, matching reduce_to_acc: input ranges on init, single after on read, bare store target.
+    # Preserve non-reduce ordering deps from the original after-chain (for example den.after(num_update) in mixed
+    # accumulators), but replace any already-rewritten deps with their wide equivalents.
+    init = None
+    if W > 1:
+      init_deps = tuple(reg_gpu.src[1:] if reg_gpu is not None else ())
+      init_base = reg_wide.after(*init_deps) if init_deps else reg_wide
+      ident = identity_element(op, sdt)
+      init = UOp.group(*(init_base.index(UOp.const(dtypes.weakint, i)).store(UOp.const(sdt, ident)) for i in range(W)))
+      for u in sink.backward_slice:
+        if _is_manual_acc_init(reg, u): subs[u] = init
+    dep_srcs = tuple(dict.fromkeys(target_extra + acc_extra))
+    deps = tuple((subs.get(x, x) if subs else x) for x in dep_srcs
+                 if x.op in {Ops.STORE, Ops.END} and x not in reduce_range and not (W > 1 and _is_manual_acc_init(reg, x)))
+    read_deps = ((init,) if init is not None else ()) + deps + reduce_range
+    read = _wide_read(*read_deps)
+    R = N // W
+    lanes = [functools.reduce(lambda a,b: a.alu(op, b),
+                              [contrib if contrib.dtype.count == 1 else contrib.gep((w*R+r,)) for r in range(R)])
+             for w in range(W)]
+    hred = lanes[0] if W == 1 else UOp(Ops.STACK, elem_dt, tuple(lanes))
+    upd = read.alu(op, hred)
+    store_base = reg_wide.after(*deps) if deps else reg_wide
+    new_store = store_base.index(target_idx).store(upd) if W == 1 else \
+      UOp.group(*(store_base.index(UOp.const(dtypes.weakint, i)).store(upd.gep(i)) for i in range(W)))
+    subs[store] = new_store
+    # If the original update is already wrapped by END(reduce_range), rewrite that END in-place. Creating a second END
+    # over the same range makes CFGContext see a nested same-range cycle (TG-P12 failure).
+    for e in sink.backward_slice:
+      if e.op is not Ops.END or e.src[0] is not store: continue
+      if tuple(e.src[1:]) == reduce_range:
+        ended_stores = [subs[m] for m,_ in matches if m in e.src[0].backward_slice_with_self and m in subs]
+        end_src = UOp.group(*ended_stores) if len(ended_stores) > 1 else new_store
+      else:
+        end_src = new_store
+      subs[e] = e.replace(src=(end_src,)+e.src[1:])
+  # redirect accumulator output reads (reads after a STORE/END, not in-loop reads under the reduce range) to the wide reg.
+  for u in sink.backward_slice:
+    tgt = _broadcast_elem(u)
+    if tgt is None: tgt = u
+    reg = _reg_slot0(tgt)
+    if reg not in wide: continue
+    after_srcs, _ = _acc_after_chain(tgt)
+    if any(r in after_srcs for r in reduce_by_reg.get(reg, ())): continue
+    if not any(s.op in {Ops.STORE, Ops.END} for s in after_srcs): continue
+    new_after = tuple((subs.get(s, s) if subs else s) for s in after_srcs)
+    nr_base = wide[reg].after(*new_after) if new_after else wide[reg]
+    nr = nr_base.index(UOp.const(dtypes.weakint, 0)) if u.dtype.count == 1 else \
+      UOp(Ops.STACK, u.dtype, tuple(nr_base.index(UOp.const(dtypes.weakint, i)) for i in range(u.dtype.count)))
+    if nr.dtype == u.dtype: subs[u] = nr
+  if not subs: return None
+  return sink.substitute(subs, walk=True)
+
+pm_reduce_acc_upcast_fix = PatternMatcher([(UPat(Ops.SINK, name="sink"), reduce_acc_upcast_fix)])
+
+def _devec_distinct_reg_store(tgt:UOp, val:UOp) -> UOp|None:
+  ptrs: list[UOp] = []
+  for s in tgt.src:
+    idx = s.src[0] if s.op is Ops.LOAD else s
+    if idx.op is not Ops.INDEX or not isinstance(idx.src[0].dtype, PtrDType) or idx.src[0].dtype.addrspace != AddrSpace.REG: return None
+    ptrs.append(idx)
+  if len(set(ptrs)) != len(ptrs): return None
+  return UOp.group(*[p.store(val.gep(i)) for i,p in enumerate(ptrs)])
+
+pm_distinct_reg_store_devec = PatternMatcher([
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_distinct_reg_store),
 ])
 
 # add loads
