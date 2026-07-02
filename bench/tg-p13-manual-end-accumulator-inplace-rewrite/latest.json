@@ -1,0 +1,33 @@
+{
+  "scope": "TG-P13 in-place manual END-accumulator rewrite",
+  "verdict": "TG_P13_BLOCKED_AMD_DEVICE_INIT",
+  "codegen_fix_committed": false,
+  "owned_attention_remains_default": true,
+  "dirty_code_state": "unverified scratch after final direct non-reduce END patch",
+  "progress": {
+    "in_place_store_rewrite": "implemented in dirty tree",
+    "same_reduce_end_grouping": "implemented in dirty tree",
+    "scalar_reg_slot_widening": "implemented in dirty tree",
+    "distinct_slot_reg_store_devec": "implemented in dirty tree"
+  },
+  "last_verified_before_infra_failure": {
+    "p11_fix_on_microgate": "PASS all four cases",
+    "shared_weight_p10_combine": "compiled but numeric wrong, rel ~= 1.82",
+    "inline_gmax_p10_combine": "compiled but NaN"
+  },
+  "unverified_after_last_patch": [
+    "P11 baseline",
+    "P11 fix-on",
+    "P10 fixed-mode repro",
+    "BoltBeam classifier",
+    "default-off census",
+    "route smoke gates"
+  ],
+  "infrastructure_failure": {
+    "class": "AMD_DEVICE_INIT_HANG",
+    "smoke_command": "DEV=AMD PYTHONPATH=. python3 - <<'PY' ... Tensor([1.0], device='AMD') ... PY",
+    "process_state": "python3 in D uninterruptible sleep",
+    "stuck_pid": 1840274
+  },
+  "next_step": "After AMD runtime recovers, rerun TG-P13.4 from scratch. Do not commit the dirty codegen fix unless P11, P10 fixed-mode, BoltBeam classifier, census, and protected route gates pass."
+}
