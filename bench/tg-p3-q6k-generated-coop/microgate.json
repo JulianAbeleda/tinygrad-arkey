@@ -6,9 +6,9 @@
       "k": 12288,
       "route_family": "q6k_coop",
       "identical_bytes": true,
-      "shipped_ms": 6.4817,
-      "generated_ms": 6.3838,
-      "gen_over_shipped": 0.9849,
+      "shipped_ms": 6.6033,
+      "generated_ms": 6.5025,
+      "gen_over_shipped": 0.9847,
       "spec": {
         "quant": "Q6_K",
         "rows": 4096,
@@ -32,9 +32,9 @@
       "k": 4096,
       "route_family": "q6k_coop",
       "identical_bytes": true,
-      "shipped_ms": 7.1364,
-      "generated_ms": 7.1727,
-      "gen_over_shipped": 1.0051,
+      "shipped_ms": 7.5504,
+      "generated_ms": 7.5394,
+      "gen_over_shipped": 0.9985,
       "spec": {
         "quant": "Q6_K",
         "rows": 151936,
@@ -58,9 +58,9 @@
       "k": 4096,
       "route_family": "q6k_partial",
       "identical_bytes": true,
-      "shipped_ms": 6.4192,
-      "generated_ms": 6.4874,
-      "gen_over_shipped": 1.0106,
+      "shipped_ms": 6.5528,
+      "generated_ms": 6.5301,
+      "gen_over_shipped": 0.9965,
       "spec": {
         "quant": "Q6_K",
         "rows": 1024,
@@ -79,5 +79,5 @@
       "kernel_name": "q6k_gen_partial_1024_4096_4"
     }
   ],
-  "worst_gen_over_shipped": 1.0106
+  "worst_gen_over_shipped": 0.9985
 }

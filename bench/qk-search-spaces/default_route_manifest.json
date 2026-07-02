@@ -630,6 +630,18 @@
       "citation": "bench/tg-p8-generated-8b-attention-parity/latest.json"
     },
     {
+      "axis": "live_split_geometry_8b_tile",
+      "domain": "attention",
+      "disposition": "SOLVED (TG-P9.2): live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; live-split tile byte-identical, ctx512 tile 4.6x, full-model ctx512 87.7%->96.7% of owned. Shipped default-off (DECODE_ATTN_LIVE_SPLIT_GENERATED). extra/qk_live_split_geometry.py",
+      "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"
+    },
+    {
+      "axis": "split_preserving_lse_combine_8b",
+      "domain": "attention",
+      "disposition": "EMITTER_BLOCKED (TG-P9.4): a split-preserving generated combine (de-dup the per-d fexp / fuse gmax without collapsing Hq*S or Hq*Hd) mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) store; REG_STORE_DEVEC=1 compiles but NaNs. The ctx4096 556us combine cap cannot be removed in current AMD codegen. Reopen: a codegen fix keeping the reduction-accumulator REG scalar for a multi-reduce/weight-sharing combine.",
+      "citation": "bench/tg-p9-pure-attention-primitive-route/combine_microgate.json"
+    },
+    {
       "axis": "n1b_scalar_address_path",
       "domain": "attention",
       "disposition": "refuted/dead",

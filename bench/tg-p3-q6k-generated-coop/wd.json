@@ -3,15 +3,15 @@
   "cases": [
     {
       "role": "ffn_down",
-      "gen_over_shipped": 0.9849
+      "gen_over_shipped": 0.9847
     },
     {
       "role": "lm_head",
-      "gen_over_shipped": 1.0051
+      "gen_over_shipped": 0.9985
     },
     {
       "role": "attn_v",
-      "gen_over_shipped": 1.0106
+      "gen_over_shipped": 0.9965
     }
   ]
 }

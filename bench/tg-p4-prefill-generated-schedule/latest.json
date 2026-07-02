@@ -1,30 +1,9 @@
 {
-  "scope": "TG-P4: generate prefill GEMM schedule from a schedule spec (provenance conversion external_handwritten_kernel -> machine_authored_generated)",
+  "scope": "TG-P4 prefill generated schedule lossless + role-policy gate",
   "verdict": "TG_P4_PASS_PREFILL_GENERATED_SCHEDULE",
-  "policy_schema": "boltbeam.route_policy.v1",
-  "selected_route": "prefill_pipe_role_selective_generated",
-  "lossless_schedule": true,
+  "all_instructions_identical": true,
   "role_policy_preserved": true,
-  "route_bound": true,
-  "hidden_fallback": false,
-  "rollback_available": true,
-  "memory_fit": true,
-  "wd_basis": "instruction-stream byte-identity (host gate) + generated route fires 504/504 in qk_prefill_whole_synced with 4 distinct kernels; whole-prefill 4413/4243/3848/3247 tok/s pp512..4096 (== legacy, byte-identical)",
-  "gates": {
-    "lossless_schedule": "PASS (all RDNA3 instructions byte-identical to legacy for the 4 prefill shapes)",
-    "role_policy": "PASS (pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288)",
-    "prefill_authority": "PASS (qk_prefill_whole_synced runs the generated route end-to-end, sane tok/s pp512..4096)",
-    "correctness": "PASS (generated and legacy emit identical instruction streams; model output identical under both flags)",
-    "memory_fit": "PASS (fp16 realization fits 24GB for all shapes; largest ffn_gate_up ~100MB Bt)",
-    "route_bound": "PASS (504 emit_from_spec calls, 0 legacy, under PREFILL_GENERATED_SCHEDULE=1)",
-    "rollback_smoke": "PASS (PREFILL_GENERATED_SCHEDULE=0 -> 504 legacy calls, 0 generated)",
-    "strict_fallback": "PASS (strict + policy-selected + rollback -> TG_P4_BLOCKED_HIDDEN_FALLBACK guard)",
-    "census": "PASS (PMS_R0_PASS_CENSUS_PINNED; prefill default now machine_authored_generated; only decode_attention_owned_two_kernel remains as final-default debt)"
-  },
-  "ownership_change": "prefill GEMM schedule selection moved from the fixed build_gemm_pipe call site to a spec-driven generated route owned by BoltBeam; legacy fixed emit retained as rollback/oracle (PREFILL_GENERATED_SCHEDULE=0).",
-  "remaining_purity_debt": [
-    "decode_attention_owned_two_kernel"
-  ],
+  "role_policy": "pipe for attn_qo/attn_kv/ffn_down; lds (excluded) for ffn_gate_up out_f==12288",
   "cases": [
     {
       "role": "attn_qo",
@@ -195,11 +174,8 @@
       }
     }
   ],
-  "artifacts": {
-    "schedule_spec": "schedule_spec.json",
-    "route_policy": "route_policy.json",
-    "route_bound": "route_bound.json",
-    "wd_by_ctx": "wd_by_ctx.json",
-    "memory_fit": "memory_fit.json"
+  "route_identity": {
+    "generated_name_pattern": "prefill_gen_sched_gemm_*",
+    "legacy_name_pattern": "prefill_graph_gemm_*"
   }
 }

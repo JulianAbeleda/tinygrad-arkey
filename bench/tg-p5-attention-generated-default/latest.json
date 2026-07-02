@@ -1,6 +1,6 @@
 {
   "scope": "TG-P5 generated G5 8B attention vs owned HIP (in-model W==D + route attribution + token match)",
-  "verdict": "TG_P5_REFUTE_GENERATED_ATTENTION_SLOWER",
+  "verdict": "TG_P5_REFUTE_GENERATED_ATTENTION_TOKEN_MISMATCH",
   "geometry": {
     "Hq": 32,
     "Hkv": 8,
@@ -8,16 +8,16 @@
     "G": 4
   },
   "not_slower_tol_pct": 98.0,
-  "worst_pct_of_owned": 87.6,
-  "all_token_match": true,
+  "worst_pct_of_owned": 95.4,
+  "all_token_match": false,
   "all_route_bound": true,
   "per_ctx": [
     {
       "ctx": 512,
-      "candidate_tok_s": 94.4,
-      "owned_tok_s": 107.8,
-      "pct_of_owned": 87.6,
-      "token_match": true,
+      "candidate_tok_s": 106.4,
+      "owned_tok_s": 111.5,
+      "pct_of_owned": 95.4,
+      "token_match": false,
       "route_bound": true,
       "candidate_attn_kernels": [
         "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
@@ -28,15 +28,15 @@
         "owned_flash_combine",
         "owned_flash_tile_gqa_whole"
       ],
-      "candidate_w_ms": 10.592,
-      "owned_w_ms": 9.28
+      "candidate_w_ms": 9.402,
+      "owned_w_ms": 8.968
     },
     {
       "ctx": 4096,
-      "candidate_tok_s": 93.6,
-      "owned_tok_s": 97.9,
+      "candidate_tok_s": 95.8,
+      "owned_tok_s": 100.2,
       "pct_of_owned": 95.6,
-      "token_match": true,
+      "token_match": false,
       "route_bound": true,
       "candidate_attn_kernels": [
         "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
@@ -47,22 +47,8 @@
         "owned_flash_combine",
         "owned_flash_tile_gqa_whole"
       ],
-      "candidate_w_ms": 10.68,
-      "owned_w_ms": 10.219
+      "candidate_w_ms": 10.433,
+      "owned_w_ms": 9.984
     }
-  ],
-  "policy_schema": "boltbeam.route_policy.v1",
-  "selected_route": "decode_attention_owned_two_kernel (UNCHANGED \u2014 owned kept as default)",
-  "candidate_route": "decode_flash_block_tile_g5_8b_refuted",
-  "decision": "REFUTE: keep owned HIP as the 8B attention default; generated G5 route is correct + route-bound but slower",
-  "gates": {
-    "microgate": "PASS (generated G5 token-identical to owned oracle at ctx512 and ctx4096)",
-    "route_bound": "PASS (generated route fires flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128; owned tile does not fire under the candidate)",
-    "resource_gate": "PASS (K_ONLY staging ~4KB LDS per GP3; 3-kernel flash split, no spill observed)",
-    "wd": "REFUTE (87.6% of owned @ctx512, 95.6% @ctx4096 \u2014 below the not-slower tolerance)",
-    "rollback": "n/a (owned remains default; generated route is the opt-in, DECODE_FLASH_BLOCK_TILE_G5_8B / policy)",
-    "census": "UNCHANGED (decode_attention_owned_two_kernel remains the default; external_handwritten purity debt persists)"
-  },
-  "stop_rule_applied": "TG-P5 stop rule: generated attention correct but slower -> keep owned HIP default, do not force purity by slowing the model",
-  "implication_for_north_star": "TINYGRAD_DEFAULT_PURITY_PASS (0 external_handwritten defaults) is NOT achievable for the 8B attention without a decode slowdown; the owned two-kernel tile is the honest remaining purity debt"
+  ]
 }

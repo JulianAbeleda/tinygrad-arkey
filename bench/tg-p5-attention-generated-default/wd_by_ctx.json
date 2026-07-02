@@ -2,10 +2,10 @@
   "per_ctx": [
     {
       "ctx": 512,
-      "candidate_tok_s": 94.4,
-      "owned_tok_s": 107.8,
-      "pct_of_owned": 87.6,
-      "token_match": true,
+      "candidate_tok_s": 106.4,
+      "owned_tok_s": 111.5,
+      "pct_of_owned": 95.4,
+      "token_match": false,
       "route_bound": true,
       "candidate_attn_kernels": [
         "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
@@ -16,15 +16,15 @@
         "owned_flash_combine",
         "owned_flash_tile_gqa_whole"
       ],
-      "candidate_w_ms": 10.592,
-      "owned_w_ms": 9.28
+      "candidate_w_ms": 9.402,
+      "owned_w_ms": 8.968
     },
     {
       "ctx": 4096,
-      "candidate_tok_s": 93.6,
-      "owned_tok_s": 97.9,
+      "candidate_tok_s": 95.8,
+      "owned_tok_s": 100.2,
       "pct_of_owned": 95.6,
-      "token_match": true,
+      "token_match": false,
       "route_bound": true,
       "candidate_attn_kernels": [
         "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
@@ -35,8 +35,8 @@
         "owned_flash_combine",
         "owned_flash_tile_gqa_whole"
       ],
-      "candidate_w_ms": 10.68,
-      "owned_w_ms": 10.219
+      "candidate_w_ms": 10.433,
+      "owned_w_ms": 9.984
     }
   ]
 }
