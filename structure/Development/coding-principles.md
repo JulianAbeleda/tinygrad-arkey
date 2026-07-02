@@ -214,6 +214,27 @@ Prefer:
 - property or fuzz tests for parsers, protocol handling, and state transitions
 - concurrency stress tests where ordering matters
 
+### Classify Evidence Before Fixing Mechanisms
+
+When a bug crosses compiler, runtime, hardware, benchmark, or policy boundaries, classify what each piece of evidence
+is allowed to prove before changing code.
+
+Trust invariants over symptoms. A microgate may prove a local invariant, but it does not prove a full route is safe. A
+full-model run may expose a regression, but it is not trustworthy until the harness itself is known to populate the
+right state and measure the intended path.
+
+Separate:
+
+- compile failure from numeric failure
+- local microgate evidence from integration evidence
+- correctness evidence from speed evidence
+- route binding from route promotion
+- harness failure from system failure
+- fix-off bug pins from fix-on success criteria
+
+Then fix the smallest violated invariant. Do not let a passing narrow gate authorize a wider claim, and do not let a
+broken harness turn noise into a route or compiler verdict.
+
 ### Explain Tradeoffs Close To The Code
 
 When code chooses performance, compatibility, portability, simplicity, or strict correctness over another value, explain that choice near the implementation.
@@ -390,5 +411,6 @@ Before merging new code, ask:
 10. Are dangerous operations contained behind a small boundary?
 11. Does the error shape match what the caller needs to know?
 12. Is the behavior tested at the boundary where it can actually fail?
+13. Has each piece of evidence been classified by what it can and cannot prove?
 
 If those answers are unclear, the code is not shaped correctly yet.

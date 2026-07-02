@@ -192,3 +192,24 @@ working version needs the accumulator-widening/distinct-slot-devec lowering exte
 **Bottom line:** miss recovered (borderline) with the smallest possible change (existing KV_BOTH staging), correctness
 rigorously verified, default-off. A decisive owned-beating win needs the vectorized-PV primitive, blocked at the
 UOp-spec level.
+
+## Practical Roofline Audit
+
+Verdict: **PRACTICAL_ROOFLINE_CLOSEOUT**
+
+Using the owned HIP attention route from the same W==D session as the practical baseline, the final KV_BOTH generated
+route is already inside the 98% practical-ceiling band:
+
+| ctx | generated tok/s | owned tok/s | % practical | extra ms/token | extra µs/layer |
+|---:|---:|---:|---:|---:|---:|
+| 512 | 109.9 | 111.6 | 98.5% | 0.138 | 3.83 |
+| 4096 | 99.8 | 101.0 | 98.8% | 0.122 | 3.39 |
+
+Three-rep floor remains ≥98% at both protected contexts (ctx512 worst 98.5%, ctx4096 worst 98.3%). The remaining
+owned gap is only ~0.12–0.14 ms/token, so further route tuning is not justified for TG-P14 parity/purity. The
+vectorized-PV primitive is still the only known path to an owned-beating win, but its maximum payoff is small and it
+requires deeper `vec-store-to-REG` lowering work. See `practical_roofline_audit.json` and
+`practical_roofline_audit.md`.
+
+Promotion formula line: `P_worst=98.5%`, `G_worst=1.5pp`, `A_worst=0.0pp`,
+`basis=owned_same_session_same_scope`, `action=promote-if-explicit-replacement-else-closeout`.

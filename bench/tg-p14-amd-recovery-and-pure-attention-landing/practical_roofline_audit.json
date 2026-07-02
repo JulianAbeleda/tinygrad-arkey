@@ -1,0 +1,132 @@
+{
+  "schema": "tinygrad.practical_roofline_audit.v1",
+  "scope": "TG-P14 practical roofline audit for generated 8B attention after KV_BOTH recovery",
+  "date": "2026-07-02",
+  "model_id": "qwen3-8b",
+  "target_id": "amd_gfx1100",
+  "workload": "decode",
+  "candidate_id": "decode_attention_g5_8b_refuted",
+  "candidate_route": "generated live-split G5 block tile + split-preserving fused combine + KV_BOTH staging",
+  "practical_baseline": {
+    "basis": "owned_same_session_same_scope",
+    "description": "Owned HIP attention route from the same qk_tg_p5_attention_wd.py W==D session; all non-attention kernels are identical between arms, so candidate-owned wall delta is attention-route residual.",
+    "owned_kernels": [
+      "owned_flash_combine",
+      "owned_flash_tile_gqa_whole"
+    ]
+  },
+  "candidate_env": {
+    "DECODE_FLASH_BLOCK_TILE_G5_8B": "1",
+    "DECODE_ATTN_LIVE_SPLIT_GENERATED": "1",
+    "DECODE_LIVE_SPLIT_FUSED_COMBINE": "1",
+    "DECODE_FLASH_BLOCK_TILE_G5_KONLY": "0",
+    "REDUCE_ACC_UPCAST_FIX": "1"
+  },
+  "evidence_sources": [
+    "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase1_kvboth_result.json",
+    "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json",
+    "bench/tg-p5-attention-generated-default/wd_by_ctx.json"
+  ],
+  "method": {
+    "live_gpu_execution": false,
+    "why_no_rerun": "The completed W==D runs already provide same-session medians and caused transient TTM D-state spikes; this audit is arithmetic over measured artifacts.",
+    "layers": 36,
+    "pct_from": "reported pct_of_owned and cross-check from owned_w_ms / candidate_w_ms",
+    "remaining_tax_us_per_layer": "(candidate_w_ms - owned_w_ms) * 1000 / layers"
+  },
+  "correctness_and_binding": {
+    "correctness_authority": "qk_prefilled_route_parity.py: generated route == owned 48/48 token-identical with real prefill",
+    "tile_numeric": "block-tile microgate rel_rmse ~1e-7",
+    "combine_numeric": "P10/P14.8 numeric ok",
+    "route_bound": true,
+    "hidden_fallback": false,
+    "default_off": true
+  },
+  "per_ctx": [
+    {
+      "ctx": 512,
+      "candidate_tok_s": 109.9,
+      "owned_tok_s": 111.6,
+      "reported_pct_of_practical": 98.5,
+      "pct_of_practical_from_ms": 98.48284960422164,
+      "gap_to_practical_pp": 1.5171503957783585,
+      "candidate_w_ms": 9.096,
+      "owned_w_ms": 8.958,
+      "extra_ms_per_token_vs_practical": 0.1379999999999999,
+      "remaining_attention_tax_us_per_layer": 3.8333333333333304,
+      "shave_needed": {
+        "to_98pct_ms_per_token": 0.0,
+        "to_99pct_ms_per_token": 0.04751515151515129,
+        "to_99pct_us_per_layer": 1.3198653198653136,
+        "to_equal_owned_ms_per_token": 0.1379999999999999,
+        "to_equal_owned_us_per_layer": 3.8333333333333304
+      },
+      "classification": "PRACTICAL_ROOFLINE_CLOSEOUT"
+    },
+    {
+      "ctx": 4096,
+      "candidate_tok_s": 99.8,
+      "owned_tok_s": 101.0,
+      "reported_pct_of_practical": 98.8,
+      "pct_of_practical_from_ms": 98.78279956100968,
+      "gap_to_practical_pp": 1.217200438990318,
+      "candidate_w_ms": 10.023,
+      "owned_w_ms": 9.901,
+      "extra_ms_per_token_vs_practical": 0.12199999999999989,
+      "remaining_attention_tax_us_per_layer": 3.3888888888888857,
+      "shave_needed": {
+        "to_98pct_ms_per_token": 0.0,
+        "to_99pct_ms_per_token": 0.021989898989899004,
+        "to_99pct_us_per_layer": 0.6108305274971946,
+        "to_equal_owned_ms_per_token": 0.12199999999999989,
+        "to_equal_owned_us_per_layer": 3.3888888888888857
+      },
+      "classification": "PRACTICAL_ROOFLINE_CLOSEOUT"
+    }
+  ],
+  "three_rep_floor": {
+    "ctx512_pct": [
+      98.6,
+      98.8,
+      98.5
+    ],
+    "ctx4096_pct": [
+      98.3,
+      98.5,
+      98.8
+    ],
+    "worst_of_3": {
+      "ctx512_pct": 98.5,
+      "ctx4096_pct": 98.3
+    },
+    "run_to_run_variation_pp": 0.3
+  },
+  "raw_hbm_context": {
+    "hbm_peak_gbps": 960.0,
+    "ctx4096_kv_bytes_per_layer": 16777216,
+    "ctx4096_kv_floor_us_per_layer_at_peak_hbm": 17.476266666666667,
+    "note": "This is only raw hardware context. The promotion baseline here is practical owned-route parity, not raw HBM peak."
+  },
+  "classification": {
+    "practical_roofline_pct_bar": 98.0,
+    "formula": {
+      "P_worst_pct": 98.47670250896059,
+      "G_worst_pp": 1.5232974910394092,
+      "A_worst_pp": 0.0,
+      "basis": "owned_same_session_same_scope",
+      "action": "promote-if-explicit-replacement-else-closeout"
+    },
+    "worst_reported_pct_of_practical": 98.5,
+    "worst_pct_from_ms": 98.48284960422164,
+    "worst_gap_pp_from_ms": 1.5171503957783585,
+    "verdict": "PRACTICAL_ROOFLINE_CLOSEOUT",
+    "promotion_interpretation": "PROMOTABLE only if BoltBeam candidate manifest explicitly marks this route as a practical-roofline replacement / handwritten-surface reduction; otherwise close out further route variants but do not flip default.",
+    "confidence": "derived_from_same_session_wd_plus_prefilled_correctness"
+  },
+  "what_left": {
+    "for_98pct_task_bar": "nothing performance-critical; already clears >=98% at both protected contexts across 3 reps.",
+    "for_practical_roofline_closeout": "package this artifact for BoltBeam practical-roofline ingestion and add an explicit replacement objective if promotion should be authorized.",
+    "for_owned_beating_win": "only ~0.122-0.138 ms/token remains to equal owned, about 3.4-3.8 us/layer. The known lever is vectorized PV, but it is blocked by vec-store-to-REG UOp lowering and has a small maximum payoff.",
+    "recommended_next_action": "Do not chase more route tuning for TG-P14. Treat the route as practical-ceiling-closeout unless the goal changes from purity/parity to an owned-beating speed win."
+  }
+}
