@@ -128,3 +128,27 @@ not linearize into wall-clock (combine is lifecycle/launch-bound, not fexp-bound
 combine-overhead cap. Per methodology, isolated combine micro-timing is **not** the promotion authority — the
 authoritative speed test is the full W==D at P14.9. Not a speed refute (fused shape is faster + 3→1 kernels + 128×
 fexp), so P14.8 passes and P14.9 is warranted.
+
+## Generated 8B Attention W==D (P14.9)
+
+Verdict: **TG_P14_9_REFUTE_GENERATED_ATTENTION_SPEED** — near-miss, **not promoted** (kept default-off).
+
+Wired the split-preserving fused combine into the generated route behind `DECODE_LIVE_SPLIT_FUSED_COMBINE`
+(default-off) and ran the authoritative same-session W==D (`qk_tg_p5_attention_wd.py`, NMEAS=40):
+
+| ctx | candidate tok/s | owned tok/s | % of owned | route |
+|---|---|---|---|---|
+| 512 | 110.8 | 111.8 | **99.1%** | bound (`flash_fused_gmax_combine`) |
+| 4096 | 99.0 | 101.5 | **97.5%** | bound |
+
+Misses the strict ≥98%-at-both bar only at ctx4096 (97.5%). Big advance over the old fixed-L route
+(87.6%/95.6%): the live-split geometry removed the ctx512 over-launch cap (→99.1%), and the fused combine recovered
+~2pp at ctx4096 (95.4%→97.5% vs the shipped combine in the same tile). Route-bound, no hidden fallback.
+
+**Correctness note:** the harness `token_match` gate is unreliable — like `qk_decode_token_match_check.py` it never
+prefills the KV cache, so owned vs candidate subprocesses read different uninitialized KV and never token-match
+(the unchanged shipped combine in the live-split tile also reports mismatch). The `...TOKEN_MISMATCH` verdict string
+is a harness artifact, not a route error; the combine shapes are numerically correct in isolation (P10/P14.8).
+
+Per scope (refute → ledger and stop, do not promote): kept default-off. The route family is **not refuted on merits**
+— it is 0.5–2.6% from parity and reopenable if the residual ctx4096 gap is closed.

@@ -79,6 +79,7 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
   addressed separately by TG-P9.3/9.4).
   """
   from tinygrad import Tensor, dtypes
+  from tinygrad.helpers import getenv
   from extra.qk_flash_decode import (flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel,
                                      flash_state_gmax_kernel, flash_state_combine_kernel)
   _F32 = dtypes.float32
@@ -93,8 +94,13 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
   po = Tensor.empty(Hq * S * W2, dtype=_F32).custom_kernel(
     q_f, cache_kv,
     fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging))[0]
-  gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, S, stride=S))[0]
-  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, S, stride=S))[0]
+  # TG-P14.9: split-preserving fused combine (opt-in, needs REDUCE_ACC_UPCAST_FIX to lower). One kernel replaces the
+  # gmax + per-d combine lifecycle and removes the Hd-fold fexp redundancy (Hq*Hd*S -> Hq*S fexp). Rollback = flag off.
+  if getenv("DECODE_LIVE_SPLIT_FUSED_COMBINE"):
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_gmax_combine_kernel(Hd, Hq, S, stride=S))[0]
+  else:
+    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, S, stride=S))[0]
+    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, S, stride=S))[0]
   return out.reshape(Hq, Hd)
 
 
