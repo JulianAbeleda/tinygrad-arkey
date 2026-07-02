@@ -169,3 +169,26 @@ promotion). BoltBeam commit `66e47fc`, full suite 258 pass.
 So BoltBeam independently confirms: the route is correct + route-bound, refuted only on the ~2.5% ctx4096 speed gap,
 and that gap will **not** close by tuning this route — it needs a new PV/tile primitive. TG-P14 closes here; the
 generated attention is near-parity and default-off, and the reopen is a future new-primitive effort, not a re-tune.
+
+## Residual ctx4096 Gap: Attribution + Recovery (Phase 0-2)
+
+**Phase 0 (evidence-only):** the residual ctx4096 delta is tile-dominated — the live-split tile converges to fixed-L
+at ctx4096 and the fused combine is saturated, so the wall is the PV step: the q·k score is already `v_dot2`-vectorized
+but the **p·V accumulate is scalar with V read from global** (K_ONLY). Owned stages K+V in 8KB LDS.
+
+**Phase 1 (recovery — smallest change, no new primitive):** flipping the **existing `KV_BOTH` staging**
+(`DECODE_FLASH_BLOCK_TILE_G5_KONLY=0`, V in LDS) recovers the miss: ctx4096 97.5% → **98.3–98.8%** across 3 reps
+(ctx512 stays ≥98.5%). Correctness: **48/48 prefilled token-parity** vs owned at ctx≥769 (new `qk_prefilled_route_parity.py`,
+real prefill so g5 fires — the correct deterministic authority), tile microgate rel_rmse ~1e-7, route-bound.
+
+Verdict: **PASS_PROMOTION_CANDIDATE** by the ≥98%-both-contexts bar, but **MARGINAL** (worst 98.3% ≈ run-to-run spread)
+and BoltBeam's stricter contract still refutes a −1.7% near-tie. **Kept default-off.**
+
+**Phase 1b (vectorized-V PV primitive — the durable lever for a robust win):** `BLOCKED_PRIMITIVE`. The naive
+STACK-vec + `gep`-store PV vectorization fails UOp spec verification (`GEP` of a `float.vec(4)` `ADD` stored into the
+manual-END REG accumulator — the same fragility class as TG-P10..P14). Reverted; scalar-PV KV_BOTH stays correct. A
+working version needs the accumulator-widening/distinct-slot-devec lowering extended to this vec-store-to-REG case.
+
+**Bottom line:** miss recovered (borderline) with the smallest possible change (existing KV_BOTH staging), correctness
+rigorously verified, default-off. A decisive owned-beating win needs the vectorized-PV primitive, blocked at the
+UOp-spec level.
