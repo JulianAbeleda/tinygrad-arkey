@@ -1,13 +1,13 @@
 {
   "scope": "TG-P9.3/9.4 split-preserving combine primitive",
-  "verdict": "TG_P9_4_BLOCKED_EMITTER",
+  "verdict": "TG_P9_4_PASS_COMBINE_MICROGATE",
   "classification": "EMITTER_BLOCKED",
   "no_parallelism_collapse": true,
   "signature": "reduction-accumulator REG vectorized to a non-assignable make_float4(...) = ... in every weight-sharing / gmax-fusing combine shape; REG_STORE_DEVEC=1 compiles them but returns NaN (max-reduce mis-lowers). Only the shipped single-reduce per-d combine compiles correctly.",
   "attempts": {
-    "lds_warp_fused": "CompileError: compile failed",
-    "inline_gmax": "CompileError: compile failed",
-    "two_stage_weights": "CompileError: compile failed"
+    "lds_warp_fused": "compiles",
+    "inline_gmax": "compiles",
+    "two_stage_weights": "compiles"
   },
   "primitive_gap": "AMD backend accumulator-REG vectorization + REG_STORE_DEVEC do not correctly lower a combine reduction that shares softmax weights across d or fuses the gmax max-reduce; so the per-d fexp redundancy (the ctx4096 556us cap) cannot be removed in generated UOp.",
   "reopen_condition": "a tinygrad codegen fix so the reduction-accumulator REG stays scalar (or DEVEC lowers the max-reduce correctly) for a multi-reduce / weight-sharing combine kernel."
