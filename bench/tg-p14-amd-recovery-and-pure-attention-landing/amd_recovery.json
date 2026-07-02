@@ -1,0 +1,21 @@
+{
+  "scope": "TG-P14 AMD recovery and pure attention landing",
+  "phase": "TG-P14.0",
+  "verdict": "TG_P14_0_BLOCKED_AMD_PROCESS_STILL_STUCK",
+  "amd_smoke_ran": false,
+  "reason": "A prior AMD Python worker is still in uninterruptible D sleep, so the timeout-guarded AMD smoke and compiler/model ladders were not run.",
+  "stuck_processes": [
+    {
+      "pid": 1840274,
+      "ppid": 1,
+      "stat": "D",
+      "etime": "10:27",
+      "cmd": "python3 -"
+    }
+  ],
+  "observed_ps_command": "ps -eo pid,ppid,stat,etime,cmd | rg \"python3 -|qk_tg|AMDKFD|tinygrad\" || true",
+  "policy": "Do not run AMD compiler or model ladders while a prior AMD init process is stuck in D state.",
+  "codegen_fix_committed": false,
+  "owned_attention_remains_default": true,
+  "next_step": "Wait for the D-state Python process to clear or reset the AMD runtime/host, then restart TG-P14.0 with the timeout-guarded AMD smoke before validating the dirty compiler scratch."
+}
