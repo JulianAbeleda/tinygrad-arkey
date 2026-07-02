@@ -1,21 +1,27 @@
 {
   "scope": "TG-P14 AMD recovery and pure attention landing",
   "phase": "TG-P14.0",
-  "verdict": "TG_P14_0_BLOCKED_AMD_PROCESS_STILL_STUCK",
-  "amd_smoke_ran": false,
-  "reason": "A prior AMD Python worker is still in uninterruptible D sleep, so the timeout-guarded AMD smoke and compiler/model ladders were not run.",
-  "stuck_processes": [
-    {
-      "pid": 1840274,
-      "ppid": 1,
-      "stat": "D",
-      "etime": "10:27",
-      "cmd": "python3 -"
-    }
-  ],
-  "observed_ps_command": "ps -eo pid,ppid,stat,etime,cmd | rg \"python3 -|qk_tg|AMDKFD|tinygrad\" || true",
-  "policy": "Do not run AMD compiler or model ladders while a prior AMD init process is stuck in D state.",
+  "verdict": "TG_P14_0_PASS_AMD_RECOVERED",
+  "timestamp": "2026-07-01T22:46:00-04:00",
+  "recovery_note": "Prior PASS (22:08) was invalidated when later P10 work wedged the AMD runtime (amdgpu/MES reset failure, sdma0 timeout, PID 8149 stuck in D). Host was power-cycled: system boot 2026-07-01 22:42, re-verified 3 min post-boot.",
+  "host_boot": "2026-07-01T22:42",
+  "gpu_liveness": {
+    "rocminfo": "gfx1100 / AMD Radeon RX 7900 XTX present and responsive",
+    "kfd_responsive": true
+  },
+  "process_check": {
+    "command": "ps -eo pid,ppid,stat,etime,cmd | rg 'python3 -|qk_tg|AMDKFD|tinygrad' || true",
+    "matched_processes": [],
+    "stuck_d_state_processes": []
+  },
+  "amd_smoke": {
+    "command": "timeout 45s bash -lc 'DEV=AMD PYTHONPATH=. python3 - <<'\"'\"'PY'\"'\"'\nfrom tinygrad import Tensor\nprint((Tensor([1.0], device=\"AMD\") + 1).realize().numpy())\nPY'",
+    "exit_code": 0,
+    "stdout": "[2.]",
+    "within_45s": true,
+    "left_stuck_process": false
+  },
   "codegen_fix_committed": false,
   "owned_attention_remains_default": true,
-  "next_step": "Wait for the D-state Python process to clear or reset the AMD runtime/host, then restart TG-P14.0 with the timeout-guarded AMD smoke before validating the dirty compiler scratch."
+  "next_step": "Continue TG-P14.1 scratch-state census, then verify P11 fix-off/fix-on before running P10 fixed-mode repro."
 }

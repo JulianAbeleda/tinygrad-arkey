@@ -23,7 +23,7 @@ import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "bench/tg-p11-reduce-upcast-accumulator"
 Hq, Hd, S = 32, 128, 36
-_INVALID = re.compile(r"make_float4\([^)]*\)\s*=")   # store to a vector rvalue (non-assignable)
+_INVALID = re.compile(r"make_float\d+\([^=]*\)\s*=(?!=)")   # store to a vector rvalue (make_floatN(...) on the LHS; args nest parens)
 
 
 def _kernels():

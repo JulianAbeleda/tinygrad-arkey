@@ -124,9 +124,9 @@ def flash_fused_gmax_combine_kernel(Hd: int, Hq: int, S, stride=None):
     # gm = max_s m (each lane computes it; max is cheap, no fexp -- the redundancy we remove is the fexp)
     gmx = UOp.placeholder((1,), _F32, 241, addrspace=AddrSpace.REG)
     s0 = UOp.range(S, 2, axis_type=AxisType.REDUCE)
-    gi = gmx.after(h, lane)[0].set(-1e30)
-    gi = gmx[0].set(gmx.after(s0)[0].maximum(pout[(h * stride + s0) * W + M_COL]), end=s0)
-    gm = gmx.after(gi)[0]
+    gacc = gmx.after(h, lane)[0].set(-1e30)
+    gi = gacc[0].set(gacc.after(s0)[0].maximum(pout[(h * stride + s0) * W + M_COL]), end=s0)
+    gm = gacc.after(gi)[0]
     # cooperatively stage the S weights w[s]=exp(m[s]-gm) into LDS: lane writes s = wi*LANES+lane (S fexp/head, not Hd*S)
     wi = UOp.range(NW, 3)
     sidx = wi * LANES + lane
@@ -151,7 +151,7 @@ def flash_fused_gmax_combine_kernel(Hd: int, Hq: int, S, stride=None):
     dd2 = UOp.range(R, 7)
     col2 = lane * R + dd2
     return out[h * Hd + col2].store(af[dd2] / df).end(dd2).end(h, lane).sink(
-      arg=KernelInfo(name=f"flash_fused_gmax_combine_{Hq}_{Hd}"))
+      arg=KernelInfo(name=f"flash_fused_gmax_combine_{Hq}_{Hd}", opts_to_apply=()))
   return kernel
 
 
@@ -168,9 +168,9 @@ def flash_gm_weights_kernel(Hd: int, Hq: int, S, stride=None):
     h = UOp.range(Hq, 0, AxisType.GLOBAL)               # Hq workgroups (matches the working gmax kernel shape)
     gmx = UOp.placeholder((1,), _F32, 250, addrspace=AddrSpace.REG)
     sp = UOp.range(S, 1, axis_type=AxisType.REDUCE)     # reduce for gm = max_s m (gmax fused in)
-    g = gmx.after(h)[0].set(-1e30)
-    g = gmx[0].set(gmx.after(sp)[0].maximum(pout[(h * stride + sp) * W + M_COL]), end=sp)
-    gm = gmx.after(g)[0]
+    gacc = gmx.after(h)[0].set(-1e30)
+    g = gacc[0].set(gacc.after(sp)[0].maximum(pout[(h * stride + sp) * W + M_COL]), end=sp)
+    gm = gacc.after(g)[0]
     sw = UOp.range(S, 2)                                # plain loop writes the S weights (per-s store is valid)
     wv = _fexp(pout[(h * stride + sw) * W + M_COL] - gm)
     return w_out[h * stride + sw].store(wv).end(sw).end(h).sink(arg=KernelInfo(name=f"flash_gm_weights_{Hq}"))
@@ -218,9 +218,9 @@ def flash_inline_gm_combine_kernel(Hd: int, Hq: int, S, stride=None):
     d = UOp.range(Hd, 1, AxisType.GLOBAL)
     gmx = UOp.placeholder((1,), _F32, 254, addrspace=AddrSpace.REG)
     sp = UOp.range(S, 2, axis_type=AxisType.REDUCE)
-    g = gmx.after(h, d)[0].set(-1e30)
-    g = gmx[0].set(gmx.after(sp)[0].maximum(pout[(h * stride + sp) * W + M_COL]), end=sp)
-    gm_h = gmx.after(g)[0]
+    gacc = gmx.after(h, d)[0].set(-1e30)
+    g = gacc[0].set(gacc.after(sp)[0].maximum(pout[(h * stride + sp) * W + M_COL]), end=sp)
+    gm_h = gacc.after(g)[0]
     s = UOp.range(S, 3, axis_type=AxisType.REDUCE)
     w = _fexp(pout[(h * stride + s) * W + M_COL] - gm_h)
     num = UOp.placeholder((1,), _F32, 255, addrspace=AddrSpace.REG)

@@ -8,28 +8,28 @@
       "case": "scalar_no_upcast",
       "compile_ok": false,
       "numeric_ok": false,
-      "invalid_reg_vector_store": false,
+      "invalid_reg_vector_store": true,
       "error": "CompileError: compile failed"
     },
     {
       "case": "invariant_upcast",
       "compile_ok": false,
       "numeric_ok": false,
-      "invalid_reg_vector_store": false,
+      "invalid_reg_vector_store": true,
       "error": "CompileError: compile failed"
     },
     {
       "case": "varies_upcast",
       "compile_ok": false,
       "numeric_ok": false,
-      "invalid_reg_vector_store": false,
+      "invalid_reg_vector_store": true,
       "error": "CompileError: compile failed"
     },
     {
       "case": "mixed_var_inv",
       "compile_ok": false,
       "numeric_ok": false,
-      "invalid_reg_vector_store": false,
+      "invalid_reg_vector_store": true,
       "error": "CompileError: compile failed"
     }
   ]
