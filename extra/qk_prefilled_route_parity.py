@@ -20,13 +20,20 @@ PROMPT = "The history of computation is a history of moving work closer to the d
 
 def main() -> int:
   from extra.qk_harness_contract import DEFAULT_MODEL
-  from extra.llm_generate import load_model_and_tokenizer, generate_one
+  from extra.llm_generate import load_model_and_tokenizer, build_prompt_ids
   model = os.environ.get("QK_MODEL", DEFAULT_MODEL)
   m, tok = load_model_and_tokenizer(model, 4608, seed=20260617)
   for lin in (getattr(m, "_q4k_linears", None).linears if getattr(m, "_q4k_linears", None) else []):
     lin.decode_enabled = True
-  r = generate_one(m, tok, PROMPT, os.environ.get("QK_PROMPT_FORMAT", "raw"), temperature=0.0, max_tokens=N)
-  print("@@PARITY@@" + json.dumps({"prompt_len": r["prompt_len"], "tokens": r["tokens"]}))
+  # collect token IDs directly (avoid tok.decode, which KeyErrors on out-of-dict special tokens) -- IDs are the
+  # correctness signal for route parity.
+  ids = build_prompt_ids(tok, PROMPT, os.environ.get("QK_PROMPT_FORMAT", "raw"))
+  out = []
+  for tid in m.generate(ids, temperature=0.0):
+    if tok.is_end(tid): break
+    out.append(int(tid))
+    if len(out) >= N: break
+  print("@@PARITY@@" + json.dumps({"prompt_len": len(ids), "tokens": out}))
   return 0
 
 
