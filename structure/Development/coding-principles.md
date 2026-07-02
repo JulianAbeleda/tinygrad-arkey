@@ -235,6 +235,23 @@ Separate:
 Then fix the smallest violated invariant. Do not let a passing narrow gate authorize a wider claim, and do not let a
 broken harness turn noise into a route or compiler verdict.
 
+### Simplify Representations Before Adding Mechanisms
+
+When a compiler, scheduler, or IR gets fragile, first ask whether the representation is carrying too many concepts.
+Prefer removing an IR node, phase exception, shape special case, or ambient side channel over teaching every later pass
+to remember it.
+
+The upstream tinygrad pattern is small but sharp:
+
+- move metadata to the owning value instead of modeling it as a separate graph node
+- remove special cases once a general invariant can express them
+- tighten the spec immediately after simplifying a representation
+- combine overlapping rewrite rules instead of adding another ordered pass
+- test order independence for mutations and realization, not only final numeric output
+
+This is different from patching symptoms. A patch says "handle this case too." A representation simplification says
+"make this case stop existing." Use the second move when the extra concept creates repeated downstream obligations.
+
 ### Explain Tradeoffs Close To The Code
 
 When code chooses performance, compatibility, portability, simplicity, or strict correctness over another value, explain that choice near the implementation.
@@ -412,5 +429,6 @@ Before merging new code, ask:
 11. Does the error shape match what the caller needs to know?
 12. Is the behavior tested at the boundary where it can actually fail?
 13. Has each piece of evidence been classified by what it can and cannot prove?
+14. Can this bug be removed by simplifying the representation instead of adding another mechanism?
 
 If those answers are unclear, the code is not shaped correctly yet.
