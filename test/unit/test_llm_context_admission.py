@@ -1,10 +1,44 @@
 import pytest
 
-from tinygrad.llm.admission import AUTO_MAX_CONTEXT, MIN_USABLE_CTX, VRAM_ADMIT_FRACTION, resolve_max_context_admission
+from tinygrad.llm.admission import (AUTO_MAX_CONTEXT, MIN_USABLE_CTX, MIN_RING_WINDOW, VRAM_ADMIT_FRACTION,
+                                    resolve_max_context_admission)
 
 def _admit(requested, *, trained_ctx=32768, free=24_000_000_000, weights=8_000_000_000,
-           kv_per_tok=1_000_000, prefill_per_tok=65_536, scratch=1_000_000):
-  return resolve_max_context_admission(requested, trained_ctx, free, weights, kv_per_tok, prefill_per_tok, scratch, "test-model")
+           kv_per_tok=1_000_000, prefill_per_tok=65_536, scratch=1_000_000, stream="auto", ring_supported=False,
+           kv_quant_supported=False, scale_per_tok=0):
+  return resolve_max_context_admission(requested, trained_ctx, free, weights, kv_per_tok, prefill_per_tok, scratch,
+                                       "test-model", kv_quant_supported=kv_quant_supported, scale_per_tok=scale_per_tok,
+                                       stream=stream, ring_supported=ring_supported)
+
+def test_stream_on_forces_ring_even_when_lossless_fits():
+  # huge free -> fp16 would admit trained ctx; stream=on forces the lossy ring instead (unbounded generation)
+  ctx, kv_quant, report = _admit(AUTO_MAX_CONTEXT, free=128_000_000_000, trained_ctx=8192, stream="on", ring_supported=True)
+  assert report["mode"] == "ring" and report["ring"] is True and kv_quant is False
+  assert ctx == 8192 and "banner" in report
+
+def test_auto_falls_to_ring_only_when_no_lossless_tier_fits():
+  # fp16 (~1450) and Q8 (~1955) both admit < MIN_USABLE_CTX (2048) but the fp16 window >= MIN_RING_WINDOW (1024)
+  # -> ring is the final rung (auto, stream default).
+  ctx, kv_quant, report = _admit(AUTO_MAX_CONTEXT, free=13_000_000_000, weights=9_000_000_000,
+                                 kv_per_tok=900_000, scale_per_tok=200_000, kv_quant_supported=True, ring_supported=True)
+  assert report["mc_fp16"] < MIN_USABLE_CTX and report["mc_q8"] < MIN_USABLE_CTX  # no lossless tier usable
+  assert report["mode"] == "ring" and report["ring"] is True and ctx >= MIN_RING_WINDOW and kv_quant is False
+
+def test_stream_off_refuses_instead_of_ring():
+  with pytest.raises(RuntimeError, match="Refusing|needs"):
+    _admit(AUTO_MAX_CONTEXT, free=10_000_000_000, weights=9_000_000_000, kv_per_tok=2_000_000,
+           kv_quant_supported=True, ring_supported=True, stream="off")
+
+def test_ring_floor_refuses_tiny_window():
+  with pytest.raises(RuntimeError, match=f">={MIN_RING_WINDOW}"):
+    _admit(AUTO_MAX_CONTEXT, free=9_500_000_000, weights=9_000_000_000, kv_per_tok=8_000_000,
+           ring_supported=True, stream="on")
+
+def test_explicit_int_never_rescued_by_ring():
+  # explicit --max_context that doesn't fit fp16/Q8 refuses even with ring_supported (N is physical); hint mentions --stream
+  with pytest.raises(RuntimeError, match="Largest admissible"):
+    _admit(30000, free=10_000_000_000, weights=9_000_000_000, kv_per_tok=2_000_000, kv_quant_supported=True,
+           ring_supported=True, stream="auto")
 
 def test_auto_context_uses_memory_cap_but_never_exceeds_trained_ctx():
   ctx, kv_quant, report = _admit(AUTO_MAX_CONTEXT, free=128_000_000_000, trained_ctx=8192)
