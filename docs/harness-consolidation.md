@@ -63,3 +63,96 @@ loop is `time_fn` (see plan item 1) — still do not clone a `synchronize()+perf
 None are safe to do while the prefill agent holds those files; forcing them now trades a merge
 collision (or a fragmented `time_fn`) for a marginal early landing. The decision above (canonical
 `bench.py`) is the load-bearing outcome and is already shipped.
+
+---
+
+# Execution spec (hand-off to the agent already in these files)
+
+Whoever owns `harness_contract.py` / `generate.py` should run this. Ordered; each step is one
+`[test]` commit. Timing numbers are run-volatile, so **parity here is methodological, not
+byte-identical**: after a migration the reported median must land within the pre-migration
+`spread_pct` (same loop shape → same number modulo GPU jitter). All timing steps need the GPU.
+
+## Step 1 — add the shared `time_fn` to `harness_contract.py` (functional, additive)
+
+Put it directly beside `repro_band` (same file, so the timing loop and its stats live together).
+Return the **sample list** (not a bare median) so it composes with `repro_band`. Keep the tinygrad
+import **lazy** — `harness_contract` is imported before tinygrad on env-ordering-sensitive paths.
+
+```python
+def time_fn(fn, n:int=200, warmup:int=0, device:str="AMD") -> list[float]:
+  """Per-call wall times (µs) for a synced GPU callable. Pair with repro_band() for the noise band,
+  or statistics.median() for a point estimate. The ONE timing loop -- do not clone this."""
+  from tinygrad import Device                      # lazy: keep this module importable pre-tinygrad
+  dev = Device[device]
+  for _ in range(warmup): fn(); dev.synchronize()
+  dev.synchronize(); ts = []
+  for _ in range(n):
+    t0 = time.perf_counter(); fn(); dev.synchronize(); ts.append((time.perf_counter() - t0) * 1e6)
+  return ts
+```
+
+This matches the de-facto shared shape (`decode_warp_flash_tile_ab.time_fn`, which
+`north_star_flash_attn_tile_ab` already imports) except it returns the list and adds optional
+`warmup`. Commit alone; nothing consumes it yet.
+
+## Step 2 — migrate the clone sites (batch, run-verified)
+
+17 files carry a `synchronize()+perf_counter()+statistics.median` loop. Migrate each to
+`from extra.qk.harness_contract import time_fn` and replace its inline loop, **preserving that
+caller's semantics** (its `n`, any warmup, and its unit — several report ms, `time_fn` is µs; keep
+the caller's presentation by dividing, don't change the reported unit). A caller that wants a point
+does `statistics.median(time_fn(f, n))`; one that wants the band does `repro_band(time_fn(f, n))`.
+
+Bench/A-B tier (do first — pure benches, no verdict artifact to break):
+`decode_warp_flash_tile_ab` (this is the source of the de-facto `time_fn`; keep its re-export or
+update `north_star`'s import), `north_star_flash_attn_tile_ab`, `decode_fused_flash_tile_ab`,
+`fused_flash_concrete_gate_ab`, `fused_softmax_v_tail_ab`, `matmul_pv_diagnostic_ab`,
+`ffn_gemv_warp_ab`, `ffn_gemv_warp_wd`, `proj_gemv_warp_wd`, `q4k_packed_gemv_wd`,
+`prefix_cache_bench`.
+
+Gate tier (OPTIONAL, lower priority — these were consolidated into `gate_registry` on 2026-07-03
+and are stable; migrating their timing is nice-to-have, and it edits gate modules):
+`decode_score_broadcast`, `decode_physical_tile`, `attention_reopen_gate`, `q6k_generated_coop_gate`,
+`decode_hotloop_schedule_diff`.
+
+**Do NOT touch `decode_runtime_overhead.py`** — its W==D loop is the decode *authority* (part of
+`bench.py`'s contract); its methodology is load-bearing, not a clone to dedup.
+
+Verify per file: run old vs new on the GPU, confirm the reported median is within the old
+`spread_pct`. Commit in batches of ~5.
+
+## Step 3 — delete dead `generate.py` scaffolding (reachability-verified)
+
+`generate.generate_one` and `configure_process_env` have zero importers; the callers their docstring
+names (`llm_rollout.py`, `llm_eval_harness.py`) no longer exist. Re-grep to confirm, then delete.
+Keep `load_model_and_tokenizer` (imported by ~22 files) and `child_env` (see step 5).
+
+## Step 4 — retire `model_e2e_bench.py`
+
+Its docstring says `model_authority_bench.py` "replaces" it; both write `bench/models/qwen/.../<id>.json`.
+Confirm `model_authority_bench` covers the same fields, then delete `model_e2e_bench` (separate commit
+from any edit). While there, drop `model_e2e_bench`'s private `_git` in favor of
+`harness_contract.provenance` if any of it is worth keeping first (item 6, folds in here).
+
+## Step 5 — unify the two `child_env` builders
+
+`harness_contract.child_env` and `generate.child_env` both assemble a child env with the sacred
+DEV/JIT/PYTHONPATH ordering, disjoint key sets, zero shared code. Extract a base
+(`_base_child_env()` in `harness_contract`) and have both call it + add their own keys. Low risk;
+preserves both public names.
+
+## Step 6 — unify the 3 `llama-bench` wrappers
+
+`llama_cpp_bench.py`, `model_authority_bench.run_llama`, and `llama_kv_ctx_slope_bench.py` each build
+a `llama-bench` argv + parse `-o json` and hardcode the same binary path under different constants.
+Extract one `run_llama_bench(argv_extra, bin=...)` (in `eval_common` or a small `llama_bench.py`) and
+route all three through it. Justified as a real shared job, not a new wheel.
+
+## Not to do
+
+- Do not add `time_fn` anywhere but `harness_contract` (a new timing module re-fragments the wheel).
+- Do not "consolidate" the 3 JSON writers (`probe_io` / `gate_registry` / `eval_common.write_json`) —
+  their newline/sort differences are intentional byte-parity constraints (each docstring explains).
+- Do not touch `bench.py` / `prefill_whole_synced` / `decode_runtime_overhead` methodology — they are
+  the authorities `bench.py` dispatches to.
