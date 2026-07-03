@@ -18,6 +18,7 @@ import json, pathlib, statistics, sys, time
 import numpy as np
 from tinygrad import Tensor, Device
 from tinygrad.device import Buffer
+from extra.qk.harness_contract import time_fn as _hc_time_fn   # the one per-call timing loop
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import UOp
 from extra.qk.flash_decode import flash_partial_src, flash_reduce_src, flash_decode_attention
@@ -37,10 +38,7 @@ def ref_attn(q, k, v, Tc):
   return out
 
 def time_fn(fn, n=200):
-  Device["AMD"].synchronize(); ts = []
-  for _ in range(n):
-    t0 = time.perf_counter(); fn(); Device["AMD"].synchronize(); ts.append(time.perf_counter() - t0)
-  return statistics.median(ts) * 1e6  # us
+  return statistics.median(_hc_time_fn(fn, n))  # median us over the shared per-call loop (harness_contract)
 
 def main():
   dev = Device["AMD"]

@@ -16,6 +16,7 @@ from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import UOp
 from extra.qk.flash_decode import flash_reduce_src, flash_decode_attention
 from extra.qk.clock_pin import pinned_peak
+from extra.qk.harness_contract import time_fn as _hc_time_fn   # the one per-call timing loop
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/qk-decode-vector-flash-tile/warp_tile_ab.json"
@@ -77,10 +78,9 @@ def ref_attn(q, k, v, Tc):
   return out
 
 def time_fn(fn, n=200):
-  Device["AMD"].synchronize(); ts = []
-  for _ in range(n):
-    t0 = time.perf_counter(); fn(); Device["AMD"].synchronize(); ts.append(time.perf_counter() - t0)
-  return statistics.median(ts) * 1e6
+  # Point estimate (median us) over the shared per-call timing loop. north_star_flash_attn_tile_ab imports this
+  # name and relies on the point return, so keep the median() wrapper; the loop itself lives once in harness_contract.
+  return statistics.median(_hc_time_fn(fn, n))
 
 def main():
   dev = Device["AMD"]; rng = np.random.default_rng(0)
