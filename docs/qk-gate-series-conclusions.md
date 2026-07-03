@@ -88,4 +88,5 @@ Env `DEV=AMD`; 8B geometry Hq=32,Hkv=8,Hd=128,MAXC=4608,S=36. Symbolic Tc via th
 Files deleted after their series was collapsed into a parameterized module + registry rows.
 Format: `series | files retired | collapsed into | commit`. (Appended per cluster as collapses land.)
 
-- **Cluster B (asm scheduler)** | `asm_scheduler_inc0_test.py`, `asm_scheduler_inc1_test.py`, `asm_scheduler_inc2_test.py`, `asm_scheduler_inc3_test.py` | `extra/qk/asm_scheduler_proofs.py` (VARIANTS + `build_inc0..3`) | this commit
+- **Cluster B (asm scheduler)** | `asm_scheduler_inc0_test.py`, `asm_scheduler_inc1_test.py`, `asm_scheduler_inc2_test.py`, `asm_scheduler_inc3_test.py` | `extra/qk/asm_scheduler_proofs.py` (VARIANTS + `build_inc0..3`) | commit 5a195c0e7
+- **Cluster E (tg_p9 trio)** | `tg_p9_live_split_microgate.py`, `tg_p9_live_split_tile_microgate.py`, `tg_p9_combine_microgate.py` | `extra/qk/tg_p9_live_split.py` (`build_live_split/_tile/_combine`) | this commit. NOTE: combine gate no longer hits EMITTER_BLOCKED at retirement time — all 3 designs compile (`TG_P9_4_PASS_COMBINE_MICROGATE`); the cross-cutting wall may have moved (recheck vs Cluster A TG-P10.1).
