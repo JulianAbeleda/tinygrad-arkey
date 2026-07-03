@@ -91,6 +91,21 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
     for global_idx in k.axes_of(AxisType.GLOBAL):
       if first_reduce_rng.src[0].divides(MV_THREADS_PER_ROW) is not None and k.full_shape[global_idx] % (MV_BLOCKSIZE*MV_ROWS_PER_THREAD) == 0:
         if DEBUG >= 3: print(f"MV_DEQUANT MATVEC: {k.full_shape=} {MV_THREADS_PER_ROW=} {MV_BLOCKSIZE=} {MV_ROWS_PER_THREAD=}")
+        # A fused-dequant matvec whose weights are packed on a small trailing reduce axis (e.g. a 32-code trellis
+        # period, or Q4_K's nibble/word axis) needs that axis UNROLL'd so the packed group-word is loaded ONCE and
+        # the per-code decode ALU is register-resident; else it stays a REDUCE loop that re-loads and does not hide
+        # under the weight stream. GROUP+LOCAL alone leaves it a loop -> ~2x slower. Unroll the packed period FIRST
+        # (before GROUP): unroll-then-group beat group-then-unroll 335 vs 434us (trellis 17408x5120, gfx1100; the
+        # default heuristic without MV_DEQUANT was 641us). Unroll ONLY the largest small genuine REDUCE axis (the
+        # period), not the K-block reduce (unrolling that too measured worse).
+        if getenv("MV_UNROLL_REDUCE", 1):
+          cap = getenv("MV_UNROLL_MAX", 32)
+          small = [i for i,t in enumerate(k.axis_types) if t is AxisType.REDUCE
+                   and isinstance(sz:=k.full_shape[i], int) and 1 < sz <= cap]
+          # keep >=1 bare REDUCE axis for GROUP to split (GROUP uses axes_of(REDUCE)[0])
+          if small and (len(k.axes_of(AxisType.REDUCE)) > 1 or MV_THREADS_PER_ROW <= 1):
+            try: k.apply_opt(Opt(OptOps.UNROLL, k.unrollable_dims.index(max(small, key=lambda i: k.full_shape[i])), 0))
+            except (KernelOptError, ValueError): pass
         try:
           if MV_THREADS_PER_ROW > 1: k.apply_opt(Opt(OptOps.GROUP, 0, MV_THREADS_PER_ROW))
         except KernelOptError: pass
