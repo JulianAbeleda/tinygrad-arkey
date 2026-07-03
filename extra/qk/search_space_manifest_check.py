@@ -83,18 +83,13 @@ def check_refuted_axis_drift() -> list[str]:
   return errors
 
 
-def main(argv: list[str]) -> int:
-  paths = [ROOT / a if not pathlib.Path(a).is_absolute() else pathlib.Path(a) for a in argv[1:]] or [SEARCH_PROFILES]
+def build() -> int:
+  paths = [SEARCH_PROFILES]
   errors: list[str] = []
   # always validate the retained route-profile contract + refuted-axis single-source agreement.
-  if not argv[1:] and SEARCH_PROFILES.exists():
+  if SEARCH_PROFILES.exists():
     errors.extend(check_search_profiles(SEARCH_PROFILES))
     errors.extend(check_refuted_axis_drift())
-  for path in paths:
-    if path.name != "search_profiles.json":
-      errors.append(f"{path}: only search_profiles.json is retained in tinygrad; candidate schemas belong in BoltBeam")
-      continue
-    if argv[1:]: errors.extend(check_search_profiles(path))
   if errors:
     print(f"SEARCH SPACE MANIFEST CHECK: FAIL ({len(errors)} issue(s))")
     print("\n".join(errors))
@@ -104,4 +99,6 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-  raise SystemExit(main(sys.argv))
+  sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("search_space_manifest"))

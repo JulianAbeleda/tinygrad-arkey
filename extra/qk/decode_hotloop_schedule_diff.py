@@ -178,10 +178,8 @@ def _first_metric(x: dict, path: list[str], default=None):
     x = x.get(p)
   return x if x is not None else default
 
-def main() -> int:
-  owned_p = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else OWNED
-  gen_p = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else GEN
-  out = {"owned": analyze(owned_p), "generated": analyze(gen_p)}
+def build() -> dict:
+  out = {"owned": analyze(OWNED), "generated": analyze(GEN)}
   o, g = out["owned"].get("selected_loop") or {}, out["generated"].get("selected_loop") or {}
   om, gm = o.get("metrics", {}), g.get("metrics", {})
   ob = _first_metric(om, ["mix", "ds_bpermute"], 0); gb = _first_metric(gm, ["mix", "ds_bpermute"], 0)
@@ -205,10 +203,9 @@ def main() -> int:
     "ds_bpermute_shadow_fill_owned_vs_generated": [ofill, gfill],
   }
   out["verdict"] = verdict
-  OUTDIR = ROOT / "bench/qk-decode-hotloop-schedule-diff"; OUTDIR.mkdir(parents=True, exist_ok=True)
-  (OUTDIR / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0
+  return out
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("hotloop_schedule_diff"))
