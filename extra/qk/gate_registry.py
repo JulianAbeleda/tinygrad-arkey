@@ -33,6 +33,8 @@ class GateSpec:
   inputs: tuple[str, ...] = ()   # repo-relative artifacts consumed (declared, greppable for retirement checks)
   pass_verdicts: frozenset[str] | None = None  # None = exit 0 whenever build() completes
   env: dict[str, str] = field(default_factory=dict)  # setdefault'd BEFORE entry import (sacred env ordering)
+  artifact_name: str = "latest.json"  # override for gates sharing one bench dir with distinct filenames
+  snapshot: bool = False         # also write a dated <name>-<ts>.json copy next to the artifact
 
 
 GATES: tuple[GateSpec, ...] = (
@@ -113,7 +115,9 @@ def run(name: str) -> int:
   if spec.out_dir is not None:
     outdir = ROOT / "bench" / spec.out_dir
     outdir.mkdir(parents=True, exist_ok=True)
-    (outdir / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
+    blob = json.dumps(out, indent=2) + "\n"
+    (outdir / spec.artifact_name).write_text(blob)
+    if spec.snapshot: (outdir / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}.json").write_text(blob)
   print(json.dumps(out, indent=2))
   if spec.pass_verdicts is None: return 0
   return 0 if out.get("verdict") in spec.pass_verdicts else 1
