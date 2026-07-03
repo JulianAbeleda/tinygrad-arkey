@@ -97,6 +97,21 @@ def repro_band(samples) -> dict:
           "mean": round(statistics.fmean(xs), 3), "spread_pct": round((max(xs) - min(xs)) / med * 100, 2) if med else None,
           "mad": round(statistics.median([abs(x - med) for x in xs]), 3)}
 
+# ---- the ONE per-call timing loop (do not clone this) -----------------------------------------------------------
+def time_fn(fn, n: int = 200, warmup: int = 0, device: str = "AMD") -> list[float]:
+  """Per-call wall times (us) for a synced GPU callable. Pair with repro_band() for the noise band, or
+  statistics.median() for a point estimate. The ONE timing loop -- ~17 harnesses used to clone this
+  synchronize()+perf_counter()+median shape; route through here instead. Returns the sample LIST (not a bare
+  median) so it composes with repro_band(). The tinygrad import is LAZY so this module stays importable before
+  tinygrad on the env-ordering-sensitive paths."""
+  from tinygrad import Device                       # lazy: keep harness_contract importable pre-tinygrad
+  dev = Device[device]
+  for _ in range(warmup): fn(); dev.synchronize()
+  dev.synchronize(); ts = []
+  for _ in range(n):
+    t0 = time.perf_counter(); fn(); dev.synchronize(); ts.append((time.perf_counter() - t0) * 1e6)
+  return ts
+
 # ---- contract self-audit (does THIS artifact capture the 13 fields?) --------------------------------------------
 def _has(d: dict, *keys) -> bool:
   return any(k in d for k in keys)
