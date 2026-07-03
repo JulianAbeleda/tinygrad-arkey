@@ -14,7 +14,7 @@ Writes bench/tg-p8-generated-8b-attention-parity/delta_audit.json. Verdict TG_P8
 TG_P8_1_BLOCKED_METADATA_MISSING / TG_P8_1_BLOCKED_MULTI_CAUSE_UNRESOLVED.
 """
 from __future__ import annotations
-import json, math, pathlib
+import json, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/tg-p8-generated-8b-attention-parity"
@@ -24,12 +24,11 @@ Hq, Hkv, Hd, MAXC, L = 32, 8, 128, 4608, 128
 def _ceildiv(a, b): return (a + b - 1) // b
 
 
-def main():
+def build():
   base = json.load(open(OUT / "baseline.json"))
   by_ctx = {r["ctx"]: r for r in base["per_ctx"]}
   if 512 not in by_ctx or 4096 not in by_ctx:
-    json.dump({"verdict": "TG_P8_1_BLOCKED_METADATA_MISSING", "reason": "baseline missing ctx512/ctx4096"}, open(OUT / "delta_audit.json", "w"), indent=2)
-    print("TG_P8_1_BLOCKED_METADATA_MISSING"); return 1
+    return {"verdict": "TG_P8_1_BLOCKED_METADATA_MISSING", "reason": "baseline missing ctx512/ctx4096"}
 
   # ---- per-kernel deltas at the protected contexts ----
   o512, o4096 = by_ctx[512]["owned_attn_split"], by_ctx[4096]["owned_attn_split"]
@@ -99,11 +98,10 @@ def main():
                "do not re-chase 14B combine collapse (ledgered refuted)",
                "do not add HIP/ASM"],
   }
-  json.dump(audit, open(OUT / "delta_audit.json", "w"), indent=2)
-  print("TG_P8_1_PASS_DELTA_CLASSIFIED primary=", primary_class, "tile_share=", tile_share, "%",
-        "owned_scaling=", owned_tile_scaling, "gen_scaling=", gen_tile_scaling)
-  return 0
+  return audit
 
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("tg_p8_delta_audit"))

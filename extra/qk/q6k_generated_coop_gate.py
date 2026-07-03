@@ -13,19 +13,17 @@ by the BoltBeam emitter step}. Verdict TG_P3_PASS_Q6K_GENERATED_COOP or a precis
 """
 from __future__ import annotations
 
-import json, pathlib, statistics, time
+import pathlib, statistics, time
 
 import numpy as np
 
 from tinygrad import Tensor, dtypes, Device
-from tinygrad.helpers import GlobalCounters
 
 from extra.qk.quant.q6_k_gemv_primitive import q6k_coop_partial_kernel, q6k_gemv_partial_kernel, parse_opt
 from extra.qk.layout import Q6_K_BLOCK_ELEMS, Q6_K_BLOCK_BYTES
-from extra.qk.q6k_route_spec import Q6KGEMVRouteSpec, spec_for_role, emit_q6k_gemv_kernel
+from extra.qk.q6k_route_spec import spec_for_role, emit_q6k_gemv_kernel
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/tg-p3-q6k-generated-coop"
 
 # tracked 8B Q6_K decode shapes + their shipped route parameters (from tinygrad/llm/decode_routes.py Q6_K branches):
 #   ffn_down 4096x12288 coop rt4 (parts=1) ; lm_head 151936x4096 coop rt4 (parts=1) ; attn_v 1024x4096 partial parts=4
@@ -65,8 +63,7 @@ def _time(fn, iters=30):
   return statistics.median(ts)
 
 
-def main():
-  OUT.mkdir(parents=True, exist_ok=True)
+def build():
   results, all_identical, ratios = [], True, []
   for c in CASES:
     rows, k, parts = c["rows"], c["k"], c["parts"]
@@ -105,20 +102,10 @@ def main():
             "speed_equivalent_tol": 1.05, "cases": results,
             "route_identity": {"generated_names": [r["kernel_name"] for r in results],
                                "shipped_names": ["q6k_coop_partial_*", "q6k_gemv_partial_*"]}}
-  json.dump(latest, open(OUT / "latest.json", "w"), indent=2)
-  json.dump({"cases": results, "worst_gen_over_shipped": round(worst, 4)}, open(OUT / "microgate.json", "w"), indent=2)
-  json.dump({"basis": "per-kernel median wall time, 30 iters, byte-identical output; W==D-equivalent since math+structure identical",
-             "cases": [{"role": r["role"], "gen_over_shipped": r["gen_over_shipped"]} for r in results]},
-            open(OUT / "wd.json", "w"), indent=2)
-  md = [f"# TG-P3 Q6_K Generated Coop\n", f"Verdict: **{verdict}**\n",
-        f"All byte-identical: {all_identical}; worst generated/shipped time ratio: {worst:.4f}\n",
-        "| role | family | identical | shipped ms | generated ms | gen/shipped |", "|---|---|---|---|---|---|"]
-  for r in results:
-    md.append(f"| {r['role']} | {r['route_family']} | {r['identical_bytes']} | {r['shipped_ms']} | {r['generated_ms']} | {r['gen_over_shipped']} |")
-  open(OUT / "summary.md", "w").write("\n".join(md) + "\n")
-  print(verdict, "all_identical=", all_identical, "worst_ratio=", round(worst, 4))
-  return 0 if verdict == "TG_P3_PASS_Q6K_GENERATED_COOP" else 1
+  return latest
 
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("q6k_generated_coop"))

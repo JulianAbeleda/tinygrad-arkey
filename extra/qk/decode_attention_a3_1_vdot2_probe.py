@@ -6,12 +6,11 @@ can generated tinygrad code expose AMD v_dot2 at all?
 """
 from __future__ import annotations
 
-import json, os, subprocess, sys, time
+import os, subprocess, sys, time
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-decode-attention-a3-1-vdot2"
 
 
 def static_hook_check() -> dict[str, Any]:
@@ -110,17 +109,7 @@ def build() -> dict[str, Any]:
   }
 
 
-def main() -> int:
-  os.chdir(ROOT)
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  latest = OUT / "latest.json"
-  stamped = OUT / f"decode-attention-a3-1-vdot2-probe-{out['timestamp']}.json"
-  latest.write_text(json.dumps(out, indent=2) + "\n")
-  stamped.write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if out["verdict"] in ("A3_1_RENDERER_VDOT2_PROBE_PASS", "A3_1_RENDERER_VDOT2_PROBE_INCONCLUSIVE") else 1
-
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("decode_attention_a3_1_vdot2"))

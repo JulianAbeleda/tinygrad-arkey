@@ -2,16 +2,15 @@
 """G2.0-G2.2 static representation probe for pure generated Q4_K GEMV."""
 from __future__ import annotations
 
-import json, os
+import pathlib
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from tinygrad.uop.ops import UOp
 from extra.qk.layout_coalesce_check import axis_stride, is_coalesced, vector_width
 from extra.qk.gemv_g2_lanemap import Q4KGateUpLaneMap
 
-OUT_DIR = Path("bench/qk-gemv-g2-representation-probe")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 def eval_expr(expr:UOp, axes:dict[str, UOp], values:dict[str, int]) -> int:
@@ -21,7 +20,7 @@ def eval_expr(expr:UOp, axes:dict[str, UOp], values:dict[str, int]) -> int:
   return int(out.arg)
 
 
-def run_probe() -> dict[str, Any]:
+def build() -> dict[str, Any]:
   lm = Q4KGateUpLaneMap()
   axes = lm.axis_uops()
   lane = lm.lane_expr(axes)
@@ -85,17 +84,7 @@ def run_probe() -> dict[str, Any]:
   }
 
 
-def main() -> None:
-  OUT_DIR.mkdir(parents=True, exist_ok=True)
-  result = run_probe()
-  stamp_path = OUT_DIR / f"g2-representation-probe-{result['timestamp']}.json"
-  latest_path = OUT_DIR / "latest.json"
-  stamp_path.write_text(json.dumps(result, indent=2) + "\n")
-  latest_path.write_text(json.dumps(result, indent=2) + "\n")
-  print(json.dumps(result, indent=2))
-  if result["verdict"] != "G2_LANEMAP_ADDRESS_BUILDER_PASS": raise SystemExit(1)
-
-
 if __name__ == "__main__":
-  os.chdir(Path(__file__).resolve().parents[2])
-  main()
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("gemv_g2_representation"))

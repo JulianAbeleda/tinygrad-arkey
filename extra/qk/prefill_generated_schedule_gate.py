@@ -10,13 +10,12 @@ TG_P4_PASS_PREFILL_GENERATED_SCHEDULE or a precise blocker.
 """
 from __future__ import annotations
 
-import json, pathlib
+import pathlib
 
-from extra.qk.prefill_graph_gemm_route import _kernel, _resolve_schedule
+from extra.qk.prefill_graph_gemm_route import _kernel
 from extra.qk.prefill_schedule_spec import describe_prefill_schedule, emit_prefill_gemm_from_spec
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/tg-p4-prefill-generated-schedule"
 
 # tracked dense prefill GEMM shapes (M=512 ubatch). (out_f, in_f, role, expected_family)
 CASES = [
@@ -34,8 +33,7 @@ def _insts_sig(built):
   return stream, (lds_bytes, bm, bn, threads)
 
 
-def main():
-  OUT.mkdir(parents=True, exist_ok=True)
+def build():
   results, all_identical, policy_ok = [], True, True
   for c in CASES:
     legacy = _kernel(c["out_f"], c["in_f"])
@@ -60,19 +58,10 @@ def main():
             "cases": results,
             "route_identity": {"generated_name_pattern": "prefill_gen_sched_gemm_*",
                                "legacy_name_pattern": "prefill_graph_gemm_*"}}
-  json.dump(latest, open(OUT / "latest.json", "w"), indent=2)
-  json.dump([r["spec"] for r in results], open(OUT / "schedule_spec.json", "w"), indent=2)
-  md = [f"# TG-P4 Prefill Generated Schedule\n", f"Verdict: **{verdict}**\n",
-        f"All instructions identical: {all_identical}; role policy preserved: {policy_ok}\n",
-        "| role | out_f | in_f | family | expected | family_ok | insts_identical | n_insts |",
-        "|---|---|---|---|---|---|---|---|"]
-  for r in results:
-    md.append(f"| {r['role']} | {r['out_f']} | {r['in_f']} | {r['route_family']} | {r['expected_family']} | "
-              f"{r['family_ok']} | {r['instructions_identical']} | {r['n_insts']} |")
-  open(OUT / "summary.md", "w").write("\n".join(md) + "\n")
-  print(verdict, "all_identical=", all_identical, "policy_ok=", policy_ok)
-  return 0 if verdict == "TG_P4_PASS_PREFILL_GENERATED_SCHEDULE" else 1
+  return latest
 
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("prefill_generated_schedule"))
