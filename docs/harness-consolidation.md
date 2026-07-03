@@ -47,8 +47,15 @@ loop is `time_fn` (see plan item 1) — still do not clone a `synchronize()+perf
    `statistics.median` loop; `north_star_flash_attn_tile_ab` already imports `time_fn` from
    `decode_warp_flash_tile_ab` (proof the share is wanted). **DEFERRED** (edits `harness_contract`).
    Highest value: kills the biggest single clone.
-2. **Retire `model_e2e_bench.py`** — its own docstring says `model_authority_bench.py` "replaces"
-   it; both write the same `bench/models/qwen/.../<id>.json`. **DEFERRED** (replacement is prefill turf).
+2. ~~Retire `model_e2e_bench.py`~~ **WITHDRAWN (2026-07-03, verified in-tree).** The supersession was
+   inverted: `model_authority_bench.py` *claims* to replace it ("Replaces the diagnostic end-to-end
+   numbers") and writes a **different** artifact (`<id>.authority.json`), but has **zero importers/refs**
+   — it was written as a successor and never adopted. `model_e2e_bench.py` is the LIVE tool: the README's
+   current decode perf table is measured with it, and `llama_cpp_bench.py` merges llama numbers into its
+   artifacts. They are also not clones — decode is measured differently (e2e = generate-window median;
+   authority = fixed-ctx 128/512 W==D matched to llama depth). Consolidating means *adopting* the authority
+   bench (migrate README + `llama_cpp_bench`, a methodology change), not deleting the live one. Left for an
+   explicit owner decision, not a mechanical dedup.
 3. **Delete dead `generate.generate_one` + `configure_process_env`** — zero importers; the callers
    its docstring names (`llm_rollout.py`, `llm_eval_harness.py`) no longer exist. **DEFERRED**
    (edits `generate.py`).
@@ -128,12 +135,14 @@ Verify per file: run old vs new on the GPU, confirm the reported median is withi
 names (`llm_rollout.py`, `llm_eval_harness.py`) no longer exist. Re-grep to confirm, then delete.
 Keep `load_model_and_tokenizer` (imported by ~22 files) and `child_env` (see step 5).
 
-## Step 4 — retire `model_e2e_bench.py`
+## Step 4 — ~~retire `model_e2e_bench.py`~~ WITHDRAWN
 
-Its docstring says `model_authority_bench.py` "replaces" it; both write `bench/models/qwen/.../<id>.json`.
-Confirm `model_authority_bench` covers the same fields, then delete `model_e2e_bench` (separate commit
-from any edit). While there, drop `model_e2e_bench`'s private `_git` in favor of
-`harness_contract.provenance` if any of it is worth keeping first (item 6, folds in here).
+Do not delete `model_e2e_bench.py`. On inspection (2026-07-03) the supersession claim is inverted:
+`model_authority_bench.py` is the unadopted successor (zero refs, writes `<id>.authority.json`), while
+`model_e2e_bench.py` is what the README perf table and `llama_cpp_bench.py` actually use. See dedup-plan
+item 2 above. Consolidating is a real methodology decision (adopt the authority bench, migrate its two
+consumers) — an owner call, not a mechanical dedup. Its private `_git` still duplicates
+`harness_contract.provenance`; fold that in only if/when the bench is touched for the adoption decision.
 
 ## Step 5 — unify the two `child_env` builders
 
