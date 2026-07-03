@@ -10,9 +10,9 @@ Usage:
       --artifact bench/models/qwen/data/amd-gfx1100/qwen3-8b.json
 """
 from __future__ import annotations
-import os, sys, json, argparse, subprocess, pathlib
+import json, argparse, pathlib
 
-DEFAULT_BIN = "/home/ubuntu/env/llama.cpp/build/bin/llama-bench"
+from extra.llm.llama_bench import LLAMA_BENCH_BIN as DEFAULT_BIN, build_llama_bench_cmd, run_llama_bench_cmd, llama_pp_row, llama_tg_rows
 
 def main():
   ap = argparse.ArgumentParser()
@@ -26,12 +26,10 @@ def main():
   ap.add_argument("--reps", type=int, default=5)
   args = ap.parse_args()
 
-  cmd = [args.bin, "-m", args.model, "-ngl", str(args.ngl), "-p", str(args.prefill), "-n", str(args.gen),
-         "-r", str(args.reps), "-o", "json"]
-  out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
-  rows = json.loads(out)
-  pp = next((r for r in rows if r.get("n_prompt") and not r.get("n_gen")), None)
-  tg = next((r for r in rows if r.get("n_gen") and not r.get("n_prompt")), None)
+  cmd = build_llama_bench_cmd(args.model, ["-p", args.prefill, "-n", args.gen], bin=args.bin, ngl=args.ngl, reps=args.reps)
+  rows = run_llama_bench_cmd(cmd)
+  pp = llama_pp_row(rows)
+  tg = next(iter(llama_tg_rows(rows)), None)
   llama = {
     "bin": args.bin,
     "build_commit": (tg or pp or {}).get("build_commit"),

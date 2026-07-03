@@ -18,8 +18,9 @@ Usage:
 from __future__ import annotations
 import os, sys, json, argparse, subprocess, pathlib
 
+from extra.llm.llama_bench import build_llama_bench_cmd, run_llama_bench_cmd, llama_pp_row, llama_tg_rows
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-LLAMA_BIN = "/home/ubuntu/env/llama.cpp/build/bin/llama-bench"
 
 def run_decode_authority(model:str, ckpts:str) -> dict:
   env = {**os.environ, "DEV": "AMD", "JIT": "1", "PYTHONPATH": str(ROOT), "QK_MODEL": model, "QK_CKPTS": ckpts}
@@ -31,14 +32,12 @@ def run_decode_authority(model:str, ckpts:str) -> dict:
 def run_llama_matched(model:str, depths:list[int], reps:int=3) -> dict:
   # decode at matched depths + pp512
   d_arg = ",".join(str(d) for d in depths)
-  cmd = [LLAMA_BIN, "-m", model, "-ngl", "99", "-n", "128", "-d", d_arg, "-p", "512", "-r", str(reps), "-o", "json"]
-  rows = json.loads(subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode())
-  decode_by_depth, prefill = {}, None
-  for r in rows:
-    if r.get("n_gen") and not r.get("n_prompt"):
-      decode_by_depth[str(r.get("n_depth", 0))] = {"tok_s": round(r["avg_ts"], 2), "stddev": round(r["stddev_ts"], 2)}
-    elif r.get("n_prompt") and not r.get("n_gen"):
-      prefill = {"pp": r["n_prompt"], "tok_s": round(r["avg_ts"], 1), "stddev": round(r["stddev_ts"], 1)}
+  cmd = build_llama_bench_cmd(model, ["-n", "128", "-d", d_arg, "-p", "512"], reps=reps)
+  rows = run_llama_bench_cmd(cmd)
+  decode_by_depth = {str(r.get("n_depth", 0)): {"tok_s": round(r["avg_ts"], 2), "stddev": round(r["stddev_ts"], 2)}
+                     for r in llama_tg_rows(rows)}
+  pp = llama_pp_row(rows)
+  prefill = {"pp": pp["n_prompt"], "tok_s": round(pp["avg_ts"], 1), "stddev": round(pp["stddev_ts"], 1)} if pp else None
   return {"decode_by_depth": decode_by_depth, "prefill_pp512": prefill,
           "build_commit": (rows[0].get("build_commit") if rows else None)}
 

@@ -13,11 +13,12 @@ Outputs:
 """
 from __future__ import annotations
 
-import argparse, json, math, pathlib, struct, subprocess
+import argparse, json, math, pathlib, struct
 from typing import Any, Callable
 
+from extra.llm.llama_bench import LLAMA_BENCH_BIN as DEFAULT_LLAMA_BENCH, build_llama_bench_cmd, run_llama_bench_cmd, llama_tg_rows
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-DEFAULT_LLAMA_BENCH = "/home/ubuntu/env/llama.cpp/build/bin/llama-bench"
 
 
 def _read_unpack(fmt:str, n:int, f) -> Any: return struct.unpack(fmt, f.read(n))[0]
@@ -75,15 +76,12 @@ def model_meta(path:pathlib.Path, cache_k:str, cache_v:str) -> dict[str, Any]:
 
 
 def run_depth(args, depth:int) -> dict[str, Any]:
-  cmd = [args.llama_bench, "-m", args.model, "-ngl", str(args.ngl), "-n", str(args.gen), "-p", "0",
-         "-d", str(depth), "-r", str(args.reps), "-ctk", args.cache_type_k, "-ctv", args.cache_type_v,
-         "-o", "json"]
-  if args.flash_attn is not None: cmd += ["-fa", args.flash_attn]
+  spec = ["-n", args.gen, "-p", "0", "-d", depth, "-ctk", args.cache_type_k, "-ctv", args.cache_type_v]
+  if args.flash_attn is not None: spec += ["-fa", args.flash_attn]
+  cmd = build_llama_bench_cmd(args.model, spec, bin=args.llama_bench, ngl=args.ngl, reps=args.reps)
   try:
-    raw = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=args.timeout).decode()
-    start = raw.find("[")
-    rows = json.loads(raw[start:] if start >= 0 else raw)
-    row = next(r for r in rows if r.get("n_gen") and not r.get("n_prompt"))
+    rows = run_llama_bench_cmd(cmd, timeout=args.timeout, merge_stderr=True)
+    row = next(iter(llama_tg_rows(rows)))
     tok_s = float(row["avg_ts"])
     return {
       "ctx": depth, "ok": True, "tok_s": tok_s, "stddev_tok_s": float(row.get("stddev_ts", 0.0)),
