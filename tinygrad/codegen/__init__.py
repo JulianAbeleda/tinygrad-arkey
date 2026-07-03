@@ -272,9 +272,44 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
   if VIZ: graph_rewrite(prg, PatternMatcher([]), name="View Program")
   return prg
 
+# LOWER_DISK_CACHE: persist the lowered/rendered Program (to_program's output) across processes. Measurement showed the
+# lowering pipeline -- not kernel compilation -- is the startup tax (~10s of a ~13s first token, and it re-runs on WARM
+# restart because to_program_cache is per-process). The compiled-binary disk cache (device.py) sits one level below and
+# only saves the comgr subprocess (~0.5s). The lowered Program pickles round-trip identically (UOp.__reduce__); the
+# lowering is cross-process deterministic (proven: 43/43 rendered-source compile-cache hits warm). Fails SAFE: on any
+# unpickle error or table-fingerprint mismatch (codegen source changed) it recomputes. Correctness authority stays the
+# generated output (token-identity) -- this cache only skips re-deriving a byte-identical Program.
+LOWER_DISK_CACHE = getenv("LOWER_DISK_CACHE", 0)
+_LOWER_CACHE_TABLE: str|None = None
+def _lower_cache_table() -> str:
+  global _LOWER_CACHE_TABLE
+  if _LOWER_CACHE_TABLE is None:
+    import hashlib, pathlib
+    h, here = hashlib.sha256(), pathlib.Path(__file__).resolve().parent
+    for rel in ("__init__.py", "../uop/ops.py", "../uop/render.py", "../renderer/cstyle.py", "../renderer/__init__.py"):
+      try: h.update((here / rel).read_bytes())
+      except Exception: pass
+    _LOWER_CACHE_TABLE = "to_program_" + h.hexdigest()[:12]   # codegen fingerprint -> a source change invalidates
+  return _LOWER_CACHE_TABLE
+
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
   key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"), getenv("DECODE_OUTER_B_SPLIT"))
-  if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
+  if (prg:=to_program_cache.get(key)) is not None: return prg
+  _dk = None
+  if LOWER_DISK_CACHE:
+    import hashlib, pickle
+    from tinygrad.helpers import diskcache_get
+    _dk = hashlib.sha256(ast.key + repr(key[1:]).encode()).hexdigest()
+    if (blob:=diskcache_get(_lower_cache_table(), _dk)) is not None:
+      try:
+        to_program_cache[key] = prg = pickle.loads(blob); return prg
+      except Exception: pass   # fail safe -> recompute below
+  to_program_cache[key] = prg = do_to_program(ast, renderer)
+  if LOWER_DISK_CACHE and _dk is not None:
+    import pickle
+    from tinygrad.helpers import diskcache_put
+    try: diskcache_put(_lower_cache_table(), _dk, pickle.dumps(prg))
+    except Exception: pass
   return prg
