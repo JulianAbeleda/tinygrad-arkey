@@ -161,6 +161,18 @@ GATES: tuple[GateSpec, ...] = (
            kind="gate", needs_gpu=True, env={"DEV": "AMD"}),
   GateSpec(name="asm_scheduler_inc3", entry="extra.qk.asm_scheduler_proofs:build_inc3",
            kind="gate", needs_gpu=True, env={"DEV": "AMD"}),
+  GateSpec(name="tg_p9_live_split", entry="extra.qk.tg_p9_live_split:build_live_split",
+           kind="microgate", needs_gpu=True, out_dir="tg-p9-pure-attention-primitive-route",
+           artifact_name="live_split_microgate.json", env={"DEV": "AMD"},
+           pass_verdicts=frozenset({"TG_P9_1_PASS_LIVE_TC_SPLIT_IR"})),
+  GateSpec(name="tg_p9_live_split_tile", entry="extra.qk.tg_p9_live_split:build_live_split_tile",
+           kind="microgate", needs_gpu=True, out_dir="tg-p9-pure-attention-primitive-route",
+           artifact_name="live_split_tile_microgate.json", env={"DEV": "AMD"},
+           pass_verdicts=frozenset({"TG_P9_2_PASS_LIVE_SPLIT_TILE"})),
+  GateSpec(name="tg_p9_combine", entry="extra.qk.tg_p9_live_split:build_combine",
+           kind="microgate", needs_gpu=True, out_dir="tg-p9-pure-attention-primitive-route",
+           artifact_name="combine_microgate.json", env={"DEV": "AMD"},
+           pass_verdicts=frozenset({"TG_P9_4_PASS_COMBINE_MICROGATE"})),
 )
 
 BY_NAME = {g.name: g for g in GATES}
