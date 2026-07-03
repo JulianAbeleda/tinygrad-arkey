@@ -153,6 +153,14 @@ GATES: tuple[GateSpec, ...] = (
            out_dir="qk-decode-attention-online-pv-lanemap", snapshot=True,
            inputs=("bench/qk-decode-attention-online-pv-tile/latest.json",),
            pass_verdicts=frozenset({"ONLINE_PV_TILE_P3_LANEMAP_READY"})),
+  GateSpec(name="asm_scheduler_inc0", entry="extra.qk.asm_scheduler_proofs:build_inc0",
+           kind="gate", needs_gpu=True, env={"DEV": "AMD"}),
+  GateSpec(name="asm_scheduler_inc1", entry="extra.qk.asm_scheduler_proofs:build_inc1",
+           kind="gate", needs_gpu=True, env={"DEV": "AMD"}),
+  GateSpec(name="asm_scheduler_inc2", entry="extra.qk.asm_scheduler_proofs:build_inc2",
+           kind="gate", needs_gpu=True, env={"DEV": "AMD"}),
+  GateSpec(name="asm_scheduler_inc3", entry="extra.qk.asm_scheduler_proofs:build_inc3",
+           kind="gate", needs_gpu=True, env={"DEV": "AMD"}),
 )
 
 BY_NAME = {g.name: g for g in GATES}
