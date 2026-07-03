@@ -1,5 +1,5 @@
 from __future__ import annotations
-import functools, itertools, os, pathlib
+import copy, functools, itertools, os, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function, Device
 from tinygrad.codegen.opt import Opt, OptOps
@@ -42,6 +42,11 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # prefill-v2 chunk instead of the slow 32-token symbolic fallback. PREFILL_REMAINDER_FIX=0 reverts. See
 # docs/prefill-route-schedule-result-20260620.md.
 PREFILL_REMAINDER_FIX = bool(getenv("PREFILL_REMAINDER_FIX", 1))
+# Opt-in (within PREFILL_V2): per-layer fp16 overlay. Instead of realizing a resident fp16 copy of every covered
+# linear up-front (~fp16-model-size extra VRAM), each block dequants its Q4/Q6 weights to fp16 inside a layer-sized
+# TinyJit. Replaying the same captured layer graph with different block tensors reuses the graph's fp16 scratch
+# buffers, so peak overlay is one layer signature rather than the whole model. Cost: dequant reruns each prefill.
+PREFILL_CHUNKED = bool(getenv("PREFILL_CHUNKED", 0))
 # Restricted default-ON (within PREFILL_V2): route eligible fp16 prefill matmuls through the dependency-free
 # graph-capturable RDNA3 GEMM. Passed all 4 default-on readiness gates (synced 1.61x, 0/256 greedy mismatches,
 # 11/11 fallback, 5/5 OOM; docs/prefill-graph-gemm-default-on-readiness-result-20260620.md). Default-on is
@@ -112,6 +117,15 @@ def _pf16(lin, x:Tensor) -> Tensor:
   # whole dequant into the matmul -> bandwidth/dequant-bound ~3% peak (no TC win). So we realize a clean fp16
   # weight ONCE per linear (cached as `_pf16_w` by _install_prefill_v2_warmstart) and matmul against that.
   w = getattr(lin, "_pf16_w", None)
+  if PREFILL_CHUNKED and w is None:
+    # Per-layer overlay: in the chunked path this runs inside a layer-sized TinyJit, whose replay reuses this fp16
+    # dequant scratch for every block with the same signature. Do not store it on the Linear; that would pin all blocks.
+    w_local = lin.weight.cast(dtypes.float16).contiguous()
+    if PREFILL_GRAPH_GEMM:
+      routed = qk_ops.route_pf16_graph_gemm(lin, x, w=w_local)
+      if routed is not None: return routed
+    b = getattr(lin, "bias", None)
+    return x.cast(dtypes.float16).linear(w_local.transpose(), b.cast(dtypes.float16) if b is not None else None)
   if PREFILL_GRAPH_GEMM and w is not None:
     routed = qk_ops.route_pf16_graph_gemm(lin, x)
     if routed is not None: return routed
@@ -558,6 +572,7 @@ class Transformer:
     # cores apply, distinct from the symbolic-batch prefill_jit. Only ever called when PREFILL_V2.
     self.prefill_v2_jit = TinyJit(self.forward)
     self.prefill_v2_jits: dict = {}   # concrete-KV: one prefill jit per concrete start_pos (PREFILL_CONCRETE_KV)
+    self.prefill_v2_layer_jits: dict = {}
     # prefill v2 warmstart table is built here but installed into the global codegen knob ONLY for the duration
     # of the prefill-v2 forward (see __call__), to contain that ambient power rather than leave it set process-wide.
     self._pf16_warmstart:dict|None = None
@@ -583,6 +598,62 @@ class Transformer:
         out_f, in_f = self._prefill_v2_dims(lin)
         if out_f is not None: yield lin, out_f, in_f
 
+  def _clone_block_shell(self, block:FFNBlock) -> FFNBlock:
+    # Shallow-copy the module tree so rebinding template tensors for JIT inputs never mutates a real decode block.
+    tmpl = copy.copy(block)
+    for k, v in block.__dict__.items():
+      if isinstance(v, dict): setattr(tmpl, k, v.copy())
+      elif isinstance(v, list): setattr(tmpl, k, v.copy())
+      elif hasattr(v, "__dict__"): setattr(tmpl, k, copy.copy(v))
+    return tmpl
+
+  def _set_state_tensor(self, obj, name:str, val:Tensor):
+    parts = name.split(".")
+    cur = obj
+    for p in parts[:-1]:
+      cur = cur[int(p)] if isinstance(cur, (list, tuple)) else cur[p] if isinstance(cur, dict) else getattr(cur, p)
+    p = parts[-1]
+    if isinstance(cur, list): cur[int(p)] = val
+    elif isinstance(cur, dict): cur[p] = val
+    else: setattr(cur, p, val)
+
+  def _prefill_v2_block_state(self, block:FFNBlock) -> tuple[tuple[str, ...], tuple[int, ...], tuple[Tensor, ...]]:
+    sd = nn.state.get_state_dict(block)
+    names, vals, val_idx, seen = tuple(sd.keys()), [], [], {}
+    for n in names:
+      t = sd[n]
+      k = t.uop
+      if k not in seen:
+        seen[k] = len(vals)
+        vals.append(t)
+      val_idx.append(seen[k])
+    return names, tuple(val_idx), tuple(vals)
+
+  def _prefill_v2_layer_key(self, block:FFNBlock, names:tuple[str, ...], val_idx:tuple[int, ...], vals:tuple[Tensor, ...], start_pos:int|UOp):
+    sp_key = ("int", start_pos) if isinstance(start_pos, int) else ("sym",)
+    return (type(block), tuple((n, vals[i].shape, vals[i].dtype) for n, i in zip(names, val_idx)), val_idx, sp_key)
+
+  def _prefill_v2_layer_jit(self, block:FFNBlock, names:tuple[str, ...], val_idx:tuple[int, ...], vals:tuple[Tensor, ...], start_pos:int|UOp) -> TinyJit:
+    key = self._prefill_v2_layer_key(block, names, val_idx, vals, start_pos)
+    if key not in self.prefill_v2_layer_jits:
+      tmpl, state_names, state_idx = self._clone_block_shell(block), names, val_idx
+      tmpl._use_flash, tmpl._prefill_v2, tmpl._ring_freqs, tmpl._ring_full = False, True, None, False
+      def bind_state(state_vals:tuple[Tensor, ...]):
+        if state_idx and max(state_idx) >= len(state_vals):
+          raise RuntimeError(f"prefill layer JIT state mismatch: need {max(state_idx)+1} tensors, got {len(state_vals)}")
+        for n, i in zip(state_names, state_idx): self._set_state_tensor(tmpl, n, state_vals[i])
+      if isinstance(start_pos, int):
+        sp_const = start_pos
+        def layer_forward(x:Tensor, *state_vals:Tensor) -> Tensor:
+          bind_state(state_vals)
+          return tmpl(x, sp_const)
+      else:
+        def layer_forward(x:Tensor, sp:UOp, *state_vals:Tensor) -> Tensor:
+          bind_state(state_vals)
+          return tmpl(x, sp)
+      self.prefill_v2_layer_jits[key] = TinyJit(layer_forward)
+    return self.prefill_v2_layer_jits[key]
+
   def _build_prefill_v2_warmstart(self) -> dict:
     # The loop-found per-shape TC schedule for the prefill-v2 fp16 FFN/attn matmuls, keyed by the in-model
     # kernel signature (verified): (frozenset({out_features, PREFILL_UBATCH}), in_features). Shapes are
@@ -598,14 +669,18 @@ class Transformer:
     # buffer makes the prefill-v2 matmul a real TC GEMM (~13x prefill on 8B). COST: ~fp16-model-size extra VRAM
     # (it coexists with the Q4_K decode storage). Gated/opt-in; called at the end of from_gguf when PREFILL_V2.
     covered = list(self._prefill_v2_covered())
+    if PREFILL_CHUNKED:
+      # VRAM-frugal per-layer path: realize nothing up-front and store no `_pf16_w`; the layer TinyJit dequants to
+      # replay-owned fp16 scratch that is reused across block tensor inputs.
+      return 0
     # preflight: realizing ~fp16-model-size on top of Q4_K OOMs for 14B/32B -> fail fast with the estimate.
     est_gb = prefill_v2_realize_bytes([(o, i) for _, o, i in covered]) / 1e9
     budget_gb = getenv("PREFILL_V2_MAX_REALIZE_GB", 18)
     if est_gb > budget_gb and not getenv("PREFILL_V2_FORCE_REALIZE", 0):
       raise RuntimeError(f"PREFILL_V2 would realize ~{est_gb:.1f} GB of fp16 weights (on top of Q4_K decode "
                          f"storage), over the ~{budget_gb} GB budget -- likely OOM. This is 8B-sized work; for "
-                         f"larger models raise PREFILL_V2_MAX_REALIZE_GB or set PREFILL_V2_FORCE_REALIZE=1 to "
-                         f"override (a VRAM-frugal per-layer realize is future work).")
+                         f"larger models raise PREFILL_V2_MAX_REALIZE_GB, set PREFILL_V2_FORCE_REALIZE=1 to "
+                         f"override, or use PREFILL_CHUNKED=1 (VRAM-frugal per-layer fp16 overlay).")
     n = 0
     for lin, _, _ in covered:
       lin._pf16_w = lin.weight.cast(dtypes.float16).contiguous().realize(); n += 1
@@ -631,9 +706,24 @@ class Transformer:
     for block in self.blk: x = block(x, start_pos)
     return self.output(self.output_norm(x))
 
+  def logits_prefill_v2_chunked(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
+    x = self.token_embd(tokens).float()
+    for block in self.blk:
+      block._init_state(x)
+      names, val_idx, vals = self._prefill_v2_block_state(block)
+      if val_idx and max(val_idx) >= len(vals):
+        raise RuntimeError(f"prefill layer state pack mismatch before JIT: need {max(val_idx)+1}, got {len(vals)}")
+      jit = self._prefill_v2_layer_jit(block, names, val_idx, vals, start_pos)
+      x = jit(x, *vals) if isinstance(start_pos, int) else jit(x, start_pos, *vals)
+    return self.output(self.output_norm(x))
+
   def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
     logits = self.logits(tokens, start_pos)[:, -1, :]
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
+    return (logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
+
+  def forward_prefill_v2_chunked(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
+    logits = self.logits_prefill_v2_chunked(tokens, start_pos)[:, -1, :]
     return (logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
 
   def forward_ring(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, freqs:Tensor) -> Tensor:
@@ -662,6 +752,14 @@ class Transformer:
     if ring_freqs is not None and not is_prefill:
       _rjit = self.rollout_jit_ring_full if ring_full else self.rollout_jit_ring
       return _rjit(tokens.contiguous(), start_pos, temperature, ring_freqs)
+    # Per-layer overlay: do not wrap the whole prefill in a TinyJit. The Python loop replays a layer-sized TinyJit
+    # across blocks, passing each block's tensors as inputs so fp16 dequant scratch is overwritten, not accumulated.
+    if is_prefill_v2 and PREFILL_CHUNKED:
+      import tinygrad.codegen.opt.postrange as pr
+      saved = pr._WARMSTART_OPTS
+      pr._WARMSTART_OPTS = self._pf16_warmstart
+      try: return self.forward_prefill_v2_chunked(tokens.contiguous(), start_pos, temperature)
+      finally: pr._WARMSTART_OPTS = saved
     # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
     if is_prefill_v2 and isinstance(start_pos, int):
       jit = self.prefill_v2_jits.setdefault(start_pos, TinyJit(self.forward))
@@ -733,7 +831,13 @@ class Transformer:
         _set_prefill_v2(_v2_on)
       else:
         _v2_on = PREFILL_V2
-      _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
+      if _v2_on and PREFILL_CHUNKED:
+        # per-layer overlay: fp16 weights are replay scratch, not a resident copy. Reserve a few layer-sized overlays
+        # instead of the whole fp16 model. Tune with PREFILL_CHUNK_RESIDENT_BLOCKS.
+        _overlay_resident = (_est_fp16 // max(num_blocks, 1)) * getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)
+        _weights = _q4_bytes + _overlay_resident
+      else:
+        _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
       _prefill_per_tok = 4 * _admit_n_heads * PREFILL_UBATCH
       _flash_scratch = _admit_n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (_admit_head_dim + 2) * 4
       _model_label = f"{_admit_arch} ({_q4_bytes/1e9:.0f}GB Q4)"
@@ -801,7 +905,13 @@ class Transformer:
         _set_prefill_v2(_v2_on)
       else:
         _v2_on = PREFILL_V2
-      _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
+      if _v2_on and PREFILL_CHUNKED:
+        # per-layer overlay: fp16 weights are replay scratch, not a resident copy. Reserve a few layer-sized overlays
+        # instead of the whole fp16 model. Tune with PREFILL_CHUNK_RESIDENT_BLOCKS.
+        _overlay_resident = (_est_fp16 // max(num_blocks, 1)) * getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)
+        _weights = _q4_bytes + _overlay_resident
+      else:
+        _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
       _prefill_per_tok = 4 * n_heads * PREFILL_UBATCH
       _flash_scratch = n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (head_dim + 2) * 4
       _model_label = f"{arch} ({_q4_bytes/1e9:.0f}GB Q4)"
