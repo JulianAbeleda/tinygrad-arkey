@@ -150,6 +150,20 @@ def _gguf_parse(tensor: Tensor, include_metadata:bool=False) -> tuple[dict, dict
   if include_metadata: return kv_data, state_dict, {"data_start": data_start, "tensor_infos": t_infos, "raw_tensor": tensor}
   return kv_data, state_dict
 
+def gguf_load_metadata(fn: str|pathlib.Path) -> tuple[dict, dict]:
+  """Read only the GGUF header/KV/tensor table. Does not realize tensor data."""
+  with pathlib.Path(fn).open("rb") as f:
+    r = io.BufferedReader(f, 1_000_000)
+    magic, version, n_tensors, n_kv = r.read(4), read_int32(r), read_int64(r), read_int64(r)
+    if magic != b"GGUF" or version not in [2, 3]: raise ValueError("Invalid GGUF format!")
+    kv_data = {}
+    for _ in range(n_kv):
+      k, typ = read_str(r), read_int32(r)
+      kv_data[k] = readers[typ](r)
+    t_infos = [(read_str(r), tuple(read_uint64(r) for _ in range(read_uint32(r))), read_int32(r), read_uint64(r)) for _ in range(n_tensors)]
+    alignment, pos = kv_data.get("general.alignment", 32), r.tell()
+    return kv_data, {"data_start": round_up(pos, alignment), "tensor_infos": t_infos}
+
 def _gguf_split_paths(path: pathlib.Path, kv: dict) -> list[pathlib.Path]:
   if (total := kv.get('split.count', 1)) <= 1: return [path]
   if kv.get('split.no', 0) != 0: raise ValueError(f"multi-part GGUF must be loaded from the first split, got split.no={kv['split.no']}")

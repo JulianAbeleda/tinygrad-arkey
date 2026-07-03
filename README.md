@@ -44,6 +44,8 @@ Read these as current working numbers, not a universal claim. **Decode is the ti
 
 You need an AMD GPU, the AMD backend working, and a GGUF model file. Most current gates assume gfx1100 / RX 7900 XTX. Run from the repo root using the project's virtual environment.
 
+`--max_context` defaults to `auto`: at load it probes free VRAM (`rocm-smi`) and admits the largest safe context for the model (weights + fp16 KV + prefill-score peak + flash scratch, held under an 0.8 fragmentation margin), capped at the model's trained context. 8B/14B admit their full trained context on a 24 GB card; 32B, whose weights alone (~20 GB) leave no room for a useful fp16 KV cache, **refuses loudly** with a "needs KV quantization" message rather than silently clamping or OOMing. An explicit `--max_context N` is still admission-checked and fails loud if it won't fit. This relies on the seqlen-bound decode attention route (decode work scales with live context, not `max_context`), so raising the cap does not collapse decode.
+
 ```sh
 # Decode benchmark
 DEV=AMD PYTHONPATH=. .venv/bin/python -m tinygrad.llm -m /path/to/Qwen3-8B-Q4_K_M.gguf --warmup --benchmark 40

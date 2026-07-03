@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function, Device
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import prod
-from tinygrad.llm.gguf import gguf_load, gguf_load_with_metadata
+from tinygrad.llm.gguf import gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import (
   clear_vdot_quant_cache, flash_decode_attention_route, q4k_primitive_linear_call, q6k_primitive_linear_call,
@@ -671,6 +671,7 @@ class TransformerConfig:
   routed_scaling_factor: float = 1.0
   qkv_bias: bool = False
   expert_bias: bool = False
+  admit: dict|None = None   # auto-scan admission report (free/budget/weights/kv/prefill terms); None if not resolved
 
 class FFNBlock:
   def __init__(self, config:TransformerConfig):
@@ -826,6 +827,22 @@ class TransformerBlock(FFNBlock):
       _generated_8b_supported = QK_AMD_GFX1100_ARCH_OK and x.shape[0] == 1 and self.config.n_heads == 32 \
         and self.config.n_kv_heads == 8 and self.config.head_dim == 128
       _kv_dtype = dtypes.float16 if _generated_8b_supported else None
+      # Admission guardrail (B5): assert the ACTUAL cache_kv bytes (with the real dtype) fit the admitted VRAM budget
+      # before allocating -- converts a silent late OOM into a clear, actionable failure. O(1), no re-probe: the
+      # admission report carries free/budget/weights so we re-derive the KV allowance and check this model's total KV.
+      _admit = getattr(self.config, "admit", None)
+      if _admit and _admit.get("mode") in ("auto", "explicit") and "budget_gb" in _admit:
+        _elem = 2 if _kv_dtype is dtypes.float16 else (dtypes.default_float.itemsize)
+        _block_kv = 2 * x.shape[0] * self.config.n_kv_heads * self.config.max_context * self.config.head_dim * _elem
+        _total_kv = _block_kv * self.config.num_blocks
+        _allow = (_admit["budget_gb"] - _admit["weights_gb"] - _admit.get("flash_scratch_gb", 0.0)) * 1e9 \
+                 - _admit.get("prefill_gb_per_1k", 0.0) * self.config.max_context / 1000 * 1e9
+        if _total_kv > _allow:
+          raise RuntimeError(
+            f"KV cache admission guard: max_context={self.config.max_context} needs {_total_kv/1e9:.1f}GB of KV "
+            f"(dtype {'fp16' if _elem==2 else dtypes.default_float.name}) but only {_allow/1e9:.1f}GB is admissible "
+            f"(budget {_admit['budget_gb']:.1f}GB @{VRAM_ADMIT_FRACTION} minus weights {_admit['weights_gb']:.1f}GB + prefill peak). "
+            f"Reduce --max_context or use auto. This is the guardrail that prevents a silent OOM.")
       self.cache_kv = Tensor.empty(2, x.shape[0], self.config.n_kv_heads, self.config.max_context, self.config.head_dim, dtype=_kv_dtype, device=x.device)
       self.freqs_cis = precompute_freqs_cis(self.config.rope_dim, self.config.max_context, self.config.rope_theta, device=x.device)
 
@@ -1065,6 +1082,10 @@ class Transformer:
   @staticmethod
   def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:"int|str|None"=None,
                 realize=bool(getenv("REALIZE", 0))) -> tuple[Transformer, dict]:
+    # Probe free VRAM at ENTRY, before gguf_load makes the weight storage resident -- so `free` is the baseline
+    # available for weights+KV (the admission budget then subtracts weights itself; probing after gguf_load would
+    # double-count weights already in `used`). Total is stable regardless.
+    _total_vram, _free_vram = _detect_total_vram_bytes(), _detect_free_vram_bytes()
     # TODO: remove the need for copy to default device
     # Q4K_PRIMITIVE defaults ON for a GGUF path ON AMD (the exact ~2.2x decode win, validated on AMD), and
     # OFF for a preloaded Tensor (no GGUF storage to view; primitive paths require a path) or a non-AMD
@@ -1087,6 +1108,43 @@ class Transformer:
     if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy) and Device.DEFAULT != "AMD":
       raise ValueError(f"QK quant primitive paths (Q4K_PRIMITIVE/Q6K_PRIMITIVE/QK_GENERATED_POLICY/QK_ROUTE_POLICY) require "
                        f"DEV=AMD; the kernels are AMD-targeted. Got Device.DEFAULT={Device.DEFAULT!r}.")
+    # Auto-scan replaces the old hardcoded clamp: capture the request now (AUTO_MAX_CONTEXT/None -> auto, or an int).
+    # Path GGUFs can be admitted from header metadata before any full tensor realization; this is load-bearing for
+    # oversized models because gguf_load_with_metadata otherwise realizes the whole file on the default device first.
+    _requested_max_context, _admit_resolved = max_context, False
+    if not isinstance(gguf, Tensor):
+      _admit_kv, _admit_meta = gguf_load_metadata(gguf)
+      _admit_arch = _admit_kv["general.architecture"]
+      _admit_n_heads, _admit_n_kv_heads = _admit_kv[f"{_admit_arch}.attention.head_count"], _admit_kv[f"{_admit_arch}.attention.head_count_kv"]
+      _admit_head_dim = _admit_kv.get(f"{_admit_arch}.attention.key_length_mla",
+                                      _admit_kv.get(f"{_admit_arch}.attention.key_length",
+                                                    _admit_kv[f"{_admit_arch}.embedding_length"] // _admit_n_heads))
+      num_blocks = _admit_kv[f"{_admit_arch}.block_count"] - _admit_kv.get(f"{_admit_arch}.nextn_predict_layers", 0)
+      trained_ctx = _admit_kv[f"{_admit_arch}.context_length"]
+      _q4_bytes = pathlib.Path(gguf).stat().st_size
+      _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
+      _est_fp16 = sum(prod(dims) * 2 for name, dims, _, _ in _admit_meta["tensor_infos"] if any(name.endswith(s) for s in _cov))
+      _kv_per_tok = 2 * _admit_n_kv_heads * _admit_head_dim * 2 * num_blocks
+      _v2_should_auto = PREFILL_V2_AUTO or (PREFILL_SERVER_PROFILE and "PREFILL_V2" not in os.environ)
+      _v2_reason = None
+      if _v2_should_auto:
+        _v2_on, _v2_reason = prefill_v2_auto_decision(_total_vram, _est_fp16, _q4_bytes, _kv_per_tok * trained_ctx)
+        _set_prefill_v2(_v2_on)
+      else:
+        _v2_on = PREFILL_V2
+      _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
+      _prefill_per_tok = 4 * _admit_n_heads * PREFILL_UBATCH
+      _flash_scratch = _admit_n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (_admit_head_dim + 2) * 4
+      _model_label = f"{_admit_arch} ({_q4_bytes/1e9:.0f}GB Q4)"
+      max_context, _admit = resolve_max_context_admission(_requested_max_context, trained_ctx, _free_vram, _weights,
+                                                          _kv_per_tok, _prefill_per_tok, _flash_scratch, _model_label)
+      print(f"max_context={_admit['mode']} -> {max_context} "
+            f"(free {_admit.get('free_gb', float('nan')):.1f}GB, budget {_admit.get('budget_gb', float('nan')):.1f}GB "
+            f"@{VRAM_ADMIT_FRACTION}, weights {_admit.get('weights_gb', _weights/1e9):.1f}GB, "
+            f"KV {_admit.get('kv_gb_per_1k', _kv_per_tok*1000/1e9):.2f}GB/1k, "
+            f"prefill-peak {_admit.get('prefill_gb_per_1k', _prefill_per_tok*1000/1e9):.2f}GB/1k, "
+            f"trained {trained_ctx}, mem-cap {_admit.get('mc_mem', '-')})")
+      _admit_resolved = True
     if use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
     else:
@@ -1101,9 +1159,6 @@ class Transformer:
     if 'output.weight' not in state_dict: state_dict['output.weight'] = state_dict['token_embd.weight']
 
     arch = kv['general.architecture']
-    # Auto-scan replaces the old hardcoded clamp: capture the request now (AUTO_MAX_CONTEXT/None -> auto, or an int)
-    # and resolve it against a live VRAM probe once the raw dims (head_dim, num_blocks) are known, below.
-    _requested_max_context = max_context
     n_heads, n_kv_heads = kv[f'{arch}.attention.head_count'], kv[f'{arch}.attention.head_count_kv']
 
     ssm = None
@@ -1115,6 +1170,34 @@ class Transformer:
     kv_lora_rank = kv.get(f'{arch}.attention.kv_lora_rank', 0)
     head_dim = kv.get(f'{arch}.attention.key_length_mla', kv.get(f'{arch}.attention.key_length', kv[f'{arch}.embedding_length'] // n_heads))
     rope_dim = kv.get(f'{arch}.rope.dimension_count', head_dim)
+
+    if not _admit_resolved:
+      # Fallback for preloaded Tensor GGUF inputs, where no path header is available before load.
+      num_blocks = kv[f'{arch}.block_count'] - kv.get(f'{arch}.nextn_predict_layers', 0)
+      trained_ctx = kv[f'{arch}.context_length']
+      _q4_bytes = pathlib.Path(gguf).stat().st_size if not isinstance(gguf, Tensor) else 0
+      _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
+      _est_fp16 = sum(t.numel() * 2 for k, t in state_dict.items() if any(k.endswith(s) for s in _cov))
+      _kv_per_tok = 2 * n_kv_heads * head_dim * 2 * num_blocks
+      _v2_should_auto = PREFILL_V2_AUTO or (PREFILL_SERVER_PROFILE and "PREFILL_V2" not in os.environ)
+      _v2_reason = None
+      if _v2_should_auto:
+        _v2_on, _v2_reason = prefill_v2_auto_decision(_total_vram, _est_fp16, _q4_bytes, _kv_per_tok * trained_ctx)
+        _set_prefill_v2(_v2_on)
+      else:
+        _v2_on = PREFILL_V2
+      _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
+      _prefill_per_tok = 4 * n_heads * PREFILL_UBATCH
+      _flash_scratch = n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (head_dim + 2) * 4
+      _model_label = f"{arch} ({_q4_bytes/1e9:.0f}GB Q4)"
+      max_context, _admit = resolve_max_context_admission(_requested_max_context, trained_ctx, _free_vram, _weights,
+                                                          _kv_per_tok, _prefill_per_tok, _flash_scratch, _model_label)
+      print(f"max_context={_admit['mode']} -> {max_context} "
+            f"(free {_admit.get('free_gb', float('nan')):.1f}GB, budget {_admit.get('budget_gb', float('nan')):.1f}GB "
+            f"@{VRAM_ADMIT_FRACTION}, weights {_admit.get('weights_gb', _weights/1e9):.1f}GB, "
+            f"KV {_admit.get('kv_gb_per_1k', _kv_per_tok*1000/1e9):.2f}GB/1k, "
+            f"prefill-peak {_admit.get('prefill_gb_per_1k', _prefill_per_tok*1000/1e9):.2f}GB/1k, "
+            f"trained {trained_ctx}, mem-cap {_admit.get('mc_mem', '-')})")
 
     # Permute RoPE weights from interleaved to half-split layout.
     for name in state_dict:
@@ -1150,7 +1233,8 @@ class Transformer:
       routed_scaling_factor=kv.get(f'{arch}.expert_weights_scale', 1.0), attn_output_gate=arch in ('qwen35', 'qwen35moe'), ssm=ssm,
       full_attention_interval=kv.get(f'{arch}.full_attention_interval', 0),
       qkv_bias='blk.0.attn_q.bias' in state_dict,
-      expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict)
+      expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict,
+      admit=_admit)
     _set_qk_route_policy(qk_route_policy, bool(getenv("QK_ROUTE_POLICY_STRICT", 0)),
                          bool(getenv("QK_ROUTE_POLICY_DEBUG", 0)))
     _validate_qk_route_policy_for_config(qk_route_policy, config)
@@ -1162,16 +1246,13 @@ class Transformer:
     # Prefill policy auto-resolution, BEFORE Transformer() (its __init__ reads PREFILL_V2 to build the warmstart,
     # and the concrete-KV precompile + generate() read PREFILL_CONCRETE_KV). Explicit 0/1 skip these.
     # PREFILL_SERVER_PROFILE=1 implies PREFILL_V2=auto (when V2 unset) + concrete-KV on (when V2 ends up on).
-    _v2_auto = PREFILL_V2_AUTO or (PREFILL_SERVER_PROFILE and "PREFILL_V2" not in os.environ)
-    if _v2_auto:
-      _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
-      est_fp16 = sum(t.numel() * 2 for k, t in state_dict.items() if any(k.endswith(s) for s in _cov))
-      q4_bytes = pathlib.Path(gguf).stat().st_size if not isinstance(gguf, Tensor) else 0
-      kv_bytes = 2 * config.n_kv_heads * config.max_context * config.head_dim * 2 * config.num_blocks
-      enabled, reason = prefill_v2_auto_decision(_detect_total_vram_bytes(), est_fp16, q4_bytes, kv_bytes)
-      _set_prefill_v2(enabled)
-      print(f"PREFILL_V2=auto -> {'ON' if enabled else 'OFF'}: {reason} "
-            f"(fp16 covered {est_fp16/1e9:.1f}GB, Q4 {q4_bytes/1e9:.1f}GB, KV {kv_bytes/1e9:.1f}GB @ctx{config.max_context})")
+    # PREFILL_V2 auto was already resolved (conservatively, at trained_ctx) in the admission block above and applied
+    # via _set_prefill_v2; report it here against the now-admitted ctx. Reusing that one decision keeps `weights` in
+    # the admission budget consistent with what is actually realized (no second, looser re-decide).
+    if _v2_should_auto:
+      kv_bytes = _kv_per_tok * config.max_context
+      print(f"PREFILL_V2=auto -> {'ON' if _v2_on else 'OFF'}: {_v2_reason} "
+            f"(fp16 covered {_est_fp16/1e9:.1f}GB, Q4 {_q4_bytes/1e9:.1f}GB, KV {kv_bytes/1e9:.1f}GB @ctx{config.max_context})")
     if PREFILL_CONCRETE_KV_AUTO or PREFILL_SERVER_PROFILE:
       ckv_on, ckv_reason = prefill_concrete_kv_auto_decision(PREFILL_SERVER_PROFILE, PREFILL_V2)
       _set_prefill_concrete_kv(ckv_on)

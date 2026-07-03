@@ -579,7 +579,10 @@ class LLMServer(socketserver.ThreadingMixIn, TCPServerWithReuse):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--model", "-m", default=list(models.keys())[0], help=f"Model choice ({', '.join(models.keys())}) or path to a local GGUF file")
-  parser.add_argument("--max_context", type=int, default=4096, help="Max Context Length")
+  parser.add_argument("--max_context", type=lambda v: v if v == "auto" else int(v), default="auto",
+                      help="Max context length: 'auto' (default) auto-scans free VRAM and admits the largest safe "
+                           "context (refuses loud if the model can't fit a useful fp16-KV context, e.g. 32B); an "
+                           "explicit int is still admission-checked and fails loud rather than OOMing.")
   parser.add_argument("--serve", nargs='?', type=int, const=8000, metavar="PORT", help="Run OpenAI compatible API (optional port, default 8000)")
   parser.add_argument("--registry", type=str, default=None, help="Path to a runtime_models.json registry (Phase R3)")
   parser.add_argument("--no-preload", action="store_true", help="Start the server without loading a model (load later via /runtime/load)")
