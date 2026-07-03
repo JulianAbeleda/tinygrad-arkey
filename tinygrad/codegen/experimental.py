@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+import importlib
+from functools import cache
+
+
+@cache
+def _attr(module:str, name:str):
+  return getattr(importlib.import_module(module), name)
+
+
+def unroll_recurrence(*args, **kwargs): return _attr("extra.qk_codegen_recurrence_unroll", "unroll_recurrence")(*args, **kwargs)
+def outer_b_split(*args, **kwargs): return _attr("extra.qk_codegen_outer_b_lds_split", "outer_b_split")(*args, **kwargs)
+def coalesce_loads(*args, **kwargs): return _attr("extra.qk_coalesced_load_lowering", "coalesce_loads")(*args, **kwargs)
+def warp_reduce_pm(): return _attr("extra.qk_warp_reduce_lowering", "pm_warp_reduce")
+def reg_store_devec_pm(): return _attr("extra.qk_reg_store_devec", "pm_reg_store_devec")
+def fdot2_pm(): return _attr("extra.qk_fdot2_lowering", "pm_fdot2")
+def line_lower_fdot2(*args, **kwargs): return _attr("extra.qk_fdot2_lowering", "line_lower_fdot2")(*args, **kwargs)
+def list_schedule(*args, **kwargs): return _attr("extra.qk_codegen_list_scheduler", "list_schedule")(*args, **kwargs)
+def structural_ops(): return _attr("extra.qk_codegen_list_scheduler", "_STRUCTURAL")

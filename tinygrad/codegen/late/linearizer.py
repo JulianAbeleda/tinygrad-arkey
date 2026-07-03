@@ -3,6 +3,7 @@ from typing import Any
 from collections import defaultdict
 from tinygrad.uop.ops import PatternMatcher, UOp, Ops, UPat, multirange_str
 from tinygrad.helpers import prod, getenv, TUPLE_ORDER
+from tinygrad.codegen import experimental as cg_extras
 
 def linearize(sink:UOp) -> list[UOp]:
   # this is a toposort with priority
@@ -48,8 +49,7 @@ def linearize(sink:UOp) -> list[UOp]:
 
   if getenv("SCHED_LIST"):
     # latency-aware list-scheduling post-pass (default-off codegen scheduling capability)
-    from extra.qk_codegen_list_scheduler import list_schedule
-    newlst = list_schedule(newlst)
+    newlst = cg_extras.list_schedule(newlst)
 
   if getenv("SCHED_MODULO_PROBE"):
     # PREFLIGHT probe (default-off): WITHIN-BLOCK maximally-different VALID reorder. Partitions on structural ops
@@ -58,7 +58,7 @@ def linearize(sink:UOp) -> list[UOp]:
     # ISA, or whether LLVM (HIP/AMDLLVM renderer) reschedules from the dep DAG regardless of source order. Identical
     # ISA despite a large reorder => the linearizer (Arm A) cannot control the schedule -> SCHEDULER_NOT_WIRABLE.
     import sys as _sys
-    from extra.qk_codegen_list_scheduler import _STRUCTURAL
+    _STRUCTURAL = cg_extras.structural_ops()
     def _revtopo(block:list[UOp]) -> list[UOp]:
       bset = set(block); idx = {u:i for i,u in enumerate(block)}
       indeg = {u: sum(1 for s in u.src if s in bset) for u in block}
@@ -93,7 +93,7 @@ def linearize(sink:UOp) -> list[UOp]:
     # ops (LDS/global LOAD, cross-lane). Tests whether a SMART UOp reorder can push the block tile's exposed
     # ds_bpermute/recurrence latency toward owned, or whether it plateaus inside LLVM's scheduling envelope.
     import sys as _sys, heapq as _hq
-    from extra.qk_codegen_list_scheduler import _STRUCTURAL
+    _STRUCTURAL = cg_extras.structural_ops()
     def _lat(u:UOp) -> int:
       if u.op is Ops.LOAD: return 40 if (u.src and getattr(u.src[0], 'addrspace', None) is not None and 'LOCAL' not in str(getattr(u.src[0],'addrspace',''))) else 20
       return 1

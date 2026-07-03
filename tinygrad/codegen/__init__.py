@@ -19,6 +19,7 @@ from tinygrad.codegen.late.expander import expander, pm_pre_expander, pm_group_f
 from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, pm_reduce, \
   ReduceContext, correct_load_store, pm_render, pm_add_loads, pm_make_images, pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec
 from tinygrad.codegen.opt.postrange import apply_opts
+from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
 from tinygrad.codegen.simplify import pm_simplify_ranges, pm_flatten_range, pm_split_ranges, pm_load_collapse
 from tinygrad.schedule.rangeify import pm_add_buffers_local, rangeify_codegen, pm_mops, pm_syntactic_sugar, pm_store_ranges
@@ -53,14 +54,12 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if DEBUG >= 5: print(pyrender(ast))
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
-    from extra.qk_codegen_recurrence_unroll import unroll_recurrence
-    ast = unroll_recurrence(ast, _u)
+    ast = cg_extras.unroll_recurrence(ast, _u)
   if (_kb:=getenv("DECODE_OUTER_B_SPLIT")) > 1 and ren.target.device == "AMD":
     # outer-b independent split-combine primitive: split the serial block loop into K independent LDS-staged
     # online-softmax partitions + flash combine (default-off, declines unrecognized structure). See
     # extra/qk_codegen_outer_b_lds_split.py + docs/decode-attention-outer-b-lds-split-combine-scope-20260627.md.
-    from extra.qk_codegen_outer_b_lds_split import outer_b_split
-    ast = outer_b_split(ast, _kb)
+    ast = cg_extras.outer_b_split(ast, _kb)
   if SPEC: type_verify(ast, spec_tensor)
 
   # preprocess
@@ -91,8 +90,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # Pairs with REG_STORE_DEVEC (fired below) to keep accumulator stores scalar. See
   # extra/qk_coalesced_load_lowering.py + docs/decode-coalesced-load-primitive-scope-20260626.md.
   if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
-    from extra.qk_coalesced_load_lowering import coalesce_loads
-    sink = coalesce_loads(sink)
+    sink = cg_extras.coalesce_loads(sink)
 
   # expand
   # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE
@@ -101,8 +99,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # extra/qk_warp_reduce_lowering.py + bench/qk-search-spaces/decode_ffn_gemv_gfx1100_v1.json.
   _expander_pm = sym+pm_pre_expander+pm_group_for_reduce+expander
   if getenv("WARP_REDUCE_LOWERING") and ren.target.device == "AMD":
-    from extra.qk_warp_reduce_lowering import pm_warp_reduce
-    _expander_pm = sym+pm_pre_expander+pm_warp_reduce+pm_group_for_reduce+expander
+    _expander_pm = sym+pm_pre_expander+cg_extras.warp_reduce_pm()+pm_group_for_reduce+expander
   sink = graph_rewrite(sink, _expander_pm, name="expander")
 
   # add locals
@@ -137,11 +134,9 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if getenv("REDUCE_ACC_UPCAST_FIX") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
   if (getenv("REG_STORE_DEVEC") or getenv("COALESCED_LOAD_LOWERING")) and ren.target.device == "AMD":
-    from extra.qk_reg_store_devec import pm_reg_store_devec
-    sink = graph_rewrite(sink, pm_reg_store_devec, name="reg store devec")
+    sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), name="reg store devec")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
-    from extra.qk_fdot2_lowering import pm_fdot2
-    sink = graph_rewrite(sink, pm_fdot2, name="fdot2 lowering")
+    sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 lowering")
 
   # lower the index dtype to a concrete int
   sink = graph_rewrite(sink, pm_lower_index_dtype+load_store_indexing+gep_pushing, name="lower all index dtypes")
@@ -166,8 +161,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   pm_final_rewrite = pm_decomp+pm_render+extra_matcher+pm_split_ends
   sink = graph_rewrite(sink, pm_final_rewrite, ctx=ren, name="final rewrite")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
-    from extra.qk_fdot2_lowering import pm_fdot2
-    sink = graph_rewrite(sink, pm_fdot2, name="fdot2 final lowering")
+    sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 final lowering")
 
   if ren.new_style:
     sink = graph_rewrite(sink, pm_index_is_shrink, name="index is shrink")
@@ -209,8 +203,7 @@ def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
   if DEBUG >= 3 and sink.arg.applied_opts: print(f"{sink.arg.function_name:<25} opts: {sink.arg.applied_opts}")
   lst = linearize(sink)
   if getenv("V_DOT2_LOWERING") and ctx.target.device == "AMD":
-    from extra.qk_fdot2_lowering import line_lower_fdot2
-    lst = line_lower_fdot2(lst)
+    lst = cg_extras.line_lower_fdot2(lst)
   lst = line_rewrite(lst, pm_linearize_cleanups)
   # isa renderers need to allocate registers
   if isinstance(ctx, ISARenderer):
