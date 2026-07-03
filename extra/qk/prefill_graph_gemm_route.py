@@ -109,7 +109,10 @@ def _kernel(out_f: int, in_f: int):
   return _emit_schedule(_resolve_schedule(out_f, in_f))
 
 
-def route_pf16_graph_gemm(lin, x: Tensor) -> Tensor | None:
+def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | None:
+  # `w` (optional): an explicit fp16 weight to GEMM against. PREFILL_CHUNKED passes an unstored
+  # `lin.weight.cast(fp16).contiguous()` from inside a layer-sized TinyJit, so replay reuses the graph-owned fp16
+  # dequant scratch across blocks instead of pinning resident `lin._pf16_w` for every block.
   # NOTE: the gfx1100 arch restriction for default-on lives in model.PREFILL_GRAPH_GEMM (computed once at import);
   # it is NOT checked here because Device[...] access is disallowed during JIT capture (ALLOW_DEVICE_USAGE). The
   # T==512 / tile-divisible / bias / role guards below restrict to the validated dense prefill shapes; everything
@@ -118,7 +121,7 @@ def route_pf16_graph_gemm(lin, x: Tensor) -> Tensor | None:
   if roles:
     role = getattr(lin, "_prefill_graph_role", None)
     if role is None or role not in {r.strip() for r in roles.split(",") if r.strip()}: return None
-  w = getattr(lin, "_pf16_w", None)
+  if w is None: w = getattr(lin, "_pf16_w", None)
   b = getattr(lin, "bias", None)
   if w is None or b is not None or x.ndim < 2: return None
   if not isinstance(x.shape[-2], int) or not isinstance(x.shape[-1], int): return None
