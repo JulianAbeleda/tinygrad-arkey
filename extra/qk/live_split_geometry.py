@@ -67,7 +67,7 @@ def live_split_coverage_kernel(geo: LiveSplitGeometry, MAXC: int, Tc: UOp):
 
 
 def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv: int, MAXC: int, S: int,
-                                       staging: str = "K_ONLY", fused_combine: bool = True, kv_scale=None):
+                                       staging: str = "K_ONLY", fused_combine: bool = True, kv_scale=None, freqs=None):
   """TG-P9.2: the generated block-tile flash decode with LIVE-CONTEXT split geometry.
 
   Identical body to flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel, but the per-split length is the runtime
@@ -92,11 +92,13 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
   q_f = q.reshape(Hq * Hd)
   # KV-quant long-context tier: when kv_scale is provided, cache_kv is INT8 and the kernel dequantizes in-register
   # (int8 * fp16 scale) -- no materialized fp16 KV. kv_scale shape [2,1,Hkv,MAXC] fp16. quant=False path unchanged.
+  # rope-at-read (freqs != None): cache_kv holds UN-roped K; the kernel rotates K in-register from `freqs` (cos|sin).
   _quant = kv_scale is not None
-  _inputs = (q_f, cache_kv) + ((kv_scale,) if _quant else ())
+  _rope = freqs is not None
+  _inputs = (q_f, cache_kv) + ((kv_scale,) if _quant else ()) + ((freqs,) if _rope else ())
   po = Tensor.empty(Hq * S * W2, dtype=_F32).custom_kernel(
     *_inputs,
-    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging, quant=_quant))[0]
+    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging, quant=_quant, rope=_rope))[0]
   # TG-P14.9: split-preserving fused combine. One kernel replaces the gmax + per-d combine lifecycle and removes the
   # Hd-fold fexp redundancy (Hq*Hd*S -> Hq*S fexp). The old two-kernel combine stays available for focused tests.
   if fused_combine:
