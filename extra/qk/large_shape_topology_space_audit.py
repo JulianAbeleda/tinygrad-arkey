@@ -23,7 +23,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/qwen-14b-32b-truegen/kt2_kt3_topology_space"
-QK_K, LANE_EXTENT = 256, 32
+from extra.qk.layout import QK_BLOCK_ELEMS as QK_K
+LANE_EXTENT = 32
 
 # target Q4_K decode shapes (in_features -> out_features), from KT0/Q1432-0
 SHAPES = [

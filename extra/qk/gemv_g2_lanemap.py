@@ -11,13 +11,14 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from tinygrad.uop.ops import UOp, AxisType
+# QK_K + words-per-block are Q4_K format facts owned by layout.py; re-exported here so quant_semantics' provenance
+# guard (which imports these names from this module) still verifies the library row against the one source.
+from extra.qk.layout import QK_BLOCK_ELEMS as QK_K, Q4K_WORDS_PER_BLOCK
 
-QK_K = 256
 WARP = 32
 BLOCK_GROUPS = 4
 WORDS_PER_GROUP = 8
-Q4K_WORDS_PER_BLOCK = 36
-Q4K_QUANT_WORD_BASE = 4
+Q4K_QUANT_WORD_BASE = 4   # G2-specific packing base (not a layout fact); owned here
 GROUP_PAIRS = 4
 
 

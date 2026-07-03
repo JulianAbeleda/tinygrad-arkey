@@ -18,7 +18,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/qwen-14b-32b-truegen/sk4a_14b_discovery"
 IN_F, OUT_F = 17408, 5120        # 14B ffn_down
-QK_K = 256
+from extra.qk.layout import QK_BLOCK_ELEMS as QK_K
 SPLITS = [1, 2, 4, 8]
 
 def _synced_min(fn, dev, warmup=8, bursts=20, reps=3):
