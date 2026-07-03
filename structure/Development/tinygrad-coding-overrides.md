@@ -64,6 +64,32 @@ One-off probes that have reached a verdict are deleted once their conclusion is
 recorded in the session handoff (they stay in git history, reproducible from the
 core). Do not leave dead probes wired into the CLI.
 
+## One IR, One Engine (upstream smallness rule)
+
+Upstream stays ~24k counted lines by architecture, not terseness: a single UOp
+graph is the only representation from tensor graph down to register allocation,
+and nearly every transformation — codegen passes, symbolic math, even autodiff
+(`mixin/gradient.py`) — is a `PatternMatcher` table run by the one generic
+`graph_rewrite` engine. Backends are string-emitting pattern tables
+(`renderer/cstyle.py`); knobs are `ContextVar`s; binding boilerplate is
+generated (`autogen/`), never handwritten.
+
+Fork rules (the tinygrad-specific form of "Prefer data over code" and
+"Simplify Representations Before Adding Mechanisms"):
+
+- **No second representation.** Work that transforms kernels or graphs is
+  written as a `PatternMatcher` table run through `graph_rewrite` — not a
+  hand-rolled traversal, visitor class, or bespoke pass framework.
+- **A new knob is a `ContextVar`**, not a parameter threaded through call
+  signatures or an ad-hoc config object.
+- **Prefer adding a rewrite rule** to adding a class, phase, or file
+  (composes with the anti-re-sprawl rule above).
+- **Watch the second-system threshold.** `extra/qk` is ~16k counted lines
+  against a ~24k core. When qk machinery starts re-implementing something the
+  engine already does (traversal, matching, scheduling, config), that is the
+  "second hidden system" anti-pattern from coding-principles — collapse it
+  into rules over the existing engine instead of growing it.
+
 ## AMD / Generation Invariants (irreducible — do not "simplify" away)
 
 - **Env ordering is sacred:** `DEV`/`JIT`/`QK_PRIMITIVE_STORAGE` and the
