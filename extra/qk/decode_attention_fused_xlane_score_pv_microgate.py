@@ -13,11 +13,10 @@ Run: DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk/decode_attention_fused_xlane_sc
 Scope: docs/decode-fused-xlane-score-pv-tile-scope.md
 """
 from __future__ import annotations
-import json, os, pathlib, time, traceback
+import pathlib, time, traceback
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-decode-attention-fused-xlane-score-pv-microgate"
 
 
 def _kernel_builder(Hd: int, Hq: int, Hkv: int, MAXC: int, L: int, S, Tc, use_fdot2: bool):
@@ -211,14 +210,7 @@ def build() -> dict[str, Any]:
                        "Isolate the failing op; if BLOCKED__UOP_VERIFY this is SEARCH_BLOCKED_BY_CODEGEN on the e-shard->reduce->d-shard store pattern.")}
 
 
-def main() -> int:
-  out = build()
-  OUT.mkdir(parents=True, exist_ok=True)
-  (OUT / "latest.json").write_text(json.dumps(out, indent=2))
-  (OUT / f"fused-xlane-score-pv-microgate-{out['timestamp']}.json").write_text(json.dumps(out, indent=2))
-  print(json.dumps(out, indent=2))
-  return 0 if out["verdict"] == "FUSED_XLANE_SCORE_PV_MICROGATE_PASS" else 1
-
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("attention_fused_xlane_score_pv_microgate"))

@@ -9,11 +9,10 @@ Run:
 """
 from __future__ import annotations
 
-import json, pathlib, time, traceback
+import pathlib, time, traceback
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-decode-attention-block-tile-microgate"
 
 
 def _run_case(Hq: int, Hkv: int, Hd: int, MAXC: int, L: int, Tc: int) -> dict[str, Any]:
@@ -85,14 +84,7 @@ def build() -> dict[str, Any]:
                        "Do not route this tile; inspect blocker before writing another attention layout.")}
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  (OUT / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  (OUT / f"block-tile-microgate-{out['timestamp']}.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if out["verdict"] == "BLOCK_TILE_MICROGATE_PASS" else 1
-
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("attention_block_tile_microgate"))

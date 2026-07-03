@@ -15,7 +15,7 @@ Run:
 """
 from __future__ import annotations
 
-import json, os, pathlib, time, traceback
+import os, pathlib, time, traceback
 from typing import Any
 
 import numpy as np
@@ -23,7 +23,6 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, Ops, UOp
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-decode-cache-identity-index"
 LANES, Hkv, MAXC, Hd, R = 32, 8, 16, 128, 4
 TOL = 1e-6
 
@@ -171,14 +170,7 @@ def build() -> dict[str, Any]:
           "decision": "If any UPCAST row fails, keep attention layout fixed and repair the coalescing/lowering path before Phase 2 block tiling."}
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  (OUT / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  (OUT / f"cache-identity-index-{out['timestamp']}.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if out["verdict"] in {"CACHE_5D_INDEX_AND_UPCAST_PASS", "CACHE_5D_REG_STORE_DEVEC_PASS"} else 1
-
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("cache_identity_index"))

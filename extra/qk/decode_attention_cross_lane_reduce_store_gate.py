@@ -13,7 +13,7 @@ The result classifies the fork:
 """
 from __future__ import annotations
 
-import json, pathlib, time
+import pathlib, time
 from typing import Any, Callable
 
 import numpy as np
@@ -24,7 +24,6 @@ from extra.qk.amd_warp_reduce import warp_reduce_max
 from extra.qk.warp_reduce_lowering import _warp_reduce_sum_staged
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-decode-attention-cross-lane-reduce-store"
 LANES, CASES = 32, 4
 TOL = 2e-4
 
@@ -132,13 +131,7 @@ def build() -> dict[str, Any]:
           "decision": "If PASS, FusedScorePVLifecycle may proceed. If FAIL, stop attention-route work and classify SEARCH_BLOCKED_BY_CODEGEN on CrossLaneReduceStore."}
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  (OUT / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  (OUT / f"cross-lane-reduce-store-{out['timestamp']}.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if out["verdict"] == "CROSS_LANE_REDUCE_STORE_PASS" else 1
-
-
-if __name__ == "__main__": raise SystemExit(main())
+if __name__ == "__main__":
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("attention_cross_lane_reduce_store"))

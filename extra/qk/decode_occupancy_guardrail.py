@@ -6,29 +6,25 @@ new decode-attention candidate: if a candidate increases register pressure, scra
 relative to the current generated best-stack baseline, it must be rejected before W==D unless explicitly overridden.
 """
 from __future__ import annotations
-import json, pathlib, datetime, argparse
+import json, pathlib, datetime
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ISA = ROOT / "bench/qk-decode-isa-vectorization/latest.json"
 HOTLOOP = ROOT / "bench/qk-decode-hotloop-schedule-diff/latest.json"
-OUTDIR = ROOT / "bench/qk-decode-occupancy-guardrail"
 BASELINE = {"vgpr_max": 88, "scratch_max": 0, "lds_max": 8192, "min_wg_per_cu": 4.0, "cross_lane_max": 40, "waitcnt_max": 50}
 
 def load(path: pathlib.Path) -> dict[str, Any]:
   return json.loads(path.read_text()) if path.exists() else {}
 
-def main() -> int:
-  ap = argparse.ArgumentParser()
-  ap.add_argument("--isa", default=str(ISA))
-  ap.add_argument("--hotloop", default=str(HOTLOOP))
-  ap.add_argument("--vgpr-max", type=int, default=BASELINE["vgpr_max"])
-  ap.add_argument("--scratch-max", type=int, default=BASELINE["scratch_max"])
-  ap.add_argument("--lds-max", type=int, default=BASELINE["lds_max"])
-  ap.add_argument("--min-wg-per-cu", type=float, default=BASELINE["min_wg_per_cu"])
-  ap.add_argument("--cross-lane-max", type=int, default=BASELINE["cross_lane_max"])
-  ap.add_argument("--waitcnt-max", type=int, default=BASELINE["waitcnt_max"])
-  args = ap.parse_args()
+class _Args:
+  def __init__(self):
+    self.isa, self.hotloop = str(ISA), str(HOTLOOP)
+    self.vgpr_max, self.scratch_max, self.lds_max = BASELINE["vgpr_max"], BASELINE["scratch_max"], BASELINE["lds_max"]
+    self.min_wg_per_cu, self.cross_lane_max, self.waitcnt_max = BASELINE["min_wg_per_cu"], BASELINE["cross_lane_max"], BASELINE["waitcnt_max"]
+
+def build() -> dict:
+  args = _Args()
   isa, hot = load(pathlib.Path(args.isa)), load(pathlib.Path(args.hotloop))
   tile = isa.get("tile") or isa.get("capture", {}).get("tile", {})
   resources = tile.get("resources", {})
@@ -55,10 +51,9 @@ def main() -> int:
     "verdict": "OCCUPANCY_GUARDRAIL_PASS" if passed else "OCCUPANCY_GUARDRAIL_FAIL__PRESSURE_INCREASE",
     "pass": passed,
   }
-  OUTDIR.mkdir(parents=True, exist_ok=True)
-  (OUTDIR / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if passed else 1
+  return out
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("occupancy_guardrail"))

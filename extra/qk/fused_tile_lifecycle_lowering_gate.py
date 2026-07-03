@@ -12,7 +12,6 @@ import traceback
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-fused-tile-lifecycle-lowering"
 ATTN_BLOCKER = ROOT / "bench/qk-decode-attention-fused-score-state-pv-tile/latest.json"
 
 
@@ -384,16 +383,7 @@ def build() -> dict[str, Any]:
   }
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  latest = OUT / "latest.json"
-  stamped = OUT / f"fused-tile-lifecycle-lowering-{out['timestamp']}.json"
-  latest.write_text(json.dumps(out, indent=2) + "\n")
-  stamped.write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0
-
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("fused_tile_lifecycle_lowering"))
