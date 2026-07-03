@@ -187,6 +187,7 @@ class TransformerConfig:
   expert_bias: bool = False
   admit: dict|None = None   # auto-scan admission report (free/budget/weights/kv/prefill terms); None if not resolved
   kv_quant: bool = False    # KV-quant long-ctx tier: store KV as int8 + fp16 per-(K|V,head,token) scale (halves resident KV)
+  ring: bool = False        # StreamingLLM streaming tier (lossy): unbounded logical ctx in the N-token buffer via eviction
 
 class FFNBlock:
   def __init__(self, config:TransformerConfig):
@@ -679,7 +680,7 @@ class Transformer:
 
   @staticmethod
   def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:"int|str|None"=None,
-                realize=bool(getenv("REALIZE", 0))) -> tuple[Transformer, dict]:
+                realize=bool(getenv("REALIZE", 0)), stream:str="auto") -> tuple[Transformer, dict]:
     # Probe free VRAM at ENTRY, before gguf_load makes the weight storage resident -- so `free` is the baseline
     # available for weights+KV (the admission budget then subtracts weights itself; probing after gguf_load would
     # double-count weights already in `used`). Total is stable regardless.
@@ -711,6 +712,7 @@ class Transformer:
     # oversized models because gguf_load_with_metadata otherwise realizes the whole file on the default device first.
     _requested_max_context, _admit_resolved = max_context, False
     _kv_quant = bool(getenv("DECODE_KV_QUANT", 0))   # default off; the tiered admission below may enable it
+    _ring_admitted = False                           # set by the admission ring tier (lossy streaming)
     if not isinstance(gguf, Tensor):
       _admit_kv, _admit_meta = gguf_load_metadata(gguf)
       _admit_arch = _admit_kv["general.architecture"]
@@ -739,17 +741,24 @@ class Transformer:
       # Hq%Hkv==0) -- the only route that dequants int8 KV in-register. scale_per_tok = per-(K|V,head) fp16 scale x blocks.
       _kv_quant_shape = _admit_head_dim == 128 and _admit_n_kv_heads == 8 and _admit_n_heads % _admit_n_kv_heads == 0
       _kv_quant_supported = _kv_quant_shape and not bool(getenv("DECODE_KV_QUANT_DISABLE", 0))
+      # ring tier needs the same live-split shape class AND full-head rope (rope_dim==head_dim; ring re-bases positions).
+      _admit_rope_dim = _admit_kv.get(f"{_admit_arch}.rope.dimension_count", _admit_head_dim)
+      _ring_supported = _kv_quant_shape and _admit_rope_dim == _admit_head_dim
+      _stream = str(getenv("STREAM", stream))
       _scale_per_tok = 2 * _admit_n_kv_heads * 2 * num_blocks
       max_context, _kv_quant, _admit = resolve_max_context_admission(
         _requested_max_context, trained_ctx, _free_vram, _weights, _kv_per_tok, _prefill_per_tok, _flash_scratch,
-        _model_label, kv_quant_supported=_kv_quant_supported, scale_per_tok=_scale_per_tok)
+        _model_label, kv_quant_supported=_kv_quant_supported, scale_per_tok=_scale_per_tok,
+        stream=_stream, ring_supported=_ring_supported)
       if getenv("DECODE_KV_QUANT", -1) != -1: _kv_quant = bool(getenv("DECODE_KV_QUANT", 0))  # explicit override
+      _ring_admitted = _admit.get("ring", False)
       print(f"max_context={_admit['mode']} -> {max_context} "
             f"(free {_admit.get('free_gb', float('nan')):.1f}GB, budget {_admit.get('budget_gb', float('nan')):.1f}GB "
             f"@{VRAM_ADMIT_FRACTION}, weights {_admit.get('weights_gb', _weights/1e9):.1f}GB, "
             f"KV{'(int8)' if _kv_quant else ''} {_admit.get('kv_gb_per_1k', _kv_per_tok*1000/1e9):.2f}GB/1k, "
             f"prefill-peak {_admit.get('prefill_gb_per_1k', _prefill_per_tok*1000/1e9):.2f}GB/1k, "
             f"trained {trained_ctx}, fp16-cap {_admit.get('mc_fp16', '-')}, q8-cap {_admit.get('mc_q8', '-')})")
+      if _admit.get("banner"): print(_admit["banner"])
       _admit_resolved = True
     if use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
@@ -796,14 +805,18 @@ class Transformer:
       _prefill_per_tok = 4 * n_heads * PREFILL_UBATCH
       _flash_scratch = n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (head_dim + 2) * 4
       _model_label = f"{arch} ({_q4_bytes/1e9:.0f}GB Q4)"
+      _ring_supported = (head_dim == 128 and n_kv_heads == 8 and n_heads % n_kv_heads == 0 and rope_dim == head_dim)
       max_context, _kv_quant, _admit = resolve_max_context_admission(_requested_max_context, trained_ctx, _free_vram, _weights,
-                                                                     _kv_per_tok, _prefill_per_tok, _flash_scratch, _model_label)
+                                                                     _kv_per_tok, _prefill_per_tok, _flash_scratch, _model_label,
+                                                                     stream=str(getenv("STREAM", stream)), ring_supported=_ring_supported)
+      _ring_admitted = _admit.get("ring", False)
       print(f"max_context={_admit['mode']} -> {max_context} "
             f"(free {_admit.get('free_gb', float('nan')):.1f}GB, budget {_admit.get('budget_gb', float('nan')):.1f}GB "
             f"@{VRAM_ADMIT_FRACTION}, weights {_admit.get('weights_gb', _weights/1e9):.1f}GB, "
             f"KV {_admit.get('kv_gb_per_1k', _kv_per_tok*1000/1e9):.2f}GB/1k, "
             f"prefill-peak {_admit.get('prefill_gb_per_1k', _prefill_per_tok*1000/1e9):.2f}GB/1k, "
             f"trained {trained_ctx}, mem-cap {_admit.get('mc_mem', '-')})")
+      if _admit.get("banner"): print(_admit["banner"])
 
     # Permute RoPE weights from interleaved to half-split layout.
     for name in state_dict:
@@ -840,7 +853,7 @@ class Transformer:
       full_attention_interval=kv.get(f'{arch}.full_attention_interval', 0),
       qkv_bias='blk.0.attn_q.bias' in state_dict,
       expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict,
-      admit=_admit, kv_quant=_kv_quant)
+      admit=_admit, kv_quant=_kv_quant, ring=_ring_admitted)
     _set_qk_route_policy(qk_route_policy, bool(getenv("QK_ROUTE_POLICY_STRICT", 0)),
                          bool(getenv("QK_ROUTE_POLICY_DEBUG", 0)))
     _validate_qk_route_policy_for_config(qk_route_policy, config)
@@ -947,7 +960,13 @@ class Transformer:
 
   def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0):
     if self.has_recurrent_block: chunk_size = 1
-    _ring = bool(getenv("DECODE_RING", 0)) and self.config.rope_dim == self.config.head_dim
+    # ring is enabled by the admission streaming tier (config.ring) or the manual env flag; both require full-head rope.
+    _ring = (self.config.ring or bool(getenv("DECODE_RING", 0))) and self.config.rope_dim == self.config.head_dim
+    if _ring and len(tokens) > self.max_context:
+      # StreamingLLM evicts DURING generation, not prefill: a prompt larger than the physical window N can't be held.
+      raise RuntimeError(f"prompt is {len(tokens)} tokens but the streaming window is N={self.max_context}: streaming "
+                         f"evicts during generation, not prefill. Shorten the prompt to <={self.max_context} tokens, or "
+                         f"use a model/quant that admits a larger window.")
     for _b in self.blk: _b._ring_active = _ring   # make prefill ALSO store un-roped K when the ring is on
     v_start_pos = UOp.variable("start_pos", 0, self.max_context-1)
     v_toks = UOp.variable("toks", 1, chunk_size)

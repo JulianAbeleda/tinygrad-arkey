@@ -583,6 +583,12 @@ def main():
                       help="Max context length: 'auto' (default) auto-scans free VRAM and admits the largest safe "
                            "context (refuses loud if the model can't fit a useful fp16-KV context, e.g. 32B); an "
                            "explicit int is still admission-checked and fails loud rather than OOMing.")
+  parser.add_argument("--stream", choices=["auto", "on", "off"], default="auto",
+                      help="StreamingLLM streaming tier (lossy, unbounded logical context in an N-token window; content "
+                           "older than the window + 4 sinks is forgotten). 'auto' (default): use it only as the last "
+                           "admission rung when no lossless tier fits. 'on': force it for deliberately-unbounded "
+                           "generation even when a lossless tier fits. 'off': exact-context semantics (refuse rather "
+                           "than stream).")
   parser.add_argument("--serve", nargs='?', type=int, const=8000, metavar="PORT", help="Run OpenAI compatible API (optional port, default 8000)")
   parser.add_argument("--registry", type=str, default=None, help="Path to a runtime_models.json registry (Phase R3)")
   parser.add_argument("--no-preload", action="store_true", help="Start the server without loading a model (load later via /runtime/load)")
@@ -602,7 +608,7 @@ def main():
 
   # load the model
   source = models.get(args.model, args.model)
-  model, kv = Transformer.from_gguf(fetch(source), args.max_context)
+  model, kv = Transformer.from_gguf(fetch(source), args.max_context, stream=args.stream)
   model_name = kv.get('general.name') or kv.get('general.basename') or args.model
   model_id = args.model if args.model in models else pathlib.Path(args.model).stem
   file_sizes = [y.nbytes() for y in UOp.sink(*[x.uop for x in nn.state.get_parameters(model)]).toposort() if y.op is Ops.BUFFER]
