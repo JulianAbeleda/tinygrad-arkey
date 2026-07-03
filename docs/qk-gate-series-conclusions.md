@@ -94,6 +94,50 @@ Env `DEV=AMD`; 8B geometry Hq=32,Hkv=8,Hd=128,MAXC=4608,S=36. Symbolic Tc via th
 - **P9.2 live-split tile** `TG_P9_2_PASS_LIVE_SPLIT_TILE` — live-split tile numerically == fixed-L=128 g5 tile (rel < 2e-2) AND reduces tile work at low ctx (DEBUG=2 per-kernel wall, live < 0.9× fixed). Guard outcome `TG_P9_2_REFUTE_LIVE_SPLIT_NO_MOVEMENT` if correct but no timing win.
 - **P9.3/9.4 combine** `TG_P9_4_BLOCKED_EMITTER` — split-preserving LSE combine to remove the per-d `fexp` redundancy (the 556us/fwd ctx4096 cap) without collapsing Hq·S or Hq·Hd parallelism: three designs (LDS weight-share warp, inline-gmax single-kernel, two-stage fexp-free) all trip the same AMD codegen wall (see cross-cutting finding). `no_parallelism_collapse=true`; only shipped single-reduce per-d combine compiles. Reopen: tinygrad codegen fix keeping the accumulator REG scalar or DEVEC lowering the max-reduce correctly.
 
+## AMD native-ISA backend arc (extra/audit/amd_isa — retired 2026-07-03)
+
+The `extra/audit/amd_isa/` dir (35 files, ~4,900 LOC) was the bring-up gate suite for a
+**native AMD ISA backend** (`DEV=AMD:ISA`) that assembles decode/GEMV kernels straight to
+RDNA3 machine code, bypassing tinygrad's C-style renderer. It was **always opt-in and never
+changed the default path**; nothing in `tinygrad/`, `extra/qk`, `bench/`, or `test/` imported
+it (only internal cross-imports), and its `bench/amd-isa-backend-phase-*` output dirs no
+longer exist. Banked here and deleted — the scripts are recoverable from git history; this is
+the searchable record of what the arc established. Recorded from docstrings (not re-run).
+
+Arc structure and what each stage established:
+
+- **Increments 0–4** (`inc0..inc4_gate.py`): acceptance gates for the ISA backend baseline —
+  Inc0 backend accepts/lowers a native tile opt-in with default unchanged; Inc1–3 build up the
+  lowering; Inc4 + `phase_b_reduction_gate` = Phase B RANGE/END reductions, correctness-first.
+- **Phases C–N** (`phase_c_gemv`, `phase_f_primitives`, `phase_g`, `phase_h`, `phase_j`,
+  `phase_l`, `phase_n1a`, `phase_n1b`): C = small fp32 GEMV correctness; F = decode-attention
+  primitive microgates; G = full generated decode block tile through the ISA renderer; H =
+  native-ISA block-tile route-binding; J = correct consumer-only waitcnt; L = cross-iteration
+  latency hiding for the grid-parallel tile; N1A = hardware exp lowering (`exp2 → v_exp_f32`)
+  to cut the pinned exp cost; N1B = scalarize wave-uniform index/address math (SALU).
+  `grid_gate` = native tile launches across global axes (grid parallelism).
+- **Register-accumulator / LDS reclaim** (`regalloc_accum_microgate` RA1, `regalloc_accum_define_reg_gate`
+  RA2, `reg_accum_lds_reclaim_audit` RL0, `reg_accum_lds_reclaim_gate` RL1): loop-carried PINNED
+  VGPR accumulators (`AMD_ISA_REG_ACCUM=1`) and reclaiming the pinned-accumulator LDS bytes at
+  the ELF group-segment level.
+- **Q6K direct-route sub-arc** (`q6k_residual_math_gate` Q6K-0 → `q6k_direct_route_design` Q6K-1
+  → `q6k_direct_microgate`/`q6k_lmhead_token_gate` Q6K-2 → `q6k_direct_speed_gate` Q6K-3): a
+  half-warp 2-row-partition direct/warp Q6_K route for `lm_head`, from residual-math proof
+  through in-model correctness to a W==D speed gate (`Q6K_DIRECT_ROUTE`).
+- **Weight-path + ceiling analysis** (audit-only): `weight_path_ceiling_audit` (W0/W2 floor +
+  gap), `weight_path_route_attribution` (W1 per-kernel wall share), `weight_path_probe_matrix`
+  (W3 WP0–WP9 achievable bands), `weight_path_search_scope_builder` (W4 search-space rec);
+  `decode_attention_ceiling_audit`, `system_residual_ceiling_audit`, `residual_lever_triage`
+  (separate live speed levers from PC/source-attribution noise), `g3_vs_owned_weight_parity` +
+  `g3_weight_promotion_gate` (Q4_K G3-vs-owned weight-path parity/promotion),
+  `lm_head_q6k_route_audit`, `schedule_contracts` (structural gates that must pass before any
+  timing claim).
+
+Status at retirement: opt-in backend, never promoted to default. If revived, the reopen asset
+is this summary + git history — the gates themselves are pinned to deleted bench dirs and would
+need rebuilding against the current codegen (cf. the shifted EMITTER_BLOCKED wall above, which
+also touches the ISA-backend combine path).
+
 ## Retirement ledger
 
 Files deleted after their series was collapsed into a parameterized module + registry rows.
@@ -103,4 +147,5 @@ Format: `series | files retired | collapsed into | commit`. (Appended per cluste
 - **Cluster E (tg_p9 trio)** | `tg_p9_live_split_microgate.py`, `tg_p9_live_split_tile_microgate.py`, `tg_p9_combine_microgate.py` | `extra/qk/tg_p9_live_split.py` (`build_live_split/_tile/_combine`) | commit (E). NOTE: combine gate no longer hits EMITTER_BLOCKED at retirement time — all 3 designs compile (`TG_P9_4_PASS_COMBINE_MICROGATE`); the cross-cutting wall may have moved (recheck vs Cluster A TG-P10.1).
 - **Cluster C (physical-tile)** | `decode_physical_tile_p1_crosslane_gate.py`, `_pall_route_gate.py`, `_pall_lifecycle_gate.py`, `_pall_lifecycle_scaling_probe.py`, `_all_primitives_gate.py` | `extra/qk/decode_physical_tile.py` (`build_p1_crosslane/pall_route/pall_lifecycle/pall_scaling/all_primitives`) | commit (C). `all_primitives` sub-probe subprocess repointed to `module:function` (was file paths).
 - **Cluster D (score-broadcast)** | `decode_physical_tile_score_broadcast_direct_gate.py`, `_chain_gate.py`, `_varjit_chain_gate.py`, `decode_score_broadcast_control_matrix_gate.py`, `_model_cache_view_gate.py`, `decode_physical_tile_score_reuse_paths_probe.py` | `extra/qk/decode_score_broadcast.py` (6 `build_*`) | this commit. 3 variants carry pre-existing kernel drift (BIND spec wall on varjit_chain/model_cache_view; `_LOG2E` NameError on reuse_paths) — verdicts differ from banked READY but old==new.
-- **Cluster A (online-state x-lane)** | `decode_attention_online_state_pv_p8_numeric.py`, `_p9_scalar_numeric.py`, `_p10_xlane_output.py`, `_p11_xlane_merge.py`, `_p12_xlane_components.py`, `decode_attention_xlane_reducer_matrix.py`, `decode_attention_xlane_recurrence_matrix.py`, `decode_attention_split_xlane_output.py`, `tg_p10_reg_scalar_repro.py` | `extra/qk/decode_attention_online_state_pv.py` (9 `build_*`) | this commit. DRIFT vs banked: P9 now `FAIL__NAN` (flash_decode leaves NaN in inactive pv slots); TG-P10.1 now `BLOCKED_REPRO_NOT_MINIMAL` (shared-weight/inline-gmax combines now compile — the EMITTER_BLOCKED wall has shifted, corroborating Cluster E's combine gate). old==new at current tree for both.
+- **Cluster A (online-state x-lane)** | `decode_attention_online_state_pv_p8_numeric.py`, `_p9_scalar_numeric.py`, `_p10_xlane_output.py`, `_p11_xlane_merge.py`, `_p12_xlane_components.py`, `decode_attention_xlane_reducer_matrix.py`, `decode_attention_xlane_recurrence_matrix.py`, `decode_attention_split_xlane_output.py`, `tg_p10_reg_scalar_repro.py` | `extra/qk/decode_attention_online_state_pv.py` (9 `build_*`) | commit (A). DRIFT vs banked: P9 now `FAIL__NAN` (flash_decode leaves NaN in inactive pv slots); TG-P10.1 now `BLOCKED_REPRO_NOT_MINIMAL` (shared-weight/inline-gmax combines now compile — the EMITTER_BLOCKED wall has shifted, corroborating Cluster E's combine gate). old==new at current tree for both.
+- **AMD native-ISA backend** | all 35 `extra/audit/amd_isa/*.py` (~4,900 LOC) | deleted, not collapsed — arc banked in the section above | this commit. Opt-in backend, never default; unreachable (no external importers), output bench dirs already gone.
