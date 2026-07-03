@@ -876,7 +876,20 @@ class Transformer:
       ckv_on, ckv_reason = prefill_concrete_kv_auto_decision(PREFILL_SERVER_PROFILE, PREFILL_V2)
       _set_prefill_concrete_kv(ckv_on)
       print(f"PREFILL_CONCRETE_KV=auto -> {'ON' if ckv_on else 'OFF'}: {ckv_reason}")
-    model = Transformer(config)
+    # FAST_EMPTY_INIT: every weight is REPLACED by load_state_dict below, so building the ~254 random init graphs
+    # (nn.Linear Tensor.uniform / nn.Embedding glorot_uniform) is wasted work (~2.3s of the load, per profiling).
+    # Init EMPTY during construction instead -- correct because nothing reads the random values before they're replaced.
+    _saved_init = None
+    if getenv("FAST_EMPTY_INIT", 1):
+      _saved_init = (Tensor.__dict__.get("uniform"), Tensor.__dict__.get("glorot_uniform"))
+      _fe = lambda *shape, **kw: Tensor.empty(*shape)
+      Tensor.uniform = Tensor.glorot_uniform = _fe
+    try:
+      model = Transformer(config)
+    finally:
+      if _saved_init is not None:
+        for _n, _v in zip(("uniform", "glorot_uniform"), _saved_init):
+          delattr(Tensor, _n) if _v is None else setattr(Tensor, _n, _v)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if q4k_meta is not None:
       # auto-enabled primitives default to `shared` storage (view the GGUF in place, storage_bytes=0) so
