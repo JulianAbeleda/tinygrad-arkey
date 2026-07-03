@@ -256,16 +256,19 @@ class FFNBlock:
   # return writes that reset this block's state after a cache mismatch
   def _state_reset_ops(self) -> list[Tensor]: return []
   def _init_state(self, x:Tensor): raise NotImplementedError
-  def _attention(self, x:Tensor, start_pos:int|UOp) -> Tensor: raise NotImplementedError
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor: raise NotImplementedError
 
   def __call__(self, x: Tensor, start_pos: int|UOp):
     self._init_state(x)
+    # StreamingLLM ring: pass the per-step freqs as an ARGUMENT into _run (a nested @function) so it is a true graph
+    # input -- reading it off self inside _run would bake it at _run's compile time (attributes don't rebind).
+    _rf = getattr(self, "_ring_freqs", None)
     # we pass in the weights implicitly so we unpack the GGUF on the fly
     @function(precompile=True, allow_implicit=True)
-    def _run(x:Tensor, start_pos:int|UOp):
-      h =     x + self._attention(self.attn_norm(x), start_pos)
+    def _run(x:Tensor, start_pos:int|UOp, ring_freqs):
+      h =     x + self._attention(self.attn_norm(x), start_pos, ring_freqs)
       return (h + self._feed_forward(self.ffn_norm(h))).contiguous()
-    return _run(x, start_pos)
+    return _run(x, start_pos, _rf)
 
 class TransformerBlock(FFNBlock):
   def __init__(self, config:TransformerConfig):
@@ -281,7 +284,7 @@ class TransformerBlock(FFNBlock):
     self.attn_output = nn.Linear(config.head_dim * config.n_heads, config.dim, bias=False)
     if config.qk_norm: self.attn_q_norm, self.attn_k_norm = nn.RMSNorm(config.qk_norm, config.norm_eps), nn.RMSNorm(config.qk_norm, config.norm_eps)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
     if getattr(self, '_prefill_v2', False) and not hasattr(self, "attn_qkv"):  # prefill v2: fp16 isolated q/k/v
       q, k, v = _pf16(self.attn_q, x).contiguous(), _pf16(self.attn_k, x).contiguous(), _pf16(self.attn_v, x).contiguous()
     elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
@@ -299,7 +302,14 @@ class TransformerBlock(FFNBlock):
 
     # rope-at-read (DECODE_ROPE_AT_READ, opt-in; requires full-head rope): store UN-roped K and rotate at read -- the
     # prerequisite for the StreamingLLM ring's position re-basing. Q is never cached, so it is always roped here.
-    _rope_read = bool(getenv("DECODE_ROPE_AT_READ", 0)) and self.config.rope_dim == self.config.head_dim
+    # The ring supplies a per-step PRE-GATHERED freqs table via the JIT-input attribute _ring_freqs (slot-relative
+    # positions); when unset the baked self.freqs_cis is used (absolute positions). _ring_freqs implies rope-at-read.
+    _ring_freqs = ring_freqs
+    # rope-at-read active if: env flag, OR a ring-decode step (freqs supplied), OR the ring is active this generation
+    # (covers PREFILL, which must ALSO store un-roped K so the ring decode reads it consistently).
+    _rope_read = (bool(getenv("DECODE_ROPE_AT_READ", 0)) or _ring_freqs is not None or getattr(self, "_ring_active", False)) \
+                 and self.config.rope_dim == self.config.head_dim
+    _fr = _ring_freqs if _ring_freqs is not None else self.freqs_cis
     q = apply_rope(q[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1)
     if not _rope_read:
       k = apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1)
@@ -336,7 +346,7 @@ class TransformerBlock(FFNBlock):
         # the kernel ropes in-register from `freqs`); it materializes only for prefill/SDPA. Unwritten slots (>ctx) are
         # roped garbage but sliced away below. Explicit (not apply_rope) so the concrete last dim needs no -1 inference.
         _rd = self.config.rope_dim; _hh = _rd // 2; _mc = self.config.max_context
-        _cos = self.freqs_cis[:, :_hh].reshape(1, 1, _mc, _hh); _sin = self.freqs_cis[:, _hh:].reshape(1, 1, _mc, _hh)
+        _cos = _fr[:, :_hh].reshape(1, 1, _mc, _hh); _sin = _fr[:, _hh:].reshape(1, 1, _mc, _hh)
         _k1, _k2 = _kfull[..., :_hh], _kfull[..., _hh:_rd]
         _kfull = (_k1 * _cos - _k2 * _sin).cat(_k2 * _cos + _k1 * _sin, _kfull[..., _rd:], dim=-1)
       k = _kfull[:, :, 0:start_pos+T, :]
@@ -353,7 +363,7 @@ class TransformerBlock(FFNBlock):
     if should_use_flash_decode(start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
-                                         kv_scale=assigned_scale, freqs=(self.freqs_cis if _rope_read else None))
+                                         kv_scale=assigned_scale, freqs=(_fr if _rope_read else None))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif PREFILL_TC_ATTN and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),
@@ -423,7 +433,7 @@ class MLATransformerBlock(FFNBlock):
     self.attn_v_b = {"weight": Tensor.zeros(config.n_heads, config.v_head_dim, config.kv_lora_rank)}
     self.attn_output = nn.Linear(config.n_heads * config.v_head_dim, config.dim, bias=False)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
     B, T, _ = x.shape
     q_nope_head_dim = self.config.head_dim - self.config.rope_dim
     q_proj = self.attn_q_b(self.attn_q_a_norm(self.attn_q_a(x))) if self.config.q_lora_rank > 0 else self.attn_q(x)
@@ -468,7 +478,7 @@ class GatedDeltaNetBlock(FFNBlock):
     self.ssm_a = Tensor.zeros(self.num_v_heads)
     self.ssm_norm, self.ssm_out = nn.RMSNorm(self.head_v_dim, config.norm_eps), nn.Linear(ssm.inner_size, config.dim, bias=False)
 
-  def _attention(self, x:Tensor, start_pos:int|UOp) -> Tensor:
+  def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
     B, T, _ = x.shape
     assert T == 1, "GatedDeltaNetBlock currently only supports T=1"
 
@@ -522,6 +532,7 @@ class Transformer:
     self.output_norm = nn.RMSNorm(config.dim, config.norm_eps)
     self.output = nn.Linear(config.dim, config.vocab_size, bias=False)
     self.max_context = config.max_context
+    self.config = config
     self.has_recurrent_block = any(isinstance(b, GatedDeltaNetBlock) for b in self.blk)
     self._cached_tokens: list[int] = []
     self._q4k_linears = Q4KPrimitiveRegistry()
@@ -530,6 +541,7 @@ class Transformer:
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
     self.rollout_jit_flash = TinyJit(self.forward)
+    self.rollout_jit_ring = TinyJit(self.forward_ring)   # StreamingLLM ring decode: freqs is a per-step JIT input
     # prefill v2 (opt-in): a SEPARATE jit captured with a CONCRETE token batch (T=PREFILL_UBATCH) so tensor
     # cores apply, distinct from the symbolic-batch prefill_jit. Only ever called when PREFILL_V2.
     self.prefill_v2_jit = TinyJit(self.forward)
@@ -612,7 +624,14 @@ class Transformer:
     # Gumbel-max trick: argmax(logits/temp - log(-log(uniform))) is equivalent to sampling from softmax(logits/temp)
     return (logits / temperature.maximum(1e-12) - (Tensor.rand_like(logits).maximum(1e-12).log().neg()).log()).argmax(-1, keepdim=True)
 
-  def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False) -> Tensor:
+  def forward_ring(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, freqs:Tensor) -> Tensor:
+    # StreamingLLM ring decode: `freqs` is a per-step JIT INPUT (the slot-relative pre-gathered cos|sin table). Set it
+    # on each block from INSIDE the traced fn so it binds to the graph input (a baked attribute would capture once).
+    for block in self.blk: block._ring_freqs = freqs
+    return self.forward(tokens, start_pos, temperature)
+
+  def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
+               ring_freqs:Tensor|None=None) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
@@ -623,7 +642,10 @@ class Transformer:
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
-    for block in self.blk: block._use_flash, block._prefill_v2 = use_flash, is_prefill_v2
+    for block in self.blk: block._use_flash, block._prefill_v2, block._ring_freqs = use_flash, is_prefill_v2, None
+    # StreamingLLM ring decode: distinct captured graph with `freqs` as a per-step JIT input (rebound each token).
+    if ring_freqs is not None and not is_prefill:
+      return self.rollout_jit_ring(tokens.contiguous(), start_pos, temperature, ring_freqs)
     # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
     if is_prefill_v2 and isinstance(start_pos, int):
       jit = self.prefill_v2_jits.setdefault(start_pos, TinyJit(self.forward))
@@ -893,6 +915,8 @@ class Transformer:
 
   def generate(self, tokens:list[int], chunk_size:int=32, temperature:float=0.0):
     if self.has_recurrent_block: chunk_size = 1
+    _ring = bool(getenv("DECODE_RING", 0)) and self.config.rope_dim == self.config.head_dim
+    for _b in self.blk: _b._ring_active = _ring   # make prefill ALSO store un-roped K when the ring is on
     v_start_pos = UOp.variable("start_pos", 0, self.max_context-1)
     v_toks = UOp.variable("toks", 1, chunk_size)
     # TODO: use UOp.variable for temperature once float variables are supported
@@ -931,8 +955,12 @@ class Transformer:
         # generation that STARTS short still crosses over to flash once ctx reaches the threshold. Without this the
         # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
         # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
+        _uf = should_use_flash_decode(sp, ntv)
+        # StreamingLLM ring (DECODE_RING): feed the per-step pre-gathered freqs as a JIT input. Increment A gathers the
+        # IDENTITY table (== the blocks' freqs_cis, absolute positions) so ctx<N stays token-identical; wrapping in B.
+        _rf = (next(b.freqs_cis for b in self.blk if hasattr(b, "freqs_cis"))) if (_ring and _uf) else None
         out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp,
-                   use_flash=should_use_flash_decode(sp, ntv)).realize()
+                   use_flash=_uf, ring_freqs=_rf).realize()
       start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue
