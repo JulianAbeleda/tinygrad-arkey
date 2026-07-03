@@ -611,7 +611,7 @@ def main():
   # Prefill profile hint (informational; see docs/prefill-default-policy-evaluation-result-20260620.md). The default
   # path is universal but slow for long prompts; recommend the fast path when it would fit / for servers.
   if not _M.PREFILL_V2 and "PREFILL_V2" not in os.environ:
-    _vram = _M._detect_total_vram_bytes()
+    _vram = _M.detect_total_vram_bytes()
     if _vram and _vram >= 23e9:
       print("  hint: large GPU detected — set PREFILL_V2=auto (or =1) for ~5-15x faster prefill on long prompts "
             "(~+14GB VRAM for 8B). Add PREFILL_SERVER_PROFILE=1 for the server/long-prompt profile.")
