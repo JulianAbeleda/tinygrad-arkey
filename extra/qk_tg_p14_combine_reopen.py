@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """TG-P14.8: split-preserving combine reopen -- numeric correctness + directional timing + structural analysis.
 
-Now that REDUCE_ACC_UPCAST_FIX lifts the emitter block (TG_P9_4_PASS_COMBINE_MICROGATE), re-run the generated-UOp
+Now that the AMD baseline reduce/upcast lowering lifts the emitter block (TG_P9_4_PASS_COMBINE_MICROGATE), re-run the generated-UOp
 combine shapes for NUMERIC correctness vs a numpy reference (P10 only covered shared-weight + fused-gmax; this adds
 the two-stage fexp-free weighted-sum), and report the STRUCTURAL win (fexp count, kernel count) plus a DIRECTIONAL
 isolated timing. Isolated combine micro-timing is NOT the promotion authority (launch/clock-ramp confounds poison
 short benches -- see the AMD decode measurement notes); the authoritative speed test is the full W==D at TG-P14.9.
 
-Run: DEV=AMD REDUCE_ACC_UPCAST_FIX=1 PYTHONPATH=. python3 extra/qk_tg_p14_combine_reopen.py
+Run: DEV=AMD PYTHONPATH=. python3 extra/qk_tg_p14_combine_reopen.py
 """
 from __future__ import annotations
 import json, pathlib, time

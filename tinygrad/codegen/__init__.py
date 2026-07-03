@@ -112,11 +112,11 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # add gpu dims (late). this works after devectorize, but it's faster here
   sink = graph_rewrite(sink, pm_add_gpudims, ctx=ren, name="add gpudims")
 
-  # opt-in (REDUCE_ACC_UPCAST_FIX): give manual END/AFTER scalar-REG accumulators the same widen+horizontal-reduce
-  # treatment Ops.REDUCE gets, so an UPCAST/UNROLL'd reduce body no longer broadcasts the scalar slot into an
-  # unassignable make_floatN(acc,...) store. Exact + fail-closed; runs before add_loads to match reduce_to_acc's form.
+  # AMD baseline: give manual END/AFTER scalar-REG accumulators the same widen+horizontal-reduce treatment Ops.REDUCE
+  # gets, so an UPCAST/UNROLL'd reduce body no longer broadcasts the scalar slot into an unassignable
+  # make_floatN(acc,...) store. Exact + fail-closed; runs before add_loads to match reduce_to_acc's form.
   # See tinygrad/codegen/late/devectorizer.py reduce_acc_upcast_fix + docs/tg-p12-*.
-  if getenv("REDUCE_ACC_UPCAST_FIX") and ren.target.device == "AMD":
+  if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_reduce_acc_upcast_fix, name="reduce acc upcast fix")
 
   # **** optimizations are done, now we lower to actual code ****
@@ -131,7 +131,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # devectorize
   sink = graph_rewrite(sink, sym+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
-  if getenv("REDUCE_ACC_UPCAST_FIX") and ren.target.device == "AMD":
+  if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
   if (getenv("REG_STORE_DEVEC") or getenv("COALESCED_LOAD_LOWERING")) and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), name="reg store devec")
@@ -275,6 +275,6 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"), getenv("DECODE_OUTER_B_SPLIT"), getenv("REDUCE_ACC_UPCAST_FIX"))
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"), getenv("DECODE_OUTER_B_SPLIT"))
   if (prg:=to_program_cache.get(key)) is None: to_program_cache[key] = prg = do_to_program(ast, renderer)
   return prg

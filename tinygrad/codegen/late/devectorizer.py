@@ -356,7 +356,7 @@ pm_reduce = PatternMatcher([
     lambda add, wmma: UOp(wmma.op, wmma.dtype, (wmma.src[0], wmma.src[1], wmma.src[2]+add), wmma.arg)),
 ])
 
-# *** REDUCE_ACC_UPCAST_FIX: manual END/AFTER scalar-REG accumulator widening (opt-in) ***
+# Manual END/AFTER scalar-REG accumulator widening for AMD generated reductions.
 #
 # Hand-written reductions (flash/gemv kernels) use a manual loop-carried accumulator
 # `acc.index(0).store(op(acc.after(reduce_range).index(0), contrib)).end(reduce_range)` rather than Ops.REDUCE, so
@@ -364,7 +364,7 @@ pm_reduce = PatternMatcher([
 # the reduce body becomes a vector and this idiom broadcasts the size-1 scalar slot: the store target becomes
 # `make_floatN(acc,...,acc) = <N partials>`, which is not assignable (and REG_STORE_DEVEC aliases the lanes -> NaN).
 #
-# This gated rewrite gives the manual accumulator the same treatment Ops.REDUCE gets: it sizes the REG to the true
+# This rewrite gives the manual accumulator the same treatment Ops.REDUCE gets: it sizes the REG to the true
 # output width W (= the init-store width; how many distinct output lanes the accumulator feeds) and horizontally
 # reduces the N/W reduce-axis lanes with the accumulator's own op before the (now genuine) width-W store. The rebuilt
 # accumulator mirrors reduce_to_acc's SSA form exactly (input ranges on the init, single after on the read, bare store

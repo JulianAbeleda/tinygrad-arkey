@@ -8,11 +8,11 @@ Four tiny generated-UOp kernels isolate the codegen invariant the TG-P10 combine
   mixed_var_inv        out[h,d] = (sum_s x[h,s]*y[h,s,d]) / (sum_s x[h,s])  (num varies, den invariant)
 
 Each case checks numeric correctness vs a numpy reference AND inspects the generated code (DEBUG=4) for the two
-failure fingerprints: an invalid `make_float4(...) = ...` REG-accumulator store, and slot-0 lane aliasing. Under the
-default (no fix) the varies/mixed cases fail to compile (invalid store); under REDUCE_ACC_UPCAST_FIX=1 they must
-compile and be numeric_ok with a widened (non-aliased) accumulator.
+failure fingerprints: an invalid `make_float4(...) = ...` REG-accumulator store, and slot-0 lane aliasing. The
+accumulator-widening lowering is now the AMD baseline, so all cases must compile and be numeric_ok with a widened
+(non-aliased) accumulator.
 
-Run: DEV=AMD PYTHONPATH=. python3 extra/qk_tg_p11_reduce_upcast_microgate.py   (add REDUCE_ACC_UPCAST_FIX=1 for the fixed arm)
+Run: DEV=AMD PYTHONPATH=. python3 extra/qk_tg_p11_reduce_upcast_microgate.py
 """
 from __future__ import annotations
 import contextlib, io, json, os, pathlib, re
@@ -115,18 +115,12 @@ def main():
            run("invariant_upcast", invariant_upcast, (xt,)),
            run("varies_upcast", varies_upcast, (xt, yt)),
            run("mixed_var_inv", mixed_var_inv, (xt, yt))]
-  fixed = os.environ.get("REDUCE_ACC_UPCAST_FIX") == "1"
   all_ok = all(c["compile_ok"] and c["numeric_ok"] for c in cases)
-  # baseline (no fix): the varies/mixed cases are expected to fail; with the fix all must pass.
-  if fixed:
-    verdict = "TG_P11_1_PASS_INVARIANT_TEST_READY" if all_ok else "TG_P11_2_BLOCKED_LOWERING_STILL_WRONG"
-  else:
-    reproduced = any(not c["compile_ok"] and c["case"] in ("varies_upcast", "mixed_var_inv") for c in cases)
-    verdict = "TG_P11_1_PASS_INVARIANT_TEST_READY" if reproduced else "TG_P11_1_BLOCKED_TEST_NOT_MINIMAL"
+  verdict = "TG_P11_1_PASS_BASELINE_LOWERING" if all_ok else "TG_P11_2_BLOCKED_LOWERING_STILL_WRONG"
   latest = {"scope": "TG-P11.1 reduce/upcast accumulator invariant microgate", "verdict": verdict,
-            "reduce_acc_upcast_fix": fixed, "all_ok": all_ok, "cases": cases}
-  json.dump(latest, open(OUT / ("invariant_microgate_fixed.json" if fixed else "invariant_microgate.json"), "w"), indent=2)
-  print(verdict, "fix=", fixed, "| " + " ".join(f"{c['case']}:{'ok' if c['numeric_ok'] else ('cfail' if not c['compile_ok'] else 'nnum')}" for c in cases))
+            "reduce_acc_upcast_lowering": "amd_baseline", "all_ok": all_ok, "cases": cases}
+  json.dump(latest, open(OUT / "invariant_microgate.json", "w"), indent=2)
+  print(verdict, "| " + " ".join(f"{c['case']}:{'ok' if c['numeric_ok'] else ('cfail' if not c['compile_ok'] else 'nnum')}" for c in cases))
   return 0 if verdict.startswith("TG_P11_1_PASS") else 1
 
 
