@@ -66,7 +66,7 @@ def main():
     rec["remaining_for_full_pass"] = ("(1) DEFINE_VAR/start_pos runtime-scalar coverage in AMDISARenderer (isel_var "
       "scaffolded + fires, unresolved regalloc desync: store-value reg None); (2) wire native_isa_block_tile into the "
       "FUSED_XLANE block-tile route (extra/qk_flash_decode.py:1397) under a flag, keeping gmax+combine on HIP; "
-      "(3) in-model route-attribution + token-match gate via extra/qk_decode_route_attribution_wd.py.")
+      "(3) in-model route-attribution + token-match gate via the current generated-route parity artifact.")
     rec["verdict"] = "AMD_ISA_PHASE_H_KEYSTONE_PASS_NATIVE_TILE_INJECTION" if (correct and det) \
                      else "AMD_ISA_PHASE_H_BLOCKED_MODEL_ROUTE_BINDING"
   except Exception as e:

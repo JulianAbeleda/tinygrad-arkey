@@ -3,7 +3,7 @@
   "profile_decode": "qwen3_8b_q4_k_m_gfx1100_decode",
   "profile_prefill": "qwen3_8b_q4_k_m_gfx1100_prefill",
   "verdict": "PMS_R0_PASS_CENSUS_PINNED",
-  "strict_default_purity_verdict": "TINYGRAD_DEFAULT_PURITY_FAIL",
+  "strict_default_purity_verdict": "TINYGRAD_DEFAULT_PURITY_PASS",
   "manifest_errors": [],
   "attribution_complete": true,
   "missing_from_census": [],
@@ -13,31 +13,28 @@
     "non_tinygrad_generated_default_route_ids": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
-      "decode_attention_owned_two_kernel",
+      "decode_flash_live_split_g4_8b_kvboth",
       "decode_flash_block_tile_g5_konly",
       "prefill_pipe_role_selective_generated"
     ],
     "of_which_search_generated": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
+      "decode_flash_live_split_g4_8b_kvboth",
       "decode_flash_block_tile_g5_konly",
       "prefill_pipe_role_selective_generated"
     ],
-    "of_which_final_purity_debt": [
-      "decode_attention_owned_two_kernel"
-    ],
+    "of_which_final_purity_debt": [],
     "of_which_transitional": [],
-    "of_which_forbidden_final_default": [
-      "decode_attention_owned_two_kernel"
-    ],
-    "interpretation": "5 kernels on the default path are non-tinygrad-generated. 4 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, decode_flash_block_tile_g5_konly, prefill_pipe_role_selective_generated); 1 are final-default purity debt (decode_attention_owned_two_kernel). Everything else in the model is tinygrad_scheduler-generated."
+    "of_which_forbidden_final_default": [],
+    "interpretation": "5 kernels on the default path are non-tinygrad-generated. 5 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, decode_flash_live_split_g4_8b_kvboth, decode_flash_block_tile_g5_konly, prefill_pipe_role_selective_generated); 0 are final-default purity debt (). Everything else in the model is tinygrad_scheduler-generated."
   },
   "purity_report": {
-    "verdict": "TINYGRAD_DEFAULT_PURITY_FAIL",
+    "verdict": "TINYGRAD_DEFAULT_PURITY_PASS",
     "default_routes": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
-      "decode_attention_owned_two_kernel",
+      "decode_flash_live_split_g4_8b_kvboth",
       "decode_flash_block_tile_g5_konly",
       "prefill_pipe_role_selective_generated"
     ],
@@ -57,11 +54,11 @@
         "final_default_allowed": true
       },
       {
-        "route_id": "decode_attention_owned_two_kernel",
-        "status": "default_shipped",
-        "provenance": "external_handwritten_kernel",
-        "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route",
-        "final_default_allowed": false
+        "route_id": "decode_flash_live_split_g4_8b_kvboth",
+        "status": "promoted_default",
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
       },
       {
         "route_id": "decode_flash_block_tile_g5_konly",
@@ -78,9 +75,7 @@
         "final_default_allowed": true
       }
     ],
-    "forbidden_default_routes": [
-      "decode_attention_owned_two_kernel"
-    ],
+    "forbidden_default_routes": [],
     "transitional_default_routes": [],
     "final_default_allowed_provenance": [
       "machine_authored_generated",
@@ -196,17 +191,37 @@
       "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 ctx>=512",
       "writer": "owned_asm",
       "selector": "env_guard",
-      "route_guard": "tinygrad/llm/model.py:1091 getenv('DECODE_ATTN_AMDGCN_TILE', 1) & ctx>=512 -> :1094-1106 amdgcn_flash_decode",
-      "kernel_source": "extra/qk_owned_flash_decode_graph_node.py amdgcn_flash_decode -> extra/qk_owned_flash_decode.hip (owned_flash_tile_gqa_whole + owned_flash_combine, two Ops.PROGRAM nodes)",
+      "route_guard": "removed from tinygrad/llm/model.py; no env flag selects this route",
+      "kernel_source": "retired handwritten HIP attention implementation",
       "authority_artifact": "bench/amd-isa-backend-decode-attention-ceiling/latest.json (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION)",
-      "rollback_flag": "DECODE_ATTN_AMDGCN_TILE=0 -> generated tinygrad flash decode",
-      "purity_status": "owned_default",
-      "next_action": "keep shipped; low-leverage (wall-share ~10%@512 ->~0%@4096); do NOT make attention the max-out target",
-      "current_default": true,
+      "rollback_flag": "n/a",
+      "purity_status": "removed",
+      "next_action": "retired; replaced by decode_flash_live_split_g4_8b_kvboth",
+      "current_default": false,
       "in_manifest": true,
       "provenance": "external_handwritten_kernel",
-      "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route",
-      "final_default_allowed": false
+      "replacement_scope": "decode_flash_live_split_g4_8b_kvboth",
+      "final_default_allowed": true
+    },
+    {
+      "route_id": "decode_flash_live_split_g4_8b_kvboth",
+      "workload": "decode",
+      "role": "attention_tile,attention_combine",
+      "quant": "fp16",
+      "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
+      "writer": "generated",
+      "selector": "BoltBeam_route_policy_or_env_default",
+      "route_guard": "tinygrad/llm/model.py 8B generated branch: default-on DECODE_FLASH_BLOCK_TILE_G5_8B=1 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True)",
+      "kernel_source": "extra/qk_live_split_geometry.py + extra/qk_flash_decode.py generated UOp kernels",
+      "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
+      "rollback_flag": "DECODE_FLASH_BLOCK_TILE_G5_8B=0 -> generic generated tinygrad flash decode",
+      "purity_status": "search_generated_promoted",
+      "next_action": "keep promoted; no handwritten attention kernel on the hot path",
+      "current_default": true,
+      "in_manifest": true,
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "decode_flash_block_tile_g5_konly",
@@ -216,7 +231,7 @@
       "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/model.py:1129-1140 QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; DECODE_FLASH_BLOCK_TILE_G5_KONLY default 1",
+      "route_guard": "tinygrad/llm/model.py 14B G=5 branch: QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; staging fixed to K_ONLY",
       "kernel_source": "extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel (staging='K_ONLY')",
       "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); bench/gp-track/gp3_microgate.json",
       "rollback_flag": "DECODE_FLASH_BLOCK_TILE_G5=0",
@@ -236,10 +251,10 @@
       "shape_guard": "same shapes; opt-in",
       "writer": "generated",
       "selector": "env_guard",
-      "route_guard": "tinygrad/llm/model.py:1076-1085 DECODE_ATTN_GENERATED_WHOLECACHE generated route, selected when DECODE_ATTN_AMDGCN_TILE=0",
+      "route_guard": "tinygrad/llm/model.py DECODE_ATTN_GENERATED_WHOLECACHE generated whole-cache route; research-only opt-in",
       "kernel_source": "extra/qk_flash_decode.py flash_decode_attention_whole_cache (+ native AMD-ISA backend)",
       "authority_artifact": "bench/amd-isa-backend-phase-n7/latest.json; bench/amd-isa-backend-decode-attention-ceiling/latest.json",
-      "rollback_flag": "unset -> owned two-kernel default",
+      "rollback_flag": "unset -> promoted generated default route",
       "purity_status": "research",
       "next_action": "infrastructure/research only (~60-68% of owned); reopen only if attention wall-share becomes dominant",
       "current_default": false,
@@ -351,24 +366,24 @@
       "final_default_allowed": true
     },
     {
-      "route_id": "decode_attention_owned_two_kernel",
+      "route_id": "decode_flash_live_split_g4_8b_kvboth",
       "workload": "decode",
       "role": "attention_tile,attention_combine",
       "quant": "fp16",
-      "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 ctx>=512",
-      "writer": "owned_asm",
-      "selector": "env_guard",
-      "route_guard": "tinygrad/llm/model.py:1091 getenv('DECODE_ATTN_AMDGCN_TILE', 1) & ctx>=512 -> :1094-1106 amdgcn_flash_decode",
-      "kernel_source": "extra/qk_owned_flash_decode_graph_node.py amdgcn_flash_decode -> extra/qk_owned_flash_decode.hip (owned_flash_tile_gqa_whole + owned_flash_combine, two Ops.PROGRAM nodes)",
-      "authority_artifact": "bench/amd-isa-backend-decode-attention-ceiling/latest.json (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION)",
-      "rollback_flag": "DECODE_ATTN_AMDGCN_TILE=0 -> generated tinygrad flash decode",
-      "purity_status": "owned_default",
-      "next_action": "keep shipped; low-leverage (wall-share ~10%@512 ->~0%@4096); do NOT make attention the max-out target",
+      "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
+      "writer": "generated",
+      "selector": "BoltBeam_route_policy_or_env_default",
+      "route_guard": "tinygrad/llm/model.py 8B generated branch: default-on DECODE_FLASH_BLOCK_TILE_G5_8B=1 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True)",
+      "kernel_source": "extra/qk_live_split_geometry.py + extra/qk_flash_decode.py generated UOp kernels",
+      "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
+      "rollback_flag": "DECODE_FLASH_BLOCK_TILE_G5_8B=0 -> generic generated tinygrad flash decode",
+      "purity_status": "search_generated_promoted",
+      "next_action": "keep promoted; no handwritten attention kernel on the hot path",
       "current_default": true,
       "in_manifest": true,
-      "provenance": "external_handwritten_kernel",
-      "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route",
-      "final_default_allowed": false
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "decode_flash_block_tile_g5_konly",
@@ -378,7 +393,7 @@
       "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/model.py:1129-1140 QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; DECODE_FLASH_BLOCK_TILE_G5_KONLY default 1",
+      "route_guard": "tinygrad/llm/model.py 14B G=5 branch: QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; staging fixed to K_ONLY",
       "kernel_source": "extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel (staging='K_ONLY')",
       "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); bench/gp-track/gp3_microgate.json",
       "rollback_flag": "DECODE_FLASH_BLOCK_TILE_G5=0",
@@ -473,6 +488,26 @@
       "final_default_allowed": true
     },
     {
+      "route_id": "decode_attention_owned_two_kernel",
+      "workload": "decode",
+      "role": "attention_tile,attention_combine",
+      "quant": "fp16",
+      "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 ctx>=512",
+      "writer": "owned_asm",
+      "selector": "env_guard",
+      "route_guard": "removed from tinygrad/llm/model.py; no env flag selects this route",
+      "kernel_source": "retired handwritten HIP attention implementation",
+      "authority_artifact": "bench/amd-isa-backend-decode-attention-ceiling/latest.json (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION)",
+      "rollback_flag": "n/a",
+      "purity_status": "removed",
+      "next_action": "retired; replaced by decode_flash_live_split_g4_8b_kvboth",
+      "current_default": false,
+      "in_manifest": true,
+      "provenance": "external_handwritten_kernel",
+      "replacement_scope": "decode_flash_live_split_g4_8b_kvboth",
+      "final_default_allowed": true
+    },
+    {
       "route_id": "decode_attention_native_correct_not_fast",
       "workload": "decode",
       "role": "attention_tile,attention_combine",
@@ -480,10 +515,10 @@
       "shape_guard": "same shapes; opt-in",
       "writer": "generated",
       "selector": "env_guard",
-      "route_guard": "tinygrad/llm/model.py:1076-1085 DECODE_ATTN_GENERATED_WHOLECACHE generated route, selected when DECODE_ATTN_AMDGCN_TILE=0",
+      "route_guard": "tinygrad/llm/model.py DECODE_ATTN_GENERATED_WHOLECACHE generated whole-cache route; research-only opt-in",
       "kernel_source": "extra/qk_flash_decode.py flash_decode_attention_whole_cache (+ native AMD-ISA backend)",
       "authority_artifact": "bench/amd-isa-backend-phase-n7/latest.json; bench/amd-isa-backend-decode-attention-ceiling/latest.json",
-      "rollback_flag": "unset -> owned two-kernel default",
+      "rollback_flag": "unset -> promoted generated default route",
       "purity_status": "research",
       "next_action": "infrastructure/research only (~60-68% of owned); reopen only if attention wall-share becomes dominant",
       "current_default": false,
@@ -547,5 +582,5 @@
     "note": "generated by tinygrad/codegen via the scheduler; no hand-written kernel. Already 'generated enough' for this scope.",
     "purity_status": "tinygrad_generated"
   },
-  "source": "derived from tinygrad/llm/model.py route guards + extra/qk_gemv_g3_codegen_lowering.py + extra/qk_prefill_graph_gemm_route.py + extra/qk_owned_flash_decode_graph_node.py; cross-checked vs extra/qk_route_manifest.py"
+  "source": "derived from tinygrad/llm/model.py route guards + extra/qk_gemv_g3_codegen_lowering.py + extra/qk_prefill_graph_gemm_route.py + generated attention routes; cross-checked vs extra/qk_route_manifest.py"
 }

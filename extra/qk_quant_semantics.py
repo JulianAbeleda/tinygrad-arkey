@@ -204,11 +204,11 @@ QUANT_LIBRARY: dict[str, QuantFormat] = {
     dequant_ops=("direct_load_fp16",),
     legal_accum_dtypes=("fp32", "fp16"), preferred_dot_dtype="fp16_wmma",
     quality_class="lossless_fp16",
-    known_good_route_families=("graph_gemm_pipe", "owned_reference", "native_isa_attention"),
+    known_good_route_families=("graph_gemm_pipe", "generated_live_split_attention", "native_isa_attention"),
     known_refuted_route_families=(),
     quality_constraints="none (no quantization).",
-    impl_citation="extra/qk_prefill_graph_gemm_route.py (prefill GEMM); extra/qk_owned_flash_decode_graph_node.py "
-                  "(attention)",
+    impl_citation="extra/qk_prefill_graph_gemm_route.py (prefill GEMM); extra/qk_live_split_geometry.py + "
+                  "extra/qk_flash_decode.py (attention)",
     notes="not a packed-quant format; no unpack. Used by prefill GEMM + decode attention."),
 }
 

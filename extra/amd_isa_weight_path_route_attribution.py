@@ -1,6 +1,6 @@
 """W1: weight-path route attribution + wall share. Per-kernel GPU time (eager PROFILE -> one ProfileRangeEvent per
 kernel with GPU HW timestamps; the JIT graph profiles as one opaque range, so eager is required -- same method as
-extra/amd_isa_phase_n4_whole_step_attribution.py). Classifies each kernel through extra.qk_decode_role_profile, which
+the decode-step attribution artifacts). Classifies each kernel through extra.qk_decode_role_profile, which
 derives role / quant / shape facts from the selected GGUF tensor table instead of Qwen3-8B constants. Audit-only.
 
 Run: DEV=AMD PYTHONPATH=. .venv/bin/python extra/amd_isa_weight_path_route_attribution.py

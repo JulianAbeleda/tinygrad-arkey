@@ -173,7 +173,7 @@ def main() -> int:
                   help="PMS-R3: validate ONE explicit candidate request against the declared profile (refusal test)")
   ap.add_argument("--failed-rows", metavar="r1,r2", default=None,
                   help="parity-closure mode: only emit a candidate whose axis targets_delta is in this set of "
-                       "FAILED parity rows (from qk_owned_oracle_parity_audit.py searchable_failed_rows). No "
+                       "FAILED parity rows (from the current generated-route parity artifacts). No "
                        "candidate may run unless it targets a failed row.")
   args = ap.parse_args()
   failed_rows = set(x.strip() for x in args.failed_rows.split(",") if x.strip()) if args.failed_rows else None

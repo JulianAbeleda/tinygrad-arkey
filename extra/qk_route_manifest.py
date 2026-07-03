@@ -7,8 +7,8 @@ This module is DATA + tiny helpers. It changes NO defaults and runs NO kernels; 
 ad-hoc env maps. For each route, `env` is what you SET to force that route onto the active path; an empty `env` ({})
 means the route is ALREADY the shipped default (no flag needed). `rollback` is the exact env to leave it.
 
-CURRENT-STATE PIN (verified 2026-06-30 against tinygrad/llm/model.py + extra/qk_gemv_g3_codegen_lowering.py +
-extra/qk_prefill_graph_gemm_route.py + extra/qk_owned_flash_decode_graph_node.py):
+CURRENT-STATE PIN (verified 2026-07-03 against tinygrad/llm/model.py + extra/qk_gemv_g3_codegen_lowering.py +
+extra/qk_prefill_graph_gemm_route.py + generated attention routes):
 
   * Decode Q4_K GEMV default = the GENERATED G3 LaneMap route. model.py:255 reads `getenv("BUBBLEBEAM_FUTURESIGHT", 1)`
     (DEFAULT-ON, flipped in commit 81370ae38). For the eligible Q4_K shapes (g3_bubblebeam_shape, model.py:256) the G3
@@ -151,23 +151,43 @@ ROUTES = {
     "note": "half-warp direct Q6_K lm_head route: token-correct + route-bound, but W==D regressed -4.77..-6.06% (median -5.44%). Default-off. Do NOT re-chase as built (only reopen with a different topology than the half-warp partition)."},
   # ---------------- decode attention ----------------
   "decode_attention_owned_two_kernel": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "default_shipped",
+    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "removed",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
-    "env": {},  # DECODE_ATTN_AMDGCN_TILE defaults to 1 at ctx>=DECODE_ATTN_AMDGCN_MIN_CTX (512)
-    "rollback": {"DECODE_ATTN_AMDGCN_TILE": "0"},  # -> generated tinygrad flash decode path
+    "env": {},
+    "rollback": {},
     "strict_fallback": True,
     "expected_kernels": ["owned_flash_tile_gqa_whole", "owned_flash_combine"],
     "authority_gate": "extra/qk_decode_runtime_overhead.py",
     "promotion_artifacts": ["docs/decode-two-kernel-problem-audit-result-20260625.md",
                             "bench/amd-isa-backend-decode-attention-ceiling/latest.json"],
-    "purity_status": "owned_default",
+    "purity_status": "removed",
     "provenance": "external_handwritten_kernel",
-    "replacement_scope": "docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route",
+    "replacement_scope": "decode_flash_live_split_g4_8b_kvboth",
     "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/model.py:1091-1106 (DECODE_ATTN_AMDGCN_TILE default 1, ctx>=512); writer extra/qk_owned_flash_decode_graph_node.py amdgcn_flash_decode (HIP .co split tile + separate combine, two Ops.PROGRAM graph nodes).",
-    "note": "shipped decode attention: hand HIP split tile + separate combine. Combine/fused-lifecycle exhausted; ceiling audit (AMD_ISA_ATTENTION_CEILING_PASS_MOVE_TO_NON_ATTENTION) says attention wall-share is ~10%@ctx512 ->~3%@ctx4096 (measured tile_wall_share in bench/amd-isa-backend-decode-attention-ceiling/latest.json); low-leverage."},
+    "route_attribution": "removed from tinygrad/llm/model.py; retired handwritten HIP attention implementation pruned.",
+    "note": "Retired owned HIP split tile + combine. Replaced as the 8B long-context default by decode_flash_live_split_g4_8b_kvboth so the hot path is generated machine-search code."},
+  "decode_flash_live_split_g4_8b_kvboth": {
+    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "promoted_default",
+    "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
+    "quant": ["fp16"],
+    "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "G": 4, "ctx": ">=512"}],
+    "env": {},  # DEFAULT-ON for the validated 8B G=4 shape.
+    "rollback": {"DECODE_FLASH_BLOCK_TILE_G5_8B": "0"},  # -> generic generated tinygrad flash decode, not owned HIP
+    "baseline_route_id": "decode_attention_owned_two_kernel",
+    "strict_fallback": True,
+    "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "flash_fused_gmax_combine"],
+    "forbidden_kernels": ["owned_flash_tile_gqa_whole", "owned_flash_combine", "fallback_graph"],
+    "authority_gate": "extra/qk_prefilled_route_parity.py",
+    "promotion_artifacts": ["bench/tg-p14-amd-recovery-and-pure-attention-landing/phase1_kvboth_result.json",
+                            "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json",
+                            "bench/tg-p14-amd-recovery-and-pure-attention-landing/summary.md"],
+    "purity_status": "search_generated_promoted",
+    "provenance": "machine_authored_generated",
+    "selector": "BoltBeam_route_policy_or_env_default",
+    "route_attribution": "tinygrad/llm/model.py 8B generated branch: B=1,Hq=32,Hkv=8,Hd=128 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True). Writer extra/qk_live_split_geometry.py + extra/qk_flash_decode.py generated UOp kernels.",
+    "note": "Promoted 8B long-context decode attention replacement. TG-P14 practical roofline closeout: worst-of-3 speed ctx512 98.5% / ctx4096 98.3% of owned, 48/48 deterministic prefilled token parity, route-bound, no hidden fallback. Default choice intentionally prefers generated machine-search code over the retired handwritten HIP route."},
   "decode_flash_block_tile_g5_konly": {
     "workload": "decode", "profile_id": PROFILE_DECODE_LARGE, "status": "promoted_default",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
@@ -185,34 +205,33 @@ ROUTES = {
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/model.py:1129-1140 (QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly, else DECODE_FLASH_BLOCK_TILE_G5 default 1; K_ONLY staging default 1). Writer extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp kernel.",
+    "route_attribution": "tinygrad/llm/model.py 14B G=5 branch (QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly, else DECODE_FLASH_BLOCK_TILE_G5 default 1; K_ONLY staging fixed). Writer extra/qk_flash_decode.py flash_decode_g5_block_tile -> generated UOp kernel.",
     "note": "G=5 block tile for 14B Hq=40/Hkv=8/Hd=128. GP0 purity gate PASS (generated UOps, no handwritten kernel); GP3 microgate PASS; GP4 W==D ctx512 +3.9 tok/s (+7.8%), ctx2048 +6.9 tok/s (+14.7%). Rollback DECODE_FLASH_BLOCK_TILE_G5=0. The next pure-search step is making BoltBeam QK_ROUTE_POLICY the required selector authority."},
   "decode_flash_block_tile_g5_8b_refuted": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "correct_not_fast",
+    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "removed",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "G": 4, "ctx": ">=512"}],
-    "env": {"DECODE_FLASH_BLOCK_TILE_G5_8B": "1"},  # opt-in; NOT default (owned HIP wins the 8B geometry)
-    "rollback": {},  # -> owned two-kernel default (decode_attention_owned_two_kernel)
+    "env": {},
+    "rollback": {},
     "baseline_route_id": "decode_attention_owned_two_kernel",
     "strict_fallback": True,
     "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "flash_state_gmax_32_128", "flash_state_combine_32_128"],
-    "authority_gate": "extra/qk_tg_p5_attention_wd.py",
+    "authority_gate": "historical TG-P5/TG-P8 artifacts; route no longer selectable",
     "promotion_artifacts": ["bench/tg-p5-attention-generated-default/latest.json",
                             "bench/tg-p5-attention-generated-default/summary.md"],
-    "purity_status": "correct_not_fast",
+    "purity_status": "removed",
     "provenance": "machine_authored_generated",
-    "selector": "env_guard_or_policy",
-    "route_attribution": "tinygrad/llm/model.py TG-P5 8B G5 branch (DECODE_FLASH_BLOCK_TILE_G5_8B or QK_ROUTE_POLICY decode_flash_block_tile_g5_konly for Hq=32); writer extra/qk_flash_decode.py flash_decode_g5_block_tile (WARPS=G=4).",
-    "note": "TG-P5/TG-P8: the generated G5 block-tile flash decode generalizes correctly to the 8B geometry (Hq=32/Hkv=8, G=4), route-bound + token-identical to owned, but SLOWER (87.6%/95.6% @ctx512/4096). TG-P8 classified the blocker precisely: (ctx512) SPLIT_GEOMETRY -- the generated route needs ~36 splits for occupancy so it over-launches masked workgroups at low ctx; L is geometry-optimal at 128 (larger L worse, TG-P8.2 refute); owned avoids this via runtime per-split length (fixed S, len=ceildiv(Tc,S)). (ctx4096) COMBINE_OVERHEAD is the BINDING cap -- the generated 3-kernel gmax+combine lifecycle is 556us/fwd (83% of the delta) vs owned's fused 224us, and combine collapse is refuted (guardrail #3). Owned HIP stays the 8B default; this route is kept default-off. 8B owned attention remains the sole external_handwritten_kernel purity debt; reopen needs a symbolic-per-split-length generated tile AND a new non-collapse combine primitive."},
+    "selector": "retired",
+    "route_attribution": "removed from tinygrad/llm/model.py; DECODE_FLASH_BLOCK_TILE_G5_8B now selects decode_flash_live_split_g4_8b_kvboth.",
+    "note": "Historical TG-P5/TG-P8 route. The generated G5 block-tile flash decode generalized correctly to the 8B geometry but was slower (87.6%/95.6% @ctx512/4096). It is no longer selectable because the validated live-split KV_BOTH route superseded it as the generated 8B default."},
   "decode_attention_native_correct_not_fast": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "correct_not_fast",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
-    "env": {"DECODE_ATTN_AMDGCN_TILE": "0", "DECODE_ATTN_GENERATED_WHOLECACHE": "1",
-            "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE": "1"},
-    "rollback": {},  # -> owned two-kernel default
+    "env": {"DECODE_ATTN_GENERATED_WHOLECACHE": "1", "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE": "1"},
+    "rollback": {},  # -> promoted generated default route
     "strict_fallback": True,
     "authority_gate": "extra/qk_decode_runtime_overhead.py",
     "promotion_artifacts": ["bench/amd-isa-backend-phase-n7/latest.json",
@@ -220,8 +239,8 @@ ROUTES = {
     "purity_status": "research",
     "provenance": "machine_authored_generated",
     "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/model.py:1076-1085 (DECODE_ATTN_GENERATED_WHOLECACHE generated whole-cache flash decode) selected when DECODE_ATTN_AMDGCN_TILE=0.",
-    "note": "native AMD-ISA / generated attention tile: correct + route-bound but ~60-68% of owned speed (native_vs_owned 68.3%@512, 60.1%@4096). Infrastructure/capability, not shipped. Low-leverage per ceiling audit."},
+    "route_attribution": "tinygrad/llm/model.py generated whole-cache flash decode branch selected by DECODE_ATTN_GENERATED_WHOLECACHE=1.",
+    "note": "native AMD-ISA / generated attention tile: correct + route-bound but much slower than the promoted live-split generated route. Infrastructure/capability, not shipped. Low-leverage per ceiling audit."},
   # ---------------- prefill GEMM ----------------
   "prefill_pipe_role_selective_generated": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
@@ -295,7 +314,7 @@ REFUTED = [
    "citation": "bench/tg-p8-generated-8b-attention-parity/geometry_search.json"},
   {"axis": "g5_block_tile_8b_combine_lifecycle_cap", "domain": "attention", "disposition": "blocking: the generated 3-kernel gmax+combine lifecycle is 556us/fwd (83% of the ctx4096 attention delta) vs owned's fused 224us -> BINDING cap at ctx4096 (95.9%); a perfect tile saves only 112us. Combine COLLAPSE is refuted (guardrail #3); reopen only with a NEW non-collapse coordination primitive (TG-P8.1/P8.2)",
    "citation": "bench/tg-p8-generated-8b-attention-parity/latest.json"},
-  {"axis": "live_split_geometry_8b_tile", "domain": "attention", "disposition": "SOLVED (TG-P9.2): live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; live-split tile byte-identical, ctx512 tile 4.6x, full-model ctx512 87.7%->96.7% of owned. Shipped default-off (DECODE_ATTN_LIVE_SPLIT_GENERATED). extra/qk_live_split_geometry.py",
+  {"axis": "live_split_geometry_8b_tile", "domain": "attention", "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk_live_split_geometry.py",
    "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"},
   {"axis": "split_preserving_lse_combine_8b", "domain": "attention", "disposition": "EMITTER_BLOCKED (TG-P9.4): a split-preserving generated combine (de-dup the per-d fexp / fuse gmax without collapsing Hq*S or Hq*Hd) mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) store; REG_STORE_DEVEC=1 compiles but NaNs. The ctx4096 556us combine cap cannot be removed in current AMD codegen. Reopen: a codegen fix keeping the reduction-accumulator REG scalar for a multi-reduce/weight-sharing combine.",
    "citation": "bench/tg-p9-pure-attention-primitive-route/combine_microgate.json"},

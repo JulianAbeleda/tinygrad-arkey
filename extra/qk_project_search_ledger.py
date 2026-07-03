@@ -62,7 +62,7 @@ def seed():
   ingest_decode_mode_a(entries)
   # shipped wins + experiments (the durable cross-lane memory)
   entries.append(entry(candidate_id="decode/buffer_identity_whole_cache", lane="decode", primitive_class="ABI",
-    knobs={"DECODE_ATTN_KV_IDENTITY": 1, "tile": "owned_flash_tile_gqa_whole"},
+    knobs={"tile": "generated_live_split_g4_8b_kvboth"},
     oracle="pre-fix slice route (owned_flash_tile_gqa, materializes E_49152)", correctness="byte-identical 64-tok x2 prompts",
     route_identity="owned_flash_tile_gqa_whole present", materialization_abi="E_49152 REMOVED (buffer identity)",
     isa="AMD_ISA_PRIMITIVE_CONFIRMED (60 VGPR, 0 spill, v_dot2/LDS/cross-lane)", local_diagnostic=None,

@@ -2,9 +2,9 @@
 
 Verdict: **PMS_R0_PASS_CENSUS_PINNED**
 
-Strict default purity: **TINYGRAD_DEFAULT_PURITY_FAIL**
+Strict default purity: **TINYGRAD_DEFAULT_PURITY_PASS**
 
-Headline: 5 kernels on the default path are non-tinygrad-generated. 4 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, decode_flash_block_tile_g5_konly, prefill_pipe_role_selective_generated); 1 are final-default purity debt (decode_attention_owned_two_kernel). Everything else in the model is tinygrad_scheduler-generated.
+Headline: 5 kernels on the default path are non-tinygrad-generated. 5 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, decode_flash_live_split_g4_8b_kvboth, decode_flash_block_tile_g5_konly, prefill_pipe_role_selective_generated); 0 are final-default purity debt (). Everything else in the model is tinygrad_scheduler-generated.
 
 ## Default-path routes
 
@@ -12,7 +12,7 @@ Headline: 5 kernels on the default path are non-tinygrad-generated. 4 are machin
 |---|---|---|---|---|---|---|---|
 | decode_q4k_g3_generated | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | Q4_K | bench/amd-isa-backend-g3-weight-promotion/latest.json | BUBBLEBEAM_FUTURESIGHT=0 -> decode_q4k_owned_warp |
 | decode_q6k_coop_generated | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | Q6_K | bench/tg-p3-q6k-generated-coop/latest.json | DECODE_Q6K_GENERATED=0 -> decode_q6k_coop_shipped (hand kernels) |
-| decode_attention_owned_two_kernel | decode | external_handwritten_kernel | no | env_guard | fp16 | bench/amd-isa-backend-decode-attention-ceiling/latest.json | DECODE_ATTN_AMDGCN_TILE=0 -> generated tinygrad flash decode |
+| decode_flash_live_split_g4_8b_kvboth | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json | DECODE_FLASH_BLOCK_TILE_G5_8B=0 -> generic generated tinygrad flash decode |
 | decode_flash_block_tile_g5_konly | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/gp-track/gp4_latest.json | DECODE_FLASH_BLOCK_TILE_G5=0 |
 | prefill_pipe_role_selective_generated | prefill | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | Q4_K,Q6_K,fp16 | bench/tg-p4-prefill-generated-schedule/latest.json | PREFILL_GENERATED_SCHEDULE=0 -> prefill_pipe_role_selective_default (legacy fixed emit) |
 
@@ -23,13 +23,13 @@ Headline: 5 kernels on the default path are non-tinygrad-generated. 4 are machin
 | decode_q4k_owned_warp | rollback_oracle | owned_reference | keep as rollback/oracle; do not delete |
 | decode_q6k_coop_shipped | rollback_oracle | owned_reference | keep as rollback/oracle; do not delete |
 | decode_q6k_direct_refuted | hand_authored_uop_template | refuted | do NOT reopen as built (-5.44% median W==D); only with a different topology than half-warp |
+| decode_attention_owned_two_kernel | external_handwritten_kernel | removed | retired; replaced by decode_flash_live_split_g4_8b_kvboth |
 | decode_attention_native_correct_not_fast | machine_authored_generated | research | infrastructure/research only (~60-68% of owned); reopen only if attention wall-share becomes dominant |
 | prefill_pipe_role_selective_default | rollback_oracle | search_selected_specialized_route | keep as rollback/oracle; do not delete |
 | prefill_pipe_global_rollback | rollback_oracle | superseded_rollback | keep as A/B comparator and the rollback target of role-selective |
 
 ## Strict-purity debt
 
-- **decode_attention_owned_two_kernel**: `external_handwritten_kernel`; replacement scope: docs/tinygrad-pure-search-codegen-audit-and-resolution-20260701.md#tg-p5-replace-owned-decode-attention-with-generated-route
 
 ## Route attribution (cited guards)
 
@@ -38,9 +38,10 @@ Headline: 5 kernels on the default path are non-tinygrad-generated. 4 are machin
 - **decode_q6k_coop_generated** (default): tinygrad/llm/model.py Q6_K generated branch: getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated -> emit_q6k_gemv_kernel(spec) fires the coop/partial route; shipped hand kernels short-circuited
 - **decode_q6k_coop_shipped** (fallback): tinygrad/llm/model.py Q6_K shipped branch (DECODE_Q6K_GENERATED=0) -> q6k_coop_partial_kernel or q6k_gemv_partial_kernel
 - **decode_q6k_direct_refuted** (fallback): tinygrad/llm/model.py:455-464 getenv('Q6K_DIRECT_ROUTE') (default-off)
-- **decode_attention_owned_two_kernel** (default): tinygrad/llm/model.py:1091 getenv('DECODE_ATTN_AMDGCN_TILE', 1) & ctx>=512 -> :1094-1106 amdgcn_flash_decode
-- **decode_flash_block_tile_g5_konly** (default): tinygrad/llm/model.py:1129-1140 QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; DECODE_FLASH_BLOCK_TILE_G5_KONLY default 1
-- **decode_attention_native_correct_not_fast** (fallback): tinygrad/llm/model.py:1076-1085 DECODE_ATTN_GENERATED_WHOLECACHE generated route, selected when DECODE_ATTN_AMDGCN_TILE=0
+- **decode_attention_owned_two_kernel** (fallback): removed from tinygrad/llm/model.py; no env flag selects this route
+- **decode_flash_live_split_g4_8b_kvboth** (default): tinygrad/llm/model.py 8B generated branch: default-on DECODE_FLASH_BLOCK_TILE_G5_8B=1 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True)
+- **decode_flash_block_tile_g5_konly** (default): tinygrad/llm/model.py 14B G=5 branch: QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; staging fixed to K_ONLY
+- **decode_attention_native_correct_not_fast** (fallback): tinygrad/llm/model.py DECODE_ATTN_GENERATED_WHOLECACHE generated whole-cache route; research-only opt-in
 - **prefill_pipe_role_selective_generated** (default): extra/qk_prefill_graph_gemm_route.py route_pf16_graph_gemm: getenv('PREFILL_GENERATED_SCHEDULE', 1) or QK_ROUTE_POLICY prefill_pipe_role_selective_generated -> describe_prefill_schedule + emit_prefill_gemm_from_spec
 - **prefill_pipe_role_selective_default** (fallback): extra/qk_prefill_graph_gemm_route.py _kernel (legacy fixed emit; reached when PREFILL_GENERATED_SCHEDULE=0)
 - **prefill_pipe_global_rollback** (fallback): extra/qk_prefill_graph_gemm_route.py:55-69 (pipe on for all roles when role-selective off)

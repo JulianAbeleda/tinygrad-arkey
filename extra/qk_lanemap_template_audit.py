@@ -54,7 +54,7 @@ LANEMAP_TEMPLATE_SCHEMA = {
     "words_per_group": "8 (Q4_K gate/up lane map requires 8 packed words per group)",
     "block_groups": "4 (lane_extent == block_groups * words_per_group == 32)",
     "dequant_body": "extra.q4_k_gemv_primitive._q4k_block_dot_packed_load (Q4_K packed dequant+dot)",
-    "wave": "wave32 (gfx1100 / DECODE_ATTN_AMDGCN_ARCH_OK)",
+    "wave": "wave32 (gfx1100 / QK_AMD_GFX1100_ARCH_OK)",
   },
   "template_pieces": {
     "lane_ownership": "lane = block_group * words_per_group + word_col  (Q4KGateUpLaneMap.lane_expr); "

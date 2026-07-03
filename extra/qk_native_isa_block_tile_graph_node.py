@@ -1,6 +1,5 @@
 """Phase H route-binding primitive: the generated decode block tile compiled by the NATIVE AMD ISA backend
-(AMDISARenderer) and injected into a graph as a precompiled Ops.PROGRAM node -- the native analogue of
-extra/qk_owned_flash_decode_graph_node.py (which injects a hand-AMDGCN ELF).
+(AMDISARenderer) and injected into a graph as a precompiled Ops.PROGRAM node.
 
 KEYSTONE (proven): an ELF produced by AMDISARenderer loads + runs in the HIP (DEV=AMD) device context. So the
 attention tile can be the native candidate while the rest of the model stays on HIP -- no whole-model DEV=AMD:ISA

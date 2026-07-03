@@ -49,7 +49,7 @@
     {
       "axis": "live_split_geometry_8b_tile",
       "domain": "attention",
-      "disposition": "SOLVED (TG-P9.2): live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; live-split tile byte-identical, ctx512 tile 4.6x, full-model ctx512 87.7%->96.7% of owned. Shipped default-off (DECODE_ATTN_LIVE_SPLIT_GENERATED). extra/qk_live_split_geometry.py",
+      "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk_live_split_geometry.py",
       "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"
     },
     {

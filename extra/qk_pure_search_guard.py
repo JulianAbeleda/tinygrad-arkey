@@ -31,11 +31,10 @@ HOT_FAMILIES = [
    "rollback_active": lambda e: str(e.get("DECODE_Q6K_GENERATED", "1")) == "0"},
   {"family": "prefill_gemm", "generated": "prefill_pipe_role_selective_generated", "oracle": "prefill_pipe_role_selective_default",
    "rollback_active": lambda e: str(e.get("PREFILL_GENERATED_SCHEDULE", "1")) == "0"},
-  # attention: the generated G5-8B route is correct but slower (TG-P5 refute), so the default is the owned HIP tile.
-  # It is "generated" only when explicitly forced via DECODE_FLASH_BLOCK_TILE_G5_8B=1 (and owned not left as the
-  # fallthrough default). On a normal fast run this family is impure by design.
-  {"family": "decode_attention", "generated": "decode_flash_block_tile_g5_8b_refuted", "oracle": "decode_attention_owned_two_kernel",
-   "rollback_active": lambda e: str(e.get("DECODE_FLASH_BLOCK_TILE_G5_8B", "0")) != "1"},
+  # attention: 8B long-context decode now defaults to the generated live-split + fused-combine + KV_BOTH route. The
+  # only rollback here is to generic generated tinygrad flash decode; the retired owned HIP tile is not selected.
+  {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_attention_native_correct_not_fast",
+   "rollback_active": lambda e: str(e.get("DECODE_FLASH_BLOCK_TILE_G5_8B", "1")) == "0"},
 ]
 
 
