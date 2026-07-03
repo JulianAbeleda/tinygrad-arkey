@@ -11,9 +11,9 @@ archive provenance was removed from the tracked tree and remains available throu
 - **`tg-p12-manual-end-accumulator-fold-guard-scope-20260701.md`** — prior TG-P12 scope; its scalar-fold-first strategy is superseded by the resolution handoff after the baseline showed expander-created vector accumulator state.
 - **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`** — provenance scope that diagnosed the generic reduce/upcast accumulator-lowering invariant.
 - **`claude-active-work-audit-and-agnostic-search-scope-20260630.md`** — older consolidated handoff for active-work audit and quant/shape/target agnostic search; useful background, but not the current route-state authority.
-- **Current route-state authority:** `bench/pure-machine-search-default-path-census/summary.md`,
-  `bench/tg-p10-reg-scalar-combine-lowering/summary.md`, and `extra/qk_route_manifest.py`. These supersede the
-  June 24 state handoff for default-route and purity status.
+- **Current route-state authority:** BoltBeam's candidate manifest, route-policy emitter, ledgers, and reports. In
+  this repo, `tinygrad/llm/route_policy.py` only consumes `boltbeam.route_policy.v1`, and `tinygrad/llm/route_ops.py`
+  is the runtime adapter for existing QK route implementations.
 - **`decode-campaign-final-synthesis-20260623.md`** — how decode reached llama parity (attention not exhausted;
   buffer identity was the wall; owned AMDGCN tile + `Q4K_GEMV_WARP` weight-GEMV).
 - **`gpu-lifecycle-primitive-coverage-tracker-20260624.md`** — per-primitive coverage vs llama (decode ~101.7–105%,
@@ -52,6 +52,9 @@ Q4_K decode uses generated G3 where eligible. Q6_K direct half-warp is refuted; 
   `extra/qk_nll_eval.py`, and phase-specific harnesses emit evidence for BoltBeam.
 - **Search/evaluation authority:** BoltBeam owns schema, candidate generation, ledgers, policy checks, and
   roofline/reporting. tinygrad should not grow new standalone search-policy scripts.
+- **Boundary rule:** tinygrad hot paths must not import `extra.qk_*`, `extra.q4_*`, `extra.q6_*`, or `extra.q8_*`
+  directly. Use `tinygrad/llm/route_ops.py` for LLM routes and `tinygrad/codegen/experimental.py` for default-off
+  codegen probes. `test/unit/test_tinygrad_boundary.py` enforces this.
 - **Benchmark harnesses + numbers:** use the phase-specific authority artifacts before quoting a number. The committed multi-model table under `bench/models/qwen/` is useful provenance but may lag the latest route changes.
 
 ## References
