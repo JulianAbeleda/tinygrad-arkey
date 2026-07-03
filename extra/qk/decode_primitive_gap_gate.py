@@ -49,13 +49,7 @@ def build() -> dict[str, Any]:
   }
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  (OUT / "gap_latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  (OUT / f"primitive-gap-{out['timestamp']}.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if not out["verdict"].startswith("PRIMITIVE_GAP_FAIL") else 1
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("primitive_gap"))

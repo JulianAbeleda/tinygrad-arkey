@@ -15,13 +15,11 @@ accumulator-widening lowering is now the AMD baseline, so all cases must compile
 Run: DEV=AMD PYTHONPATH=. python3 extra/qk/tg_p11_reduce_upcast_microgate.py
 """
 from __future__ import annotations
-import contextlib, io, json, os, pathlib, re
+import contextlib, io, pathlib, re
 
-os.environ.setdefault("DEV", "AMD")
 import numpy as np
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/tg-p11-reduce-upcast-accumulator"
 Hq, Hd, S = 32, 128, 36
 _INVALID = re.compile(r"make_float\d+\([^=]*\)\s*=(?!=)")   # store to a vector rvalue (make_floatN(...) on the LHS; args nest parens)
 
@@ -72,8 +70,7 @@ def _kernels():
   return scalar_no_upcast, invariant_upcast, varies_upcast, mixed_var_inv
 
 
-def main():
-  OUT.mkdir(parents=True, exist_ok=True)
+def build():
   from tinygrad import Tensor, dtypes, Device, Context
   rng = np.random.RandomState(3)
   x = rng.randn(Hq, S).astype(np.float32)
@@ -117,12 +114,11 @@ def main():
            run("mixed_var_inv", mixed_var_inv, (xt, yt))]
   all_ok = all(c["compile_ok"] and c["numeric_ok"] for c in cases)
   verdict = "TG_P11_1_PASS_BASELINE_LOWERING" if all_ok else "TG_P11_2_BLOCKED_LOWERING_STILL_WRONG"
-  latest = {"scope": "TG-P11.1 reduce/upcast accumulator invariant microgate", "verdict": verdict,
-            "reduce_acc_upcast_lowering": "amd_baseline", "all_ok": all_ok, "cases": cases}
-  json.dump(latest, open(OUT / "invariant_microgate.json", "w"), indent=2)
-  print(verdict, "| " + " ".join(f"{c['case']}:{'ok' if c['numeric_ok'] else ('cfail' if not c['compile_ok'] else 'nnum')}" for c in cases))
-  return 0 if verdict.startswith("TG_P11_1_PASS") else 1
+  return {"scope": "TG-P11.1 reduce/upcast accumulator invariant microgate", "verdict": verdict,
+          "reduce_acc_upcast_lowering": "amd_baseline", "all_ok": all_ok, "cases": cases}
 
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("tg_p11_reduce_upcast_microgate"))

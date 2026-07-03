@@ -7,7 +7,6 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 P2 = ROOT / "bench/qk-decode-attention-online-pv-tile/latest.json"
-OUT = ROOT / "bench/qk-decode-attention-online-pv-lanemap"
 
 Hq, Hkv, Hd, L = 32, 8, 128, 256
 CTXS = (512, 1024, 2048, 4096)
@@ -110,16 +109,7 @@ def build() -> dict[str, Any]:
   }
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  latest = OUT / "latest.json"
-  stamped = OUT / f"decode-attention-online-pv-lanemap-{out['timestamp']}.json"
-  latest.write_text(json.dumps(out, indent=2) + "\n")
-  stamped.write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if out["verdict"] == "ONLINE_PV_TILE_P3_LANEMAP_READY" else 1
-
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("attention_online_pv_lanemap"))

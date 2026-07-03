@@ -7,17 +7,13 @@ Tests the staging parameter at several (G, Hd, TK) shapes. Confirms:
 
 Run: DEV=AMD JIT=1 QK_MODEL=.../Qwen3-14B-Q4_K_M.gguf PYTHONPATH=. python3 extra/qk/gp3_konly_microgate.py
 """
-import os, sys, json, pathlib
+import pathlib
 import numpy as np
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-def run_microgate():
-  os.environ.setdefault("DEV", "AMD")
-  os.environ.setdefault("JIT", "1")
-
+def build():
   from tinygrad import Tensor, dtypes
-  from tinygrad.helpers import getenv
   from extra.qk.flash_decode import flash_decode_g5_block_tile
 
   results = []
@@ -80,7 +76,7 @@ def run_microgate():
   lds_konly = TK * 128 * 2        # K only, fp16
   print(f"\n  LDS KV_BOTH: {lds_kvboth} bytes, K_ONLY: {lds_konly} bytes (reduction: {lds_kvboth//lds_konly}×)")
 
-  out = {
+  return {
     "verdict": verdict,
     "all_pass": bool(all_pass),
     "lds_kvboth_bytes": lds_kvboth,
@@ -89,13 +85,7 @@ def run_microgate():
     "results": results,
   }
 
-  art = ROOT / "bench/gp-track/gp3_microgate.json"
-  art.parent.mkdir(parents=True, exist_ok=True)
-  art.write_text(json.dumps(out, indent=2))
-  print(f"\n{verdict}")
-  print(f"  -> {art}")
-  return verdict
-
 if __name__ == "__main__":
-  verdict = run_microgate()
-  sys.exit(0 if verdict == "GP3_PASS_MICROGATE" else 1)
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("gp3_konly_microgate"))
