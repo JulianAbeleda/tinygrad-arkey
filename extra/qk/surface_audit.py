@@ -12,6 +12,8 @@ SUPPORT = {
   "amd_warp_reduce.py", "artifact_cache.py", "asm_scheduler.py", "bubblebeam_futuresight.py", "clock_pin.py",
   "experiment_matrix.py", "flash_common.py", "flash_kernels.py", "gate_registry.py", "harness_contract.py",
   "isa_helpers.py", "kv_load.py", "lane_partition_reduce.py", "lanemap_template.py",
+  "asm_scheduler_proofs.py", "decode_physical_tile.py", "decode_score_broadcast.py",
+  "decode_attention_online_state_pv.py", "tg_p9_live_split.py",
   "layout.py", "layout_fn.py", "modes.py", "native_isa_block_tile_graph_node.py", "nll_eval.py", "paths.py",
   "probe_harness.py", "pure_search_guard.py", "reg_store_devec.py", "warp_reduce_lowering.py",
 }
