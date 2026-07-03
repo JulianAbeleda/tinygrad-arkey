@@ -116,6 +116,23 @@ GATES: tuple[GateSpec, ...] = (
            kind="gate", needs_gpu=True, out_dir="qk-fused-tile-lifecycle-lowering", snapshot=True,
            env={"DEV": "AMD", "JIT": "1"},
            inputs=("bench/qk-decode-attention-fused-score-state-pv-tile/latest.json",)),
+  GateSpec(name="q6k_generated_coop", entry="extra.qk.q6k_generated_coop_gate:build", kind="gate",
+           needs_gpu=True, out_dir="tg-p3-q6k-generated-coop", env={"DEV": "AMD"},
+           pass_verdicts=frozenset({"TG_P3_PASS_Q6K_GENERATED_COOP"})),
+  GateSpec(name="prefill_generated_schedule", entry="extra.qk.prefill_generated_schedule_gate:build",
+           kind="gate", out_dir="tg-p4-prefill-generated-schedule",
+           pass_verdicts=frozenset({"TG_P4_PASS_PREFILL_GENERATED_SCHEDULE"})),
+  GateSpec(name="tg_p8_delta_audit", entry="extra.qk.tg_p8_delta_audit:build",
+           out_dir="tg-p8-generated-8b-attention-parity", artifact_name="delta_audit.json",
+           inputs=("bench/tg-p8-generated-8b-attention-parity/baseline.json",),
+           pass_verdicts=frozenset({"TG_P8_1_PASS_DELTA_CLASSIFIED"})),
+  GateSpec(name="decode_attention_a3_1_vdot2", entry="extra.qk.decode_attention_a3_1_vdot2_probe:build",
+           kind="probe", needs_gpu=True, out_dir="qk-decode-attention-a3-1-vdot2", snapshot=True,
+           env={"DEV": "AMD"},
+           pass_verdicts=frozenset({"A3_1_RENDERER_VDOT2_PROBE_PASS", "A3_1_RENDERER_VDOT2_PROBE_INCONCLUSIVE"})),
+  GateSpec(name="gemv_g2_representation", entry="extra.qk.gemv_g2_representation_probe:build",
+           kind="probe", out_dir="qk-gemv-g2-representation-probe", snapshot=True,
+           pass_verdicts=frozenset({"G2_LANEMAP_ADDRESS_BUILDER_PASS"})),
 )
 
 BY_NAME = {g.name: g for g in GATES}
