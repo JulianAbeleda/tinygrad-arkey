@@ -8,9 +8,8 @@ from __future__ import annotations
 import json, pathlib, datetime
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUTDIR = ROOT / "bench/qk-decode-outer-b-split-combine"
 
-def main() -> int:
+def build() -> dict:
   contract = {
     "schema": "qk_decode_outer_b_split_combine_contract_v1",
     "date": datetime.date.today().isoformat(),
@@ -65,11 +64,9 @@ def main() -> int:
     ],
     "verdict": "OUTER_B_SPLIT_COMBINE_LOWERING_BUILT__REFUTED_ON_SPEED__OCCUPANCY_TAX"
   }
-  OUTDIR.mkdir(parents=True, exist_ok=True)
-  (OUTDIR / "search_contract.json").write_text(json.dumps(contract, indent=2) + "\n")
-  (OUTDIR / "latest.json").write_text(json.dumps(contract, indent=2) + "\n")
-  print(json.dumps(contract, indent=2))
-  return 0
+  return contract
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("outer_b_split_contract"))

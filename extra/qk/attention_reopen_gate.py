@@ -19,7 +19,6 @@ import json, pathlib, statistics
 from extra.qk.route_manifest import REFUTED
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-attention-reopen-gate"
 CEILING = ROOT / "bench/amd-isa-backend-decode-attention-ceiling/latest.json"
 
 PROFILE_ID = "qwen3_8b_q4_k_m_gfx1100_decode"
@@ -31,11 +30,9 @@ MODEL_ARCH = {"family": "qwen3", "params": "8b", "Hq": 32, "Hkv": 8, "Hd": 128, 
 ATTENTION_REFUTED_AXES = [r for r in REFUTED if r.get("domain") == "attention" or "attention" in r["axis"]]
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
+def build() -> dict:
   if not CEILING.exists():
-    res = {"verdict": "PMS_R7_BLOCKED_WALL_SHARE_ATTRIBUTION_MISSING", "missing_artifact": str(CEILING.relative_to(ROOT))}
-    json.dump(res, open(OUT / "latest.json", "w"), indent=2); print(res["verdict"]); return 1
+    return {"verdict": "PMS_R7_BLOCKED_WALL_SHARE_ATTRIBUTION_MISSING", "missing_artifact": str(CEILING.relative_to(ROOT))}
   d = json.load(open(CEILING))
   ws = {k.replace("ctx", ""): v for k, v in d["loss_stack"]["tile_wall_share_measured"].items() if k.startswith("ctx")}
   native_vs_owned = d["native_vs_owned"]            # {"512":68.3,"4096":60.1} -> best available is BELOW owned
@@ -92,22 +89,10 @@ def main() -> int:
     "owned_route_stays_shipped": "decode_attention_owned_two_kernel (owned_flash_tile_gqa_whole -> owned_flash_combine)",
     "do_not": ["do not rewrite attention", "do not start from 'the native route is slower'"],
   }
-  json.dump(result, open(OUT / "latest.json", "w"), indent=2)
-  md = ["# PMS-R7 Decode Attention Reopen Gate", "",
-        f"Verdict: **{verdict}** -> gate: **{gate}**", "",
-        f"Active threshold: {ACTIVE_THRESHOLD_PCT}% whole-decode gain. Realizable gain: **{realizable_gain_pct}%** "
-        f"(best available route = {best_available_vs_owned_pct}% of owned, all levers walled).", "",
-        "| ctx | attention tile wall-share (Amdahl) | perfect-parity gain ceiling % | native vs owned % |",
-        "|---:|---:|---:|---:|"]
-  for c in ctxs:
-    md.append(f"| {c} | {ws[str(c)]} | {perfect_parity_gain_pct[str(c)]} | {native_vs_owned.get(str(c), '-')} |")
-  md += ["", result["decision_reason"], "",
-         "What would make attention active again:",
-         *[f"- {x}" for x in result["what_would_make_it_active"]], ""]
-  (OUT / "summary.md").write_text("\n".join(md))
-  print(verdict, "->", gate, "| realizable:", realizable_gain_pct, "% | theoretical long-ctx:", theoretical_long_ctx, "%")
-  return 0
+  return result
 
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("attention_reopen"))

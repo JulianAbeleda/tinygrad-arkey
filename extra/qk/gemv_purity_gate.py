@@ -4,10 +4,9 @@ import json, pathlib, time
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SRC = ROOT / 'bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json'
-OUT = ROOT / 'bench/qk-gemv-purity-gate'
 
 
-def main() -> int:
+def build() -> dict:
   src = json.loads(SRC.read_text())
   rows = src['rows']
   ctxs = [str(c) for c in src['ctxs']]
@@ -77,13 +76,9 @@ def main() -> int:
     'g3_lanemap_verdict': src.get('g3_lanemap_verdict'),
     'classification': classification,
   }
-  OUT.mkdir(parents=True, exist_ok=True)
-  latest = OUT / 'latest.json'
-  stamped = OUT / f"gemv-purity-gate-{out['timestamp']}.json"
-  latest.write_text(json.dumps(out, indent=2) + '\n')
-  stamped.write_text(json.dumps(out, indent=2) + '\n')
-  print(json.dumps(out, indent=2))
-  return 0 if verdict != 'GEMV_PURITY_GATE_FAIL' else 1
+  return out
 
 if __name__ == '__main__':
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("gemv_purity"))

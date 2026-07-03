@@ -10,7 +10,8 @@ PROMOTED = {
 }
 SUPPORT = {
   "amd_warp_reduce.py", "artifact_cache.py", "asm_scheduler.py", "bubblebeam_futuresight.py", "clock_pin.py",
-  "experiment_matrix.py", "harness_contract.py", "isa_helpers.py", "lane_partition_reduce.py", "lanemap_template.py",
+  "experiment_matrix.py", "flash_common.py", "flash_kernels.py", "gate_registry.py", "harness_contract.py",
+  "isa_helpers.py", "kv_load.py", "lane_partition_reduce.py", "lanemap_template.py",
   "layout.py", "layout_fn.py", "modes.py", "native_isa_block_tile_graph_node.py", "nll_eval.py", "paths.py",
   "probe_harness.py", "pure_search_guard.py", "reg_store_devec.py", "warp_reduce_lowering.py",
 }
@@ -39,7 +40,7 @@ def classify(path:pathlib.Path) -> str|None:
   if any(re.fullmatch(p, name) for p in REFUTED_PATTERNS): return "refuted"
   return None
 
-def main() -> int:
+def build() -> int:
   files = [p for p in ROOT.glob("*.py") if p.name not in {"__init__.py", "surface_audit.py"}]
   groups: dict[str, list[str]] = {"promoted": [], "active": [], "support": [], "refuted": [], "unclassified": []}
   for path in sorted(files):
@@ -51,4 +52,6 @@ def main() -> int:
   return 0
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  sys.path.insert(0, str(ROOT.parents[1]))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("surface"))

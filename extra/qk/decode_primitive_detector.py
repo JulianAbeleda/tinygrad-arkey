@@ -5,7 +5,6 @@ import json, pathlib, time
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "bench/qk-decode-primitive-space"
 ATTR = ROOT / "bench/qk-decode-attention-fused-score-state-pv-attribution/latest.json"
 P1 = ROOT / "bench/qk-decode-primitive-space/p1_crosslane_latest.json"
 PALL = ROOT / "bench/qk-decode-primitive-space/all_primitives_latest.json"
@@ -118,13 +117,7 @@ def build() -> dict[str, Any]:
   }
 
 
-def main() -> int:
-  OUT.mkdir(parents=True, exist_ok=True)
-  out = build()
-  (OUT / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  (OUT / f"primitive-detector-{out['timestamp']}.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0 if not out["verdict"].startswith("PRIMITIVE_DETECTOR_FAIL") else 1
-
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("primitive_detector"))
