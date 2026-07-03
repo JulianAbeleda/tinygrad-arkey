@@ -310,7 +310,14 @@ class TransformerBlock(FFNBlock):
     _rope_read = (bool(getenv("DECODE_ROPE_AT_READ", 0)) or _ring_freqs is not None or getattr(self, "_ring_active", False)) \
                  and self.config.rope_dim == self.config.head_dim
     _fr = _ring_freqs if _ring_freqs is not None else self.freqs_cis
-    q = apply_rope(q[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1)
+    # full-ring (ctx>=N): the buffer is full and the write slot wraps, so the live read length is the WHOLE buffer N
+    # (all slots valid), not start_pos+T (start_pos is the wrapped write slot, not a length). Selects [0:N] reads + Tc=N.
+    _ring_full = getattr(self, "_ring_full", False)
+    _rl = self.config.max_context if _ring_full else (start_pos + T)
+    # Q is roped via _fr (the gathered ring table when ring, else freqs_cis) indexed by start_pos: in the full ring
+    # start_pos is the write slot wp, and _fr[wp] = freqs[pos_of(wp)] = the query's (newest) position -> consistent
+    # with the K positions. In fill / non-ring, _fr == freqs_cis and start_pos is the absolute position (unchanged).
+    q = apply_rope(q[..., :self.config.rope_dim], _fr[start_pos:start_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1)
     if not _rope_read:
       k = apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1)
 
@@ -349,8 +356,8 @@ class TransformerBlock(FFNBlock):
         _cos = _fr[:, :_hh].reshape(1, 1, _mc, _hh); _sin = _fr[:, _hh:].reshape(1, 1, _mc, _hh)
         _k1, _k2 = _kfull[..., :_hh], _kfull[..., _hh:_rd]
         _kfull = (_k1 * _cos - _k2 * _sin).cat(_k2 * _cos + _k1 * _sin, _kfull[..., _rd:], dim=-1)
-      k = _kfull[:, :, 0:start_pos+T, :]
-      v = assigned_kv[1, :, :, 0:start_pos+T, :]
+      k = _kfull[:, :, 0:_rl, :]
+      v = assigned_kv[1, :, :, 0:_rl, :]
 
     #self.cache_kv[:, :, :, start_pos:start_pos+T, :].assign(Tensor.stack(k, v))
     #k = self.cache_kv[0, :, :, 0:start_pos+T, :]
@@ -360,10 +367,13 @@ class TransformerBlock(FFNBlock):
     # TODO: this if statement should be removed and it shouldn't generate extra kernels
     mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
       if resolve(T != 1) else None
-    if should_use_flash_decode(start_pos, T, getattr(self, "_use_flash", False)):
+    # ring decode ALWAYS uses flash: start_pos is the wrapped write SLOT (not the ctx), so should_use_flash_decode(slot)
+    # could wrongly pick SDPA; the ring context is the whole window and must read via the flash live-split route.
+    if _ring_freqs is not None or should_use_flash_decode(start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
-                                         kv_scale=assigned_scale, freqs=(_fr if _rope_read else None))
+                                         kv_scale=assigned_scale, freqs=(_fr if _rope_read else None),
+                                         ring_full=_ring_full)
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif PREFILL_TC_ATTN and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),
@@ -541,7 +551,8 @@ class Transformer:
     self.prefill_jit = TinyJit(self.forward)
     self.rollout_jit = TinyJit(self.forward)
     self.rollout_jit_flash = TinyJit(self.forward)
-    self.rollout_jit_ring = TinyJit(self.forward_ring)   # StreamingLLM ring decode: freqs is a per-step JIT input
+    self.rollout_jit_ring = TinyJit(self.forward_ring)        # ring FILL phase (ctx<N): read [0:start_pos+T], identity freqs
+    self.rollout_jit_ring_full = TinyJit(self.forward_ring)   # ring FULL phase (ctx>=N): read [0:N], wrapped write slot + gathered freqs
     # prefill v2 (opt-in): a SEPARATE jit captured with a CONCRETE token batch (T=PREFILL_UBATCH) so tensor
     # cores apply, distinct from the symbolic-batch prefill_jit. Only ever called when PREFILL_V2.
     self.prefill_v2_jit = TinyJit(self.forward)
@@ -631,7 +642,7 @@ class Transformer:
     return self.forward(tokens, start_pos, temperature)
 
   def __call__(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor, use_flash:bool=False,
-               ring_freqs:Tensor|None=None) -> Tensor:
+               ring_freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
     is_prefill = resolve(tokens.shape[1] != 1)
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
@@ -642,10 +653,14 @@ class Transformer:
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
     # rollout_jit_flash bake distinct attention -- each is only ever called with its own use_flash, so
     # capture is consistent. The decode-only T==1 guard in _attention ignores it during prefill.
-    for block in self.blk: block._use_flash, block._prefill_v2, block._ring_freqs = use_flash, is_prefill_v2, None
-    # StreamingLLM ring decode: distinct captured graph with `freqs` as a per-step JIT input (rebound each token).
+    for block in self.blk:
+      block._use_flash, block._prefill_v2, block._ring_freqs, block._ring_full = use_flash, is_prefill_v2, None, ring_full
+    # StreamingLLM ring decode: distinct captured graphs with `freqs` as a per-step JIT input (rebound each token). The
+    # FULL-phase graph (ring_full, ctx>=N) reads the whole [0:N] cache and writes at the wrapped slot; the FILL-phase
+    # graph reads [0:start_pos+T] like normal decode. block._ring_full (baked bool) selects the read mode in _attention.
     if ring_freqs is not None and not is_prefill:
-      return self.rollout_jit_ring(tokens.contiguous(), start_pos, temperature, ring_freqs)
+      _rjit = self.rollout_jit_ring_full if ring_full else self.rollout_jit_ring
+      return _rjit(tokens.contiguous(), start_pos, temperature, ring_freqs)
     # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
     if is_prefill_v2 and isinstance(start_pos, int):
       jit = self.prefill_v2_jits.setdefault(start_pos, TinyJit(self.forward))
@@ -900,6 +915,23 @@ class Transformer:
     prefix_len = sum(1 for _ in itertools.takewhile(lambda ab: ab[0] == ab[1], zip(tokens[:-1], self._cached_tokens)))
     return min(block._reusable_prefix_len(prefix_len, len(self._cached_tokens)) for block in self.blk)
 
+  def _ring_slot(self, logical_pos:int, N:int, sinks:int) -> int:
+    # StreamingLLM ring write slot: FILL in order (the first `sinks` tokens land in slots 0..sinks-1); once FULL,
+    # round-robin the WINDOW (slots sinks..N-1) with modulus N-sinks so the sink slots are never overwritten.
+    if logical_pos < N: return logical_pos
+    return sinks + ((logical_pos - sinks) % (N - sinks))
+
+  def _ring_gather_freqs(self, freqs_full:Tensor, logical_pos:int, N:int, sinks:int) -> Tensor:
+    # Pre-gather the rotary table so row==slot -> freqs_full[pos_of(slot)]. FILL: identity (row==slot==abs position, so
+    # ctx<N is token-identical). FULL: sinks keep positions 0..sinks-1; window slot s gets recency position
+    # N-1 - ((wp - s) mod (N-sinks)) so the newest slot (wp) is N-1 and the oldest window slot is `sinks` -> all rotary
+    # phases stay in [0,N) <= trained ctx. Rebuilt each step (shared across layers) and fed as the ring JIT freqs input.
+    if logical_pos < N: return freqs_full
+    W = N - sinks
+    wp = sinks + ((logical_pos - sinks) % W)
+    posmap = list(range(sinks)) + [(N - 1) - ((wp - s) % W) for s in range(sinks, N)]
+    return freqs_full[Tensor(posmap, dtype=dtypes.int32, device=freqs_full.device)].contiguous()
+
   def warmup_flash_decode(self):
     # Pre-capture rollout_jit_flash so the in-generation crossover at ctx>=FLASH_DECODE_THRESHOLD does not pay the
     # one-time jit-compile stall inline (the first long generation would otherwise pause ~once at the boundary).
@@ -929,7 +961,7 @@ class Transformer:
     # flash-decode selection is centralized in should_use_flash_decode (default FLASH_DECODE=auto, threshold
     # 512): generate passes no use_flash override and lets that single authority decide per captured graph.
     out, prompt_len = None, len(tokens)
-    while len(tokens) < self.max_context:
+    while _ring or len(tokens) < self.max_context:   # ring: unbounded logical context (caller controls when to stop)
       if PREFILL_V2 and (prompt_len - start_pos) >= PREFILL_UBATCH:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
@@ -948,6 +980,16 @@ class Transformer:
         sp = v_start_pos.bind(prompt_len - PREFILL_UBATCH)   # symbolic offset -> matches the prefill_v2_jit signature
         out = self(t[:, sp:sp+PREFILL_UBATCH], sp, temp, use_flash=False).realize()
         ntv = prompt_len - start_pos                      # advance straight to end of prompt
+      elif _ring and start_pos >= prompt_len and out is not None:
+        # StreamingLLM ring decode (T=1, past the prompt). Bind the WRAPPED write slot (always in [0,N-1] -> never trips
+        # Variable.bind's vmax assert even as the logical position grows unboundedly); feed the per-step pre-gathered
+        # freqs (identity while filling -> token-identical; slot-relative once full); ring_full switches to the [0:N]
+        # read graph at the wrap. Two graphs total (fill + full), captured once each -- no per-step recompile.
+        _N, _sinks = self.max_context, int(getenv("DECODE_RING_SINKS", 4))
+        sp = v_start_pos.bind(self._ring_slot(start_pos, _N, _sinks)); ntv = 1
+        _rf = self._ring_gather_freqs(next(b.freqs_cis for b in self.blk if hasattr(b, "freqs_cis")),
+                                      start_pos, _N, _sinks)
+        out = self(out, sp, temp, use_flash=True, ring_freqs=_rf, ring_full=(start_pos >= _N)).realize()
       else:
         sp, nt = v_start_pos.bind(start_pos), v_toks.bind(min(chunk_size, len(tokens) - start_pos))
         ntv = nt.val
@@ -956,11 +998,8 @@ class Transformer:
         # decode graph is baked SDPA at the start ctx and never switches -> short-prompt decode SDPA-degrades the
         # whole way (e.g. 85->54 tok/s by ctx512). should_use_flash_decode returns False for ntv!=1 (prefill chunks).
         _uf = should_use_flash_decode(sp, ntv)
-        # StreamingLLM ring (DECODE_RING): feed the per-step pre-gathered freqs as a JIT input. Increment A gathers the
-        # IDENTITY table (== the blocks' freqs_cis, absolute positions) so ctx<N stays token-identical; wrapping in B.
-        _rf = (next(b.freqs_cis for b in self.blk if hasattr(b, "freqs_cis"))) if (_ring and _uf) else None
         out = self(t[:, sp:sp+nt] if start_pos < prompt_len or out is None else out, sp, temp,
-                   use_flash=_uf, ring_freqs=_rf).realize()
+                   use_flash=_uf).realize()
       start_pos += ntv
       # chunked prefill: keep processing until all prompt tokens are consumed
       if start_pos < len(tokens): continue

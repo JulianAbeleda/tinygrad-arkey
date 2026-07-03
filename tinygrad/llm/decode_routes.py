@@ -199,9 +199,12 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
                                  Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
-                                 freqs:Tensor|None=None) -> Tensor:
+                                 freqs:Tensor|None=None, ring_full:bool=False) -> Tensor:
   MAXC, L = max_context, getenv("FLASH_L", 128)
   vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
+  # full-ring (ctx>=N): the ring buffer is full and start_pos is the wrapped WRITE slot, so the live read length is the
+  # whole buffer (all MAXC slots valid) -- a CONCRETE Tc, not vsp+T. Keeps the graph's read extent constant across wrap.
+  _tc = MAXC if ring_full else (vsp + T)
   out = None
   # KV-quant (assigned_kv int8 + kv_scale) and rope-at-read (assigned_kv holds UN-roped K, rotated in-kernel from
   # `freqs`) are BOTH only supported on the live-split route -- every other route here reads fp16 pre-roped KV and would
@@ -232,7 +235,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   else:
     _ls_enabled = _ls_shape and bool(getenv("DECODE_LIVE_SPLIT", 1))
   if out is None and _ls_enabled:
-    out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
+    out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, _tc, Hd, Hq, Hkv, MAXC,
                                                     getenv("DECODE_LIVE_SPLIT_S", 48),
                                                     staging=str(getenv("DECODE_LIVE_SPLIT_STAGING", "KV_BOTH")),
                                                     fused_combine=True, kv_scale=kv_scale, freqs=freqs)
