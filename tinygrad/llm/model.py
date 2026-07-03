@@ -6,12 +6,14 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import prod
 from tinygrad.llm.gguf import gguf_load, gguf_load_with_metadata
 from tinygrad.llm import route_ops as qk_ops
+from tinygrad.llm.decode_routes import (
+  clear_vdot_quant_cache, flash_decode_attention_route, q4k_primitive_linear_call, q6k_primitive_linear_call,
+)
 from tinygrad.llm.route_policy import (
   _q4k_policy, _q6k_policy, _load_qk_generated_policy, _qk_generated_policy_entry,
   _qk_generated_policy_len, _load_qk_route_policy, _set_qk_route_policy,
-  _qk_route_policy_selected, _qk_route_policy_selects_q4k_g3,
-  _qk_route_policy_selects_q6k_generated, _qk_route_policy_selects_prefill_generated,
-  _validate_qk_route_policy_for_config, has_qk_route_policy, qk_route_policy_strict,
+  _qk_route_policy_selected, _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated,
+  _qk_route_policy_selects_prefill_generated, _validate_qk_route_policy_for_config,
   should_use_flash_decode as _route_should_use_flash_decode,
 )
 from tinygrad.uop.ops import resolve
@@ -47,6 +49,67 @@ def prefill_v2_auto_decision(total_vram_bytes:int|None, est_fp16_bytes:int, q4_b
   if total_vram_bytes < need + margin_gb*1e9:
     return (False, f"need {need_gb:.1f}GB + {margin_gb:.0f}GB margin > {tot_gb:.1f}GB total -> OFF")
   return (True, f"need {need_gb:.1f}GB + {margin_gb:.0f}GB margin <= {tot_gb:.1f}GB total -> ON")
+def _detect_free_vram_bytes() -> int|None:
+  # free = total - used, parsed from the same rocm-smi vram block; None on any failure. Probe BEFORE weights/KV are
+  # resident (from_gguf runs pre-realize) so `used` is the baseline and the admission budget subtracts weights itself.
+  try:
+    import subprocess
+    out = subprocess.run(["rocm-smi", "--showmeminfo", "vram"], capture_output=True, text=True, timeout=10).stdout
+    total = used = None
+    for ln in out.splitlines():
+      if "VRAM Total Used Memory" in ln: used = int(ln.split(":")[-1].strip())
+      elif "VRAM Total Memory" in ln: total = int(ln.split(":")[-1].strip())
+    if total is not None and used is not None: return total - used
+  except Exception: return None
+  return None
+
+# Auto-scan memory admission (removes the hardcoded max_context gate). AUTO is the default; explicit ints are still
+# admission-checked and fail loud rather than OOM. See docs / the auto-scan plan.
+AUTO_MAX_CONTEXT = "auto"                              # sentinel threaded from the CLI (distinct from None)
+MIN_USABLE_CTX = getenv("MIN_USABLE_CTX", 2048)       # below this, auto REFUSES (needs KV-quant, follow-on)
+VRAM_ADMIT_FRACTION = float(getenv("VRAM_ADMIT_FRACTION", "0.8"))  # fragmentation / runtime-peak headroom
+
+def resolve_max_context_admission(requested, trained_ctx:int, free_bytes:int|None, weights_bytes:int,
+                                  kv_per_tok:int, prefill_per_tok:int, flash_scratch_bytes:int,
+                                  model_label:str) -> tuple[int, dict]:
+  """Resolve max_context against available VRAM. `requested` is AUTO_MAX_CONTEXT/None (auto) or an int.
+  Budget (all must hold simultaneously): free*FRAC >= weights + flash_scratch + (kv_per_tok+prefill_per_tok)*MAXC.
+  Auto -> min(mc_mem, trained_ctx); explicit -> min(req, trained) but FAIL LOUD if it won't fit. Refuse loud when the
+  model can't fit MIN_USABLE_CTX in fp16 KV (the 32B case). Returns (max_context, report)."""
+  is_auto = requested is None or requested == AUTO_MAX_CONTEXT
+  if free_bytes is None:
+    # No probe: auto cannot guess (fail loud); an explicit int falls back to the old trained-ctx clamp (unchecked).
+    if is_auto:
+      raise RuntimeError("--max_context auto needs a VRAM free-probe but rocm-smi is unavailable. "
+                         "Pass an explicit --max_context (it will be used as-is, unchecked).")
+    mc = min(int(requested), trained_ctx)
+    return mc, {"mode": "explicit_no_probe", "max_context": mc, "trained_ctx": trained_ctx}
+  budget = free_bytes * VRAM_ADMIT_FRACTION
+  fixed = weights_bytes + flash_scratch_bytes
+  per_tok = kv_per_tok + prefill_per_tok
+  mc_mem = int((budget - fixed) // per_tok) if per_tok > 0 else trained_ctx
+  report = {"free_gb": free_bytes/1e9, "budget_gb": budget/1e9, "weights_gb": weights_bytes/1e9,
+            "flash_scratch_gb": flash_scratch_bytes/1e9, "kv_gb_per_1k": kv_per_tok*1000/1e9,
+            "prefill_gb_per_1k": prefill_per_tok*1000/1e9, "mc_mem": max(mc_mem, 0), "trained_ctx": trained_ctx}
+  if is_auto:
+    if mc_mem < MIN_USABLE_CTX:
+      raise RuntimeError(
+        f"{model_label}: fp16-KV auto-scan admits only {max(mc_mem,0)} tokens "
+        f"(free {free_bytes/1e9:.1f}GB, weights {weights_bytes/1e9:.1f}GB, budget {budget/1e9:.1f}GB @{VRAM_ADMIT_FRACTION}). "
+        f"Useful long context (>={MIN_USABLE_CTX}) requires KV quantization (follow-on). "
+        f"To proceed anyway, pass an explicit small --max_context.")
+    mc = min(mc_mem, trained_ctx)
+    report["mode"] = "auto"; report["max_context"] = mc
+    return mc, report
+  req = int(requested)
+  if req > mc_mem:
+    raise RuntimeError(
+      f"{model_label}: --max_context {req} needs {(fixed + per_tok*req)/1e9:.1f}GB but only {budget/1e9:.1f}GB is "
+      f"admissible (free {free_bytes/1e9:.1f}GB @{VRAM_ADMIT_FRACTION}, weights {weights_bytes/1e9:.1f}GB). "
+      f"Max admissible is {max(mc_mem,0)}. Reduce --max_context or use auto.")
+  mc = min(req, trained_ctx)
+  report["mode"] = "explicit"; report["max_context"] = mc
+  return mc, report
 PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstart keys use this N
 # Phase-3 routing fix (default ON under PREFILL_V2): route a sub-UBATCH prompt remainder through ONE shifted
 # prefill-v2 chunk instead of the slow 32-token symbolic fallback. PREFILL_REMAINDER_FIX=0 reverts. See
@@ -200,8 +263,6 @@ class Q4KPrimitiveRegistry:
   __slots__ = ("linears",)
   def __init__(self, linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]|None=None): self.linears = linears or []
 
-_VDOT_QUANT_CACHE: dict = {}  # E0: per-token q8 quant cache keyed by x.uop.key (q/k/v + gate/up share)
-
 class Q4KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
@@ -218,171 +279,7 @@ class Q4KPrimitiveLinear:
     return x.linear(self.weight.transpose(), self.bias)
 
   def __call__(self, x:Tensor) -> Tensor:
-    # Decode GEMV (1 token) or batched verify/prefill GEMM (K tokens). Unsupported bias/shape -> normal graph.
-    if not self.decode_enabled or self.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != self.in_features:
-      return self._fallback(x)
-    K = x.shape[-2]
-    if not isinstance(K, int) or K != 1:  # batched (verify/prefill); fall back for large or symbolic K
-      if not isinstance(K, int) or K > 32 or self.kernel_mode == "direct_out": return self._fallback(x)
-      x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
-      words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
-      partials = Tensor.empty(self.out_features, K, self.parts, dtype=dtypes.float32, device=x.device)
-      gemm_opts = self.opts + (qk_ops.q4k_parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
-      out = partials.custom_kernel(words, x_batch.reshape(K*self.in_features),
-        fxn=qk_ops.q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
-      return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
-    # PROMOTED default-on: the generated G3 LaneMap is the default Q4_K decode GEMV route (speed-equivalent to the owned
-    # warp kernel, <0.5% across ctx 512-4096; token-matched, route-clean). Directional pure-machine-search move: ship the
-    # generated route, keep owned warp one flag away. Rollback to owned warp: BUBBLEBEAM_FUTURESIGHT=0.
-    bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1) or getenv("BEAM_COALESCE")
-    # TG-P2: BoltBeam QK_ROUTE_POLICY route ownership. When the policy selects decode_q4k_g3_generated for this
-    # tensor's dims, G3 is the authorized route (regardless of the DECODE_Q4K_G3_ANYSHAPE default). This does not
-    # change no-policy behavior; it moves selection authority from the model-side default into BoltBeam. Owned warp
-    # stays one rollback flag away (BUBBLEBEAM_FUTURESIGHT=0). Strict mode fails loud on any silent fallback.
-    g3_policy_selected = _qk_route_policy_selects_q4k_g3(self.out_features, self.in_features)
-    g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and QK_AMD_GFX1100_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
-    # PROMOTED default-ON 2026-06-30 (rollback = DECODE_Q4K_G3_ANYSHAPE=0): bind the generated G3 lanemap by
-    # STRUCTURAL shape eligibility ((in//256)%4==0 and out%32==0) rather than the hardcoded 8B dims, so larger
-    # dense Q4_K decode shapes (14B/32B FFN gate/up/down + attn_q/k/o) take the generated route instead of the slow
-    # lazy-dequant fallback. Byte-identical (token-matched 8B/14B); W==D 8B +4%, 14B +60%, 32B +78% (paired with
-    # DECODE_ROUTE_ATTN_K). Structural class, not a model-dim hardcode. See docs/qwen-14b-32b-attn-k-route-miss-result.
-    g3_anyshape = (bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 1)) or g3_policy_selected) and QK_AMD_GFX1100_ARCH_OK \
-      and (self.in_features // 256) % 4 == 0 and self.out_features % 32 == 0
-    if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and (g3_bubblebeam_shape or g3_anyshape):
-      if g3_anyshape or qk_ops.should_route_q4k_lane_partition(self.out_features, self.in_features):
-        _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
-        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
-        # L2 (rollback = DECODE_Q4K_SPLIT_K_KV=0): split-K decode for OCCUPANCY-STARVED G3 GEMVs. A generated
-        # kernel that launches only `out_features` workgroups underutilizes the GPU when out_features is small
-        # (the KV projections 5120->1024 sit at ~26% occupancy). Split-K launches out_features*parts workgroups
-        # and finalizes with a sum over parts. GENERIC: parts = the largest divisor of blocks_per_group
-        # ((in//256)//4) that keeps out_features*parts under a workgroup cap; no model/shape hardcode.
-        # L2b (rollback = DECODE_Q4K_INKERNEL_COMBINE_KV=0): in-kernel-combine decode for OCCUPANCY-STARVED G3
-        # GEMVs. Same occupancy motivation as split-K, but instead of launching more workgroups + an EXTERNAL
-        # .sum (L2, which was speed-flat because the added combine reduce offset the gain), it uses a WIDER
-        # workgroup (`parts` waves per row) and combines the per-wave partials IN-KERNEL via LDS+barrier ->
-        # out[row] directly (no external reduce). GENERIC: parts = largest divisor of blocks_per_group under a
-        # workgroup cap; no model/shape hardcode. Takes precedence over the split-K path when enabled.
-        if getenv("DECODE_Q4K_INKERNEL_COMBINE_KV", 0) and self.out_features <= getenv("DECODE_SPLIT_K_MAX_ROWS", 2048):
-          _bpg = (self.in_features // 256) // 4
-          _cap = getenv("DECODE_SPLIT_K_TARGET_WG", 8192)
-          _parts = max((p for p in range(1, _bpg + 1) if _bpg % p == 0 and self.out_features * p <= _cap), default=1)
-          if _parts > 1:
-            _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-            return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_inkernel_combine_kernel(self.out_features, self.in_features, _parts))[0].reshape(1, 1, self.out_features)
-        if getenv("DECODE_Q4K_SPLIT_K_KV", 0) and self.out_features <= getenv("DECODE_SPLIT_K_MAX_ROWS", 2048):
-          _bpg = (self.in_features // 256) // 4
-          _cap = getenv("DECODE_SPLIT_K_TARGET_WG", 8192)
-          _parts = max((p for p in range(1, _bpg + 1) if _bpg % p == 0 and self.out_features * p <= _cap), default=1)
-          if _parts > 1:
-            _p = Tensor.empty(self.out_features * _parts, dtype=dtypes.float32, device=x.device)
-            _p = _p.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_splitk_kernel(self.out_features, self.in_features, _parts))[0]
-            return _p.reshape(self.out_features, _parts).sum(axis=1).reshape(1, 1, self.out_features)
-        _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
-    # TG-P2 strict hidden-fallback guard: a QK_ROUTE_POLICY-selected tensor must bind to G3. If we reach here with the
-    # policy selecting G3 and futuresight on (not an explicit BUBBLEBEAM_FUTURESIGHT=0 rollback, not a scheduler
-    # research override), G3 did not bind -> fail loud instead of silently taking the owned warp / coop fallback.
-    if g3_policy_selected and qk_route_policy_strict() and bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
-      raise ValueError(f"TG_P2_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q4k_g3_generated for Q4_K "
-                       f"tensor {self.name!r} (out={self.out_features}, in={self.in_features}) but it did not bind to "
-                       f"the G3 route (structural eligibility (in//256)%4==0 and out%32==0 not met, or arch unsupported)")
-    if (getenv("Q4K_GEMV_SCHEDULER") or bubblebeam_futuresight) and self.in_features == 4096 and self.out_features == 12288:
-      # M5/M6 research lever (default-off): scheduler-GENERATED matvec for FFN gate/up instead of the owned warp
-      # custom_kernel. Two modes:
-      #   1 (=_fallback): x.linear(self.weight.T) -- self.weight is a LAZY Q4_K->fp16 dequant graph (model.py:141)
-      #     fused into the matmul (reads packed); the matvec heuristic groups the K-reduce, so WARP_REDUCE_LOWERING=1
-      #     swaps the LDS-tree group reduce for the ds_bpermute ladder. (M6: cross-lane ~neutral.)
-      #   2 (PACKED): word-structured tinygrad-ops dequant (extra/qk_q4k_scheduler_gemv) whose load unit is the
-      #     uint32 word -- tests whether a pure-scheduler GEMV can coalesce packed-word loads like the owned kernel.
-      #   4 (LANE_PARTITION): explicit research-only custom-kernel bridge fallback using LanePartitionReduce.
-      #   5 (G2_LANEMAP): generated Tensor/scheduler route bound to the bridge-independent G2 Q4_K LaneMap. Route-clean
-      #     runtime/codegen binding probe; expected to fail speed until codegen exploits the representation.
-      #   6 (G3_LANEMAP_CODEGEN): generated named wave32 UOp program from the G2 LaneMap. This is the first lowering
-      #     probe for one-word-per-lane in-register dequant without routing through the lane-partition bridge module.
-      if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
-        if not (qk_ops.should_route_q4k_lane_partition(self.out_features, self.in_features) or g3_bubblebeam_shape): return self._fallback(x)
-        _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
-        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
-        _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
-      if getenv("Q4K_GEMV_SCHEDULER") == 4:
-        _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
-        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
-        _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_lane_partition_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
-      if getenv("Q4K_GEMV_SCHEDULER") == 6:
-        _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
-        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
-        _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
-      if getenv("Q4K_GEMV_SCHEDULER") in (2, 3, 5):
-        _w = self.q4k_storage.words.to(x.device)
-        _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float32)
-        _fn = qk_ops.q4k_scheduler_matvec_lanemap if getenv("Q4K_GEMV_SCHEDULER") == 5 else qk_ops.q4k_scheduler_matvec_wordlane if getenv("Q4K_GEMV_SCHEDULER") == 3 else qk_ops.q4k_scheduler_matvec
-        return _fn(_w, _xv, self.out_features, self.in_features).reshape(1, 1, self.out_features)
-      return self._fallback(x)
-    x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
-    words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
-    # Cooperative-K Q4_K decode GEMV (MMVQ_COOP) for attn_q/o only: the within-block word index lane4=pos//4
-    # becomes a LOCAL lane -> coalesced packed-word loads. Q4_K coop is role-dependent: attn_q/o (4096x4096) is
-    # poorly coalesced by default (~19% peak -> ~29%, 1.52x), but ffn_gate/up is already ~41% peak so it is NOT
-    # routed. fp-reassoc-tol exact. See docs/qk-mmvq-coop-q4k-attn-*.
-    # attn q/o projection work-decomposition warp (same lossless q4k_gemv_warp_kernel as FFN; Q4K_GEMV_WARP_PROJ).
-    # q/o is Q4_K 4096x4096, coop-routed by default (~27% -> warp ~36%, 1.32x local). Takes precedence over coop.
-    # DEFAULT-ON 2026-06-25: a clock-pinned INTERLEAVED (drift-cancelled) W==D re-test shows +1.58-1.67%/ctx,
-    # byte-identical, route fires (q4k_gemv_warp_4096_4096) -- REFUTES the 2026-06-22 "did not transfer" finding,
-    # which was a non-interleaved auto-clock confound. Revert with Q4K_GEMV_WARP_PROJ=0.
-    # Evidence: bench/qk-proj-gemv-warp/wd.json, docs/decode-proj-gemv-warp-promotion-result-20260625.md.
-    if getenv("Q4K_GEMV_WARP_PROJ", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
-       and (self.in_features // 256) % 4 == 0 and QK_AMD_GFX1100_ARCH_OK:
-      try:
-        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
-        return got.reshape(1, 1, self.out_features)
-      except Exception as e:
-        if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP_PROJ fallback: {e}")
-    rt4 = getenv("Q4K_COOP_RT", 16)
-    if getenv("Q4K_ATTN_QO_COOP", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
-        and self.out_features % rt4 == 0:
-      partials = Tensor.empty(self.out_features, 8, dtype=dtypes.float32, device=x.device)
-      partial = partials.custom_kernel(words, x_vec, fxn=qk_ops.q4k_coop_partial_kernel(self.out_features, self.in_features, rt4))[0]
-      return partial.sum(axis=1).reshape(1, 1, self.out_features)
-    if self.kernel_mode == "direct_out":
-      out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-      got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_kernel(self.out_features, self.in_features, "none", self.opts))[0]
-      return got.reshape(1, 1, self.out_features)
-    partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
-    if getenv("Q4K_VDOT") and self.parts == 1:  # D1/E0: schedulable builtin v_dot4 (udot4) decode GEMV
-      amort = bool(getenv("Q4K_VDOT_AMORT"))  # E0: quantize x ONCE/token, shared across q/k/v and gate/up
-      ck = x.uop.key if amort else None
-      cached = _VDOT_QUANT_CACHE.get(ck) if amort else None
-      if cached is None:
-        q, scales = qk_ops.q8_1_quantize(x_vec.cast(dtypes.float32))
-        q_bias_words = Tensor.empty(self.in_features // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
-          q, fxn=qk_ops.q8_1_bias_pack_u32_kernel(self.in_features))[0]
-        if amort: _VDOT_QUANT_CACHE[ck] = (q_bias_words, scales); _VDOT_QUANT_CACHE["m"] = _VDOT_QUANT_CACHE.get("m", 0)+1
-      else:
-        q_bias_words, scales = cached; _VDOT_QUANT_CACHE["h"] = _VDOT_QUANT_CACHE.get("h", 0)+1
-      partial = partials.custom_kernel(words, q_bias_words, scales,
-        fxn=qk_ops.q4k_q8_1_vdot_builtin_partial_kernel(self.out_features, self.in_features, 1, "none", ()))[0]
-      return partial.sum(axis=1).reshape(1, 1, self.out_features)
-    # FFN-GEMV work-decomposition variant: lossless FP 32-thread/row + K-block-parallel + in-kernel warp_reduce_sum
-    # (ds_bpermute), one output (vs default 1-thread/row serial). Default-ON for guarded 8B Q4_K FFN gate/up + down
-    # after W==D hardening: ~+9.6%@ctx1024 / ~+8.5%@ctx4096, byte-identical. Revert with Q4K_GEMV_WARP=0; disable
-    # down separately with Q4K_GEMV_WARP_DOWN=0. Q4K_GEMV_WARP_PROJ (attn q/o) is now ALSO default-on (+1.6%/ctx,
-    # byte-identical, see above) -- the earlier "did not transfer" was a non-interleaved clock confound.
-    if getenv("Q4K_GEMV_WARP", 1) and (self.in_features // 256) % 4 == 0 and QK_AMD_GFX1100_ARCH_OK \
-       and ((self.in_features == 4096 and self.out_features == 12288 and self.parts == 1)      # FFN gate/up
-            or (getenv("Q4K_GEMV_WARP_DOWN", 1) and self.in_features == 12288 and self.out_features == 4096)):  # FFN down (Q4_K)
-      try:
-        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
-        return got.reshape(1, 1, self.out_features)
-      except Exception as e:
-        if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP fallback: {e}")
-    partial = partials.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
-    return partial.sum(axis=1).reshape(1, 1, self.out_features)
+    return q4k_primitive_linear_call(self, x, self._fallback, QK_AMD_GFX1100_ARCH_OK)
 
 class Q4KFusedLinear:
   # B1 horizontal-fusion probe: one Q4_K GEMV over concatenated sibling weight rows (q/k/v or gate/up),
@@ -429,85 +326,7 @@ class Q6KPrimitiveLinear:
     return x.linear(self.weight.transpose(), self.bias)
 
   def __call__(self, x:Tensor) -> Tensor:
-    # Q6_K decode GEMV (1 token) or batched verify/prefill GEMM (K tokens).
-    if not self.decode_enabled or self.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != self.in_features:
-      return self._fallback(x)
-    K = x.shape[-2]
-    if not isinstance(K, int) or K != 1:  # batched (verify/prefill)
-      if not isinstance(K, int) or K > 32: return self._fallback(x)
-      x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
-      partials = Tensor.empty(self.out_features, K, self.parts, dtype=dtypes.float32, device=x.device)
-      gemm_opts = self.opts + (qk_ops.q6k_parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
-      out = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_batch.reshape(K*self.in_features),
-        fxn=qk_ops.q6k_gemm_kernel(self.out_features, self.in_features, K, self.parts, gemm_opts))[0]
-      return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
-    x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
-    # Cooperative-K Q6_K decode GEMV (MMVQ_COOP family): the within-block pos becomes a LOCAL lane axis ->
-    # coalesced packed-weight loads (the default one-row-per-thread path runs Q6_K roles at ~10-14% HBM peak;
-    # coop reaches ~40-51%). fp-reassoc-tol exact, byte-identical greedy. Gated per role-class:
-    #   lm_head (out>=100000): Q6K_LM_HEAD_COOP default on (+19% decode, isolated 5x).
-    #   ffn_down (4096x12288): Q6K_FFN_DOWN_COOP default on (isolated 2.77x). See docs/qk-mmvq-q6k-*.
-    # FFN-down Q6_K work-decomposition warp (same lossless lever). SEPARATE research flag Q6K_GEMV_WARP_DOWN (NOT the
-    # promoted Q4K_GEMV_WARP_DOWN): the Q6_K down is ALREADY coop-routed (~51% peak) so warp is only ~1.09x and does NOT
-    # improve W==D (correct, byte-identical, but not worth promoting). down shape only (NOT lm_head). default-off.
-    if getenv("Q6K_GEMV_WARP_DOWN") and self.parts == 1 and self.out_features == 4096 and self.in_features == 12288 \
-       and (self.in_features // 256) % 2 == 0 and QK_AMD_GFX1100_ARCH_OK:
-      try:
-        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                fxn=qk_ops.q6k_gemv_warp_kernel(self.out_features, self.in_features))[0]
-        return got.reshape(1, 1, self.out_features)
-      except Exception as e:
-        if getenv("DEBUG", 0): print(f"Q6K_GEMV_WARP down fallback: {e}")
-    # Q6K-2/3 direct/warp lm_head route (research flag Q6K_DIRECT_ROUTE, default-off). lm_head currently uses
-    # Q6K_LM_HEAD_COOP = coop_partial + external .sum (the r_32_4_1187 reduce). The half-warp 2-row partition route
-    # (q6k_halfwarp_partition_kernel: 2 independent rows per 32-lane wave as two 16-lane partitions, in-warp
-    # warp_reduce_sum(width=16)) writes out[row] DIRECTLY -> no partials buffer, no external r_* reduce. Dequant
-    # (_q6k_weight) is byte-identical to coop. lm_head shape only (out>=100000, even rows). Flag-off => coop unchanged.
-    if getenv("Q6K_DIRECT_ROUTE") and self.parts == 1 and self.out_features >= 100000 \
-       and self.out_features % 2 == 0 and QK_AMD_GFX1100_ARCH_OK:
-      try:
-        out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                fxn=qk_ops.q6k_halfwarp_partition_kernel(self.out_features, self.in_features))[0]
-        return got.reshape(1, 1, self.out_features)
-      except Exception as e:
-        if getenv("DEBUG", 0): print(f"Q6K_DIRECT_ROUTE lm_head fallback: {e}")
-    rt = getenv("Q6K_COOP_RT", 4)
-    use_coop = self.parts == 1 and self.out_features % rt == 0 and (
-      (getenv("Q6K_LM_HEAD_COOP", 1) and self.out_features >= 100000) or
-      (getenv("Q6K_FFN_DOWN_COOP", 1) and self.out_features == 4096 and self.in_features == 12288) or
-      # L3 (rollback = DECODE_Q6K_FFN_DOWN_LONGK=0): route LARGE-IN Q6_K ffn_down (14B 17408->5120,
-      # 32B 25600->5120) through the same coop-partial route the 8B ffn_down already uses. The shipped gate
-      # above hardcodes the 8B dims (4096/12288), so 14B/32B Q6_K ffn_down falls to the slower generic partial
-      # path (~253 GB/s). Structural class (long in-features, moderate out, not lm_head), not a model-dim hardcode.
-      (getenv("DECODE_Q6K_FFN_DOWN_LONGK", 1) and self.in_features >= 8192 and self.out_features < 100000))
-    # TG-P3: spec-driven GENERATED Q6_K route (extra/qk/q6k_route_spec.py). Byte-identical to the shipped coop/partial
-    # hand templates -- a provenance conversion (hand_authored_uop_template -> machine_authored_generated). Default-on;
-    # BoltBeam QK_ROUTE_POLICY can also select it per tensor. Rollback to the shipped kernels: DECODE_Q6K_GENERATED=0.
-    q6k_gen_selected = _qk_route_policy_selects_q6k_generated(self.out_features, self.in_features)
-    q6k_generated = bool(getenv("DECODE_Q6K_GENERATED", 1))
-    if q6k_generated:
-      spec = qk_ops.q6k_spec_for_role(self.out_features, self.in_features, role=self.name, parts=self.parts,
-                                      row_tile=rt, use_coop=use_coop, opts=self.opts)
-      partials = Tensor.empty(self.out_features, spec.partial_axis_extent, dtype=dtypes.float32, device=x.device)
-      partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec, fxn=qk_ops.emit_q6k_gemv_kernel(spec))[0]
-      return partial.sum(axis=1).reshape(1, 1, self.out_features)
-    # strict hidden-fallback guard: a policy-selected Q6_K tensor must bind to the generated route. Reaching the
-    # shipped hand kernels here means the generated route was rolled back (DECODE_Q6K_GENERATED=0) -> fail loud.
-    if q6k_gen_selected and qk_route_policy_strict():
-      raise ValueError(f"TG_P3_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q6k_coop_generated for Q6_K "
-                       f"tensor {self.name!r} (out={self.out_features}, in={self.in_features}) but DECODE_Q6K_GENERATED "
-                       f"is off -> it fell back to the shipped hand template")
-    if use_coop:
-      partials = Tensor.empty(self.out_features, 16, dtype=dtypes.float32, device=x.device)
-      partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                       fxn=qk_ops.q6k_coop_partial_kernel(self.out_features, self.in_features, rt))[0]
-      return partial.sum(axis=1).reshape(1, 1, self.out_features)
-    partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
-    partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                     fxn=qk_ops.q6k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, self.opts))[0]
-    return partial.sum(axis=1).reshape(1, 1, self.out_features)
+    return q6k_primitive_linear_call(self, x, self._fallback, QK_AMD_GFX1100_ARCH_OK)
 
 def apply_rope(x:Tensor, freqs_cis:Tensor) -> Tensor:
   assert x.shape[-1] % 2 == 0
@@ -979,92 +798,8 @@ class TransformerBlock(FFNBlock):
     mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
       if resolve(T != 1) else None
     if should_use_flash_decode(start_pos, T, getattr(self, "_use_flash", False)):
-      # P2: Flash-Decoding for batch-1 GQA decode. Splits the symbolic-length KV cache into S chunks
-      # -> Hq*S workgroups (saturates the GPU at batch 1, vs SDPA's <1% occupancy at long context).
-      # Exact vs SDPA up to fp reassociation. Decode-only (T==1, symbolic start_pos).
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
-      MAXC, L = self.config.max_context, getenv("FLASH_L", 128)  # Track-3 search: L=128 >= L=256 at every ctx
-      vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
-      # variant 'gqa_coop_vec' (default): cooperative GQA V-reuse (kv-head global axis, V read once/group) PLUS
-      # the output-dim d mapped to LOCAL workgroup threads, so V loads coalesce within a wavefront (gqa_coop ran
-      # as 1-thread workgroups -> scalar uncoalesced loads). Byte-identical greedy; in-model vs gqa_coop
-      # +6.5/+13.3/+25.5/+48.8% @ctx 512/1024/2048/4096 -- flattens the decode slope to ~llama-flat (-8%).
-      # See docs/qk-gqa-coop-vector-load-result-*.
-      out = None
-      # Hybrid route-binding guard (fail-loud, default-inert): DECODE_ATTN_BLOCK_TILE only binds in-model via the
-      # whole-cache fused-xlane route. Set WITHOUT its enabling flags, the selection silently falls back to
-      # generic generated flash -> phantom W==D (docs/decode-attention-block-tile-route-binding-scope-20260627.md). Catch
-      # the partial stack HERE, before any W==D run, instead of after via the route_bound precheck. BLOCK_TILE off
-      # => guard inert => promoted generated default. DECODE_ATTN_BLOCK_TILE_STRICT=1 (default) raises; =0 warns.
-      if getenv("DECODE_ATTN_BLOCK_TILE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
-         and not (getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE", 0)):
-        _bt_msg = ("DECODE_ATTN_BLOCK_TILE=1 does not bind in-model without DECODE_ATTN_GENERATED_WHOLECACHE=1 and "
-                   "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1 -- it would silently fall back to the generic generated "
-                   "flash route (phantom W==D). Set the full generated whole-cache stack or unset DECODE_ATTN_BLOCK_TILE.")
-        if getenv("DECODE_ATTN_BLOCK_TILE_STRICT", 1): raise RuntimeError(_bt_msg)
-        if getenv("DEBUG", 0): print("WARN:", _bt_msg)
-      if getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
-         and (Hq // Hkv) == 4:
-        # A2 pure-search skeleton (default-off): generated flash-decode route that reads the whole assigned_kv cache
-        # buffer directly. This targets lifecycle cleanliness: generated route + no owned tile + no E_49152.
-        # NOTE: relaxing this guard to 14B (Hq=40,G=5) was tried — token-correct but REGRESSES ctx512 -10%
-        # (the score-broadcast variant is 8B-tuned); kept 8B-scoped. See attention-combine result doc.
-        out = qk_ops.flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                                        Hd, Hq, Hkv, MAXC, L)
-      # PROMOTED default: MODULAR generated live-split flash-decode. ONE structural shape class -- B==1, Hd==128,
-      # Hkv==8, Hq % Hkv == 0 (any GQA decode with these params), NOT per-model Hq hardcodes -- covering 8B (Hq=32/G=4),
-      # 14B (Hq=40/G=5), 32B (Hq=64/G=8) and future GQA shapes on the same generated tile kernel
-      # (flash_block_tiled_xlane_score_pv_tile_whole_cache). Mirrors the FUSED_COMBINE structural-class precedent below.
-      # per-split LENGTH = ceildiv(Tc, S_occ) scales to the LIVE context, so decode never reads the full max_context
-      # buffer -- required once max_context is raised (e.g. auto-scan); the old fixed-L 14B g5 route looped
-      # ceildiv(MAXC,L) splits over the WHOLE buffer every token (~MAXC/token). S_occ is a FIXED occupancy split count
-      # (const in MAXC -> const split-count + scratch, so raising MAXC is free). Tunables: DECODE_LIVE_SPLIT_S (splits),
-      # DECODE_LIVE_SPLIT_STAGING (K_ONLY|KV_BOTH). Rollback: DECODE_LIVE_SPLIT=0 -> generic generated flash below
-      # (never a handwritten kernel). BoltBeam route policy still selects per shape via either promoted live-split key.
-      _ls_shape = B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0
-      if has_qk_route_policy():
-        _ls_enabled = _ls_shape and (
-          _qk_route_policy_selected("decode_flash_block_tile_g5_konly", {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) or
-          _qk_route_policy_selected("decode_flash_live_split_g4_8b_kvboth", {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}))
-      else:
-        _ls_enabled = _ls_shape and bool(getenv("DECODE_LIVE_SPLIT", 1))
-      if out is None and _ls_enabled:
-        out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
-                                                        getenv("DECODE_LIVE_SPLIT_S", 48),
-                                                        staging=str(getenv("DECODE_LIVE_SPLIT_STAGING", "K_ONLY")),
-                                                        fused_combine=True)
-      if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
-         and (Hq // Hkv) == 4:
-        # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
-        # promoted generated route. This is an attribution/correctness candidate, not a speed candidate. It intentionally
-        # reuses the generated UOp flash kernels so the gate can prove whether a generated route can stay route-clean
-        # without reintroducing full-KV materialization.
-        out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                            start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                            variant=str(getenv("DECODE_ATTN_GENERATED_SKELETON_VARIANT",
-                                                               getenv("FLASH_VARIANT", "gqa_coop_vec"))))
-      # Attention-combine parity lever (rollback = DECODE_ATTN_FUSED_COMBINE=0, default-off): a GENERATED fused
-      # flash-decode kernel that puts the S splits as WAVES in one workgroup per head and does the online-softmax
-      # LSE combine IN LDS -> out[h,:], removing the 3 external flash_gmax/den/combine reduce kernels (the ~12-24%
-      # attention_combine bucket). Structural shape class (Hkv==8, Hq%Hkv==0, Hd==128), not a model-dim hardcode.
-      if out is None and getenv("DECODE_ATTN_FUSED_COMBINE", 0) and B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0:
-        out = qk_ops.flash_decode_fused_combine(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                                Hd, Hq, Hkv, MAXC, getenv("FLASH_COMBINE_L", 256))
-      # EB-track (DECODE_BYPASS_KV_SLICE, default-off): eliminate E_49152_32_3 V-slice materialization.
-      # The default path passes assigned_kv[1,0] (a [1,0]-indexed view with uop.after ordering) as vc_f
-      # to flash_partial_coop_vec via custom_kernel. tinygrad's callify cannot alias the [1,0]-indexed
-      # view back to cache_kv, so it inserts a copy kernel (E_49152_32_3, 6.69% GPU at ctx512). This flag
-      # passes assigned_kv.reshape(2*Hkv*MAXC*Hd) instead -- a contiguous reshape that callify CAN alias --
-      # and updates flash_partial_coop_vec to index V at offset Hkv*MAXC*Hd. K path unchanged.
-      # Rollback: DECODE_BYPASS_KV_SLICE=0. Reopen: if E_49152 eliminated and W==D improves.
-      if out is None and getenv("DECODE_BYPASS_KV_SLICE", 0) and B == 1 and (getenv("FLASH_VARIANT", "gqa_coop_vec") == "gqa_coop_vec"):
-        kv_flat = assigned_kv.reshape(2 * Hkv * MAXC * Hd)
-        out = qk_ops.flash_decode_attention_kv_flat(q.reshape(Hq, Hd), assigned_kv[0, 0], kv_flat,
-                                                    start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
-      if out is None:
-        out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                            start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                            variant=str(getenv("FLASH_VARIANT", "gqa_coop_vec")))
+      out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context)
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif PREFILL_TC_ATTN and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),
@@ -1304,7 +1039,7 @@ class Transformer:
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
     is_prefill_v2 = PREFILL_V2 and is_prefill and isinstance(tokens.shape[1], int)
-    if getenv("Q4K_VDOT_AMORT"): _VDOT_QUANT_CACHE.clear()  # E0: fresh quant cache per forward/trace
+    if getenv("Q4K_VDOT_AMORT"): clear_vdot_quant_cache()  # E0: fresh quant cache per forward/trace
     for q4k_linear in self._q4k_linears.linears:
       q4k_linear.decode_enabled = not is_prefill
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and
@@ -1328,7 +1063,7 @@ class Transformer:
     finally: pr._WARMSTART_OPTS = saved
 
   @staticmethod
-  def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:int|None=None,
+  def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:"int|str|None"=None,
                 realize=bool(getenv("REALIZE", 0))) -> tuple[Transformer, dict]:
     # TODO: remove the need for copy to default device
     # Q4K_PRIMITIVE defaults ON for a GGUF path ON AMD (the exact ~2.2x decode win, validated on AMD), and
@@ -1366,7 +1101,9 @@ class Transformer:
     if 'output.weight' not in state_dict: state_dict['output.weight'] = state_dict['token_embd.weight']
 
     arch = kv['general.architecture']
-    max_context = min(max_context, kv[f'{arch}.context_length']) if max_context is not None else kv[f'{arch}.context_length']
+    # Auto-scan replaces the old hardcoded clamp: capture the request now (AUTO_MAX_CONTEXT/None -> auto, or an int)
+    # and resolve it against a live VRAM probe once the raw dims (head_dim, num_blocks) are known, below.
+    _requested_max_context = max_context
     n_heads, n_kv_heads = kv[f'{arch}.attention.head_count'], kv[f'{arch}.attention.head_count_kv']
 
     ssm = None

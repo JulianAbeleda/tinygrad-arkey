@@ -107,7 +107,7 @@ def _placeholders(rows: int, k: int):
 
 
 def _reference_sink(rows: int, k: int) -> UOp:
-  """The exact emission the default route uses (tinygrad/llm/model.py:264 fxn=q4k_g3_lanemap_gemv_kernel(N,K))."""
+  """The exact emission the default route uses (tinygrad/llm/decode_routes.py q4k_g3_lanemap_gemv_kernel(N,K))."""
   return q4k_g3_lanemap_gemv_kernel(rows, k)(*_placeholders(rows, k))
 
 
@@ -155,7 +155,7 @@ def main() -> int:
     "proof_method": "static UOp .key equivalence of template-emitted vs default-route kernel + packed-word-index "
                     "formula match; no GPU, no re-measurement.",
     "writer": "extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel (lowered from extra/qk/gemv_g2_lanemap.py)",
-    "default_route_attribution": "tinygrad/llm/model.py:255-264 (BUBBLEBEAM_FUTURESIGHT default-on, g3_bubblebeam_shape)",
+    "default_route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (BUBBLEBEAM_FUTURESIGHT default-on, g3_bubblebeam_shape)",
     "lanemap_template_schema": LANEMAP_TEMPLATE_SCHEMA,
     "reconstruction_per_role": recon,
     "speed_equivalence": {"source": SPEED_ARTIFACT, "cited_verdict": speed,

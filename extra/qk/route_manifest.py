@@ -7,14 +7,13 @@ This module is DATA + tiny helpers. It changes NO defaults and runs NO kernels; 
 ad-hoc env maps. For each route, `env` is what you SET to force that route onto the active path; an empty `env` ({})
 means the route is ALREADY the shipped default (no flag needed). `rollback` is the exact env to leave it.
 
-CURRENT-STATE PIN (verified 2026-07-03 against tinygrad/llm/model.py + extra/qk/gemv_g3_codegen_lowering.py +
+CURRENT-STATE PIN (verified 2026-07-03 against tinygrad/llm/decode_routes.py + extra/qk/gemv_g3_codegen_lowering.py +
 extra/qk/prefill_graph_gemm_route.py + generated attention routes):
 
-  * Decode Q4_K GEMV default = the GENERATED G3 LaneMap route. model.py:255 reads `getenv("BUBBLEBEAM_FUTURESIGHT", 1)`
-    (DEFAULT-ON, flipped in commit 81370ae38). For the eligible Q4_K shapes (g3_bubblebeam_shape, model.py:256) the G3
-    route at model.py:257-264 fires FIRST and short-circuits before the owned-warp guards (Q4K_GEMV_WARP_PROJ@318,
-    Q4K_GEMV_WARP@360). So `decode_q4k_g3_generated` is the promoted default; the owned warp kernel is the
-    rollback/reference one flag away (BUBBLEBEAM_FUTURESIGHT=0).
+  * Decode Q4_K GEMV default = the GENERATED G3 LaneMap route. decode_routes.py:q4k_primitive_linear_call reads
+    `getenv("BUBBLEBEAM_FUTURESIGHT", 1)` (DEFAULT-ON, flipped in commit 81370ae38). For eligible Q4_K shapes
+    the G3 route fires FIRST and short-circuits before the owned-warp guards. So `decode_q4k_g3_generated` is the
+    promoted default; the owned warp kernel is the rollback/reference one flag away (BUBBLEBEAM_FUTURESIGHT=0).
   * An earlier draft of this file had G3/owned default-status INVERTED (it predated the default flip). This version
     pins the real state: G3 = default, owned warp = rollback.
 
@@ -63,7 +62,7 @@ ROUTES = {
       {"role": "ffn_gate_up", "K": 4096, "N": 12288}, {"role": "ffn_down", "K": 12288, "N": 4096},
       {"role": "attn_qo", "K": 4096, "N": 4096},
       {"role": "anyshape", "condition": "DECODE_Q4K_G3_ANYSHAPE=1 and (K//256)%4==0 and N%32==0"}],
-    "env": {},  # DEFAULT-ON: model.py:255 getenv("BUBBLEBEAM_FUTURESIGHT", 1). No flag needed.
+    "env": {},  # DEFAULT-ON: decode_routes.py q4k_primitive_linear_call getenv("BUBBLEBEAM_FUTURESIGHT", 1). No flag needed.
     "rollback": {"BUBBLEBEAM_FUTURESIGHT": "0"},  # -> owned warp (decode_q4k_owned_warp)
     "baseline_route_id": "decode_q4k_owned_warp",  # the oracle/baseline the evaluator measures against (== rollback target)
     "strict_fallback": True,
@@ -75,7 +74,7 @@ ROUTES = {
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/model.py:255-311 (QK_ROUTE_POLICY selects decode_q4k_g3_generated per tensor when present, else g3 fires by default for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility; strict mode fails loud on hidden fallback); writer extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
+    "route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (QK_ROUTE_POLICY selects decode_q4k_g3_generated per tensor when present, else g3 fires by default for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility; strict mode fails loud on hidden fallback); writer extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
     "note": "generated wave32 UOp program lowered from the G2 Q4_K LaneMap (extra/qk/gemv_g2_lanemap.py). Speed-equivalent to owned warp (-0.13..+0.41% across ctx 512-4096), token-identical, route-clean. DECODE_Q4K_G3_ANYSHAPE extends it structurally to larger dense Q4_K shapes (including attn_k when policy installs it). This is the positive-control pure-search default decode kernel."},
   "decode_q4k_owned_warp": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "rollback_reference",
@@ -93,7 +92,7 @@ ROUTES = {
     "purity_status": "owned_reference",
     "provenance": "rollback_oracle",
     "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/model.py:318 (Q4K_GEMV_WARP_PROJ default 1, q/o) + :360 (Q4K_GEMV_WARP default 1, gate/up+down); reached only when BUBBLEBEAM_FUTURESIGHT=0 short-circuits the G3 branch. Writer extra/qk/quant/q4_k_gemv_primitive.py q4k_gemv_warp_kernel",
+    "route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (Q4K_GEMV_WARP_PROJ default 1, q/o + Q4K_GEMV_WARP default 1, gate/up+down); reached only when BUBBLEBEAM_FUTURESIGHT=0 short-circuits the G3 branch. Writer extra/qk/quant/q4_k_gemv_primitive.py q4k_gemv_warp_kernel",
     "note": "hand-written owned warp GEMV. The Q4K_GEMV_WARP* guards still default to 1, but the G3 branch intercepts first for the eligible shapes when BUBBLEBEAM_FUTURESIGHT is on (the default). So owned warp is the rollback/reference, not the live default."},
   # ---------------- decode weight GEMV: Q6_K ----------------
   "decode_q6k_coop_generated": {
@@ -102,7 +101,7 @@ ROUTES = {
     "quant": ["Q6_K"],
     "shape_guards": [{"role": "ffn_down", "K": 12288, "N": 4096}, {"role": "ffn_down_longk", "K": ">=8192", "N": "<100000"},
                      {"role": "lm_head", "N": ">=100000"}, {"role": "attn_v", "enabled_by": "Q6K_COVER_MORE=1"}],
-    "env": {},  # DEFAULT-ON: model.py getenv("DECODE_Q6K_GENERATED", 1). BoltBeam QK_ROUTE_POLICY can select per tensor.
+    "env": {},  # DEFAULT-ON: decode_routes.py q6k_primitive_linear_call getenv("DECODE_Q6K_GENERATED", 1). BoltBeam QK_ROUTE_POLICY can select per tensor.
     "rollback": {"DECODE_Q6K_GENERATED": "0"},  # -> shipped hand kernels (decode_q6k_coop_shipped)
     "baseline_route_id": "decode_q6k_coop_shipped",
     "strict_fallback": True,
@@ -113,7 +112,7 @@ ROUTES = {
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/model.py Q6_K generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
+    "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
     "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/qk/q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."},
   "decode_q6k_coop_shipped": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "rollback_reference",
@@ -130,7 +129,7 @@ ROUTES = {
     "purity_status": "owned_reference",
     "provenance": "rollback_oracle",
     "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/model.py Q6_K shipped branch (reached only when DECODE_Q6K_GENERATED=0); writer extra/qk/quant/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
+    "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call shipped branch (reached only when DECODE_Q6K_GENERATED=0); writer extra/qk/quant/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
     "note": "hand-authored Q6_K coop/partial UOp templates. Byte-identical to the generated route (decode_q6k_coop_generated), retained as the rollback/oracle one flag away (DECODE_Q6K_GENERATED=0)."},
   "decode_q6k_direct_refuted": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "refuted",
@@ -147,7 +146,7 @@ ROUTES = {
     "purity_status": "refuted",
     "provenance": "hand_authored_uop_template",
     "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/model.py:455-464 (Q6K_DIRECT_ROUTE default-off); refuted vs decode_q6k_coop_shipped baseline.",
+    "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call Q6K_DIRECT_ROUTE branch (default-off); refuted vs decode_q6k_coop_shipped baseline.",
     "note": "half-warp direct Q6_K lm_head route: token-correct + route-bound, but W==D regressed -4.77..-6.06% (median -5.44%). Default-off. Do NOT re-chase as built (only reopen with a different topology than the half-warp partition)."},
   # ---------------- decode attention ----------------
   "decode_attention_owned_two_kernel": {
@@ -174,7 +173,7 @@ ROUTES = {
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "G": 4, "ctx": ">=512"}],
     "env": {},  # DEFAULT-ON for the validated 8B G=4 shape.
-    "rollback": {"DECODE_FLASH_BLOCK_TILE_G5_8B": "0"},  # -> generic generated tinygrad flash decode, not owned HIP
+    "rollback": {"DECODE_LIVE_SPLIT": "0"},  # unified structural branch -> generic generated tinygrad flash decode, not owned HIP
     "baseline_route_id": "decode_attention_owned_two_kernel",
     "strict_fallback": True,
     "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "flash_fused_gmax_combine"],
@@ -186,7 +185,7 @@ ROUTES = {
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/model.py 8B generated branch: B=1,Hq=32,Hkv=8,Hd=128 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True). Writer extra/qk/live_split_geometry.py + extra/qk/flash_decode.py generated UOp kernels.",
+    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route 8B generated branch: B=1,Hq=32,Hkv=8,Hd=128 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True). Writer extra/qk/live_split_geometry.py + extra/qk/flash_decode.py generated UOp kernels.",
     "note": "Promoted 8B long-context decode attention replacement. TG-P14 practical roofline closeout: worst-of-3 speed ctx512 98.5% / ctx4096 98.3% of owned, 48/48 deterministic prefilled token parity, route-bound, no hidden fallback. Default choice intentionally prefers generated machine-search code over the retired handwritten HIP route."},
   "decode_flash_block_tile_g5_konly": {
     "workload": "decode", "profile_id": PROFILE_DECODE_LARGE, "status": "promoted_default",
@@ -194,7 +193,7 @@ ROUTES = {
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
     "env": {},  # DEFAULT-ON for the validated G=5 shape; BoltBeam QK_ROUTE_POLICY can select it by shape.
-    "rollback": {"DECODE_FLASH_BLOCK_TILE_G5": "0"},
+    "rollback": {"DECODE_LIVE_SPLIT": "0"},  # unified structural branch -> generic generated flash on rollback
     "baseline_route_id": "decode_attention_owned_two_kernel",
     "strict_fallback": True,
     "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel"],
@@ -205,8 +204,8 @@ ROUTES = {
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/model.py 14B G=5 branch (QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly, else DECODE_FLASH_BLOCK_TILE_G5 default 1; K_ONLY staging fixed). Writer extra/qk/flash_decode.py flash_decode_g5_block_tile -> generated UOp kernel.",
-    "note": "G=5 block tile for 14B Hq=40/Hkv=8/Hd=128. GP0 purity gate PASS (generated UOps, no handwritten kernel); GP3 microgate PASS; GP4 W==D ctx512 +3.9 tok/s (+7.8%), ctx2048 +6.9 tok/s (+14.7%). Rollback DECODE_FLASH_BLOCK_TILE_G5=0. The next pure-search step is making BoltBeam QK_ROUTE_POLICY the required selector authority."},
+    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route UNIFIED live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5). QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1. Writer extra/qk/live_split_geometry.py flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True) -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel.",
+    "note": "Promoted 2026-07-03: 14B (Hq=40/Hkv=8/Hd=128) decode now shares the MODULAR live-split route with 8B/32B (no per-model Hq hardcode). Live per-split length ceildiv(Tc,S_occ) is SEQLEN-BOUND: 14B decode is FLAT across max_context (69.24 tok/s @MAXC=1024 vs 69.04 @MAXC=8192, live ctx ~550), vs the retired fixed-L g5 route which read the full max_context buffer every token and collapsed as MAXC rose. W==D token-identical to the generic generated flash reference (DECODE_LIVE_SPLIT=0) at 8B/14B/32B. Staging is KV_BOTH (self-contained LDS); K_ONLY is unsupported under live-split geometry (wrong global-V addressing -> garbage). S_occ fixed at 48 (=4*CU/Hkv occupancy default). Rollback DECODE_LIVE_SPLIT=0."},
   "decode_flash_block_tile_g5_8b_refuted": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "removed",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
@@ -223,14 +222,14 @@ ROUTES = {
     "purity_status": "removed",
     "provenance": "machine_authored_generated",
     "selector": "retired",
-    "route_attribution": "removed from tinygrad/llm/model.py; DECODE_FLASH_BLOCK_TILE_G5_8B now selects decode_flash_live_split_g4_8b_kvboth.",
+    "route_attribution": "removed from tinygrad/llm/model.py; superseded by decode_flash_live_split_g4_8b_kvboth.",
     "note": "Historical TG-P5/TG-P8 route. The generated G5 block-tile flash decode generalized correctly to the 8B geometry but was slower (87.6%/95.6% @ctx512/4096). It is no longer selectable because the validated live-split KV_BOTH route superseded it as the generated 8B default."},
   "decode_attention_generic_flash_generated": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "superseded_rollback",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
-    "env": {"DECODE_FLASH_BLOCK_TILE_G5_8B": "0"},
+    "env": {"DECODE_LIVE_SPLIT": "0"},
     "rollback": {},  # -> promoted generated default route
     "strict_fallback": True,
     "authority_gate": "tinygrad generated flash attention fallback",
@@ -238,7 +237,7 @@ ROUTES = {
     "purity_status": "research",
     "provenance": "tinygrad_scheduler_generated",
     "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/model.py generic generated flash_decode_attention fallback reached when DECODE_FLASH_BLOCK_TILE_G5_8B=0.",
+    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route generic generated flash_decode_attention fallback reached when DECODE_LIVE_SPLIT=0.",
     "note": "Generic generated tinygrad flash-decode fallback. It is retained only as a generated rollback/reference for the promoted live-split KV_BOTH route; the old native/HIP research route was pruned."},
   # ---------------- prefill GEMM ----------------
   "prefill_pipe_role_selective_generated": {

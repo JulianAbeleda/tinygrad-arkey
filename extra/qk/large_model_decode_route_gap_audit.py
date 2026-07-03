@@ -8,7 +8,7 @@ slow lazy-dequant fallback.
 
 This script does a static-but-faithful route census: it loads the model in decode mode, enumerates the Q4_K
 primitive linears with their (role, in_features, out_features), and classifies the route each one takes by
-replaying the exact model.py guard logic (G3 generated lanemap vs scheduler FFN branch vs _fallback dequant).
+replaying the exact decode_routes.py q4k_primitive_linear_call guard logic (G3 generated lanemap vs scheduler FFN branch vs _fallback dequant).
 W==D tok/s and the llama-matched ratio are read from the authority bench artifacts (not re-measured here).
 
 Writes bench/qwen-14b-32b-truegen/q1432_0_baseline/{latest,route_counts}.json + summary.md
@@ -30,11 +30,11 @@ def _role(name:str) -> str:
   return name.split(".")[-1] if "." in name else name
 
 def _g3_eligible(in_f:int, out_f:int) -> bool:
-  # mirrors tinygrad/llm/model.py Q4KPrimitiveLinear.__call__ g3_bubblebeam_shape (sans the runtime arch flag)
+  # mirrors tinygrad/llm/decode_routes.py q4k_primitive_linear_call g3_bubblebeam_shape (sans the runtime arch flag)
   return (in_f // 256) % 4 == 0 and ((in_f == 4096 and out_f in (4096, 12288)) or (in_f == 12288 and out_f == 4096))
 
 def _ffn_sched_eligible(in_f:int, out_f:int) -> bool:
-  # the in=4096/out=12288 scheduler FFN branch (model.py)
+  # the in=4096/out=12288 scheduler FFN branch (decode_routes.py)
   return in_f == 4096 and out_f == 12288
 
 def classify_route(in_f:int, out_f:int) -> str:

@@ -31,7 +31,7 @@ def main():
 
   # ---- 1. current route inventory (measured rows; classes per scope) ----
   current_route = {
-    "source": "tinygrad/llm/model.py:447-461 (Q6KPrimitiveLinear.forward, use_coop path) + extra/qk/quant/q6_k_gemv_primitive.py",
+    "source": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call (use_coop path) + extra/qk/quant/q6_k_gemv_primitive.py",
     "pattern": "q6k_coop_partial_kernel -> partials[rows,16] (one partial per pos-lane, NO in-kernel reduce) -> Tensor.sum(axis=1) -> r_* reduce kernel -> output",
     "rows": {
       "q6k_gemv_proven": {"kernels": ["q6k_coop_partial_4096_12288 (ffn_down)", "q6k_coop_partial_151936_4096 (lm_head GEMV body)"],
@@ -100,7 +100,7 @@ def main():
     "lane_shuffle_lane_map": {"exists": True, "cite": "qk_lane_partition_reduce.py LanePartition + amd_warp_reduce.py WARP=32 (used by Q4_K G3)"},
     "in_register_reduction": {"exists": True, "cite": "qk_lane_partition_reduce.py:57 lane_partition_reduce_sum"},
     "final_output_store": {"exists": True, "cite": "Q4_K G3 qk_gemv_g3_codegen_lowering.py:41 out[row].store(total)"},
-    "shape_guard": {"exists": True, "cite": "model.py:448-450 use_coop role guards (out>=100000 lm_head, 4096x12288 down)"},
+    "shape_guard": {"exists": True, "cite": "decode_routes.py q6k_primitive_linear_call use_coop role guards (out>=100000 lm_head, 4096x12288 down)"},
     "route_attribution_label": {"exists": True, "is_new_addition": True, "cite": "KernelInfo(name=...) pattern; new label q6k_direct_*"},
     "rollback_flag": {"exists": True, "is_new_addition": True, "cite": "NEW default-off flag Q6K_DIRECT_ROUTE (trivial getenv guard) -- a planned addition, not a capability gap"}}
   # CAPABILITY gaps = primitives that don't exist AND aren't planned new additions. (label + rollback flag are planned, trivial.)
@@ -112,7 +112,7 @@ def main():
   # ---- 6. Q6K-2 implementation plan ----
   impl_plan = {"target_candidate": "B_q6k_lanemap_g3_like",
     "files_to_edit": ["extra/qk/quant/q6_k_gemv_primitive.py (ADD q6k_direct_lanemap_kernel: reuse _q6k_block_dot body + in-warp lane_partition_reduce_sum, store out[row])",
-                      "tinygrad/llm/model.py:447-461 (ADD Q6K_DIRECT_ROUTE branch BEFORE use_coop; default-off; same shape guards)"],
+                      "tinygrad/llm/decode_routes.py q6k_primitive_linear_call (ADD Q6K_DIRECT_ROUTE branch BEFORE use_coop; default-off; same shape guards)"],
     "new_flags": {"Q6K_DIRECT_ROUTE": "1 = route covered Q6_K roles through the new direct kernel (default 0)", "rollback": "Q6K_DIRECT_ROUTE=0 -> existing coop_partial+sum"},
     "route_guards": ["quant==Q6_K", "self.parts==1", "out>=100000 (lm_head) OR (out==4096 and in==12288) (ffn_down)", "out % lane_extent == 0"],
     "labels": ["q6k_direct_lanemap_{rows}_{k}"],
@@ -162,7 +162,7 @@ def main():
     "\n## Primitive checklist\n| primitive | exists | cite |", "|---|---|---|"]
   for k,v in primitives.items(): md.append(f"| {k} | {'YES' if v['exists'] else 'NEW'} | {v['cite']} |")
   md += [f"\n## Expected gain\nTIER_B floor ~{reduce_elim_floor}% (reduce+partial-traffic elimination, clean mechanism) -> TIER_A target ~{tier_a_target}% (if 503->650 bw gap closes).",
-    "\n## Q6K-2 plan (headline)\n- files: extra/qk/quant/q6_k_gemv_primitive.py (+q6k_direct_lanemap_kernel), tinygrad/llm/model.py (Q6K_DIRECT_ROUTE branch, default-off)\n- first gate: single-role ffn_down microgate (byte-identical vs coop_partial+sum, route-bound)\n- rollback: Q6K_DIRECT_ROUTE=0",
+    "\n## Q6K-2 plan (headline)\n- files: extra/qk/quant/q6_k_gemv_primitive.py (+q6k_direct_lanemap_kernel), tinygrad/llm/decode_routes.py (Q6K_DIRECT_ROUTE branch, default-off)\n- first gate: single-role ffn_down microgate (byte-identical vs coop_partial+sum, route-bound)\n- rollback: Q6K_DIRECT_ROUTE=0",
     "\n## Merge\nStay on q6k-direct-route; merge to local master only after Q6K-2 correctness + Q6K-3 speed pass; do NOT merge stale psp-top-table.",
     "\n## Caveats\n"+"\n".join(f"- {c}" for c in rec["caveats"])]
   (OUT/"summary.md").write_text("\n".join(md))

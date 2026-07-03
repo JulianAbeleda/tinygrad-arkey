@@ -245,9 +245,6 @@ def compile_linear(linear:UOp, beam:int|None=None, validate=False) -> UOp:
   if validate: linear = graph_rewrite(linear, pm_validate, name="validate", walk=True)
   if (beam_val:=BEAM.value if beam is None else beam) >= 1: linear = graph_rewrite(linear, pm_beam, ctx=beam_val, walk=True)
   linear = graph_rewrite(linear, pm_compile, name="precompile kernels", walk=True)
-  if getenv("HCQ2"):
-    from extra.hcq2.hcq2 import hcq_schedule
-    linear = hcq_schedule(linear)
   return graph_rewrite(linear, pm_optimize_local_size, name="optimize local size", walk=True)
 
 def run_linear(linear:UOp, var_vals:dict[str, int]|None=None, input_uops:tuple[UOp, ...]=(), update_stats=True, jit=False, wait=False):

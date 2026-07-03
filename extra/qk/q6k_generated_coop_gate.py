@@ -27,7 +27,7 @@ from extra.qk.q6k_route_spec import Q6KGEMVRouteSpec, spec_for_role, emit_q6k_ge
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/tg-p3-q6k-generated-coop"
 
-# tracked 8B Q6_K decode shapes + their shipped route parameters (from tinygrad/llm/model.py Q6_K branches):
+# tracked 8B Q6_K decode shapes + their shipped route parameters (from tinygrad/llm/decode_routes.py Q6_K branches):
 #   ffn_down 4096x12288 coop rt4 (parts=1) ; lm_head 151936x4096 coop rt4 (parts=1) ; attn_v 1024x4096 partial parts=4
 CASES = [
   {"role": "ffn_down", "rows": 4096, "k": 12288, "parts": 1, "row_tile": 4, "use_coop": True},

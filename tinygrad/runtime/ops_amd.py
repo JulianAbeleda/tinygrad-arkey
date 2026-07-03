@@ -19,7 +19,6 @@ from tinygrad.runtime.support.amd import AMD_RUNTIME_DEVICES, AMDReg, AMDIP, imp
 from tinygrad.runtime.support.system import System, PCIIfaceBase, PCIAllocationMeta, USBPCIDevice, MAP_FIXED, MAP_NORESERVE
 from tinygrad.runtime.support.usb import USB3
 from tinygrad.runtime.support.memory import AddrSpace
-if getenv("IOCTL"): import extra.amd_ioctl.hip_ioctl  # noqa: F401 # pylint: disable=unused-import
 
 SQTT = ContextVar("SQTT", abs(VIZ.value)>=2)
 SQTT_ITRACE_SE_MASK, SQTT_LIMIT_SE, SQTT_SIMD_SEL, SQTT_TOKEN_EXCLUDE = \
@@ -1147,5 +1146,3 @@ class AMDDevice(HCQCompiled):
   def device_props(self): return self.iface.props
 
   def hw_copy_queues(self): return [(f"SDMA:{i}", functools.partial(unwrap(self.hw_copy_queue_t), queue_idx=i)) for i in self.sdma_queues]
-
-if getenv("HCQ2"): from extra.hcq2.ops_amd2 import * # noqa: F401, F403 # pylint: disable=unused-import

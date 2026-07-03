@@ -124,7 +124,7 @@ def _fc(v:float) -> UOp: return UOp.const(_F32, v)
 def _fki(name:str) -> KernelInfo: return KernelInfo(name=name, opts_to_apply=())
 def _ceildiv(a:int, b:int) -> int: return (a + b - 1) // b
 
-# Single source of truth for accepted FLASH_VARIANT values (consumed by flash_decode_attention + model.py).
+# Single source of truth for accepted FLASH_VARIANT values (consumed by flash_decode_attention + decode_routes.py).
 # 'gqa_coop' is the shipped default; 'hoisted'/'v1' are historical/fallback. Unknown -> raise (see below).
 FLASH_DECODE_VARIANTS = ("v1", "hoisted", "gqa_coop", "gqa_coop_vec")
 FLASH_DECODE_DEFAULT_VARIANT = "gqa_coop_vec"
@@ -1436,7 +1436,7 @@ def flash_decode_g5_block_tile(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   Using symbolic s_route as S collapses the global axis to a serial inner loop (verified: single-WG
   serialization, 3 GB/s vs 960 GB/s peak). smax_route fixes this: all splits launch in parallel, OOB
   positions are masked by the existing in_stage < Tc check in the kernel body.
-  Requires WARPS=G (already parameterized in the block tile kernel). Default-off: DECODE_FLASH_BLOCK_TILE_G5=0.
+  Requires WARPS=G (already parameterized in the block tile kernel). Historical microgate primitive; not model-wired.
   staging="K_ONLY": stage only K in LDS, read V from global (L2-warm).
   """
   W2 = Hd + 2

@@ -3,7 +3,7 @@
 
 Why decode-path (not prefill): a demoted Q6->Q4 tensor only swaps the bytes the DECODE primitive
 reads (the requantized `words`); the prefill/fallback path still uses the original fp `weight`
-(model.py:70 `_fallback`). So a prefill NLL would be blind to the demotion. We therefore run the
+(model.py Q4KPrimitiveLinear._fallback). So a prefill NLL would be blind to the demotion. We therefore run the
 real decode path (T=1, decode_enabled=True, symbolic start_pos so the graph compiles ONCE) over a
 fixed calibration sequence, teacher-forced, and accumulate -log p(true_next | logits_at_pos).
 

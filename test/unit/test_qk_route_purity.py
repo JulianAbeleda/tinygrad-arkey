@@ -74,8 +74,8 @@ def test_qk_route_policy_selects_g5_by_shape(tmp_path):
       "quant": "Q4_K",
       "selected_route": "decode_flash_block_tile_g5_konly",
       "status": "promoted",
-      "route_params": {"DECODE_FLASH_BLOCK_TILE_G5": "1"},
-      "rollback": {"DECODE_FLASH_BLOCK_TILE_G5": "0"},
+      "route_params": {"DECODE_LIVE_SPLIT": "1"},
+      "rollback": {"DECODE_LIVE_SPLIT": "0"},
     }],
   }))
   policy = _load_qk_route_policy(str(policy_path))
@@ -100,8 +100,8 @@ def test_qk_route_policy_selects_8b_live_split_by_shape(tmp_path):
       "quant": "fp16",
       "selected_route": "decode_flash_live_split_g4_8b_kvboth",
       "status": "promoted",
-      "route_params": {"DECODE_FLASH_BLOCK_TILE_G5_8B": "1"},
-      "rollback": {"DECODE_FLASH_BLOCK_TILE_G5_8B": "0"},
+      "route_params": {"DECODE_LIVE_SPLIT": "1"},
+      "rollback": {"DECODE_LIVE_SPLIT": "0"},
     }],
   }))
   policy = _load_qk_route_policy(str(policy_path))

@@ -28,8 +28,8 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m"); _KNAME = re.compile(r"\*\*\*\s+\S+\s+\d+\
 
 # arm flag-sets. ALLFLAGS popped from env before applying so arms do not leak into each other.
 # roles_under_test = the Q4_K GEMV roles this arm is SUPPOSED to route to G3. BUBBLEBEAM_FUTURESIGHT=1 routes all three
-# (model.py:254, g3_bubblebeam_shape covers 4096->4096, 4096->12288, 12288->4096). Q4K_GEMV_SCHEDULER=6 is gated to
-# in==4096/out==12288 ONLY (model.py:262) -> it forces FFN gate/up to G3 and BY DESIGN leaves q/o + down on the owned
+# (decode_routes.py q4k_primitive_linear_call, g3_bubblebeam_shape covers 4096->4096, 4096->12288, 12288->4096). Q4K_GEMV_SCHEDULER=6 is gated to
+# in==4096/out==12288 ONLY (decode_routes.py scheduler branch) -> it forces FFN gate/up to G3 and BY DESIGN leaves q/o + down on the owned
 # warp route. So the forced arm's owned_warp for q/o+down is EXPECTED, not a route leak.
 ARMS = {
   "owned_default":           {"BUBBLEBEAM_FUTURESIGHT": "0"},

@@ -93,17 +93,17 @@ def load_qk_route_policy(path:str) -> dict:
       raise ValueError(f"{policy_path} selects unsupported route {route_id!r}; supported={sorted(_SUPPORTED_QK_ROUTE_IDS)}")
     params = dict(row.get("route_params", {}))
     if route_id == "decode_flash_block_tile_g5_konly":
-      allowed = {"DECODE_FLASH_BLOCK_TILE_G5"}
+      allowed = {"DECODE_LIVE_SPLIT"}
       if set(params) - allowed:
         raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"DECODE_FLASH_BLOCK_TILE_G5": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated 14B G5 route, got {params}")
+      if params and params != {"DECODE_LIVE_SPLIT": "1"}:
+        raise ValueError(f"{policy_path} route {route_id!r} must select the generated live-split route, got {params}")
       selected[route_id] = row
     elif route_id == "decode_flash_live_split_g4_8b_kvboth":
-      allowed = {"DECODE_FLASH_BLOCK_TILE_G5_8B"}
+      allowed = {"DECODE_LIVE_SPLIT"}
       if set(params) - allowed:
         raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"DECODE_FLASH_BLOCK_TILE_G5_8B": "1"}:
+      if params and params != {"DECODE_LIVE_SPLIT": "1"}:
         raise ValueError(f"{policy_path} route {route_id!r} must select the generated 8B live-split route, got {params}")
       selected[route_id] = row
     elif route_id == "decode_q4k_g3_generated":

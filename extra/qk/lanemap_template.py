@@ -310,7 +310,7 @@ def main() -> int:
                     "plus kernel-name match and packed-word-index formula match. No GPU.",
     "reuses": ["extra/qk/gemv_g2_lanemap.py Q4KGateUpLaneMap", "extra/qk/gemv_g3_codegen_lowering.py "
                "q4k_g3_lanemap_gemv_kernel (PROMOTED default route)"],
-    "default_route_attribution": "tinygrad/llm/model.py (BUBBLEBEAM_FUTURESIGHT default-on); NOT changed by TG1.",
+    "default_route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (BUBBLEBEAM_FUTURESIGHT default-on); NOT changed by TG1.",
     "field_listing": field_listing,
     "field_taxonomy_detail": taxonomy,
     "topology_separable": topology_separable,
