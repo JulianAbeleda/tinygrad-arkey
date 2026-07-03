@@ -62,8 +62,14 @@ loop is `time_fn` (see plan item 1) — still do not clone a `synchronize()+perf
 4. **Unify the 3 `llama-bench` wrappers** (`llama_cpp_bench`, `model_authority_bench.run_llama`,
    `llama_kv_ctx_slope_bench`) into one — each rebuilds the `llama-bench` argv + `-o json` parse and
    hardcodes the same binary path. **DEFERRED** (touches `model_authority_bench`).
-5. **Merge the two `child_env` builders** (`harness_contract.child_env`, `generate.child_env`) into a
-   base + two overrides. **DEFERRED** (both prefill turf).
+5. ~~Merge the two `child_env` builders~~ **WITHDRAWN (2026-07-03, verified in-tree).** Same name, different
+   job, and they share only `os.environ.copy()` (one line). `harness_contract.child_env(extra)` setdefaults
+   DEV=AMD, uses PYTHONPATH=absolute ROOT, and adds QK_MODEL (launch a QK *eval* child).
+   `generate.child_env(mode, *, device, storage, ...)` takes DEV from a required param, uses PYTHONPATH=".",
+   clears `_CLEAR_KEYS`, and applies policy/storage/Q4K/Q6K flags (launch a *policy-mode rollout* child). A
+   shared `_base_child_env()` that setdefaults DEV=AMD would be semantically wrong for the rollout builder
+   (DEV comes from an explicit param there). Merging couples two unrelated launchers for one trivial line —
+   the "intentional difference, don't consolidate" case (cf. the 3 JSON writers in "Not to do").
 6. **`model_e2e_bench` redefines its own `_git`** despite importing `harness_contract` — use
    `harness_contract.provenance`. **DEFERRED** (bundled with item 2).
 
@@ -144,12 +150,14 @@ item 2 above. Consolidating is a real methodology decision (adopt the authority 
 consumers) — an owner call, not a mechanical dedup. Its private `_git` still duplicates
 `harness_contract.provenance`; fold that in only if/when the bench is touched for the adoption decision.
 
-## Step 5 — unify the two `child_env` builders
+## Step 5 — ~~unify the two `child_env` builders~~ WITHDRAWN
 
-`harness_contract.child_env` and `generate.child_env` both assemble a child env with the sacred
-DEV/JIT/PYTHONPATH ordering, disjoint key sets, zero shared code. Extract a base
-(`_base_child_env()` in `harness_contract`) and have both call it + add their own keys. Low risk;
-preserves both public names.
+Do not merge them. On inspection they share only `os.environ.copy()`: `harness_contract.child_env(extra)`
+setdefaults DEV=AMD / PYTHONPATH=absolute ROOT / adds QK_MODEL (QK eval child); `generate.child_env(mode,
+*, device, storage, ...)` takes DEV from a required param / PYTHONPATH="." / clears `_CLEAR_KEYS` / applies
+policy+storage flags (policy-mode rollout child). Same name, different job — a shared base would be
+semantically wrong for the rollout builder and would couple two unrelated launchers for one line. See
+dedup-plan item 5.
 
 ## Step 6 — unify the 3 `llama-bench` wrappers
 
