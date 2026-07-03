@@ -71,14 +71,11 @@ def _prefill_graph_gemm_default() -> int:
   except Exception: return 0
 PREFILL_GRAPH_GEMM = bool(_prefill_graph_gemm_default())
 
-# Route B B4 (default-off): the owned hand-AMDGCN flash-decode tile injected as external precompiled Ops.PROGRAM JIT
-# graph nodes. The device/arch guard is decided ONCE at import (Device[...] access is disallowed during JIT capture);
-# the per-call route adds only shape checks + the env flag. gfx1100-only (the validated arch). See
-# docs/decode-attention-route-b-b4-external-graph-node-result-20260621.md.
-def _decode_attn_amdgcn_arch_ok() -> bool:
+def _qk_amd_gfx1100_arch_ok() -> bool:
   try: return Device.DEFAULT == "AMD" and "gfx1100" in str(getattr(Device["AMD"], "arch", ""))
   except Exception: return False
-DECODE_ATTN_AMDGCN_ARCH_OK = _decode_attn_amdgcn_arch_ok()
+QK_AMD_GFX1100_ARCH_OK = _qk_amd_gfx1100_arch_ok()
+
 # Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
 # concrete -> the attention's reduce tiles/TC fires (symbolic KV blocks it). ~1.24x e2e, byte-identical. Cost: a
 # separate concrete prefill jit per distinct start_pos (0,512,...), precompiled at load -> best WARM/server prefill
@@ -266,13 +263,13 @@ class Q4KPrimitiveLinear:
     # change no-policy behavior; it moves selection authority from the model-side default into BoltBeam. Owned warp
     # stays one rollback flag away (BUBBLEBEAM_FUTURESIGHT=0). Strict mode fails loud on any silent fallback.
     g3_policy_selected = _qk_route_policy_selects_q4k_g3(self.out_features, self.in_features)
-    g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
+    g3_bubblebeam_shape = (self.in_features // 256) % 4 == 0 and QK_AMD_GFX1100_ARCH_OK and ((self.in_features == 4096 and self.out_features in (4096, 12288)) or (self.in_features == 12288 and self.out_features == 4096))
     # PROMOTED default-ON 2026-06-30 (rollback = DECODE_Q4K_G3_ANYSHAPE=0): bind the generated G3 lanemap by
     # STRUCTURAL shape eligibility ((in//256)%4==0 and out%32==0) rather than the hardcoded 8B dims, so larger
     # dense Q4_K decode shapes (14B/32B FFN gate/up/down + attn_q/k/o) take the generated route instead of the slow
     # lazy-dequant fallback. Byte-identical (token-matched 8B/14B); W==D 8B +4%, 14B +60%, 32B +78% (paired with
     # DECODE_ROUTE_ATTN_K). Structural class, not a model-dim hardcode. See docs/qwen-14b-32b-attn-k-route-miss-result.
-    g3_anyshape = (bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 1)) or g3_policy_selected) and DECODE_ATTN_AMDGCN_ARCH_OK \
+    g3_anyshape = (bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 1)) or g3_policy_selected) and QK_AMD_GFX1100_ARCH_OK \
       and (self.in_features // 256) % 4 == 0 and self.out_features % 32 == 0
     if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and (g3_bubblebeam_shape or g3_anyshape):
       if g3_anyshape or qk_ops.should_route_q4k_lane_partition(self.out_features, self.in_features):
@@ -361,7 +358,7 @@ class Q4KPrimitiveLinear:
     # which was a non-interleaved auto-clock confound. Revert with Q4K_GEMV_WARP_PROJ=0.
     # Evidence: bench/qk-proj-gemv-warp/wd.json, docs/decode-proj-gemv-warp-promotion-result-20260625.md.
     if getenv("Q4K_GEMV_WARP_PROJ", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
-       and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
+       and (self.in_features // 256) % 4 == 0 and QK_AMD_GFX1100_ARCH_OK:
       try:
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
@@ -398,7 +395,7 @@ class Q4KPrimitiveLinear:
     # after W==D hardening: ~+9.6%@ctx1024 / ~+8.5%@ctx4096, byte-identical. Revert with Q4K_GEMV_WARP=0; disable
     # down separately with Q4K_GEMV_WARP_DOWN=0. Q4K_GEMV_WARP_PROJ (attn q/o) is now ALSO default-on (+1.6%/ctx,
     # byte-identical, see above) -- the earlier "did not transfer" was a non-interleaved clock confound.
-    if getenv("Q4K_GEMV_WARP", 1) and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK \
+    if getenv("Q4K_GEMV_WARP", 1) and (self.in_features // 256) % 4 == 0 and QK_AMD_GFX1100_ARCH_OK \
        and ((self.in_features == 4096 and self.out_features == 12288 and self.parts == 1)      # FFN gate/up
             or (getenv("Q4K_GEMV_WARP_DOWN", 1) and self.in_features == 12288 and self.out_features == 4096)):  # FFN down (Q4_K)
       try:
@@ -477,7 +474,7 @@ class Q6KPrimitiveLinear:
     # promoted Q4K_GEMV_WARP_DOWN): the Q6_K down is ALREADY coop-routed (~51% peak) so warp is only ~1.09x and does NOT
     # improve W==D (correct, byte-identical, but not worth promoting). down shape only (NOT lm_head). default-off.
     if getenv("Q6K_GEMV_WARP_DOWN") and self.parts == 1 and self.out_features == 4096 and self.in_features == 12288 \
-       and (self.in_features // 256) % 2 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
+       and (self.in_features // 256) % 2 == 0 and QK_AMD_GFX1100_ARCH_OK:
       try:
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
@@ -491,7 +488,7 @@ class Q6KPrimitiveLinear:
     # warp_reduce_sum(width=16)) writes out[row] DIRECTLY -> no partials buffer, no external r_* reduce. Dequant
     # (_q6k_weight) is byte-identical to coop. lm_head shape only (out>=100000, even rows). Flag-off => coop unchanged.
     if getenv("Q6K_DIRECT_ROUTE") and self.parts == 1 and self.out_features >= 100000 \
-       and self.out_features % 2 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
+       and self.out_features % 2 == 0 and QK_AMD_GFX1100_ARCH_OK:
       try:
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
@@ -1021,25 +1018,17 @@ class TransformerBlock(FFNBlock):
       # as 1-thread workgroups -> scalar uncoalesced loads). Byte-identical greedy; in-model vs gqa_coop
       # +6.5/+13.3/+25.5/+48.8% @ctx 512/1024/2048/4096 -- flattens the decode slope to ~llama-flat (-8%).
       # See docs/qk-gqa-coop-vector-load-result-*.
-      # Route B B4 (default-off, owner-gated): replay the OWNED hand-AMDGCN flash-decode tile (extra/
-      # qk_owned_flash_decode.hip) as external precompiled Ops.PROGRAM JIT graph nodes via Tensor.custom_kernel
-      # (the B3 kernel; NO repack -- reads tinygrad's native [Hkv,MAXC,Hd] layout). Strictly shape/device-guarded to
-      # the validated Qwen3-8B/gfx1100 decode shape; ANY mismatch or failure falls back to gqa_coop_vec.
-      # ctx-gate: the owned tile only wins at long context (its KV-split combine over-splits short KV); below the
-      # threshold the route falls back to gqa_coop_vec. Threshold read from the bound start_pos at trace time.
-      try: _amdgcn_ctx = start_pos.unbind()[1] + T if isinstance(start_pos, UOp) else -1
-      except Exception: _amdgcn_ctx = -1
       out = None
       # Hybrid route-binding guard (fail-loud, default-inert): DECODE_ATTN_BLOCK_TILE only binds in-model via the
       # whole-cache fused-xlane route. Set WITHOUT its enabling flags, the selection silently falls back to
-      # owned/gqa_coop_vec -> phantom W==D (docs/decode-attention-block-tile-route-binding-scope-20260627.md). Catch
+      # generic generated flash -> phantom W==D (docs/decode-attention-block-tile-route-binding-scope-20260627.md). Catch
       # the partial stack HERE, before any W==D run, instead of after via the route_bound precheck. BLOCK_TILE off
-      # => guard inert => byte-identical owned default. DECODE_ATTN_BLOCK_TILE_STRICT=1 (default) raises; =0 warns.
+      # => guard inert => promoted generated default. DECODE_ATTN_BLOCK_TILE_STRICT=1 (default) raises; =0 warns.
       if getenv("DECODE_ATTN_BLOCK_TILE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and not (getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE", 0)):
         _bt_msg = ("DECODE_ATTN_BLOCK_TILE=1 does not bind in-model without DECODE_ATTN_GENERATED_WHOLECACHE=1 and "
-                   "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1 -- it would silently fall back to owned/gqa_coop_vec "
-                   "(phantom W==D). Set the full stack (also DECODE_ATTN_AMDGCN_TILE=0) or unset DECODE_ATTN_BLOCK_TILE.")
+                   "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1 -- it would silently fall back to the generic generated "
+                   "flash route (phantom W==D). Set the full generated whole-cache stack or unset DECODE_ATTN_BLOCK_TILE.")
         if getenv("DECODE_ATTN_BLOCK_TILE_STRICT", 1): raise RuntimeError(_bt_msg)
         if getenv("DEBUG", 0): print("WARN:", _bt_msg)
       if getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
@@ -1057,36 +1046,25 @@ class TransformerBlock(FFNBlock):
       if out is None and _g5_enabled and _g5_shape_ok:
         # G=5 block tile for 14B (Hq=40/Hkv=8): one warp per GQA group, TK=16 K rows staged in LDS,
         # online softmax + d-sharded PV. Sliced path: l_route=L, grid=Hkv×ceildiv(ctx,L)=32 wg at ctx=512.
-        # Default-on (TIER_A +3.9 tok/s ctx512). BoltBeam QK_ROUTE_POLICY selects this route by shape when
-        # present; without a policy, rollback remains DECODE_FLASH_BLOCK_TILE_G5=0.
-        # DECODE_FLASH_BLOCK_TILE_G5_KONLY=1 (default-on): K_ONLY staging (4KB LDS, V from global/L2).
-        _g5_staging = "K_ONLY" if (_g5_policy_selected or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
+        # Default-on (TIER_A +3.9 tok/s ctx512). BoltBeam QK_ROUTE_POLICY selects this route by shape when present;
+        # without a policy, rollback remains DECODE_FLASH_BLOCK_TILE_G5=0. The validated 14B staging is K_ONLY.
         out = qk_ops.flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                                Hd, Hq, Hkv, MAXC, L, staging=_g5_staging)
-      # TG-P5: generalize the generated G5 block-tile flash decode to the 8B geometry (Hq=32/Hkv=8, G=4). Same
-      # generated UOp route as the 14B G=5 default (WARPS=G is parameterized). Opt-in for the A/B vs the owned HIP
-      # tile: DECODE_FLASH_BLOCK_TILE_G5_8B, or BoltBeam QK_ROUTE_POLICY selecting decode_flash_block_tile_g5_konly
-      # for the Hq=32 shape. Fires BEFORE the owned tile so the generated route preempts owned when selected.
+                                                Hd, Hq, Hkv, MAXC, L, staging="K_ONLY")
+      # TG-P14 promoted default: generated 8B long-context attention (Hq=32/Hkv=8, G=4). The default is the validated
+      # live-context split geometry + fused split-preserving combine + KV_BOTH staging. This replaces the old owned
+      # HIP two-kernel route on the hot path. Rollback/debug fallback: DECODE_FLASH_BLOCK_TILE_G5_8B=0 routes to the
+      # generic generated tinygrad flash path below, never to a handwritten kernel.
       _g5_8b_shape = B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 and (Hq // Hkv) == 4
-      _g5_8b_policy = _qk_route_policy_selected("decode_flash_block_tile_g5_konly",
+      _g5_8b_policy = _qk_route_policy_selected("decode_flash_live_split_g4_8b_kvboth",
                                                 {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_8b_shape else False
-      _g5_8b_enabled = _g5_8b_policy if has_qk_route_policy() else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5_8B", 0))
+      _g5_8b_enabled = _g5_8b_policy if has_qk_route_policy() else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5_8B", 1))
       if out is None and _g5_8b_shape and _g5_8b_enabled:
-        # TG-P9.2: DECODE_ATTN_LIVE_SPLIT_GENERATED=1 uses the live-context split geometry tile (fixed S splits, per-
-        # split length scaled to the live Tc) instead of the fixed-L whole-cache tile -- byte-identical output, but
-        # the tile block-work scales with ctx (ctx512 tile ~4.6x faster; TG-P8 SPLIT_GEOMETRY fix). S = the fixed
-        # occupancy split count (= the fixed-L smax_route). Default-off pending the combine primitive (TG-P9.3/9.4).
-        _g5_8b_staging = "K_ONLY" if (_g5_8b_policy or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
-        if getenv("DECODE_ATTN_LIVE_SPLIT_GENERATED", 0):
-          out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
-                                                          MAXC // L, staging=_g5_8b_staging)
-        else:
-          out = qk_ops.flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                                  Hd, Hq, Hkv, MAXC, L, staging=_g5_8b_staging)
+        out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
+                                                        MAXC // L, staging="KV_BOTH", fused_combine=True)
       if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
-        # owned AMDGCN tile. This is an attribution/correctness candidate, not a speed candidate. It intentionally
+        # promoted generated route. This is an attribution/correctness candidate, not a speed candidate. It intentionally
         # reuses the generated UOp flash kernels so the gate can prove whether a generated route can stay route-clean
         # without reintroducing full-KV materialization.
         out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
@@ -1100,35 +1078,6 @@ class TransformerBlock(FFNBlock):
       if out is None and getenv("DECODE_ATTN_FUSED_COMBINE", 0) and B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0:
         out = qk_ops.flash_decode_fused_combine(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
                                                 Hd, Hq, Hkv, MAXC, getenv("FLASH_COMBINE_L", 256))
-      # DEFAULT-ON (2026-06-23) for the validated gfx1100 / Qwen3-8B / B=1 / T=1 / Hq=32 / Hkv=8 / Hd=128 / ctx>=512
-      # shape; strict guards keep every other shape/device on gqa. DECODE_ATTN_AMDGCN_TILE=0 disables.
-      if out is None and getenv("DECODE_ATTN_AMDGCN_TILE", 1) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
-         and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 512):
-        try:
-          # DTYPE CONTRACT (mandatory): the owned tile kernel reads __half K/V/Q, but the canonical cache_kv is fp32.
-          # Without this cast the tile reads fp32 bytes as fp16 -> NaN K -> garbage real-decode tokens (the route was
-          # silently broken for real cache; W==D was only validated with a degenerate zero cache). fp16->fp16 is a no-op.
-          # Validated 2026-06-23: byte-identical to gqa for 64 tokens; W==D +11.5%@ctx2048 / +16%@ctx4096.
-          _Qt = q.reshape(Hq, Hd).cast(dtypes.float16)
-          if getenv("DECODE_ATTN_KV_IDENTITY", 1):
-            # buffer-identity read (DEFAULT-ON 2026-06-23, owner-authorized; DECODE_ATTN_KV_IDENTITY=0 disables): pass
-            # the WHOLE cache_kv buffer (assigned_kv = cache_kv.after(store), no slice/reshape) so callify reads it
-            # directly (no full-MAXC slice materialization E_49152); the whole-cache tile offsets K/V halves. Byte-
-            # identical to the slice route; W==D +13-19% (ctx512..4096), tinygrad decode now 102-105% of llama.cpp.
-            out = qk_ops.amdgcn_flash_decode(_Qt, assigned_kv, assigned_kv, vsp,
-                                             getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
-                                             getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"), whole_cache=True,
-                                             # Mode-B tile-constant knobs (default 16/1/1 = shipped kernel, byte-identical):
-                                             tk=getenv("DECODE_ATTN_AMDGCN_TK", 16), vec=getenv("DECODE_ATTN_AMDGCN_VEC", 1),
-                                             unroll=getenv("DECODE_ATTN_AMDGCN_UNROLL", 1))
-          else:
-            _Kt, _Vt = assigned_kv[0, 0].cast(dtypes.float16), assigned_kv[1, 0].cast(dtypes.float16)
-            out = qk_ops.amdgcn_flash_decode(_Qt, _Kt, _Vt, vsp,
-                                             getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
-                                             getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"))  # B5: 'base' or 'hd64' cheaper combine
-        except Exception as e:
-          if getenv("DEBUG", 0): print(f"DECODE_ATTN_AMDGCN_TILE fallback to gqa_coop_vec: {e}")
-          out = None
       # EB-track (DECODE_BYPASS_KV_SLICE, default-off): eliminate E_49152_32_3 V-slice materialization.
       # The default path passes assigned_kv[1,0] (a [1,0]-indexed view with uop.after ordering) as vc_f
       # to flash_partial_coop_vec via custom_kernel. tinygrad's callify cannot alias the [1,0]-indexed
@@ -1171,15 +1120,12 @@ class TransformerBlock(FFNBlock):
 
   def _init_state(self, x:Tensor):
     if not hasattr(self, "cache_kv"):
-      # TODO: how is the dtype of this determined?
-      # DEFAULT-ON (2026-06-23) for the validated shape/device: the owned AMDGCN decode-attention route uses a native
-      # fp16 cache (the tile reads __half; fp16 cache makes the cast a no-op, dropping the fp32->fp16 copy). Confirmed
-      # byte-identical to gqa across the whole decode range (short-ctx SDPA + mid/long-ctx owned tile) and W==D
-      # +12.7/+15.4/+18.7/+22.4% @ctx512/1024/2048/4096 (canonical harness). GATED to the supported shape so other
-      # models keep fp32; DECODE_ATTN_AMDGCN_TILE=0 fully disables (back to fp32 gqa).
-      _owned_supported = DECODE_ATTN_AMDGCN_ARCH_OK and x.shape[0] == 1 and self.config.n_heads == 32 \
+      # 8B generated decode attention was validated with fp16 K/V cache storage (TG-P14 KV_BOTH parity and roofline
+      # closeout). Keep this shape on fp16 so the generated tile reads the same cache dtype the promotion measured;
+      # other shapes keep the default dtype.
+      _generated_8b_supported = QK_AMD_GFX1100_ARCH_OK and x.shape[0] == 1 and self.config.n_heads == 32 \
         and self.config.n_kv_heads == 8 and self.config.head_dim == 128
-      _kv_dtype = dtypes.float16 if ((getenv("DECODE_ATTN_AMDGCN_FP16CACHE") or getenv("DECODE_ATTN_AMDGCN_TILE", 1)) and _owned_supported) else None
+      _kv_dtype = dtypes.float16 if _generated_8b_supported else None
       self.cache_kv = Tensor.empty(2, x.shape[0], self.config.n_kv_heads, self.config.max_context, self.config.head_dim, dtype=_kv_dtype, device=x.device)
       self.freqs_cis = precompute_freqs_cis(self.config.rope_dim, self.config.max_context, self.config.rope_theta, device=x.device)
 

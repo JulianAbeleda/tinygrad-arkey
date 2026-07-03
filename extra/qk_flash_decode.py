@@ -1437,7 +1437,7 @@ def flash_decode_g5_block_tile(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   serialization, 3 GB/s vs 960 GB/s peak). smax_route fixes this: all splits launch in parallel, OOB
   positions are masked by the existing in_stage < Tc check in the kernel body.
   Requires WARPS=G (already parameterized in the block tile kernel). Default-off: DECODE_FLASH_BLOCK_TILE_G5=0.
-  staging="K_ONLY" (DECODE_FLASH_BLOCK_TILE_G5_KONLY=1): stage only K in LDS, read V from global (L2-warm).
+  staging="K_ONLY": stage only K in LDS, read V from global (L2-warm).
   """
   W2 = Hd + 2
   l_route = L
@@ -1448,7 +1448,7 @@ def flash_decode_g5_block_tile(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
     fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, l_route, smax_route, Tc_u, staging=staging))[0]
   # Combine: opt-in single-kernel machine-search fused split-preserving combine (TG-P9/P14.8 generated UOp), which
   # replaces the 2-kernel flash_state_gmax + flash_state_combine lifecycle and removes the Hd-fold fexp redundancy
-  # (Hq*Hd*S -> Hq*S). Needs REDUCE_ACC_UPCAST_FIX to lower the manual-END accumulator. Rollback = flag off.
+  # (Hq*Hd*S -> Hq*S). Uses the AMD baseline reduce/upcast lowering for the manual-END accumulator.
   if getenv("DECODE_G5_FUSED_COMBINE"):
     from extra.qk_live_split_geometry import flash_fused_gmax_combine_kernel
     out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_gmax_combine_kernel(Hd, Hq, smax_route, stride=smax_route))[0]
@@ -1517,10 +1517,10 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
   if getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE", 0):
     # physically-fast fused tile: score-once (e-shard fdot2 + cross-lane) + d-shard PV, buffer-identity
     # raw cache_kv. Split count S sets occupancy (docs/decode-fused-tile-occupancy-roofline-baseline.md):
-    # default 48 == 4*CU/Hkv == owned route's DECODE_ATTN_AMDGCN_S -> ~4 workgroups/CU.
+    # default 48 == 4*CU/Hkv -> ~4 workgroups/CU.
     W2 = Hd + 2
     # L is concrete (from MAXC + target split count); S is symbolic in Tc_u (mirrors the other routes,
-    # which must not Python-eval the JIT-bound context length). target_s=48 == owned DECODE_ATTN_AMDGCN_S.
+    # which must not Python-eval the JIT-bound context length). target_s=48 keeps ~4 workgroups/CU.
     target_s = getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_S", 48)
     if getenv("DECODE_ATTN_BLOCK_TILE_FIXED_S", 0) and getenv("DECODE_ATTN_BLOCK_TILE", 0):
       # H2 occupancy experiment: keep the block-tile route at a concrete S grid for the measured ctx.

@@ -57,6 +57,5 @@ def flash_decode_g5_block_tile(*args, **kwargs): return _attr("extra.qk_flash_de
 def flash_decode_attention_kv_flat(*args, **kwargs): return _attr("extra.qk_flash_decode", "flash_decode_attention_kv_flat")(*args, **kwargs)
 def flash_decode_live_split_block_tile(*args, **kwargs): return _attr("extra.qk_live_split_geometry", "flash_decode_live_split_block_tile")(*args, **kwargs)
 def flash_decode_fused_combine(*args, **kwargs): return _attr("extra.qk_flash_decode_fused_combine", "flash_decode_fused_combine")(*args, **kwargs)
-def amdgcn_flash_decode(*args, **kwargs): return _attr("extra.qk_owned_flash_decode_graph_node", "amdgcn_flash_decode")(*args, **kwargs)
 
 def assert_pure_machine_search(*args, **kwargs): return _attr("extra.qk_pure_search_guard", "assert_pure_machine_search")(*args, **kwargs)

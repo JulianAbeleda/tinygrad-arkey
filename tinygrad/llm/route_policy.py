@@ -73,7 +73,8 @@ def qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, nam
 _QK_ROUTE_POLICY: dict|None = None
 _QK_ROUTE_POLICY_STRICT = False
 _QK_ROUTE_POLICY_DEBUG = False
-_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_q4k_g3_generated", "decode_q6k_coop_generated",
+_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth",
+                           "decode_q4k_g3_generated", "decode_q6k_coop_generated",
                            "prefill_pipe_role_selective_generated"}
 
 def load_qk_route_policy(path:str) -> dict:
@@ -92,11 +93,18 @@ def load_qk_route_policy(path:str) -> dict:
       raise ValueError(f"{policy_path} selects unsupported route {route_id!r}; supported={sorted(_SUPPORTED_QK_ROUTE_IDS)}")
     params = dict(row.get("route_params", {}))
     if route_id == "decode_flash_block_tile_g5_konly":
-      allowed = {"DECODE_FLASH_BLOCK_TILE_G5", "DECODE_FLASH_BLOCK_TILE_G5_KONLY"}
+      allowed = {"DECODE_FLASH_BLOCK_TILE_G5"}
       if set(params) - allowed:
         raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params != {"DECODE_FLASH_BLOCK_TILE_G5": "1", "DECODE_FLASH_BLOCK_TILE_G5_KONLY": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select K-only G5 flags, got {params}")
+      if params and params != {"DECODE_FLASH_BLOCK_TILE_G5": "1"}:
+        raise ValueError(f"{policy_path} route {route_id!r} must select the generated 14B G5 route, got {params}")
+      selected[route_id] = row
+    elif route_id == "decode_flash_live_split_g4_8b_kvboth":
+      allowed = {"DECODE_FLASH_BLOCK_TILE_G5_8B"}
+      if set(params) - allowed:
+        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
+      if params and params != {"DECODE_FLASH_BLOCK_TILE_G5_8B": "1"}:
+        raise ValueError(f"{policy_path} route {route_id!r} must select the generated 8B live-split route, got {params}")
       selected[route_id] = row
     elif route_id == "decode_q4k_g3_generated":
       allowed = {"BUBBLEBEAM_FUTURESIGHT"}
@@ -191,16 +199,17 @@ def qk_route_policy_selects_prefill_generated(out_features:int, in_features:int)
 
 def validate_qk_route_policy_for_config(policy:dict|None, config) -> None:
   if policy is None: return
-  row = policy.get("selected", {}).get("decode_flash_block_tile_g5_konly")
-  if row is None: return
-  shape = dict(row.get("shape", {}))
   expected = {"Hq": config.n_heads, "Hkv": config.n_kv_heads, "Hd": config.head_dim}
-  mismatches = {k: (shape.get(k), v) for k, v in expected.items() if k in shape and int(shape[k]) != int(v)}
-  if mismatches and _QK_ROUTE_POLICY_STRICT:
-    raise ValueError(f"QK_ROUTE_POLICY selects decode_flash_block_tile_g5_konly for incompatible model shape: {mismatches}")
-  if _QK_ROUTE_POLICY_DEBUG:
-    print(f"QK_ROUTE_POLICY_DEBUG path={policy.get('path')} selected={sorted(policy.get('selected', {}))} "
-          f"shape={shape} model={expected} compatible={not mismatches}")
+  for rid in ("decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth"):
+    row = policy.get("selected", {}).get(rid)
+    if row is None: continue
+    shape = dict(row.get("shape", {}))
+    mismatches = {k: (shape.get(k), v) for k, v in expected.items() if k in shape and int(shape[k]) != int(v)}
+    if mismatches and _QK_ROUTE_POLICY_STRICT:
+      raise ValueError(f"QK_ROUTE_POLICY selects {rid} for incompatible model shape: {mismatches}")
+    if _QK_ROUTE_POLICY_DEBUG:
+      print(f"QK_ROUTE_POLICY_DEBUG path={policy.get('path')} route={rid} selected={sorted(policy.get('selected', {}))} "
+            f"shape={shape} model={expected} compatible={not mismatches}")
 
 def should_use_flash_decode(start_pos, T, use_flash:bool=False, getenv_fn=getenv) -> bool:
   if not (isinstance(start_pos, UOp) and isinstance(T, int) and T == 1): return False
