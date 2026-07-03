@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# STALE AGAINST CURRENT ARCHITECTURE -- revalidate on the Mac before trusting recovery.
+# This tool's bridge lifecycle assumes the old Python bridge `extra/remote/serve.py` launched on a
+# TCP port (bridge_pids pgreps serve.py; start_bridge runs `python serve.py <port>`; run_health_checks
+# connects to 127.0.0.1:<port>). That bridge was REMOVED 2026-06-16 (4c5e67cff) when the remote-GPU host
+# migrated to the native `/Applications/TinyGPU.app` over a UNIX SOCKET (see
+# tinygrad/runtime/support/system.py APLRemotePCIDevice.ensure_app: spawn `[APP_PATH, "server", sock]`,
+# kill via `pkill -f TinyGPU`). So --bridge-script defaults to a deleted file and the tool exits early
+# (line ~167). To repoint: bridge_pids/stop_bridge -> pgrep/pkill "TinyGPU"; start_bridge -> the app
+# (or let the next connection auto-spawn it); run_health_checks -> the app's socket, not 127.0.0.1:port.
+# The Shelly power-cycle logic below is architecture-independent and still correct.
+# Background + the lost keepalive fix: docs/egpu-usb4-link-keepalive.md
 import argparse, os, signal, subprocess, sys, time, urllib.request
 from pathlib import Path
 
