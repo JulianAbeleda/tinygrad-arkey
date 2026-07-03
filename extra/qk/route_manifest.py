@@ -68,7 +68,7 @@ ROUTES = {
     "strict_fallback": True,
     "expected_kernels": ["q4k_g3_lanemap_gemv_*"],
     "forbidden_kernels": ["q4k_gemv_warp_kernel (on the eligible roles)", "q4k_lane_partition_gemv_*", "fallback_graph"],
-    "authority_gate": "extra/audit/amd_isa/g3_weight_promotion_gate.py",
+    "authority_gate": "retired 2026-07-03; promotion banked in docs/qk-gate-series-conclusions.md (was extra/audit/amd_isa/g3_weight_promotion_gate.py)",
     "promotion_artifacts": ["bench/amd-isa-backend-g3-weight-promotion/latest.json",
                             "bench/amd-isa-backend-g3-weight-promotion/summary.md"],
     "purity_status": "search_generated_promoted",
@@ -87,7 +87,7 @@ ROUTES = {
     "rollback": {},  # this IS the rollback target
     "strict_fallback": True,
     "expected_kernels": ["q4k_gemv_warp_4096_4096", "q4k_gemv_warp_kernel"],
-    "authority_gate": "extra/audit/amd_isa/g3_weight_promotion_gate.py",
+    "authority_gate": "retired 2026-07-03; promotion banked in docs/qk-gate-series-conclusions.md (was extra/audit/amd_isa/g3_weight_promotion_gate.py)",
     "promotion_artifacts": ["docs/decode-q4k-gemv-warp-promotion-result-20260624.md"],
     "purity_status": "owned_reference",
     "provenance": "rollback_oracle",
