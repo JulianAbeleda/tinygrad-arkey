@@ -44,7 +44,13 @@ Read these as current working numbers, not a universal claim. **Decode is the ti
 
 You need an AMD GPU, the AMD backend working, and a GGUF model file. Most current gates assume gfx1100 / RX 7900 XTX. Run from the repo root using the project's virtual environment.
 
-`--max_context` defaults to `auto`: at load it probes free VRAM (`rocm-smi`) and admits the largest safe context for the model (weights + fp16 KV + prefill-score peak + flash scratch, held under an 0.8 fragmentation margin), capped at the model's trained context. 8B/14B admit their full trained context on a 24 GB card; 32B, whose weights alone (~20 GB) leave no room for a useful fp16 KV cache, **refuses loudly** with a "needs KV quantization" message rather than silently clamping or OOMing. An explicit `--max_context N` is still admission-checked and fails loud if it won't fit. This relies on the seqlen-bound decode attention route (decode work scales with live context, not `max_context`), so raising the cap does not collapse decode.
+`--max_context` defaults to `auto`: at load it probes free VRAM (`rocm-smi`) and admits the largest safe context for the model (weights + KV + prefill-score peak + flash scratch, held under an 0.8 fragmentation margin), capped at the model's trained context. Admission is a **tier ladder**, all driven by the memory arithmetic (no model-name checks):
+
+1. **fp16 KV (lossless)** — used whenever it admits a useful context. 8B/14B admit their full trained context on a 24 GB card this way.
+2. **int8 KV-quant (`DECODE_KV_QUANT`, ~0.6% loss)** — auto-escalated when fp16 can't fit but int8 can. The resident KV cache is int8 + a tiny per-(K/V,head,token) fp16 scale; the decode flash route dequantizes in-register (no materialized fp16 KV). This is what lets **32B run long context** (~2800 tokens where fp16 admits <2000), token-identical to fp16 in practice. It's a *capacity* lever, not a decode speedup (attention decode is compute-bound, not bandwidth-bound).
+3. **refuse loud** — only when even int8 can't fit a useful context; the message points at the Q4-KV / eviction tiers (follow-ons).
+
+An explicit `--max_context N` is still admission-checked and auto-upgrades through the ladder to honor the request, failing loud only if no tier fits. All of this relies on the seqlen-bound decode attention route (decode work scales with live context, not `max_context`), so raising the cap does not collapse decode.
 
 ```sh
 # Decode benchmark
