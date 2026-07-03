@@ -1,10 +1,19 @@
 from __future__ import annotations
-import collections, functools, itertools, json, os, pathlib
+import collections, functools, itertools, os, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function, Device
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import prod
 from tinygrad.llm.gguf import gguf_load, gguf_load_with_metadata
+from tinygrad.llm import route_ops as qk_ops
+from tinygrad.llm.route_policy import (
+  _q4k_policy, _q6k_policy, _load_qk_generated_policy, _qk_generated_policy_entry,
+  _qk_generated_policy_len, _load_qk_route_policy, _set_qk_route_policy,
+  _qk_route_policy_selected, _qk_route_policy_selects_q4k_g3,
+  _qk_route_policy_selects_q6k_generated, _qk_route_policy_selects_prefill_generated,
+  _validate_qk_route_policy_for_config, has_qk_route_policy, qk_route_policy_strict,
+  should_use_flash_decode as _route_should_use_flash_decode,
+)
 from tinygrad.uop.ops import resolve
 
 # Prefill v2 (opt-in, default off; decode 100% untouched when off). Concrete-ubatch fp16 prefill that lets
@@ -136,6 +145,9 @@ def _prefill_v2_validate_ubatch(ubatch:int) -> None:
 # oversized model (14B/32B) fails fast with an actionable error instead of OOMing late mid-realize.
 def _prefill_v2_realize_bytes(shapes:list[tuple[int,int]]) -> int: return sum(o * i for o, i in shapes) * 2  # fp16
 
+def should_use_flash_decode(start_pos, T, use_flash:bool=False) -> bool:
+  return _route_should_use_flash_decode(start_pos, T, use_flash, getenv_fn=getenv)
+
 def _pf16(lin, x:Tensor) -> Tensor:
   # prefill v2: a single fp16 matmul (both operands fp16 -> RDNA3 WMMA tensor cores can fire). The primitives'
   # `.weight` is a LAZY Q4_K/Q6_K->fp16 dequant graph (not a realized buffer); using it directly fuses the
@@ -143,12 +155,10 @@ def _pf16(lin, x:Tensor) -> Tensor:
   # weight ONCE per linear (cached as `_pf16_w` by _install_prefill_v2_warmstart) and matmul against that.
   w = getattr(lin, "_pf16_w", None)
   if PREFILL_GRAPH_GEMM and w is not None:
-    from extra.qk_prefill_graph_gemm_route import route_pf16_graph_gemm
-    routed = route_pf16_graph_gemm(lin, x)
+    routed = qk_ops.route_pf16_graph_gemm(lin, x)
     if routed is not None: return routed
   if PREFILL_TENSILE_GEMM and w is not None:   # research-only external Tensile route (flag-gated, eligible shapes only)
-    from extra.qk_tensile_inmodel import route_pf16
-    routed = route_pf16(lin, x)
+    routed = qk_ops.route_pf16(lin, x)
     if routed is not None: return routed       # else fall through to the normal fp16 matmul (silent fallback)
   if w is None: w = lin.weight.cast(dtypes.float16)   # fallback (uncached): lazy, slow -- expect the cache
   b = getattr(lin, "bias", None)
@@ -158,15 +168,14 @@ def _ffn_tensile_col(block, x:Tensor):
   """Transpose-free Tensile FFN (research, PREFILL_TENSILE_GEMM): keep gate/up/down in [feature,T] (column)
   so the gate/up output-transpose + down input-transpose cancel (the diagnostic-localized prefill win).
   Transpose x ONCE at entry, result ONCE at exit. Returns None (silent fallback) if any role is ineligible."""
-  from extra.qk_tensile_inmodel import route_pf16_col
   gw = getattr(block.ffn_gate, "_pf16_w", None)
   if gw is None or x.ndim < 2 or not isinstance(x.shape[-2], int) or x.shape[-2] != 512: return None
   D, T = gw.shape[1], x.shape[-2]
   xT = x.reshape(T, D).cast(dtypes.float16).transpose().contiguous()      # [D, T] (one entry transpose)
-  g = route_pf16_col(block.ffn_gate, xT); u = route_pf16_col(block.ffn_up, xT)
+  g = qk_ops.route_pf16_col(block.ffn_gate, xT); u = qk_ops.route_pf16_col(block.ffn_up, xT)
   if g is None or u is None: return None
   h = (g.silu() * u).contiguous()                                        # [hidden, T] (down's A, no transpose)
-  o = route_pf16_col(block.ffn_down, h)                                  # [dim, T]
+  o = qk_ops.route_pf16_col(block.ffn_down, h)                           # [dim, T]
   if o is None: return None
   return o.transpose().reshape(*x.shape[:-1], D)                         # [..., dim] (one exit transpose)
 
@@ -241,13 +250,12 @@ class Q4KPrimitiveLinear:
     K = x.shape[-2]
     if not isinstance(K, int) or K != 1:  # batched (verify/prefill); fall back for large or symbolic K
       if not isinstance(K, int) or K > 32 or self.kernel_mode == "direct_out": return self._fallback(x)
-      from extra.q4_k_gemv_primitive import q4k_gemm_kernel, parse_opt
       x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
       words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
       partials = Tensor.empty(self.out_features, K, self.parts, dtype=dtypes.float32, device=x.device)
-      gemm_opts = self.opts + (parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
+      gemm_opts = self.opts + (qk_ops.q4k_parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
       out = partials.custom_kernel(words, x_batch.reshape(K*self.in_features),
-        fxn=q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
+        fxn=qk_ops.q4k_gemm_kernel(self.out_features, self.in_features, K, self.parts, "none", gemm_opts))[0]
       return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
     # PROMOTED default-on: the generated G3 LaneMap is the default Q4_K decode GEMV route (speed-equivalent to the owned
     # warp kernel, <0.5% across ctx 512-4096; token-matched, route-clean). Directional pure-machine-search move: ship the
@@ -267,8 +275,7 @@ class Q4KPrimitiveLinear:
     g3_anyshape = (bool(getenv("DECODE_Q4K_G3_ANYSHAPE", 1)) or g3_policy_selected) and DECODE_ATTN_AMDGCN_ARCH_OK \
       and (self.in_features // 256) % 4 == 0 and self.out_features % 32 == 0
     if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER") and (g3_bubblebeam_shape or g3_anyshape):
-      from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
-      if g3_anyshape or should_route_q4k_lane_partition(self.out_features, self.in_features):
+      if g3_anyshape or qk_ops.should_route_q4k_lane_partition(self.out_features, self.in_features):
         _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
         # L2 (rollback = DECODE_Q4K_SPLIT_K_KV=0): split-K decode for OCCUPANCY-STARVED G3 GEMVs. A generated
@@ -287,25 +294,22 @@ class Q4KPrimitiveLinear:
           _cap = getenv("DECODE_SPLIT_K_TARGET_WG", 8192)
           _parts = max((p for p in range(1, _bpg + 1) if _bpg % p == 0 and self.out_features * p <= _cap), default=1)
           if _parts > 1:
-            from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_inkernel_combine_kernel
             _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-            return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_inkernel_combine_kernel(self.out_features, self.in_features, _parts))[0].reshape(1, 1, self.out_features)
+            return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_inkernel_combine_kernel(self.out_features, self.in_features, _parts))[0].reshape(1, 1, self.out_features)
         if getenv("DECODE_Q4K_SPLIT_K_KV", 0) and self.out_features <= getenv("DECODE_SPLIT_K_MAX_ROWS", 2048):
           _bpg = (self.in_features // 256) // 4
           _cap = getenv("DECODE_SPLIT_K_TARGET_WG", 8192)
           _parts = max((p for p in range(1, _bpg + 1) if _bpg % p == 0 and self.out_features * p <= _cap), default=1)
           if _parts > 1:
-            from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_splitk_kernel
             _p = Tensor.empty(self.out_features * _parts, dtype=dtypes.float32, device=x.device)
-            _p = _p.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_splitk_kernel(self.out_features, self.in_features, _parts))[0]
+            _p = _p.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_splitk_kernel(self.out_features, self.in_features, _parts))[0]
             return _p.reshape(self.out_features, _parts).sum(axis=1).reshape(1, 1, self.out_features)
-        from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
         _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
+        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
     # TG-P2 strict hidden-fallback guard: a QK_ROUTE_POLICY-selected tensor must bind to G3. If we reach here with the
     # policy selecting G3 and futuresight on (not an explicit BUBBLEBEAM_FUTURESIGHT=0 rollback, not a scheduler
     # research override), G3 did not bind -> fail loud instead of silently taking the owned warp / coop fallback.
-    if g3_policy_selected and _QK_ROUTE_POLICY_STRICT and bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
+    if g3_policy_selected and qk_route_policy_strict() and bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
       raise ValueError(f"TG_P2_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q4k_g3_generated for Q4_K "
                        f"tensor {self.name!r} (out={self.out_features}, in={self.in_features}) but it did not bind to "
                        f"the G3 route (structural eligibility (in//256)%4==0 and out%32==0 not met, or arch unsupported)")
@@ -323,33 +327,27 @@ class Q4KPrimitiveLinear:
       #   6 (G3_LANEMAP_CODEGEN): generated named wave32 UOp program from the G2 LaneMap. This is the first lowering
       #     probe for one-word-per-lane in-register dequant without routing through the lane-partition bridge module.
       if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
-        from extra.qk_bubblebeam_futuresight import should_route_q4k_lane_partition
-        if not (should_route_q4k_lane_partition(self.out_features, self.in_features) or g3_bubblebeam_shape): return self._fallback(x)
-        from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
+        if not (qk_ops.should_route_q4k_lane_partition(self.out_features, self.in_features) or g3_bubblebeam_shape): return self._fallback(x)
         _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
         _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
+        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
       if getenv("Q4K_GEMV_SCHEDULER") == 4:
-        from extra.qk_q4k_lane_partition_gemv import q4k_lane_partition_gemv_kernel
         _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
         _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=q4k_lane_partition_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
+        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_lane_partition_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
       if getenv("Q4K_GEMV_SCHEDULER") == 6:
-        from extra.qk_gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
         _w = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
         _out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        return _out.custom_kernel(_w, _xv, fxn=q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
+        return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(self.out_features, self.in_features))[0].reshape(1, 1, self.out_features)
       if getenv("Q4K_GEMV_SCHEDULER") in (2, 3, 5):
-        from extra.qk_q4k_scheduler_gemv import q4k_scheduler_matvec, q4k_scheduler_matvec_wordlane, q4k_scheduler_matvec_lanemap
         _w = self.q4k_storage.words.to(x.device)
         _xv = x[:, 0, :].reshape(self.in_features).cast(dtypes.float32)
-        _fn = q4k_scheduler_matvec_lanemap if getenv("Q4K_GEMV_SCHEDULER") == 5 else q4k_scheduler_matvec_wordlane if getenv("Q4K_GEMV_SCHEDULER") == 3 else q4k_scheduler_matvec
+        _fn = qk_ops.q4k_scheduler_matvec_lanemap if getenv("Q4K_GEMV_SCHEDULER") == 5 else qk_ops.q4k_scheduler_matvec_wordlane if getenv("Q4K_GEMV_SCHEDULER") == 3 else qk_ops.q4k_scheduler_matvec
         return _fn(_w, _xv, self.out_features, self.in_features).reshape(1, 1, self.out_features)
       return self._fallback(x)
-    from extra.q4_k_gemv_primitive import q4k_gemv_kernel, q4k_gemv_partial_kernel
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
     words = self.q4k_storage.words.to(x.device).contiguous() if self.q4k_storage.mode == "q4_ondemand" else self.q4k_storage.words.to(x.device)
     # Cooperative-K Q4_K decode GEMV (MMVQ_COOP) for attn_q/o only: the within-block word index lane4=pos//4
@@ -365,39 +363,35 @@ class Q4KPrimitiveLinear:
     if getenv("Q4K_GEMV_WARP_PROJ", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
        and (self.in_features // 256) % 4 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
       try:
-        from extra.q4_k_gemv_primitive import q4k_gemv_warp_kernel
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
+        got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
         return got.reshape(1, 1, self.out_features)
       except Exception as e:
         if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP_PROJ fallback: {e}")
     rt4 = getenv("Q4K_COOP_RT", 16)
     if getenv("Q4K_ATTN_QO_COOP", 1) and self.parts == 1 and self.out_features == 4096 and self.in_features == 4096 \
         and self.out_features % rt4 == 0:
-      from extra.q4_k_gemv_primitive import q4k_coop_partial_kernel
       partials = Tensor.empty(self.out_features, 8, dtype=dtypes.float32, device=x.device)
-      partial = partials.custom_kernel(words, x_vec, fxn=q4k_coop_partial_kernel(self.out_features, self.in_features, rt4))[0]
+      partial = partials.custom_kernel(words, x_vec, fxn=qk_ops.q4k_coop_partial_kernel(self.out_features, self.in_features, rt4))[0]
       return partial.sum(axis=1).reshape(1, 1, self.out_features)
     if self.kernel_mode == "direct_out":
       out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-      got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_kernel(self.out_features, self.in_features, "none", self.opts))[0]
+      got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_kernel(self.out_features, self.in_features, "none", self.opts))[0]
       return got.reshape(1, 1, self.out_features)
     partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
     if getenv("Q4K_VDOT") and self.parts == 1:  # D1/E0: schedulable builtin v_dot4 (udot4) decode GEMV
-      from extra.q4_k_gemv_primitive import q4k_q8_1_vdot_builtin_partial_kernel, q8_1_bias_pack_u32_kernel
-      from extra.qk_layout import q8_1_quantize
       amort = bool(getenv("Q4K_VDOT_AMORT"))  # E0: quantize x ONCE/token, shared across q/k/v and gate/up
       ck = x.uop.key if amort else None
       cached = _VDOT_QUANT_CACHE.get(ck) if amort else None
       if cached is None:
-        q, scales = q8_1_quantize(x_vec.cast(dtypes.float32))
+        q, scales = qk_ops.q8_1_quantize(x_vec.cast(dtypes.float32))
         q_bias_words = Tensor.empty(self.in_features // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
-          q, fxn=q8_1_bias_pack_u32_kernel(self.in_features))[0]
+          q, fxn=qk_ops.q8_1_bias_pack_u32_kernel(self.in_features))[0]
         if amort: _VDOT_QUANT_CACHE[ck] = (q_bias_words, scales); _VDOT_QUANT_CACHE["m"] = _VDOT_QUANT_CACHE.get("m", 0)+1
       else:
         q_bias_words, scales = cached; _VDOT_QUANT_CACHE["h"] = _VDOT_QUANT_CACHE.get("h", 0)+1
       partial = partials.custom_kernel(words, q_bias_words, scales,
-        fxn=q4k_q8_1_vdot_builtin_partial_kernel(self.out_features, self.in_features, 1, "none", ()))[0]
+        fxn=qk_ops.q4k_q8_1_vdot_builtin_partial_kernel(self.out_features, self.in_features, 1, "none", ()))[0]
       return partial.sum(axis=1).reshape(1, 1, self.out_features)
     # FFN-GEMV work-decomposition variant: lossless FP 32-thread/row + K-block-parallel + in-kernel warp_reduce_sum
     # (ds_bpermute), one output (vs default 1-thread/row serial). Default-ON for guarded 8B Q4_K FFN gate/up + down
@@ -408,13 +402,12 @@ class Q4KPrimitiveLinear:
        and ((self.in_features == 4096 and self.out_features == 12288 and self.parts == 1)      # FFN gate/up
             or (getenv("Q4K_GEMV_WARP_DOWN", 1) and self.in_features == 12288 and self.out_features == 4096)):  # FFN down (Q4_K)
       try:
-        from extra.q4_k_gemv_primitive import q4k_gemv_warp_kernel
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
-        got = out.custom_kernel(words, x_vec, fxn=q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
+        got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_warp_kernel(self.out_features, self.in_features))[0]
         return got.reshape(1, 1, self.out_features)
       except Exception as e:
         if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP fallback: {e}")
-    partial = partials.custom_kernel(words, x_vec, fxn=q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
+    partial = partials.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, "none", self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
 
 class Q4KFusedLinear:
@@ -468,12 +461,11 @@ class Q6KPrimitiveLinear:
     K = x.shape[-2]
     if not isinstance(K, int) or K != 1:  # batched (verify/prefill)
       if not isinstance(K, int) or K > 32: return self._fallback(x)
-      from extra.q6_k_gemv_primitive import q6k_gemm_kernel, parse_opt
       x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
       partials = Tensor.empty(self.out_features, K, self.parts, dtype=dtypes.float32, device=x.device)
-      gemm_opts = self.opts + (parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
+      gemm_opts = self.opts + (qk_ops.q6k_parse_opt(f"UPCAST:1:{min(K, 16)}"),)  # hoist the dequant across the K columns
       out = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_batch.reshape(K*self.in_features),
-        fxn=q6k_gemm_kernel(self.out_features, self.in_features, K, self.parts, gemm_opts))[0]
+        fxn=qk_ops.q6k_gemm_kernel(self.out_features, self.in_features, K, self.parts, gemm_opts))[0]
       return out.sum(axis=2).transpose(0, 1).reshape(1, K, self.out_features)
     x_vec = x[:, 0, :].reshape(self.in_features).cast(dtypes.float16).contiguous()
     # Cooperative-K Q6_K decode GEMV (MMVQ_COOP family): the within-block pos becomes a LOCAL lane axis ->
@@ -487,10 +479,9 @@ class Q6KPrimitiveLinear:
     if getenv("Q6K_GEMV_WARP_DOWN") and self.parts == 1 and self.out_features == 4096 and self.in_features == 12288 \
        and (self.in_features // 256) % 2 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
       try:
-        from extra.q6_k_gemv_primitive import q6k_gemv_warp_kernel
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                fxn=q6k_gemv_warp_kernel(self.out_features, self.in_features))[0]
+                                fxn=qk_ops.q6k_gemv_warp_kernel(self.out_features, self.in_features))[0]
         return got.reshape(1, 1, self.out_features)
       except Exception as e:
         if getenv("DEBUG", 0): print(f"Q6K_GEMV_WARP down fallback: {e}")
@@ -502,10 +493,9 @@ class Q6KPrimitiveLinear:
     if getenv("Q6K_DIRECT_ROUTE") and self.parts == 1 and self.out_features >= 100000 \
        and self.out_features % 2 == 0 and DECODE_ATTN_AMDGCN_ARCH_OK:
       try:
-        from extra.q6_k_gemv_primitive import q6k_halfwarp_partition_kernel
         out = Tensor.empty(self.out_features, dtype=dtypes.float32, device=x.device)
         got = out.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                fxn=q6k_halfwarp_partition_kernel(self.out_features, self.in_features))[0]
+                                fxn=qk_ops.q6k_halfwarp_partition_kernel(self.out_features, self.in_features))[0]
         return got.reshape(1, 1, self.out_features)
       except Exception as e:
         if getenv("DEBUG", 0): print(f"Q6K_DIRECT_ROUTE lm_head fallback: {e}")
@@ -524,259 +514,32 @@ class Q6KPrimitiveLinear:
     q6k_gen_selected = _qk_route_policy_selects_q6k_generated(self.out_features, self.in_features)
     q6k_generated = bool(getenv("DECODE_Q6K_GENERATED", 1))
     if q6k_generated:
-      from extra.qk_q6k_route_spec import spec_for_role, emit_q6k_gemv_kernel
-      spec = spec_for_role(self.out_features, self.in_features, role=self.name, parts=self.parts,
-                           row_tile=rt, use_coop=use_coop, opts=self.opts)
+      spec = qk_ops.q6k_spec_for_role(self.out_features, self.in_features, role=self.name, parts=self.parts,
+                                      row_tile=rt, use_coop=use_coop, opts=self.opts)
       partials = Tensor.empty(self.out_features, spec.partial_axis_extent, dtype=dtypes.float32, device=x.device)
-      partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec, fxn=emit_q6k_gemv_kernel(spec))[0]
+      partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec, fxn=qk_ops.emit_q6k_gemv_kernel(spec))[0]
       return partial.sum(axis=1).reshape(1, 1, self.out_features)
     # strict hidden-fallback guard: a policy-selected Q6_K tensor must bind to the generated route. Reaching the
     # shipped hand kernels here means the generated route was rolled back (DECODE_Q6K_GENERATED=0) -> fail loud.
-    if q6k_gen_selected and _QK_ROUTE_POLICY_STRICT:
+    if q6k_gen_selected and qk_route_policy_strict():
       raise ValueError(f"TG_P3_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q6k_coop_generated for Q6_K "
                        f"tensor {self.name!r} (out={self.out_features}, in={self.in_features}) but DECODE_Q6K_GENERATED "
                        f"is off -> it fell back to the shipped hand template")
     if use_coop:
-      from extra.q6_k_gemv_primitive import q6k_coop_partial_kernel
       partials = Tensor.empty(self.out_features, 16, dtype=dtypes.float32, device=x.device)
       partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                       fxn=q6k_coop_partial_kernel(self.out_features, self.in_features, rt))[0]
+                                       fxn=qk_ops.q6k_coop_partial_kernel(self.out_features, self.in_features, rt))[0]
       return partial.sum(axis=1).reshape(1, 1, self.out_features)
-    from extra.q6_k_gemv_primitive import q6k_gemv_partial_kernel
     partials = Tensor.empty(self.out_features, self.parts, dtype=dtypes.float32, device=x.device)
     partial = partials.custom_kernel(self.q6k_storage.halfs.to(x.device), x_vec,
-                                     fxn=q6k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, self.opts))[0]
+                                     fxn=qk_ops.q6k_gemv_partial_kernel(self.out_features, self.in_features, self.parts, self.opts))[0]
     return partial.sum(axis=1).reshape(1, 1, self.out_features)
-
-def should_use_flash_decode(start_pos, T, use_flash:bool=False) -> bool:
-  """Centralized flash-decode selection policy (decode attention). Invariants: single-token decode (T==1) with a
-  symbolic start_pos (the flash-decode kernel needs the symbolic KV length). `FLASH_DECODE` env: "0"/off, "1"/on,
-  "auto" (default). In auto, enable when the trace-time context (the decode-start position, read from the bound
-  start_pos) >= FLASH_DECODE_THRESHOLD (default 512) -- short-context decode <512 stays SDPA, and if the context
-  can't be read we stay SDPA. flash-decode is exact-vs-SDPA up to fp reassociation and measured neutral-or-better
-  at/above the threshold; the crossover is ~ctx384 (flash REGRESSES below ~256: 0.93x @128, 0.95x @256), and it
-  wins above: +12.8% real-generate @ctx520 (byte-identical greedy), 1.05x @512, 1.23x @1024, 1.73x @4096. 512 is
-  the measured safe cutover (Arc 1, docs/qk-8b-attention-fusion-result-20260617.md)."""
-  if not (isinstance(start_pos, UOp) and isinstance(T, int) and T == 1): return False  # decode-only invariant
-  mode = str(getenv("FLASH_DECODE", "auto")).lower()
-  if mode in ("0", "false", "off"): return False                 # force off
-  if use_flash or mode in ("1", "true", "on"): return True       # force on (programmatic or env), invariants hold
-  if mode != "auto": return False                                # unknown value -> conservative SDPA
-  try: ctx = start_pos.unbind()[1] + T                           # decode-start context known at trace/capture time
-  except Exception: return False                                 # can't read context -> conservative SDPA
-  return ctx >= getenv("FLASH_DECODE_THRESHOLD", 512)
 
 def apply_rope(x:Tensor, freqs_cis:Tensor) -> Tensor:
   assert x.shape[-1] % 2 == 0
   cos, sin = freqs_cis.reshape(1, 1, x.shape[2], -1).chunk(2, dim=-1)
   x1, x2 = x.chunk(2, dim=-1)
   return (x1 * cos - x2 * sin).cat(x2 * cos + x1 * sin, dim=-1)
-
-def _q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
-  if ".ffn_gate.weight" in name or ".ffn_up.weight" in name: return 1, ("LOCAL:0:64",)
-  if ".ffn_down.weight" in name: return 4, ("LOCAL:0:32",)
-  if ".attn_q.weight" in name or ".attn_output.weight" in name: return 1, ("LOCAL:0:64",)
-  # PROMOTED default-ON 2026-06-30 (rollback DECODE_ROUTE_ATTN_K=0): attn_k is Q4_K (same as attn_q) but was
-  # omitted here, so it fell to a plain nn.Linear -> the slow generic lazy-dequant GEMV (kernel r_8_32_4_20_4_2_32),
-  # measured 38% of 14B decode. Cover it so it takes the same primitive/generated route as attn_q. Byte-identical;
-  # W==D 14B 27.8->44.5 (+60%), 32B 11.8->21.0 (+78%), 8B 103.5->107.6 (+4%). See
-  # docs/qwen-14b-32b-attn-k-route-miss-result-20260630.md.
-  if ".attn_k.weight" in name and getenv("DECODE_ROUTE_ATTN_K", 1): return 1, ("LOCAL:0:64",)
-  return None
-
-def _q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
-  # ffn_down wins decisively (the dominant Q6_K decode cost). attn_v/output were historically left to the
-  # fused graph; re-measured 2026-06-15 on RX 7900 XTX at full clock they now also win (+5%, 50.8->53.4 tok/s,
-  # byte-identical output). The older "lose to fused graph" claim was likely a clock-ramp-confounded bench.
-  # Default-on (exact dequant, no accuracy risk); set Q6K_COVER_MORE=0 to disable if a model regresses.
-  if ".ffn_down.weight" in name: return 1, ("LOCAL:0:64",)
-  if getenv("Q6K_COVER_MORE", 1):
-    if ".attn_v.weight" in name: return 4, ("LOCAL:0:32",)
-    if name == "output.weight": return 1, ("LOCAL:0:64",)
-  return None
-
-def _qk_policy_value(entry:dict) -> dict:
-  cand = entry.get("candidate") or {}
-  return {
-    "winner": entry.get("winner"), "parts": int(cand.get("parts", 0)),
-    "opts": tuple(cand.get("opts", ())), "family": cand.get("family", ""),
-    "reduction": cand.get("reduction", ""),
-    "policy_reason": entry.get("policy_reason", ""), "storage": entry.get("storage", {}),
-  }
-
-def _load_qk_generated_policy(path:str) -> dict:
-  policy_path = pathlib.Path(path).expanduser()
-  data = json.loads(policy_path.read_text())
-  if data.get("kind") != "qk_generated_policy": raise ValueError(f"{policy_path} is not a QK generated policy cache")
-  if data.get("generator_version") not in (0, 1):
-    raise ValueError(f"{policy_path} has unsupported generator_version={data.get('generator_version')}")
-  by_shape: dict[tuple[int, int, int], dict] = {}
-  by_tensor: dict[tuple[str, int, int, int], dict] = {}
-  for entry in data.get("entries", []):
-    desc, cand = entry.get("descriptor", {}), entry.get("candidate") or {}
-    key = (int(desc["ggml_type"]), int(desc["rows"]), int(desc["cols"]))
-    value = _qk_policy_value(entry)
-    if entry.get("scope") == "tensor":
-      tensor = str(desc.get("tensor", ""))
-      if not tensor: raise ValueError(f"{policy_path} has tensor-scoped entry without descriptor.tensor")
-      tensor_key = (tensor, *key)
-      if tensor_key in by_tensor and by_tensor[tensor_key] != value:
-        raise ValueError(f"{policy_path} has conflicting tensor generated policy entries for key={tensor_key}: "
-                         f"{by_tensor[tensor_key]} vs {value}")
-      by_tensor[tensor_key] = value
-    else:
-      if key in by_shape and by_shape[key] != value:
-        raise ValueError(f"{policy_path} has conflicting generated policy entries for key={key}: {by_shape[key]} vs {value}")
-      by_shape[key] = value
-  if not by_shape and not by_tensor: raise ValueError(f"{policy_path} contains no generated policy entries")
-  return {"by_shape": by_shape, "by_tensor": by_tensor}
-
-def _qk_generated_policy_len(policy:dict|None) -> int:
-  if policy is None: return 0
-  return len(policy.get("by_shape", {})) + len(policy.get("by_tensor", {}))
-
-def _qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, name:str|None=None) -> dict|None:
-  if policy is None: return None
-  if name is not None and (entry:=policy.get("by_tensor", {}).get((name, typ, rows, cols))) is not None: return entry
-  return policy.get("by_shape", {}).get((typ, rows, cols))
-
-_QK_ROUTE_POLICY: dict|None = None
-_QK_ROUTE_POLICY_STRICT = False
-_QK_ROUTE_POLICY_DEBUG = False
-_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_q4k_g3_generated", "decode_q6k_coop_generated",
-                           "prefill_pipe_role_selective_generated"}
-
-def _load_qk_route_policy(path:str) -> dict:
-  policy_path = pathlib.Path(path).expanduser()
-  data = json.loads(policy_path.read_text())
-  if data.get("schema") != "boltbeam.route_policy.v1":
-    raise ValueError(f"{policy_path} is not a boltbeam.route_policy.v1 route policy")
-  selected: dict[str, dict] = {}
-  q4k_g3_rows: list[dict] = []
-  q6k_gen_rows: list[dict] = []
-  prefill_gen_rows: list[dict] = []
-  for row in data.get("routes", []):
-    route_id = row.get("selected_route")
-    if not route_id: continue
-    if route_id not in _SUPPORTED_QK_ROUTE_IDS:
-      raise ValueError(f"{policy_path} selects unsupported route {route_id!r}; supported={sorted(_SUPPORTED_QK_ROUTE_IDS)}")
-    params = dict(row.get("route_params", {}))
-    if route_id == "decode_flash_block_tile_g5_konly":
-      allowed = {"DECODE_FLASH_BLOCK_TILE_G5", "DECODE_FLASH_BLOCK_TILE_G5_KONLY"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params != {"DECODE_FLASH_BLOCK_TILE_G5": "1", "DECODE_FLASH_BLOCK_TILE_G5_KONLY": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select K-only G5 flags, got {params}")
-      selected[route_id] = row
-    elif route_id == "decode_q4k_g3_generated":
-      allowed = {"BUBBLEBEAM_FUTURESIGHT"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"BUBBLEBEAM_FUTURESIGHT": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated G3 route (BUBBLEBEAM_FUTURESIGHT=1), got {params}")
-      shape = row.get("shape", {})
-      try:
-        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
-      except (KeyError, TypeError, ValueError):
-        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
-      if rows_i <= 0 or cols_i <= 0:
-        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
-      q4k_g3_rows.append(row)
-      selected.setdefault(route_id, row)
-    elif route_id == "decode_q6k_coop_generated":
-      allowed = {"DECODE_Q6K_GENERATED"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"DECODE_Q6K_GENERATED": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated Q6_K route (DECODE_Q6K_GENERATED=1), got {params}")
-      shape = row.get("shape", {})
-      try:
-        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
-      except (KeyError, TypeError, ValueError):
-        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
-      if rows_i <= 0 or cols_i <= 0:
-        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
-      q6k_gen_rows.append(row)
-      selected.setdefault(route_id, row)
-    elif route_id == "prefill_pipe_role_selective_generated":
-      allowed = {"PREFILL_GENERATED_SCHEDULE"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"PREFILL_GENERATED_SCHEDULE": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated prefill schedule (PREFILL_GENERATED_SCHEDULE=1), got {params}")
-      shape = row.get("shape", {})
-      try:
-        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
-      except (KeyError, TypeError, ValueError):
-        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
-      if rows_i <= 0 or cols_i <= 0:
-        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
-      prefill_gen_rows.append(row)
-      selected.setdefault(route_id, row)
-    else:
-      selected[route_id] = row
-  return {"path": str(policy_path), "selected": selected, "q4k_g3": q4k_g3_rows, "q6k_gen": q6k_gen_rows,
-          "prefill_gen": prefill_gen_rows}
-
-def _set_qk_route_policy(policy:dict|None, strict:bool=False, debug:bool=False) -> None:
-  global _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG
-  _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG = policy, strict, debug
-
-def _qk_route_policy_selected(route_id:str, shape:dict[str, int]|None=None) -> bool:
-  if _QK_ROUTE_POLICY is None: return False
-  row = _QK_ROUTE_POLICY.get("selected", {}).get(route_id)
-  if row is None: return False
-  if shape is not None:
-    policy_shape = dict(row.get("shape", {}))
-    for k, v in shape.items():
-      if k in policy_shape and int(policy_shape[k]) != int(v): return False
-  return True
-
-def _qk_route_policy_selects_q4k_g3(out_features:int, in_features:int) -> bool:
-  """True if the loaded QK_ROUTE_POLICY selects decode_q4k_g3_generated for a Q4_K weight tensor with these GEMV
-  dims (rows=out_features=N, cols=in_features=K). Per-tensor: matches any selected G3 row whose shape equals the
-  tensor's real dims. BoltBeam owns this selection; when it fires, G3 is the authorized route for the tensor."""
-  if _QK_ROUTE_POLICY is None: return False
-  for row in _QK_ROUTE_POLICY.get("q4k_g3", []):
-    shape = row.get("shape", {})
-    if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
-      return True
-  return False
-
-def _qk_route_policy_selects_q6k_generated(out_features:int, in_features:int) -> bool:
-  """True if the loaded QK_ROUTE_POLICY selects decode_q6k_coop_generated for a Q6_K weight tensor with these GEMV
-  dims (rows=out_features, cols=in_features). BoltBeam owns this selection; when it fires, the spec-driven generated
-  Q6_K route (extra/qk_q6k_route_spec.py) is the authorized route for the tensor."""
-  if _QK_ROUTE_POLICY is None: return False
-  for row in _QK_ROUTE_POLICY.get("q6k_gen", []):
-    shape = row.get("shape", {})
-    if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
-      return True
-  return False
-
-def _qk_route_policy_selects_prefill_generated(out_features:int, in_features:int) -> bool:
-  """True if the loaded QK_ROUTE_POLICY selects prefill_pipe_role_selective_generated for a prefill GEMM weight with
-  these dims (rows=out_features, cols=in_features). BoltBeam owns this selection; when it fires, the spec-driven
-  generated prefill schedule (extra/qk_prefill_schedule_spec.py) is authorized for the tensor."""
-  if _QK_ROUTE_POLICY is None: return False
-  for row in _QK_ROUTE_POLICY.get("prefill_gen", []):
-    shape = row.get("shape", {})
-    if "rows" in shape and "cols" in shape and int(shape["rows"]) == out_features and int(shape["cols"]) == in_features:
-      return True
-  return False
-
-def _validate_qk_route_policy_for_config(policy:dict|None, config:TransformerConfig) -> None:
-  if policy is None: return
-  row = policy.get("selected", {}).get("decode_flash_block_tile_g5_konly")
-  if row is None: return
-  shape = dict(row.get("shape", {}))
-  expected = {"Hq": config.n_heads, "Hkv": config.n_kv_heads, "Hd": config.head_dim}
-  mismatches = {k: (shape.get(k), v) for k, v in expected.items() if k in shape and int(shape[k]) != int(v)}
-  if mismatches and _QK_ROUTE_POLICY_STRICT:
-    raise ValueError(f"QK_ROUTE_POLICY selects decode_flash_block_tile_g5_konly for incompatible model shape: {mismatches}")
-  if _QK_ROUTE_POLICY_DEBUG:
-    print(f"QK_ROUTE_POLICY_DEBUG path={policy.get('path')} selected={sorted(policy.get('selected', {}))} "
-          f"shape={shape} model={expected} compatible={not mismatches}")
 
 def _qk_storage_cap_from_env() -> int|None:
   raw = getenv("QK_PRIMITIVE_MAX_STORAGE_MB", "")
@@ -892,7 +655,6 @@ def _set_module_at(root, path:str, value) -> None:
 
 def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
                             budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar") -> list[Q4KPrimitiveLinear]:
-  from extra.q4_k_gemv_primitive import parse_opt
   supported_generated_families = {"q4_k_packed_u32", "q4_k_packed_u32_direct"}
   raw_words = Tensor(gguf, dtype=dtypes.uint32)
   installed: list[Q4KPrimitiveLinear] = []
@@ -957,7 +719,7 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     else:
       words = source.contiguous() if storage_mode == "q4_ondemand" else source.to(None).contiguous().realize()
       shared_bytes, nonpersistent_bytes = 0, q4_bytes if storage_mode == "q4_ondemand" else 0
-    q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name,
+    q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(qk_ops.q4k_parse_opt(x) for x in opt_specs), name,
                                     q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes, kernel_mode=kernel_mode)
     _set_module_at(model, module_path, q4k_linear)
     installed.append(q4k_linear)
@@ -976,7 +738,6 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
 
 def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
                             budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar") -> list[Q6KPrimitiveLinear]:
-  from extra.q6_k_gemv_primitive import parse_opt
   raw_halfs = Tensor(gguf, dtype=dtypes.uint16)
   installed: list[Q6KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
@@ -1033,7 +794,7 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       halfs, shared_bytes = _shared_packed_view(meta, byte_start, q6_bytes, dtypes.uint16), q6_bytes
     else:
       halfs, shared_bytes = raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous().realize(), 0
-    q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(parse_opt(x) for x in opt_specs), name,
+    q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(qk_ops.q6k_parse_opt(x) for x in opt_specs), name,
                                     q6_bytes, persistent_bytes, storage_mode, shared_bytes, 0)
     _set_module_at(model, module_path, q6k_linear)
     installed.append(q6k_linear)
@@ -1055,15 +816,13 @@ def _demote_q6k_to_q4(model, linears:list, targets:tuple[str, ...]) -> list:
   # quality, fewer per-token bytes -> an operating point llama.cpp's fixed Q4_K_M doesn't offer). `targets`
   # is a tuple of tensor-name substrings (e.g. ("ffn_down","attn_v")) selected by the demotion search;
   # each demoted tensor's (parts, opts) reuse _q4k_policy, with a shape-based fallback for roles it omits.
-  from extra.qk_quantize import quantize_q4_k
-  from extra.q4_k_gemv_primitive import parse_opt
   out = []
   for lin in linears:
     if isinstance(lin, Q6KPrimitiveLinear) and any(t in lin.name for t in targets):
       pol = _q4k_policy(lin.name) or ((4, ("LOCAL:0:32",)) if lin.out_features > 8192 else (1, ("LOCAL:0:64",)))
       parts, opt_strs = pol
-      opts = tuple(parse_opt(x) for x in opt_strs)
-      words = Tensor(quantize_q4_k(lin.weight.numpy())).to(None).contiguous().realize()
+      opts = tuple(qk_ops.q4k_parse_opt(x) for x in opt_strs)
+      words = Tensor(qk_ops.quantize_q4_k(lin.weight.numpy())).to(None).contiguous().realize()
       q4_bytes = lin.out_features * lin.in_features // 256 * 144
       q4 = Q4KPrimitiveLinear(lin.weight, lin.bias, words, lin.out_features, lin.in_features, parts, opts,
                               lin.name, q4_bytes, q4_bytes, "sidecar")
@@ -1200,8 +959,7 @@ class FFNBlock:
     def _run(x:Tensor, start_pos:int|UOp):
       h =     x + self._attention(self.attn_norm(x), start_pos)
       if Q8_FFN_HANDWRITTEN and not hasattr(self, 'ffn_gate_exps'):
-        from extra.q8_ffn_graph_route import route_q8_ffn
-        if (routed := route_q8_ffn(self, h)) is not None: return (h + routed).contiguous()
+        if (routed := qk_ops.route_q8_ffn(self, h)) is not None: return (h + routed).contiguous()
       return (h + self._feed_forward(self.ffn_norm(h))).contiguous()
     return _run(x, start_pos)
 
@@ -1255,7 +1013,6 @@ class TransformerBlock(FFNBlock):
       # P2: Flash-Decoding for batch-1 GQA decode. Splits the symbolic-length KV cache into S chunks
       # -> Hq*S workgroups (saturates the GPU at batch 1, vs SDPA's <1% occupancy at long context).
       # Exact vs SDPA up to fp reassociation. Decode-only (T==1, symbolic start_pos).
-      from extra.qk_flash_decode import flash_decode_attention
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       MAXC, L = self.config.max_context, getenv("FLASH_L", 128)  # Track-3 search: L=128 >= L=256 at every ctx
       vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
@@ -1291,23 +1048,21 @@ class TransformerBlock(FFNBlock):
         # buffer directly. This targets lifecycle cleanliness: generated route + no owned tile + no E_49152.
         # NOTE: relaxing this guard to 14B (Hq=40,G=5) was tried — token-correct but REGRESSES ctx512 -10%
         # (the score-broadcast variant is 8B-tuned); kept 8B-scoped. See attention-combine result doc.
-        from extra.qk_flash_decode import flash_decode_attention_whole_cache
-        out = flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                                 Hd, Hq, Hkv, MAXC, L)
+        out = qk_ops.flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                                        Hd, Hq, Hkv, MAXC, L)
       _g5_shape_ok = B == 1 and Hd == 128 and Hq == 40 and Hkv == 8
       _g5_policy_selected = _qk_route_policy_selected("decode_flash_block_tile_g5_konly",
                                                        {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_shape_ok else False
-      _g5_enabled = _g5_policy_selected if _QK_ROUTE_POLICY is not None else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5", 1))
+      _g5_enabled = _g5_policy_selected if has_qk_route_policy() else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5", 1))
       if out is None and _g5_enabled and _g5_shape_ok:
         # G=5 block tile for 14B (Hq=40/Hkv=8): one warp per GQA group, TK=16 K rows staged in LDS,
         # online softmax + d-sharded PV. Sliced path: l_route=L, grid=Hkv×ceildiv(ctx,L)=32 wg at ctx=512.
         # Default-on (TIER_A +3.9 tok/s ctx512). BoltBeam QK_ROUTE_POLICY selects this route by shape when
         # present; without a policy, rollback remains DECODE_FLASH_BLOCK_TILE_G5=0.
         # DECODE_FLASH_BLOCK_TILE_G5_KONLY=1 (default-on): K_ONLY staging (4KB LDS, V from global/L2).
-        from extra.qk_flash_decode import flash_decode_g5_block_tile
         _g5_staging = "K_ONLY" if (_g5_policy_selected or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
-        out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                         Hd, Hq, Hkv, MAXC, L, staging=_g5_staging)
+        out = qk_ops.flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                                Hd, Hq, Hkv, MAXC, L, staging=_g5_staging)
       # TG-P5: generalize the generated G5 block-tile flash decode to the 8B geometry (Hq=32/Hkv=8, G=4). Same
       # generated UOp route as the 14B G=5 default (WARPS=G is parameterized). Opt-in for the A/B vs the owned HIP
       # tile: DECODE_FLASH_BLOCK_TILE_G5_8B, or BoltBeam QK_ROUTE_POLICY selecting decode_flash_block_tile_g5_konly
@@ -1315,7 +1070,7 @@ class TransformerBlock(FFNBlock):
       _g5_8b_shape = B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 and (Hq // Hkv) == 4
       _g5_8b_policy = _qk_route_policy_selected("decode_flash_block_tile_g5_konly",
                                                 {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_8b_shape else False
-      _g5_8b_enabled = _g5_8b_policy if _QK_ROUTE_POLICY is not None else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5_8B", 0))
+      _g5_8b_enabled = _g5_8b_policy if has_qk_route_policy() else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5_8B", 0))
       if out is None and _g5_8b_shape and _g5_8b_enabled:
         # TG-P9.2: DECODE_ATTN_LIVE_SPLIT_GENERATED=1 uses the live-context split geometry tile (fixed S splits, per-
         # split length scaled to the live Tc) instead of the fixed-L whole-cache tile -- byte-identical output, but
@@ -1323,37 +1078,33 @@ class TransformerBlock(FFNBlock):
         # occupancy split count (= the fixed-L smax_route). Default-off pending the combine primitive (TG-P9.3/9.4).
         _g5_8b_staging = "K_ONLY" if (_g5_8b_policy or getenv("DECODE_FLASH_BLOCK_TILE_G5_KONLY", 1)) else "KV_BOTH"
         if getenv("DECODE_ATTN_LIVE_SPLIT_GENERATED", 0):
-          from extra.qk_live_split_geometry import flash_decode_live_split_block_tile
-          out = flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
-                                                   MAXC // L, staging=_g5_8b_staging)
+          out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
+                                                          MAXC // L, staging=_g5_8b_staging)
         else:
-          from extra.qk_flash_decode import flash_decode_g5_block_tile
-          out = flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                           Hd, Hq, Hkv, MAXC, L, staging=_g5_8b_staging)
+          out = qk_ops.flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                                  Hd, Hq, Hkv, MAXC, L, staging=_g5_8b_staging)
       if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
         # owned AMDGCN tile. This is an attribution/correctness candidate, not a speed candidate. It intentionally
         # reuses the generated UOp flash kernels so the gate can prove whether a generated route can stay route-clean
         # without reintroducing full-KV materialization.
-        out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                     start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                     variant=str(getenv("DECODE_ATTN_GENERATED_SKELETON_VARIANT",
-                                                        getenv("FLASH_VARIANT", "gqa_coop_vec"))))
+        out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
+                                            start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
+                                            variant=str(getenv("DECODE_ATTN_GENERATED_SKELETON_VARIANT",
+                                                               getenv("FLASH_VARIANT", "gqa_coop_vec"))))
       # Attention-combine parity lever (rollback = DECODE_ATTN_FUSED_COMBINE=0, default-off): a GENERATED fused
       # flash-decode kernel that puts the S splits as WAVES in one workgroup per head and does the online-softmax
       # LSE combine IN LDS -> out[h,:], removing the 3 external flash_gmax/den/combine reduce kernels (the ~12-24%
       # attention_combine bucket). Structural shape class (Hkv==8, Hq%Hkv==0, Hd==128), not a model-dim hardcode.
       if out is None and getenv("DECODE_ATTN_FUSED_COMBINE", 0) and B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0:
-        from extra.qk_flash_decode_fused_combine import flash_decode_fused_combine
-        out = flash_decode_fused_combine(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                         Hd, Hq, Hkv, MAXC, getenv("FLASH_COMBINE_L", 256))
+        out = qk_ops.flash_decode_fused_combine(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
+                                                Hd, Hq, Hkv, MAXC, getenv("FLASH_COMBINE_L", 256))
       # DEFAULT-ON (2026-06-23) for the validated gfx1100 / Qwen3-8B / B=1 / T=1 / Hq=32 / Hkv=8 / Hd=128 / ctx>=512
       # shape; strict guards keep every other shape/device on gqa. DECODE_ATTN_AMDGCN_TILE=0 disables.
       if out is None and getenv("DECODE_ATTN_AMDGCN_TILE", 1) and DECODE_ATTN_AMDGCN_ARCH_OK and B == 1 and Hd == 128 and Hq == 32 \
          and Hkv == 8 and (Hq // Hkv) == 4 and _amdgcn_ctx >= getenv("DECODE_ATTN_AMDGCN_MIN_CTX", 512):
         try:
-          from extra.qk_owned_flash_decode_graph_node import amdgcn_flash_decode
           # DTYPE CONTRACT (mandatory): the owned tile kernel reads __half K/V/Q, but the canonical cache_kv is fp32.
           # Without this cast the tile reads fp32 bytes as fp16 -> NaN K -> garbage real-decode tokens (the route was
           # silently broken for real cache; W==D was only validated with a degenerate zero cache). fp16->fp16 is a no-op.
@@ -1364,17 +1115,17 @@ class TransformerBlock(FFNBlock):
             # the WHOLE cache_kv buffer (assigned_kv = cache_kv.after(store), no slice/reshape) so callify reads it
             # directly (no full-MAXC slice materialization E_49152); the whole-cache tile offsets K/V halves. Byte-
             # identical to the slice route; W==D +13-19% (ctx512..4096), tinygrad decode now 102-105% of llama.cpp.
-            out = amdgcn_flash_decode(_Qt, assigned_kv, assigned_kv, vsp,
-                                      getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
-                                      getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"), whole_cache=True,
-                                      # Mode-B tile-constant knobs (default 16/1/1 = shipped kernel, byte-identical):
-                                      tk=getenv("DECODE_ATTN_AMDGCN_TK", 16), vec=getenv("DECODE_ATTN_AMDGCN_VEC", 1),
-                                      unroll=getenv("DECODE_ATTN_AMDGCN_UNROLL", 1))
+            out = qk_ops.amdgcn_flash_decode(_Qt, assigned_kv, assigned_kv, vsp,
+                                             getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
+                                             getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"), whole_cache=True,
+                                             # Mode-B tile-constant knobs (default 16/1/1 = shipped kernel, byte-identical):
+                                             tk=getenv("DECODE_ATTN_AMDGCN_TK", 16), vec=getenv("DECODE_ATTN_AMDGCN_VEC", 1),
+                                             unroll=getenv("DECODE_ATTN_AMDGCN_UNROLL", 1))
           else:
             _Kt, _Vt = assigned_kv[0, 0].cast(dtypes.float16), assigned_kv[1, 0].cast(dtypes.float16)
-            out = amdgcn_flash_decode(_Qt, _Kt, _Vt, vsp,
-                                      getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
-                                      getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"))  # B5: 'base' or 'hd64' cheaper combine
+            out = qk_ops.amdgcn_flash_decode(_Qt, _Kt, _Vt, vsp,
+                                             getenv("DECODE_ATTN_AMDGCN_S", 48), MAXC,
+                                             getenv("DECODE_ATTN_AMDGCN_COMBINE", "base"))  # B5: 'base' or 'hd64' cheaper combine
         except Exception as e:
           if getenv("DEBUG", 0): print(f"DECODE_ATTN_AMDGCN_TILE fallback to gqa_coop_vec: {e}")
           out = None
@@ -1386,14 +1137,13 @@ class TransformerBlock(FFNBlock):
       # and updates flash_partial_coop_vec to index V at offset Hkv*MAXC*Hd. K path unchanged.
       # Rollback: DECODE_BYPASS_KV_SLICE=0. Reopen: if E_49152 eliminated and W==D improves.
       if out is None and getenv("DECODE_BYPASS_KV_SLICE", 0) and B == 1 and (getenv("FLASH_VARIANT", "gqa_coop_vec") == "gqa_coop_vec"):
-        from extra.qk_flash_decode import flash_decode_attention_kv_flat
         kv_flat = assigned_kv.reshape(2 * Hkv * MAXC * Hd)
-        out = flash_decode_attention_kv_flat(q.reshape(Hq, Hd), assigned_kv[0, 0], kv_flat,
-                                             start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
+        out = qk_ops.flash_decode_attention_kv_flat(q.reshape(Hq, Hd), assigned_kv[0, 0], kv_flat,
+                                                    start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
       if out is None:
-        out = flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                     start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                     variant=str(getenv("FLASH_VARIANT", "gqa_coop_vec")))
+        out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
+                                            start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
+                                            variant=str(getenv("FLASH_VARIANT", "gqa_coop_vec")))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif PREFILL_TC_ATTN and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),
@@ -1411,12 +1161,11 @@ class TransformerBlock(FFNBlock):
     out_in = attn if not self.config.attn_output_gate else (attn * gate.sigmoid())
     if getattr(self, '_prefill_v2', False): return _pf16(self.attn_output, out_in).contiguous()  # prefill v2
     if DECODE_MMVQ_IMPORT_Q4 and resolve(T == 1) and out_in.shape == (1, 1, self.config.dim) and hasattr(self.attn_output, "q4k_storage"):
-      from extra.qk_decode_mmvq_graph_route import Q8_BYTES, route_imported_q4_mmvq
       if not hasattr(self, "_decode_mmvq_import_q4_q8"):
-        self._decode_mmvq_import_q4_q8 = Tensor.empty(Q8_BYTES, dtype=dtypes.uint8, device=out_in.device).contiguous().realize()
+        self._decode_mmvq_import_q4_q8 = Tensor.empty(qk_ops.imported_q4_mmvq_q8_bytes(), dtype=dtypes.uint8, device=out_in.device).contiguous().realize()
         self._decode_mmvq_import_q4_out = Tensor.empty(self.config.dim, dtype=dtypes.float32, device=out_in.device).contiguous().realize()
-      routed = route_imported_q4_mmvq(self.attn_output, out_in.cast(dtypes.float32).contiguous(),
-                                      self._decode_mmvq_import_q4_q8, self._decode_mmvq_import_q4_out)
+      routed = qk_ops.route_imported_q4_mmvq(self.attn_output, out_in.cast(dtypes.float32).contiguous(),
+                                             self._decode_mmvq_import_q4_q8, self._decode_mmvq_import_q4_out)
       if routed is not None: return routed
     return self.attn_output(out_in)
 
@@ -1568,11 +1317,9 @@ class Transformer:
       _prefill_v2_validate_ubatch(PREFILL_UBATCH)
       self._pf16_warmstart = self._build_prefill_v2_warmstart()
       if PREFILL_TENSILE_GEMM:   # research-only: build Tensile runners + install routing EAGERLY (outside the prefill trace)
-        from extra.qk_tensile_inmodel import install
-        install()
+        qk_ops.install_tensile()
     if Q8_FFN_HANDWRITTEN:        # research-only: install q8 decode artifacts before block function tracing
-      from extra.q8_ffn_graph_route import install_q8_ffn_artifacts
-      install_q8_ffn_artifacts()
+      qk_ops.install_q8_ffn_artifacts()
 
   # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
   _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
@@ -1767,8 +1514,7 @@ class Transformer:
     # default route is not machine-authored/generated. Rollback/oracle routes are tolerated only when explicitly
     # requested (PURE_MACHINE_SEARCH_ALLOW_ROLLBACK=1). No-op unless PURE_MACHINE_SEARCH_ONLY=1.
     if getenv("PURE_MACHINE_SEARCH_ONLY", 0):
-      from extra.qk_pure_search_guard import assert_pure_machine_search
-      assert_pure_machine_search()
+      qk_ops.assert_pure_machine_search()
     # Prefill policy auto-resolution, BEFORE Transformer() (its __init__ reads PREFILL_V2 to build the warmstart,
     # and the concrete-KV precompile + generate() read PREFILL_CONCRETE_KV). Explicit 0/1 skip these.
     # PREFILL_SERVER_PROFILE=1 implies PREFILL_V2=auto (when V2 unset) + concrete-KV on (when V2 ends up on).
