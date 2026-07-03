@@ -130,7 +130,8 @@ def route_pf16_graph_gemm(lin, x: Tensor) -> Tensor | None:
   # route resolves the SAME schedule params as the legacy path (byte-identical instruction stream) but carries a
   # distinct program name. Rollback to the legacy emit: PREFILL_GENERATED_SCHEDULE=0.
   role = getattr(lin, "_prefill_graph_role", None)
-  from tinygrad.llm.model import _qk_route_policy_selects_prefill_generated, _QK_ROUTE_POLICY_STRICT
+  from tinygrad.llm.model import _qk_route_policy_selects_prefill_generated
+  from tinygrad.llm.route_policy import qk_route_policy_strict
   gen_selected = _qk_route_policy_selects_prefill_generated(out_f, in_f)
   gen_on = bool(getenv("PREFILL_GENERATED_SCHEDULE", 1))
   if gen_on:
@@ -140,7 +141,7 @@ def route_pf16_graph_gemm(lin, x: Tensor) -> Tensor | None:
   else:
     # strict hidden-fallback guard: a policy-selected prefill tensor must bind to the generated schedule; reaching
     # the legacy emit with the generated route rolled back (PREFILL_GENERATED_SCHEDULE=0) under strict fails loud.
-    if gen_selected and _QK_ROUTE_POLICY_STRICT:
+    if gen_selected and qk_route_policy_strict():
       raise ValueError(f"TG_P4_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects prefill_pipe_role_selective_generated "
                        f"for prefill tensor (out={out_f}, in={in_f}) but PREFILL_GENERATED_SCHEDULE is off -> it fell "
                        f"back to the legacy schedule emit")
