@@ -12,6 +12,7 @@ Verdicts: SK4A_PASS_14B_DISCOVERY_RULE_LEARNED / SK4A_REFUTED_14B_SPLIT_K_NO_ROL
 """
 from __future__ import annotations
 import sys, json, math, time, pathlib
+from extra.qk.paths import DEFAULT_MODEL_14B_GGUF
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -47,7 +48,7 @@ def main():
   sk0 = {str(p): {"split_serial_depth": math.ceil(k_blocks / (4 * p)),
                   "serial_speedup_bound": round(direct_serial / math.ceil(k_blocks / (4 * p)), 2)} for p in SPLITS}
 
-  m, kv = Transformer.from_gguf(fetch("/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf"), 2048)
+  m, kv = Transformer.from_gguf(fetch(DEFAULT_MODEL_14B_GGUF), 2048)
   lin = next(L for L in m._q4k_linears.linears if L.in_features == IN_F and L.out_features == OUT_F and "down" in L.name)
   lin.decode_enabled = True
   Tensor.manual_seed(1)

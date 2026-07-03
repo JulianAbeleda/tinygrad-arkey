@@ -11,6 +11,7 @@ Verdict: INKCOMB_MICROGATE_PASS / INKCOMB_MICROGATE_FAIL
 """
 from __future__ import annotations
 import os, sys, json, pathlib
+from extra.qk.paths import DEFAULT_MODEL_14B_GGUF
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -23,7 +24,7 @@ def main():
   from extra.qk.gemv_g3_codegen_lowering import (q4k_g3_lanemap_gemv_kernel,
                                                  q4k_g3_lanemap_gemv_inkernel_combine_kernel)
 
-  model = os.environ.get("QK_MODEL", "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf")
+  model = os.environ.get("QK_MODEL", DEFAULT_MODEL_14B_GGUF)
   m, _tok = load_model_and_tokenizer(model, 4608, seed=20260701)
   reg = getattr(m, "_q4k_linears", None)
   lins = reg.linears if reg else []

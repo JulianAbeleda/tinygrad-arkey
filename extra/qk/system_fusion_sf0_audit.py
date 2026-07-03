@@ -24,11 +24,12 @@ Verdict:
 """
 from __future__ import annotations
 import argparse, json, os, pathlib, re, subprocess, sys, collections, math
+from extra.qk.paths import DEFAULT_MODEL_14B_GGUF
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from extra.qk.decode_role_profile import classify_kernel, profile_from_gguf
 
-MODEL_DEFAULT = "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf"
+MODEL_DEFAULT = DEFAULT_MODEL_14B_GGUF
 CTXS_DEFAULT = [128, 512]
 NSTEPS_DEFAULT = 8    # more steps → better per-kernel timing stability
 MAXC = 4608

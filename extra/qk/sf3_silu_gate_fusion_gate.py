@@ -5,11 +5,12 @@ by resetting KV cache between runs and comparing logit vectors.
 Usage: DEV=AMD PYTHONPATH=. python3 extra/qk/sf3_silu_gate_fusion_gate.py
 """
 import os, sys
+from extra.qk.paths import DEFAULT_MODEL_14B_GGUF
 os.environ.setdefault("DEV", "AMD")
 os.environ.setdefault("JIT", "0")  # eager mode for clean comparison
 
 import numpy as np
-MODEL_PATH = os.environ.get("QK_MODEL", "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf")
+MODEL_PATH = os.environ.get("QK_MODEL", DEFAULT_MODEL_14B_GGUF)
 NSTEPS = 3
 PROMPT_TOKS = [1, 2, 3, 4, 5, 6, 7, 8]
 
