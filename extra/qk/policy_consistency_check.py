@@ -88,7 +88,7 @@ def scan(rel: str, lines: list[str]) -> list[str]:
   return out
 
 
-def main() -> int:
+def build() -> int:
   violations = []
   for rel in CANONICAL:
     p = ROOT / rel
@@ -104,4 +104,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("policy_consistency"))

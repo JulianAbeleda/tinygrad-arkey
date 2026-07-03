@@ -16,7 +16,6 @@ import json, pathlib, datetime
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUTDIR = ROOT / "bench/qk-pure-machine-search-gap"
 CANON = ROOT / "bench/canonical-benchmarks.json"
 DECODE_ATT = ROOT / "bench/qk-pure-search-gap/latest.json"
 PREFILL_READINESS = ROOT / "bench/qk-prefill-search/prefill_search_readiness.json"
@@ -48,7 +47,7 @@ def pct_of(candidate: dict[str, float], baseline: dict[str, float]) -> dict[str,
 def ratio_of(baseline: dict[str, float], candidate: dict[str, float]) -> dict[str, float]:
   return {k: round(baseline[k] / candidate[k], 2) for k in candidate.keys() & baseline.keys() if candidate[k]}
 
-def main() -> int:
+def build() -> dict:
   critical = {"canonical_benchmarks": CANON, "decode_attention_child_audit": DECODE_ATT,
               "prefill_search_readiness": PREFILL_READINESS, "occupancy_guardrail": OCC_GUARD,
               "outer_b_split_contract": OUTER_B}
@@ -241,10 +240,9 @@ def main() -> int:
     ],
     "verdict": verdict,
   }
-  OUTDIR.mkdir(parents=True, exist_ok=True)
-  (OUTDIR / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0
+  return out
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("pure_machine_search_gap"))

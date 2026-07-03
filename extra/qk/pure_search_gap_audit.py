@@ -55,7 +55,7 @@ def ratio(a: float, b: float) -> float:
 def pct(a: float, b: float) -> float:
   return round((a / b) * 100.0, 1) if b else 0.0
 
-def main() -> int:
+def build() -> dict:
   # Track which critical inputs are absent (loaded their default) so the verdict can be marked degraded.
   critical = {"transfer": TRANSFER, "hotloop": HOTLOOP, "isa_vectorization": ISA_VEC,
               "occupancy_guardrail": OCC_GUARD, "outer_b_split_contract": OUTER_B}
@@ -252,11 +252,9 @@ def main() -> int:
     "next_actions": next_actions,
     "verdict": verdict,
   }
-
-  OUTDIR.mkdir(parents=True, exist_ok=True)
-  (OUTDIR / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0
+  return out
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("pure_search_gap"))

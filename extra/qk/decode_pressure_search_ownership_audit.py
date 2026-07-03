@@ -7,11 +7,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 PURE = ROOT / "bench/qk-pure-search-gap/latest.json"
 OCC = ROOT / "bench/qk-decode-occupancy-guardrail/latest.json"
 OUTER = ROOT / "bench/qk-decode-outer-b-split-combine/latest.json"
-OUTDIR = ROOT / "bench/qk-decode-pressure-search-ownership"
 
 def load(p: pathlib.Path): return json.loads(p.read_text()) if p.exists() else {}
 
-def main() -> int:
+def build() -> dict:
   pure, occ, outer = load(PURE), load(OCC), load(OUTER)
   manual = ["DECODE_ATTN_BLOCK_TILE", "DECODE_STAGE_COALESCE", "COALESCED_LOAD_LOWERING", "SCHED_UNROLL", "SCHED_LIST", "DECODE_FAST_EXP2"]
   out = {
@@ -27,10 +26,9 @@ def main() -> int:
     "promotion_blocker": "manual winning flags and outer-b lowering are not BubbleBeam-owned",
     "verdict": "PRESSURE_SEARCH_OWNERSHIP_PARTIAL__GUARDRAIL_AND_VOCAB_PRESENT__LOWERING_AND_FLAG_BINDING_REMAIN"
   }
-  OUTDIR.mkdir(parents=True, exist_ok=True)
-  (OUTDIR / "latest.json").write_text(json.dumps(out, indent=2) + "\n")
-  print(json.dumps(out, indent=2))
-  return 0
+  return out
 
 if __name__ == "__main__":
-  raise SystemExit(main())
+  import sys; sys.path.insert(0, str(ROOT))
+  from extra.qk.gate_registry import run
+  raise SystemExit(run("pressure_search_ownership"))
