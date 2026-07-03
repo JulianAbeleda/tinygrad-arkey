@@ -2,7 +2,7 @@
 
 Current benchmarks for the fork (Qwen3-8B-Q4_K_M, gfx1100 RX 7900 XTX): the number, and how to reproduce it.
 Canonical state: `../docs/current-project-state-handoff-20260624.md`. Most `bench/**` output is gitignored
-(regeneratable); durable artifacts are force-added.
+(regeneratable); durable artifacts are force-added only when they are current authority or compact evidence.
 
 ## Current numbers
 
@@ -44,4 +44,5 @@ DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_prefill_whole_synced.py
 DEV=AMD PREFILL_GEMM_PIPELINE=0 PYTHONPATH=. .venv/bin/python extra/qk_prefill_whole_synced.py
 ```
 
-History: `../docs/archive/` + `../docs/provenance-index-20260624.md`.
+History: removed archive provenance is available through git history; do not use old provenance maps as current
+authority.

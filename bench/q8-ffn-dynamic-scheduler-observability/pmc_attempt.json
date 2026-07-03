@@ -1,7 +1,0 @@
-{
-  "attempted": true,
-  "returncode": 0,
-  "stdout_tail": "{\n  \"out\": \"/home/ubuntu/tinygrad-arkey/bench/q8-ffn-dynamic-scheduler-observability/pmc_q8_gateup_full.json\",\n  \"verdict\": \"FAIL\",\n  \"correctness\": {\n    \"gate_max_abs\": 9.5367431640625e-07,\n    \"gate_mean_abs\": 1.2431685547653615e-07,\n    \"up_max_abs\": 1.430511474609375e-06,\n    \"up_mean_abs\": 2.3386444070183643e-07\n  },\n  \"median_us\": 5374.835,\n  \"gates\": {\n    \"gate_correct_lte_2e_3\": true,\n    \"up_correct_lte_2e_3\": true,\n    \"consumer_lte_60us\": false,\n    \"no_external_artifact\": true\n  }\n}\n",
-  "target": "q8_ffn_asm_gateup_full",
-  "verdict": "PASS_Q8_PROFILE_RUN"
-}

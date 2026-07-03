@@ -1,3 +1,4 @@
+from __future__ import annotations
 import collections, time
 from typing import Any, cast
 from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, suppress_finalizing, TracingKey, unwrap
@@ -6,7 +7,6 @@ from tinygrad.device import Buffer, BufferSpec, Compiled, Device, MultiBuffer, P
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import UOp, Ops, Variable
 from tinygrad.engine.jit import GraphRunner, MultiGraphRunner
-from tinygrad.runtime.ops_rdma import RDMACopyQueue
 
 class HCQGraph(MultiGraphRunner):
   def __init__(self, *args, **kwargs):
@@ -50,7 +50,7 @@ class HCQGraph(MultiGraphRunner):
 
     self.comp_queues: dict[HCQCompiled, HWQueue] = {dev: unwrap(dev.hw_compute_queue_t)() for dev in self.devices}
     self.copy_queues: dict[tuple[HCQCompiled, int], HWQueue] = {} # lazy allocation, keyed by (device, queue_idx)
-    self.rdma_queues: dict[tuple[HCQCompiled, HCQCompiled], RDMACopyQueue] = {} # lazy allocation, keyed by device pair
+    self.rdma_queues: dict[tuple[HCQCompiled, HCQCompiled], Any] = {} # disabled in this fork; kept for explicit unsupported-path checks
     self.num_copy_queues: int = getenv("HCQ_NUM_SDMA", min(len(self.devices), 8) if ALL2ALL >= 1 else 1)
     self.num_rdma_ops: dict[tuple[HCQCompiled, HCQCompiled], int] = collections.defaultdict(int)
 
@@ -102,9 +102,7 @@ class HCQGraph(MultiGraphRunner):
       if runtime is not None:
         enqueue_queue = self.comp_queues[enqueue_dev]
       elif is_rdma:
-        enqueue_queue = self.comp_queues[enqueue_dev]
-        rdma_key = (cast(HCQCompiled, Device[bufs[0].device]).rdma_dev(), enqueue_dev.rdma_dev())
-        self.rdma_queues.setdefault(rdma_key, RDMACopyQueue(enqueue_dev.rdma_dev()))
+        raise RuntimeError("RDMA peer-copy path was removed from this fork; use same-peer copies.")
       else:
         assert (enqueue_dev.hw_copy_queue_t is not None), "device must implement a copy queue"
         queue_idx = self.devices.index(cast(HCQCompiled, Device[bufs[0].device])) % self.num_copy_queues

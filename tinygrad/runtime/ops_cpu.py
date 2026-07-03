@@ -6,7 +6,6 @@ from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQBuffer, H
 from tinygrad.runtime.support.hcq import CLikeArgsState
 from tinygrad.renderer.cstyle import ClangRenderer
 from tinygrad.renderer.llvmir import CPULLVMRenderer
-from tinygrad.renderer.nir import LVPRenderer
 from tinygrad.renderer.isa.x86 import X86Renderer
 from tinygrad.runtime.support.elf import jit_loader
 from tinygrad.uop.ops import sint
@@ -80,7 +79,7 @@ class CPUProgram(HCQProgram):
   def __init__(self, dev, name:str, lib:bytes, runtimevars:dict[str, int]|None=None, **kwargs):
     self.runtimevars = runtimevars or {}
 
-    LVP = isinstance(dev.renderer, LVPRenderer)
+    LVP = False
     if sys.platform == "win32": # mypy doesn't understand when WIN is used here
       PAGE_EXECUTE_READWRITE, MEM_COMMIT, MEM_RESERVE = 0x40, 0x1000, 0x2000
       ctypes.windll.kernel32.VirtualAlloc.restype = ctypes.c_void_p
@@ -138,5 +137,5 @@ class CPUDevice(HCQCompiled):
   def __init__(self, device:str=""):
     self.tasks:queue.Queue = queue.Queue()
     CPUWorker(self, self.tasks, thread_id=0).start()
-    super().__init__(device, CPUAllocator(self), [ClangRenderer, CPULLVMRenderer, LVPRenderer, X86Renderer], functools.partial(CPUProgram, self),
+    super().__init__(device, CPUAllocator(self), [ClangRenderer, CPULLVMRenderer, X86Renderer], functools.partial(CPUProgram, self),
                      CPUSignal, CPUComputeQueue, arch={'amd64':'x86_64', 'aarch64':'arm64'}.get(m:=platform.machine().lower(), m)+",native")

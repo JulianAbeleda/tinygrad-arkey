@@ -1,7 +1,7 @@
 # docs/ — map
 
-Navigation source-of-truth for this fork's docs. **Current state only** — read the canonical docs below; treat
-anything under `docs/archive/` as provenance, not current state.
+Navigation source-of-truth for this fork's docs. **Current state only** — read the canonical docs below; old
+archive provenance was removed from the tracked tree and remains available through git history.
 
 ## ⭐ Start here (canonical)
 
@@ -19,7 +19,7 @@ anything under `docs/archive/` as provenance, not current state.
 - **`gpu-lifecycle-primitive-coverage-tracker-20260624.md`** — per-primitive coverage vs llama (decode ~101.7–105%,
   prefill ~114.5% pp512).
 - **`prefill-decode-next-workstreams-codex-scope-20260624.md`** — current next-work map.
-- **`provenance-index-20260624.md`** — the archive map (what moved, where current authority lives).
+- Historical archive maps were removed with the tracked archive; use git history when tracing old probe logs.
 
 ## Decode (current)
 
@@ -56,7 +56,7 @@ Q4_K decode uses generated G3 where eligible. Q6_K direct half-warp is refuted; 
 
 ## References
 
-- **tinygrad docs (current):** `developer/` (am, hcq, runtime, speed, uop), `tensor/`, and upstream
-  `index.md` / `quickstart.md` / `mnist.md` / `nn.md` / `dtypes.md` / `env_vars.md`.
-- **History & subsystem docs:** `docs/archive/` is provenance only; prefer current docs and BoltBeam ledgers for
-  decisions.
+- **tinygrad docs (current):** `developer/` (am, hcq, runtime, speed, uop), `tensor/`, and upstream-derived
+  `index.md` / `quickstart.md` / `nn.md` / `dtypes.md` / `env_vars.md`.
+- **History & subsystem docs:** prefer current docs and BoltBeam ledgers for decisions; removed archive provenance
+  is recoverable from git history when tracing an old result.

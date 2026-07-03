@@ -1,8 +1,8 @@
 # Current Project State — Handoff (2026-06-30 refresh)
 
 Canonical, high-signal snapshot. If anything elsewhere contradicts this file, this file wins.
-Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M. Supersedes the 2026-06-21 handoff (now in
-`docs/archive/`), whose `~67% llama` decode baseline and "bounded decode RESTED / capped at backend
+Machine: gfx1100 RX 7900 XTX 24GB, Qwen3-8B-Q4_K_M. Supersedes the 2026-06-21 handoff (available from
+git history), whose `~67% llama` decode baseline and "bounded decode RESTED / capped at backend
 ceiling" frontier were overturned by the 06-22→06-30 campaign (owned attention tile + buffer-identity fix,
 generated G3 Q4_K route parity, Q6_K direct-route refutation, and prefill pipe promotion).
 
@@ -60,8 +60,8 @@ TIER_A win and is the more promising frontier for further role-selective pipelin
 4. `docs/decode-campaign-final-synthesis-20260623.md` — how decode reached parity.
 5. `docs/prefill-decode-next-workstreams-codex-scope-20260624.md` — next-work map.
 
-Historical provenance (the full 06-16→06-22 probe log, superseded results, completed scopes) lives in
-`docs/archive/` and is indexed by `docs/provenance-index-20260624.md`. It is kept for history, **not authority**.
+Historical provenance from the full 06-16→06-22 probe log, superseded results, and completed scopes was removed
+from the tracked tree. Recover it from git history when needed; it is history, **not authority**.
 
 ## Consistency guardrail
 Run `DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk_policy_consistency_check.py` — it scans the canonical

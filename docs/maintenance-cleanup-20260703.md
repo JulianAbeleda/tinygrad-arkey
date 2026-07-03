@@ -10,11 +10,18 @@ This pass tightened the tinygrad/BoltBeam boundary after the decouple audit.
   `qk_artifact_cache_inventory.py`, `qk_decode_primitive_candidate_template.py`, `qk_descriptor_policy.py`,
   `qk_search_spec.py`, and `qk_semantic_candidate.py`.
 
+## Removed In Follow-Up
+
+- `docs/archive/` provenance. It made the active docs surface too large and is still recoverable through git
+  history.
+- Stale repo/docs cleanup bench folders: `bench/qk-docs-archive`, `bench/qk-active-surface-reduction`, and
+  `bench/qk-repo-principles-cleanup`.
+
 ## Kept In tinygrad
 
 - Runtime/compiler/hardware harnesses.
 - Runner adapters that execute tinygrad or emit evidence JSON for BoltBeam.
-- `docs/archive/` provenance, because current docs still cite it for historical traceability.
+- Compact current authority docs and benchmark artifacts referenced by the live docs.
 
 ## Boundary Rule
 

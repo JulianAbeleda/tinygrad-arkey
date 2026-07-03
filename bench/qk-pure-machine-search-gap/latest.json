@@ -1,11 +1,11 @@
 {
   "schema": "qk_pure_machine_search_gap_audit_v1",
-  "date": "2026-06-27",
+  "date": "2026-07-03",
   "inputs": {
     "canonical_benchmarks": "bench/canonical-benchmarks.json",
     "decode_attention_child_audit": "bench/qk-pure-search-gap/latest.json",
     "prefill_search_readiness": "bench/qk-prefill-search/prefill_search_readiness.json",
-    "prefill_long_context_hardening_doc": "docs/archive/prefill-long-context-integration-hardening-result-20260624.md",
+    "prefill_long_context_hardening_doc": "docs/prefill-long-context-integration-nonsearch-fix-result-20260624.md",
     "gemv_scope": "docs/gemv-pure-search-generated-route-scope.md",
     "occupancy_guardrail": "bench/qk-decode-occupancy-guardrail/latest.json",
     "outer_b_split_contract": "bench/qk-decode-outer-b-split-combine/latest.json",
@@ -75,10 +75,10 @@
       "verdict": "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV",
       "gate_evidence": {
         "bubblebeam_pct_of_baseline": {
-          "4096": 101.8,
-          "1024": 101.8,
+          "2048": 101.8,
           "512": 101.9,
-          "2048": 101.8
+          "4096": 101.8,
+          "1024": 101.8
         },
         "parity_min_pct": 99.0,
         "parity_holds": true,
@@ -98,10 +98,10 @@
           "4096": 94.4
         },
         "bubblebeam_pct_of_baseline": {
-          "4096": 101.8,
-          "1024": 101.8,
+          "2048": 101.8,
           "512": 101.9,
-          "2048": 101.8
+          "4096": 101.8,
+          "1024": 101.8
         }
       },
       "primitive_vocab": {
@@ -150,18 +150,18 @@
           "8192": 2869.33
         },
         "aggressive_pct_of_baseline": {
-          "1024": 125.6,
+          "512": 128.5,
           "4096": 100.4,
+          "1024": 125.6,
           "8192": 80.4,
-          "2048": 117.2,
-          "512": 128.5
+          "2048": 117.2
         },
         "baseline_over_aggressive_ratio": {
-          "1024": 0.8,
+          "512": 0.78,
           "4096": 1.0,
+          "1024": 0.8,
           "8192": 1.24,
-          "2048": 0.85,
-          "512": 0.78
+          "2048": 0.85
         },
         "aggressive_proven_whole_prefill": false,
         "long_context_status": "flat_512_to_8192"

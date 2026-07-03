@@ -1,14 +1,11 @@
-import glob, importlib, os, pathlib, shutil, subprocess, tarfile, tempfile
+import glob, importlib, os, pathlib, subprocess, tarfile, tempfile
 from tinygrad.helpers import fetch, flatten, system, getenv
 
 root = (here:=pathlib.Path(__file__).parent).parents[2]
-ffmpeg_src = "https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.gz"
 rocr_src = "https://github.com/ROCm/rocm-systems/archive/refs/tags/rocm-7.1.1.tar.gz"
 linux_headers_deb = "https://snapshot.debian.org/archive/debian/20260207T145350Z/pool/main/l/linux/linux-libc-dev_6.18.9-1_all.deb"
-linux_headers_kern_deb = "https://snapshot.debian.org/archive/debian/20260207T145350Z/pool/main/l/linux/linux-headers-6.18.9+deb14-common_6.18.9-1_all.deb"
 liburing_src = "https://raw.githubusercontent.com/axboe/liburing/refs/tags/liburing-2.14/src/include/liburing.h"
 ggml_common_src = "https://raw.githubusercontent.com/ggml-org/ggml/d4fcfe88a8bcf5c9840be14be6c2fbf1f5b3b2db/src/ggml-common.h"
-nvrtc_src = "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/linux-x86_64/cuda_nvrtc-linux-x86_64-12.0.140-archive.tar.xz"
 macossdk = "/var/db/xcode_select_link/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 
 llvm_lib = (
@@ -16,9 +13,6 @@ llvm_lib = (
   (mac_llvm:=repr([f'/opt/homebrew/opt/llvm@{i}/lib/libLLVM.dylib' for i in reversed(range(14, 21+1))]) + " if OSX else ") +
   (other_llvm:=repr(['LLVM'] + [f'LLVM-{i}' for i in reversed(range(14, 21+1))])))
 clang_lib = win_llvm.replace("LLVM-C", "libclang") + (mac_llvm + other_llvm).replace("LLVM", "clang")
-
-nv_lib_path = ("[f'/{pre}/cuda/targets/{tgt}/lib' for pre in ['opt', 'usr/local'] for tgt in "
-               "[sysconfig.get_config_vars().get(\"MULTIARCH\", \"\").rsplit(\"-\", 1)[0], 'sbsa-linux']]")
 
 def load(name, files, **kwargs):
   if not (f:=(root/(path:=kwargs.pop("path", __name__)).replace('.','/')/f"{name}.py")).exists() or getenv('REGEN'):
@@ -48,9 +42,6 @@ def __getattr__(nm):
       return load("libc", lambda: ([i for i in system("dpkg -L libc6-dev").split() if 'sys/mman.h' in i or 'bits/mman-shared.h' in i] +
                                    ["/usr/include/string.h", "/usr/include/elf.h", "/usr/include/unistd.h", "/usr/include/asm-generic/mman-common.h"]),
                   args=["-D__USE_GNU", "-D_GNU_SOURCE"], dll="'c'", errno=True, recsym=True)
-    case "avcodec": return load("avcodec", ["{}/libavcodec/hevc/hevc.h", "{}/libavcodec/cbs_h265.h"], srcs=ffmpeg_src)
-    case "nvrtc": return load("nvrtc", ["{}/include/nvrtc.h"], dll="'nvrtc'", paths=nv_lib_path, srcs=nvrtc_src, prolog=["import sysconfig"])
-    case "nvjitlink": load("nvjitlink", [root/"extra/nvJitLink.h"], dll="'nvJitLink'", paths=nv_lib_path, prolog=["import sysconfig"])
     case "kfd": return load("kfd", [root/"extra/hip_gpu_driver/kfd_ioctl.h"])
     # this defines all syscall numbers. should probably unify linux autogen?
     case "io_uring":
@@ -89,30 +80,6 @@ def __getattr__(nm):
       return load("rocprof", [f"{{}}/include/{s}.h" for s in ["rocprof_trace_decoder", "trace_decoder_instrument", "trace_decoder_types"]],
                   dll= "['rocprof-trace-decoder', p:='/usr/local/lib/rocprof-trace-decoder.so', p.replace('so','dylib')]",
                   srcs="https://github.com/ROCm/rocprof-trace-decoder/archive/dd0485100971522cc4cd8ae136bdda431061a04d.tar.gz")
-    case "mesa": return load("mesa", [
-        *[f"{{}}/src/compiler/nir/{s}.h" for s in ["nir", "nir_builder", "nir_shader_compiler_options", "nir_serialize"]], "{}/gen/nir_intrinsics.h",
-        *[f"{{}}/src/nouveau/{s}.h" for s in ["headers/nv_device_info", "compiler/nak"]],
-        *[f"{{}}/src/gallium/auxiliary/gallivm/lp_bld{s}.h" for s in ["", "_passmgr", "_misc", "_type", "_init", "_nir", "_struct", "_jit_types",
-                                                                     "_flow", "_const"]],
-        *[f"{{}}/src/freedreno/{s}.h" for s in ["common/freedreno_dev_info", "ir3/ir3_compiler", "ir3/ir3_shader", "ir3/ir3_nir"]],
-        "{}/src/compiler/glsl_types.h", "{}/src/util/blob.h", "{}/src/util/ralloc.h", "{}/gen/ir3-isa.h", "{}/gen/builtin_types.h",
-        "{}/gen/a6xx.xml.h", "{}/gen/adreno_pm4.xml.h", "{}/gen/a6xx_enums.xml.h", "{}/gen/a6xx_descriptors.xml.h"], args=lambda:[
-          "-DHAVE_ENDIAN_H", "-DHAVE_STRUCT_TIMESPEC", "-DHAVE_PTHREAD", "-DHAVE_FUNC_ATTRIBUTE_PACKED", "-I{}/src", "-I{}/include", "-I{}/gen",
-          "-I{}/src/compiler/nir", "-I{}/src/gallium/auxiliary", "-I{}/src/gallium/include", "-I{}/src/freedreno/common",
-          f"-I{system('llvm-config-20 --includedir')}"],
-        preprocess=lambda path: subprocess.run("\n".join(["mkdir -p gen/util/format", "python3 src/compiler/builtin_types_h.py gen/builtin_types.h",
-          "python3 src/compiler/isaspec/decode.py --xml src/freedreno/isa/ir3.xml --out-c /dev/null --out-h gen/ir3-isa.h",
-          "python3 src/util/format/u_format_table.py src/util/format/u_format.yaml --enums > gen/util/format/u_format_gen.h",
-          *["python3 src/freedreno/registers/gen_header.py --rnn src/freedreno/registers/ --xml " +
-            f"src/freedreno/registers/adreno/{s}.xml c-defines > gen/{s}.xml.h" for s in ["a6xx", "adreno_pm4", "a6xx_enums", "a6xx_descriptors"]],
-          *[f"python3 src/compiler/{s}_h.py > gen/{s.split('/')[-1]}.h" for s in ["nir/nir_opcodes", "nir/nir_builder_opcodes"]],
-          *[f"python3 src/compiler/nir/nir_{s}_h.py --outdir gen" for s in ["intrinsics", "intrinsics_indices"]]]), cwd=path, shell=True, check=True),
-  srcs="https://gitlab.freedesktop.org/mesa/mesa/-/archive/mesa-25.2.7/mesa-25.2.7.tar.gz",
-  dll="'tinymesa_cpu' if (_cpu:=DEV.renderer == 'LVP') else 'tinymesa', " \
-      'emsg="not available on this platform" if WIN or (OSX and (platform.machine() != "arm64" or (_mv:=platform.mac_ver()[0][:2]) not in {"14","15","26"})) or (platform.system() == "Linux" and platform.machine() not in {"x86_64", "aarch64"}) else ' \
-      'f"run `sudo curl -fL https://github.com/sirhcm/tinymesa/releases/download/v1/libtinymesa{\'_cpu\'*_cpu}-mesa-25.2.7-{\'macos-\'+_mv if OSX else \'linux\'}-{\'amd64\' if ARCH_X86 else \'arm64\'}.{\'dylib\' if OSX else \'so\'} -o /usr/local/lib/libtinymesa{\'_cpu\'*_cpu}.{\'dylib\' if OSX else \'so\'}`"',
-  prolog=["from tinygrad.helpers import DEV, ARCH_X86, WIN, OSX", "import gzip, base64, platform"],
-  epilog=lambda path: [system(f"{root}/extra/mesa/lvp_nir_options.sh {path}")])
     case "libclang":
       return load("libclang",
                   lambda: [f"{system('llvm-config-20 --includedir')}/clang-c/{s}.h" for s in ["Index", "CXString", "CXSourceLocation", "CXFile"]],
@@ -124,11 +91,4 @@ def __getattr__(nm):
                                        dll="'CoreFoundation'",args=["-isysroot", macossdk])
     case "ggml_common": return load("ggml_common", ["{}/ggml-common.h"], srcs=ggml_common_src,
                                     args=["-DGGML_COMMON_DECL_C", "-DGGML_COMMON_IMPL_C"], macros=False)
-    case "mlx5":
-      kh = "{}/usr/src/linux-headers-6.18.9+deb14-common/include/linux/mlx5"
-      return load("mlx5", [root/"extra/mlx_driver/mlx5.h", f"{kh}/mlx5_ifc.h"], srcs=linux_headers_kern_deb,
-                  args=["-Du8=unsigned char", "-Du16=unsigned short", "-Du32=unsigned int", "-Du64=unsigned long long",
-                        "-D__be16=unsigned short", "-D__be32=unsigned int", "-D__be64=unsigned long long", f"-I{kh}"],
-                  preprocess=lambda path: subprocess.run(f"ar x {linux_headers_kern_deb.split('/')[-1]} && tar xf data.tar.xz",
-                                                         cwd=path, shell=True, check=True))
     case _: raise AttributeError(f"no such autogen: {nm}")

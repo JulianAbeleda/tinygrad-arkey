@@ -39,7 +39,7 @@ Use `Purpose/` for role alignment.
 - `machine-search-decode-context-plan-2026-06-16.md` — the active machine-search direction.
 - `amd-optimization-checklist.md` — the AMD perf-work checklist.
 - Audits/manifests (2026-06-16): `repo-audit-*`, `upstream-audit-*`, `qk-script-audit-*`,
-  `repo-script-map-*`, `principles-grade-*`, `hardfork-prune-{plan,manifest}.md`.
+  `repo-script-map-*`, `principles-grade-*`.
 - Sub-arc handoffs: `codex-cleanup-*`, `flywheel-rewrite-status.md`.
 
 For the engineering work itself (decode/prefill/MMVQ), the source of truth is `../../docs/README.md` (doc map).

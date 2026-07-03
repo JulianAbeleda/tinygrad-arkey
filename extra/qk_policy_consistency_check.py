@@ -19,10 +19,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CANONICAL = [
   "docs/README.md", "bench/README.md",
   "docs/current-project-state-handoff-20260624.md",
-  # superseded docs moved under docs/archive/ in the 2026-06-24 declutter; still scanned for closed-question hygiene
-  "docs/archive/current-project-state-handoff-20260621.md",
-  "docs/archive/decode-prefill-headline-reconciliation-result-20260621.md",
-  "docs/archive/prefill-policy-integration-result-20260620.md",
 ]
 # explanatory context that makes an `87.6` mention legitimate (it is being explained/closed, not quoted as headline)
 _87_OK = ("ctx", "ms", "coincid", "ambig", "11.4", "contextual", "empty-kv", "empty kv", "never quote", "ms/token",
