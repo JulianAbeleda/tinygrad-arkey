@@ -18,12 +18,15 @@ def exponent_bias(d:DType) -> int: return (1 << (dtypes.finfo(d.scalar())[0] - 1
 def exponent_mask(d:DType) -> int: return (1 << dtypes.finfo(d.scalar())[0]) - 1
 
 # **** utils ****
+# the integer / unsigned dtype of the same bit width as a float dtype (callers apply .vec(...) themselves).
+_INT_OF_SAME_WIDTH = {dtypes.float64: dtypes.int64, dtypes.float32: dtypes.int32, dtypes.float16: dtypes.int16}
+_UINT_OF_SAME_WIDTH = {dtypes.float64: dtypes.uint64, dtypes.float32: dtypes.uint32, dtypes.float16: dtypes.uint16}
 def shr(x:UOp|int, y:UOp|int) -> UOp: return x // (2**(y.simplify().arg) if isinstance(y, UOp) else 2**y)
 def shl(x:UOp|int, y:UOp|int) -> UOp: return x * (2**(y.simplify().arg) if isinstance(y, UOp) else 2**y)
 
 def rintk(d:UOp) -> UOp:
   """round d:float to int away from 0"""
-  out_dtype = {dtypes.float64: dtypes.int64, dtypes.float32: dtypes.int32, dtypes.float16: dtypes.int16}[d.dtype.scalar()].vec(d.dtype.vcount)
+  out_dtype = _INT_OF_SAME_WIDTH[d.dtype.scalar()].vec(d.dtype.vcount)
   return (d + (d<0.0).where(d.const_like(-0.5), d.const_like(0.5))).cast(out_dtype)
 
 def pow2if(q:UOp, float_dtype:DType):
@@ -34,14 +37,14 @@ def pow2if(q:UOp, float_dtype:DType):
 def ilogb2k(d:UOp) -> UOp:
   """calculate the integer part of log2(d), where d is normalized fp value in the range of [0, +inf)."""
   assert d.dtype.scalar() in TRANSCENDENTAL_DTYPES
-  dint = d.bitcast({dtypes.float64: dtypes.int64, dtypes.float32: dtypes.int32, dtypes.float16: dtypes.int16}[d.dtype.scalar()].vec(d.dtype.vcount))
+  dint = d.bitcast(_INT_OF_SAME_WIDTH[d.dtype.scalar()].vec(d.dtype.vcount))
   # -1 <= ilog2bk(d) <= 128
   return (shr(dint, mantissa_bits(d.dtype)) & exponent_mask(d.dtype)) - exponent_bias(d.dtype)
 
 def ldexp3k(d:UOp, e:UOp) -> UOp:
   """d*2^e. e is a number obtained by casting an integer in the range [-127, 127] to a float. d is any float number."""
   assert d.dtype.scalar() in TRANSCENDENTAL_DTYPES and e.dtype.scalar() in TRANSCENDENTAL_DTYPES
-  dtype = {dtypes.float64: dtypes.int64, dtypes.float32: dtypes.int32, dtypes.float16: dtypes.int16}[d.dtype.scalar()].vec(d.dtype.count)
+  dtype = _INT_OF_SAME_WIDTH[d.dtype.scalar()].vec(d.dtype.count)
   m1 = d.bitcast(dtype)
   m2 = shl(e.cast(dtype), mantissa_bits(d.dtype))
   return (m1 + m2).bitcast(d.dtype)
@@ -57,7 +60,7 @@ def frexp(v:UOp) -> tuple[UOp, UOp]:
   # m1 = masks for mantissa, m2 = masks to normalize the mantissa.
   m1 = {dtypes.float64: 0x000FFFFFFFFFFFFF, dtypes.float32: 0x807FFFFF, dtypes.float16: 0x83FF}[v.dtype.scalar()]
   m2 = {dtypes.float64: 0x3FE0000000000000, dtypes.float32: 0x3F000000, dtypes.float16: 0x3800}[v.dtype.scalar()]
-  bits = v.bitcast({dtypes.float64: dtypes.uint64, dtypes.float32: dtypes.uint32, dtypes.float16: dtypes.uint16}[v.dtype.scalar()].vec(v.dtype.count))
+  bits = v.bitcast(_UINT_OF_SAME_WIDTH[v.dtype.scalar()].vec(v.dtype.count))
   exponent = shr(bits, mantissa_bits(v.dtype)) & exponent_mask(v.dtype)
   # Set the exponent bits appropriately to normalize the mantissa into the range of [0.5, 1.0).
   mantissa = ((bits & m1) | m2).bitcast(v.dtype)
