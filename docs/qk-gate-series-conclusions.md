@@ -26,6 +26,17 @@ accumulator REG scalar, or a DEVEC path that lowers the max-reduce correctly. Th
 a compiler-primitive gap, not a decode-attention design failure — the math primitives
 are all proven correct (Cluster A P11–P14).
 
+**UPDATE (2026-07-03, observed at collapse time):** the wall appears to have SHIFTED.
+Both TG-P9.4 (Cluster E) and TG-P10.1 (Cluster A) now *compile* the shared-weight /
+inline-gmax / fused-gmax combines that previously hit `invalid_reg_vector_store` —
+TG-P9.4 → `TG_P9_4_PASS_COMBINE_MICROGATE`, TG-P10.1 → `TG_P10_1_BLOCKED_REPRO_NOT_MINIMAL`
+(`fails=[]`, `devec_nan=False`). Something in the codegen path (or the concurrent
+rope-at-read / kv_load work) moved it. This is a live lead, not a settled conclusion:
+re-run both gates and, if the combine truly lowers correctly now, the decode-attention
+combine that was blocked on this wall may be unblocked — worth a fresh W==D attempt.
+Related: Cluster A P9 now yields `FAIL__NAN` (flash_decode leaves NaN in inactive-slot
+pv), a separate current-tree regression in the scalar tile path worth checking.
+
 ## Cluster A — online-state x-lane family (P8–P15 + TG-P10.1)
 
 Arc: P9 (scalar tile vs NumPy, the base) → P8/P10 (x-lane state / final-output vs ref)
@@ -90,4 +101,6 @@ Format: `series | files retired | collapsed into | commit`. (Appended per cluste
 
 - **Cluster B (asm scheduler)** | `asm_scheduler_inc0_test.py`, `asm_scheduler_inc1_test.py`, `asm_scheduler_inc2_test.py`, `asm_scheduler_inc3_test.py` | `extra/qk/asm_scheduler_proofs.py` (VARIANTS + `build_inc0..3`) | commit 5a195c0e7
 - **Cluster E (tg_p9 trio)** | `tg_p9_live_split_microgate.py`, `tg_p9_live_split_tile_microgate.py`, `tg_p9_combine_microgate.py` | `extra/qk/tg_p9_live_split.py` (`build_live_split/_tile/_combine`) | commit (E). NOTE: combine gate no longer hits EMITTER_BLOCKED at retirement time — all 3 designs compile (`TG_P9_4_PASS_COMBINE_MICROGATE`); the cross-cutting wall may have moved (recheck vs Cluster A TG-P10.1).
-- **Cluster C (physical-tile)** | `decode_physical_tile_p1_crosslane_gate.py`, `_pall_route_gate.py`, `_pall_lifecycle_gate.py`, `_pall_lifecycle_scaling_probe.py`, `_all_primitives_gate.py` | `extra/qk/decode_physical_tile.py` (`build_p1_crosslane/pall_route/pall_lifecycle/pall_scaling/all_primitives`) | this commit. `all_primitives` sub-probe subprocess repointed to `module:function` (was file paths).
+- **Cluster C (physical-tile)** | `decode_physical_tile_p1_crosslane_gate.py`, `_pall_route_gate.py`, `_pall_lifecycle_gate.py`, `_pall_lifecycle_scaling_probe.py`, `_all_primitives_gate.py` | `extra/qk/decode_physical_tile.py` (`build_p1_crosslane/pall_route/pall_lifecycle/pall_scaling/all_primitives`) | commit (C). `all_primitives` sub-probe subprocess repointed to `module:function` (was file paths).
+- **Cluster D (score-broadcast)** | `decode_physical_tile_score_broadcast_direct_gate.py`, `_chain_gate.py`, `_varjit_chain_gate.py`, `decode_score_broadcast_control_matrix_gate.py`, `_model_cache_view_gate.py`, `decode_physical_tile_score_reuse_paths_probe.py` | `extra/qk/decode_score_broadcast.py` (6 `build_*`) | this commit. 3 variants carry pre-existing kernel drift (BIND spec wall on varjit_chain/model_cache_view; `_LOG2E` NameError on reuse_paths) — verdicts differ from banked READY but old==new.
+- **Cluster A (online-state x-lane)** | `decode_attention_online_state_pv_p8_numeric.py`, `_p9_scalar_numeric.py`, `_p10_xlane_output.py`, `_p11_xlane_merge.py`, `_p12_xlane_components.py`, `decode_attention_xlane_reducer_matrix.py`, `decode_attention_xlane_recurrence_matrix.py`, `decode_attention_split_xlane_output.py`, `tg_p10_reg_scalar_repro.py` | `extra/qk/decode_attention_online_state_pv.py` (9 `build_*`) | this commit. DRIFT vs banked: P9 now `FAIL__NAN` (flash_decode leaves NaN in inactive pv slots); TG-P10.1 now `BLOCKED_REPRO_NOT_MINIMAL` (shared-weight/inline-gmax combines now compile — the EMITTER_BLOCKED wall has shifted, corroborating Cluster E's combine gate). old==new at current tree for both.
