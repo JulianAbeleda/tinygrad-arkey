@@ -150,14 +150,18 @@ item 2 above. Consolidating is a real methodology decision (adopt the authority 
 consumers) — an owner call, not a mechanical dedup. Its private `_git` still duplicates
 `harness_contract.provenance`; fold that in only if/when the bench is touched for the adoption decision.
 
-## Step 5 — ~~unify the two `child_env` builders~~ WITHDRAWN
+## Step 5 — the two `child_env` builders: NOT merged — dead twin deleted + survivor renamed
 
-Do not merge them. On inspection they share only `os.environ.copy()`: `harness_contract.child_env(extra)`
-setdefaults DEV=AMD / PYTHONPATH=absolute ROOT / adds QK_MODEL (QK eval child); `generate.child_env(mode,
-*, device, storage, ...)` takes DEV from a required param / PYTHONPATH="." / clears `_CLEAR_KEYS` / applies
-policy+storage flags (policy-mode rollout child). Same name, different job — a shared base would be
-semantically wrong for the rollout builder and would couple two unrelated launchers for one line. See
-dedup-plan item 5.
+Do not merge them (they share only `os.environ.copy()` — same name, different job). But a deeper check
+(2026-07-03) showed **both had zero callers**: `generate.child_env` + `policy_overrides` were dead
+scaffolding from the removed rollout harnesses (same generation as `generate_one`), and
+`harness_contract.child_env` had no call site either. Resolution:
+  - Deleted the entire dead `generate.py` policy-env surface (`policy_overrides`, `child_env`, `_CLEAR_KEYS`,
+    the `extra.qk.modes` import) — `generate.py` is now just `load_model_and_tokenizer`.
+  - Renamed the documented survivor `harness_contract.child_env` → **`qk_subprocess_env`** (declarative;
+    no same-named twin remains). This is the "if it's the same name, rename it better" fix.
+  - Side-fix: Step 3's deletion had removed a `build_prompt_ids` re-export that `prefilled_route_parity`
+    relied on; repointed that caller at its canonical home `extra.llm.eval_common`.
 
 ## Step 6 — unify the 3 `llama-bench` wrappers
 

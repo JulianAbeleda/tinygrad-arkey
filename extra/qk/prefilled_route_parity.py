@@ -20,7 +20,8 @@ PROMPT = "The history of computation is a history of moving work closer to the d
 
 def main() -> int:
   from extra.qk.harness_contract import DEFAULT_MODEL
-  from extra.llm.generate import load_model_and_tokenizer, build_prompt_ids
+  from extra.llm.generate import load_model_and_tokenizer
+  from extra.llm.eval_common import build_prompt_ids
   model = os.environ.get("QK_MODEL", DEFAULT_MODEL)
   m, tok = load_model_and_tokenizer(model, 4608, seed=20260617)
   for lin in (getattr(m, "_q4k_linears", None).linears if getattr(m, "_q4k_linears", None) else []):

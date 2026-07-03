@@ -42,9 +42,10 @@ DECODE_COMPARATOR = "gqa_coop_vec"
 # Default model + the single child-subprocess env builder (the env-ordering invariant lives here once).
 DEFAULT_MODEL = DEFAULT_MODEL_GGUF
 
-def child_env(extra: dict | None = None) -> dict:
+def qk_subprocess_env(extra: dict | None = None) -> dict:
   """Build the env for a spawned QK eval subprocess: AMD/JIT/PYTHONPATH/QK_MODEL (+ caller overrides). The single
-  source for 'how to launch a QK child' so the env-ordering invariant + model default cannot drift across launchers."""
+  source for 'how to launch a QK child' so the env-ordering invariant + model default cannot drift across launchers.
+  (Declaratively named: this builds the *QK subprocess* env; there is no longer a same-named twin in generate.py.)"""
   e = os.environ.copy()
   e.setdefault("DEV", "AMD"); e.setdefault("JIT", "1")
   e["PYTHONPATH"] = str(ROOT)
