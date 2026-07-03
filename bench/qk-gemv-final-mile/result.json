@@ -1,8 +1,0 @@
-{
-  "model_id": "Qwen3-8B-Q4_K_M", "arc": "3 GEMV final-mile", "verdict": "REFUTED",
-  "standalone_device_timed_Q4_GBs": {"ffn_gate_12288x4096": 357.2, "attn_q_4096x4096": 169.3, "note": "policy opts serial LOCAL:0:64, DEBUG=2 device timing iters=200; smaller GEMVs ~2x lower effective BW (fixed overhead); below banked standalone 76% due to short-read measurement overhead"},
-  "in_model_per_role": "not cleanly measurable -- batched graph hides per-kernel; DEBUG=2 unbatch inflates (eager 9-33% peak is artifact)",
-  "q4k_fuse_test": {"baseline_programs": 780, "baseline_decode_tok_s": 55.42, "fuse_programs": 744, "fuse_decode_tok_s": 45.20, "fuse_speedup": 0.816, "prefill_status": "Q4K_FUSE crashes on T>32 (fused linear has no .weight fallback)"},
-  "gate": ">=5% e2e from a local role fix",
-  "conclusion": "REFUTED: GEMV primitive competitive (banked 76% standalone); only available local fix (Q4K_FUSE horizontal fusion) is -18% on decode and broken on prefill. No local GEMV change improves decode. Residual 8B short-decode gap is structural. Next upside: speculative decoding or 14B."
-}

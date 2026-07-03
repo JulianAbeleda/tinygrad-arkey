@@ -1,8 +1,0 @@
-{
-  "date": "2026-06-23",
-  "phase": "MATERIALIZATION_ATTRIBUTION",
-  "owned_tile_kv_inputs": "assigned_kv[0,0]/[1,0] = SLICE views (has_buffer_identity=False)",
-  "whole_buffer_check": "cache_kv.reshape(flat) has_buffer_identity=True; cache_kv[0,0] slice =False (IR-confirmed)",
-  "callify_mechanism": "transform_precompiled_call: AFTER-node input not force-contiguous; _precompiled_output_redirect returns BUFFER w/ has_buffer_identity() directly (no materialize), SLICE falls through to materialize",
-  "verdict": "MATERIALIZATION_ATTRIBUTED_TO_KV_SLICE_READ + WHOLE_BUFFER_IDENTITY_PROBE_PASS"
-}

@@ -1,9 +1,0 @@
-{
-  "schema": "qk_tensile_inject_v1",
-  "phase": "TPE-7c",
-  "approach": "custom_kernel(trivial,tensile-dims)+runtime_cache swap",
-  "injected_correct": true,
-  "rel_err": 0.000371,
-  "verdict": "PASS",
-  "note": "if PASS: the precompiled Tensile kernel runs through tinygrad's realize path driven by TensileRunner (in-graph node), no UOp surgery. Next: confirm under TinyJit + one-block harness."
-}

@@ -1,8 +1,0 @@
-{
-  "date": "2026-06-23",
-  "phase": "DECISION",
-  "result": "A register-lifetime VGPR pool does NOT unlock the deep (A+B) software-pipelined K-loop at the occupancy-optimal 4x4 WMMA tile. The pool concept is real and ALREADY realized for the A-side (PLRA, +9-11%, shipped). Full A+B prefetch is HARDWARE-REGISTER-LIMITED: the 128-reg accumulator floor + 64-reg current-fragment (live until WMMA completes) leaves only 32 dead regs -- exactly the A-prefetch; the B-prefetch pushes even an ideal pool to 266 > 256 (over by ~10). Squeezing to 256 would collapse occupancy (1 wave/SIMD). Reaching deeper needs a smaller WMMA tile (occupancy tradeoff, Phase-B-closed for well-occupied down/qo) or the block-level DBUF pipeline (regresses via LDS-doubling).",
-  "stopped_before_allocator": "per scope Phase-1 branch: ideal-packed max_live > 256 -> do not build the allocator",
-  "prefill_speed_conclusion": "the ~4-5% gap to Tensile is a HARDWARE register-pressure / occupancy ceiling at the optimal tile, NOT a missing software representation. Tensile's advantage is its register-pool + tile + scheduling combination tuned to its own occupancy point. Closing it = vendored Tensile or a smaller-tile occupancy tradeoff (already explored), not a new representation.",
-  "verdict": "REGISTER_POOL_INSUFFICIENT_HW_LIMIT"
-}

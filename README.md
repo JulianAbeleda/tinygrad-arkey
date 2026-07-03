@@ -18,25 +18,27 @@ The main idea is still kernel search, but the bar is strict: a route only become
 
 ## Current performance state
 
-Machine: RX 7900 XTX (24 GB), AMD gfx1100. Decode numbers below are authority-style fixed-context W==D or phase-gate numbers, not mixed-context `generate` medians.
+Machine: RX 7900 XTX (24 GB), AMD gfx1100. Measured 2026-07-03 on `master` (all shipping defaults incl. the attn_v route fix). Decode = median steady-state W==D via `extra/model_e2e_bench.py` (the `generate` harness), auto clock; both runtimes measured the same way, same GGUFs, on the same box.
+
+**tinygrad now leads llama.cpp on decode across all three models at both contexts** — a few percent at ctx512, widening at ctx4096 (tinygrad decode is context-robust; llama's tg falls off with KV depth). The recent lift on 14B/8B/32B comes from the attn_v route-miss fix (`DECODE_ROUTE_ATTN_V`, +8.9% 8B / +13% 14B, byte-identical).
 
 ### tinygrad
 
-| Model | Quant | Decode ctx512 | Decode ctx4096 | Prefill pp512 | Notes |
-|---|---:|---:|---:|---:|---|
-| Qwen3-8B | Q4_K_M | 107.6 tok/s | 97.6 tok/s | 4420 tok/s | Current default uses owned HIP attention at long context. Generated attention is 104.0 / 93.3 tok/s and remains default-off. |
-| Qwen3-14B | Q4_K_M | 54.0 tok/s | 53.7 tok/s | not measured | Current generated G=5 K-only attention route. |
-| Qwen3-32B | Q4_K_M | 24.8 tok/s | 22.1 tok/s | not measured | Current route set; 24 GB card fit confirmed. |
+| Model | Quant | Decode ctx512 | Decode ctx4096 | Notes |
+|---|---:|---:|---:|---|
+| Qwen3-8B | Q4_K_M | 103.9 tok/s | 107.9 tok/s | +3.9% / +19.4% vs llama. Owned HIP attention default at long ctx. |
+| Qwen3-14B | Q4_K_M | 66.5 tok/s | 68.2 tok/s | +1.4% / +24.9% vs llama. Generated G=5 K-only attention route + attn_v fix. |
+| Qwen3-32B | Q4_K_M | 31.9 tok/s | 32.6 tok/s | +2.3% / +9.8% vs llama. Fits 24 GB (20.9/24.2 GB at ctx512/4096). |
 
 ### llama.cpp reference
 
 | Model | Quant | Decode ctx512 | Decode ctx4096 | Prefill pp512 | Notes |
 |---|---:|---:|---:|---:|---|
-| Qwen3-8B | Q4_K_M | 98.2 tok/s | 92.0 tok/s | 3045 tok/s | Same GGUF / RX 7900 XTX via local llama-bench. |
-| Qwen3-14B | Q4_K_M | 64.9 tok/s | 60.9 tok/s | 1676 tok/s | Same GGUF / RX 7900 XTX via local llama-bench. |
-| Qwen3-32B | Q4_K_M | 30.9 tok/s | 29.6 tok/s | 751 tok/s | Same GGUF / RX 7900 XTX via local llama-bench. |
+| Qwen3-8B | Q4_K_M | 100.0 tok/s | 90.4 tok/s | 3107 tok/s | Same GGUF / RX 7900 XTX via local llama-bench (tg128). |
+| Qwen3-14B | Q4_K_M | 65.6 tok/s | 54.6 tok/s | 1702 tok/s | Same GGUF / RX 7900 XTX via local llama-bench (tg128). |
+| Qwen3-32B | Q4_K_M | 31.2 tok/s | 29.7 tok/s | 757 tok/s | Same GGUF / RX 7900 XTX via local llama-bench (tg128). |
 
-Read these as current working numbers, not a universal claim. The multi-model table in `bench/models/qwen/` is useful provenance but may lag the latest route changes. The current purity state is in `bench/pure-machine-search-default-path-census/summary.md`; the final 8B attention blocker is in `bench/tg-p10-reg-scalar-combine-lowering/summary.md` and `docs/tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`.
+Read these as current working numbers, not a universal claim. **Decode is the tinygrad win; prefill is not** — llama's batched prefill (pp512 above, ~750–3100 tok/s) is far ahead; tinygrad's story here is decode/HBM-bound throughput, and prefill is a known compute-bound gap (the `model_e2e_bench` prefill metric is ttft-derived and includes JIT compile, so it is omitted here rather than reported misleadingly). The multi-model table in `bench/models/qwen/` is useful provenance but may lag the latest route changes.
 
 ## Running it
 

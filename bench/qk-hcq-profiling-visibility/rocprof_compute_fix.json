@@ -1,8 +1,0 @@
-{
-  "date": "2026-06-21", "attempted": true, "method": "contained venv (no system change)",
-  "result": "NOT_BOUNDED_AND_LOW_VALUE",
-  "dep_chain_seen": ["astunparse==1.6.2 (system has 1.6.3, exact pin)", "plotext", "colorlover", "plotly", "dash>=3.0.0", "dash-bootstrap-components", "dash-svg", "matplotlib", "pandas", "pyyaml", "tabulate", "..."],
-  "classification": "the rocprofiler-compute install is missing its full requirement set; each install reveals more (deep viz/dash chain). Even if fully satisfied, rocprof-compute WRAPS rocprofv3's PMC counter backend, which returns 0 for compute counters on this gfx1100+ROCm-7.2.4 stack -> a working UI over a 0-counter backend.",
-  "decision": "DO NOT FIX — unbounded dep chain + low value (0-counter backend); and it would only help the llama/HIP side, never HCQ.",
-  "if_fixed_helps": "llama/HIP counter analysis ONLY (and even those compute counters read 0 here); NOTHING for tinygrad HCQ"
-}

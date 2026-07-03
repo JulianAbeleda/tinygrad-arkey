@@ -1,6 +1,0 @@
-{
-  "date": "2026-06-25",
-  "timestamp": "20260625-230022",
-  "verdict": "ONLINE_STATE_PV_P8_FAIL__CAPTURE",
-  "error": "TypeError(\"_f() missing 1 required positional argument: 'p8_tc'\")"
-}

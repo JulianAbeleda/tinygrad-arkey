@@ -1,5 +1,0 @@
-{
-  "schema": "boltbeam.route_policy.v1",
-  "note": "TG-P5 REFUTE: no generated attention route promoted for 8B; owned HIP kept as default. Included for completeness only.",
-  "routes": []
-}

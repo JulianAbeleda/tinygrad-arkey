@@ -1,8 +1,0 @@
-{
-  "date": "2026-06-23",
-  "phase": "LIVENESS_REVISION",
-  "prior_claim_RETRACTED": "REGISTER_POOL_INSUFFICIENT_HW_LIMIT (266>256) -- WRONG: it analyzed build_gemm_lds2's 4-WAVE 4x4 layout, whose WM*WN*8=128-reg accumulator floor is layout-specific, NOT fundamental",
-  "tensile_layout": "256 threads (8 waves) for the 128x128 tile -> HALF the per-wave accumulator footprint vs build_gemm_lds2's 4-wave 4x4",
-  "build_gemm_lds2_CAN_express": "8-wave layout WAVES_M=4,WAVES_N=2,WM=2,WN=4 -> 128x128 tile, acc=64 (half). PLRAB fits at ~188 VGPR (<256); DBUF+PLRAB = PIPELINED (8/16 global loads in wmma span) + correct (rel_rmse 2.1e-4). The deep double-level pipeline IS expressible in EXISTING build_gemm_lds2 knobs.",
-  "verdict": "REGISTER_POOL_HW_LIMIT_RETRACTED -- the deep pipeline FITS via the Tensile-like 8-wave layout"
-}

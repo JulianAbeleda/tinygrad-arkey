@@ -1,7 +1,0 @@
-{
-  "prefill_regime": "COMPUTE-bound (GEMM FLOP-limited, M=512 high arithmetic intensity)",
-  "evidence": "GEMM roles are 85% of measured wall @ctx512; ceiling set by GEMM TFLOPS (tinygrad ~40.8 vs BLAS 51.8-76.7); attention/non-GEMM ~15% and grows with ctx",
-  "ceiling_set_by": "GEMM compute throughput (tinygrad graph-GEMM at ~58% of measured BLAS); NOT memory, NOT launch (launch/graph is in non_gemm_share, small @ctx512)",
-  "wmma_marketing_peak_tflops": 122.0,
-  "note": "we use MEASURED BLAS practical ceilings (51.8-76.7 TF), NOT the 122 TF WMMA peak -> conservative ceiling"
-}
