@@ -67,7 +67,7 @@ def live_split_coverage_kernel(geo: LiveSplitGeometry, MAXC: int, Tc: UOp):
 
 
 def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv: int, MAXC: int, S: int,
-                                       staging: str = "K_ONLY", fused_combine: bool = True):
+                                       staging: str = "K_ONLY", fused_combine: bool = True, kv_scale=None):
   """TG-P9.2: the generated block-tile flash decode with LIVE-CONTEXT split geometry.
 
   Identical body to flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel, but the per-split length is the runtime
@@ -90,9 +90,13 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
   # t < Tc). At ctx512 per->16 (1 block/split); at ctx4096 per->128 (8 blocks/split == fixed L=128).
   per = ceildiv_uop(ceildiv_uop(Tc_u, S), TK) * TK
   q_f = q.reshape(Hq * Hd)
+  # KV-quant long-context tier: when kv_scale is provided, cache_kv is INT8 and the kernel dequantizes in-register
+  # (int8 * fp16 scale) -- no materialized fp16 KV. kv_scale shape [2,1,Hkv,MAXC] fp16. quant=False path unchanged.
+  _quant = kv_scale is not None
+  _inputs = (q_f, cache_kv) + ((kv_scale,) if _quant else ())
   po = Tensor.empty(Hq * S * W2, dtype=_F32).custom_kernel(
-    q_f, cache_kv,
-    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging))[0]
+    *_inputs,
+    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging, quant=_quant))[0]
   # TG-P14.9: split-preserving fused combine. One kernel replaces the gmax + per-d combine lifecycle and removes the
   # Hd-fold fexp redundancy (Hq*Hd*S -> Hq*S fexp). The old two-kernel combine stays available for focused tests.
   if fused_combine:

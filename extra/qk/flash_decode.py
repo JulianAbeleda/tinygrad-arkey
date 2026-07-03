@@ -951,7 +951,7 @@ def flash_fused_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, 
     return ms.end(kvh, s).sink(arg=_fki(f"flash_fused_xlane_score_pv_tile_whole_cache_{Hq}_{Hd}"))
   return kernel
 
-def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH"):
+def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH", quant:bool=False):
   """Block-tiled generated decode candidate.
 
   Mirrors the owned tile's topology at the UOp level: one workgroup per (kvh, split), G warps per
@@ -959,14 +959,21 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
   staging="KV_BOTH" (default): both K and V staged in LDS (original behavior, 8KB LDS).
   staging="K_ONLY": K staged in LDS (4KB), V read directly from global cache (L2-warmed by E_49152).
   This is default-off and guarded by extra/qk/decode_attention_block_tile_microgate.py before route use.
+
+  quant=False (default): `cache` is fp16 K/V, read directly (byte-identical to the shipped route).
+  quant=True: `cache` is INT8 K/V and an extra `scale` buffer (fp16, shape [2,1,Hkv,MAXC]) is bound after `cache`;
+    each element is dequantized IN-REGISTER as int8*scale[kv,head,token] at the load site -- no materialized fp16 KV
+    (the buffer stays int8-sized), model-agnostic (keys off the KV shape). Scale is per-(K|V, kv_head, token),
+    symmetric absmax over head_dim. This is the fused-dequant path for the KV-quant long-context tier.
   """
   if Hd % 64 != 0: raise ValueError(f"block tile requires Hd%%64==0, got {Hd}")
   G = Hq // Hkv; W = Hd + 2; LANES = 32; WARPS = G; THREADS = LANES * WARPS; TK = 16
   R = Hd // LANES; RP = Hd // 64; STAGES = _ceildiv(TK * Hd, THREADS); NB = _ceildiv(L, TK)
   scale = 1.0 / (Hd ** 0.5)
-  def kernel(pout:UOp, q:UOp, cache:UOp) -> UOp:
+  def kernel(pout:UOp, q:UOp, cache:UOp, kvscale:UOp|None=None) -> UOp:
     from extra.qk.warp_reduce_lowering import _warp_reduce_sum_staged
     from extra.qk.amd_warp_reduce import warp_reduce_sum
+    if quant and kvscale is None: raise ValueError("quant=True requires a scale buffer bound after cache")
     kvh = UOp.range(Hkv, 0, AxisType.GLOBAL)
     s = UOp.range(S, 1, AxisType.GLOBAL)
     # Use LOCAL ranges (not UOp.special) so add_gpudims can run and emit gidx for kvh/s.
@@ -1010,9 +1017,15 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
     in_stage = (tt_stage < TK) & (t_stage < Tc)
     t_safe_stage = in_stage.where(t_stage, t_stage.const_like(0))
     _gate = () if _stage_w else (i < (TK * Hd),)   # W|TK*Hd divides evenly -> no bounds gate needed
-    kstore = ksh[i].store(cache[0, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
+    # KV load with optional in-register int8->fp16 dequant (int8 * per-(kv,head,token) fp16 scale). quant=False keeps
+    # the byte-identical fp16 direct read; quant=True never materializes an fp16 KV buffer (dequant is fused here).
+    _kload = cache[0, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half)
+    if quant: _kload = _kload * kvscale[0, 0, kvh, t_safe_stage].cast(dtypes.half)
+    kstore = ksh[i].store(_kload, *_gate)
     if staging == "KV_BOTH":
-      vstore = vsh.after(kstore)[i].store(cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half), *_gate)
+      _vload = cache[1, 0, kvh, t_safe_stage, e_stage].cast(dtypes.half)
+      if quant: _vload = _vload * kvscale[1, 0, kvh, t_safe_stage].cast(dtypes.half)
+      vstore = vsh.after(kstore)[i].store(_vload, *_gate)
       bar = UOp.barrier(UOp.group(vstore.end(wv).end(st) if _stage_w else vstore.end(st)))
     else:
       # K_ONLY: barrier after K staging only; V read from global (L2-warmed by E_49152)
@@ -1046,6 +1059,8 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       d = lane * R + dd
       vd = (vsh.after(bar)[tt * Hd + d] if staging == "KV_BOTH" else
             cache.after(bar)[1, 0, kvh, s * L + b * TK + tt, d]).cast(_F32)
+      if quant and staging != "KV_BOTH":  # K_ONLY reads int8 V from global -> dequant here (KV_BOTH did it at stage)
+        vd = vd * kvscale[1, 0, kvh, s * L + b * TK + tt].cast(_F32)
       accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
       denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
       mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
@@ -1061,6 +1076,8 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
       d = lane * R + dd
       vd = (vsh.after(bar)[tt * Hd + d] if staging == "KV_BOTH" else
             cache.after(bar)[1, 0, kvh, s * L + b * TK + tt, d]).cast(_F32)
+      if quant and staging != "KV_BOTH":  # K_ONLY reads int8 V from global -> dequant here (KV_BOTH did it at stage)
+        vd = vd * kvscale[1, 0, kvh, s * L + b * TK + tt].cast(_F32)
       accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
       denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
       mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
