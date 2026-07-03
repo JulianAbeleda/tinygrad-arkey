@@ -147,15 +147,11 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
   return binary
 
 def kernel_descriptor_from_elf(binary:bytes) -> amdgpu_kd.llvm_amdhsa_kernel_descriptor_t:
-  ehdr = libc.Elf64_Ehdr.from_buffer_copy(binary[:ctypes.sizeof(libc.Elf64_Ehdr)])
-  shdr_size = ctypes.sizeof(libc.Elf64_Shdr)
-  shdrs = [libc.Elf64_Shdr.from_buffer_copy(binary[ehdr.e_shoff+i*shdr_size:ehdr.e_shoff+(i+1)*shdr_size]) for i in range(ehdr.e_shnum)]
-  strtab = binary[shdrs[ehdr.e_shstrndx].sh_offset:shdrs[ehdr.e_shstrndx].sh_offset+shdrs[ehdr.e_shstrndx].sh_size]
-  for shdr in shdrs:
-    name = strtab[shdr.sh_name:strtab.find(b"\x00", shdr.sh_name)].decode("ascii")
-    if name == ".rodata":
-      return amdgpu_kd.llvm_amdhsa_kernel_descriptor_t.from_buffer_copy(binary[shdr.sh_offset:shdr.sh_offset+shdr.sh_size])
-  raise ValueError("ELF does not contain .rodata kernel descriptor")
+  from tinygrad.runtime.support.elf import elf_loader   # lazy: avoid import cycle
+  _, sections, _ = elf_loader(binary)
+  if (rodata := next((s.content for s in sections if s.name == ".rodata"), None)) is None:
+    raise ValueError("ELF does not contain .rodata kernel descriptor")
+  return amdgpu_kd.llvm_amdhsa_kernel_descriptor_t.from_buffer_copy(rodata)
 
 def group_segment_fixed_size_from_elf(binary:bytes) -> int:
   return kernel_descriptor_from_elf(binary).group_segment_fixed_size
