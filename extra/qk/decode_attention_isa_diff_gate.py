@@ -12,6 +12,7 @@ Run: DEV=AMD JIT=1 PYTHONPATH=. python3 extra/qk/decode_attention_isa_diff_gate.
 Scope: docs/decode-isa-diff-gate-scope.md
 """
 from __future__ import annotations
+from extra.qk.isa_helpers import CROSS_LANE_RE
 import json, os, pathlib, re, subprocess, sys, time
 from typing import Any
 
@@ -39,7 +40,7 @@ def _markers(asm: str) -> dict[str, int]:
     "global_load_dword": c(r"\bglobal_load_dword\b"), "global_load_d16": c(r"\bglobal_load_(u?short|d16)"),
     "ds_read": c(r"\bds_(read|load)"), "ds_write": c(r"\bds_(write|store)"), "s_barrier": c(r"\bs_barrier\b"),
     "s_waitcnt": c(r"\bs_waitcnt\b"), "v_dot2": c(r"\bv_dot2"),
-    "cross_lane": c(r"\b(ds_bpermute|ds_permute|ds_swizzle|v_permlane)"), "scratch": c(r"\bscratch_(load|store)"),
+    "cross_lane": c(CROSS_LANE_RE), "scratch": c(r"\bscratch_(load|store)"),
     "v_fma": c(r"\bv_fma"), "v_exp": c(r"\bv_exp"), "v_mul": c(r"\bv_mul"), "v_add": c(r"\bv_add"),
   }
 

@@ -8,6 +8,7 @@ llvm-objdump -d + llvm-readelf --notes -> per-kernel resources (VGPR/SGPR/LDS/sc
          (no args: auto-discovers cached owned-route code objects /tmp/b4_tile_*.co + /tmp/b4_comb_*.co)
 """
 import json, glob, pathlib, re, shutil, subprocess, sys
+from extra.qk.isa_helpers import CROSS_LANE_RE
 
 ROCM_LLVM = ["/opt/rocm/llvm/bin", "/opt/rocm-7.2.4/llvm/bin"]
 def tool(name):
@@ -18,7 +19,7 @@ def tool(name):
 
 OBJDUMP, READELF, BUNDLER = tool("llvm-objdump"), tool("llvm-readelf"), tool("clang-offload-bundler")
 FLAG_PATTERNS = {"has_v_dot2": r"\bv_dot2", "has_lds": r"\bds_(load|store|read|write)",
-                 "has_cross_lane": r"\b(ds_bpermute|ds_permute|ds_swizzle|v_permlane)", 
+                 "has_cross_lane": CROSS_LANE_RE, 
                  "has_vector_global_load": r"\bglobal_load", "has_spill": r"\bscratch_(load|store)"}
 COUNT_INS = ["v_dot2","ds_store","ds_load","ds_bpermute","global_load","v_fma_f32","v_exp","v_max","s_waitcnt","scratch_"]
 

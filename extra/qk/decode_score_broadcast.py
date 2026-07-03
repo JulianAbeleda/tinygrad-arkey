@@ -31,6 +31,7 @@ Run:  DEV=AMD V_DOT2_LOWERING=1 DECODE_ATTN_PHYSICAL_TILE_SCORE_BROADCAST_LIFECY
       PYTHONPATH=. python3 -m extra.qk.gate_registry run score_broadcast_direct [chain varjit_chain ...]
 """
 from __future__ import annotations
+from extra.qk.isa_helpers import CROSS_LANE_RE
 
 import ctypes, json, os, pathlib, re, subprocess, sys, time, traceback
 from typing import Any
@@ -331,7 +332,7 @@ def _desc(lib: bytes) -> dict[str, Any]:
 def _flags(asm: str) -> dict[str, bool]:
   return {"has_v_dot2": "v_dot2" in asm or "__builtin_amdgcn_fdot2" in asm,
           "has_lds": bool(re.search(r"\bds_(load|store|read|write)", asm)),
-          "has_cross_lane": bool(re.search(r"\b(ds_bpermute|ds_permute|ds_swizzle|v_permlane)", asm)),
+          "has_cross_lane": bool(re.search(CROSS_LANE_RE, asm)),
           "has_spill": bool(re.search(r"\bscratch_(load|store)", asm))}
 
 def _reuse_run_probe() -> dict[str, Any]:

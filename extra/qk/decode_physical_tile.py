@@ -43,6 +43,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes, Device
 from tinygrad.uop.ops import AddrSpace, AxisType, KernelInfo, Ops, UOp
 from extra.qk.warp_reduce_lowering import _warp_reduce_sum_staged
+from extra.qk.isa_helpers import CROSS_LANE_RE, CROSS_LANE_OPS
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/qk-decode-primitive-space"
@@ -117,7 +118,7 @@ def _hist_fma(asm: str) -> dict[str, int]:
     if op.startswith("global_load") or op.startswith("buffer_load"): h["vmem_load"] += 1
     if op.startswith("global_store") or op.startswith("buffer_store"): h["vmem_store"] += 1
     if op.startswith("ds_"): h["ds"] += 1
-    if op.startswith(("ds_bpermute", "ds_permute", "ds_swizzle")) or op.startswith("v_permlane"): h["cross_lane"] += 1
+    if op.startswith(CROSS_LANE_OPS): h["cross_lane"] += 1
     if "fma" in op or "dot" in op or "mac" in op: h["fma_dot"] += 1
     if op.startswith("scratch_"): h["scratch"] += 1
   return h
@@ -135,7 +136,7 @@ def _hist_barrier(asm: str) -> dict[str, int]:
     if op.startswith("global_load") or op.startswith("buffer_load"): h["vmem_load"] += 1
     if op.startswith("global_store") or op.startswith("buffer_store"): h["vmem_store"] += 1
     if op.startswith("ds_"): h["ds"] += 1
-    if op.startswith(("ds_bpermute", "ds_permute", "ds_swizzle")) or op.startswith("v_permlane"): h["cross_lane"] += 1
+    if op.startswith(CROSS_LANE_OPS): h["cross_lane"] += 1
     if "fma" in op or "dot" in op or "mac" in op: h["fma_dot"] += 1
     if op.startswith("scratch_"): h["scratch"] += 1
     if op == "s_barrier": h["barrier"] += 1
@@ -154,7 +155,7 @@ def _hist_bundle(asm: str) -> dict[str, int]:
     if op.startswith("global_load") or op.startswith("buffer_load"): h["vmem_load"] += 1
     if op.startswith("global_store") or op.startswith("buffer_store"): h["vmem_store"] += 1
     if op.startswith("ds_"): h["ds"] += 1
-    if op.startswith(("ds_bpermute", "ds_permute", "ds_swizzle")) or op.startswith("v_permlane"): h["cross_lane"] += 1
+    if op.startswith(CROSS_LANE_OPS): h["cross_lane"] += 1
     if op == "s_barrier" or "s_waitcnt" in op: h["barrier_wait"] += 1
     if op.startswith("scratch_"): h["scratch"] += 1
   return h
@@ -166,7 +167,7 @@ def _flags_p1(asm: str) -> dict[str, bool]:
   return {
     "has_v_dot2": "v_dot2" in asm,
     "has_lds": bool(re.search(r"\bds_(load|store|read|write)", asm)),
-    "has_cross_lane": bool(re.search(r"\b(ds_bpermute|ds_permute|ds_swizzle|v_permlane)", asm)),
+    "has_cross_lane": bool(re.search(CROSS_LANE_RE, asm)),
     "has_vector_global_load": "global_load" in asm or "buffer_load" in asm,
     "has_spill": bool(re.search(r"\bscratch_(load|store)", asm)),
   }
@@ -177,7 +178,7 @@ def _flags_full(asm: str) -> dict[str, bool]:
   return {
     "has_v_dot2": "v_dot2" in asm or "__builtin_amdgcn_fdot2" in asm,
     "has_lds": bool(re.search(r"\bds_(load|store|read|write)", asm)),
-    "has_cross_lane": bool(re.search(r"\b(ds_bpermute|ds_permute|ds_swizzle|v_permlane)", asm)),
+    "has_cross_lane": bool(re.search(CROSS_LANE_RE, asm)),
     "has_barrier": "s_barrier" in asm,
     "has_vector_global_load": "global_load" in asm or "buffer_load" in asm,
     "has_spill": bool(re.search(r"\bscratch_(load|store)", asm)),
@@ -188,7 +189,7 @@ def _flags_lifecycle(asm: str) -> dict[str, bool]:
   """pall_lifecycle flags: v_dot2 by mnemonic OR fdot2 builtin, minimal set (no barrier / global-load buckets)."""
   return {"has_v_dot2": "v_dot2" in asm or "__builtin_amdgcn_fdot2" in asm,
           "has_lds": bool(re.search(r"\bds_(load|store|read|write)", asm)),
-          "has_cross_lane": bool(re.search(r"\b(ds_bpermute|ds_permute|ds_swizzle|v_permlane)", asm)),
+          "has_cross_lane": bool(re.search(CROSS_LANE_RE, asm)),
           "has_spill": bool(re.search(r"\bscratch_(load|store)", asm))}
 
 

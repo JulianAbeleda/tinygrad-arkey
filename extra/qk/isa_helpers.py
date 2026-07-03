@@ -28,6 +28,12 @@ def _disasm(lib: bytes) -> str:
   return system(f"{objdump} -d -", input=lib)
 
 
+# canonical cross-lane opcode set: the ONE source for "does this ISA use a cross-lane primitive?".
+# both the histogram (startswith) and the gate probes (regex) derive from this tuple.
+CROSS_LANE_OPS = ("ds_bpermute", "ds_permute", "ds_swizzle", "v_permlane")
+CROSS_LANE_RE = r"\b(" + "|".join(CROSS_LANE_OPS) + ")"
+def has_cross_lane(asm: str) -> bool: return re.search(CROSS_LANE_RE, asm) is not None
+
 def _hist(asm: str) -> dict[str, int]:
   h = {"total": 0, "valu": 0, "s_inst": 0, "vmem_load": 0, "vmem_store": 0, "ds": 0, "cross_lane": 0, "barrier_wait": 0, "scratch": 0}
   for line in asm.splitlines():
@@ -39,7 +45,7 @@ def _hist(asm: str) -> dict[str, int]:
     if op.startswith("global_load") or op.startswith("buffer_load"): h["vmem_load"] += 1
     if op.startswith("global_store") or op.startswith("buffer_store"): h["vmem_store"] += 1
     if op.startswith("ds_"): h["ds"] += 1
-    if op.startswith(("ds_bpermute", "ds_permute", "ds_swizzle")) or op.startswith("v_permlane"): h["cross_lane"] += 1
+    if op.startswith(CROSS_LANE_OPS): h["cross_lane"] += 1
     if op == "s_barrier" or "s_waitcnt" in op: h["barrier_wait"] += 1
     if op.startswith("scratch_"): h["scratch"] += 1
   return h
