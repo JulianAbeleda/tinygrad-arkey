@@ -35,7 +35,7 @@ def make_kv_element_loader(cache:UOp, Hd:int, kvscale:UOp|None=None, freqs:UOp|N
       _pos = pos_of(tok)
       _jr, _low = e % _Hh, e < _Hh
       _pair = _raw(0, kvh, tok, _low.where(e + _Hh, e - _Hh))
-      _cos, _sin = freqs[_pos, _jr], freqs[_pos, _Hh + _jr]
+      _cos, _sin = freqs[_pos, _jr].cast(dtypes.half), freqs[_pos, _Hh + _jr].cast(dtypes.half)  # freqs may be fp32
       val = val * _cos + _low.where(-(_pair * _sin), _pair * _sin)
     return val
   return load
