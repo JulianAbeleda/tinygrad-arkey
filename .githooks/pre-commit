@@ -1,0 +1,5 @@
+#!/bin/sh
+# fail the commit if budgeted line count exceeds the cap in sz.py.
+# bypass for a single commit with: git commit --no-verify
+cd "$(git rev-parse --show-toplevel)" || exit 1
+python3 sz.py > /dev/null || { echo; echo "line budget exceeded — run 'python3 sz.py' for the breakdown"; exit 1; }
