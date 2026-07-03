@@ -297,10 +297,17 @@ class TransformerBlock(FFNBlock):
     v = v.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
     if self.config.qk_norm == self.config.head_dim: q, k = self.attn_q_norm(q), self.attn_k_norm(k)
 
+    # rope-at-read (DECODE_ROPE_AT_READ, opt-in; requires full-head rope): store UN-roped K and rotate at read -- the
+    # prerequisite for the StreamingLLM ring's position re-basing. Q is never cached, so it is always roped here.
+    _rope_read = bool(getenv("DECODE_ROPE_AT_READ", 0)) and self.config.rope_dim == self.config.head_dim
     q = apply_rope(q[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(q[..., self.config.rope_dim:], dim=-1)
-    k = apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1)
+    if not _rope_read:
+      k = apply_rope(k[..., :self.config.rope_dim], self.freqs_cis[start_pos:start_pos+T]).cat(k[..., self.config.rope_dim:], dim=-1)
 
     # NOTE: we don't want to change self.cache_kv, the function API doesn't support this well
+    if self.config.kv_quant and _rope_read:
+      raise NotImplementedError("KV-quant + rope-at-read not yet composed (Q8 stores roped K; the ring's un-roped K "
+                                "path is validated fp16 first). Disable one of DECODE_KV_QUANT / DECODE_ROPE_AT_READ.")
     if self.config.kv_quant:
       # KV-quant write: symmetric per-(K|V, head, token) int8 (absmax over head_dim). k is already roped, so we store
       # roped-then-quantized K (Q8 is orthogonal to RoPE). Store int8 KV + fp16 scale; dequant the re-slice to fp16 for
@@ -321,7 +328,18 @@ class TransformerBlock(FFNBlock):
     else:
       assigned_scale = None
       assigned_kv = Tensor(self.cache_kv.uop.after(self.cache_kv[:, :, :, start_pos:start_pos+T, :].uop.store(Tensor.stack(k, v).uop)))
-      k = assigned_kv[0, :, :, 0:start_pos+T, :]
+      _kfull = assigned_kv[0]
+      if _rope_read:
+        # rope-at-read for the NON-flash (SDPA/prefill) consumers: K is stored un-roped. Rotate the FULL concrete-MAXC
+        # cache (positions 0..MAXC-1) THEN slice -- roping before the slice avoids indexing freqs by a SYMBOLIC bound
+        # (start_pos+T's vmax can exceed MAXC). The full-MAXC rope is DCE'd on the flash decode path (k unused there;
+        # the kernel ropes in-register from `freqs`); it materializes only for prefill/SDPA. Unwritten slots (>ctx) are
+        # roped garbage but sliced away below. Explicit (not apply_rope) so the concrete last dim needs no -1 inference.
+        _rd = self.config.rope_dim; _hh = _rd // 2; _mc = self.config.max_context
+        _cos = self.freqs_cis[:, :_hh].reshape(1, 1, _mc, _hh); _sin = self.freqs_cis[:, _hh:].reshape(1, 1, _mc, _hh)
+        _k1, _k2 = _kfull[..., :_hh], _kfull[..., _hh:_rd]
+        _kfull = (_k1 * _cos - _k2 * _sin).cat(_k2 * _cos + _k1 * _sin, _kfull[..., _rd:], dim=-1)
+      k = _kfull[:, :, 0:start_pos+T, :]
       v = assigned_kv[1, :, :, 0:start_pos+T, :]
 
     #self.cache_kv[:, :, :, start_pos:start_pos+T, :].assign(Tensor.stack(k, v))
@@ -335,7 +353,7 @@ class TransformerBlock(FFNBlock):
     if should_use_flash_decode(start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
-                                         kv_scale=assigned_scale)
+                                         kv_scale=assigned_scale, freqs=(self.freqs_cis if _rope_read else None))
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif PREFILL_TC_ATTN and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),

@@ -198,16 +198,18 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
   return partial.sum(axis=1).reshape(1, 1, linear.out_features)
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
-                                 Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None) -> Tensor:
+                                 Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
+                                 freqs:Tensor|None=None) -> Tensor:
   MAXC, L = max_context, getenv("FLASH_L", 128)
   vsp = UOp.variable("start_pos", 0, MAXC - 1)  # unbound twin of start_pos (for kernel ranges)
   out = None
-  # KV-quant tier: assigned_kv is int8 + a per-(K|V,head,token) fp16 kv_scale. ONLY the live-split route dequants
-  # in-register; every other route here reads KV as fp16 and would silently misread int8. Fail loud rather than
-  # feed int8 to an fp16-only route (no phantom output). The live-split path below threads kv_scale.
-  if kv_scale is not None and not (B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0 and bool(getenv("DECODE_LIVE_SPLIT", 1))):
-    raise RuntimeError("KV-quant (int8 KV) is only supported on the live-split decode route (structural class "
-                       "B=1,Hd=128,Hkv=8,Hq%Hkv==0 with DECODE_LIVE_SPLIT=1). Disable KV-quant for this shape/route.")
+  # KV-quant (assigned_kv int8 + kv_scale) and rope-at-read (assigned_kv holds UN-roped K, rotated in-kernel from
+  # `freqs`) are BOTH only supported on the live-split route -- every other route here reads fp16 pre-roped KV and would
+  # silently misread. Fail loud rather than emit a phantom result. The live-split path below threads kv_scale + freqs.
+  _ls_only = B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0 and bool(getenv("DECODE_LIVE_SPLIT", 1))
+  if (kv_scale is not None or freqs is not None) and not _ls_only:
+    raise RuntimeError(f"KV-quant/rope-at-read (kv_scale={kv_scale is not None}, freqs={freqs is not None}) is only "
+                       "supported on the live-split decode route (B=1,Hd=128,Hkv=8,Hq%Hkv==0, DECODE_LIVE_SPLIT=1).")
   if getenv("DECODE_ATTN_BLOCK_TILE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
      and not (getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE", 0)):
     _bt_msg = ("DECODE_ATTN_BLOCK_TILE=1 does not bind in-model without DECODE_ATTN_GENERATED_WHOLECACHE=1 and "
@@ -233,7 +235,7 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
                                                     getenv("DECODE_LIVE_SPLIT_S", 48),
                                                     staging=str(getenv("DECODE_LIVE_SPLIT_STAGING", "KV_BOTH")),
-                                                    fused_combine=True, kv_scale=kv_scale)
+                                                    fused_combine=True, kv_scale=kv_scale, freqs=freqs)
   if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
      and (Hq // Hkv) == 4:
     out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
