@@ -1,9 +1,7 @@
 # docs/ — map
 
-Navigation source-of-truth for this fork's docs. **Current state only** — the long chronological probe log
-(decode-attention arc, prefill WMMA/Tensile, fused-flash, flywheel) was archived on 2026-06-24 under
-`docs/archive/` and indexed by `provenance-index-20260624.md`. Read the canonical docs below; treat anything
-in `docs/archive/` as provenance, not current state.
+Navigation source-of-truth for this fork's docs. **Current state only** — read the canonical docs below; treat
+anything under `docs/archive/` as provenance, not current state.
 
 ## ⭐ Start here (canonical)
 
@@ -48,16 +46,17 @@ in `docs/archive/` as provenance, not current state.
 
 Q4_K decode uses generated G3 where eligible. Q6_K direct half-warp is refuted; Q6_K generated coop is the default generated route with shipped kernels retained as rollback. The generated G=5 K-only attention route is promoted for the validated 14B shape. 8B long-context attention still uses the owned HIP two-kernel route because the generated route is close but below the 98% promotion bar. Prefill uses the generated role-selective schedule by default with rollback via `PREFILL_GENERATED_SCHEDULE=0` or the older pipeline flags described in the route manifest.
 
-## Live tooling
+## Live Tooling
 
-- **Machine-search:** `extra/qk_decode_eval.py` (lifecycle evaluator), `extra/qk_lifecycle_search_loop.py`
-  (generate→evaluate→prune), `extra/qk_search_spec.py` (schema authority), `extra/qk_nll_eval.py` (dNLL gate),
-  `extra/qk_demote_search.py` (demotion orchestrator). Benches: `bench/README.md`.
+- **Runtime and measurement:** `extra/qk_decode_eval.py`, `extra/qk_lifecycle_search_loop.py`,
+  `extra/qk_nll_eval.py`, and phase-specific harnesses emit evidence for BoltBeam.
+- **Search/evaluation authority:** BoltBeam owns schema, candidate generation, ledgers, policy checks, and
+  roofline/reporting. tinygrad should not grow new standalone search-policy scripts.
 - **Benchmark harnesses + numbers:** use the phase-specific authority artifacts before quoting a number. The committed multi-model table under `bench/models/qwen/` is useful provenance but may lag the latest route changes.
 
 ## References
 
 - **tinygrad docs (current):** `developer/` (am, hcq, runtime, speed, uop), `tensor/`, and upstream
   `index.md` / `quickstart.md` / `mnist.md` / `nn.md` / `dtypes.md` / `env_vars.md`.
-- **History & subsystem docs** (architecture, PSP/boot, reference research, the full 797-doc probe log):
-  `docs/archive/` — start from `provenance-index-20260624.md` to trace any cluster to its current authority.
+- **History & subsystem docs:** `docs/archive/` is provenance only; prefer current docs and BoltBeam ledgers for
+  decisions.

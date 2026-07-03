@@ -60,20 +60,20 @@ PYTHONPATH=. .venv/bin/python extra/pure_machine_search_default_path_census.py -
 PYTHONPATH=. .venv/bin/python extra/pure_machine_search_default_path_census.py --strict-final-default
 ```
 
-## Main files
+## Main Files
 
-The full list of active files is in [FILE_INDEX.md](FILE_INDEX.md). The ones to start with:
+Start with these files and the documentation map in [docs/README.md](docs/README.md):
 
 * `tinygrad/llm/` — the core runtime (command line, model, model-file loader).
 * `extra/qk_decode_runtime_overhead.py` — decode speed across context lengths.
 * `extra/qk_prefill_whole_synced.py` — prefill speed.
 * `extra/pure_machine_search_default_path_census.py` — current generated/default-route census.
-* `extra/qk_route_manifest.py` — route manifest, rollback flags, provenance, and refuted axes.
+* `extra/qk_route_manifest.py` — runtime-facing route manifest, rollback flags, provenance, and refuted axes. BoltBeam owns the policy/search copy.
 * `extra/qk_flash_decode.py` — generated flash/decode attention routes.
 * `extra/qk_gemv_g3_codegen_lowering.py`, `extra/qk_q6k_route_spec.py`, `extra/qk_prefill_schedule_spec.py` — generated route/spec surfaces.
 * `extra/qk_tg_p10_reg_scalar_repro.py` — minimal repro for the current final compiler-lowering blocker.
 
-More detail and the documentation map: [docs/README.md](docs/README.md).
+BoltBeam owns model facts, candidate/search schema, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime execution, compiler/backend lowering, and hardware gates.
 
 ## License
 

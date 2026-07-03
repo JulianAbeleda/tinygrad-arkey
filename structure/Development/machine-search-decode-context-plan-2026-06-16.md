@@ -9,13 +9,13 @@ principled machine-search layer. This is a handoff for later implementation,
 not an active runtime contract.
 
 > **Execution status (2026-06-16) — see `docs/amd-decode-banked-20260616.md`.**
-> - **Scaffold built** (`extra/qk_search_spec.py` + tests): the schema authority (rows, constraints,
+> - **Scaffold built** (now ported to `boltbeam.search.spec`): the schema authority (rows, constraints,
 >   accepted-policy records) this plan prescribes. ✅
 > - **Track 1 (decode sequential tax): investigated → overlap GATED.** Profiled (72% GEMV / 28% non-GEMV,
 >   single-queue sum); overlap is reclaimable (~+30%, HBM ~58% idle) but tinygrad's AMD backend has one
 >   compute ring, so it needs a `[runtime]` 2nd-ring build first (`docs/amd-decode-two-queue-probe-...`).
 >   Norm-fusion refuted.
-> - **B3 (per-tensor bit-width) DONE** as the first real search run (`extra/qk_demote_search.py` on the
+> - **B3 (per-tensor bit-width) DONE** as the first real search run (historical tinygrad demotion search; BoltBeam now owns search-policy work) on the
 >   scaffold): the quality-gated demotion search mapped the frontier and the gate rejected lm_head on
 >   quality; in-pattern lever tapped at ~64 tok/s (`docs/amd-decode-demotion-search-...`).
 > - **Track 2 (flash policy) / Track 3 (prefill LDS)**: not started. Decode is **banked**; these + the two
@@ -154,7 +154,7 @@ op_scope: q4k_gemv | q6k_gemv | attention | ffn_down | lm_head | scheduler
 backend: AMD
 search_space: primitive_policy | demotion | flash_threshold | storage | schedule | lds_blocking
 objective: tok_s | hbm_pct | serving_latency
-constraints: exact_required | dNLL_epsilon | max_storage_mb | ctx_range | no_beam_remote
+constraints: exact_required | dNLL_epsilon | max_storage_mb | ctx_range | no_remote_execution
 ```
 
 Accepted policy artifacts should contain at least:
@@ -326,4 +326,3 @@ Requirements:
 Expected output: a small schema + tests + documentation that make future
 decode/context machine search row-driven rather than script-driven.
 ```
-

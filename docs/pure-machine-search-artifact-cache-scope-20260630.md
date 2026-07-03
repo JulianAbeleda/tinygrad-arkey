@@ -180,7 +180,7 @@ Goal: classify existing PMS/TG artifacts into A/B/C and identify missing fingerp
 Build:
 
 ```text
-extra/qk_artifact_cache_inventory.py
+BoltBeam: `boltbeam artifact-cache-inventory /path/to/tinygrad --out ... --markdown ...`
 ```
 
 Outputs:

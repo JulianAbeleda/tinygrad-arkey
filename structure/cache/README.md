@@ -8,9 +8,11 @@ Read this folder after `structure/INDEX.md` and `structure/Purpose/` when the ta
 
 ## Files
 
-- `repo-cache.md` - compact human-maintained project briefing
-- `repo-map.md` - compact file and ownership map
 - `module-notes/` - optional deeper notes loaded only when a task needs that area
+
+The old `repo-cache.md` / `repo-map.md` files were removed in the 2026-07-03 maintainability cleanup because they
+duplicated stale repo maps. Use `../../README.md`, `../../docs/README.md`, and BoltBeam ledgers for current
+navigation.
 
 ## Rules
 
@@ -25,9 +27,6 @@ Read this folder after `structure/INDEX.md` and `structure/Purpose/` when the ta
 
 This folder should be safe to copy between projects.
 
-Replace placeholder content with project-specific facts, but keep the file roles stable:
+Replace placeholder content with project-specific facts, but keep the role stable:
 
-- `repo-cache.md` answers "what should an agent know before reading source?"
-- `repo-map.md` answers "which files own which behavior?"
 - `module-notes/` answers "what deeper context should be loaded only for this task?"
-

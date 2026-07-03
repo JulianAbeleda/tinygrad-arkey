@@ -64,5 +64,5 @@ When creating boilerplate:
 - replace named people with roles
 - replace product-specific claims with placeholders
 - replace local paths with neutral examples where possible
-- replace repo-cache placeholders with project-specific facts or leave them empty
+- add repo-cache/module notes only when they are current and lower rediscovery cost
 - keep the pattern, not the biography

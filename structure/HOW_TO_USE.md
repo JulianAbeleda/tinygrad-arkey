@@ -65,7 +65,7 @@ Start here if you are integrating this into an existing repo or team workflow.
 
 1. Read `Development/structure-convention.md`.
 2. Customize `Development/coding-principles.md`.
-3. Fill `cache/repo-cache.md` and `cache/repo-map.md` if repeated agent work would otherwise rediscover the repo each session.
+3. Add focused cache notes under `cache/module-notes/` only when repeated agent work would otherwise rediscover the same stable facts.
 4. Add focused files under `cache/module-notes/` for stable, task-specific areas.
 5. Fill `Purpose/control-plane.md` with project-appropriate assignments only if persistent routing is needed.
 6. Add optional model profiles under `Purpose/agents/`.

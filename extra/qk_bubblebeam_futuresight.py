@@ -62,10 +62,10 @@ def score_layout_transform(name:str, lane:UOp|None=None) -> CoalesceScore:
   return choose_q4k_candidate(lane)
 
 def should_route_q4k_lane_partition(out_features:int, in_features:int) -> bool:
-  """Search-owned q4k route selector for the proven FFN gate/up shape.
+  """Search-owned q4k route selector for tracked Q4_K GEMV roles.
 
-  This is intentionally narrow for P3.3: route only when static COALESCE selects the lane-partition candidate for
-  the shape that passed M-E.  Broader beam synthesis remains a follow-on.
+  The original P3.3 selector covered only FFN gate/up. It now covers the promoted G3 LaneMap Q4_K roles:
+  gate/up, FFN down, and 4096x4096 projection.
   """
   if not ((out_features in (4096, 12288) and in_features == 4096) or (out_features == 4096 and in_features == 12288)): return False
   return choose_q4k_candidate().candidate.requires_lane_partition

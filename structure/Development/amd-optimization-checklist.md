@@ -131,7 +131,7 @@ optimizing any kernel.
       attribution still points at QK semantic schedule/codegen as the next
       bottleneck.
 - [x] Added descriptor policy reproduction and the candidate/search-loop v0
-      surface: `extra/qk_descriptor_policy.py`,
+      surface. Descriptor policy has since moved to BoltBeam (`boltbeam.policy.descriptor`);
       `extra/qk_candidate_generator.py`, `extra/qk_candidate_static_gate.py`,
       and `extra/qk_ansor_transition_loop.py`. Descriptors reproduce accepted
       runtime policy semantics with zero diff; the bounded candidate sets are

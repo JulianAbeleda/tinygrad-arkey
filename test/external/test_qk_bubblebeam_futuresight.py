@@ -25,17 +25,22 @@ class TestQKBubbleBeamFutureSight(unittest.TestCase):
     self.assertEqual(best.candidate.name, "lane_partition_q4k")
     self.assertTrue(best.candidate.requires_lane_partition)
 
-  def test_shape_route_selector_is_narrow(self):
+  def test_shape_route_selector_matches_promoted_g3_roles(self):
     self.assertTrue(should_route_q4k_lane_partition(12288, 4096))
-    self.assertFalse(should_route_q4k_lane_partition(4096, 4096))
-    self.assertFalse(should_route_q4k_lane_partition(4096, 12288))
+    self.assertTrue(should_route_q4k_lane_partition(4096, 4096))
+    self.assertTrue(should_route_q4k_lane_partition(4096, 12288))
+    self.assertFalse(should_route_q4k_lane_partition(1024, 4096))
 
   def test_static_choice_agrees_with_measured_m_e_artifact(self):
     latest = ROOT / "bench/qk-scheduler-gemv-vs-owned/coalesced_dequant_mE_latest.json"
     data = json.loads(latest.read_text())
-    self.assertEqual(data["verdict"], "PROCEED_P3_SEARCH_GENERALIZATION")
-    self.assertTrue(data.get("bubblebeam_futuresight_route_ok", data.get("beam_coalesce_route_ok", False)))
-    self.assertTrue(all(v in ("lane_partition", "bubblebeam_futuresight") for v in data["best_arm"].values()))
+    self.assertEqual(data["verdict"], "GEMV_PURE_SEARCH_GENERATED__BUBBLEBEAM_G3_FULL_Q4K_GEMV")
+    self.assertTrue(data["bubblebeam_futuresight_generated_route_ok"])
+    self.assertTrue(data["tokens_match_all_ctx"])
+    self.assertTrue(all(v in ("lane_partition", "bubblebeam_futuresight", "g3_lanemap_codegen") for v in data["best_arm"].values()))
+    full = data["bubblebeam_g3_full_q4k_gemv_2026_06_25"]
+    self.assertEqual(full["verdict"], data["verdict"])
+    self.assertTrue(full["tokens_match_all_ctx"])
     self.assertEqual(choose_q4k_candidate(UOp.range(WARP, 0, AxisType.WARP)).candidate.name, "lane_partition_q4k")
 
 if __name__ == "__main__":
