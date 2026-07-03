@@ -10,20 +10,7 @@ from tinygrad.runtime.support.amd import AMD_RUNTIME_DEVICES
 from tinygrad.runtime.support.system import RemotePCIDevice, System
 
 # The clean gate classifies VMBX/BL/ADDR/SOS; the remaining PSP registers are printed for operator context.
-PSP_GATE_REGS = {
-  "C2PMSG33_VMBX": 0x16061,
-  "C2PMSG35_BL": 0x16063,
-  "C2PMSG36_ADDR": 0x16064,
-  "C2PMSG64_RING": 0x16080,
-  "C2PMSG67_WPTR": 0x16083,
-  "C2PMSG69_RING_LO": 0x16085,
-  "C2PMSG70_RING_HI": 0x16086,
-  "C2PMSG71_RING_SIZE": 0x16087,
-  "C2PMSG81_SOS": 0x16091,
-  "C2PMSG90_SMU": 0x1609a,
-  "C2PMSG92_STATUS": 0x1609c,
-  "C2PMSG115_SPI": 0x160b3,
-}
+from extra.hardware.amdpci.psp_c2pmsg_regs import PSP_GATE_REGS
 PSP_CLEAN_GATE_ALLOWED_C2PMSG36 = {0x0, 0x5fff}
 
 def stamp(msg:str):
