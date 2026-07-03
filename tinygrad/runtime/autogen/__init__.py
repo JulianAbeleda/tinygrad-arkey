@@ -2,6 +2,7 @@ import glob, importlib, os, pathlib, subprocess, tarfile, tempfile
 from tinygrad.helpers import fetch, flatten, system, getenv
 
 root = (here:=pathlib.Path(__file__).parent).parents[2]
+amd_autogen_src = root/"tinygrad/runtime/autogen/sources/amd"
 rocr_src = "https://github.com/ROCm/rocm-systems/archive/refs/tags/rocm-7.1.1.tar.gz"
 linux_headers_deb = "https://snapshot.debian.org/archive/debian/20260207T145350Z/pool/main/l/linux/linux-libc-dev_6.18.9-1_all.deb"
 liburing_src = "https://raw.githubusercontent.com/axboe/liburing/refs/tags/liburing-2.14/src/include/liburing.h"
@@ -42,7 +43,7 @@ def __getattr__(nm):
       return load("libc", lambda: ([i for i in system("dpkg -L libc6-dev").split() if 'sys/mman.h' in i or 'bits/mman-shared.h' in i] +
                                    ["/usr/include/string.h", "/usr/include/elf.h", "/usr/include/unistd.h", "/usr/include/asm-generic/mman-common.h"]),
                   args=["-D__USE_GNU", "-D_GNU_SOURCE"], dll="'c'", errno=True, recsym=True)
-    case "kfd": return load("kfd", [root/"extra/hip_gpu_driver/kfd_ioctl.h"])
+    case "kfd": return load("kfd", [amd_autogen_src/"kfd_ioctl.h"])
     # this defines all syscall numbers. should probably unify linux autogen?
     case "io_uring":
       return load("io_uring", ["{}/liburing.h", "{}/usr/include/linux/io_uring.h", "{}/usr/include/asm-generic/unistd.h"],
@@ -71,11 +72,11 @@ def __getattr__(nm):
       srcs=rocr_src, args=["-DLITTLEENDIAN_CPU"], prolog=["import os"])
     case "amdgpu_kd": return load("amdgpu_kd", lambda: [f"{system('llvm-config-20 --includedir')}/llvm/Support/AMDHSAKernelDescriptor.h"],
                                   args=lambda: system("llvm-config-20 --cflags").split() + ["-x", "c++"], recsym=True, macros=False)
-    case "amd_gpu": return load("amd_gpu", [root/f"extra/hip_gpu_driver/{s}.h" for s in ["sdma_registers", "nvd", "gc_11_0_0_offset",
-                                                                                               "sienna_cichlid_ip_offset"]],
+    case "amd_gpu": return load("amd_gpu", [amd_autogen_src/f"{s}.h" for s in ["sdma_registers", "nvd", "gc_11_0_0_offset",
+                                                                                "sienna_cichlid_ip_offset"]],
                                 args=["-I/opt/rocm/include", "-x", "c++"])
-    case "amdgpu_drm": return load("amdgpu_drm", [ "/usr/include/drm/drm.h", *[root/f"extra/hip_gpu_driver/{s}.h" for s in ["amdgpu_drm"]]])
-    case "sqtt": return load("sqtt", [root/"extra/sqtt/sqtt.h"])
+    case "amdgpu_drm": return load("amdgpu_drm", ["/usr/include/drm/drm.h", amd_autogen_src/"amdgpu_drm.h"])
+    case "sqtt": return load("sqtt", [root/"tinygrad/runtime/autogen/sources/amd/sqtt.h"])
     case "rocprof":
       return load("rocprof", [f"{{}}/include/{s}.h" for s in ["rocprof_trace_decoder", "trace_decoder_instrument", "trace_decoder_types"]],
                   dll= "['rocprof-trace-decoder', p:='/usr/local/lib/rocprof-trace-decoder.so', p.replace('so','dylib')]",

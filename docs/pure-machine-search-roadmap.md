@@ -142,8 +142,8 @@ reduce, and decode block-tile kernels.
 ### Scheduler/search gate
 
 The `Inst` stream must expose scheduler, regalloc, waitcnt, spill/occupancy, and pipeline-depth decisions as candidate
-space entries. The evaluator must prove that a candidate moved a targeted counter toward the owned oracle before W==D can
-promote it.
+space entries. The evaluator must prove that a candidate moved a targeted counter toward its declared baseline or
+practical roofline before W==D can promote it.
 
 ### Promotion gate
 

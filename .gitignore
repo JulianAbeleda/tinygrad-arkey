@@ -36,7 +36,7 @@ extra/datasets/open-images-v6-mlperf
 extra/datasets/kits/
 extra/datasets/COCO/
 extra/datasets/audio*
-extra/amdpci/captures/
+extra/hardware/amdpci/captures/
 extra/huggingface_onnx/models/*
 extra/huggingface_onnx/*.yaml
 extra/weights
@@ -61,7 +61,7 @@ weights
 *.lprof
 comgr_*
 *.pkl
-!extra/sqtt/examples/**/*.pkl
+!bench/sqtt-examples/**/*.pkl
 site/
 profile_stats
 *.log
@@ -97,7 +97,7 @@ bench/**
 
 # PSP boot/trace captures are local provenance (backed up outside the repo), not code.
 # The durable record lives in docs/amd-linux-psp-good-trace.md; raw captures stay local.
-extra/amdpci/captures/
+extra/hardware/amdpci/captures/
 psp-*.log
 linux-*gart*.log
 linux-*psp*.log

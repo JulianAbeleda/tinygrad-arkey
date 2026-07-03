@@ -1,5 +1,5 @@
 import pathlib, hashlib, re, itertools
-from tinygrad.runtime.autogen import load, root
+from tinygrad.runtime.autogen import amd_autogen_src, load, root
 
 __all__ = ["am", "pm4_soc15", "pm4_nv", "sdma_4_0_0", "sdma_5_0_0", "sdma_6_0_0", "smu_13_0_0", "smu_13_0_6", "smu_13_0_12", "smu_14_0_2",
            "fw", "navi_offsets", "vega_offsets", "regs", "soc_9", "soc_11", "soc_12", "pmc"]
@@ -35,26 +35,26 @@ soc_patterns = ["SQ_TT", "VGT_EVENT_TYPE", "CS", "MTYPE", "SH"]
 
 def __getattr__(nm):
   match nm:
-    case "am": return load("am/am", [root/f"extra/amdpci/headers/{s}.h" for s in ["v11_structs", "v12_structs", "amdgpu_vm",
+    case "am": return load("am/am", [root/f"tinygrad/runtime/autogen/sources/amdpci/{s}.h" for s in ["v11_structs", "v12_structs", "amdgpu_vm",
       "discovery", "amdgpu_ucode", "psp_gfx_if", "amdgpu_psp", "amdgpu_irq", "amdgpu_doorbell"]] + [f"{AMD}/amdkfd/soc15_int.h"] + \
       [f"{AMDINC}/ivsrcid/{s}.h" for s in [f"gfx/irqsrcs_gfx_{x}_0" for x in ('9','11_0','12_0')] + [f"sdma0/irqsrcs_sdma0_{x}_0" for x in (4,5)]] + \
       [f"{AMDINC}/{s}.h" for s in ["v9_structs", "soc15_ih_clientid"]], args=inc, srcs=am_src, rules=kern_rules)
     case "pm4_soc15": return load("am/pm4_soc15", [f"{AMD}/amdkfd/kfd_pm4_headers_ai.h", f"{AMD}/amdgpu/soc15d.h"], srcs=am_src)
     case "pm4_nv": return load("am/pm4_nv", [f"{AMD}/amdkfd/kfd_pm4_headers_ai.h", f"{AMD}/amdgpu/nvd.h"], srcs=am_src)
-    case "sdma_4_0_0": return load("am/sdma_4_0_0", [root/"extra/hip_gpu_driver/sdma_registers.h", f"{AMD}/amdgpu/vega10_sdma_pkt_open.h"],
+    case "sdma_4_0_0": return load("am/sdma_4_0_0", [amd_autogen_src/"sdma_registers.h", f"{AMD}/amdgpu/vega10_sdma_pkt_open.h"],
                                    args=["-I/opt/rocm/include", "-x", "c++"], srcs=am_src)
-    case "sdma_5_0_0": return load("am/sdma_5_0_0", [root/"extra/hip_gpu_driver/sdma_registers.h", f"{AMD}/amdgpu/navi10_sdma_pkt_open.h"],
+    case "sdma_5_0_0": return load("am/sdma_5_0_0", [amd_autogen_src/"sdma_registers.h", f"{AMD}/amdgpu/navi10_sdma_pkt_open.h"],
                                    args=["-I/opt/rocm/include", "-x", "c++"], srcs=am_src)
-    case "sdma_6_0_0": return load("am/sdma_6_0_0", [root/"extra/hip_gpu_driver/sdma_registers.h", f"{AMD}/amdgpu/sdma_v6_0_0_pkt_open.h"],
+    case "sdma_6_0_0": return load("am/sdma_6_0_0", [amd_autogen_src/"sdma_registers.h", f"{AMD}/amdgpu/sdma_v6_0_0_pkt_open.h"],
                                    args=["-I/opt/rocm/include", "-x", "c++"], srcs=am_src)
     case "smu_13_0_0": return load("am/smu_13_0_0", [f"{AMD}/pm/swsmu/inc/pmfw_if/{s}.h" for s in ["smu_v13_0_0_ppsmc","smu13_driver_if_v13_0_0"]]
-                                    +[root/"extra/amdpci/headers/amdgpu_smu.h"], args=inc, srcs=am_src)
+                                    +[root/"tinygrad/runtime/autogen/sources/amdpci/amdgpu_smu.h"], args=inc, srcs=am_src)
     case "smu_13_0_6": return load("am/smu_13_0_6", [f"{AMD}/pm/swsmu/inc/pmfw_if/{s}.h" for s in ["smu_v13_0_6_ppsmc","smu_v13_0_6_pmfw", \
-      "smu13_driver_if_v13_0_6"]] +[root/"extra/amdpci/headers/amdgpu_smu.h"], args=inc, srcs=am_src)
+      "smu13_driver_if_v13_0_6"]] +[root/"tinygrad/runtime/autogen/sources/amdpci/amdgpu_smu.h"], args=inc, srcs=am_src)
     case "smu_13_0_12": return load("am/smu_13_0_12", [f"{AMD}/pm/swsmu/inc/pmfw_if/{s}.h" for s in ["smu_v13_0_12_ppsmc","smu_v13_0_12_pmfw",
-      "smu13_driver_if_v13_0_6"]] +[root/"extra/amdpci/headers/amdgpu_smu.h"], args=inc, srcs=am_src)
+      "smu13_driver_if_v13_0_6"]] +[root/"tinygrad/runtime/autogen/sources/amdpci/amdgpu_smu.h"], args=inc, srcs=am_src)
     case "smu_14_0_2": return load("am/smu_14_0_2", [f"{AMD}/pm/swsmu/inc/pmfw_if/{s}.h" for s in ["smu_v14_0_0_pmfw", "smu_v14_0_2_ppsmc",
-                                    "smu14_driver_if_v14_0"]]+[root/"extra/amdpci/headers/amdgpu_smu.h"], args=inc, srcs=am_src)
+                                    "smu14_driver_if_v14_0"]]+[root/"tinygrad/runtime/autogen/sources/amdpci/amdgpu_smu.h"], args=inc, srcs=am_src)
     # firmware hashes
     case "fw":
       def genfw(name, files, **kwargs): return "\n".join(["hashes = {"] + [f"  {p.name!r}: {hashlib.sha256(p.read_bytes()).hexdigest()!r},"

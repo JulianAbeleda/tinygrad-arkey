@@ -52,9 +52,6 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # prefill-v2 chunk instead of the slow 32-token symbolic fallback. PREFILL_REMAINDER_FIX=0 reverts. See
 # docs/prefill-route-schedule-result-20260620.md.
 PREFILL_REMAINDER_FIX = bool(getenv("PREFILL_REMAINDER_FIX", 1))
-# Research-only (default off): route eligible PREFILL_V2 prefill matmuls through an extracted rocBLAS Tensile kernel
-# via HCQ (external artifact). NOT a default/ship path. See docs/prefill-tensile-a3-inmodel-route-scope-20260619.md.
-PREFILL_TENSILE_GEMM = bool(getenv("PREFILL_TENSILE_GEMM", 0))
 # Restricted default-ON (within PREFILL_V2): route eligible fp16 prefill matmuls through the dependency-free
 # graph-capturable RDNA3 GEMM. Passed all 4 default-on readiness gates (synced 1.61x, 0/256 greedy mismatches,
 # 11/11 fallback, 5/5 OOM; docs/prefill-graph-gemm-default-on-readiness-result-20260620.md). Default-on is
@@ -112,8 +109,6 @@ def _prefill_tc_attn_default() -> int:
     return 1 if "gfx1100" in str(getattr(Device["AMD"], "arch", "")) else 0
   except Exception: return 0
 PREFILL_TC_ATTN = bool(_prefill_tc_attn_default())
-Q8_FFN_HANDWRITTEN = bool(getenv("Q8_FFN_HANDWRITTEN", 0))
-DECODE_MMVQ_IMPORT_Q4 = bool(getenv("DECODE_MMVQ_IMPORT_Q4", 0))
 # HISTORY: the earlier env `PREFILL_TC_ATTENTION` probe reported ~0.8x "REFUTED in-model" -- that was a BROKEN
 # harness: it set the typo'd env `PREFILL_TC_ATTENTION` (model reads PREFILL_TC_ATTN) so both arms ran SDPA, AND
 # it bound a symbolic start_pos that fails the concrete-int guard so the path never fired. Overturned 2026-06-20
@@ -136,7 +131,7 @@ def _prefill_v2_validate_ubatch(ubatch:int) -> None:
   if ubatch not in _PREFILL_V2_VALIDATED_UBATCH:
     raise ValueError(f"PREFILL_V2 only validates PREFILL_UBATCH in {_PREFILL_V2_VALIDATED_UBATCH} (got {ubatch}); "
                      f"the warmstart TC schedule is shape-specific. Re-measure per-shape opts for {ubatch} first "
-                     f"(extra/qk_prefill_gate.py) and add it to _PREFILL_V2_VALIDATED_UBATCH.")
+                     f"and add it to _PREFILL_V2_VALIDATED_UBATCH.")
 
 # fp16 realization coexists with the Q4_K decode storage (~fp16-model-size extra VRAM). Preflight it so an
 # oversized model (14B/32B) fails fast with an actionable error instead of OOMing late mid-realize.
@@ -154,27 +149,9 @@ def _pf16(lin, x:Tensor) -> Tensor:
   if PREFILL_GRAPH_GEMM and w is not None:
     routed = qk_ops.route_pf16_graph_gemm(lin, x)
     if routed is not None: return routed
-  if PREFILL_TENSILE_GEMM and w is not None:   # research-only external Tensile route (flag-gated, eligible shapes only)
-    routed = qk_ops.route_pf16(lin, x)
-    if routed is not None: return routed       # else fall through to the normal fp16 matmul (silent fallback)
   if w is None: w = lin.weight.cast(dtypes.float16)   # fallback (uncached): lazy, slow -- expect the cache
   b = getattr(lin, "bias", None)
   return x.cast(dtypes.float16).linear(w.transpose(), b.cast(dtypes.float16) if b is not None else None)
-
-def _ffn_tensile_col(block, x:Tensor):
-  """Transpose-free Tensile FFN (research, PREFILL_TENSILE_GEMM): keep gate/up/down in [feature,T] (column)
-  so the gate/up output-transpose + down input-transpose cancel (the diagnostic-localized prefill win).
-  Transpose x ONCE at entry, result ONCE at exit. Returns None (silent fallback) if any role is ineligible."""
-  gw = getattr(block.ffn_gate, "_pf16_w", None)
-  if gw is None or x.ndim < 2 or not isinstance(x.shape[-2], int) or x.shape[-2] != 512: return None
-  D, T = gw.shape[1], x.shape[-2]
-  xT = x.reshape(T, D).cast(dtypes.float16).transpose().contiguous()      # [D, T] (one entry transpose)
-  g = qk_ops.route_pf16_col(block.ffn_gate, xT); u = qk_ops.route_pf16_col(block.ffn_up, xT)
-  if g is None or u is None: return None
-  h = (g.silu() * u).contiguous()                                        # [hidden, T] (down's A, no transpose)
-  o = qk_ops.route_pf16_col(block.ffn_down, h)                           # [dim, T]
-  if o is None: return None
-  return o.transpose().reshape(*x.shape[:-1], D)                         # [..., dim] (one exit transpose)
 
 @functools.cache
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, device:str|None=None) -> Tensor:
@@ -505,7 +482,7 @@ class Q6KPrimitiveLinear:
       # above hardcodes the 8B dims (4096/12288), so 14B/32B Q6_K ffn_down falls to the slower generic partial
       # path (~253 GB/s). Structural class (long in-features, moderate out, not lm_head), not a model-dim hardcode.
       (getenv("DECODE_Q6K_FFN_DOWN_LONGK", 1) and self.in_features >= 8192 and self.out_features < 100000))
-    # TG-P3: spec-driven GENERATED Q6_K route (extra/qk_q6k_route_spec.py). Byte-identical to the shipped coop/partial
+    # TG-P3: spec-driven GENERATED Q6_K route (extra/qk/q6k_route_spec.py). Byte-identical to the shipped coop/partial
     # hand templates -- a provenance conversion (hand_authored_uop_template -> machine_authored_generated). Default-on;
     # BoltBeam QK_ROUTE_POLICY can also select it per tensor. Rollback to the shipped kernels: DECODE_Q6K_GENERATED=0.
     q6k_gen_selected = _qk_route_policy_selects_q6k_generated(self.out_features, self.in_features)
@@ -904,10 +881,7 @@ class FFNBlock:
   def _feed_forward(self, x:Tensor) -> Tensor:
     if getattr(self, '_prefill_v2', False) and not hasattr(self, 'ffn_gate_exps') and not hasattr(self, 'ffn_gateup'):
       # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
-      # kernel (mirrors extra/qk_prefill_gate.py chained_ffn, the gated 37.5%-peak chain). MoE/fused fall through.
-      if PREFILL_TENSILE_GEMM:   # research: transpose-free column-layout Tensile FFN (silent fallback if ineligible)
-        col = _ffn_tensile_col(self, x)
-        if col is not None: return col
+      # kernel (mirrors the gated chained-FFN prefill authority shape). MoE/fused fall through.
       g = _pf16(self.ffn_gate, x).contiguous()
       u = _pf16(self.ffn_up, x).contiguous()
       h = (g.silu() * u).contiguous()
@@ -955,8 +929,6 @@ class FFNBlock:
     @function(precompile=True, allow_implicit=True)
     def _run(x:Tensor, start_pos:int|UOp):
       h =     x + self._attention(self.attn_norm(x), start_pos)
-      if Q8_FFN_HANDWRITTEN and not hasattr(self, 'ffn_gate_exps'):
-        if (routed := qk_ops.route_q8_ffn(self, h)) is not None: return (h + routed).contiguous()
       return (h + self._feed_forward(self.ffn_norm(h))).contiguous()
     return _run(x, start_pos)
 
@@ -1039,28 +1011,28 @@ class TransformerBlock(FFNBlock):
         # (the score-broadcast variant is 8B-tuned); kept 8B-scoped. See attention-combine result doc.
         out = qk_ops.flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
                                                         Hd, Hq, Hkv, MAXC, L)
-      _g5_shape_ok = B == 1 and Hd == 128 and Hq == 40 and Hkv == 8
-      _g5_policy_selected = _qk_route_policy_selected("decode_flash_block_tile_g5_konly",
-                                                       {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_shape_ok else False
-      _g5_enabled = _g5_policy_selected if has_qk_route_policy() else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5", 1))
-      if out is None and _g5_enabled and _g5_shape_ok:
-        # G=5 block tile for 14B (Hq=40/Hkv=8): one warp per GQA group, TK=16 K rows staged in LDS,
-        # online softmax + d-sharded PV. Sliced path: l_route=L, grid=Hkv×ceildiv(ctx,L)=32 wg at ctx=512.
-        # Default-on (TIER_A +3.9 tok/s ctx512). BoltBeam QK_ROUTE_POLICY selects this route by shape when present;
-        # without a policy, rollback remains DECODE_FLASH_BLOCK_TILE_G5=0. The validated 14B staging is K_ONLY.
-        out = qk_ops.flash_decode_g5_block_tile(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                                Hd, Hq, Hkv, MAXC, L, staging="K_ONLY")
-      # TG-P14 promoted default: generated 8B long-context attention (Hq=32/Hkv=8, G=4). The default is the validated
-      # live-context split geometry + fused split-preserving combine + KV_BOTH staging. This replaces the old owned
-      # HIP two-kernel route on the hot path. Rollback/debug fallback: DECODE_FLASH_BLOCK_TILE_G5_8B=0 routes to the
-      # generic generated tinygrad flash path below, never to a handwritten kernel.
-      _g5_8b_shape = B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 and (Hq // Hkv) == 4
-      _g5_8b_policy = _qk_route_policy_selected("decode_flash_live_split_g4_8b_kvboth",
-                                                {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) if _g5_8b_shape else False
-      _g5_8b_enabled = _g5_8b_policy if has_qk_route_policy() else bool(getenv("DECODE_FLASH_BLOCK_TILE_G5_8B", 1))
-      if out is None and _g5_8b_shape and _g5_8b_enabled:
+      # PROMOTED default: MODULAR generated live-split flash-decode. ONE structural shape class -- B==1, Hd==128,
+      # Hkv==8, Hq % Hkv == 0 (any GQA decode with these params), NOT per-model Hq hardcodes -- covering 8B (Hq=32/G=4),
+      # 14B (Hq=40/G=5), 32B (Hq=64/G=8) and future GQA shapes on the same generated tile kernel
+      # (flash_block_tiled_xlane_score_pv_tile_whole_cache). Mirrors the FUSED_COMBINE structural-class precedent below.
+      # per-split LENGTH = ceildiv(Tc, S_occ) scales to the LIVE context, so decode never reads the full max_context
+      # buffer -- required once max_context is raised (e.g. auto-scan); the old fixed-L 14B g5 route looped
+      # ceildiv(MAXC,L) splits over the WHOLE buffer every token (~MAXC/token). S_occ is a FIXED occupancy split count
+      # (const in MAXC -> const split-count + scratch, so raising MAXC is free). Tunables: DECODE_LIVE_SPLIT_S (splits),
+      # DECODE_LIVE_SPLIT_STAGING (K_ONLY|KV_BOTH). Rollback: DECODE_LIVE_SPLIT=0 -> generic generated flash below
+      # (never a handwritten kernel). BoltBeam route policy still selects per shape via either promoted live-split key.
+      _ls_shape = B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0
+      if has_qk_route_policy():
+        _ls_enabled = _ls_shape and (
+          _qk_route_policy_selected("decode_flash_block_tile_g5_konly", {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}) or
+          _qk_route_policy_selected("decode_flash_live_split_g4_8b_kvboth", {"B": 1, "Hq": Hq, "Hkv": Hkv, "Hd": Hd}))
+      else:
+        _ls_enabled = _ls_shape and bool(getenv("DECODE_LIVE_SPLIT", 1))
+      if out is None and _ls_enabled:
         out = qk_ops.flash_decode_live_split_block_tile(q.reshape(Hq, Hd), assigned_kv, vsp + T, Hd, Hq, Hkv, MAXC,
-                                                        MAXC // L, staging="KV_BOTH", fused_combine=True)
+                                                        getenv("DECODE_LIVE_SPLIT_S", 48),
+                                                        staging=str(getenv("DECODE_LIVE_SPLIT_STAGING", "K_ONLY")),
+                                                        fused_combine=True)
       if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
          and (Hq // Hkv) == 4:
         # A1 pure-search skeleton (default-off): force the scheduler-generated flash-decode route and bypass the
@@ -1109,13 +1081,6 @@ class TransformerBlock(FFNBlock):
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
     out_in = attn if not self.config.attn_output_gate else (attn * gate.sigmoid())
     if getattr(self, '_prefill_v2', False): return _pf16(self.attn_output, out_in).contiguous()  # prefill v2
-    if DECODE_MMVQ_IMPORT_Q4 and resolve(T == 1) and out_in.shape == (1, 1, self.config.dim) and hasattr(self.attn_output, "q4k_storage"):
-      if not hasattr(self, "_decode_mmvq_import_q4_q8"):
-        self._decode_mmvq_import_q4_q8 = Tensor.empty(qk_ops.imported_q4_mmvq_q8_bytes(), dtype=dtypes.uint8, device=out_in.device).contiguous().realize()
-        self._decode_mmvq_import_q4_out = Tensor.empty(self.config.dim, dtype=dtypes.float32, device=out_in.device).contiguous().realize()
-      routed = qk_ops.route_imported_q4_mmvq(self.attn_output, out_in.cast(dtypes.float32).contiguous(),
-                                             self._decode_mmvq_import_q4_q8, self._decode_mmvq_import_q4_out)
-      if routed is not None: return routed
     return self.attn_output(out_in)
 
   def _init_state(self, x:Tensor):
@@ -1262,10 +1227,6 @@ class Transformer:
     if PREFILL_V2:
       _prefill_v2_validate_ubatch(PREFILL_UBATCH)
       self._pf16_warmstart = self._build_prefill_v2_warmstart()
-      if PREFILL_TENSILE_GEMM:   # research-only: build Tensile runners + install routing EAGERLY (outside the prefill trace)
-        qk_ops.install_tensile()
-    if Q8_FFN_HANDWRITTEN:        # research-only: install q8 decode artifacts before block function tracing
-      qk_ops.install_q8_ffn_artifacts()
 
   # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
   _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",

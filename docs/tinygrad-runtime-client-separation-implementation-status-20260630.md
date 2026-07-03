@@ -44,7 +44,7 @@ POST /runtime/cache/clear        # clears the prompt/KV prefix cache
 
 | phase | deliverable | verdict |
 |---|---|---|
-| R0 | boundary audit (`extra/tinygrad_runtime_boundary_audit.py`) | **R0_PASS_BOUNDARY_PINNED** (19/19 surface checks, no leakage) |
+| R0 | boundary audit (`extra/audit/tinygrad_runtime_boundary_audit.py`) | **R0_PASS_BOUNDARY_PINNED** (19/19 surface checks, no leakage) |
 | R1 | read-only status endpoints | **R1_PASS_STATUS_ENDPOINTS** |
 | R2 | prompt guard + structured error contract | **R2_PASS_PROVIDER_ERROR_CONTRACT** |
 | R3 | model registry (`extra/runtime_models.example.json`, `build_registry`) | **R3_PASS_MODEL_REGISTRY_READONLY** |
@@ -53,7 +53,7 @@ POST /runtime/cache/clear        # clears the prompt/KV prefix cache
 | R6 | client context envelope spec (`tinygrad-client-context-envelope-v1.md`) | **R6_PASS_CONTEXT_ENVELOPE_SPEC** |
 | R7 | repo-index adapter boundary (`tinygrad-repo-index-adapter-boundary-v1.md`) | **R7_PASS_REPO_CONTEXT_BOUNDARY** |
 | R8 | runtime cache observability (`/runtime/cache`) | **R8_PASS_RUNTIME_CACHE_OBSERVABILITY** (real compile hit/miss counters + kernel-count proxy) |
-| R9 | provider compat gate (`extra/tinygrad_provider_compat_gate.py`) | **R9_PASS_PROVIDER_COMPAT** (12/12) |
+| R9 | provider compat gate (`extra/audit/tinygrad_provider_compat_gate.py`) | **R9_PASS_PROVIDER_COMPAT** (12/12) |
 | R10 | operational policy (`tinygrad-runtime-operational-policy-r10.md`) | **R10_PASS_OPERATIONAL_POLICY** |
 
 ## How to run
@@ -71,8 +71,8 @@ python -m tinygrad.llm.cli --serve 8000 --no-preload
 Verify the boundary and provider compatibility:
 
 ```
-python extra/tinygrad_runtime_boundary_audit.py            # R0: static + live audit
-python extra/tinygrad_provider_compat_gate.py \
+python extra/audit/tinygrad_runtime_boundary_audit.py            # R0: static + live audit
+python extra/audit/tinygrad_provider_compat_gate.py \
   --base-url http://127.0.0.1:8000 --model qwen3:8b        # R9: 11-check gate
 ```
 

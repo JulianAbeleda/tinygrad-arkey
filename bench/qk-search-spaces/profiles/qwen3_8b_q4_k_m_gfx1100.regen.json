@@ -202,5 +202,5 @@
     "decode_q6k_coop_shipped",
     "prefill_pipe_role_selective_default"
   ],
-  "new_target_bootstrap": "to add a new <model>_<quant>_<gpu>: fill model/quant_mix/gpu/authority_contexts, derive role shapes from model dims (role_shape_derivation), then run the census (extra/pure_machine_search_default_path_census.py), the ceiling/attribution audit, and the candidate evaluator -- do NOT hand-edit route flags."
+  "new_target_bootstrap": "to add a new <model>_<quant>_<gpu>: fill model/quant_mix/gpu/authority_contexts, derive role shapes from model dims (role_shape_derivation), then run the census (extra/audit/pure_machine_search_default_path_census.py) and BoltBeam evaluation/policy -- do NOT hand-edit route flags."
 }

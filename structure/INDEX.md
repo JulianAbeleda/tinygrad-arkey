@@ -11,9 +11,8 @@ If you are new to this structure, start with `HOW_TO_USE.md`.
 If the goal is fast role alignment for a model or operator, start with `Purpose/`.
 
 **For this project's actual engineering work** (the AMD-only quantized-decode fork): start with
-`../docs/README.md` (the doc map) → `../docs/amd-decode-banked-20260616.md` (current decode state + lever
-map). Running log: `Development/session-handoff.md`. Active direction:
-`Development/machine-search-decode-context-plan-2026-06-16.md`.
+`../docs/README.md` (the current doc map) and `../bench/qk-search-spaces/default_route_manifest.json` (route state).
+Historical handoffs and old audits are available through git history, not active-tree docs.
 
 - `HOW_TO_USE.md` — plain-English workflow and reader paths
 - `Purpose/README.md` — project-agnostic boot layer for orienting LLMs

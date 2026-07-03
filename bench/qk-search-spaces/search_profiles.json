@@ -1,14 +1,22 @@
 {
-  "_schema": "PMS-R3 search profiles -- declared candidate space (workload x role x quant x shape x target x route_family). The manifest-driven candidate generator (extra/qk_pure_search_next_candidate.py --profile-driven) draws candidates ONLY from here. It REFUSES any candidate whose route_family is not declared allowed for the requested role (REFUSED_OUT_OF_PROFILE), refuses any (role,route_family) carried in do_not_search (REFUSED_DO_NOT_SEARCH), and when asked for the next untried candidate it emits NO_UNTRIED_CANDIDATE_TARGETS_A_FAILED_ROW rather than wandering into already-promoted/shipped roles. A role is a SEARCHABLE failed/open row only if its status is open|failed (not promoted|shipped|refuted).",
-  "generated_by": "PMS-R3; route status + do_not_search synced from extra/qk_route_manifest.py (ROUTES + REFUTED)",
-  "scope_doc": "docs/pure-machine-search-remaining-hot-kernels-scope-20260630.md (PMS-R3)",
+  "_schema": "PMS-R3 search profile descriptor retained as tinygrad route-shape data. BoltBeam owns candidate generation/evaluation; tinygrad uses this file only as local manifest context and for route-space audits.",
+  "generated_by": "Route status + do_not_search synced from extra/qk/route_manifest.py; candidate generation lives in BoltBeam.",
+  "scope_doc": "docs/pure-machine-search-roadmap.md",
   "target": "AMD_gfx1100",
-  "route_families": ["lanemap", "coop", "graph_gemm_pipe", "native_isa_attention", "owned_reference", "lanemap_layout_reshuffle", "coop_halfwarp_direct"],
-  "_route_families_note": "lanemap/coop/graph_gemm_pipe/native_isa_attention/owned_reference are the GENERIC families a live route uses. lanemap_layout_reshuffle and coop_halfwarp_direct are the refuted SUB-variant tokens used only by do_not_search, so a refuted topology never shadows a generic family that a promoted/shipped route still uses (e.g. ffn_gate_up=lanemap is PROMOTED; the refuted offline-reshuffle is a distinct token).",
+  "route_families": [
+    "lanemap",
+    "coop",
+    "graph_gemm_pipe",
+    "live_split_attention",
+    "owned_reference",
+    "lanemap_layout_reshuffle",
+    "coop_halfwarp_direct"
+  ],
+  "_route_families_note": "lanemap/coop/graph_gemm_pipe/live_split_attention are promoted generated families. owned_reference is rollback/reference provenance only, not a live default or search target. lanemap_layout_reshuffle and coop_halfwarp_direct are refuted sub-variant tokens used only by do_not_search.",
   "status_vocab": {
     "promoted": "generated/search-selected route is the shipped default for this role (no open search)",
-    "shipped": "owned/hand route is the shipped default for this role (no generated replacement promoted; not an open search target unless a ceiling audit reopens it)",
-    "shipped_owned": "owned route shipped; a generated alt exists but is correct_not_fast (research, not a failed-row search target)",
+    "shipped": "historical/rollback route exists but is not a generated default; not searchable unless a manifest row explicitly reopens it",
+    "shipped_owned": "legacy owned route retained as rollback/reference only; not a live default and not a search target",
     "refuted": "a candidate was built+measured and lost; do not re-search as built",
     "deferred": "blocked-but-OPEN: a capability gap (e.g. renderer lowering of v_dot2 / cross-lane) prevents building this now, but it is NOT refuted on merits -> reopen when the capability lands. The codegen north-star frontier lives in qk_route_manifest.DEFERRED_CAPABILITIES (distinct from refuted/failed).",
     "open": "no promoted/shipped route yet -> a searchable failed/open row",
@@ -18,36 +26,193 @@
     "qwen3_8b_q4_k_m_gfx1100_decode": {
       "workload": "decode",
       "target": "AMD_gfx1100",
-      "quant_supported": ["Q4_K", "Q6_K", "fp16"],
+      "quant_supported": [
+        "Q4_K",
+        "Q6_K",
+        "fp16"
+      ],
       "roles": {
-        "ffn_gate_up": {"quant": "Q4_K", "shape": {"K": 4096, "N": 12288}, "allowed_route_families": ["lanemap", "owned_reference"], "status": "promoted", "route_id": "decode_q4k_g3_generated"},
-        "ffn_down":    {"quant": "Q4_K", "shape": {"K": 12288, "N": 4096}, "allowed_route_families": ["lanemap", "owned_reference"], "status": "promoted", "route_id": "decode_q4k_g3_generated"},
-        "attn_qo":     {"quant": "Q4_K", "shape": {"K": 4096, "N": 4096}, "allowed_route_families": ["lanemap", "owned_reference"], "status": "promoted", "route_id": "decode_q4k_g3_generated"},
-        "ffn_down_q6k": {"quant": "Q6_K", "shape": {"K": 12288, "N": 4096}, "allowed_route_families": ["coop", "owned_reference"], "status": "shipped", "route_id": "decode_q6k_coop_shipped"},
-        "lm_head":     {"quant": "Q6_K", "shape": {"N": ">=100000"}, "allowed_route_families": ["coop", "owned_reference"], "status": "shipped", "route_id": "decode_q6k_coop_shipped"},
-        "attention_tile":    {"quant": "fp16", "shape": {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "ctx": ">=512"}, "allowed_route_families": ["owned_reference", "native_isa_attention"], "status": "shipped_owned", "route_id": "decode_attention_owned_two_kernel"},
-        "attention_combine": {"quant": "fp16", "shape": {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "ctx": ">=512"}, "allowed_route_families": ["owned_reference", "native_isa_attention"], "status": "shipped_owned", "route_id": "decode_attention_owned_two_kernel"}
+        "ffn_gate_up": {
+          "quant": "Q4_K",
+          "shape": {
+            "K": 4096,
+            "N": 12288
+          },
+          "allowed_route_families": [
+            "lanemap"
+          ],
+          "status": "promoted",
+          "route_id": "decode_q4k_g3_generated"
+        },
+        "ffn_down": {
+          "quant": "Q4_K",
+          "shape": {
+            "K": 12288,
+            "N": 4096
+          },
+          "allowed_route_families": [
+            "lanemap"
+          ],
+          "status": "promoted",
+          "route_id": "decode_q4k_g3_generated"
+        },
+        "attn_qo": {
+          "quant": "Q4_K",
+          "shape": {
+            "K": 4096,
+            "N": 4096
+          },
+          "allowed_route_families": [
+            "lanemap"
+          ],
+          "status": "promoted",
+          "route_id": "decode_q4k_g3_generated"
+        },
+        "ffn_down_q6k": {
+          "quant": "Q6_K",
+          "shape": {
+            "K": 12288,
+            "N": 4096
+          },
+          "allowed_route_families": [
+            "coop"
+          ],
+          "status": "promoted",
+          "route_id": "decode_q6k_coop_generated"
+        },
+        "lm_head": {
+          "quant": "Q6_K",
+          "shape": {
+            "N": ">=100000"
+          },
+          "allowed_route_families": [
+            "coop"
+          ],
+          "status": "promoted",
+          "route_id": "decode_q6k_coop_generated"
+        },
+        "attention_tile": {
+          "quant": "fp16",
+          "shape": {
+            "B": 1,
+            "Hq": 32,
+            "Hkv": 8,
+            "Hd": 128,
+            "ctx": ">=512"
+          },
+          "allowed_route_families": [
+            "live_split_attention"
+          ],
+          "status": "promoted",
+          "route_id": "decode_flash_live_split_g4_8b_kvboth",
+          "note": "promoted generated live-split/KV_BOTH attention route; owned two-kernel route is removed from the default path and retained only as historical baseline provenance"
+        },
+        "attention_combine": {
+          "quant": "fp16",
+          "shape": {
+            "B": 1,
+            "Hq": 32,
+            "Hkv": 8,
+            "Hd": 128,
+            "ctx": ">=512"
+          },
+          "allowed_route_families": [
+            "live_split_attention"
+          ],
+          "status": "promoted",
+          "route_id": "decode_flash_live_split_g4_8b_kvboth",
+          "note": "promoted generated live-split/KV_BOTH attention route; owned two-kernel route is removed from the default path and retained only as historical baseline provenance"
+        }
       }
     },
     "qwen3_8b_q4_k_m_gfx1100_prefill": {
       "workload": "prefill",
       "target": "AMD_gfx1100",
-      "quant_supported": ["Q4_K", "Q6_K", "fp16"],
+      "quant_supported": [
+        "Q4_K",
+        "Q6_K",
+        "fp16"
+      ],
       "roles": {
-        "attn_qo":     {"quant": "fp16", "shape": {"M": 512, "N": 4096, "K": 4096}, "allowed_route_families": ["graph_gemm_pipe", "owned_reference"], "status": "promoted", "route_id": "prefill_pipe_role_selective_default"},
-        "attn_kv":     {"quant": "fp16", "shape": {"M": 512, "N": 1024, "K": 4096}, "allowed_route_families": ["graph_gemm_pipe", "owned_reference"], "status": "promoted", "route_id": "prefill_pipe_role_selective_default"},
-        "ffn_down":    {"quant": "fp16", "shape": {"M": 512, "N": 4096, "K": 12288}, "allowed_route_families": ["graph_gemm_pipe", "owned_reference"], "status": "promoted", "route_id": "prefill_pipe_role_selective_default"},
-        "ffn_gate_up": {"quant": "fp16", "shape": {"M": 512, "N": 12288, "K": 4096}, "allowed_route_families": ["graph_gemm_pipe", "owned_reference"], "status": "promoted", "route_id": "prefill_pipe_role_selective_default", "pipe_excluded": true, "pipe_exclude_reason": "out_f==12288 is BLAS-saturated (~107% of BLAS on lds2); pipe regresses it ~17% -> kept on lds2"}
+        "attn_qo": {
+          "quant": "fp16",
+          "shape": {
+            "M": 512,
+            "N": 4096,
+            "K": 4096
+          },
+          "allowed_route_families": [
+            "graph_gemm_pipe"
+          ],
+          "status": "promoted",
+          "route_id": "prefill_pipe_role_selective_default"
+        },
+        "attn_kv": {
+          "quant": "fp16",
+          "shape": {
+            "M": 512,
+            "N": 1024,
+            "K": 4096
+          },
+          "allowed_route_families": [
+            "graph_gemm_pipe"
+          ],
+          "status": "promoted",
+          "route_id": "prefill_pipe_role_selective_default"
+        },
+        "ffn_down": {
+          "quant": "fp16",
+          "shape": {
+            "M": 512,
+            "N": 4096,
+            "K": 12288
+          },
+          "allowed_route_families": [
+            "graph_gemm_pipe"
+          ],
+          "status": "promoted",
+          "route_id": "prefill_pipe_role_selective_default"
+        },
+        "ffn_gate_up": {
+          "quant": "fp16",
+          "shape": {
+            "M": 512,
+            "N": 12288,
+            "K": 4096
+          },
+          "allowed_route_families": [
+            "graph_gemm_pipe"
+          ],
+          "status": "promoted",
+          "route_id": "prefill_pipe_role_selective_default",
+          "pipe_excluded": true,
+          "pipe_exclude_reason": "out_f==12288 is BLAS-saturated (~107% of BLAS on lds2); pipe regresses it ~17% -> kept on lds2"
+        }
       }
     }
   },
   "do_not_search": [
-    {"axis": "q6k_direct_half_warp_route", "route_family": "coop_halfwarp_direct", "role": "lm_head", "disposition": "refuted: W==D regression -4.77..-6.06% (median -5.44%)", "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json", "route_id": "decode_q6k_direct_refuted"},
-    {"axis": "q4k_offline_layout_reshuffle", "route_family": "lanemap_layout_reshuffle", "role": "ffn_gate_up", "disposition": "deprioritized: G3 (generic lanemap) matches owned; the refuted axis is the OFFLINE LAYOUT RESHUFFLE variant, not the promoted lanemap route", "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"},
-    {"axis": "attention_combine_fused_lifecycle", "route_family": "native_isa_attention", "role": "attention_combine", "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)", "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"},
-    {"axis": "native_attention_as_default", "route_family": "native_isa_attention", "role": "attention_tile", "disposition": "correct_not_fast (~60-68% of owned)", "citation": "bench/amd-isa-backend-phase-n7/latest.json", "route_id": "decode_attention_native_correct_not_fast"},
-    {"axis": "n1b_scalar_address_path", "route_family": "native_isa_attention", "role": "attention_tile", "disposition": "refuted/dead", "citation": "bench/amd-isa-backend-phase-n1b/latest.json"},
-    {"axis": "occupancy_lds_only_attention_tuning", "route_family": "native_isa_attention", "role": "attention_tile", "disposition": "refuted: no W==D movement", "citation": "bench/amd-isa-backend-phase-m/latest.json"},
-    {"axis": "scheduler_only_attention_tuning", "route_family": "native_isa_attention", "role": "attention_tile", "disposition": "small/no movement", "citation": "bench/amd-isa-backend-phase-k/latest.json"}
+    {
+      "axis": "q6k_direct_half_warp_route",
+      "route_family": "coop_halfwarp_direct",
+      "role": "lm_head",
+      "disposition": "refuted: W==D regression -4.77..-6.06% (median -5.44%)",
+      "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json",
+      "route_id": "decode_q6k_direct_refuted"
+    },
+    {
+      "axis": "q4k_offline_layout_reshuffle",
+      "route_family": "lanemap_layout_reshuffle",
+      "role": "ffn_gate_up",
+      "disposition": "deprioritized: G3 (generic lanemap) matches owned; the refuted axis is the OFFLINE LAYOUT RESHUFFLE variant, not the promoted lanemap route",
+      "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"
+    },
+    {
+      "axis": "attention_combine_fused_lifecycle",
+      "route_family": "live_split_attention",
+      "role": "attention_combine",
+      "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
+      "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"
+    }
   ]
 }

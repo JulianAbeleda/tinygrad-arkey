@@ -24,7 +24,7 @@ Headline: 5 kernels on the default path are non-tinygrad-generated. 5 are machin
 | decode_q6k_coop_shipped | rollback_oracle | owned_reference | keep as rollback/oracle; do not delete |
 | decode_q6k_direct_refuted | hand_authored_uop_template | refuted | do NOT reopen as built (-5.44% median W==D); only with a different topology than half-warp |
 | decode_attention_owned_two_kernel | external_handwritten_kernel | removed | retired; replaced by decode_flash_live_split_g4_8b_kvboth |
-| decode_attention_native_correct_not_fast | machine_authored_generated | research | infrastructure/research only (~60-68% of owned); reopen only if attention wall-share becomes dominant |
+| decode_attention_generic_flash_generated | tinygrad_scheduler_generated | research | generated rollback/reference only; promoted live-split KV_BOTH remains the default |
 | prefill_pipe_role_selective_default | rollback_oracle | search_selected_specialized_route | keep as rollback/oracle; do not delete |
 | prefill_pipe_global_rollback | rollback_oracle | superseded_rollback | keep as A/B comparator and the rollback target of role-selective |
 
@@ -41,10 +41,10 @@ Headline: 5 kernels on the default path are non-tinygrad-generated. 5 are machin
 - **decode_attention_owned_two_kernel** (fallback): removed from tinygrad/llm/model.py; no env flag selects this route
 - **decode_flash_live_split_g4_8b_kvboth** (default): tinygrad/llm/model.py 8B generated branch: default-on DECODE_FLASH_BLOCK_TILE_G5_8B=1 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True)
 - **decode_flash_block_tile_g5_konly** (default): tinygrad/llm/model.py 14B G=5 branch: QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_FLASH_BLOCK_TILE_G5 default 1; staging fixed to K_ONLY
-- **decode_attention_native_correct_not_fast** (fallback): tinygrad/llm/model.py DECODE_ATTN_GENERATED_WHOLECACHE generated whole-cache route; research-only opt-in
-- **prefill_pipe_role_selective_generated** (default): extra/qk_prefill_graph_gemm_route.py route_pf16_graph_gemm: getenv('PREFILL_GENERATED_SCHEDULE', 1) or QK_ROUTE_POLICY prefill_pipe_role_selective_generated -> describe_prefill_schedule + emit_prefill_gemm_from_spec
-- **prefill_pipe_role_selective_default** (fallback): extra/qk_prefill_graph_gemm_route.py _kernel (legacy fixed emit; reached when PREFILL_GENERATED_SCHEDULE=0)
-- **prefill_pipe_global_rollback** (fallback): extra/qk_prefill_graph_gemm_route.py:55-69 (pipe on for all roles when role-selective off)
+- **decode_attention_generic_flash_generated** (fallback): tinygrad/llm/model.py generic flash_decode_attention fallback when DECODE_FLASH_BLOCK_TILE_G5_8B=0
+- **prefill_pipe_role_selective_generated** (default): extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm: getenv('PREFILL_GENERATED_SCHEDULE', 1) or QK_ROUTE_POLICY prefill_pipe_role_selective_generated -> describe_prefill_schedule + emit_prefill_gemm_from_spec
+- **prefill_pipe_role_selective_default** (fallback): extra/qk/prefill_graph_gemm_route.py _kernel (legacy fixed emit; reached when PREFILL_GENERATED_SCHEDULE=0)
+- **prefill_pipe_global_rollback** (fallback): extra/qk/prefill_graph_gemm_route.py:55-69 (pipe on for all roles when role-selective off)
 
 ## tinygrad-scheduler coverage
 

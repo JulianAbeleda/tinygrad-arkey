@@ -319,7 +319,7 @@ Goal: document the current tinygrad server behavior and identify runtime/client 
 Build:
 
 ```text
-extra/tinygrad_runtime_boundary_audit.py
+extra/audit/tinygrad_runtime_boundary_audit.py
 ```
 
 Outputs:
@@ -614,7 +614,7 @@ Goal: prove the runtime can be used by both OpenCode-style and proprietary clien
 Build:
 
 ```text
-extra/tinygrad_provider_compat_gate.py
+extra/audit/tinygrad_provider_compat_gate.py
 ```
 
 Checks:

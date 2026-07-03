@@ -58,7 +58,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if (_kb:=getenv("DECODE_OUTER_B_SPLIT")) > 1 and ren.target.device == "AMD":
     # outer-b independent split-combine primitive: split the serial block loop into K independent LDS-staged
     # online-softmax partitions + flash combine (default-off, declines unrecognized structure). See
-    # extra/qk_codegen_outer_b_lds_split.py + docs/decode-attention-outer-b-lds-split-combine-scope-20260627.md.
+    # extra/qk/codegen_outer_b_lds_split.py + docs/decode-attention-outer-b-lds-split-combine-scope-20260627.md.
     ast = cg_extras.outer_b_split(ast, _kb)
   if SPEC: type_verify(ast, spec_tensor)
 
@@ -88,7 +88,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # opt-in (COALESCED_LOAD_LOWERING): predicate-driven promotion of unit-stride load axes to UPCAST so the
   # existing expander+devectorizer vectorize the load (codegen realization of the layout-IR OptOps.COALESCE).
   # Pairs with REG_STORE_DEVEC (fired below) to keep accumulator stores scalar. See
-  # extra/qk_coalesced_load_lowering.py + docs/decode-coalesced-load-primitive-scope-20260626.md.
+  # extra/qk/coalesced_load_lowering.py + docs/decode-coalesced-load-primitive-scope-20260626.md.
   if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
     sink = cg_extras.coalesce_loads(sink)
 
@@ -96,7 +96,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # opt-in (WARP_REDUCE_LOWERING): auto-lower a full-warp REDUCE to the AMD ds_bpermute cross-lane ladder BEFORE
   # pm_group_for_reduce claims it for the LDS tree. Milestone 5 of the generic-low-level-search goal -- makes the
   # cross-lane reduce primitive scheduler-emittable (today only the hand kernels emit it). See
-  # extra/qk_warp_reduce_lowering.py + bench/qk-search-spaces/decode_ffn_gemv_gfx1100_v1.json.
+  # extra/qk/warp_reduce_lowering.py + bench/qk-search-spaces/decode_ffn_gemv_gfx1100_v1.json.
   _expander_pm = sym+pm_pre_expander+pm_group_for_reduce+expander
   if getenv("WARP_REDUCE_LOWERING") and ren.target.device == "AMD":
     _expander_pm = sym+pm_pre_expander+cg_extras.warp_reduce_pm()+pm_group_for_reduce+expander

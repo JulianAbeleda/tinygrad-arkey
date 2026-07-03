@@ -51,7 +51,7 @@
     "tier_b_pct": 2.0,
     "equiv_band_pct": 1.0,
     "regression_pct": -2.0,
-    "note": "tiered_residual; SINGLE SOURCE for promotion thresholds. qk_candidate_evaluator.evaluate() loads these by profile_id; DEFAULT_THRESHOLDS is the matching code fallback (TIER_A 5%, TIER_B 2%)."
+    "note": "tiered_residual; promotion thresholds are profile data consumed by BoltBeam evaluation/policy."
   },
   "role_shape_derivation": {
     "prefill_ubatch": 512,
@@ -78,6 +78,6 @@
     }
   },
   "regenerates_routes": [],
-  "new_target_bootstrap": "to add a new <model>_<quant>_<gpu>: fill model/quant_mix/gpu/authority_contexts, derive role shapes from model dims (role_shape_derivation), then run the census (extra/pure_machine_search_default_path_census.py), the ceiling/attribution audit, and the candidate evaluator -- do NOT hand-edit route flags.",
-  "draft_provenance": "extra/qk_profile_opener.py _draft_new_profile (TG4); shapes derived from model dims; quant layout from extra/qk_quant_semantics.py; NO hand-edited route flags."
+  "new_target_bootstrap": "to add a new <model>_<quant>_<gpu>: fill model/quant_mix/gpu/authority_contexts, derive role shapes from model dims (role_shape_derivation), then run the census (extra/audit/pure_machine_search_default_path_census.py) and BoltBeam evaluation/policy -- do NOT hand-edit route flags.",
+  "draft_provenance": "BoltBeam profile authoring; shapes derived from model dims; quant layout from extra/qk/quant_semantics.py; NO hand-edited route flags."
 }

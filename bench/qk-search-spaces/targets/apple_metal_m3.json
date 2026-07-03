@@ -1,5 +1,5 @@
 {
-  "_schema": "TG5 target feature descriptor (extra/qk_target_features.py)",
+  "_schema": "static target feature descriptor consumed by BoltBeam and tinygrad route audits",
   "target_id": "apple_metal_m3",
   "vendor": "Apple",
   "arch": "metal3_m3",

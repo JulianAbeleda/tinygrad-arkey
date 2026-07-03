@@ -1,5 +1,5 @@
 {
-  "_schema": "TG5 target feature descriptor (extra/qk_target_features.py)",
+  "_schema": "static target feature descriptor consumed by BoltBeam and tinygrad route audits",
   "target_id": "amd_gfx1100",
   "vendor": "AMD",
   "arch": "gfx1100",
@@ -24,8 +24,7 @@
     "lanemap",
     "coop",
     "graph_gemm_pipe",
-    "native_isa_attention",
     "owned_reference"
   ],
-  "notes": "validated: native-ISA backend + HIP + W==D/whole-prefill profiling all present. Reproduces the current route permissions (the manifest routes run here)."
+  "notes": "validated: Route permissions mirror the retained tinygrad manifest; candidate generation/evaluation lives in BoltBeam."
 }

@@ -1,6 +1,6 @@
 {
   "_schema": "canonical refuted axes (generated FROM qk_route_manifest.REFUTED)",
-  "generated_by": "extra/qk_route_manifest.py:dump_refuted",
+  "generated_by": "extra/qk/route_manifest.py:dump_refuted",
   "agreement_key": "route_id when present else axis; disposition compared by class token",
   "refuted_axes": [
     {
@@ -19,13 +19,6 @@
       "domain": "attention",
       "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
       "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"
-    },
-    {
-      "axis": "native_attention_as_default",
-      "domain": "attention",
-      "disposition": "correct_not_fast (~60-68% of owned)",
-      "citation": "bench/amd-isa-backend-phase-n7/latest.json",
-      "route_id": "decode_attention_native_correct_not_fast"
     },
     {
       "axis": "g5_block_tile_8b_as_default",
@@ -49,7 +42,7 @@
     {
       "axis": "live_split_geometry_8b_tile",
       "domain": "attention",
-      "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk_live_split_geometry.py",
+      "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk/live_split_geometry.py",
       "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"
     },
     {
@@ -57,24 +50,6 @@
       "domain": "attention",
       "disposition": "EMITTER_BLOCKED (TG-P9.4): a split-preserving generated combine (de-dup the per-d fexp / fuse gmax without collapsing Hq*S or Hq*Hd) mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) store; REG_STORE_DEVEC=1 compiles but NaNs. The ctx4096 556us combine cap cannot be removed in current AMD codegen. Reopen: a codegen fix keeping the reduction-accumulator REG scalar for a multi-reduce/weight-sharing combine.",
       "citation": "bench/tg-p9-pure-attention-primitive-route/combine_microgate.json"
-    },
-    {
-      "axis": "n1b_scalar_address_path",
-      "domain": "attention",
-      "disposition": "refuted/dead",
-      "citation": "bench/amd-isa-backend-phase-n1b/latest.json"
-    },
-    {
-      "axis": "occupancy_lds_only_attention_tuning",
-      "domain": "attention",
-      "disposition": "refuted: no W==D movement",
-      "citation": "bench/amd-isa-backend-phase-m/latest.json"
-    },
-    {
-      "axis": "scheduler_only_attention_tuning",
-      "domain": "attention",
-      "disposition": "small/no movement",
-      "citation": "bench/amd-isa-backend-phase-k/latest.json"
     }
   ]
 }

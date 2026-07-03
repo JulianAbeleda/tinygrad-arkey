@@ -1,5 +1,5 @@
 {
-  "_schema": "TG3 quant semantics library (extra/qk_quant_semantics.py)",
+  "_schema": "TG3 quant semantics library (extra/qk/quant_semantics.py)",
   "scope": "quant FORMATS as DATA for the topology search (block layout, payload vs metadata bytes, scale/min layout, dequant ops, accum/dot dtypes, quality class, known good/refuted route families).",
   "audit_only": "no GPU kernel, no default change, no live-route repoint.",
   "formats": {
@@ -62,7 +62,7 @@
         }
       ],
       "quality_constraints": "none (dequant is exact up to fp reassoc; lossless vs the GGUF reference)",
-      "impl_citation": "extra/q4_k_gemv_primitive.py (_q4k_block_dot_packed_load); gguf ggml_type 12",
+      "impl_citation": "extra/qk/quant/q4_k_gemv_primitive.py (_q4k_block_dot_packed_load); gguf ggml_type 12",
       "notes": "natural_lane_extent=8 = the within-block packed-word index lane4 (pos//4) the coop/G3 routes coalesce; G3 owns 8 words/group x 4 block_groups = wave32.",
       "derived": {
         "metadata_bytes": 16,
@@ -205,7 +205,7 @@
         }
       ],
       "quality_constraints": "none (exact dequant). PAYLOAD-FIRST + symmetric (no dmin/min) + int8 sub-scales -> a different lane-map shape than Q4_K; the metadata-first packed-word index does NOT apply.",
-      "impl_citation": "extra/q6_k_gemv_primitive.py (q6k_coop_partial_kernel shipped; q6k_halfwarp_partition refuted); gguf ggml_type 14",
+      "impl_citation": "extra/qk/quant/q6_k_gemv_primitive.py (q6k_coop_partial_kernel shipped; q6k_halfwarp_partition refuted); gguf ggml_type 14",
       "notes": "shipped route = decode_q6k_coop_shipped (pos 0..15 LOCAL lane + stage-2 .sum). natural_lane_extent=16.",
       "derived": {
         "metadata_bytes": 18,
@@ -258,7 +258,7 @@
       ],
       "known_refuted_route_families": [],
       "quality_constraints": "near-lossless (8-bit). block_bytes=34 is NOT uint32 word-aligned -> no clean uint32 packed-word factorization; pack 4 int8 into uint32 only for v_dot4_i32_i8.",
-      "impl_citation": "tinygrad/llm/gguf.py ggml_type 8; activation pairing extra/q4_k_gemv_primitive.py q8_1 path",
+      "impl_citation": "tinygrad/llm/gguf.py ggml_type 8; activation pairing extra/qk/quant/q4_k_gemv_primitive.py q8_1 path",
       "notes": "on this profile Q8_0/q8_1 appears as the ACTIVATION quant for the int-dot Q4_K weight GEMV, not a standalone weight tensor.",
       "derived": {
         "metadata_bytes": 2,
@@ -300,12 +300,11 @@
       "quality_class": "lossless_fp16",
       "known_good_route_families": [
         "graph_gemm_pipe",
-        "generated_live_split_attention",
-        "native_isa_attention"
+        "generated_live_split_attention"
       ],
       "known_refuted_route_families": [],
       "quality_constraints": "none (no quantization).",
-      "impl_citation": "extra/qk_prefill_graph_gemm_route.py (prefill GEMM); extra/qk_live_split_geometry.py + extra/qk_flash_decode.py (attention)",
+      "impl_citation": "extra/qk/prefill_graph_gemm_route.py (prefill GEMM); extra/qk/live_split_geometry.py + extra/qk/flash_decode.py (attention)",
       "notes": "not a packed-quant format; no unpack. Used by prefill GEMM + decode attention.",
       "derived": {
         "metadata_bytes": 0,

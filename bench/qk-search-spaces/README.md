@@ -1,50 +1,19 @@
-# Search-space manifests (Milestone 1 of the generic-low-level-search goal)
+# QK Search-Space Manifests
 
-Roadmap: `../../docs/pure-machine-search-roadmap.md`.
+This directory is tinygrad-side route context, not the active search engine.
 
-`docs/generic-low-level-search-goal-scope.md` Milestone 1. Each manifest declares **what a search over that
-primitive family can and cannot express**, so a search result is self-classifying: a failure is only a *true
-performance wall* if the winning oracle/owned kernel used **no excluded primitive**; otherwise it is
-`SEARCH_SPACE_INCOMPLETE` / `SEARCH_BLOCKED_BY_CODEGEN` (see the label set in the goal scope).
+BoltBeam owns candidate generation, evaluation policy, roofline reporting, and ledgers. tinygrad keeps these files so
+runtime gates can explain which generated route is expected for a shape, which routes are rollback/reference only, and
+which axes are refuted.
 
-This is the machine-evidenced answer to "can we replace the hand-tuned kernels with search?":
-- **No, not yet, for the two hand-written decode kernels** — the owned AMDGCN attention tile and the warp GEMV.
-  GEMV now has a BubbleBeam/FutureSight selector for the lane-partition custom bridge, but that is
-  `search_selected_custom_bridge`, not `search_generated`. Attention still depends on `v_dot2` and cross-lane
-  reduction; GEMV purity now depends on generating the packed-word/dequant/thread-map structure. Their other needs
-  (LDS staging, vector global loads) are natively emittable. ISA evidence: `docs/archive/native-codegen-microprimitive-search-result-20260623.md:24-30`.
-- **Yes, for everything else** — the search over `env_policy` + `tile_config` (split/combine policy, KV identity,
-  route thresholds, flash variant, tile constants) is real and runs today; within it, the hand oracle remains best
-  (`docs/archive/decode-mode-b-search-result-20260623.md`).
+## Active Files
 
-## Provenance binding (Milestone 2)
+- `default_route_manifest.json` - local source of truth for default/rollback/refuted route state.
+- `search_profiles.json` - profile/shape context retained for audits; candidate generation lives in BoltBeam.
+- `quant_semantics.json` - quant layout facts used by route/audit tooling.
+- `targets/*.json`, `profiles/*.json` - static profile and target descriptors.
 
-Every candidate in `bench/qk-decode-eval/candidates.json` should carry a `search_space_id`:
-- a real space id (e.g. `decode_attention_gfx1100_v1`) → the candidate is a point a search could sample;
-- `manual_oracle_not_search_generated` → the candidate is hand-owned / an oracle target and is **not** evidence that
-  the generic search space can express it (goal scope, "Relationship To Owned Kernels").
+## Rule
 
-## Files
-
-| file | family | searchable today? |
-|---|---|---|
-| `decode_attention_gfx1100_v1.json` | decode split-KV attention (tile + combine) | config-only; the winning tile is `SEARCH_BLOCKED_BY_CODEGEN` (v_dot2 + cross-lane) |
-| `decode_attention_online_softmax_pv_tile_v1.json` | decode primitive-complete online-softmax+PV tile | declared target; currently `SEARCH_SPACE_INCOMPLETE` until lane/reduction/dot tile lowerings bind |
-| `decode_ffn_gemv_gfx1100_v1.json` | decode Q4_K FFN/proj weight-GEMV | config-only; the winning warp GEMV is `SEARCH_BLOCKED_BY_CODEGEN` (cross-lane) |
-| `manual_oracle_not_search_generated.json` | provenance marker | n/a — declares a candidate is hand-owned, not search-generated |
-
-## Path to making these searchable (Milestone 5)
-
-Expose the two missing renderer lowerings — **cross-lane reduction first** (`ds_bpermute`), then `v_dot2`. Once a
-lowering exists, the corresponding `excluded_primitives` entry moves to `exposed_*`, the space becomes searchable at
-that level, and Milestone 6 can compare a search-generated candidate against the owned oracle under the existing
-W==D + byte-exact gate. Caveat (DNR arc): exposing the *instruction* makes the primitive *searchable* but may not
-alone reach owned-kernel perf — the *schedule* (waitcnt/clause/live-range) is a separate, deeper gap.
-## Primitive-complete decode attention target
-
-`decode_attention_online_softmax_pv_tile_v1.json` is the post-A3.10 target. It names the full online-softmax+PV primitive boundary before more codegen work: whole-cache KV identity, T=1 split-KV parallelism, query/GQA lane ownership, packed fp16 dot, cross-lane reduction, register-resident `(m,l,acc[D])`, PV accumulation, and TILE+COMBINE lifecycle accounting. Validate it with:
-
-```bash
-PYTHONPATH=. python3 extra/qk_search_space_manifest_check.py
-```
-
+Do not use this directory to resurrect a tinygrad-local search loop. If a candidate/evaluator change is needed, implement
+it in BoltBeam and update tinygrad only with the resulting route policy, runtime adapter, or verification gate.

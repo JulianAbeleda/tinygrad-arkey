@@ -373,9 +373,9 @@ workgroup counts (occupancy vs CU count), the per-ctx optimal split S, and an Am
 measured / half / free combine. A tile A/B win alone is NOT W==D-ready.
 ```
 
-The audit is `extra/qk_split_kv_economics_audit.py` → `bench/qk-split-kv-economics-audit/latest.json`
-(`split_kv_economics_audit_v1`); the binding requirement is `split_kv_economics_contract_v1` in
-`bench/qk-decode-eval/binding_templates.json`. It classifies each candidate:
+The audit is `extra/qk/split_kv_economics_audit.py` → `bench/qk-split-kv-economics-audit/latest.json`
+(`split_kv_economics_audit_v1`); BoltBeam owns the promotion binding/policy for this contract. It classifies each
+candidate:
 
 - `COMBINE_TAX_DOMINATES` — a cheaper/fused combine is projected to clear the gate (the actionable next lever);
 - `COMBINE_SMALL_AMDAHL_LIMIT` — even a free combine cannot clear it (attention's Amdahl share is the ceiling;

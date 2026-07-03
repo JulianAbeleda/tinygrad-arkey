@@ -161,7 +161,7 @@ class PCIDevice:
     self.pcibus, self.irq_poller = pcibus, None
 
     try: FileIOInterface(f"/sys/bus/pci/devices/{self.pcibus}/enable", os.O_RDWR)
-    except PermissionError: raise PermissionError(f"Cannot access PCI device {pcibus}: run `extra/amdpci/setup_python_cap.sh` or use sudo")
+    except PermissionError: raise PermissionError(f"Cannot access PCI device {pcibus}: run `extra/hardware/amdpci/setup_python_cap.sh` or use sudo")
 
     if FileIOInterface.exists(f"/sys/bus/pci/devices/{self.pcibus}/driver"):
       FileIOInterface(f"/sys/bus/pci/devices/{self.pcibus}/driver/unbind", os.O_WRONLY).write(self.pcibus)

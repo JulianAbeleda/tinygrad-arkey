@@ -1,65 +1,40 @@
-# docs/ — map
+# docs/ - Current Map
 
-Navigation source-of-truth for this fork's docs. **Current state only** — read the canonical docs below; old
-archive provenance was removed from the tracked tree and remains available through git history.
+This directory is intentionally small. Old probe logs, obsolete handoffs, and upstream marketing/demo docs were removed
+from the tracked tree; use git history for archaeology.
 
-## ⭐ Start here (canonical)
+## Start Here
 
-- **`pure-machine-search-roadmap.md`** — roadmap for replacing hand-owned decode kernels with generated/search-owned routes.
-- **`tg-p13-manual-end-accumulator-inplace-rewrite-scope-20260701.md`** — current active handoff: repair the TG-P12 prototype by rewriting manual accumulator stores in-place and reusing existing `END` nodes.
-- **`tg-p12-resolution-verify-and-land-scope-20260701.md`** — verification handoff that rejected Claude's default-off prototype at the TG-P10 combine-shaped repro.
-- **`tg-p12-manual-end-accumulator-fold-guard-scope-20260701.md`** — prior TG-P12 scope; its scalar-fold-first strategy is superseded by the resolution handoff after the baseline showed expander-created vector accumulator state.
-- **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`** — provenance scope that diagnosed the generic reduce/upcast accumulator-lowering invariant.
-- **`claude-active-work-audit-and-agnostic-search-scope-20260630.md`** — older consolidated handoff for active-work audit and quant/shape/target agnostic search; useful background, but not the current route-state authority.
-- **Current route-state authority:** BoltBeam's candidate manifest, route-policy emitter, ledgers, and reports. In
-  this repo, `tinygrad/llm/route_policy.py` only consumes `boltbeam.route_policy.v1`, and `tinygrad/llm/route_ops.py`
-  is the runtime adapter for existing QK route implementations.
-- **`decode-campaign-final-synthesis-20260623.md`** — how decode reached llama parity (attention not exhausted;
-  buffer identity was the wall; owned AMDGCN tile + `Q4K_GEMV_WARP` weight-GEMV).
-- **`gpu-lifecycle-primitive-coverage-tracker-20260624.md`** — per-primitive coverage vs llama (decode ~101.7–105%,
-  prefill ~114.5% pp512).
-- **`prefill-decode-next-workstreams-codex-scope-20260624.md`** — current next-work map.
-- Historical archive maps were removed with the tracked archive; use git history when tracing old probe logs.
+- `../README.md` - repo purpose, current performance snapshot, and run commands.
+- `pure-machine-search.md` - project rule: generated/spec-driven routes are the target path.
+- `pure-machine-search-roadmap.md` - current route/search roadmap and promotion rules.
+- `bubblebeam-futuresight-terminology-20260625.md` - naming and ownership terms.
+- `maintenance-cleanup-20260703.md` - cleanup decisions and removed surfaces.
 
-## Decode (current)
+## Runtime Boundary
 
-- **`amd-isa-g3-weight-promotion-hardening-scope-20260629.md`** — generated G3 LaneMap is the speed-equivalent Q4_K route under BubbleBeam/FutureSight.
-- **`amd-isa-q6k-direct-route-full-scope-20260629.md`** — Q6_K direct-route work; later Q6K-3 refuted the half-warp direct route, so current Q6_K stays on coop/default.
-- **`tg-p8-generated-8b-attention-parity-scope-20260701.md`**, **`tg-p9-pure-attention-primitive-route-scope-20260701.md`**,
-  **`tg-p11-reduce-upcast-accumulator-widening-scope-20260701.md`**, and
-  **`tg-p12-manual-end-accumulator-fold-guard-scope-20260701.md`**, and
-  **`tg-p12-resolution-verify-and-land-scope-20260701.md`**, and
-  **`tg-p13-manual-end-accumulator-inplace-rewrite-scope-20260701.md`** — the current 8B attention purity chain:
-  generated live-split solved the short-context tile gap; the remaining blocker is an in-place manual accumulator lowering fix.
-- **`decode-two-kernel-problem-audit-result-20260625.md`** — historical attention tile+combine audit; still useful provenance, but superseded for current purity work by TG-P8/TG-P9/TG-P10/TG-P11.
-- **`post-owned-attention-promotion-synthesis-20260623.md`** — provenance for the owned HIP decode-attention tile that remains the 8B default/rollback oracle.
+- `tinygrad-runtime-operational-policy-r10.md` - runtime operating policy.
+- `tinygrad-runtime-client-separation-roadmap-20260630.md` - client/runtime separation plan.
+- `tinygrad-runtime-client-separation-implementation-status-20260630.md` - implementation status.
+- `tinygrad-client-context-envelope-v1.md` - context envelope contract.
+- `tinygrad-repo-index-adapter-boundary-v1.md` - repo index and adapter boundary.
 
-## Prefill (current)
+## Local References
 
-- **`prefill-baseline-confirmed-aggressive-bound-handoff-20260624.md`** — confirmed prefill baseline + aggressive bound.
-- **`prefill-pure-machine-search-roadmap-20260629.md`** — prefill P0-P8 roadmap and authority chain.
-- **`prefill-eightwave-promotion-result-20260624.md`** — historical `eightwave` promotion (~+3%); superseded as the prefill default by `pipe_tm2_tn2`.
-- **`prefill-long-context-no-regression-audit-result-20260623.md`** — long-context no-regression confirm.
-- **`prefill-aggressive-target-proof-scope-20260624.md`** — aggressive-target proof; `pipe_tm2_tn2` was later hardened and promoted.
+- `quickstart.md`, `env_vars.md`, `dtypes.md`, `nn.md` - retained tinygrad reference docs that are still useful for
+  running and debugging the fork.
 
-## Decided policies (do not re-open — see handoff §2)
+## Authorities
 
-Q4_K decode uses generated G3 where eligible. Q6_K direct half-warp is refuted; Q6_K generated coop is the default generated route with shipped kernels retained as rollback. The generated G=5 K-only attention route is promoted for the validated 14B shape. 8B long-context attention still uses the owned HIP two-kernel route because the generated route is close but below the 98% promotion bar. Prefill uses the generated role-selective schedule by default with rollback via `PREFILL_GENERATED_SCHEDULE=0` or the older pipeline flags described in the route manifest.
+- BoltBeam owns route policy, candidate/search schema, evaluation policy, roofline reports, and ledgers.
+- tinygrad owns runtime execution, compiler/backend lowering, and hardware gates.
+- `tinygrad/llm/route_policy.py` consumes `boltbeam.route_policy.v1`.
+- `tinygrad/llm/route_ops.py` is the runtime adapter for QK route implementations.
+- `bench/qk-search-spaces/default_route_manifest.json` is the local route-state manifest.
+- `extra/audit/pure_machine_search_default_path_census.py` is the local generated-default census.
 
-## Live Tooling
+## Boundary Rule
 
-- **Runtime and measurement:** `extra/qk_decode_eval.py`, `extra/qk_lifecycle_search_loop.py`,
-  `extra/qk_nll_eval.py`, and phase-specific harnesses emit evidence for BoltBeam.
-- **Search/evaluation authority:** BoltBeam owns schema, candidate generation, ledgers, policy checks, and
-  roofline/reporting. tinygrad should not grow new standalone search-policy scripts.
-- **Boundary rule:** tinygrad hot paths must not import `extra.qk_*`, `extra.q4_*`, `extra.q6_*`, or `extra.q8_*`
-  directly. Use `tinygrad/llm/route_ops.py` for LLM routes and `tinygrad/codegen/experimental.py` for default-off
-  codegen probes. `test/unit/test_tinygrad_boundary.py` enforces this.
-- **Benchmark harnesses + numbers:** use the phase-specific authority artifacts before quoting a number. The committed multi-model table under `bench/models/qwen/` is useful provenance but may lag the latest route changes.
-
-## References
-
-- **tinygrad docs (current):** `developer/` (am, hcq, runtime, speed, uop), `tensor/`, and upstream-derived
-  `index.md` / `quickstart.md` / `nn.md` / `dtypes.md` / `env_vars.md`.
-- **History & subsystem docs:** prefer current docs and BoltBeam ledgers for decisions; removed archive provenance
-  is recoverable from git history when tracing an old result.
+tinygrad hot paths must not import `extra.qk.*`, `extra.qk.quant.*`, or `extra.audit.*` directly. Use
+`tinygrad/llm/route_ops.py` for LLM routes and `tinygrad/codegen/experimental.py` for default-off codegen probes.
+`test/unit/test_tinygrad_boundary.py` enforces this.

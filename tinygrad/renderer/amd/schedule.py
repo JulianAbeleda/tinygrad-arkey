@@ -734,12 +734,12 @@ def gemm_schedule_object_summary(obj: AMDGemmScheduleObject) -> dict[str, Any]:
 # First-class AMD decode MMVQ schedule object (structural, UNWIRED).
 #
 # This is the decode analogue of AMDGemmScheduleObject, but the primitive is not
-# dense GEMM. It represents a small-batch quantized matvec lifecycle: q8
+# dense GEMM. It represents a small-batch quantized matvec lifecycle: generated q8_1
 # activation production/reuse, packed Q4_K/Q6_K weight load, packed extract or
 # dequant-dot, reduction/output, route policy, and evidence labels.
 #
 # It changes NO default behavior and does not lower to ISA. It is metadata plus
-# gates only, so existing shipped Q4/Q6/q8 decode paths can be inspected against
+# gates only, so existing shipped Q4/Q6 decode paths can be inspected against
 # one primitive contract before any native renderer or search work starts.
 # ---------------------------------------------------------------------------
 
@@ -775,8 +775,8 @@ class DecodeMMVQRoleContract:
     return {
       "shape_positive": self.out_features > 0 and self.in_features > 0,
       "decode_small_batch": 1 <= self.batch_max <= 8,
-      "quant_format_known": self.quant_format in {"Q4_K", "Q6_K", "Q8_FFN_ARTIFACT"},
-      "activation_format_known": self.activation_format in {"fp16", "q8_1", "q8_artifact"},
+      "quant_format_known": self.quant_format in {"Q4_K", "Q6_K"},
+      "activation_format_known": self.activation_format in {"fp16", "q8_1"},
       "reduction_named": bool(self.reduction),
       "route_status_named": bool(self.route_status),
     }

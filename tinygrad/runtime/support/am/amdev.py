@@ -213,7 +213,7 @@ class AMDev:
         self.pci_dev.write_config_flush(pci.PCI_COMMAND, self.pci_dev.read_config(pci.PCI_COMMAND, 2) & ~pci.PCI_COMMAND_MASTER, 2)
         if self.is_hive():
           if reset_mode: return # in reset mode, do not raise
-          raise RuntimeError("Malformed state. Use extra/amdpci/hive_reset.py to reset the hive")
+          raise RuntimeError("Malformed state. Use extra/hardware/amdpci/hive_reset.py to reset the hive")
         self.smu.mode1_reset()
         self._init_trace_regs("after-sos-alive-reset")
       self._init_trace_regs("before-bus-master-enable")
