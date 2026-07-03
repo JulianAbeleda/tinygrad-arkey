@@ -64,6 +64,34 @@ One-off probes that have reached a verdict are deleted once their conclusion is
 recorded in the session handoff (they stay in git history, reproducible from the
 core). Do not leave dead probes wired into the CLI.
 
+## Naming Reflects Actuals (so deliberate look-alikes don't read as dups)
+
+When two things are **deliberately** separate but look near-identical, the fix is
+naming, not merging. A dedup pass will keep re-flagging them as accidental
+duplicates — and someone will eventually "consolidate" them and destroy the
+distinction — unless the *name* states why they differ.
+
+Rule: if a function/constant intentionally mirrors another but must stay separate,
+its name (or an adjacent one-line note) must encode the reason.
+
+- **Validation-probe re-derivations of shipped code** get a `probe_` prefix. A
+  probe must not import the thing it validates (or it regresses silently with it),
+  so it re-derives the kernel — that is a feature, not a copy. Example:
+  `extra/qk/decode_physical_tile.py` `probe_p1_crosslane_score_kernel` mirrors the
+  shipped `flash_kernels.flash_p1_crosslane_score_whole_cache_kernel`; the `probe_`
+  prefix marks the deliberate independence. (Keep the *emitted* kernel name stable
+  when renaming the Python function, so gate artifacts don't shift.)
+- **Protocol/wire identifiers** duplicated at both ends of a client↔server boundary
+  (e.g. the `gfx1100_744c` discovery-profile value set by `amd_repro` and validated
+  by `amdev`) are named for their role via the *env var / key* they live under
+  (`AM_REMOTE_DISCOVERY_PROFILE`), not consolidated into one constant — the two ends
+  are independent by design, like an HTTP header name written on both sides.
+- **Per-arch parallel implementations** of one interface (e.g. `isa/amd.py` vs
+  `isa/x86.py` `alloc_vregs`) share a name on purpose — that IS the actual (same
+  role, different arch); leave them.
+
+If a reviewer or a dedup audit has to ask "is this a duplicate?", the name failed.
+
 ## One IR, One Engine (upstream smallness rule)
 
 Upstream stays ~24k counted lines by architecture, not terseness: a single UOp

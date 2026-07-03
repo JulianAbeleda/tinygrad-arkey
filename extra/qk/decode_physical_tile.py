@@ -195,8 +195,13 @@ def _flags_lifecycle(asm: str) -> dict[str, bool]:
 
 # ======================================================================================================================
 # p1_crosslane -- lane map + cross-lane score reduce
+#
+# NAMING: the probe_* builders below independently RE-DERIVE the shipped flash_kernels.*_whole_cache builders. The
+# near-duplication is DELIBERATE (a validation probe must not import the thing it validates, or it regresses silently
+# with it) -- the probe_ prefix marks that. Emitted kernel names (_fki(...)) are left unchanged so the gate artifacts
+# stay stable; only the Python function names carry the probe_ marker.
 # ======================================================================================================================
-def flash_p1_crosslane_score_kernel(Hd: int, Hq: int, Hkv: int, MAXC: int, Tc: int):
+def probe_p1_crosslane_score_kernel(Hd: int, Hq: int, Hkv: int, MAXC: int, Tc: int):
   if Hd % 32 != 0: raise ValueError(f"P1 requires Hd divisible by 32, got {Hd}")
   G = Hq // Hkv; R = Hd // 32
   def kernel(score: UOp, q: UOp, cache: UOp) -> UOp:
@@ -227,7 +232,7 @@ def _p1_numeric_and_isa() -> dict[str, Any]:
   cache[0] = rng.normal(0.0, 0.25, size=(Hkv, MAXC, Hd)).astype(np.float32)
   got = Tensor.empty(Hq * MAXC, dtype=dtypes.float32).custom_kernel(
     Tensor(q.reshape(-1)), Tensor(cache.reshape(-1)),
-    fxn=flash_p1_crosslane_score_kernel(Hd, Hq, Hkv, MAXC, Tc))[0].realize().numpy().reshape(Hq, MAXC)
+    fxn=probe_p1_crosslane_score_kernel(Hd, Hq, Hkv, MAXC, Tc))[0].realize().numpy().reshape(Hq, MAXC)
   ref = np.zeros((Hq, MAXC), dtype=np.float32)
   for h in range(Hq):
     kvh = h // (Hq // Hkv)
@@ -275,7 +280,7 @@ def build_p1_crosslane() -> dict[str, Any]:
 # ======================================================================================================================
 # pall_route -- composed LDS + lane-sharded q.k + cross-lane reduce + fdot2 score builder
 # ======================================================================================================================
-def flash_pall_lds_crosslane_score_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc:int):
+def probe_pall_lds_crosslane_score_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, Tc:int):
   """Composed physical-primitive score builder.
 
   This deliberately targets the first hard composition: LDS K staging + lane-sharded q.k + cross-lane score reduce
@@ -318,7 +323,7 @@ def _pall_route_attempt() -> dict[str, Any]:
   cache = np.zeros((2,Hkv,MAXC,Hd),np.float16)
   cache[0] = rng.normal(0,0.25,(Hkv,MAXC,Hd)).astype(np.float16)
   got = Tensor.empty(Hq*MAXC, dtype=dtypes.float32).custom_kernel(
-    Tensor(q.reshape(-1)), Tensor(cache.reshape(-1)), fxn=flash_pall_lds_crosslane_score_kernel(Hd,Hq,Hkv,MAXC,Tc))[0].realize().numpy().reshape(Hq,MAXC)
+    Tensor(q.reshape(-1)), Tensor(cache.reshape(-1)), fxn=probe_pall_lds_crosslane_score_kernel(Hd,Hq,Hkv,MAXC,Tc))[0].realize().numpy().reshape(Hq,MAXC)
   ref = np.zeros((Hq,MAXC),np.float32)
   for h in range(Hq): ref[h,:Tc] = (cache[0,h//(Hq//Hkv),:Tc,:].astype(np.float32) @ q[h].astype(np.float32)) * (1.0/np.sqrt(Hd))
   diff = got[:,:Tc] - ref[:,:Tc]
@@ -358,7 +363,7 @@ def build_pall_route() -> dict[str, Any]:
 # ======================================================================================================================
 # pall_lifecycle -- q.k score + online-softmax state + PV accumulation in one lifecycle kernel
 # ======================================================================================================================
-def flash_pall_score_state_pv_lifecycle_kernel(Hd: int, Hq: int, Hkv: int, MAXC: int, L: int, S: int, Tc: int):
+def probe_pall_score_state_pv_lifecycle_kernel(Hd: int, Hq: int, Hkv: int, MAXC: int, L: int, S: int, Tc: int):
   """Composed physical lifecycle probe.
 
   Grid owns (kv-head, split, output column). Lanes shard the q.k head dimension for each token, reduce the score across
@@ -442,7 +447,7 @@ def _pall_lifecycle_attempt() -> dict[str, Any]:
   cache[0] = rng.normal(0, 0.25, (Hkv, MAXC, Hd)).astype(np.float16)
   cache[1] = rng.normal(0, 0.25, (Hkv, MAXC, Hd)).astype(np.float16)
   got = Tensor.empty(Hq * S * W, dtype=dtypes.float32).custom_kernel(Tensor(q.reshape(-1)), Tensor(cache.reshape(-1)),
-    fxn=flash_pall_score_state_pv_lifecycle_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc))[0].realize().numpy().reshape(Hq, S, W)
+    fxn=probe_pall_score_state_pv_lifecycle_kernel(Hd, Hq, Hkv, MAXC, L, S, Tc))[0].realize().numpy().reshape(Hq, S, W)
   ref = np.zeros((Hq, S, W), np.float32); scale = 1.0 / np.sqrt(Hd)
   for kvh in range(Hkv):
     for s in range(S):
