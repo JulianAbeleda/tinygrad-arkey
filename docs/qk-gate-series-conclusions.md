@@ -88,4 +88,4 @@ Env `DEV=AMD`; 8B geometry Hq=32,Hkv=8,Hd=128,MAXC=4608,S=36. Symbolic Tc via th
 Files deleted after their series was collapsed into a parameterized module + registry rows.
 Format: `series | files retired | collapsed into | commit`. (Appended per cluster as collapses land.)
 
-_none yet — collapses pending._
+- **Cluster B (asm scheduler)** | `asm_scheduler_inc0_test.py`, `asm_scheduler_inc1_test.py`, `asm_scheduler_inc2_test.py`, `asm_scheduler_inc3_test.py` | `extra/qk/asm_scheduler_proofs.py` (VARIANTS + `build_inc0..3`) | this commit
