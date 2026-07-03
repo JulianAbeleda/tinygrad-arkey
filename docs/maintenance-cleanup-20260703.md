@@ -16,12 +16,25 @@ This pass tightened the tinygrad/BoltBeam boundary after the decouple audit.
   history.
 - Stale repo/docs cleanup bench folders: `bench/qk-docs-archive`, `bench/qk-active-surface-reduction`, and
   `bench/qk-repo-principles-cleanup`.
+- Historical `bench/` run archives. tinygrad now keeps only current centralized search-space manifests, the
+  default-path census, and the project search ledger. Old per-phase proof artifacts stay recoverable from git
+  history or should be represented in BoltBeam policy metadata.
+- Dated one-off docs/scope/result files. The docs surface is now restricted to docs-site basics plus central
+  operating contracts.
+- `test/external/` manual/fuzz/benchmark shards. Active tinygrad coverage is the compact core/unit/backend suite;
+  policy/search validation belongs in BoltBeam.
 
 ## Kept In tinygrad
 
 - Runtime/compiler/hardware harnesses.
 - Runner adapters that execute tinygrad or emit evidence JSON for BoltBeam.
 - Compact current authority docs and benchmark artifacts referenced by the live docs.
+
+Current tracked surface after this cleanup:
+
+- `bench/`: 19 files.
+- `docs/`: 22 files.
+- `test/`: 11 files.
 
 ## Boundary Rule
 
