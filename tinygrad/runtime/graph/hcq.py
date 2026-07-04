@@ -2,6 +2,14 @@ from __future__ import annotations
 import collections, time
 from typing import Any, cast
 from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, suppress_finalizing, TracingKey, unwrap
+
+# Insert a per-kernel PMC read into the graph command queue so graph-captured kernels (e.g. prefill
+# GEMMs) emit ProfilePMCEvent, which the eager AMDProgram.__call__ path does but the graph did not.
+# Only active when a device is pmc_enabled (PROFILE>0 and PMC>0), i.e. trace runs.
+# WIP / opt-in (PMC_GRAPH=1): the per-kernel read captures SQ_BUSY_CYCLES correctly, but the other
+# perfcounter blocks (GRBM_GUI_ACTIVE, GL2C/SQC) read zero inline in the graph, so the derived
+# occupancy/VALU/memory-busy metrics are not yet produced. Off by default until that is resolved.
+PMC_GRAPH = getenv("PMC_GRAPH", 0)
 from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQSignal, HCQBuffer, HWQueue, HCQArgsState, BumpAllocator, MMIOInterface
 from tinygrad.device import Buffer, BufferSpec, Compiled, Device, MultiBuffer, ProfileGraphEntry, ProfileGraphEvent
 from tinygrad.dtype import dtypes
@@ -79,6 +87,21 @@ class HCQGraph(MultiGraphRunner):
     self.dev_access: dict[HWQueue, set[HCQCompiled]] = collections.defaultdict(set)
 
     for dev, queue in self.comp_queues.items(): self.dev_access[queue].add(dev)
+
+    # Per-graph PMC capture: one buffer slot per program dispatch on each pmc-enabled device.
+    self.pmc_prog_js: dict[Any, list[int]] = {}
+    self.graph_pmc_buf: dict[Any, HCQBuffer] = {}
+    self.pmc_slot: dict[int, int] = {}
+    if PMC_GRAPH:
+      for dev in self.devices:
+        if not getattr(dev, "pmc_enabled", False): continue
+        js = [j for j, rt in enumerate(self.runtimes) if rt is not None and rt.dev is dev]
+        if not js: continue
+        rec = dev.pmc_buffer.size
+        buf = dev.allocator.alloc(rec * len(js), BufferSpec(nolru=True, uncached=True))
+        dev.allocator._copyin(buf, memoryview(bytearray(buf.size)))
+        self.pmc_prog_js[dev], self.graph_pmc_buf[dev] = js, buf
+        for slot, j in enumerate(js): self.pmc_slot[j] = slot
 
     self.input_replace_map: dict[HCQCompiled, set[tuple[int, int]]] = collections.defaultdict(set)
     self.device_vars: dict[HCQCompiled, dict[str, int]] = {}
@@ -171,6 +194,9 @@ class HCQGraph(MultiGraphRunner):
       # Encode main commands based on ji type.
       if runtime is not None:
         enqueue_queue.exec(runtime, self.ji_args[j], ast.arg.global_size or (1,1,1), ast.arg.local_size or (1,1,1))  # type: ignore[arg-type]
+        if enqueue_dev in self.graph_pmc_buf:
+          rec = enqueue_dev.pmc_buffer.size
+          enqueue_queue.pmc_read(self.graph_pmc_buf[enqueue_dev].offset(self.pmc_slot[j] * rec), enqueue_dev.pmc_sched)
       elif j in self.rdma_deps:
         dest_queue, dest_deps, dest_out_signal, dest_out_val = self.rdma_deps[j]
         for sig, val in dest_deps: dest_queue.wait(sig, val)
@@ -268,7 +294,9 @@ class HCQGraph(MultiGraphRunner):
     # Wait and restore signals
     self.kickoff_value += 1
     for dev in self.devices: self.last_timeline[dev][0].wait(self.last_timeline[dev][1])
-    if PROFILE and self.kickoff_value > 1: self.collect_timestamps()
+    if PROFILE and self.kickoff_value > 1:
+      self.collect_timestamps()
+      self.collect_pmc()
 
     hcq_var_vals = {self.kickoff_var.expr: self.kickoff_value, **var_vals,
                     **{var.expr: dev.timeline_value - 1 for dev, var in self.virt_timeline_vals.items()},
@@ -303,13 +331,27 @@ class HCQGraph(MultiGraphRunner):
     # NOTE: Append to any device is fine...
     self.devices[0].profile_events += [ProfileGraphEvent(self.prof_graph_entries, self.prof_graph_deps, [s.timestamp for s in self.prof_signals])]
 
+  def collect_pmc(self):
+    if not self.graph_pmc_buf: return
+    from tinygrad.runtime.ops_amd import ProfilePMCEvent
+    for dev, js in self.pmc_prog_js.items():
+      rec = dev.pmc_buffer.size
+      blob = memoryview(bytearray(self.graph_pmc_buf[dev].size))
+      dev.allocator._copyout(blob, self.graph_pmc_buf[dev])
+      for slot, j in enumerate(js):
+        rt = self.runtimes[j]
+        Compiled.profile_events += [ProfilePMCEvent(dev.device, rt.prof_prg_counter, dev.pmc_sched,
+                                                    bytes(blob[slot * rec:(slot + 1) * rec]), dev.prof_exec_counter)]
+
   def dev_name(self, dev) -> str: return dev.device.replace(":", "_")
 
   @suppress_finalizing
   def __del__(self):
     for dev in self.devices: self.last_timeline[dev][0].wait(self.last_timeline[dev][1])
 
-    if PROFILE and self.kickoff_value >= 1: self.collect_timestamps()
+    if PROFILE and self.kickoff_value >= 1:
+      self.collect_timestamps()
+      self.collect_pmc()
 
     for fdev, buf in self.kernargs_bufs.items(): fdev.allocator._free(buf, BufferSpec(cpu_access=True))
 

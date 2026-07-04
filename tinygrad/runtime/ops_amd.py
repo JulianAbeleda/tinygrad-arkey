@@ -849,6 +849,19 @@ class KFDIface:
         self.require_profile_mode(can_set_mode=False)
       else:
         raise RuntimeError("PMC/SQTT requires stable power state: run `amd-smi set -l stable_std` for KFD iface")
+    # gfx11+: ungate the perfmon clock via the KFD profiler ioctl. Without this, medium-grain clock
+    # gating (RLC_CGTT_MGCG_OVERRIDE.PERFMON_CLOCK_STATE) keeps the perfmon clock off, so every counter
+    # fed by it (GRBM/GL2C/SQC + SQ instruction counters) reads zero; only SQ_BUSY_CYCLES (SQ clock
+    # domain) survives. This is what ROCProfiler does to enable perfcounting.
+    if not getattr(self, "_pmc_profiler_locked", False):
+      self._pmc_profiler_locked = True
+      try:
+        kfd.AMDKFD_IOC_PROFILER(KFDIface.kfd, op=kfd.KFD_IOC_PROFILER_PMC,
+          pmc=kfd.struct_kfd_ioctl_pmc_settings(gpu_id=self.gpu_id, lock=1, perfcount_enable=1))
+        atexit.register(lambda: kfd.AMDKFD_IOC_PROFILER(KFDIface.kfd, op=kfd.KFD_IOC_PROFILER_PMC,
+          pmc=kfd.struct_kfd_ioctl_pmc_settings(gpu_id=self.gpu_id, lock=0, perfcount_enable=0)))
+      except OSError as e:
+        print(f"warning: KFD PROFILER PMC ioctl failed ({e}); gfx11 perfmon clock may stay gated -> only SQ_BUSY_CYCLES will read")
 
   @functools.cached_property
   def drm_dev_info(self) -> amdgpu_drm.struct_drm_amdgpu_info_device:
