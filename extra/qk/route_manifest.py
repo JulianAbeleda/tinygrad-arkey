@@ -278,7 +278,7 @@ ROUTES = {
     "provenance": "machine_authored_generated",
     "selector": "env_guard",
     "route_attribution": "future tinygrad/llm/prefill_routes.py branch guarded by PREFILL_QK_GENERATED_TILE=1; intended writer is a PackedPrefillTileSpec lowered to generated UOps, not a source-string or external handwritten kernel.",
-    "note": "14B/32B memory-safe parity route scope. BoltBeam practical roofline shows the live direct-packed Q4 path at ~2 GB/s on ffn_gate_up/ffn_down/attn_qo versus llama-class Q4 at ~26 GB/s. The required substrate change is a generated cooperative packed-prefill tile: row/token tiles plus Q4 lane4 as LOCAL/cooperative work, with lossless fp32 accumulation and direct [tokens, rows] output. Default-off until a microgate shows a multi-x hot-kernel move."},
+    "note": "14B/32B memory-safe parity route scope. BoltBeam practical roofline shows the live direct-packed Q4 path at ~2 GB/s on ffn_gate_up/ffn_down/attn_qo versus llama-class Q4 at ~26 GB/s. The required substrate change is a generated cooperative packed-prefill tile: row/token tiles plus Q4 lane4 as LOCAL/cooperative work, with lossless fp32 accumulation and direct [tokens, rows] output. The first simple generated-UOp probes are refuted: 256-thread lane_partials hit 0.99 GB/s, and one-wave direct_warp tops out at 1.29 GB/s on ffn_gate_up. Keep the route default-off; next work must be a real MMQ-style codegen substrate, not another small UOp axis rearrangement."},
   "prefill_pipe_role_selective_default": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "rollback_reference",
     "roles": ["attn_qo", "attn_kv", "ffn_down"], "excluded_roles": ["ffn_gate_up"],
@@ -322,6 +322,9 @@ REFUTED = [
    "citation": "bench/amd-isa-backend-q6k-direct-speed/latest.json", "route_id": "decode_q6k_direct_refuted"},
   {"axis": "q4k_offline_layout_reshuffle", "disposition": "deprioritized: G3 matches owned, no layout gap to recover",
    "citation": "bench/amd-isa-backend-g3-weight-promotion/search_space_update.json"},
+  {"axis": "prefill_q4k_simple_uop_cooperative_lane_tile", "domain": "prefill",
+   "disposition": "refuted on 14B ffn_gate_up: lane_partials 0.99 GB/s; direct_warp sweep best 1.29 GB/s vs current direct-packed floor ~2.11 GB/s",
+   "citation": "docs/prefill-packed-generated-tile-scope-20260704.md", "route_id": "prefill_q4k_generated_tile_research"},
   {"axis": "attention_combine_fused_lifecycle", "domain": "attention", "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
    "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"},
   {"axis": "g5_block_tile_8b_as_default", "domain": "attention", "disposition": "correct_not_fast: token-identical + route-bound but 87.6% of owned @ctx512 / 95.6% @ctx4096 (TG-P5)",

@@ -45,3 +45,23 @@ Q4 lane axis reduced inside the output element. The route needs an explicit coop
 Close a candidate quickly if the bound hot-row kernel stays in the ~2 GB/s class. Continue only when the generated
 tile changes the substrate class, visible as wider workgroups/cooperative lanes and a multi-x per-kernel GB/s move.
 
+## 2026-07-04 Candidate Results
+
+The first generated-UOp cooperative-lane probes are correct but refuted for speed on 14B `ffn_gate_up`.
+
+| candidate | tile | output | whole pp512 tok/s | ffn_gate_up GB/s | verdict |
+|---|---|---|---:|---:|---|
+| current direct-packed floor | current | direct `[tokens, rows]` | 135.7 | 2.11 | baseline |
+| generated tile | rows=4, tokens=8, lanes=8 | external 8-lane partial reduce | 79.2 | 0.99 | refuted |
+| generated direct-warp | rows=1, tokens=4, lanes=8 | in-kernel warp reduce | 98.4 | 1.29 | refuted |
+| generated direct-warp | rows=2, tokens=2, lanes=8 | in-kernel warp reduce | 86.7 | 1.05 | refuted |
+| generated direct-warp | rows=4, tokens=1, lanes=8 | in-kernel warp reduce | 83.5 | 1.00 | refuted |
+
+Correctness for the best direct-warp mode passed against the existing lossless direct-packed route on real 14B
+`blk.0.ffn_gate`: `rel_rmse=1.64e-6`, `max_abs=3.81e-5`.
+
+This exhausts the "simple generated UOp cooperative lane" family for the 14B hot row. The failure mode is now clear:
+external lane partials add too much lifecycle, while a one-wave in-kernel combine removes that lifecycle but loses too
+much row/token tile throughput. The next implementation cannot be another small axis rearrangement of the current UOp
+body. It needs a real generated MMQ-style packed-prefill substrate that owns the full workgroup schedule: row/token
+tiling, packed-load vectorization, lane combine, and output writeback in one codegen unit.

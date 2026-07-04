@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from tinygrad import dtypes
+from tinygrad.dtype import AddrSpace
 from tinygrad.helpers import cdiv
 from tinygrad.uop.ops import AxisType, KernelInfo, UOp
 
@@ -29,7 +30,7 @@ class PackedPrefillTileSpec:
   token_tile: int = 8
   lane_tile: int = 8
   role: str = ""
-  output_layout: str = "lane_partials"
+  output_layout: str = "lane_partials"  # "lane_partials" | "direct_warp"
   accumulator: str = "fp32"
   target: str = "amd_gfx1100"
 
@@ -44,10 +45,14 @@ class PackedPrefillTileSpec:
 
   def validate(self) -> None:
     if self.quant != "Q4_K": raise ValueError(f"only Q4_K is implemented, got {self.quant}")
-    if self.output_layout != "lane_partials": raise ValueError("first generated tile emits lane_partials only")
+    if self.output_layout not in ("lane_partials", "direct_warp"):
+      raise ValueError(f"unsupported output_layout={self.output_layout!r}")
     if self.accumulator != "fp32": raise ValueError("lossless generated tile requires fp32 accumulation")
     if self.lane_tile != 8: raise ValueError("Q4_K generated tile requires all 8 packed word lanes")
-    if self.threads != 256: raise ValueError(f"first generated tile must be 256 threads, got {self.threads}")
+    if self.output_layout == "lane_partials" and self.threads != 256:
+      raise ValueError(f"lane_partials generated tile must be 256 threads, got {self.threads}")
+    if self.output_layout == "direct_warp" and self.threads != 32:
+      raise ValueError(f"direct_warp generated tile must be one wave / 32 threads, got {self.threads}")
     if self.rows % self.row_tile or self.tokens % self.token_tile:
       raise ValueError(f"row_tile/token_tile must divide rows/tokens, got rows={self.rows}, tokens={self.tokens}")
     if self.k % Q4_K_BLOCK_ELEMS: raise ValueError(f"k={self.k} must be a multiple of Q4_K block elems")
@@ -60,14 +65,17 @@ class PackedPrefillTileSpec:
 
 
 def describe_q4k_packed_prefill_tile(rows:int, k:int, tokens:int, *, role:str="",
-                                     row_tile:int=4, token_tile:int=8) -> PackedPrefillTileSpec:
-  spec = PackedPrefillTileSpec("Q4_K", rows, k, tokens, row_tile=row_tile, token_tile=token_tile, role=role)
+                                     row_tile:int=4, token_tile:int=8,
+                                     output_layout:str="lane_partials") -> PackedPrefillTileSpec:
+  spec = PackedPrefillTileSpec("Q4_K", rows, k, tokens, row_tile=row_tile, token_tile=token_tile, role=role,
+                               output_layout=output_layout)
   spec.validate()
   return spec
 
 
 def emit_q4k_packed_prefill_tile(spec:PackedPrefillTileSpec):
   spec.validate()
+  if spec.output_layout == "direct_warp": return _emit_q4k_packed_prefill_direct_warp(spec)
   rows, k, b = spec.rows, spec.k, spec.tokens
   row_tile, token_tile = spec.row_tile, spec.token_tile
   k_blocks = k // Q4_K_BLOCK_ELEMS
@@ -88,5 +96,33 @@ def emit_q4k_packed_prefill_tile(spec:PackedPrefillTileSpec):
     acc = partials[row, bb, lane4].set(acc.after(blk)[row, bb, lane4] + contrib, end=blk)
     return acc.end(row_o, bb_o, row_i, bb_i, lane4).sink(
       arg=KernelInfo(name=spec.kernel_name, opts_to_apply=()))
+
+  return kernel
+
+
+def _emit_q4k_packed_prefill_direct_warp(spec:PackedPrefillTileSpec):
+  from extra.qk.amd_warp_reduce import warp_reduce_sum
+  rows, k, b = spec.rows, spec.k, spec.tokens
+  row_tile, token_tile = spec.row_tile, spec.token_tile
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
+    row_o = UOp.special(cdiv(rows, row_tile), "gidx0")
+    bb_o = UOp.special(cdiv(b, token_tile), "gidx1")
+    lane = UOp.special(32, "lidx0")
+    out_lane = lane // 8
+    lane4 = lane % 8
+    row_i = out_lane // token_tile
+    bb_i = out_lane % token_tile
+    blk = UOp.range(k_blocks, 0, axis_type=AxisType.REDUCE)
+    row = row_o * row_tile + row_i
+    bb = bb_o * token_tile + bb_i
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = _q4k_block_dot_packed_load_gemm(words, x, base, blk, lane4, bb, k)
+    acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+    total = warp_reduce_sum(acc[0], lane, 8)
+    return out[bb, row].store(total).sink(arg=KernelInfo(name=spec.kernel_name, opts_to_apply=()))
 
   return kernel
