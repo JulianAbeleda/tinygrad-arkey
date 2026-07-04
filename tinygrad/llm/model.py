@@ -15,9 +15,12 @@ from tinygrad.llm.prefill_policy import (
   prefill_concrete_kv_auto_decision, prefill_v2_auto_decision, prefill_v2_realize_bytes,
   prefill_v2_validate_ubatch,
 )
+from tinygrad.llm.prefill_routes import (
+  is_direct_packed_prefill_linear, prefill_route_policy, prefill_route_wants_resident_fp16, route_prefill_linear,
+)
 from tinygrad.llm.qk_primitives import (
-  QK_AMD_GFX1100_ARCH_OK, QKConfig, QKPrimitiveBudget, Q4KPrimitiveRegistry, _demote_q6k_to_q4,
-  _install_q4k_fusions, _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
+  QK_AMD_GFX1100_ARCH_OK, QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
+  _demote_q6k_to_q4, _install_q4k_fusions, _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
 )
 from tinygrad.llm.route_policy import (
   _load_qk_generated_policy, _qk_generated_policy_len, _load_qk_route_policy, _set_qk_route_policy,
@@ -112,26 +115,7 @@ def should_use_flash_decode(start_pos, T, use_flash:bool=False) -> bool:
   return _route_should_use_flash_decode(start_pos, T, use_flash, getenv_fn=getenv)
 
 def _pf16(lin, x:Tensor) -> Tensor:
-  # prefill v2: a single fp16 matmul (both operands fp16 -> RDNA3 WMMA tensor cores can fire). The primitives'
-  # `.weight` is a LAZY Q4_K/Q6_K->fp16 dequant graph (not a realized buffer); using it directly fuses the
-  # whole dequant into the matmul -> bandwidth/dequant-bound ~3% peak (no TC win). So we realize a clean fp16
-  # weight ONCE per linear (cached as `_pf16_w` by _install_prefill_v2_warmstart) and matmul against that.
-  w = getattr(lin, "_pf16_w", None)
-  if PREFILL_CHUNKED and w is None:
-    # Per-layer overlay: in the chunked path this runs inside a layer-sized TinyJit, whose replay reuses this fp16
-    # dequant scratch for every block with the same signature. Do not store it on the Linear; that would pin all blocks.
-    w_local = lin.weight.cast(dtypes.float16).contiguous()
-    if PREFILL_GRAPH_GEMM:
-      routed = qk_ops.route_pf16_graph_gemm(lin, x, w=w_local)
-      if routed is not None: return routed
-    b = getattr(lin, "bias", None)
-    return x.cast(dtypes.float16).linear(w_local.transpose(), b.cast(dtypes.float16) if b is not None else None)
-  if PREFILL_GRAPH_GEMM and w is not None:
-    routed = qk_ops.route_pf16_graph_gemm(lin, x)
-    if routed is not None: return routed
-  if w is None: w = lin.weight.cast(dtypes.float16)   # fallback (uncached): lazy, slow -- expect the cache
-  b = getattr(lin, "bias", None)
-  return x.cast(dtypes.float16).linear(w.transpose(), b.cast(dtypes.float16) if b is not None else None)
+  return route_prefill_linear(lin, x, prefill_graph_gemm=PREFILL_GRAPH_GEMM, prefill_chunked=PREFILL_CHUNKED)
 
 @functools.cache
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0, device:str|None=None) -> Tensor:
@@ -604,7 +588,11 @@ class Transformer:
     for k, v in block.__dict__.items():
       if isinstance(v, dict): setattr(tmpl, k, v.copy())
       elif isinstance(v, list): setattr(tmpl, k, v.copy())
-      elif hasattr(v, "__dict__"): setattr(tmpl, k, copy.copy(v))
+      elif hasattr(v, "__dict__"):
+        vv = copy.copy(v)
+        if hasattr(vv, "q4k_storage"): vv.q4k_storage = copy.copy(vv.q4k_storage)
+        if hasattr(vv, "q6k_storage"): vv.q6k_storage = copy.copy(vv.q6k_storage)
+        setattr(tmpl, k, vv)
     return tmpl
 
   def _set_state_tensor(self, obj, name:str, val:Tensor):
@@ -617,11 +605,28 @@ class Transformer:
     elif isinstance(cur, dict): cur[p] = val
     else: setattr(cur, p, val)
 
-  def _prefill_v2_block_state(self, block:FFNBlock) -> tuple[tuple[str, ...], tuple[int, ...], tuple[Tensor, ...]]:
-    sd = nn.state.get_state_dict(block)
+  def _prefill_v2_block_state(self, block:FFNBlock, device:str|None=None) -> tuple[tuple[str, ...], tuple[int, ...], tuple[Tensor, ...]]:
+    primitive_weight_names, primitive_storage = set(), {}
+    for n in self._PREFILL_V2_LINEARS:
+      lin = getattr(block, n, None)
+      if isinstance(lin, Q4KPrimitiveLinear):
+        primitive_weight_names.add(f"{n}.weight")
+        words = lin.prefill_packed_weight()
+        if getenv("PREFILL_PACKED_STREAM", 0) and device is not None: words = words.to(device).contiguous().realize()
+        primitive_storage[f"{n}.q4k_storage.words"] = words
+      elif isinstance(lin, Q6KPrimitiveLinear):
+        primitive_weight_names.add(f"{n}.weight")
+        halfs = lin.prefill_packed_weight()
+        if getenv("PREFILL_PACKED_STREAM", 0) and device is not None: halfs = halfs.to(device).contiguous().realize()
+        primitive_storage[f"{n}.q6k_storage.halfs"] = halfs
+    sd = {k:v for k, v in nn.state.get_state_dict(block).items()
+          if k not in primitive_weight_names and not any(p.startswith("_prefill_q") for p in k.split("."))}
+    sd.update(primitive_storage)
     names, vals, val_idx, seen = tuple(sd.keys()), [], [], {}
     for n in names:
       t = sd[n]
+      if getenv("PREFILL_PACKED_STREAM", 0) and device is not None and getattr(t, "device", None) != device:
+        t = t.to(device).contiguous().realize()
       k = t.uop
       if k not in seen:
         seen[k] = len(vals)
@@ -676,11 +681,15 @@ class Transformer:
     # preflight: realizing ~fp16-model-size on top of Q4_K OOMs for 14B/32B -> fail fast with the estimate.
     est_gb = prefill_v2_realize_bytes([(o, i) for _, o, i in covered]) / 1e9
     budget_gb = getenv("PREFILL_V2_MAX_REALIZE_GB", 18)
+    has_direct_packed = any(is_direct_packed_prefill_linear(lin) for lin, _, _ in covered)
+    if not getenv("PREFILL_V2_FORCE_REALIZE", 0) and not prefill_route_wants_resident_fp16(
+        est_gb=est_gb, budget_gb=budget_gb, has_direct_packed=has_direct_packed, prefill_chunked=PREFILL_CHUNKED):
+      return 0
     if est_gb > budget_gb and not getenv("PREFILL_V2_FORCE_REALIZE", 0):
       raise RuntimeError(f"PREFILL_V2 would realize ~{est_gb:.1f} GB of fp16 weights (on top of Q4_K decode "
                          f"storage), over the ~{budget_gb} GB budget -- likely OOM. This is 8B-sized work; for "
-                         f"larger models raise PREFILL_V2_MAX_REALIZE_GB, set PREFILL_V2_FORCE_REALIZE=1 to "
-                         f"override, or use PREFILL_CHUNKED=1 (VRAM-frugal per-layer fp16 overlay).")
+                         f"larger models raise PREFILL_V2_MAX_REALIZE_GB, set PREFILL_V2_FORCE_REALIZE=1, use "
+                         f"PREFILL_ROUTE=direct_packed, or use PREFILL_CHUNKED=1.")
     n = 0
     for lin, _, _ in covered:
       lin._pf16_w = lin.weight.cast(dtypes.float16).contiguous().realize(); n += 1
@@ -709,8 +718,13 @@ class Transformer:
   def logits_prefill_v2_chunked(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()
     for block in self.blk:
+      x = x.contiguous().realize()
+      if getenv("PREFILL_PACKED_STREAM", 0):
+        block._init_state(x)
+        x = block(x, start_pos)
+        continue
       block._init_state(x)
-      names, val_idx, vals = self._prefill_v2_block_state(block)
+      names, val_idx, vals = self._prefill_v2_block_state(block, x.device)
       if val_idx and max(val_idx) >= len(vals):
         raise RuntimeError(f"prefill layer state pack mismatch before JIT: need {max(val_idx)+1}, got {len(vals)}")
       jit = self._prefill_v2_layer_jit(block, names, val_idx, vals, start_pos)
@@ -755,6 +769,10 @@ class Transformer:
     # Per-layer overlay: do not wrap the whole prefill in a TinyJit. The Python loop replays a layer-sized TinyJit
     # across blocks, passing each block's tensors as inputs so fp16 dequant scratch is overwritten, not accumulated.
     if is_prefill_v2 and PREFILL_CHUNKED:
+      if prefill_route_policy() == "chunked" and not getenv("PREFILL_CHUNKED_EXPERIMENTAL", 0):
+        raise RuntimeError("PREFILL_ROUTE=chunked is disabled: the fp16 per-layer overlay can replay stale captured "
+                           "state and has produced AMD MMU faults. Use PREFILL_ROUTE=direct_packed for 14B/32B "
+                           "prefill, or set PREFILL_CHUNKED_EXPERIMENTAL=1 to debug the overlay.")
       import tinygrad.codegen.opt.postrange as pr
       saved = pr._WARMSTART_OPTS
       pr._WARMSTART_OPTS = self._pf16_warmstart
@@ -831,13 +849,17 @@ class Transformer:
         _set_prefill_v2(_v2_on)
       else:
         _v2_on = PREFILL_V2
+      _admit_has_direct = (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy)
+      _resident_fp16_admit = _v2_on and prefill_route_wants_resident_fp16(
+        est_gb=_est_fp16 / 1e9, budget_gb=getenv("PREFILL_V2_MAX_REALIZE_GB", 18),
+        has_direct_packed=_admit_has_direct, prefill_chunked=PREFILL_CHUNKED)
       if _v2_on and PREFILL_CHUNKED:
         # per-layer overlay: fp16 weights are replay scratch, not a resident copy. Reserve a few layer-sized overlays
         # instead of the whole fp16 model. Tune with PREFILL_CHUNK_RESIDENT_BLOCKS.
         _overlay_resident = (_est_fp16 // max(num_blocks, 1)) * getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)
         _weights = _q4_bytes + _overlay_resident
       else:
-        _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
+        _weights = _q4_bytes + (_est_fp16 if _resident_fp16_admit else 0)
       _prefill_per_tok = 4 * _admit_n_heads * PREFILL_UBATCH
       _flash_scratch = _admit_n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (_admit_head_dim + 2) * 4
       _model_label = f"{_admit_arch} ({_q4_bytes/1e9:.0f}GB Q4)"
@@ -905,13 +927,17 @@ class Transformer:
         _set_prefill_v2(_v2_on)
       else:
         _v2_on = PREFILL_V2
+      _admit_has_direct = (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy)
+      _resident_fp16_admit = _v2_on and prefill_route_wants_resident_fp16(
+        est_gb=_est_fp16 / 1e9, budget_gb=getenv("PREFILL_V2_MAX_REALIZE_GB", 18),
+        has_direct_packed=_admit_has_direct, prefill_chunked=PREFILL_CHUNKED)
       if _v2_on and PREFILL_CHUNKED:
         # per-layer overlay: fp16 weights are replay scratch, not a resident copy. Reserve a few layer-sized overlays
         # instead of the whole fp16 model. Tune with PREFILL_CHUNK_RESIDENT_BLOCKS.
         _overlay_resident = (_est_fp16 // max(num_blocks, 1)) * getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)
         _weights = _q4_bytes + _overlay_resident
       else:
-        _weights = _q4_bytes + (_est_fp16 if _v2_on else 0)
+        _weights = _q4_bytes + (_est_fp16 if _resident_fp16_admit else 0)
       _prefill_per_tok = 4 * n_heads * PREFILL_UBATCH
       _flash_scratch = n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (head_dim + 2) * 4
       _model_label = f"{arch} ({_q4_bytes/1e9:.0f}GB Q4)"

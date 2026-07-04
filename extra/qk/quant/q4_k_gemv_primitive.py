@@ -100,6 +100,15 @@ def _q4k_block_dot_q8_1(words:UOp, xq:UOp, xscales:UOp, base:UOp, x_block:UOp, p
     contrib = contrib + _q4k_weight(words, base, grp, pos) * x
   return contrib
 
+def _q4k_block_dot_q8_1_gemm(words:UOp, xq:UOp, xscales:UOp, base:UOp, x_block:UOp, pos:UOp, bb:UOp, k:int) -> UOp:
+  contrib = UOp.const(dtypes.float32, 0.0)
+  x_base = bb * k
+  for grp in range(8):
+    x_idx = x_base + x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos
+    x = xq[x_idx].cast(dtypes.float32) * xscales[x_idx//Q8_1_BLOCK_ELEMS].cast(dtypes.float32)
+    contrib = contrib + _q4k_weight(words, base, grp, pos) * x
+  return contrib
+
 def _q4k_group_dot_q8_1_intdot(words:UOp, xq:UOp, xscales:UOp, base:UOp, x_block:UOp, grp:int, afters:tuple[UOp, ...]) -> UOp:
   pos = UOp.range(32, 20 + grp, axis_type=AxisType.REDUCE)
   x_idx = x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos
@@ -373,7 +382,7 @@ def _q4k_block_dot_gemm(words:UOp, x:UOp, base:UOp, x_block:UOp, pos:UOp, bb:UOp
     contrib = contrib + w * x[bb*k + x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
   return contrib
 
-def q4k_gemm_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+def q4k_gemm_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...], name:str="q4k_gemm"):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)
 
@@ -390,7 +399,7 @@ def q4k_gemm_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[
 
     acc = partials[row, bb, part].set(0.0)
     acc = partials[row, bb, part].set(acc.after(blk_part, pos)[row, bb, part] + contrib, end=pos)
-    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"q4k_gemm_{rows}_{k}_{b}_{parts}", schedule, opts))
+    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}_{parts}", schedule, opts))
 
   return kernel
 
@@ -533,7 +542,7 @@ def _q4k_block_dot_packed_load_gemm(words:UOp, x:UOp, base:UOp, x_block:UOp, lan
       contrib = contrib + weight * x[bb*k + x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
   return contrib
 
-def q4k_gemm_packed_load_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
+def q4k_gemm_packed_load_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...], name:str="q4k_gemm_packed_load"):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)
 
@@ -550,7 +559,25 @@ def q4k_gemm_packed_load_kernel(rows:int, k:int, b:int, parts:int, schedule:str,
 
     acc = partials[row, bb, part].set(0.0)
     acc = partials[row, bb, part].set(acc.after(blk_part, lane4)[row, bb, part] + contrib, end=lane4)
-    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"q4k_gemm_packed_load_{rows}_{k}_{b}_{parts}", schedule, opts))
+    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_gemm_packed_load_direct_out_kernel(rows:int, k:int, b:int, schedule:str, opts:tuple[Opt, ...],
+                                           name:str="q4k_gemm_packed_load_direct_out"):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    bb = UOp.range(b, 1)
+    blk = UOp.range(k_blocks, 2, axis_type=AxisType.REDUCE)
+    lane4 = UOp.range(8, 3, axis_type=AxisType.REDUCE)
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = _q4k_block_dot_packed_load_gemm(words, x, base, blk, lane4, bb, k)
+
+    acc = out[bb, row].set(0.0)
+    acc = out[bb, row].set(acc.after(blk, lane4)[bb, row] + contrib, end=lane4)
+    return acc.end(row, bb, blk).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}_1", schedule, opts))
 
   return kernel
 
@@ -618,6 +645,103 @@ def q4k_q8_1_gemv_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:
     acc = partials[row, part].set(0.0)
     acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
     return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q4k_q8_1_gemv_partial_{rows}_{k}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_q8_1_gemm_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...], name:str="q4k_q8_1_gemm"):
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, xq:UOp, xscales:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    bb = UOp.range(b, 1)
+    part = UOp.range(parts, 2)
+    blk_part = UOp.range(blocks_per_part, 3, axis_type=AxisType.REDUCE)
+    pos = UOp.range(32, 4, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = in_range.where(_q4k_block_dot_q8_1_gemm(words, xq, xscales, base, blk, pos, bb, k), UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, bb, part].set(0.0)
+    acc = partials[row, bb, part].set(acc.after(blk_part, pos)[row, bb, part] + contrib, end=pos)
+    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_q8_1_sdot4_gemm_kernel(rows:int, k:int, b:int, parts:int, schedule:str, opts:tuple[Opt, ...],
+                               name:str="q4k_q8_1_sdot4_gemm"):
+  if schedule != "none" or opts:
+    raise ValueError("q4k_q8_1_sdot4_gemm_kernel is a generated-UOp dot4 candidate; schedule opts unsupported")
+  if parts != 1: raise ValueError("q4k_q8_1_sdot4_gemm_kernel currently supports parts=1 only")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  blocks_per_part = cdiv(k_blocks, parts)
+
+  def kernel(partials:UOp, words:UOp, q8packed:UOp, xscales:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    bb = UOp.range(b, 1)
+    part = UOp.range(parts, 2)
+    blk_part = UOp.range(blocks_per_part, 3, axis_type=AxisType.REDUCE)
+    lane4 = UOp.range(8, 4, axis_type=AxisType.REDUCE)
+    blk = part * blocks_per_part + blk_part
+    in_range = blk < k_blocks
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    d_blk = _f16_word(words[base], False); dmin_blk = _f16_word(words[base], True)
+    psd = UOp.const(dtypes.float32, 0.0); psm = UOp.const(dtypes.float32, 0.0)
+    ones = UOp.const(dtypes.int32, 0x01010101); z = UOp.const(dtypes.int32, 0)
+    q8_base = bb * (k // 4) + blk * 64
+    scale_base = bb * (k // Q8_1_BLOCK_ELEMS) + blk * 8
+    for grp in range(8):
+      _, _, sc, mn = _q4k_group_params(words, base, grp)
+      qword = words[base + 4 + (grp // 2) * 8 + lane4]
+      q4 = qword.rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F).cast(dtypes.int32)
+      q8 = q8packed[q8_base + grp * 8 + lane4].cast(dtypes.int32)
+      d8 = xscales[scale_base + grp].cast(dtypes.float32)
+      psd = psd + d8 * _sdot4_op(q8, q4, z).cast(dtypes.float32) * sc.cast(dtypes.float32)
+      psm = psm + d8 * _sdot4_op(q8, ones, z).cast(dtypes.float32) * mn.cast(dtypes.float32)
+    contrib = in_range.where(d_blk * psd - dmin_blk * psm, UOp.const(dtypes.float32, 0.0))
+
+    acc = partials[row, bb, part].set(0.0)
+    acc = partials[row, bb, part].set(acc.after(blk_part, lane4)[row, bb, part] + contrib, end=lane4)
+    return acc.end(row, bb, part, blk_part).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}_{parts}", schedule, opts))
+
+  return kernel
+
+def q4k_q8_1_sdot4_coop_gemm_kernel(rows:int, k:int, b:int, row_tile:int=1, token_tile:int=1,
+                                    name:str="q4k_q8_1_sdot4_coop_gemm"):
+  # Generated-UOp MMQ-shaped first step: 8 local lanes split the Q4_K word columns for one output element.
+  # Output partials shape is [rows, b, 8]; the caller reduces axis=2.
+  if row_tile < 1 or token_tile < 1: raise ValueError("row_tile/token_tile must be >= 1")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(partials:UOp, words:UOp, q8packed:UOp, xscales:UOp) -> UOp:
+    row_o = UOp.range(cdiv(rows, row_tile), 0)
+    bb_o = UOp.range(cdiv(b, token_tile), 1)
+    row_i = UOp.range(row_tile, 2, axis_type=AxisType.LOCAL)
+    bb_i = UOp.range(token_tile, 3, axis_type=AxisType.LOCAL)
+    lane4 = UOp.range(8, 4, axis_type=AxisType.LOCAL)
+    blk = UOp.range(k_blocks, 5, axis_type=AxisType.REDUCE)
+    row = row_o * row_tile + row_i
+    bb = bb_o * token_tile + bb_i
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    d_blk = _f16_word(words[base], False); dmin_blk = _f16_word(words[base], True)
+    psd = UOp.const(dtypes.float32, 0.0); psm = UOp.const(dtypes.float32, 0.0)
+    ones = UOp.const(dtypes.int32, 0x01010101); z = UOp.const(dtypes.int32, 0)
+    q8_base = bb * (k // 4) + blk * 64
+    scale_base = bb * (k // Q8_1_BLOCK_ELEMS) + blk * 8
+    for grp in range(8):
+      _, _, sc, mn = _q4k_group_params(words, base, grp)
+      qword = words[base + 4 + (grp // 2) * 8 + lane4]
+      q4 = qword.rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F).cast(dtypes.int32)
+      q8 = q8packed[q8_base + grp * 8 + lane4].cast(dtypes.int32)
+      d8 = xscales[scale_base + grp].cast(dtypes.float32)
+      psd = psd + d8 * _sdot4_op(q8, q4, z).cast(dtypes.float32) * sc.cast(dtypes.float32)
+      psm = psm + d8 * _sdot4_op(q8, ones, z).cast(dtypes.float32) * mn.cast(dtypes.float32)
+    contrib = d_blk * psd - dmin_blk * psm
+
+    acc = partials[row, bb, lane4].set(0.0)
+    acc = partials[row, bb, lane4].set(acc.after(blk)[row, bb, lane4] + contrib, end=blk)
+    return acc.end(row_o, bb_o, row_i, bb_i, lane4).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}_8", "", ()))
 
   return kernel
 

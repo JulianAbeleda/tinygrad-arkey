@@ -1,0 +1,113 @@
+import os
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def clean_prefill_route_env():
+  old = {k: os.environ.get(k) for k in ("PREFILL_ROUTE", "PREFILL_QK_DIRECT", "PREFILL_ROUTE_STRICT",
+                                        "QK_GENERATED_POLICY_STRICT", "PREFILL_DIRECT_QUANTS",
+                                        "PREFILL_DIRECT_TENSORS", "PREFILL_DIRECT_SKIP_TENSORS",
+                                        "PREFILL_Q4K_PACKED_LOAD", "PREFILL_Q6K_PACKED_LOAD",
+                                        "PREFILL_DIRECT_B_UPCAST", "PREFILL_DIRECT_OUT", "PREFILL_DIRECT_PARTS",
+                                        "PREFILL_DIRECT_Q4K_PARTS", "PREFILL_DIRECT_Q6K_PARTS",
+                                        "PREFILL_DIRECT_FFN_GATE_UP_PARTS", "PREFILL_DIRECT_FFN_DOWN_PARTS",
+                                        "PREFILL_Q4K_Q8")}
+  for k in old: os.environ.pop(k, None)
+  yield
+  for k, v in old.items():
+    if v is None: os.environ.pop(k, None)
+    else: os.environ[k] = v
+
+
+def test_prefill_route_policy_defaults_auto():
+  from tinygrad.llm.prefill_routes import prefill_route_policy
+  assert prefill_route_policy() == "auto"
+
+
+def test_prefill_qk_direct_alias_selects_direct_packed():
+  from tinygrad.llm.prefill_routes import prefill_route_policy
+  os.environ["PREFILL_QK_DIRECT"] = "1"
+  assert prefill_route_policy() == "direct_packed"
+
+
+def test_prefill_route_rejects_unknown_policy():
+  from tinygrad.llm.prefill_routes import prefill_route_policy
+  os.environ["PREFILL_ROUTE"] = "hardcoded_14b"
+  with pytest.raises(ValueError):
+    prefill_route_policy()
+
+
+def test_auto_keeps_resident_fp16_when_it_fits():
+  from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
+  assert prefill_route_wants_resident_fp16(est_gb=12.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+
+
+def test_auto_skips_resident_fp16_when_direct_packed_exists_and_fp16_exceeds_budget():
+  from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
+  assert not prefill_route_wants_resident_fp16(est_gb=24.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+
+
+def test_fp16_policy_keeps_resident_fp16_even_over_budget():
+  from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
+  os.environ["PREFILL_ROUTE"] = "fp16"
+  assert prefill_route_wants_resident_fp16(est_gb=24.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+
+
+def test_direct_policy_skips_resident_fp16_for_8b_experiments_too():
+  from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
+  os.environ["PREFILL_ROUTE"] = "direct_packed"
+  assert not prefill_route_wants_resident_fp16(est_gb=12.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+
+
+def test_direct_packed_quant_selector():
+  from tinygrad.llm.prefill_routes import _direct_packed_enabled_for
+  lin = type("Lin", (), {"name": "blk.0.ffn_down.weight"})()
+  os.environ["PREFILL_DIRECT_QUANTS"] = "Q4_K"
+  assert _direct_packed_enabled_for(lin, "Q4_K")
+  assert not _direct_packed_enabled_for(lin, "Q6_K")
+
+
+def test_direct_packed_tensor_selector():
+  from tinygrad.llm.prefill_routes import _direct_packed_enabled_for
+  lin = type("Lin", (), {"name": "blk.0.ffn_down.weight"})()
+  os.environ["PREFILL_DIRECT_TENSORS"] = "ffn_gate,attn_q"
+  assert not _direct_packed_enabled_for(lin, "Q4_K")
+  os.environ["PREFILL_DIRECT_TENSORS"] = "ffn_down"
+  assert _direct_packed_enabled_for(lin, "Q4_K")
+
+
+def test_direct_packed_parts_prefers_role_then_quant_then_global():
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_parts
+  lin = type("Lin", (), {"parts": 1})()
+  spec = PrefillLinearRouteSpec("direct_packed", "q4k", "ffn_gate_up", 512, 17408, 5120)
+  os.environ["PREFILL_DIRECT_PARTS"] = "2"
+  assert _direct_packed_parts(lin, spec) == 2
+  os.environ["PREFILL_DIRECT_Q4K_PARTS"] = "3"
+  assert _direct_packed_parts(lin, spec) == 3
+  os.environ["PREFILL_DIRECT_FFN_GATE_UP_PARTS"] = "4"
+  assert _direct_packed_parts(lin, spec) == 4
+
+
+def test_direct_packed_q4_ffn_down_defaults_to_single_part():
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_parts
+  lin = type("Lin", (), {"parts": 4, "name": "blk.0.ffn_down.weight"})()
+  spec = PrefillLinearRouteSpec("direct_packed", "q4k", "", 512, 5120, 17408)
+  assert _direct_packed_parts(lin, spec) == 1
+  os.environ["PREFILL_DIRECT_FFN_DOWN_PARTS"] = "2"
+  assert _direct_packed_parts(lin, spec) == 2
+
+
+def test_direct_packed_q6_defaults_to_single_part():
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_parts
+  lin = type("Lin", (), {"parts": 4, "name": "blk.0.ffn_down.weight"})()
+  spec = PrefillLinearRouteSpec("direct_packed", "q6k", "", 512, 5120, 17408)
+  assert _direct_packed_parts(lin, spec) == 1
+  os.environ["PREFILL_DIRECT_Q6K_PARTS"] = "2"
+  assert _direct_packed_parts(lin, spec) == 2
+
+
+def test_prefill_q4k_q8_flag_is_valid_route_env():
+  from tinygrad.llm.prefill_routes import prefill_route_policy
+  os.environ["PREFILL_Q4K_Q8"] = "1"
+  assert prefill_route_policy() == "auto"

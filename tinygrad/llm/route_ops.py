@@ -13,12 +13,19 @@ def route_pf16_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph
 
 def q4k_parse_opt(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "parse_opt")(*args, **kwargs)
 def q4k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_kernel")(*args, **kwargs)
+def q4k_gemm_packed_load_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_kernel")(*args, **kwargs)
+def q4k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
+  return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_direct_out_kernel")(*args, **kwargs)
+def q4k_q8_1_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_gemm_kernel")(*args, **kwargs)
+def q4k_q8_1_sdot4_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_sdot4_gemm_kernel")(*args, **kwargs)
+def q4k_q8_1_sdot4_coop_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_sdot4_coop_gemm_kernel")(*args, **kwargs)
 def q4k_gemv_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_kernel")(*args, **kwargs)
 def q4k_gemv_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_partial_kernel")(*args, **kwargs)
 def q4k_gemv_warp_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_warp_kernel")(*args, **kwargs)
 def q4k_coop_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_coop_partial_kernel")(*args, **kwargs)
 def q4k_q8_1_vdot_builtin_partial_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_vdot_builtin_partial_kernel")(*args, **kwargs)
+def q8_signed_pack_u32_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q8_signed_pack_u32_kernel")(*args, **kwargs)
 def q8_1_bias_pack_u32_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q8_1_bias_pack_u32_kernel")(*args, **kwargs)
 def q8_1_quantize(*args, **kwargs): return _attr("extra.qk.layout", "q8_1_quantize")(*args, **kwargs)
 def quantize_q4_k(*args, **kwargs): return _attr("extra.qk.quantize", "quantize_q4_k")(*args, **kwargs)
@@ -36,6 +43,9 @@ def q4k_scheduler_matvec_lanemap(*args, **kwargs): return _attr("extra.qk.q4k_sc
 
 def q6k_parse_opt(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "parse_opt")(*args, **kwargs)
 def q6k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_kernel")(*args, **kwargs)
+def q6k_gemm_packed_load_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_packed_load_kernel")(*args, **kwargs)
+def q6k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
+  return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_packed_load_direct_out_kernel")(*args, **kwargs)
 def q6k_gemv_warp_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemv_warp_kernel")(*args, **kwargs)
 def q6k_halfwarp_partition_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_halfwarp_partition_kernel")(*args, **kwargs)
 def q6k_coop_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_coop_partial_kernel")(*args, **kwargs)

@@ -3,6 +3,7 @@ import collections, pathlib
 from dataclasses import dataclass
 from tinygrad import Tensor, UOp, dtypes, getenv, Device
 from tinygrad.helpers import prod
+from tinygrad.llm.gguf import ggml_data_to_tensor
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
 from tinygrad.llm.route_policy import _q4k_policy, _q6k_policy, _qk_generated_policy_entry
@@ -61,6 +62,17 @@ class Q4KPrimitiveLinear:
   def _fallback(self, x:Tensor) -> Tensor:
     return x.linear(self.weight.transpose(), self.bias)
 
+  def prefill_packed_weight(self) -> Tensor:
+    if self.q4k_storage.mode == "sidecar" or bool(getenv("PREFILL_PACKED_STREAM", 0)): return self.q4k_storage.words
+    if not hasattr(self, "_prefill_q4k_words"):
+      self._prefill_q4k_words = self.q4k_storage.words.clone().realize()
+    return self._prefill_q4k_words
+
+  def prefill_fp16_weight(self) -> Tensor:
+    raw = self.q4k_storage.words.bitcast(dtypes.uint8).reshape(-1)
+    return ggml_data_to_tensor(raw, self.out_features * self.in_features, 12).reshape(
+      self.out_features, self.in_features).cast(dtypes.float16).contiguous()
+
   def __call__(self, x:Tensor) -> Tensor:
     return q4k_primitive_linear_call(self, x, self._fallback, QK_AMD_GFX1100_ARCH_OK)
 
@@ -107,6 +119,17 @@ class Q6KPrimitiveLinear:
 
   def _fallback(self, x:Tensor) -> Tensor:
     return x.linear(self.weight.transpose(), self.bias)
+
+  def prefill_packed_weight(self) -> Tensor:
+    if self.q6k_storage.mode == "sidecar" or bool(getenv("PREFILL_PACKED_STREAM", 0)): return self.q6k_storage.halfs
+    if not hasattr(self, "_prefill_q6k_halfs"):
+      self._prefill_q6k_halfs = self.q6k_storage.halfs.clone().realize()
+    return self._prefill_q6k_halfs
+
+  def prefill_fp16_weight(self) -> Tensor:
+    raw = self.q6k_storage.halfs.bitcast(dtypes.uint8).reshape(-1)
+    return ggml_data_to_tensor(raw, self.out_features * self.in_features, 14).reshape(
+      self.out_features, self.in_features).cast(dtypes.float16).contiguous()
 
   def __call__(self, x:Tensor) -> Tensor:
     return q6k_primitive_linear_call(self, x, self._fallback, QK_AMD_GFX1100_ARCH_OK)
