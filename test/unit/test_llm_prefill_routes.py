@@ -12,7 +12,10 @@ def clean_prefill_route_env():
                                         "PREFILL_DIRECT_B_UPCAST", "PREFILL_DIRECT_OUT", "PREFILL_DIRECT_PARTS",
                                         "PREFILL_DIRECT_Q4K_PARTS", "PREFILL_DIRECT_Q6K_PARTS",
                                         "PREFILL_DIRECT_FFN_GATE_UP_PARTS", "PREFILL_DIRECT_FFN_DOWN_PARTS",
-                                        "PREFILL_Q4K_Q8")}
+                                        "PREFILL_Q4K_Q8", "PREFILL_Q4K_DIRECT_OPTS",
+                                        "PREFILL_Q4K_DIRECT_EXTRA_OPTS", "PREFILL_Q6K_DIRECT_OPTS",
+                                        "PREFILL_Q6K_DIRECT_EXTRA_OPTS", "PREFILL_DIRECT_FFN_GATE_UP_OPTS",
+                                        "PREFILL_DIRECT_FFN_GATE_UP_EXTRA_OPTS", "PREFILL_Q4K_DIRECT_SCHEDULE")}
   for k in old: os.environ.pop(k, None)
   yield
   for k, v in old.items():
@@ -105,6 +108,28 @@ def test_direct_packed_q6_defaults_to_single_part():
   assert _direct_packed_parts(lin, spec) == 1
   os.environ["PREFILL_DIRECT_Q6K_PARTS"] = "2"
   assert _direct_packed_parts(lin, spec) == 2
+
+
+def test_direct_packed_q4_opts_override_and_extra():
+  from tinygrad.codegen.opt import OptOps
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_opts
+  lin = type("Lin", (), {"opts": ()})()
+  spec = PrefillLinearRouteSpec("direct_packed", "q4k", "ffn_gate_up", 512, 17408, 5120)
+  opts = _direct_packed_opts(lin, spec)
+  assert [(x.op, x.axis, x.arg) for x in opts] == [
+    (OptOps.LOCAL, 0, 16), (OptOps.LOCAL, 1, 16), (OptOps.UPCAST, 0, 4), (OptOps.UPCAST, 1, 4)]
+  os.environ["PREFILL_Q4K_DIRECT_SCHEDULE"] = "legacy"
+  os.environ["PREFILL_Q4K_DIRECT_EXTRA_OPTS"] = "UPCAST:0:4"
+  opts = _direct_packed_opts(lin, spec)
+  assert opts[-2].op is OptOps.UPCAST and opts[-2].axis == 1 and opts[-2].arg == 4
+  assert opts[-1].op is OptOps.UPCAST and opts[-1].axis == 0 and opts[-1].arg == 4
+  os.environ.pop("PREFILL_Q4K_DIRECT_SCHEDULE")
+  os.environ["PREFILL_Q4K_DIRECT_OPTS"] = "LOCAL:0:16,UPCAST:1:4"
+  opts = _direct_packed_opts(lin, spec)
+  assert [(x.op, x.axis, x.arg) for x in opts] == [(OptOps.LOCAL, 0, 16), (OptOps.UPCAST, 1, 4)]
+  os.environ["PREFILL_DIRECT_FFN_GATE_UP_OPTS"] = "LOCAL:0:64,GROUP:0:10,UPCAST:1:4"
+  opts = _direct_packed_opts(lin, spec)
+  assert [(x.op, x.axis, x.arg) for x in opts] == [(OptOps.LOCAL, 0, 64), (OptOps.GROUP, 0, 10), (OptOps.UPCAST, 1, 4)]
 
 
 def test_prefill_q4k_q8_flag_is_valid_route_env():

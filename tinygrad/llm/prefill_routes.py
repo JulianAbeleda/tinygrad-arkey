@@ -80,6 +80,34 @@ def _direct_packed_parts(lin, spec:"PrefillLinearRouteSpec") -> int:
   return max(1, base)
 
 
+def _direct_packed_opts(lin, spec:"PrefillLinearRouteSpec"):
+  role = _direct_packed_role(lin, spec)
+  role_key = "".join(ch.upper() if ch.isalnum() else "_" for ch in role)
+  if spec.quant == "q4k":
+    parse = qk_ops.q4k_parse_opt
+    override_key, extra_key = "PREFILL_Q4K_DIRECT_OPTS", "PREFILL_Q4K_DIRECT_EXTRA_OPTS"
+  else:
+    parse = qk_ops.q6k_parse_opt
+    override_key, extra_key = "PREFILL_Q6K_DIRECT_OPTS", "PREFILL_Q6K_DIRECT_EXTRA_OPTS"
+  if role_key:
+    role_override = str(os.environ.get(f"PREFILL_DIRECT_{role_key}_OPTS", "")).strip()
+    role_extra = str(os.environ.get(f"PREFILL_DIRECT_{role_key}_EXTRA_OPTS", "")).strip()
+    if role_override: override_key, extra_key = f"PREFILL_DIRECT_{role_key}_OPTS", f"PREFILL_DIRECT_{role_key}_EXTRA_OPTS"
+    elif role_extra: extra_key = f"PREFILL_DIRECT_{role_key}_EXTRA_OPTS"
+  override = str(os.environ.get(override_key, "")).strip()
+  if override:
+    return tuple(parse(x) for x in override.replace(";", ",").split(",") if x.strip())
+  extra = str(os.environ.get(extra_key, "")).strip()
+  if spec.quant == "q4k" and str(os.environ.get("PREFILL_Q4K_DIRECT_SCHEDULE", "tile4x4")).strip().lower() != "legacy":
+    # 14B pp512: this keeps Q4 dequant token-invariant across a 4x4 register tile. Clean whole-prefill: 135.7 -> 172.7 tok/s.
+    opts = tuple(parse(x) for x in ("LOCAL:0:16", "LOCAL:1:16", "UPCAST:0:4", "UPCAST:1:4"))
+  else:
+    opts = tuple(getattr(lin, "opts", ())) + (parse(f"UPCAST:1:{_direct_packed_b_upcast(spec.m)}"),)
+  if extra:
+    opts += tuple(parse(x) for x in extra.replace(";", ",").split(",") if x.strip())
+  return opts
+
+
 def prefill_route_wants_resident_fp16(*, est_gb:float, budget_gb:float, has_direct_packed:bool, prefill_chunked:bool) -> bool:
   route = prefill_route_policy()
   if route == "fp16": return True
@@ -131,7 +159,7 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   if _is_q4k_linear(lin):
     words = lin.prefill_packed_weight().to(x.device)
     partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
-    opts = getattr(lin, "opts", ()) + (qk_ops.q4k_parse_opt(f"UPCAST:1:{_direct_packed_b_upcast(spec.m)}"),)
+    opts = _direct_packed_opts(lin, spec)
     generated_tile_on = bool(_env("PREFILL_QK_GENERATED_TILE", 0))
     generated_tile_roles = _csv_set("PREFILL_QK_GENERATED_TILE_ROLES", "ffn_gate_up")
     role = _direct_packed_role(lin, spec)
@@ -193,7 +221,7 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   else:
     halfs = lin.prefill_packed_weight().to(x.device)
     partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
-    opts = getattr(lin, "opts", ()) + (qk_ops.q4k_parse_opt(f"UPCAST:1:{_direct_packed_b_upcast(spec.m)}"),)
+    opts = _direct_packed_opts(lin, spec)
     kernel = qk_ops.q6k_gemm_packed_load_kernel if bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)) else qk_ops.q6k_gemm_kernel
     if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) and bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)):
       out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(

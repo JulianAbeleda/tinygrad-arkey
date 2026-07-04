@@ -5,9 +5,14 @@ pp512 time against llama's measured Q4 packed-matmul rate, not by broad code own
 
 ## Conclusion
 
-The next tinygrad work is a generated packed-prefill tile route. The current Q4_K direct-output path is a
-fit/safety floor, but its topology is the bottleneck: 32/64-thread workgroups, no LDS, no scratch, and a
-Q4 lane axis reduced inside the output element. The route needs an explicit cooperative token/row/lane tile.
+The first fix is schedule selection on the existing Q4_K direct-output route. The original trace made the path look
+like a bandwidth problem, but the useful interpretation is dequant amortization: when token/row work is not register
+tiled, Q4_K unpack/dequant is repeated too often. A correct `LOCAL:0:16,LOCAL:1:16,UPCAST:0:4,UPCAST:1:4` schedule
+moves 14B pp512 from `135.7` to `173.6 tok/s`.
+
+The remaining gap is still the packed-prefill matmul substrate, but it is narrower: tinygrad needs a correct grouped
+or staged reduction that preserves the 4x4 register tile and amortizes dequant over a larger token tile. Naive
+`GROUP` on the current custom UOp body is fast but wrong.
 
 ## Generated Schedule Requirements
 
@@ -47,6 +52,40 @@ tile changes the substrate class, visible as wider workgroups/cooperative lanes 
 
 ## 2026-07-04 Candidate Results
 
+### Promoted Schedule
+
+Fable's audit corrected the framing: the current route was effectively too close to 512 independent GEMVs because
+dequant work was not sufficiently amortized across tokens. The safe schedule change is:
+
+```text
+LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4
+```
+
+This is now the default Q4_K direct-packed prefill schedule. Rollback:
+
+```text
+PREFILL_Q4K_DIRECT_SCHEDULE=legacy
+```
+
+Clean 14B pp512 timing:
+
+| route | pp512 tok/s | elapsed us | verdict |
+|---|---:|---:|---|
+| old Q4 direct-packed default | 135.7 | 3772608.7 | baseline |
+| Q4 4x4 register-tiled schedule | 173.6 | 2950068.1 | promoted |
+
+The tempting grouped schedule:
+
+```text
+LOCAL:0:64, GROUP:0:10, UPCAST:1:4
+```
+
+looked much faster (`~214 tok/s` when applied to `ffn_gate_up`, `~275 tok/s` when applied to K=5120 Q4 roles), but it
+is numerically invalid on real 14B `blk.0.ffn_gate`: `rel_rmse ~= 1.26`. Do not use `GROUP` on this direct-output Q4
+custom UOp until the grouped reduction semantics are fixed.
+
+### Refuted Cooperative-Lane Probes
+
 The first generated-UOp cooperative-lane probes are correct but refuted for speed on 14B `ffn_gate_up`.
 
 | candidate | tile | output | whole pp512 tok/s | ffn_gate_up GB/s | verdict |
@@ -60,8 +99,14 @@ The first generated-UOp cooperative-lane probes are correct but refuted for spee
 Correctness for the best direct-warp mode passed against the existing lossless direct-packed route on real 14B
 `blk.0.ffn_gate`: `rel_rmse=1.64e-6`, `max_abs=3.81e-5`.
 
-This exhausts the "simple generated UOp cooperative lane" family for the 14B hot row. The failure mode is now clear:
+This exhausts the "simple generated UOp cooperative lane" family for the 14B hot row. The failure mode is clear:
 external lane partials add too much lifecycle, while a one-wave in-kernel combine removes that lifecycle but loses too
-much row/token tile throughput. The next implementation cannot be another small axis rearrangement of the current UOp
-body. It needs a real generated MMQ-style packed-prefill substrate that owns the full workgroup schedule: row/token
-tiling, packed-load vectorization, lane combine, and output writeback in one codegen unit.
+much row/token tile throughput.
+
+## Next Work
+
+1. Fix or replace grouped reduction for the direct-output Q4 custom UOp so that a grouped K-superblock schedule is
+   numerically correct.
+2. Re-test the fast-but-wrong `GROUP:0:10` family after the reduction fix; the measured speed suggests the schedule
+   shape is valuable if semantics can be made correct.
+3. Only after correct grouping plateaus, add the dequant-to-fp16-LDS prologue feeding WMMA or an int8/dot path.
