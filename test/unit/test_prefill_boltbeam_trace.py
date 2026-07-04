@@ -43,6 +43,14 @@ def test_q4_q8_mmq_prefill_kernel_classifies_as_q4_direct_packed():
   assert info["shape"] == [512, 17408, 5120]
 
 
+def test_generated_packed_tile_kernel_classifies():
+  role_by_shape = {(17408, 5120): {"role": "ffn_gate_up", "quant": "Q4_K"}}
+  info = _classify_kernel("prefill_q4_k_generated_tile_ffn_gate_up_512_17408_5120", role_by_shape)
+  assert info["role"] == "ffn_gate_up"
+  assert info["quant"] == "Q4_K"
+  assert info["shape"] == [512, 17408, 5120]
+
+
 def test_pmc_stats_normalize_to_boltbeam_vocab():
   sched = [
     SimpleNamespace(name="GL2C_HIT", xcc=1, inst=1, se=1, sa=1, wgp=1),
