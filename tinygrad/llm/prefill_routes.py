@@ -47,7 +47,8 @@ def _direct_packed_enabled_for(lin, quant:str) -> bool:
 
 
 def _direct_packed_b_upcast(m:int) -> int:
-  return min(m, 16, max(1, int(_env("PREFILL_DIRECT_B_UPCAST", 16))))
+  # 14B pp512 direct-packed: 4 beats the former 16-token unroll; lower values lose occupancy/reuse.
+  return min(m, 16, max(1, int(_env("PREFILL_DIRECT_B_UPCAST", 4))))
 
 
 def _direct_packed_parts(lin, spec:"PrefillLinearRouteSpec") -> int:
