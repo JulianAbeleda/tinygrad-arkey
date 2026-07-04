@@ -581,6 +581,25 @@ def q4k_gemm_packed_load_direct_out_kernel(rows:int, k:int, b:int, schedule:str,
 
   return kernel
 
+def q4k_gemm_packed_load_reduce_out_kernel(rows:int, k:int, b:int, schedule:str, opts:tuple[Opt, ...],
+                                           name:str="q4k_gemm_packed_load_reduce_out"):
+  # Experimental direct-output variant using a real Ops.REDUCE instead of a manual store recurrence. GROUP/GROUPTOP
+  # lowering only combines Ops.REDUCE correctly; the manual direct-out accumulator is fast with GROUP but wrong because
+  # the GROUP_REDUCE local axis is masked at the global store instead of summed.
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(out:UOp, words:UOp, x:UOp) -> UOp:
+    row = UOp.range(rows, 0)
+    bb = UOp.range(b, 1)
+    blk = UOp.range(k_blocks, 2, axis_type=AxisType.REDUCE)
+    lane4 = UOp.range(8, 3, axis_type=AxisType.REDUCE)
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = _q4k_block_dot_packed_load_gemm(words, x, base, blk, lane4, bb, k)
+    return out[bb, row].store(contrib.reduce(blk, lane4, arg=Ops.ADD)).end(row, bb).sink(
+      arg=_kernel_info(f"{name}_{rows}_{k}_{b}_1", schedule, opts))
+
+  return kernel
+
 def q4k_gemv_vector_load_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)

@@ -16,6 +16,8 @@ def q4k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_pri
 def q4k_gemm_packed_load_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_kernel")(*args, **kwargs)
 def q4k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_direct_out_kernel")(*args, **kwargs)
+def q4k_gemm_packed_load_reduce_out_kernel(*args, **kwargs):
+  return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_reduce_out_kernel")(*args, **kwargs)
 def q4k_q8_1_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_gemm_kernel")(*args, **kwargs)
 def q4k_q8_1_sdot4_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_sdot4_gemm_kernel")(*args, **kwargs)
 def q4k_q8_1_sdot4_coop_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_sdot4_coop_gemm_kernel")(*args, **kwargs)

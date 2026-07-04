@@ -110,3 +110,40 @@ much row/token tile throughput.
 2. Re-test the fast-but-wrong `GROUP:0:10` family after the reduction fix; the measured speed suggests the schedule
    shape is valuable if semantics can be made correct.
 3. Only after correct grouping plateaus, add the dequant-to-fp16-LDS prologue feeding WMMA or an int8/dot path.
+
+## Primitive Root Cause
+
+The direct-output Q4_K primitive used a manual accumulator/store recurrence:
+
+```python
+acc = out[bb, row].set(0.0)
+acc = out[bb, row].set(acc.after(blk, lane4)[bb, row] + contrib, end=lane4)
+return acc.end(row, bb, blk)
+```
+
+That form is fine for ordinary `REDUCE` loops, but it is not semantically compatible with tinygrad's `GROUP` lowering.
+`GROUP` turns part of the reduce into a `GROUP_REDUCE` local axis. Late GPU-dim lowering sees that local axis is missing
+from the global output index, so it masks the store to one local lane. There is no sum over the grouped lanes. That is
+why `GROUP:0:10` looked fast and was badly wrong.
+
+The fixed experimental primitive uses a real `Ops.REDUCE`:
+
+```python
+total = contrib.reduce(blk, lane4, arg=Ops.ADD)
+out[bb, row].store(total)
+```
+
+With `PREFILL_Q4K_REDUCE_OUT=1`, the formerly wrong grouped schedule is numerically correct on real 14B `ffn_gate_up`:
+`rel_rmse ~= 1.6e-6`, `max_abs ~= 3.4e-5`.
+
+However, correctness costs enough that it is not the fastest route yet:
+
+| route | clean pp512 tok/s | note |
+|---|---:|---|
+| Q4 4x4 manual direct-output default | 173.6 | current default |
+| Q4 reduce-out + `GROUP:0:10` on K=5120 roles | 169.7 | correct, default-off |
+
+So the primitive correctness bug is fixed behind a flag, but the big remaining issue is now clearer: the correct
+generic `GROUP_REDUCE`/LDS combine path is too expensive for this packed-prefill matmul. The next primitive must keep
+correct grouped reduction semantics while avoiding the current LDS/group overhead, likely via a Q4-specific staged
+combine or dequant-to-fp16 tile feeding the existing matmul path.

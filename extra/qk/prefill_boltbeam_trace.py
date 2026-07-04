@@ -28,7 +28,7 @@ from extra.qk.harness_contract import DEFAULT_MODEL
 SCHEMA = "boltbeam.timing_trace.v1"
 HW_SCHEMA = "boltbeam.hw_trace.v1"
 _GEMM_RE = re.compile(r"prefill_(?:graph|gen_sched)_gemm_(\d+)_(\d+)_(\d+)")
-_DIRECT_PACKED_RE = re.compile(r"prefill_(q4k|q6k)(?:_q8_1)?(?:_sdot4|_mmq)?_direct_packed(?:_load)?(?:_direct_out)?_gemm_(\d+)_(\d+)_(\d+)_(\d+)")
+_DIRECT_PACKED_RE = re.compile(r"prefill_(q4k|q6k)(?:_q8_1)?(?:_sdot4|_mmq)?_direct_packed(?:_load)?(?:_direct_out|_reduce_out)?_gemm_(\d+)_(\d+)_(\d+)_(\d+)")
 _GENERATED_PACKED_TILE_RE = re.compile(r"prefill_(q4_k|q6_k)_generated_tile(?:_([a-z0-9_]+))?_(\d+)_(\d+)_(\d+)")
 _ROLE_BY_LINEAR = {
   "ffn_gate": "ffn_gate_up",

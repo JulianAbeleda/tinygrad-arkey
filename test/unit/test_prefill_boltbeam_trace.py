@@ -19,6 +19,14 @@ def test_direct_packed_direct_out_kernel_classifies():
   assert info["shape"] == [512, 5120, 17408]
 
 
+def test_direct_packed_reduce_out_kernel_classifies():
+  role_by_shape = {(17408, 5120): {"role": "ffn_gate_up", "quant": "Q4_K"}}
+  info = _classify_kernel("prefill_q4k_direct_packed_load_reduce_out_gemm_17408_5120_512_1", role_by_shape)
+  assert info["role"] == "ffn_gate_up"
+  assert info["quant"] == "Q4_K"
+  assert info["shape"] == [512, 17408, 5120]
+
+
 def test_q4_q8_prefill_kernel_classifies_as_q4_direct_packed():
   role_by_shape = {(17408, 5120): {"role": "ffn_gate_up", "quant": "Q4_K"}}
   info = _classify_kernel("prefill_q4k_q8_1_direct_packed_gemm_17408_5120_512_1", role_by_shape)
