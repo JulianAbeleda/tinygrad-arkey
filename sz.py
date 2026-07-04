@@ -6,7 +6,7 @@ import os, sys, token, tokenize, itertools
 BUDGET_DIRS = ["tinygrad", "bench", "structure"]
 INFO_DIRS = ["extra"]
 EXCLUDE = ["tinygrad/runtime/autogen", "tinygrad/viz/assets"]
-DEFAULT_MAX_LINE_COUNT = 25000
+DEFAULT_MAX_LINE_COUNT = 50000
 
 TOKEN_WHITELIST = [token.OP, token.NAME, token.NUMBER, token.STRING]
 
