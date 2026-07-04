@@ -2,6 +2,8 @@ import glob, importlib, os, pathlib, subprocess, tarfile, tempfile
 from tinygrad.helpers import fetch, flatten, system, getenv
 
 root = (here:=pathlib.Path(__file__).parent).parents[2]
+nv_src = {"nv_570": "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/81fe4fb417c8ac3b9bdcc1d56827d116743892a5.tar.gz",
+          "nv_580": "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/2af9f1f0f7de4988432d4ae875b5858ffdb09cc2.tar.gz"}
 amd_autogen_src = root/"tinygrad/runtime/autogen/sources/amd"
 rocr_src = "https://github.com/ROCm/rocm-systems/archive/refs/tags/rocm-7.1.1.tar.gz"
 linux_headers_deb = "https://snapshot.debian.org/archive/debian/20260207T145350Z/pool/main/l/linux/linux-libc-dev_6.18.9-1_all.deb"
