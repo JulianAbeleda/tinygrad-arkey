@@ -109,6 +109,38 @@ quantized prefill matmul substrate/codegen path.
 6. **Keep direct-packed direct-output as the memory-safe fallback floor.**
    It is valuable for 14B/32B fit and traceability, but it should not be treated as the final parity strategy.
 
+## 2026-07-04 clean-trace update
+
+After adding BoltBeam launch-resource enrichment, the current clean 14B direct-packed path is:
+
+| tinygrad route | pp512 tok/s | note |
+|---|---:|---|
+| direct-packed, direct-output, old token upcast default 16 | 129.1 | clean `PROFILE=0`, `PMC=0` timing |
+| direct-packed, direct-output, token upcast 4 | 133.9 | explicit env probe |
+| direct-packed, direct-output, new default token upcast 4 | 135.7 | post-change clean verification |
+| direct-packed, staged partials | 116.9 | clean control |
+
+The default direct-packed token upcast was changed from 16 to 4 in commit `720b76477`. This is a fallback-floor
+improvement, not a parity fix.
+
+The clean timing trace must be paired with PROFILE attribution, not replaced by PROFILE timing. `PROFILE=1` roughly
+halved observed throughput in this workload, so BoltBeam comparisons should use synced clean wall time with profile
+rows scaled to that wall time.
+
+With clean wall time plus profile/resource attribution, BoltBeam reports:
+
+- tinygrad current direct-packed: 135.7 tok/s class, still roughly 12x behind llama's 1624.9 tok/s.
+- Packed GEMMs are still ~95% of tinygrad time.
+- Hot Q4 rows run around 2.0-2.4 effective source-GB/s versus llama Q4 `mul_mat_q<` around 26.0 effective source-GB/s.
+- Dominant tinygrad Q4 launch topology is 32/64-thread workgroups with no LDS and no scratch, e.g.
+  `global_size=[32,272,1]`, `local_size=[64,1,1]`, `vgpr=185`, `sgpr=16` for `ffn_gate_up [512,17408,5120]`.
+- Llama's matched Q4 template reports `WG=32x8x1` (256 threads), `lds_bytes=0`, `scratch_bytes=12`, `vgpr=256`,
+  `sgpr=128`.
+
+Conclusion unchanged: the remaining gap is the packed-prefill matmul substrate/topology. Direct-output and token
+upcast tuning help the memory-safe fallback, but the next real parity work is a generated llama-class quantized
+prefill matmul route, starting with Q4_K `ffn_gate_up` and `attn_qo`.
+
 ## Do not build from scratch
 
 This should extend the existing generated route and BoltBeam trace stack, not create a parallel kernel/tracing system.
