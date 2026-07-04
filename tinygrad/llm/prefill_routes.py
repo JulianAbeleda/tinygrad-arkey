@@ -51,16 +51,21 @@ def _direct_packed_b_upcast(m:int) -> int:
   return min(m, 16, max(1, int(_env("PREFILL_DIRECT_B_UPCAST", 4))))
 
 
+def _direct_packed_role(lin, spec:"PrefillLinearRouteSpec") -> str:
+  role = spec.role
+  if role: return role
+  name = str(getattr(lin, "name", ""))
+  if any(x in name for x in ("ffn_gate", "ffn_up")): return "ffn_gate_up"
+  if "ffn_down" in name: return "ffn_down"
+  if any(x in name for x in ("attn_q", "attn_output")): return "attn_qo"
+  if any(x in name for x in ("attn_k", "attn_v")): return "attn_kv"
+  return ""
+
+
 def _direct_packed_parts(lin, spec:"PrefillLinearRouteSpec") -> int:
   base = int(getattr(lin, "parts", 1))
   keys = []
-  name = str(getattr(lin, "name", ""))
-  role = spec.role
-  if not role:
-    if any(x in name for x in ("ffn_gate", "ffn_up")): role = "ffn_gate_up"
-    elif "ffn_down" in name: role = "ffn_down"
-    elif any(x in name for x in ("attn_q", "attn_output")): role = "attn_qo"
-    elif any(x in name for x in ("attn_k", "attn_v")): role = "attn_kv"
+  role = _direct_packed_role(lin, spec)
   role_key = "".join(ch.upper() if ch.isalnum() else "_" for ch in role)
   if role_key: keys.append(f"PREFILL_DIRECT_{role_key}_PARTS")
   keys += [f"PREFILL_DIRECT_{spec.quant.upper()}_PARTS", "PREFILL_DIRECT_PARTS"]
@@ -127,6 +132,22 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
     words = lin.prefill_packed_weight().to(x.device)
     partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
     opts = getattr(lin, "opts", ()) + (qk_ops.q4k_parse_opt(f"UPCAST:1:{_direct_packed_b_upcast(spec.m)}"),)
+    generated_tile_on = bool(_env("PREFILL_QK_GENERATED_TILE", 0))
+    generated_tile_roles = _csv_set("PREFILL_QK_GENERATED_TILE_ROLES", "ffn_gate_up")
+    role = _direct_packed_role(lin, spec)
+    if generated_tile_on and (not generated_tile_roles or role in generated_tile_roles):
+      try:
+        tile_spec = qk_ops.describe_q4k_packed_prefill_tile(
+          spec.n, spec.k, spec.m, role=role,
+          row_tile=max(1, int(_env("PREFILL_QK_GENERATED_TILE_ROWS", 4))),
+          token_tile=max(1, int(_env("PREFILL_QK_GENERATED_TILE_TOKENS", 8))))
+      except Exception:
+        if prefill_route_strict(): raise
+      else:
+        tile_partials = Tensor.empty(spec.n, spec.m, 8, dtype=dtypes.float32, device=x.device)
+        out = tile_partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
+          fxn=qk_ops.emit_q4k_packed_prefill_tile(tile_spec))[0]
+        return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
     q8_mode = str(os.environ.get("PREFILL_Q4K_Q8", "")).strip().lower()
     if q8_mode and q8_mode not in ("0", "false", "off", "no"):
       xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
