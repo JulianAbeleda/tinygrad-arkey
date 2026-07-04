@@ -65,13 +65,19 @@ def test_pmc_stats_normalize_to_boltbeam_vocab():
     SimpleNamespace(name="GL2C_MISS", xcc=1, inst=1, se=1, sa=1, wgp=1),
     SimpleNamespace(name="SQ_INSTS_VALU", xcc=1, inst=1, se=1, sa=1, wgp=1),
     SimpleNamespace(name="SQ_BUSY_CYCLES", xcc=1, inst=1, se=1, sa=1, wgp=1),
+    SimpleNamespace(name="SQ_INST_CYCLES_VMEM", xcc=1, inst=1, se=1, sa=1, wgp=1),
     SimpleNamespace(name="GRBM_GUI_ACTIVE", xcc=1, inst=1, se=1, sa=1, wgp=1),
     SimpleNamespace(name="SQC_LDS_IDX_ACTIVE", xcc=1, inst=1, se=1, sa=1, wgp=1),
     SimpleNamespace(name="SQC_LDS_BANK_CONFLICT", xcc=1, inst=1, se=1, sa=1, wgp=1),
+    SimpleNamespace(name="GL2C_EA_RDREQ_128B", xcc=1, inst=1, se=1, sa=1, wgp=1),
+    SimpleNamespace(name="GL2C_EA_WRREQ_64B", xcc=1, inst=1, se=1, sa=1, wgp=1),
   ]
-  blob = b"".join(int(v).to_bytes(8, "little") for v in (90, 10, 200, 50, 100, 40, 4))
+  blob = b"".join(int(v).to_bytes(8, "little") for v in (90, 10, 200, 50, 25, 100, 40, 4, 8, 2))
   counters = _normalize_pmc_stats(_pmc_stats(SimpleNamespace(blob=blob, sched=sched)))
   assert counters["l2_hit_pct"] == 90.0
   assert counters["valu_busy_pct"] == 50.0
   assert counters["occupancy_pct"] == 50.0
+  assert counters["memory_busy_pct"] == 25.0
   assert counters["lds_conflict_pct"] == 10.0
+  assert counters["fetch_kb"] == 1.0
+  assert counters["write_kb"] == 0.125

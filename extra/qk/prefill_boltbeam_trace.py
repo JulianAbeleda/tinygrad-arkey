@@ -184,6 +184,11 @@ def _normalize_pmc_stats(stats:dict[str, tuple[int, int, int]]) -> dict[str, flo
   out: dict[str, float] = {}
   hits, misses = total("GL2C_HIT") + total("TCC_HIT"), total("GL2C_MISS") + total("TCC_MISS")
   if hits or misses: out["l2_hit_pct"] = _pct(hits, hits + misses)
+  fetch_bytes = total("GL2C_EA_RDREQ_32B") * 32 + total("GL2C_EA_RDREQ_64B") * 64 + \
+                total("GL2C_EA_RDREQ_96B") * 96 + total("GL2C_EA_RDREQ_128B") * 128
+  write_bytes = total("GL2C_EA_WRREQ_64B") * 64 + total("GL2C_MC_WRREQ") * 32
+  if fetch_bytes: out["fetch_kb"] = fetch_bytes / 1024.0
+  if write_bytes: out["write_kb"] = write_bytes / 1024.0
   lds_active = total("SQC_LDS_IDX_ACTIVE") + total("SQ_LDS_IDX_ACTIVE")
   lds_conflict = total("SQC_LDS_BANK_CONFLICT") + total("SQ_LDS_BANK_CONFLICT")
   if lds_active or lds_conflict: out["lds_conflict_pct"] = _pct(lds_conflict, max(lds_active, 1.0))
@@ -193,8 +198,11 @@ def _normalize_pmc_stats(stats:dict[str, tuple[int, int, int]]) -> dict[str, flo
     valu_cnt = count("SQ_INSTS_VALU") or 1.0
     busy = total("SQ_BUSY_CYCLES")
     busy_cnt = count("SQ_BUSY_CYCLES") or 1.0
+    vmem_cycles = total("SQ_INST_CYCLES_VMEM")
+    vmem_cnt = count("SQ_INST_CYCLES_VMEM") or 1.0
     out["valu_busy_pct"] = _pct(valu / valu_cnt, gui * 4.0)
     out["occupancy_pct"] = min(100.0, _pct(busy / busy_cnt, gui))
+    if vmem_cycles: out["memory_busy_pct"] = min(100.0, _pct(vmem_cycles / vmem_cnt, gui))
   return out
 
 
