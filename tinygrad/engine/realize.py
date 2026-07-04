@@ -3,7 +3,7 @@ from typing import cast, Iterator, Any
 import time, random, itertools, math, contextlib, weakref
 from dataclasses import dataclass, replace, field
 from tinygrad.helpers import colored, DEBUG, GlobalCounters, ansilen, all_int, TRACEMETA, prod, flatten, Context, getenv
-from tinygrad.helpers import BEAM, size_to_str, time_to_str, VALIDATE_WITH_CPU, PROFILE, ProfilePointEvent, cpu_events
+from tinygrad.helpers import size_to_str, time_to_str, VALIDATE_WITH_CPU, PROFILE, ProfilePointEvent, cpu_events
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, PatternMatcher, UOp, UPat, sym_infer, buffers, graph_rewrite, ProgramInfo
 from tinygrad.device import Device, Buffer, MultiBuffer
@@ -217,12 +217,6 @@ def _validate(call:UOp, sink:UOp) -> UOp:
   return UOp(Ops.LINEAR, src=copies + (call, UOp(Ops.CUSTOM_FUNCTION, dtypes.void, src=(sink,), arg="validate").call(*shadows, *params)))
 pm_validate = PatternMatcher([(UPat(Ops.CALL, src=(UPat(Ops.SINK, name="sink"),), name="call", allow_any_len=True), _validate)]) + pm_flatten_linear
 
-# ctx is beam value
-pm_beam = PatternMatcher([
-  (UPat(Ops.CALL, src=(UPat(Ops.SINK, name="sink"),), name="call", allow_any_len=True),
-   lambda ctx,call,sink: call.replace(src=(sink.replace(arg=replace(sink.arg, beam=ctx)), *call.src[1:])) if sink.arg.beam == 0 else None),
-])
-
 pm_compile = PatternMatcher([
   (UPat(Ops.CALL, src=(UPat((Ops.SINK, Ops.PROGRAM), name="ast"),), name="call", allow_any_len=True), lambda call,ast:
     call.replace(src=(to_program(ast, Device[call.device if isinstance(call.device, str) else call.device[0]].renderer), *call.src[1:]))),
@@ -241,9 +235,8 @@ pm_exec = PatternMatcher([
   (UPat(Ops.CALL, src=(UPat(Ops.CUSTOM_FUNCTION, arg="validate", name="ast"),), name="call", allow_any_len=True), exec_validate),
 ])
 
-def compile_linear(linear:UOp, beam:int|None=None, validate=False) -> UOp:
+def compile_linear(linear:UOp, validate=False) -> UOp:
   if validate: linear = graph_rewrite(linear, pm_validate, name="validate", walk=True)
-  if (beam_val:=BEAM.value if beam is None else beam) >= 1: linear = graph_rewrite(linear, pm_beam, ctx=beam_val, walk=True)
   linear = graph_rewrite(linear, pm_compile, name="precompile kernels", walk=True)
   return graph_rewrite(linear, pm_optimize_local_size, name="optimize local size", walk=True)
 
@@ -257,6 +250,6 @@ def time_call(call:UOp, var_vals:dict[str, int]|None=None, timeout:int|None=None
     if hasattr(dev:=Device[call.src[0].src[1].arg], 'invalidate_caches'): dev.invalidate_caches()
     else:
       from tinygrad.tensor import Tensor
-      with Context(DEBUG=0, BEAM=0, CAPTURING=0, TRACK_MATCH_STATS=0): Tensor.ones(1024, 1024).contiguous().realize(do_update_stats=False)
-  call = compile_linear(UOp(Ops.LINEAR, src=(call,)), beam=0).src[0]
+      with Context(DEBUG=0, CAPTURING=0, TRACK_MATCH_STATS=0): Tensor.ones(1024, 1024).contiguous().realize(do_update_stats=False)
+  call = compile_linear(UOp(Ops.LINEAR, src=(call,))).src[0]
   return cast(float, pm_exec.rewrite(call, ExecContext(var_vals or {}, update_stats=False, wait=True, timeout=timeout, cache=False)))

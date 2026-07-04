@@ -1,7 +1,7 @@
 from typing import TypeVar, Generic, Callable, Any
 import functools, collections, os
 from tinygrad.tensor import Tensor
-from tinygrad.helpers import flatten, merge_dicts, DEBUG, Context, BEAM, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ
+from tinygrad.helpers import flatten, merge_dicts, DEBUG, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ
 from tinygrad.device import Buffer, Compiled, Device, MultiBuffer
 from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import UOp, PatternMatcher, Variable, sym_infer, Ops, buffers, track_rewrites, graph_rewrite
@@ -85,7 +85,7 @@ def jit_lower(linear:UOp, held_bufs:set[UOp], input_uops:list[UOp]) -> UOp:
   # parametrize input buffers: map each input buffer UOp to a PARAM with the correct slot index
   linear = linear.substitute({u: UOp.param(i, u.dtype, u.shape, u.device) for i,u in enumerate(input_uops)}, walk=True)
   linear = memory_plan_rewrite(linear, held_bufs)
-  linear = compile_linear(linear, beam=getenv("JITBEAM", BEAM.value))
+  linear = compile_linear(linear)
   if JIT < 2: linear = graph_split_rewrite(linear, max_batch_size=JIT_BATCH_SIZE.value)
   if VIZ: graph_rewrite(linear, PatternMatcher([]), name="View graphed linear")
   return linear
@@ -285,9 +285,8 @@ class TinyJit(Generic[ReturnType]):
     if not JIT or self.cnt == 0:
       # jit ignore
       assert self.fxn is not None
-      with Context(BEAM=0 if getenv("IGNORE_JIT_FIRST_BEAM") else BEAM.value):
-        ret = self.fxn(*args, **kwargs)
-        if len(params:=get_parameters(ret)): Tensor.realize(*params)
+      ret = self.fxn(*args, **kwargs)
+      if len(params:=get_parameters(ret)): Tensor.realize(*params)
     elif self.cnt == 1:
       # jit capture
       assert self.fxn is not None

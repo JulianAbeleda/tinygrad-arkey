@@ -79,8 +79,8 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     # optimize (schedule) the AST
     sink = graph_rewrite(sink, pm_flatten_range+pm_simplify_ranges, ctx={}, name="simplify ranges")
 
-    # do postrange optimization, BEAM or hand_coded_optimizations
-    sink = apply_opts(sink, ren, beam=ast.arg.beam)
+    # do postrange optimization: FutureSight/BubbleBeam opts_to_apply, warm-start, or hand_coded_optimizations
+    sink = apply_opts(sink, ren)
 
   # ** expander (expand_rewrite) **
   sink = graph_rewrite(sink, sym+pm_move_where_on_load, name="postopt symbolic")
@@ -247,7 +247,7 @@ pm_to_program = PatternMatcher([
 @Context(ALLOW_DEVICE_USAGE=0)
 def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
   """
-  Transform an AST into a compiled PROGRAM. May trigger BEAM search.
+  Transform an AST into a compiled PROGRAM.
 
   Args:
     ast: The Ops.SINK/Ops.PROGRAM rooted AST

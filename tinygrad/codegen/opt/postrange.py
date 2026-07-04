@@ -7,7 +7,7 @@ from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
 from tinygrad.dtype import dtypes
 from tinygrad.helpers import colored, getenv, DEBUG, to_function_name, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
-from tinygrad.helpers import ALLOW_TF32, count, Context
+from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
@@ -350,18 +350,12 @@ def _warmstart_match(k):
     elif isinstance(s, int): out.append(s)
   return _WARMSTART_OPTS.get((frozenset(out), red))
 
-def apply_opts(ast:UOp, ren:Renderer, beam:int=0) -> UOp:
+def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
   k = Scheduler(ast, ren)
   k.convert_loop_to_global()
   if ast.arg is not None and ast.arg.opts_to_apply is not None:
     for opt in ast.arg.opts_to_apply: k.apply_opt(opt)
-  elif beam >= 1:
-    from tinygrad.codegen.opt.search import beam_search
-    rawbufs = bufs_from_ast(ast, ren.target.device)
-    # beam search may open devices
-    with Context(ALLOW_DEVICE_USAGE=1):
-      k = beam_search(k, rawbufs, beam, bool(getenv("BEAM_ESTIMATE", 1)))
   elif _WARMSTART_OPTS is not None and (forced := _warmstart_match(k)) is not None:
     _warmstart_stats["match"] += 1
     if getenv("WARMSTART_DUMP") and len(_warmstart_stats.setdefault("dumps", [])) < 4:
