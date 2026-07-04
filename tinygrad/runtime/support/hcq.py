@@ -4,7 +4,7 @@ import contextlib, decimal, statistics, time, ctypes, array, os, struct, collect
 from dataclasses import replace
 try: import fcntl # windows misses that
 except ImportError: fcntl = None #type:ignore[assignment]
-from tinygrad.helpers import DEV, PROFILE, getenv, to_mv, from_mv, cpu_profile, ProfileRangeEvent, select_first_inited, select_by_name, unwrap
+from tinygrad.helpers import DEV, PROFILE, getenv, to_mv, from_mv, cpu_profile, ProfilePointEvent, ProfileRangeEvent, select_first_inited, select_by_name, unwrap
 from tinygrad.helpers import suppress_finalizing, pluralize, TracingKey
 from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent
 from tinygrad.uop.ops import sym_infer, sint, UOp
@@ -374,6 +374,12 @@ class HCQProgram(Generic[HCQDeviceType]):
     q = unwrap(self.dev.hw_compute_queue_t)().wait(self.dev.timeline_signal, self.dev.timeline_value - 1).memory_barrier()
 
     self.dev.prof_exec_counter += 1
+    if PROFILE:
+      Compiled.profile_events += [ProfilePointEvent(self.dev.device, "launch", self.prof_prg_counter, {
+        "exec": self.dev.prof_exec_counter,
+        "global_size": tuple(int(x) for x in global_size),
+        "local_size": tuple(int(x) for x in local_size),
+      })]
     with hcq_profile(self.dev, queue=q, desc=self.name, enabled=wait or PROFILE) as (sig_st, sig_en):
       q.exec(self, kernargs, global_size, local_size)
 
