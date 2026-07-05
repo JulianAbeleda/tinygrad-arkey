@@ -136,3 +136,9 @@ def test_prefill_q4k_q8_flag_is_valid_route_env():
   from tinygrad.llm.prefill_routes import prefill_route_policy
   os.environ["PREFILL_Q4K_Q8"] = "1"
   assert prefill_route_policy() == "auto"
+
+
+def test_prefill_q4k_q8_wmma_flag_is_valid_route_env():
+  from tinygrad.llm.prefill_routes import prefill_route_policy
+  os.environ["PREFILL_Q4K_Q8"] = "wmma"
+  assert prefill_route_policy() == "auto"

@@ -205,6 +205,10 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
             fxn=qk_ops.q4k_q8_1_sdot4_gemm_kernel(spec.n, spec.k, spec.m, parts, "none", (),
                                                   name="prefill_q4k_q8_1_sdot4_direct_packed_gemm"))[0]
           return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
+      if q8_mode == "wmma":
+        wmma_spec = qk_ops.describe_q4k_int8_wmma_prefill(spec.n, spec.k, spec.m, role=role)
+        out = qk_ops.emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec)
+        return out.reshape(1, spec.m, spec.n)
       out = partials.custom_kernel(words, xq, xscales,
         fxn=qk_ops.q4k_q8_1_gemm_kernel(spec.n, spec.k, spec.m, parts, "prefill", opts,
                                         name="prefill_q4k_q8_1_direct_packed_gemm"))[0]

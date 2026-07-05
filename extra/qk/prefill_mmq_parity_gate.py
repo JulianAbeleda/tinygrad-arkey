@@ -19,6 +19,7 @@ from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference, 
 from extra.qk.quant.q4_k_gemv_primitive import (
   q8_signed_pack_u32_kernel, q4k_q8_1_sdot4_gemm_kernel, q4k_q8_1_sdot4_coop_gemm_kernel,
 )
+from extra.qk.prefill_int8_wmma_spec import describe_q4k_int8_wmma_prefill, emit_q4k_int8_wmma_prefill_tensor
 
 RTOL = 6e-3  # q8_1 activation quant + q4_k weight quant; matches the ~4.8e-3 numpy MMQ validation
 
@@ -68,8 +69,12 @@ def run(n:int, k:int, m:int, seed:int=1337) -> None:
     fxn=q4k_q8_1_sdot4_gemm_kernel(n, k, m, 1, "none", (), name="prefill_q4k_q8_1_sdot4_direct_packed_gemm"))[0]
   sd_out = sd.sum(axis=2).transpose(0, 1).numpy()  # [m, n]
 
+  # --- wmma-generated substrate: no handwritten kernel, int dot expressed as Tensor.matmul(..., dtype=int) ---
+  wmma_spec = describe_q4k_int8_wmma_prefill(n, k, m, role="parity")
+  wmma_out = emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec).numpy()
+
   ok = True
-  for label, got in (("mmq(coop)", mmq_out), ("sdot4", sd_out)):
+  for label, got in (("mmq(coop)", mmq_out), ("sdot4", sd_out), ("wmma_generated", wmma_out)):
     r = _rel_rmse(got, ref_out)
     status = "PASS" if r < RTOL else "FAIL"
     if r >= RTOL: ok = False
@@ -78,6 +83,6 @@ def run(n:int, k:int, m:int, seed:int=1337) -> None:
 
 if __name__ == "__main__":
   # small GPU-free shapes; k multiple of 256, plus a k>256 multi-block case
-  for (n, k, m) in [(64, 256, 16), (32, 512, 8), (128, 768, 4)]:
+  for (n, k, m) in [(64, 256, 16), (32, 512, 16), (128, 768, 16)]:
     run(n, k, m, seed=getenv("SEED", 1337))
   print("MMQ parity gate PASS")
