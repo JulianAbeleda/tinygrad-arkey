@@ -380,7 +380,7 @@ def build_trace(args:argparse.Namespace) -> dict[str, Any]:
       "mode": args.mode,
       "chunk_timings": chunk_timings,
       "route_flags": {k: os.environ.get(k) for k in ("PREFILL_V2", "PREFILL_CHUNKED", "PREFILL_GRAPH_GEMM",
-                                                     "PREFILL_GENERATED_SCHEDULE", "PREFILL_ROUTE",
+                                                     "PREFILL_ROUTE",
                                                      "PREFILL_QK_DIRECT", "PREFILL_DIRECT_QUANTS",
                                                      "PREFILL_DIRECT_TENSORS", "PREFILL_DIRECT_SKIP_TENSORS",
                                                      "PREFILL_Q4K_PACKED_LOAD", "PREFILL_Q6K_PACKED_LOAD",

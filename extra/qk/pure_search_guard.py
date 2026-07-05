@@ -29,8 +29,8 @@ HOT_FAMILIES = [
    "rollback_active": lambda e: str(e.get("BUBBLEBEAM_FUTURESIGHT", "1")) == "0"},
   {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_shipped",
    "rollback_active": lambda e: str(e.get("DECODE_Q6K_GENERATED", "1")) == "0"},
-  {"family": "prefill_gemm", "generated": "prefill_pipe_role_selective_generated", "oracle": "prefill_pipe_role_selective_default",
-   "rollback_active": lambda e: str(e.get("PREFILL_GENERATED_SCHEDULE", "1")) == "0"},
+  {"family": "prefill_gemm", "generated": "prefill_pipe_role_selective_generated", "oracle": "prefill_pipe_role_selective_generated",
+   "rollback_active": lambda e: False},
   # attention: 8B long-context decode now defaults to the generated live-split + fused-combine + KV_BOTH route. The
   # only rollback here is to generic generated tinygrad flash decode; the retired owned HIP tile is not selected.
   {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_attention_generic_flash_generated",

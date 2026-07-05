@@ -16,8 +16,8 @@ from extra.qk.pure_search_guard import effective_routes, pure_search_violations
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench/tg-p6-pure-search-diagnostic"
 
-# effective-route env scenarios. Generated defaults are on unless a rollback flag flips them.
-GEN_ON = {"BUBBLEBEAM_FUTURESIGHT": "1", "DECODE_Q6K_GENERATED": "1", "PREFILL_GENERATED_SCHEDULE": "1"}
+# effective-route env scenarios. Generated defaults are on unless a supported rollback flag flips them.
+GEN_ON = {"BUBBLEBEAM_FUTURESIGHT": "1", "DECODE_Q6K_GENERATED": "1"}
 PASS_CURRENT = {**GEN_ON, "DECODE_LIVE_SPLIT": "1"}
 ROLLBACK_Q6K = {**PASS_CURRENT, "DECODE_Q6K_GENERATED": "0"}      # a named rollback -> impure
 

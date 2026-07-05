@@ -76,7 +76,7 @@ def main() -> int:
     want = {"M": ub, **derived[role]}
     got = rmeta["shape"]
     ok = all(got.get(k) == v for k, v in want.items())
-    checks.append({"route": "prefill_pipe_role_selective_default", "role": role, "derived": want,
+    checks.append({"route": "prefill_pipe_role_selective_generated", "role": role, "derived": want,
                    "guard": got, "match": ok})
     if not ok: errors.append(f"prefill.{role}: derived {want} != search_profiles {got}")
 

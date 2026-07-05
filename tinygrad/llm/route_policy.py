@@ -137,11 +137,8 @@ def load_qk_route_policy(path:str) -> dict:
       q6k_gen_rows.append(row)
       selected.setdefault(route_id, row)
     elif route_id == "prefill_pipe_role_selective_generated":
-      allowed = {"PREFILL_GENERATED_SCHEDULE"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"PREFILL_GENERATED_SCHEDULE": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated prefill schedule (PREFILL_GENERATED_SCHEDULE=1), got {params}")
+      if params:
+        raise ValueError(f"{policy_path} route {route_id!r} no longer accepts route_params; generated prefill is the only runtime emitter, got {params}")
       shape = row.get("shape", {})
       try:
         rows_i, cols_i = int(shape["rows"]), int(shape["cols"])

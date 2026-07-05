@@ -1,9 +1,9 @@
 """Prefill P2 — whole-prefill role attribution, REBUILT on env-PROFILE=1 ProfileRangeEvent capture (the only method that
 works for the PREFILL_V2 path; Context(PROFILE=1) yields nothing). Profiles a warmed chunk forward at start_pos 0 and
-3584 (to show ctx growth), aggregates per-kernel GPU time, buckets by the self-labeled prefill_graph_gemm_M_N_K names
+3584 (to show ctx growth), aggregates per-kernel GPU time, buckets by the self-labeled prefill_gen_sched_gemm_M_N_K names
 + E_/r_/flash kernels, computes effective TFLOPS per GEMM role vs the BLAS ceilings.
 
-Role map (M=512 chunk): prefill_graph_gemm_512_12288_4096=ffn_gate_up, _512_4096_12288=ffn_down, _512_4096_4096=attn_qo,
+Role map (M=512 chunk): prefill_gen_sched_gemm_512_12288_4096=ffn_gate_up, _512_4096_12288=ffn_down, _512_4096_4096=attn_qo,
 _512_1024_4096=attn_kv.  Run: DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk/prefill_whole_role_attribution.py
 Writes: bench/qk-prefill-whole-role-attribution/{latest,summary.md,per_role_by_ctx,per_chunk_by_ctx,route_coverage,unknown_bucket}.json
 """
@@ -41,10 +41,10 @@ print("@@"+json.dumps({"sp":SP,"per_kernel":{k:{"dur":round(agg[k],3),"calls":ca
 
 def _bucket(nm):
   n = nm.lower()
-  if nm.startswith("prefill_graph_gemm_512_12288_4096"): return "ffn_gate_up"
-  if nm.startswith("prefill_graph_gemm_512_4096_12288"): return "ffn_down"
-  if nm.startswith("prefill_graph_gemm_512_4096_4096"): return "attn_qo"
-  if nm.startswith("prefill_graph_gemm_512_1024_4096"): return "attn_kv"
+  if nm.startswith(("prefill_gen_sched_gemm_512_12288_4096", "prefill_graph_gemm_512_12288_4096")): return "ffn_gate_up"
+  if nm.startswith(("prefill_gen_sched_gemm_512_4096_12288", "prefill_graph_gemm_512_4096_12288")): return "ffn_down"
+  if nm.startswith(("prefill_gen_sched_gemm_512_4096_4096", "prefill_graph_gemm_512_4096_4096")): return "attn_qo"
+  if nm.startswith(("prefill_gen_sched_gemm_512_1024_4096", "prefill_graph_gemm_512_1024_4096")): return "attn_kv"
   if "gemm" in n and ("12288" in n): return "ffn_gate_up" if n.index("12288") < n.rindex("_") else "ffn_down"
   if "flash" in n or "attn" in n:
     if "soft" in n or "max" in n or "sum" in n: return "attention_softmax"

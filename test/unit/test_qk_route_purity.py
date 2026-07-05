@@ -28,24 +28,23 @@ def _write_q4k_g3_policy(tmp_path, rows):
 def test_qk_route_manifest_purity_debt_is_explicit():
   assert validate_manifest() == []
   report = default_purity_report()
-  assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_PASS"
+  assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
   assert route_provenance("decode_q4k_g3_generated") == "machine_authored_generated"
   assert route_provenance("decode_flash_block_tile_g5_konly") == "machine_authored_generated"
   assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "machine_authored_generated"
   # TG-P3: Q6_K default is now the generated route; the hand template is rollback-only, no longer transitional debt.
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
   assert route_provenance("decode_q6k_coop_shipped") == "rollback_oracle"
-  # TG-P4: prefill default is now the spec-generated schedule; the legacy fixed emit is rollback-only.
+  # TG-P4: prefill default is now the spec-generated schedule; the legacy fixed emit rollback is removed.
   assert route_provenance("prefill_pipe_role_selective_generated") == "machine_authored_generated"
-  assert route_provenance("prefill_pipe_role_selective_default") == "rollback_oracle"
-  assert set(report["transitional_default_routes"]) == set()
+  assert set(report["transitional_default_routes"]) == {"prefill_q4k_direct_tile4x4_default"}
   assert set(report["forbidden_default_routes"]) == set()
 
 
 def test_default_path_census_uses_manifest_provenance():
   census = build_census()
   assert census["verdict"] == "PMS_R0_PASS_CENSUS_PINNED"
-  assert census["strict_default_purity_verdict"] == "TINYGRAD_DEFAULT_PURITY_PASS"
+  assert census["strict_default_purity_verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
   by_route = {row["route_id"]: row for row in census["default_route_table"]}
   assert by_route["decode_q4k_g3_generated"]["final_default_allowed"] is True
   assert by_route["decode_flash_block_tile_g5_konly"]["final_default_allowed"] is True
@@ -59,6 +58,8 @@ def test_default_path_census_uses_manifest_provenance():
   assert by_route["prefill_pipe_role_selective_generated"]["provenance"] == "machine_authored_generated"
   assert by_route["prefill_pipe_role_selective_generated"]["final_default_allowed"] is True
   assert "prefill_pipe_role_selective_default" not in by_route
+  assert by_route["prefill_q4k_direct_tile4x4_default"]["provenance"] == "hand_authored_uop_template"
+  assert by_route["prefill_q4k_direct_tile4x4_default"]["final_default_allowed"] is False
 
 
 def test_qk_route_policy_selects_g5_by_shape(tmp_path):

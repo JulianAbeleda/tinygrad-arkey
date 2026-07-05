@@ -9,10 +9,8 @@ schedule DATA: a PrefillGEMMScheduleSpec captures the resolved tile / wave / pip
 emit_prefill_gemm_from_spec lowers the spec through the same generator. The RDNA3 WMMA instruction set is the target
 grammar (as wave32 is for the Q4_K G3 route); the SCHEDULE is machine-authored from the spec.
 
-This is a provenance conversion: the generated route resolves the identical schedule the legacy path did
-(_resolve_schedule is the single source), so the emitted instruction stream is byte-identical (proven in
-extra/qk/prefill_generated_schedule_gate.py). The old fixed call site remains one rollback flag away
-(PREFILL_GENERATED_SCHEDULE=0).
+This is a provenance conversion: the generated route resolves the schedule through _resolve_schedule and emits through
+the spec. The old fixed call site and PREFILL_GENERATED_SCHEDULE rollback have been removed from runtime.
 
 role_policy: the current default pipes the latency-bound roles (attn q/o, attn k/v, ffn_down) and EXCLUDES the
 saturated ffn_gate_up (uniquely out_f==12288), which keeps its faster LDS path. That fact is carried on the spec as
@@ -85,7 +83,7 @@ def _params_to_spec(p: dict, role: str | None) -> PrefillGEMMScheduleSpec:
 
 def describe_prefill_schedule(out_f: int, in_f: int, *, role: str | None = None) -> PrefillGEMMScheduleSpec:
   """Resolve the current default schedule for a prefill (out_f, in_f) GEMM into a PrefillGEMMScheduleSpec. Uses the
-  same _resolve_schedule the legacy path uses, so the spec is a faithful snapshot of the resolved schedule."""
+  graph-GEMM resolver, so the spec is a faithful snapshot of the resolved schedule."""
   from extra.qk.prefill_graph_gemm_route import _resolve_schedule
   return _params_to_spec(_resolve_schedule(out_f, in_f), role)
 
@@ -99,7 +97,6 @@ def _spec_to_params(spec: PrefillGEMMScheduleSpec) -> dict:
 
 
 def emit_prefill_gemm_from_spec(spec: PrefillGEMMScheduleSpec):
-  """Lower a PrefillGEMMScheduleSpec to (insts, lds_bytes, bm, bn, threads, name). Reuses the shared _emit_schedule
-  generator so the instruction stream is byte-identical to the legacy path; only the program name differs."""
+  """Lower a PrefillGEMMScheduleSpec to (insts, lds_bytes, bm, bn, threads, name)."""
   from extra.qk.prefill_graph_gemm_route import _emit_schedule
   return _emit_schedule(_spec_to_params(spec), name=spec.kernel_name)

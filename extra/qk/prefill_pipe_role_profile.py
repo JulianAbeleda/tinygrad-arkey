@@ -1,5 +1,5 @@
 """H3: per-role effective TFLOPS for one arm (default or pipe), env-selected. PROFILE=1 ProfileRangeEvent on a warmed
-chunk forward @sp=0. Bucket by prefill_graph_gemm_512_N_K name; eff_tflops = role_flop / per-call gpu time. Prints @@JSON."""
+chunk forward @sp=0. Bucket by prefill_gen_sched_gemm_512_N_K name; eff_tflops = role_flop / per-call gpu time. Prints @@JSON."""
 import os, json
 os.environ.setdefault("PREFILL_V2","1"); os.environ["PROFILE"]="1"
 from tinygrad import Tensor, Device, TinyJit
@@ -8,10 +8,10 @@ from tinygrad.device import Compiled
 from tinygrad.helpers import ProfileRangeEvent
 from extra.llm.generate import load_model_and_tokenizer
 from extra.qk.harness_contract import DEFAULT_MODEL
-ROLE={"prefill_graph_gemm_512_12288_4096":("ffn_gate_up",2*512*12288*4096,69.8),
-      "prefill_graph_gemm_512_4096_12288":("ffn_down",2*512*4096*12288,70.9),
-      "prefill_graph_gemm_512_4096_4096":("attn_qo",2*512*4096*4096,76.7),
-      "prefill_graph_gemm_512_1024_4096":("attn_kv",2*512*1024*4096,51.8)}
+ROLE={"prefill_gen_sched_gemm_512_12288_4096":("ffn_gate_up",2*512*12288*4096,69.8),
+      "prefill_gen_sched_gemm_512_4096_12288":("ffn_down",2*512*4096*12288,70.9),
+      "prefill_gen_sched_gemm_512_4096_4096":("attn_qo",2*512*4096*4096,76.7),
+      "prefill_gen_sched_gemm_512_1024_4096":("attn_kv",2*512*1024*4096,51.8)}
 dev=Device["AMD"]
 m,tok=load_model_and_tokenizer(DEFAULT_MODEL,1024,seed=20260617)
 for b in m.blk: b._use_flash,b._prefill_v2=True,True

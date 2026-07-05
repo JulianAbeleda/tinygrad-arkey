@@ -245,9 +245,8 @@ ROUTES = {
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
     "quant": ["Q4_K", "Q6_K", "fp16"],
     "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "graph-GEMM prefill ubatch=512; role_policy in the spec: pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288"}],
-    "env": {},  # DEFAULT-ON: extra/qk/prefill_graph_gemm_route.py getenv("PREFILL_GENERATED_SCHEDULE", 1)
-    "rollback": {"PREFILL_GENERATED_SCHEDULE": "0"},  # -> legacy fixed emit (prefill_pipe_role_selective_default)
-    "baseline_route_id": "prefill_pipe_role_selective_default",
+    "env": {},
+    "rollback": {},
     "strict_fallback": True,
     "expected_kernels": ["prefill_gen_sched_gemm_*"],
     "forbidden_kernels": ["prefill_graph_gemm_* (on the default path)"],
@@ -257,8 +256,8 @@ ROUTES = {
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm (getenv('PREFILL_GENERATED_SCHEDULE', 1) or QK_ROUTE_POLICY prefill_pipe_role_selective_generated -> describe_prefill_schedule + emit_prefill_gemm_from_spec); writer extra/qk/prefill_schedule_spec.py (PrefillGEMMScheduleSpec lowered through the RDNA3 WMMA schedule generator ref.build_gemm_pipe / build_gemm_lds2).",
-    "note": "spec-driven generated prefill GEMM schedule: PrefillGEMMScheduleSpec (data) captures the resolved tile/wave/pipeline/role-policy; emit_prefill_gemm_from_spec lowers it through the parameterized RDNA3 WMMA schedule generator. Resolves the SAME schedule as the legacy path (single source _resolve_schedule) so the instruction stream is byte-identical (extra/qk/prefill_generated_schedule_gate.py TG_P4_PASS: all instructions identical, role policy preserved; full-model prefill token-identical). The RDNA3 WMMA instruction set is the target grammar; the schedule is machine-authored from the spec. Legacy fixed emit retained as rollback/oracle (PREFILL_GENERATED_SCHEDULE=0)."},
+    "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec; writer extra/qk/prefill_schedule_spec.py (PrefillGEMMScheduleSpec lowered through the RDNA3 WMMA schedule generator ref.build_gemm_pipe / build_gemm_lds2).",
+    "note": "spec-driven generated prefill GEMM schedule: PrefillGEMMScheduleSpec (data) captures the resolved tile/wave/pipeline/role-policy; emit_prefill_gemm_from_spec lowers it through the parameterized RDNA3 WMMA schedule generator. The RDNA3 WMMA instruction set is the target grammar; the schedule is machine-authored from the spec. The legacy fixed emit and PREFILL_GENERATED_SCHEDULE rollback were removed from runtime."},
   "prefill_q4k_direct_tile4x4_default": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
     "roles": ["ffn_gate_up", "attn_qo", "ffn_down", "attn_kv"], "excluded_roles": [],
@@ -273,6 +272,7 @@ ROUTES = {
     "promotion_artifacts": ["docs/prefill-packed-generated-tile-scope-20260704.md"],
     "purity_status": "search_selected_specialized_route",
     "provenance": "hand_authored_uop_template",
+    "replacement_scope": "14B/32B Q4_K prefill needs a generated quantized MMQ substrate that fuses dequant and matmul; this direct-packed UOp template is only the memory-safe interim route.",
     "selector": "env_default",
     "route_attribution": "tinygrad/llm/prefill_routes.py _direct_packed_opts default Q4_K schedule: LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4; rollback PREFILL_Q4K_DIRECT_SCHEDULE=legacy.",
     "note": "Promoted Q4_K direct-packed schedule for 14B memory-safe prefill. Fable audit reframed the gap as dequant amortization across token/register tiles rather than a new kernel family. Clean pp512 improved 135.7 -> 173.6 tok/s on Qwen3-14B-Q4_K_M. Correctness matched the old lossless direct path for the checked ffn_gate row. This is a schedule default on the existing direct-output UOp route, not the final llama-class MMQ substrate."},
@@ -313,25 +313,6 @@ ROUTES = {
     "selector": "env_guard",
     "route_attribution": "extra/qk/quant/q4_k_gemv_primitive.py q4k_gemm_packed_load_reduce_out_kernel, selected by tinygrad/llm/prefill_routes.py when PREFILL_Q4K_REDUCE_OUT=1.",
     "note": "Default-off primitive correctness fix. It replaces the manual direct-output accumulator recurrence with a real Ops.REDUCE, making GROUP schedules numerically valid: GROUP:0:10 on real 14B ffn_gate rel_rmse ~=1.6e-6 vs the lossless direct path. It is not promoted because clean pp512 is 169.7 tok/s vs 173.6 for the current Q4 tile4x4 manual direct-output default. Use this as the correctness foundation for future grouped/staged combine work."},
-  "prefill_pipe_role_selective_default": {
-    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "rollback_reference",
-    "roles": ["attn_qo", "attn_kv", "ffn_down"], "excluded_roles": ["ffn_gate_up"],
-    "quant": ["Q4_K", "Q6_K", "fp16"],
-    "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "graph-GEMM prefill ubatch=512; gate/up out_f==12288 kept on lds2"}],
-    "env": {"PREFILL_GENERATED_SCHEDULE": "0"},  # SET this to force the legacy fixed emit (the rollback for the generated schedule)
-    "rollback": {},  # this IS the rollback target
-    "baseline_route_id": "prefill_pipe_global_rollback",
-    "strict_fallback": True,
-    "expected_kernels": ["prefill_graph_gemm_*"],
-    "expected_roles_pipe": ["attn_qo", "attn_kv", "ffn_down"], "excluded_roles_pipe": ["ffn_gate_up"],
-    "authority_gate": "extra/qk/prefill_whole_synced.py",
-    "promotion_artifacts": ["bench/qk-prefill-pipe-role-selective/latest.json",
-                            "bench/qk-prefill-pipe-role-selective/summary.md"],
-    "purity_status": "search_selected_specialized_route",
-    "provenance": "rollback_oracle",
-    "selector": "env_guard",
-    "route_attribution": "extra/qk/prefill_graph_gemm_route.py _kernel (reached only when PREFILL_GENERATED_SCHEDULE=0); the legacy fixed call site of the software-pipelined assembly GEMM.",
-    "note": "legacy fixed emit of the role-selective software-pipelined assembly GEMM. Byte-identical to the generated schedule route (prefill_pipe_role_selective_generated); retained as rollback/oracle one flag away (PREFILL_GENERATED_SCHEDULE=0). ROLE_SELECTIVE_PASS_BEATS_GLOBAL speed proof still applies."},
   "prefill_pipe_global_rollback": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "superseded_rollback",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
