@@ -24,6 +24,11 @@ loop is `time_fn` (see plan item 1) — still do not clone a `synchronize()+perf
 `bench.py` and `prefill_whole_synced.py` both consume that module; the timing loop itself remains
 inside `prefill_whole_synced.py`.
 
+**Decode process policy** lives in `extra/qk/decode_harness.py`. It owns checkpoint contexts,
+measurement count, max-context validation, subprocess env, and child argv construction.
+`bench.py` and `decode_runtime_overhead.py` both consume that module; the W==D timing method itself
+remains inside `decode_runtime_overhead.py`.
+
 ## Harness jobs, one owner each (target)
 
 | Job | Canonical owner | Status |
@@ -31,6 +36,7 @@ inside `prefill_whole_synced.py`.
 | gate/probe → verdict → artifact → exit | `extra/qk/gate_registry.py` | DONE (consolidated) |
 | whole-model throughput | `extra/qk/bench.py` → the two authorities | DONE |
 | prefill process profile/env/argv | `extra/qk/prefill_harness.py` | DONE |
+| decode process profile/env/argv | `extra/qk/decode_harness.py` | DONE |
 | per-kernel timing loop | `harness_contract.time_fn` | DONE |
 | eval/scoring (NLL + JSON) | `extra/llm/eval_common.py` + `json_scorer.py` | ok |
 | provenance / repro-band | `extra/qk/harness_contract.py` | ok |

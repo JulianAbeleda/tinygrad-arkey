@@ -53,6 +53,11 @@ def qk_subprocess_env(extra: dict | None = None) -> dict:
   for k, v in (extra or {}).items(): e[str(k)] = str(v)
   return e
 
+def csv_ints(raw:str) -> tuple[int, ...]:
+  vals = tuple(int(x) for x in raw.replace(" ", "").split(",") if x)
+  if not vals: raise ValueError("expected at least one comma-separated integer")
+  return vals
+
 # The 13 fields a valid benchmark artifact must record (the principle doc's enumerated contract).
 # This is a generic per-harness audit vocabulary, not a local promotion evaluator. BoltBeam owns candidate
 # promotion policy; tinygrad harnesses only stamp workload/comparator/provenance evidence.

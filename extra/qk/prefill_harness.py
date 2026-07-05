@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import pathlib
 
+from extra.qk.harness_contract import csv_ints
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 AUTHORITY_START_POSITIONS = (0, 512, 1024, 2048, 3584)
@@ -42,12 +44,6 @@ class PrefillRunProfile:
     max_start = max(self.start_positions)
     if max_start + self.chunk_n > self.max_context:
       raise ValueError(f"max start_pos {max_start} + chunk_n {self.chunk_n} exceeds max_context {self.max_context}")
-
-
-def csv_ints(raw:str) -> tuple[int, ...]:
-  vals = tuple(int(x) for x in raw.replace(" ", "").split(",") if x)
-  if not vals: raise ValueError("expected at least one comma-separated integer")
-  return vals
 
 
 def prefill_run_profile(mode:str="authority", *, K:int|None=None, warmups:int|None=None, rounds:int|None=None,

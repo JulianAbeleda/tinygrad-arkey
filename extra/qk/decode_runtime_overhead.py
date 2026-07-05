@@ -13,28 +13,34 @@ Run: DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk/decode_runtime_overhea
 """
 from __future__ import annotations
 
-import io, json, os, pathlib, re, statistics, sys, time, contextlib
+import argparse, io, json, os, pathlib, re, statistics, sys, time, contextlib
+from extra.qk.decode_harness import csv_ints, decode_run_profile
+from extra.qk.harness_contract import DEFAULT_MODEL  # tinygrad-free; import before tinygrad to preserve env-ordering
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m"); _LINE = re.compile(r"\*\*\*\s+\S+\s+\d+\s+(.+?)\s+arg\s+\d+\s+mem")
-# ctx list is env-overridable (QK_CKPTS); flash-capability tracks the model's FLASH_DECODE_THRESHOLD (default 512,
-# the shipped value) so the measured decode matches the real generate path (the owned-attention route fires >=512).
-CKPTS = [int(x) for x in os.environ.get("QK_CKPTS", "128,512,1024,4096").split(",")]; MAXC = 4608; NMEAS = 40
 
-def main():
-  from extra.qk.harness_contract import DEFAULT_MODEL  # tinygrad-free; import before tinygrad to preserve env-ordering
-  model = os.environ.get("QK_MODEL", DEFAULT_MODEL)
+def main(argv:list[str]|None=None):
+  ap = argparse.ArgumentParser(description=__doc__)
+  ap.add_argument("--model", default=os.environ.get("QK_MODEL", DEFAULT_MODEL), help="GGUF path")
+  ap.add_argument("--ckpts", default=os.environ.get("QK_CKPTS"), help="comma-separated decode checkpoint contexts")
+  ap.add_argument("--max-context", type=int, default=int(os.environ.get("QK_MAX_CONTEXT", 4608)), help="model max_context")
+  ap.add_argument("--nmeas", type=int, default=int(os.environ.get("QK_NMEAS", 40)), help="measurements per context")
+  args = ap.parse_args(argv)
+  profile = decode_run_profile(ckpts=csv_ints(args.ckpts) if args.ckpts else None,
+                               max_context=args.max_context, nmeas=args.nmeas)
+  model = args.model
   from tinygrad import Tensor, UOp, TinyJit, Context, GlobalCounters, Device
   from extra.llm.generate import load_model_and_tokenizer
   dev = Device[Device.DEFAULT]
-  m, tok = load_model_and_tokenizer(model, MAXC, seed=20260617)
+  m, tok = load_model_and_tokenizer(model, profile.max_context, seed=20260617)
   for lin in (getattr(m, "_q4k_linears", None).linears if getattr(m, "_q4k_linears", None) else []):
     lin.decode_enabled = True
   ids = (tok.prefix() if hasattr(tok, "prefix") else []) + tok.encode("the quick brown fox jumps. " * 800)
-  ids = (ids * (1 + MAXC // max(1, len(ids))))[:MAXC]
-  v_sp = UOp.variable("start_pos", 0, MAXC - 1); temp = Tensor([0.0])
+  ids = (ids * (1 + profile.max_context // max(1, len(ids))))[:profile.max_context]
+  v_sp = UOp.variable("start_pos", 0, profile.max_context - 1); temp = Tensor([0.0])
 
   rows = []
-  for ck in CKPTS:
+  for ck in profile.ckpts:
     use_flash = ck >= int(os.environ.get("FLASH_DECODE_THRESHOLD", "512"))   # match the shipped real-generate flash threshold
     for b in m.blk: b._use_flash, b._prefill_v2 = use_flash, False
     step = TinyJit(m.forward)
@@ -45,17 +51,17 @@ def main():
     for i in range(8): out = step(out, v_sp.bind(ck + i), temp).realize()
     # W: real decode -- feed out->out, .item() readback per token (the actual sync path, as generate does)
     out = Tensor([[tokid]], dtype="int32").contiguous(); W = []
-    for i in range(NMEAS):
+    for i in range(profile.nmeas):
       t0 = time.perf_counter(); out = step(out, v_sp.bind(ck + i), temp); _ = int(out.item())
       W.append(time.perf_counter() - t0)
     # D: dispatch-only -- feed out->out, NO per-token .item, one final synchronize
     out = Tensor([[tokid]], dtype="int32").contiguous(); dev.synchronize(); t0 = time.perf_counter()
-    for i in range(NMEAS): out = step(out, v_sp.bind(ck + i), temp)
-    dev.synchronize(); D = (time.perf_counter() - t0) / NMEAS
+    for i in range(profile.nmeas): out = step(out, v_sp.bind(ck + i), temp)
+    dev.synchronize(); D = (time.perf_counter() - t0) / profile.nmeas
     # GPU proxy (DEBUG=2 unbatched -- inflated) + program count
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf), Context(DEBUG=2):
-      GlobalCounters.reset(); step(out, v_sp.bind(ck + NMEAS), temp).realize()
+      GlobalCounters.reset(); step(out, v_sp.bind(ck + profile.nmeas), temp).realize()
       gpu_dbg = GlobalCounters.time_sum_s
     progs = sum(1 for l in buf.getvalue().splitlines() if _LINE.search(_ANSI.sub("", l)))
     w_ms, d_ms = statistics.median(W) * 1e3, D * 1e3
@@ -69,7 +75,8 @@ def main():
           f"| host-sync {host:.2f}ms ({rows[-1]['host_sync_pct_of_wall']}%) | progs {progs}", file=sys.__stderr__)
 
   med_host = statistics.median([r["host_sync_pct_of_wall"] for r in rows])
-  out = {"model_id": pathlib.Path(model).stem, "hardware": "RX 7900 XTX / gfx1100", "ckpts": CKPTS, "nmeas": NMEAS,
+  out = {"model_id": pathlib.Path(model).stem, "hardware": "RX 7900 XTX / gfx1100",
+         "ckpts": list(profile.ckpts), "nmeas": profile.nmeas, "max_context": profile.max_context,
          "method": "W=real decode (.item/token), D=dispatch-only (no per-token sync, 1 final sync); host_sync=W-D",
          "rows": rows, "median_host_sync_pct": round(med_host, 1),
          "verdict": ("RUNTIME IS A TARGET (host-sync >20% of wall): a low-sync path could approach the D ceiling"

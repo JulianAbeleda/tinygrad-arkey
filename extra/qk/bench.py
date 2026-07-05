@@ -15,6 +15,7 @@ overhead + sampling + host jitter). In 2026-07 that mistake read 1247 tok/s for 
   DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk/bench.py --model <gguf> --prefill --prefill-mode smoke
 """
 import os, sys, argparse, subprocess, pathlib
+from extra.qk.decode_harness import csv_ints as decode_csv_ints, decode_authority_argv, decode_run_profile, decode_subprocess_env
 from extra.qk.prefill_harness import PREFILL_MODES, csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -36,6 +37,9 @@ def main():
   ap.add_argument("--prefill-rounds", type=int, default=None, help="override prefill timing rounds")
   ap.add_argument("--prefill-start-positions", default=None, help="comma-separated prefill start_pos values")
   ap.add_argument("--prefill-whole-lengths", default=None, help="comma-separated whole-prefill lengths")
+  ap.add_argument("--decode-ckpts", default=None, help="comma-separated decode checkpoint contexts")
+  ap.add_argument("--decode-nmeas", type=int, default=None, help="override decode measurements per context")
+  ap.add_argument("--decode-max-context", type=int, default=None, help="override decode model max_context")
   args = ap.parse_args()
   both = not (args.prefill or args.decode)
   if args.prefill or both:
@@ -45,7 +49,9 @@ def main():
                                   whole_lengths=csv_ints(args.prefill_whole_lengths) if args.prefill_whole_lengths else None)
     _run("PREFILL pp@L", prefill_authority_argv(args.model, profile), prefill_subprocess_env(), label=profile.mode)
   if args.decode or both:
-    _run("DECODE W==D", ["extra/qk/decode_runtime_overhead.py"], {"QK_MODEL": args.model})
+    profile = decode_run_profile(ckpts=decode_csv_ints(args.decode_ckpts) if args.decode_ckpts else None,
+                                 max_context=args.decode_max_context, nmeas=args.decode_nmeas)
+    _run("DECODE W==D", decode_authority_argv(args.model, profile), decode_subprocess_env(args.model))
   print("\nCanonical harness numbers only. Do NOT report prefill/decode throughput from a generate-TTFT harness.")
 
 if __name__ == "__main__":
