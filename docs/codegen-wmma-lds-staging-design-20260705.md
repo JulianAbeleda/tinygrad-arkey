@@ -74,6 +74,30 @@ slot s) finish. Nothing currently expresses this (group-reduce never reuses a sl
 Long pole = B (needs the dependency-edge addition + uncertain payoff; RDNA3 occupancy already hides some
 latency). 2A likely captures the larger share (traffic reduction).
 
+## TRACK 2A MILESTONE-1: SOLVED + VERIFIED ON REAL AMD (2026-07-05)
+LDS input-staging of the shared WMMA operand: **rel_rmse=2.075e-04 (bit-exact vs baseline) on DEV=AMD,
+M=512 N=2048 K=1024, with REAL LDS traffic** (shared buf0[8192], 64 ds_store + s_barrier + 64 ds_load;
+baseline LOCALINPUT=0 has 0 shared/0 barriers). Repro: scratchpad/localinput_test.py `_stage`.
+The working construction (3 findings, each a real blocker):
+1. **Address key = WARP ONLY.** END-closing a SEQUENTIAL range (REDUCE/UPCAST/UNROLL) as an LDS key makes a
+   store-END->barrier->read->range->store-END cycle -> CFGContext assert (linearizer.py:162). WARP is a
+   PARALLEL dim (gpudims.py:68 lowers it to a thread-special, not a loop) -> END-closing it is cycle-free.
+2. **Fold the within-lane vector axes into the buffer element EXPLICITLY.** Build one big
+   `CONTRACT(idx, frag+extra) -> vec(vecn)` (frag = the CONTRACT's arg fragment axes; extra = the non-fragment
+   within-lane UPCAST/UNROLL axes), `bufferize(*warp, LOCAL, removable=False).index(*warp)`, then rebuild the
+   per-instance vec(16) via inverse `CONTRACT(UNROLL(read, ext_arg), frag)`. Implicit vectorization (staging
+   bare CONTRACT keyed by WARP) is bit-exact on SMALL tiles but MISLAYS the fragment on real AMD when N&K are
+   both large (rel_rmse ~0.14) -- the explicit CONTRACT fixes it.
+3. **`removable=False` is load-bearing.** Default removable=True -> pm_remove_bufferize (rangeify.py:239)
+   folds the store/load away on AMD, leaving a dead shared decl + bare s_barrier (ds=0, rel_rmse ~0.16).
+**PROCESS: DEV=PYTHON::gfx1100 is a FALSE-POSITIVE oracle** — reports bit-exact even when the buffer is
+removed AND for the large-shape-wrong variant. Verify EVERY candidate on DEV=AMD (tiny/medium shapes,
+seconds, wedge-safe); large N&K exposed the implicit-vec bug.
+NEXT: milestone-1 is correct but REDUNDANT (all threads store full tile) -> perf flat-or-worse. (a) cooperative
+partition (store_keys != read_keys, split tile across LOCAL threads) for the traffic-cut perf win; (b) integrate
+as a proper expander-phase pass behind LOCALINPUT=1 (not the apply_opts monkeypatch); (c) double-buffer (2B);
+(d) match build_gemm_lds2 -> delete it.
+
 ## IMPLEMENTATION STATUS (2026-07-05)
 - **Track 1 DONE + validated + shipped.** `extra/qk/prefill_v2_schedule_search.py` + frozen
   `prefill_v2_schedule_table.json` (real 14B+8B shapes) + wired into `model.py::_build_prefill_v2_warmstart`.

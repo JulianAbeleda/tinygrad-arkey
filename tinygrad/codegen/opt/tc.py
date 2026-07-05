@@ -91,7 +91,9 @@ class TensorCore: # D = A * B + C, A is (M x K), B is (K x N), C and D are (M x 
   def base_upcast_axes(self):
     # this is defined in the swizzle. first we use the upcast axes, then the reduce
     return ([f"r{i}" for i in range(len(self.get_reduce_axes()))] + [f"u{i}" for i in range(len(self.get_upcast_axes()))])[::-1]
-  def __str__(self): return "_".join(["WMMA"] + list(map(str, self.dims)) + [self.dtype_in.name, self.dtype_out.name])
+  # NOTE: str(tc) is used verbatim as a C identifier (the WMMA wrapper name via wmma_arg[0]); dtype names like
+  # "signed char" contain spaces, so sanitize them to keep the emitted `__WMMA_...` a valid identifier.
+  def __str__(self): return "_".join(["WMMA"] + list(map(str, self.dims)) + [self.dtype_in.name, self.dtype_out.name]).replace(" ", "_")
   def __post_init__(self):
     # all axes have size 2, <local> <reduce> <upcast> is the order
     local_axes, upcast_axes, reduce_axes = len(self.get_local_axes()), len(self.get_upcast_axes()), len(self.get_reduce_axes())

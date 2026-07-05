@@ -443,12 +443,17 @@ class HIPRenderer(CStyleLanguage):
       elif dtype_out == dtypes.float:
         prefix.append(f"#define __{name} __builtin_amdgcn_wmma_f32_16x16x16_{'f16' if dtype_in == dtypes.half else 'bf16'}_w32")
       elif dtype_out == dtypes.int:
-        # RDNA3 iu8 int8 WMMA (Q4_K MMQ). A/B arrive as 16 int8/lane (char16); the builtin wants v4i32 (16 int8
-        # packed) -> bitcast. C/D = 8 int32 (int8). signed*signed (first/third bool = unsigned flag = false;
-        # q4 codes 0..15 fit signed char, activations signed -- cf. the sudot4 signedness note above).
-        # VALIDATE-ON-AMD: the unsigned-flag bools + the char16->int4 pack (mirror _sdot4 which is value-validated).
-        prefix.append(f"static inline __attribute__((device)) int8 __{name}(char16 a, char16 b, int8 c) {{\n"
-                      f"  return __builtin_amdgcn_wmma_i32_16x16x16_iu8_w32(false, *(int4*)&a, false, *(int4*)&b, c, false);\n}}")
+        # RDNA3 iu8 int8 WMMA (Q4_K MMQ). A/B arrive as 16 int8/lane; the builtin wants v4i32 (16 int8 packed)
+        # -> bitcast. C/D = 8 int32. signed*signed: the 1st/3rd bool args are the per-operand SIGN flags where
+        # true == SIGNED (AMD-VALIDATED bit-exact on gfx1100 -- passing false treats int8 as UNSIGNED, which
+        # blows negatives up to 255 and gives garbage; cf. the sudot4 true=signed convention above).
+        # NOTE: use render_dtype for the vector type spellings -- char.vec(16) renders as "signed_char16"
+        # (NOT "char16"), and int.vec(4) ("int4") is needed for the pack but is not a naturally-used dtype, so
+        # emit its typedef here if the render_kernel prologue didn't already (avoids a duplicate typedef).
+        c16, i8, i4 = self.render_dtype(dtypes.char.vec(16)), self.render_dtype(dtypes.int.vec(8)), self.render_dtype(dtypes.int.vec(4))
+        if dtypes.int.vec(4) not in used_dtypes: prefix.append(self.render_vector_prefix(dtypes.int.vec(4)))
+        prefix.append(f"static inline __attribute__((device)) {i8} __{name}({c16} a, {c16} b, {i8} c) {{\n"
+                      f"  return __builtin_amdgcn_wmma_i32_16x16x16_iu8_w32(true, *({i4}*)&a, true, *({i4}*)&b, c, false);\n}}")
       else: prefix.append(f"static inline __attribute__((device)) half8 __{name}"+"""(half16 a, half16 b, half8 c) {
   half16 c_frag = {}; half8 d; for (int n = 0; n < 8; n++) { c_frag[n*2] = c[n]; }
   c_frag = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a, b, c_frag, false);
