@@ -206,6 +206,14 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
           fxn=qk_ops.q4k_q8_1_sdot4_coop_gemm_kernel(spec.n, spec.k, spec.m, 1, 1,
                                                      name="prefill_q4k_q8_1_mmq_direct_packed_gemm"))[0]
         return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
+      if q8_mode in ("mmq_direct", "mmq_direct_out"):
+        xq_words = Tensor.empty(xq.numel() // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
+          xq, fxn=qk_ops.q8_signed_pack_u32_kernel(spec.m * spec.k))[0]
+        out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
+          words, xq_words, xscales,
+          fxn=qk_ops.q4k_q8_1_sdot4_coop_direct_out_kernel(spec.n, spec.k, spec.m, 1, 4,
+                                                           name="prefill_q4k_q8_1_mmq_direct_out_gemm"))[0]
+        return out.reshape(1, spec.m, spec.n)
       if q8_mode == "sdot4":
         if parts != 1:
           if prefill_route_strict(): raise RuntimeError("PREFILL_Q4K_Q8=sdot4 requires parts=1")

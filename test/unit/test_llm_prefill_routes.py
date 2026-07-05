@@ -144,6 +144,12 @@ def test_prefill_q4k_q8_wmma_flag_is_valid_route_env():
   assert prefill_route_policy() == "auto"
 
 
+def test_prefill_q4k_q8_mmq_direct_flag_is_valid_route_env():
+  from tinygrad.llm.prefill_routes import prefill_route_policy
+  os.environ["PREFILL_Q4K_Q8"] = "mmq_direct"
+  assert prefill_route_policy() == "auto"
+
+
 def test_direct_packed_route_spec_exports_runtime_op_spec():
   from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec
   q4 = PrefillLinearRouteSpec("direct_packed", "q4k", "ffn_gate_up", 512, 17408, 5120).runtime_op_spec()

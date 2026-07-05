@@ -254,6 +254,16 @@ Classification: blocked on lowering/runtime graph explosion in `group_tensor_mat
 is a fused/tiled generated emitter that keeps the Q4_K/Q8_1 grouped dot route-bound without materializing many Tensor
 matmul graph fragments.
 
+Reuse scan result:
+
+- Existing `q4k_q8_1_sdot4_coop_gemm_kernel` already owns the fused Q4_K/Q8_1 dot4 algebra.
+- Existing generated packed-tile direct-warp code already owns the in-kernel 8-lane direct-output reduction pattern.
+- Combining those produced `PREFILL_Q4K_Q8=mmq_direct`, which is bounded and correct but not fast:
+  canonical 14B pp512 smoke = 85 tok/s.
+
+So the next route should not duplicate the scalar dot4/direct-output topology. The remaining gap is a generated tiled
+lowering that keeps the bounded direct-output shape while using a throughput-appropriate dot substrate.
+
 ## Do Not Start Yet
 
 Defer until descriptor/registry foundation exists:

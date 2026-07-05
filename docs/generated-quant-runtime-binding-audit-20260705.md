@@ -21,7 +21,7 @@ This is an audit and ownership map. It is not a route promotion gate yet.
 | Classification | Count | Meaning |
 | --- | ---: | --- |
 | `allowed.generated` | 9 | Machine-authored or tinygrad scheduler generated provenance. |
-| `transitional.hand_authored_uop` | 3 | Hand-authored UOp templates that need generated descriptor ownership before final promotion. |
+| `transitional.hand_authored_uop` | 4 | Hand-authored UOp templates that need generated descriptor ownership before final promotion. |
 | `banned.not_default_but_reachable_or_ledgered` | 4 | External handwritten kernels or rollback oracles that are not acceptable as default generated routes. |
 
 Default debt:
@@ -34,7 +34,7 @@ Default debt:
 
 | Finding kind | Count | Interpretation |
 | --- | ---: | --- |
-| `binding.custom_kernel` | 106 | Direct custom kernel binding surfaces that need explicit ownership or retirement. |
+| `binding.custom_kernel` | 108 | Direct custom kernel binding surfaces that need explicit ownership or retirement. |
 | `binding.ops_custom` | 6 | UOp custom op surfaces. |
 | `binding.ops_customi` | 3 | UOp custom immediate op surfaces. |
 | `binding.ops_program` | 1 | Program construction surface. |

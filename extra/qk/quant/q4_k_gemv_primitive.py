@@ -764,6 +764,49 @@ def q4k_q8_1_sdot4_coop_gemm_kernel(rows:int, k:int, b:int, row_tile:int=1, toke
 
   return kernel
 
+def q4k_q8_1_sdot4_coop_direct_out_kernel(rows:int, k:int, b:int, row_tile:int=1, token_tile:int=4,
+                                          name:str="q4k_q8_1_sdot4_coop_direct_out_gemm"):
+  # Same generated-UOp Q4_K/Q8_1 dot4 algebra as q4k_q8_1_sdot4_coop_gemm_kernel, but the 8 lane partials are reduced
+  # inside the wave and written directly to [b, rows]. This removes the full-model [rows,b,8] partial tensor.
+  from extra.qk.amd_warp_reduce import warp_reduce_sum
+  if row_tile < 1 or token_tile < 1 or row_tile * token_tile != 4:
+    raise ValueError("direct-out coop requires row_tile*token_tile == 4 for one wave of four 8-lane outputs")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+
+  def kernel(out:UOp, words:UOp, q8packed:UOp, xscales:UOp) -> UOp:
+    row_o = UOp.special(cdiv(rows, row_tile), "gidx0")
+    bb_o = UOp.special(cdiv(b, token_tile), "gidx1")
+    lane = UOp.special(32, "lidx0")
+    out_lane = lane // 8
+    lane4 = lane % 8
+    row_i = out_lane // token_tile
+    bb_i = out_lane % token_tile
+    blk = UOp.range(k_blocks, 0, axis_type=AxisType.REDUCE)
+    row = row_o * row_tile + row_i
+    bb = bb_o * token_tile + bb_i
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    d_blk = _f16_word(words[base], False); dmin_blk = _f16_word(words[base], True)
+    psd = UOp.const(dtypes.float32, 0.0); psm = UOp.const(dtypes.float32, 0.0)
+    ones = UOp.const(dtypes.int32, 0x01010101); z = UOp.const(dtypes.int32, 0)
+    q8_base = bb * (k // 4) + blk * 64
+    scale_base = bb * (k // Q8_1_BLOCK_ELEMS) + blk * 8
+    for grp in range(8):
+      _, _, sc, mn = _q4k_group_params(words, base, grp)
+      qword = words[base + 4 + (grp // 2) * 8 + lane4]
+      q4 = qword.rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F).cast(dtypes.int32)
+      q8 = q8packed[q8_base + grp * 8 + lane4].cast(dtypes.int32)
+      d8 = xscales[scale_base + grp].cast(dtypes.float32)
+      psd = psd + d8 * _sdot4_op(q8, q4, z).cast(dtypes.float32) * sc.cast(dtypes.float32)
+      psm = psm + d8 * _sdot4_op(q8, ones, z).cast(dtypes.float32) * mn.cast(dtypes.float32)
+    contrib = d_blk * psd - dmin_blk * psm
+    acc = UOp.placeholder((1,), dtypes.float32, 212, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+    total = warp_reduce_sum(acc[0], lane, 8)
+    return out[bb, row].store(total).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}", "", ()))
+
+  return kernel
+
 def q4k_q8_1_intdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   k_blocks = k // Q4_K_BLOCK_ELEMS
   blocks_per_part = cdiv(k_blocks, parts)

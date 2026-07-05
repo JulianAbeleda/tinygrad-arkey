@@ -177,6 +177,26 @@ Conclusion: the blocker is no longer candidate selection, numeric parity, or AMD
 `group_tensor_matmul_v0` lowering shape: full-model prefill needs a fused/tiled generated emitter that avoids building
 one large Tensor matmul graph per Q4_K/Q8_1 group/tile.
 
+2026-07-05 reuse scan and direct-output result:
+
+- Existing reusable pieces:
+  - `extra/qk/quant/q4_k_gemv_primitive.py::q4k_q8_1_sdot4_coop_gemm_kernel` owns the Q4_K/Q8_1 dot4 algebra.
+  - `extra/qk/prefill_packed_tile_spec.py::_emit_q4k_packed_prefill_direct_warp` owns the in-kernel 8-lane
+    `warp_reduce_sum` direct-output pattern.
+- Combined route:
+  - `PREFILL_Q4K_Q8=mmq_direct`
+  - `q4k_q8_1_sdot4_coop_direct_out_kernel`
+  - no `[rows,tokens,8]` partial tensor.
+- Correctness:
+  - AMD small-shape parity passes for `mmq_direct` at `n=64,k=256,m=16` and `n=32,k=512,m=16`.
+- 14B canonical smoke:
+  - `PREFILL_Q4K_Q8=mmq_direct DEVICE_IN_FUNCTION_BUG=1 ALLOW_DEVICE_USAGE=1 ... bench.py --prefill --prefill-mode smoke`
+  - `chunk@start_pos=0: 6028.0ms`
+  - `WHOLE-PREFILL@512: 85 tok/s`
+
+Classification: bounded and correct, but correct-not-fast. This is useful topology evidence for in-kernel lane combine,
+not the final replacement for `prefill_q4k_direct_tile4x4_default`.
+
 Next required implementation:
 
 - A single fused/tiled generated emitter that streams over N/group tiles inside one generated kernel or equivalent scheduler-owned lowering.

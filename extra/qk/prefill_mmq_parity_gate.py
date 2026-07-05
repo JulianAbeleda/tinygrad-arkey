@@ -18,6 +18,7 @@ from tinygrad.helpers import getenv
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference, q8_1_quantize
 from extra.qk.quant.q4_k_gemv_primitive import (
   q8_signed_pack_u32_kernel, q4k_q8_1_sdot4_gemm_kernel, q4k_q8_1_sdot4_coop_gemm_kernel,
+  q4k_q8_1_sdot4_coop_direct_out_kernel,
 )
 from extra.qk.prefill_int8_wmma_spec import describe_q4k_int8_wmma_prefill, emit_q4k_int8_wmma_prefill_tensor
 
@@ -63,6 +64,14 @@ def run(n:int, k:int, m:int, seed:int=1337) -> None:
     fxn=q4k_q8_1_sdot4_coop_gemm_kernel(n, k, m, 1, 1, name="prefill_q4k_q8_1_mmq_direct_packed_gemm"))[0]
   mmq_out = mmq.sum(axis=2).transpose(0, 1).numpy()  # [m, n]
 
+  direct_cases = []
+  if getenv("DEV", "") == "AMD":
+    # --- mmq direct-out : same dot4 algebra, in-kernel 8-lane reduce, no [n,m,8] partial tensor ---
+    # Requires AMD ds_bpermute through warp_reduce_sum; DEV=PYTHON cannot execute that CUSTOMI.
+    mmq_direct = Tensor.empty(m, n, dtype=dtypes.float32).custom_kernel(words, xq_words, xscales,
+      fxn=q4k_q8_1_sdot4_coop_direct_out_kernel(n, k, m, 1, 4, name="prefill_q4k_q8_1_mmq_direct_out_gemm"))[0]
+    direct_cases.append(("mmq_direct", mmq_direct.numpy()))  # [m, n]
+
   # --- sdot4 : parts=1 partials [n,m,1] reduced on axis 2 ---
   sd_partials = Tensor.empty(n, m, 1, dtype=dtypes.float32)
   sd = sd_partials.custom_kernel(words, xq_words, xscales,
@@ -74,7 +83,7 @@ def run(n:int, k:int, m:int, seed:int=1337) -> None:
   wmma_out = emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec).numpy()
 
   ok = True
-  for label, got in (("mmq(coop)", mmq_out), ("sdot4", sd_out), ("wmma_generated", wmma_out)):
+  for label, got in (("mmq(coop)", mmq_out), *direct_cases, ("sdot4", sd_out), ("wmma_generated", wmma_out)):
     r = _rel_rmse(got, ref_out)
     status = "PASS" if r < RTOL else "FAIL"
     if r >= RTOL: ok = False
