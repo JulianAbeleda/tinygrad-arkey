@@ -72,7 +72,10 @@ BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
     required_codegen_features=("wmma_i32_16x16x16_iu8",),
     authority_gates=("extra/qk/q4k_wmma_tiled_lowering_feasibility.py",
                      "extra/qk/q4k_wmma_tiled_microgate.py",
-                     "extra/qk/q4k_wmma_tiled_role_shape_gate.py")),
+                     "extra/qk/q4k_wmma_tiled_surface_gate.py",
+                     "extra/qk/q4k_wmma_tiled_lifecycle_gate.py",
+                     "extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py",
+                     "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py")),
   GeneratedCandidate(
     candidate_id="quant_linear_decode.q4k_g3_lanemap",
     op_family="QuantizedLinear", supported_quant_formats=("Q4_K",),
