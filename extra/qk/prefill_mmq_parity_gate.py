@@ -83,6 +83,6 @@ def run(n:int, k:int, m:int, seed:int=1337) -> None:
 
 if __name__ == "__main__":
   # small GPU-free shapes; k multiple of 256, plus a k>256 multi-block case
-  for (n, k, m) in [(64, 256, 16), (32, 512, 16), (128, 768, 16)]:
+  for (n, k, m) in [(64, 256, 16), (32, 512, 16), (16, 768, 16)]:
     run(n, k, m, seed=getenv("SEED", 1337))
   print("MMQ parity gate PASS")

@@ -215,6 +215,8 @@ Exit criteria:
 
 ## Phase 6: First End-To-End Conversion
 
+Status 2026-07-05: executed through `generated_q4k_prefill_e2e`.
+
 Target: Q4_K prefill.
 
 Reason:
@@ -239,6 +241,18 @@ Success is not immediate speed. Success is:
 - no banned implementation reachable from the selected candidate,
 - route-bound correctness,
 - full-model blocker classified as missing lowering/search/codegen/runtime/hardware.
+
+Observed result:
+
+- Candidate selection reaches `quant_linear_prefill.q4k_int8_wmma_tensor_substrate`.
+- `prefill_mmq_parity_gate.py` passes for `mmq`, `sdot4`, and `wmma_generated`.
+- `int8_wmma_codegen` passes with full-range Q8_1 int8 activations and emits `wmma_i32_16x16x16_iu8`.
+- Canonical 14B smoke reaches `PREFILL_Q4K_Q8=wmma` and stops at the full-model graph guard:
+  `RAW groups*m*n=419430400 > limit=67108864` for `attn_qo`.
+
+Classification: blocked on lowering/runtime graph explosion in `group_tensor_matmul_v0`; the next implementation target
+is a fused/tiled generated emitter that keeps the Q4_K/Q8_1 grouped dot route-bound without materializing many Tensor
+matmul graph fragments.
 
 ## Do Not Start Yet
 

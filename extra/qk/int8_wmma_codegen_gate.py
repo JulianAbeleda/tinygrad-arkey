@@ -16,7 +16,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 M=N=K=16
 rng=np.random.default_rng(0)
-a=rng.integers(-8,8,size=(M,K),dtype=np.int8)
+a=rng.integers(-128,127,size=(M,K),dtype=np.int8)
 b=rng.integers(0,16,size=(N,K),dtype=np.int8)
 out=Tensor(a).matmul(Tensor(b).transpose(), dtype=dtypes.int).realize().numpy()
 ref=a.astype(np.int32) @ b.astype(np.int32).T

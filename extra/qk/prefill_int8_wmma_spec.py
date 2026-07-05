@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from tinygrad import Tensor, dtypes
+from tinygrad.helpers import getenv
 
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
@@ -71,6 +72,14 @@ def describe_q4k_int8_wmma_prefill(n:int, k:int, m:int, *, role:str="", n_tile:i
   spec = Q4KInt8WMMAPrefillSpec(n=n, k=k, m=m, role=role, n_tile=n_tile)
   spec.validate()
   return spec
+
+
+def _intdot_matmul(a:Tensor, b_t:Tensor) -> Tensor:
+  # DEV=PYTHON overflows full-range int8 dot products. Widen only the GPU-free oracle; AMD must keep int8 operands so
+  # codegen can select iu8 WMMA.
+  if getenv("DEV", "") == "PYTHON":
+    return a.cast(dtypes.int32).matmul(b_t.cast(dtypes.int32), dtype=dtypes.int)
+  return a.matmul(b_t, dtype=dtypes.int)
 
 
 def _f16_word_tensor(word:Tensor, high:bool) -> Tensor:
@@ -171,7 +180,7 @@ def emit_q4k_int8_wmma_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
   if vectorized:
     q4_g = _q4k_all_group_codes_tensor(words3, spec)                         # [groups, n, 32]
     q8_g = xq2.reshape(spec.m, spec.groups, spec.group_elems).permute(1, 0, 2).contiguous()  # [groups, m, 32]
-    raw = q8_g.matmul(q4_g.permute(0, 2, 1).contiguous(), dtype=dtypes.int).cast(dtypes.float32)  # [groups,m,n]
+    raw = _intdot_matmul(q8_g, q4_g.permute(0, 2, 1).contiguous()).cast(dtypes.float32)  # [groups,m,n]
     qsum = q8_g.cast(dtypes.int32).sum(axis=2).cast(dtypes.float32)          # [groups,m]
     d, dmin, sc, mn = _q4k_all_group_params_tensor(words3, spec)             # [n,groups]
     coeff_raw = (d * sc.cast(dtypes.float32)).permute(1, 0).reshape(spec.groups, 1, spec.n)
@@ -186,7 +195,7 @@ def emit_q4k_int8_wmma_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
       start = group_idx * spec.group_elems
       q4_g = _q4k_group_codes_tensor(words3, blk, grp)
       q8_g = xq2[:, start:start + spec.group_elems].contiguous()
-      raw = q8_g.matmul(q4_g.transpose(), dtype=dtypes.int).cast(dtypes.float32)
+      raw = _intdot_matmul(q8_g, q4_g.transpose()).cast(dtypes.float32)
       qsum = q8_g.cast(dtypes.int32).sum(axis=1).cast(dtypes.float32)
       d, dmin, sc, mn = _q4k_group_params_tensor(words3, blk, grp)
       xscale = xsc2[:, group_idx].cast(dtypes.float32)

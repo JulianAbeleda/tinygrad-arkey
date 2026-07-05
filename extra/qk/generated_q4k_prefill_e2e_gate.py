@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""End-to-end classification gate for the generated Q4_K/Q8_1 prefill candidate.
+
+This gate intentionally treats the current 14B smoke fail-fast as a classified result, not a promotion. Passing means:
+descriptor selection works, numeric parity passes, AMD int8 WMMA codegen passes, and the canonical 14B smoke reaches
+the generated route before being blocked by the known Tensor graph explosion guard.
+"""
+from __future__ import annotations
+
+import json, os, pathlib, subprocess, sys
+from typing import Any
+
+from tinygrad.llm.generated_candidates import select_generated_candidate
+from tinygrad.llm.quant_specs import activation_spec, quant_spec
+from tinygrad.llm.runtime_specs import RuntimeOpSpec
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+MODEL = "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf"
+EXPECTED_CANDIDATE = "quant_linear_prefill.q4k_int8_wmma_tensor_substrate"
+GRAPH_BLOCKER = "PREFILL_Q4K_Q8=wmma Tensor-substrate blocked for full-model shape"
+
+
+def _run(argv:list[str], *, env:dict[str, str]|None=None, timeout:int=180) -> dict[str, Any]:
+  child_env = {**os.environ, "PYTHONPATH": str(ROOT), **(env or {})}
+  r = subprocess.run([sys.executable, *argv], cwd=str(ROOT), env=child_env, capture_output=True, text=True, timeout=timeout)
+  return {"argv": [sys.executable, *argv], "returncode": r.returncode,
+          "stdout_tail": r.stdout[-6000:], "stderr_tail": r.stderr[-6000:]}
+
+
+def _candidate_selection() -> dict[str, Any]:
+  op = RuntimeOpSpec("QuantizedLinear", "prefill", "ffn_gate_up", {"M": 512, "N": 17408, "K": 5120},
+                     quant_spec("Q4_K").tensor_spec(), activation_spec("Q8_1").activation_spec(),
+                     lowering_strategy="iu8_wmma_grouped_dot")
+  sel = select_generated_candidate(op, preferred=(EXPECTED_CANDIDATE,))
+  return sel.to_json()
+
+
+def _smoke_classification(smoke:dict[str, Any]) -> dict[str, Any]:
+  text = smoke["stdout_tail"] + "\n" + smoke["stderr_tail"]
+  graph_blocked = GRAPH_BLOCKER in text and "RAW groups*m*n=" in text
+  route_reached = "PREFILL_Q4K_Q8=wmma" in text
+  return {"route_reached": route_reached, "graph_explosion_guard": graph_blocked,
+          "class": "blocked.graph_explosion" if route_reached and graph_blocked else "unknown"}
+
+
+def build() -> dict[str, Any]:
+  candidate = _candidate_selection()
+  parity = _run(["extra/qk/prefill_mmq_parity_gate.py"], env={"DEV": "PYTHON"}, timeout=120)
+  from extra.qk.int8_wmma_codegen_gate import build as codegen_build
+  codegen = codegen_build()
+  smoke = _run(["extra/qk/bench.py", "--model", MODEL, "--prefill", "--prefill-mode", "smoke"],
+               env={"PREFILL_Q4K_Q8": "wmma", "DEVICE_IN_FUNCTION_BUG": "1", "ALLOW_DEVICE_USAGE": "1"},
+               timeout=180)
+  smoke_class = _smoke_classification(smoke)
+  selected_ok = candidate["status"] == "selected" and candidate["candidate"]["candidate_id"] == EXPECTED_CANDIDATE
+  parity_ok = parity["returncode"] == 0 and "MMQ parity gate PASS" in parity["stdout_tail"]
+  codegen_ok = codegen["verdict"] == "INT8_WMMA_CODEGEN_PASS"
+  smoke_ok = smoke_class["class"] == "blocked.graph_explosion"
+  verdict = "GENERATED_Q4K_PREFILL_E2E_BLOCKED_GRAPH_EXPLOSION" if selected_ok and parity_ok and codegen_ok and smoke_ok \
+    else "GENERATED_Q4K_PREFILL_E2E_FAIL"
+  return {"schema": "generated_q4k_prefill_e2e_gate.v1",
+          "scope": "Q4_K/Q8_1 generated prefill candidate selection, parity, AMD WMMA codegen, and 14B smoke classification",
+          "verdict": verdict,
+          "candidate_selection": candidate,
+          "parity": {"ok": parity_ok, **parity},
+          "codegen": codegen,
+          "smoke": {"ok": smoke_ok, "classification": smoke_class, **smoke},
+          "blocker": "full-model Tensor graph explosion in group_tensor_matmul_v0; needs fused/tiled generated emitter" if smoke_ok else "unclassified"}
+
+
+if __name__ == "__main__":
+  print(json.dumps(build(), indent=2))

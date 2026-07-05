@@ -162,6 +162,21 @@ Current guard:
 - `PREFILL_Q4K_Q8=wmma` now fails fast for full-model RAW shapes above `PREFILL_Q4K_WMMA_MAX_RAW_ELEMS` unless `PREFILL_Q4K_WMMA_ALLOW_GRAPH_EXPLOSION=1`.
 - This keeps the route useful for parity/codegen probes and prevents accidental indefinite 14B authorities.
 
+2026-07-05 end-to-end classification:
+
+- Gate: `generated_q4k_prefill_e2e`.
+- Verdict: `GENERATED_Q4K_PREFILL_E2E_BLOCKED_GRAPH_EXPLOSION`.
+- Candidate registry selects `quant_linear_prefill.q4k_int8_wmma_tensor_substrate`.
+- `prefill_mmq_parity_gate.py` passes for `mmq`, `sdot4`, and `wmma_generated`.
+- `int8_wmma_codegen` now stress-tests full-range Q8_1 activations (`[-128, 127]`) and still proves
+  `wmma_i32_16x16x16_iu8` with `max_abs 0` on AMD.
+- Canonical 14B smoke reaches the route and stops at the intended guard:
+  `role=attn_qo m=512 n=5120 k=5120: RAW groups*m*n=419430400 > limit=67108864`.
+
+Conclusion: the blocker is no longer candidate selection, numeric parity, or AMD WMMA codegen. It is the
+`group_tensor_matmul_v0` lowering shape: full-model prefill needs a fused/tiled generated emitter that avoids building
+one large Tensor matmul graph per Q4_K/Q8_1 group/tile.
+
 Next required implementation:
 
 - A single fused/tiled generated emitter that streams over N/group tiles inside one generated kernel or equivalent scheduler-owned lowering.
