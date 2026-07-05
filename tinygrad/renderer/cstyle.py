@@ -442,6 +442,13 @@ class HIPRenderer(CStyleLanguage):
         prefix.append(f"#define __{name} __builtin_amdgcn_wmma_{type_map[dtype_out]}_16x16x16_{type_map[dtype_in]}_w32_gfx12")
       elif dtype_out == dtypes.float:
         prefix.append(f"#define __{name} __builtin_amdgcn_wmma_f32_16x16x16_{'f16' if dtype_in == dtypes.half else 'bf16'}_w32")
+      elif dtype_out == dtypes.int:
+        # RDNA3 iu8 int8 WMMA (Q4_K MMQ). A/B arrive as 16 int8/lane (char16); the builtin wants v4i32 (16 int8
+        # packed) -> bitcast. C/D = 8 int32 (int8). signed*signed (first/third bool = unsigned flag = false;
+        # q4 codes 0..15 fit signed char, activations signed -- cf. the sudot4 signedness note above).
+        # VALIDATE-ON-AMD: the unsigned-flag bools + the char16->int4 pack (mirror _sdot4 which is value-validated).
+        prefix.append(f"static inline __attribute__((device)) int8 __{name}(char16 a, char16 b, int8 c) {{\n"
+                      f"  return __builtin_amdgcn_wmma_i32_16x16x16_iu8_w32(false, *(int4*)&a, false, *(int4*)&b, c, false);\n}}")
       else: prefix.append(f"static inline __attribute__((device)) half8 __{name}"+"""(half16 a, half16 b, half8 c) {
   half16 c_frag = {}; half8 d; for (int n = 0; n < 8; n++) { c_frag[n*2] = c[n]; }
   c_frag = __builtin_amdgcn_wmma_f16_16x16x16_f16_w32(a, b, c_frag, false);
