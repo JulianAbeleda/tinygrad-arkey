@@ -264,11 +264,28 @@ Reuse scan result:
 So the next route should not duplicate the scalar dot4/direct-output topology. The remaining gap is a generated tiled
 lowering that keeps the bounded direct-output shape while using a throughput-appropriate dot substrate.
 
+Tiled WMMA route scope implemented:
+
+- New route descriptor: `prefill_q4k_int8_wmma_tiled_research`.
+- New candidate: `quant_linear_prefill.q4k_int8_wmma_tiled_substrate`.
+- New env: `PREFILL_Q4K_Q8=wmma_tiled`.
+- Unknown `PREFILL_Q4K_Q8` modes now raise instead of falling through to the scalar Q4_K/Q8_1 GEMM route.
+- `q4k_wmma_tiled_lowering_feasibility` passes on AMD:
+  bounded `16x16x32` RAW tile lowers to `wmma_i32_16x16x16_iu8` and matches int32 reference.
+- `q4k_wmma_tiled_microgate` passes on AMD:
+  one bounded Q4_K/Q8_1 tile with scale/min correction has rel_rmse ~= `1.3e-7` vs the q8-dequant reference.
+- `q4k_wmma_tiled_role_shape` classifies all 14B role shapes as `blocked.full_route_lowering_missing`.
+- `generated_q4k_prefill_e2e` now reports:
+  `GENERATED_Q4K_PREFILL_E2E_TILED_BLOCKED_FULL_ROUTE`.
+
+Current classification: one-tile tiled WMMA is correct and codegen-valid, but there is still no direct tiled full-role
+scheduler/codegen lowering. The next implementation is not another Tensor chunk/cat wrapper; it must map role shapes to
+bounded tiles without route-local WMMA source/asm and without falling back to `prefill_q4k_direct_tile4x4_default`.
+
 ## Do Not Start Yet
 
-Defer until descriptor/registry foundation exists:
+Do not start until the direct tiled full-role lowering exists:
 
-- A new fused/tiled Q4_K WMMA route branch in `prefill_routes.py`.
 - MoE-specific expert offload or expert-cache route machinery.
 - MLA-specific branches.
 - New environment-variable control planes.

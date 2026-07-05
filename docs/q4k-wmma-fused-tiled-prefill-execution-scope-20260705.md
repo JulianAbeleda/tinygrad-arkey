@@ -458,3 +458,30 @@ Medium findings were also incorporated:
 - Route-clean evidence must either add trace regex/tests for named kernels or use emitted WMMA artifacts plus forbidden
   default-kernel absence when pure Tensor descriptors do not become `KernelInfo` names.
 - Small-M synthetic tests are emitter gates, not real route-binding tests unless `PREFILL_DIRECT_REQUIRE_UBATCH=0` is set.
+
+## Implementation Status
+
+Implemented after this scope:
+
+- `prefill_q4k_int8_wmma_tiled_research` manifest row.
+- `quant_linear_prefill.q4k_int8_wmma_tiled_substrate` generated candidate.
+- `Q4KInt8WMMATiledPrefillSpec`.
+- Explicit `PREFILL_Q4K_Q8` mode validation.
+- `PREFILL_Q4K_Q8=wmma_tiled` route branch that either runs the one-tile emitter or raises a clear no-fallthrough
+  error for full route shapes.
+- `q4k_wmma_tiled_lowering_feasibility` gate:
+  `Q4K_WMMA_TILED_LOWERING_FEASIBLE`.
+- `q4k_wmma_tiled_microgate`:
+  `Q4K_WMMA_TILED_MICROGATE_PASS`.
+- `q4k_wmma_tiled_role_shape`:
+  `Q4K_WMMA_TILED_ROLE_SHAPES_BLOCKED_FULL_ROUTE`.
+- `generated_q4k_prefill_e2e` multi-verdict:
+  `GENERATED_Q4K_PREFILL_E2E_TILED_BLOCKED_FULL_ROUTE`.
+
+Remaining blocker:
+
+- Direct tiled full-role lowering is missing. The working one-tile path still delegates to the Tensor WMMA oracle and is
+  only valid when `m <= m_tile`, `n <= n_tile`, and `group_tile == groups`.
+- A full 14B route cannot be completed by looping/cat-ing many Tensor tiles; that recreates the graph-expansion class
+  of failure. The next implementation must be scheduler/codegen-owned tiling or a declarative generated WMMA lowering
+  with route-local WMMA source/asm forbidden.

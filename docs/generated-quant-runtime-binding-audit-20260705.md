@@ -20,7 +20,7 @@ This is an audit and ownership map. It is not a route promotion gate yet.
 
 | Classification | Count | Meaning |
 | --- | ---: | --- |
-| `allowed.generated` | 9 | Machine-authored or tinygrad scheduler generated provenance. |
+| `allowed.generated` | 10 | Machine-authored or tinygrad scheduler generated provenance. |
 | `transitional.hand_authored_uop` | 4 | Hand-authored UOp templates that need generated descriptor ownership before final promotion. |
 | `banned.not_default_but_reachable_or_ledgered` | 4 | External handwritten kernels or rollback oracles that are not acceptable as default generated routes. |
 
