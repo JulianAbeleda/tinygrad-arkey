@@ -233,11 +233,12 @@ def _time_prefill(model:Any, chunk:Tensor, start_pos:int, temp:Tensor, repeats:i
 
 
 def _profile_prefill(model:Any, chunk:Tensor, start_pos:int, temp:Tensor) -> dict[str, dict[str, Any]]:
-  model(chunk, start_pos, temp).realize()
+  # Env PROFILE=1 captures individual ProfileRangeEvents on the eager forward path. The TinyJit __call__ path can
+  # collapse into an opaque graph event and leave no kernel rows for attribution.
+  model.forward(chunk, start_pos, temp).realize()
   Device["AMD"].synchronize()
-  program_events = [e for e in Compiled.profile_events if type(e).__name__ == "ProfileProgramEvent"]
-  Compiled.profile_events = program_events
-  model(chunk, start_pos, temp).realize()
+  Compiled.profile_events = []
+  model.forward(chunk, start_pos, temp).realize()
   Device["AMD"].synchronize()
   out = _profile_events()
   for name, counters in _pmc_by_program().items():
@@ -316,7 +317,7 @@ def _whole_row(args:argparse.Namespace, wall_us:float, total_bytes:float, launch
     "scope": "whole_step",
     "context": args.context,
     "wall_us": wall_us,
-    "tok_s": args.context / wall_us * 1e6,
+    "tok_s": args.context / wall_us * 1e6 if wall_us > 0 else 0.0,
     "total_bytes": total_bytes,
     "launch_count": launch_count,
     "time_source": "synced_min_of_bursts" if args.mode in ("timing", "full") else "profile_event_sum",
@@ -337,6 +338,7 @@ def build_trace(args:argparse.Namespace) -> dict[str, Any]:
   chunk_timings = []
   chunk_rows = []
   profile_raw_total_us = 0.0
+  profile_empty_chunks = []
   for start_pos in range(0, args.context, args.chunk):
     if args.mode in ("timing", "full"):
       wall_us = _time_prefill(model, chunk, start_pos, temp, args.repeats)
@@ -345,10 +347,14 @@ def build_trace(args:argparse.Namespace) -> dict[str, Any]:
       per_kernel = _profile_prefill(model, chunk, start_pos, temp)
       profile_wall_us = float(sum(v["raw_wall_us"] for v in per_kernel.values()))
       profile_raw_total_us += profile_wall_us
+      if profile_wall_us <= 0:
+        profile_empty_chunks.append(start_pos)
       if args.mode == "profile":
         wall_us = profile_wall_us
-        chunk_timings.append({"start_pos": start_pos, "wall_us": wall_us, "tok_s": args.chunk / wall_us * 1e6})
-      chunk_rows.extend(_build_rows(args.context, wall_us, per_kernel, role_by_shape, bytes_by_role, chunk_start=start_pos))
+        chunk_timings.append({"start_pos": start_pos, "wall_us": wall_us,
+                              "tok_s": args.chunk / wall_us * 1e6 if wall_us > 0 else 0.0})
+      if profile_wall_us > 0:
+        chunk_rows.extend(_build_rows(args.context, wall_us, per_kernel, role_by_shape, bytes_by_role, chunk_start=start_pos))
   dev.synchronize()
   kernel_rows = _merge_kernel_rows(chunk_rows)
   wall_us = sum(float(r["wall_us"]) for r in chunk_timings)
@@ -381,6 +387,7 @@ def build_trace(args:argparse.Namespace) -> dict[str, Any]:
                                                      "PREFILL_DIRECT_B_UPCAST", "PREFILL_DIRECT_OUT",
                                                      "PREFILL_Q4K_Q8", "PROFILE", "PMC", "PMC_COUNTERS")},
       "profile_raw_total_us": profile_raw_total_us,
+      "profile_empty_chunks": profile_empty_chunks,
       "role_inventory_count": len(bytes_by_role),
     },
     "notes": [
