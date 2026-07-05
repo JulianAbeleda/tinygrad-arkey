@@ -665,7 +665,16 @@ class Transformer:
     # config-fixed so this is computable at init from the (pre-primitive) nn.Linears. A kernel whose key is
     # absent (e.g. a silu-fused gate) keeps the heuristic; a key that applies-then-errors falls back too
     # (postrange.py). NOT set into the global here -- installed only around the prefill-v2 forward (__call__).
-    return {(frozenset({out_f, PREFILL_UBATCH}), in_f): _prefill_v2_opts(out_f, in_f)
+    # Track-1: a frozen offline schedule table (extra/qk/prefill_v2_schedule_search.py) overrides the static
+    # heuristic per shape when present -- it adds the LOCAL opt the heuristic omits (measured up-to-3x on
+    # LOCAL-starved shapes). Absent/unreadable table -> pure static fallback (zero behavior change).
+    try:
+      from extra.qk.prefill_v2_schedule_search import load_table
+      _table = load_table()
+    except Exception:
+      _table = {}
+    def _opts(out_f, in_f): return _table.get((out_f, in_f)) or _prefill_v2_opts(out_f, in_f)
+    return {(frozenset({out_f, PREFILL_UBATCH}), in_f): _opts(out_f, in_f)
             for _, out_f, in_f in self._prefill_v2_covered()}
 
   def realize_prefill_v2_weights(self) -> int:
