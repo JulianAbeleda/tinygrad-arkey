@@ -8,6 +8,23 @@ Companion measured context: `docs/prefill-packed-generated-tile-scope-20260704.m
 (2026-07-05 sections: the VALU ceiling, the fp16 memory wall, the llama-int8-MMQ trace, the scoreboard).
 
 --------------------------------------------------------------------------------
+## PROGRESS (2026-07-05, branch int8-wmma-vocab; GPU-free pieces validated)
+- **int8 MMQ math VALIDATED (numpy, CPU):** rel_rmse 4.8e-3 vs fp32 ref (int8-activation-quant error only,
+  int32 range safe). llama's Q4_K decomposition confirmed: `W=d*sc*q4-dmin*mn`; quantize activations per-32-group
+  to int8 (xq,xsc,xsum); `DOT=sum_{k in g} q4*xq` (int32); `out=sum_g(d*sc*xsc*DOT - dmin*mn*xsc*xsum)`. The
+  primitive is now a TRANSCRIPTION, not a research question. Repro: scratchpad/q4k_int8_mmq_math.py.
+- **iu8 tensor core ADDED to vocab (tc.py + cstyle.py), CPU-verified:** first int8 TC in tinygrad;
+  `(dtypes.char, dtypes.int)` in amd_rdna3 (same 16x16x16/32-thread/swizzle as fp16; lane_map.validate() passes).
+  Renderer wrapper around `__builtin_amdgcn_wmma_i32_16x16x16_iu8_w32` (char16->int4 pack, signed*signed --
+  reuse the value-validated `_sdot4` signedness). Build imports, descriptor validates in-list. Committed WIP.
+- **LDS input-staging (Track 2A) is REUSABLE for iu8** -- it stages any WMMA operand (reads fragment axes
+  dynamically); the int8 MMQ tile staging (llama's shared-mem tiles) inherits it once milestone-2 (partition) lands.
+- REMAINING (GPU-gated): (a) confirm an int8 matmul tensorizes to iu8 WMMA + correct numerics on AMD
+  (scratchpad/iu8_wmma_test.py -- verify the intrinsic signedness bools + char16->int4 pack; NEVER trust
+  DEV=PYTHON::gfx1100, it false-positives); (b) transcribe the int8 Q4_K primitive (unpack nibbles->int8,
+  quantize activations->Q8_1 int8, reduce int32, per-group scale/min correction) so its int8 dot tensorizes;
+  (c) apply the LDS-staging; (d) wire the route + measure pp512 vs 365 baseline and vs llama 1849.
+
 ## 0. One-paragraph summary
 
 llama.cpp does 14B Q4_K prefill at 1849 tok/s (vs our 365) with **MMQ**: everything stays quantized —
