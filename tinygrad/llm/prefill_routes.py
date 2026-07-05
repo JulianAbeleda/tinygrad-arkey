@@ -206,7 +206,16 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
                                                   name="prefill_q4k_q8_1_sdot4_direct_packed_gemm"))[0]
           return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
       if q8_mode == "wmma":
-        wmma_spec = qk_ops.describe_q4k_int8_wmma_prefill(spec.n, spec.k, spec.m, role=role)
+        wmma_spec = qk_ops.describe_q4k_int8_wmma_prefill(spec.n, spec.k, spec.m, role=role,
+                                                          n_tile=max(16, int(_env("PREFILL_Q4K_WMMA_N_TILE", 256))))
+        raw_elems = wmma_spec.groups * wmma_spec.m * wmma_spec.n
+        raw_limit = int(_env("PREFILL_Q4K_WMMA_MAX_RAW_ELEMS", 64 * 1024 * 1024))
+        if raw_elems > raw_limit and not bool(_env("PREFILL_Q4K_WMMA_ALLOW_GRAPH_EXPLOSION", 0)):
+          raise RuntimeError(f"PREFILL_Q4K_Q8=wmma Tensor-substrate blocked for full-model shape "
+                             f"role={role or '?'} m={spec.m} n={spec.n} k={spec.k}: RAW groups*m*n={raw_elems} "
+                             f"> limit={raw_limit}. This parity/codegen substrate is correct, but 14B authority "
+                             f"needs the next fused/tiled generated emitter, not many Tensor matmul graph fragments. "
+                             f"Set PREFILL_Q4K_WMMA_ALLOW_GRAPH_EXPLOSION=1 only for debugging.")
         out = qk_ops.emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec)
         return out.reshape(1, spec.m, spec.n)
       out = partials.custom_kernel(words, xq, xscales,

@@ -141,3 +141,29 @@ Promotion gate:
 - The existing `sdot4/mmq` routes are scalar dot4/cooperative UOp templates, not a true tiled WMMA substrate.
 - The existing generated packed tile route was refuted and should be treated as topology evidence, not reused as the math path.
 - The grouped Q4_K correction may prevent tinygrad from seeing a clean int8 matmul. The scope therefore requires an isolated int8 matmul gate before attempting the fused Q4_K emitter.
+
+## Phase 2 Result
+
+Implemented in `60d020db0` plus the follow-up vectorized substrate work:
+
+- `Q4KInt8WMMAPrefillSpec` exists.
+- `PREFILL_Q4K_Q8=wmma` is wired default-off.
+- `prefill_mmq_parity_gate.py` validates `wmma_generated` against the same q8-dequant reference as `sdot4/mmq`.
+- `int8_wmma_codegen_gate.py` proves ordinary `Tensor.matmul(..., dtype=dtypes.int)` emits `wmma_i32_16x16x16_iu8` and matches int32 reference on AMD.
+
+14B smoke outcome:
+
+- Naive group-loop Tensor emitter: no timing within the smoke ceiling; CPU-bound compile/capture explosion.
+- Vectorized grouped Tensor emitter: algebraically correct and lower-memory on synthetic shapes, but full 14B smoke still does not reach a timing result within the ceiling.
+- Untiled vectorized full shape also hit AMD OOM at `Used: 23.84 GB` while allocating a 25 MB buffer, because the lazy graph keeps large RAW/correction intermediates live.
+
+Current guard:
+
+- `PREFILL_Q4K_Q8=wmma` now fails fast for full-model RAW shapes above `PREFILL_Q4K_WMMA_MAX_RAW_ELEMS` unless `PREFILL_Q4K_WMMA_ALLOW_GRAPH_EXPLOSION=1`.
+- This keeps the route useful for parity/codegen probes and prevents accidental indefinite 14B authorities.
+
+Next required implementation:
+
+- A single fused/tiled generated emitter that streams over N/group tiles inside one generated kernel or equivalent scheduler-owned lowering.
+- It must not build one lazy Tensor matmul fragment per tile/group and then concatenate them.
+- It must bound live RAW storage and preserve the int8 dot as a codegen-lowered iu8 WMMA operation.
