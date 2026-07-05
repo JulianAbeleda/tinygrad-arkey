@@ -282,3 +282,25 @@ def emit_q4k_int8_wmma_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
       scaled_min = qsum.reshape(spec.m, 1) * (dmin * mn.cast(dtypes.float32)).reshape(1, spec.n)
       out = out + xscale.reshape(spec.m, 1) * (scaled_raw - scaled_min)
   return out.contiguous()
+
+
+def emit_q4k_int8_wmma_tiled_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
+                                            spec:Q4KInt8WMMATiledPrefillSpec) -> Tensor:
+  """One-tile Q4_K/Q8_1 WMMA correctness emitter.
+
+  This is the Phase-2 bounded microgate implementation, not the full 14B route. It only accepts a single output tile
+  and requires `group_tile == groups`, so the live RAW tensor is exactly the declared bounded tile. Full role shapes
+  must use the later direct tiled lowering instead of falling back to this wrapper.
+  """
+  spec.validate()
+  if spec.m > spec.m_tile or spec.n > spec.n_tile:
+    raise NotImplementedError(f"wmma_tiled one-tile emitter requires m<=m_tile and n<=n_tile, got "
+                              f"m={spec.m} n={spec.n} tile={spec.m_tile}x{spec.n_tile}")
+  if spec.group_tile != spec.groups:
+    raise NotImplementedError(f"wmma_tiled one-tile emitter requires group_tile==groups for now, got "
+                              f"group_tile={spec.group_tile} groups={spec.groups}")
+  wmma_spec = Q4KInt8WMMAPrefillSpec(n=spec.n, k=spec.k, m=spec.m, role=spec.role, group_elems=spec.group_elems,
+                                    wmma_m=spec.wmma_m, wmma_n=spec.wmma_n, wmma_k=spec.wmma_k,
+                                    n_tile=spec.n_tile, target=spec.target)
+  wmma_spec.validate()
+  return emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec, vectorized=True)

@@ -254,10 +254,14 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
           m_tile=max(16, int(_env("PREFILL_Q4K_WMMA_TILED_M_TILE", 16))),
           n_tile=max(16, int(_env("PREFILL_Q4K_WMMA_TILED_N_TILE", 16))),
           group_tile=max(1, int(_env("PREFILL_Q4K_WMMA_TILED_GROUP_TILE", 1))))
-        raise RuntimeError(f"PREFILL_Q4K_Q8=wmma_tiled is scoped but not implemented yet for "
-                           f"role={role or '?'} m={spec.m} n={spec.n} k={spec.k}; "
-                           f"planned kernel={tiled_spec.kernel_name} live_raw_elems={tiled_spec.live_raw_elems}. "
-                           f"This explicit stop prevents fallthrough to the default Q4_K/Q8_1 GEMM route.")
+        try:
+          out = qk_ops.emit_q4k_int8_wmma_tiled_prefill_tensor(words, xq, xscales, tiled_spec)
+        except NotImplementedError as e:
+          raise RuntimeError(f"PREFILL_Q4K_Q8=wmma_tiled is not implemented for full route shape "
+                             f"role={role or '?'} m={spec.m} n={spec.n} k={spec.k}; "
+                             f"planned kernel={tiled_spec.kernel_name} live_raw_elems={tiled_spec.live_raw_elems}. "
+                             f"This explicit stop prevents fallthrough to the default Q4_K/Q8_1 GEMM route.") from e
+        return out.reshape(1, spec.m, spec.n)
       out = partials.custom_kernel(words, xq, xscales,
         fxn=qk_ops.q4k_q8_1_gemm_kernel(spec.n, spec.k, spec.m, parts, "prefill", opts,
                                         name="prefill_q4k_q8_1_direct_packed_gemm"))[0]
