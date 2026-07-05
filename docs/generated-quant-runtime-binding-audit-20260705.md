@@ -45,6 +45,26 @@ Default debt:
 
 Unknown binding findings: none in the scanned scope.
 
+## Candidate Registry
+
+The audit now validates the generated candidate registry in `tinygrad/llm/generated_candidates.py`.
+
+| Registry check | Result |
+| --- | ---: |
+| Registered generated candidates | 5 |
+| Non-generated candidates | 0 |
+| Candidates pointing at unknown route ids | 0 |
+
+Initial registered candidates:
+
+| Candidate | Route |
+| --- | --- |
+| `quant_linear_prefill.prefill_pipe_role_selective_generated` | `prefill_pipe_role_selective_generated` |
+| `quant_linear_prefill.q4k_int8_wmma_tensor_substrate` | `prefill_q4k_int8_wmma_generated_research` |
+| `quant_linear_decode.q4k_g3_lanemap` | `decode_q4k_g3_generated` |
+| `quant_linear_decode.q6k_generated_coop` | `decode_q6k_coop_generated` |
+| `attention_decode.live_split_flash` | `decode_flash_live_split_g4_8b_kvboth` |
+
 ## Interpretation
 
 The audit confirms the immediate blocker for the 14B path is not missing route discovery. The blocker is ownership:
@@ -57,9 +77,18 @@ candidate path.
 
 No new Q4_K route branches should be added before the descriptor/candidate layer exists.
 
-## Next Phase
+## Current Architecture State
 
-1. Add descriptor types in `tinygrad/llm/runtime_specs.py` for quant layouts, tile geometry, lowering provenance,
-   and candidate metadata.
-2. Register current generated and transitional routes through those descriptors without changing runtime behavior.
-3. Convert this audit into a descriptor validation gate so promoted defaults require generated ownership.
+Implemented:
+
+1. Descriptor types in `tinygrad/llm/runtime_specs.py` for quantized tensors, activation quantization, runtime ops, and
+   generated candidates.
+2. Quant format descriptors in `tinygrad/llm/quant_specs.py` for Q4_K, Q6_K, and Q8_1.
+3. Generated candidate registry in `tinygrad/llm/generated_candidates.py`.
+4. Prefill direct-packed route analysis can emit a `RuntimeOpSpec` without changing route behavior.
+5. The audit gate validates candidate provenance and route-id references.
+
+Remaining:
+
+1. `prefill_q4k_direct_tile4x4_default` is still transitional default debt.
+2. Q4_K prefill promotion still needs route-bound correctness and 14B authority for a generated MMQ candidate.

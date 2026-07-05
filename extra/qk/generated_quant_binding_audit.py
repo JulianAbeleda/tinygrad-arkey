@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from extra.qk import route_manifest
+from tinygrad.llm.generated_candidates import builtin_registry
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCAN_FILES = (
@@ -142,20 +143,39 @@ def summarize(routes:list[dict[str, Any]], bindings:list[dict[str, Any]]) -> dic
           "unknown_bindings": [b for b in bindings if str(b["kind"]).startswith("unknown.")]}
 
 
+def candidate_rows() -> list[dict[str, Any]]:
+  rows = []
+  for c in builtin_registry().all():
+    route_known = bool(c.route_id and c.route_id in route_manifest.ROUTES)
+    rows.append(c.to_json() | {"generated_only": c.is_generated_only, "route_known": route_known})
+  return rows
+
+
+def summarize_candidates(candidates:list[dict[str, Any]]) -> dict[str, Any]:
+  return {"count": len(candidates),
+          "non_generated": [c["candidate_id"] for c in candidates if not c["generated_only"]],
+          "unknown_routes": [c["candidate_id"] for c in candidates if c.get("route_id") and not c["route_known"]]}
+
+
 def build() -> dict[str, Any]:
   routes = route_rows()
   bindings = scan_bindings()
+  candidates = candidate_rows()
   summary = summarize(routes, bindings)
-  verdict = "GENERATED_QUANT_BINDING_AUDIT_READY"
+  summary["candidates"] = summarize_candidates(candidates)
+  cand_summary = summary["candidates"]
+  verdict = "GENERATED_QUANT_BINDING_AUDIT_READY" if not cand_summary["non_generated"] and not cand_summary["unknown_routes"] \
+    else "GENERATED_QUANT_BINDING_AUDIT_FAIL"
   return {"schema": "generated_quant_binding_audit.v1",
-          "scope": "Phase 1 route/binding provenance inventory for generated quant runtime",
+          "scope": "Route/binding provenance plus generated candidate descriptor audit for generated quant runtime",
           "verdict": verdict,
           "scan_files": list(SCAN_FILES),
           "summary": summary,
           "routes": routes,
+          "candidates": candidates,
           "bindings": bindings,
-          "next": ["convert this inventory into RuntimeOpSpec/GeneratedCandidate descriptors",
-                   "resolve unknown bindings before promoting any new optimized route",
+          "next": ["use RuntimeOpSpec/GeneratedCandidate descriptors as the promotion boundary",
+                   "resolve or explicitly classify default debt before final default purity can pass",
                    "do not add new Q4_K-specific route branches outside the candidate model"]}
 
 

@@ -142,3 +142,17 @@ def test_prefill_q4k_q8_wmma_flag_is_valid_route_env():
   from tinygrad.llm.prefill_routes import prefill_route_policy
   os.environ["PREFILL_Q4K_Q8"] = "wmma"
   assert prefill_route_policy() == "auto"
+
+
+def test_direct_packed_route_spec_exports_runtime_op_spec():
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec
+  q4 = PrefillLinearRouteSpec("direct_packed", "q4k", "ffn_gate_up", 512, 17408, 5120).runtime_op_spec()
+  assert q4.family == "QuantizedLinear"
+  assert q4.phase == "prefill"
+  assert q4.role == "ffn_gate_up"
+  assert q4.weight.format == "Q4_K"
+  assert q4.activation.format == "fp16"
+  assert q4.shape == {"M": 512, "N": 17408, "K": 5120}
+  q6 = PrefillLinearRouteSpec("direct_packed", "q6k", "", 512, 5120, 17408).runtime_op_spec()
+  assert q6.role == "unknown"
+  assert q6.weight.format == "Q6_K"

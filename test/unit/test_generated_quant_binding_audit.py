@@ -33,6 +33,9 @@ def test_build_report_shape():
   out = audit.build()
   assert out["verdict"] == "GENERATED_QUANT_BINDING_AUDIT_READY"
   assert out["routes"]
+  assert out["candidates"]
   assert out["bindings"]
   assert "routes_by_classification" in out["summary"]
   assert "bindings_by_kind" in out["summary"]
+  assert out["summary"]["candidates"]["non_generated"] == []
+  assert out["summary"]["candidates"]["unknown_routes"] == []

@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from typing import Any
 from tinygrad import Tensor, dtypes
+from tinygrad.llm.quant_specs import activation_spec, quant_spec
+from tinygrad.llm.runtime_specs import RuntimeOpSpec
 from tinygrad.llm import route_ops as qk_ops
 
 PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed", "chunked")
@@ -137,6 +139,15 @@ class PrefillLinearRouteSpec:
   def q6k_kernel_prefix(self) -> str:
     suffix = "direct_packed_load" if bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)) else self.route
     return f"prefill_{self.quant.lower()}_{suffix}_gemm"
+
+  def runtime_op_spec(self, *, activation_format:str="fp16", lowering_strategy:str="packed_dequant_dot",
+                      device:str="unknown") -> RuntimeOpSpec:
+    qfmt = "Q4_K" if self.quant == "q4k" else "Q6_K" if self.quant == "q6k" else "unknown"
+    role = self.role if self.role else "unknown"
+    return RuntimeOpSpec("QuantizedLinear", "prefill", role, {"M": self.m, "N": self.n, "K": self.k},
+                         quant_spec(qfmt).tensor_spec(), activation_spec(activation_format).activation_spec(),
+                         lowering_strategy=lowering_strategy, device=device,
+                         route_id=f"prefill_{self.quant}_{self.route}")
 
 
 def _direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:

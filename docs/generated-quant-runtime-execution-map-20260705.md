@@ -95,6 +95,8 @@ Exit criteria:
 
 ## Phase 2: Descriptor Types
 
+Status 2026-07-05: implemented in `tinygrad/llm/runtime_specs.py`.
+
 Goal: add types only. No behavior changes.
 
 Target module:
@@ -131,6 +133,9 @@ Exit criteria:
 
 ## Phase 3: Build Specs In Existing Routes
 
+Status 2026-07-05: prefill direct-packed route analysis exports `RuntimeOpSpec` metadata through
+`PrefillLinearRouteSpec.runtime_op_spec(...)`; runtime behavior and defaults are unchanged.
+
 Goal: make route files describe the operation before selecting any implementation.
 
 First target:
@@ -154,6 +159,9 @@ Exit criteria:
 - Strict mode can report the op spec when no route binds.
 
 ## Phase 4: Generated Candidate Registry
+
+Status 2026-07-05: implemented in `tinygrad/llm/generated_candidates.py`; the audit gate validates generated-only
+provenance and route-id references.
 
 Goal: register generated candidates by op semantics, not by route-specific flags.
 
@@ -183,6 +191,8 @@ Exit criteria:
 - Candidate selection can be run without importing GPU/tinygrad-heavy modules.
 
 ## Phase 5: Quant Specs
+
+Status 2026-07-05: implemented in `tinygrad/llm/quant_specs.py` for Q4_K, Q6_K, and Q8_1.
 
 Goal: move Q4_K/Q6_K properties out of route logic into reusable descriptors.
 
