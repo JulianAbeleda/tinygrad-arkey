@@ -19,13 +19,19 @@ it measures nothing itself — to the two sanctioned authorities:
 `prefill-bench-authority-not-ttft`. For a per-kernel A/B (not whole-model throughput) the shared
 loop is `time_fn` (see plan item 1) — still do not clone a `synchronize()+perf_counter()+median`.
 
-## Ten harness jobs, one owner each (target)
+**Prefill process policy** lives in `extra/qk/prefill_harness.py`. It owns the sanctioned
+`authority` and `smoke` profiles, CSV parsing, subprocess env, and child argv construction.
+`bench.py` and `prefill_whole_synced.py` both consume that module; the timing loop itself remains
+inside `prefill_whole_synced.py`.
+
+## Harness jobs, one owner each (target)
 
 | Job | Canonical owner | Status |
 |---|---|---|
 | gate/probe → verdict → artifact → exit | `extra/qk/gate_registry.py` | DONE (consolidated) |
 | whole-model throughput | `extra/qk/bench.py` → the two authorities | DONE |
-| per-kernel timing loop | `harness_contract.time_fn` (to add) | PLANNED (item 1) |
+| prefill process profile/env/argv | `extra/qk/prefill_harness.py` | DONE |
+| per-kernel timing loop | `harness_contract.time_fn` | DONE |
 | eval/scoring (NLL + JSON) | `extra/llm/eval_common.py` + `json_scorer.py` | ok |
 | provenance / repro-band | `extra/qk/harness_contract.py` | ok |
 | GPU clock pinning | `extra/qk/clock_pin.py` | ok (2 idioms, justified) |

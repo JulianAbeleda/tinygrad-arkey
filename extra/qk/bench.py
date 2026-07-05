@@ -15,6 +15,7 @@ overhead + sampling + host jitter). In 2026-07 that mistake read 1247 tok/s for 
   DEV=AMD PYTHONPATH=. .venv/bin/python extra/qk/bench.py --model <gguf> --prefill --prefill-mode smoke
 """
 import os, sys, argparse, subprocess, pathlib
+from extra.qk.prefill_harness import PREFILL_MODES, csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -28,7 +29,7 @@ def main():
   ap.add_argument("--model", required=True, help="GGUF path")
   ap.add_argument("--prefill", action="store_true", help="prefill authority only")
   ap.add_argument("--decode", action="store_true", help="decode authority only")
-  ap.add_argument("--prefill-mode", choices=("authority", "smoke"), default="authority",
+  ap.add_argument("--prefill-mode", choices=PREFILL_MODES, default="authority",
                   help="prefill authority depth: full publishable sweep or short start_pos=0 smoke probe")
   ap.add_argument("--prefill-K", type=int, default=None, help="override prefill burst count")
   ap.add_argument("--prefill-warmups", type=int, default=None, help="override prefill warm/capture forwards")
@@ -38,11 +39,11 @@ def main():
   args = ap.parse_args()
   both = not (args.prefill or args.decode)
   if args.prefill or both:
-    prefill_argv = ["extra/qk/prefill_whole_synced.py", "--model", args.model, "--mode", args.prefill_mode]
-    for flag, val in (("-K", args.prefill_K), ("--warmups", args.prefill_warmups), ("--rounds", args.prefill_rounds),
-                      ("--start-positions", args.prefill_start_positions), ("--whole-lengths", args.prefill_whole_lengths)):
-      if val is not None: prefill_argv += [flag, str(val)]
-    _run("PREFILL pp@L", prefill_argv, {"PREFILL_V2": "1"}, label=args.prefill_mode)
+    profile = prefill_run_profile(args.prefill_mode, K=args.prefill_K, warmups=args.prefill_warmups,
+                                  rounds=args.prefill_rounds,
+                                  start_positions=csv_ints(args.prefill_start_positions) if args.prefill_start_positions else None,
+                                  whole_lengths=csv_ints(args.prefill_whole_lengths) if args.prefill_whole_lengths else None)
+    _run("PREFILL pp@L", prefill_authority_argv(args.model, profile), prefill_subprocess_env(), label=profile.mode)
   if args.decode or both:
     _run("DECODE W==D", ["extra/qk/decode_runtime_overhead.py"], {"QK_MODEL": args.model})
   print("\nCanonical harness numbers only. Do NOT report prefill/decode throughput from a generate-TTFT harness.")

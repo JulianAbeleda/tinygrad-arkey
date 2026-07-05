@@ -21,17 +21,8 @@ os.environ.setdefault("PREFILL_V2", "1")
 from tinygrad import Tensor, Device, TinyJit
 from extra.llm.generate import load_model_and_tokenizer
 from extra.qk.harness_contract import DEFAULT_MODEL
+from extra.qk.prefill_harness import PREFILL_MODES, csv_ints, prefill_run_profile
 from tinygrad.llm.model import PREFILL_GRAPH_GEMM
-
-AUTHORITY_START_POSITIONS = (0, 512, 1024, 2048, 3584)
-AUTHORITY_WHOLE_LENGTHS = (512, 1024, 2048, 4096)
-SMOKE_START_POSITIONS = (0,)
-SMOKE_WHOLE_LENGTHS = (512,)
-
-def _csv_ints(raw:str) -> tuple[int, ...]:
-  vals = tuple(int(x) for x in raw.replace(" ", "").split(",") if x)
-  if not vals: raise ValueError("expected at least one comma-separated integer")
-  return vals
 
 def prefill_authority(model_path:str=DEFAULT_MODEL, chunk_n:int=512, start_positions=(0, 512, 1024, 2048, 3584),
                       whole_lengths=(512, 1024, 2048, 4096), K:int=8, max_context:int=4608,
@@ -73,7 +64,7 @@ def prefill_authority(model_path:str=DEFAULT_MODEL, chunk_n:int=512, start_posit
 if __name__ == "__main__":
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--model", default=DEFAULT_MODEL, help="GGUF path (default: harness DEFAULT_MODEL)")
-  ap.add_argument("--mode", choices=("authority", "smoke"), default="authority",
+  ap.add_argument("--mode", choices=PREFILL_MODES, default="authority",
                   help="authority is publishable full sweep; smoke is one short start_pos=0 probe")
   ap.add_argument("-K", type=int, default=None, help="bursts to min over (default: 8 authority, 1 smoke)")
   ap.add_argument("--warmups", type=int, default=None, help="TinyJit warm/capture forwards per start position")
@@ -81,12 +72,9 @@ if __name__ == "__main__":
   ap.add_argument("--start-positions", default=None, help="comma-separated concrete start_pos values")
   ap.add_argument("--whole-lengths", default=None, help="comma-separated whole-prefill lengths to report")
   args = ap.parse_args()
-  smoke = args.mode == "smoke"
-  prefill_authority(model_path=args.model, K=args.K if args.K is not None else (1 if smoke else 8),
-                    warmups=(1 if smoke else 4) if args.warmups is None else args.warmups,
-                    rounds=(1 if smoke else 3) if args.rounds is None else args.rounds,
-                    start_positions=_csv_ints(args.start_positions) if args.start_positions else
-                                    (SMOKE_START_POSITIONS if smoke else AUTHORITY_START_POSITIONS),
-                    whole_lengths=_csv_ints(args.whole_lengths) if args.whole_lengths else
-                                  (SMOKE_WHOLE_LENGTHS if smoke else AUTHORITY_WHOLE_LENGTHS),
-                    mode=args.mode)
+  profile = prefill_run_profile(args.mode, K=args.K, warmups=args.warmups, rounds=args.rounds,
+                                start_positions=csv_ints(args.start_positions) if args.start_positions else None,
+                                whole_lengths=csv_ints(args.whole_lengths) if args.whole_lengths else None)
+  prefill_authority(model_path=args.model, K=profile.K, warmups=profile.warmups, rounds=profile.rounds,
+                    start_positions=profile.start_positions, whole_lengths=profile.whole_lengths,
+                    chunk_n=profile.chunk_n, max_context=profile.max_context, mode=profile.mode)
