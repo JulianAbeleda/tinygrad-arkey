@@ -68,8 +68,87 @@ class Q4KInt8WMMAPrefillSpec:
             "kernel_name": self.kernel_name}
 
 
+@dataclass(frozen=True)
+class Q4KInt8WMMATiledPrefillSpec:
+  n: int
+  k: int
+  m: int
+  role: str = ""
+  group_elems: int = Q8_1_BLOCK_ELEMS
+  wmma_m: int = 16
+  wmma_n: int = 16
+  wmma_k: int = 16
+  m_tile: int = 16
+  n_tile: int = 16
+  group_tile: int = 1
+  output_layout: str = "direct"
+  target: str = "amd_gfx1100"
+  implementation: str = "direct_tiled_wmma_v0"
+
+  @property
+  def k_blocks(self) -> int:
+    return self.k // Q4_K_BLOCK_ELEMS
+
+  @property
+  def groups_per_block(self) -> int:
+    return Q4_K_BLOCK_ELEMS // self.group_elems
+
+  @property
+  def groups(self) -> int:
+    return self.k // self.group_elems
+
+  @property
+  def live_raw_elems(self) -> int:
+    return self.m_tile * self.n_tile * self.group_tile
+
+  @property
+  def forbidden_full_raw_elems(self) -> int:
+    return self.groups * self.m * self.n
+
+  @property
+  def kernel_name(self) -> str:
+    role = f"_{self.role}" if self.role else ""
+    return f"prefill_q4k_q8_1_wmma_tiled_generated_gemm{role}_{self.n}_{self.k}_{self.m}_{self.m_tile}x{self.n_tile}x{self.group_tile}"
+
+  def validate(self) -> None:
+    if self.group_elems != Q8_1_BLOCK_ELEMS:
+      raise ValueError(f"group_elems must match Q8_1 block elems ({Q8_1_BLOCK_ELEMS}), got {self.group_elems}")
+    if self.k % Q4_K_BLOCK_ELEMS:
+      raise ValueError(f"k={self.k} must be a multiple of Q4_K block elems ({Q4_K_BLOCK_ELEMS})")
+    if self.m <= 0 or self.n <= 0 or self.k <= 0:
+      raise ValueError(f"invalid non-positive shape m={self.m} n={self.n} k={self.k}")
+    if self.m % self.wmma_m or self.n % self.wmma_n or self.group_elems % self.wmma_k:
+      raise ValueError(f"shape must align to WMMA tile ({self.wmma_m},{self.wmma_n},{self.wmma_k}), got m={self.m} n={self.n} group={self.group_elems}")
+    if self.m_tile <= 0 or self.n_tile <= 0 or self.group_tile <= 0:
+      raise ValueError(f"tile sizes must be positive, got m_tile={self.m_tile} n_tile={self.n_tile} group_tile={self.group_tile}")
+    if self.m_tile % self.wmma_m or self.n_tile % self.wmma_n:
+      raise ValueError(f"m_tile/n_tile must align to WMMA tile ({self.wmma_m},{self.wmma_n}), got {self.m_tile},{self.n_tile}")
+    if self.group_tile > self.groups:
+      raise ValueError(f"group_tile={self.group_tile} exceeds groups={self.groups}")
+    if self.output_layout != "direct":
+      raise ValueError(f"unsupported output_layout={self.output_layout!r}")
+    if self.implementation != "direct_tiled_wmma_v0":
+      raise ValueError(f"unsupported implementation={self.implementation!r}")
+
+  def to_json(self) -> dict[str, Any]:
+    return {"n": self.n, "k": self.k, "m": self.m, "role": self.role, "group_elems": self.group_elems,
+            "wmma_m": self.wmma_m, "wmma_n": self.wmma_n, "wmma_k": self.wmma_k, "m_tile": self.m_tile,
+            "n_tile": self.n_tile, "group_tile": self.group_tile, "output_layout": self.output_layout,
+            "target": self.target, "implementation": self.implementation, "groups": self.groups,
+            "k_blocks": self.k_blocks, "live_raw_elems": self.live_raw_elems,
+            "forbidden_full_raw_elems": self.forbidden_full_raw_elems, "kernel_name": self.kernel_name}
+
+
 def describe_q4k_int8_wmma_prefill(n:int, k:int, m:int, *, role:str="", n_tile:int=256) -> Q4KInt8WMMAPrefillSpec:
   spec = Q4KInt8WMMAPrefillSpec(n=n, k=k, m=m, role=role, n_tile=n_tile)
+  spec.validate()
+  return spec
+
+
+def describe_q4k_int8_wmma_tiled_prefill(n:int, k:int, m:int, *, role:str="", m_tile:int=16, n_tile:int=16,
+                                         group_tile:int=1) -> Q4KInt8WMMATiledPrefillSpec:
+  spec = Q4KInt8WMMATiledPrefillSpec(n=n, k=k, m=m, role=role, m_tile=m_tile, n_tile=n_tile,
+                                     group_tile=group_tile)
   spec.validate()
   return spec
 

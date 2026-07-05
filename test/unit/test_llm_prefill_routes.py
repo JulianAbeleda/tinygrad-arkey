@@ -15,7 +15,9 @@ def clean_prefill_route_env():
                                         "PREFILL_Q4K_Q8", "PREFILL_Q4K_DIRECT_OPTS",
                                         "PREFILL_Q4K_DIRECT_EXTRA_OPTS", "PREFILL_Q6K_DIRECT_OPTS",
                                         "PREFILL_Q6K_DIRECT_EXTRA_OPTS", "PREFILL_DIRECT_FFN_GATE_UP_OPTS",
-                                        "PREFILL_DIRECT_FFN_GATE_UP_EXTRA_OPTS", "PREFILL_Q4K_DIRECT_SCHEDULE")}
+                                        "PREFILL_DIRECT_FFN_GATE_UP_EXTRA_OPTS", "PREFILL_Q4K_DIRECT_SCHEDULE",
+                                        "PREFILL_Q4K_WMMA_TILED_M_TILE", "PREFILL_Q4K_WMMA_TILED_N_TILE",
+                                        "PREFILL_Q4K_WMMA_TILED_GROUP_TILE")}
   for k in old: os.environ.pop(k, None)
   yield
   for k, v in old.items():
@@ -133,21 +135,38 @@ def test_direct_packed_q4_opts_override_and_extra():
 
 
 def test_prefill_q4k_q8_flag_is_valid_route_env():
-  from tinygrad.llm.prefill_routes import prefill_route_policy
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
   os.environ["PREFILL_Q4K_Q8"] = "1"
   assert prefill_route_policy() == "auto"
+  assert prefill_q4k_q8_mode() == "gemm"
 
 
 def test_prefill_q4k_q8_wmma_flag_is_valid_route_env():
-  from tinygrad.llm.prefill_routes import prefill_route_policy
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
   os.environ["PREFILL_Q4K_Q8"] = "wmma"
   assert prefill_route_policy() == "auto"
+  assert prefill_q4k_q8_mode() == "wmma"
 
 
 def test_prefill_q4k_q8_mmq_direct_flag_is_valid_route_env():
-  from tinygrad.llm.prefill_routes import prefill_route_policy
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
   os.environ["PREFILL_Q4K_Q8"] = "mmq_direct"
   assert prefill_route_policy() == "auto"
+  assert prefill_q4k_q8_mode() == "mmq_direct"
+
+
+def test_prefill_q4k_q8_wmma_tiled_flag_is_valid_but_explicit():
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
+  os.environ["PREFILL_Q4K_Q8"] = "wmma_tiled"
+  assert prefill_route_policy() == "auto"
+  assert prefill_q4k_q8_mode() == "wmma_tiled"
+
+
+def test_prefill_q4k_q8_rejects_unknown_mode():
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
+  os.environ["PREFILL_Q4K_Q8"] = "surprise_tensorcore"
+  with pytest.raises(ValueError, match="PREFILL_Q4K_Q8"):
+    prefill_q4k_q8_mode()
 
 
 def test_direct_packed_route_spec_exports_runtime_op_spec():

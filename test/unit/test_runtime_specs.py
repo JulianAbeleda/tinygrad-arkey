@@ -40,6 +40,15 @@ def test_builtin_registry_selects_wmma_and_blocks_unknown():
   assert blocked.candidate is None
 
 
+def test_builtin_registry_selects_wmma_tiled_candidate():
+  op = RuntimeOpSpec("QuantizedLinear", "prefill", "ffn_down", {"M": 512, "N": 5120, "K": 17408},
+                     quant_spec("Q4_K").tensor_spec(), activation_spec("Q8_1").activation_spec(),
+                     lowering_strategy="iu8_wmma_tiled_grouped_dot")
+  selected = select_generated_candidate(op, preferred=("quant_linear_prefill.q4k_int8_wmma_tiled_substrate",))
+  assert selected.status == "selected"
+  assert selected.candidate and selected.candidate.route_id == "prefill_q4k_int8_wmma_tiled_research"
+
+
 def test_quant_specs_are_data_descriptors():
   q4 = quant_spec("Q4_K")
   assert q4.block_size == 256

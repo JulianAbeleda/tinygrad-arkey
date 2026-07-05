@@ -9,6 +9,7 @@ from tinygrad.llm.runtime_specs import RuntimeOpSpec
 from tinygrad.llm import route_ops as qk_ops
 
 PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed", "chunked")
+Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "1", "q8", "gemm", "mmq", "mmq_direct", "mmq_direct_out", "sdot4", "wmma", "wmma_tiled")
 
 
 def _env(key:str, default:Any=0) -> Any:
@@ -26,6 +27,16 @@ def prefill_route_policy() -> str:
 
 def prefill_route_strict() -> bool:
   return bool(_env("PREFILL_ROUTE_STRICT", _env("QK_GENERATED_POLICY_STRICT", 0)))
+
+
+def prefill_q4k_q8_mode() -> str:
+  mode = str(os.environ.get("PREFILL_Q4K_Q8", "")).strip().lower()
+  if mode not in Q4K_Q8_CHOICES:
+    allowed = ", ".join(repr(x) for x in Q4K_Q8_CHOICES if x)
+    raise ValueError(f"PREFILL_Q4K_Q8 must be one of {allowed}, got {mode!r}")
+  if mode in ("", "0", "false", "off", "no"): return ""
+  if mode in ("1", "q8", "gemm"): return "gemm"
+  return mode
 
 
 def _is_q4k_linear(lin) -> bool: return hasattr(lin, "q4k_storage") and hasattr(lin, "prefill_packed_weight")
@@ -195,8 +206,8 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
           out = tile_partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
             fxn=qk_ops.emit_q4k_packed_prefill_tile(tile_spec))[0]
           return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
-    q8_mode = str(os.environ.get("PREFILL_Q4K_Q8", "")).strip().lower()
-    if q8_mode and q8_mode not in ("0", "false", "off", "no"):
+    q8_mode = prefill_q4k_q8_mode()
+    if q8_mode:
       xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
       if q8_mode == "mmq":
         xq_words = Tensor.empty(xq.numel() // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
@@ -237,6 +248,16 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
                              f"Set PREFILL_Q4K_WMMA_ALLOW_GRAPH_EXPLOSION=1 only for debugging.")
         out = qk_ops.emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec)
         return out.reshape(1, spec.m, spec.n)
+      if q8_mode == "wmma_tiled":
+        tiled_spec = qk_ops.describe_q4k_int8_wmma_tiled_prefill(
+          spec.n, spec.k, spec.m, role=role,
+          m_tile=max(16, int(_env("PREFILL_Q4K_WMMA_TILED_M_TILE", 16))),
+          n_tile=max(16, int(_env("PREFILL_Q4K_WMMA_TILED_N_TILE", 16))),
+          group_tile=max(1, int(_env("PREFILL_Q4K_WMMA_TILED_GROUP_TILE", 1))))
+        raise RuntimeError(f"PREFILL_Q4K_Q8=wmma_tiled is scoped but not implemented yet for "
+                           f"role={role or '?'} m={spec.m} n={spec.n} k={spec.k}; "
+                           f"planned kernel={tiled_spec.kernel_name} live_raw_elems={tiled_spec.live_raw_elems}. "
+                           f"This explicit stop prevents fallthrough to the default Q4_K/Q8_1 GEMM route.")
       out = partials.custom_kernel(words, xq, xscales,
         fxn=qk_ops.q4k_q8_1_gemm_kernel(spec.n, spec.k, spec.m, parts, "prefill", opts,
                                         name="prefill_q4k_q8_1_direct_packed_gemm"))[0]

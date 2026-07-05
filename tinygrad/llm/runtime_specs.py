@@ -9,7 +9,7 @@ ROLES = ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv", "lm_head", "attention"
 QUANT_FORMATS = ("Q4_K", "Q6_K", "fp16", "fp8", "int8", "unknown")
 ACTIVATION_FORMATS = ("fp16", "fp32", "Q8_1", "none")
 LOWERING_STRATEGIES = (
-  "packed_dequant_dot", "grouped_int_dot_correction", "iu8_wmma_grouped_dot",
+  "packed_dequant_dot", "grouped_int_dot_correction", "iu8_wmma_grouped_dot", "iu8_wmma_tiled_grouped_dot",
   "online_softmax_flash", "tinygrad_scheduler", "unknown",
 )
 PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated", "banned", "unknown")

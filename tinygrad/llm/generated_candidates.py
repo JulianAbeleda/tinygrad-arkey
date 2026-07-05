@@ -63,6 +63,17 @@ BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
     required_codegen_features=("wmma_i32_16x16x16_iu8",),
     authority_gates=("extra/qk/prefill_mmq_parity_gate.py", "extra/qk/int8_wmma_codegen_gate.py")),
   GeneratedCandidate(
+    candidate_id="quant_linear_prefill.q4k_int8_wmma_tiled_substrate",
+    op_family="QuantizedLinear", supported_quant_formats=("Q4_K",),
+    supported_activation_formats=("Q8_1",), phases=("prefill",),
+    roles=("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv"),
+    lowering_strategy="iu8_wmma_tiled_grouped_dot", provenance="machine_authored_generated",
+    route_id="prefill_q4k_int8_wmma_tiled_research", search_space_id="q4k_int8_wmma_tiled_prefill",
+    required_codegen_features=("wmma_i32_16x16x16_iu8",),
+    authority_gates=("extra/qk/q4k_wmma_tiled_lowering_feasibility.py",
+                     "extra/qk/q4k_wmma_tiled_microgate.py",
+                     "extra/qk/q4k_wmma_tiled_role_shape_gate.py")),
+  GeneratedCandidate(
     candidate_id="quant_linear_decode.q4k_g3_lanemap",
     op_family="QuantizedLinear", supported_quant_formats=("Q4_K",),
     supported_activation_formats=("fp16",), phases=("decode",),
