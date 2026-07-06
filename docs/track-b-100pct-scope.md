@@ -84,6 +84,43 @@ targeting as a mode (default full-drain unchanged). Centralize simm16 packing in
 | L6.5 | carry pending loads across the loop backedge (the overlap-enabler); full-drain only if a store is outstanding | `amd.py:775` |
 Gate: bit-exact vs full-drain on `DEV=PYTHON`, then TFLOPS lift on AMD; disassembly shows `vmcnt(LPB)`-style waits.
 
+## L4a — `operand_staging_policy`: the centralized REGISTER-vs-LDS router
+The operand-staging fork is NOT 8B-vs-14B — it is a property of each operand, decided by ONE reusable module.
+This dissolves the "B1 forks" problem: both paths exist behind a single policy; the caller never hardcodes a mode.
+
+**Criterion (the indicators, as a predicate):** an operand routes to **LDS** iff it is a *computed* operand with
+intra-workgroup reuse — i.e. producing it costs more than an LDS read, and it is reused > 1×:
+```
+operand_staging_policy(operand, reuse_factor, override=None) -> REGISTER | LDS:
+  if override is not None: return override                 # env escape hatch (testing/forcing)
+  if reuse_factor <= 1:   return REGISTER                  # decode / M==1: LDS never amortizes
+  return LDS if _production_cost(operand) > THRESHOLD else REGISTER   # THRESHOLD~2 (dequant~8-12 vs cast~1)
+
+_production_cost(operand) = # of non-trivial ALU ops in operand.backward_slice up to its buffer load
+                            (INDEX/LOAD/CAST/BITCAST count ~0; unpack+scale/min dequant counts ~8-12)
+```
+**Inputs — all reuse existing signals (no new state):**
+- `operand` = `wmma.src[k]` at the `_tc_local_stage` decision point (`postrange.py:399-410`).
+- `reuse_factor` = the M-tile size (`BM`) for the B operand (N-tile for A) — from the Scheduler's LOCAL/UPCAST tiling.
+- The GPU×Model cause is ALREADY baked upstream: whether the operand is a plain load or a dequant is set by
+  `realize_prefill_v2_weights` / `prefill_route_wants_resident_fp16` (`model.py:690-699`) comparing fp16-weight bytes
+  to the VRAM budget. The policy only *reads* the resulting operand shape — it does not re-derive VRAM fit.
+- `override` = the existing `PREFILL_TC_LOCAL_STAGE=a/b/both/off` env becomes a test-only override, not the driver.
+
+**Indicator summary (what routes to LDS):** computed operand (dequant subgraph) — from quantized weights (Q4_K/Q6_K/Q8)
+that don't fit fp16-resident under the GPU VRAM budget — in a high-reuse (prefill M≫1) GEMM. Any of: plain fp16 load,
+fp16 fits VRAM, or reuse≤1 (decode) → REGISTER. Model/GPU/quant-format/operand agnostic (evaluates A and B
+independently → gives 14B's A=REGISTER / B=LDS automatically; a bigger GPU where 14B-fp16 fits → REGISTER for free).
+
+**Centralize / reuse / no-dup:** ONE module, the sole decider. `_tc_local_stage_wmma_sources` calls it per operand
+instead of reading the env mode. Any code asking "is operand k LDS-staged?" reads the same function. No per-model
+branching anywhere; the two downstream paths are:
+- **REGISTER** → B0's fragment regalloc feeds the WMMA directly (the `build_gemm_pipe`-shape; 8B fp16, decode).
+- **LDS** → the `bufferize(LOCAL)` B-tile + double-buffer, which REQUIRES the `amd.py:708` mem-order refinement so
+  disjoint double-buffer slots don't serialize (the `build_gemm_lds2`-shape; 14B dequant, any quantized prefill).
+So the `amd.py:708` fix is not "14B-specific work" — it is the enabler of the LDS path the policy selects, exercised
+whenever any operand is computed. B0 stays fully shared.
+
 ## L4 — software-pipelined double-buffer (NO new modulo pass — recommended)
 Reuse: the existing `_schedule` list scheduler (`amd.py:676`) already front-loads height-200 loads; the existing
 DBUF unroll-by-2 peel (`postrange.py:521-539`) already emits two K-copies in one block. Overlap = (front-loaded loads)
@@ -144,9 +181,9 @@ concerns, not the author's. Ceiling ~23 TFLOPS (decode-VALU-bound) → win is es
 # Net new surface (the no-duplication payoff)
 Everything else reuses/extends existing code. Total NEW surface across all of Track B:
 - **B0:** ONE module-local helper `_frag_base` (centralized contiguous-VGPR allocator, mirrors `_accum_pin`/`_lds_byte_offset`); FOUR `AMDOps` (`V_WMMA`, `GLOBAL_LOAD_B128`, `DS_LOAD_B128`, `DS_STORE_B128` — each non-redundant, routed through the existing isel/lower dispatch); ONE isel rule (`isel_wmma`); ONE attribute (`tensor_cores = amd_rdna3`, pure reuse of the shared tc descriptor). ZERO new encoders, ZERO changes to `regalloc.py`/`elf.py`/`ins.py`, ZERO imports from `wmma.py`.
-- **B1:** ONE staticmethod `_waitcnt_simm16` (centralizes the packing; all emit sites route through it); `_insert_waitcnt` extended in place (set→ordered-list); ONE `_sched_lat` line (`v_wmma`→16). NO new waitcnt pass, NO new scheduler.
+- **B1:** ONE staticmethod `_waitcnt_simm16` (centralizes the packing; all emit sites route through it); `_insert_waitcnt` extended in place (set→ordered-list); ONE `_sched_lat` line (`v_wmma`→16); ONE `operand_staging_policy` module (the sole REGISTER-vs-LDS router, replaces the manual `PREFILL_TC_LOCAL_STAGE` env); ONE `amd.py:708` mem-order refinement (enables the LDS double-buffer path the policy selects). NO new waitcnt pass, NO new scheduler, NO per-model branching.
 - **14B:** ONE thin index adapter calling the EXISTING `_q4k_weight` decode verbatim (+`.cast(f16)`); ONE generated route replacing the `Ops.INS` call. ZERO new dequant math, ZERO new LDS-staging/residency code.
-Centralized single-source-of-truth helpers: `_frag_base` (fragment ranges), `_waitcnt_simm16` (wait packing), `_q4k_weight` (Q4_K decode — shared by VALU fallback AND fused-WMMA). Anti-duplication guard: the Tensor-family Q4_K decode in `prefill_int8_wmma_spec.py` is for the REFUTED int8 path — do NOT use it; reuse the UOp-family `_q4k_weight` only.
+Centralized single-source-of-truth helpers: `_frag_base` (fragment ranges), `_waitcnt_simm16` (wait packing), `_q4k_weight` (Q4_K decode — shared by VALU fallback AND fused-WMMA), `operand_staging_policy` (REGISTER-vs-LDS fork — one predicate on operand-compute-cost × reuse, model/GPU/quant-agnostic, replaces the manual staging env). Anti-duplication guard: the Tensor-family Q4_K decode in `prefill_int8_wmma_spec.py` is for the REFUTED int8 path — do NOT use it; reuse the UOp-family `_q4k_weight` only.
 
 Source scopes: agent B0/B1/14B outputs (2026-07-06); census `docs/prefill-substrate-layer-census-20260706.md`.
 </content>
