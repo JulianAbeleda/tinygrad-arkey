@@ -75,13 +75,6 @@ def test_phase_registry_enrichment(monkeypatch):
       "target_lowering_level": "L3",
       "next_action": "manifest or replace route",
     },
-    {
-      "id": "prefill_pipe_global_rollback",
-      "phase": 5,
-      "phase_name": "rollback_and_quarantine",
-      "target_lowering_level": "L4",
-      "next_action": "quarantine fixture",
-    },
   ]
 
   monkeypatch.setitem(sys.modules, "extra.qk.lowering_phase_registry", fake_phase_registry)
@@ -101,9 +94,6 @@ def test_phase_registry_enrichment(monkeypatch):
   assert phase_only_item["phase_name"] == "direct_packed_prefill"
   assert phase_only_item["target_lowering_level"] == "L3"
   assert phase_only_item["next_action"] == "manifest or replace route"
-  phase_item = next(i for i in out["work_queue"] if i["work_item_id"] == "prefill_pipe_global_rollback")
-  assert phase_item["work_item_type"] == "phase_registry_item"
-  assert phase_item["phase_name"] == "rollback_and_quarantine"
 
 
 def test_report_enriches_done_criteria_from_dynamic_module(monkeypatch):
@@ -124,13 +114,6 @@ def test_report_enriches_done_criteria_from_dynamic_module(monkeypatch):
       "target_lowering_level": "L4",
       "next_action": "manifest or replace route",
     },
-    {
-      "id": "prefill_pipe_global_rollback",
-      "phase": 5,
-      "phase_name": "rollback_and_quarantine",
-      "target_lowering_level": "L4",
-      "next_action": "quarantine fixture",
-    },
   ]
   fake_done_criteria = types.ModuleType("extra.qk.lowering_done_criteria")
   fake_done_criteria.rows = lambda: [
@@ -145,12 +128,10 @@ def test_report_enriches_done_criteria_from_dynamic_module(monkeypatch):
   out = report.build_exhaustive_lowering_report()
   strict_item = next(i for i in out["work_queue"] if i["work_item_type"] == "strict_default_route_blocker")
   phase_only_item = next(i for i in out["work_queue"] if i["work_item_id"] == "synthetic_phase_only_surface")
-  rollback_item = next(i for i in out["work_queue"] if i["work_item_id"] == "prefill_pipe_global_rollback")
 
   assert strict_item["done_criteria"] == ["descriptor_owned_substrate"]
   assert phase_only_item["work_item_type"] == "phase_registry_item"
   assert phase_only_item["done_criteria"] == ["ordinary_tinygrad_graph"]
-  assert rollback_item["done_criteria"] == ["ordinary_tinygrad_graph"]
 
 
 def test_done_criteria_loader_uses_required_criteria_schema(monkeypatch):

@@ -22,7 +22,6 @@ Headline: 7 kernels on the default path are non-tinygrad-generated. 4 are machin
 
 | route_id | provenance | purity_status | next_action |
 |---|---|---|---|
-| prefill_pipe_global_rollback | rollback_oracle | superseded_rollback | keep as A/B comparator and the rollback target of role-selective |
 
 ## Strict-purity debt
 
@@ -39,7 +38,6 @@ Headline: 7 kernels on the default path are non-tinygrad-generated. 4 are machin
 - **prefill_pipe_role_selective_generated** (default): extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec
 - **prefill_q4k_direct_tile4x4_default** (default): tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts selects LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4
 - **prefill_q6k_direct_generated** (default): tinygrad/llm/prefill_routes.py Q6_K direct-packed branch: PREFILL_Q6K_PACKED_LOAD default-on -> Q6KPrefillRouteSpec + emit_q6k_packed_prefill_kernel; direct_out for parts==1/PREFILL_DIRECT_OUT=1, otherwise partials
-- **prefill_pipe_global_rollback** (fallback): extra/qk/prefill_graph_gemm_route.py:55-69 (pipe on for all roles when role-selective off)
 
 ## tinygrad-scheduler coverage
 

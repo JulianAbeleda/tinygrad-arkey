@@ -10,7 +10,6 @@ SEEDED = (
   "decode_flash_live_split_g4_8b_kvboth",
   "decode_flash_block_tile_g5_konly",
   "prefill_pipe_role_selective_generated",
-  "prefill_pipe_global_rollback",
 )
 
 
@@ -41,8 +40,7 @@ def test_lowering_phase_registry_build_is_json_serializable():
   assert report["schema"] == "lowering-phase-registry.v1"
   assert report["total_rows"] == len(SEEDED)
   assert set(report["by_level"].keys()) <= {"L3", "L4", "L5"}
-  assert set(report["by_phase"].keys()) == {3, 4, 5}
+  assert set(report["by_phase"].keys()) == {3, 4}
   assert report["by_phase"][3] == 2
   assert report["by_phase"][4] == 1
-  assert report["by_phase"][5] == 1
   json.dumps(report)

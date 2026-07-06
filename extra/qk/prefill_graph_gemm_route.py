@@ -48,6 +48,9 @@ def _resolve_schedule(out_f: int, in_f: int):
     if v is None: return dv
     try: return int(v)
     except ValueError: return dv
+  if _envint("PREFILL_PIPE_ROLE_SELECTIVE", 1) == 0:
+    raise RuntimeError("PREFILL_PIPE_ROLE_SELECTIVE=0 global-pipe rollback was retired; "
+                       "the role-selective prefill schedule is the only manifest graph-GEMM route.")
   bk    = _envint("PREFILL_GEMM_BK", bk)
   dbuf  = _envint("PREFILL_GEMM_DBUF", dbuf)
   plra  = _envint("PREFILL_GEMM_PLRA", plra)
@@ -56,8 +59,8 @@ def _resolve_schedule(out_f: int, in_f: int):
   # PROMOTED DEFAULT = the ROLE-SELECTIVE pipe (both flags below default-on). The software-pipelined route is on for the
   # latency-bound roles (attn q/o, attn k/v, ffn-down) and OFF for the already-saturated ffn gate/up (the pipe regressed
   # that one ~17%), so gate/up keeps its faster lds path. Net: beats the all-roles "global pipe" by ~3% and the old lds
-  # default by ~12-23% through ctx8192, output-equivalent. Rollback chain: PREFILL_PIPE_ROLE_SELECTIVE=0 -> global pipe
-  # (all roles); then PREFILL_GEMM_PIPELINE=0 -> old lds default.
+  # default by ~12-23% through ctx8192, output-equivalent. The old PREFILL_PIPE_ROLE_SELECTIVE=0 global-pipe rollback is
+  # retired; PREFILL_GEMM_PIPELINE=0 remains the old-lds fallback.
   pipe_mode = bool(_envint("PREFILL_GEMM_PIPELINE", 1))
   pipe_tm = _envint("PREFILL_GEMM_PIPELINE_TM", 2)
   pipe_tn = _envint("PREFILL_GEMM_PIPELINE_TN", 2)

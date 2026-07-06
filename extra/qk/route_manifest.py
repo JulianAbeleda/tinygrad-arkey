@@ -263,22 +263,7 @@ ROUTES = {
   # prefill_q4k_mmq_direct_out_research (+ the mmq/sdot4 PREFILL_Q4K_Q8 modes) REMOVED 2026-07-06 (no backups):
   # handwritten scalar-sdot4/Q8_1 MMQ prefill kernels deleted (confirmed ~85-237 tok/s dead end). Only the
   # generated int8-WMMA substrate (prefill_q4k_int8_wmma_generated_research) remains selectable via PREFILL_Q4K_Q8.
-  "prefill_pipe_global_rollback": {
-    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "superseded_rollback",
-    "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
-    "quant": ["Q4_K", "Q6_K", "fp16"],
-    "shape_guards": [{"M": 512, "N": "*", "K": "*"}],
-    "env": {"PREFILL_GEMM_PIPELINE": "1", "PREFILL_PIPE_ROLE_SELECTIVE": "0"},
-    "rollback": {"PREFILL_GEMM_PIPELINE": "0"},  # -> old lds2 default
-    "strict_fallback": True,
-    "authority_gate": "extra/qk/prefill_whole_synced.py",
-    "promotion_artifacts": ["bench/qk-prefill-pipe-promotion/latest.json",
-                            "bench/qk-prefill-pipe-promotion/summary.md"],
-    "purity_status": "search_selected_specialized_route",
-    "provenance": "rollback_oracle",
-    "selector": "env_guard",
-    "route_attribution": "extra/qk/prefill_graph_gemm_route.py:55 (pipe on for all roles when PREFILL_PIPE_ROLE_SELECTIVE=0).",
-    "note": "global pipe (all roles): was TIER_A vs old lds2 default (+8.5..19.2%), superseded by role-selective (which excludes the saturated gate/up where pipe regressed ~17%). Kept as the A/B rollback comparator and the rollback target of role-selective."},
+  # prefill_pipe_global_rollback REMOVED 2026-07-06 (no backups): PREFILL_PIPE_ROLE_SELECTIVE=0 now fails loud.
 }
 
 # Closed / refuted axes -- do not re-search without a NEW premise (PMS-R3 do_not_search carries these forward).

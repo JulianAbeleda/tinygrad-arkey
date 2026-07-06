@@ -96,15 +96,6 @@ CENSUS_ROWS = [
    "rollback_flag": "PREFILL_Q6K_PACKED_LOAD=0 reaches the legacy non-packed debug path; no manifest default rollback remains",
    "purity_status": "search_generated_promoted",
    "next_action": "keep generated descriptor binding; Q6_K direct prefill is no longer unmanifested runtime handwritten debt"},
-  {"route_id": "prefill_pipe_global_rollback", "workload": "prefill", "role": "all graph-GEMM roles", "quant": "Q4_K,Q6_K,fp16",
-   "shape_guard": "all roles incl ffn_gate_up; reached with PREFILL_PIPE_ROLE_SELECTIVE=0",
-   "writer": "owned_asm", "selector": "env_guard",
-   "route_guard": "extra/qk/prefill_graph_gemm_route.py:55-69 (pipe on for all roles when role-selective off)",
-   "kernel_source": "extra/qk/prefill_graph_gemm_route.py build_gemm_pipe (all roles)",
-   "authority_artifact": "bench/qk-prefill-pipe-promotion/latest.json",
-   "rollback_flag": "PREFILL_GEMM_PIPELINE=0 -> old lds2 default",
-   "purity_status": "superseded_rollback",
-   "next_action": "keep as A/B comparator and the rollback target of role-selective"},
 ]
 
 # tinygrad-scheduler-generated coverage (the rest of the model): not enumerated as hot-kernel rows but recorded so the

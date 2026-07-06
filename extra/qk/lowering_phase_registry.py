@@ -41,13 +41,6 @@ _PHASE_ROWS: tuple[LoweringPhaseRegistryRow, ...] = (
     "target_lowering_level": "L5",
     "next_action": "replace Ops.INS substrate with generated LDS+WMMA flow",
   },
-  {
-    "id": "prefill_pipe_global_rollback",
-    "phase": 5,
-    "phase_name": "rollback_and_quarantine",
-    "target_lowering_level": "L4",
-    "next_action": "quarantine fixture with strict rollback-only coverage",
-  },
 )
 
 

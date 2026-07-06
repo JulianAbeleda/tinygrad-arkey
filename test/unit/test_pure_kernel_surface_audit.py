@@ -46,13 +46,6 @@ def test_route_rows_expose_expected_kernel_bindings_for_generated_and_handwritte
   assert generated_surface_row["has_expected_kernel_binding"] is True
 
 
-def test_routes_without_expected_kernels_get_empty_binding_fields():
-  route_id = "prefill_pipe_global_rollback"
-  row = audit.route_surface_row(route_id)
-  assert row["expected_kernel_patterns"] == []
-  assert row["has_expected_kernel_binding"] is False
-
-
 def test_unmanifested_runtime_surfaces_are_explicit():
   report = audit.build()
   got = {s["surface_id"] for s in report["unmanifested_runtime_surfaces"]}

@@ -70,10 +70,6 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     ("extra/qk/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py"),
     "Tiled Q4_K/Q8_1 WMMA research route is intended to use Tensor/codegen lowering; full route remains blocked.",
     descriptor_artifact="Q4KInt8WMMATiledPrefillSpec"),
-  "prefill_pipe_global_rollback": RouteSurface(
-    "prefill_pipe_global_rollback", "rollback_oracle",
-    ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py"),
-    "Rollback comparator still uses raw WMMA instruction-list substrate."),
 }
 
 def _read(path: str) -> str:
