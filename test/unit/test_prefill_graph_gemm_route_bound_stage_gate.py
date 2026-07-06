@@ -16,11 +16,11 @@ def test_route_bound_stage_gate_default_report_is_conservative_without_amd_run()
 
 
 def test_tc_local_stage_rejects_unvalidated_b_operand_modes(monkeypatch):
-  monkeypatch.setattr(postrange, "_tc_local_stage_mode", lambda: "b")
+  monkeypatch.setattr(postrange, "_tc_local_stage_mode", lambda: "c")
   try:
     postrange._tc_local_stage_wmma_sources([], ())
   except KernelOptError as e:
-    assert "supports only a/off" in str(e)
+    assert "supports a/b/both/off" in str(e)
   else:
     raise AssertionError("expected KernelOptError")
 

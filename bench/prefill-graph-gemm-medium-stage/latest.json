@@ -20,7 +20,13 @@
     "pre_wmma_forced_local_ok": false,
     "post_local_stage_ok": false,
     "post_tile_b_stage_ok": true,
-    "post_coop_b_partition_stage_ok": false,
+    "post_coop_b_partition_stage_ok": true,
+    "post_coop_b_partition_stage_coop_b_seen": 1,
+    "post_coop_b_partition_stage_coop_b_rewrite_count": 0,
+    "post_coop_b_partition_stage_coop_b_skip_count": 1,
+    "post_coop_b_partition_stage_has_fp16_wmma": true,
+    "post_coop_b_partition_stage_has_local_shared": false,
+    "post_coop_b_partition_stage_has_barrier": false,
     "scalar_post_local_stage_ok": false,
     "staged_beats_baseline": false
   },
@@ -30,7 +36,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 35.43,
+      "tflops": 35.58,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -63,7 +69,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 35.26,
+      "tflops": 35.59,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -74,13 +80,54 @@
       }
     },
     "post_coop_b_partition_stage": {
+      "returncode": 0,
+      "stdout_tail": "half)((*(buf0+112))));\n  *(data0_2097152+(alu264+196656)) = ((half)((*(buf0+120))));\n  *(data0_2097152+(alu264+204800)) = ((half)((*(buf0+97))));\n  *(data0_2097152+(alu264+204816)) = ((half)((*(buf0+105))));\n  *(data0_2097152+(alu264+204832)) = ((half)((*(buf0+113))));\n  *(data0_2097152+(alu264+204848)) = ((half)((*(buf0+121))));\n  *(data0_2097152+(alu264+212992)) = ((half)((*(buf0+98))));\n  *(data0_2097152+(alu264+213008)) = ((half)((*(buf0+106))));\n  *(data0_2097152+(alu264+213024)) = ((half)((*(buf0+114))));\n  *(data0_2097152+(alu264+213040)) = ((half)((*(buf0+122))));\n  *(data0_2097152+(alu264+221184)) = ((half)((*(buf0+99))));\n  *(data0_2097152+(alu264+221200)) = ((half)((*(buf0+107))));\n  *(data0_2097152+(alu264+221216)) = ((half)((*(buf0+115))));\n  *(data0_2097152+(alu264+221232)) = ((half)((*(buf0+123))));\n  *(data0_2097152+(alu264+229376)) = ((half)((*(buf0+100))));\n  *(data0_2097152+(alu264+229392)) = ((half)((*(buf0+108))));\n  *(data0_2097152+(alu264+229408)) = ((half)((*(buf0+116))));\n  *(data0_2097152+(alu264+229424)) = ((half)((*(buf0+124))));\n  *(data0_2097152+(alu264+237568)) = ((half)((*(buf0+101))));\n  *(data0_2097152+(alu264+237584)) = ((half)((*(buf0+109))));\n  *(data0_2097152+(alu264+237600)) = ((half)((*(buf0+117))));\n  *(data0_2097152+(alu264+237616)) = ((half)((*(buf0+125))));\n  *(data0_2097152+(alu264+245760)) = ((half)((*(buf0+102))));\n  *(data0_2097152+(alu264+245776)) = ((half)((*(buf0+110))));\n  *(data0_2097152+(alu264+245792)) = ((half)((*(buf0+118))));\n  *(data0_2097152+(alu264+245808)) = ((half)((*(buf0+126))));\n  *(data0_2097152+(alu264+253952)) = ((half)((*(buf0+103))));\n  *(data0_2097152+(alu264+253968)) = ((half)((*(buf0+111))));\n  *(data0_2097152+(alu264+253984)) = ((half)((*(buf0+119))));\n  *(data0_2097152+(alu264+254000)) = ((half)((*(buf0+127))));\n  *(data0_2097152+alu264) = ((half)((*(buf0+0))));\n}\n*** AMD        1 copy    4.00 MB,     AMD <- NPY                arg  2 mem   0.04 GB tm   3262.34us/     3.26ms (      0 GFLOPS    1|1      GB/s) \n*** AMD        2 copy   32.00 MB,     AMD <- NPY                arg  2 mem   0.08 GB tm   5816.35us/     9.08ms (      0 GFLOPS    6|6      GB/s) \n*** AMD        3 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.08 GB tm    917.24us/    10.00ms (  18730 GFLOPS   46|1175   GB/s) \nscheduled     1 kernels in     2.10 ms | CACHE MISS bb527372 |    3827 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk/prefill_v2_schedule_search.py:74\nmore upcast axis : [(0, 2, 0, 4)]\nTC_LOCAL_STAGE_COOP_B_STATS {\"seen\": 0, \"rewritten\": 0, \"dumped\": 0, \"skipped\": 0}\nE_16384_32_4              opts: (Opt(op=OptOps.UPCAST, axis=0, arg=4), Opt(op=OptOps.LOCAL, axis=0, arg=32))\ntypedef long unsigned int size_t;\n#define half _Float16\nextern \"C\" __attribute__((device, const)) size_t __ockl_get_local_id(unsigned int);\nextern \"C\" __attribute__((device, const)) size_t __ockl_get_group_id(unsigned int);\nextern \"C\" __attribute__((device, const)) size_t __ockl_get_local_size(unsigned int);\ntypedef half half4 __attribute__((ext_vector_type(4)));\nstatic inline __attribute__((device)) half4 make_half4(half x, half y, half z, half w) { return { x, y, z, w }; }\ntypedef float float4 __attribute__((ext_vector_type(4)));\nstatic inline __attribute__((device)) float4 make_float4(float x, float y, float z, float w) { return { x, y, z, w }; }\nextern \"C\" __attribute__((global)) void __attribute__((amdgpu_flat_work_group_size(1, 32))) E_16384_32_4(float* data0_2097152, half* data1_2097152) {\n  int gidx0 = __ockl_get_group_id(0); /* 16384 */\n  int lidx0 = __ockl_get_local_id(0); /* 32 */\n  int alu0 = ((gidx0<<7)+(lidx0<<2));\n  half4 val0 = (*((half4*)((data1_2097152+alu0))));\n  *((float4*)((data0_2097152+alu0))) = make_float4(((float)(val0.x)),((float)(val0.y)),((float)(val0.z)),((float)(val0.w)));\n}\n*** AMD        4 E_16384_32_4                                   arg  2 mem   0.05 GB tm     16.12us/    10.01ms (      0 GFLOPS  781|781    GB/s) \nscheduled     1 kernels in     3.02 ms | CACHE MISS 680968f5 |    3879 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk/prefill_v2_schedule_search.py:76\n*** AMD        5 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    428.00us/    10.44ms (  40140 GFLOPS   98|2519   GB/s) \nscheduled     1 kernels in     0.86 ms |  cache hit 680968f5 |    3879 uops in cache | /home/ubuntu/tinygrad-arkey/extra/qk/prefill_v2_schedule_search.py:76\nJIT captured 1 linears with 0 inputs\n*** AMD        6 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    440.40us/    10.88ms (  39010 GFLOPS   95|2448   GB/s) \n*** AMD        7 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    455.04us/    11.34ms (  37755 GFLOPS   92|2369   GB/s) \n*** AMD        8 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    460.60us/    11.80ms (  37299 GFLOPS   91|2340   GB/s) \n*** AMD        9 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    447.08us/    12.24ms (  38427 GFLOPS   94|2411   GB/s) \n*** AMD       10 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    432.12us/    12.68ms (  39757 GFLOPS   97|2495   GB/s) \n*** AMD       11 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    462.28us/    13.14ms (  37163 GFLOPS   91|2332   GB/s) \n*** AMD       12 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    459.88us/    13.60ms (  37357 GFLOPS   91|2344   GB/s) \n*** AMD       13 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    452.00us/    14.05ms (  38009 GFLOPS   93|2385   GB/s) \n*** AMD       14 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    455.52us/    14.50ms (  37715 GFLOPS   92|2366   GB/s) \n*** AMD       15 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    419.48us/    14.92ms (  40955 GFLOPS  100|2570   GB/s) \n*** AMD       16 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    436.44us/    15.36ms (  39364 GFLOPS   96|2470   GB/s) \n*** AMD       17 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    446.52us/    15.81ms (  38475 GFLOPS   94|2414   GB/s) \n*** AMD       18 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    458.16us/    16.27ms (  37498 GFLOPS   92|2353   GB/s) \n*** AMD       19 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    475.72us/    16.74ms (  36113 GFLOPS   88|2266   GB/s) \n*** AMD       20 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    460.20us/    17.20ms (  37331 GFLOPS   91|2342   GB/s) \n*** AMD       21 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    453.32us/    17.65ms (  37898 GFLOPS   93|2378   GB/s) \n*** AMD       22 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    455.92us/    18.11ms (  37682 GFLOPS   92|2364   GB/s) \n*** AMD       23 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    434.16us/    18.54ms (  39570 GFLOPS   97|2483   GB/s) \n*** AMD       24 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    456.16us/    19.00ms (  37662 GFLOPS   92|2363   GB/s) \n*** AMD       25 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    448.12us/    19.45ms (  38338 GFLOPS   94|2405   GB/s) \n*** AMD       26 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    453.96us/    19.90ms (  37844 GFLOPS   92|2375   GB/s) \n*** AMD       27 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    438.92us/    20.34ms (  39141 GFLOPS   96|2456   GB/s) \n*** AMD       28 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    444.76us/    20.79ms (  38627 GFLOPS   94|2424   GB/s) \n*** AMD       29 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    441.80us/    21.23ms (  38886 GFLOPS   95|2440   GB/s) \n*** AMD       30 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    432.44us/    21.66ms (  39728 GFLOPS   97|2493   GB/s) \n*** AMD       31 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    455.60us/    22.12ms (  37708 GFLOPS   92|2366   GB/s) \n*** AMD       32 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    431.00us/    22.55ms (  39860 GFLOPS   97|2501   GB/s) \n*** AMD       33 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    462.08us/    23.01ms (  37179 GFLOPS   91|2333   GB/s) \n*** AMD       34 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    425.08us/    23.43ms (  40416 GFLOPS   99|2536   GB/s) \n*** AMD       35 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    450.28us/    23.89ms (  38154 GFLOPS   93|2394   GB/s) \n*** AMD       36 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    454.24us/    24.34ms (  37821 GFLOPS   92|2373   GB/s) \n*** AMD       37 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    448.44us/    24.79ms (  38310 GFLOPS   94|2404   GB/s) \n*** AMD       38 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    437.04us/    25.22ms (  39310 GFLOPS   96|2466   GB/s) \n*** AMD       39 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    445.52us/    25.67ms (  38561 GFLOPS   94|2420   GB/s) \n*** AMD       40 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    453.32us/    26.12ms (  37898 GFLOPS   93|2378   GB/s) \n*** AMD       41 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    458.72us/    26.58ms (  37452 GFLOPS   91|2350   GB/s) \n*** AMD       42 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    450.84us/    27.03ms (  38106 GFLOPS   93|2391   GB/s) \n*** AMD       43 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    446.60us/    27.48ms (  38468 GFLOPS   94|2414   GB/s) \n*** AMD       44 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    466.92us/    27.95ms (  36794 GFLOPS   90|2309   GB/s) \n*** AMD       45 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    457.28us/    28.40ms (  37570 GFLOPS   92|2357   GB/s) \n*** AMD       46 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    472.40us/    28.88ms (  36367 GFLOPS   89|2282   GB/s) \n*** AMD       47 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    444.00us/    29.32ms (  38693 GFLOPS   94|2428   GB/s) \n*** AMD       48 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    427.40us/    29.75ms (  40196 GFLOPS   98|2522   GB/s) \n*** AMD       49 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    457.00us/    30.20ms (  37593 GFLOPS   92|2359   GB/s) \n*** AMD       50 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    456.84us/    30.66ms (  37606 GFLOPS   92|2360   GB/s) \n*** AMD       51 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    453.48us/    31.12ms (  37885 GFLOPS   92|2377   GB/s) \n*** AMD       52 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    436.36us/    31.55ms (  39371 GFLOPS   96|2470   GB/s) \n*** AMD       53 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    464.20us/    32.02ms (  37010 GFLOPS   90|2322   GB/s) \n*** AMD       54 r_2_64_32_4_2_2_2_4_4_32_2_8                   arg  3 mem   0.05 GB tm    465.72us/    32.48ms (  36889 GFLOPS   90|2315   GB/s) \nRESULT {\"u0\": 4, \"u1\": 4, \"loc\": 4, \"unr\": 8, \"tflops\": 26.64, \"status\": \"ok\", \"pin_clock\": true, \"clock_pin\": {\"cmd\": \"echo manual > /sys/class/drm/card0/device/power_dpm_force_performance_level && echo 2 > /sys/class/drm/card0/device/pp_dpm_sclk && echo 3 > /sys/class/drm/card0/device/pp_dpm_mclk\", \"rc\": 0, \"ok\": true, \"out\": \"\"}}\n",
+      "stderr_tail": "",
       "u0": 4,
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 0.0,
-      "status": "RuntimeError",
-      "pin_clock": true
+      "tflops": 26.64,
+      "status": "ok",
+      "pin_clock": true,
+      "clock_pin": {
+        "cmd": "echo manual > /sys/class/drm/card0/device/power_dpm_force_performance_level && echo 2 > /sys/class/drm/card0/device/pp_dpm_sclk && echo 3 > /sys/class/drm/card0/device/pp_dpm_mclk",
+        "rc": 0,
+        "ok": true,
+        "out": ""
+      },
+      "has_fp16_wmma": true,
+      "has_local_shared": false,
+      "has_barrier": false,
+      "cooperative_b_stage": {
+        "seen": 1,
+        "skipped": 1,
+        "rewritten": 0,
+        "skip_payloads": [
+          {
+            "reason": "unsupported_nonlane_source_shape",
+            "warp": {
+              "arg": "(-1, AxisType.WARP)",
+              "size": 32
+            },
+            "extra_ranges": [
+              {
+                "arg": "(2, AxisType.GLOBAL)",
+                "size": 64
+              },
+              {
+                "arg": "(11, AxisType.UPCAST)",
+                "size": 4
+              },
+              {
+                "arg": "(13, AxisType.UNROLL)",
+                "size": 8
+              }
+            ]
+          }
+        ],
+        "rewrite_payloads": []
+      }
     },
     "scalar_post_local_stage": {
       "u0": 4,
@@ -92,5 +139,5 @@
       "pin_clock": true
     }
   },
-  "remaining_blocker": "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; the first route-bound cooperative B-partition attempt passes the previous CFG cycle but is rejected later as an invalid vector local-store shape; A/both/final-scalar staging remain wrong or unbuildable"
+  "remaining_blocker": "B-operand tile-only post-WMMA staging is composition-checked but performance-flat for this schedule; medium shape route-bound cooperative B post-stage is skipped today because source B includes non-lane ranges outside warp+reduce"
 }

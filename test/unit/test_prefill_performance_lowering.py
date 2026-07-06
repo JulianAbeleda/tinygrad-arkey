@@ -154,7 +154,7 @@ def test_prefill_performance_report_uses_current_route_bound_blocker():
   filtered = report.build_prefill_performance_lowering_report("target_1")
   payload = json.dumps(filtered)
   assert "current CFG/control-flow dependency lowering" not in payload
-  assert "late vector local-store" in payload
+  assert "outside warp+reduce" in payload
 
 
 def test_prefill_performance_report_cli_modes(monkeypatch, capsys):

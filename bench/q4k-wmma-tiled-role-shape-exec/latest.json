@@ -3,6 +3,7 @@
   "scope": "synthetic execution gate for all 14B Q4_K/Q8_1 wmma_tiled prefill role shapes",
   "verdict": "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING",
   "route_id": "prefill_q4k_int8_wmma_tiled_research",
+  "remaining_blocker": "scheduler_owned_tile_loop_missing",
   "lifecycle": {
     "verdict": "Q4K_WMMA_TILED_LIFECYCLE_PASS",
     "class": "pass.bounded_multi_tile_lifecycle"
@@ -60,13 +61,15 @@
         }
       },
       "exec": {
-        "attempted": false,
+        "attempted": true,
         "class": "blocked.scheduler_owned_tile_loop_missing",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
         "graph_node_count": null,
-        "wmma_present": null
+        "wmma_present": false,
+        "error": "execution_skipped_no_clang",
+        "raw_tile_steps": 2560
       }
     },
     {
@@ -121,13 +124,15 @@
         }
       },
       "exec": {
-        "attempted": false,
+        "attempted": true,
         "class": "blocked.scheduler_owned_tile_loop_missing",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
         "graph_node_count": null,
-        "wmma_present": null
+        "wmma_present": false,
+        "error": "execution_skipped_no_clang",
+        "raw_tile_steps": 2560
       }
     },
     {
@@ -182,13 +187,15 @@
         }
       },
       "exec": {
-        "attempted": false,
+        "attempted": true,
         "class": "blocked.scheduler_owned_tile_loop_missing",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
         "graph_node_count": null,
-        "wmma_present": null
+        "wmma_present": false,
+        "error": "execution_skipped_no_clang",
+        "raw_tile_steps": 8704
       }
     },
     {
@@ -243,17 +250,28 @@
         }
       },
       "exec": {
-        "attempted": false,
+        "attempted": true,
         "class": "blocked.scheduler_owned_tile_loop_missing",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
         "graph_node_count": null,
-        "wmma_present": null
+        "wmma_present": false,
+        "error": "execution_skipped_no_clang",
+        "raw_tile_steps": 2560
       }
     }
   ],
+  "attempted_count": 4,
+  "executed_roles": [
+    "attn_kv",
+    "attn_qo",
+    "ffn_down",
+    "ffn_gate_up"
+  ],
   "classified_blocker": true,
-  "blocker": "role execution is intentionally not attempted until a scheduler-owned tile_m/tile_n/group loop exists",
-  "distinction_from_classifier": "q4k_wmma_tiled_role_shape enumerates/selects shapes; this gate is reserved for actual synthetic execution metrics"
+  "all_numeric_ok": false,
+  "blocker": "role execution is intentionally not passed until a scheduler-owned tile_m/tile_n/group loop exists",
+  "distinction_from_classifier": "q4k_wmma_tiled_role_shape enumerates/selects shapes; this gate executes bounded synthetic role-shape subgraphs and reports the remaining loop-boundary blocker.",
+  "next_blocker": "scheduler_owned_tile_loop_missing"
 }

@@ -24,5 +24,5 @@ def test_q4k_wmma_tiled_role_shape_exec_classifier_is_not_a_false_pass():
   assert report["verdict"] == "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING"
   assert report["classified_blocker"] is True
   assert len(report["roles"]) == 4
-  assert all(row["exec"]["attempted"] is False for row in report["roles"])
+  assert all(row["exec"]["attempted"] for row in report["roles"])
   assert all(row["exec"]["class"] == "blocked.scheduler_owned_tile_loop_missing" for row in report["roles"])

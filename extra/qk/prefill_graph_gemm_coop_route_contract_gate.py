@@ -66,8 +66,10 @@ def build_report(*, artifact: bool = True) -> dict[str, Any]:
       "route_bound_coop_status": route_bound_coop_case.get("status") if isinstance(route_bound_coop_case, dict) else None,
       "route_bound_coop_tflops": route_bound_coop_case.get("tflops") if isinstance(route_bound_coop_case, dict) else None,
     },
-    "remaining_blocker": None if passed else
-      "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case does not execute and beat baseline",
+    "remaining_blocker": None if passed else (
+      "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case "
+      + ("executes without beating baseline" if route_bound_coop_executes else "does not execute")
+    ),
   }
   if artifact:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
