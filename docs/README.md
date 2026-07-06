@@ -34,6 +34,8 @@ from the tracked tree; use git history for archaeology.
 - `tinygrad/llm/route_ops.py` is the runtime adapter for QK route implementations.
 - `bench/qk-search-spaces/default_route_manifest.json` is the local route-state manifest.
 - `extra/audit/pure_machine_search_default_path_census.py` is the local generated-default census.
+- `extra/qk/lowering_phase_registry.py` and `extra/qk/exhaustive_lowering_report.py` track handwritten-surface
+  lowering phases without duplicating route/runtime facts.
 
 ## Boundary Rule
 

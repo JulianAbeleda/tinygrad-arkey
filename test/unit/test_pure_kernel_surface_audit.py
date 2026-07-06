@@ -32,6 +32,27 @@ def test_l3_descriptor_surfaces_are_derived_from_registry():
     assert row["writer_files"] == reg["writer_files"]
 
 
+def test_route_rows_expose_expected_kernel_bindings_for_generated_and_handwritten_routes():
+  route_id = "decode_q4k_g3_generated"
+  reg_row = registry.row(route_id)
+  route_row = audit.route_surface_row(route_id)
+  assert route_row["expected_kernel_patterns"] == reg_row["emitted_kernel_patterns"]
+  assert route_row["has_expected_kernel_binding"] is True
+
+  handwritten_route = "prefill_q4k_direct_tile4x4_default"
+  manifest_row = audit.route_manifest.ROUTES[handwritten_route]
+  handwritten_surface_row = audit.route_surface_row(handwritten_route)
+  assert handwritten_surface_row["expected_kernel_patterns"] == list(manifest_row["expected_kernels"])
+  assert handwritten_surface_row["has_expected_kernel_binding"] is True
+
+
+def test_routes_without_expected_kernels_get_empty_binding_fields():
+  route_id = "prefill_pipe_global_rollback"
+  row = audit.route_surface_row(route_id)
+  assert row["expected_kernel_patterns"] == []
+  assert row["has_expected_kernel_binding"] is False
+
+
 def test_unmanifested_runtime_surfaces_are_explicit():
   report = audit.build()
   got = {s["surface_id"] for s in report["unmanifested_runtime_surfaces"]}
@@ -49,6 +70,8 @@ def test_unmanifested_runtime_surfaces_are_derived_from_registry():
     assert row["writer_files"] == reg["writer_files"]
     assert row["reason"] == reg["reason"]
     assert row["replacement_scope"] == reg["replacement_scope"]
+    assert "expected_kernel_patterns" not in row
+    assert "has_expected_kernel_binding" not in row
 
 
 def test_missing_writer_file_evidence_is_reported_in_rows(tmp_path, monkeypatch):

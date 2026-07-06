@@ -149,11 +149,18 @@ def route_surface_row(route_id: str) -> dict[str, Any]:
   surface_pure = surface.pure
   strict_pure = surface_pure and not missing_writer_files
   contradiction = manifest_pure and not strict_pure
+  if route_id in generated_route_registry.route_ids():
+    reg = generated_route_registry.row(route_id)
+    expected_kernel_patterns = list(reg.get("emitted_kernel_patterns", ()))
+  else:
+    expected_kernel_patterns = list(manifest.get("expected_kernels", ()))
+  has_expected_kernel_binding = bool(expected_kernel_patterns)
   return {"route_id": route_id, "status": status, "manifest_provenance": prov, "manifest_pure": manifest_pure,
           "surface_class": surface.surface_class, "surface_pure": surface_pure, "strict_pure": strict_pure,
           "contradiction": contradiction,
           "writer_files": list(surface.writer_files), "writer_file_exists": writer_file_exists,
           "writer_files_present": not missing_writer_files, "missing_writer_files": missing_writer_files, "markers": markers,
+          "expected_kernel_patterns": expected_kernel_patterns, "has_expected_kernel_binding": has_expected_kernel_binding,
           "descriptor_artifact": surface.descriptor_artifact, "reason": surface.reason,
           "replacement_scope": surface.replacement_scope or str(manifest.get("replacement_scope", ""))}
 
