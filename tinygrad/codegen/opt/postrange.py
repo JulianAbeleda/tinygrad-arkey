@@ -2,7 +2,7 @@ from __future__ import annotations
 import math, itertools
 from collections import defaultdict
 from typing import cast, Final
-from tinygrad.uop.ops import Ops, UOp, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
+from tinygrad.uop.ops import Ops, UOp, UPat, PatternMatcher, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
 from tinygrad.dtype import dtypes, AddrSpace
@@ -310,7 +310,8 @@ class Scheduler:
               UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
             ]
             wmma_srcs = _tc_local_stage_wmma_sources(wmma_srcs, _tc_local_stage_ranges((wmma_srcs[0], wmma_srcs[1])),
-                                                     enabled=not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts)))
+                                                     enabled=_tc_local_stage_with_planned_local() or
+                                                     not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts)))
             wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
               wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
             tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
@@ -352,6 +353,12 @@ _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
 def _tc_local_stage_mode() -> str:
   return str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower()
 
+def _tc_local_stage_with_planned_local() -> bool:
+  return bool(getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0))
+
+def _tc_local_stage_post_opt() -> bool:
+  return bool(getenv("PREFILL_TC_LOCAL_STAGE_POST", 0))
+
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...]) -> UOp:
   return src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False)).index(*ranges)
 
@@ -360,6 +367,10 @@ def _tc_local_stage_wmma_sources(srcs:list[UOp], stage_ranges:tuple[UOp, ...], *
   if mode in ("", "0", "false", "off", "no") or not enabled: return srcs
   if mode not in ("a", "1", "true", "yes"):
     raise KernelOptError(f"PREFILL_TC_LOCAL_STAGE currently supports only a/off; b/both are not numerically validated, got {mode!r}")
+  if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
+    print("TC_LOCAL_STAGE", {"ranges": [(r.arg, r.vmax+1) for r in stage_ranges],
+                             "src0_ranges": [(r.arg, r.vmax+1) for r in sorted(srcs[0].ranges, key=lambda r: r.arg)],
+                             "src1_ranges": [(r.arg, r.vmax+1) for r in sorted(srcs[1].ranges, key=lambda r: r.arg)]})
   srcs[0] = _tc_local_stage_src(srcs[0], stage_ranges)
   return srcs
 
@@ -367,6 +378,15 @@ def _tc_local_stage_ranges(srcs:tuple[UOp, ...]) -> tuple[UOp, ...]:
   rngs = sorted(UOp.sink(*srcs).ranges, key=lambda r: r.arg)
   lane_rngs = tuple(r for r in rngs if r.arg[-1] in (AxisType.LOCAL, AxisType.WARP))
   return lane_rngs or tuple(r for r in rngs if r.arg[-1] is not AxisType.UPCAST)
+
+def _tc_local_stage_wmma_post(wmma:UOp) -> UOp|None:
+  if wmma.src[0].op_in_backward_slice_with_self(Ops.STAGE): return None
+  srcs = _tc_local_stage_wmma_sources([wmma.src[0], wmma.src[1]], _tc_local_stage_ranges((wmma.src[0],)))
+  return wmma.replace(src=(srcs[0], wmma.src[1], wmma.src[2])) if srcs[0] is not wmma.src[0] else None
+
+pm_tc_local_stage_post = PatternMatcher([
+  (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_wmma_post),
+])
 
 def _warmstart_match(k):
   # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce)
@@ -410,4 +430,6 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
+  if _tc_local_stage_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+    k.ast = graph_rewrite(k.ast, pm_tc_local_stage_post, name="tc local stage post")
   return k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)
