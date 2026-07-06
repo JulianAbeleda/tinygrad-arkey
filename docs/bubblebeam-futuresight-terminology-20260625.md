@@ -10,19 +10,11 @@ Date: 2026-06-25
 
 ## Current flag
 
-Preferred:
-
 ```bash
 BUBBLEBEAM_FUTURESIGHT=1
 ```
 
-Deprecated temporary alias:
-
-```bash
-BEAM_COALESCE=1
-```
-
-The alias remains only so older docs/scripts do not fail immediately. New docs, tests, and harnesses should use
+Old beam-named compatibility wiring has been removed. New docs, tests, and harnesses should use
 `BUBBLEBEAM_FUTURESIGHT`.
 
 ## Compiler terms that remain

@@ -30,15 +30,15 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   report = default_purity_report()
   assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
   assert route_provenance("decode_q4k_g3_generated") == "machine_authored_generated"
-  assert route_provenance("decode_flash_block_tile_g5_konly") == "machine_authored_generated"
-  assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "machine_authored_generated"
+  assert route_provenance("decode_flash_block_tile_g5_konly") == "hand_authored_uop_template"
+  assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "hand_authored_uop_template"
   # TG-P3: Q6_K default is now the generated route; the hand template is rollback-only, no longer transitional debt.
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
   assert route_provenance("decode_q6k_coop_shipped") == "rollback_oracle"
-  # TG-P4: prefill default is now the spec-generated schedule; the legacy fixed emit rollback is removed.
-  assert route_provenance("prefill_pipe_role_selective_generated") == "machine_authored_generated"
-  assert set(report["transitional_default_routes"]) == {"prefill_q4k_direct_tile4x4_default"}
-  assert set(report["forbidden_default_routes"]) == set()
+  assert route_provenance("prefill_pipe_role_selective_generated") == "external_handwritten_kernel"
+  assert set(report["transitional_default_routes"]) == {
+    "decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth", "prefill_q4k_direct_tile4x4_default"}
+  assert set(report["forbidden_default_routes"]) == {"prefill_pipe_role_selective_generated"}
 
 
 def test_default_path_census_uses_manifest_provenance():
@@ -47,16 +47,15 @@ def test_default_path_census_uses_manifest_provenance():
   assert census["strict_default_purity_verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
   by_route = {row["route_id"]: row for row in census["default_route_table"]}
   assert by_route["decode_q4k_g3_generated"]["final_default_allowed"] is True
-  assert by_route["decode_flash_block_tile_g5_konly"]["final_default_allowed"] is True
-  assert by_route["decode_flash_live_split_g4_8b_kvboth"]["final_default_allowed"] is True
+  assert by_route["decode_flash_block_tile_g5_konly"]["final_default_allowed"] is False
+  assert by_route["decode_flash_live_split_g4_8b_kvboth"]["final_default_allowed"] is False
   # TG-P3: the generated Q6_K route is the default; the hand template is no longer on the default path.
   assert by_route["decode_q6k_coop_generated"]["provenance"] == "machine_authored_generated"
   assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True
   assert "decode_q6k_coop_shipped" not in by_route
   assert "decode_attention_owned_two_kernel" not in by_route
-  # TG-P4: generated prefill schedule is the default; legacy fixed emit is off the default path.
-  assert by_route["prefill_pipe_role_selective_generated"]["provenance"] == "machine_authored_generated"
-  assert by_route["prefill_pipe_role_selective_generated"]["final_default_allowed"] is True
+  assert by_route["prefill_pipe_role_selective_generated"]["provenance"] == "external_handwritten_kernel"
+  assert by_route["prefill_pipe_role_selective_generated"]["final_default_allowed"] is False
   assert "prefill_pipe_role_selective_default" not in by_route
   assert by_route["prefill_q4k_direct_tile4x4_default"]["provenance"] == "hand_authored_uop_template"
   assert by_route["prefill_q4k_direct_tile4x4_default"]["final_default_allowed"] is False

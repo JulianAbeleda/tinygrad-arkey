@@ -127,5 +127,5 @@ Fork rules (the tinygrad-specific form of "Prefer data over code" and
 - **Subprocess isolation for generation is intentional:** the eval harness spawns
   a child per policy mode for clean per-run AMD/JIT device state + a JSON summary
   over stdout. Keep both entry points (in-process loop + isolated child).
-- Do not run BEAM / risky schedule search on Mac/TinyGPU/remote paths. Do not
+- Do not run risky schedule search on Mac/TinyGPU/remote paths. Do not
   make `QK_GENERATED_POLICY` a global default.

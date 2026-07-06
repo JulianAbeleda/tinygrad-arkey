@@ -1,4 +1,4 @@
-# opt opinionatedly transforms an ast into an optimized ast using either heuristics or beam search
+# opt opinionatedly transforms an ast into an optimized ast using heuristics and explicit opts_to_apply.
 from __future__ import annotations
 from enum import Enum, auto
 from dataclasses import dataclass

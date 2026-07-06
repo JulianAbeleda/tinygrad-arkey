@@ -4,12 +4,13 @@ from extra.qk import pure_kernel_surface_audit as audit
 from extra.qk.pure_search_guard import effective_routes, assert_pure_machine_search
 
 
-def test_strict_surface_audit_flags_manifest_contradictions():
+def test_strict_surface_audit_flags_default_blockers():
   report = audit.strict_default_purity_report()
   assert report["verdict"] == "STRICT_DEFAULT_PURITY_FAIL"
-  contradictions = {r["route_id"]: r for r in report["manifest_contradictions"]}
-  assert contradictions["prefill_pipe_role_selective_generated"]["surface_class"] == "external_raw_or_binary"
-  assert contradictions["decode_flash_live_split_g4_8b_kvboth"]["surface_class"] == "route_local_custom_kernel"
+  blockers = {r["route_id"]: r for r in report["blockers"]}
+  assert blockers["prefill_pipe_role_selective_generated"]["surface_class"] == "external_raw_or_binary"
+  assert blockers["decode_flash_live_split_g4_8b_kvboth"]["surface_class"] == "route_local_custom_kernel"
+  assert report["manifest_contradictions"] == []
 
 
 def test_route_surface_rows_classify_known_surfaces():
