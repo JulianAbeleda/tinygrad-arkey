@@ -87,11 +87,6 @@ class TestTiny(unittest.TestCase):
     # function is only called twice
     self.assertEqual(cnt, 2)
 
-  # *** BEAM (for Kernel speed) ***
-
-  def test_beam(self):
-    with Context(BEAM=1, IGNORE_BEAM_CACHE=1): self.test_plus()
-
   # *** symbolic (to allow less recompilation) ***
 
   def test_symbolic(self):
@@ -149,9 +144,6 @@ class TestTiny(unittest.TestCase):
   @unittest.skipIf(Device.DEFAULT != "CL", "image only supported on CL")
   def test_image(self):
     with Context(IMAGE=1): self.test_gemm(N=64)
-
-  def test_beam_image(self):
-    with Context(BEAM=1, IGNORE_BEAM_CACHE=1): self.test_image()
 
 if __name__ == '__main__':
   unittest.main()

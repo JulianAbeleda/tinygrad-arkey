@@ -32,7 +32,6 @@ Variable | Possible Value(s) | Description
 ---|---|---
 DEBUG               | [1-7]      | enable debugging output (operations, timings, speed, generated code and more)
 DEV                 | [AMD, NV, ...] | enable a specific backend, see [below](#dev-variable)
-BEAM                | [#]        | number of beams in kernel beam search
 DEFAULT_FLOAT       | [HALF, ...]| specify the default float dtype (FLOAT32, HALF, BFLOAT16, FLOAT64, ...), default to FLOAT32
 IMAGE               | [1]        | enable 2d specific optimizations
 FLOAT16             | [1]        | use float16 for images instead of float32
