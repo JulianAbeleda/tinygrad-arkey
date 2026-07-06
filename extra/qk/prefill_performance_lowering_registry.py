@@ -190,19 +190,25 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "owner_area": "scheduler",
     "status": "pending",
     "blockers": [
-      "Cooperative global-to-LDS partition and per-lane fragment reads are not yet generated",
+      "Tiny generated cooperative B-tile partition probe exists, but route-bound warmstart integration is not generated",
+      "Cooperative global-to-LDS partition and per-lane fragment reads are not yet bound to the scheduler TC route",
     ],
     "reuse_files": [
+      "extra/qk/cooperative_stage_lanemap.py",
+      "extra/qk/prefill_graph_gemm_coop_partition_gate.py",
+      "bench/prefill-graph-gemm-coop-partition/latest.json",
       "tinygrad/schedule/rangeify.py",
       "tinygrad/schedule/wmma.py",
       "docs/handwritten-kernel-exhaustive-lowering-scope-20260706.md",
       "tinygrad/llm/model.py",
     ],
     "gates": [
+      "prefill_graph_gemm_coop_partition_probe_gate",
       "prefill_graph_gemm_coop_partition_gate",
       "prefill_graph_gemm_no_raw_ops_ins_gate",
     ],
     "success_criteria": [
+      "Tiny generated cooperative B-tile partition probe emits a 256-half LOCAL tile, lane guard, barrier, and fp16 WMMA with exact output parity.",
       "8B pp512 materially above current strict-pure runtime when partitioning is enabled.",
       "Route-bound execution stays on generated scheduler/codegen lowering, not raw graph-GEMM research.",
     ],
