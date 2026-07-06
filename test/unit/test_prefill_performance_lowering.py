@@ -37,6 +37,9 @@ def test_prefill_performance_registry_rows_are_valid_and_ordered():
     assert row["phase"] == row["phase_order"]
     assert row["status"] in registry.VALID_STATUSES
     assert row["owner_area"] in registry.VALID_OWNER_AREAS
+    assert isinstance(row["completion_percent"], int)
+    assert 0 <= row["completion_percent"] <= 100
+    assert row["completion_rationale"]
     assert row["scope_doc"] == registry.DOC_PATH
     assert pathlib.Path(row["scope_doc"]).exists()
     for reuse_file in row["reuse_files"]:
@@ -65,6 +68,7 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   expected_targets = sorted({r["target"] for r in rows})
   assert full["schema"] == "prefill-performance-lowering-report.v1"
   assert full["row_count"] == len(rows)
+  assert full["average_completion_percent"] == round(sum(r["completion_percent"] for r in rows) / len(rows), 1)
   assert full["target_count"] == len(expected_targets)
   assert sorted(full["targets"]) == expected_targets
   assert full["scope_doc"] == registry.DOC_PATH
@@ -76,6 +80,9 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   for target in expected_targets:
     expected_rows = [r["id"] for r in sorted((r for r in rows if r["target"] == target), key=lambda r: r["phase_order"])]
     assert full["targets"][target]["rows"] == expected_rows
+    target_rows = [r for r in rows if r["target"] == target]
+    assert full["targets"][target]["average_completion_percent"] == \
+      round(sum(r["completion_percent"] for r in target_rows) / len(target_rows), 1)
   assert not full["targets"]["target_1"]["done"]
   assert any("single_operand_stage" in blocker for blocker in full["blocker_list"])
   baseline_row = registry.row("prefill_performance_target_1_baseline")

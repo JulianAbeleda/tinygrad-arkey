@@ -4,6 +4,10 @@
 
 This is the execution plan for getting the prefill lowering work to **100% complete before route promotion**.
 
+For the current handoff packet, percentage table, and exhaustive reading list, start with:
+
+- `docs/HANDOFF-prefill-performance-lowering-20260706.md`
+
 Promotion rows stay explicitly out of scope:
 
 - `prefill_performance_target_1_promotion`
@@ -31,7 +35,6 @@ Cleared blockers:
 Remaining non-promotion blockers:
 
 - `prefill_performance_target_1_fp16_recovery`
-- `prefill_performance_target_1_baseline`
 - `prefill_performance_target_1_single_operand_stage`
 - `prefill_performance_target_1_both_operands_stage`
 - `prefill_performance_target_1_coop_partition`

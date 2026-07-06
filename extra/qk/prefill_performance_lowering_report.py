@@ -145,13 +145,17 @@ def _target_summary(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
       "rows": [],
       "max_phase": -1,
       "blocking_count": 0,
+      "completion_percent_sum": 0,
     })
     target_data["rows"].append((row["phase_order"], row["id"]))
     target_data["max_phase"] = max(target_data["max_phase"], row["phase"])
+    target_data["completion_percent_sum"] += row["completion_percent"]
     if row["status"] == "blocked":
       target_data["blocking_count"] += 1
   for target_id, target_data in targets.items():
     target_data["rows"] = [row_id for _, row_id in sorted(target_data["rows"])]
+    row_count = len(target_data["rows"])
+    target_data["average_completion_percent"] = round(target_data.pop("completion_percent_sum") / row_count, 1) if row_count else 0.0
     target_data["done"] = all(row["status"] == "done" for row in rows if row["target"] == target_id)
   return targets
 
@@ -176,6 +180,7 @@ def build_prefill_performance_lowering_report(
   by_status: dict[str, int] = {}
   blockers: list[str] = []
   reusable_files: set[str] = set()
+  average_completion_percent = round(sum(row["completion_percent"] for row in rows) / len(rows), 1) if rows else 0.0
   for row in rows:
     by_status[row["status"]] = by_status.get(row["status"], 0) + 1
     reusable_files.update(row["reuse_files"])
@@ -191,6 +196,7 @@ def build_prefill_performance_lowering_report(
     "promotion_rows": [row["id"] for row in promotion_rows],
     "rows": rows,
     "row_count": len(rows),
+    "average_completion_percent": average_completion_percent,
     "target_count": len(target_summary),
     "targets": target_summary,
     "by_status": by_status,

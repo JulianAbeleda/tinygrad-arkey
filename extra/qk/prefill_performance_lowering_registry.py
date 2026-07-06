@@ -26,6 +26,8 @@ class PrefillPerformanceLoweringRow(TypedDict):
   phase_name: str
   owner_area: str
   status: str
+  completion_percent: int
+  completion_rationale: str
   blockers: list[str]
   reuse_files: list[str]
   gates: list[str]
@@ -43,6 +45,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "target_scope",
     "owner_area": "policy",
     "status": "pending",
+    "completion_percent": 20,
+    "completion_rationale": "Scope and purity gates exist, but generated fast fp16 prefill still has not replaced the raw graph-GEMM substrate.",
     "blockers": [
       "PREFILL_GRAPH_GEMM=1 still routes to raw instruction-list WMMA baseline",
       "No generated performance substrate yet owns prefill-WMMA+LDS staging",
@@ -75,6 +79,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "baseline",
     "owner_area": "policy",
     "status": "done",
+    "completion_percent": 100,
+    "completion_rationale": "Current warmstart schedule-table and bounded whole-prefill route-attribution evidence are in place.",
     "blockers": [
       "Latest current-baseline evidence is in-place: `bench/prefill-v2-schedule-table/latest.json` for warmstart schedule-table AMD pass, "
       "`bench/prefill-whole-synced/latest.json` carries the bounded strict-pure smoke pp512 value and route attribution."
@@ -108,6 +114,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "single_operand_lds_staging",
     "owner_area": "codegen",
     "status": "in_progress",
+    "completion_percent": 55,
+    "completion_rationale": "Small and route-bound A/B staging evidence exists, but medium-shape performance is flat and coop source-B ownership is unresolved.",
     "blockers": [
       "Generated fp16 shaped-WMMA LOCAL staging substrate probe passes",
       "The fp16 prefill TC route can emit numerically correct generated A-operand LOCAL staging on the 512x512 route-bound diagnostic",
@@ -160,6 +168,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "both_operands_staging",
     "owner_area": "codegen",
     "status": "pending",
+    "completion_percent": 35,
+    "completion_rationale": "Both-operand generated custom probe passes, but actual route-bound medium execution and performance proof are missing.",
     "blockers": [
       "Generated fp16 both-operand LOCAL staging substrate probe passes, but only for a tiny custom kernel",
       "Both-source staging is not bound to the actual fp16 prefill TC route",
@@ -192,6 +202,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "cooperative_partition",
     "owner_area": "scheduler",
     "status": "pending",
+    "completion_percent": 45,
+    "completion_rationale": "Tiny cooperative B-tile probe and route-bound case exist, but the medium source-B shape is not owned by the cooperative rewrite.",
     "blockers": [
       "Tiny generated cooperative B-tile partition probe exists, and the medium gate now defines a route-bound cooperative case",
       "The route-bound cooperative case executes without beating baseline because the medium source-B shape is not owned by the cooperative rewrite",
@@ -230,6 +242,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "optional_double_buffer",
     "owner_area": "scheduler",
     "status": "not_started",
+    "completion_percent": 0,
+    "completion_rationale": "Sidecar only; intentionally deferred until phases 1-4 leave a measured residual worth pursuing.",
     "blockers": [
       "Only needed if phase 1-4 leaves >20% residual vs historical graph-GEMM trajectory",
     ],
@@ -254,6 +268,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "promotion",
     "owner_area": "policy",
     "status": "blocked",
+    "completion_percent": 0,
+    "completion_rationale": "Promotion is intentionally out of scope until generated 8B performance parity is demonstrated.",
     "blockers": [
       "8B performance parity must be demonstrated before route authority changes.",
     ],
@@ -278,6 +294,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "target_scope",
     "owner_area": "policy",
     "status": "pending",
+    "completion_percent": 25,
+    "completion_rationale": "Packed/MMQ scope and substrates are tracked, but generated MMQ still does not dominate the direct-packed VALU route.",
     "blockers": [
       "Generated packed/MMQ substrate still does not dominate direct-packed VALU path",
     ],
@@ -310,6 +328,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "baseline",
     "owner_area": "policy",
     "status": "pending",
+    "completion_percent": 45,
+    "completion_rationale": "Direct-packed memory-safe baseline is documented, but it remains performance-limited and still needs model-authority baseline treatment.",
     "blockers": [
       "Current direct-packed route remains memory-safe but performance-limited by dequant/VALU",
     ],
@@ -334,6 +354,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "tile_contract",
     "owner_area": "scheduler",
     "status": "done",
+    "completion_percent": 100,
+    "completion_rationale": "Bounded full-role tile contract is centralized, compile-time checked, and gated.",
     "blockers": [],
     "reuse_files": [
       "docs/q4k-wmma-full-role-lowering-solution-scope-20260705.md",
@@ -361,6 +383,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "wmma_surface_decision",
     "owner_area": "vocab",
     "status": "done",
+    "completion_percent": 100,
+    "completion_rationale": "The shaped WMMA surface is selected and backed by scheduler/codegen evidence.",
     "blockers": [],
     "reuse_files": [
       "docs/route-b-iu8-wmma-mmq-design-20260705.md",
@@ -385,6 +409,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "small_lifecycle",
     "owner_area": "codegen",
     "status": "done",
+    "completion_percent": 100,
+    "completion_rationale": "Small bounded multi-tile lifecycle keeps RAW/QSUM/output lifetime bounded and is gated.",
     "blockers": [],
     "reuse_files": [
       "extra/qk/prefill_int8_wmma_spec.py",
@@ -412,6 +438,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "synthetic_role_shape",
     "owner_area": "scheduler",
     "status": "pending",
+    "completion_percent": 60,
+    "completion_rationale": "Role-shape contract and bounded synthetic execution gate exist, but full role execution is blocked on scheduler-owned tile loops.",
     "blockers": [
       "Synthetic role-shape contract exists, but execution is blocked by scheduler_owned_tile_loop_missing",
     ],
@@ -441,6 +469,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "model_authority",
     "owner_area": "policy",
     "status": "blocked",
+    "completion_percent": 30,
+    "completion_rationale": "Blocked gates exist and classify the gap, but QK route policy cannot select 14B MMQ prefill route ids yet.",
     "blockers": [
       "QK_ROUTE_POLICY._SUPPORTED_QK_ROUTE_IDS does not include prefill_q4k_int8_wmma_generated_research or prefill_q4k_int8_wmma_tiled_research.",
       "14B prefill MMQ currently binds via PREFILL_Q4K_Q8 env modes, not via explicit policy selection with representative shapes.",
@@ -470,6 +500,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "q6_residual_decision",
     "owner_area": "policy",
     "status": "blocked",
+    "completion_percent": 20,
+    "completion_rationale": "Q6 direct-generated route exists, but there is no generated Q6_K prefill MMQ route or residual attribution artifact.",
     "blockers": [
       "No generated Q6_K prefill MMQ route is currently in route-policy support or generated-route registry.",
       "No 14B full-prefill residual attribution exists yet for a data-driven Q6_K keep-vs-promote policy decision.",
@@ -500,6 +532,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_name": "promotion",
     "owner_area": "policy",
     "status": "blocked",
+    "completion_percent": 0,
+    "completion_rationale": "Promotion is intentionally out of scope until strict-pure 14B packed/MMQ improvement is demonstrated.",
     "blockers": [
       "No >1.25x improvement on strict-pure 14B packed baseline yet",
     ],
@@ -535,6 +569,11 @@ def _validate_rows(rows: tuple[PrefillPerformanceLoweringRow, ...]) -> None:
     if row["status"] not in VALID_STATUSES:
       raise ValueError(f"invalid status {row['status']!r} for row {row['id']!r}")
 
+    if not isinstance(row["completion_percent"], int) or not 0 <= row["completion_percent"] <= 100:
+      raise ValueError(f"invalid completion_percent {row['completion_percent']!r} for row {row['id']!r}")
+    if not row["completion_rationale"]:
+      raise ValueError(f"missing completion_rationale for row {row['id']!r}")
+
     if not pathlib.Path(row["scope_doc"]).is_absolute():
       scope_path = ROOT / row["scope_doc"]
     else:
@@ -566,6 +605,8 @@ def _sanitize_row(row: PrefillPerformanceLoweringRow) -> dict[str, Any]:
     "phase_name": row["phase_name"],
     "owner_area": row["owner_area"],
     "status": row["status"],
+    "completion_percent": row["completion_percent"],
+    "completion_rationale": row["completion_rationale"],
     "blockers": list(row["blockers"]),
     "reuse_files": list(row["reuse_files"]),
     "gates": list(row["gates"]),

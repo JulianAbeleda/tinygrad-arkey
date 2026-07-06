@@ -11,6 +11,14 @@ Short answer: the repo has lowered the **default provenance** far enough to pass
 the **old fast execution substrate** far enough to recover the previous graph-GEMM performance without the raw WMMA
 route.
 
+For handoff, percentages, and the no-duplicate-work reading list, start with:
+
+- `docs/HANDOFF-prefill-performance-lowering-20260706.md`
+
+The per-row completion estimates are source-controlled in
+`extra/qk/prefill_performance_lowering_registry.py` as `completion_percent` and `completion_rationale`, and are emitted
+by `extra/qk/prefill_performance_lowering_report.py`.
+
 Two distinct targets are now being conflated:
 
 1. **8B resident-fp16 graph-GEMM recovery**
