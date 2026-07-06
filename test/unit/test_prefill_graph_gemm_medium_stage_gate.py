@@ -14,6 +14,7 @@ def test_medium_stage_gate_classifies_forced_stage_blocker(monkeypatch):
     {"status": "ok", "tflops": 40.0},
     {"status": "WRONG rr=1.2e+00", "tflops": 0.0},
     {"status": "CompileError", "tflops": 0.0},
+    {"status": "CompileError", "tflops": 0.0},
   ]
 
   def fake_run_config(*args, **kwargs):
@@ -24,4 +25,5 @@ def test_medium_stage_gate_classifies_forced_stage_blocker(monkeypatch):
   assert report["evidence"]["baseline_table_local_ok"] is True
   assert report["evidence"]["pre_wmma_forced_local_ok"] is False
   assert report["evidence"]["post_local_stage_ok"] is False
+  assert report["evidence"]["scalar_post_local_stage_ok"] is False
   assert report["verdict"] == "PREFILL_GRAPH_GEMM_MEDIUM_LOCAL_STAGE_BLOCKED"

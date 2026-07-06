@@ -359,6 +359,9 @@ def _tc_local_stage_with_planned_local() -> bool:
 def _tc_local_stage_post_opt() -> bool:
   return bool(getenv("PREFILL_TC_LOCAL_STAGE_POST", 0))
 
+def _tc_local_stage_scalar_post_opt() -> bool:
+  return bool(getenv("PREFILL_TC_LOCAL_STAGE_SCALAR_POST", 0))
+
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...]) -> UOp:
   return src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False)).index(*ranges)
 
@@ -386,6 +389,22 @@ def _tc_local_stage_wmma_post(wmma:UOp) -> UOp|None:
 
 pm_tc_local_stage_post = PatternMatcher([
   (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_wmma_post),
+])
+
+def _tc_local_stage_contract_src_post(wmma:UOp) -> UOp|None:
+  if wmma.src[0].op is not Ops.CONTRACT: return None
+  if wmma.src[0].src[0].op_in_backward_slice_with_self(Ops.STAGE): return None
+  contracted = wmma.src[0]
+  stage_ranges = _tc_local_stage_ranges((contracted.src[0], contracted))
+  if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
+    print("TC_LOCAL_STAGE_SCALAR", {"ranges": [(r.arg, r.vmax+1) for r in stage_ranges],
+                                    "scalar_ranges": [(r.arg, r.vmax+1) for r in sorted(contracted.src[0].ranges, key=lambda r: r.arg)],
+                                    "contract_ranges": [(r.arg, r.vmax+1) for r in sorted(contracted.ranges, key=lambda r: r.arg)]})
+  staged = _tc_local_stage_src(contracted.src[0], stage_ranges)
+  return wmma.replace(src=(contracted.replace(src=(staged,)), wmma.src[1], wmma.src[2]))
+
+pm_tc_local_stage_scalar_post = PatternMatcher([
+  (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_contract_src_post),
 ])
 
 def _warmstart_match(k):
@@ -430,6 +449,8 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
-  if _tc_local_stage_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+  if _tc_local_stage_scalar_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+    k.ast = graph_rewrite(k.ast, pm_tc_local_stage_scalar_post, name="tc local stage scalar post")
+  elif _tc_local_stage_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_post, name="tc local stage post")
   return k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)

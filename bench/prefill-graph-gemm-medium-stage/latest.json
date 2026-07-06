@@ -19,6 +19,7 @@
     "baseline_table_local_ok": true,
     "pre_wmma_forced_local_ok": false,
     "post_local_stage_ok": false,
+    "scalar_post_local_stage_ok": false,
     "staged_beats_baseline": false
   },
   "cases": {
@@ -27,7 +28,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 35.4,
+      "tflops": 35.47,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -54,7 +55,16 @@
       "tflops": 0.0,
       "status": "CompileError",
       "pin_clock": true
+    },
+    "scalar_post_local_stage": {
+      "u0": 4,
+      "u1": 4,
+      "loc": 4,
+      "unr": 8,
+      "tflops": 0.0,
+      "status": "CompileError",
+      "pin_clock": true
     }
   },
-  "remaining_blocker": "final-WMMA operand staging does not compose with warmstart LOCAL schedules; needs lower-level cooperative tile staging"
+  "remaining_blocker": "final/scalar WMMA operand staging does not compose with warmstart LOCAL schedules; needs tile-shaped cooperative staging"
 }

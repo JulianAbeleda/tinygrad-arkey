@@ -60,6 +60,13 @@ def build_report(*, run_amd: bool = False, m: int = M_DEFAULT, out_f: int = 4096
         "PREFILL_TC_LOCAL_STAGE": "a",
         "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL": None,
         "PREFILL_TC_LOCAL_STAGE_POST": "1",
+        "PREFILL_TC_LOCAL_STAGE_SCALAR_POST": None,
+      }),
+      "scalar_post_local_stage": _run_case(m, out_f, in_f, pin_clock=pin_clock, env={
+        "PREFILL_TC_LOCAL_STAGE": "a",
+        "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL": None,
+        "PREFILL_TC_LOCAL_STAGE_POST": None,
+        "PREFILL_TC_LOCAL_STAGE_SCALAR_POST": "1",
       }),
     }
   else:
@@ -68,8 +75,9 @@ def build_report(*, run_amd: bool = False, m: int = M_DEFAULT, out_f: int = 4096
   baseline_ok = run_amd and cases["baseline_table_local"].get("status") == "ok"
   pre_ok = run_amd and cases["pre_wmma_stage_forced_local"].get("status") == "ok"
   post_ok = run_amd and cases["post_local_stage"].get("status") == "ok"
-  staged_ok = bool(pre_ok or post_ok)
-  staged_best = max((cases[k].get("tflops", 0.0) for k in ("pre_wmma_stage_forced_local", "post_local_stage")
+  scalar_post_ok = run_amd and cases["scalar_post_local_stage"].get("status") == "ok"
+  staged_ok = bool(pre_ok or post_ok or scalar_post_ok)
+  staged_best = max((cases[k].get("tflops", 0.0) for k in ("pre_wmma_stage_forced_local", "post_local_stage", "scalar_post_local_stage")
                      if isinstance(cases.get(k), dict)), default=0.0)
   baseline_tflops = cases["baseline_table_local"].get("tflops", 0.0) if run_amd else 0.0
   staged_beats_baseline = bool(staged_ok and staged_best > baseline_tflops * 1.05)
@@ -88,11 +96,12 @@ def build_report(*, run_amd: bool = False, m: int = M_DEFAULT, out_f: int = 4096
       "baseline_table_local_ok": bool(baseline_ok),
       "pre_wmma_forced_local_ok": bool(pre_ok),
       "post_local_stage_ok": bool(post_ok),
+      "scalar_post_local_stage_ok": bool(scalar_post_ok),
       "staged_beats_baseline": staged_beats_baseline,
     },
     "cases": cases,
     "remaining_blocker": None if verdict.endswith("_PASS") else
-      "final-WMMA operand staging does not compose with warmstart LOCAL schedules; needs lower-level cooperative tile staging",
+      "final/scalar WMMA operand staging does not compose with warmstart LOCAL schedules; needs tile-shaped cooperative staging",
   }
   if artifact:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
