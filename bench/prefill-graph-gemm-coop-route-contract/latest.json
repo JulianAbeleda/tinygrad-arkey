@@ -14,9 +14,9 @@
   "artifacts": {
     "coop_partition": "bench/prefill-graph-gemm-coop-partition/latest.json",
     "medium_stage": "bench/prefill-graph-gemm-medium-stage/latest.json",
-    "baseline_tflops": 34.97,
-    "post_tile_b_tflops": 35.1,
-    "route_bound_coop_status": "AssertionError",
+    "baseline_tflops": 35.43,
+    "post_tile_b_tflops": 35.26,
+    "route_bound_coop_status": "RuntimeError",
     "route_bound_coop_tflops": 0.0
   },
   "remaining_blocker": "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case does not execute and beat baseline"

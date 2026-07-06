@@ -310,8 +310,10 @@ class Scheduler:
               UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
             ]
             wmma_srcs = _tc_local_stage_wmma_sources(wmma_srcs, _tc_local_stage_ranges((wmma_srcs[0], wmma_srcs[1])),
-                                                     enabled=_tc_local_stage_with_planned_local() or
+                                                     enabled=not _tc_local_stage_coop_b_post_opt() and
+                                                     (_tc_local_stage_with_planned_local() or
                                                      not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts)))
+                                                     )
             wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
               wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
             tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
@@ -418,11 +420,12 @@ def _tc_local_stage_coop_b_wmma_post(wmma:UOp) -> UOp|None:
   lane = warp_ranges[0]
   row = lane & 15
   bsh = UOp.placeholder((256,), wmma.src[1].dtype.scalar(), 990, addrspace=AddrSpace.LOCAL)
-  end_ranges = tuple(r for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg) if r is not lane)
-  idx = UOp.vectorize(*[row*16+i for i in range(16)])
-  stage = bsh.index(idx, dtype=wmma.src[1].dtype).store(wmma.src[1], lane < 16).end(*end_ranges)
-  bar = UOp.barrier(stage)
-  bvec = bsh.after(bar).index(idx, dtype=wmma.src[1].dtype)
+  end_ranges = tuple(r for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg)
+                     if r is not lane and r.arg[-1] is not AxisType.REDUCE)
+  stores = [bsh[row*16+i].store(wmma.src[1].gep(i), lane < 16).end(*end_ranges) for i in range(16)]
+  bar = stores[0].barrier(*stores[1:])
+  vals = [bsh.after(bar)[row*16+i] for i in range(16)]
+  bvec = vals[0].vectorize(*vals[1:])
   _tc_local_stage_coop_b_stats["rewritten"] += 1
   if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
     _tc_local_stage_coop_b_stats["dumped"] += 1

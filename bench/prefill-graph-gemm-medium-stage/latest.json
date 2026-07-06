@@ -30,7 +30,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 34.97,
+      "tflops": 35.43,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -63,7 +63,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 35.1,
+      "tflops": 35.26,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -79,7 +79,7 @@
       "loc": 4,
       "unr": 8,
       "tflops": 0.0,
-      "status": "AssertionError",
+      "status": "RuntimeError",
       "pin_clock": true
     },
     "scalar_post_local_stage": {
@@ -92,5 +92,5 @@
       "pin_clock": true
     }
   },
-  "remaining_blocker": "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; the first route-bound cooperative B-partition attempt reaches the CFG linearizer and is rejected by current control-flow dependencies; A/both/final-scalar staging remain wrong or unbuildable"
+  "remaining_blocker": "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; the first route-bound cooperative B-partition attempt passes the previous CFG cycle but is rejected later as an invalid vector local-store shape; A/both/final-scalar staging remain wrong or unbuildable"
 }

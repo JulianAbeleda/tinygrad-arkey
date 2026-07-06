@@ -89,9 +89,9 @@ def build_report(*, run_amd: bool = False, m: int = M_DEFAULT, out_f: int = 4096
         "PREFILL_TC_LOCAL_STAGE_TILE_ONLY": None,
         "PREFILL_TC_LOCAL_STAGE_SCALAR_POST": None,
         "PREFILL_TC_LOCAL_STAGE_COOP_B_POST": "1",
-        # This is a control-flow/lowering diagnostic, not a perf attempt. One
+        # This is a lowering diagnostic, not a perf attempt. One
         # rewrite is enough to prove whether route-bound cooperative stores
-        # compose with the current CFG linearizer.
+        # compose through CFG, late vectorization, and verifier lowering.
         "PREFILL_TC_LOCAL_STAGE_COOP_B_LIMIT": "1",
       }),
       "scalar_post_local_stage": _run_case(m, out_f, in_f, pin_clock=pin_clock, env={
@@ -142,7 +142,7 @@ def build_report(*, run_amd: bool = False, m: int = M_DEFAULT, out_f: int = 4096
     },
     "cases": cases,
     "remaining_blocker": None if verdict.endswith("_PASS") else
-      "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; the first route-bound cooperative B-partition attempt reaches the CFG linearizer and is rejected by current control-flow dependencies; A/both/final-scalar staging remain wrong or unbuildable",
+      "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; the first route-bound cooperative B-partition attempt passes the previous CFG cycle but is rejected later as an invalid vector local-store shape; A/both/final-scalar staging remain wrong or unbuildable",
   }
   if artifact:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)

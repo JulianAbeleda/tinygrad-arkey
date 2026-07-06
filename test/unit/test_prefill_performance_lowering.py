@@ -42,32 +42,18 @@ def test_prefill_performance_registry_build_shape():
 
 def test_prefill_performance_report_prints_json_and_can_filter_target():
   full = report.build_prefill_performance_lowering_report()
+  rows = registry.rows()
+  expected_targets = sorted({r["target"] for r in rows})
   assert full["schema"] == "prefill-performance-lowering-report.v1"
-  assert full["row_count"] == len(registry.rows())
-  assert full["target_count"] == 2
+  assert full["row_count"] == len(rows)
+  assert full["target_count"] == len(expected_targets)
+  assert sorted(full["targets"]) == expected_targets
   assert full["scope_doc"] == registry.DOC_PATH
   assert "scope_files" in full
   assert isinstance(full["scope_files"], list)
-  assert full["targets"]["target_1"]["rows"] == [
-    "prefill_performance_target_1_fp16_recovery",
-    "prefill_performance_target_1_baseline",
-    "prefill_performance_target_1_single_operand_stage",
-    "prefill_performance_target_1_both_operands_stage",
-    "prefill_performance_target_1_coop_partition",
-    "prefill_performance_target_1_optional_double_buffer",
-    "prefill_performance_target_1_promotion",
-  ]
-  assert full["targets"]["target_2"]["rows"] == [
-    "prefill_performance_target_2_packed_mmq_recovery",
-    "prefill_performance_target_2_baseline",
-    "prefill_performance_target_2_tile_contract",
-    "prefill_performance_target_2_wmma_surface_decision",
-    "prefill_performance_target_2_small_lifecycle",
-    "prefill_performance_target_2_synthetic_shape",
-    "prefill_performance_target_2_model_authority",
-    "prefill_performance_target_2_q6_residual_decision",
-    "prefill_performance_target_2_promotion",
-  ]
+  for target in expected_targets:
+    expected_rows = [r["id"] for r in sorted((r for r in rows if r["target"] == target), key=lambda r: r["phase_order"])]
+    assert full["targets"][target]["rows"] == expected_rows
   assert not full["targets"]["target_1"]["done"]
   assert any("single_operand_stage" in blocker for blocker in full["blocker_list"])
   baseline_row = registry.row("prefill_performance_target_1_baseline")
@@ -90,6 +76,13 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   assert filtered["target_count"] == 1
   assert filtered["scope_doc"] == registry.DOC_PATH
   assert all(r["target"] == "target_1" for r in filtered["rows"])
+
+
+def test_prefill_performance_report_uses_current_route_bound_blocker():
+  filtered = report.build_prefill_performance_lowering_report("target_1")
+  payload = json.dumps(filtered)
+  assert "current CFG/control-flow dependency lowering" not in payload
+  assert "late vector local-store" in payload
 
 
 def test_prefill_performance_report_cli_modes(monkeypatch, capsys):

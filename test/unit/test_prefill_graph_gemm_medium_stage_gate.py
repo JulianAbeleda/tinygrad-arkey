@@ -15,7 +15,7 @@ def test_medium_stage_gate_classifies_forced_stage_blocker(monkeypatch):
     {"status": "WRONG rr=1.2e+00", "tflops": 0.0},
     {"status": "CompileError", "tflops": 0.0},
     {"status": "ok", "tflops": 42.5},
-    {"status": "AssertionError", "tflops": 0.0},
+    {"status": "RuntimeError", "tflops": 0.0},
     {"status": "CompileError", "tflops": 0.0},
   ]
 
