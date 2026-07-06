@@ -3,7 +3,7 @@ import math, functools
 from tinygrad.tensor import Tensor
 from tinygrad.dtype import dtypes
 from tinygrad.helpers import prod, make_tuple, flatten, USE_ATOMICS
-from tinygrad.nn import optim, state  # noqa: F401
+from tinygrad.nn import state  # noqa: F401  (optim removed 2026-07-06: inference-only fork)
 
 class BatchNorm:
   """

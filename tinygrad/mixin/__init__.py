@@ -444,27 +444,7 @@ class OpMixin(ElementwiseMixin, ReduceMixin):
   def __matmul__(self, x:Self) -> Self: return self.matmul(x)
   def __rmatmul__(self, x:Self) -> Self: return self.matmul(x, True)
 
-  def gradient(self, *targets:Self, gradient:Self|None=None) -> list[Self]:
-    """
-    Computes the gradient of the targets with respect to self.
-
-    ```python exec="true" source="above" session="tensor" result="python"
-    x = Tensor.eye(3)
-    y = Tensor([[2.0,0,-2.0]])
-    z = y.matmul(x).sum()
-    dx, dy = z.gradient(x, y)
-
-    print(dx.tolist())  # dz/dx
-    print(dy.tolist())  # dz/dy
-    ```
-    """
-    assert gradient is not None or self.shape == tuple(), "when no gradient is provided, backward must be called on a scalar tensor"
-    if not (self.is_floating_point() and all(t.is_floating_point() for t in targets)): raise RuntimeError("only float Tensors have gradient")
-    from tinygrad.gradient import compute_gradient
-    if gradient is None: gradient = self.const_like(1.0)
-    target_uops = [t._uop for t in targets]
-    grads = compute_gradient(self._uop, gradient._uop, set(target_uops))
-    return [self._wrap_uop(grads[x] if x in grads else x.const_like(0)) for x in target_uops]
+  # gradient() removed 2026-07-06: inference-only hard fork (forward-only). tinygrad/gradient.py deleted.
 
   def min(self, axis:int|Sequence[int]|None=None, keepdim=False) -> Self:
     """
