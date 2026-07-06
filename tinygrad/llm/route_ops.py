@@ -10,6 +10,7 @@ def _attr(module:str, name:str):
 
 
 def route_pf16_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_pf16_graph_gemm")(*args, **kwargs)
+def route_q4k_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_q4k_graph_gemm")(*args, **kwargs)
 
 def q4k_parse_opt(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "parse_opt")(*args, **kwargs)
 def q4k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_kernel")(*args, **kwargs)

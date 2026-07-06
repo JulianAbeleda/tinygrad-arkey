@@ -143,3 +143,34 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
                                  UOp(Ops.LINEAR, src=tuple([UOp(Ops.INS, arg=i) for i in insts]))))
   out = Tensor.custom_kernel(a, bt, c, fxn=asm_kernel)[2]
   return out.reshape(*x.shape[:-1], out_f)
+
+
+def route_q4k_graph_gemm(lin, x: Tensor) -> Tensor | None:
+  # 14B fused Q4_K prefill: keep weights PACKED 4-bit resident (no fp16 materialization -> no ~31GB OOM), decode to
+  # fp16 in-kernel (fused dequant -> fp16-LDS -> fp16-WMMA) via build_gemm_lds2_q4k. Quantized analog of the 8B
+  # resident-fp16 graph-GEMM. Guards restrict to the validated dense prefill shapes (T==512, tile-divisible). gfx1100
+  # arch restriction lives in the caller (Device[...] is disallowed during JIT capture).
+  b = getattr(lin, "bias", None)
+  if b is not None or x.ndim < 2 or not isinstance(x.shape[-2], int) or not isinstance(x.shape[-1], int): return None
+  if x.shape[-2] != 512: return None
+  out_f, in_f = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
+  if not (isinstance(out_f, int) and isinstance(in_f, int)) or in_f != x.shape[-1]: return None
+  WAVES_M, WAVES_N, WM, WN = 2, 2, 4, 4
+  BM, BN, THREADS = WAVES_M*WM*16, WAVES_N*WN*16, WAVES_M*WAVES_N*32
+  if out_f % BN or 512 % BM or in_f % 256: return None                     # tile / super-block divisibility
+  insts = ref.build_gemm_lds2_q4k(512, out_f, in_f, WAVES_M, WAVES_N, WM, WN)
+  words = lin.prefill_packed_weight()                                       # raw ggml Q4_K bytes [out_f, in_f], 144B/256-elem block (already on device)
+  a = x.reshape(512, in_f).cast(dtypes.float16).contiguous()
+  c = Tensor.empty(512, out_f, dtype=dtypes.half, device=x.device).contiguous()
+  grid = (out_f // BN, 512 // BM, 1); lds_bytes = (32*2)*(BM+BN)
+  name = f"prefill_q4k_fused_gemm_512_{out_f}_{in_f}"
+  def asm_kernel(A, W, C):
+    lds = UOp(Ops.DEFINE_LOCAL, dtypes.uint8.ptr(size=lds_bytes, addrspace=AddrSpace.LOCAL), (), "lds")
+    g = [UOp.special(grid[0], "gidx0"), UOp.special(grid[1], "gidx1")]
+    sink = UOp.sink(A.base, W.base, C.base, lds, *g, UOp.special(THREADS, "lidx0"),
+                    arg=KernelInfo(name=colored(name, "cyan"),
+                                   estimates=Estimates(ops=512*out_f*in_f*2, mem=(512*in_f + out_f*in_f//2 + 512*out_f)*2)))
+    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT),
+                                 UOp(Ops.LINEAR, src=tuple([UOp(Ops.INS, arg=i) for i in insts]))))
+  out = Tensor.custom_kernel(a, words, c, fxn=asm_kernel)[2]
+  return out.reshape(*x.shape[:-1], out_f)
