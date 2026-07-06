@@ -5,18 +5,20 @@ from typing import cast, Final
 from tinygrad.uop.ops import Ops, UOp, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.helpers import colored, getenv, DEBUG, to_function_name, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
+from tinygrad.schedule.indexing import BufferizeOpts
 
 class Scheduler:
   def __init__(self, ast:UOp, ren:Renderer):
     self.ast, self.ren = ast, ren
     self.dont_use_locals = self.ast.arg.dont_use_locals if self.ast.arg is not None else False
     self.applied_opts = list(self.ast.arg.applied_opts) if self.ast.arg is not None else []
+    self.planned_opts: tuple[Opt, ...] = ()
     self.opt_range = count(start=max([x.arg[0] for x in self.rngs], default=0)+1)
 
   @property
@@ -44,6 +46,7 @@ class Scheduler:
     ret = Scheduler(self.ast, self.ren)
     ret.dont_use_locals = self.dont_use_locals
     ret.applied_opts = self.applied_opts[:]
+    ret.planned_opts = self.planned_opts
     if hasattr(self, 'tensor_core'): ret.tensor_core = self.tensor_core
     return ret
 
@@ -302,10 +305,14 @@ class Scheduler:
             # do the reduce_axes always disappear? i think they don't
             # they need to be moved into the WMMA srcs
             wmma_arg = (str(tc), tc.dims, tc.dtype_in, tc.dtype_out, self.ren.target.device, tc.threads, tc_upcast_axes, ()) #, tc_reduce_axes)
-            wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
+            wmma_srcs = [
               UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
               UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
-              UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
+            ]
+            wmma_srcs = _tc_local_stage_wmma_sources(wmma_srcs, _tc_local_stage_ranges((wmma_srcs[0], wmma_srcs[1])),
+                                                     enabled=not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts)))
+            wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
+              wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
             tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
 
             # preserve extra reduces
@@ -341,6 +348,26 @@ def bufs_from_ast(ast:UOp, dname:str) -> list[Buffer]:
 # Map key = (frozenset(output dims), product(reduce dims)); value = tuple[Opt]. Default None = no-op.
 _WARMSTART_OPTS = None
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
+
+def _tc_local_stage_mode() -> str:
+  return str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower()
+
+def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...]) -> UOp:
+  return src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False)).index(*ranges)
+
+def _tc_local_stage_wmma_sources(srcs:list[UOp], stage_ranges:tuple[UOp, ...], *, enabled:bool=True) -> list[UOp]:
+  mode = _tc_local_stage_mode()
+  if mode in ("", "0", "false", "off", "no") or not enabled: return srcs
+  if mode not in ("a", "1", "true", "yes"):
+    raise KernelOptError(f"PREFILL_TC_LOCAL_STAGE currently supports only a/off; b/both are not numerically validated, got {mode!r}")
+  srcs[0] = _tc_local_stage_src(srcs[0], stage_ranges)
+  return srcs
+
+def _tc_local_stage_ranges(srcs:tuple[UOp, ...]) -> tuple[UOp, ...]:
+  rngs = sorted(UOp.sink(*srcs).ranges, key=lambda r: r.arg)
+  lane_rngs = tuple(r for r in rngs if r.arg[-1] in (AxisType.LOCAL, AxisType.WARP))
+  return lane_rngs or tuple(r for r in rngs if r.arg[-1] is not AxisType.UPCAST)
+
 def _warmstart_match(k):
   # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce)
   red, out = 1, []
@@ -355,6 +382,7 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   k = Scheduler(ast, ren)
   k.convert_loop_to_global()
   if ast.arg is not None and ast.arg.opts_to_apply is not None:
+    k.planned_opts = tuple(ast.arg.opts_to_apply)
     for opt in ast.arg.opts_to_apply: k.apply_opt(opt)
   elif _WARMSTART_OPTS is not None and (forced := _warmstart_match(k)) is not None:
     _warmstart_stats["match"] += 1
@@ -367,6 +395,7 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
           f"(after-cast={s0b.op} dtypes={[x.dtype for x in s0b.src][:2] if s0b.op is Ops.MUL else '?'})")
       else: _warmstart_stats["dumps"].append("NO reduceops")
     try:
+      k.planned_opts = tuple(forced)
       for o in forced: k.apply_opt(o)
       _warmstart_stats["apply"] += 1
     except KernelOptError as _e:  # axis/fusion mismatch -> safe fallback to the heuristic on a fresh kernel

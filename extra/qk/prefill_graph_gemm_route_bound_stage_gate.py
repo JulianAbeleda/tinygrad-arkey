@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser()
   ap.add_argument("--compact", action="store_true")
   ap.add_argument("--run-amd", action="store_true", help="execute the route-bound AMD prefill probe")
-  ap.add_argument("--local-stage", default="", help="set PREFILL_TC_LOCAL_STAGE for the route-bound probe, e.g. 1/a/both")
+  ap.add_argument("--local-stage", default="", help="set PREFILL_TC_LOCAL_STAGE for the route-bound probe; currently validated values are off or a")
   add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
   report = build_report(run_amd=args.run_amd, local_stage=args.local_stage, pin_clock=args.pin_clock)
