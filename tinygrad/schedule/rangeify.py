@@ -16,6 +16,23 @@ from tinygrad.schedule.allreduce import create_allreduce_function
 import sys
 sys.setrecursionlimit(10000)
 
+# *** PREFILL_DBUF: generated double-buffered K-loop primitive (Step 1 of the pure-substrate prefill scope) ***
+# Default-off. Everything behind this gate. The primitive has three sub-parts, all gated by the same flag:
+#   1b (storage): the LOCAL bufferize branch allocates NBUF=2 LDS slots and indexes store/read by (k&1).
+#   1c (peel):    an extra UNROLL-by-2 on the K reduce axis, applied in postrange.apply_opts, so the two
+#                 K-copies land in one basic block as intra-body forward AFTER edges (no second END over the
+#                 K-range -> CFGContext never sees the same-range cycle at linearizer.py:162).
+#   1d (waitcnt): NOT here -- it is the AMD-renderer residual (deferred vmcnt drain). Measure 1c first.
+def PREFILL_DBUF() -> int: return getenv("PREFILL_DBUF", 0)
+def PREFILL_DBUF_NBUF() -> int: return getenv("PREFILL_DBUF_NBUF", 2)
+
+def prefill_dbuf_reduce_range(rngs) -> UOp|None:
+  # pick the K slot-carrier: the innermost (highest axis id) const-even-sized REDUCE/UNROLL range.
+  # fail-closed: symbolic or odd or absent -> None (caller keeps single-buffer behavior).
+  cands = [r for r in rngs if r.op is Ops.RANGE and r.arg[-1] in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE)
+           and r.src[0].op is Ops.CONST and isinstance(r.src[0].arg, int) and (int(r.vmax)+1) % 2 == 0]
+  return max(cands, key=lambda r: r.arg[0]) if cands else None
+
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
   assert x.src[0].shape == x.src[1].shape, "bad store shape"
@@ -427,6 +444,11 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
 
   if allow_locals:
     # handle locals
+    # NOTE (PREFILL_DBUF, removed): a branch formerly sat here that enlarged this LDS allocation to size*NBUF slots
+    # for a staged double-buffer tile. It was a functional no-op -- it reserved the extra LDS but the store and the
+    # downstream read still used the SAME idx (no per-slot (k&1) offset), so it only wasted LDS while producing
+    # byte-identical results. The real paired (k&1) store+read indexing lives at the co-located _tc_local_stage_src
+    # site in postrange.py. The dead branch has been deleted; the plain single-slot allocation below is the sole path.
     buf = UOp.placeholder((size,), x.dtype, next(ctx), AddrSpace.LOCAL)
     do_store = buf.broadcast(x.src[1].dtype.count).index(idx, dtype=sdtype).store(x.src[0]).end(*rngs)
     return buf.after(do_store.barrier())

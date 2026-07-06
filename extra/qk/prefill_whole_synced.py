@@ -78,15 +78,19 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
   chunk = Tensor([[(i * 7) % 1000 for i in range(chunk_n)]], dtype="int32").contiguous()
 
   def burst(sp_int: int) -> dict[str, Any]:
-    jitted = TinyJit(model.forward)
-    for _ in range(warmups): jitted(chunk, sp_int, temp).realize()
+    # Measure the real production path: model.__call__ with a concrete int start_pos + concrete chunk.shape[1]=512
+    # takes the prefill_v2_jits[start_pos] per-start_pos branch (model.py:788-789) AND installs the warmstart
+    # schedule table around the jit call (model.py:797-801). use_flash=True is required -- else __call__ clobbers
+    # each block._use_flash to False (model.py:768). A harness-level TinyJit(model.forward) would bypass __call__
+    # entirely, leaving _WARMSTART_OPTS empty (the phantom-1741 bench bug).
+    for _ in range(warmups): model(chunk, sp_int, temp, use_flash=True).realize()
     dev.synchronize()
     ts = []
     with pinned_peak_from_env() as pin_prov:
       for _ in range(rounds):
         dev.synchronize()
         t0 = time.perf_counter()
-        for _ in range(K): jitted(chunk, sp_int, temp).realize()
+        for _ in range(K): model(chunk, sp_int, temp, use_flash=True).realize()
         dev.synchronize()
         ts.append((time.perf_counter() - t0) / K * 1e3)
     return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov}
@@ -131,7 +135,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "git_short": _git_short(),
     "git_dirty": _dirty_tree(),
     "route_attribution": _route_attribution(),
-    "timing_authority": "synced TinyJit forward, min over repeated bursts, no generate TTFT/sampling",
+    "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
   }
 
 

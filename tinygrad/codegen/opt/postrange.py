@@ -12,6 +12,7 @@ from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
 from tinygrad.schedule.indexing import BufferizeOpts
+from tinygrad.schedule.rangeify import PREFILL_DBUF, PREFILL_DBUF_NBUF, prefill_dbuf_reduce_range
 
 class Scheduler:
   def __init__(self, ast:UOp, ren:Renderer):
@@ -463,12 +464,21 @@ def _tc_local_stage_coop_b_wmma_post(wmma:UOp) -> UOp|None:
       }))
     return None
   row = lane & 15
-  bsh = UOp.placeholder((256,), wmma.src[1].dtype.scalar(), 990, addrspace=AddrSpace.LOCAL)
-  stores = [bsh.index(row*16+i, dtype=bsh.dtype).store(wmma.src[1].gep(i), lane < 16).end() for i in range(16)]
+  # 1b (paired double-buffer): PREFILL_DBUF gives the cooperative LDS tile NBUF slots and offsets BOTH the
+  # store and the read by (k&1)*256, built from the same reduce carrier -> self-consistent (co-located store
+  # and read share `slot`), so this is bit-exact for the still-rolled loop (one live slot per K instant) and
+  # becomes the true double-buffer once 1c peels the K-loop so both slots coexist in one body. Fail-closed to
+  # the single 256-wide tile when there is no const-even reduce carrier in the fragment ranges.
+  nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
+  kr = prefill_dbuf_reduce_range(wmma.src[1].ranges) if nbuf > 1 else None
+  base = 256 * nbuf if kr is not None else 256
+  slot = (kr % nbuf) * 256 if kr is not None else UOp.const(dtypes.int, 0)
+  bsh = UOp.placeholder((base,), wmma.src[1].dtype.scalar(), 990, addrspace=AddrSpace.LOCAL)
+  stores = [bsh.index(slot+row*16+i, dtype=bsh.dtype).store(wmma.src[1].gep(i), lane < 16).end() for i in range(16)]
   stage = UOp.group(*stores)
   if tile_ranges: stage = stage.end(*tile_ranges)
   bar = UOp.barrier(stage)
-  vals = [bsh.after(bar)[row*16+i] for i in range(16)]
+  vals = [bsh.after(bar)[slot+row*16+i] for i in range(16)]
   bvec = vals[0].vectorize(*vals[1:])
   _tc_local_stage_coop_b_stats["rewritten"] += 1
   if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
@@ -508,6 +518,26 @@ def _warmstart_match(k):
     elif isinstance(s, int): out.append(s)
   return _WARMSTART_OPTS.get((frozenset(out), red))
 
+def _prefill_dbuf_peel(k:Scheduler) -> None:
+  # 1c: peel the K reduce by 2 by applying ONE extra UNROLL(=2) on a const-even REDUCE axis. UNROLL becomes an
+  # AxisType.UNROLL axis that the expander expands straight-line -- it adds NO second END over the K range, so
+  # CFGContext (linearizer.py:162) never sees two ENDs over the same range and the loop-carried WAR turns into
+  # ordinary intra-body forward AFTER edges. This mirrors the hand kernel's unroll-by-2 without any new UOp.
+  # ROLE GUARD: this peel is a WMMA/GEMM-only primitive. Without this guard it would fire on ANY const-even REDUCE
+  # (softmax, RMSNorm, ...), which is out of scope and could perturb unrelated kernels. Only proceed when this
+  # kernel actually carries a tensor-core role -- a TC opt already applied, or an Ops.WMMA node in the AST.
+  if not (any(o.op is OptOps.TC for o in (*k.applied_opts, *k.planned_opts))
+          or any(u.op is Ops.WMMA for u in k.ast.backward_slice)): return
+  # Fail-closed: no plain const-even REDUCE axis (e.g. already TC-consumed to UNROLL, or symbolic/odd) -> no-op.
+  for ui, ax in enumerate(k.unrollable_dims):
+    r = k.rngs[ax]
+    if r.arg[-1] is AxisType.REDUCE and isinstance(s:=k.full_shape[ax], int) and s % 2 == 0 and s > 2:
+      try:
+        k.apply_opt(Opt(OptOps.UNROLL, ui, 2))
+        return
+      except KernelOptError:
+        continue
+
 def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
   _tc_local_stage_coop_b_stats.update({"seen": 0, "rewritten": 0, "dumped": 0, "skipped": 0})
@@ -542,6 +572,8 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
+  if PREFILL_DBUF():
+    _prefill_dbuf_peel(k)
   if _tc_local_stage_coop_b_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_coop_b_post, name="tc local stage coop b post")
   elif _tc_local_stage_scalar_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
