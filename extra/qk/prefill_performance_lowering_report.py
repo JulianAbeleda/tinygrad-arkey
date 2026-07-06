@@ -13,11 +13,20 @@ from typing import Any
 from extra.qk import prefill_performance_lowering_registry as registry
 
 SCHEMA = "prefill-performance-lowering-report.v1"
+_PROMOTION_PHASE_NAME = "promotion"
 _SIDECAR_NOTE_MARKERS = ("optional", "only needed if", "only needed")
 _EVIDENCE_NOTE_MARKERS = ("passes", "can emit", "supports numerically correct", "probe exists", "contract exists")
 _ACTIVE_BLOCKER_MARKERS = (
   "blocked", "does not", "fails", "failure", "missing", "must", "needs", "not ", "no ", "wrong", "without",
 )
+
+
+def _is_promotion_row(row: dict[str, Any]) -> bool:
+  return row["phase_name"] == _PROMOTION_PHASE_NAME or row["id"].endswith("_promotion")
+
+
+def _row_sort_key(row: dict[str, Any]) -> tuple[str, int, str]:
+  return (row["target"], row["phase_order"], row["id"])
 
 
 def _classify_note(note: str, status: str) -> str:
@@ -54,7 +63,7 @@ def _by_owner_area(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
       "parallel_ready_rows": [],
       "blocked_rows": [],
     })
-    owner_data["rows"].append(row["id"])
+    owner_data["rows"].append((row["target"], row["phase_order"], row["id"]))
     owner_data["row_count"] += 1
     owner_data["gates"].update(row["gates"])
     owner_data["status_counts"][row["status"]] = owner_data["status_counts"].get(row["status"], 0) + 1
@@ -62,14 +71,17 @@ def _by_owner_area(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     row_note_types = [_classify_note(note, row["status"]) for note in row["blockers"]]
     if "active_blocker" in row_note_types:
       owner_data["active_blocker_count"] += row_note_types.count("active_blocker")
-      owner_data["blocked_rows"].append(row["id"])
+      owner_data["blocked_rows"].append((row["target"], row["phase_order"], row["id"]))
     owner_data["evidence_note_count"] += row_note_types.count("evidence")
     owner_data["sidecar_blocker_count"] += row_note_types.count("sidecar")
 
     if row["status"] in {"pending", "not_started"} and "active_blocker" not in row_note_types:
-      owner_data["parallel_ready_rows"].append(row["id"])
+      owner_data["parallel_ready_rows"].append((row["target"], row["phase_order"], row["id"]))
 
   for owner_data in by_owner.values():
+    owner_data["rows"] = [row_id for _, _, row_id in sorted(owner_data["rows"])]
+    owner_data["parallel_ready_rows"] = [row_id for _, _, row_id in sorted(owner_data["parallel_ready_rows"])]
+    owner_data["blocked_rows"] = [row_id for _, _, row_id in sorted(owner_data["blocked_rows"])]
     owner_data["gates"] = sorted(owner_data["gates"])
 
   return by_owner
@@ -79,34 +91,41 @@ def _gates_to_rows(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
   gate_rows: dict[str, list[str]] = {}
   for row in rows:
     for gate in row["gates"]:
-      gate_rows.setdefault(gate, []).append(row["id"])
-  return {k: v for k, v in sorted(gate_rows.items(), key=lambda kv: kv[0])}
+      gate_rows.setdefault(gate, []).append((row["target"], row["phase_order"], row["id"]))
+  return {
+    gate: [row_id for _, _, row_id in sorted(entries)]
+    for gate, entries in sorted(gate_rows.items(), key=lambda kv: kv[0])
+  }
 
 
 def _orchestration(rows: list[dict[str, Any]]) -> dict[str, Any]:
   notes_by_type = _notes_by_type(rows)
   by_owner = _by_owner_area(rows)
   gate_rows = _gates_to_rows(rows)
-  parallel_rows: list[str] = []
-  active_blocker_rows: list[str] = []
-  status_blocked_rows: list[str] = []
+  parallel_rows: list[tuple[str, int, str]] = []
+  active_blocker_rows: list[tuple[str, int, str]] = []
+  status_blocked_rows: list[tuple[str, int, str]] = []
 
   for row in rows:
     has_active_blocker = any(_classify_note(note, row["status"]) == "active_blocker" for note in row["blockers"])
     if has_active_blocker:
-      active_blocker_rows.append(row["id"])
+      active_blocker_rows.append((row["target"], row["phase_order"], row["id"]))
     if row["status"] == "blocked":
-      status_blocked_rows.append(row["id"])
+      status_blocked_rows.append((row["target"], row["phase_order"], row["id"]))
     if row["status"] in {"pending", "not_started"} and not has_active_blocker:
-      parallel_rows.append(row["id"])
+      parallel_rows.append((row["target"], row["phase_order"], row["id"]))
+
+  parallel_rows = sorted(parallel_rows)
+  active_blocker_rows = sorted(active_blocker_rows)
+  status_blocked_rows = sorted(status_blocked_rows)
 
   return {
     "by_owner_area": by_owner,
     "gates": gate_rows,
     "notes": notes_by_type,
-    "parallel_ready_rows": parallel_rows,
-    "active_blocker_rows": active_blocker_rows,
-    "status_blocked_rows": status_blocked_rows,
+    "parallel_ready_rows": [row_id for _, _, row_id in parallel_rows],
+    "active_blocker_rows": [row_id for _, _, row_id in active_blocker_rows],
+    "status_blocked_rows": [row_id for _, _, row_id in status_blocked_rows],
     "summary": {
       "active_blocker_count": len(notes_by_type["active_blocker"]),
       "evidence_note_count": len(notes_by_type["evidence"]),
@@ -137,11 +156,18 @@ def _target_summary(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
   return targets
 
 
-def build_prefill_performance_lowering_report(target: str | None = None) -> dict[str, Any]:
+def build_prefill_performance_lowering_report(
+  target: str | None = None,
+  pre_promotion_only: bool = False,
+) -> dict[str, Any]:
   all_rows = registry.rows()
   rows = all_rows
   if target is not None:
     rows = [r for r in all_rows if r["target"] == target]
+  rows = sorted(rows, key=_row_sort_key)
+  promotion_rows = [r for r in rows if _is_promotion_row(r)]
+  if pre_promotion_only:
+    rows = [r for r in rows if not _is_promotion_row(r)]
   target_summary = _target_summary(rows)
 
   by_status: dict[str, int] = {}
@@ -157,6 +183,9 @@ def build_prefill_performance_lowering_report(target: str | None = None) -> dict
   return {
     "schema": SCHEMA,
     "scope_doc": registry.DOC_PATH,
+    "pre_promotion_only": pre_promotion_only,
+    "row_scope": "pre_promotion" if pre_promotion_only else "full",
+    "promotion_rows": [row["id"] for row in promotion_rows],
     "rows": rows,
     "row_count": len(rows),
     "target_count": len(target_summary),
@@ -172,10 +201,18 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser(description="Build prefill performance lowering registry report.")
   ap.add_argument("--compact", action="store_true", help="print compact JSON")
   ap.add_argument("--target", help="filter rows by target id (target_1 or target_2)")
+  ap.add_argument(
+    "--pre-promotion",
+    action="store_true",
+    help="exclude promotion rows for pre-promotion completion tracking",
+  )
   ap.add_argument("--orchestration", action="store_true", help="print orchestration slice only")
   args = ap.parse_args(argv)
 
-  report = build_prefill_performance_lowering_report(args.target)
+  report = build_prefill_performance_lowering_report(
+    args.target,
+    pre_promotion_only=args.pre_promotion,
+  )
   indent = None if args.compact else 2
   payload = report["orchestration"] if args.orchestration else report
   print(json.dumps(payload, indent=indent))

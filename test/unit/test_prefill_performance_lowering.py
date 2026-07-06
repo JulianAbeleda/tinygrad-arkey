@@ -5,6 +5,14 @@ from extra.qk import prefill_performance_lowering_registry as registry
 from extra.qk import prefill_performance_lowering_report as report
 
 
+def _is_promotion_row(row: dict[str, object]) -> bool:
+  return row.get("phase_name") == "promotion" or str(row["id"]).endswith("_promotion")
+
+
+def _row_sort_key(row: dict[str, object]) -> tuple[str, int, str]:
+  return (str(row["target"]), int(row["phase_order"]), str(row["id"]))
+
+
 def _derive_note_rows(rows: list[dict[str, object]], note_type: str) -> list[str]:
   assert note_type in {"active_blocker", "evidence", "sidecar"}
   return sorted(
@@ -59,6 +67,9 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   assert full["target_count"] == len(expected_targets)
   assert sorted(full["targets"]) == expected_targets
   assert full["scope_doc"] == registry.DOC_PATH
+  assert full["pre_promotion_only"] is False
+  assert full["row_scope"] == "full"
+  assert full["promotion_rows"] == [row["id"] for row in rows if _is_promotion_row(row)]
   assert "scope_files" in full
   assert isinstance(full["scope_files"], list)
   for target in expected_targets:
@@ -88,6 +99,24 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   assert all(r["target"] == "target_1" for r in filtered["rows"])
 
 
+def test_prefill_performance_report_pre_promotion_view_excludes_promotion_rows():
+  rows = registry.rows()
+  full = report.build_prefill_performance_lowering_report()
+  pre_promotion = report.build_prefill_performance_lowering_report(pre_promotion_only=True)
+  expected_promotion_rows = [row["id"] for row in rows if _is_promotion_row(row)]
+  expected_non_promotion_rows = [row["id"] for row in rows if not _is_promotion_row(row)]
+
+  assert pre_promotion["pre_promotion_only"] is True
+  assert pre_promotion["row_scope"] == "pre_promotion"
+  assert pre_promotion["promotion_rows"] == expected_promotion_rows
+  assert len(pre_promotion["rows"]) == len(expected_non_promotion_rows)
+  assert [row["id"] for row in pre_promotion["rows"]] == expected_non_promotion_rows
+  assert pre_promotion["row_count"] == full["row_count"] - len(expected_promotion_rows)
+  assert all(_is_promotion_row(r) is False for r in pre_promotion["rows"])
+  assert set(full["promotion_rows"]) == set(pre_promotion["promotion_rows"])
+  assert all(r not in pre_promotion["rows"] for r in full["promotion_rows"])
+
+
 def test_prefill_performance_report_orchestration_is_consistent_with_registry_rows():
   rows = registry.rows()
   full = report.build_prefill_performance_lowering_report()
@@ -105,7 +134,7 @@ def test_prefill_performance_report_orchestration_is_consistent_with_registry_ro
   }
   expected_by_owner = {
     owner: {
-      "rows": expected_owner_rows[owner],
+      "rows": [row["id"] for row in sorted((r for r in rows if r["owner_area"] == owner), key=_row_sort_key)],
       "row_count": len(expected_owner_rows[owner]),
       "parallel_ready_rows": [
         row["id"]
@@ -128,7 +157,11 @@ def test_prefill_performance_report_orchestration_is_consistent_with_registry_ro
   expected_gate_rows: dict[str, list[str]] = {}
   for row in rows:
     for gate in row["gates"]:
-      expected_gate_rows.setdefault(gate, []).append(row["id"])
+      expected_gate_rows.setdefault(gate, []).append((row["target"], row["phase_order"], row["id"]))
+  expected_gate_rows = {
+    gate: [row_id for _, _, row_id in sorted(ids)]
+    for gate, ids in expected_gate_rows.items()
+  }
   assert orchestration["gates"] == {gate: ids for gate, ids in sorted(expected_gate_rows.items())}
 
   for row in rows:
@@ -142,12 +175,27 @@ def test_prefill_performance_report_orchestration_is_consistent_with_registry_ro
 
 
 def test_prefill_performance_report_orchestration_cli_mode(monkeypatch, capsys):
+  expected_rows = report.build_prefill_performance_lowering_report()["rows"]
   report.main(["--orchestration", "--compact"])
   parsed = json.loads(capsys.readouterr().out.strip())
   assert "by_owner_area" in parsed
   assert "gates" in parsed
   assert "notes" in parsed
   assert "parallel_ready_rows" in parsed
+  assert parsed["summary"]["active_blocker_count"] == len(_derive_note_rows(expected_rows, "active_blocker"))
+
+
+def test_prefill_performance_report_pre_promotion_cli_mode(monkeypatch, capsys):
+  report.main(["--pre-promotion", "--orchestration", "--compact"])
+  parsed = json.loads(capsys.readouterr().out.strip())
+  assert "by_owner_area" in parsed
+  assert "notes" in parsed
+  assert "parallel_ready_rows" in parsed
+  rows = registry.rows()
+  promotion_ids = {row["id"] for row in rows if _is_promotion_row(row)}
+  assert not any(row_id in promotion_ids for row_id in parsed["parallel_ready_rows"])
+  assert not any(row_id in promotion_ids for row_id in parsed["active_blocker_rows"])
+  assert not any(row_id in promotion_ids for row_id in parsed["status_blocked_rows"])
 
 
 def test_prefill_performance_report_uses_current_route_bound_blocker():

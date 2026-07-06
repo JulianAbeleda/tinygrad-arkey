@@ -17,6 +17,55 @@ PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report --orchestra
 
 and leave only promotion/authority-review decisions for humans.
 
+### Review Packet (harness slice, 2026-07-06)
+
+Generated from:
+
+- `PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report --orchestration --compact`
+- `PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report --pre-promotion --orchestration --compact`
+
+Cleared blockers:
+
+- none (report consistency updates only)
+
+Remaining non-promotion blockers:
+
+- `prefill_performance_target_1_fp16_recovery`
+- `prefill_performance_target_1_baseline`
+- `prefill_performance_target_1_single_operand_stage`
+- `prefill_performance_target_1_both_operands_stage`
+- `prefill_performance_target_1_coop_partition`
+- `prefill_performance_target_2_packed_mmq_recovery`
+- `prefill_performance_target_2_baseline`
+- `prefill_performance_target_2_synthetic_shape`
+- `prefill_performance_target_2_model_authority`
+- `prefill_performance_target_2_q6_residual_decision`
+
+Remaining promotion blockers (separate slice):
+
+- `prefill_performance_target_1_promotion`
+- `prefill_performance_target_2_promotion`
+
+Artifacts / evidence:
+
+- all entries listed in the scope document’s artifact list, including:
+  - `bench/prefill-graph-gemm-medium-stage/latest.json`
+  - `bench/prefill-graph-gemm-coop-route-contract/latest.json`
+  - `bench/q4k-wmma-tiled-role-shape-exec/latest.json`
+  - `bench/q4k-wmma-full-role-contract/latest.json`
+- `test/unit/test_prefill_performance_lowering.py` (consistency gates)
+
+Commands:
+
+- `PYTHONPATH=. python3 -m pytest test/unit/test_prefill_performance_lowering.py -q`
+- `PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report --pre-promotion --orchestration --compact`
+
+Changed files for this packet:
+
+- `extra/qk/prefill_performance_lowering_report.py`
+- `test/unit/test_prefill_performance_lowering.py`
+- `docs/prefill-lowering-spark-orchestration-100pct-20260706.md`
+
 ## Done Definition
 
 The pre-promotion work is done when all of the following are true:
