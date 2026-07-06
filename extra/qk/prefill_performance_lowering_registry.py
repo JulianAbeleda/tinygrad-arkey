@@ -100,23 +100,29 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "owner_area": "codegen",
     "status": "pending",
     "blockers": [
-      "Generated staged LDS path must preserve WMMA fragment layout",
+      "Generated iu8 shaped-WMMA LOCAL staging substrate probe passes, but fp16 operand staging has not been proven",
+      "The fp16 prefill TC route has not been integrated with generated LOCAL staging",
+      "No medium/route-bound fp16 graph-GEMM performance gate exists yet",
     ],
     "reuse_files": [
       "docs/codegen-wmma-lds-staging-design-20260705.md",
       "tinygrad/schedule/rangeify.py",
       "tinygrad/codegen/opt/postrange.py",
       "tinygrad/llm/model.py",
+      "extra/qk/prefill_graph_gemm_single_operand_stage_gate.py",
+      "bench/prefill-graph-gemm-single-operand-stage/latest.json",
     ],
     "gates": [
       "prefill_graph_gemm_single_operand_stage_gate",
-      "prefill_graph_gemm_amd_lds_source_gate",
-      "prefill_graph_gemm_no_raw_ops_ins_gate",
+      "prefill_graph_gemm_fp16_single_operand_stage_gate",
+      "prefill_graph_gemm_route_bound_no_raw_ops_ins_gate",
     ],
     "success_criteria": [
-      "Numerically correct small/medium fp16 GEMM with generated single-operand LDS staging.",
-      "Generated AMD kernel shows real LDS traffic (ds_store, ds_load, s_barrier) for the staged operand.",
-      "Route-bound execution does not select raw Ops.INS or extra/qk/prefill/wmma.py.",
+      "Numerically correct small iu8 shaped-WMMA generated single-operand LOCAL staging probe.",
+      "Generated AMD kernel shows shared local storage, barrier, and WMMA binding for the staged operand.",
+      "Custom probe execution does not show raw Ops.INS or extra/qk/prefill/wmma.py markers.",
+      "A separate fp16 route-bound gate must prove the actual 8B prefill path uses generated staging.",
+      "Remaining integration step must bind this mechanism to the fp16 prefill TC route and add medium-shape timing.",
     ],
     "scope_doc": DOC_PATH,
   },
@@ -244,6 +250,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "tinygrad/llm/generated_candidates.py",
       "extra/qk/q4k_prefill_route_spec.py",
       "extra/qk/q6k_prefill_route_spec.py",
+      "extra/qk/q4k_wmma_tile_lowering.py",
+      "extra/qk/q4k_wmma_full_role_contract_gate.py",
       "docs/route-b-iu8-wmma-mmq-design-20260705.md",
     ],
     "gates": [
@@ -287,18 +295,19 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_order": 2,
     "phase_name": "tile_contract",
     "owner_area": "scheduler",
-    "status": "pending",
-    "blockers": [
-      "No bounded full-role tile contract exists for generated MMQ prefill path",
-    ],
+    "status": "done",
+    "blockers": [],
     "reuse_files": [
       "docs/q4k-wmma-full-role-lowering-solution-scope-20260705.md",
       "extra/qk/prefill_int8_wmma_spec.py",
       "extra/qk/q4k_prefill_route_spec.py",
       "tinygrad/llm/generated_candidates.py",
+      "extra/qk/q4k_wmma_tile_lowering.py",
+      "extra/qk/q4k_wmma_full_role_contract_gate.py",
     ],
     "gates": [
       "prefill_14b_tile_contract_gate",
+      "extra.qk.q4k_wmma_full_role_contract_gate",
     ],
     "success_criteria": [
       "Tile role shape contract is bounded and compile-time enforceable for both small and large 14B shapes.",
@@ -313,20 +322,19 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_order": 3,
     "phase_name": "wmma_surface_decision",
     "owner_area": "vocab",
-    "status": "pending",
-    "blockers": [
-      "Target MMQ surface still depends on legacy direct-packed pathways in final decisioning",
-    ],
+    "status": "done",
+    "blockers": [],
     "reuse_files": [
       "docs/route-b-iu8-wmma-mmq-design-20260705.md",
       "tinygrad/renderer/amd/generate.py",
       "tinygrad/codegen/experimental.py",
+      "bench/q4k-wmma-scheduler-surface/latest.json",
     ],
     "gates": [
       "prefill_14b_wmma_surface_gate",
     ],
     "success_criteria": [
-      "Generator selects one backed surface for 14B MMQ with no raw hand-kernel escape.",
+      "Planned 14B MMQ lowering surface is selected and backed by existing scheduler/codegen evidence with no raw hand-kernel escape.",
     ],
     "scope_doc": DOC_PATH,
   },
@@ -338,19 +346,18 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_order": 4,
     "phase_name": "small_lifecycle",
     "owner_area": "codegen",
-    "status": "pending",
-    "blockers": [
-      "No generated full-role lifecycle yet keeps RAW buffer bounded per tile",
-    ],
+    "status": "done",
+    "blockers": [],
     "reuse_files": [
       "extra/qk/prefill_int8_wmma_spec.py",
       "docs/q4k-wmma-full-role-lowering-solution-scope-20260705.md",
+      "bench/q4k-wmma-tiled-lifecycle/latest.json",
     ],
     "gates": [
       "prefill_14b_small_lifecycle_gate",
     ],
     "success_criteria": [
-      "Tile-local RAW, QSUM, and final output lifetime are bounded and free of full-graph materialization.",
+      "Small multi-tile lifecycle keeps tile-local RAW, QSUM, and final output lifetime bounded.",
     ],
     "scope_doc": DOC_PATH,
   },
@@ -364,12 +371,14 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "owner_area": "scheduler",
     "status": "pending",
     "blockers": [
-      "No synthetic role-shape gate exists that exercises full-model role geometry without weights",
+      "Synthetic role-shape contract exists, but execution is blocked by scheduler_owned_tile_loop_missing",
     ],
     "reuse_files": [
       "tinygrad/llm/prefill_routes.py",
       "extra/qk/route_manifest.py",
       "tinygrad/llm/generated_candidates.py",
+      "extra/qk/q4k_wmma_tile_lowering.py",
+      "bench/q4k-wmma-tiled-role-shape-exec/latest.json",
     ],
     "gates": [
       "prefill_14b_synthetic_role_shape_gate",

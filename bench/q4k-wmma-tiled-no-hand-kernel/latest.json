@@ -1,0 +1,45 @@
+{
+  "schema": "q4k_wmma_tiled_no_hand_kernel_gate.v1",
+  "scope": "Q4_K/Q8_1 wmma_tiled route implementation must remain generated/tinygrad-owned",
+  "verdict": "Q4K_WMMA_TILED_NO_HAND_KERNEL_PASS",
+  "route_id": "prefill_q4k_int8_wmma_tiled_research",
+  "scanned": [
+    "extra/qk/prefill_int8_wmma_spec.py",
+    "tinygrad/llm/route_ops.py",
+    "tinygrad/llm/generated_candidates.py",
+    "extra/qk/q4k_wmma_tile_lowering.py",
+    "tinygrad/llm/prefill_routes.py::q8_mode==wmma_tiled"
+  ],
+  "forbidden": [
+    {
+      "kind": "source.inline_asm",
+      "token": "asm volatile"
+    },
+    {
+      "kind": "source.route_local_wmma_builtin",
+      "token": "__builtin_amdgcn_wmma"
+    },
+    {
+      "kind": "binding.route_local_ops_wmma",
+      "token": "Ops.WMMA"
+    },
+    {
+      "kind": "binding.route_local_custom_kernel",
+      "token": ".custom_kernel("
+    },
+    {
+      "kind": "binding.route_local_tensor_custom_kernel",
+      "token": "Tensor.custom_kernel"
+    },
+    {
+      "kind": "import.handwritten_prefill_wmma",
+      "token": "extra.qk.prefill.wmma"
+    }
+  ],
+  "allowed_external_owners": [
+    "tinygrad/renderer/cstyle.py",
+    "tinygrad/codegen/opt/tc.py",
+    "tinygrad/schedule/rangeify.py"
+  ],
+  "findings": []
+}

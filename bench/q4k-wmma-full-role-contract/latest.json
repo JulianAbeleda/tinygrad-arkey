@@ -1,0 +1,183 @@
+{
+  "schema": "q4k-wmma-full-role-contract-gate.v1",
+  "route_id": "prefill_q4k_int8_wmma_tiled_research",
+  "verdict": "Q4K_WMMA_FULL_ROLE_CONTRACT_PASS",
+  "contract": {
+    "route_id": "prefill_q4k_int8_wmma_tiled_research",
+    "target": "amd_gfx1100",
+    "implementation": "scheduler_owned_tiled_wmma_contract_v1",
+    "roles": [
+      {
+        "role": "attn_kv",
+        "m": 512,
+        "n": 1024,
+        "k": 5120,
+        "groups": 160,
+        "k_blocks": 20,
+        "tile": {
+          "m_tile": 16,
+          "n_tile": 16,
+          "group_tile": 1,
+          "group_elems": 32,
+          "wmma_m": 16,
+          "wmma_n": 16,
+          "wmma_k": 16
+        },
+        "grid": {
+          "m_tiles": 32,
+          "n_tiles": 64,
+          "group_tiles": 160,
+          "output_tiles": 2048,
+          "raw_tile_steps": 327680,
+          "wmma_fragments_per_raw_tile": 2,
+          "wmma_fragment_ops": 655360
+        },
+        "bounds": {
+          "live_raw_elems": 256,
+          "forbidden_full_raw_elems": 83886080,
+          "bounded_raw_ok": true
+        },
+        "lowering": {
+          "wmma_surface": "shaped_wmma_tile",
+          "waves_per_block": 1,
+          "output_layout": "direct",
+          "requires_scheduler_owned_loop": true,
+          "kernel_name": "prefill_q4k_q8_1_wmma_tiled_generated_gemm_attn_kv_1024_5120_512_16x16x1"
+        }
+      },
+      {
+        "role": "attn_qo",
+        "m": 512,
+        "n": 5120,
+        "k": 5120,
+        "groups": 160,
+        "k_blocks": 20,
+        "tile": {
+          "m_tile": 16,
+          "n_tile": 16,
+          "group_tile": 1,
+          "group_elems": 32,
+          "wmma_m": 16,
+          "wmma_n": 16,
+          "wmma_k": 16
+        },
+        "grid": {
+          "m_tiles": 32,
+          "n_tiles": 320,
+          "group_tiles": 160,
+          "output_tiles": 10240,
+          "raw_tile_steps": 1638400,
+          "wmma_fragments_per_raw_tile": 2,
+          "wmma_fragment_ops": 3276800
+        },
+        "bounds": {
+          "live_raw_elems": 256,
+          "forbidden_full_raw_elems": 419430400,
+          "bounded_raw_ok": true
+        },
+        "lowering": {
+          "wmma_surface": "shaped_wmma_tile",
+          "waves_per_block": 1,
+          "output_layout": "direct",
+          "requires_scheduler_owned_loop": true,
+          "kernel_name": "prefill_q4k_q8_1_wmma_tiled_generated_gemm_attn_qo_5120_5120_512_16x16x1"
+        }
+      },
+      {
+        "role": "ffn_down",
+        "m": 512,
+        "n": 5120,
+        "k": 17408,
+        "groups": 544,
+        "k_blocks": 68,
+        "tile": {
+          "m_tile": 16,
+          "n_tile": 16,
+          "group_tile": 1,
+          "group_elems": 32,
+          "wmma_m": 16,
+          "wmma_n": 16,
+          "wmma_k": 16
+        },
+        "grid": {
+          "m_tiles": 32,
+          "n_tiles": 320,
+          "group_tiles": 544,
+          "output_tiles": 10240,
+          "raw_tile_steps": 5570560,
+          "wmma_fragments_per_raw_tile": 2,
+          "wmma_fragment_ops": 11141120
+        },
+        "bounds": {
+          "live_raw_elems": 256,
+          "forbidden_full_raw_elems": 1426063360,
+          "bounded_raw_ok": true
+        },
+        "lowering": {
+          "wmma_surface": "shaped_wmma_tile",
+          "waves_per_block": 1,
+          "output_layout": "direct",
+          "requires_scheduler_owned_loop": true,
+          "kernel_name": "prefill_q4k_q8_1_wmma_tiled_generated_gemm_ffn_down_5120_17408_512_16x16x1"
+        }
+      },
+      {
+        "role": "ffn_gate_up",
+        "m": 512,
+        "n": 17408,
+        "k": 5120,
+        "groups": 160,
+        "k_blocks": 20,
+        "tile": {
+          "m_tile": 16,
+          "n_tile": 16,
+          "group_tile": 1,
+          "group_elems": 32,
+          "wmma_m": 16,
+          "wmma_n": 16,
+          "wmma_k": 16
+        },
+        "grid": {
+          "m_tiles": 32,
+          "n_tiles": 1088,
+          "group_tiles": 160,
+          "output_tiles": 34816,
+          "raw_tile_steps": 5570560,
+          "wmma_fragments_per_raw_tile": 2,
+          "wmma_fragment_ops": 11141120
+        },
+        "bounds": {
+          "live_raw_elems": 256,
+          "forbidden_full_raw_elems": 1426063360,
+          "bounded_raw_ok": true
+        },
+        "lowering": {
+          "wmma_surface": "shaped_wmma_tile",
+          "waves_per_block": 1,
+          "output_layout": "direct",
+          "requires_scheduler_owned_loop": true,
+          "kernel_name": "prefill_q4k_q8_1_wmma_tiled_generated_gemm_ffn_gate_up_17408_5120_512_16x16x1"
+        }
+      }
+    ],
+    "role_count": 4,
+    "total_output_tiles": 57344,
+    "total_raw_tile_steps": 13107200,
+    "max_forbidden_full_raw_elems": 1426063360,
+    "max_live_raw_elems": 256
+  },
+  "evidence": {
+    "surface_artifact": "bench/q4k-wmma-scheduler-surface/latest.json",
+    "surface_verdict": "Q4K_WMMA_SCHEDULER_SURFACE_SHAPED_READY",
+    "surface_ok": true,
+    "selected_surface": "shaped_wmma_tile",
+    "lifecycle_artifact": "bench/q4k-wmma-tiled-lifecycle/latest.json",
+    "lifecycle_verdict": "Q4K_WMMA_TILED_LIFECYCLE_PASS",
+    "lifecycle_ok": true,
+    "no_hand_artifact": "bench/q4k-wmma-tiled-no-hand-kernel/latest.json",
+    "no_hand_verdict": "Q4K_WMMA_TILED_NO_HAND_KERNEL_PASS",
+    "no_hand_ok": true,
+    "bounded_roles": true
+  },
+  "remaining_blocker": "scheduler_owned_tile_loop_missing"
+}

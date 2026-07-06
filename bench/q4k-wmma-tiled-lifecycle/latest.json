@@ -1,0 +1,50 @@
+{
+  "schema": "q4k_wmma_tiled_lifecycle_gate.v1",
+  "scope": "M=32,N=32,K=256 four-output-tile bounded generated lifecycle for Q4_K/Q8_1 tiled WMMA",
+  "verdict": "Q4K_WMMA_TILED_LIFECYCLE_PASS",
+  "route_id": "prefill_q4k_int8_wmma_tiled_research",
+  "target_shape": {
+    "m": 32,
+    "n": 32,
+    "k": 256,
+    "output_tiles": 4,
+    "m_tile": 16,
+    "n_tile": 16,
+    "group_tile": 1
+  },
+  "surface": {
+    "ok": true,
+    "verdict": "Q4K_WMMA_TILED_SURFACE_TC_MATCHER_SELECTED",
+    "selected_surface": "tc_matcher_tile"
+  },
+  "one_tile_numeric": {
+    "ok": true,
+    "verdict": "Q4K_WMMA_TILED_MICROGATE_PASS",
+    "has_iu8_wmma": true
+  },
+  "implemented": true,
+  "class": "pass.bounded_multi_tile_lifecycle",
+  "classified_blocker": false,
+  "lifecycle": {
+    "numeric_ok": true,
+    "rel_rmse": 1.3815123622862302e-07,
+    "rtol": 0.006,
+    "kernel_count": 59,
+    "runtime_ms": 0.4895600000000001,
+    "compile_ms": 862.19,
+    "graph_node_count": null,
+    "wmma_present": true,
+    "wmma_evidence": "lifecycle_debug_source",
+    "debug_tail": "                                     arg  2 mem   0.00 GB tm      7.24us/     0.14ms (      2 GFLOPS    0|0      GB/s) \n*** AMD       28 E_16_8_4n9                                     arg  2 mem   0.00 GB tm      7.16us/     0.15ms (      2 GFLOPS    0|0      GB/s) \n*** AMD       29 E_16_8_4n10                                    arg  2 mem   0.00 GB tm      7.16us/     0.15ms (      2 GFLOPS    0|0      GB/s) \n*** AMD       30 E_16_8_4n11                                    arg  2 mem   0.00 GB tm      7.24us/     0.16ms (      2 GFLOPS    0|0      GB/s) \n*** AMD       31 E_16_8_4n12                                    arg  2 mem   0.00 GB tm      7.24us/     0.17ms (      2 GFLOPS    0|0      GB/s) \n*** AMD       32 E_16_8_4n13                                    arg  2 mem   0.00 GB tm      7.12us/     0.17ms (      2 GFLOPS    0|0      GB/s) \n*** AMD       33 E_16_8_4n14                                    arg  2 mem   0.00 GB tm      7.12us/     0.18ms (      2 GFLOPS    0|0      GB/s) \n*** AMD       34 E_16_8_4n15                                    arg  2 mem   0.00 GB tm      6.08us/     0.19ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       35 E_2_32_4n1                                     arg  1 mem   0.00 GB tm      6.08us/     0.19ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       36 E_16_8_4n16                                    arg  2 mem   0.00 GB tm      6.20us/     0.20ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       37 E_16_8_4n17                                    arg  2 mem   0.00 GB tm      6.20us/     0.21ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       38 E_16_8_4n18                                    arg  2 mem   0.00 GB tm      6.60us/     0.21ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       39 E_16_8_4n19                                    arg  2 mem   0.00 GB tm      6.12us/     0.22ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       40 E_16_8_4n20                                    arg  2 mem   0.00 GB tm      6.16us/     0.23ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       41 E_16_8_4n21                                    arg  2 mem   0.00 GB tm      6.16us/     0.23ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       42 E_16_8_4n22                                    arg  2 mem   0.00 GB tm      6.20us/     0.24ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       43 E_2_32_4n1                                     arg  1 mem   0.00 GB tm      6.20us/     0.24ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       44 E_16_8_4n23                                    arg  2 mem   0.00 GB tm      6.16us/     0.25ms (      0 GFLOPS    0|0      GB/s) \n*** AMD       45 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.84us/     0.26ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       46 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.28us/     0.26ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       47 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.27ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       48 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.28ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       49 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.28ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       50 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.29ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       51 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.28us/     0.29ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       52 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.30ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       53 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.28us/     0.31ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       54 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.31ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       55 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.32ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       56 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.33ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       57 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.20us/     0.33ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       58 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.34ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       59 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.24us/     0.34ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       60 r_16_16_2                                      arg  2 mem   0.00 GB tm      6.28us/     0.35ms (      1 GFLOPS    0|3      GB/s) \n*** AMD       61 r_32_2_2_2_2_32_32_32_32_32_32_32_2            arg 28 mem   0.00 GB tm     29.68us/     0.38ms (      5 GFLOPS    0|3      GB/s) \n*** AMD       62 r_32_2_2_2_2_32_32_32_32_32_32_32_2            arg 28 mem   0.00 GB tm     30.12us/     0.41ms (      5 GFLOPS    0|3      GB/s) \n*** AMD       63 r_32_2_2_2_2_32_32_32_32_32_32_32_2n1          arg 28 mem   0.00 GB tm     29.64us/     0.44ms (      5 GFLOPS    0|3      GB/s) \n*** AMD       64 r_32_2_2_2_2_32_32_32_32_32_32_32_2n1          arg 28 mem   0.00 GB tm     30.36us/     0.47ms (      5 GFLOPS    0|3      GB/s) \n*** AMD       65 E_16_8_4n24                                    arg  3 mem   0.00 GB tm      6.28us/     0.48ms (      0 GFLOPS    1|1      GB/s) \n*** AMD       66 E_16_8_4n24                                    arg  3 mem   0.00 GB tm      6.64us/     0.48ms (      0 GFLOPS    1|1      GB/s) \n*** AMD       67 E_8_32_4                                       arg  3 mem   0.00 GB tm      6.20us/     0.49ms (      0 GFLOPS    1|2      GB/s) \n",
+    "live_raw_elems": 256,
+    "forbidden_full_raw_elems": 8192,
+    "output_shape": [
+      32,
+      32
+    ]
+  },
+  "required_next": [
+    "scale the bounded lifecycle to synthetic 14B role-shape execution",
+    "reduce kernel_count once scheduler ownership exists for the full route"
+  ]
+}

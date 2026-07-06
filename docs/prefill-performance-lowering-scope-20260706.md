@@ -36,6 +36,27 @@ Recent strict-pure warm pp512 measurements:
 
 This path passes `PURE_MACHINE_SEARCH_ONLY=1` because it avoids the raw graph-GEMM route.
 
+### 2026-07-06 progress gates
+
+Two new gates narrow the remaining compiler work:
+
+| Target | Gate | Current result | What it proves | What it does not prove |
+| --- | --- | --- | --- | --- |
+| 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_single_operand_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_SINGLE_OPERAND_STAGE_PROBE_PASS` | A generated iu8 shaped-WMMA kernel can keep one operand in `AddrSpace.LOCAL` with `BufferizeOpts(..., removable=False)`, emit shared local storage plus a barrier, match the direct WMMA output, and avoid raw-marker strings. | It is a tiny iu8 substrate probe, not the fp16 prefill TC route, not a medium GEMM timing gate, not route-bound `Ops.INS` proof, and not 8B performance recovery. |
+| 14B packed/MMQ recovery | `extra.qk.q4k_wmma_full_role_contract_gate` | `Q4K_WMMA_FULL_ROLE_CONTRACT_PASS` | The Q4_K/Q8_1 14B role geometry is centralized, bounded, uses the selected shaped-WMMA surface, and keeps tile-local RAW lifetime bounded to 256 elements. | It is structural only. Full-role execution is still blocked by the missing scheduler-owned tile loop. |
+
+Run:
+
+```sh
+PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_single_operand_stage_gate --run-amd --compact
+PYTHONPATH=. python3 -m extra.qk.q4k_wmma_full_role_contract_gate --compact
+```
+
+The artifacts are:
+
+- `bench/prefill-graph-gemm-single-operand-stage/latest.json`
+- `bench/q4k-wmma-full-role-contract/latest.json`
+
 ## Tracking Scaffold
 
 Machine-readable rows for this scope are in:
@@ -138,6 +159,9 @@ Use these; do not duplicate them:
 - Warm-start TC opts recover part of the gap versus static codegen.
 - Current strict default can run 8B pp512 at about 2436 tok/s warm.
 - The raw graph-GEMM route remains available as an opt-in research baseline.
+- A tiny generated iu8 shaped-WMMA LOCAL-staging probe now passes on AMD. This proves the current `Ops.STAGE` /
+  `BufferizeOpts(None, AddrSpace.LOCAL, removable=False)` / `pm_add_buffers_local` substrate can preserve a staged iu8
+  WMMA operand layout in a custom generated kernel. It does not prove fp16 route-bound graph-GEMM recovery.
 
 ### What is missing
 
@@ -148,9 +172,9 @@ LDS staging/cooperative input movement.
 
 Required work:
 
-- Add a generated/codegen-owned way to stage WMMA input tiles into `AddrSpace.LOCAL`.
-- Preserve exact WMMA fragment layout. The failed naive attempt proved that `.bufferize(...).index(...)` can emit LDS
-  traffic but produce wrong numeric layout.
+- Add/prove fp16 generated LOCAL staging, then bind that mechanism to the actual fp16 prefill TC route.
+- Preserve exact WMMA fragment layout at real prefill fragment shapes. The tiny shaped-WMMA probe proves the primitive
+  can work; the route-bound fp16 graph-GEMM layout is still unproven.
 - Keep staged bufferizes alive with `removable=False` or equivalent proof that `pm_remove_bufferize` cannot erase them.
 - Verify actual AMD kernels contain expected `ds_store`, `ds_load`, and `s_barrier`.
 
@@ -159,6 +183,7 @@ Done criteria:
 - Small and medium fp16 GEMM shapes are numerically correct on real AMD.
 - LDS traffic is present in emitted AMD code.
 - No raw `Ops.INS`, source-string, or hand-assembly substrate is selected.
+- A route-bound gate proves the 8B prefill path, not only a custom microprobe, uses the generated staging.
 
 #### 1B. Cooperative partition of staged tiles
 
@@ -247,6 +272,9 @@ Use these; do not duplicate them:
 - Q4_K int8 WMMA tiled one-tile proof exists.
 - Full-model graph explosion is guarded explicitly.
 - Scalar sdot4/MMQ research route was deleted after poor measurements/dead-end classification.
+- The Q4_K/Q8_1 full-role lowering contract now exists in `extra/qk/q4k_wmma_tile_lowering.py`.
+- `extra.qk.q4k_wmma_full_role_contract_gate` passes using the existing shaped-WMMA surface, lifecycle, and no-hand-kernel
+  artifacts.
 
 ### What is missing
 
@@ -257,7 +285,7 @@ The current Q4_K/Q8_1 WMMA route cannot run full 14B shapes because the oracle m
 
 Required work:
 
-- Implement a generated tile lifecycle:
+- Implement the scheduler-owned execution loop for the generated tile lifecycle:
   - output tile loop,
   - Q4_K group loop,
   - tile-local int32 RAW,
@@ -269,7 +297,7 @@ Required work:
 
 Done criteria:
 
-- Synthetic role-shape gate runs real 14B dimensions without loading the model.
+- Synthetic role-shape execution gate runs real 14B dimensions without loading the model.
 - Kernel count and compile time are bounded.
 - No graph explosion guard is tripped.
 
