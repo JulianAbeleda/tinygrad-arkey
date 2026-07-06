@@ -29,7 +29,7 @@ def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
       fxn=qk_ops.q4k_gemm_kernel(linear.out_features, linear.in_features, K, linear.parts, "none", gemm_opts))[0]
     return out.sum(axis=2).transpose(0, 1).reshape(1, K, linear.out_features)
 
-  bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1) or getenv("BEAM_COALESCE")
+  bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1)
   g3_policy_selected = _qk_route_policy_selects_q4k_g3(linear.out_features, linear.in_features)
   g3_bubblebeam_shape = (linear.in_features // 256) % 4 == 0 and arch_ok and (
     (linear.in_features == 4096 and linear.out_features in (4096, 12288)) or
@@ -161,15 +161,6 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
       return got.reshape(1, 1, linear.out_features)
     except Exception as e:
       if getenv("DEBUG", 0): print(f"Q6K_GEMV_WARP down fallback: {e}")
-  if getenv("Q6K_DIRECT_ROUTE") and linear.parts == 1 and linear.out_features >= 100000 \
-     and linear.out_features % 2 == 0 and arch_ok:
-    try:
-      out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-      got = out.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec,
-                              fxn=qk_ops.q6k_halfwarp_partition_kernel(linear.out_features, linear.in_features))[0]
-      return got.reshape(1, 1, linear.out_features)
-    except Exception as e:
-      if getenv("DEBUG", 0): print(f"Q6K_DIRECT_ROUTE lm_head fallback: {e}")
   rt = getenv("Q6K_COOP_RT", 4)
   use_coop = linear.parts == 1 and linear.out_features % rt == 0 and (
     (getenv("Q6K_LM_HEAD_COOP", 1) and linear.out_features >= 100000) or
