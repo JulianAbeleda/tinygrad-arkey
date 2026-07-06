@@ -52,14 +52,7 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     ("extra/qk/q6k_route_spec.py", "extra/qk/quant/q6_k_gemv_primitive.py"),
     "Q6_K decode route is emitted from Q6KGEMVRouteSpec; quant-format helpers are shared semantics.",
     descriptor_artifact="Q6KGEMVRouteSpec"),
-  "decode_q6k_coop_shipped": RouteSurface(
-    "decode_q6k_coop_shipped", "rollback_oracle",
-    ("extra/qk/quant/q6_k_gemv_primitive.py",),
-    "Rollback/reference Q6_K shipped hand UOp templates."),
-  "decode_q6k_direct_refuted": RouteSurface(
-    "decode_q6k_direct_refuted", "route_local_custom_kernel",
-    ("extra/qk/quant/q6_k_gemv_primitive.py",),
-    "Refuted half-warp Q6_K hand UOp route."),
+  # decode_q6k_coop_shipped + decode_q6k_direct_refuted RouteSurfaces REMOVED 2026-07-06 (no backups): kernels deleted.
   "decode_attention_owned_two_kernel": RouteSurface(
     "decode_attention_owned_two_kernel", "external_raw_or_binary",
     ("tinygrad/llm/model.py",),

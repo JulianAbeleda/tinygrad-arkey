@@ -85,9 +85,9 @@ ROUTES = {
     "quant": ["Q6_K"],
     "shape_guards": [{"role": "ffn_down", "K": 12288, "N": 4096}, {"role": "ffn_down_longk", "K": ">=8192", "N": "<100000"},
                      {"role": "lm_head", "N": ">=100000"}, {"role": "attn_v", "enabled_by": "Q6K_COVER_MORE=1"}],
-    "env": {},  # DEFAULT-ON: decode_routes.py q6k_primitive_linear_call getenv("DECODE_Q6K_GENERATED", 1). BoltBeam QK_ROUTE_POLICY can select per tensor.
-    "rollback": {"DECODE_Q6K_GENERATED": "0"},  # -> shipped hand kernels (decode_q6k_coop_shipped)
-    "baseline_route_id": "decode_q6k_coop_shipped",
+    "env": {},  # DEFAULT-ON and unconditional: decode_routes.py q6k_primitive_linear_call. BoltBeam QK_ROUTE_POLICY can select per tensor.
+    "rollback": {},  # no backups: the DECODE_Q6K_GENERATED=0 shipped-hand-kernel rollback was deleted. Generated Q6_K decode is the only kernel route.
+    "baseline_route_id": "ordinary_tinygrad_graph",
     "strict_fallback": True,
     "expected_kernels": ["q6k_gen_coop_*", "q6k_gen_partial_*"],
     "forbidden_kernels": ["q6k_coop_partial_* (on the default path)", "q6k_gemv_partial_* (on the default path)"],
@@ -98,40 +98,9 @@ ROUTES = {
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
     "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/qk/q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."},
-  "decode_q6k_coop_shipped": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "rollback_reference",
-    "roles": ["ffn_down", "lm_head", "attn_v"], "excluded_roles": [],
-    "quant": ["Q6_K"],
-    "shape_guards": [{"role": "ffn_down", "K": 12288, "N": 4096}, {"role": "ffn_down_longk", "K": ">=8192", "N": "<100000"},
-                     {"role": "lm_head", "N": ">=100000"}, {"role": "attn_v", "enabled_by": "Q6K_COVER_MORE=1"}],
-    "env": {"DECODE_Q6K_GENERATED": "0"},  # SET this to force the shipped hand kernels (the rollback for the generated route)
-    "rollback": {},  # this IS the rollback target
-    "strict_fallback": True,
-    "expected_kernels": ["q6k_coop_partial_*", "q6k_gemv_partial_*"],
-    "authority_gate": "extra/qk/q6k_generated_coop_gate.py",
-    "promotion_artifacts": ["bench/tg-p3-q6k-generated-coop/latest.json"],
-    "purity_status": "owned_reference",
-    "provenance": "rollback_oracle",
-    "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call shipped branch (reached only when DECODE_Q6K_GENERATED=0); writer extra/qk/quant/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
-    "note": "hand-authored Q6_K coop/partial UOp templates. Byte-identical to the generated route (decode_q6k_coop_generated), retained as the rollback/oracle one flag away (DECODE_Q6K_GENERATED=0)."},
-  "decode_q6k_direct_refuted": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "refuted",
-    "roles": ["lm_head"], "excluded_roles": [],
-    "quant": ["Q6_K"],
-    "shape_guards": [{"role": "lm_head", "N": ">=100000"}],
-    "env": {"Q6K_DIRECT_ROUTE": "1"}, "rollback": {"Q6K_DIRECT_ROUTE": "0"},
-    "baseline_route_id": "decode_q6k_coop_shipped",  # the oracle/baseline the evaluator measures against
-    "strict_fallback": True,
-    "expected_kernels": ["q6k_halfwarp_partition_151936_4096"],
-    "authority_gate": "extra/qk/decode_runtime_overhead.py",
-    "promotion_artifacts": ["bench/amd-isa-backend-q6k-direct-speed/latest.json",
-                            "bench/amd-isa-backend-q6k-direct-speed/summary.md"],
-    "purity_status": "refuted",
-    "provenance": "hand_authored_uop_template",
-    "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call Q6K_DIRECT_ROUTE branch (default-off); refuted vs decode_q6k_coop_shipped baseline.",
-    "note": "half-warp direct Q6_K lm_head route: token-correct + route-bound, but W==D regressed -4.77..-6.06% (median -5.44%). Default-off. Do NOT re-chase as built (only reopen with a different topology than the half-warp partition)."},
+  # decode_q6k_coop_shipped + decode_q6k_direct_refuted rows REMOVED 2026-07-06 (no backups): their kernels
+  # (q6k_coop_partial_kernel / q6k_gemv_partial_kernel / q6k_halfwarp_partition) were deleted in prior cuts, and the
+  # DECODE_Q6K_GENERATED=0 / Q6K_DIRECT_ROUTE env rollbacks are gone. Generated Q6_K decode is the only kernel route.
   # ---------------- decode attention ----------------
   "decode_attention_owned_two_kernel": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "removed",
