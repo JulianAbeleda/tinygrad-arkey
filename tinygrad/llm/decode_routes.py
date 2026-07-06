@@ -5,7 +5,7 @@ from typing import Callable, Any
 from tinygrad import Tensor, UOp, dtypes, getenv
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.route_policy import (
-  _qk_route_policy_selected, _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated,
+  _qk_route_policy_selected, _qk_route_policy_selects_q4k_g3,
   has_qk_route_policy, qk_route_policy_strict,
 )
 
@@ -166,26 +166,11 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
     (getenv("Q6K_LM_HEAD_COOP", 1) and linear.out_features >= 100000) or
     (getenv("Q6K_FFN_DOWN_COOP", 1) and linear.out_features == 4096 and linear.in_features == 12288) or
     (getenv("DECODE_Q6K_FFN_DOWN_LONGK", 1) and linear.in_features >= 8192 and linear.out_features < 100000))
-  q6k_gen_selected = _qk_route_policy_selects_q6k_generated(linear.out_features, linear.in_features)
-  q6k_generated = bool(getenv("DECODE_Q6K_GENERATED", 1))
-  if q6k_generated:
-    spec = qk_ops.q6k_spec_for_role(linear.out_features, linear.in_features, role=linear.name, parts=linear.parts,
-                                    row_tile=rt, use_coop=use_coop, opts=linear.opts)
-    partials = Tensor.empty(linear.out_features, spec.partial_axis_extent, dtype=dtypes.float32, device=x.device)
-    partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec, fxn=qk_ops.emit_q6k_gemv_kernel(spec))[0]
-    return partial.sum(axis=1).reshape(1, 1, linear.out_features)
-  if q6k_gen_selected and qk_route_policy_strict():
-    raise ValueError(f"TG_P3_BLOCKED_HIDDEN_FALLBACK: QK_ROUTE_POLICY selects decode_q6k_coop_generated for Q6_K "
-                     f"tensor {linear.name!r} (out={linear.out_features}, in={linear.in_features}) but DECODE_Q6K_GENERATED "
-                     f"is off -> it fell back to the shipped hand template")
-  if use_coop:
-    partials = Tensor.empty(linear.out_features, 16, dtype=dtypes.float32, device=x.device)
-    partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec,
-                                     fxn=qk_ops.q6k_coop_partial_kernel(linear.out_features, linear.in_features, rt))[0]
-    return partial.sum(axis=1).reshape(1, 1, linear.out_features)
-  partials = Tensor.empty(linear.out_features, linear.parts, dtype=dtypes.float32, device=x.device)
-  partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec,
-                                   fxn=qk_ops.q6k_gemv_partial_kernel(linear.out_features, linear.in_features, linear.parts, linear.opts))[0]
+  # Generated Q6_K decode is unconditional (no-backups: the DECODE_Q6K_GENERATED=0 shipped hand rollback was deleted).
+  spec = qk_ops.q6k_spec_for_role(linear.out_features, linear.in_features, role=linear.name, parts=linear.parts,
+                                  row_tile=rt, use_coop=use_coop, opts=linear.opts)
+  partials = Tensor.empty(linear.out_features, spec.partial_axis_extent, dtype=dtypes.float32, device=x.device)
+  partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec, fxn=qk_ops.emit_q6k_gemv_kernel(spec))[0]
   return partial.sum(axis=1).reshape(1, 1, linear.out_features)
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,

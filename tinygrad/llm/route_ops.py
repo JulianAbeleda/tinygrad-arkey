@@ -58,8 +58,6 @@ def q6k_gemm_packed_load_kernel(*args, **kwargs): return _attr("extra.qk.quant.q
 def q6k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_packed_load_direct_out_kernel")(*args, **kwargs)
 def q6k_gemv_warp_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemv_warp_kernel")(*args, **kwargs)
-def q6k_coop_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_coop_partial_kernel")(*args, **kwargs)
-def q6k_gemv_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemv_partial_kernel")(*args, **kwargs)
 def q6k_spec_for_role(*args, **kwargs): return _attr("extra.qk.q6k_route_spec", "spec_for_role")(*args, **kwargs)
 def emit_q6k_gemv_kernel(*args, **kwargs): return _attr("extra.qk.q6k_route_spec", "emit_q6k_gemv_kernel")(*args, **kwargs)
 

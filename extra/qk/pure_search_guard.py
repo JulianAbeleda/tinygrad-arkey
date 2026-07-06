@@ -28,8 +28,9 @@ from extra.qk.pure_kernel_surface_audit import route_surface_row
 HOT_FAMILIES = [
   {"family": "decode_q4k_gemv", "generated": "decode_q4k_g3_generated", "oracle": "decode_q4k_owned_warp",
    "rollback_active": lambda e: str(e.get("BUBBLEBEAM_FUTURESIGHT", "1")) == "0"},
-  {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_shipped",
-   "rollback_active": lambda e: str(e.get("DECODE_Q6K_GENERATED", "1")) == "0"},
+  # decode_q6k_coop_shipped rollback DELETED (no backups): generated Q6_K decode is now unconditional.
+  {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_generated",
+   "rollback_active": lambda e: False},
   {"family": "prefill_gemm", "generated": "prefill_pipe_role_selective_generated", "oracle": "prefill_pipe_role_selective_generated",
    "rollback_active": lambda e: False},
   # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is a hand-authored UOp template and

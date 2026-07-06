@@ -179,50 +179,6 @@ def q6k_gemv_warp_kernel(rows:int, k:int):
   return kernel
 
 
-def q6k_gemv_partial_kernel(rows:int, k:int, parts:int, opts:tuple[Opt, ...]):
-  k_blocks = k // Q6_K_BLOCK_ELEMS
-  blocks_per_part = cdiv(k_blocks, parts)
-
-  def kernel(partials:UOp, halfs:UOp, x:UOp) -> UOp:
-    row = UOp.range(rows, 0)
-    part = UOp.range(parts, 1)
-    blk_part = UOp.range(blocks_per_part, 2, axis_type=AxisType.REDUCE)
-    pos = UOp.range(16, 3, axis_type=AxisType.REDUCE)
-    blk = part * blocks_per_part + blk_part
-    in_range = blk < k_blocks
-    base = (row * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
-    contrib = in_range.where(_q6k_block_dot(halfs, x, base, blk, pos), UOp.const(dtypes.float32, 0.0))
-
-    acc = partials[row, part].set(0.0)
-    acc = partials[row, part].set(acc.after(blk_part, pos)[row, part] + contrib, end=pos)
-    return acc.end(row, part, blk_part).sink(arg=_kernel_info(f"q6k_gemv_partial_{rows}_{k}_{parts}", opts))
-
-  return kernel
-
-
-def q6k_coop_partial_kernel(rows:int, k:int, row_tile:int=4):
-  # Cooperative-K Q6_K GEMV: the within-block position `pos` (0..15) becomes a LOCAL lane axis. In _q6k_weight,
-  # ql/qh byte indices are `...+pos`, so adjacent lanes read ADJACENT bytes -> coalesced packed-weight loads (the
-  # current q6k_gemv_partial maps one row per thread -> adjacent lanes read whole rows apart -> ~10% HBM peak).
-  # Each lane writes its OWN partial partials[row, pos] (no cross-lane reduce in-kernel, like gqa_coop_vec); the
-  # final reduction over the 16 pos-lanes is stage-2 `.sum(axis=1)`. row_tile rows share a workgroup so the
-  # wavefront is row_tile*16 lanes wide (occupancy). Output: partials[rows, 16].
-  k_blocks = k // Q6_K_BLOCK_ELEMS
-
-  def kernel(partials:UOp, halfs:UOp, x:UOp) -> UOp:
-    row_o = UOp.range(cdiv(rows, row_tile), 0)
-    row_i = UOp.range(row_tile, 1, axis_type=AxisType.LOCAL)
-    pos = UOp.range(16, 2, axis_type=AxisType.LOCAL)
-    blk = UOp.range(k_blocks, 3, axis_type=AxisType.REDUCE)
-    row = row_o * row_tile + row_i
-    base = (row * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
-    contrib = _q6k_block_dot(halfs, x, base, blk, pos)
-
-    acc = partials[row, pos].set(0.0)
-    acc = partials[row, pos].set(acc.after(blk)[row, pos] + contrib, end=blk)
-    return acc.end(row_o, row_i, pos).sink(arg=_kernel_info(f"q6k_coop_partial_{rows}_{k}", ()))
-
-  return kernel
 
 def q6k_unpack_kernel(rows:int, k:int):
   k_blocks = k // Q6_K_BLOCK_ELEMS
@@ -309,16 +265,4 @@ if __name__ == "__main__":
     if unpack_max_abs != 0:
       raise AssertionError("Q6_K unpack primitive correctness failed")
 
-  def primitive():
-    partial = partials.custom_kernel(halfs, x, fxn=q6k_gemv_partial_kernel(rows, k, parts, opts))[0]
-    return partial.sum(axis=1)
-
-  got = primitive().realize()
-  max_abs = (got - ref).abs().max().item()
-  print(f"correctness: max_abs={max_abs:.6g}")
-  if max_abs > 1e-2:
-    print("got", got.numpy())
-    print("ref", ref.numpy())
-    raise AssertionError("Q6_K GEMV primitive correctness failed")
   bench("q6k_fused_graph", args.iters, quant_bytes, fused_graph)
-  bench("q6k_gemv_primitive_partial", args.iters, quant_bytes, primitive)
