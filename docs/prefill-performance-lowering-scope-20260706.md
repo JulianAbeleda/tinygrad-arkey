@@ -53,7 +53,7 @@ Run:
 ```sh
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_single_operand_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_v2_schedule_table_gate --compact
-PYTHONPATH=. python3 -m extra.qk.prefill_v2_schedule_table_gate --run-amd --compact
+PYTHONPATH=. python3 -m extra.qk.prefill_v2_schedule_table_gate --run-amd --pin-clock --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --compact

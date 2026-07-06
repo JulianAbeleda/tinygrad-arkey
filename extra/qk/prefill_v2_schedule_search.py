@@ -58,7 +58,8 @@ def _worker():
   from tinygrad.codegen.opt import postrange
   M=int(os.environ["MM"]); out_f=int(os.environ["OUTF"]); in_f=int(os.environ["INF"])
   u0=int(os.environ["U0"]); u1=int(os.environ["U1"]); loc=int(os.environ["LOC"]); unr=int(os.environ["UNR"])
-  res={"u0":u0,"u1":u1,"loc":loc,"unr":unr,"tflops":0.0,"status":"?"}
+  pin_clock = os.environ.get("PREFILL_PIN_CLOCK", "0") == "1"
+  res={"u0":u0,"u1":u1,"loc":loc,"unr":unr,"tflops":0.0,"status":"?","pin_clock":pin_clock}
   try:
     dev=Device[Device.DEFAULT]
     rng=np.random.default_rng(0)
@@ -72,20 +73,24 @@ def _worker():
     out=c.float().numpy(); rr=float(np.sqrt(np.mean((out-ref)**2))/refn)
     if not np.isfinite(rr) or rr>2e-2: res["status"]=f"WRONG rr={rr:.1e}"; print("RESULT",json.dumps(res)); return
     j=TinyJit(lambda:(a@b.transpose()).realize())
-    for _ in range(5): j()
-    dev.synchronize(); ts=[]
-    for _ in range(3):
-      dev.synchronize(); t0=time.perf_counter()
-      for _ in range(15): j()
-      dev.synchronize(); ts.append((time.perf_counter()-t0)/15*1e3)
+    from extra.qk.clock_pin import pinned_peak
+    with pinned_peak(enabled=pin_clock) as pin_prov:
+      if pin_prov is not None: res["clock_pin"] = pin_prov
+      for _ in range(5): j()
+      dev.synchronize(); ts=[]
+      for _ in range(3):
+        dev.synchronize(); t0=time.perf_counter()
+        for _ in range(15): j()
+        dev.synchronize(); ts.append((time.perf_counter()-t0)/15*1e3)
     res["tflops"]=round(2*M*out_f*in_f/min(ts)*1e-12*1e3,2); res["status"]="ok"
   except Exception as e:
     res["status"]=type(e).__name__
   print("RESULT",json.dumps(res))
 
-def _run_config(M,out_f,in_f,u0,u1,loc,unr):
+def _run_config(M,out_f,in_f,u0,u1,loc,unr,pin_clock:bool=False):
   env={**os.environ,"WORKER":"1","MM":str(M),"OUTF":str(out_f),"INF":str(in_f),
        "U0":str(u0),"U1":str(u1),"LOC":str(loc),"UNR":str(unr)}
+  if pin_clock: env["PREFILL_PIN_CLOCK"] = "1"
   try:
     p=subprocess.run([sys.executable, __file__], env=env, capture_output=True, text=True, timeout=180)
     for ln in p.stdout.splitlines():

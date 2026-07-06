@@ -60,17 +60,17 @@ def _table_row(shape: str, table: dict[str, Any]) -> dict[str, Any]:
   }
 
 
-def _run_shape(shape: str, row: dict[str, Any], m: int) -> dict[str, Any]:
-  result = _run_config(m, row["out_f"], row["in_f"], **row["params"])
+def _run_shape(shape: str, row: dict[str, Any], m: int, *, pin_clock: bool = False) -> dict[str, Any]:
+  result = _run_config(m, row["out_f"], row["in_f"], **row["params"], pin_clock=pin_clock)
   return {**row, "measured": result}
 
 
 def build_report(*, run_amd: bool = False, shapes: tuple[str, ...] = DEFAULT_SHAPES,
-                 m: int = M_DEFAULT, artifact: bool = True) -> dict[str, Any]:
+                 m: int = M_DEFAULT, pin_clock: bool = False, artifact: bool = True) -> dict[str, Any]:
   table = _read_table()
   rows = [_table_row(shape, table) for shape in shapes]
   if run_amd:
-    rows = [_run_shape(row["shape"], row, m) for row in rows]
+    rows = [_run_shape(row["shape"], row, m, pin_clock=pin_clock) for row in rows]
 
   missing = [row["shape"] for row in rows if row["params"]["loc"] == 0]
   executed = [row for row in rows if "measured" in row]
@@ -89,6 +89,7 @@ def build_report(*, run_amd: bool = False, shapes: tuple[str, ...] = DEFAULT_SHA
       "all_selected_shapes_present": len(rows) == len(shapes),
       "all_selected_shapes_use_local": not missing,
       "run_amd": run_amd,
+      "pin_clock": pin_clock,
       "all_measured_shapes_ok": (not run_amd or len(measured_ok) == len(rows)),
     },
     "rows": rows,
@@ -104,10 +105,12 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser()
   ap.add_argument("--compact", action="store_true")
   ap.add_argument("--run-amd", action="store_true", help="execute the representative table shapes on AMD")
+  ap.add_argument("--pin-clock", action="store_true", help="pin AMD clocks during timing windows via extra.qk.clock_pin")
   ap.add_argument("--shapes", default=",".join(DEFAULT_SHAPES), help="comma-separated out_fxin_f shapes from the table")
   ap.add_argument("--M", type=int, default=M_DEFAULT)
   args = ap.parse_args(argv)
-  report = build_report(run_amd=args.run_amd, shapes=tuple(x for x in args.shapes.split(",") if x), m=args.M)
+  report = build_report(run_amd=args.run_amd, shapes=tuple(x for x in args.shapes.split(",") if x), m=args.M,
+                        pin_clock=args.pin_clock)
   print(json.dumps(report, indent=None if args.compact else 2))
   return report
 

@@ -12,6 +12,7 @@ def test_prefill_v2_schedule_table_gate_static_report_uses_local_for_representat
   assert report["evidence"]["all_selected_shapes_present"] is True
   assert report["evidence"]["all_selected_shapes_use_local"] is True
   assert report["evidence"]["run_amd"] is False
+  assert report["evidence"]["pin_clock"] is False
   assert report["shapes"] == ["4096x4096", "5120x5120"]
   assert all(row["params"]["loc"] > 0 for row in report["rows"])
   assert all(row["table_tflops"] > row["table_default_tflops"] for row in report["rows"])
