@@ -19,10 +19,6 @@ def q4k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_direct_out_kernel")(*args, **kwargs)
 def q4k_gemm_packed_load_reduce_out_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_reduce_out_kernel")(*args, **kwargs)
-def q4k_q8_1_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_gemm_kernel")(*args, **kwargs)
-def q4k_q8_1_sdot4_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_sdot4_gemm_kernel")(*args, **kwargs)
-def q4k_q8_1_sdot4_coop_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_sdot4_coop_gemm_kernel")(*args, **kwargs)
-def q4k_q8_1_sdot4_coop_direct_out_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_sdot4_coop_direct_out_kernel")(*args, **kwargs)
 def describe_q4k_int8_wmma_prefill(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "describe_q4k_int8_wmma_prefill")(*args, **kwargs)
 def describe_q4k_int8_wmma_tiled_prefill(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "describe_q4k_int8_wmma_tiled_prefill")(*args, **kwargs)
 def emit_q4k_int8_wmma_prefill_tensor(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_prefill_tensor")(*args, **kwargs)
@@ -33,7 +29,6 @@ def emit_q4k_packed_prefill_tile(*args, **kwargs): return _attr("extra.qk.prefil
 def q4k_gemv_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_kernel")(*args, **kwargs)
 def q4k_gemv_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_partial_kernel")(*args, **kwargs)
 def q4k_gemv_warp_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_warp_kernel")(*args, **kwargs)
-def q8_signed_pack_u32_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q8_signed_pack_u32_kernel")(*args, **kwargs)
 def q8_1_quantize(*args, **kwargs): return _attr("extra.qk.layout", "q8_1_quantize")(*args, **kwargs)
 def quantize_q4_k(*args, **kwargs): return _attr("extra.qk.quantize", "quantize_q4_k")(*args, **kwargs)
 

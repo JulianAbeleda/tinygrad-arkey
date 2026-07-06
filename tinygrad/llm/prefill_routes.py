@@ -9,7 +9,9 @@ from tinygrad.llm.runtime_specs import RuntimeOpSpec
 from tinygrad.llm import route_ops as qk_ops
 
 PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed", "chunked")
-Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "1", "q8", "gemm", "mmq", "mmq_direct", "mmq_direct_out", "sdot4", "wmma", "wmma_tiled")
+# Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
+# Only the generated int8-WMMA parity substrates remain selectable; off-values fall to the direct-packed default.
+Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled")
 
 
 def _env(key:str, default:Any=0) -> Any:
@@ -35,7 +37,6 @@ def prefill_q4k_q8_mode() -> str:
     allowed = ", ".join(repr(x) for x in Q4K_Q8_CHOICES if x)
     raise ValueError(f"PREFILL_Q4K_Q8 must be one of {allowed}, got {mode!r}")
   if mode in ("", "0", "false", "off", "no"): return ""
-  if mode in ("1", "q8", "gemm"): return "gemm"
   return mode
 
 
@@ -209,32 +210,6 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
     q8_mode = prefill_q4k_q8_mode()
     if q8_mode:
       xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
-      if q8_mode == "mmq":
-        xq_words = Tensor.empty(xq.numel() // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
-          xq, fxn=qk_ops.q8_signed_pack_u32_kernel(spec.m * spec.k))[0]
-        mmq_partials = Tensor.empty(spec.n, spec.m, 8, dtype=dtypes.float32, device=x.device)
-        out = mmq_partials.custom_kernel(words, xq_words, xscales,
-          fxn=qk_ops.q4k_q8_1_sdot4_coop_gemm_kernel(spec.n, spec.k, spec.m, 1, 1,
-                                                     name="prefill_q4k_q8_1_mmq_direct_packed_gemm"))[0]
-        return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
-      if q8_mode in ("mmq_direct", "mmq_direct_out"):
-        xq_words = Tensor.empty(xq.numel() // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
-          xq, fxn=qk_ops.q8_signed_pack_u32_kernel(spec.m * spec.k))[0]
-        out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-          words, xq_words, xscales,
-          fxn=qk_ops.q4k_q8_1_sdot4_coop_direct_out_kernel(spec.n, spec.k, spec.m, 1, 4,
-                                                           name="prefill_q4k_q8_1_mmq_direct_out_gemm"))[0]
-        return out.reshape(1, spec.m, spec.n)
-      if q8_mode == "sdot4":
-        if parts != 1:
-          if prefill_route_strict(): raise RuntimeError("PREFILL_Q4K_Q8=sdot4 requires parts=1")
-        else:
-          xq_words = Tensor.empty(xq.numel() // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
-            xq, fxn=qk_ops.q8_signed_pack_u32_kernel(spec.m * spec.k))[0]
-          out = partials.custom_kernel(words, xq_words, xscales,
-            fxn=qk_ops.q4k_q8_1_sdot4_gemm_kernel(spec.n, spec.k, spec.m, parts, "none", (),
-                                                  name="prefill_q4k_q8_1_sdot4_direct_packed_gemm"))[0]
-          return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
       if q8_mode == "wmma":
         wmma_spec = qk_ops.describe_q4k_int8_wmma_prefill(spec.n, spec.k, spec.m, role=role,
                                                           n_tile=max(16, int(_env("PREFILL_Q4K_WMMA_N_TILE", 256))))
@@ -262,9 +237,8 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
                              f"planned kernel={tiled_spec.kernel_name} live_raw_elems={tiled_spec.live_raw_elems}. "
                              f"This explicit stop prevents fallthrough to the default Q4_K/Q8_1 GEMM route.") from e
         return out.reshape(1, spec.m, spec.n)
-      out = partials.custom_kernel(words, xq, xscales,
-        fxn=qk_ops.q4k_q8_1_gemm_kernel(spec.n, spec.k, spec.m, parts, "prefill", opts,
-                                        name="prefill_q4k_q8_1_direct_packed_gemm"))[0]
+      raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "
+                         f"modes were deleted 2026-07-06. Only 'wmma'/'wmma_tiled' (generated) or off-values are valid.")
     else:
       kernel = qk_ops.q4k_gemm_packed_load_kernel if bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)) else qk_ops.q4k_gemm_kernel
       if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) and bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)):

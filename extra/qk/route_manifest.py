@@ -337,24 +337,9 @@ ROUTES = {
     "selector": "env_guard",
     "route_attribution": "extra/qk/quant/q4_k_gemv_primitive.py q4k_gemm_packed_load_reduce_out_kernel, selected by tinygrad/llm/prefill_routes.py when PREFILL_Q4K_REDUCE_OUT=1.",
     "note": "Default-off primitive correctness fix. It replaces the manual direct-output accumulator recurrence with a real Ops.REDUCE, making GROUP schedules numerically valid: GROUP:0:10 on real 14B ffn_gate rel_rmse ~=1.6e-6 vs the lossless direct path. It is not promoted because clean pp512 is 169.7 tok/s vs 173.6 for the current Q4 tile4x4 manual direct-output default. Use this as the correctness foundation for future grouped/staged combine work."},
-  "prefill_q4k_mmq_direct_out_research": {
-    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "correct_not_fast",
-    "roles": ["ffn_gate_up", "attn_qo", "ffn_down", "attn_kv"], "excluded_roles": [],
-    "quant": ["Q4_K"],
-    "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "Q4_K/Q8_1 generated-UOp dot4 MMQ with in-kernel 8-lane reduce and direct output"}],
-    "env": {"PREFILL_Q4K_Q8": "mmq_direct"},
-    "rollback": {"PREFILL_Q4K_Q8": "0"},
-    "baseline_route_id": "prefill_q4k_direct_tile4x4_default",
-    "strict_fallback": True,
-    "expected_kernels": ["prefill_q4k_q8_1_mmq_direct_out_gemm_*"],
-    "forbidden_kernels": ["prefill_q4k_q8_1_mmq_direct_packed_gemm_* partial tensor path"],
-    "authority_gate": "extra/qk/prefill_mmq_parity_gate.py + canonical 14B smoke",
-    "promotion_artifacts": ["docs/14b-q4k-int8-wmma-substrate-scope-20260705.md"],
-    "purity_status": "research",
-    "provenance": "hand_authored_uop_template",
-    "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=mmq_direct -> extra/qk/quant/q4_k_gemv_primitive.py q4k_q8_1_sdot4_coop_direct_out_kernel. Reuses the existing Q4_K/Q8_1 dot4 algebra and the existing warp_reduce_sum direct-output pattern.",
-    "note": "Correct and bounded 14B research route. It eliminates the [rows,tokens,8] partial tensor and avoids the WMMA Tensor graph-explosion guard, but canonical 14B pp512 smoke measured only 85 tok/s, slower than the current direct-packed default. Keep as topology evidence for in-kernel lane combine, not as the final route."},
+  # prefill_q4k_mmq_direct_out_research (+ the mmq/sdot4 PREFILL_Q4K_Q8 modes) REMOVED 2026-07-06 (no backups):
+  # handwritten scalar-sdot4/Q8_1 MMQ prefill kernels deleted (confirmed ~85-237 tok/s dead end). Only the
+  # generated int8-WMMA substrate (prefill_q4k_int8_wmma_generated_research) remains selectable via PREFILL_Q4K_Q8.
   "prefill_pipe_global_rollback": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "superseded_rollback",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
