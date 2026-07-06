@@ -362,23 +362,29 @@ def _tc_local_stage_post_opt() -> bool:
 def _tc_local_stage_scalar_post_opt() -> bool:
   return bool(getenv("PREFILL_TC_LOCAL_STAGE_SCALAR_POST", 0))
 
+def _tc_local_stage_tile_only() -> bool:
+  return bool(getenv("PREFILL_TC_LOCAL_STAGE_TILE_ONLY", 0))
+
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...]) -> UOp:
   return src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False)).index(*ranges)
 
 def _tc_local_stage_wmma_sources(srcs:list[UOp], stage_ranges:tuple[UOp, ...], *, enabled:bool=True) -> list[UOp]:
   mode = _tc_local_stage_mode()
   if mode in ("", "0", "false", "off", "no") or not enabled: return srcs
-  if mode not in ("a", "1", "true", "yes"):
-    raise KernelOptError(f"PREFILL_TC_LOCAL_STAGE currently supports only a/off; b/both are not numerically validated, got {mode!r}")
+  if mode not in ("a", "b", "both", "1", "true", "yes"):
+    raise KernelOptError(f"PREFILL_TC_LOCAL_STAGE supports a/b/both/off, got {mode!r}")
   if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
     print("TC_LOCAL_STAGE", {"ranges": [(r.arg, r.vmax+1) for r in stage_ranges],
                              "src0_ranges": [(r.arg, r.vmax+1) for r in sorted(srcs[0].ranges, key=lambda r: r.arg)],
                              "src1_ranges": [(r.arg, r.vmax+1) for r in sorted(srcs[1].ranges, key=lambda r: r.arg)]})
-  srcs[0] = _tc_local_stage_src(srcs[0], stage_ranges)
+  if mode in ("a", "1", "true", "yes", "both"): srcs[0] = _tc_local_stage_src(srcs[0], stage_ranges)
+  if mode in ("b", "both"): srcs[1] = _tc_local_stage_src(srcs[1], stage_ranges)
   return srcs
 
 def _tc_local_stage_ranges(srcs:tuple[UOp, ...]) -> tuple[UOp, ...]:
   rngs = sorted(UOp.sink(*srcs).ranges, key=lambda r: r.arg)
+  if _tc_local_stage_tile_only():
+    return tuple(r for r in rngs if r.arg[-1] is AxisType.WARP)
   lane_rngs = tuple(r for r in rngs if r.arg[-1] in (AxisType.LOCAL, AxisType.WARP))
   return lane_rngs or tuple(r for r in rngs if r.arg[-1] is not AxisType.UPCAST)
 

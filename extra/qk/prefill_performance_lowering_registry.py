@@ -109,8 +109,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "blockers": [
       "Generated fp16 shaped-WMMA LOCAL staging substrate probe passes",
       "The fp16 prefill TC route can emit numerically correct generated A-operand LOCAL staging on the 512x512 route-bound diagnostic",
-      "Representative warmstart-table shapes still fail when PREFILL_TC_LOCAL_STAGE=a is combined with OptOps.LOCAL schedules",
-      "No medium-shape performance win exists yet; loc=0 staged schedules are correct but slower than the existing LOCAL table",
+      "Representative warmstart-table shape now supports numerically correct B-operand tile-only post-WMMA staging, but A/both staging remain wrong",
+      "No medium-shape performance win exists yet; B-tile staging is flat against the existing LOCAL table schedule",
     ],
     "reuse_files": [
       "docs/codegen-wmma-lds-staging-design-20260705.md",

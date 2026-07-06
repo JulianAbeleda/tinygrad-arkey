@@ -19,6 +19,7 @@
     "baseline_table_local_ok": true,
     "pre_wmma_forced_local_ok": false,
     "post_local_stage_ok": false,
+    "post_tile_b_stage_ok": true,
     "scalar_post_local_stage_ok": false,
     "staged_beats_baseline": false
   },
@@ -28,7 +29,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 35.47,
+      "tflops": 35.49,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -56,6 +57,21 @@
       "status": "CompileError",
       "pin_clock": true
     },
+    "post_tile_b_stage": {
+      "u0": 4,
+      "u1": 4,
+      "loc": 4,
+      "unr": 8,
+      "tflops": 35.57,
+      "status": "ok",
+      "pin_clock": true,
+      "clock_pin": {
+        "cmd": "echo manual > /sys/class/drm/card0/device/power_dpm_force_performance_level && echo 2 > /sys/class/drm/card0/device/pp_dpm_sclk && echo 3 > /sys/class/drm/card0/device/pp_dpm_mclk",
+        "rc": 0,
+        "ok": true,
+        "out": ""
+      }
+    },
     "scalar_post_local_stage": {
       "u0": 4,
       "u1": 4,
@@ -66,5 +82,5 @@
       "pin_clock": true
     }
   },
-  "remaining_blocker": "final/scalar WMMA operand staging does not compose with warmstart LOCAL schedules; needs tile-shaped cooperative staging"
+  "remaining_blocker": "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; A/both/final-scalar staging remain wrong or unbuildable"
 }
