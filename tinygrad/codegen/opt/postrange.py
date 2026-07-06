@@ -372,6 +372,27 @@ def _tc_local_stage_coop_b_post_opt() -> bool:
 
 _tc_local_stage_coop_b_stats = {"seen": 0, "rewritten": 0, "dumped": 0, "skipped": 0}
 
+
+def _tc_local_stage_contract_axes(x:UOp) -> tuple[int, ...]:
+  if x.op is not Ops.CONTRACT: return tuple()
+  if not isinstance(x.arg, tuple): return tuple()
+  axes: list[int] = []
+  for item in x.arg:
+    if not isinstance(item, tuple): continue
+    if len(item) < 1 or not isinstance(item[0], int): continue
+    axes.append(item[0])
+  return tuple(axes)
+
+
+def _tc_local_stage_coop_b_ranges(src:UOp) -> tuple[tuple[UOp, ...], tuple[UOp, ...]]:
+  ranges = sorted(src.ranges, key=lambda r: r.arg)
+  # Fragment identity carries warp rows plus explicit CONTRACT fragment axes.
+  contract_axes = set(_tc_local_stage_contract_axes(src))
+  fragment = tuple(r for r in ranges if r.arg[-1] is AxisType.WARP or r.arg[0] in contract_axes)
+  tile = tuple(r for r in ranges if r.arg[-1] is not AxisType.REDUCE and r not in fragment)
+  return fragment, tile
+
+
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...]) -> UOp:
   return src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False)).index(*ranges)
 
@@ -413,28 +434,40 @@ def _tc_local_stage_coop_b_wmma_post(wmma:UOp) -> UOp|None:
   # Keep this diagnostic cheap. A full backward-slice scan on every WMMA in a
   # medium GEMM is quadratic enough to hide the actual compile result.
   if wmma.src[1].op in {Ops.STAGE, Ops.AFTER, Ops.BARRIER}: return None
-  # Cooperative map is only legal today for lane+reduce operand shaping. Shapes with
-  # extra non-reduce ranges (GLOBAL/UPCAST/UNROLL) can produce late local-store
-  # vectorization shape failures.
+  # Cooperative map is only safe today for lane+reduce operand shaping. Keep fragment
+  # carriers (warp + explicit contract axes) in the staged identity and only allow
+  # optional UPCAST/UNROLL tile loops.
   warp_ranges = [r for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
   if len(warp_ranges) != 1 or wmma.src[1].dtype.count != 16: return None
   lane = warp_ranges[0]
-  extra_ranges = tuple(r for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg)
-                       if r is not lane and r.arg[-1] is not AxisType.REDUCE)
-  if extra_ranges:
+  fragment_ranges, tile_ranges = _tc_local_stage_coop_b_ranges(wmma.src[1])
+  if lane not in fragment_ranges:
     _tc_local_stage_coop_b_stats["skipped"] += 1
     if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
       _tc_local_stage_coop_b_stats["dumped"] += 1
       print("TC_LOCAL_STAGE_COOP_B_SKIP", json.dumps({
-        "reason": "unsupported_nonlane_source_shape",
+        "reason": "missing_fragment_warp_axis",
         "warp": {"arg": str(lane.arg), "size": lane.vmax+1},
-        "extra_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in extra_ranges],
+        "all_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg)],
+      }))
+    return None
+  unsupported_ranges = tuple(r for r in tile_ranges if r.arg[-1] not in {AxisType.UPCAST, AxisType.UNROLL})
+  if unsupported_ranges:
+    _tc_local_stage_coop_b_stats["skipped"] += 1
+    if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
+      _tc_local_stage_coop_b_stats["dumped"] += 1
+      print("TC_LOCAL_STAGE_COOP_B_SKIP", json.dumps({
+        "reason": "unsupported_tile_loop_range_type",
+        "warp": {"arg": str(lane.arg), "size": lane.vmax+1},
+        "unsupported_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in unsupported_ranges],
       }))
     return None
   row = lane & 15
   bsh = UOp.placeholder((256,), wmma.src[1].dtype.scalar(), 990, addrspace=AddrSpace.LOCAL)
   stores = [bsh.index(row*16+i, dtype=bsh.dtype).store(wmma.src[1].gep(i), lane < 16).end() for i in range(16)]
-  bar = stores[0].barrier(*stores[1:])
+  stage = UOp.group(*stores)
+  if tile_ranges: stage = stage.end(*tile_ranges)
+  bar = UOp.barrier(stage)
   vals = [bsh.after(bar)[row*16+i] for i in range(16)]
   bvec = vals[0].vectorize(*vals[1:])
   _tc_local_stage_coop_b_stats["rewritten"] += 1

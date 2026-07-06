@@ -21,7 +21,18 @@ def test_medium_stage_gate_classifies_forced_stage_blocker(monkeypatch):
   def fake_run_config(*args, **kwargs):
     return results.pop(0)
 
+  def fake_run_diagnostic(*args, **kwargs):
+    return {
+      "status": "ok",
+      "tflops": 42.5,
+      "has_fp16_wmma": True,
+      "has_local_shared": True,
+      "has_barrier": True,
+      "cooperative_b_stage": {"seen": 1, "rewritten": 1, "skipped": 0},
+    }
+
   monkeypatch.setattr(gate, "_run_config", fake_run_config)
+  monkeypatch.setattr(gate, "_run_case_diagnostic", fake_run_diagnostic)
   report = gate.build_report(run_amd=True, artifact=False)
   assert report["evidence"]["baseline_table_local_ok"] is True
   assert report["evidence"]["pre_wmma_forced_local_ok"] is False
