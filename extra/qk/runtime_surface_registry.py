@@ -30,26 +30,6 @@ _RUNTIME_SURFACES: tuple[RuntimeSurface, ...] = (
     "reason": "PREFILL_DIRECT_QUANTS defaults to Q4_K,Q6_K and Q6_K direct prefill calls q6k_gemm_packed_load_* hand UOp templates.",
     "replacement_scope": "Add Q6KPrefillRouteSpec or explicit manifest debt row.",
   },
-  {
-    "surface_id": "decode_q4k_smallk_batched",
-    "surface_class": "route_local_custom_kernel",
-    "writer_files": [
-      "tinygrad/llm/decode_routes.py",
-      "extra/qk/quant/q4_k_gemv_primitive.py",
-    ],
-    "reason": "q4k_primitive_linear_call routes non-decode K<=32 through q4k_gemm_kernel hand UOp template.",
-    "replacement_scope": "Add Q4KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY.",
-  },
-  {
-    "surface_id": "decode_q6k_smallk_batched",
-    "surface_class": "route_local_custom_kernel",
-    "writer_files": [
-      "tinygrad/llm/decode_routes.py",
-      "extra/qk/quant/q6_k_gemv_primitive.py",
-    ],
-    "reason": "q6k_primitive_linear_call routes non-decode K<=32 through q6k_gemm_kernel hand UOp template.",
-    "replacement_scope": "Add Q6KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY.",
-  },
 )
 
 

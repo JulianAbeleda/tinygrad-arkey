@@ -5,8 +5,6 @@ from extra.qk import runtime_surface_registry as registry
 
 SEEDED = (
   "prefill_q6k_direct_packed_default_capable",
-  "decode_q4k_smallk_batched",
-  "decode_q6k_smallk_batched",
 )
 
 

@@ -143,25 +143,22 @@ Goal: make the inventory mechanically complete.
 Actions:
 
 - Keep `pure_kernel_surface_audit` as the strict surface authority.
-- Keep unmanifested Q6_K direct prefill and small-K batched Q4_K/Q6_K paths centralized in
-  `runtime_surface_registry` until they gain manifest rows or strict guard coverage.
+- Keep unmanifested Q6_K direct prefill centralized in `runtime_surface_registry` until it gains manifest rows or strict guard coverage.
 - Add emitted-kernel-name binding to the audit artifact so "selected route" and "executed kernel" are tied together.
 - Keep historical/non-runtime fixtures out of default blockers but classified as fixture debt.
 
-### Phase 1: Small-K Batched Q4_K/Q6_K
+### Phase 1: Small-K Batched Q4_K/Q6_K (completed)
 
-Goal: close the smallest runtime-capable handwritten surfaces.
+Goal: small-K Q4_K/Q6_K is out of active handwritten debt because runtime fallback now routes these shapes to graph execution.
 
 Target:
 
-- L3 descriptor-owned small-batch GEMM specs, or L4 ordinary graph fallback when `K<=32`.
+- Keep route-level status and guards as proof while preserving a deprecation checkpoint for fallback behavior.
 
 Actions:
 
-- Add `Q4KSmallBatchGEMMSpec` and `Q6KSmallBatchGEMMSpec` or explicitly route these shapes to ordinary tinygrad graph
-  under strict mode.
-- Gate correctness against current hand templates.
-- Measure only enough to prevent catastrophic regression; these are not the main performance route.
+- Remove the small-K phase/runtime debt rows and keep registry artifacts in sync with runtime route status.
+- Continue strict fallback/route-level guard coverage while the small-K benchmark envelope remains non-default.
 
 ### Phase 2: Direct-Packed Q4_K/Q6_K Prefill
 

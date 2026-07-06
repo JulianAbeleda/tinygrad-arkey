@@ -14,15 +14,10 @@ def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
   if not linear.decode_enabled or linear.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != linear.in_features:
     return fallback(x)
   K = x.shape[-2]
-  if not isinstance(K, int) or K != 1:  # batched (verify/prefill); fall back for large or symbolic K
-    if not isinstance(K, int) or K > 32 or linear.kernel_mode == "direct_out": return fallback(x)
-    x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
-    words = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
-    partials = Tensor.empty(linear.out_features, K, linear.parts, dtype=dtypes.float32, device=x.device)
-    gemm_opts = linear.opts + (qk_ops.q4k_parse_opt(f"UPCAST:1:{min(K, 16)}"),)
-    out = partials.custom_kernel(words, x_batch.reshape(K*linear.in_features),
-      fxn=qk_ops.q4k_gemm_kernel(linear.out_features, linear.in_features, K, linear.parts, "none", gemm_opts))[0]
-    return out.sum(axis=2).transpose(0, 1).reshape(1, K, linear.out_features)
+  # Q4_K batched K!=1 small-K (including decode-time verify/prefill) now routes through ordinary graph fallback;
+  # the pre-existing hand-written batched q4k_gemm_kernel path is retired in this phase.
+  if not isinstance(K, int) or K != 1:
+    return fallback(x)
 
   bubblebeam_futuresight = getenv("BUBBLEBEAM_FUTURESIGHT", 1)
   g3_policy_selected = _qk_route_policy_selects_q4k_g3(linear.out_features, linear.in_features)
@@ -70,14 +65,10 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
   if not linear.decode_enabled or linear.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != linear.in_features:
     return fallback(x)
   K = x.shape[-2]
-  if not isinstance(K, int) or K != 1:  # batched (verify/prefill)
-    if not isinstance(K, int) or K > 32: return fallback(x)
-    x_batch = x[0].cast(dtypes.float16).contiguous()  # [K, in_features]
-    partials = Tensor.empty(linear.out_features, K, linear.parts, dtype=dtypes.float32, device=x.device)
-    gemm_opts = linear.opts + (qk_ops.q6k_parse_opt(f"UPCAST:1:{min(K, 16)}"),)
-    out = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_batch.reshape(K*linear.in_features),
-      fxn=qk_ops.q6k_gemm_kernel(linear.out_features, linear.in_features, K, linear.parts, gemm_opts))[0]
-    return out.sum(axis=2).transpose(0, 1).reshape(1, K, linear.out_features)
+  # Q6_K batched K!=1 small-K (including decode-time verify/prefill) now routes through ordinary graph fallback;
+  # the pre-existing hand-written batched q6k_gemm_kernel path is retired in this phase.
+  if not isinstance(K, int) or K != 1:
+    return fallback(x)
   x_vec = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float16).contiguous()
 
   # No backups: the Q6K_GEMV_WARP_DOWN handwritten warp rollback was deleted 2026-07-06. Generated Q6_K decode

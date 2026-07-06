@@ -21,20 +21,6 @@ class LoweringPhaseRegistryRow(TypedDict):
 
 _PHASE_ROWS: tuple[LoweringPhaseRegistryRow, ...] = (
   {
-    "id": "decode_q4k_smallk_batched",
-    "phase": 1,
-    "phase_name": "small_k_surface_conversion",
-    "target_lowering_level": "L4",
-    "next_action": "add a small-k Q4_K spec and enforce graph-only fallback",
-  },
-  {
-    "id": "decode_q6k_smallk_batched",
-    "phase": 1,
-    "phase_name": "small_k_surface_conversion",
-    "target_lowering_level": "L4",
-    "next_action": "add a small-k Q6_K spec and enforce graph-only fallback",
-  },
-  {
     "id": "prefill_q6k_direct_packed_default_capable",
     "phase": 2,
     "phase_name": "direct_packed_prefill",
