@@ -337,7 +337,7 @@ def bufs_from_ast(ast:UOp, dname:str) -> list[Buffer]:
   glbls = sorted([x for x in ast.backward_slice if x.op is Ops.PARAM], key=lambda x: x.arg.slot)
   return [Buffer(dname, x.max_numel(), x.dtype.base) for x in glbls]
 
-# Step 3 warm-start: force a loop-found schedule on matmuls of a known shape signature, NO BEAM.
+# Step 3 warm-start: force a loop-found schedule on matmuls of a known shape signature.
 # Map key = (frozenset(output dims), product(reduce dims)); value = tuple[Opt]. Default None = no-op.
 _WARMSTART_OPTS = None
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}

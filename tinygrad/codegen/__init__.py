@@ -105,7 +105,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     # optimize (schedule) the AST
     sink = graph_rewrite(sink, pm_flatten_range+pm_simplify_ranges, ctx={}, name="simplify ranges")
 
-    # do postrange optimization: FutureSight/BubbleBeam opts_to_apply, warm-start, or hand_coded_optimizations
+    # do postrange optimization: explicit opts_to_apply, warm-start, or hand_coded_optimizations
     sink = apply_opts(sink, ren)
 
   # ** expander (expand_rewrite) **
