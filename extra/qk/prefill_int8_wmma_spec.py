@@ -304,3 +304,43 @@ def emit_q4k_int8_wmma_tiled_prefill_tensor(words:Tensor, xq:Tensor, xscales:Ten
                                     n_tile=spec.n_tile, target=spec.target)
   wmma_spec.validate()
   return emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec, vectorized=True)
+
+
+def emit_q4k_int8_wmma_tiled_lifecycle_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
+                                              spec:Q4KInt8WMMATiledPrefillSpec) -> Tensor:
+  """Bounded multi-output-tile Q4_K/Q8_1 WMMA lifecycle.
+
+  This keeps each live RAW dot at `[m_tile,n_tile,group_tile]` scope and composes output tiles in the generated Tensor
+  graph. It is the Phase-C lifecycle gate target; full 14B route execution still needs scheduler ownership for scale.
+  """
+  spec.validate()
+  if spec.group_tile != 1:
+    raise NotImplementedError(f"wmma_tiled lifecycle currently requires group_tile=1, got {spec.group_tile}")
+  if spec.m % spec.m_tile or spec.n % spec.n_tile:
+    raise ValueError(f"m/n must be exact multiples of tile sizes, got m={spec.m} n={spec.n} "
+                     f"tile={spec.m_tile}x{spec.n_tile}")
+  words3 = words.reshape(spec.n, spec.k_blocks, Q4K_WORDS_PER_BLOCK)
+  xq2 = xq.reshape(spec.m, spec.k)
+  xsc2 = xscales.reshape(spec.m, spec.groups)
+  rows = []
+  for ms in range(0, spec.m, spec.m_tile):
+    cols = []
+    for ns in range(0, spec.n, spec.n_tile):
+      acc = Tensor.zeros(spec.m_tile, spec.n_tile, dtype=dtypes.float32, device=xq.device)
+      words_tile = words3[ns:ns + spec.n_tile].contiguous()
+      for blk in range(spec.k_blocks):
+        for grp in range(spec.groups_per_block):
+          group_idx = blk * spec.groups_per_block + grp
+          start = group_idx * spec.group_elems
+          q4_g = _q4k_group_codes_tensor(words_tile, blk, grp)
+          q8_g = xq2[ms:ms + spec.m_tile, start:start + spec.group_elems].contiguous()
+          raw = _intdot_matmul(q8_g, q4_g.transpose()).cast(dtypes.float32)
+          qsum = q8_g.cast(dtypes.int32).sum(axis=1).cast(dtypes.float32)
+          d, dmin, sc, mn = _q4k_group_params_tensor(words_tile, blk, grp)
+          xscale = xsc2[ms:ms + spec.m_tile, group_idx].cast(dtypes.float32)
+          scaled_raw = raw * (d * sc.cast(dtypes.float32)).reshape(1, spec.n_tile)
+          scaled_min = qsum.reshape(spec.m_tile, 1) * (dmin * mn.cast(dtypes.float32)).reshape(1, spec.n_tile)
+          acc = acc + xscale.reshape(spec.m_tile, 1) * (scaled_raw - scaled_min)
+      cols.append(acc.contiguous())
+    rows.append(cols[0].cat(*cols[1:], dim=1).contiguous())
+  return rows[0].cat(*rows[1:], dim=0).contiguous()

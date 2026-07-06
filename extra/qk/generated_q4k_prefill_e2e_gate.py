@@ -97,14 +97,16 @@ def build() -> dict[str, Any]:
   tiled_microgate_ok = tiled_microgate["verdict"] == "Q4K_WMMA_TILED_MICROGATE_PASS"
   tiled_surface_ok = tiled_surface["verdict"] == "Q4K_WMMA_TILED_SURFACE_TC_MATCHER_SELECTED"
   tiled_no_hand_ok = tiled_no_hand["verdict"] == "Q4K_WMMA_TILED_NO_HAND_KERNEL_PASS"
-  tiled_lifecycle_classified = tiled_lifecycle["verdict"] == "Q4K_WMMA_TILED_LIFECYCLE_BLOCKED_MULTI_TILE_LOWERING"
-  tiled_role_shape_exec_classified = tiled_role_shape_exec["verdict"] == "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE"
+  tiled_lifecycle_ok = tiled_lifecycle["verdict"] == "Q4K_WMMA_TILED_LIFECYCLE_PASS"
+  tiled_role_shape_exec_classified = tiled_role_shape_exec["verdict"] in (
+    "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE",
+    "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING")
   tiled_role_shape_ok = tiled_role_shape["verdict"] == "Q4K_WMMA_TILED_ROLE_SHAPES_BLOCKED_FULL_ROUTE"
   smoke_ok = smoke_class["class"] == "blocked.graph_explosion"
   tiled_smoke_ok = tiled_smoke_class["class"] == "blocked.full_route_lowering_missing"
   old_ok = selected_ok and parity_ok and codegen_ok and smoke_ok
   tiled_ok = tiled_selected_ok and tiled_lowering_ok and tiled_microgate_ok and tiled_surface_ok and tiled_no_hand_ok and \
-    tiled_lifecycle_classified and tiled_role_shape_exec_classified and tiled_role_shape_ok and tiled_smoke_ok
+    tiled_lifecycle_ok and tiled_role_shape_exec_classified and tiled_role_shape_ok and tiled_smoke_ok
   verdict = "GENERATED_Q4K_PREFILL_E2E_TILED_BLOCKED_FULL_ROUTE" if old_ok and tiled_ok else \
     "GENERATED_Q4K_PREFILL_E2E_BLOCKED_GRAPH_EXPLOSION" if old_ok else "GENERATED_Q4K_PREFILL_E2E_FAIL"
   return {"schema": "generated_q4k_prefill_e2e_gate.v1",
@@ -118,7 +120,7 @@ def build() -> dict[str, Any]:
           "tiled_microgate": {"ok": tiled_microgate_ok, **tiled_microgate},
           "tiled_surface": {"ok": tiled_surface_ok, **tiled_surface},
           "tiled_no_hand_kernel": {"ok": tiled_no_hand_ok, **tiled_no_hand},
-          "tiled_lifecycle": {"ok": False, "classified": tiled_lifecycle_classified, **tiled_lifecycle},
+          "tiled_lifecycle": {"ok": tiled_lifecycle_ok, "classified": False, **tiled_lifecycle},
           "tiled_role_shape_exec": {"ok": False, "classified": tiled_role_shape_exec_classified, **tiled_role_shape_exec},
           "tiled_role_shape": {"ok": tiled_role_shape_ok, **tiled_role_shape},
           "smoke": {"ok": smoke_ok, "classification": smoke_class, **smoke},
