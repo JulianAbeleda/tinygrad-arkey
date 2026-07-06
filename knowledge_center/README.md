@@ -8,6 +8,8 @@ don't get re-litigated. Not API docs (those live in `docs/`); this is the reason
 - [minimization-principles.md](minimization-principles.md) — the reduced, cited principles for the smallest honest
   inference stack (authored/generated boundary, generate-don't-hand-write kernels, AOT compiler/runtime split,
   rules-as-data optimization, the hardware-submission floor). The north-star for any reduction/rewrite work.
+- [100-percent-audit.md](100-percent-audit.md) — definition of done for a quant-grade fast + minimal AOT engine:
+  the six-axis scorecard (have/partial/missing) and the ranked gap list with the critical path. The standing tracker.
 
 ## Conventions
 
