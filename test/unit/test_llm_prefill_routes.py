@@ -18,7 +18,8 @@ def clean_prefill_route_env():
                                         "PREFILL_Q6K_DIRECT_EXTRA_OPTS", "PREFILL_DIRECT_FFN_GATE_UP_OPTS",
                                         "PREFILL_DIRECT_FFN_GATE_UP_EXTRA_OPTS", "PREFILL_Q4K_DIRECT_SCHEDULE",
                                         "PREFILL_Q4K_WMMA_TILED_M_TILE", "PREFILL_Q4K_WMMA_TILED_N_TILE",
-                                        "PREFILL_Q4K_WMMA_TILED_GROUP_TILE", "PREFILL_QK_GENERATED_TILE",
+                                        "PREFILL_Q4K_WMMA_TILED_GROUP_TILE", "PREFILL_Q4K_WMMA_TILED_MAX_RAW_TILE_STEPS",
+                                        "PREFILL_QK_GENERATED_TILE",
                                         "PREFILL_QK_GENERATED_TILE_ROLES", "PREFILL_QK_GENERATED_TILE_MODE",
                                         "PREFILL_QK_GENERATED_TILE_ROWS", "PREFILL_QK_GENERATED_TILE_TOKENS")}
   for k in old: os.environ.pop(k, None)
@@ -307,6 +308,49 @@ def test_q4_generated_tile_flag_is_retired(monkeypatch):
   monkeypatch.setattr(prefill_routes, "Tensor", _TensorFactoryStub)
   with pytest.raises(RuntimeError, match="PREFILL_QK_GENERATED_TILE was retired"):
     prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), _PrefillTensorStub())
+
+
+def test_q4_wmma_tiled_small_multitile_uses_lifecycle(monkeypatch):
+  from tinygrad.llm import prefill_routes
+
+  os.environ["PREFILL_Q4K_Q8"] = "wmma_tiled"
+  os.environ["PREFILL_Q4K_WMMA_TILED_MAX_RAW_TILE_STEPS"] = "1024"
+  calls = []
+  monkeypatch.setattr(prefill_routes.qk_ops, "q8_1_quantize", lambda x: ("xq", "xscales"))
+
+  def one_tile(*_args, **_kwargs):
+    calls.append("one_tile")
+    raise NotImplementedError("multi tile")
+
+  def lifecycle(*_args, **_kwargs):
+    calls.append("lifecycle")
+    return _PrefillTensorStub()
+
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_int8_wmma_tiled_prefill_tensor", one_tile)
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_int8_wmma_tiled_lifecycle_tensor", lifecycle)
+  out = prefill_routes.route_direct_packed_prefill(SimpleNamespace(
+    bias=None, in_features=256, out_features=32, parts=1, opts=(), name="blk.0.ffn_gate.weight",
+    q4k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q4PrefillWeight()), _PrefillTensorStub())
+  assert isinstance(out, _PrefillTensorStub)
+  assert calls == ["one_tile", "lifecycle"]
+
+
+def test_q4_wmma_tiled_large_shape_keeps_explicit_blocker(monkeypatch):
+  from tinygrad.llm import prefill_routes
+
+  class _LargePrefillTensorStub(_PrefillTensorStub):
+    shape = (1, 512, 5120)
+
+  os.environ["PREFILL_Q4K_Q8"] = "wmma_tiled"
+  monkeypatch.setattr(prefill_routes.qk_ops, "q8_1_quantize", lambda x: ("xq", "xscales"))
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_int8_wmma_tiled_prefill_tensor",
+                      lambda *_args, **_kwargs: (_ for _ in ()).throw(NotImplementedError("full role")))
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_int8_wmma_tiled_lifecycle_tensor",
+                      lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must stay blocked")))
+  with pytest.raises(RuntimeError, match="raw_tile_steps=.*max_raw_tile_steps"):
+    prefill_routes.route_direct_packed_prefill(SimpleNamespace(
+      bias=None, in_features=5120, out_features=5120, parts=1, opts=(), name="blk.0.attn_q.weight",
+      q4k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q4PrefillWeight()), _LargePrefillTensorStub())
 
 
 def test_q6_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):

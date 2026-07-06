@@ -212,9 +212,16 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
         try:
           out = qk_ops.emit_q4k_int8_wmma_tiled_prefill_tensor(words, xq, xscales, tiled_spec)
         except NotImplementedError as e:
+          tile_steps = (spec.m // tiled_spec.m_tile) * (spec.n // tiled_spec.n_tile) * (tiled_spec.groups // tiled_spec.group_tile)
+          max_tile_steps = int(_env("PREFILL_Q4K_WMMA_TILED_MAX_RAW_TILE_STEPS", 128))
+          if (spec.m % tiled_spec.m_tile == 0 and spec.n % tiled_spec.n_tile == 0 and
+              tiled_spec.groups % tiled_spec.group_tile == 0 and tile_steps <= max_tile_steps):
+            out = qk_ops.emit_q4k_int8_wmma_tiled_lifecycle_tensor(words, xq, xscales, tiled_spec)
+            return out.reshape(1, spec.m, spec.n)
           raise RuntimeError(f"PREFILL_Q4K_Q8=wmma_tiled is not implemented for full route shape "
                              f"role={role or '?'} m={spec.m} n={spec.n} k={spec.k}; "
-                             f"planned kernel={tiled_spec.kernel_name} live_raw_elems={tiled_spec.live_raw_elems}. "
+                             f"planned kernel={tiled_spec.kernel_name} live_raw_elems={tiled_spec.live_raw_elems} "
+                             f"raw_tile_steps={tile_steps} max_raw_tile_steps={max_tile_steps}. "
                              f"This explicit stop prevents fallthrough to the default Q4_K/Q8_1 GEMM route.") from e
         return out.reshape(1, spec.m, spec.n)
       raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "
