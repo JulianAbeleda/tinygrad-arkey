@@ -37,6 +37,16 @@ def _q4k_weight(words:UOp, base:UOp, grp:int, pos:UOp) -> UOp:
   q = _q4k_quant(words, base, grp, pos)
   return d * sc.cast(dtypes.float32) * q.cast(dtypes.float32) - dmin * mn.cast(dtypes.float32)
 
+def w_f16(words:UOp, n, k:int, k_blocks:int) -> UOp:
+  # 14B decode adapter (scope 14B task T1): scalar Q4_K weight decode -> fp16 for a single (n, k) element.
+  # `n` may be a Python int or a UOp range (it only feeds the words base offset); `k` must be a Python int
+  # because grp selects a Python branch inside _q4k_group_params. Reuses the verbatim Q4_K unpack primitives.
+  blk = k // Q4_K_BLOCK_ELEMS
+  grp = (k % Q4_K_BLOCK_ELEMS) // 32
+  pos = k % 32
+  base = (n * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+  return _q4k_weight(words, base, grp, pos).cast(dtypes.float16)
+
 def _q4k_group_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, grp:int, lane4:UOp) -> UOp:
   d, dmin, sc, mn = _q4k_group_params(words, base, grp)
   qword = words[base + 4 + (grp//2)*8 + lane4]

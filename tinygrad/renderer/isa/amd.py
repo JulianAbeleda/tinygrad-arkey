@@ -49,10 +49,21 @@ def _n_workitem_dims(ctx:IselContext) -> int:
     lids = {int(str(u.arg)[-1]) for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
     ctx._n_lid = n = (max(lids) + 1) if lids else 1
   return n
+# B0.L5: WMMA A/B/C fragments live in the reserved high VGPR window v200..v237. FRAG_TOP is EXCLUSIVE so a fragment of 8
+# regs based at 230 uses v230..v237 (base+7 == 237): v>=238 is the raw-INS garbage trap (see gfx1100 raw-INS asm gotchas).
+FRAG_BASE, FRAG_TOP = 200, 238
+def _has_wmma(ctx:IselContext) -> bool:
+  # cache: does this kernel use a WMMA op? (fragment region is only reserved when it does, so non-WMMA kernels keep v200+)
+  if (w := getattr(ctx, "_haswmma", None)) is None:
+    w = ctx._haswmma = any(u.op is Ops.WMMA for u in ctx.uses)
+  return w
 def _vpool(ctx:IselContext):
   # reserve v0 (packed workitem ids). RA4: when AMD_ISA_REG_ACCUM, also reserve the LOW pin range v1..v16 for pinned
   # accumulators (kept OUT of the normal pool so regalloc never assigns a virtual to a pin); virtuals start at v17.
-  return VBASE[ACCUM_PIN_TOP:] if getenv("AMD_ISA_REG_ACCUM", 0) else VBASE[1:]
+  # B0.L5: when a WMMA is present, ALSO exclude the fragment region [FRAG_BASE, FRAG_TOP) so regalloc virtuals never
+  # collide with the pinned A/B/C fragment VGPRs allocated by _frag_base.
+  lo = ACCUM_PIN_TOP if getenv("AMD_ISA_REG_ACCUM", 0) else 1
+  return VBASE[lo:FRAG_BASE] if _has_wmma(ctx) else VBASE[lo:]
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
@@ -165,6 +176,22 @@ def _accum_pin(ctx:IselContext, dreg:UOp, elem:int):
     if nxt >= ACCUM_PIN_TOP: return None
     d[k] = nxt
   return d[k]
+
+# ---- B0.L5: WMMA fragment VGPR allocator. A bump allocator over the reserved fragment region [FRAG_BASE, FRAG_TOP):
+# each distinct `key` (e.g. an A/B/C fragment identity) gets an `align`-aligned contiguous run of `n` VGPRs, STABLE across
+# repeat calls with the same key. Returns None when the region is exhausted (base+n would exceed FRAG_TOP) -> the WMMA
+# isel MUST fail loud (NotImplementedError) rather than silently overlap another fragment. Mirrors _accum_pin (per-key
+# dict) + _lds_byte_offset (running top). The region is kept OUT of _vpool (see _vpool) whenever a WMMA is present. ----
+def _frag_base(ctx:IselContext, key, n:int, align:int=1):
+  d = getattr(ctx, "_frag", None)
+  if d is None: d = ctx._frag = {}
+  if key not in d:
+    top = getattr(ctx, "_frag_top", FRAG_BASE)
+    base = (top + align - 1) // align * align       # round the running top UP to the requested alignment
+    if base + n > FRAG_TOP: return None              # exhausted: base+n-1 would land at/above FRAG_TOP (v>=238 trap)
+    d[key] = base
+    ctx._frag_top = base + n
+  return d[key]
 
 # ============================ instruction selection ============================
 def isel_param(ctx:IselContext, x:UOp):
@@ -664,12 +691,21 @@ class AMDISARenderer(ISARenderer):
     if getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)   # Phase K list scheduler; DEFAULT-ON (Phase L: +4.6% W==D with grid, token_match preserved). AMD_ISA_SCHED=0 disables.
     return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts)))), self.target.arch)
 
+  # ---- B1.L6: pack an s_waitcnt simm16 field. Bit layout (SPEC ONLY, from extra/qk/prefill/wmma.py L19-28, never
+  # imported): expcnt=bits[2:0], lgkmcnt=bits[9:4], vmcnt=bits[15:10]. A MAXED field (vm=63/lgkm=63/exp=7, the defaults)
+  # means "don't wait on that class"; a field of 0 waits until that class is fully drained. _waitcnt_simm16(0,0,0)==0 is
+  # the full-drain used by _insert_waitcnt. ----
+  @staticmethod
+  def _waitcnt_simm16(vm:int=63, lgkm:int=63, exp:int=7) -> int:
+    return ((vm & 0x3F) << 10) | ((lgkm & 0x3F) << 4) | (exp & 0x7)
+
   # ---- Phase K: legality-preserving list scheduler (latency-hiding). Reorders within basic blocks only. ----
   @staticmethod
   def _sched_lat(m:str) -> int:
     if m.startswith(("global_load", "s_load")): return 200      # VMEM/SMEM (long)
     if m.startswith(("ds_load", "ds_bpermute")): return 20      # LDS
     if m.startswith("v_dot2"): return 16
+    if m.startswith("v_wmma"): return 16                        # B1.L4: matrix multiply-accumulate (long); BEFORE generic v_
     if m.startswith("v_"): return 4                             # VALU
     return 1
 
@@ -758,13 +794,13 @@ class AMDISARenderer(ISARenderer):
         out.append(u)
         if not isinstance(u.arg, tuple) and str(u.arg).split("(", 1)[0].startswith(
             ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")):
-          out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=0)))
+          out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0))))
       return out
     out = []
     pend_vm:set[int] = set(); pend_lgkm:set[int] = set(); vm_store = lgkm_store = False
     def _drain():
       nonlocal vm_store, lgkm_store
-      out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=0)))
+      out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0))))
       pend_vm.clear(); pend_lgkm.clear(); vm_store = lgkm_store = False
     for u in uops:
       a = u.arg
