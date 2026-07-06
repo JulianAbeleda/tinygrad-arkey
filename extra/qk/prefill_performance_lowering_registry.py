@@ -111,6 +111,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "The fp16 prefill TC route can emit numerically correct generated A-operand LOCAL staging on the 512x512 route-bound diagnostic",
       "Representative warmstart-table shape now supports numerically correct B-operand tile-only post-WMMA staging, but A/both staging remain wrong",
       "No medium-shape performance win exists yet; B-tile staging is flat against the existing LOCAL table schedule",
+      "The first route-bound cooperative B-partition diagnostic is present but fails current CFG/control-flow dependency lowering",
       "8B pp512 bounded whole-prefill smoke showed no win from B-tile staging (1699 tok/s vs 1744 tok/s baseline)",
     ],
     "reuse_files": [
@@ -190,8 +191,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "owner_area": "scheduler",
     "status": "pending",
     "blockers": [
-      "Tiny generated cooperative B-tile partition probe exists, but route-bound warmstart integration is not generated",
-      "Cooperative global-to-LDS partition and per-lane fragment reads are not yet bound to the scheduler TC route",
+      "Tiny generated cooperative B-tile partition probe exists, and the medium gate now defines a route-bound cooperative case",
+      "The route-bound cooperative case fails before timing in current CFG/control-flow dependency lowering",
     ],
     "reuse_files": [
       "extra/qk/cooperative_stage_lanemap.py",

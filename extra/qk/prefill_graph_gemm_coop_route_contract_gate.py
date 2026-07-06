@@ -37,12 +37,10 @@ def build_report(*, artifact: bool = True) -> dict[str, Any]:
   medium_b_tile_beats = bool(post_tile_b.get("status") == "ok" and baseline.get("status") == "ok" and
                              float(post_tile_b.get("tflops", 0.0)) > float(baseline.get("tflops", 0.0)) * 1.05)
 
-  # This intentionally has no route-bound pass condition yet. The expected
-  # future evidence is a medium gate case that uses the cooperative 256-half
-  # B-tile layout from the scheduler path, not the custom probe.
   route_bound_coop_case = medium_cases.get("post_coop_b_partition_stage", {})
-  route_bound_coop_present = isinstance(route_bound_coop_case, dict) and route_bound_coop_case.get("status") == "ok"
-  route_bound_coop_beats = bool(route_bound_coop_present and baseline.get("status") == "ok" and
+  route_bound_coop_defined = isinstance(route_bound_coop_case, dict) and bool(route_bound_coop_case)
+  route_bound_coop_executes = bool(route_bound_coop_defined and route_bound_coop_case.get("status") == "ok")
+  route_bound_coop_beats = bool(route_bound_coop_executes and baseline.get("status") == "ok" and
                                 float(route_bound_coop_case.get("tflops", 0.0)) > float(baseline.get("tflops", 0.0)) * 1.05)
   passed = bool(coop_probe_pass and route_bound_coop_beats)
 
@@ -56,7 +54,8 @@ def build_report(*, artifact: bool = True) -> dict[str, Any]:
       "custom_coop_partition_probe_pass": coop_probe_pass,
       "medium_gate_has_b_tile_operand_stage": medium_has_b_tile,
       "medium_b_tile_operand_stage_beats_baseline": medium_b_tile_beats,
-      "medium_gate_has_route_bound_coop_partition_case": route_bound_coop_present,
+      "medium_gate_defines_route_bound_coop_partition_case": route_bound_coop_defined,
+      "medium_gate_route_bound_coop_partition_executes": route_bound_coop_executes,
       "route_bound_coop_partition_beats_baseline": route_bound_coop_beats,
     },
     "artifacts": {
@@ -64,10 +63,11 @@ def build_report(*, artifact: bool = True) -> dict[str, Any]:
       "medium_stage": str(MEDIUM_ARTIFACT),
       "baseline_tflops": baseline.get("tflops"),
       "post_tile_b_tflops": post_tile_b.get("tflops"),
+      "route_bound_coop_status": route_bound_coop_case.get("status") if isinstance(route_bound_coop_case, dict) else None,
       "route_bound_coop_tflops": route_bound_coop_case.get("tflops") if isinstance(route_bound_coop_case, dict) else None,
     },
     "remaining_blocker": None if passed else
-      "custom cooperative B-tile partition is proven, but the warmstart TC route has no route-bound cooperative partition case that beats baseline",
+      "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case does not execute and beat baseline",
   }
   if artifact:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)

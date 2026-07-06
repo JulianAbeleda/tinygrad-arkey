@@ -20,6 +20,7 @@
     "pre_wmma_forced_local_ok": false,
     "post_local_stage_ok": false,
     "post_tile_b_stage_ok": true,
+    "post_coop_b_partition_stage_ok": false,
     "scalar_post_local_stage_ok": false,
     "staged_beats_baseline": false
   },
@@ -29,7 +30,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 35.49,
+      "tflops": 34.97,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -62,7 +63,7 @@
       "u1": 4,
       "loc": 4,
       "unr": 8,
-      "tflops": 35.57,
+      "tflops": 35.1,
       "status": "ok",
       "pin_clock": true,
       "clock_pin": {
@@ -71,6 +72,15 @@
         "ok": true,
         "out": ""
       }
+    },
+    "post_coop_b_partition_stage": {
+      "u0": 4,
+      "u1": 4,
+      "loc": 4,
+      "unr": 8,
+      "tflops": 0.0,
+      "status": "AssertionError",
+      "pin_clock": true
     },
     "scalar_post_local_stage": {
       "u0": 4,
@@ -82,5 +92,5 @@
       "pin_clock": true
     }
   },
-  "remaining_blocker": "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; A/both/final-scalar staging remain wrong or unbuildable"
+  "remaining_blocker": "B-operand tile-only post-WMMA staging composes with warmstart LOCAL schedules but is performance-flat; the first route-bound cooperative B-partition attempt reaches the CFG linearizer and is rejected by current control-flow dependencies; A/both/final-scalar staging remain wrong or unbuildable"
 }

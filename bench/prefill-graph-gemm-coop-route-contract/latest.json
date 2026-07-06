@@ -7,15 +7,17 @@
     "custom_coop_partition_probe_pass": true,
     "medium_gate_has_b_tile_operand_stage": true,
     "medium_b_tile_operand_stage_beats_baseline": false,
-    "medium_gate_has_route_bound_coop_partition_case": false,
+    "medium_gate_defines_route_bound_coop_partition_case": true,
+    "medium_gate_route_bound_coop_partition_executes": false,
     "route_bound_coop_partition_beats_baseline": false
   },
   "artifacts": {
     "coop_partition": "bench/prefill-graph-gemm-coop-partition/latest.json",
     "medium_stage": "bench/prefill-graph-gemm-medium-stage/latest.json",
-    "baseline_tflops": 35.49,
-    "post_tile_b_tflops": 35.57,
-    "route_bound_coop_tflops": null
+    "baseline_tflops": 34.97,
+    "post_tile_b_tflops": 35.1,
+    "route_bound_coop_status": "AssertionError",
+    "route_bound_coop_tflops": 0.0
   },
-  "remaining_blocker": "custom cooperative B-tile partition is proven, but the warmstart TC route has no route-bound cooperative partition case that beats baseline"
+  "remaining_blocker": "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case does not execute and beat baseline"
 }

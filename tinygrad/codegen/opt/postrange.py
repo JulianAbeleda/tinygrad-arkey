@@ -365,6 +365,11 @@ def _tc_local_stage_scalar_post_opt() -> bool:
 def _tc_local_stage_tile_only() -> bool:
   return bool(getenv("PREFILL_TC_LOCAL_STAGE_TILE_ONLY", 0))
 
+def _tc_local_stage_coop_b_post_opt() -> bool:
+  return bool(getenv("PREFILL_TC_LOCAL_STAGE_COOP_B_POST", 0))
+
+_tc_local_stage_coop_b_stats = {"seen": 0, "rewritten": 0, "dumped": 0}
+
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...]) -> UOp:
   return src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False)).index(*ranges)
 
@@ -397,6 +402,38 @@ pm_tc_local_stage_post = PatternMatcher([
   (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_wmma_post),
 ])
 
+def _tc_local_stage_coop_b_wmma_post(wmma:UOp) -> UOp|None:
+  mode = _tc_local_stage_mode()
+  if mode not in ("b", "both"): return None
+  _tc_local_stage_coop_b_stats["seen"] += 1
+  if (limit := getenv("PREFILL_TC_LOCAL_STAGE_COOP_B_LIMIT", 0)) and _tc_local_stage_coop_b_stats["rewritten"] >= limit:
+    return None
+  # Keep this diagnostic cheap. A full backward-slice scan on every WMMA in a
+  # medium GEMM is quadratic enough to hide the actual compile result.
+  if wmma.src[1].op in {Ops.STAGE, Ops.AFTER, Ops.BARRIER}: return None
+  # Diagnostic-only first route-bound cooperative map: use the already-built B vector,
+  # store only lanes 0..15 into a unique 16x16 LOCAL tile, and read it back from all lanes.
+  warp_ranges = [r for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
+  if len(warp_ranges) != 1 or wmma.src[1].dtype.count != 16: return None
+  lane = warp_ranges[0]
+  row = lane & 15
+  bsh = UOp.placeholder((256,), wmma.src[1].dtype.scalar(), 990, addrspace=AddrSpace.LOCAL)
+  end_ranges = tuple(r for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg) if r is not lane)
+  idx = UOp.vectorize(*[row*16+i for i in range(16)])
+  stage = bsh.index(idx, dtype=wmma.src[1].dtype).store(wmma.src[1], lane < 16).end(*end_ranges)
+  bar = UOp.barrier(stage)
+  bvec = bsh.after(bar).index(idx, dtype=wmma.src[1].dtype)
+  _tc_local_stage_coop_b_stats["rewritten"] += 1
+  if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
+    _tc_local_stage_coop_b_stats["dumped"] += 1
+    print("TC_LOCAL_STAGE_COOP_B", {"warp": (lane.arg, lane.vmax+1), "src1_ranges":
+      [(r.arg, r.vmax+1) for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg)]})
+  return wmma.replace(src=(wmma.src[0], bvec, wmma.src[2]))
+
+pm_tc_local_stage_coop_b_post = PatternMatcher([
+  (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_coop_b_wmma_post),
+])
+
 def _tc_local_stage_contract_src_post(wmma:UOp) -> UOp|None:
   if wmma.src[0].op is not Ops.CONTRACT: return None
   if wmma.src[0].src[0].op_in_backward_slice_with_self(Ops.STAGE): return None
@@ -424,6 +461,7 @@ def _warmstart_match(k):
 
 def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
+  _tc_local_stage_coop_b_stats.update({"seen": 0, "rewritten": 0, "dumped": 0})
   k = Scheduler(ast, ren)
   k.convert_loop_to_global()
   if ast.arg is not None and ast.arg.opts_to_apply is not None:
@@ -455,7 +493,9 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
-  if _tc_local_stage_scalar_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+  if _tc_local_stage_coop_b_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+    k.ast = graph_rewrite(k.ast, pm_tc_local_stage_coop_b_post, name="tc local stage coop b post")
+  elif _tc_local_stage_scalar_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_scalar_post, name="tc local stage scalar post")
   elif _tc_local_stage_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_post, name="tc local stage post")
