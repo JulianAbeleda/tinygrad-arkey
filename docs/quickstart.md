@@ -119,93 +119,24 @@ net = TinyNet()
 
 We can see that the forward pass of our neural network is just the sequence of operations performed on the input tensor `x`.
 We can also see that functional operations like `leaky_relu` are not defined as classes and instead are just methods we can just call.
-Finally, we just initialize an instance of our neural network, and we are ready to start training it.
+Finally, we initialize an instance of our neural network, and we are ready for inference.
 
-## Training
+## Inference-only note
 
-Now that we have our neural network defined we can start training it.
-Training neural networks in tinygrad is super simple.
-All we need to do is define our neural network, define our loss function, and then call `.backward()` on the loss function to compute the gradients.
-They can then be used to update the parameters of our neural network using one of the many [Optimizers](nn.md#optimizers).
-
-For our loss function we will be using sparse categorical cross entropy loss. The implementation below is taken from [tensor.py](https://github.com/JulianAbeleda/tinygrad-arkey/blob/master/tinygrad/tensor.py), it's copied below to highlight an important detail of tinygrad.
-
-```python
-def sparse_categorical_crossentropy(self, Y, ignore_index=-1) -> Tensor:
-    loss_mask = Y != ignore_index
-    y_counter = Tensor.arange(self.shape[-1], dtype=dtypes.int32).unsqueeze(0).expand(Y.numel(), self.shape[-1])
-    y = ((y_counter == Y.flatten().reshape(-1, 1)).where(-1.0, 0) * loss_mask.reshape(-1, 1)).reshape(*Y.shape, self.shape[-1])
-    return self.log_softmax().mul(y).sum() / loss_mask.sum()
-```
-
-As we can see in this implementation of cross entropy loss, there are certain operations that tinygrad does not support natively.
-Load/store ops are not supported in tinygrad natively because they add complexity when trying to port to different backends, 90% of the models out there don't use/need them, and they can be implemented like it's done above with an `arange` mask.
-
-For our optimizer we will be using the traditional stochastic gradient descent optimizer with a learning rate of 3e-4.
-
-```python
-from tinygrad.nn.optim import SGD
-
-opt = SGD([net.l1.weight, net.l2.weight], lr=3e-4)
-```
-
-We can see that we are passing in the parameters of our neural network to the optimizer.
-This is due to the fact that the optimizer needs to know which parameters to update.
-There is a simpler way to do this just by using `get_parameters(net)` from `tinygrad.nn.state` which will return a list of all the parameters in the neural network.
-The parameters are just listed out explicitly here for clarity.
-
-Now that we have our network, loss function, and optimizer defined all we are missing is the data to train on!
-There are a couple of dataset loaders in tinygrad located in [/extra/datasets](https://github.com/JulianAbeleda/tinygrad-arkey/blob/master/extra/datasets).
-We will be using the MNIST dataset loader.
-
-```python
-from extra.datasets import fetch_mnist
-```
-
-Now we have everything we need to start training our neural network.
-We will be training for 1000 steps with a batch size of 64.
-
-We use `with Tensor.train()` to set the internal flag `Tensor.training` to `True` during training.
-Upon exit, the flag is restored to its previous value by the context manager.
-
-```python
-X_train, Y_train, X_test, Y_test = fetch_mnist()
-
-with Tensor.train():
-  for step in range(1000):
-    # random sample a batch
-    samp = np.random.randint(0, X_train.shape[0], size=(64))
-    batch = Tensor(X_train[samp])
-    # get the corresponding labels
-    labels = Tensor(Y_train[samp])
-
-    # forward pass
-    out = net(batch)
-
-    # compute loss
-    loss = sparse_categorical_crossentropy(out, labels)
-
-    # zero gradients
-    opt.zero_grad()
-
-    # backward pass
-    loss.backward()
-
-    # update parameters
-    opt.step()
-
-    # calculate accuracy
-    pred = out.argmax(axis=-1)
-    acc = (pred == labels).mean()
-
-    if step % 100 == 0:
-      print(f"Step {step+1} | Loss: {loss.numpy()} | Accuracy: {acc.numpy()}")
-```
+Training APIs that rely on autograd and `tinygrad.nn.optim` have been removed in this branch.
+This guide now focuses on inference-only workflows.
+Load your model data (or dataset loader output) and call the model directly to run forward passes.
 
 ## Evaluation
 
-Now that we have trained our neural network we can evaluate it on the test set.
-We will be using the same batch size of 64 and will be evaluating for 1000 of those batches.
+Now that we have our neural network we can evaluate it on a dataset split.
+We will be using the MNIST dataset loader in [/extra/datasets](https://github.com/JulianAbeleda/tinygrad-arkey/blob/master/extra/datasets) and evaluate 1000 random batches of size 64.
+
+```python
+from extra.datasets import fetch_mnist
+
+_, _, X_test, Y_test = fetch_mnist()
+```
 
 ```python
 with Timing("Time: "):

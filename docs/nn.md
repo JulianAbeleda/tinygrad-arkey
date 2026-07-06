@@ -16,11 +16,7 @@
 
 ## Optimizers
 
-::: tinygrad.nn.optim.SGD
-::: tinygrad.nn.optim.LARS
-::: tinygrad.nn.optim.AdamW
-::: tinygrad.nn.optim.Adam
-::: tinygrad.nn.optim.LAMB
+Autograd-based training and the `tinygrad.nn.optim` module are not part of this inference-only revision.
 
 ## Load/Save
 

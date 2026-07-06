@@ -187,20 +187,5 @@ class TestSoftmaxFusion(unittest.TestCase):
 
     np.testing.assert_allclose(sout.numpy(), out.numpy(), atol=3e-7)
 
-  def test_softmax_bw(self):
-    print("*** softmax bw ***")
-    with Context(NOOPT=1, DEBUG=max(DEBUG.value, 2)):
-      self.test.softmax(-1).sum().backward()
-      sg = self.test.grad.realize()
-
-    self.test.grad = None
-
-    print("*** single kernel softmax bw ***")
-    with Context(NOOPT=1, DEBUG=max(DEBUG.value, 2)):
-      single_kernel_softmax(self.test).sum().backward()
-      g = self.test.grad.realize()
-
-    np.testing.assert_allclose(sg.numpy(), g.numpy(), atol=1e-7)
-
 if __name__ == '__main__':
   unittest.main()
