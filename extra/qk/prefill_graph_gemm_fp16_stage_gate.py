@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
+
 SCHEMA = "prefill-graph-gemm-fp16-single-operand-stage-gate.v1"
 HANDOFF = Path("docs/HANDOFF-routeB-lds-codegen-20260706.md")
 
@@ -28,6 +30,7 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.schedule.indexing import BufferizeOpts
 from tinygrad.schedule.wmma import shaped_wmma
 from tinygrad.uop.ops import UOp, KernelInfo
+from extra.qk.timing_harness import env_wants_clock_pin, pinned_peak_from_env
 
 
 def _frags(buf, row):
@@ -64,9 +67,12 @@ rng = np.random.default_rng(20260706)
 a = rng.normal(size=(256,)).astype(np.float16)
 b = rng.normal(size=(256,)).astype(np.float16)
 ta, tb = Tensor(a), Tensor(b)
-direct = Tensor.empty(256, dtype=dtypes.half).custom_kernel(ta, tb, fxn=direct_kernel)[0].realize().numpy()
-staged = Tensor.empty(256, dtype=dtypes.half).custom_kernel(ta, tb, fxn=staged_kernel)[0].realize().numpy()
+with pinned_peak_from_env() as pin_prov:
+  direct = Tensor.empty(256, dtype=dtypes.half).custom_kernel(ta, tb, fxn=direct_kernel)[0].realize().numpy()
+  staged = Tensor.empty(256, dtype=dtypes.half).custom_kernel(ta, tb, fxn=staged_kernel)[0].realize().numpy()
 print("PROBE_RESULT " + json.dumps({
+  "pin_clock": env_wants_clock_pin(),
+  "clock_pin": pin_prov,
   "output_match": bool(np.array_equal(direct, staged)),
   "max_abs": float(np.max(np.abs(direct.astype(np.float32) - staged.astype(np.float32)))),
   "direct_head": direct[:8].astype(float).tolist(),
@@ -75,9 +81,10 @@ print("PROBE_RESULT " + json.dumps({
 '''
 
 
-def _run_amd_probe(*, both_operands: bool = False) -> dict[str, Any]:
+def _run_amd_probe(*, both_operands: bool = False, pin_clock: bool = False) -> dict[str, Any]:
   env = {**os.environ, "DEV": "AMD", "DEBUG": "4", "PYTHONPATH": "."}
   if both_operands: env["PREFILL_FP16_STAGE_BOTH"] = "1"
+  set_clock_pin_env(env, pin_clock)
   proc = subprocess.run([sys.executable, "-c", _PROBE], cwd=Path.cwd(), env=env, capture_output=True, text=True)
   result = {"returncode": proc.returncode, "stdout_tail": proc.stdout[-12000:], "stderr_tail": proc.stderr[-4000:]}
   for line in proc.stdout.splitlines():
@@ -96,7 +103,7 @@ def _run_amd_probe(*, both_operands: bool = False) -> dict[str, Any]:
   return result
 
 
-def build_report(*, run_amd: bool = False, both_operands: bool = False) -> dict[str, Any]:
+def build_report(*, run_amd: bool = False, both_operands: bool = False, pin_clock: bool = False) -> dict[str, Any]:
   from tinygrad.dtype import AddrSpace, dtypes
   from tinygrad.schedule.indexing import BufferizeOpts
   from tinygrad.schedule import rangeify
@@ -111,7 +118,7 @@ def build_report(*, run_amd: bool = False, both_operands: bool = False) -> dict[
   has_shaped_wmma = callable(shaped_wmma)
   handoff_exists = HANDOFF.exists()
 
-  probe = _run_amd_probe(both_operands=both_operands) if run_amd else {"skipped": "pass --run-amd to execute the tiny generated fp16 staging probe"}
+  probe = _run_amd_probe(both_operands=both_operands, pin_clock=pin_clock) if run_amd else {"skipped": "pass --run-amd to execute the tiny generated fp16 staging probe"}
   emitted_local_evidence = bool(probe.get("has_shared_local") and probe.get("has_barrier") and probe.get("has_fp16_wmma"))
   staged_operand_count_ok = bool(probe.get("shared_local_count", 0) >= (2 if both_operands else 1))
   custom_probe_raw_markers_excluded = bool(run_amd and not probe.get("has_raw_ops_ins_marker") and probe.get("output_match"))
@@ -143,6 +150,7 @@ def build_report(*, run_amd: bool = False, both_operands: bool = False) -> dict[
       "emitted_amd_source_has_s_barrier": emitted_local_evidence,
       "emitted_amd_source_has_fp16_wmma": emitted_local_evidence,
       "custom_probe_has_no_raw_ops_ins_marker": custom_probe_raw_markers_excluded,
+      "pin_clock": pin_clock,
     },
     "probe": probe,
     "remaining_blocker": None if passed else blocker,
@@ -154,8 +162,9 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--compact", action="store_true")
   ap.add_argument("--run-amd", action="store_true", help="execute the tiny AMD fp16 shaped-WMMA LOCAL-stage probe")
   ap.add_argument("--both-operands", action="store_true", help="stage both A and B operands in the tiny fp16 probe")
+  add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
-  report = build_report(run_amd=args.run_amd, both_operands=args.both_operands)
+  report = build_report(run_amd=args.run_amd, both_operands=args.both_operands, pin_clock=args.pin_clock)
   print(json.dumps(report, indent=None if args.compact else 2))
   return report
 

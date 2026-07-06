@@ -14,6 +14,7 @@ import pathlib
 from typing import Any
 
 from extra.qk.prefill_v2_schedule_search import M_DEFAULT, TABLE_PATH, _run_config
+from extra.qk.timing_harness import add_clock_pin_arg
 
 SCHEMA = "prefill-v2-schedule-table-gate.v1"
 ARTIFACT_DIR = pathlib.Path("bench/prefill-v2-schedule-table")
@@ -105,7 +106,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser()
   ap.add_argument("--compact", action="store_true")
   ap.add_argument("--run-amd", action="store_true", help="execute the representative table shapes on AMD")
-  ap.add_argument("--pin-clock", action="store_true", help="pin AMD clocks during timing windows via extra.qk.clock_pin")
+  add_clock_pin_arg(ap)
   ap.add_argument("--shapes", default=",".join(DEFAULT_SHAPES), help="comma-separated out_fxin_f shapes from the table")
   ap.add_argument("--M", type=int, default=M_DEFAULT)
   args = ap.parse_args(argv)

@@ -1,6 +1,7 @@
 import subprocess
 
 from extra.qk import clock_pin
+from extra.qk import timing_harness
 
 
 def test_clock_pin_commands_are_centralized_and_noninteractive():
@@ -43,3 +44,13 @@ def test_perflevel_wraps_rocm_smi(monkeypatch):
   assert ret.returncode == 0
   assert seen["cmd"] == ["rocm-smi", "--setperflevel", "high"]
   assert seen["kwargs"] == {"capture_output": True, "text": True}
+
+
+def test_timing_harness_clock_pin_env_is_canonical():
+  env = {"OTHER": "1"}
+  assert timing_harness.env_wants_clock_pin(env) is False
+  assert timing_harness.set_clock_pin_env(env, True) is env
+  assert env[timing_harness.PIN_CLOCK_ENV] == "1"
+  assert timing_harness.env_wants_clock_pin(env) is True
+  timing_harness.set_clock_pin_env(env, False)
+  assert timing_harness.PIN_CLOCK_ENV not in env

@@ -82,6 +82,21 @@ first). Verdicts, numerics, booleans must match exactly. See `git log --grep gat
   load a real GGUF; run on demand, not in the health sweep.
 - **CLI tools** (`experiment_matrix.py`): argv-parameterized, no fixed artifact.
 
+## Timing controls
+
+Short AMD benchmark windows must use the shared clock-pin wrapper when comparing
+latency or throughput-sensitive runs:
+
+```python
+from extra.qk.timing_harness import add_clock_pin_arg, pinned_peak_from_env, set_clock_pin_env
+```
+
+`extra/qk/clock_pin.py` owns the privileged sysfs/`rocm-smi` mutations. `timing_harness.py`
+owns the canonical `PREFILL_PIN_CLOCK=1` env flag and `--pin-clock` parser hook. Parent
+tools set the env flag before spawning a worker; worker/probe code wraps only the measured
+AMD window with `pinned_peak_from_env()`, records the yielded provenance in JSON, and
+lets the context manager restore `auto` in `finally`.
+
 ## Collapsed experiment series
 
 Five sequential series are now parameterized modules (one `VARIANTS` table + N `build_*`).

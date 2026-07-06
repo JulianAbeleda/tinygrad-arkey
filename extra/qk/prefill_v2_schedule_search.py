@@ -15,6 +15,7 @@ Table schema: { "<out_f>x<in_f>": {"opts": [[OP_NAME, axis, arg], ...], "tflops"
 from __future__ import annotations
 import os, sys, time, json, argparse, itertools, subprocess, pathlib
 import numpy as np
+from extra.qk.timing_harness import add_clock_pin_arg, env_wants_clock_pin, pinned_peak_from_env, set_clock_pin_env
 
 M_DEFAULT = 512
 GRID_U0 = [2, 4]; GRID_U1 = [2, 4]; GRID_LOC = [0, 4, 8]; GRID_UNR = [8, 16]
@@ -58,7 +59,7 @@ def _worker():
   from tinygrad.codegen.opt import postrange
   M=int(os.environ["MM"]); out_f=int(os.environ["OUTF"]); in_f=int(os.environ["INF"])
   u0=int(os.environ["U0"]); u1=int(os.environ["U1"]); loc=int(os.environ["LOC"]); unr=int(os.environ["UNR"])
-  pin_clock = os.environ.get("PREFILL_PIN_CLOCK", "0") == "1"
+  pin_clock = env_wants_clock_pin()
   res={"u0":u0,"u1":u1,"loc":loc,"unr":unr,"tflops":0.0,"status":"?","pin_clock":pin_clock}
   try:
     dev=Device[Device.DEFAULT]
@@ -73,8 +74,7 @@ def _worker():
     out=c.float().numpy(); rr=float(np.sqrt(np.mean((out-ref)**2))/refn)
     if not np.isfinite(rr) or rr>2e-2: res["status"]=f"WRONG rr={rr:.1e}"; print("RESULT",json.dumps(res)); return
     j=TinyJit(lambda:(a@b.transpose()).realize())
-    from extra.qk.clock_pin import pinned_peak
-    with pinned_peak(enabled=pin_clock) as pin_prov:
+    with pinned_peak_from_env() as pin_prov:
       if pin_prov is not None: res["clock_pin"] = pin_prov
       for _ in range(5): j()
       dev.synchronize(); ts=[]
@@ -90,7 +90,7 @@ def _worker():
 def _run_config(M,out_f,in_f,u0,u1,loc,unr,pin_clock:bool=False):
   env={**os.environ,"WORKER":"1","MM":str(M),"OUTF":str(out_f),"INF":str(in_f),
        "U0":str(u0),"U1":str(u1),"LOC":str(loc),"UNR":str(unr)}
-  if pin_clock: env["PREFILL_PIN_CLOCK"] = "1"
+  set_clock_pin_env(env, pin_clock)
   try:
     p=subprocess.run([sys.executable, __file__], env=env, capture_output=True, text=True, timeout=180)
     for ln in p.stdout.splitlines():
@@ -102,11 +102,12 @@ def _run_config(M,out_f,in_f,u0,u1,loc,unr,pin_clock:bool=False):
 def main():
   ap=argparse.ArgumentParser()
   ap.add_argument("--shapes", default=None); ap.add_argument("--out", default=str(TABLE_PATH)); ap.add_argument("--M", type=int, default=M_DEFAULT)
+  add_clock_pin_arg(ap)
   args=ap.parse_args()
   shapes=[tuple(int(x) for x in s.split(",")) for s in args.shapes.split(";")] if args.shapes else DEFAULT_SHAPES
   table={}
   for out_f,in_f in shapes:
-    rows=[_run_config(args.M,out_f,in_f,u0,u1,loc,unr) for u0,u1,loc,unr in itertools.product(GRID_U0,GRID_U1,GRID_LOC,GRID_UNR)]
+    rows=[_run_config(args.M,out_f,in_f,u0,u1,loc,unr,pin_clock=args.pin_clock) for u0,u1,loc,unr in itertools.product(GRID_U0,GRID_U1,GRID_LOC,GRID_UNR)]
     ok=[r for r in rows if r["status"]=="ok"]
     dflt=max((r["tflops"] for r in ok if r["loc"]==0), default=0.0)
     if not ok: print(f"[{out_f}x{in_f}] NO valid config", flush=True); continue
