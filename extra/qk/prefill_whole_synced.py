@@ -22,6 +22,7 @@ from typing import Any
 from extra.llm.generate import load_model_and_tokenizer
 from extra.qk.prefill_harness import DEFAULT_MODEL, PREFILL_MODES, csv_ints, prefill_run_profile
 from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
+from extra.qk.pure_search_guard import effective_routes
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
@@ -42,6 +43,20 @@ def _dirty_tree() -> bool:
 def _prefill_graph_gemm_enabled() -> bool:
   import tinygrad.llm.model as model_mod
   return bool(model_mod.PREFILL_GRAPH_GEMM)
+
+
+def _route_attribution() -> dict[str, Any]:
+  routes = effective_routes()
+  prefill_gemm = next((route for route in routes if route.get("family") == "prefill_gemm"), None)
+  prefill_q4k = next((route for route in routes if route.get("family") == "prefill_q4k"), None)
+  return {
+    "prefill_route_family": prefill_gemm.get("effective_route", "unknown") if prefill_gemm else "unknown",
+    "prefill_route_pure": bool(prefill_gemm.get("pure")) if prefill_gemm else False,
+    "prefill_route_rolled_back": bool(prefill_gemm.get("rolled_back_to_oracle")) if prefill_gemm else False,
+    "prefill_route_provenance": prefill_gemm.get("provenance", "unknown") if prefill_gemm else "unknown",
+    "prefill_q4k_route_family": prefill_q4k.get("effective_route", "unknown") if prefill_q4k else "unknown",
+    "prefill_q4k_route_pure": bool(prefill_q4k.get("pure")) if prefill_q4k else False,
+  }
 
 
 def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
@@ -115,6 +130,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "clock_pin": next((row["clock_pin"] for row in chunk_rows.values() if row["clock_pin"] is not None), None),
     "git_short": _git_short(),
     "git_dirty": _dirty_tree(),
+    "route_attribution": _route_attribution(),
     "timing_authority": "synced TinyJit forward, min over repeated bursts, no generate TTFT/sampling",
   }
 

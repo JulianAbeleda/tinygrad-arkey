@@ -84,6 +84,25 @@ WHOLE-PREFILL@2048: 4439 tok/s
 WHOLE-PREFILL@4096: 3684 tok/s
 ```
 
+Current strict-pure smoke baseline (bounded command below, non-pinned):
+
+```bash
+DEVICE_IN_FUNCTION_BUG=1 ALLOW_DEVICE_USAGE=1 PYTHONPATH=. python3 extra/qk/prefill_whole_synced.py --mode smoke --whole-lengths 512
+```
+
+```text
+PREFILL SMOKE (synced, K=1, warmups=1, rounds=1)  model=Qwen3-8B-Q4_K_M.gguf GRAPH_GEMM=False
+  chunk@start_pos=    0: 2013.5ms (254 tok/s)
+  WHOLE-PREFILL@512: 254 tok/s
+```
+
+Route attribution is explicit in `bench/prefill-whole-synced/latest.json`:
+
+- `prefill_route_family`: `prefill_v2_scheduler_matmul_default`
+- `prefill_route_pure`: `true`
+- `prefill_q4k_route_family`: `prefill_q4k_direct_tile4x4_default`
+- `prefill_q4k_route_pure`: `true`
+
 The pure-search route report now selects the scheduler-owned default unless `PREFILL_GRAPH_GEMM=1` is explicitly set:
 
 ```text

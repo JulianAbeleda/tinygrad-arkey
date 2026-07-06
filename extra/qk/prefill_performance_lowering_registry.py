@@ -76,7 +76,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "owner_area": "policy",
     "status": "in_progress",
     "blockers": [
-      "Warmstart table needs current AMD verification for representative 8B and 14B shapes before it can be treated as recovered baseline evidence",
+      "Latest current-baseline evidence is in-place: `bench/prefill-v2-schedule-table/latest.json` for warmstart schedule-table AMD pass, "
+      "`bench/prefill-whole-synced/latest.json` carries the bounded strict-pure smoke pp512 value and route attribution."
     ],
     "reuse_files": [
       "docs/8b-prefill-generated-route-closed-20260705.md",
@@ -85,6 +86,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "extra/qk/prefill_v2_schedule_table.json",
       "extra/qk/prefill_v2_schedule_table_gate.py",
       "bench/prefill-v2-schedule-table/latest.json",
+      "bench/prefill-whole-synced/latest.json",
     ],
     "gates": [
       "prefill_v2_schedule_table_gate",

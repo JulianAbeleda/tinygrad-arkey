@@ -15,6 +15,7 @@ from typing import Any
 
 from extra.qk.prefill_v2_schedule_search import M_DEFAULT, TABLE_PATH, _run_config
 from extra.qk.timing_harness import add_clock_pin_arg
+from extra.qk.pure_search_guard import effective_routes
 
 SCHEMA = "prefill-v2-schedule-table-gate.v1"
 ARTIFACT_DIR = pathlib.Path("bench/prefill-v2-schedule-table")
@@ -93,6 +94,7 @@ def build_report(*, run_amd: bool = False, shapes: tuple[str, ...] = DEFAULT_SHA
       "pin_clock": pin_clock,
       "all_measured_shapes_ok": (not run_amd or len(measured_ok) == len(rows)),
     },
+    "route_attribution": next((r for r in effective_routes() if r.get("family") == "prefill_gemm"), None),
     "rows": rows,
     "remaining_blocker": None if verdict.endswith("_PASS") else "warmstart table missing LOCAL schedule or AMD measurement failed",
   }

@@ -31,7 +31,7 @@ Recent strict-pure warm pp512 measurements:
 
 | Model | Route state | Warm pp512 |
 | --- | --- | ---: |
-| Qwen3-8B-Q4_K_M | `PREFILL_GRAPH_GEMM=0`, `prefill_v2_scheduler_matmul_default` | about 271 tok/s on bounded smoke (`--mode smoke --whole-lengths 512`) |
+| Qwen3-8B-Q4_K_M | `PREFILL_GRAPH_GEMM=0`, `prefill_v2_scheduler_matmul_default` | about 254 tok/s on bounded smoke (`--mode smoke --whole-lengths 512`) |
 | Qwen3-14B-Q4_K_M | `PREFILL_GRAPH_GEMM=0`, direct-packed Q4/Q6 where needed | about 358 tok/s |
 
 This path passes `PURE_MACHINE_SEARCH_ONLY=1` because it avoids the raw graph-GEMM route.
@@ -48,7 +48,7 @@ Two new gates narrow the remaining compiler work:
 | 8B route-bound default | `extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --local-stage a` | `PREFILL_GRAPH_GEMM_ROUTE_BOUND_LOCAL_STAGE_PASS` | The actual strict-pure `prefill_v2_scheduler_matmul_default` route can execute the 512³ diagnostic with generated A-operand LOCAL staging, fp16 WMMA, shared local storage, barrier, and no raw `Ops.INS` markers. | It is still a tiny route-bound diagnostic, not a medium warmstart schedule or 8B pp512 performance recovery. |
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_tile_loop_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_TILE_LOOP_LOCAL_STAGE_PASS` | A generated fp16 shaped-WMMA kernel can stage a WMMA operand in `AddrSpace.LOCAL` inside an enclosing tile loop while keeping the `STAGE` index tile-shaped (`lane` only), emitting bounded LDS plus a barrier and matching the direct kernel. | It is still a custom-kernel substrate probe, not route-bound scheduler integration and not a medium GEMM timing gate. |
 | 8B medium warmstart staging | `extra.qk.prefill_graph_gemm_medium_stage_gate --run-amd --pin-clock` | `PREFILL_GRAPH_GEMM_MEDIUM_LOCAL_STAGE_BLOCKED` | The representative `4096x4096` warmstart `LOCAL:0:4` schedule is correct at about 35 TFLOPS. B-operand tile-only post-WMMA staging composes and is numerically correct, and the route-bound cooperative B-partition diagnostic now executes instead of crashing. | It does not solve performance: pinned B-tile staging is flat versus baseline (`35.59` vs `35.58` TFLOPS in the latest artifact), and the cooperative diagnostic is slower (`26.64` TFLOPS) because the intended rewrite is skipped when source B carries extra non-lane `GLOBAL`/`UPCAST`/`UNROLL` ranges outside warp+reduce. |
-| 8B whole-prefill impact | `prefill_whole_synced.py --mode smoke --whole-lengths 512` | no win from B-tile diagnostic | Latest bounded smoke evidence is `271 tok/s` on `prefill_v2_scheduler_matmul_default` with `PREFILL_GRAPH_GEMM=0`. | Route attribution in `bench/prefill-whole-synced/latest.json` is `prefill_v2_scheduler_matmul_default` (pure strict-default) and `prefill_q4k_direct_tile4x4_default` for direct-packed fallback roles. |
+| 8B whole-prefill impact | `prefill_whole_synced.py --mode smoke --whole-lengths 512` | no win from B-tile diagnostic | Latest bounded smoke evidence is `254 tok/s` on `prefill_v2_scheduler_matmul_default` with `PREFILL_GRAPH_GEMM=0`. | Route attribution in `bench/prefill-whole-synced/latest.json` is `prefill_v2_scheduler_matmul_default` (pure strict-default) and `prefill_q4k_direct_tile4x4_default` for direct-packed fallback roles. |
 | 8B cooperative partition substrate | `extra.qk.prefill_graph_gemm_coop_partition_gate --run-amd` | `PREFILL_GRAPH_GEMM_COOP_PARTITION_PROBE_PASS` | A generated fp16 shaped-WMMA custom kernel stages the unique B tile into `buf0[256]` with lanes 0..15, uses a workgroup barrier, has no raw `Ops.INS`, and matches direct WMMA exactly on AMD. | It proves the B-tile lane map/readback, not scheduler integration into the route-bound warmstart TC path or an 8B performance win. |
 | 8B cooperative route binding | `extra.qk.prefill_graph_gemm_coop_route_contract_gate` | `PREFILL_GRAPH_GEMM_COOP_ROUTE_CONTRACT_BLOCKED` | The gate ties the passing custom cooperative probe to the medium warmstart evidence and requires the route-bound cooperative case to execute and beat baseline by at least 5%. | Current evidence is intentionally blocked: the medium gate defines `post_coop_b_partition_stage` and it executes, but the cooperative rewrite is skipped for the medium source-B shape and the case does not beat baseline. |
 | 14B packed/MMQ recovery | `extra.qk.q4k_wmma_full_role_contract_gate` | `Q4K_WMMA_FULL_ROLE_CONTRACT_PASS` | The Q4_K/Q8_1 14B role geometry is centralized, bounded, uses the selected shaped-WMMA surface, and keeps tile-local RAW lifetime bounded to 256 elements. | It is structural only. Full-role execution is still blocked by the missing scheduler-owned tile loop. |
@@ -198,7 +198,7 @@ Success means:
 - No selected default path executes `extra/qk/prefill/wmma.py`.
 - `PURE_MACHINE_SEARCH_ONLY=1` remains passing.
 - pp512 speed is compared against both:
-  - current strict-pure 8B bounded-smoke, about 271 tok/s,
+  - current strict-pure 8B bounded-smoke, about 254 tok/s,
   - historical graph-GEMM 8B pp512, about 5117 tok/s.
 
 ### Existing reusable work
@@ -231,7 +231,7 @@ Use these; do not duplicate them:
 - Warm-start TC opts recover part of the gap versus static codegen.
 - The representative warm-start table gate now proves the 8B/14B graph-GEMM baseline shapes are present and use LOCAL
   schedules; run it with `--run-amd` to refresh current TFLOPS.
-- Current strict default can run 8B pp512 at about 271 tok/s on the bounded smoke command used for this slice (`mode=smoke`, `whole-lengths=512`).
+- Current strict default can run 8B pp512 at about 254 tok/s on the bounded smoke command used for this slice (`mode=smoke`, `whole-lengths=512`).
 - The raw graph-GEMM route remains available as an opt-in research baseline.
 - Tiny generated iu8, fp16 single-operand, and fp16 both-operand shaped-WMMA LOCAL-staging probes now pass on AMD. This
   proves the current `Ops.STAGE` / `BufferizeOpts(None, AddrSpace.LOCAL, removable=False)` / `pm_add_buffers_local`
@@ -300,7 +300,7 @@ Required work:
 
 Done criteria:
 
-- 8B pp512 improves materially over the current strict-pure bounded smoke baseline of about 271 tok/s.
+- 8B pp512 improves materially over the current strict-pure bounded smoke baseline of about 254 tok/s.
 - Per-shape fp16 microbench closes the gap toward the historical raw route.
 - The raw graph-GEMM route becomes a baseline only, not the speed path.
 
