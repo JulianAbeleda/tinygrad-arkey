@@ -40,6 +40,7 @@ def _sample_audit_report():
 def test_build_report_contains_blockers_and_work_queue(monkeypatch):
   monkeypatch.setattr(report.audit, "build", lambda: _sample_audit_report())
   monkeypatch.setattr(report, "_load_phase_lookup", lambda: {})
+  monkeypatch.setattr(report, "_load_done_criteria_lookup", lambda: {})
   out = report.build_exhaustive_lowering_report()
 
   assert out["schema"] == "exhaustive-lowering-report.v1"
@@ -53,6 +54,8 @@ def test_build_report_contains_blockers_and_work_queue(monkeypatch):
   runtime_item = next(i for i in out["work_queue"] if i["work_item_type"] == "unmanifested_runtime_surface")
   assert strict_item["work_item_id"] == "decode_q4k_g3_generated"
   assert runtime_item["work_item_id"] == "prefill_q6k_direct_packed_default_capable"
+  assert "done_criteria" not in strict_item
+  assert "done_criteria" not in runtime_item
 
 
 def test_report_prints_json_payload(monkeypatch, capsys):
@@ -113,6 +116,65 @@ def test_phase_registry_enrichment(monkeypatch):
   assert phase_item["phase_name"] == "rollback_and_quarantine"
 
 
+def test_report_enriches_done_criteria_from_dynamic_module(monkeypatch):
+  fake_phase_registry = types.ModuleType("extra.qk.lowering_phase_registry")
+  fake_phase_registry.rows = lambda: [
+    {
+      "id": "decode_q4k_g3_generated",
+      "phase": 2,
+      "phase_name": "descriptor_replacement",
+      "target_lowering_level": "L3",
+      "next_action": "move to generated substrate",
+      "route_fact_that_should_not_be_copied": "do not copy",
+    },
+    {
+      "id": "prefill_q6k_direct_packed_default_capable",
+      "phase": 2,
+      "phase_name": "direct_packed_prefill",
+      "target_lowering_level": "L4",
+      "next_action": "manifest or replace route",
+    },
+    {
+      "id": "prefill_pipe_global_rollback",
+      "phase": 5,
+      "phase_name": "rollback_and_quarantine",
+      "target_lowering_level": "L4",
+      "next_action": "quarantine fixture",
+    },
+  ]
+  fake_done_criteria = types.ModuleType("extra.qk.lowering_done_criteria")
+  fake_done_criteria.rows = lambda: [
+    {"target_lowering_level": "L3", "required_criteria": ["descriptor_owned_substrate"]},
+    {"target_lowering_level": "L4", "required_criteria": ["ordinary_tinygrad_graph"]},
+  ]
+
+  monkeypatch.setitem(sys.modules, "extra.qk.lowering_phase_registry", fake_phase_registry)
+  monkeypatch.setitem(sys.modules, "extra.qk.lowering_done_criteria", fake_done_criteria)
+  monkeypatch.setattr(report.audit, "build", lambda: _sample_audit_report())
+
+  out = report.build_exhaustive_lowering_report()
+  strict_item = next(i for i in out["work_queue"] if i["work_item_type"] == "strict_default_route_blocker")
+  runtime_item = next(i for i in out["work_queue"] if i["work_item_type"] == "unmanifested_runtime_surface")
+  rollback_item = next(i for i in out["work_queue"] if i["work_item_id"] == "prefill_pipe_global_rollback")
+
+  assert strict_item["done_criteria"] == ["descriptor_owned_substrate"]
+  assert runtime_item["done_criteria"] == ["ordinary_tinygrad_graph"]
+  assert rollback_item["done_criteria"] == ["ordinary_tinygrad_graph"]
+
+
+def test_done_criteria_loader_uses_required_criteria_schema(monkeypatch):
+  fake_done_criteria = types.ModuleType("extra.qk.lowering_done_criteria")
+  fake_done_criteria.rows = lambda: [
+    {"target_lowering_level": "L3", "required_criteria": ["descriptor_owned_substrate"]},
+    {"target_lowering_level": "L4", "done_criteria": ["legacy_shape_should_not_load"]},
+    {"target_lowering_level": "L5", "required_criteria": ["valid", 1]},
+  ]
+
+  monkeypatch.setitem(sys.modules, "extra.qk.lowering_done_criteria", fake_done_criteria)
+
+  assert report._load_done_criteria_lookup() == {"L3": ["descriptor_owned_substrate"]}
+
+
 def test_report_build_integrates_current_audit_output():
   real_report = audit.build()
   out = report.build_exhaustive_lowering_report()
@@ -130,3 +192,13 @@ def test_report_build_integrates_current_audit_output():
   assert enriched["prefill_q6k_direct_packed_default_capable"]["target_lowering_level"] == "L3"
   phase_registry_ids = {r["id"] for r in report._load_phase_lookup().values()}
   assert phase_registry_ids.issubset(queue_blockers)
+  done_criteria_lookup = report._load_done_criteria_lookup()
+  if done_criteria_lookup:
+    for item in out["work_queue"]:
+      target_level = item.get("target_lowering_level")
+      if not isinstance(target_level, str):
+        continue
+      if target_level in done_criteria_lookup:
+        assert item["done_criteria"] == done_criteria_lookup[target_level]
+      else:
+        assert "done_criteria" not in item

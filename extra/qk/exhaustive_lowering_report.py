@@ -54,7 +54,34 @@ def _load_phase_lookup() -> dict[str, dict[str, Any]]:
 _PHASE_METADATA_KEYS = ("phase", "phase_name", "target_lowering_level", "next_action")
 
 
-def _enrich_with_phase(row: dict[str, Any], phase_lookup: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _load_done_criteria_lookup() -> dict[str, list[str]]:
+  try:
+    done_criteria_module = importlib.import_module("extra.qk.lowering_done_criteria")
+  except ModuleNotFoundError:
+    return {}
+
+  rows_fn = getattr(done_criteria_module, "rows", None)
+  if not callable(rows_fn):
+    return {}
+  rows = rows_fn()
+  if not isinstance(rows, (list, tuple)):
+    return {}
+
+  by_level: dict[str, list[str]] = {}
+  for row in rows:
+    if not isinstance(row, dict):
+      continue
+    level = row.get("target_lowering_level")
+    required_criteria = row.get("required_criteria")
+    if not isinstance(level, str) or not isinstance(required_criteria, list):
+      continue
+    if not all(isinstance(criterion, str) for criterion in required_criteria):
+      continue
+    by_level[level] = list(required_criteria)
+  return by_level
+
+
+def _enrich_with_phase(row: dict[str, Any], phase_lookup: dict[str, dict[str, Any]], done_criteria_lookup: dict[str, list[str]]) -> dict[str, Any]:
   if not row:
     return row
   item_id = row.get("route_id") or row.get("surface_id") or row.get("work_item_id")
@@ -68,6 +95,9 @@ def _enrich_with_phase(row: dict[str, Any], phase_lookup: dict[str, dict[str, An
   for key in _PHASE_METADATA_KEYS:
     if key in phase_row:
       out[key] = phase_row[key]
+  target_level = out.get("target_lowering_level")
+  if isinstance(target_level, str) and target_level in done_criteria_lookup:
+    out["done_criteria"] = list(done_criteria_lookup[target_level])
   return out
 
 
@@ -83,6 +113,7 @@ def _work_queue(
   strict_rows: list[dict[str, Any]],
   runtime_rows: list[dict[str, Any]],
   phase_lookup: dict[str, dict[str, Any]],
+  done_criteria_lookup: dict[str, list[str]],
 ) -> list[dict[str, Any]]:
   work_queue: list[dict[str, Any]] = []
   queued_ids: set[str] = set()
@@ -92,7 +123,7 @@ def _work_queue(
     entry["work_item_id"] = entry.get("route_id", "")
     if entry["work_item_id"]:
       queued_ids.add(str(entry["work_item_id"]))
-      work_queue.append(_enrich_with_phase(entry, phase_lookup))
+      work_queue.append(_enrich_with_phase(entry, phase_lookup, done_criteria_lookup))
 
   for row in runtime_rows:
     entry = dict(row)
@@ -100,13 +131,13 @@ def _work_queue(
     entry["work_item_id"] = entry.get("surface_id", "")
     if entry["work_item_id"]:
       queued_ids.add(str(entry["work_item_id"]))
-      work_queue.append(_enrich_with_phase(entry, phase_lookup))
+      work_queue.append(_enrich_with_phase(entry, phase_lookup, done_criteria_lookup))
 
   for item_id, phase_row in phase_lookup.items():
     if item_id in queued_ids:
       continue
     entry = {"work_item_type": "phase_registry_item", "work_item_id": item_id}
-    work_queue.append(_enrich_with_phase(entry, phase_lookup))
+    work_queue.append(_enrich_with_phase(entry, phase_lookup, done_criteria_lookup))
 
   return work_queue
 
@@ -119,6 +150,7 @@ def build_exhaustive_lowering_report() -> dict[str, Any]:
   runtime_blocker_ids = [row["surface_id"] for row in runtime_rows if isinstance(row.get("surface_id"), str)]
 
   phase_lookup = _load_phase_lookup()
+  done_criteria_lookup = _load_done_criteria_lookup()
   blockers = dict(audit_report.get("audit_blockers", {}))
   blockers.setdefault("strict_default_route_blockers", sorted(strict_blocker_ids))
   blockers.setdefault("unmanifested_runtime_surfaces", sorted(runtime_blocker_ids))
@@ -127,7 +159,7 @@ def build_exhaustive_lowering_report() -> dict[str, Any]:
     "schema": SCHEMA,
     "audit_verdict": audit_report.get("verdict", "UNKNOWN"),
     "blockers": blockers,
-    "work_queue": _work_queue(strict_rows, runtime_rows, phase_lookup),
+    "work_queue": _work_queue(strict_rows, runtime_rows, phase_lookup, done_criteria_lookup),
     "audit_report": audit_report,
   }
 

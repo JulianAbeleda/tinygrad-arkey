@@ -6,8 +6,16 @@ This scope answers whether every handwritten QK kernel surface can be lowered in
 "exhaustive lowering" means, and what gates prove completion.
 
 This document is subordinate to `docs/pure-machine-search.md` and
-`docs/pure-machine-search-handwritten-kernel-scope-20260706.md`. The current mechanical authority is
-`extra/qk/pure_kernel_surface_audit.py`, fed by the centralized generated-route and runtime-surface registries.
+`docs/pure-machine-search-handwritten-kernel-scope-20260706.md`.
+
+It defines completion in terms of centralized mechanical authorities, not in-page checklist rows:
+
+- `extra/qk/lowering_phase_registry.py` (planned work items and target lowering level)
+- `extra/qk/exhaustive_lowering_report.py` (single source of truth for route + runtime work queue)
+- `extra/qk/lowering_done_criteria.py` (completion criteria by lowering level; the report exposes these as
+  `done_criteria` on phase-backed work items)
+
+The repository should source route-completion facts from those modules and keep docs focused on policy and scope.
 
 ## Public Alignment
 
@@ -50,34 +58,32 @@ non-default rollback/test debt with explicit audit classification.
 
 ## Current Mechanical State
 
-Command:
+The current blockers and pending items are authoritative in:
 
 ```bash
-python3 -m extra.qk.pure_kernel_surface_audit
+python3 -m extra.qk.exhaustive_lowering_report
 ```
 
-Current verdict:
+This report is intentionally source-of-truth for:
 
-- `PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND`
-- `STRICT_DEFAULT_PURITY_FAIL`
+- strict-default blockers currently failing mechanical audits,
+- unmanifested runtime-capable surfaces still requiring manifest or strict guard coverage,
+- `lowering_phase_registry` metadata and `lowering_done_criteria` gates joined to each work item.
 
-Current strict default blockers:
+Use this output instead of maintaining a duplicate route checklist in this document.
 
-| Route | Current surface | Target level |
-|---|---|---|
-| `decode_flash_live_split_g4_8b_kvboth` | `route_local_custom_kernel` | L3 descriptor-owned flash specs or L4 ordinary graph. |
-| `decode_flash_block_tile_g5_konly` | `route_local_custom_kernel` | L3 descriptor-owned flash specs or L4 ordinary graph. |
-| `prefill_pipe_role_selective_generated` | `external_raw_or_binary` | L3/L5 generated LDS+WMMA substrate. |
-| `prefill_q4k_direct_tile4x4_default` | `route_local_custom_kernel` | L3 generated Q4_K prefill/MMQ or L4 graph if performant. |
+## When Is Something Done for Lowering?
 
-Current unmanifested runtime-capable surfaces:
+Mark a route/surface as lower-complete only when all of these are true at the same time:
 
-- `prefill_q6k_direct_packed_default_capable`
-- `decode_q4k_smallk_batched`
-- `decode_q6k_smallk_batched`
+1. It is absent from the blocker lists in `extra/qk/exhaustive_lowering_report` and no longer needs a
+   registry-only phase work item.
+2. Its `route_id`/`surface_id` is represented in `extra/qk/lowering_phase_registry.py` with a target level.
+3. Its target level is covered by `extra/qk/lowering_done_criteria.py`, which expresses the required proof for that
+   lowering class (`L3`, `L4`, or `L5`).
 
-These rows live in `extra/qk/runtime_surface_registry.py`. They must either gain manifest rows and strict guard
-coverage or be blocked under `PURE_MACHINE_SEARCH_ONLY`.
+If any one of these fail, keep the route in the registry, keep rollback/fixture classification explicit, and run a strict
+gate until the report moves it out of blocking status.
 
 ## Exhaustive Lowering Algorithm
 
@@ -142,11 +148,6 @@ Actions:
 - Add emitted-kernel-name binding to the audit artifact so "selected route" and "executed kernel" are tied together.
 - Keep historical/non-runtime fixtures out of default blockers but classified as fixture debt.
 
-Done:
-
-- No default-capable non-pure route exists outside the audit.
-- `PURE_MACHINE_SEARCH_ONLY=1` rejects every selected L0/L1/L2 default.
-
 ### Phase 1: Small-K Batched Q4_K/Q6_K
 
 Goal: close the smallest runtime-capable handwritten surfaces.
@@ -161,10 +162,6 @@ Actions:
   under strict mode.
 - Gate correctness against current hand templates.
 - Measure only enough to prevent catastrophic regression; these are not the main performance route.
-
-Done:
-
-- `decode_q4k_smallk_batched` and `decode_q6k_smallk_batched` disappear from unmanifested debt.
 
 ### Phase 2: Direct-Packed Q4_K/Q6_K Prefill
 
@@ -181,11 +178,6 @@ Actions:
 - Lower descriptors through shared generated UOp/codegen path.
 - Retain hand route as rollback until generated path passes correctness and timing.
 
-Done:
-
-- `prefill_q4k_direct_tile4x4_default` is strict-pure or no longer a default.
-- Q6_K direct prefill is manifest-covered and strict-mode safe.
-
 ### Phase 3: Decode Attention Live-Split / Block-Tile
 
 Goal: make promoted attention routes descriptor-owned instead of route-local custom kernels.
@@ -200,11 +192,6 @@ Actions:
 - Move current hand-authored topology into data descriptors.
 - Build a shared flash lowering emitter with generated-only marker gate.
 - Add route-bound proof for both G4 8B KV-both and G5 live-split routes.
-
-Done:
-
-- `decode_flash_live_split_g4_8b_kvboth` and `decode_flash_block_tile_g5_konly` classify as L3/L4/L5.
-- Existing hand flash kernels are rollback/reference or removed.
 
 ### Phase 4: Raw WMMA Prefill Substrate
 
@@ -225,11 +212,6 @@ Actions:
 - Add missing backend/codegen vocabulary for stable LDS buffers, barriers, waits, and WMMA selection.
 - Use the current raw route as correctness/perf oracle only.
 
-Done:
-
-- `prefill_pipe_role_selective_generated` no longer touches `Ops.INS`, raw source, or route-local custom kernels.
-- `extra/qk/prefill/wmma.py` is not selected by any default route.
-
 ### Phase 5: Rollback And Fixture Quarantine
 
 Goal: make remaining handwritten code impossible to confuse with pure defaults.
@@ -241,10 +223,6 @@ Actions:
 - Keep microbench/proof custom kernels outside route manifest and default selectors.
 - Ensure `docs/pure-machine-search.md`, route manifest, and audit agree.
 
-Done:
-
-- A reviewer can run the audit and see `PURE_KERNEL_SURFACE_AUDIT_PASS`, or see only non-default rollback/fixture debt.
-
 ## Non-Goals
 
 - Do not reintroduce inherited tinygrad beam search.
@@ -255,21 +233,17 @@ Done:
 
 ## Acceptance Gates
 
-Every converted route needs:
+Every converted route is done only if the centralized artifacts are clear:
 
-- semantic correctness against mathematical reference or current oracle,
-- route-bound emitted-kernel proof,
-- no hidden fallback,
-- strict audit classification as L3/L4/L5,
-- forbidden marker scan for `Ops.INS`, `Ops.BINARY`, `asm volatile`, route-local `Tensor.custom_kernel`, `Ops.CUSTOM`,
-  and `Ops.CUSTOMI`,
-- W==D or role-level timing comparison,
-- rollback retained until the generated route survives regression windows.
+- route-classification and blocker status in `pure_kernel_surface_audit` and `exhaustive_lowering_report`,
+- route-specific target in `lowering_phase_registry`,
+- target-level proof criteria from `lowering_done_criteria` for `L3`/`L4`/`L5`,
+- rollback/fixture separation and W==D or role-level timing policy as enforced by route-specific gates.
 
 Repository-level completion requires:
 
 ```bash
-python3 -m extra.qk.pure_kernel_surface_audit
+python3 -m extra.qk.exhaustive_lowering_report
 ```
 
-to return `PURE_KERNEL_SURFACE_AUDIT_PASS`, or to return debt only for non-default rollback/test fixtures.
+with `audit_verdict` equal to `PURE_KERNEL_SURFACE_AUDIT_PASS` and no non-fixture work items left blocking lowering completion.
