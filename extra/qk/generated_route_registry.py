@@ -50,6 +50,19 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
     "required_gates": [],
     "rollback_route": None,
   },
+  {
+    "route_id": "prefill_q6k_direct_generated",
+    "descriptor_artifact": "Q6KPrefillRouteSpec",
+    "lowering_level": "L3",
+    "owner": "descriptor",
+    "writer_files": [
+      "extra/qk/q6k_prefill_route_spec.py",
+      "extra/qk/quant/q6_k_gemv_primitive.py",
+    ],
+    "emitter": "extra/qk/q6k_prefill_route_spec.py emit_q6k_packed_prefill_kernel",
+    "required_gates": [],
+    "rollback_route": None,
+  },
 )
 
 

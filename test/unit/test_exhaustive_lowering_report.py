@@ -22,17 +22,9 @@ def _sample_audit_report():
     },
     "audit_blockers": {
       "strict_default_route_blockers": ["decode_q4k_g3_generated"],
-      "unmanifested_runtime_surfaces": ["prefill_q6k_direct_packed_default_capable"],
+      "unmanifested_runtime_surfaces": [],
     },
-    "unmanifested_runtime_surfaces": [
-      {
-        "surface_id": "prefill_q6k_direct_packed_default_capable",
-        "surface_class": "route_local_custom_kernel",
-        "writer_files": ["tinygrad/llm/prefill_routes.py", "extra/qk/quant/q6_k_gemv_primitive.py"],
-        "reason": "runtime-capable hand-written surface",
-        "replacement_scope": "manifest or replace",
-      }
-    ],
+    "unmanifested_runtime_surfaces": [],
     "routes": [{"route_id": "decode_q4k_g3_generated"}],
   }
 
@@ -46,16 +38,13 @@ def test_build_report_contains_blockers_and_work_queue(monkeypatch):
   assert out["schema"] == "exhaustive-lowering-report.v1"
   assert out["audit_verdict"] == "PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND"
   assert out["blockers"]["strict_default_route_blockers"] == ["decode_q4k_g3_generated"]
-  assert out["blockers"]["unmanifested_runtime_surfaces"] == ["prefill_q6k_direct_packed_default_capable"]
-  assert len(out["work_queue"]) == 2
+  assert out["blockers"]["unmanifested_runtime_surfaces"] == []
+  assert len(out["work_queue"]) == 1
   kinds = {i["work_item_type"] for i in out["work_queue"]}
-  assert kinds == {"strict_default_route_blocker", "unmanifested_runtime_surface"}
+  assert kinds == {"strict_default_route_blocker"}
   strict_item = next(i for i in out["work_queue"] if i["work_item_type"] == "strict_default_route_blocker")
-  runtime_item = next(i for i in out["work_queue"] if i["work_item_type"] == "unmanifested_runtime_surface")
   assert strict_item["work_item_id"] == "decode_q4k_g3_generated"
-  assert runtime_item["work_item_id"] == "prefill_q6k_direct_packed_default_capable"
   assert "done_criteria" not in strict_item
-  assert "done_criteria" not in runtime_item
 
 
 def test_report_prints_json_payload(monkeypatch, capsys):
@@ -80,7 +69,7 @@ def test_phase_registry_enrichment(monkeypatch):
       "route_fact_that_should_not_be_copied": "do not copy",
     },
     {
-      "id": "prefill_q6k_direct_packed_default_capable",
+      "id": "synthetic_phase_only_surface",
       "phase": 2,
       "phase_name": "direct_packed_prefill",
       "target_lowering_level": "L3",
@@ -100,17 +89,18 @@ def test_phase_registry_enrichment(monkeypatch):
 
   out = report.build_exhaustive_lowering_report()
   strict_item = next(i for i in out["work_queue"] if i["work_item_type"] == "strict_default_route_blocker")
-  runtime_item = next(i for i in out["work_queue"] if i["work_item_type"] == "unmanifested_runtime_surface")
+  phase_only_item = next(i for i in out["work_queue"] if i["work_item_id"] == "synthetic_phase_only_surface")
 
   assert strict_item["phase"] == 2
   assert strict_item["phase_name"] == "descriptor_replacement"
   assert strict_item["target_lowering_level"] == "L3"
   assert strict_item["next_action"] == "move to generated substrate"
   assert "route_fact_that_should_not_be_copied" not in strict_item
-  assert runtime_item["phase"] == 2
-  assert runtime_item["phase_name"] == "direct_packed_prefill"
-  assert runtime_item["target_lowering_level"] == "L3"
-  assert runtime_item["next_action"] == "manifest or replace route"
+  assert phase_only_item["work_item_type"] == "phase_registry_item"
+  assert phase_only_item["phase"] == 2
+  assert phase_only_item["phase_name"] == "direct_packed_prefill"
+  assert phase_only_item["target_lowering_level"] == "L3"
+  assert phase_only_item["next_action"] == "manifest or replace route"
   phase_item = next(i for i in out["work_queue"] if i["work_item_id"] == "prefill_pipe_global_rollback")
   assert phase_item["work_item_type"] == "phase_registry_item"
   assert phase_item["phase_name"] == "rollback_and_quarantine"
@@ -128,7 +118,7 @@ def test_report_enriches_done_criteria_from_dynamic_module(monkeypatch):
       "route_fact_that_should_not_be_copied": "do not copy",
     },
     {
-      "id": "prefill_q6k_direct_packed_default_capable",
+      "id": "synthetic_phase_only_surface",
       "phase": 2,
       "phase_name": "direct_packed_prefill",
       "target_lowering_level": "L4",
@@ -154,11 +144,12 @@ def test_report_enriches_done_criteria_from_dynamic_module(monkeypatch):
 
   out = report.build_exhaustive_lowering_report()
   strict_item = next(i for i in out["work_queue"] if i["work_item_type"] == "strict_default_route_blocker")
-  runtime_item = next(i for i in out["work_queue"] if i["work_item_type"] == "unmanifested_runtime_surface")
+  phase_only_item = next(i for i in out["work_queue"] if i["work_item_id"] == "synthetic_phase_only_surface")
   rollback_item = next(i for i in out["work_queue"] if i["work_item_id"] == "prefill_pipe_global_rollback")
 
   assert strict_item["done_criteria"] == ["descriptor_owned_substrate"]
-  assert runtime_item["done_criteria"] == ["ordinary_tinygrad_graph"]
+  assert phase_only_item["work_item_type"] == "phase_registry_item"
+  assert phase_only_item["done_criteria"] == ["ordinary_tinygrad_graph"]
   assert rollback_item["done_criteria"] == ["ordinary_tinygrad_graph"]
 
 
@@ -187,9 +178,6 @@ def test_report_build_integrates_current_audit_output():
   assert runtime_blockers.issubset(queue_blockers)
   assert out["blockers"]["strict_default_route_blockers"] == sorted(strict_blockers)
   enriched = {i["work_item_id"]: i for i in out["work_queue"] if "phase_name" in i}
-  assert "prefill_q6k_direct_packed_default_capable" in enriched
-  assert enriched["prefill_q6k_direct_packed_default_capable"]["phase_name"] == "direct_packed_prefill"
-  assert enriched["prefill_q6k_direct_packed_default_capable"]["target_lowering_level"] == "L3"
   phase_registry_ids = {r["id"] for r in report._load_phase_lookup().values()}
   assert phase_registry_ids.issubset(queue_blockers)
   done_criteria_lookup = report._load_done_criteria_lookup()

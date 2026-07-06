@@ -3,9 +3,7 @@ import json
 from extra.qk import runtime_surface_registry as registry
 
 
-SEEDED = (
-  "prefill_q6k_direct_packed_default_capable",
-)
+SEEDED = ()
 
 
 def test_runtime_surface_registry_contains_unmanifested_surfaces():

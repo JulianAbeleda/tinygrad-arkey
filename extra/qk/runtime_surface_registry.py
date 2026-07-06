@@ -19,18 +19,7 @@ class RuntimeSurface(TypedDict):
   replacement_scope: str
 
 
-_RUNTIME_SURFACES: tuple[RuntimeSurface, ...] = (
-  {
-    "surface_id": "prefill_q6k_direct_packed_default_capable",
-    "surface_class": "route_local_custom_kernel",
-    "writer_files": [
-      "tinygrad/llm/prefill_routes.py",
-      "extra/qk/quant/q6_k_gemv_primitive.py",
-    ],
-    "reason": "PREFILL_DIRECT_QUANTS defaults to Q4_K,Q6_K and Q6_K direct prefill calls q6k_gemm_packed_load_* hand UOp templates.",
-    "replacement_scope": "Add Q6KPrefillRouteSpec or explicit manifest debt row.",
-  },
-)
+_RUNTIME_SURFACES: tuple[RuntimeSurface, ...] = ()
 
 
 def _sanitize_row(row: RuntimeSurface) -> dict[str, Any]:

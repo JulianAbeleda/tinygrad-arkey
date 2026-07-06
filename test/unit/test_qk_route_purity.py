@@ -34,6 +34,7 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "hand_authored_uop_template"
   # TG-P3: Q6_K default is now the generated route; no manifest hand-kernel rollback remains.
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
+  assert route_provenance("prefill_q6k_direct_generated") == "machine_authored_generated"
   assert route_provenance("prefill_pipe_role_selective_generated") == "external_handwritten_kernel"
   assert set(report["transitional_default_routes"]) == {
     "decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth", "prefill_q4k_direct_tile4x4_default"}
@@ -53,6 +54,8 @@ def test_default_path_census_uses_manifest_provenance():
   # TG-P3: the generated Q6_K route is the default and the census only carries current manifest route rows.
   assert by_route["decode_q6k_coop_generated"]["provenance"] == "machine_authored_generated"
   assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True
+  assert by_route["prefill_q6k_direct_generated"]["provenance"] == "machine_authored_generated"
+  assert by_route["prefill_q6k_direct_generated"]["final_default_allowed"] is True
   assert by_route["prefill_pipe_role_selective_generated"]["provenance"] == "external_handwritten_kernel"
   assert by_route["prefill_pipe_role_selective_generated"]["final_default_allowed"] is False
   assert "prefill_pipe_role_selective_default" not in by_route

@@ -21,13 +21,6 @@ class LoweringPhaseRegistryRow(TypedDict):
 
 _PHASE_ROWS: tuple[LoweringPhaseRegistryRow, ...] = (
   {
-    "id": "prefill_q6k_direct_packed_default_capable",
-    "phase": 2,
-    "phase_name": "direct_packed_prefill",
-    "target_lowering_level": "L3",
-    "next_action": "move Q6_K direct prefill into shared Q6_K packed descriptor",
-  },
-  {
     "id": "prefill_q4k_direct_tile4x4_default",
     "phase": 2,
     "phase_name": "direct_packed_prefill",

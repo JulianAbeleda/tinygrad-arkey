@@ -43,6 +43,9 @@ def q6k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_packed_load_direct_out_kernel")(*args, **kwargs)
 def q6k_spec_for_role(*args, **kwargs): return _attr("extra.qk.q6k_route_spec", "spec_for_role")(*args, **kwargs)
 def emit_q6k_gemv_kernel(*args, **kwargs): return _attr("extra.qk.q6k_route_spec", "emit_q6k_gemv_kernel")(*args, **kwargs)
+def describe_q6k_packed_prefill(*args, **kwargs): return _attr("extra.qk.q6k_prefill_route_spec", "describe_q6k_packed_prefill")(*args, **kwargs)
+def emit_q6k_packed_prefill_kernel(*args, **kwargs):
+  return _attr("extra.qk.q6k_prefill_route_spec", "emit_q6k_packed_prefill_kernel")(*args, **kwargs)
 
 def flash_decode_live_split_block_tile(*args, **kwargs): return _attr("extra.qk.live_split_geometry", "flash_decode_live_split_block_tile")(*args, **kwargs)
 

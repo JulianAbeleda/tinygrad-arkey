@@ -4,7 +4,7 @@ from extra.qk import generated_route_registry as registry
 from extra.qk import route_manifest
 
 
-SEEDED = ("decode_q4k_g3_generated", "decode_q6k_coop_generated")
+SEEDED = ("decode_q4k_g3_generated", "decode_q6k_coop_generated", "prefill_q6k_direct_generated")
 REQUIRED_L3_FIELDS = {
   "route_id",
   "descriptor_artifact",
@@ -31,6 +31,7 @@ def test_generated_route_registry_contains_positive_controls():
   by_route = {r["route_id"]: r for r in registry.rows()}
   assert by_route["decode_q4k_g3_generated"]["route_id"] == "decode_q4k_g3_generated"
   assert by_route["decode_q6k_coop_generated"]["route_id"] == "decode_q6k_coop_generated"
+  assert by_route["prefill_q6k_direct_generated"]["route_id"] == "prefill_q6k_direct_generated"
 
 
 def test_positive_controls_are_l3_descriptor_owned():

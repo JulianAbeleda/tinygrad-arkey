@@ -1,4 +1,5 @@
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -181,3 +182,87 @@ def test_direct_packed_route_spec_exports_runtime_op_spec():
   q6 = PrefillLinearRouteSpec("direct_packed", "q6k", "", 512, 5120, 17408).runtime_op_spec()
   assert q6.role == "unknown"
   assert q6.weight.format == "Q6_K"
+
+
+class _PrefillTensorStub:
+  shape = (1, 512, 256)
+  device = "CPU"
+
+  def __getitem__(self, _idx):
+    return self
+
+  def cast(self, *_args, **_kwargs):
+    return self
+
+  def contiguous(self):
+    return self
+
+  def reshape(self, *_args, **_kwargs):
+    return self
+
+  def custom_kernel(self, *_args, **_kwargs):
+    return (self,)
+
+  def sum(self, *_args, **_kwargs):
+    return self
+
+  def transpose(self, *_args, **_kwargs):
+    return self
+
+
+class _TensorFactoryStub(_PrefillTensorStub):
+  @classmethod
+  def empty(cls, *_args, **_kwargs):
+    return cls()
+
+
+class _Q6PrefillWeight:
+  def to(self, *_args, **_kwargs):
+    return self
+
+
+def _q6_prefill_linear(parts=1):
+  return SimpleNamespace(
+    bias=None, in_features=256, out_features=16, parts=parts, opts=(), name="blk.0.ffn_down.weight",
+    q6k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q6PrefillWeight())
+
+
+def test_q6_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):
+  from tinygrad.llm import prefill_routes
+
+  monkeypatch.setattr(prefill_routes, "Tensor", _TensorFactoryStub)
+  monkeypatch.setattr(prefill_routes.qk_ops, "q6k_gemm_packed_load_direct_out_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
+    AssertionError("Q6_K packed prefill default must not use q6k_gemm_packed_load_direct_out_kernel")))
+  monkeypatch.setattr(prefill_routes.qk_ops, "q6k_gemm_packed_load_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
+    AssertionError("Q6_K packed prefill default must not use q6k_gemm_packed_load_kernel")))
+
+  calls = []
+  def describe(*args, **kwargs):
+    calls.append(("describe", args, kwargs))
+    return SimpleNamespace(output_layout=kwargs["output_layout"])
+  monkeypatch.setattr(prefill_routes.qk_ops, "describe_q6k_packed_prefill", describe)
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q6k_packed_prefill_kernel", lambda spec: ("generated", spec.output_layout))
+
+  out = prefill_routes.route_direct_packed_prefill(_q6_prefill_linear(), _PrefillTensorStub())
+  assert isinstance(out, _PrefillTensorStub)
+  assert calls[0][2]["output_layout"] == "direct_out"
+
+
+def test_q6_direct_packed_prefill_partials_use_generated_descriptor(monkeypatch):
+  from tinygrad.llm import prefill_routes
+
+  os.environ["PREFILL_DIRECT_Q6K_PARTS"] = "2"
+  monkeypatch.setattr(prefill_routes, "Tensor", _TensorFactoryStub)
+  monkeypatch.setattr(prefill_routes.qk_ops, "q6k_gemm_packed_load_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
+    AssertionError("Q6_K packed prefill partials must not use q6k_gemm_packed_load_kernel")))
+
+  calls = []
+  def describe(*args, **kwargs):
+    calls.append(("describe", args, kwargs))
+    return SimpleNamespace(output_layout=kwargs["output_layout"])
+  monkeypatch.setattr(prefill_routes.qk_ops, "describe_q6k_packed_prefill", describe)
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q6k_packed_prefill_kernel", lambda spec: ("generated", spec.output_layout))
+
+  out = prefill_routes.route_direct_packed_prefill(_q6_prefill_linear(parts=2), _PrefillTensorStub())
+  assert isinstance(out, _PrefillTensorStub)
+  assert calls[0][2]["output_layout"] == "partials"

@@ -256,15 +256,20 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
     halfs = lin.prefill_packed_weight().to(x.device)
     partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
     opts = _direct_packed_opts(lin, spec)
-    kernel = qk_ops.q6k_gemm_packed_load_kernel if bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)) else qk_ops.q6k_gemm_kernel
-    if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) and bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)):
-      out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-        halfs, x_batch.reshape(spec.m * spec.k),
-        fxn=qk_ops.q6k_gemm_packed_load_direct_out_kernel(spec.n, spec.k, spec.m, opts,
-                                                          name="prefill_q6k_direct_packed_load_direct_out_gemm"))[0]
-      return out.reshape(1, spec.m, spec.n)
-    out = partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
-      fxn=kernel(spec.n, spec.k, spec.m, parts, opts, name=spec.q6k_kernel_prefix))[0]
+    if bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)):
+      output_layout = "direct_out" if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) else "partials"
+      q6_spec = qk_ops.describe_q6k_packed_prefill(spec.n, spec.k, spec.m, role=_direct_packed_role(lin, spec),
+                                                   parts=parts, output_layout=output_layout, opts=opts)
+      if output_layout == "direct_out":
+        out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
+          halfs, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0]
+        return out.reshape(1, spec.m, spec.n)
+      out = partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
+        fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0]
+    else:
+      kernel = qk_ops.q6k_gemm_kernel
+      out = partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
+        fxn=kernel(spec.n, spec.k, spec.m, parts, opts, name=spec.q6k_kernel_prefix))[0]
   return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
 
 
