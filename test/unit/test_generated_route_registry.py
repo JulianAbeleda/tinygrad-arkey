@@ -5,7 +5,7 @@ from extra.qk import route_manifest
 
 
 SEEDED = ("decode_q4k_g3_generated", "decode_q6k_coop_generated", "prefill_q4k_direct_tile4x4_default",
-          "prefill_q6k_direct_generated")
+          "prefill_q4k_reduce_out_research", "prefill_q6k_direct_generated")
 REQUIRED_L3_FIELDS = {
   "route_id",
   "descriptor_artifact",
@@ -33,6 +33,7 @@ def test_generated_route_registry_contains_positive_controls():
   assert by_route["decode_q4k_g3_generated"]["route_id"] == "decode_q4k_g3_generated"
   assert by_route["decode_q6k_coop_generated"]["route_id"] == "decode_q6k_coop_generated"
   assert by_route["prefill_q4k_direct_tile4x4_default"]["route_id"] == "prefill_q4k_direct_tile4x4_default"
+  assert by_route["prefill_q4k_reduce_out_research"]["route_id"] == "prefill_q4k_reduce_out_research"
   assert by_route["prefill_q6k_direct_generated"]["route_id"] == "prefill_q6k_direct_generated"
 
 

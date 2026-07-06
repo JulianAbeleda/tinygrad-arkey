@@ -39,11 +39,11 @@ def test_route_rows_expose_expected_kernel_bindings_for_generated_and_handwritte
   assert route_row["expected_kernel_patterns"] == reg_row["emitted_kernel_patterns"]
   assert route_row["has_expected_kernel_binding"] is True
 
-  handwritten_route = "prefill_q4k_reduce_out_research"
-  manifest_row = audit.route_manifest.ROUTES[handwritten_route]
-  handwritten_surface_row = audit.route_surface_row(handwritten_route)
-  assert handwritten_surface_row["expected_kernel_patterns"] == list(manifest_row["expected_kernels"])
-  assert handwritten_surface_row["has_expected_kernel_binding"] is True
+  generated_research_route = "prefill_q4k_reduce_out_research"
+  manifest_row = audit.route_manifest.ROUTES[generated_research_route]
+  generated_surface_row = audit.route_surface_row(generated_research_route)
+  assert generated_surface_row["expected_kernel_patterns"] == list(manifest_row["expected_kernels"])
+  assert generated_surface_row["has_expected_kernel_binding"] is True
 
 
 def test_routes_without_expected_kernels_get_empty_binding_fields():

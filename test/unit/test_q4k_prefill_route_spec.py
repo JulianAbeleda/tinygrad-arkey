@@ -48,6 +48,8 @@ def test_describe_q4k_packed_prefill_rejects_direct_out_parts():
   from extra.qk.q4k_prefill_route_spec import describe_q4k_packed_prefill
   with pytest.raises(ValueError, match="direct_out output_layout requires parts==1"):
     describe_q4k_packed_prefill(128, 256, 32, parts=2, output_layout="direct_out")
+  with pytest.raises(ValueError, match="reduce_out output_layout requires parts==1"):
+    describe_q4k_packed_prefill(128, 256, 32, parts=2, output_layout="reduce_out")
 
 
 def test_describe_q4k_packed_prefill_rejects_bad_k():
@@ -77,4 +79,12 @@ def test_emit_q4k_packed_prefill_kernel_partials():
   spec = describe_q4k_packed_prefill(4, 256, 8, parts=2, output_layout="partials")
   partials, words, x = _partials_placeholders(spec)
   uops = emit_q4k_packed_prefill_kernel(spec)(partials, words, x)
+  assert uops.arg.name == spec.kernel_name
+
+
+def test_emit_q4k_packed_prefill_kernel_reduce_out():
+  from extra.qk.q4k_prefill_route_spec import describe_q4k_packed_prefill, emit_q4k_packed_prefill_kernel
+  spec = describe_q4k_packed_prefill(4, 256, 8, output_layout="reduce_out")
+  out, words, x = _direct_out_placeholders(spec)
+  uops = emit_q4k_packed_prefill_kernel(spec)(out, words, x)
   assert uops.arg.name == spec.kernel_name

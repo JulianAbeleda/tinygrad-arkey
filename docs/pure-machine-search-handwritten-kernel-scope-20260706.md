@@ -247,8 +247,9 @@ Why non-pure or provisional:
 - `q4_k_gemv_primitive.py` templates are hand-authored UOp custom kernels.
 - `prefill_q4k_direct_tile4x4_default` is descriptor-owned through `Q4KPrefillRouteSpec`; the old packed-load helpers
   remain as helper grammar/legacy debug surfaces, not the default route-local binding.
-- `prefill_q4k_reduce_out_research` remains manifest debt. The old `PREFILL_Q4K_Q8=sdot4/mmq/mmq_direct` routes were
-  removed 2026-07-06; any remaining helper symbols are historical/non-default fixture debt, not valid route envs.
+- `prefill_q4k_reduce_out_research` is non-default research, but now descriptor-owned through `Q4KPrefillRouteSpec`.
+  The old `PREFILL_Q4K_Q8=sdot4/mmq/mmq_direct` routes were removed 2026-07-06; any remaining helper symbols are
+  historical/non-default fixture debt, not valid route envs.
 - `emit_q4k_packed_prefill_tile` is descriptor-shaped, but it still shares hand-authored Q4_K UOp helper topology; it
   should remain research until generated-only provenance is proved.
 
@@ -282,7 +283,7 @@ Gameplan:
    - final fused MMQ/WMMA only if it beats direct-packed.
 5. Keep default manifest authority aligned:
    - `prefill_q4k_direct_tile4x4_default` is `machine_authored_generated`,
-   - `prefill_q4k_reduce_out_research` remains separate hand-authored research debt,
+  - `prefill_q4k_reduce_out_research` remains separate descriptor-owned research,
    - old direct-packed templates become rollback/debug helpers or are deleted when no longer needed.
 
 Done means:
@@ -832,7 +833,7 @@ Tasks:
 Acceptance:
 
 - Q4_K/Q6_K prefill defaults are generated-only and route-bound.
-- `prefill_q4k_reduce_out_research` is still explicit non-default research debt.
+- `prefill_q4k_reduce_out_research` is explicit non-default descriptor-owned research.
 
 ### Phase 4: Attention Provenance Closure
 

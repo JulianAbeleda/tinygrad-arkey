@@ -163,7 +163,7 @@ Actions:
 ### Phase 2: Direct-Packed Q4_K/Q6_K Prefill
 
 Goal: replace direct-packed prefill custom UOp templates. Q4_K and Q6_K direct-packed defaults are completed by
-`Q4KPrefillRouteSpec` and `Q6KPrefillRouteSpec`; Q4_K reduce-out and generated-tile research remain active debt.
+`Q4KPrefillRouteSpec` and `Q6KPrefillRouteSpec`; Q4_K generated-tile research remains active debt.
 
 Target:
 

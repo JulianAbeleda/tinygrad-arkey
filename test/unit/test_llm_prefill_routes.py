@@ -279,22 +279,23 @@ def test_q4_direct_packed_prefill_partials_use_generated_descriptor(monkeypatch)
   assert calls[0][2]["output_layout"] == "partials"
 
 
-def test_q4_reduce_out_stays_on_research_kernel(monkeypatch):
+def test_q4_reduce_out_uses_generated_descriptor(monkeypatch):
   from tinygrad.llm import prefill_routes
 
   os.environ["PREFILL_Q4K_REDUCE_OUT"] = "1"
   monkeypatch.setattr(prefill_routes, "Tensor", _TensorFactoryStub)
-  monkeypatch.setattr(prefill_routes.qk_ops, "describe_q4k_packed_prefill_generated", lambda *_args, **_kwargs: (_ for _ in ()).throw(
-    AssertionError("reduce_out research path must not use Q4KPrefillRouteSpec until it owns reduce semantics")))
+  monkeypatch.setattr(prefill_routes.qk_ops, "q4k_gemm_packed_load_reduce_out_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
+    AssertionError("Q4_K reduce_out should use Q4KPrefillRouteSpec")))
   calls = []
-  def reduce_kernel(*args, **kwargs):
-    calls.append(("reduce", args, kwargs))
-    return "reduce-kernel"
-  monkeypatch.setattr(prefill_routes.qk_ops, "q4k_gemm_packed_load_reduce_out_kernel", reduce_kernel)
+  def describe(*args, **kwargs):
+    calls.append(("describe", args, kwargs))
+    return SimpleNamespace(output_layout=kwargs["output_layout"])
+  monkeypatch.setattr(prefill_routes.qk_ops, "describe_q4k_packed_prefill_generated", describe)
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_packed_prefill_kernel", lambda spec: ("generated", spec.output_layout))
 
   out = prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), _PrefillTensorStub())
   assert isinstance(out, _PrefillTensorStub)
-  assert calls
+  assert calls[0][2]["output_layout"] == "reduce_out"
 
 
 def test_q6_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):
