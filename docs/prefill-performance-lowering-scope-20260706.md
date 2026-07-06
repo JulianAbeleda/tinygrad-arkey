@@ -98,6 +98,10 @@ Machine-readable rows for this scope are in:
 - `extra/qk/prefill_performance_lowering_registry.py`
 - `extra/qk/prefill_performance_lowering_report.py`
 
+The Spark execution plan for clearing every non-promotion blocker is:
+
+- `docs/prefill-lowering-spark-orchestration-100pct-20260706.md`
+
 Run:
 
 ```sh
