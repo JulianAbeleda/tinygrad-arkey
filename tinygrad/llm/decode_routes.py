@@ -80,15 +80,8 @@ def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
     return out.sum(axis=2).transpose(0, 1).reshape(1, K, linear.out_features)
   x_vec = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float16).contiguous()
 
-  if getenv("Q6K_GEMV_WARP_DOWN") and linear.parts == 1 and linear.out_features == 4096 and linear.in_features == 12288 \
-     and (linear.in_features // 256) % 2 == 0 and arch_ok:
-    try:
-      out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-      got = out.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec,
-                              fxn=qk_ops.q6k_gemv_warp_kernel(linear.out_features, linear.in_features))[0]
-      return got.reshape(1, 1, linear.out_features)
-    except Exception as e:
-      if getenv("DEBUG", 0): print(f"Q6K_GEMV_WARP down fallback: {e}")
+  # No backups: the Q6K_GEMV_WARP_DOWN handwritten warp rollback was deleted 2026-07-06. Generated Q6_K decode
+  # (q6k_spec_for_role + emit_q6k_gemv_kernel) is unconditional below.
   rt = getenv("Q6K_COOP_RT", 4)
   use_coop = linear.parts == 1 and linear.out_features % rt == 0 and (
     (getenv("Q6K_LM_HEAD_COOP", 1) and linear.out_features >= 100000) or
