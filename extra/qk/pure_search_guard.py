@@ -35,8 +35,8 @@ HOT_FAMILIES = [
    "rollback_active": lambda e: False},
   {"family": "prefill_gemm", "generated": "prefill_pipe_role_selective_generated", "oracle": "prefill_pipe_role_selective_generated",
    "rollback_active": lambda e: False},
-  # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is a hand-authored UOp template and
-  # the opt-in PREFILL_Q4K_WMMA_FUSED route is raw-ISA WMMA -> both impure until the generated MMQ/WMMA substrate lands.
+  # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is descriptor-owned; the opt-in
+  # PREFILL_Q4K_WMMA_FUSED route remains raw-ISA WMMA and is not selected here.
   {"family": "prefill_q4k", "generated": "prefill_q4k_direct_tile4x4_default", "oracle": "prefill_q4k_direct_tile4x4_default",
    "rollback_active": lambda e: False},
   # attention: 8B long-context decode now defaults to the generated live-split + fused-combine + KV_BOTH route. The

@@ -162,8 +162,8 @@ Actions:
 
 ### Phase 2: Direct-Packed Q4_K/Q6_K Prefill
 
-Goal: replace direct-packed prefill custom UOp templates. Q6_K direct-packed prefill is completed by
-`Q6KPrefillRouteSpec`; Q4_K remains active debt.
+Goal: replace direct-packed prefill custom UOp templates. Q4_K and Q6_K direct-packed defaults are completed by
+`Q4KPrefillRouteSpec` and `Q6KPrefillRouteSpec`; Q4_K reduce-out and generated-tile research remain active debt.
 
 Target:
 
@@ -171,9 +171,7 @@ Target:
 
 Actions:
 
-- Keep Q6_K default bound to `prefill_q6k_direct_generated` / `Q6KPrefillRouteSpec`, with no unmanifested runtime
-  surface row.
-- Create reusable packed-quant prefill descriptors for Q4_K.
+- Keep Q4_K/Q6_K defaults bound to descriptor-owned generated routes, with no unmanifested runtime surface rows.
 - Move block layout, scale/min handling, tile geometry, lane ownership, and reduction shape into descriptor fields.
 - Lower descriptors through shared generated UOp/codegen path.
 - Retain hand route as rollback until generated path passes correctness and timing.

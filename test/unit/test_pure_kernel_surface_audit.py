@@ -18,7 +18,7 @@ def test_strict_surface_audit_flags_default_blockers():
 def test_route_surface_rows_classify_known_surfaces():
   assert audit.route_surface_row("decode_q4k_g3_generated")["strict_pure"] is True
   assert audit.route_surface_row("decode_q6k_coop_generated")["strict_pure"] is True
-  assert audit.route_surface_row("prefill_q4k_direct_tile4x4_default")["surface_class"] == "route_local_custom_kernel"
+  assert audit.route_surface_row("prefill_q4k_direct_tile4x4_default")["surface_class"] == "descriptor_owned_uop_codegen"
   assert "Ops.INS" in audit.route_surface_row("prefill_pipe_role_selective_generated")["markers"]["extra/qk/prefill_graph_gemm_route.py"]
 
 
@@ -39,7 +39,7 @@ def test_route_rows_expose_expected_kernel_bindings_for_generated_and_handwritte
   assert route_row["expected_kernel_patterns"] == reg_row["emitted_kernel_patterns"]
   assert route_row["has_expected_kernel_binding"] is True
 
-  handwritten_route = "prefill_q4k_direct_tile4x4_default"
+  handwritten_route = "prefill_q4k_reduce_out_research"
   manifest_row = audit.route_manifest.ROUTES[handwritten_route]
   handwritten_surface_row = audit.route_surface_row(handwritten_route)
   assert handwritten_surface_row["expected_kernel_patterns"] == list(manifest_row["expected_kernels"])

@@ -240,18 +240,30 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
       raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "
                          f"modes were deleted 2026-07-06. Only 'wmma'/'wmma_tiled' (generated) or off-values are valid.")
     else:
-      kernel = qk_ops.q4k_gemm_packed_load_kernel if bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)) else qk_ops.q4k_gemm_kernel
-      if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) and bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)):
-        out_kernel = qk_ops.q4k_gemm_packed_load_reduce_out_kernel if bool(_env("PREFILL_Q4K_REDUCE_OUT", 0)) \
-          else qk_ops.q4k_gemm_packed_load_direct_out_kernel
-        out_name = "prefill_q4k_direct_packed_load_reduce_out_gemm" if bool(_env("PREFILL_Q4K_REDUCE_OUT", 0)) \
-          else "prefill_q4k_direct_packed_load_direct_out_gemm"
-        out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-          words, x_batch.reshape(spec.m * spec.k),
-          fxn=out_kernel(spec.n, spec.k, spec.m, "prefill", opts, name=out_name))[0]
-        return out.reshape(1, spec.m, spec.n)
-      out = partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
-        fxn=kernel(spec.n, spec.k, spec.m, parts, "prefill", opts, name=spec.q4k_kernel_prefix))[0]
+      if bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)) and not bool(_env("PREFILL_Q4K_REDUCE_OUT", 0)):
+        output_layout = "direct_out" if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) else "partials"
+        q4_spec = qk_ops.describe_q4k_packed_prefill_generated(spec.n, spec.k, spec.m,
+                                                               role=_direct_packed_role(lin, spec), parts=parts,
+                                                               output_layout=output_layout, opts=opts)
+        if output_layout == "direct_out":
+          out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
+            words, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0]
+          return out.reshape(1, spec.m, spec.n)
+        out = partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
+          fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0]
+      else:
+        kernel = qk_ops.q4k_gemm_kernel
+        if bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)):
+          kernel = qk_ops.q4k_gemm_packed_load_kernel
+        if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) and bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)) and bool(_env("PREFILL_Q4K_REDUCE_OUT", 0)):
+          out_kernel = qk_ops.q4k_gemm_packed_load_reduce_out_kernel
+          out_name = "prefill_q4k_direct_packed_load_reduce_out_gemm"
+          out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
+            words, x_batch.reshape(spec.m * spec.k),
+            fxn=out_kernel(spec.n, spec.k, spec.m, "prefill", opts, name=out_name))[0]
+          return out.reshape(1, spec.m, spec.n)
+        out = partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
+          fxn=kernel(spec.n, spec.k, spec.m, parts, "prefill", opts, name=spec.q4k_kernel_prefix))[0]
   else:
     halfs = lin.prefill_packed_weight().to(x.device)
     partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)

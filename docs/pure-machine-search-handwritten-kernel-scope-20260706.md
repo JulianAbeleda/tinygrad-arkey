@@ -245,7 +245,8 @@ Runtime functions:
 Why non-pure or provisional:
 
 - `q4_k_gemv_primitive.py` templates are hand-authored UOp custom kernels.
-- `prefill_q4k_direct_tile4x4_default` is explicitly manifest debt: `hand_authored_uop_template`.
+- `prefill_q4k_direct_tile4x4_default` is descriptor-owned through `Q4KPrefillRouteSpec`; the old packed-load helpers
+  remain as helper grammar/legacy debug surfaces, not the default route-local binding.
 - `prefill_q4k_reduce_out_research` remains manifest debt. The old `PREFILL_Q4K_Q8=sdot4/mmq/mmq_direct` routes were
   removed 2026-07-06; any remaining helper symbols are historical/non-default fixture debt, not valid route envs.
 - `emit_q4k_packed_prefill_tile` is descriptor-shaped, but it still shares hand-authored Q4_K UOp helper topology; it
@@ -253,7 +254,7 @@ Why non-pure or provisional:
 
 Runtime reachability:
 
-- Default memory-safe Q4_K prefill routes through direct-packed templates when resident fp16 is unavailable or not chosen.
+- Default memory-safe Q4_K prefill routes through `Q4KPrefillRouteSpec` when resident fp16 is unavailable or not chosen.
 - Generated Q4_K/Q8_1 research modes are selected by `PREFILL_Q4K_Q8=wmma|wmma_tiled`; legacy scalar/MMQ values are
   rejected.
 - Generated packed tile is selected by `PREFILL_QK_GENERATED_TILE=1`.
@@ -279,10 +280,10 @@ Gameplan:
    - reduce-out correctness foundation,
    - generated tile/direct-warp if it beats current default,
    - final fused MMQ/WMMA only if it beats direct-packed.
-5. Update manifest only after authority:
-   - `prefill_q4k_direct_tile4x4_default` leaves default,
-   - replacement route has `machine_authored_generated`,
-   - old direct-packed templates become rollback or deleted.
+5. Keep default manifest authority aligned:
+   - `prefill_q4k_direct_tile4x4_default` is `machine_authored_generated`,
+   - `prefill_q4k_reduce_out_research` remains separate hand-authored research debt,
+   - old direct-packed templates become rollback/debug helpers or are deleted when no longer needed.
 
 Done means:
 
@@ -607,8 +608,8 @@ This is the implementation backlog to convert every runtime-relevant handwritten
 |---|---|---|---|---|---|
 | `prefill_fp16_wmma_codegen` | `build_gemm_pipe`, `build_gemm_lds2`, `route_pf16_graph_gemm` | `PrefillWMMAScheduleSpec -> generated UOps/Tensor graph` | LDS allocation, cooperative stores/loads, barriers, WMMA from codegen, wait lowering | single role fp16 parity + no `Ops.INS` | whole-prefill W==D + throughput near raw-ISA decider |
 | `prefill_q4k_fused_codegen` | `build_gemm_lds2_q4k`, `route_q4k_graph_gemm` | `Q4KPrefillFusedSpec -> generated dequant-to-LDS + WMMA` | Q4_K unpack/dequant lowering, LDS staging, WMMA tile scheduler | ffn_gate_up correctness + no raw markers | 14B pp512 beats direct-packed baseline |
-| `prefill_q4k_direct_codegen` | `q4k_gemm_packed_load_*`, `q4k_q8_1_*` templates | `Q4KPrefillTileSpec/Q4KMMQSpec -> generated UOps or Tensor graph` | packed nibble decode, grouped reductions, direct output, optional dot4 lowering | direct-packed parity on role shapes | replaces `prefill_q4k_direct_tile4x4_default` |
-| `prefill_q6k_direct_codegen` | `q6k_gemm_packed_load_*` templates | `Q6KPrefillRouteSpec -> generated UOps` | Q6_K block decode, token tiling, direct output | Q6 prefill parity | Q6 prefill W==D |
+| `prefill_q4k_direct_codegen` | `q4k_gemm_packed_load_*`, `q4k_q8_1_*` templates | `Q4KPrefillRouteSpec -> generated UOps` | packed nibble decode, grouped reductions, direct output | direct-packed parity on route shapes | closed for default; reduce-out research remains |
+| `prefill_q6k_direct_codegen` | `q6k_gemm_packed_load_*` templates | `Q6KPrefillRouteSpec -> generated UOps` | Q6_K block decode, token tiling, direct output | Q6 prefill parity | closed for default |
 | `smallk_primitive_codegen` | `q4k_gemm_kernel`, `q6k_gemm_kernel` small-K runtime paths | `Q4KSmallBatchGEMMSpec`, `Q6KSmallBatchGEMMSpec` | small token-axis tiling, generated packed decode reductions | K<=32 parity | pure-mode allowed small-batch route |
 | `decode_q4k_cleanup` | `q4k_gemv_warp`, `q4k_coop_partial`, lane partition rollback | hardened `Q4KGateUpLaneMap/G3` + optional split/combine specs | descriptor audit, split-K/in-kernel combine codegen | generated-only G3 audit | rollback-only or delete owned templates |
 | `decode_q6k_cleanup` | `q6k_*` shipped rollback templates | existing `Q6KGEMVRouteSpec` plus coverage | existing generated UOp emitter | generated/rollback byte identity | delete or quarantine refuted direct route |
@@ -830,8 +831,8 @@ Tasks:
 
 Acceptance:
 
-- `prefill_q4k_direct_tile4x4_default` is no longer a default.
 - Q4_K/Q6_K prefill defaults are generated-only and route-bound.
+- `prefill_q4k_reduce_out_research` is still explicit non-default research debt.
 
 ### Phase 4: Attention Provenance Closure
 

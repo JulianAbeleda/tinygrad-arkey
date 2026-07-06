@@ -19,6 +19,9 @@ def q4k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_direct_out_kernel")(*args, **kwargs)
 def q4k_gemm_packed_load_reduce_out_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_packed_load_reduce_out_kernel")(*args, **kwargs)
+def describe_q4k_packed_prefill_generated(*args, **kwargs): return _attr("extra.qk.q4k_prefill_route_spec", "describe_q4k_packed_prefill")(*args, **kwargs)
+def emit_q4k_packed_prefill_kernel(*args, **kwargs):
+  return _attr("extra.qk.q4k_prefill_route_spec", "emit_q4k_packed_prefill_kernel")(*args, **kwargs)
 def describe_q4k_int8_wmma_prefill(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "describe_q4k_int8_wmma_prefill")(*args, **kwargs)
 def describe_q4k_int8_wmma_tiled_prefill(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "describe_q4k_int8_wmma_tiled_prefill")(*args, **kwargs)
 def emit_q4k_int8_wmma_prefill_tensor(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_prefill_tensor")(*args, **kwargs)

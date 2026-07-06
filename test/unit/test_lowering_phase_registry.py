@@ -7,7 +7,6 @@ from extra.qk import route_manifest, runtime_surface_registry
 
 
 SEEDED = (
-  "prefill_q4k_direct_tile4x4_default",
   "prefill_q4k_reduce_out_research",
   "prefill_q4k_generated_tile_research",
   "decode_flash_live_split_g4_8b_kvboth",
@@ -45,7 +44,7 @@ def test_lowering_phase_registry_build_is_json_serializable():
   assert report["total_rows"] == len(SEEDED)
   assert set(report["by_level"].keys()) <= {"L3", "L4", "L5"}
   assert set(report["by_phase"].keys()) == {2, 3, 4, 5}
-  assert report["by_phase"][2] == 3
+  assert report["by_phase"][2] == 2
   assert report["by_phase"][3] == 2
   assert report["by_phase"][4] == 1
   assert report["by_phase"][5] == 1

@@ -37,7 +37,7 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert route_provenance("prefill_q6k_direct_generated") == "machine_authored_generated"
   assert route_provenance("prefill_pipe_role_selective_generated") == "external_handwritten_kernel"
   assert set(report["transitional_default_routes"]) == {
-    "decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth", "prefill_q4k_direct_tile4x4_default"}
+    "decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth"}
   assert set(report["forbidden_default_routes"]) == {"prefill_pipe_role_selective_generated"}
 
 
@@ -59,8 +59,8 @@ def test_default_path_census_uses_manifest_provenance():
   assert by_route["prefill_pipe_role_selective_generated"]["provenance"] == "external_handwritten_kernel"
   assert by_route["prefill_pipe_role_selective_generated"]["final_default_allowed"] is False
   assert "prefill_pipe_role_selective_default" not in by_route
-  assert by_route["prefill_q4k_direct_tile4x4_default"]["provenance"] == "hand_authored_uop_template"
-  assert by_route["prefill_q4k_direct_tile4x4_default"]["final_default_allowed"] is False
+  assert by_route["prefill_q4k_direct_tile4x4_default"]["provenance"] == "machine_authored_generated"
+  assert by_route["prefill_q4k_direct_tile4x4_default"]["final_default_allowed"] is True
 
 
 def test_qk_route_policy_selects_g5_by_shape(tmp_path):

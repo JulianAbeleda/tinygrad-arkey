@@ -22,23 +22,22 @@
     "of_which_search_generated": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
+      "prefill_q4k_direct_tile4x4_default",
       "prefill_q6k_direct_generated"
     ],
     "of_which_final_purity_debt": [
       "decode_flash_live_split_g4_8b_kvboth",
       "decode_flash_block_tile_g5_konly",
-      "prefill_pipe_role_selective_generated",
-      "prefill_q4k_direct_tile4x4_default"
+      "prefill_pipe_role_selective_generated"
     ],
     "of_which_transitional": [
       "decode_flash_live_split_g4_8b_kvboth",
-      "decode_flash_block_tile_g5_konly",
-      "prefill_q4k_direct_tile4x4_default"
+      "decode_flash_block_tile_g5_konly"
     ],
     "of_which_forbidden_final_default": [
       "prefill_pipe_role_selective_generated"
     ],
-    "interpretation": "7 kernels on the default path are non-tinygrad-generated. 3 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, prefill_q6k_direct_generated); 4 are final-default purity debt (decode_flash_live_split_g4_8b_kvboth, decode_flash_block_tile_g5_konly, prefill_pipe_role_selective_generated, prefill_q4k_direct_tile4x4_default). Everything else in the model is tinygrad_scheduler-generated."
+    "interpretation": "7 kernels on the default path are non-tinygrad-generated. 4 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, prefill_q4k_direct_tile4x4_default, prefill_q6k_direct_generated); 3 are final-default purity debt (decode_flash_live_split_g4_8b_kvboth, decode_flash_block_tile_g5_konly, prefill_pipe_role_selective_generated). Everything else in the model is tinygrad_scheduler-generated."
   },
   "purity_report": {
     "verdict": "TINYGRAD_DEFAULT_PURITY_FAIL",
@@ -90,9 +89,9 @@
       {
         "route_id": "prefill_q4k_direct_tile4x4_default",
         "status": "promoted_default",
-        "provenance": "hand_authored_uop_template",
-        "replacement_scope": "14B/32B Q4_K prefill needs a generated quantized MMQ substrate that fuses dequant and matmul; this direct-packed UOp template is only the memory-safe interim route.",
-        "final_default_allowed": false
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
       },
       {
         "route_id": "prefill_q6k_direct_generated",
@@ -107,8 +106,7 @@
     ],
     "transitional_default_routes": [
       "decode_flash_live_split_g4_8b_kvboth",
-      "decode_flash_block_tile_g5_konly",
-      "prefill_q4k_direct_tile4x4_default"
+      "decode_flash_block_tile_g5_konly"
     ],
     "final_default_allowed_provenance": [
       "machine_authored_generated",
@@ -222,19 +220,19 @@
       "role": "ffn_gate_up,attn_qo,ffn_down,attn_kv",
       "quant": "Q4_K",
       "shape_guard": "direct-packed Q4_K prefill, memory-safe 14B/32B route",
-      "writer": "hand_authored_uop_template",
+      "writer": "generated",
       "selector": "env_default",
-      "route_guard": "tinygrad/llm/prefill_routes.py _direct_packed_opts default Q4_K schedule LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4",
-      "kernel_source": "extra/qk/quant/q4_k_gemv_primitive.py q4k_gemm_packed_load_direct_out_kernel",
+      "route_guard": "tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts selects LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4",
+      "kernel_source": "extra/qk/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel (spec-driven lowering of Q4KPrefillRouteSpec -> q4k_gen_prefill_direct_out_* / q4k_gen_prefill_partials_*)",
       "authority_artifact": "docs/prefill-packed-generated-tile-scope-20260704.md",
       "rollback_flag": "PREFILL_Q4K_DIRECT_SCHEDULE=legacy",
-      "purity_status": "search_selected_specialized_route",
-      "next_action": "replace with generated quantized MMQ substrate; not part of 8B fp16 graph-GEMM closure",
+      "purity_status": "search_generated_promoted",
+      "next_action": "keep generated descriptor binding; Q4_K int8-WMMA remains a separate research substrate, not the shipped default",
       "current_default": true,
       "in_manifest": true,
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "14B/32B Q4_K prefill needs a generated quantized MMQ substrate that fuses dequant and matmul; this direct-packed UOp template is only the memory-safe interim route.",
-      "final_default_allowed": false
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "prefill_q6k_direct_generated",
@@ -384,19 +382,19 @@
       "role": "ffn_gate_up,attn_qo,ffn_down,attn_kv",
       "quant": "Q4_K",
       "shape_guard": "direct-packed Q4_K prefill, memory-safe 14B/32B route",
-      "writer": "hand_authored_uop_template",
+      "writer": "generated",
       "selector": "env_default",
-      "route_guard": "tinygrad/llm/prefill_routes.py _direct_packed_opts default Q4_K schedule LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4",
-      "kernel_source": "extra/qk/quant/q4_k_gemv_primitive.py q4k_gemm_packed_load_direct_out_kernel",
+      "route_guard": "tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts selects LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4",
+      "kernel_source": "extra/qk/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel (spec-driven lowering of Q4KPrefillRouteSpec -> q4k_gen_prefill_direct_out_* / q4k_gen_prefill_partials_*)",
       "authority_artifact": "docs/prefill-packed-generated-tile-scope-20260704.md",
       "rollback_flag": "PREFILL_Q4K_DIRECT_SCHEDULE=legacy",
-      "purity_status": "search_selected_specialized_route",
-      "next_action": "replace with generated quantized MMQ substrate; not part of 8B fp16 graph-GEMM closure",
+      "purity_status": "search_generated_promoted",
+      "next_action": "keep generated descriptor binding; Q4_K int8-WMMA remains a separate research substrate, not the shipped default",
       "current_default": true,
       "in_manifest": true,
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "14B/32B Q4_K prefill needs a generated quantized MMQ substrate that fuses dequant and matmul; this direct-packed UOp template is only the memory-safe interim route.",
-      "final_default_allowed": false
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "prefill_q6k_direct_generated",
