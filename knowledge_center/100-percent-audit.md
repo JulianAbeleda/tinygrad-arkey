@@ -40,7 +40,8 @@ You have static replay but still launch N kernels/token. Fuse decode into ~1 per
 producer/consumer, pipelined). Uniquely: **search** it with BubbleBeam rather than hand-write. Big batch-1 latency win;
 does NOT fix prefill compute.
 Done when: decode step replays as ~1 launch/token, latency measured below the multi-launch baseline.
-Refs: Hazy Research "No Bubbles"; Mirage (MPK); AMD MI300X single-kernel engine (kog.ai); AutoMegaKernel.
+**Scope:** `docs/generated-megakernel-decode-scope-20260706.md` (generated-only, reuses substrate, phased).
+Refs: Hazy Research "No Bubbles"; Mirage (MPK); ETC dynamic megakernel; Ada-MK searched megakernel; AMD MI300X monokernel.
 
 ### [ ] 4. AOT serialize + tiny runner  (axis C — the smallest-shipped-thing unlock)
 Capture exists (TinyJit); persist does not. First: the **serialize-a-captured-HCQ-graph-and-replay-it-in-a-fresh-process
