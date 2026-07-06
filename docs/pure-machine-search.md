@@ -69,7 +69,7 @@ route-local kernel directly emits a source string or instruction list to force i
 |---|---|---|
 | `decode_q4k_g3_generated` | `machine_authored_generated` | Generated G3 LaneMap route selected by policy and lowered from route/search descriptors. |
 | `decode_q6k_coop_generated` | `machine_authored_generated` | Spec-driven Q6_K route emitted from `Q6KGEMVRouteSpec`. |
-| `decode_attention_generic_flash_generated` | `tinygrad_scheduler_generated` | Generic tinygrad flash fallback. |
+| `decode_attention_generic_flash_generated` | not pure under this strict implementation rule until descriptor ownership is proven | The fallback route still executes hand-authored flash `Tensor.custom_kernel` UOp templates; it should not be treated as ordinary tinygrad scheduler output without a generated binding proof. |
 | `prefill_pipe_role_selective_generated` | not pure under this strict implementation rule while it lowers through raw `Ops.INS` | The schedule is spec-selected, but the executing implementation still uses `extra/qk/prefill/wmma.py` instruction-list emitters. This is generated schedule selection over a handwritten substrate, not final pure machine search. |
 | `prefill_q4k_direct_tile4x4_default` | `hand_authored_uop_template` | Human-authored Q4_K direct-packed UOp template; explicit transitional debt. |
 | `prefill_q4k_mmq_direct_out_research` | `hand_authored_uop_template` | Human-authored UOp MMQ direct-output route. |
