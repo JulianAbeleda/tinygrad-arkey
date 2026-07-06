@@ -365,6 +365,10 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "blockers": [],
     "reuse_files": [
       "extra/qk/prefill_int8_wmma_spec.py",
+      "extra/qk/q4k_wmma_tiled_lifecycle_gate.py",
+      "extra/qk/q4k_wmma_tiled_microgate.py",
+      "extra/qk/q4k_wmma_tiled_surface_gate.py",
+      "extra/qk/q4k_wmma_tiled_lowering_feasibility.py",
       "docs/q4k-wmma-full-role-lowering-solution-scope-20260705.md",
       "bench/q4k-wmma-tiled-lifecycle/latest.json",
     ],
@@ -393,6 +397,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "extra/qk/route_manifest.py",
       "tinygrad/llm/generated_candidates.py",
       "extra/qk/q4k_wmma_tile_lowering.py",
+      "extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py",
+      "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py",
       "bench/q4k-wmma-tiled-role-shape-exec/latest.json",
     ],
     "gates": [

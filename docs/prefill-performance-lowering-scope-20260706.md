@@ -47,6 +47,7 @@ Two new gates narrow the remaining compiler work:
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands` | `PREFILL_GRAPH_GEMM_FP16_BOTH_OPERANDS_STAGE_PROBE_PASS` | A generated fp16 shaped-WMMA kernel can keep both A and B operands in `AddrSpace.LOCAL`, emit two local buffers plus barriers, match direct WMMA output, and avoid raw-marker strings. | It is still a tiny custom-kernel probe, not route-bound prefill execution, not cooperative partitioning, and not a performance gate. |
 | 8B route-bound default | `extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_ROUTE_BOUND_LOCAL_STAGE_MISSING` | The actual strict-pure `prefill_v2_scheduler_matmul_default` route executes, emits fp16 WMMA, and avoids raw `Ops.INS` markers. | It also proves the missing piece: the route-bound kernel does not yet emit generated shared local storage or barriers. |
 | 14B packed/MMQ recovery | `extra.qk.q4k_wmma_full_role_contract_gate` | `Q4K_WMMA_FULL_ROLE_CONTRACT_PASS` | The Q4_K/Q8_1 14B role geometry is centralized, bounded, uses the selected shaped-WMMA surface, and keeps tile-local RAW lifetime bounded to 256 elements. | It is structural only. Full-role execution is still blocked by the missing scheduler-owned tile loop. |
+| 14B packed/MMQ recovery | `extra.qk.q4k_wmma_tiled_lifecycle_gate` + `extra.qk.q4k_wmma_tiled_role_shape_exec_gate` | lifecycle pass; role-shape execution blocked | The deleted tiled gate sources have been restored against current APIs; the small generated lifecycle emits iu8 WMMA and stays bounded, while the role-shape gate records the real full-role blocker without falling back. | It still does not execute all 14B role shapes or beat the direct-packed ceiling. |
 
 Run:
 
@@ -57,6 +58,12 @@ PYTHONPATH=. python3 -m extra.qk.prefill_v2_schedule_table_gate --run-amd --pin-
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --compact
+PYTHONPATH=. python3 -m extra.qk.q4k_wmma_tiled_lifecycle_gate
+PYTHONPATH=. python3 - <<'PY'
+import json
+from extra.qk.q4k_wmma_tiled_role_shape_exec_gate import build
+print(json.dumps(build(), indent=2))
+PY
 PYTHONPATH=. python3 -m extra.qk.q4k_wmma_full_role_contract_gate --compact
 ```
 
@@ -67,6 +74,8 @@ The artifacts are:
 - `bench/prefill-graph-gemm-fp16-single-operand-stage/latest.json`
 - `bench/prefill-graph-gemm-fp16-both-operands-stage/latest.json`
 - `bench/prefill-graph-gemm-route-bound-stage/latest.json`
+- `bench/q4k-wmma-tiled-lifecycle/latest.json`
+- `bench/q4k-wmma-tiled-role-shape-exec/latest.json`
 - `bench/q4k-wmma-full-role-contract/latest.json`
 
 ## Tracking Scaffold
@@ -186,6 +195,9 @@ Use these; do not duplicate them:
   solution: B-only emitted shared local/barrier but was numerically wrong (`rel_rmse` about 1.22 on the 512x512x512
   route-bound probe), while A/both fell off the WMMA route. The route-bound gate now checks Numpy-reference error so this
   class of false positive cannot pass.
+- The Q4_K/Q8_1 tiled authority gate sources are restored and current-compatible. The small lifecycle gate passes on AMD,
+  while the role-shape gate writes the explicit `scheduler_owned_tile_loop_missing` blocker instead of classifying stale
+  artifacts as execution.
 
 ### What is missing
 
