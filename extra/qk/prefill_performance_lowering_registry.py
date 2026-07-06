@@ -111,6 +111,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "The fp16 prefill TC route can emit numerically correct generated A-operand LOCAL staging on the 512x512 route-bound diagnostic",
       "Representative warmstart-table shape now supports numerically correct B-operand tile-only post-WMMA staging, but A/both staging remain wrong",
       "No medium-shape performance win exists yet; B-tile staging is flat against the existing LOCAL table schedule",
+      "8B pp512 bounded whole-prefill smoke showed no win from B-tile staging (1699 tok/s vs 1744 tok/s baseline)",
     ],
     "reuse_files": [
       "docs/codegen-wmma-lds-staging-design-20260705.md",
