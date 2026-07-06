@@ -431,7 +431,13 @@ class HIPRenderer(CStyleLanguage):
     prefix += [f'extern "C" __attribute__((device{f", {atr}" if atr else ""})) {dto} {meth}({dti});' for meth,dti,dto,atr in ockl+ocml]
     prefix += [self.render_vector_prefix(dt) for dt in used_dtypes if dt.count > 1]
 
+    _seen_wmma: set[str] = set()
     for name, (N, M, K), dtype_in, dtype_out, _, _, _, _ in wmma_args(uops): # TODO: handle TCs f32_bf16 and bf16_bf16 w/ wrapper
+      # wmma_args dedups on the full arg tuple incl. upcast_axes (fresh range-ids per SHAPED_WMMA call), so multiple
+      # WMMA ops of the SAME type but different range-ids yield repeat entries -> the name-keyed helper/typedef would be
+      # emitted (and C-redefined) more than once. The helper body is fully determined by `name`, so dedup on it.
+      if name in _seen_wmma: continue
+      _seen_wmma.add(name)
       if self.is_cdna(self.target.arch):
         if (N, M, K) == (16, 16, 16): type_map[dtypes.bfloat16] = 'bf16_1k'
         elif (N, M, K) == (16, 16, 32): type_map = {**type_map, dtypes.bfloat16: "_bf16", dtypes.half: "_f16"}
