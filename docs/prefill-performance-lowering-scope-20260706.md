@@ -46,6 +46,7 @@ Two new gates narrow the remaining compiler work:
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_FP16_SINGLE_OPERAND_STAGE_PROBE_PASS` | A generated fp16 shaped-WMMA kernel can keep one operand in `AddrSpace.LOCAL` with `BufferizeOpts(..., removable=False)`, emit shared local storage plus a barrier, match the direct WMMA output, and avoid raw-marker strings. | It is a tiny fp16 substrate probe, not the fp16 prefill TC route, not a medium GEMM timing gate, not route-bound `Ops.INS` proof, and not 8B performance recovery. |
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands` | `PREFILL_GRAPH_GEMM_FP16_BOTH_OPERANDS_STAGE_PROBE_PASS` | A generated fp16 shaped-WMMA kernel can keep both A and B operands in `AddrSpace.LOCAL`, emit two local buffers plus barriers, match direct WMMA output, and avoid raw-marker strings. | It is still a tiny custom-kernel probe, not route-bound prefill execution, not cooperative partitioning, and not a performance gate. |
 | 8B route-bound default | `extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --local-stage a` | `PREFILL_GRAPH_GEMM_ROUTE_BOUND_LOCAL_STAGE_PASS` | The actual strict-pure `prefill_v2_scheduler_matmul_default` route can execute the 512³ diagnostic with generated A-operand LOCAL staging, fp16 WMMA, shared local storage, barrier, and no raw `Ops.INS` markers. | It is still a tiny route-bound diagnostic, not a medium warmstart schedule or 8B pp512 performance recovery. |
+| 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_tile_loop_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_TILE_LOOP_LOCAL_STAGE_PASS` | A generated fp16 shaped-WMMA kernel can stage a WMMA operand in `AddrSpace.LOCAL` inside an enclosing tile loop while keeping the `STAGE` index tile-shaped (`lane` only), emitting bounded LDS plus a barrier and matching the direct kernel. | It is still a custom-kernel substrate probe, not route-bound scheduler integration and not a medium GEMM timing gate. |
 | 8B medium warmstart staging | `extra.qk.prefill_graph_gemm_medium_stage_gate --run-amd --pin-clock` | `PREFILL_GRAPH_GEMM_MEDIUM_LOCAL_STAGE_BLOCKED` | The representative `4096x4096` warmstart `LOCAL:0:4` schedule is correct at about 35 TFLOPS, while forced final-WMMA A-staging is wrong, post-LOCAL final-WMMA staging compile-fails, and scalar-before-contract post staging also compile-fails. | It does not solve performance; it rules out final/scalar WMMA operand wrapping as the Route-B implementation path and points to tile-shaped cooperative staging before `STAGE`. |
 | 14B packed/MMQ recovery | `extra.qk.q4k_wmma_full_role_contract_gate` | `Q4K_WMMA_FULL_ROLE_CONTRACT_PASS` | The Q4_K/Q8_1 14B role geometry is centralized, bounded, uses the selected shaped-WMMA surface, and keeps tile-local RAW lifetime bounded to 256 elements. | It is structural only. Full-role execution is still blocked by the missing scheduler-owned tile loop. |
 | 14B packed/MMQ recovery | `extra.qk.q4k_wmma_tiled_lifecycle_gate` + `extra.qk.q4k_wmma_tiled_role_shape_exec_gate` | lifecycle pass; role-shape execution blocked | The deleted tiled gate sources have been restored against current APIs; the small generated lifecycle emits iu8 WMMA and stays bounded, while the role-shape gate records the real full-role blocker without falling back. | It still does not execute all 14B role shapes or beat the direct-packed ceiling. |
@@ -59,6 +60,7 @@ PYTHONPATH=. python3 -m extra.qk.prefill_v2_schedule_table_gate --run-amd --pin-
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --local-stage a --compact
+PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_tile_loop_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_medium_stage_gate --run-amd --pin-clock --compact
 PYTHONPATH=. python3 -m extra.qk.q4k_wmma_tiled_lifecycle_gate
 PYTHONPATH=. python3 - <<'PY'
@@ -76,6 +78,7 @@ The artifacts are:
 - `bench/prefill-graph-gemm-fp16-single-operand-stage/latest.json`
 - `bench/prefill-graph-gemm-fp16-both-operands-stage/latest.json`
 - `bench/prefill-graph-gemm-route-bound-stage/latest.json`
+- `bench/prefill-graph-gemm-tile-loop-stage/latest.json`
 - `bench/prefill-graph-gemm-medium-stage/latest.json`
 - `bench/q4k-wmma-tiled-lifecycle/latest.json`
 - `bench/q4k-wmma-tiled-role-shape-exec/latest.json`
@@ -194,6 +197,9 @@ Use these; do not duplicate them:
   graph-GEMM recovery.
 - The actual strict-pure default route is now pinned by a route-bound gate: with `PREFILL_TC_LOCAL_STAGE=a`, the 512³
   diagnostic emits fp16 WMMA with generated shared local storage and barriers, without raw `Ops.INS`.
+- A tile-loop staging gate now proves the key distinction needed after the medium-gate failure: keep the tile loop as
+  an enclosing loop and stage only the per-lane fragment shape. That emits bounded tile-local LDS instead of capturing
+  the whole GEMM/reduce shape in the `STAGE` buffer.
 - The medium warmstart gate now pins the next failure: final-WMMA operand staging does not compose with real
   `OptOps.LOCAL` schedules. Pre-WMMA forced staging aliases local output lanes and is numerically wrong; post-LOCAL
   final-WMMA staging creates an oversized/unfriendly generated kernel that COMGR rejects; scalar-before-contract post

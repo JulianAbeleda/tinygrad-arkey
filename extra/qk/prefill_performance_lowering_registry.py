@@ -120,10 +120,12 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "extra/qk/prefill_graph_gemm_single_operand_stage_gate.py",
       "extra/qk/prefill_graph_gemm_fp16_stage_gate.py",
       "extra/qk/prefill_graph_gemm_route_bound_stage_gate.py",
+      "extra/qk/prefill_graph_gemm_tile_loop_stage_gate.py",
       "extra/qk/prefill_graph_gemm_medium_stage_gate.py",
       "bench/prefill-graph-gemm-single-operand-stage/latest.json",
       "bench/prefill-graph-gemm-fp16-single-operand-stage/latest.json",
       "bench/prefill-graph-gemm-route-bound-stage/latest.json",
+      "bench/prefill-graph-gemm-tile-loop-stage/latest.json",
       "bench/prefill-graph-gemm-medium-stage/latest.json",
     ],
     "gates": [
@@ -131,6 +133,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "prefill_graph_gemm_fp16_single_operand_stage_gate",
       "prefill_graph_gemm_route_bound_no_raw_ops_ins_gate",
       "prefill_graph_gemm_route_bound_stage_gate",
+      "prefill_graph_gemm_tile_loop_stage_gate",
       "prefill_graph_gemm_medium_stage_gate",
     ],
     "success_criteria": [
@@ -138,6 +141,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "Generated AMD kernel shows shared local storage, barrier, and fp16 WMMA binding for the staged operand.",
       "Custom probe execution does not show raw Ops.INS or extra/qk/prefill/wmma.py markers.",
       "A separate fp16 route-bound gate must prove the actual prefill route can use generated staging.",
+      "A tile-loop gate must prove generated staging can remain tile-shaped inside an enclosing tile loop before scheduler integration.",
       "A medium-shape gate must prove staging composes with warmstart LOCAL schedules before this can be considered a performance route.",
       "Remaining integration step must make generated staging compose with warmstart LOCAL schedules and add medium-shape timing.",
     ],
