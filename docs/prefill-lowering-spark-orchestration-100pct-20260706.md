@@ -89,7 +89,6 @@ Current non-promotion active blockers from the registry:
 | Row | Owner | Current blocker |
 | --- | --- | --- |
 | `prefill_performance_target_1_fp16_recovery` | policy | Raw graph-GEMM is still the old fast substrate; generated replacement has not recovered performance. |
-| `prefill_performance_target_1_baseline` | policy | Representative AMD baselines need current authority evidence. |
 | `prefill_performance_target_1_single_operand_stage` | codegen | Medium B tile-only staging is flat; coop diagnostic skips the real rewrite because source B has non-lane ranges outside warp+reduce. |
 | `prefill_performance_target_1_both_operands_stage` | codegen | Both-source staging is only a custom probe; route-bound medium proof is missing. |
 | `prefill_performance_target_1_coop_partition` | scheduler | Route-bound coop executes but does not beat baseline; medium source-B shape is not owned by the coop rewrite. |

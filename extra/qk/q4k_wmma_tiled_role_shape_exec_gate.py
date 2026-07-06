@@ -171,7 +171,7 @@ def build(lifecycle: dict[str, Any] | None = None) -> dict[str, Any]:
   loop_contract = build_scheduler_owned_tile_loop_contract(role_specs, route_id="prefill_q4k_int8_wmma_tiled_research")
   rows = [_role_row(spec, lifecycle) for spec in role_specs]
   all_attempted = all(row["exec"]["attempted"] for row in rows)
-  any_numeric_ok = any(row["exec"].get("numeric_ok") for row in rows)
+  all_numeric_ok = all_attempted and all(bool(row["exec"].get("numeric_ok")) for row in rows)
   blocker = lifecycle["verdict"] == "Q4K_WMMA_TILED_LIFECYCLE_PASS" and loop_contract["required"]
   return {
     "schema": "q4k_wmma_tiled_role_shape_exec_gate.v1",
@@ -187,7 +187,7 @@ def build(lifecycle: dict[str, Any] | None = None) -> dict[str, Any]:
     "attempted_count": sum(1 if row["exec"]["attempted"] else 0 for row in rows),
     "executed_roles": [row["role"] for row in rows if row["exec"]["attempted"]],
     "classified_blocker": True,
-    "all_numeric_ok": all_attempted and any_numeric_ok,
+    "all_numeric_ok": all_numeric_ok,
     "blocker": "role execution is intentionally blocked until a scheduler-owned tile_m/tile_n/group loop is ownership-integrated",
     "distinction_from_classifier": (
       "q4k_wmma_tiled_role_shape enumerates/selects shapes; this gate executes bounded synthetic role-shape "

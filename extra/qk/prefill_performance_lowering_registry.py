@@ -74,7 +74,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_order": 1,
     "phase_name": "baseline",
     "owner_area": "policy",
-    "status": "in_progress",
+    "status": "done",
     "blockers": [
       "Latest current-baseline evidence is in-place: `bench/prefill-v2-schedule-table/latest.json` for warmstart schedule-table AMD pass, "
       "`bench/prefill-whole-synced/latest.json` carries the bounded strict-pure smoke pp512 value and route attribution."

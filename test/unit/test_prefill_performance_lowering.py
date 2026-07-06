@@ -1,5 +1,6 @@
 import json
 import pathlib
+import pytest
 
 from extra.qk import prefill_performance_lowering_registry as registry
 from extra.qk import prefill_performance_lowering_report as report
@@ -97,6 +98,11 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   assert filtered["target_count"] == 1
   assert filtered["scope_doc"] == registry.DOC_PATH
   assert all(r["target"] == "target_1" for r in filtered["rows"])
+
+
+def test_prefill_performance_report_rejects_unknown_target():
+  with pytest.raises(ValueError, match="unknown prefill performance target"):
+    report.build_prefill_performance_lowering_report("does_not_exist")
 
 
 def test_prefill_performance_report_pre_promotion_view_excludes_promotion_rows():

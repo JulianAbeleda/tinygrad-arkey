@@ -163,6 +163,9 @@ def build_prefill_performance_lowering_report(
   all_rows = registry.rows()
   rows = all_rows
   if target is not None:
+    valid_targets = sorted({row["target"] for row in all_rows})
+    if target not in valid_targets:
+      raise ValueError(f"unknown prefill performance target {target!r}; expected one of {valid_targets}")
     rows = [r for r in all_rows if r["target"] == target]
   rows = sorted(rows, key=_row_sort_key)
   promotion_rows = [r for r in rows if _is_promotion_row(r)]
