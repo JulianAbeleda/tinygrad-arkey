@@ -173,6 +173,10 @@ Use these; do not duplicate them:
   graph-GEMM recovery.
 - The actual strict-pure default route is now pinned by a route-bound gate: it emits fp16 WMMA without raw `Ops.INS`,
   but emits no shared local storage or barrier. That is the concrete failing gate for the next codegen integration step.
+- A naive postrange experiment that wrapped the TC operand `CONTRACT` in `bufferize(... AddrSpace.LOCAL ...)` is not the
+  solution: B-only emitted shared local/barrier but was numerically wrong (`rel_rmse` about 1.22 on the 512x512x512
+  route-bound probe), while A/both fell off the WMMA route. The route-bound gate now checks Numpy-reference error so this
+  class of false positive cannot pass.
 
 ### What is missing
 
