@@ -7,6 +7,8 @@ from the tracked tree; use git history for archaeology.
 
 - `../README.md` - repo purpose, current performance snapshot, and run commands.
 - `pure-machine-search.md` - project rule: generated/spec-driven routes are the target path.
+- `handwritten-kernel-exhaustive-lowering-scope-20260706.md` - exhaustive lowering scope for converting handwritten
+  route surfaces into pure tinygrad/codegen paths.
 - `pure-machine-search-roadmap.md` - current route/search roadmap and promotion rules.
 - `bubblebeam-futuresight-terminology-20260625.md` - naming and ownership terms.
 - `maintenance-cleanup-20260703.md` - cleanup decisions and removed surfaces.

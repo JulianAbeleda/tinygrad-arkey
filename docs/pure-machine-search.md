@@ -69,14 +69,14 @@ route-local kernel directly emits a source string or instruction list to force i
 |---|---|---|
 | `decode_q4k_g3_generated` | `machine_authored_generated` | Generated G3 LaneMap route selected by policy and lowered from route/search descriptors. |
 | `decode_q6k_coop_generated` | `machine_authored_generated` | Spec-driven Q6_K route emitted from `Q6KGEMVRouteSpec`. |
-| `decode_attention_generic_flash_generated` | not pure under this strict implementation rule until descriptor ownership is proven | The fallback route still executes hand-authored flash `Tensor.custom_kernel` UOp templates; it should not be treated as ordinary tinygrad scheduler output without a generated binding proof. |
+| `decode_flash_live_split_g4_8b_kvboth` | not pure under this strict implementation rule until descriptor ownership is proven | The selected route still executes hand-authored flash/live-split `Tensor.custom_kernel` UOp templates; it should not be treated as ordinary tinygrad scheduler output without a generated binding proof. |
 | `prefill_pipe_role_selective_generated` | not pure under this strict implementation rule while it lowers through raw `Ops.INS` | The schedule is spec-selected, but the executing implementation still uses `extra/qk/prefill/wmma.py` instruction-list emitters. This is generated schedule selection over a handwritten substrate, not final pure machine search. |
 | `prefill_q4k_direct_tile4x4_default` | `hand_authored_uop_template` | Human-authored Q4_K direct-packed UOp template; explicit transitional debt. |
 | `prefill_q4k_mmq_direct_out_research` | `hand_authored_uop_template` | Human-authored UOp MMQ direct-output route. |
 | `extra/qk/prefill/wmma.py` raw builders | `external_handwritten_kernel` | Explicit instruction-list emitter using RDNA3 instructions and `Ops.INS`. |
 | `route_q4k_graph_gemm` fused Q4_K WMMA path | `external_handwritten_kernel` | Calls `build_gemm_lds2_q4k` and wraps the emitted instruction list in `Ops.INS`. |
 | `native_isa_block_tile_graph_node.py` | `external_handwritten_kernel` for selected runtime use | Injects a precompiled native-ISA `Ops.BINARY` program into the HIP runtime. |
-| ~~`decode_q4k_owned_warp` / `decode_q6k_coop_shipped`~~ | — | Removed 2026-07-06 (no backups): rollback routes deleted; bubblebeam-off / generated-off now falls to the ordinary tinygrad graph. |
+| Retired handwritten decode rollback routes | — | Removed 2026-07-06 (no backups): bubblebeam-off / generated-off now falls to the ordinary tinygrad graph or no manifest kernel route. |
 
 ## Audit Rule
 

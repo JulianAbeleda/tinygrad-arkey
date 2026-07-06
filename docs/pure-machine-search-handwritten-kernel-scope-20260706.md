@@ -43,9 +43,9 @@ claim:
    reclassify the row as non-pure with `replacement_scope`.
 2. Q6_K direct-packed prefill is default-capable because `PREFILL_DIRECT_QUANTS` defaults to `Q4_K,Q6_K`, but the manifest
    debt row is Q4_K-specific. Add an explicit Q6_K direct-packed prefill row or broaden the direct-packed debt row.
-3. `decode_attention_generic_flash_generated` is not ordinary tinygrad scheduler output under the strict rule; it calls
-   hand-authored flash `Tensor.custom_kernel` UOp templates. Reclassify as hand-authored/unknown until descriptor proof
-   exists.
+3. Historical generic flash fallback rows were removed with the deleted `flash_decode` implementation. Any future
+   generic attention fallback must be reintroduced as ordinary graph or descriptor-owned generated codegen before it can
+   claim scheduler-generated provenance.
 4. Promoted live-split/block-tile attention routes must not rely on names alone. They need serialized
    `FlashDecodeTileSpec` / `LiveSplitGeometrySpec` / `FlashCombineSpec` artifacts and a generated-only binding gate, or
    they should be downgraded to `hand_authored_uop_template`.
@@ -455,10 +455,8 @@ Done means:
 Files:
 
 - `tinygrad/llm/decode_routes.py`
-- `extra/qk/flash_decode.py`
 - `extra/qk/flash_kernels.py`
 - `extra/qk/live_split_geometry.py`
-- `extra/qk/flash_decode_fused_combine.py`
 - `extra/qk/fdot2_lowering.py`
 - `extra/qk/amd_warp_reduce.py`
 
@@ -547,7 +545,7 @@ Done means:
 File:
 
 - `extra/qk/quant/q4_k_gemv_primitive.py`
-- `extra/qk/flash_decode.py`
+- `extra/qk/flash_kernels.py`
 
 Known functions/surfaces:
 
@@ -718,7 +716,7 @@ Steps:
 2. Define `FlashDecodeTileSpec`: split size, staging mode, score/PV fusion mode, lane/wave mapping.
 3. Define `LiveSplitGeometrySpec`: live-context split count, occupancy cap, ring-buffer behavior.
 4. Define `FlashCombineSpec`: state layout, gmax/lse combine, fused or staged combine.
-5. Refactor `flash_decode.py`, `flash_kernels.py`, and `live_split_geometry.py` so runtime selects specs and shared
+5. Refactor `flash_kernels.py` and `live_split_geometry.py` so runtime selects specs and shared
    emitters lower those specs.
 6. Add a generated provenance gate for 8B, 14B/G5, and 32B-style shapes.
 

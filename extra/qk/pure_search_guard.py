@@ -30,7 +30,7 @@ HOT_FAMILIES = [
   # ordinary tinygrad graph (pure), not a hand kernel. Generated G3 is the only Q4_K decode kernel route.
   {"family": "decode_q4k_gemv", "generated": "decode_q4k_g3_generated", "oracle": "decode_q4k_g3_generated",
    "rollback_active": lambda e: False},
-  # decode_q6k_coop_shipped rollback DELETED (no backups): generated Q6_K decode is now unconditional.
+  # Q6_K shipped hand-kernel rollback was deleted (no backups): generated Q6_K decode is now unconditional.
   {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_generated",
    "rollback_active": lambda e: False},
   {"family": "prefill_gemm", "generated": "prefill_pipe_role_selective_generated", "oracle": "prefill_pipe_role_selective_generated",
@@ -41,7 +41,7 @@ HOT_FAMILIES = [
    "rollback_active": lambda e: False},
   # attention: 8B long-context decode now defaults to the generated live-split + fused-combine + KV_BOTH route. The
   # only rollback here is to generic generated tinygrad flash decode; the retired owned HIP tile is not selected.
-  # decode_attention_generic_flash_generated oracle DELETED 2026-07-06 (no backups): the generic/whole-cache/fused
+  # Generic flash oracle deleted 2026-07-06 (no backups): the generic/whole-cache/fused
   # handwritten flash routes are gone; unsupported shapes fail loud. Generated live-split is the only kernel route.
   {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_flash_live_split_g4_8b_kvboth",
    "rollback_active": lambda e: False},

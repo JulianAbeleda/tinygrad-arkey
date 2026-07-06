@@ -98,11 +98,11 @@ ROUTES = {
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
     "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/qk/q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."},
-  # decode_q6k_coop_shipped + decode_q6k_direct_refuted rows REMOVED 2026-07-06 (no backups): their kernels
+  # Q6_K shipped/refuted hand-kernel rows REMOVED 2026-07-06 (no backups): their kernels
   # (q6k_coop_partial_kernel / q6k_gemv_partial_kernel / q6k_halfwarp_partition) were deleted in prior cuts, and the
   # DECODE_Q6K_GENERATED=0 / Q6K_DIRECT_ROUTE env rollbacks are gone. Generated Q6_K decode is the only kernel route.
   # ---------------- decode attention ----------------
-  # decode_attention_owned_two_kernel row REMOVED 2026-07-06 (no backups): retired handwritten HIP owned split
+  # Retired handwritten HIP owned split row REMOVED 2026-07-06 (no backups): tile + combine
   # tile + combine; its route_attribution target no longer exists in the code (model.py branch removed).
   "decode_flash_live_split_g4_8b_kvboth": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "promoted_default",
@@ -110,8 +110,8 @@ ROUTES = {
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "G": 4, "ctx": ">=512"}],
     "env": {},  # DEFAULT-ON for the validated 8B G=4 shape.
-    "rollback": {"DECODE_LIVE_SPLIT": "0"},  # unified structural branch -> generic generated tinygrad flash decode, not owned HIP
-    "baseline_route_id": "decode_attention_owned_two_kernel",
+    "rollback": {"DECODE_LIVE_SPLIT": "0"},  # exits the live-split default; no manifest fallback route row remains
+    "baseline_route_id": "retired_owned_attention_ceiling",
     "strict_fallback": True,
     "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "flash_fused_gmax_combine"],
     "forbidden_kernels": ["owned_flash_tile_gqa_whole", "owned_flash_combine", "fallback_graph"],
@@ -123,7 +123,7 @@ ROUTES = {
     "provenance": "hand_authored_uop_template",
     "replacement_scope": "Attention descriptor conversion: FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec own topology, shared emitter lowers to codegen, generated-only binding gate. Until then the executing flash/live-split kernels are hand-authored Tensor.custom_kernel UOp templates, not ordinary scheduler output.",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route 8B generated branch: B=1,Hq=32,Hkv=8,Hd=128 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True). Writer extra/qk/live_split_geometry.py + extra/qk/flash_decode.py generated UOp kernels.",
+    "route_attribution": "tinygrad/llm/decode_routes.py attention live-split branch: B=1,Hq=32,Hkv=8,Hd=128 -> live-split block tile path, staging='KV_BOTH', fused_combine=True. Writer extra/qk/live_split_geometry.py + extra/qk/flash_kernels.py UOp templates.",
     "note": "Promoted 8B long-context decode attention replacement. TG-P14 practical roofline closeout: worst-of-3 speed ctx512 98.5% / ctx4096 98.3% of owned, 48/48 deterministic prefilled token parity, route-bound, no hidden fallback. Default choice intentionally prefers generated machine-search code over the retired handwritten HIP route."},
   "decode_flash_block_tile_g5_konly": {
     "workload": "decode", "profile_id": PROFILE_DECODE_LARGE, "status": "promoted_default",
@@ -131,8 +131,8 @@ ROUTES = {
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
     "env": {},  # DEFAULT-ON for the validated G=5 shape; BoltBeam QK_ROUTE_POLICY can select it by shape.
-    "rollback": {"DECODE_LIVE_SPLIT": "0"},  # unified structural branch -> generic generated flash on rollback
-    "baseline_route_id": "decode_attention_owned_two_kernel",
+    "rollback": {"DECODE_LIVE_SPLIT": "0"},  # exits the live-split default; no manifest fallback route row remains
+    "baseline_route_id": "retired_owned_attention_ceiling",
     "strict_fallback": True,
     "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel"],
     "forbidden_kernels": ["owned_flash_tile_gqa_whole", "fallback_graph"],
@@ -147,8 +147,8 @@ ROUTES = {
     "note": "Promoted 2026-07-03: 14B (Hq=40/Hkv=8/Hd=128) decode now shares the MODULAR live-split route with 8B/32B (no per-model Hq hardcode). Live per-split length ceildiv(Tc,S_occ) is SEQLEN-BOUND: 14B decode is FLAT across max_context (69.24 tok/s @MAXC=1024 vs 69.04 @MAXC=8192, live ctx ~550), vs the retired fixed-L g5 route which read the full max_context buffer every token and collapsed as MAXC rose. W==D token-identical to the generic generated flash reference (DECODE_LIVE_SPLIT=0) at 8B/14B/32B. Staging is KV_BOTH (self-contained LDS); K_ONLY is unsupported under live-split geometry (wrong global-V addressing -> garbage). S_occ fixed at 48 (=4*CU/Hkv occupancy default). Rollback DECODE_LIVE_SPLIT=0."},
   # decode_flash_block_tile_g5_8b_refuted row REMOVED 2026-07-06 (no backups): historical TG-P5/TG-P8 route; its
   # kernels (flash_state_gmax/flash_state_combine) and route_attribution branch no longer exist.
-  # decode_attention_generic_flash_generated row REMOVED 2026-07-06 (no backups): the DECODE_LIVE_SPLIT=0 generic
-  # flash_decode_attention fallback was deleted with extra/qk/flash_decode.py; no rollback target remains.
+  # Generic flash fallback row REMOVED 2026-07-06 (no backups): the DECODE_LIVE_SPLIT=0 fallback implementation was
+  # deleted; no rollback target remains.
   # ---------------- prefill GEMM ----------------
   "prefill_pipe_role_selective_generated": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",

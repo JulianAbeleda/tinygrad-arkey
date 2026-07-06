@@ -21,10 +21,13 @@ def test_route_surface_rows_classify_known_surfaces():
 
 
 def test_unmanifested_runtime_surfaces_are_explicit():
-  got = {s["surface_id"] for s in audit.build()["unmanifested_runtime_surfaces"]}
+  report = audit.build()
+  got = {s["surface_id"] for s in report["unmanifested_runtime_surfaces"]}
   assert "prefill_q6k_direct_packed_default_capable" in got
   assert "decode_q4k_smallk_batched" in got
   assert "decode_q6k_smallk_batched" in got
+  assert set(report["audit_blockers"]["unmanifested_runtime_surfaces"]) == got
+  assert report["summary"]["unmanifested_runtime_surface_blockers"] == sorted(got)
 
 
 def test_missing_writer_file_evidence_is_reported_in_rows(tmp_path, monkeypatch):
@@ -45,8 +48,35 @@ def test_missing_writer_file_evidence_is_reported_in_rows(tmp_path, monkeypatch)
   row = audit.route_surface_row(route_id)
   assert row["writer_file_exists"][existing] is True
   assert row["writer_file_exists"][missing] is False
+  assert row["writer_files_present"] is False
   assert row["missing_writer_files"] == [missing]
   assert "Tensor.custom_kernel" in row["markers"][existing]
+
+
+def test_missing_writer_file_blocks_default_pure_route(tmp_path, monkeypatch):
+  route_id = "decode_q4k_g3_generated"
+  existing = "extra/qk/gemv_g3_codegen_lowering.py"
+  missing = "extra/qk/missing_generated_writer.py"
+  (tmp_path / existing).parent.mkdir(parents=True, exist_ok=True)
+  (tmp_path / existing).write_text("def emit():\n  return 'q4k_g3_lanemap_gemv_kernel'\n")
+
+  monkeypatch.setattr(audit, "ROOT", tmp_path)
+  surface = audit.ROUTE_SURFACES[route_id]
+  monkeypatch.setattr(audit, "ROUTE_SURFACES", {
+    **audit.ROUTE_SURFACES,
+    route_id: audit.RouteSurface(route_id, surface.surface_class, (existing, missing), surface.reason,
+                                replacement_scope=surface.replacement_scope, descriptor_artifact=surface.descriptor_artifact),
+  })
+  monkeypatch.setattr(audit.route_manifest, "default_routes", lambda: [route_id])
+
+  row = audit.route_surface_row(route_id)
+  assert row["surface_pure"] is True
+  assert row["strict_pure"] is False
+  assert row["contradiction"] is True
+  report = audit.strict_default_purity_report()
+  assert report["verdict"] == "STRICT_DEFAULT_PURITY_FAIL"
+  assert [r["route_id"] for r in report["missing_writer_file_blockers"]] == [route_id]
+  assert [r["route_id"] for r in report["blockers"]] == [route_id]
 
 
 def test_missing_writer_files_are_reported_in_summary(tmp_path, monkeypatch):
@@ -67,6 +97,25 @@ def test_missing_writer_files_are_reported_in_summary(tmp_path, monkeypatch):
   report = audit.build()
   assert missing in report["summary"]["missing_writer_files"]
   assert route_id in report["summary"]["routes_with_missing_writer_files"]
+  assert route_id in report["audit_blockers"]["missing_writer_file_routes"]
+  assert report["verdict"] == "PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND"
+
+
+def test_unmanifested_runtime_surfaces_block_otherwise_passing_audit(monkeypatch):
+  route_id = "decode_q4k_g3_generated"
+  monkeypatch.setattr(audit.route_manifest, "ROUTES", {route_id: audit.route_manifest.ROUTES[route_id]})
+  monkeypatch.setattr(audit, "ROUTE_SURFACES", {route_id: audit.ROUTE_SURFACES[route_id]})
+  monkeypatch.setattr(audit, "UNMANIFESTED_RUNTIME_SURFACES", (
+    {"surface_id": "synthetic_runtime_capable_surface", "surface_class": "route_local_custom_kernel",
+     "writer_files": ("tinygrad/llm/prefill_routes.py",), "reason": "runtime-capable handwritten test surface",
+     "replacement_scope": "manifest or replace"},
+  ))
+
+  report = audit.build()
+  assert report["strict_default_purity"]["verdict"] == "STRICT_DEFAULT_PURITY_PASS"
+  assert report["verdict"] == "PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND"
+  assert report["audit_blockers"]["strict_default_route_blockers"] == []
+  assert report["audit_blockers"]["unmanifested_runtime_surfaces"] == ["synthetic_runtime_capable_surface"]
 
 
 def test_pure_search_guard_uses_strict_surface_classification():

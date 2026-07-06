@@ -170,13 +170,15 @@ def route_surface_row(route_id: str) -> dict[str, Any]:
   prov = str(manifest.get("provenance", "unknown"))
   status = str(manifest.get("status", "unknown"))
   manifest_pure = prov in route_manifest.FINAL_DEFAULT_PROVENANCE
-  strict_pure = surface.pure
-  contradiction = manifest_pure and not strict_pure
   markers, writer_file_exists, missing_writer_files = _writer_scan(surface.writer_files)
+  surface_pure = surface.pure
+  strict_pure = surface_pure and not missing_writer_files
+  contradiction = manifest_pure and not strict_pure
   return {"route_id": route_id, "status": status, "manifest_provenance": prov, "manifest_pure": manifest_pure,
-          "surface_class": surface.surface_class, "strict_pure": strict_pure, "contradiction": contradiction,
+          "surface_class": surface.surface_class, "surface_pure": surface_pure, "strict_pure": strict_pure,
+          "contradiction": contradiction,
           "writer_files": list(surface.writer_files), "writer_file_exists": writer_file_exists,
-          "missing_writer_files": missing_writer_files, "markers": markers,
+          "writer_files_present": not missing_writer_files, "missing_writer_files": missing_writer_files, "markers": markers,
           "descriptor_artifact": surface.descriptor_artifact, "reason": surface.reason,
           "replacement_scope": surface.replacement_scope or str(manifest.get("replacement_scope", ""))}
 
@@ -193,30 +195,61 @@ def strict_default_purity_report() -> dict[str, Any]:
   rows = default_rows()
   blockers = [r for r in rows if not r["strict_pure"]]
   contradictions = [r for r in rows if r["contradiction"]]
+  missing_writer_file_blockers = [r for r in rows if r["missing_writer_files"]]
   return {"verdict": "STRICT_DEFAULT_PURITY_PASS" if not blockers else "STRICT_DEFAULT_PURITY_FAIL",
           "default_routes": [r["route_id"] for r in rows],
-          "blockers": blockers, "manifest_contradictions": contradictions}
+          "blockers": blockers, "manifest_contradictions": contradictions,
+          "missing_writer_file_blockers": missing_writer_file_blockers}
+
+
+def unmanifested_runtime_surface_rows() -> list[dict[str, Any]]:
+  rows: list[dict[str, Any]] = []
+  for surface in UNMANIFESTED_RUNTIME_SURFACES:
+    writer_files = tuple(surface.get("writer_files", ()))
+    markers, writer_file_exists, missing_writer_files = _writer_scan(writer_files)
+    rows.append({**surface,
+                 "writer_files": list(writer_files),
+                 "writer_file_exists": writer_file_exists,
+                 "writer_files_present": not missing_writer_files,
+                 "missing_writer_files": missing_writer_files,
+                 "markers": markers,
+                 "manifested": False,
+                 "strict_pure": False,
+                 "audit_blocker": True})
+  return rows
 
 
 def build() -> dict[str, Any]:
   rows = route_rows()
   report = strict_default_purity_report()
   missing = [rid for rid in route_manifest.ROUTES if rid not in ROUTE_SURFACES]
+  unmanifested_rows = unmanifested_runtime_surface_rows()
   routes_with_missing_writer_files = sorted([r["route_id"] for r in rows if r["missing_writer_files"]])
   missing_writer_files = sorted({path for row in rows for path in row["missing_writer_files"]})
+  unmanifested_ids = [s["surface_id"] for s in unmanifested_rows]
+  unmanifested_blocker_ids = sorted(unmanifested_ids)
+  audit_blockers = {
+    "strict_default_route_blockers": sorted([r["route_id"] for r in report["blockers"]]),
+    "missing_writer_file_routes": routes_with_missing_writer_files,
+    "unmanifested_runtime_surfaces": unmanifested_blocker_ids,
+    "routes_missing_explicit_surface_rows": sorted(missing),
+  }
+  audit_pass = not any(audit_blockers.values())
   by_surface: dict[str, int] = {}
   for row in rows: by_surface[row["surface_class"]] = by_surface.get(row["surface_class"], 0) + 1
   return {"schema": "pure_kernel_surface_audit.v1",
-          "verdict": "PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND" if report["blockers"] else "PURE_KERNEL_SURFACE_AUDIT_PASS",
+          "verdict": "PURE_KERNEL_SURFACE_AUDIT_PASS" if audit_pass else "PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND",
           "strict_default_purity": report,
+          "audit_blockers": audit_blockers,
           "summary": {"routes_by_surface_class": by_surface,
                       "manifest_contradictions": [r["route_id"] for r in report["manifest_contradictions"]],
-                      "unmanifested_runtime_surfaces": [s["surface_id"] for s in UNMANIFESTED_RUNTIME_SURFACES],
+                      "unmanifested_runtime_surfaces": unmanifested_ids,
+                      "unmanifested_runtime_surface_blockers": unmanifested_blocker_ids,
                       "missing_writer_files": missing_writer_files,
                       "routes_with_missing_writer_files": routes_with_missing_writer_files,
                       "routes_missing_explicit_surface_rows": sorted(missing)},
           "routes": rows,
-          "unmanifested_runtime_surfaces": list(UNMANIFESTED_RUNTIME_SURFACES),
+          "unmanifested_runtime_surfaces": unmanifested_rows,
           "next": ["align route_manifest provenance with strict selected-surface classifications",
                    "add explicit manifest rows for unmanifested runtime-capable surfaces",
                    "replace strict blockers with ordinary tinygrad graph or descriptor-owned generated codegen"]}
