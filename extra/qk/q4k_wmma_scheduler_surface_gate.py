@@ -17,10 +17,10 @@ def shaped_kernel(out:UOp, a:UOp, b:UOp) -> UOp:
   lane = UOp.special(32, "lidx0")
   afrags = [a[((lane & 15) * 16) + i] for i in range(16)]
   bfrags = [b[((lane & 15) * 16) + i] for i in range(16)]
-  avec = afrags[0].stack(*afrags[1:])
-  bvec = bfrags[0].stack(*bfrags[1:])
+  avec = afrags[0].vectorize(*afrags[1:])
+  bvec = bfrags[0].vectorize(*bfrags[1:])
   zero = UOp.const(dtypes.int32, 0)
-  acc = zero.stack(*([zero] * 7))
+  acc = zero.vectorize(*([zero] * 7))
   w = shaped_wmma(avec, bvec, acc, dims=(16, 16, 16), device="AMD", threads=32)
   stores = [out[lane + e * 32].store(w.gep(e)) for e in range(8)]
   return UOp.group(*stores).sink(arg=KernelInfo(name="q4k_scheduler_shaped_wmma_probe", opts_to_apply=()))

@@ -29,9 +29,12 @@ def lower_shaped_wmma(ctx, x):
   tc_upcast_axes = tuple(((u.arg[0], s.shape[-1]),) for s, u in upcasts)
   name = f"WMMA_{'_'.join(map(str, dims))}_{dtype_in.name}_{dtype_out.name}"
   wmma_arg = (name, dims, dtype_in, dtype_out, device, threads, tc_upcast_axes, ())
-  wmma = UOp(Ops.WMMA, dtype_out.vec(x.src[2].shape[-1]), tuple(s[u].contract(u) for s, u in upcasts), arg=wmma_arg)
+  srcs = tuple(s if s.dtype.count == s.shape[-1] else s[u].contract(u) for s, u in upcasts)
+  wmma = UOp(Ops.WMMA, dtype_out.vec(x.src[2].shape[-1]), srcs, arg=wmma_arg)
   tmp = UOp.placeholder((x.src[2].shape[-1],), dtype_out, slot=next(ctx), addrspace=AddrSpace.REG)
-  return tmp.after(UOp.group(*[tmp[e].store(wmma.gep(e)) for e in range(x.src[2].shape[-1])]))
+  stores = UOp.group(*[tmp[e].store(wmma.gep(e)) for e in range(x.src[2].shape[-1])])
+  vals = [tmp[e] for e in range(x.src[2].shape[-1])]
+  return vals[0].vectorize(*vals[1:]).after(stores)
 
 pm_store_ranges = PatternMatcher([
   (UPat(Ops.STORE, name="x"), add_ranges_to_store),

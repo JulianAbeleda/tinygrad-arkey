@@ -85,7 +85,7 @@ spec_shared = PatternMatcher([
 
   # AFTER on Movement Op, PARAM, BUFFER, CONTIGUOUS, or another AFTER
   (UPat(Ops.AFTER, src=(UPat(GroupOp.Movement.union({Ops.PARAM, Ops.BUFFER, Ops.CONTIGUOUS, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.AFTER, Ops.MULTI,
-                                                     Ops.BITCAST, Ops.INS})),),
+                                                     Ops.BITCAST, Ops.INS, Ops.STACK, Ops.INDEX})),),
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)

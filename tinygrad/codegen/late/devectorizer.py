@@ -286,6 +286,8 @@ devectorize_alu = PatternMatcher([
 ])
 
 pm_render = PatternMatcher([
+  # preserve AFTER ordering while scalarizing a vector value for rendering
+  (UPat(Ops.AFTER, name="a").f(Ops.GEP, name="gep"), lambda gep,a: a.src[0].gep(gep.arg).after(*a.src[1:])),
   # for rendering, we use explicit VECTORIZE
   (UPat(Ops.CONST, name='c'),
    lambda c: UOp(Ops.STACK, c.dtype, (UOp.const(c.dtype.scalar(), c.arg),)*c.dtype.vcount) if c.dtype.vcount > 1 else None),
