@@ -838,28 +838,6 @@ def q4k_q8_1_vdot_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:
 
   return kernel
 
-def q4k_q8_1_vdot_builtin_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
-  # D1: the v_dot4 GEMV via the SCHEDULABLE __builtin_amdgcn_udot4 (through the _dp4a device helper the
-  # HIPRenderer emits) instead of asm volatile. Same structure as q4k_q8_1_vdot_partial_kernel.
-  if schedule != "none" or opts:
-    raise ValueError("q4k_q8_1_vdot_builtin_partial_kernel is a fixed builtin-dp4a candidate; opts unsupported")
-  if parts != 1: raise ValueError("q4k_q8_1_vdot_builtin_partial_kernel currently supports parts=1 only")
-  k_blocks = k // Q4_K_BLOCK_ELEMS
-  source = _q4k_q8_1_vdot_source(k_blocks, parts, builtin=True)
-
-  LOCAL = 64  # rows per workgroup -> full-occupancy launch (the fp kernel gets this via LOCAL:0:64)
-  def kernel(partials:UOp, words:UOp, xq_bias_words:UOp, xscales:UOp) -> UOp:
-    if rows % LOCAL == 0:
-      gid = UOp.special(rows // LOCAL, "gidx0") * LOCAL + UOp.special(LOCAL, "lidx0")
-    else:
-      gid = UOp.special(rows, "gidx0")
-    out_ptr = partials.flatten().index(gid, ptr=True)
-    row_words = words.index(gid * k_blocks * Q4K_WORDS_PER_BLOCK, ptr=True)
-    stmt = UOp(Ops.CUSTOM, dtypes.void, (out_ptr, row_words, xq_bias_words, xscales), arg=source)
-    return stmt.sink(arg=_kernel_info(f"q4k_q8_1_vdot_builtin_partial_{rows}_{k}_{parts}", schedule, opts))
-
-  return kernel
-
 def q4k_gemv_tile_custom_partial_kernel(rows:int, k:int, parts:int, schedule:str, opts:tuple[Opt, ...]):
   if schedule != "none" or opts:
     raise ValueError("q4k_gemv_tile_custom_partial_kernel is a fixed semantic packed-tile lowering; schedule opts are not supported")
@@ -880,20 +858,6 @@ def q4k_gemv_tile_custom_partial_kernel(rows:int, k:int, parts:int, schedule:str
       srcs = (out_ptr, row_words, x, part, half_marker)
     stmt = UOp(Ops.CUSTOM, dtypes.void, srcs, arg=source)
     return stmt.sink(arg=_kernel_info(f"q4k_gemv_tile_custom_partial_{rows}_{k}_{parts}", schedule, opts))
-
-  return kernel
-
-def q8_1_bias_pack_u32_kernel(k:int):
-  if k % 4 != 0: raise ValueError(f"K={k} is not divisible by 4")
-
-  def kernel(out:UOp, q:UOp) -> UOp:
-    idx = UOp.range(k//4, 0)
-    base = idx * 4
-    word = UOp.const(dtypes.uint32, 0)
-    for lane in range(4):
-      biased = (q[base+lane].cast(dtypes.int32) + 128).cast(dtypes.uint32).bitwise_and(255)
-      word = word.bitwise_or(biased.lshift(8*lane))
-    return out[idx].store(word).end(idx).sink(arg=_kernel_info(f"q8_1_bias_pack_u32_{k}", "none", ()))
 
   return kernel
 
