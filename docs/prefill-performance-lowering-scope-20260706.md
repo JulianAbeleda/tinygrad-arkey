@@ -42,6 +42,7 @@ Two new gates narrow the remaining compiler work:
 
 | Target | Gate | Current result | What it proves | What it does not prove |
 | --- | --- | --- | --- | --- |
+| 8B/14B generated graph-GEMM baseline | `extra.qk.prefill_v2_schedule_table_gate` | `PREFILL_V2_SCHEDULE_TABLE_APPLIES_PASS` without AMD timing | Representative 8B (`4096x4096`) and 14B (`5120x5120`) PREFILL_V2 graph-GEMM shapes are present in the frozen warmstart table, select LOCAL schedules, and are checked through the same schedule-search worker path used to build the table. | Without `--run-amd`, it proves table coverage and selected opts only; it does not prove current TFLOPS or route-bound LDS operand staging. |
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_FP16_SINGLE_OPERAND_STAGE_PROBE_PASS` | A generated fp16 shaped-WMMA kernel can keep one operand in `AddrSpace.LOCAL` with `BufferizeOpts(..., removable=False)`, emit shared local storage plus a barrier, match the direct WMMA output, and avoid raw-marker strings. | It is a tiny fp16 substrate probe, not the fp16 prefill TC route, not a medium GEMM timing gate, not route-bound `Ops.INS` proof, and not 8B performance recovery. |
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands` | `PREFILL_GRAPH_GEMM_FP16_BOTH_OPERANDS_STAGE_PROBE_PASS` | A generated fp16 shaped-WMMA kernel can keep both A and B operands in `AddrSpace.LOCAL`, emit two local buffers plus barriers, match direct WMMA output, and avoid raw-marker strings. | It is still a tiny custom-kernel probe, not route-bound prefill execution, not cooperative partitioning, and not a performance gate. |
 | 8B route-bound default | `extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_ROUTE_BOUND_LOCAL_STAGE_MISSING` | The actual strict-pure `prefill_v2_scheduler_matmul_default` route executes, emits fp16 WMMA, and avoids raw `Ops.INS` markers. | It also proves the missing piece: the route-bound kernel does not yet emit generated shared local storage or barriers. |
@@ -51,6 +52,8 @@ Run:
 
 ```sh
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_single_operand_stage_gate --run-amd --compact
+PYTHONPATH=. python3 -m extra.qk.prefill_v2_schedule_table_gate --compact
+PYTHONPATH=. python3 -m extra.qk.prefill_v2_schedule_table_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --compact
@@ -60,6 +63,7 @@ PYTHONPATH=. python3 -m extra.qk.q4k_wmma_full_role_contract_gate --compact
 The artifacts are:
 
 - `bench/prefill-graph-gemm-single-operand-stage/latest.json`
+- `bench/prefill-v2-schedule-table/latest.json`
 - `bench/prefill-graph-gemm-fp16-single-operand-stage/latest.json`
 - `bench/prefill-graph-gemm-fp16-both-operands-stage/latest.json`
 - `bench/prefill-graph-gemm-route-bound-stage/latest.json`
@@ -152,6 +156,9 @@ Use these; do not duplicate them:
   - Offline schedule table generator.
 - `extra/qk/prefill_v2_schedule_table.json`
   - Frozen warm-start table for real 8B/14B shapes.
+- `extra/qk/prefill_v2_schedule_table_gate.py`
+  - Canonical representative-shape verifier for the frozen warm-start table; use this before treating 8B/14B
+    generated graph-GEMM baseline numbers as current.
 - `tinygrad/llm/model.py::_build_prefill_v2_warmstart`
   - Reads the warm-start TC schedule table.
 - `tinygrad/codegen/opt/postrange.py`
@@ -165,6 +172,8 @@ Use these; do not duplicate them:
 
 - Track 1 schedule search is done and wired.
 - Warm-start TC opts recover part of the gap versus static codegen.
+- The representative warm-start table gate now proves the 8B/14B graph-GEMM baseline shapes are present and use LOCAL
+  schedules; run it with `--run-amd` to refresh current TFLOPS.
 - Current strict default can run 8B pp512 at about 2436 tok/s warm.
 - The raw graph-GEMM route remains available as an opt-in research baseline.
 - Tiny generated iu8, fp16 single-operand, and fp16 both-operand shaped-WMMA LOCAL-staging probes now pass on AMD. This

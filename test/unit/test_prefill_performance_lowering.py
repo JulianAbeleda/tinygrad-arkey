@@ -70,6 +70,10 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   ]
   assert not full["targets"]["target_1"]["done"]
   assert any("single_operand_stage" in blocker for blocker in full["blocker_list"])
+  baseline_row = registry.row("prefill_performance_target_1_baseline")
+  assert "prefill_v2_schedule_table_gate" in baseline_row["gates"]
+  assert "extra/qk/prefill_v2_schedule_table_gate.py" in baseline_row["reuse_files"]
+  assert "bench/prefill-v2-schedule-table/latest.json" in baseline_row["reuse_files"]
   stage_row = registry.row("prefill_performance_target_1_single_operand_stage")
   assert "prefill_graph_gemm_fp16_single_operand_stage_gate" in stage_row["gates"]
   assert "prefill_graph_gemm_route_bound_no_raw_ops_ins_gate" in stage_row["gates"]

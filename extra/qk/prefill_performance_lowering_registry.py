@@ -74,18 +74,25 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_order": 1,
     "phase_name": "baseline",
     "owner_area": "policy",
-    "status": "pending",
+    "status": "in_progress",
     "blockers": [
-      "No generated baseline currently beats raw 8B research route in practice",
+      "Warmstart table needs current AMD verification for representative 8B and 14B shapes before it can be treated as recovered baseline evidence",
     ],
     "reuse_files": [
       "docs/8b-prefill-generated-route-closed-20260705.md",
       "docs/handwritten-kernel-exhaustive-lowering-scope-20260706.md",
+      "extra/qk/prefill_v2_schedule_search.py",
+      "extra/qk/prefill_v2_schedule_table.json",
+      "extra/qk/prefill_v2_schedule_table_gate.py",
+      "bench/prefill-v2-schedule-table/latest.json",
     ],
     "gates": [
+      "prefill_v2_schedule_table_gate",
       "baseline_pp512_recovery_gate",
     ],
     "success_criteria": [
+      "Representative 8B and 14B PREFILL_V2 graph-GEMM shapes are present in the frozen warmstart table.",
+      "The representative table-selected schedules include LOCAL opts and are validated by a single reusable AMD gate.",
       "Current baseline rows remain recorded and reproducible without raw instruction route promotion.",
     ],
     "scope_doc": DOC_PATH,

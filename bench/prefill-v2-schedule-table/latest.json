@@ -1,0 +1,65 @@
+{
+  "schema": "prefill-v2-schedule-table-gate.v1",
+  "route_id": "prefill_v2_scheduler_matmul_default",
+  "m": 512,
+  "shape_count": 2,
+  "shapes": [
+    "4096x4096",
+    "5120x5120"
+  ],
+  "verdict": "PREFILL_V2_SCHEDULE_TABLE_APPLIES_PASS",
+  "evidence": {
+    "table_exists": true,
+    "all_selected_shapes_present": true,
+    "all_selected_shapes_use_local": true,
+    "run_amd": true,
+    "all_measured_shapes_ok": true
+  },
+  "rows": [
+    {
+      "shape": "4096x4096",
+      "out_f": 4096,
+      "in_f": 4096,
+      "table_tflops": 38.82,
+      "table_default_tflops": 34.26,
+      "table_speedup": 1.1330998248686515,
+      "params": {
+        "u0": 4,
+        "u1": 4,
+        "loc": 4,
+        "unr": 8
+      },
+      "measured": {
+        "u0": 4,
+        "u1": 4,
+        "loc": 4,
+        "unr": 8,
+        "tflops": 40.18,
+        "status": "ok"
+      }
+    },
+    {
+      "shape": "5120x5120",
+      "out_f": 5120,
+      "in_f": 5120,
+      "table_tflops": 40.66,
+      "table_default_tflops": 23.68,
+      "table_speedup": 1.7170608108108107,
+      "params": {
+        "u0": 4,
+        "u1": 4,
+        "loc": 4,
+        "unr": 8
+      },
+      "measured": {
+        "u0": 4,
+        "u1": 4,
+        "loc": 4,
+        "unr": 8,
+        "tflops": 37.18,
+        "status": "ok"
+      }
+    }
+  ],
+  "remaining_blocker": null
+}
