@@ -1,5 +1,6 @@
 import json
 
+from extra.qk import prefill_v2_schedule_table_gate as gate
 from extra.qk.prefill_v2_schedule_table_gate import build_report
 
 
@@ -17,3 +18,15 @@ def test_prefill_v2_schedule_table_gate_static_report_uses_local_for_representat
   assert all(row["params"]["loc"] > 0 for row in report["rows"])
   assert all(row["table_tflops"] > row["table_default_tflops"] for row in report["rows"])
   json.dumps(report)
+
+
+def test_prefill_v2_schedule_table_gate_cli_can_skip_artifact(monkeypatch):
+  seen = {}
+
+  def fake_build_report(**kwargs):
+    seen.update(kwargs)
+    return {"verdict": "ok"}
+
+  monkeypatch.setattr(gate, "build_report", fake_build_report)
+  gate.main(["--compact", "--no-artifact"])
+  assert seen["artifact"] is False

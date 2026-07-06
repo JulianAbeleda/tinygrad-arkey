@@ -107,11 +107,12 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--compact", action="store_true")
   ap.add_argument("--run-amd", action="store_true", help="execute the representative table shapes on AMD")
   add_clock_pin_arg(ap)
+  ap.add_argument("--no-artifact", action="store_true", help="do not write bench/prefill-v2-schedule-table/latest.json")
   ap.add_argument("--shapes", default=",".join(DEFAULT_SHAPES), help="comma-separated out_fxin_f shapes from the table")
   ap.add_argument("--M", type=int, default=M_DEFAULT)
   args = ap.parse_args(argv)
   report = build_report(run_amd=args.run_amd, shapes=tuple(x for x in args.shapes.split(",") if x), m=args.M,
-                        pin_clock=args.pin_clock)
+                        pin_clock=args.pin_clock, artifact=not args.no_artifact)
   print(json.dumps(report, indent=None if args.compact else 2))
   return report
 
