@@ -96,8 +96,8 @@ Current non-promotion active blockers from the registry:
 | `prefill_performance_target_2_packed_mmq_recovery` | policy | Generated packed/MMQ substrate does not dominate direct-packed VALU yet. |
 | `prefill_performance_target_2_baseline` | policy | Direct-packed baseline remains the authority path. |
 | `prefill_performance_target_2_synthetic_shape` | scheduler | `scheduler_owned_tile_loop_missing`. |
-| `prefill_performance_target_2_model_authority` | policy | No model-authority route policy proves MMQ-first packed prefill. |
-| `prefill_performance_target_2_q6_residual_decision` | policy | No explicit Q6 residual policy. |
+| `prefill_performance_target_2_model_authority` | policy | `_SUPPORTED_QK_ROUTE_IDS` has no 14B MMQ route ids; prefill MMQ today is env-gated (`PREFILL_Q4K_Q8=...`). |
+| `prefill_performance_target_2_q6_residual_decision` | policy | No generated Q6_K prefill MMQ route exists in registry/policy yet, and no residual attribution artifact exists. |
 
 Sidecar:
 

@@ -440,14 +440,17 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_order": 6,
     "phase_name": "model_authority",
     "owner_area": "policy",
-    "status": "pending",
+    "status": "blocked",
     "blockers": [
-      "No clear 14B model-authority route policy for MMQ-first packed prefill yet",
+      "QK_ROUTE_POLICY._SUPPORTED_QK_ROUTE_IDS does not include prefill_q4k_int8_wmma_generated_research or prefill_q4k_int8_wmma_tiled_research.",
+      "14B prefill MMQ currently binds via PREFILL_Q4K_Q8 env modes, not via explicit policy selection with representative shapes.",
     ],
     "reuse_files": [
       "extra/qk/route_manifest.py",
+      "tinygrad/llm/route_policy.py",
       "tinygrad/llm/prefill_routes.py",
       "tinygrad/llm/generated_candidates.py",
+      "extra/qk/prefill_14b_model_authority_gate.py",
       "docs/prefill-performance-lowering-scope-20260706.md",
     ],
     "gates": [
@@ -466,16 +469,19 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "phase_order": 7,
     "phase_name": "q6_residual_decision",
     "owner_area": "policy",
-    "status": "pending",
+    "status": "blocked",
     "blockers": [
-      "No explicit post-MMQ Q6 residual policy (keep direct-packed or promote generated MMQ) is in place",
+      "No generated Q6_K prefill MMQ route is currently in route-policy support or generated-route registry.",
+      "No 14B full-prefill residual attribution exists yet for a data-driven Q6_K keep-vs-promote policy decision.",
     ],
     "reuse_files": [
       "docs/route-b-iu8-wmma-mmq-design-20260705.md",
       "docs/prefill-14b-llama-parity-trace-20260704.md",
-      "tinygrad/llm/prefill_routes.py",
       "tinygrad/llm/generated_candidates.py",
+      "tinygrad/llm/prefill_routes.py",
+      "tinygrad/llm/route_policy.py",
       "extra/qk/q6k_prefill_route_spec.py",
+      "extra/qk/prefill_14b_q6_decision_gate.py",
     ],
     "gates": [
       "prefill_14b_q6_decision_gate",
