@@ -102,24 +102,8 @@ ROUTES = {
   # (q6k_coop_partial_kernel / q6k_gemv_partial_kernel / q6k_halfwarp_partition) were deleted in prior cuts, and the
   # DECODE_Q6K_GENERATED=0 / Q6K_DIRECT_ROUTE env rollbacks are gone. Generated Q6_K decode is the only kernel route.
   # ---------------- decode attention ----------------
-  "decode_attention_owned_two_kernel": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "removed",
-    "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
-    "quant": ["fp16"],
-    "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
-    "env": {},
-    "rollback": {},
-    "strict_fallback": True,
-    "expected_kernels": ["owned_flash_tile_gqa_whole", "owned_flash_combine"],
-    "authority_gate": "extra/qk/decode_runtime_overhead.py",
-    "promotion_artifacts": ["docs/decode-two-kernel-problem-audit-result-20260625.md",
-                            "bench/amd-isa-backend-decode-attention-ceiling/latest.json"],
-    "purity_status": "removed",
-    "provenance": "external_handwritten_kernel",
-    "replacement_scope": "decode_flash_live_split_g4_8b_kvboth",
-    "selector": "env_guard",
-    "route_attribution": "removed from tinygrad/llm/model.py; retired handwritten HIP attention implementation pruned.",
-    "note": "Retired owned HIP split tile + combine. Replaced as the 8B long-context default by decode_flash_live_split_g4_8b_kvboth so the hot path is generated machine-search code."},
+  # decode_attention_owned_two_kernel row REMOVED 2026-07-06 (no backups): retired handwritten HIP owned split
+  # tile + combine; its route_attribution target no longer exists in the code (model.py branch removed).
   "decode_flash_live_split_g4_8b_kvboth": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "promoted_default",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
@@ -161,39 +145,10 @@ ROUTES = {
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route UNIFIED live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5). QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1. Writer extra/qk/live_split_geometry.py flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True) -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel.",
     "note": "Promoted 2026-07-03: 14B (Hq=40/Hkv=8/Hd=128) decode now shares the MODULAR live-split route with 8B/32B (no per-model Hq hardcode). Live per-split length ceildiv(Tc,S_occ) is SEQLEN-BOUND: 14B decode is FLAT across max_context (69.24 tok/s @MAXC=1024 vs 69.04 @MAXC=8192, live ctx ~550), vs the retired fixed-L g5 route which read the full max_context buffer every token and collapsed as MAXC rose. W==D token-identical to the generic generated flash reference (DECODE_LIVE_SPLIT=0) at 8B/14B/32B. Staging is KV_BOTH (self-contained LDS); K_ONLY is unsupported under live-split geometry (wrong global-V addressing -> garbage). S_occ fixed at 48 (=4*CU/Hkv occupancy default). Rollback DECODE_LIVE_SPLIT=0."},
-  "decode_flash_block_tile_g5_8b_refuted": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "removed",
-    "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
-    "quant": ["fp16"],
-    "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "G": 4, "ctx": ">=512"}],
-    "env": {},
-    "rollback": {},
-    "baseline_route_id": "decode_attention_owned_two_kernel",
-    "strict_fallback": True,
-    "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128", "flash_state_gmax_32_128", "flash_state_combine_32_128"],
-    "authority_gate": "historical TG-P5/TG-P8 artifacts; route no longer selectable",
-    "promotion_artifacts": ["bench/tg-p5-attention-generated-default/latest.json",
-                            "bench/tg-p5-attention-generated-default/summary.md"],
-    "purity_status": "removed",
-    "provenance": "machine_authored_generated",
-    "selector": "retired",
-    "route_attribution": "removed from tinygrad/llm/model.py; superseded by decode_flash_live_split_g4_8b_kvboth.",
-    "note": "Historical TG-P5/TG-P8 route. The generated G5 block-tile flash decode generalized correctly to the 8B geometry but was slower (87.6%/95.6% @ctx512/4096). It is no longer selectable because the validated live-split KV_BOTH route superseded it as the generated 8B default."},
-  "decode_attention_generic_flash_generated": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "superseded_rollback",
-    "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
-    "quant": ["fp16"],
-    "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
-    "env": {"DECODE_LIVE_SPLIT": "0"},
-    "rollback": {},  # -> promoted generated default route
-    "strict_fallback": True,
-    "authority_gate": "tinygrad generated flash attention fallback",
-    "promotion_artifacts": ["bench/tg-p14-amd-recovery-and-pure-attention-landing/summary.md"],
-    "purity_status": "research",
-    "provenance": "tinygrad_scheduler_generated",
-    "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route generic generated flash_decode_attention fallback reached when DECODE_LIVE_SPLIT=0.",
-    "note": "Generic generated tinygrad flash-decode fallback. It is retained only as a generated rollback/reference for the promoted live-split KV_BOTH route; the old native/HIP research route was pruned."},
+  # decode_flash_block_tile_g5_8b_refuted row REMOVED 2026-07-06 (no backups): historical TG-P5/TG-P8 route; its
+  # kernels (flash_state_gmax/flash_state_combine) and route_attribution branch no longer exist.
+  # decode_attention_generic_flash_generated row REMOVED 2026-07-06 (no backups): the DECODE_LIVE_SPLIT=0 generic
+  # flash_decode_attention fallback was deleted with extra/qk/flash_decode.py; no rollback target remains.
   # ---------------- prefill GEMM ----------------
   "prefill_pipe_role_selective_generated": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",

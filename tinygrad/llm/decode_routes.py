@@ -110,18 +110,8 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   if (kv_scale is not None or freqs is not None) and not _ls_only:
     raise RuntimeError(f"KV-quant/rope-at-read (kv_scale={kv_scale is not None}, freqs={freqs is not None}) is only "
                        "supported on the live-split decode route (B=1,Hd=128,Hkv=8,Hq%Hkv==0, DECODE_LIVE_SPLIT=1).")
-  if getenv("DECODE_ATTN_BLOCK_TILE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
-     and not (getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and getenv("DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE", 0)):
-    _bt_msg = ("DECODE_ATTN_BLOCK_TILE=1 does not bind in-model without DECODE_ATTN_GENERATED_WHOLECACHE=1 and "
-               "DECODE_ATTN_FUSED_XLANE_SCORE_PV_TILE=1 -- it would silently fall back to the generic generated "
-               "flash route (phantom W==D). Set the full generated whole-cache stack or unset DECODE_ATTN_BLOCK_TILE.")
-    if getenv("DECODE_ATTN_BLOCK_TILE_STRICT", 1): raise RuntimeError(_bt_msg)
-    if getenv("DEBUG", 0): print("WARN:", _bt_msg)
-  if getenv("DECODE_ATTN_GENERATED_WHOLECACHE", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
-     and (Hq // Hkv) == 4:
-    out = qk_ops.flash_decode_attention_whole_cache(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                                    Hd, Hq, Hkv, MAXC, L)
-
+  # Scorched earth: all handwritten research attention routes (whole-cache / generated-skeleton / fused-combine /
+  # bypass-kv / generic flash) deleted 2026-07-06. Generated live-split is the ONLY attention kernel route.
   # Promoted generated live-split flash-decode. Structural shape class: B==1, Hd==128, Hkv==8, Hq%Hkv==0.
   # KV_BOTH is the default because K_ONLY assumes the old g5 V layout and was verified to produce bad logits on 8B.
   _ls_shape = B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0
@@ -136,21 +126,10 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
                                                     getenv("DECODE_LIVE_SPLIT_S", 48),
                                                     staging=str(getenv("DECODE_LIVE_SPLIT_STAGING", "KV_BOTH")),
                                                     fused_combine=True, kv_scale=kv_scale, freqs=freqs)
-  if out is None and getenv("DECODE_ATTN_GENERATED_SKELETON", 0) and B == 1 and Hd == 128 and Hq == 32 and Hkv == 8 \
-     and (Hq // Hkv) == 4:
-    out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                        start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                        variant=str(getenv("DECODE_ATTN_GENERATED_SKELETON_VARIANT",
-                                                           getenv("FLASH_VARIANT", "gqa_coop_vec"))))
-  if out is None and getenv("DECODE_ATTN_FUSED_COMBINE", 0) and B == 1 and Hd == 128 and Hkv == 8 and Hq % Hkv == 0:
-    out = qk_ops.flash_decode_fused_combine(q.reshape(Hq, Hd), assigned_kv, start_pos + T, vsp + T,
-                                            Hd, Hq, Hkv, MAXC, getenv("FLASH_COMBINE_L", 256))
-  if out is None and getenv("DECODE_BYPASS_KV_SLICE", 0) and B == 1 and (getenv("FLASH_VARIANT", "gqa_coop_vec") == "gqa_coop_vec"):
-    kv_flat = assigned_kv.reshape(2 * Hkv * MAXC * Hd)
-    out = qk_ops.flash_decode_attention_kv_flat(q.reshape(Hq, Hd), assigned_kv[0, 0], kv_flat,
-                                                start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L)
   if out is None:
-    out = qk_ops.flash_decode_attention(q.reshape(Hq, Hd), assigned_kv[0, 0], assigned_kv[1, 0],
-                                        start_pos + T, vsp + T, Hd, Hq, Hkv, MAXC, L,
-                                        variant=str(getenv("FLASH_VARIANT", "gqa_coop_vec")))
+    # No backups: the generated live-split route is the only attention kernel path. Unsupported shapes fail loud
+    # (rather than silently emitting a deleted handwritten flash kernel); model.py gates flash vs SDPA upstream.
+    raise RuntimeError(f"flash_decode_attention_route: shape B={B} Hd={Hd} Hkv={Hkv} Hq={Hq} "
+                       f"(DECODE_LIVE_SPLIT={getenv('DECODE_LIVE_SPLIT', 1)}) is not served by the generated "
+                       "live-split route, and all handwritten fallback flash routes were deleted.")
   return out

@@ -27,6 +27,48 @@ def test_unmanifested_runtime_surfaces_are_explicit():
   assert "decode_q6k_smallk_batched" in got
 
 
+def test_missing_writer_file_evidence_is_reported_in_rows(tmp_path, monkeypatch):
+  route_id = "prefill_q4k_direct_tile4x4_default"
+  existing = "tinygrad/llm/prefill_routes.py"
+  missing = "extra/qk/does_not_exist.py"
+  (tmp_path / existing).parent.mkdir(parents=True, exist_ok=True)
+  (tmp_path / existing).write_text("from tinygrad import Tensor\n_ = Tensor.custom_kernel\n_ = 'Ops.CUSTOM'\n")
+
+  monkeypatch.setattr(audit, "ROOT", tmp_path)
+  surface = audit.ROUTE_SURFACES[route_id]
+  monkeypatch.setattr(audit, "ROUTE_SURFACES", {
+    **audit.ROUTE_SURFACES,
+    route_id: audit.RouteSurface(route_id, surface.surface_class, (existing, missing), surface.reason,
+                                replacement_scope=surface.replacement_scope, descriptor_artifact=surface.descriptor_artifact),
+  })
+
+  row = audit.route_surface_row(route_id)
+  assert row["writer_file_exists"][existing] is True
+  assert row["writer_file_exists"][missing] is False
+  assert row["missing_writer_files"] == [missing]
+  assert "Tensor.custom_kernel" in row["markers"][existing]
+
+
+def test_missing_writer_files_are_reported_in_summary(tmp_path, monkeypatch):
+  route_id = "prefill_pipe_role_selective_generated"
+  existing = "extra/qk/prefill_graph_gemm_route.py"
+  missing = "extra/qk/missing_prefill_writer.py"
+  (tmp_path / existing).parent.mkdir(parents=True, exist_ok=True)
+  (tmp_path / existing).write_text("from tinygrad import Tensor\n_ = Tensor.custom_kernel\n")
+
+  monkeypatch.setattr(audit, "ROOT", tmp_path)
+  surface = audit.ROUTE_SURFACES[route_id]
+  monkeypatch.setattr(audit, "ROUTE_SURFACES", {
+    **audit.ROUTE_SURFACES,
+    route_id: audit.RouteSurface(route_id, surface.surface_class, (existing, missing), surface.reason,
+                                replacement_scope=surface.replacement_scope, descriptor_artifact=surface.descriptor_artifact),
+  })
+
+  report = audit.build()
+  assert missing in report["summary"]["missing_writer_files"]
+  assert route_id in report["summary"]["routes_with_missing_writer_files"]
+
+
 def test_pure_search_guard_uses_strict_surface_classification():
   routes = {r["family"]: r for r in effective_routes({})}
   assert routes["decode_q4k_gemv"]["pure"] is True

@@ -41,8 +41,10 @@ HOT_FAMILIES = [
    "rollback_active": lambda e: False},
   # attention: 8B long-context decode now defaults to the generated live-split + fused-combine + KV_BOTH route. The
   # only rollback here is to generic generated tinygrad flash decode; the retired owned HIP tile is not selected.
-  {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_attention_generic_flash_generated",
-   "rollback_active": lambda e: str(e.get("DECODE_LIVE_SPLIT", "1")) == "0"},
+  # decode_attention_generic_flash_generated oracle DELETED 2026-07-06 (no backups): the generic/whole-cache/fused
+  # handwritten flash routes are gone; unsupported shapes fail loud. Generated live-split is the only kernel route.
+  {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_flash_live_split_g4_8b_kvboth",
+   "rollback_active": lambda e: False},
 ]
 
 

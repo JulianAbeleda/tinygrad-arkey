@@ -53,29 +53,18 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     "Q6_K decode route is emitted from Q6KGEMVRouteSpec; quant-format helpers are shared semantics.",
     descriptor_artifact="Q6KGEMVRouteSpec"),
   # decode_q6k_coop_shipped + decode_q6k_direct_refuted RouteSurfaces REMOVED 2026-07-06 (no backups): kernels deleted.
-  "decode_attention_owned_two_kernel": RouteSurface(
-    "decode_attention_owned_two_kernel", "external_raw_or_binary",
-    ("tinygrad/llm/model.py",),
-    "Retired owned HIP attention implementation."),
+  # decode_attention_owned_two_kernel, decode_flash_block_tile_g5_8b_refuted, decode_attention_generic_flash_generated
+  # RouteSurfaces REMOVED 2026-07-06 (no backups): their manifest ROUTES rows were deleted (kernels/files gone).
   "decode_flash_live_split_g4_8b_kvboth": RouteSurface(
     "decode_flash_live_split_g4_8b_kvboth", "route_local_custom_kernel",
-    ("extra/qk/live_split_geometry.py", "extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
+    ("extra/qk/live_split_geometry.py", "extra/qk/flash_kernels.py"),
     "Promoted attention route still executes hand-authored flash/live-split UOp templates until descriptor artifacts prove topology ownership.",
     replacement_scope="Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."),
   "decode_flash_block_tile_g5_konly": RouteSurface(
     "decode_flash_block_tile_g5_konly", "route_local_custom_kernel",
-    ("extra/qk/live_split_geometry.py", "extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
+    ("extra/qk/live_split_geometry.py", "extra/qk/flash_kernels.py"),
     "G5 attention route shares live-split/block-tile hand UOp template surface until descriptor artifacts prove topology ownership.",
     replacement_scope="Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."),
-  "decode_flash_block_tile_g5_8b_refuted": RouteSurface(
-    "decode_flash_block_tile_g5_8b_refuted", "route_local_custom_kernel",
-    ("extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
-    "Removed/refuted generated-attention candidate still used hand-authored UOp templates."),
-  "decode_attention_generic_flash_generated": RouteSurface(
-    "decode_attention_generic_flash_generated", "route_local_custom_kernel",
-    ("extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
-    "Generic flash fallback is hand-authored Tensor.custom_kernel UOp templates, not ordinary tinygrad scheduler output.",
-    replacement_scope="Convert fallback to ordinary tinygrad graph or descriptor-owned flash specs."),
   "prefill_pipe_role_selective_generated": RouteSurface(
     "prefill_pipe_role_selective_generated", "external_raw_or_binary",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
@@ -136,13 +125,26 @@ def _read(path: str) -> str:
   return p.read_text() if p.exists() else ""
 
 
-def _markers(paths: tuple[str, ...]) -> dict[str, list[str]]:
-  out: dict[str, list[str]] = {}
+def _writer_scan(paths: tuple[str, ...]) -> tuple[dict[str, list[str]], dict[str, bool], list[str]]:
+  markers: dict[str, list[str]] = {}
+  writer_file_exists: dict[str, bool] = {}
+  missing: list[str] = []
   for path in paths:
+    p = ROOT / path
+    exists = p.exists()
+    writer_file_exists[path] = exists
+    if not exists:
+      missing.append(path)
+      continue
     src = _read(path)
     found = sorted({m for m in RAW_MARKERS + CUSTOM_MARKERS + SOURCE_MARKERS if m in src})
-    if found: out[path] = found
-  return out
+    if found: markers[path] = found
+  return markers, writer_file_exists, sorted(missing)
+
+
+def _markers(paths: tuple[str, ...]) -> dict[str, list[str]]:
+  # Backward-compatible helper for previous callers.
+  return _writer_scan(paths)[0]
 
 
 def route_surface(route_id: str) -> RouteSurface:
@@ -170,9 +172,11 @@ def route_surface_row(route_id: str) -> dict[str, Any]:
   manifest_pure = prov in route_manifest.FINAL_DEFAULT_PROVENANCE
   strict_pure = surface.pure
   contradiction = manifest_pure and not strict_pure
+  markers, writer_file_exists, missing_writer_files = _writer_scan(surface.writer_files)
   return {"route_id": route_id, "status": status, "manifest_provenance": prov, "manifest_pure": manifest_pure,
           "surface_class": surface.surface_class, "strict_pure": strict_pure, "contradiction": contradiction,
-          "writer_files": list(surface.writer_files), "markers": _markers(surface.writer_files),
+          "writer_files": list(surface.writer_files), "writer_file_exists": writer_file_exists,
+          "missing_writer_files": missing_writer_files, "markers": markers,
           "descriptor_artifact": surface.descriptor_artifact, "reason": surface.reason,
           "replacement_scope": surface.replacement_scope or str(manifest.get("replacement_scope", ""))}
 
@@ -198,6 +202,8 @@ def build() -> dict[str, Any]:
   rows = route_rows()
   report = strict_default_purity_report()
   missing = [rid for rid in route_manifest.ROUTES if rid not in ROUTE_SURFACES]
+  routes_with_missing_writer_files = sorted([r["route_id"] for r in rows if r["missing_writer_files"]])
+  missing_writer_files = sorted({path for row in rows for path in row["missing_writer_files"]})
   by_surface: dict[str, int] = {}
   for row in rows: by_surface[row["surface_class"]] = by_surface.get(row["surface_class"], 0) + 1
   return {"schema": "pure_kernel_surface_audit.v1",
@@ -206,6 +212,8 @@ def build() -> dict[str, Any]:
           "summary": {"routes_by_surface_class": by_surface,
                       "manifest_contradictions": [r["route_id"] for r in report["manifest_contradictions"]],
                       "unmanifested_runtime_surfaces": [s["surface_id"] for s in UNMANIFESTED_RUNTIME_SURFACES],
+                      "missing_writer_files": missing_writer_files,
+                      "routes_with_missing_writer_files": routes_with_missing_writer_files,
                       "routes_missing_explicit_surface_rows": sorted(missing)},
           "routes": rows,
           "unmanifested_runtime_surfaces": list(UNMANIFESTED_RUNTIME_SURFACES),

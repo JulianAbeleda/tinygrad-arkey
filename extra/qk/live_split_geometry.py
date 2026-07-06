@@ -79,8 +79,7 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
   addressed separately by TG-P9.3/9.4).
   """
   from tinygrad import Tensor, dtypes
-  from extra.qk.flash_decode import (flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel,
-                                     flash_state_gmax_kernel, flash_state_combine_kernel)
+  from extra.qk.flash_kernels import flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel
   _F32 = dtypes.float32
   TK = 16                                    # the tile's K-block size (kernel-internal constant)
   W2 = Hd + 2
@@ -100,12 +99,9 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
     *_inputs,
     fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging, quant=_quant, rope=_rope))[0]
   # TG-P14.9: split-preserving fused combine. One kernel replaces the gmax + per-d combine lifecycle and removes the
-  # Hd-fold fexp redundancy (Hq*Hd*S -> Hq*S fexp). The old two-kernel combine stays available for focused tests.
-  if fused_combine:
-    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_gmax_combine_kernel(Hd, Hq, S, stride=S))[0]
-  else:
-    gm = Tensor.empty(Hq, dtype=_F32).custom_kernel(po, fxn=flash_state_gmax_kernel(Hd, Hq, S, stride=S))[0]
-    out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, gm, fxn=flash_state_combine_kernel(Hd, Hq, S, stride=S))[0]
+  # Hd-fold fexp redundancy (Hq*Hd*S -> Hq*S fexp). (fused_combine is now unconditional; the old two-kernel combine
+  # was removed 2026-07-06.)
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_gmax_combine_kernel(Hd, Hq, S, stride=S))[0]
   return out.reshape(Hq, Hd)
 
 
@@ -124,7 +120,7 @@ def flash_fused_gmax_combine_kernel(Hd: int, Hq: int, S, stride=None):
   """
   from tinygrad.uop.ops import AxisType, KernelInfo, UOp
   from tinygrad.dtype import AddrSpace, dtypes
-  from extra.qk.flash_decode import _fexp, _F32, _ceildiv
+  from extra.qk.flash_common import _fexp, _F32, _ceildiv
   W = Hd + 2; L_COL = Hd; M_COL = Hd + 1; LANES = 32; R = Hd // LANES; NW = _ceildiv(S, LANES)
   stride = S if stride is None else stride
   if Hd % LANES != 0: raise ValueError(f"fused combine needs Hd%%{LANES}==0, got {Hd}")
@@ -166,80 +162,6 @@ def flash_fused_gmax_combine_kernel(Hd: int, Hq: int, S, stride=None):
   return kernel
 
 
-def flash_gm_weights_kernel(Hd: int, Hq: int, S, stride=None):
-  """TG-P9.3 combine stage A (generated UOp): per (h,s) compute gm=max_s' m and the softmax weight w[h,s]=exp(m-gm).
-  Hq*S threads (s GLOBAL so the per-s weight is a valid output store); gm via a nested S reduce. This is the ONLY
-  fexp in the combine lifecycle -- Hq*S of them, not Hq*Hd*S. Output w[Hq*stride]. Fuses the old gmax kernel in."""
-  from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-  from tinygrad.dtype import AddrSpace, dtypes
-  from extra.qk.flash_decode import _fexp, _F32
-  W = Hd + 2; M_COL = Hd + 1
-  stride = S if stride is None else stride
-  def kernel(w_out: UOp, pout: UOp) -> UOp:
-    h = UOp.range(Hq, 0, AxisType.GLOBAL)               # Hq workgroups (matches the working gmax kernel shape)
-    gmx = UOp.placeholder((1,), _F32, 250, addrspace=AddrSpace.REG)
-    sp = UOp.range(S, 1, axis_type=AxisType.REDUCE)     # reduce for gm = max_s m (gmax fused in)
-    gacc = gmx.after(h)[0].set(-1e30)
-    g = gacc[0].set(gacc.after(sp)[0].maximum(pout[(h * stride + sp) * W + M_COL]), end=sp)
-    gm = gacc.after(g)[0]
-    sw = UOp.range(S, 2)                                # plain loop writes the S weights (per-s store is valid)
-    wv = _fexp(pout[(h * stride + sw) * W + M_COL] - gm)
-    return w_out[h * stride + sw].store(wv).end(sw).end(h).sink(arg=KernelInfo(name=f"flash_gm_weights_{Hq}"))
-  return kernel
-
-
-def flash_weighted_sum_kernel(Hd: int, Hq: int, S, stride=None):
-  """TG-P9.3 combine stage B (generated UOp): out[h,d] = (sum_s w[h,s]*pv[h,s,d]) / (sum_s w[h,s]*l[h,s]). Hq*Hd
-  workgroups, S reduce, NO fexp (weights precomputed in stage A). Preserves Hq*Hd (d GLOBAL) and Hq*S (s reduce)
-  parallelism -- no collapse. den is a cheap fexp-free reduce folded in here (redundant over d, S mults only)."""
-  from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-  from tinygrad.dtype import AddrSpace, dtypes
-  from extra.qk.flash_decode import _F32
-  W = Hd + 2; L_COL = Hd
-  stride = S if stride is None else stride
-  def kernel(out: UOp, w_in: UOp, pout: UOp) -> UOp:
-    h = UOp.range(Hq, 0, AxisType.GLOBAL)
-    d = UOp.range(Hd, 1, AxisType.GLOBAL)
-    num = UOp.placeholder((1,), _F32, 252, addrspace=AddrSpace.REG)
-    den = UOp.placeholder((1,), _F32, 253, addrspace=AddrSpace.REG)
-    num = num.after(h, d)[0].set(0.0)
-    den = den.after(h, d)[0].set(0.0)
-    s = UOp.range(S, 2, axis_type=AxisType.REDUCE)
-    ws = w_in[h * stride + s]
-    upd = num[0].store(num.after(s)[0] + ws * pout[(h * stride + s) * W + d])
-    upd = den.after(upd)[0].store(den.after(s)[0] + ws * pout[(h * stride + s) * W + L_COL]).end(s)
-    return out[h * Hd + d].store(num.after(upd)[0] / den.after(upd)[0]).end(h, d).sink(
-      arg=KernelInfo(name=f"flash_weighted_sum_{Hq}_{Hd}"))
-  return kernel
-
-
-def flash_inline_gm_combine_kernel(Hd: int, Hq: int, S, stride=None):
-  """TG-P9.3 combine (conservative, compiles): the working flash_state_combine with gm computed INLINE via a nested
-  reduce, so the separate gmax kernel is fused away (3-kernel lifecycle -> 2). Structure is byte-for-byte the proven
-  per-(h,d) combine (h,d GLOBAL, s REDUCE), so it does not trip the reduction-REG vectorization that blocks the
-  weight-sharing variants. It does NOT remove the per-d fexp redundancy (that needs the emitter-blocked LDS/weight
-  share), so it is a partial win: saves the gmax launch, not the fexp cost."""
-  from tinygrad.uop.ops import AxisType, KernelInfo, UOp
-  from tinygrad.dtype import AddrSpace, dtypes
-  from extra.qk.flash_decode import _fexp, _F32
-  W = Hd + 2; L_COL = Hd; M_COL = Hd + 1
-  stride = S if stride is None else stride
-  def kernel(out: UOp, pout: UOp) -> UOp:
-    h = UOp.range(Hq, 0, AxisType.GLOBAL)
-    d = UOp.range(Hd, 1, AxisType.GLOBAL)
-    gmx = UOp.placeholder((1,), _F32, 254, addrspace=AddrSpace.REG)
-    sp = UOp.range(S, 2, axis_type=AxisType.REDUCE)
-    gacc = gmx.after(h, d)[0].set(-1e30)
-    g = gacc[0].set(gacc.after(sp)[0].maximum(pout[(h * stride + sp) * W + M_COL]), end=sp)
-    gm_h = gacc.after(g)[0]
-    s = UOp.range(S, 3, axis_type=AxisType.REDUCE)
-    w = _fexp(pout[(h * stride + s) * W + M_COL] - gm_h)
-    num = UOp.placeholder((1,), _F32, 255, addrspace=AddrSpace.REG)
-    den = UOp.placeholder((1,), _F32, 256, addrspace=AddrSpace.REG)
-    num = num.after(g, h, d)[0].set(0.0)
-    den = den.after(g, h, d)[0].set(0.0)
-    upd = num[0].store(num.after(s)[0] + w * pout[(h * stride + s) * W + d])
-    upd = den.after(upd)[0].store(den.after(s)[0] + w * pout[(h * stride + s) * W + L_COL]).end(s)
-    return out[h * Hd + d].store(num.after(upd)[0] / den.after(upd)[0]).end(h, d).sink(
-      arg=KernelInfo(name=f"flash_inline_gm_combine_{Hq}_{Hd}"))
-  return kernel
+# REMOVED 2026-07-06 (no backups): flash_gm_weights_kernel, flash_weighted_sum_kernel, flash_inline_gm_combine_kernel
+# were research-only combine variants never used by flash_decode_live_split_block_tile (which is unconditionally
+# fused_combine=True via flash_fused_gmax_combine_kernel above).

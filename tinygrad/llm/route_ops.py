@@ -44,11 +44,6 @@ def q6k_gemm_packed_load_direct_out_kernel(*args, **kwargs):
 def q6k_spec_for_role(*args, **kwargs): return _attr("extra.qk.q6k_route_spec", "spec_for_role")(*args, **kwargs)
 def emit_q6k_gemv_kernel(*args, **kwargs): return _attr("extra.qk.q6k_route_spec", "emit_q6k_gemv_kernel")(*args, **kwargs)
 
-def flash_decode_attention(*args, **kwargs): return _attr("extra.qk.flash_decode", "flash_decode_attention")(*args, **kwargs)
-def flash_decode_attention_whole_cache(*args, **kwargs): return _attr("extra.qk.flash_decode", "flash_decode_attention_whole_cache")(*args, **kwargs)
-def flash_decode_g5_block_tile(*args, **kwargs): return _attr("extra.qk.flash_decode", "flash_decode_g5_block_tile")(*args, **kwargs)
-def flash_decode_attention_kv_flat(*args, **kwargs): return _attr("extra.qk.flash_decode", "flash_decode_attention_kv_flat")(*args, **kwargs)
 def flash_decode_live_split_block_tile(*args, **kwargs): return _attr("extra.qk.live_split_geometry", "flash_decode_live_split_block_tile")(*args, **kwargs)
-def flash_decode_fused_combine(*args, **kwargs): return _attr("extra.qk.flash_decode_fused_combine", "flash_decode_fused_combine")(*args, **kwargs)
 
 def assert_pure_machine_search(*args, **kwargs): return _attr("extra.qk.pure_search_guard", "assert_pure_machine_search")(*args, **kwargs)

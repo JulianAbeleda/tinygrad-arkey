@@ -1,4 +1,4 @@
-"""Shared low-level helpers/constants for the generated flash-decode kernels (float const, exp2, KernelInfo, ceildiv). Imported by flash_kernels.py (the UOp kernel builders) and flash_decode.py (the entry points)."""
+"""Shared low-level helpers/constants for the generated flash-decode kernels (float const, exp2, KernelInfo, ceildiv). Imported by flash_kernels.py (the UOp kernel builders) and extra/qk/live_split_geometry.py (the entry points)."""
 from __future__ import annotations
 from tinygrad import Tensor, dtypes  # noqa: E402
 from tinygrad.helpers import getenv  # noqa: E402
