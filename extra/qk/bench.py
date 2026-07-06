@@ -16,6 +16,7 @@ import sys
 from extra.qk.prefill_harness import (
   PREFILL_MODES, csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env,
 )
+from extra.qk.timing_harness import add_clock_pin_arg
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -38,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--prefill-start-positions", default=None)
   ap.add_argument("--prefill-whole-lengths", default=None)
   ap.add_argument("--prefill-no-artifact", action="store_true", help="do not write prefill-whole-synced/latest.json")
-  ap.add_argument("--pin-clock", action="store_true", help="pin AMD clocks during prefill timing windows")
+  add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
 
   both = not (args.prefill or args.decode)
