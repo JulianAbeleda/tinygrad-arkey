@@ -503,31 +503,6 @@ def q4k_gemv_warp_kernel(rows:int, k:int, lanes:int=32):
 
   return kernel
 
-def q4k_coop_partial_kernel(rows:int, k:int, row_tile:int=8):
-  # Cooperative-K Q4_K GEMV (MMVQ_COOP, sibling of q6k_coop_partial_kernel). The Q4_K quant word index is
-  # `4 + (grp//2)*8 + pos//4`, so the within-block word index `lane4` (= pos//4, 0..7) becomes a LOCAL lane
-  # axis -> adjacent lanes read ADJACENT packed words -> coalesced (the default q4k_gemv_partial maps one row
-  # per thread -> uncoalesced, ~40% peak). Each lane reads one qword and does its 4 nibbles across the 8 groups
-  # (_q4k_block_dot_packed_load) and writes its OWN partial partials[row, lane4]; stage-2 `.sum(axis=1)` reduces
-  # the 8 lanes (no in-kernel cross-lane reduce, like the Q6_K coop kernel). row_tile rows share a workgroup
-  # (lanes = row_tile*8) for occupancy. Output: partials[rows, 8].
-  k_blocks = k // Q4_K_BLOCK_ELEMS
-
-  def kernel(partials:UOp, words:UOp, x:UOp) -> UOp:
-    row_o = UOp.range(cdiv(rows, row_tile), 0)
-    row_i = UOp.range(row_tile, 1, axis_type=AxisType.LOCAL)
-    lane4 = UOp.range(8, 2, axis_type=AxisType.LOCAL)
-    blk = UOp.range(k_blocks, 3, axis_type=AxisType.REDUCE)
-    row = row_o * row_tile + row_i
-    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
-    contrib = _q4k_block_dot_packed_load(words, x, base, blk, lane4)
-
-    acc = partials[row, lane4].set(0.0)
-    acc = partials[row, lane4].set(acc.after(blk)[row, lane4] + contrib, end=blk)
-    return acc.end(row_o, row_i, lane4).sink(arg=_kernel_info(f"q4k_coop_partial_{rows}_{k}", "", ()))
-
-  return kernel
-
 def _q4k_block_dot_packed_load_gemm(words:UOp, x:UOp, base:UOp, x_block:UOp, lane4:UOp, bb:UOp, k:int) -> UOp:
   # GEMM body: x is flattened [B*K]; each dequantized weight is reused across the B columns.
   # If bb is UPCAST'd, tinygrad unrolls it and CSEs the weight, so the dequant runs once per weight.

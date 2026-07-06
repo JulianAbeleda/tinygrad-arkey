@@ -46,10 +46,7 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     ("extra/qk/gemv_g3_codegen_lowering.py", "extra/qk/gemv_g2_lanemap.py"),
     "Q4_K decode G3 is generated from Q4KGateUpLaneMap; no raw/source-string route escape is selected.",
     descriptor_artifact="Q4KGateUpLaneMap"),
-  "decode_q4k_owned_warp": RouteSurface(
-    "decode_q4k_owned_warp", "rollback_oracle",
-    ("extra/qk/quant/q4_k_gemv_primitive.py",),
-    "Rollback/reference Q4_K owned warp template."),
+  # decode_q4k_owned_warp REMOVED 2026-07-06 (no backups): rollback route deleted; bubblebeam-off -> ordinary graph.
   "decode_q6k_coop_generated": RouteSurface(
     "decode_q6k_coop_generated", "descriptor_owned_uop_codegen",
     ("extra/qk/q6k_route_spec.py", "extra/qk/quant/q6_k_gemv_primitive.py"),

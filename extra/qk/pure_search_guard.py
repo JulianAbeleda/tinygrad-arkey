@@ -26,8 +26,10 @@ from extra.qk.pure_kernel_surface_audit import route_surface_row
 # env selects the handwritten oracle instead of the generated default; `generated_route`/`oracle_route` are the two
 # manifest route ids. `pure_default` names the generated route that SHOULD be selected on a pure path.
 HOT_FAMILIES = [
-  {"family": "decode_q4k_gemv", "generated": "decode_q4k_g3_generated", "oracle": "decode_q4k_owned_warp",
-   "rollback_active": lambda e: str(e.get("BUBBLEBEAM_FUTURESIGHT", "1")) == "0"},
+  # decode_q4k_owned_warp rollback DELETED 2026-07-06 (no backups): BUBBLEBEAM_FUTURESIGHT=0 now falls to the
+  # ordinary tinygrad graph (pure), not a hand kernel. Generated G3 is the only Q4_K decode kernel route.
+  {"family": "decode_q4k_gemv", "generated": "decode_q4k_g3_generated", "oracle": "decode_q4k_g3_generated",
+   "rollback_active": lambda e: False},
   # decode_q6k_coop_shipped rollback DELETED (no backups): generated Q6_K decode is now unconditional.
   {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_generated",
    "rollback_active": lambda e: False},

@@ -10,7 +10,7 @@ from tinygrad.llm.admission import (
 )
 from tinygrad.llm.gguf import gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm import route_ops as qk_ops
-from tinygrad.llm.decode_routes import clear_vdot_quant_cache, flash_decode_attention_route
+from tinygrad.llm.decode_routes import flash_decode_attention_route
 from tinygrad.llm.prefill_policy import (
   prefill_concrete_kv_auto_decision, prefill_v2_auto_decision, prefill_v2_realize_bytes,
   prefill_v2_validate_ubatch,
@@ -761,7 +761,6 @@ class Transformer:
     # prefill v2: only when opt-in AND this is a CONCRETE-batch prefill chunk. Normal prefill passes a symbolic
     # v_toks (tokens.shape[1] is a UOp -> not int), so the two paths never collide; decode is T==1.
     is_prefill_v2 = PREFILL_V2 and is_prefill and isinstance(tokens.shape[1], int)
-    if getenv("Q4K_VDOT_AMORT"): clear_vdot_quant_cache()  # E0: fresh quant cache per forward/trace
     for q4k_linear in self._q4k_linears.linears:
       q4k_linear.decode_enabled = not is_prefill
     # context-aware flash: each block reads _use_flash at trace time; rollout_jit (SDPA) and

@@ -63,8 +63,8 @@ ROUTES = {
       {"role": "attn_qo", "K": 4096, "N": 4096},
       {"role": "anyshape", "condition": "DECODE_Q4K_G3_ANYSHAPE=1 and (K//256)%4==0 and N%32==0"}],
     "env": {},  # DEFAULT-ON: decode_routes.py q4k_primitive_linear_call getenv("BUBBLEBEAM_FUTURESIGHT", 1). No flag needed.
-    "rollback": {"BUBBLEBEAM_FUTURESIGHT": "0"},  # -> owned warp (decode_q4k_owned_warp)
-    "baseline_route_id": "decode_q4k_owned_warp",  # the oracle/baseline the evaluator measures against (== rollback target)
+    "rollback": {},  # no backups: the handwritten owned-warp rollback was deleted 2026-07-06. BUBBLEBEAM_FUTURESIGHT=0 now falls to the ordinary tinygrad graph, not a hand kernel.
+    "baseline_route_id": "ordinary_tinygrad_graph",  # bubblebeam-off baseline is the ordinary dequant+matmul graph
     "strict_fallback": True,
     "expected_kernels": ["q4k_g3_lanemap_gemv_*"],
     "forbidden_kernels": ["q4k_gemv_warp_kernel (on the eligible roles)", "q4k_lane_partition_gemv_*", "fallback_graph"],
@@ -76,24 +76,8 @@ ROUTES = {
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (QK_ROUTE_POLICY selects decode_q4k_g3_generated per tensor when present, else g3 fires by default for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility; strict mode fails loud on hidden fallback); writer extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
     "note": "generated wave32 UOp program lowered from the G2 Q4_K LaneMap (extra/qk/gemv_g2_lanemap.py). Speed-equivalent to owned warp (-0.13..+0.41% across ctx 512-4096), token-identical, route-clean. DECODE_Q4K_G3_ANYSHAPE extends it structurally to larger dense Q4_K shapes (including attn_k when policy installs it). This is the positive-control pure-search default decode kernel."},
-  "decode_q4k_owned_warp": {
-    "workload": "decode", "profile_id": PROFILE_DECODE, "status": "rollback_reference",
-    "roles": ["ffn_gate_up", "ffn_down", "attn_qo"], "excluded_roles": [],
-    "quant": ["Q4_K"],
-    "shape_guards": [
-      {"role": "ffn_gate_up", "K": 4096, "N": 12288}, {"role": "ffn_down", "K": 12288, "N": 4096},
-      {"role": "attn_qo", "K": 4096, "N": 4096}],
-    "env": {"BUBBLEBEAM_FUTURESIGHT": "0"},  # SET this to force owned warp (the rollback for G3)
-    "rollback": {},  # this IS the rollback target
-    "strict_fallback": True,
-    "expected_kernels": ["q4k_gemv_warp_4096_4096", "q4k_gemv_warp_kernel"],
-    "authority_gate": "retired 2026-07-03; promotion banked in docs/qk-gate-series-conclusions.md (was extra/audit/amd_isa/g3_weight_promotion_gate.py)",
-    "promotion_artifacts": ["docs/decode-q4k-gemv-warp-promotion-result-20260624.md"],
-    "purity_status": "owned_reference",
-    "provenance": "rollback_oracle",
-    "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (Q4K_GEMV_WARP_PROJ default 1, q/o + Q4K_GEMV_WARP default 1, gate/up+down); reached only when BUBBLEBEAM_FUTURESIGHT=0 short-circuits the G3 branch. Writer extra/qk/quant/q4_k_gemv_primitive.py q4k_gemv_warp_kernel",
-    "note": "hand-written owned warp GEMV. The Q4K_GEMV_WARP* guards still default to 1, but the G3 branch intercepts first for the eligible shapes when BUBBLEBEAM_FUTURESIGHT is on (the default). So owned warp is the rollback/reference, not the live default."},
+  # decode_q4k_owned_warp REMOVED 2026-07-06 (no backups): the handwritten owned-warp/coop/direct/vdot rollback
+  # path in decode_routes.py was deleted. BUBBLEBEAM_FUTURESIGHT=0 now falls to the ordinary tinygrad graph.
   # ---------------- decode weight GEMV: Q6_K ----------------
   "decode_q6k_coop_generated": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "promoted_default",

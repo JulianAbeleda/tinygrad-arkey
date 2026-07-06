@@ -76,7 +76,7 @@ route-local kernel directly emits a source string or instruction list to force i
 | `extra/qk/prefill/wmma.py` raw builders | `external_handwritten_kernel` | Explicit instruction-list emitter using RDNA3 instructions and `Ops.INS`. |
 | `route_q4k_graph_gemm` fused Q4_K WMMA path | `external_handwritten_kernel` | Calls `build_gemm_lds2_q4k` and wraps the emitted instruction list in `Ops.INS`. |
 | `native_isa_block_tile_graph_node.py` | `external_handwritten_kernel` for selected runtime use | Injects a precompiled native-ISA `Ops.BINARY` program into the HIP runtime. |
-| `decode_q4k_owned_warp` / `decode_q6k_coop_shipped` | `rollback_oracle` | Retained rollback/reference implementations, not pure defaults. |
+| ~~`decode_q4k_owned_warp` / `decode_q6k_coop_shipped`~~ | — | Removed 2026-07-06 (no backups): rollback routes deleted; bubblebeam-off / generated-off now falls to the ordinary tinygrad graph. |
 
 ## Audit Rule
 

@@ -33,7 +33,6 @@ def emit_q4k_packed_prefill_tile(*args, **kwargs): return _attr("extra.qk.prefil
 def q4k_gemv_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_kernel")(*args, **kwargs)
 def q4k_gemv_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_partial_kernel")(*args, **kwargs)
 def q4k_gemv_warp_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemv_warp_kernel")(*args, **kwargs)
-def q4k_coop_partial_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_coop_partial_kernel")(*args, **kwargs)
 def q4k_q8_1_vdot_builtin_partial_kernel(*args, **kwargs):
   return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_q8_1_vdot_builtin_partial_kernel")(*args, **kwargs)
 def q8_signed_pack_u32_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q8_signed_pack_u32_kernel")(*args, **kwargs)

@@ -9,11 +9,6 @@ from tinygrad.llm.route_policy import (
   has_qk_route_policy, qk_route_policy_strict,
 )
 
-_VDOT_QUANT_CACHE: dict = {}  # per-token q8 quant cache keyed by x.uop.key
-
-def clear_vdot_quant_cache() -> None:
-  _VDOT_QUANT_CACHE.clear()
-
 def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool) -> Tensor:
   # Decode GEMV (1 token) or batched verify/prefill GEMM (K tokens). Unsupported bias/shape -> normal graph.
   if not linear.decode_enabled or linear.bias is not None or len(x.shape) != 3 or x.shape[0] != 1 or x.shape[-1] != linear.in_features:
@@ -65,53 +60,10 @@ def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
                      f"tensor {linear.name!r} (out={linear.out_features}, in={linear.in_features}) but it did not bind to "
                      f"the G3 route (structural eligibility (in//256)%4==0 and out%32==0 not met, or arch unsupported)")
 
-  x_vec = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float16).contiguous()
-  words = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
-  if getenv("Q4K_GEMV_WARP_PROJ", 1) and linear.parts == 1 and linear.out_features == 4096 and linear.in_features == 4096 \
-     and (linear.in_features // 256) % 4 == 0 and arch_ok:
-    try:
-      out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-      got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_warp_kernel(linear.out_features, linear.in_features))[0]
-      return got.reshape(1, 1, linear.out_features)
-    except Exception as e:
-      if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP_PROJ fallback: {e}")
-  rt4 = getenv("Q4K_COOP_RT", 16)
-  if getenv("Q4K_ATTN_QO_COOP", 1) and linear.parts == 1 and linear.out_features == 4096 and linear.in_features == 4096 \
-      and linear.out_features % rt4 == 0:
-    partials = Tensor.empty(linear.out_features, 8, dtype=dtypes.float32, device=x.device)
-    partial = partials.custom_kernel(words, x_vec, fxn=qk_ops.q4k_coop_partial_kernel(linear.out_features, linear.in_features, rt4))[0]
-    return partial.sum(axis=1).reshape(1, 1, linear.out_features)
-  if linear.kernel_mode == "direct_out":
-    out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-    got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_kernel(linear.out_features, linear.in_features, "none", linear.opts))[0]
-    return got.reshape(1, 1, linear.out_features)
-  partials = Tensor.empty(linear.out_features, linear.parts, dtype=dtypes.float32, device=x.device)
-  if getenv("Q4K_VDOT") and linear.parts == 1:
-    amort = bool(getenv("Q4K_VDOT_AMORT"))
-    ck = x.uop.key if amort else None
-    cached = _VDOT_QUANT_CACHE.get(ck) if amort else None
-    if cached is None:
-      q, scales = qk_ops.q8_1_quantize(x_vec.cast(dtypes.float32))
-      q_bias_words = Tensor.empty(linear.in_features // 4, dtype=dtypes.uint32, device=x.device).custom_kernel(
-        q, fxn=qk_ops.q8_1_bias_pack_u32_kernel(linear.in_features))[0]
-      if amort: _VDOT_QUANT_CACHE[ck] = (q_bias_words, scales); _VDOT_QUANT_CACHE["m"] = _VDOT_QUANT_CACHE.get("m", 0)+1
-    else:
-      q_bias_words, scales = cached; _VDOT_QUANT_CACHE["h"] = _VDOT_QUANT_CACHE.get("h", 0)+1
-    partial = partials.custom_kernel(words, q_bias_words, scales,
-      fxn=qk_ops.q4k_q8_1_vdot_builtin_partial_kernel(linear.out_features, linear.in_features, 1, "none", ()))[0]
-    return partial.sum(axis=1).reshape(1, 1, linear.out_features)
-  if getenv("Q4K_GEMV_WARP", 1) and (linear.in_features // 256) % 4 == 0 and arch_ok \
-     and ((linear.in_features == 4096 and linear.out_features == 12288 and linear.parts == 1)
-          or (getenv("Q4K_GEMV_WARP_DOWN", 1) and linear.in_features == 12288 and linear.out_features == 4096)):
-    try:
-      out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-      got = out.custom_kernel(words, x_vec, fxn=qk_ops.q4k_gemv_warp_kernel(linear.out_features, linear.in_features))[0]
-      return got.reshape(1, 1, linear.out_features)
-    except Exception as e:
-      if getenv("DEBUG", 0): print(f"Q4K_GEMV_WARP fallback: {e}")
-  partial = partials.custom_kernel(words, x_vec,
-    fxn=qk_ops.q4k_gemv_partial_kernel(linear.out_features, linear.in_features, linear.parts, "none", linear.opts))[0]
-  return partial.sum(axis=1).reshape(1, 1, linear.out_features)
+  # No backups: when the generated G3 route is not selected (BUBBLEBEAM_FUTURESIGHT=0 or a non-G3-eligible shape),
+  # decode falls through to the ordinary tinygrad graph. The handwritten warp/coop/direct/vdot rollback kernels
+  # that used to live here have been retired.
+  return fallback(x)
 
 def q6k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], Tensor], arch_ok:bool) -> Tensor:
   # Q6_K decode GEMV (1 token) or batched verify/prefill GEMM (K tokens).
