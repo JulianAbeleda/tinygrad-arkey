@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from extra.qk.prefill_int8_wmma_spec import describe_q4k_int8_wmma_tiled_prefill
+from extra.qk.q4k_wmma_tile_lowering import describe_q4k_wmma_full_role_lowering
 from extra.qk.q4k_wmma_tiled_lifecycle_gate import build as lifecycle_build
 
 ROLE_SHAPES = (
@@ -17,11 +17,13 @@ ROLE_SHAPES = (
 
 
 def _role_row(role:str, m:int, n:int, k:int) -> dict[str, Any]:
-  spec = describe_q4k_int8_wmma_tiled_prefill(n, k, m, role=role, m_tile=16, n_tile=16, group_tile=1)
+  spec = describe_q4k_wmma_full_role_lowering(n, k, m, role=role, m_tile=16, n_tile=16, group_tile=1)
+  plan = spec.to_json()
   return {"role": role, "m": m, "n": n, "k": k, "groups": spec.groups,
-          "tile": {"m_tile": spec.m_tile, "n_tile": spec.n_tile, "group_tile": spec.group_tile,
+          "tile": {"m_tile": spec.tiled.m_tile, "n_tile": spec.tiled.n_tile, "group_tile": spec.tiled.group_tile,
                    "live_raw_elems": spec.live_raw_elems,
                    "forbidden_full_raw_elems": spec.forbidden_full_raw_elems},
+          "lowering_plan": plan,
           "exec": {"attempted": False, "class": "blocked.lifecycle_missing",
                    "compile_ms": None, "runtime_ms": None, "kernel_count": None,
                    "graph_node_count": None, "wmma_present": None}}
@@ -33,7 +35,7 @@ def build(lifecycle:dict[str, Any]|None=None) -> dict[str, Any]:
   lifecycle_pass = lifecycle["verdict"] == "Q4K_WMMA_TILED_LIFECYCLE_PASS"
   rows = [_role_row(*shape) for shape in ROLE_SHAPES]
   for row in rows:
-    row["exec"]["class"] = "blocked.full_role_lowering_missing" if lifecycle_pass else "blocked.lifecycle_missing"
+    row["exec"]["class"] = "blocked.scheduler_owned_tile_loop_missing" if lifecycle_pass else "blocked.lifecycle_missing"
   verdict = "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING" if lifecycle_pass else \
     "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE" if lifecycle_blocked else "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_FAIL"
   return {"schema": "q4k_wmma_tiled_role_shape_exec_gate.v1",
@@ -44,7 +46,7 @@ def build(lifecycle:dict[str, Any]|None=None) -> dict[str, Any]:
           "roles": rows,
           "classified_blocker": verdict in ("Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE",
                                             "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING"),
-          "blocker": "role execution is intentionally not attempted until full-role synthetic lowering exists",
+          "blocker": "role execution is intentionally not attempted until a scheduler-owned tile_m/tile_n/group loop exists",
           "distinction_from_classifier": "q4k_wmma_tiled_role_shape enumerates/selects shapes; this gate is reserved for actual synthetic execution metrics"}
 
 

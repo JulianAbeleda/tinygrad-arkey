@@ -139,7 +139,7 @@ GATES: tuple[GateSpec, ...] = (
            entry="extra.qk.q4k_wmma_tiled_no_hand_kernel_gate:build", kind="audit",
            out_dir="q4k-wmma-tiled-no-hand-kernel",
            inputs=("extra/qk/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py",
-                   "tinygrad/llm/generated_candidates.py"),
+                   "tinygrad/llm/generated_candidates.py", "extra/qk/q4k_wmma_tile_lowering.py"),
            pass_verdicts=frozenset({"Q4K_WMMA_TILED_NO_HAND_KERNEL_PASS"})),
   GateSpec(name="q4k_wmma_tiled_lifecycle", entry="extra.qk.q4k_wmma_tiled_lifecycle_gate:build",
            kind="gate", needs_gpu=True, out_dir="q4k-wmma-tiled-lifecycle",
