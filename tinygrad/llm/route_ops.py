@@ -27,8 +27,6 @@ def describe_q4k_int8_wmma_tiled_prefill(*args, **kwargs): return _attr("extra.q
 def emit_q4k_int8_wmma_prefill_tensor(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_prefill_tensor")(*args, **kwargs)
 def emit_q4k_int8_wmma_tiled_prefill_tensor(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_prefill_tensor")(*args, **kwargs)
 def emit_q4k_int8_wmma_tiled_lifecycle_tensor(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_lifecycle_tensor")(*args, **kwargs)
-def describe_q4k_packed_prefill_tile(*args, **kwargs): return _attr("extra.qk.prefill_packed_tile_spec", "describe_q4k_packed_prefill_tile")(*args, **kwargs)
-def emit_q4k_packed_prefill_tile(*args, **kwargs): return _attr("extra.qk.prefill_packed_tile_spec", "emit_q4k_packed_prefill_tile")(*args, **kwargs)
 def q8_1_quantize(*args, **kwargs): return _attr("extra.qk.layout", "q8_1_quantize")(*args, **kwargs)
 def quantize_q4_k(*args, **kwargs): return _attr("extra.qk.quantize", "quantize_q4_k")(*args, **kwargs)
 

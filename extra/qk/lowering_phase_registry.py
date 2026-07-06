@@ -21,13 +21,6 @@ class LoweringPhaseRegistryRow(TypedDict):
 
 _PHASE_ROWS: tuple[LoweringPhaseRegistryRow, ...] = (
   {
-    "id": "prefill_q4k_generated_tile_research",
-    "phase": 2,
-    "phase_name": "direct_packed_prefill",
-    "target_lowering_level": "L3",
-    "next_action": "rework tile research route to generated emitter + descriptor",
-  },
-  {
     "id": "decode_flash_live_split_g4_8b_kvboth",
     "phase": 3,
     "phase_name": "decode_attention_live_split",

@@ -18,7 +18,9 @@ def clean_prefill_route_env():
                                         "PREFILL_Q6K_DIRECT_EXTRA_OPTS", "PREFILL_DIRECT_FFN_GATE_UP_OPTS",
                                         "PREFILL_DIRECT_FFN_GATE_UP_EXTRA_OPTS", "PREFILL_Q4K_DIRECT_SCHEDULE",
                                         "PREFILL_Q4K_WMMA_TILED_M_TILE", "PREFILL_Q4K_WMMA_TILED_N_TILE",
-                                        "PREFILL_Q4K_WMMA_TILED_GROUP_TILE")}
+                                        "PREFILL_Q4K_WMMA_TILED_GROUP_TILE", "PREFILL_QK_GENERATED_TILE",
+                                        "PREFILL_QK_GENERATED_TILE_ROLES", "PREFILL_QK_GENERATED_TILE_MODE",
+                                        "PREFILL_QK_GENERATED_TILE_ROWS", "PREFILL_QK_GENERATED_TILE_TOKENS")}
   for k in old: os.environ.pop(k, None)
   yield
   for k, v in old.items():
@@ -296,6 +298,15 @@ def test_q4_reduce_out_uses_generated_descriptor(monkeypatch):
   out = prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), _PrefillTensorStub())
   assert isinstance(out, _PrefillTensorStub)
   assert calls[0][2]["output_layout"] == "reduce_out"
+
+
+def test_q4_generated_tile_flag_is_retired(monkeypatch):
+  from tinygrad.llm import prefill_routes
+
+  os.environ["PREFILL_QK_GENERATED_TILE"] = "1"
+  monkeypatch.setattr(prefill_routes, "Tensor", _TensorFactoryStub)
+  with pytest.raises(RuntimeError, match="PREFILL_QK_GENERATED_TILE was retired"):
+    prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), _PrefillTensorStub())
 
 
 def test_q6_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):

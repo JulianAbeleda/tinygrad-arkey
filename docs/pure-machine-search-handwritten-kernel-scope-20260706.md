@@ -51,8 +51,7 @@ claim:
    they should be downgraded to `hand_authored_uop_template`.
 5. Small-K batched Q4_K/Q6_K routes (`K<=32`) in `decode_routes.py` call hand UOp GEMM templates and need explicit
    manifest or guard coverage.
-6. `prefill_q4k_generated_tile_research` is descriptor-shaped, but its emitter still returns hand-written UOp bodies; keep
-   it research/provisional until generated provenance is mechanically proven.
+6. The refuted `PREFILL_QK_GENERATED_TILE` opt-in is retired fail-loud; historical helpers remain fixtures only.
 7. Non-runtime flash source-string helpers such as `flash_partial_src` / `flash_reduce_src` must be listed as fixtures so
    audits can distinguish them from selected route debt.
 
@@ -250,15 +249,14 @@ Why non-pure or provisional:
 - `prefill_q4k_reduce_out_research` is non-default research, but now descriptor-owned through `Q4KPrefillRouteSpec`.
   The old `PREFILL_Q4K_Q8=sdot4/mmq/mmq_direct` routes were removed 2026-07-06; any remaining helper symbols are
   historical/non-default fixture debt, not valid route envs.
-- `emit_q4k_packed_prefill_tile` is descriptor-shaped, but it still shares hand-authored Q4_K UOp helper topology; it
-  should remain research until generated-only provenance is proved.
+- `emit_q4k_packed_prefill_tile` is historical fixture code; `PREFILL_QK_GENERATED_TILE` no longer reaches it.
 
 Runtime reachability:
 
 - Default memory-safe Q4_K prefill routes through `Q4KPrefillRouteSpec` when resident fp16 is unavailable or not chosen.
 - Generated Q4_K/Q8_1 research modes are selected by `PREFILL_Q4K_Q8=wmma|wmma_tiled`; legacy scalar/MMQ values are
   rejected.
-- Generated packed tile is selected by `PREFILL_QK_GENERATED_TILE=1`.
+- The refuted generated packed-tile opt-in `PREFILL_QK_GENERATED_TILE=1` now fails loud.
 
 Gameplan:
 

@@ -183,30 +183,10 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
     words = lin.prefill_packed_weight().to(x.device)
     partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
     opts = _direct_packed_opts(lin, spec)
-    generated_tile_on = bool(_env("PREFILL_QK_GENERATED_TILE", 0))
-    generated_tile_roles = _csv_set("PREFILL_QK_GENERATED_TILE_ROLES", "ffn_gate_up")
     role = _direct_packed_role(lin, spec)
-    if generated_tile_on and (not generated_tile_roles or role in generated_tile_roles):
-      try:
-        tile_mode = str(os.environ.get("PREFILL_QK_GENERATED_TILE_MODE", "lane_partials")).strip().lower()
-        default_rows, default_tokens = (1, 4) if tile_mode == "direct_warp" else (4, 8)
-        tile_spec = qk_ops.describe_q4k_packed_prefill_tile(
-          spec.n, spec.k, spec.m, role=role,
-          row_tile=max(1, int(_env("PREFILL_QK_GENERATED_TILE_ROWS", default_rows))),
-          token_tile=max(1, int(_env("PREFILL_QK_GENERATED_TILE_TOKENS", default_tokens))),
-          output_layout=tile_mode)
-      except Exception:
-        if prefill_route_strict(): raise
-      else:
-        if tile_spec.output_layout == "direct_warp":
-          out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-            words, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q4k_packed_prefill_tile(tile_spec))[0]
-          return out.reshape(1, spec.m, spec.n)
-        else:
-          tile_partials = Tensor.empty(spec.n, spec.m, 8, dtype=dtypes.float32, device=x.device)
-          out = tile_partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
-            fxn=qk_ops.emit_q4k_packed_prefill_tile(tile_spec))[0]
-          return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
+    if bool(_env("PREFILL_QK_GENERATED_TILE", 0)):
+      raise RuntimeError("PREFILL_QK_GENERATED_TILE was retired after the generated packed-tile route was refuted; "
+                         "use the Q4KPrefillRouteSpec direct-packed default or PREFILL_Q4K_Q8=wmma_tiled research.")
     q8_mode = prefill_q4k_q8_mode()
     if q8_mode:
       xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))

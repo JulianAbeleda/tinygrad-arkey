@@ -60,11 +60,6 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
     "Schedule selection is spec-shaped, but executing substrate wraps raw RDNA3 instruction lists with Ops.INS.",
     replacement_scope="Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."),
-  "prefill_q4k_generated_tile_research": RouteSurface(
-    "prefill_q4k_generated_tile_research", "route_local_custom_kernel",
-    ("extra/qk/prefill_packed_tile_spec.py", "tinygrad/llm/prefill_routes.py"),
-    "Descriptor-shaped research route still returns hand-written UOp bodies; generated-only provenance not proven.",
-    replacement_scope="Descriptor-owned generated emitter plus binding audit."),
   "prefill_q4k_int8_wmma_generated_research": RouteSurface(
     "prefill_q4k_int8_wmma_generated_research", "ordinary_tinygrad_graph",
     ("extra/qk/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py"),
