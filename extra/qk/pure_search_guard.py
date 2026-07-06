@@ -20,6 +20,7 @@ import os
 from typing import Any
 
 from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE
+from extra.qk.pure_kernel_surface_audit import route_surface_row
 
 # Each hot route family resolves to an EFFECTIVE route id from the environment. `rollback_active(env)` is True when the
 # env selects the handwritten oracle instead of the generated default; `generated_route`/`oracle_route` are the two
@@ -54,8 +55,11 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     rolled_back = fam["rollback_active"](e)
     rid = fam["oracle"] if rolled_back else fam["generated"]
     prov = _provenance(rid)
+    surface = route_surface_row(rid)
     out.append({"family": fam["family"], "effective_route": rid, "provenance": prov,
-                "rolled_back_to_oracle": rolled_back, "pure": prov in FINAL_DEFAULT_PROVENANCE})
+                "surface_class": surface["surface_class"], "strict_pure": surface["strict_pure"],
+                "manifest_pure": prov in FINAL_DEFAULT_PROVENANCE,
+                "rolled_back_to_oracle": rolled_back, "pure": surface["strict_pure"]})
   return out
 
 
@@ -65,10 +69,11 @@ def pure_search_violations(env: dict[str, Any] | None = None) -> list[dict[str, 
   for r in effective_routes(env):
     if not r["pure"]:
       viols.append({"family": r["family"], "route_id": r["effective_route"], "provenance": r["provenance"],
+                    "surface_class": r.get("surface_class", "unknown"),
                     "rolled_back_to_oracle": r["rolled_back_to_oracle"],
                     "replacement_scope": _replacement_scope(r["effective_route"]),
                     "reason": ("explicit rollback to handwritten oracle" if r["rolled_back_to_oracle"]
-                               else "no generated default is fast enough to promote (handwritten route is the default)")})
+                               else f"selected surface is not strict pure machine search ({r.get('surface_class', 'unknown')})")})
   return viols
 
 
@@ -87,7 +92,8 @@ def assert_pure_machine_search(env: dict[str, Any] | None = None) -> None:
   print("PURE_MACHINE_SEARCH_ONLY route report: " + str({r["family"]: (r["effective_route"], "pure" if r["pure"] else "IMPURE")
                                                           for r in report["effective_routes"]}))
   if viols:
-    lines = [f"  - {v['family']}: selected {v['route_id']} (provenance={v['provenance']}) is not machine-authored/"
+    lines = [f"  - {v['family']}: selected {v['route_id']} (provenance={v['provenance']}, "
+             f"surface={v['surface_class']}) is not machine-authored/"
              f"generated; {v['reason']}. Replacement scope: {v['replacement_scope'][:120]}" for v in viols]
     raise RuntimeError("PURE_MACHINE_SEARCH_ONLY=1 but the default path is not pure:\n" + "\n".join(lines))
 

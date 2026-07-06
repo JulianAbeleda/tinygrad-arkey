@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""Strict pure-machine-search route surface audit.
+
+This is the route-aware companion to generated_quant_binding_audit. The older audit inventories source markers; this one
+answers the stricter question from docs/pure-machine-search.md: does the selected runtime route execute through generated
+codegen, or through a hand-authored/raw kernel surface?
+"""
+from __future__ import annotations
+
+import json, pathlib
+from dataclasses import dataclass
+from typing import Any
+
+from extra.qk import route_manifest
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+PURE_CLASSES = {"ordinary_tinygrad_graph", "descriptor_owned_uop_codegen", "backend_owned_intrinsic_lowering"}
+IMPURE_CLASSES = {"descriptor_wrapped_hand_kernel", "route_local_custom_kernel", "external_raw_or_binary",
+                  "rollback_oracle", "unknown"}
+
+RAW_MARKERS = ("Ops.INS", "Ops.BINARY", "asm volatile")
+CUSTOM_MARKERS = (".custom_kernel(", "Tensor.custom_kernel", "Ops.CUSTOM", "Ops.CUSTOMI")
+SOURCE_MARKERS = ("asm volatile", "__builtin_amdgcn", "Ops.BINARY")
+
+
+@dataclass(frozen=True)
+class RouteSurface:
+  route_id: str
+  surface_class: str
+  writer_files: tuple[str, ...]
+  reason: str
+  replacement_scope: str = ""
+  descriptor_artifact: str = ""
+
+  @property
+  def pure(self) -> bool:
+    return self.surface_class in PURE_CLASSES
+
+
+# Runtime-relevant surfaces from tinygrad/llm/route_ops.py + route_manifest.py. This is intentionally explicit: a route
+# cannot claim strict purity just because its name contains "generated".
+ROUTE_SURFACES: dict[str, RouteSurface] = {
+  "decode_q4k_g3_generated": RouteSurface(
+    "decode_q4k_g3_generated", "descriptor_owned_uop_codegen",
+    ("extra/qk/gemv_g3_codegen_lowering.py", "extra/qk/gemv_g2_lanemap.py"),
+    "Q4_K decode G3 is generated from Q4KGateUpLaneMap; no raw/source-string route escape is selected.",
+    descriptor_artifact="Q4KGateUpLaneMap"),
+  "decode_q4k_owned_warp": RouteSurface(
+    "decode_q4k_owned_warp", "rollback_oracle",
+    ("extra/qk/quant/q4_k_gemv_primitive.py",),
+    "Rollback/reference Q4_K owned warp template."),
+  "decode_q6k_coop_generated": RouteSurface(
+    "decode_q6k_coop_generated", "descriptor_owned_uop_codegen",
+    ("extra/qk/q6k_route_spec.py", "extra/qk/quant/q6_k_gemv_primitive.py"),
+    "Q6_K decode route is emitted from Q6KGEMVRouteSpec; quant-format helpers are shared semantics.",
+    descriptor_artifact="Q6KGEMVRouteSpec"),
+  "decode_q6k_coop_shipped": RouteSurface(
+    "decode_q6k_coop_shipped", "rollback_oracle",
+    ("extra/qk/quant/q6_k_gemv_primitive.py",),
+    "Rollback/reference Q6_K shipped hand UOp templates."),
+  "decode_q6k_direct_refuted": RouteSurface(
+    "decode_q6k_direct_refuted", "route_local_custom_kernel",
+    ("extra/qk/quant/q6_k_gemv_primitive.py",),
+    "Refuted half-warp Q6_K hand UOp route."),
+  "decode_attention_owned_two_kernel": RouteSurface(
+    "decode_attention_owned_two_kernel", "external_raw_or_binary",
+    ("tinygrad/llm/model.py",),
+    "Retired owned HIP attention implementation."),
+  "decode_flash_live_split_g4_8b_kvboth": RouteSurface(
+    "decode_flash_live_split_g4_8b_kvboth", "route_local_custom_kernel",
+    ("extra/qk/live_split_geometry.py", "extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
+    "Promoted attention route still executes hand-authored flash/live-split UOp templates until descriptor artifacts prove topology ownership.",
+    replacement_scope="Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."),
+  "decode_flash_block_tile_g5_konly": RouteSurface(
+    "decode_flash_block_tile_g5_konly", "route_local_custom_kernel",
+    ("extra/qk/live_split_geometry.py", "extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
+    "G5 attention route shares live-split/block-tile hand UOp template surface until descriptor artifacts prove topology ownership.",
+    replacement_scope="Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."),
+  "decode_flash_block_tile_g5_8b_refuted": RouteSurface(
+    "decode_flash_block_tile_g5_8b_refuted", "route_local_custom_kernel",
+    ("extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
+    "Removed/refuted generated-attention candidate still used hand-authored UOp templates."),
+  "decode_attention_generic_flash_generated": RouteSurface(
+    "decode_attention_generic_flash_generated", "route_local_custom_kernel",
+    ("extra/qk/flash_decode.py", "extra/qk/flash_kernels.py"),
+    "Generic flash fallback is hand-authored Tensor.custom_kernel UOp templates, not ordinary tinygrad scheduler output.",
+    replacement_scope="Convert fallback to ordinary tinygrad graph or descriptor-owned flash specs."),
+  "prefill_pipe_role_selective_generated": RouteSurface(
+    "prefill_pipe_role_selective_generated", "external_raw_or_binary",
+    ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
+    "Schedule selection is spec-shaped, but executing substrate wraps raw RDNA3 instruction lists with Ops.INS.",
+    replacement_scope="Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."),
+  "prefill_q4k_direct_tile4x4_default": RouteSurface(
+    "prefill_q4k_direct_tile4x4_default", "route_local_custom_kernel",
+    ("tinygrad/llm/prefill_routes.py", "extra/qk/quant/q4_k_gemv_primitive.py"),
+    "Default Q4_K direct-packed prefill calls hand-authored UOp templates.",
+    replacement_scope="Generated Q4_K prefill/MMQ substrate."),
+  "prefill_q4k_generated_tile_research": RouteSurface(
+    "prefill_q4k_generated_tile_research", "route_local_custom_kernel",
+    ("extra/qk/prefill_packed_tile_spec.py", "tinygrad/llm/prefill_routes.py"),
+    "Descriptor-shaped research route still returns hand-written UOp bodies; generated-only provenance not proven.",
+    replacement_scope="Descriptor-owned generated emitter plus binding audit."),
+  "prefill_q4k_int8_wmma_generated_research": RouteSurface(
+    "prefill_q4k_int8_wmma_generated_research", "ordinary_tinygrad_graph",
+    ("extra/qk/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py"),
+    "Q4_K/Q8_1 int WMMA research expresses core dot as Tensor.matmul(dtype=int), relying on codegen TC matching.",
+    descriptor_artifact="Q4KInt8WMMAPrefillSpec"),
+  "prefill_q4k_int8_wmma_tiled_research": RouteSurface(
+    "prefill_q4k_int8_wmma_tiled_research", "ordinary_tinygrad_graph",
+    ("extra/qk/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py"),
+    "Tiled Q4_K/Q8_1 WMMA research route is intended to use Tensor/codegen lowering; full route remains blocked.",
+    descriptor_artifact="Q4KInt8WMMATiledPrefillSpec"),
+  "prefill_q4k_reduce_out_research": RouteSurface(
+    "prefill_q4k_reduce_out_research", "route_local_custom_kernel",
+    ("extra/qk/quant/q4_k_gemv_primitive.py", "tinygrad/llm/prefill_routes.py"),
+    "Correct-but-not-fast Q4_K reduce-out hand UOp route."),
+  "prefill_q4k_mmq_direct_out_research": RouteSurface(
+    "prefill_q4k_mmq_direct_out_research", "route_local_custom_kernel",
+    ("extra/qk/quant/q4_k_gemv_primitive.py", "tinygrad/llm/prefill_routes.py"),
+    "Q4_K/Q8_1 MMQ direct-out hand UOp route."),
+  "prefill_pipe_global_rollback": RouteSurface(
+    "prefill_pipe_global_rollback", "rollback_oracle",
+    ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py"),
+    "Rollback comparator still uses raw WMMA instruction-list substrate."),
+}
+
+UNMANIFESTED_RUNTIME_SURFACES: tuple[dict[str, Any], ...] = (
+  {"surface_id": "prefill_q6k_direct_packed_default_capable", "surface_class": "route_local_custom_kernel",
+   "writer_files": ("tinygrad/llm/prefill_routes.py", "extra/qk/quant/q6_k_gemv_primitive.py"),
+   "reason": "PREFILL_DIRECT_QUANTS defaults to Q4_K,Q6_K and Q6_K direct prefill calls q6k_gemm_packed_load_* hand UOp templates.",
+   "replacement_scope": "Add Q6KPrefillRouteSpec or explicit manifest debt row."},
+  {"surface_id": "decode_q4k_smallk_batched", "surface_class": "route_local_custom_kernel",
+   "writer_files": ("tinygrad/llm/decode_routes.py", "extra/qk/quant/q4_k_gemv_primitive.py"),
+   "reason": "q4k_primitive_linear_call routes non-decode K<=32 through q4k_gemm_kernel hand UOp template.",
+   "replacement_scope": "Add Q4KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY."},
+  {"surface_id": "decode_q6k_smallk_batched", "surface_class": "route_local_custom_kernel",
+   "writer_files": ("tinygrad/llm/decode_routes.py", "extra/qk/quant/q6_k_gemv_primitive.py"),
+   "reason": "q6k_primitive_linear_call routes non-decode K<=32 through q6k_gemm_kernel hand UOp template.",
+   "replacement_scope": "Add Q6KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY."},
+)
+
+
+def _read(path: str) -> str:
+  p = ROOT / path
+  return p.read_text() if p.exists() else ""
+
+
+def _markers(paths: tuple[str, ...]) -> dict[str, list[str]]:
+  out: dict[str, list[str]] = {}
+  for path in paths:
+    src = _read(path)
+    found = sorted({m for m in RAW_MARKERS + CUSTOM_MARKERS + SOURCE_MARKERS if m in src})
+    if found: out[path] = found
+  return out
+
+
+def route_surface(route_id: str) -> RouteSurface:
+  if route_id in ROUTE_SURFACES: return ROUTE_SURFACES[route_id]
+  r = route_manifest.ROUTES.get(route_id, {})
+  prov = str(r.get("provenance", "unknown"))
+  if prov == "rollback_oracle":
+    cls = "rollback_oracle"
+  elif prov == "external_handwritten_kernel":
+    cls = "external_raw_or_binary"
+  elif prov == "hand_authored_uop_template":
+    cls = "route_local_custom_kernel"
+  elif prov in route_manifest.FINAL_DEFAULT_PROVENANCE:
+    cls = "unknown"
+  else:
+    cls = "unknown"
+  return RouteSurface(route_id, cls, (), f"No explicit strict route-surface row for manifest provenance {prov!r}.")
+
+
+def route_surface_row(route_id: str) -> dict[str, Any]:
+  surface = route_surface(route_id)
+  manifest = route_manifest.ROUTES.get(route_id, {})
+  prov = str(manifest.get("provenance", "unknown"))
+  status = str(manifest.get("status", "unknown"))
+  manifest_pure = prov in route_manifest.FINAL_DEFAULT_PROVENANCE
+  strict_pure = surface.pure
+  contradiction = manifest_pure and not strict_pure
+  return {"route_id": route_id, "status": status, "manifest_provenance": prov, "manifest_pure": manifest_pure,
+          "surface_class": surface.surface_class, "strict_pure": strict_pure, "contradiction": contradiction,
+          "writer_files": list(surface.writer_files), "markers": _markers(surface.writer_files),
+          "descriptor_artifact": surface.descriptor_artifact, "reason": surface.reason,
+          "replacement_scope": surface.replacement_scope or str(manifest.get("replacement_scope", ""))}
+
+
+def route_rows() -> list[dict[str, Any]]:
+  return [route_surface_row(rid) for rid in sorted(route_manifest.ROUTES)]
+
+
+def default_rows() -> list[dict[str, Any]]:
+  return [route_surface_row(rid) for rid in route_manifest.default_routes()]
+
+
+def strict_default_purity_report() -> dict[str, Any]:
+  rows = default_rows()
+  blockers = [r for r in rows if not r["strict_pure"]]
+  contradictions = [r for r in rows if r["contradiction"]]
+  return {"verdict": "STRICT_DEFAULT_PURITY_PASS" if not blockers else "STRICT_DEFAULT_PURITY_FAIL",
+          "default_routes": [r["route_id"] for r in rows],
+          "blockers": blockers, "manifest_contradictions": contradictions}
+
+
+def build() -> dict[str, Any]:
+  rows = route_rows()
+  report = strict_default_purity_report()
+  missing = [rid for rid in route_manifest.ROUTES if rid not in ROUTE_SURFACES]
+  by_surface: dict[str, int] = {}
+  for row in rows: by_surface[row["surface_class"]] = by_surface.get(row["surface_class"], 0) + 1
+  return {"schema": "pure_kernel_surface_audit.v1",
+          "verdict": "PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND" if report["blockers"] else "PURE_KERNEL_SURFACE_AUDIT_PASS",
+          "strict_default_purity": report,
+          "summary": {"routes_by_surface_class": by_surface,
+                      "manifest_contradictions": [r["route_id"] for r in report["manifest_contradictions"]],
+                      "unmanifested_runtime_surfaces": [s["surface_id"] for s in UNMANIFESTED_RUNTIME_SURFACES],
+                      "routes_missing_explicit_surface_rows": sorted(missing)},
+          "routes": rows,
+          "unmanifested_runtime_surfaces": list(UNMANIFESTED_RUNTIME_SURFACES),
+          "next": ["align route_manifest provenance with strict selected-surface classifications",
+                   "add explicit manifest rows for unmanifested runtime-capable surfaces",
+                   "replace strict blockers with ordinary tinygrad graph or descriptor-owned generated codegen"]}
+
+
+if __name__ == "__main__":
+  print(json.dumps(build(), indent=2))

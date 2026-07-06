@@ -85,7 +85,9 @@ These are shared dependencies for converting all families, not per-route one-off
 
 ### A. Provenance And Binding Audit
 
-Build or extend `pure_kernel_surface_audit` so the audit can answer, per route:
+`extra/qk/pure_kernel_surface_audit.py` is the strict route-surface audit. It is wired into `extra/qk/gate_registry.py`
+as `pure_kernel_surface_audit` and intentionally reports `PURE_KERNEL_SURFACE_AUDIT_DEBT_FOUND` until the selected
+default surfaces are strict pure machine search. Keep extending that audit so it can answer, per route:
 
 - selected route id,
 - selected writer function/file,
