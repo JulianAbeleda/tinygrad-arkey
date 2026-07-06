@@ -1,6 +1,6 @@
 from typing import cast
 from dataclasses import replace
-import itertools, re
+import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
 from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, pm_unbind, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
@@ -25,26 +25,6 @@ from tinygrad.codegen.simplify import pm_simplify_ranges, pm_flatten_range, pm_s
 from tinygrad.schedule.rangeify import pm_add_buffers_local, rangeify_codegen, pm_mops, pm_syntactic_sugar, pm_store_ranges
 from tinygrad.codegen.late.linearizer import CFGContext, pm_split_ends, pm_add_control_flow, linearize
 from tinygrad.codegen.late.regalloc import LinearScanRegallocContext, pm_regalloc_rewrite
-
-def _expand_sdot4(x:UOp) -> UOp|None:
-  # Non-HIP fallback for the `_sdot4(a,b,c)` CUSTOMI helper (see extra/qk/quant/q4_k_gemv_primitive._sdot4_op).
-  # The HIP renderer owns _sdot4 as the native v_dot4_i32_iu8 intrinsic (cstyle.render_kernel); backends without
-  # that helper (e.g. PYTHON) cannot render the opaque call, so expand it into the equivalent integer UOps and let
-  # the normal lowering handle it. Semantics: c + Sum_{i=0..3} sext(int8, (a>>8i)&0xff) * zext((b>>8i)&0xff), where
-  # a is SIGNED int8x4 packed in an int32 and b is UNSIGNED uint8x4 packed in an int32. This is byte-identical to
-  # the intrinsic and only fires on non-AMD devices, so the HIP lowering is untouched.
-  if not (isinstance(x.arg, str) and re.search(r"(?<!\w)_sdot4\s*\(", x.arg)): return None
-  # template '_sdot4({1}, {2}, {0})': src[0]=acc(c), src[1]=a(signed lanes), src[2]=b(unsigned lanes)
-  acc, a, b = x.src[0], x.src[1], x.src[2]
-  total = acc
-  for i in range(4):
-    ub = a.rshift(8*i).bitwise_and(0xff)                        # unsigned byte lane 0..255
-    a_byte = ub - ub.bitwise_and(0x80).lshift(1)               # arithmetic sign-extend: value - (bit7 ? 256 : 0)
-    b_byte = b.rshift(8*i).bitwise_and(0xff)                    # unsigned byte lane (0..255)
-    total = total + a_byte * b_byte
-  return total.cast(x.dtype)
-
-pm_expand_sdot4 = PatternMatcher([(UPat(Ops.CUSTOMI, name="x"), _expand_sdot4)])
 
 pm_index_is_shrink = PatternMatcher([
   # rewrite non-image INDEX to SHRINK
@@ -84,12 +64,6 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
   # preprocess
   sink = graph_rewrite(ast, pm_mops+pm_syntactic_sugar+pm_store_ranges, ctx=itertools.count(1000), name="early movement ops", bottom_up=True)
-
-  # non-HIP fallback: expand the `_sdot4` CUSTOMI (RDNA3 v_dot4_i32_iu8 helper) into equivalent integer UOps so
-  # backends without the device helper (e.g. PYTHON) can execute the wired scalar-sdot4 Q4_K MMQ kernels. AMD keeps
-  # the native intrinsic (owned by cstyle.render_kernel), so this only touches non-AMD devices.
-  if ren.target.device != "AMD":
-    sink = graph_rewrite(sink, pm_expand_sdot4, name="expand sdot4 (non-HIP fallback)")
 
   # first we optimize
   if optimize:
