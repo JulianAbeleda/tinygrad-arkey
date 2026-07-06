@@ -14,6 +14,21 @@ from extra.qk.layout import Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
 VALID_WMMA_SURFACES = ("tc_matcher_tile", "shaped_wmma_tile")
 VALID_OUTPUT_LAYOUTS = ("direct",)
+SCHEDULER_OWNED_TILE_LOOP_CONTRACT = "scheduler_owned_tiled_wmma_contract_v1"
+SCHEDULER_OWNED_TILE_LOOP_BLOCKER = "scheduler_owned_tile_loop_missing"
+
+
+def build_scheduler_owned_tile_loop_contract(roles: tuple[Int8WMMATileLoweringSpec, ...], *, route_id: str) -> dict[str, Any]:
+  required_roles = [role.role for role in roles if role.requires_scheduler_owned_loop]
+  return {
+    "contract": SCHEDULER_OWNED_TILE_LOOP_CONTRACT,
+    "route_id": route_id,
+    "required": bool(required_roles),
+    "required_roles": required_roles,
+    "required_axes": ("m_tile", "n_tile", "group_tile"),
+    "requires_scheduler_owned_loop": required_roles != [],
+    "remaining_blocker": SCHEDULER_OWNED_TILE_LOOP_BLOCKER if required_roles else None,
+  }
 
 
 @dataclass(frozen=True)

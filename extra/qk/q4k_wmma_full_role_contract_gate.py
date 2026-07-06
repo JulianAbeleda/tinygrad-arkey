@@ -11,12 +11,17 @@ import json
 from pathlib import Path
 from typing import Any
 
-from extra.qk.q4k_wmma_tile_lowering import describe_qwen3_14b_q4k_full_role_lowering
+from extra.qk.q4k_wmma_tile_lowering import (
+  SCHEDULER_OWNED_TILE_LOOP_BLOCKER,
+  describe_qwen3_14b_q4k_full_role_lowering,
+  build_scheduler_owned_tile_loop_contract,
+)
 
 SCHEMA = "q4k-wmma-full-role-contract-gate.v1"
 SURFACE_ARTIFACT = Path("bench/q4k-wmma-scheduler-surface/latest.json")
 LIFECYCLE_ARTIFACT = Path("bench/q4k-wmma-tiled-lifecycle/latest.json")
 NO_HAND_ARTIFACT = Path("bench/q4k-wmma-tiled-no-hand-kernel/latest.json")
+ROLE_SHAPE_EXEC_ARTIFACT = Path("bench/q4k-wmma-tiled-role-shape-exec/latest.json")
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -37,6 +42,17 @@ def build_report() -> dict[str, Any]:
   no_hand_ok = no_hand.get("verdict") == "Q4K_WMMA_TILED_NO_HAND_KERNEL_PASS"
   roles = spec.to_json()["roles"]
   bounded_roles = all(r["bounds"]["bounded_raw_ok"] and r["bounds"]["live_raw_elems"] <= 256 for r in roles)
+  scheduler_loop_contract = build_scheduler_owned_tile_loop_contract(spec.roles, route_id=spec.route_id)
+  role_shape_exec = _load_json(ROLE_SHAPE_EXEC_ARTIFACT)
+  role_shape_loop_validation = {
+    "artifact": str(ROLE_SHAPE_EXEC_ARTIFACT),
+    "available": role_shape_exec.get("verdict") not in {None, "missing"},
+    "verdict": role_shape_exec.get("verdict"),
+    "remaining_blocker": role_shape_exec.get("remaining_blocker"),
+    "attempted_count": role_shape_exec.get("attempted_count"),
+    "executor_verified": role_shape_exec.get("verdict") in {"Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING",
+                                                          "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE"},
+  }
 
   return {
     "schema": SCHEMA,
@@ -56,8 +72,10 @@ def build_report() -> dict[str, Any]:
       "no_hand_verdict": no_hand.get("verdict"),
       "no_hand_ok": no_hand_ok,
       "bounded_roles": bounded_roles,
+      "role_shape_exec_validation": role_shape_loop_validation,
+      "scheduler_owned_tile_loop": scheduler_loop_contract,
     },
-    "remaining_blocker": "scheduler_owned_tile_loop_missing",
+    "remaining_blocker": SCHEDULER_OWNED_TILE_LOOP_BLOCKER if scheduler_loop_contract["required"] else None,
   }
 
 

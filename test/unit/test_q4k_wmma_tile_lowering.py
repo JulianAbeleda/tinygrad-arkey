@@ -5,6 +5,8 @@ import pytest
 from extra.qk.q4k_wmma_full_role_contract_gate import build_report
 from extra.qk.q4k_wmma_tile_lowering import (
   QWEN3_14B_Q4K_ROLE_SHAPES,
+  SCHEDULER_OWNED_TILE_LOOP_BLOCKER,
+  build_scheduler_owned_tile_loop_contract,
   describe_int8_wmma_tile_lowering,
   describe_qwen3_14b_q4k_full_role_lowering,
 )
@@ -39,3 +41,15 @@ def test_q4k_wmma_full_role_contract_gate_reports_remaining_scheduler_blocker():
   assert report["evidence"]["lifecycle_ok"] is True
   assert report["evidence"]["no_hand_ok"] is True
   assert report["remaining_blocker"] == "scheduler_owned_tile_loop_missing"
+  assert report["evidence"]["scheduler_owned_tile_loop"]["required"] is True
+  assert report["evidence"]["role_shape_exec_validation"]["artifact"] == "bench/q4k-wmma-tiled-role-shape-exec/latest.json"
+  assert report["evidence"]["role_shape_exec_validation"]["verdict"] == "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING"
+
+
+def test_q4k_wmma_scheduler_owned_loop_contract_is_shared_across_gate_outputs():
+  spec = describe_qwen3_14b_q4k_full_role_lowering()
+  scheduler_contract = build_scheduler_owned_tile_loop_contract(spec.roles, route_id=spec.route_id)
+  assert scheduler_contract["required"] is True
+  assert set(scheduler_contract["required_roles"]) == {role for role, *_ in QWEN3_14B_Q4K_ROLE_SHAPES}
+  assert scheduler_contract["remaining_blocker"] == SCHEDULER_OWNED_TILE_LOOP_BLOCKER
+  assert scheduler_contract["route_id"] == spec.route_id

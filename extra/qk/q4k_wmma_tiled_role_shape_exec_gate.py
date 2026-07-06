@@ -15,7 +15,12 @@ import numpy as np
 from tinygrad import Context, GlobalCounters, Tensor, dtypes
 from extra.qk.prefill_mmq_parity_gate import _make_q4k_words, RTOL, _rel_rmse
 from tinygrad.llm import route_ops as qk_ops
-from extra.qk.q4k_wmma_tile_lowering import Int8WMMATileLoweringSpec, QWEN3_14B_Q4K_ROLE_SHAPES, describe_int8_wmma_tile_lowering
+from extra.qk.q4k_wmma_tile_lowering import (
+  Int8WMMATileLoweringSpec,
+  QWEN3_14B_Q4K_ROLE_SHAPES,
+  build_scheduler_owned_tile_loop_contract,
+  describe_int8_wmma_tile_lowering,
+)
 from extra.qk.q4k_wmma_tiled_lifecycle_gate import build as lifecycle_build
 
 ARTIFACT = Path("bench/q4k-wmma-tiled-role-shape-exec/latest.json")
@@ -161,31 +166,34 @@ def _role_row(spec: Int8WMMATileLoweringSpec, lifecycle: dict[str, Any]) -> dict
 
 def build(lifecycle: dict[str, Any] | None = None) -> dict[str, Any]:
   lifecycle = lifecycle if lifecycle is not None else lifecycle_build()
-  role_specs = [describe_int8_wmma_tile_lowering(m, n, k, role=role, m_tile=16, n_tile=16, group_tile=1)
-                for role, m, n, k in QWEN3_14B_Q4K_ROLE_SHAPES]
+  role_specs = tuple(describe_int8_wmma_tile_lowering(m, n, k, role=role, m_tile=16, n_tile=16, group_tile=1)
+                    for role, m, n, k in QWEN3_14B_Q4K_ROLE_SHAPES)
+  loop_contract = build_scheduler_owned_tile_loop_contract(role_specs, route_id="prefill_q4k_int8_wmma_tiled_research")
   rows = [_role_row(spec, lifecycle) for spec in role_specs]
   all_attempted = all(row["exec"]["attempted"] for row in rows)
   any_numeric_ok = any(row["exec"].get("numeric_ok") for row in rows)
-  blocker = lifecycle["verdict"] == "Q4K_WMMA_TILED_LIFECYCLE_PASS"
+  blocker = lifecycle["verdict"] == "Q4K_WMMA_TILED_LIFECYCLE_PASS" and loop_contract["required"]
   return {
     "schema": "q4k_wmma_tiled_role_shape_exec_gate.v1",
     "scope": "synthetic execution gate for all 14B Q4_K/Q8_1 wmma_tiled prefill role shapes",
     "verdict": "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING" if blocker else
       "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE",
     "route_id": "prefill_q4k_int8_wmma_tiled_research",
-    "remaining_blocker": "scheduler_owned_tile_loop_missing" if blocker else None,
+    "scheduler_owned_tile_loop": loop_contract,
+    "remaining_blocker": loop_contract["remaining_blocker"] if blocker else None,
+    "required_next": loop_contract["remaining_blocker"] if blocker else None,
     "lifecycle": {"verdict": lifecycle["verdict"], "class": lifecycle["class"]},
     "roles": rows,
     "attempted_count": sum(1 if row["exec"]["attempted"] else 0 for row in rows),
     "executed_roles": [row["role"] for row in rows if row["exec"]["attempted"]],
     "classified_blocker": True,
     "all_numeric_ok": all_attempted and any_numeric_ok,
-    "blocker": "role execution is intentionally not passed until a scheduler-owned tile_m/tile_n/group loop exists",
+    "blocker": "role execution is intentionally blocked until a scheduler-owned tile_m/tile_n/group loop is ownership-integrated",
     "distinction_from_classifier": (
       "q4k_wmma_tiled_role_shape enumerates/selects shapes; this gate executes bounded synthetic role-shape "
       "subgraphs and reports the remaining loop-boundary blocker."
     ),
-    "next_blocker": "scheduler_owned_tile_loop_missing" if blocker else None,
+    "next_blocker": loop_contract["remaining_blocker"] if blocker else None,
   }
 
 

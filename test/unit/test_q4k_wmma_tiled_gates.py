@@ -31,3 +31,6 @@ def test_q4k_wmma_tiled_role_shape_exec_classifier_is_not_a_false_pass():
       "blocked.generated_tiled_loop_execution_failed",
       "blocked.compiler_unavailable",
     }
+  assert report["scheduler_owned_tile_loop"]["required"] is True
+  assert report["scheduler_owned_tile_loop"]["remaining_blocker"] == "scheduler_owned_tile_loop_missing"
+  assert report["required_next"] == "scheduler_owned_tile_loop_missing"
