@@ -87,3 +87,29 @@ tinygrad codegen (no hand kernels)". This work EXTENDS the hand kernel. The 2026
 `gen_sched` substrate-builder model after establishing that the 8B fast path is ALSO hand-asm `build_gemm_lds2`/
 `pipe` (so a hand-asm quantized analog is consistent with how 8B actually ships). If the codegen-LDS-staging track
 is revived, this route becomes the reference to match/retire.
+
+## Deletion track (2026-07-06): int8 DEAD, Route B is the path (deep codegen, not yet built)
+
+Goal was to replace this hand kernel with tinygrad codegen (no-hand-kernel mandate). Findings:
+
+- **int8/Q8_1 WMMA MMQ route: DEAD.** iu8 WMMA is throughput-NEUTRAL vs fp16 on RDNA3 (no tensor-core win),
+  so int8-MMQ = compute-neutral core + MMQ overhead (q8 quant, qsum, per-group affine) that the fp16-fused
+  kernel avoids (decode already amortized once-per-tile into LDS). Best case <= 808. Evidence: scalar sdot4
+  MMQ = 237 tok/s authority; naive full-role iu8-WMMA microbench (scratchpad/mmq_fullrole_probe.py) bit-exact
+  but 0.75 TFLOPS. The MMQ atom (int8 shaped_wmma K-accumulate + Q4_K scale, rel RMSE 0.000000) is kept as a
+  correctness asset only. Substrate fix landed en route: renderer WMMA-helper dedup (commit 84efd5172),
+  unblocks any multi-WMMA codegen kernel.
+- **Route B (fp16-fused-decode-LDS codegen): the only credible deletion route.** Replicate THIS kernel's
+  algorithm (Q4_K decode -> fp16 -> LDS-stage the decoded tile -> WMMA) in codegen via
+  `bufferize(LOCAL, removable=False)`. Payoff is clear (this hand kernel proves 66 TFLOPS is achievable with
+  LDS-staging); the risk is the build. Track-1 codegen (schedule search, shipped) alone is ~40-48 TFLOPS
+  global-direct; the 40->66 gap IS the LDS input-staging this kernel does by hand.
+- **GO/NO-GO decider (cheap, do first in a dedicated codegen session):** does cooperative LDS input-staging
+  lift plain fp16 codegen WMMA at attn_qo (512x5120x5120) from ~40 -> ~58+ TFLOPS? GO(>=58) -> build Route B
+  (add Q4_K decode fusion, match 808, delete this kernel). NO-GO(<=50) -> keep this kernel.
+- **Why not built yet:** the LDS-staging application code (WARP address-key + explicit CONTRACT fold +
+  removable=False; see docs/codegen-wmma-lds-staging-design-20260705.md:77-99) was cleared from scratchpad and
+  must be reconstructed; the cooperative-partition perf step (store_keys != read_keys) is unfinished with
+  "uncertain payoff" per that doc. This is dedicated multi-session tinygrad-codegen work
+  (`bufferize_to_store` at rangeify.py:397 is the machinery hook). Until then, this hand kernel (808 tok/s) is
+  the honest shipped state.
