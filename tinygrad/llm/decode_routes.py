@@ -65,30 +65,6 @@ def q4k_primitive_linear_call(linear:Any, x:Tensor, fallback:Callable[[Tensor], 
                      f"tensor {linear.name!r} (out={linear.out_features}, in={linear.in_features}) but it did not bind to "
                      f"the G3 route (structural eligibility (in//256)%4==0 and out%32==0 not met, or arch unsupported)")
 
-  if (getenv("Q4K_GEMV_SCHEDULER") or bubblebeam_futuresight) and linear.in_features == 4096 and linear.out_features == 12288:
-    if bubblebeam_futuresight and not getenv("Q4K_GEMV_SCHEDULER"):
-      if not (qk_ops.should_route_q4k_lane_partition(linear.out_features, linear.in_features) or g3_bubblebeam_shape): return fallback(x)
-      _w = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
-      _xv = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float16).contiguous()
-      _out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-      return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(linear.out_features, linear.in_features))[0].reshape(1, 1, linear.out_features)
-    if getenv("Q4K_GEMV_SCHEDULER") == 4:
-      _w = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
-      _xv = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float16).contiguous()
-      _out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-      return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_lane_partition_gemv_kernel(linear.out_features, linear.in_features))[0].reshape(1, 1, linear.out_features)
-    if getenv("Q4K_GEMV_SCHEDULER") == 6:
-      _w = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
-      _xv = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float16).contiguous()
-      _out = Tensor.empty(linear.out_features, dtype=dtypes.float32, device=x.device)
-      return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(linear.out_features, linear.in_features))[0].reshape(1, 1, linear.out_features)
-    if getenv("Q4K_GEMV_SCHEDULER") in (2, 3, 5):
-      _w = linear.q4k_storage.words.to(x.device)
-      _xv = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float32)
-      _fn = qk_ops.q4k_scheduler_matvec_lanemap if getenv("Q4K_GEMV_SCHEDULER") == 5 else qk_ops.q4k_scheduler_matvec_wordlane if getenv("Q4K_GEMV_SCHEDULER") == 3 else qk_ops.q4k_scheduler_matvec
-      return _fn(_w, _xv, linear.out_features, linear.in_features).reshape(1, 1, linear.out_features)
-    return fallback(x)
-
   x_vec = x[:, 0, :].reshape(linear.in_features).cast(dtypes.float16).contiguous()
   words = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
   if getenv("Q4K_GEMV_WARP_PROJ", 1) and linear.parts == 1 and linear.out_features == 4096 and linear.in_features == 4096 \

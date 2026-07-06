@@ -47,10 +47,6 @@ def q4k_g3_lanemap_gemv_splitk_kernel(*args, **kwargs):
   return _attr("extra.qk.gemv_g3_codegen_lowering", "q4k_g3_lanemap_gemv_splitk_kernel")(*args, **kwargs)
 def q4k_g3_lanemap_gemv_inkernel_combine_kernel(*args, **kwargs):
   return _attr("extra.qk.gemv_g3_codegen_lowering", "q4k_g3_lanemap_gemv_inkernel_combine_kernel")(*args, **kwargs)
-def q4k_lane_partition_gemv_kernel(*args, **kwargs): return _attr("extra.qk.q4k_lane_partition_gemv", "q4k_lane_partition_gemv_kernel")(*args, **kwargs)
-def q4k_scheduler_matvec(*args, **kwargs): return _attr("extra.qk.q4k_scheduler_gemv", "q4k_scheduler_matvec")(*args, **kwargs)
-def q4k_scheduler_matvec_wordlane(*args, **kwargs): return _attr("extra.qk.q4k_scheduler_gemv", "q4k_scheduler_matvec_wordlane")(*args, **kwargs)
-def q4k_scheduler_matvec_lanemap(*args, **kwargs): return _attr("extra.qk.q4k_scheduler_gemv", "q4k_scheduler_matvec_lanemap")(*args, **kwargs)
 
 def q6k_parse_opt(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "parse_opt")(*args, **kwargs)
 def q6k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q6_k_gemv_primitive", "q6k_gemm_kernel")(*args, **kwargs)

@@ -5,7 +5,7 @@ ROOT = pathlib.Path(__file__).resolve().parent
 
 PROMOTED = {
   "flash_decode.py", "flash_decode_fused_combine.py", "live_split_geometry.py", "route_manifest.py",
-  "q4k_lane_partition_gemv.py", "q4k_packed_gemv_wd.py", "q4k_scheduler_gemv.py", "q6k_route_spec.py",
+  "q4k_packed_gemv_wd.py", "q6k_route_spec.py",
   "quant_semantics.py", "quantize.py",
 }
 SUPPORT = {
