@@ -104,9 +104,33 @@ Run:
 PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report
 PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report --target target_2
+PYTHONPATH=. python3 -m extra.qk.prefill_performance_lowering_report --orchestration
 ```
 
 to print JSON without requiring GPU or model artifacts.
+
+### Orchestration
+
+Use the registry rows as the single source of truth for distributed work.
+
+- `orchestration.by_owner_area`: rows grouped by `owner_area` so workers can own disjoint tracks.
+- `orchestration.notes.active_blocker`, `orchestration.notes.evidence`, and `orchestration.notes.sidecar`: row notes
+  split by immediate dependency, already-proven evidence, and optional/documentation-only (`optional`, `only needed ...`)
+  work.
+- `orchestration.parallel_ready_rows`: rows safe to run now (not `done`, not blocked, not carrying true blockers).
+- `orchestration.active_blocker_rows` and `orchestration.status_blocked_rows`: rows with active blocker notes vs. rows
+  explicitly marked `blocked`.
+- `orchestration.gates`: every gate mapped to the rows that own it.
+
+A/B/C worker integration pattern:
+
+- **A (codegen)** handles `owner_area=codegen` rows and updates gate outcomes for those IDs.
+- **B (scheduler)** handles `owner_area=scheduler` rows.
+- **C (policy + vocab)** handles `owner_area=policy|vocab` rows.
+
+Each worker only reports status for its own rows; central 100% progress is the union of all updated rows.
+A full plan is unblocked only when every `orchestration.notes.active_blocker` entry is cleared and no row remains in
+`orchestration.status_blocked_rows`.
 
 ### Historical fast 8B baseline
 

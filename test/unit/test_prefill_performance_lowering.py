@@ -5,6 +5,16 @@ from extra.qk import prefill_performance_lowering_registry as registry
 from extra.qk import prefill_performance_lowering_report as report
 
 
+def _derive_note_rows(rows: list[dict[str, object]], note_type: str) -> list[str]:
+  assert note_type in {"active_blocker", "evidence", "sidecar"}
+  return sorted(
+    f"{row['id']}: {blocker}"
+    for row in rows
+    for blocker in row["blockers"]
+    if report._classify_note(blocker, row["status"]) == note_type
+  )
+
+
 def test_prefill_performance_registry_rows_are_valid_and_ordered():
   rows = registry.rows()
   assert rows
@@ -76,6 +86,68 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   assert filtered["target_count"] == 1
   assert filtered["scope_doc"] == registry.DOC_PATH
   assert all(r["target"] == "target_1" for r in filtered["rows"])
+
+
+def test_prefill_performance_report_orchestration_is_consistent_with_registry_rows():
+  rows = registry.rows()
+  full = report.build_prefill_performance_lowering_report()
+  orchestration = full["orchestration"]
+
+  owners = sorted(set(row["owner_area"] for row in rows))
+  assert sorted(orchestration["summary"]["owner_areas"]) == owners
+  assert orchestration["summary"]["active_blocker_count"] == len(_derive_note_rows(rows, "active_blocker"))
+  assert orchestration["summary"]["evidence_note_count"] == len(_derive_note_rows(rows, "evidence"))
+  assert orchestration["summary"]["sidecar_blocker_count"] == len(_derive_note_rows(rows, "sidecar"))
+
+  expected_owner_rows = {
+    owner: [row["id"] for row in rows if row["owner_area"] == owner]
+    for owner in owners
+  }
+  expected_by_owner = {
+    owner: {
+      "rows": expected_owner_rows[owner],
+      "row_count": len(expected_owner_rows[owner]),
+      "parallel_ready_rows": [
+        row["id"]
+        for row in rows
+        if row["owner_area"] == owner
+        and row["status"] in {"pending", "not_started"}
+        and all(report._classify_note(blocker, row["status"]) != "active_blocker" for blocker in row["blockers"])
+      ],
+    }
+    for owner in owners
+  }
+  for owner, owner_payload in expected_by_owner.items():
+    bucket = orchestration["by_owner_area"][owner]
+    assert bucket["rows"] == owner_payload["rows"]
+    assert bucket["row_count"] == owner_payload["row_count"]
+    assert bucket["parallel_ready_rows"] == owner_payload["parallel_ready_rows"]
+    assert set(bucket["status_counts"].keys()) == set(row["status"] for row in rows if row["owner_area"] == owner)
+    assert bucket["gates"] == sorted(set(gate for row in rows if row["owner_area"] == owner for gate in row["gates"]))
+
+  expected_gate_rows: dict[str, list[str]] = {}
+  for row in rows:
+    for gate in row["gates"]:
+      expected_gate_rows.setdefault(gate, []).append(row["id"])
+  assert orchestration["gates"] == {gate: ids for gate, ids in sorted(expected_gate_rows.items())}
+
+  for row in rows:
+    has_active_blocker = any(report._classify_note(blocker, row["status"]) == "active_blocker" for blocker in row["blockers"])
+    if has_active_blocker:
+      assert row["id"] in orchestration["active_blocker_rows"]
+    if row["status"] == "blocked":
+      assert row["id"] in orchestration["status_blocked_rows"]
+    if row["status"] in {"pending", "not_started"} and not has_active_blocker:
+      assert row["id"] in orchestration["parallel_ready_rows"]
+
+
+def test_prefill_performance_report_orchestration_cli_mode(monkeypatch, capsys):
+  report.main(["--orchestration", "--compact"])
+  parsed = json.loads(capsys.readouterr().out.strip())
+  assert "by_owner_area" in parsed
+  assert "gates" in parsed
+  assert "notes" in parsed
+  assert "parallel_ready_rows" in parsed
 
 
 def test_prefill_performance_report_uses_current_route_bound_blocker():

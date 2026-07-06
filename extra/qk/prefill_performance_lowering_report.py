@@ -13,6 +13,108 @@ from typing import Any
 from extra.qk import prefill_performance_lowering_registry as registry
 
 SCHEMA = "prefill-performance-lowering-report.v1"
+_SIDECAR_NOTE_MARKERS = ("optional", "only needed if", "only needed")
+_EVIDENCE_NOTE_MARKERS = ("passes", "can emit", "supports numerically correct", "probe exists", "contract exists")
+_ACTIVE_BLOCKER_MARKERS = (
+  "blocked", "does not", "fails", "failure", "missing", "must", "needs", "not ", "no ", "wrong", "without",
+)
+
+
+def _classify_note(note: str, status: str) -> str:
+  lower = note.lower()
+  if any(marker in lower for marker in _SIDECAR_NOTE_MARKERS):
+    return "sidecar"
+  if any(marker in lower for marker in _EVIDENCE_NOTE_MARKERS) and not any(marker in lower for marker in _ACTIVE_BLOCKER_MARKERS):
+    return "evidence"
+  if status == "done":
+    return "evidence"
+  return "active_blocker"
+
+
+def _notes_by_type(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
+  out = {"active_blocker": [], "evidence": [], "sidecar": []}
+  for row in rows:
+    for note in row["blockers"]:
+      out[_classify_note(note, row["status"])].append(f"{row['id']}: {note}")
+  return out
+
+
+def _by_owner_area(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+  by_owner: dict[str, dict[str, Any]] = {}
+  for row in rows:
+    owner_area = row["owner_area"]
+    owner_data = by_owner.setdefault(owner_area, {
+      "rows": [],
+      "row_count": 0,
+      "gates": set(),
+      "status_counts": {},
+      "active_blocker_count": 0,
+      "evidence_note_count": 0,
+      "sidecar_blocker_count": 0,
+      "parallel_ready_rows": [],
+      "blocked_rows": [],
+    })
+    owner_data["rows"].append(row["id"])
+    owner_data["row_count"] += 1
+    owner_data["gates"].update(row["gates"])
+    owner_data["status_counts"][row["status"]] = owner_data["status_counts"].get(row["status"], 0) + 1
+
+    row_note_types = [_classify_note(note, row["status"]) for note in row["blockers"]]
+    if "active_blocker" in row_note_types:
+      owner_data["active_blocker_count"] += row_note_types.count("active_blocker")
+      owner_data["blocked_rows"].append(row["id"])
+    owner_data["evidence_note_count"] += row_note_types.count("evidence")
+    owner_data["sidecar_blocker_count"] += row_note_types.count("sidecar")
+
+    if row["status"] in {"pending", "not_started"} and "active_blocker" not in row_note_types:
+      owner_data["parallel_ready_rows"].append(row["id"])
+
+  for owner_data in by_owner.values():
+    owner_data["gates"] = sorted(owner_data["gates"])
+
+  return by_owner
+
+
+def _gates_to_rows(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
+  gate_rows: dict[str, list[str]] = {}
+  for row in rows:
+    for gate in row["gates"]:
+      gate_rows.setdefault(gate, []).append(row["id"])
+  return {k: v for k, v in sorted(gate_rows.items(), key=lambda kv: kv[0])}
+
+
+def _orchestration(rows: list[dict[str, Any]]) -> dict[str, Any]:
+  notes_by_type = _notes_by_type(rows)
+  by_owner = _by_owner_area(rows)
+  gate_rows = _gates_to_rows(rows)
+  parallel_rows: list[str] = []
+  active_blocker_rows: list[str] = []
+  status_blocked_rows: list[str] = []
+
+  for row in rows:
+    has_active_blocker = any(_classify_note(note, row["status"]) == "active_blocker" for note in row["blockers"])
+    if has_active_blocker:
+      active_blocker_rows.append(row["id"])
+    if row["status"] == "blocked":
+      status_blocked_rows.append(row["id"])
+    if row["status"] in {"pending", "not_started"} and not has_active_blocker:
+      parallel_rows.append(row["id"])
+
+  return {
+    "by_owner_area": by_owner,
+    "gates": gate_rows,
+    "notes": notes_by_type,
+    "parallel_ready_rows": parallel_rows,
+    "active_blocker_rows": active_blocker_rows,
+    "status_blocked_rows": status_blocked_rows,
+    "summary": {
+      "active_blocker_count": len(notes_by_type["active_blocker"]),
+      "evidence_note_count": len(notes_by_type["evidence"]),
+      "sidecar_blocker_count": len(notes_by_type["sidecar"]),
+      "parallel_ready_count": len(parallel_rows),
+      "owner_areas": sorted(by_owner),
+    },
+  }
 
 
 def _target_summary(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -62,6 +164,7 @@ def build_prefill_performance_lowering_report(target: str | None = None) -> dict
     "by_status": by_status,
     "scope_files": sorted(reusable_files),
     "blocker_list": blockers,
+    "orchestration": _orchestration(rows),
   }
 
 
@@ -69,11 +172,13 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser(description="Build prefill performance lowering registry report.")
   ap.add_argument("--compact", action="store_true", help="print compact JSON")
   ap.add_argument("--target", help="filter rows by target id (target_1 or target_2)")
+  ap.add_argument("--orchestration", action="store_true", help="print orchestration slice only")
   args = ap.parse_args(argv)
 
   report = build_prefill_performance_lowering_report(args.target)
   indent = None if args.compact else 2
-  print(json.dumps(report, indent=indent))
+  payload = report["orchestration"] if args.orchestration else report
+  print(json.dumps(payload, indent=indent))
   return report
 
 
