@@ -119,6 +119,8 @@ spec_tensor = PatternMatcher([
   # SHAPED_WMMA <a_frag, b_frag, acc_frag>, arg=(dims, device, threads); tensor-graph only
   # (lowered to Ops.WMMA by lower_shaped_wmma during rangeify, so it never reaches the program graph).
   (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 3),
+  (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat())).f(Ops.GEP, name="g"),
+   lambda g: g.src[0].src[2].shape is not None and all(0 <= x < g.src[0].src[2].shape[-1] for x in g.arg)),
 
   # DEVICE
   (UPat(Ops.DEVICE, dtypes.void, (), name="d"), lambda d:

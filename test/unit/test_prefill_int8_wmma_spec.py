@@ -42,3 +42,17 @@ def test_q4k_wmma_full_role_lowering_spec_counts_14b_work_without_full_raw():
   assert spec.forbidden_full_raw_elems == 160 * 512 * 5120
   assert spec.requires_scheduler_owned_loop
   assert spec.to_json()["lowering"]["wmma_surface"] == "tc_matcher_tile"
+
+
+def test_scheduler_shaped_wmma_helper_owns_uop_convention():
+  from tinygrad import dtypes
+  from tinygrad.schedule.wmma import shaped_wmma
+  from tinygrad.uop.ops import Ops, UOp
+  zero = UOp.const(dtypes.int32, 0)
+  a = UOp.const(dtypes.int8, 1).stack(*[UOp.const(dtypes.int8, 1) for _ in range(15)])
+  b = UOp.const(dtypes.int8, 1).stack(*[UOp.const(dtypes.int8, 1) for _ in range(15)])
+  acc = zero.stack(*([zero] * 7))
+  w = shaped_wmma(a, b, acc, dims=(16, 16, 16), device="AMD", threads=32)
+  assert w.op is Ops.SHAPED_WMMA
+  assert w.arg == ((16, 16, 16), "AMD", 32)
+  assert w.dtype == dtypes.int32
