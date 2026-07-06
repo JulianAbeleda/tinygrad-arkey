@@ -259,8 +259,8 @@ ROUTES = {
     "purity_status": "research",
     "provenance": "machine_authored_generated",
     "selector": "env_guard",
-    "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma_tiled -> extra/qk/prefill_int8_wmma_spec.py Q4KInt8WMMATiledPrefillSpec + one-tile emit_q4k_int8_wmma_tiled_prefill_tensor; bounded multi-tile shapes below PREFILL_Q4K_WMMA_TILED_MAX_RAW_TILE_STEPS route to emit_q4k_int8_wmma_tiled_lifecycle_tensor. Full role shapes raise explicitly so this flag cannot silently fall through to the scalar Q4_K/Q8_1 GEMM route.",
-    "note": "One-tile tiled WMMA substrate is correct and codegen-valid: lowering feasibility and Q4_K/Q8_1 microgate pass on AMD with wmma_i32_16x16x16_iu8. Full 14B role shapes are classified blocked.full_route_lowering_missing until a direct tiled scheduler/codegen lowering maps role shapes to bounded tiles. Promotion requires canonical 14B smoke beating the current direct-packed default."},
+    "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma_tiled -> extra/qk/prefill_int8_wmma_spec.py Q4KInt8WMMATiledPrefillSpec + one-tile emit_q4k_int8_wmma_tiled_prefill_tensor for the direct runtime path (with bounded fallback to emit_q4k_int8_wmma_tiled_lifecycle_tensor); route authority additionally requires extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py to run a bounded synthetic generated tiled loop via emit_q4k_int8_wmma_tiled_exec_tensor.",
+    "note": "One-tile tiled WMMA substrate is correct and codegen-valid: lowering feasibility and Q4_K/Q8_1 microgate pass on AMD with wmma_i32_16x16x16_iu8. Synthetic 14B role-shape execution now runs through a bounded generated tiled loop (emit_q4k_int8_wmma_tiled_exec_tensor) for route authority, while full runtime role-shape execution is still blocked on scheduler-owned tiled loop ownership. Promotion requires canonical 14B smoke beating the current direct-packed default."},
   "prefill_q4k_reduce_out_research": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "correct_not_fast",
     "roles": ["ffn_gate_up", "attn_qo", "attn_kv"], "excluded_roles": ["ffn_down"],

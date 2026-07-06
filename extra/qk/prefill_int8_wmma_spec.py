@@ -310,12 +310,11 @@ def emit_q4k_int8_wmma_tiled_lifecycle_tensor(words:Tensor, xq:Tensor, xscales:T
                                               spec:Q4KInt8WMMATiledPrefillSpec) -> Tensor:
   """Bounded multi-output-tile Q4_K/Q8_1 WMMA lifecycle.
 
-  This keeps each live RAW dot at `[m_tile,n_tile,group_tile]` scope and composes output tiles in the generated Tensor
-  graph. It is the Phase-C lifecycle gate target; full 14B route execution still needs scheduler ownership for scale.
+  This keeps each live RAW dot local to `[m_tile,n_tile]` and iterates output/group tiles in the generated Tensor
+  graph so no `[groups, M, N]` RAW tensor is ever materialized. It is the Phase-C lifecycle gate target; full
+  14B route execution still needs scheduler ownership for scale/tile-loop orchestration.
   """
   spec.validate()
-  if spec.group_tile != 1:
-    raise NotImplementedError(f"wmma_tiled lifecycle currently requires group_tile=1, got {spec.group_tile}")
   if spec.m % spec.m_tile or spec.n % spec.n_tile:
     raise ValueError(f"m/n must be exact multiples of tile sizes, got m={spec.m} n={spec.n} "
                      f"tile={spec.m_tile}x{spec.n_tile}")
@@ -328,15 +327,18 @@ def emit_q4k_int8_wmma_tiled_lifecycle_tensor(words:Tensor, xq:Tensor, xscales:T
     for ns in range(0, spec.n, spec.n_tile):
       acc = Tensor.zeros(spec.m_tile, spec.n_tile, dtype=dtypes.float32, device=xq.device)
       words_tile = words3[ns:ns + spec.n_tile].contiguous()
-      for blk in range(spec.k_blocks):
-        for grp in range(spec.groups_per_block):
-          group_idx = blk * spec.groups_per_block + grp
+      for grp in range(0, spec.groups, spec.group_tile):
+        for group_offset in range(spec.group_tile):
+          group_idx = grp + group_offset
+          if group_idx >= spec.groups: break
+          blk = group_idx // spec.groups_per_block
+          grp_in_block = group_idx % spec.groups_per_block
           start = group_idx * spec.group_elems
-          q4_g = _q4k_group_codes_tensor(words_tile, blk, grp)
+          q4_g = _q4k_group_codes_tensor(words_tile, blk, grp_in_block)
           q8_g = xq2[ms:ms + spec.m_tile, start:start + spec.group_elems].contiguous()
           raw = _intdot_matmul(q8_g, q4_g.transpose()).cast(dtypes.float32)
           qsum = q8_g.cast(dtypes.int32).sum(axis=1).cast(dtypes.float32)
-          d, dmin, sc, mn = _q4k_group_params_tensor(words_tile, blk, grp)
+          d, dmin, sc, mn = _q4k_group_params_tensor(words_tile, blk, grp_in_block)
           xscale = xsc2[ms:ms + spec.m_tile, group_idx].cast(dtypes.float32)
           scaled_raw = raw * (d * sc.cast(dtypes.float32)).reshape(1, spec.n_tile)
           scaled_min = qsum.reshape(spec.m_tile, 1) * (dmin * mn.cast(dtypes.float32)).reshape(1, spec.n_tile)
@@ -344,3 +346,14 @@ def emit_q4k_int8_wmma_tiled_lifecycle_tensor(words:Tensor, xq:Tensor, xscales:T
       cols.append(acc.contiguous())
     rows.append(cols[0].cat(*cols[1:], dim=1).contiguous())
   return rows[0].cat(*rows[1:], dim=0).contiguous()
+
+
+def emit_q4k_int8_wmma_tiled_exec_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
+                                        spec:Q4KInt8WMMATiledPrefillSpec) -> Tensor:
+  """Bounded tiled role-shape execution emitter used by the role-shape exec gate.
+
+  This is a plain-Tensor generated loop over output/group tiles. It owns the synthetic role-shape lifecycle in Python and keeps
+  all live RAW local to each `(tile_m, tile_n, group_tile)` scope: at no point is a full `[groups, M, N]` RAW tensor
+  materialized in the graph.
+  """
+  return emit_q4k_int8_wmma_tiled_lifecycle_tensor(words, xq, xscales, spec)

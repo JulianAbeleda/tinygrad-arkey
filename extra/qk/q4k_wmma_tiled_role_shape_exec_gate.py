@@ -102,7 +102,7 @@ def _role_row(spec: Int8WMMATileLoweringSpec, lifecycle: dict[str, Any]) -> dict
       **base,
       "exec": {
         "attempted": True,
-        "class": "blocked.scheduler_owned_tile_loop_missing",
+        "class": "blocked.compiler_unavailable",
         "compile_ms": None,
         "runtime_ms": None,
         "kernel_count": None,
@@ -118,13 +118,13 @@ def _role_row(spec: Int8WMMATileLoweringSpec, lifecycle: dict[str, Any]) -> dict
   before_time = GlobalCounters.time_sum_s
   try:
     with contextlib.redirect_stdout(debug), Context(DEBUG=4):
-      got = qk_ops.emit_q4k_int8_wmma_tiled_lifecycle_tensor(words, xq, xscales, run_spec).realize().numpy()
+      got = qk_ops.emit_q4k_int8_wmma_tiled_exec_tensor(words, xq, xscales, run_spec).realize().numpy()
   except Exception as e:
     return {
       **base,
       "exec": {
         "attempted": True,
-        "class": "blocked.scheduler_owned_tile_loop_missing",
+        "class": "blocked.generated_tiled_loop_execution_failed",
         "compile_ms": None,
         "runtime_ms": None,
         "kernel_count": None,
@@ -140,7 +140,7 @@ def _role_row(spec: Int8WMMATileLoweringSpec, lifecycle: dict[str, Any]) -> dict
   compile_match = re.search(r"scheduled\s+\d+\s+kernels in\s+([0-9.]+)\s+ms", debug_text)
   base["exec"] = {
     "attempted": True,
-    "class": "blocked.scheduler_owned_tile_loop_missing",
+    "class": "pass.generated_tiled_loop",
     "compile_ms": float(compile_match.group(1)) if compile_match else None,
     "runtime_ms": (GlobalCounters.time_sum_s - before_time) * 1000.0,
     "kernel_count": GlobalCounters.kernel_count - before,

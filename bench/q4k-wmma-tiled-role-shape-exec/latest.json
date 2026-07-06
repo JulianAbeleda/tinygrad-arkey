@@ -62,7 +62,7 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.scheduler_owned_tile_loop_missing",
+        "class": "blocked.compiler_unavailable",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
@@ -125,7 +125,7 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.scheduler_owned_tile_loop_missing",
+        "class": "blocked.compiler_unavailable",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
@@ -188,7 +188,7 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.scheduler_owned_tile_loop_missing",
+        "class": "blocked.compiler_unavailable",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
@@ -251,7 +251,7 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.scheduler_owned_tile_loop_missing",
+        "class": "blocked.compiler_unavailable",
         "compile_ms": null,
         "runtime_ms": null,
         "kernel_count": null,
