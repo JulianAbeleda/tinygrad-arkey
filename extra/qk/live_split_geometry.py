@@ -79,15 +79,9 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
   addressed separately by TG-P9.3/9.4).
   """
   from tinygrad import Tensor, dtypes
-  from extra.qk.flash_kernels import flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel
+  from extra.qk.flash_decode_attention_spec import describe_flash_decode_attention
   _F32 = dtypes.float32
-  TK = 16                                    # the tile's K-block size (kernel-internal constant)
   W2 = Hd + 2
-  # per-split length = ceildiv(Tc, S), ROUNDED UP to a multiple of TK. Alignment is required because the tile covers
-  # each split in whole TK blocks; an unaligned per would make block NB*TK overshoot the split slot and overlap the
-  # next split (double-counting in the softmax). Aligned splits stay disjoint and their union >= Tc (tail masked by
-  # t < Tc). At ctx512 per->16 (1 block/split); at ctx4096 per->128 (8 blocks/split == fixed L=128).
-  per = ceildiv_uop(ceildiv_uop(Tc_u, S), TK) * TK
   q_f = q.reshape(Hq * Hd)
   # KV-quant long-context tier: when kv_scale is provided, cache_kv is INT8 and the kernel dequantizes in-register
   # (int8 * fp16 scale) -- no materialized fp16 KV. kv_scale shape [2,1,Hkv,MAXC] fp16. quant=False path unchanged.
@@ -95,13 +89,16 @@ def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv:
   _quant = kv_scale is not None
   _rope = freqs is not None
   _inputs = (q_f, cache_kv) + ((kv_scale,) if _quant else ()) + ((freqs,) if _rope else ())
+  spec = describe_flash_decode_attention(Hq=Hq, Hd=Hd, Hkv=Hkv, MAXC=MAXC, S=S, staging=staging, quant=_quant, rope=_rope)
   po = Tensor.empty(Hq * S * W2, dtype=_F32).custom_kernel(
     *_inputs,
-    fxn=flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd, Hq, Hkv, MAXC, per, S, Tc_u, staging=staging, quant=_quant, rope=_rope))[0]
+    fxn=spec.emit_tile(Tc_u))[0]
   # TG-P14.9: split-preserving fused combine. One kernel replaces the gmax + per-d combine lifecycle and removes the
   # Hd-fold fexp redundancy (Hq*Hd*S -> Hq*S fexp). (fused_combine is now unconditional; the old two-kernel combine
   # was removed 2026-07-06.)
-  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_gmax_combine_kernel(Hd, Hq, S, stride=S))[0]
+  if not fused_combine:
+    raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
+  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=spec.emit_combine())[0]
   return out.reshape(Hq, Hd)
 
 

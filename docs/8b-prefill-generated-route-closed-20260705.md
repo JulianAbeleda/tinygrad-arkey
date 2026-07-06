@@ -56,8 +56,8 @@ PYTHONPATH=. .venv/bin/python extra/qk/pure_search_guard.py
 Result:
 
 ```text
-prefill_gemm -> prefill_pipe_role_selective_generated, pure
-violations: []
+prefill_gemm -> prefill_pipe_role_selective_generated, IMPURE
+violations: [prefill_pipe_role_selective_generated]
 ```
 
 ## 8B Authority
@@ -89,6 +89,10 @@ The pure-search route report for that run selected:
 ```text
 prefill_gemm -> prefill_pipe_role_selective_generated
 ```
+
+Strict surface audit note, updated 2026-07-06: this route has spec-driven schedule selection, but it still lowers through
+`extra/qk/prefill/wmma.py` raw instruction lists wrapped as `Ops.INS`. It remains the single final-default purity blocker
+until the executing WMMA substrate is replaced by tinygrad-owned lowering.
 
 ## Profile Trace
 

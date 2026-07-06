@@ -4,7 +4,8 @@ from extra.qk import generated_route_registry as registry
 from extra.qk import route_manifest
 
 
-SEEDED = ("decode_q4k_g3_generated", "decode_q6k_coop_generated", "prefill_q4k_direct_tile4x4_default",
+SEEDED = ("decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth",
+          "decode_q4k_g3_generated", "decode_q6k_coop_generated", "prefill_q4k_direct_tile4x4_default",
           "prefill_q4k_reduce_out_research", "prefill_q6k_direct_generated")
 REQUIRED_L3_FIELDS = {
   "route_id",
@@ -30,6 +31,8 @@ REQUIRED_L3_FIELDS = {
 
 def test_generated_route_registry_contains_positive_controls():
   by_route = {r["route_id"]: r for r in registry.rows()}
+  assert by_route["decode_flash_block_tile_g5_konly"]["route_id"] == "decode_flash_block_tile_g5_konly"
+  assert by_route["decode_flash_live_split_g4_8b_kvboth"]["route_id"] == "decode_flash_live_split_g4_8b_kvboth"
   assert by_route["decode_q4k_g3_generated"]["route_id"] == "decode_q4k_g3_generated"
   assert by_route["decode_q6k_coop_generated"]["route_id"] == "decode_q6k_coop_generated"
   assert by_route["prefill_q4k_direct_tile4x4_default"]["route_id"] == "prefill_q4k_direct_tile4x4_default"

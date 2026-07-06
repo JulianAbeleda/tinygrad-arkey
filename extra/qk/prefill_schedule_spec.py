@@ -24,6 +24,36 @@ from typing import Any
 # ffn_gate_up is the protected (pipe-excluded) role: uniquely out_f==12288 on the tracked dense prefill shapes.
 PROTECTED_PIPE_ROLES = ("ffn_gate_up",)
 _GATE_UP_OUT_F = 12288
+PIPELINE_TARGET_SUBSTRATE = ("tinygrad.schedule.wmma.shaped_wmma", "tinygrad.schedule.rangeify")
+
+
+def prefill_pipe_role_selective_generated_pure_search_proof() -> dict[str, Any]:
+  """Small, non-authoritative proof scaffold for strict pure-machine-search tooling.
+
+  The route is still route-selective from a spec, but the active lowering path still emits a raw
+  `UOp(Ops.INS, ...)` program in `route_pf16_graph_gemm`, so it remains externally handwritten despite the
+  schedule-data conversion.
+  """
+  return {
+    "route_id": "prefill_pipe_role_selective_generated",
+    "status": "blocked_for_strict_pure_search",
+    "is_pure": False,
+    "blocker": "Ops.INS",
+    "executing_surface": {
+      "writer": "extra/qk/prefill_graph_gemm_route.py::route_pf16_graph_gemm",
+      "lowering_chain": "describe_prefill_schedule -> emit_prefill_gemm_from_spec -> _emit_schedule -> "
+                        "build_gemm_pipe / build_gemm_lds2 -> UOp(Ops.INS, ...)",
+    },
+    "target_lowering_substrate": {
+      "goal": "backend-owned matrix instructions via Tinygrad IR",
+      "path": ("tinygrad.schedule.wmma", "tinygrad.schedule.shaped_wmma", "tinygrad.schedule.rangeify"),
+      "target": PIPELINE_TARGET_SUBSTRATE,
+    },
+    "notes": (
+      "The manifest already calls this route `external_handwritten_kernel`; this helper is intended to keep the blocker explicit "
+      "for audits/tests and avoid any false 'pure' interpretation."
+    )
+  }
 
 
 @dataclass(frozen=True)

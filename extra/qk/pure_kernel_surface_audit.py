@@ -45,16 +45,6 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
   # decode_q6k_coop_shipped + decode_q6k_direct_refuted RouteSurfaces REMOVED 2026-07-06 (no backups): kernels deleted.
   # decode_attention_owned_two_kernel, decode_flash_block_tile_g5_8b_refuted, decode_attention_generic_flash_generated
   # RouteSurfaces REMOVED 2026-07-06 (no backups): their manifest ROUTES rows were deleted (kernels/files gone).
-  "decode_flash_live_split_g4_8b_kvboth": RouteSurface(
-    "decode_flash_live_split_g4_8b_kvboth", "route_local_custom_kernel",
-    ("extra/qk/live_split_geometry.py", "extra/qk/flash_kernels.py"),
-    "Promoted attention route still executes hand-authored flash/live-split UOp templates until descriptor artifacts prove topology ownership.",
-    replacement_scope="Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."),
-  "decode_flash_block_tile_g5_konly": RouteSurface(
-    "decode_flash_block_tile_g5_konly", "route_local_custom_kernel",
-    ("extra/qk/live_split_geometry.py", "extra/qk/flash_kernels.py"),
-    "G5 attention route shares live-split/block-tile hand UOp template surface until descriptor artifacts prove topology ownership.",
-    replacement_scope="Add FlashDecodeTileSpec, LiveSplitGeometrySpec, FlashCombineSpec, and generated-only binding gate."),
   "prefill_pipe_role_selective_generated": RouteSurface(
     "prefill_pipe_role_selective_generated", "external_raw_or_binary",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),

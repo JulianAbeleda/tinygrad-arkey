@@ -53,8 +53,8 @@ CENSUS_ROWS = [
   {"route_id": "decode_flash_live_split_g4_8b_kvboth", "workload": "decode", "role": "attention_tile,attention_combine", "quant": "fp16",
    "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
    "writer": "generated", "selector": "BoltBeam_route_policy_or_env_default",
-   "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> live-split block tile path (staging='KV_BOTH', fused_combine=True)",
-   "kernel_source": "extra/qk/live_split_geometry.py + extra/qk/flash_kernels.py live-split UOp templates",
+   "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine",
+   "kernel_source": "extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
    "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
    "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
    "purity_status": "search_generated_promoted",
@@ -62,8 +62,8 @@ CENSUS_ROWS = [
   {"route_id": "decode_flash_block_tile_g5_konly", "workload": "decode", "role": "attention_tile,attention_combine", "quant": "fp16",
    "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
    "writer": "generated", "selector": "BoltBeam_route_policy_or_env_default",
-   "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; staging KV_BOTH (K_ONLY unsupported under live-split geometry)",
-   "kernel_source": "extra/qk/live_split_geometry.py live-split block tile path -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel (staging='KV_BOTH', seqlen-bound per-split length)",
+   "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; FlashDecodeAttentionSpec owns staging/geometry/combine",
+   "kernel_source": "extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
    "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); W==D 8B/14B/32B token-identical to generic flash ref; 14B tok/s flat 69.24@MAXC1024 vs 69.04@MAXC8192 (no-collapse)",
    "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
    "purity_status": "search_generated_promoted",
@@ -141,6 +141,7 @@ def build_census() -> dict:
   transitional_default = [r for r in default_rows if r["provenance"] == "hand_authored_uop_template"]
   forbidden_default = [r for r in default_rows if r["provenance"] in ("external_handwritten_kernel", "rollback_oracle")]
   purity = default_purity_report()
+  debt_verb = "is" if len(final_purity_debt) == 1 else "are"
 
   verdict = "PMS_R0_PASS_CENSUS_PINNED" if attribution_complete else "PMS_R0_BLOCKED_ROUTE_ATTRIBUTION_MISSING"
   headline = {
@@ -154,7 +155,7 @@ def build_census() -> dict:
     "interpretation": (
       f"{len(non_tinygrad_default)} kernels on the default path are non-tinygrad-generated. "
       f"{len(generated_default)} are machine-authored/generated ({', '.join(r['route_id'] for r in generated_default)}); "
-      f"{len(final_purity_debt)} are final-default purity debt "
+      f"{len(final_purity_debt)} {debt_verb} final-default purity debt "
       f"({', '.join(r['route_id'] for r in final_purity_debt)}). "
       "Everything else in the model is tinygrad_scheduler-generated."),
   }

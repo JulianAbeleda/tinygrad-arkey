@@ -21,20 +21,6 @@ class LoweringPhaseRegistryRow(TypedDict):
 
 _PHASE_ROWS: tuple[LoweringPhaseRegistryRow, ...] = (
   {
-    "id": "decode_flash_live_split_g4_8b_kvboth",
-    "phase": 3,
-    "phase_name": "decode_attention_live_split",
-    "target_lowering_level": "L3",
-    "next_action": "introduce FlashDecodeTileSpec and generated flash combine path",
-  },
-  {
-    "id": "decode_flash_block_tile_g5_konly",
-    "phase": 3,
-    "phase_name": "decode_attention_live_split",
-    "target_lowering_level": "L3",
-    "next_action": "share live-split descriptors and route through generated lowering",
-  },
-  {
     "id": "prefill_pipe_role_selective_generated",
     "phase": 4,
     "phase_name": "raw_wmma_substrate",

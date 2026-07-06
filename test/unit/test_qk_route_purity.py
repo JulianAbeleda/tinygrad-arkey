@@ -30,14 +30,13 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   report = default_purity_report()
   assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
   assert route_provenance("decode_q4k_g3_generated") == "machine_authored_generated"
-  assert route_provenance("decode_flash_block_tile_g5_konly") == "hand_authored_uop_template"
-  assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "hand_authored_uop_template"
+  assert route_provenance("decode_flash_block_tile_g5_konly") == "machine_authored_generated"
+  assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "machine_authored_generated"
   # TG-P3: Q6_K default is now the generated route; no manifest hand-kernel rollback remains.
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
   assert route_provenance("prefill_q6k_direct_generated") == "machine_authored_generated"
   assert route_provenance("prefill_pipe_role_selective_generated") == "external_handwritten_kernel"
-  assert set(report["transitional_default_routes"]) == {
-    "decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth"}
+  assert set(report["transitional_default_routes"]) == set()
   assert set(report["forbidden_default_routes"]) == {"prefill_pipe_role_selective_generated"}
 
 
@@ -49,8 +48,8 @@ def test_default_path_census_uses_manifest_provenance():
   assert all(row["in_manifest"] for row in census["rows"])
   by_route = {row["route_id"]: row for row in census["default_route_table"]}
   assert by_route["decode_q4k_g3_generated"]["final_default_allowed"] is True
-  assert by_route["decode_flash_block_tile_g5_konly"]["final_default_allowed"] is False
-  assert by_route["decode_flash_live_split_g4_8b_kvboth"]["final_default_allowed"] is False
+  assert by_route["decode_flash_block_tile_g5_konly"]["final_default_allowed"] is True
+  assert by_route["decode_flash_live_split_g4_8b_kvboth"]["final_default_allowed"] is True
   # TG-P3: the generated Q6_K route is the default and the census only carries current manifest route rows.
   assert by_route["decode_q6k_coop_generated"]["provenance"] == "machine_authored_generated"
   assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True

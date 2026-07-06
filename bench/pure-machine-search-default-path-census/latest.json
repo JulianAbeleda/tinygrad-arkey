@@ -22,22 +22,19 @@
     "of_which_search_generated": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
+      "decode_flash_live_split_g4_8b_kvboth",
+      "decode_flash_block_tile_g5_konly",
       "prefill_q4k_direct_tile4x4_default",
       "prefill_q6k_direct_generated"
     ],
     "of_which_final_purity_debt": [
-      "decode_flash_live_split_g4_8b_kvboth",
-      "decode_flash_block_tile_g5_konly",
       "prefill_pipe_role_selective_generated"
     ],
-    "of_which_transitional": [
-      "decode_flash_live_split_g4_8b_kvboth",
-      "decode_flash_block_tile_g5_konly"
-    ],
+    "of_which_transitional": [],
     "of_which_forbidden_final_default": [
       "prefill_pipe_role_selective_generated"
     ],
-    "interpretation": "7 kernels on the default path are non-tinygrad-generated. 4 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, prefill_q4k_direct_tile4x4_default, prefill_q6k_direct_generated); 3 are final-default purity debt (decode_flash_live_split_g4_8b_kvboth, decode_flash_block_tile_g5_konly, prefill_pipe_role_selective_generated). Everything else in the model is tinygrad_scheduler-generated."
+    "interpretation": "7 kernels on the default path are non-tinygrad-generated. 6 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, decode_flash_live_split_g4_8b_kvboth, decode_flash_block_tile_g5_konly, prefill_q4k_direct_tile4x4_default, prefill_q6k_direct_generated); 1 is final-default purity debt (prefill_pipe_role_selective_generated). Everything else in the model is tinygrad_scheduler-generated."
   },
   "purity_report": {
     "verdict": "TINYGRAD_DEFAULT_PURITY_FAIL",
@@ -68,16 +65,16 @@
       {
         "route_id": "decode_flash_live_split_g4_8b_kvboth",
         "status": "promoted_default",
-        "provenance": "hand_authored_uop_template",
-        "replacement_scope": "Attention descriptor conversion: FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec own topology, shared emitter lowers to codegen, generated-only binding gate. Until then the executing flash/live-split kernels are hand-authored Tensor.custom_kernel UOp templates, not ordinary scheduler output.",
-        "final_default_allowed": false
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
       },
       {
         "route_id": "decode_flash_block_tile_g5_konly",
         "status": "promoted_default",
-        "provenance": "hand_authored_uop_template",
-        "replacement_scope": "Attention descriptor conversion (shared with 8B live-split): FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec + generated-only binding gate. Executing block-tile/live-split kernels are hand-authored UOp templates until then.",
-        "final_default_allowed": false
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
       },
       {
         "route_id": "prefill_pipe_role_selective_generated",
@@ -104,10 +101,7 @@
     "forbidden_default_routes": [
       "prefill_pipe_role_selective_generated"
     ],
-    "transitional_default_routes": [
-      "decode_flash_live_split_g4_8b_kvboth",
-      "decode_flash_block_tile_g5_konly"
-    ],
+    "transitional_default_routes": [],
     "final_default_allowed_provenance": [
       "machine_authored_generated",
       "tinygrad_scheduler_generated"
@@ -162,17 +156,17 @@
       "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> live-split block tile path (staging='KV_BOTH', fused_combine=True)",
-      "kernel_source": "extra/qk/live_split_geometry.py + extra/qk/flash_kernels.py live-split UOp templates",
+      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine",
+      "kernel_source": "extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
       "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
       "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
       "purity_status": "search_generated_promoted",
       "next_action": "keep promoted; no handwritten attention kernel on the hot path",
       "current_default": true,
       "in_manifest": true,
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "Attention descriptor conversion: FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec own topology, shared emitter lowers to codegen, generated-only binding gate. Until then the executing flash/live-split kernels are hand-authored Tensor.custom_kernel UOp templates, not ordinary scheduler output.",
-      "final_default_allowed": false
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "decode_flash_block_tile_g5_konly",
@@ -182,17 +176,17 @@
       "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; staging KV_BOTH (K_ONLY unsupported under live-split geometry)",
-      "kernel_source": "extra/qk/live_split_geometry.py live-split block tile path -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel (staging='KV_BOTH', seqlen-bound per-split length)",
+      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; FlashDecodeAttentionSpec owns staging/geometry/combine",
+      "kernel_source": "extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
       "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); W==D 8B/14B/32B token-identical to generic flash ref; 14B tok/s flat 69.24@MAXC1024 vs 69.04@MAXC8192 (no-collapse)",
       "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
       "purity_status": "search_generated_promoted",
       "next_action": "keep promoted; 8B/14B/32B now share one modular structural-class route",
       "current_default": true,
       "in_manifest": true,
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "Attention descriptor conversion (shared with 8B live-split): FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec + generated-only binding gate. Executing block-tile/live-split kernels are hand-authored UOp templates until then.",
-      "final_default_allowed": false
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "prefill_pipe_role_selective_generated",
@@ -304,17 +298,17 @@
       "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> live-split block tile path (staging='KV_BOTH', fused_combine=True)",
-      "kernel_source": "extra/qk/live_split_geometry.py + extra/qk/flash_kernels.py live-split UOp templates",
+      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine",
+      "kernel_source": "extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
       "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
       "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
       "purity_status": "search_generated_promoted",
       "next_action": "keep promoted; no handwritten attention kernel on the hot path",
       "current_default": true,
       "in_manifest": true,
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "Attention descriptor conversion: FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec own topology, shared emitter lowers to codegen, generated-only binding gate. Until then the executing flash/live-split kernels are hand-authored Tensor.custom_kernel UOp templates, not ordinary scheduler output.",
-      "final_default_allowed": false
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "decode_flash_block_tile_g5_konly",
@@ -324,17 +318,17 @@
       "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; staging KV_BOTH (K_ONLY unsupported under live-split geometry)",
-      "kernel_source": "extra/qk/live_split_geometry.py live-split block tile path -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel (staging='KV_BOTH', seqlen-bound per-split length)",
+      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; FlashDecodeAttentionSpec owns staging/geometry/combine",
+      "kernel_source": "extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
       "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); W==D 8B/14B/32B token-identical to generic flash ref; 14B tok/s flat 69.24@MAXC1024 vs 69.04@MAXC8192 (no-collapse)",
       "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
       "purity_status": "search_generated_promoted",
       "next_action": "keep promoted; 8B/14B/32B now share one modular structural-class route",
       "current_default": true,
       "in_manifest": true,
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "Attention descriptor conversion (shared with 8B live-split): FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec + generated-only binding gate. Executing block-tile/live-split kernels are hand-authored UOp templates until then.",
-      "final_default_allowed": false
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
     },
     {
       "route_id": "prefill_pipe_role_selective_generated",
