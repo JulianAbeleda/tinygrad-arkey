@@ -150,13 +150,31 @@ ROUTES = {
   # Generic flash fallback row REMOVED 2026-07-06 (no backups): the DECODE_LIVE_SPLIT=0 fallback implementation was
   # deleted; no rollback target remains.
   # ---------------- prefill GEMM ----------------
-  "prefill_pipe_role_selective_generated": {
+  "prefill_v2_scheduler_matmul_default": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
     "quant": ["Q4_K", "Q6_K", "fp16"],
-    "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "graph-GEMM prefill ubatch=512; role_policy in the spec: pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288"}],
+    "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "ordinary PREFILL_V2 fp16 matmul under warmstart TC opts"}],
     "env": {},
     "rollback": {},
+    "strict_fallback": True,
+    "expected_kernels": [],
+    "forbidden_kernels": ["prefill_gen_sched_gemm_* (on the default path)", "Ops.INS"],
+    "authority_gate": "tinygrad/llm/model.py PREFILL_GRAPH_GEMM default",
+    "promotion_artifacts": ["docs/pure-machine-search.md"],
+    "purity_status": "search_generated_promoted",
+    "provenance": "tinygrad_scheduler_generated",
+    "replacement_scope": "",
+    "selector": "env_default",
+    "route_attribution": "tinygrad/llm/prefill_routes.py route_prefill_linear default path: PREFILL_GRAPH_GEMM=0 -> x.cast(float16).linear(w.transpose(), bias) inside PREFILL_V2, with model.py installing warmstart TC opts around the prefill jit.",
+    "note": "Strict pure-machine-search default for fp16 resident/chunked prefill: ordinary tinygrad graph lowering owns matmul scheduling. The raw RDNA3 graph-GEMM instruction-list route remains opt-in via PREFILL_GRAPH_GEMM=1."},
+  "prefill_pipe_role_selective_generated": {
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
+    "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
+    "quant": ["Q4_K", "Q6_K", "fp16"],
+    "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "graph-GEMM prefill ubatch=512; role_policy in the spec: pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288"}],
+    "env": {"PREFILL_GRAPH_GEMM": "1"},
+    "rollback": {"PREFILL_GRAPH_GEMM": "0"},
     "strict_fallback": True,
     "expected_kernels": ["prefill_gen_sched_gemm_*"],
     "forbidden_kernels": ["prefill_graph_gemm_* (on the default path)"],
@@ -166,7 +184,7 @@ ROUTES = {
     "purity_status": "search_generated_promoted",
     "provenance": "external_handwritten_kernel",
     "replacement_scope": "Route B: generated LDS+WMMA codegen substrate (PrefillWMMAScheduleSpec) replacing extra/qk/prefill/wmma.py raw Ops.INS. Schedule SELECTION is spec-generated, but the executing substrate wraps raw RDNA3 instruction lists -> external handwritten kernel under the strict rule.",
-    "selector": "BoltBeam_route_policy_or_env_default",
+    "selector": "env_guard",
     "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec; writer extra/qk/prefill_schedule_spec.py (PrefillGEMMScheduleSpec lowered through the RDNA3 WMMA schedule generator ref.build_gemm_pipe / build_gemm_lds2).",
     "note": "spec-driven generated prefill GEMM schedule: PrefillGEMMScheduleSpec (data) captures the resolved tile/wave/pipeline/role-policy; emit_prefill_gemm_from_spec lowers it through the parameterized RDNA3 WMMA schedule generator. The RDNA3 WMMA instruction set is the target grammar; the schedule is machine-authored from the spec. The legacy fixed emit and PREFILL_GENERATED_SCHEDULE rollback were removed from runtime."},
   "prefill_q4k_direct_tile4x4_default": {

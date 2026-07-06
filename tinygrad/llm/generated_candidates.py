@@ -46,13 +46,13 @@ class GeneratedCandidateRegistry:
 
 BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
   GeneratedCandidate(
-    candidate_id="quant_linear_prefill.prefill_pipe_role_selective_generated",
+    candidate_id="quant_linear_prefill.prefill_v2_scheduler_matmul_default",
     op_family="QuantizedLinear", supported_quant_formats=("Q4_K", "Q6_K", "fp16"),
     supported_activation_formats=("fp16",), phases=("prefill",),
     roles=("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv"),
-    lowering_strategy="tinygrad_scheduler", provenance="machine_authored_generated",
-    route_id="prefill_pipe_role_selective_generated", search_space_id="prefill_generated_schedule",
-    authority_gates=("extra/qk/prefill_generated_schedule_gate.py",)),
+    lowering_strategy="tinygrad_scheduler", provenance="tinygrad_scheduler_generated",
+    route_id="prefill_v2_scheduler_matmul_default", search_space_id="prefill_v2_scheduler_matmul",
+    authority_gates=("extra.qk.pure_search_guard",)),
   GeneratedCandidate(
     candidate_id="quant_linear_prefill.q4k_int8_wmma_tensor_substrate",
     op_family="QuantizedLinear", supported_quant_formats=("Q4_K",),

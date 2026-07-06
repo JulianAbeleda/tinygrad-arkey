@@ -33,8 +33,8 @@ HOT_FAMILIES = [
   # Q6_K shipped hand-kernel rollback was deleted (no backups): generated Q6_K decode is now unconditional.
   {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_generated",
    "rollback_active": lambda e: False},
-  {"family": "prefill_gemm", "generated": "prefill_pipe_role_selective_generated", "oracle": "prefill_pipe_role_selective_generated",
-   "rollback_active": lambda e: False},
+  {"family": "prefill_gemm", "generated": "prefill_v2_scheduler_matmul_default", "oracle": "prefill_pipe_role_selective_generated",
+   "rollback_active": lambda e: str(e.get("PREFILL_GRAPH_GEMM", "0")).lower() not in ("0", "false", "off", "no", "")},
   # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is descriptor-owned; the opt-in
   # PREFILL_Q4K_WMMA_FUSED route remains raw-ISA WMMA and is not selected here.
   {"family": "prefill_q4k", "generated": "prefill_q4k_direct_tile4x4_default", "oracle": "prefill_q4k_direct_tile4x4_default",

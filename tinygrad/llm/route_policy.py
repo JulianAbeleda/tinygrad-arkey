@@ -75,7 +75,7 @@ _QK_ROUTE_POLICY_STRICT = False
 _QK_ROUTE_POLICY_DEBUG = False
 _SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth",
                            "decode_q4k_g3_generated", "decode_q6k_coop_generated",
-                           "prefill_pipe_role_selective_generated"}
+                           "prefill_v2_scheduler_matmul_default"}
 
 def load_qk_route_policy(path:str) -> dict:
   policy_path = pathlib.Path(path).expanduser()
@@ -136,9 +136,9 @@ def load_qk_route_policy(path:str) -> dict:
         raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
       q6k_gen_rows.append(row)
       selected.setdefault(route_id, row)
-    elif route_id == "prefill_pipe_role_selective_generated":
+    elif route_id == "prefill_v2_scheduler_matmul_default":
       if params:
-        raise ValueError(f"{policy_path} route {route_id!r} no longer accepts route_params; generated prefill is the only runtime emitter, got {params}")
+        raise ValueError(f"{policy_path} route {route_id!r} no longer accepts route_params; scheduler prefill is the pure default, got {params}")
       shape = row.get("shape", {})
       try:
         rows_i, cols_i = int(shape["rows"]), int(shape["cols"])

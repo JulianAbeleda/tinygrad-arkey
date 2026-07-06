@@ -19,15 +19,7 @@ class LoweringPhaseRegistryRow(TypedDict):
   next_action: str
 
 
-_PHASE_ROWS: tuple[LoweringPhaseRegistryRow, ...] = (
-  {
-    "id": "prefill_pipe_role_selective_generated",
-    "phase": 4,
-    "phase_name": "raw_wmma_substrate",
-    "target_lowering_level": "L5",
-    "next_action": "replace Ops.INS substrate with generated LDS+WMMA flow",
-  },
-)
+_PHASE_ROWS: tuple[LoweringPhaseRegistryRow, ...] = ()
 
 
 _KNOWN_IDS = set(route_manifest.ROUTES) | set(runtime_surface_registry.surface_ids())

@@ -32,7 +32,7 @@ CENSUS_ROWS = [
   # ----- decode Q4_K weight GEMV -----
   {"route_id": "decode_q4k_g3_generated", "workload": "decode", "role": "ffn_gate_up,ffn_down,attn_qo,attn_k", "quant": "Q4_K",
    "shape_guard": "QK_ROUTE_POLICY decode_q4k_g3_generated per tensor OR g3_bubblebeam_shape OR DECODE_Q4K_G3_ANYSHAPE structural guard ((in//256)%4==0 and out%32==0)",
-   "writer": "generated", "selector": "BoltBeam_route_policy_or_env_default",
+   "writer": "generated", "selector": "env_guard",
    "route_guard": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call getenv('BUBBLEBEAM_FUTURESIGHT', 1)==1 (default-on) + _qk_route_policy_selects_q4k_g3 (BoltBeam QK_ROUTE_POLICY) + DECODE_Q4K_G3_ANYSHAPE default-on -> q4k_g3_lanemap_gemv_kernel fires FIRST for eligible shapes, short-circuiting the owned-warp guards; strict policy fails loud on hidden fallback",
    "kernel_source": "extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel (UOp program from extra/qk/gemv_g2_lanemap.py Q4KGateUpLaneMap)",
    "authority_artifact": "bench/amd-isa-backend-g3-weight-promotion/latest.json (AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT)",
@@ -75,9 +75,18 @@ CENSUS_ROWS = [
    "route_guard": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec",
    "kernel_source": "extra/qk/prefill_schedule_spec.py emit_prefill_gemm_from_spec (PrefillGEMMScheduleSpec lowered via the parameterized RDNA3 WMMA schedule generator ref.build_gemm_pipe/build_gemm_lds2 -> prefill_gen_sched_gemm_*)",
    "authority_artifact": "bench/tg-p4-prefill-generated-schedule/latest.json (TG_P4_PASS_PREFILL_GENERATED_SCHEDULE: generated build present, role policy preserved)",
-   "rollback_flag": "none; legacy fixed emit removed",
+   "rollback_flag": "PREFILL_GRAPH_GEMM=0 returns to the scheduler-owned default",
+   "purity_status": "research",
+   "next_action": "keep opt-in until the executing WMMA substrate is generated instead of Ops.INS"},
+  {"route_id": "prefill_v2_scheduler_matmul_default", "workload": "prefill", "role": "attn_qo,attn_kv,ffn_down,ffn_gate_up", "quant": "Q4_K,Q6_K,fp16",
+   "shape_guard": "PREFILL_V2 fp16 resident/chunked matmul; graph-GEMM raw route not selected by default",
+   "writer": "tinygrad_generated", "selector": "env_default",
+   "route_guard": "tinygrad/llm/prefill_routes.py route_prefill_linear default path: PREFILL_GRAPH_GEMM=0 -> x.cast(float16).linear(w.transpose(), bias)",
+   "kernel_source": "ordinary tinygrad graph lowering with model.py warmstart TC opts installed around PREFILL_V2 jit",
+   "authority_artifact": "docs/pure-machine-search.md",
+   "rollback_flag": "PREFILL_GRAPH_GEMM=1 opts into prefill_pipe_role_selective_generated raw graph-GEMM research",
    "purity_status": "search_generated_promoted",
-   "next_action": "keep promoted; BoltBeam owns prefill schedule selection; 8B generated prefill is closed"},
+   "next_action": "keep as strict pure-machine-search default; use PREFILL_GRAPH_GEMM=1 only as explicit raw-substrate research"},
   {"route_id": "prefill_q4k_direct_tile4x4_default", "workload": "prefill", "role": "ffn_gate_up,attn_qo,ffn_down,attn_kv", "quant": "Q4_K",
    "shape_guard": "direct-packed Q4_K prefill, memory-safe 14B/32B route",
    "writer": "generated", "selector": "env_default",
@@ -123,7 +132,7 @@ def build_census() -> dict:
     row["in_manifest"] = in_manifest
     row["provenance"] = route_provenance(rid) if in_manifest else "missing_manifest"
     row["replacement_scope"] = ROUTES.get(rid, {}).get("replacement_scope", "")
-    row["final_default_allowed"] = (not is_default) or row["provenance"] in ("machine_authored_generated", "tinygrad_scheduler_generated")
+    row["final_default_allowed"] = row["provenance"] in ("machine_authored_generated", "tinygrad_scheduler_generated")
     # route attribution must be present (a model.py / route-file guard), else flag incomplete
     if not row.get("route_guard") or not in_manifest:
       attribution_complete = False
@@ -141,7 +150,12 @@ def build_census() -> dict:
   transitional_default = [r for r in default_rows if r["provenance"] == "hand_authored_uop_template"]
   forbidden_default = [r for r in default_rows if r["provenance"] in ("external_handwritten_kernel", "rollback_oracle")]
   purity = default_purity_report()
-  debt_verb = "is" if len(final_purity_debt) == 1 else "are"
+  debt_clause = (
+    "0 are final-default purity debt"
+    if not final_purity_debt else
+    f"{len(final_purity_debt)} {'is' if len(final_purity_debt) == 1 else 'are'} final-default purity debt "
+    f"({', '.join(r['route_id'] for r in final_purity_debt)})"
+  )
 
   verdict = "PMS_R0_PASS_CENSUS_PINNED" if attribution_complete else "PMS_R0_BLOCKED_ROUTE_ATTRIBUTION_MISSING"
   headline = {
@@ -155,8 +169,7 @@ def build_census() -> dict:
     "interpretation": (
       f"{len(non_tinygrad_default)} kernels on the default path are non-tinygrad-generated. "
       f"{len(generated_default)} are machine-authored/generated ({', '.join(r['route_id'] for r in generated_default)}); "
-      f"{len(final_purity_debt)} {debt_verb} final-default purity debt "
-      f"({', '.join(r['route_id'] for r in final_purity_debt)}). "
+      f"{debt_clause}. "
       "Everything else in the model is tinygrad_scheduler-generated."),
   }
   return {

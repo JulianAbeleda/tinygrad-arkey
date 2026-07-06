@@ -45,6 +45,11 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
   # decode_q6k_coop_shipped + decode_q6k_direct_refuted RouteSurfaces REMOVED 2026-07-06 (no backups): kernels deleted.
   # decode_attention_owned_two_kernel, decode_flash_block_tile_g5_8b_refuted, decode_attention_generic_flash_generated
   # RouteSurfaces REMOVED 2026-07-06 (no backups): their manifest ROUTES rows were deleted (kernels/files gone).
+  "prefill_v2_scheduler_matmul_default": RouteSurface(
+    "prefill_v2_scheduler_matmul_default", "ordinary_tinygrad_graph",
+    ("tinygrad/llm/prefill_routes.py", "tinygrad/llm/model.py"),
+    "Default PREFILL_V2 fp16 matmul uses ordinary tinygrad Tensor.linear lowering with warmstart TC opts; no route-local raw substrate.",
+    descriptor_artifact="tinygrad_scheduler"),
   "prefill_pipe_role_selective_generated": RouteSurface(
     "prefill_pipe_role_selective_generated", "external_raw_or_binary",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
@@ -104,6 +109,8 @@ def route_surface(route_id: str) -> RouteSurface:
     cls = "external_raw_or_binary"
   elif prov == "hand_authored_uop_template":
     cls = "route_local_custom_kernel"
+  elif prov == "tinygrad_scheduler_generated":
+    cls = "ordinary_tinygrad_graph"
   elif prov in route_manifest.FINAL_DEFAULT_PROVENANCE:
     cls = "unknown"
   else:

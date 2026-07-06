@@ -38,9 +38,8 @@ Current non-pure surface by severity:
 An xhigh review on this scope found several manifest/documentation mismatches that must be fixed before any final purity
 claim:
 
-1. `prefill_pipe_role_selective_generated` is currently marked `machine_authored_generated`, but the executing path still
-   lowers through `route_pf16_graph_gemm -> UOp(Ops.INS)`. Split generated schedule selection from raw WMMA substrate, or
-   reclassify the row as non-pure with `replacement_scope`.
+1. `prefill_pipe_role_selective_generated` is now marked `external_handwritten_kernel` and is opt-in via
+   `PREFILL_GRAPH_GEMM=1`; the strict default is `prefill_v2_scheduler_matmul_default`.
 2. Q6_K direct-packed prefill is default-capable because `PREFILL_DIRECT_QUANTS` defaults to `Q4_K,Q6_K`, but the manifest
    debt row is Q4_K-specific. Add an explicit Q6_K direct-packed prefill row or broaden the direct-packed debt row.
 3. Historical generic flash fallback rows were removed with the deleted `flash_decode` implementation. Any future
@@ -186,9 +185,9 @@ Runtime reachability:
 
 - `route_pf16_graph_gemm` is selected by prefill graph GEMM paths.
 - `route_q4k_graph_gemm` is selected by `PREFILL_Q4K_WMMA_FUSED=1`.
-- `prefill_pipe_role_selective_generated` currently describes spec-generated schedule selection but still lowers through
+- `prefill_pipe_role_selective_generated` describes spec-generated schedule selection but still lowers through
   `ref.build_gemm_pipe / ref.build_gemm_lds2`; under the strict rule this is generated selection over a handwritten
-  substrate, not final pure machine search.
+  substrate, not final pure machine search. It is no longer a default route.
 
 Gameplan:
 

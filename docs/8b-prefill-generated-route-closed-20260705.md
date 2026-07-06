@@ -56,8 +56,8 @@ PYTHONPATH=. .venv/bin/python extra/qk/pure_search_guard.py
 Result:
 
 ```text
-prefill_gemm -> prefill_pipe_role_selective_generated, IMPURE
-violations: [prefill_pipe_role_selective_generated]
+prefill_gemm -> prefill_v2_scheduler_matmul_default, pure
+violations: []
 ```
 
 ## 8B Authority
@@ -69,7 +69,7 @@ PURE_MACHINE_SEARCH_ONLY=1 ALLOW_DEVICE_USAGE=1 .venv/bin/python extra/qk/bench.
   --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --prefill
 ```
 
-Result:
+Historical result with `GRAPH_GEMM=True` / raw graph-GEMM enabled:
 
 ```text
 PREFILL AUTHORITY (synced, K=8, warmups=4, rounds=3) model=Qwen3-8B-Q4_K_M.gguf GRAPH_GEMM=True
@@ -84,15 +84,15 @@ WHOLE-PREFILL@2048: 4439 tok/s
 WHOLE-PREFILL@4096: 3684 tok/s
 ```
 
-The pure-search route report for that run selected:
+The pure-search route report now selects the scheduler-owned default unless `PREFILL_GRAPH_GEMM=1` is explicitly set:
 
 ```text
-prefill_gemm -> prefill_pipe_role_selective_generated
+prefill_gemm -> prefill_v2_scheduler_matmul_default
 ```
 
-Strict surface audit note, updated 2026-07-06: this route has spec-driven schedule selection, but it still lowers through
-`extra/qk/prefill/wmma.py` raw instruction lists wrapped as `Ops.INS`. It remains the single final-default purity blocker
-until the executing WMMA substrate is replaced by tinygrad-owned lowering.
+Strict surface audit note, updated 2026-07-06: `prefill_pipe_role_selective_generated` has spec-driven schedule
+selection, but it still lowers through `extra/qk/prefill/wmma.py` raw instruction lists wrapped as `Ops.INS`. It is now
+an opt-in research route (`PREFILL_GRAPH_GEMM=1`), not the strict pure-machine-search default.
 
 ## Profile Trace
 

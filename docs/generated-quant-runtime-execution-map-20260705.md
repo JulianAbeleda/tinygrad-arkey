@@ -173,7 +173,7 @@ tinygrad/llm/generated_candidates.py
 
 Initial registered candidates:
 
-- `quant_linear_prefill.prefill_pipe_role_selective_generated`
+- `quant_linear_prefill.prefill_v2_scheduler_matmul_default`
 - `quant_linear_prefill.q4k_int8_wmma_tensor_substrate`
 - `quant_linear_decode.q4k_g3_lanemap`
 - `quant_linear_decode.q6k_generated_coop`

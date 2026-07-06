@@ -20,15 +20,15 @@ This is an audit and ownership map. It is not a route promotion gate yet.
 
 | Classification | Count | Meaning |
 | --- | ---: | --- |
-| `allowed.generated` | 10 | Machine-authored or tinygrad scheduler generated provenance. |
-| `transitional.hand_authored_uop` | 4 | Hand-authored UOp templates that need generated descriptor ownership before final promotion. |
-| `banned.not_default_but_reachable_or_ledgered` | 4 | External handwritten kernels or rollback oracles that are not acceptable as default generated routes. |
+| `allowed.generated` | current manifest-generated defaults | Machine-authored or tinygrad scheduler generated provenance. |
+| `transitional.hand_authored_uop` | 0 default routes | Hand-authored UOp templates are no longer accepted on the default path. |
+| `banned.not_default_but_reachable_or_ledgered` | opt-in/research only | External handwritten kernels or rollback oracles that are not acceptable as default generated routes. |
 
 Default debt:
 
 | Route | Current issue | Replacement scope |
 | --- | --- | --- |
-| `prefill_q4k_direct_tile4x4_default` | Promoted default route with `hand_authored_uop_template` provenance. | Replace with generated 14B/32B quantized MMQ substrate under descriptor/candidate ownership. |
+| none | Strict default purity is now expected to pass. | Raw graph-GEMM remains opt-in research via `PREFILL_GRAPH_GEMM=1`. |
 
 ## Binding Findings
 
@@ -51,7 +51,7 @@ The audit now validates the generated candidate registry in `tinygrad/llm/genera
 
 | Registry check | Result |
 | --- | ---: |
-| Registered generated candidates | 5 |
+| Registered generated candidates | 6 |
 | Non-generated candidates | 0 |
 | Candidates pointing at unknown route ids | 0 |
 
@@ -59,8 +59,9 @@ Initial registered candidates:
 
 | Candidate | Route |
 | --- | --- |
-| `quant_linear_prefill.prefill_pipe_role_selective_generated` | `prefill_pipe_role_selective_generated` |
+| `quant_linear_prefill.prefill_v2_scheduler_matmul_default` | `prefill_v2_scheduler_matmul_default` |
 | `quant_linear_prefill.q4k_int8_wmma_tensor_substrate` | `prefill_q4k_int8_wmma_generated_research` |
+| `quant_linear_prefill.q4k_int8_wmma_tiled_substrate` | `prefill_q4k_int8_wmma_tiled_research` |
 | `quant_linear_decode.q4k_g3_lanemap` | `decode_q4k_g3_generated` |
 | `quant_linear_decode.q6k_generated_coop` | `decode_q6k_coop_generated` |
 | `attention_decode.live_split_flash` | `decode_flash_live_split_g4_8b_kvboth` |
@@ -90,5 +91,6 @@ Implemented:
 
 Remaining:
 
-1. `prefill_q4k_direct_tile4x4_default` is still transitional default debt.
-2. Q4_K prefill promotion still needs route-bound correctness and 14B authority for a generated MMQ candidate.
+1. `prefill_pipe_role_selective_generated` remains opt-in raw-substrate research until its WMMA execution path no longer
+   wraps instruction lists as `Ops.INS`.
+2. Q4_K int8-WMMA prefill remains research; it is not the shipped default.

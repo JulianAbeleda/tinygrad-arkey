@@ -8,9 +8,9 @@ from extra.qk.pure_search_guard import effective_routes, assert_pure_machine_sea
 
 def test_strict_surface_audit_flags_default_blockers():
   report = audit.strict_default_purity_report()
-  assert report["verdict"] == "STRICT_DEFAULT_PURITY_FAIL"
+  assert report["verdict"] == "STRICT_DEFAULT_PURITY_PASS"
   blockers = {r["route_id"]: r for r in report["blockers"]}
-  assert blockers["prefill_pipe_role_selective_generated"]["surface_class"] == "external_raw_or_binary"
+  assert "prefill_pipe_role_selective_generated" not in blockers
   assert "decode_flash_live_split_g4_8b_kvboth" not in blockers
   assert "decode_flash_block_tile_g5_konly" not in blockers
   assert report["manifest_contradictions"] == []
@@ -19,6 +19,7 @@ def test_strict_surface_audit_flags_default_blockers():
 def test_route_surface_rows_classify_known_surfaces():
   assert audit.route_surface_row("decode_q4k_g3_generated")["strict_pure"] is True
   assert audit.route_surface_row("decode_q6k_coop_generated")["strict_pure"] is True
+  assert audit.route_surface_row("prefill_v2_scheduler_matmul_default")["surface_class"] == "ordinary_tinygrad_graph"
   assert audit.route_surface_row("prefill_q4k_direct_tile4x4_default")["surface_class"] == "descriptor_owned_uop_codegen"
   assert "Ops.INS" in audit.route_surface_row("prefill_pipe_role_selective_generated")["markers"]["extra/qk/prefill_graph_gemm_route.py"]
 
@@ -160,7 +161,8 @@ def test_pure_search_guard_uses_strict_surface_classification():
   routes = {r["family"]: r for r in effective_routes({})}
   assert routes["decode_q4k_gemv"]["pure"] is True
   assert routes["decode_q6k_gemv"]["pure"] is True
-  assert routes["prefill_gemm"]["pure"] is False
+  assert routes["prefill_gemm"]["pure"] is True
   assert routes["decode_attention"]["pure"] is True
+  assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1"})
   with pytest.raises(RuntimeError, match="surface=external_raw_or_binary"):
-    assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1"})
+    assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1", "PREFILL_GRAPH_GEMM": "1"})

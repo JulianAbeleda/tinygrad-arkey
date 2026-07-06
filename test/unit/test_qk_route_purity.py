@@ -28,7 +28,7 @@ def _write_q4k_g3_policy(tmp_path, rows):
 def test_qk_route_manifest_purity_debt_is_explicit():
   assert validate_manifest() == []
   report = default_purity_report()
-  assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
+  assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_PASS"
   assert route_provenance("decode_q4k_g3_generated") == "machine_authored_generated"
   assert route_provenance("decode_flash_block_tile_g5_konly") == "machine_authored_generated"
   assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "machine_authored_generated"
@@ -36,14 +36,15 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
   assert route_provenance("prefill_q6k_direct_generated") == "machine_authored_generated"
   assert route_provenance("prefill_pipe_role_selective_generated") == "external_handwritten_kernel"
+  assert route_provenance("prefill_v2_scheduler_matmul_default") == "tinygrad_scheduler_generated"
   assert set(report["transitional_default_routes"]) == set()
-  assert set(report["forbidden_default_routes"]) == {"prefill_pipe_role_selective_generated"}
+  assert set(report["forbidden_default_routes"]) == set()
 
 
 def test_default_path_census_uses_manifest_provenance():
   census = build_census()
   assert census["verdict"] == "PMS_R0_PASS_CENSUS_PINNED"
-  assert census["strict_default_purity_verdict"] == "TINYGRAD_DEFAULT_PURITY_FAIL"
+  assert census["strict_default_purity_verdict"] == "TINYGRAD_DEFAULT_PURITY_PASS"
   assert census["missing_from_census"] == []
   assert all(row["in_manifest"] for row in census["rows"])
   by_route = {row["route_id"]: row for row in census["default_route_table"]}
@@ -55,8 +56,9 @@ def test_default_path_census_uses_manifest_provenance():
   assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True
   assert by_route["prefill_q6k_direct_generated"]["provenance"] == "machine_authored_generated"
   assert by_route["prefill_q6k_direct_generated"]["final_default_allowed"] is True
-  assert by_route["prefill_pipe_role_selective_generated"]["provenance"] == "external_handwritten_kernel"
-  assert by_route["prefill_pipe_role_selective_generated"]["final_default_allowed"] is False
+  assert by_route["prefill_v2_scheduler_matmul_default"]["provenance"] == "tinygrad_scheduler_generated"
+  assert by_route["prefill_v2_scheduler_matmul_default"]["final_default_allowed"] is True
+  assert "prefill_pipe_role_selective_generated" not in by_route
   assert "prefill_pipe_role_selective_default" not in by_route
   assert by_route["prefill_q4k_direct_tile4x4_default"]["provenance"] == "machine_authored_generated"
   assert by_route["prefill_q4k_direct_tile4x4_default"]["final_default_allowed"] is True
@@ -112,6 +114,40 @@ def test_qk_route_policy_selects_8b_live_split_by_shape(tmp_path):
     assert not _qk_route_policy_selected("decode_flash_live_split_g4_8b_kvboth", {"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128})
   finally:
     _set_qk_route_policy(None)
+
+
+def test_qk_route_policy_accepts_pure_prefill_scheduler_route(tmp_path):
+  policy_path = tmp_path / "prefill_policy.json"
+  policy_path.write_text(json.dumps({
+    "schema": "boltbeam.route_policy.v1",
+    "model_id": "qwen8ish",
+    "architecture_class": "dense_decoder",
+    "authorized": True,
+    "routes": [{
+      "role": "ffn_down",
+      "shape": {"rows": 4096, "cols": 12288},
+      "quant": "Q4_K",
+      "selected_route": "prefill_v2_scheduler_matmul_default",
+      "status": "promoted",
+      "route_params": {},
+      "rollback": {"PREFILL_GRAPH_GEMM": "1"},
+    }],
+  }))
+  policy = _load_qk_route_policy(str(policy_path))
+  assert policy["prefill_gen"][0]["selected_route"] == "prefill_v2_scheduler_matmul_default"
+
+
+def test_qk_route_policy_rejects_raw_prefill_graph_gemm_route(tmp_path):
+  policy_path = tmp_path / "raw_prefill_policy.json"
+  policy_path.write_text(json.dumps({
+    "schema": "boltbeam.route_policy.v1",
+    "routes": [{
+      "selected_route": "prefill_pipe_role_selective_generated",
+      "shape": {"rows": 4096, "cols": 12288},
+    }],
+  }))
+  with pytest.raises(ValueError, match="unsupported route"):
+    _load_qk_route_policy(str(policy_path))
 
 
 def test_qk_route_policy_selects_q4k_g3_per_tensor(tmp_path):

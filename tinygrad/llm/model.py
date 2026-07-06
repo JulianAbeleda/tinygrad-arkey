@@ -50,20 +50,18 @@ PREFILL_REMAINDER_FIX = bool(getenv("PREFILL_REMAINDER_FIX", 1))
 # TinyJit. Replaying the same captured layer graph with different block tensors reuses the graph's fp16 scratch
 # buffers, so peak overlay is one layer signature rather than the whole model. Cost: dequant reruns each prefill.
 PREFILL_CHUNKED = bool(getenv("PREFILL_CHUNKED", 0))
-# Restricted default-ON (within PREFILL_V2): route eligible fp16 prefill matmuls through the dependency-free
-# graph-capturable RDNA3 GEMM. Passed all 4 default-on readiness gates (synced 1.61x, 0/256 greedy mismatches,
-# 11/11 fallback, 5/5 OOM; docs/prefill-graph-gemm-default-on-readiness-result-20260620.md). Default-on is
-# GUARDED to gfx1100 (the validated arch), decided ONCE HERE at import -- NOT in the route, because Device[...]
-# access is disallowed during JIT capture. Non-gfx1100/other-device -> default off. Unsupported shapes (T!=512,
-# non-tile-divisible, bias, ineligible role) silently fall back to the normal PREFILL_V2 matmul. Only active when
-# PREFILL_V2 is on. Set PREFILL_GRAPH_GEMM=0/1 to override. Absolute-parity drift (max_abs_dNLL 0.0176) accepted
-# report-only (greedy byte-identical; harmful dNLL <= 0.0094).
+# Opt-in raw graph GEMM (within PREFILL_V2): eligible fp16 prefill matmuls can still be routed through the
+# dependency-free RDNA3 instruction-list GEMM for performance experiments. It is no longer default-on because strict
+# pure-machine-search default execution must not select the `Ops.INS` substrate in extra/qk/prefill_graph_gemm_route.py.
+# The default path is the ordinary scheduler-owned PREFILL_V2 matmul with warmstart TC opts. Set PREFILL_GRAPH_GEMM=1
+# explicitly to use the raw graph-GEMM research route.
 def _prefill_graph_gemm_default() -> int:
-  if "PREFILL_GRAPH_GEMM" in os.environ: return getenv("PREFILL_GRAPH_GEMM", 0)   # explicit user override
-  try:                                                                            # restricted default-on: gfx1100 only
-    if Device.DEFAULT != "AMD": return 0
-    return 1 if "gfx1100" in str(getattr(Device["AMD"], "arch", "")) else 0
-  except Exception: return 0
+  if "PREFILL_GRAPH_GEMM" in os.environ:
+    raw = os.environ.get("PREFILL_GRAPH_GEMM", "0").strip().lower()
+    if raw in ("", "0", "false", "off", "no"): return 0
+    if raw in ("1", "true", "on", "yes"): return 1
+    return int(raw)
+  return 0
 PREFILL_GRAPH_GEMM = bool(_prefill_graph_gemm_default())
 
 # Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
