@@ -4,7 +4,7 @@ Date: 2026-07-06
 
 Goal: fuse the **entire decode step** (all layers, one token) into **one persistent GPU kernel**, **generated and
 machine-searched — never hand-written**. This is the batch-1 decode-latency frontier (kills launch overhead + between-op
-HBM round-trips + pipeline bubbles). See `knowledge_center/100-percent-audit.md` (gap #3) and the megakernel landscape
+HBM round-trips + pipeline bubbles). See `knowledge_base/notes/arkey-inference-100-percent-audit.md` (gap #3) and the megakernel landscape
 (Hazy "No Bubbles"; Mirage/MPK; ETC dynamic megakernel; Ada-MK searched megakernel; AMD MI300X monokernel).
 
 This document is **subordinate to `docs/pure-machine-search.md`** (the generated-vs-handwritten contract) and consistent
