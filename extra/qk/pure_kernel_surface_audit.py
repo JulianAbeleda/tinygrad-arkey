@@ -11,7 +11,7 @@ import json, pathlib
 from dataclasses import dataclass
 from typing import Any
 
-from extra.qk import route_manifest
+from extra.qk import generated_route_registry, route_manifest, runtime_surface_registry
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -41,17 +41,7 @@ class RouteSurface:
 # Runtime-relevant surfaces from tinygrad/llm/route_ops.py + route_manifest.py. This is intentionally explicit: a route
 # cannot claim strict purity just because its name contains "generated".
 ROUTE_SURFACES: dict[str, RouteSurface] = {
-  "decode_q4k_g3_generated": RouteSurface(
-    "decode_q4k_g3_generated", "descriptor_owned_uop_codegen",
-    ("extra/qk/gemv_g3_codegen_lowering.py", "extra/qk/gemv_g2_lanemap.py"),
-    "Q4_K decode G3 is generated from Q4KGateUpLaneMap; no raw/source-string route escape is selected.",
-    descriptor_artifact="Q4KGateUpLaneMap"),
   # decode_q4k_owned_warp REMOVED 2026-07-06 (no backups): rollback route deleted; bubblebeam-off -> ordinary graph.
-  "decode_q6k_coop_generated": RouteSurface(
-    "decode_q6k_coop_generated", "descriptor_owned_uop_codegen",
-    ("extra/qk/q6k_route_spec.py", "extra/qk/quant/q6_k_gemv_primitive.py"),
-    "Q6_K decode route is emitted from Q6KGEMVRouteSpec; quant-format helpers are shared semantics.",
-    descriptor_artifact="Q6KGEMVRouteSpec"),
   # decode_q6k_coop_shipped + decode_q6k_direct_refuted RouteSurfaces REMOVED 2026-07-06 (no backups): kernels deleted.
   # decode_attention_owned_two_kernel, decode_flash_block_tile_g5_8b_refuted, decode_attention_generic_flash_generated
   # RouteSurfaces REMOVED 2026-07-06 (no backups): their manifest ROUTES rows were deleted (kernels/files gone).
@@ -94,31 +84,11 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     "prefill_q4k_reduce_out_research", "route_local_custom_kernel",
     ("extra/qk/quant/q4_k_gemv_primitive.py", "tinygrad/llm/prefill_routes.py"),
     "Correct-but-not-fast Q4_K reduce-out hand UOp route."),
-  "prefill_q4k_mmq_direct_out_research": RouteSurface(
-    "prefill_q4k_mmq_direct_out_research", "route_local_custom_kernel",
-    ("extra/qk/quant/q4_k_gemv_primitive.py", "tinygrad/llm/prefill_routes.py"),
-    "Q4_K/Q8_1 MMQ direct-out hand UOp route."),
   "prefill_pipe_global_rollback": RouteSurface(
     "prefill_pipe_global_rollback", "rollback_oracle",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py"),
     "Rollback comparator still uses raw WMMA instruction-list substrate."),
 }
-
-UNMANIFESTED_RUNTIME_SURFACES: tuple[dict[str, Any], ...] = (
-  {"surface_id": "prefill_q6k_direct_packed_default_capable", "surface_class": "route_local_custom_kernel",
-   "writer_files": ("tinygrad/llm/prefill_routes.py", "extra/qk/quant/q6_k_gemv_primitive.py"),
-   "reason": "PREFILL_DIRECT_QUANTS defaults to Q4_K,Q6_K and Q6_K direct prefill calls q6k_gemm_packed_load_* hand UOp templates.",
-   "replacement_scope": "Add Q6KPrefillRouteSpec or explicit manifest debt row."},
-  {"surface_id": "decode_q4k_smallk_batched", "surface_class": "route_local_custom_kernel",
-   "writer_files": ("tinygrad/llm/decode_routes.py", "extra/qk/quant/q4_k_gemv_primitive.py"),
-   "reason": "q4k_primitive_linear_call routes non-decode K<=32 through q4k_gemm_kernel hand UOp template.",
-   "replacement_scope": "Add Q4KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY."},
-  {"surface_id": "decode_q6k_smallk_batched", "surface_class": "route_local_custom_kernel",
-   "writer_files": ("tinygrad/llm/decode_routes.py", "extra/qk/quant/q6_k_gemv_primitive.py"),
-   "reason": "q6k_primitive_linear_call routes non-decode K<=32 through q6k_gemm_kernel hand UOp template.",
-   "replacement_scope": "Add Q6KSmallBatchGEMMSpec or block under PURE_MACHINE_SEARCH_ONLY."},
-)
-
 
 def _read(path: str) -> str:
   p = ROOT / path
@@ -149,6 +119,11 @@ def _markers(paths: tuple[str, ...]) -> dict[str, list[str]]:
 
 def route_surface(route_id: str) -> RouteSurface:
   if route_id in ROUTE_SURFACES: return ROUTE_SURFACES[route_id]
+  if route_id in generated_route_registry.route_ids():
+    reg = generated_route_registry.row(route_id)
+    return RouteSurface(route_id, "descriptor_owned_uop_codegen", tuple(reg["writer_files"]),
+                        f"{route_id} is L3 descriptor-owned generated codegen via {reg['descriptor_artifact']}.",
+                        descriptor_artifact=str(reg["descriptor_artifact"]))
   r = route_manifest.ROUTES.get(route_id, {})
   prov = str(r.get("provenance", "unknown"))
   if prov == "rollback_oracle":
@@ -204,7 +179,7 @@ def strict_default_purity_report() -> dict[str, Any]:
 
 def unmanifested_runtime_surface_rows() -> list[dict[str, Any]]:
   rows: list[dict[str, Any]] = []
-  for surface in UNMANIFESTED_RUNTIME_SURFACES:
+  for surface in runtime_surface_registry.rows():
     writer_files = tuple(surface.get("writer_files", ()))
     markers, writer_file_exists, missing_writer_files = _writer_scan(writer_files)
     rows.append({**surface,
@@ -222,7 +197,8 @@ def unmanifested_runtime_surface_rows() -> list[dict[str, Any]]:
 def build() -> dict[str, Any]:
   rows = route_rows()
   report = strict_default_purity_report()
-  missing = [rid for rid in route_manifest.ROUTES if rid not in ROUTE_SURFACES]
+  registry_route_ids = set(generated_route_registry.route_ids())
+  missing = [rid for rid in route_manifest.ROUTES if rid not in ROUTE_SURFACES and rid not in registry_route_ids]
   unmanifested_rows = unmanifested_runtime_surface_rows()
   routes_with_missing_writer_files = sorted([r["route_id"] for r in rows if r["missing_writer_files"]])
   missing_writer_files = sorted({path for row in rows for path in row["missing_writer_files"]})

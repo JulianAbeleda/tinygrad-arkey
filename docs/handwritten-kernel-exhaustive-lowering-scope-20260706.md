@@ -7,7 +7,7 @@ This scope answers whether every handwritten QK kernel surface can be lowered in
 
 This document is subordinate to `docs/pure-machine-search.md` and
 `docs/pure-machine-search-handwritten-kernel-scope-20260706.md`. The current mechanical authority is
-`extra/qk/pure_kernel_surface_audit.py`.
+`extra/qk/pure_kernel_surface_audit.py`, fed by the centralized generated-route and runtime-surface registries.
 
 ## Public Alignment
 
@@ -76,7 +76,8 @@ Current unmanifested runtime-capable surfaces:
 - `decode_q4k_smallk_batched`
 - `decode_q6k_smallk_batched`
 
-These must either gain manifest rows and strict guard coverage or be blocked under `PURE_MACHINE_SEARCH_ONLY`.
+These rows live in `extra/qk/runtime_surface_registry.py`. They must either gain manifest rows and strict guard
+coverage or be blocked under `PURE_MACHINE_SEARCH_ONLY`.
 
 ## Exhaustive Lowering Algorithm
 
@@ -118,6 +119,8 @@ Initial scaffolds:
 
 - `extra/qk/generated_route_registry.py` records L3 descriptor-owned generated route rows, emitted-kernel patterns,
   authority artifacts, selector binding, shape/role policy, and manifest provenance.
+- `extra/qk/runtime_surface_registry.py` records runtime-capable handwritten surfaces that are not manifest routes yet,
+  so audits and future guards share one inventory.
 - `extra/qk/backend_intrinsic_lowering_allowlist.py` records L5 backend-owned intrinsic categories and the route-local
   markers that remain non-pure.
 
@@ -134,7 +137,8 @@ Goal: make the inventory mechanically complete.
 Actions:
 
 - Keep `pure_kernel_surface_audit` as the strict surface authority.
-- Add explicit rows or guard coverage for unmanifested Q6_K direct prefill and small-K batched Q4_K/Q6_K paths.
+- Keep unmanifested Q6_K direct prefill and small-K batched Q4_K/Q6_K paths centralized in
+  `runtime_surface_registry` until they gain manifest rows or strict guard coverage.
 - Add emitted-kernel-name binding to the audit artifact so "selected route" and "executed kernel" are tied together.
 - Keep historical/non-runtime fixtures out of default blockers but classified as fixture debt.
 

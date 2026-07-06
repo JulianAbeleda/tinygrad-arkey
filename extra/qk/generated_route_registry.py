@@ -19,7 +19,6 @@ class GeneratedRouteDescriptor(TypedDict):
   owner: str
   writer_files: list[str]
   emitter: str
-  emitted_kernel_patterns: list[str]
   required_gates: list[str]
   rollback_route: str | None
 
@@ -35,7 +34,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/gemv_g2_lanemap.py",
     ],
     "emitter": "extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
-    "emitted_kernel_patterns": ["q4k_g3_lanemap_gemv_*"],
     "required_gates": ["BUBBLEBEAM_FUTURESIGHT"],
     "rollback_route": None,
   },
@@ -49,7 +47,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/quant/q6_k_gemv_primitive.py",
     ],
     "emitter": "extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel",
-    "emitted_kernel_patterns": ["q6k_gen_coop_*", "q6k_gen_partial_*"],
     "required_gates": [],
     "rollback_route": None,
   },
@@ -81,7 +78,7 @@ def _sanitize_row(row: GeneratedRouteDescriptor) -> dict[str, Any]:
     "owner": row["owner"],
     "writer_files": list(row["writer_files"]),
     "emitter": row["emitter"],
-    "emitted_kernel_patterns": list(row["emitted_kernel_patterns"]),
+    "emitted_kernel_patterns": list(manifest.get("expected_kernels", ())),
     "authority_gate": str(manifest.get("authority_gate", "")),
     "authority_artifacts": list(manifest.get("promotion_artifacts", ())),
     "selector_binding": str(manifest.get("selector", "")),
@@ -101,6 +98,10 @@ def row(route_id: str) -> dict[str, Any]:
     if r["route_id"] == route_id:
       return _sanitize_row(r)
   raise KeyError(f"unknown generated route {route_id!r}")
+
+
+def route_ids() -> tuple[str, ...]:
+  return tuple(r["route_id"] for r in _GENERATION_REGISTRY)
 
 
 def rows() -> list[dict[str, Any]]:

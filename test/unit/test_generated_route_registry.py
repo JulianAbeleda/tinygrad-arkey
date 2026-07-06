@@ -64,4 +64,5 @@ def test_rows_and_build_are_json_serializable():
   report = registry.build()
   assert report["schema"] == "generated-route-descriptor-registry.v2"
   assert registry.row("decode_q4k_g3_generated")["rollback_route"] is None
+  assert set(registry.route_ids()) == set(SEEDED)
   json.dumps(report)

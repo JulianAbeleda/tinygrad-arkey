@@ -246,14 +246,16 @@ Why non-pure or provisional:
 
 - `q4_k_gemv_primitive.py` templates are hand-authored UOp custom kernels.
 - `prefill_q4k_direct_tile4x4_default` is explicitly manifest debt: `hand_authored_uop_template`.
-- `prefill_q4k_reduce_out_research` and `prefill_q4k_mmq_direct_out_research` are also manifest debt.
+- `prefill_q4k_reduce_out_research` remains manifest debt. The old `PREFILL_Q4K_Q8=sdot4/mmq/mmq_direct` routes were
+  removed 2026-07-06; any remaining helper symbols are historical/non-default fixture debt, not valid route envs.
 - `emit_q4k_packed_prefill_tile` is descriptor-shaped, but it still shares hand-authored Q4_K UOp helper topology; it
   should remain research until generated-only provenance is proved.
 
 Runtime reachability:
 
 - Default memory-safe Q4_K prefill routes through direct-packed templates when resident fp16 is unavailable or not chosen.
-- Q4_K/Q8_1 modes are selected by `PREFILL_Q4K_Q8`.
+- Generated Q4_K/Q8_1 research modes are selected by `PREFILL_Q4K_Q8=wmma|wmma_tiled`; legacy scalar/MMQ values are
+  rejected.
 - Generated packed tile is selected by `PREFILL_QK_GENERATED_TILE=1`.
 
 Gameplan:

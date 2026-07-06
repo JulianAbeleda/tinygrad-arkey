@@ -134,11 +134,11 @@ def test_direct_packed_q4_opts_override_and_extra():
   assert [(x.op, x.axis, x.arg) for x in opts] == [(OptOps.LOCAL, 0, 64), (OptOps.GROUP, 0, 10), (OptOps.UPCAST, 1, 4)]
 
 
-def test_prefill_q4k_q8_flag_is_valid_route_env():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
+def test_prefill_q4k_q8_legacy_gemm_flag_is_rejected():
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
   os.environ["PREFILL_Q4K_Q8"] = "1"
-  assert prefill_route_policy() == "auto"
-  assert prefill_q4k_q8_mode() == "gemm"
+  with pytest.raises(ValueError, match="PREFILL_Q4K_Q8"):
+    prefill_q4k_q8_mode()
 
 
 def test_prefill_q4k_q8_wmma_flag_is_valid_route_env():
@@ -148,11 +148,11 @@ def test_prefill_q4k_q8_wmma_flag_is_valid_route_env():
   assert prefill_q4k_q8_mode() == "wmma"
 
 
-def test_prefill_q4k_q8_mmq_direct_flag_is_valid_route_env():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
+def test_prefill_q4k_q8_mmq_direct_flag_is_rejected():
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
   os.environ["PREFILL_Q4K_Q8"] = "mmq_direct"
-  assert prefill_route_policy() == "auto"
-  assert prefill_q4k_q8_mode() == "mmq_direct"
+  with pytest.raises(ValueError, match="PREFILL_Q4K_Q8"):
+    prefill_q4k_q8_mode()
 
 
 def test_prefill_q4k_q8_wmma_tiled_flag_is_valid_but_explicit():
