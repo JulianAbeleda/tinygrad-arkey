@@ -50,6 +50,7 @@ Two new gates narrow the remaining compiler work:
 | 8B medium warmstart staging | `extra.qk.prefill_graph_gemm_medium_stage_gate --run-amd --pin-clock` | `PREFILL_GRAPH_GEMM_MEDIUM_LOCAL_STAGE_BLOCKED` | The representative `4096x4096` warmstart `LOCAL:0:4` schedule is correct at about 35 TFLOPS. B-operand tile-only post-WMMA staging now composes and is numerically correct, while A/both staging remains wrong and final/scalar wrapping remains unbuildable. | It does not solve performance: pinned B-tile staging is flat versus baseline (`35.57` vs `35.49` TFLOPS in the latest artifact), and a staged grid search still selected the same schedule at about `35.50` TFLOPS. |
 | 8B whole-prefill impact | `prefill_whole_synced.py --mode smoke --whole-lengths 512` | no win from B-tile diagnostic | Strict generated pp512 measured `1744 tok/s` baseline and `1699 tok/s` with `PREFILL_TC_LOCAL_STAGE=b PREFILL_TC_LOCAL_STAGE_POST=1 PREFILL_TC_LOCAL_STAGE_TILE_ONLY=1` on the same bounded K=2 smoke. | The diagnostic is a correctness/composition result only; whole-prefill recovery still needs a different cooperative tile movement or fragment assignment change. |
 | 8B cooperative partition substrate | `extra.qk.prefill_graph_gemm_coop_partition_gate --run-amd` | `PREFILL_GRAPH_GEMM_COOP_PARTITION_PROBE_PASS` | A generated fp16 shaped-WMMA custom kernel stages the unique B tile into `buf0[256]` with lanes 0..15, uses a workgroup barrier, has no raw `Ops.INS`, and matches direct WMMA exactly on AMD. | It proves the B-tile lane map/readback, not scheduler integration into the route-bound warmstart TC path or an 8B performance win. |
+| 8B cooperative route binding | `extra.qk.prefill_graph_gemm_coop_route_contract_gate` | `PREFILL_GRAPH_GEMM_COOP_ROUTE_CONTRACT_BLOCKED` | The gate ties the passing custom cooperative probe to the medium warmstart evidence and requires a future route-bound cooperative case to beat baseline by at least 5%. | Current evidence is intentionally blocked: no medium gate case exists yet for scheduler-generated cooperative partitioning. |
 | 14B packed/MMQ recovery | `extra.qk.q4k_wmma_full_role_contract_gate` | `Q4K_WMMA_FULL_ROLE_CONTRACT_PASS` | The Q4_K/Q8_1 14B role geometry is centralized, bounded, uses the selected shaped-WMMA surface, and keeps tile-local RAW lifetime bounded to 256 elements. | It is structural only. Full-role execution is still blocked by the missing scheduler-owned tile loop. |
 | 14B packed/MMQ recovery | `extra.qk.q4k_wmma_tiled_lifecycle_gate` + `extra.qk.q4k_wmma_tiled_role_shape_exec_gate` | lifecycle pass; role-shape execution blocked | The deleted tiled gate sources have been restored against current APIs; the small generated lifecycle emits iu8 WMMA and stays bounded, while the role-shape gate records the real full-role blocker without falling back. | It still does not execute all 14B role shapes or beat the direct-packed ceiling. |
 
@@ -64,6 +65,7 @@ PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --local-stage a --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_tile_loop_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_coop_partition_gate --run-amd --compact
+PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_coop_route_contract_gate --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_medium_stage_gate --run-amd --pin-clock --compact
 PYTHONPATH=. python3 -m extra.qk.q4k_wmma_tiled_lifecycle_gate
 PYTHONPATH=. python3 - <<'PY'
@@ -83,6 +85,7 @@ The artifacts are:
 - `bench/prefill-graph-gemm-route-bound-stage/latest.json`
 - `bench/prefill-graph-gemm-tile-loop-stage/latest.json`
 - `bench/prefill-graph-gemm-coop-partition/latest.json`
+- `bench/prefill-graph-gemm-coop-route-contract/latest.json`
 - `bench/prefill-graph-gemm-medium-stage/latest.json`
 - `bench/q4k-wmma-tiled-lifecycle/latest.json`
 - `bench/q4k-wmma-tiled-role-shape-exec/latest.json`
@@ -213,6 +216,9 @@ Use these; do not duplicate them:
   unique 16x16 B tile into 256 halfs, all 32 lanes read through `lane&15`, and AMD output matches the direct WMMA
   kernel. This is still a custom probe; the scheduler still needs to generate this mapping for the route-bound
   warmstart TC path.
+- A route-bound contract gate now prevents confusing the custom cooperative proof with recovery: it remains blocked
+  until the medium warmstart gate has a scheduler-generated cooperative partition case that beats the existing LOCAL
+  baseline.
 - A naive postrange experiment that wrapped the TC operand `CONTRACT` in `bufferize(... AddrSpace.LOCAL ...)` is not the
   solution: B-only emitted shared local/barrier but was numerically wrong (`rel_rmse` about 1.22 on the 512x512x512
   route-bound probe), while A/both fell off the WMMA route. The route-bound gate now checks Numpy-reference error so this

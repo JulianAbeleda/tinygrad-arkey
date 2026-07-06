@@ -1,0 +1,21 @@
+{
+  "schema": "prefill-graph-gemm-coop-route-contract-gate.v1",
+  "route_id": "prefill_v2_scheduler_matmul_default",
+  "target": "target_1_8b_fp16_graph_gemm_cooperative_partition_route_bound",
+  "verdict": "PREFILL_GRAPH_GEMM_COOP_ROUTE_CONTRACT_BLOCKED",
+  "required_evidence": {
+    "custom_coop_partition_probe_pass": true,
+    "medium_gate_has_b_tile_operand_stage": true,
+    "medium_b_tile_operand_stage_beats_baseline": false,
+    "medium_gate_has_route_bound_coop_partition_case": false,
+    "route_bound_coop_partition_beats_baseline": false
+  },
+  "artifacts": {
+    "coop_partition": "bench/prefill-graph-gemm-coop-partition/latest.json",
+    "medium_stage": "bench/prefill-graph-gemm-medium-stage/latest.json",
+    "baseline_tflops": 35.49,
+    "post_tile_b_tflops": 35.57,
+    "route_bound_coop_tflops": null
+  },
+  "remaining_blocker": "custom cooperative B-tile partition is proven, but the warmstart TC route has no route-bound cooperative partition case that beats baseline"
+}

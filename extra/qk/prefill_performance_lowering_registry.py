@@ -196,7 +196,9 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "reuse_files": [
       "extra/qk/cooperative_stage_lanemap.py",
       "extra/qk/prefill_graph_gemm_coop_partition_gate.py",
+      "extra/qk/prefill_graph_gemm_coop_route_contract_gate.py",
       "bench/prefill-graph-gemm-coop-partition/latest.json",
+      "bench/prefill-graph-gemm-coop-route-contract/latest.json",
       "tinygrad/schedule/rangeify.py",
       "tinygrad/schedule/wmma.py",
       "docs/handwritten-kernel-exhaustive-lowering-scope-20260706.md",
@@ -204,11 +206,13 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     ],
     "gates": [
       "prefill_graph_gemm_coop_partition_probe_gate",
+      "prefill_graph_gemm_coop_route_contract_gate",
       "prefill_graph_gemm_coop_partition_gate",
       "prefill_graph_gemm_no_raw_ops_ins_gate",
     ],
     "success_criteria": [
       "Tiny generated cooperative B-tile partition probe emits a 256-half LOCAL tile, lane guard, barrier, and fp16 WMMA with exact output parity.",
+      "A route-bound medium gate case uses scheduler-generated cooperative partitioning and beats the existing warmstart LOCAL baseline.",
       "8B pp512 materially above current strict-pure runtime when partitioning is enabled.",
       "Route-bound execution stays on generated scheduler/codegen lowering, not raw graph-GEMM research.",
     ],
