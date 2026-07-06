@@ -44,6 +44,7 @@ Two new gates narrow the remaining compiler work:
 | --- | --- | --- | --- | --- |
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_FP16_SINGLE_OPERAND_STAGE_PROBE_PASS` | A generated fp16 shaped-WMMA kernel can keep one operand in `AddrSpace.LOCAL` with `BufferizeOpts(..., removable=False)`, emit shared local storage plus a barrier, match the direct WMMA output, and avoid raw-marker strings. | It is a tiny fp16 substrate probe, not the fp16 prefill TC route, not a medium GEMM timing gate, not route-bound `Ops.INS` proof, and not 8B performance recovery. |
 | 8B graph-GEMM recovery substrate | `extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands` | `PREFILL_GRAPH_GEMM_FP16_BOTH_OPERANDS_STAGE_PROBE_PASS` | A generated fp16 shaped-WMMA kernel can keep both A and B operands in `AddrSpace.LOCAL`, emit two local buffers plus barriers, match direct WMMA output, and avoid raw-marker strings. | It is still a tiny custom-kernel probe, not route-bound prefill execution, not cooperative partitioning, and not a performance gate. |
+| 8B route-bound default | `extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd` | `PREFILL_GRAPH_GEMM_ROUTE_BOUND_LOCAL_STAGE_MISSING` | The actual strict-pure `prefill_v2_scheduler_matmul_default` route executes, emits fp16 WMMA, and avoids raw `Ops.INS` markers. | It also proves the missing piece: the route-bound kernel does not yet emit generated shared local storage or barriers. |
 | 14B packed/MMQ recovery | `extra.qk.q4k_wmma_full_role_contract_gate` | `Q4K_WMMA_FULL_ROLE_CONTRACT_PASS` | The Q4_K/Q8_1 14B role geometry is centralized, bounded, uses the selected shaped-WMMA surface, and keeps tile-local RAW lifetime bounded to 256 elements. | It is structural only. Full-role execution is still blocked by the missing scheduler-owned tile loop. |
 
 Run:
@@ -52,6 +53,7 @@ Run:
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_single_operand_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_fp16_stage_gate --run-amd --both-operands --compact
+PYTHONPATH=. python3 -m extra.qk.prefill_graph_gemm_route_bound_stage_gate --run-amd --compact
 PYTHONPATH=. python3 -m extra.qk.q4k_wmma_full_role_contract_gate --compact
 ```
 
@@ -60,6 +62,7 @@ The artifacts are:
 - `bench/prefill-graph-gemm-single-operand-stage/latest.json`
 - `bench/prefill-graph-gemm-fp16-single-operand-stage/latest.json`
 - `bench/prefill-graph-gemm-fp16-both-operands-stage/latest.json`
+- `bench/prefill-graph-gemm-route-bound-stage/latest.json`
 - `bench/q4k-wmma-full-role-contract/latest.json`
 
 ## Tracking Scaffold
@@ -168,6 +171,8 @@ Use these; do not duplicate them:
   proves the current `Ops.STAGE` / `BufferizeOpts(None, AddrSpace.LOCAL, removable=False)` / `pm_add_buffers_local`
   substrate can preserve staged WMMA operand layouts in custom generated kernels. It does not prove fp16 route-bound
   graph-GEMM recovery.
+- The actual strict-pure default route is now pinned by a route-bound gate: it emits fp16 WMMA without raw `Ops.INS`,
+  but emits no shared local storage or barrier. That is the concrete failing gate for the next codegen integration step.
 
 ### What is missing
 

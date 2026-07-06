@@ -111,13 +111,16 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "tinygrad/llm/model.py",
       "extra/qk/prefill_graph_gemm_single_operand_stage_gate.py",
       "extra/qk/prefill_graph_gemm_fp16_stage_gate.py",
+      "extra/qk/prefill_graph_gemm_route_bound_stage_gate.py",
       "bench/prefill-graph-gemm-single-operand-stage/latest.json",
       "bench/prefill-graph-gemm-fp16-single-operand-stage/latest.json",
+      "bench/prefill-graph-gemm-route-bound-stage/latest.json",
     ],
     "gates": [
       "prefill_graph_gemm_single_operand_stage_gate",
       "prefill_graph_gemm_fp16_single_operand_stage_gate",
       "prefill_graph_gemm_route_bound_no_raw_ops_ins_gate",
+      "prefill_graph_gemm_route_bound_stage_gate",
     ],
     "success_criteria": [
       "Numerically correct small fp16 shaped-WMMA generated single-operand LOCAL staging probe.",

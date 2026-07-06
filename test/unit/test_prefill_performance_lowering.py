@@ -73,7 +73,10 @@ def test_prefill_performance_report_prints_json_and_can_filter_target():
   stage_row = registry.row("prefill_performance_target_1_single_operand_stage")
   assert "prefill_graph_gemm_fp16_single_operand_stage_gate" in stage_row["gates"]
   assert "prefill_graph_gemm_route_bound_no_raw_ops_ins_gate" in stage_row["gates"]
+  assert "prefill_graph_gemm_route_bound_stage_gate" in stage_row["gates"]
   assert "extra/qk/prefill_graph_gemm_fp16_stage_gate.py" in stage_row["reuse_files"]
+  assert "extra/qk/prefill_graph_gemm_route_bound_stage_gate.py" in stage_row["reuse_files"]
+  assert "bench/prefill-graph-gemm-route-bound-stage/latest.json" in stage_row["reuse_files"]
   assert any("fp16 route-bound gate" in criterion for criterion in stage_row["success_criteria"])
   both_row = registry.row("prefill_performance_target_1_both_operands_stage")
   assert "prefill_graph_gemm_fp16_both_operands_stage_gate" in both_row["gates"]
