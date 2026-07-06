@@ -291,21 +291,9 @@ def flash_decode_attention_whole_cache(q:Tensor, cache_kv:Tensor, Tc_b, Tc_u,
     tile_builder = flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel if getenv("DECODE_ATTN_BLOCK_TILE", 0) else \
       flash_fused_xlane_score_pv_tile_whole_cache_kernel
     combine_stride = s_route   # HIP tile packs partials at S=s_route stride; gmax/combine read at the same stride
-    if getenv("DECODE_ATTN_NATIVE_ISA_BLOCK_TILE", 0) and getenv("DECODE_ATTN_BLOCK_TILE", 0):
-      # Phase H: the block tile is compiled by the NATIVE AMD ISA backend (AMDISARenderer) and injected as a
-      # precompiled Ops.PROGRAM graph node; gmax + combine stay on HIP. Default-off. L must be a concrete loop bound.
-      # Phase N3F (dynamic-S): compile ONCE at the concrete Smax (partials stride + RANGE->gidx grid bound) but launch
-      # only s_route = cdiv(Tc,L) split-workgroups (symbolic grid resolved at launch). With FIXED_S, s_route==smax_route
-      # (static grid, unchanged). Partials are packed at the Smax stride; gmax/combine read s_route splits at Smax stride.
-      if not isinstance(l_route, int):
-        raise RuntimeError("DECODE_ATTN_NATIVE_ISA_BLOCK_TILE needs a concrete L loop bound; set DECODE_ATTN_BLOCK_TILE_FIXED_S/_L")
-      from extra.qk.native_isa_block_tile_graph_node import native_isa_block_tile
-      po = native_isa_block_tile(Tensor.empty(Hq * smax_route * W2, dtype=_F32), q_f, cache_kv,
-                                 Hd, Hq, Hkv, MAXC, l_route, smax_route, Tc_u, s_grid=s_route)
-      combine_stride = smax_route   # native tile compiled at Smax -> partials packed at Smax stride
-    else:
-      po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,
-        fxn=tile_builder(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
+    # native_isa_block_tile (opt-in raw-ELF AMDISARenderer injection) deleted 2026-07-06 (no backups).
+    po = Tensor.empty(Hq * smax_route * W2, dtype=_F32).custom_kernel(q_f, cache_kv,
+      fxn=tile_builder(Hd, Hq, Hkv, MAXC, l_route, s_route, Tc_u))[0]
     if getenv("DECODE_ATTN_FUSED_COMBINE", 0):   # P5: one fused dispatch (inline gmax) instead of gmax+combine
       out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=flash_fused_state_combine_kernel(Hd, Hq, s_route, stride=combine_stride))[0]
     else:
