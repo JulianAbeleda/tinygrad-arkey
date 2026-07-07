@@ -25,6 +25,8 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
   v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32,
   v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
   ds_store_b16, ds_load_u16, v_exp_f32_e32,
+  # Phase-1a: 16-bit global access for fp16 elements (b32 over-reads/writes 2 bytes past the last element -> MMU fault)
+  global_load_u16, global_store_b16,
   # B0.L7: RDNA3 wave32 tensor-core multiply-accumulate D = A*B + C (fp16 in, fp32 out)
   v_wmma_f32_16x16x16_f16)
 from tinygrad.codegen.opt.tc import amd_rdna3
@@ -680,7 +682,9 @@ def lower_inst(x:UOp):
     return _ins(v_lshlrev_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
   if a is AMDOps.GLOBAL_LOAD:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg    # imm = per-lane element byte offset
-    ld = _ins(global_load_b32(vdst=_Vr(x.reg), addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
+    # Phase-1a: fp16 (itemsize 2) must use a 16-bit load; b32 reads 2 bytes past the final element -> page-boundary MMU fault.
+    gl = global_load_u16 if x.dtype.itemsize == 2 else global_load_b32
+    ld = _ins(gl(vdst=_Vr(x.reg), addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
     return (ld, [ld])
   # float VOP2 (add/mul): src0 may be a 32-bit float literal, vsrc1 must be a VGPR -> a CONST operand goes in src0.
   if a is AMDOps.V_ADD: return _ins(_vop2_f(v_add_f32_e32, x, src), x.tag)
@@ -723,14 +727,15 @@ def lower_inst(x:UOp):
     cmp = UOp(Ops.INS, arg=v_cmp_ne_u32_e32(0, gate))         # VCC = gate != 0
     save = UOp(Ops.INS, arg=s_and_saveexec_b32(_S[5], VCC))   # s5 = EXEC; EXEC = VCC & EXEC  (s5 reserved: not in any pool)
     st = UOp(Ops.INS, arg=((ds_store_b16 if src[5].arg == 2 else ds_store_b32)(addr=addr, data0=val) if kind == 1
-                           else global_store_b32(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))   # src[5]=element size
+                           else (global_store_b16 if src[5].arg == 2 else global_store_b32)(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))   # src[5]=element size
     restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))        # restore EXEC (store ordering -> _insert_waitcnt)
     return (restore, [cmp, save, st, restore])
   if a is AMDOps.GLOBAL_STORE:
     # SCALARIZED: one INS -> N scalar stores, lane l at immediate offset l*itemsize. src=(off, base, val0..valN-1, isz)
     off_r, ptr_r, isz = src[0].reg, src[1].reg, src[-1].arg
     vals = src[2:-1]
-    stores = [UOp(Ops.INS, arg=global_store_b32(addr=_Vr(off_r), data=_Vr(v.reg), saddr=_S2(ptr_r), offset=l*isz))
+    gs = global_store_b16 if isz == 2 else global_store_b32   # Phase-1a: fp16 must use 16-bit store (b32 writes 2 stray bytes)
+    stores = [UOp(Ops.INS, arg=gs(addr=_Vr(off_r), data=_Vr(v.reg), saddr=_S2(ptr_r), offset=l*isz))
               for l,v in enumerate(vals)]
     return (stores[-1], stores)    # vmcnt drain before endpgm inserted by _insert_waitcnt
   return None
