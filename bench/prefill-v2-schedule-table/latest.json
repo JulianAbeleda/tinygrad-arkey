@@ -45,7 +45,7 @@
         "u1": 4,
         "loc": 4,
         "unr": 8,
-        "tflops": 35.31,
+        "tflops": 14.89,
         "status": "ok",
         "pin_clock": true,
         "clock_pin": {
@@ -74,7 +74,7 @@
         "u1": 4,
         "loc": 4,
         "unr": 8,
-        "tflops": 37.0,
+        "tflops": 36.35,
         "status": "ok",
         "pin_clock": true,
         "clock_pin": {

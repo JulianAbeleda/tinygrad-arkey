@@ -99,8 +99,10 @@ def fold_expanded_index(midx:UOp):
   ret = []
   idxs: list[int|None] = [None]*len(midx.src)
   global_offset = 0
+  no_group = getenv("DEVECTORIZE_NO_PTR_GROUP", 0)
   for offsets in offsets_rootsrc.values():
-    grouped_offsets = [[x for _,x in group] for _,group in itertools.groupby(enumerate(sorted(offsets.keys())), lambda x: x[1]-x[0])]
+    grouped_offsets = [[x] for x in sorted(offsets.keys())] if no_group else \
+      [[x for _,x in group] for _,group in itertools.groupby(enumerate(sorted(offsets.keys())), lambda x: x[1]-x[0])]
     for grp in grouped_offsets:
       # get the index offset for this element. using [0] is okay, because they are the same
       lidx = midx.src[offsets[grp[0]][0]]
@@ -115,6 +117,18 @@ def fold_expanded_index(midx:UOp):
   # this base thing is for image, we want the CAT to be a normal pointer
   post_cat = UOp(Ops.PTRCAT, buf.ptrdtype.base.ptr(size=buf.max_numel(), addrspace=buf.addrspace).vec(global_offset), tuple(ret))
   return post_cat.gep(tuple(cast(list[int], idxs)))
+
+def _gep_local_ptrcat(g:UOp, cat:UOp):
+  if not cat.src or not all(isinstance(s.dtype, PtrDType) and s.addrspace == AddrSpace.LOCAL for s in cat.src): return None
+  idx = g.arg
+  if isinstance(idx, int): idx = (idx,)
+  if not isinstance(idx, tuple) or len(idx) == 0 or not all(isinstance(i, int) for i in idx): return None
+  if len(idx) == 1:
+    off = idx[0]
+    for s in cat.src:
+      if off < s.dtype.base.count: return s.gep(off)
+      off -= s.dtype.base.count
+  return None
 
 def cat_after_store(cat:UOp, data:UOp):
   # TODO: this is written in many places
@@ -134,8 +148,10 @@ def gep_on_store(gep:UOp, st:UOp):
   return gep.src[0].store(st.gep(new_arg))
 
 load_store_folding = PatternMatcher([
+  (UPat(Ops.PTRCAT, name="cat"), lambda cat: cat.src[0] if len(cat.src) == 1 and cat.dtype == cat.src[0].dtype else None),
   (UPat(Ops.INDEX, src=(UPat(Ops.STACK, src=UPat(name="buf")), UPat.var("vec"))), expand_index),
   (UPat(Ops.STACK, src=UPat(Ops.INDEX), name="midx"), fold_expanded_index),
+  (UPat(Ops.GEP, src=(UPat(Ops.PTRCAT, name="cat"),), name="g"), _gep_local_ptrcat),
   # GEP after LOAD
   (UPat(Ops.LOAD, src=(UPat(Ops.GEP, name="gep"),), name="ld", allow_any_len=True),
    lambda gep, ld: ld.replace(dtype=ld.dtype.scalar().vec(gep.dtype.count), src=(gep.src[0],)+ld.src[1:]).gep(gep.arg)),
@@ -546,8 +562,21 @@ def _devec_distinct_reg_store(tgt:UOp, val:UOp) -> UOp|None:
   if len(set(ptrs)) != len(ptrs): return None
   return UOp.group(*[p.store(val.gep(i)) for i,p in enumerate(ptrs)])
 
+def _devec_stack_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
+  if val.dtype.count != len(tgt.src): return None
+  if gate is not None and gate.dtype.count != len(tgt.src): return None
+  stores = []
+  for i,p in enumerate(tgt.src):
+    if not isinstance(p.dtype, PtrDType): return None
+    ptr = p.gep(0) if p.dtype.base.count != 1 else p
+    stores.append(ptr.store(val.gep(i), gate.gep(i) if gate is not None else None))
+  return UOp.group(*stores)
+
 pm_distinct_reg_store_devec = PatternMatcher([
+  (UPat(Ops.GEP, src=(UPat(Ops.PTRCAT, name="cat"),), name="g"), _gep_local_ptrcat),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_distinct_reg_store),
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"), UPat.var("gate"))), _devec_stack_store),
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_stack_store),
 ])
 
 # add loads

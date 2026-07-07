@@ -16,9 +16,9 @@ from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import ISARenderer, IselContext, Register
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
-  s_load_b64, s_load_b32, global_load_b32, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
+  s_load_b64, s_load_b32, global_load_b32, global_load_b128, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
-  s_mov_b32, s_add_i32, s_mul_i32, s_lshl_b32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, s_barrier,
+  s_mov_b32, s_add_i32, s_mul_i32, s_lshl_b32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
   # Phase G: full block-tile ALU/control surface
   v_xor_b32_e32, v_and_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
@@ -213,6 +213,9 @@ class AMDOps(FastEnum):
   ACCUM_READ = 42                        # RA1: read a pinned loop-carried accumulator -> v_mov vvirt, v[pin] (src[-1].arg=pin)
   ACCUM_WRITE = 43                       # RA1: write a pinned accumulator from a VGPR -> v_mov v[pin], vsrc (in-place loop-carried state)
   V_WMMA = 44                            # B0.L7: RDNA3 tensor-core 16x16x16 matmul-accumulate -> v_wmma_f32_16x16x16_f16 (D=A*B+C)
+  GLOBAL_LOAD_B128 = 45                  # L3: direct 16-byte fragment load into four packed fp16 WMMA operand VGPRs
+  DS_LOAD_B128 = 46                       # L4/LDS: direct 16-byte LDS fragment load into four packed fp16 VGPRs
+  DS_STORE_B128 = 47                      # L4/LDS: direct 16-byte LDS fragment store from four packed fp16 VGPRs
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -443,6 +446,9 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   if a.arg == "accum":                        # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
+    if (bdata := _lds_b128_store_data(b)) is not None:
+      # Fail-closed: require explicit packed VGPR data for DS_STORE_B128.
+      return UOp(Ops.INS, dtypes.void, src=(a.src[0],) + bdata + (a.src[1], UOp.const(dtypes.int32, 0).rtag()), arg=AMDOps.DS_STORE_B128)
     esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
     if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
     return UOp(Ops.INS, dtypes.void, src=(a.src[0], b, a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.DS_STORE)  # addr,data,order,esz
@@ -541,14 +547,76 @@ def _wmma_elems(carrier:UOp, n:int):
     raise NotImplementedError(f"AMD:ISA WMMA operand is not a {n}-lane STACK/NOOP carrier: {carrier.op} n={len(carrier.src)}")
   return carrier.src
 
+def _fixed_vgpr_index(u:UOp) -> int|None:
+  return u.tag[0].index if isinstance(u.tag, tuple) and len(u.tag) == 1 and isinstance(u.tag[0], Register) else None
+
+def _fixed_contiguous_vgpr4(us:tuple[UOp, ...]) -> bool:
+  return len(us) == 4 and (b := _fixed_vgpr_index(us[0])) is not None and [_fixed_vgpr_index(u) for u in us] == list(range(b, b + 4))
+
+def _lds_b128_store_data(u:UOp) -> tuple[UOp, ...]|None:
+  """Return the 4-wide VGPR data span for a packed LDS store, or None (fail-closed)."""
+  if isinstance(u.dtype, PtrDType):
+    return None
+  if u.op is Ops.NOOP and u.dtype.count == 4 and u.dtype.scalar().itemsize == 4 and _fixed_contiguous_vgpr4(u.src):
+    return tuple(u.src)
+  # Wide producers can already encode 4-reg spans as a single INS.
+  if u.op is Ops.INS and u.arg in (AMDOps.GLOBAL_LOAD_B128, AMDOps.DS_LOAD_B128) and u.dtype is dtypes.int32:
+    if _fixed_vgpr_index(u) is None:
+      return None
+    return (u,)
+  return None
+
+def _const_base(x:UOp) -> tuple[UOp|None, int]:
+  if x.op is Ops.CONST: return None, int(x.arg)
+  if x.op is Ops.ADD:
+    a, ac = _const_base(x.src[0]); b, bc = _const_base(x.src[1])
+    if a is None: return b, ac + bc
+    if b is None: return a, ac + bc
+  return x, 0
+
+def _wmma_half_addr(e:UOp):
+  lane = 0
+  if e.op is Ops.GEP:
+    lane = e.arg[0]; e = e.src[0]
+  if e.op is not Ops.LOAD: return None
+  idx = e.src[0].src[0] if e.src[0].op is Ops.CAST else e.src[0]
+  if idx.op is not Ops.INDEX or idx.src[1].op is Ops.CONST: return None
+  base_expr, const = _const_base(idx.src[1])
+  if base_expr is None: return None
+  return idx, idx.src[0], base_expr, const + lane
+
+def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp,...]=()) -> tuple[UOp,...]|None:
+  if not getenv("AMD_ISA_WMMA_B128_FRAG", 1): return None
+  addrs = [_wmma_half_addr(e) for e in E]
+  if any(a is None for a in addrs): return None
+  idx0, ptr0, expr0, c0 = addrs[0]
+  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
+  idxc = isel_index(ctx, idx0)
+  if idxc is None or idxc.op is not Ops.NOOP or len(idxc.src) != 2: return None
+  if idxc.arg == "lds":
+    addr, order = idxc.src
+    loads:list[UOp] = []
+    for j, imm in enumerate((0, 16)):
+      ld = UOp(Ops.INS, dtypes.int32, src=(addr, order, UOp.const(dtypes.int32, imm).rtag()) + dep,
+               arg=AMDOps.DS_LOAD_B128, tag=_pin(base, j * 4))
+      loads.extend([ld] + [UOp(Ops.INS, dtypes.int32, src=(ld,), arg=AMDOps.MOV, tag=_pin(base, j * 4 + i)) for i in range(1, 4)])
+    return tuple(loads)
+  ptr, off = idxc.src
+  loads:list[UOp] = []
+  for j, imm in enumerate((0, 16)):
+    ld = UOp(Ops.INS, dtypes.int32, src=(off, ptr, UOp.const(dtypes.int32, imm).rtag()) + dep,
+             arg=AMDOps.GLOBAL_LOAD_B128, tag=_pin(base, j * 4))
+    loads.extend([ld] + [UOp(Ops.INS, dtypes.int32, src=(ld,), arg=AMDOps.MOV, tag=_pin(base, j * 4 + i)) for i in range(1, 4)])
+  return tuple(loads)
+
 # B0.K: build ONE K-tile v_wmma. `cin` is the 8 src2 lanes (V_CONST 0.0 at the chain head, else the prior tile's 8 pinned
 # D lanes). All three fragments are pinned: A->abase, B->bbase, D/C in-place->cbase. On accumulate tiles the A/B packs
 # carry `dep` (the prior WMMA def) as an extra ignored src so the shared-frag reload is scheduled AFTER the prior matmul
 # read it (WAR guard). Returns the 8-lane NOOP output carrier (lane 0 = the V_WMMA def, lanes 1..7 = passthrough MOVs).
 def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...]):
   aE, bE = _wmma_elems(A, 16), _wmma_elems(B, 16)
-  apk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, aE[2*i]), _tov(ctx, aE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(abase, i)) for i in range(8)]
-  bpk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, bE[2*i]), _tov(ctx, bE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(bbase, i)) for i in range(8)]
+  apk = _frag_b128_loads(ctx, aE, abase, dep) or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, aE[2*i]), _tov(ctx, aE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(abase, i)) for i in range(8))
+  bpk = _frag_b128_loads(ctx, bE, bbase, dep) or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, bE[2*i]), _tov(ctx, bE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(bbase, i)) for i in range(8))
   # V_WMMA INS: srcs = A0..A7, B0..B7, C0..C7 (keeps all 24 fragment defs reachable + ordered before the matmul); the
   # def (tag) is the C-range base -> vdst base. lower_inst reads the three fragment bases off src[0]/src[8]/src[16].
   wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin), arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
@@ -564,7 +632,7 @@ def _pack_frag(ctx:IselContext, carrier:UOp, base:int) -> tuple[UOp,...]:
   memo = ctx._frag_pack = getattr(ctx, "_frag_pack", {})
   if (pk := memo.get((id(carrier), base))) is not None: return pk
   E = _wmma_elems(carrier, 16)
-  pk = tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
+  pk = _frag_b128_loads(ctx, E, base) or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
   memo[(id(carrier), base)] = pk
   return pk
 
@@ -623,6 +691,13 @@ def isel_wmma(ctx:IselContext, x:UOp):
   chain = [x]                                   # outermost .. head
   while (c := chain[-1].src[2]).op is Ops.WMMA: chain.append(c)
   head = chain[-1]
+  head_acc = None
+  c2 = head.src[2]
+  if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
+     and _is_wmma_acc(ctx, (dreg := _reg_base(c2.src[0].src[0].src[0]))):
+    idx0 = c2.src[0].src[0].src[1]
+    subtile = idx0.arg // 8 if idx0.op is Ops.CONST else 0
+    head_acc = (dreg, subtile, c2.src[0].src[0].src[0])
   # ONE accumulator range for the whole chain (gate (b)): keyed on the head's const-0 carrier so every tile agrees on it.
   # A/B fragments are REUSED across all K-tiles (spec-reference: one A-frag + one B-frag range reloaded per K-substep),
   # keyed on that same accumulator base -> a single K>16 chain needs only 3 fragment ranges total and fits [200,238);
@@ -630,7 +705,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
   # B0.M: a MULTI-output-tile UNROLLed kernel has one chain PER subtile. Each chain's C goes LOW (per-head 8-run) and ALL
   # chains SHARE the single reused high A/B pair (K-serial reload) -- WM*WN chains would otherwise blow the high window.
   # Single-chain kernels (_c_low False) keep the legacy per-head high C + per-head A/B (k64-chain / single-tile tests).
-  cbase = _acc_base(ctx, id(head.src[2])) if _c_low(ctx) else _frag_base(ctx, id(head.src[2]), 8)
+  cbase = _acc_base(ctx, (id(head_acc[0]), head_acc[1]) if head_acc is not None else id(head.src[2])) if _c_low(ctx) else _frag_base(ctx, id(head.src[2]), 8)
   ab_key = "wmma_ab" if _c_low(ctx) else id(head.src[2])
   abase = _frag_base(ctx, (ab_key, "A"), 8)
   bbase = _frag_base(ctx, (ab_key, "B"), 8)
@@ -639,11 +714,14 @@ def isel_wmma(ctx:IselContext, x:UOp):
   prev:UOp|None = None
   for tile in reversed(chain):                  # head first, then each accumulate tile
     if prev is None:                            # HEAD: init the accumulator to 0 from the 8 CONST-0 seed lanes (V_CONST)
-      cE = _wmma_elems(tile.src[2], 8)
-      for i in range(8):
-        if cE[i].op is not Ops.CONST:
-          raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST at the K-reduction chain head")
-      cin = [UOp(Ops.INS, dtypes.float32, src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i)) for i in range(8)]
+      if head_acc is not None:
+        cin = [UOp(Ops.INS, dtypes.float32, src=(head_acc[2],), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+      else:
+        cE = _wmma_elems(tile.src[2], 8)
+        for i in range(8):
+          if cE[i].op is not Ops.CONST:
+            raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST at the K-reduction chain head")
+        cin = [UOp(Ops.INS, dtypes.float32, src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i)) for i in range(8)]
       dep:tuple[UOp,...] = ()
     else:                                       # ACCUMULATE: src2 = prior tile's 8 pinned D lanes (== v{cbase..cbase+7})
       cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
@@ -826,6 +904,18 @@ def lower_inst(x:UOp):
     stfn = ds_store_b16 if src[3].arg == 2 else ds_store_b32
     st = UOp(Ops.INS, arg=stfn(addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)))
     return (st, [st])
+  if a is AMDOps.DS_LOAD_B128:
+    ld = _ins(ds_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(src[0].reg), offset0=src[2].arg), x.tag)
+    return (ld, [ld])
+  if a is AMDOps.DS_STORE_B128:
+    if len(src) == 3:
+      data, imm = src[1], src[2]
+    elif len(src) in (4, 6, 7):
+      data, imm = src[1], src[-1]
+    else:
+      raise NotImplementedError(f"AMD:ISA unsupported DS_STORE_B128 source shape: {len(src)}")
+    st = UOp(Ops.INS, arg=ds_store_b128(addr=_Vr(src[0].reg), data0=_V[data.reg.index:data.reg.index+3], offset0=imm.arg))
+    return (st, [st])
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
     return _ins(v_mov_b32_e32(_Vr(x.reg), src[0].arg), x.tag)
   if a is AMDOps.V_CONST:                           # materialize a CONST value (float or int) into a VGPR
@@ -838,6 +928,10 @@ def lower_inst(x:UOp):
     # Phase-1a: fp16 (itemsize 2) must use a 16-bit load; b32 reads 2 bytes past the final element -> page-boundary MMU fault.
     gl = global_load_u16 if x.dtype.itemsize == 2 else global_load_b32
     ld = _ins(gl(vdst=_Vr(x.reg), addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
+    return (ld, [ld])
+  if a is AMDOps.GLOBAL_LOAD_B128:
+    off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg
+    ld = _ins(global_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
     return (ld, [ld])
   # float VOP2 (add/mul): src0 may be a 32-bit float literal, vsrc1 must be a VGPR -> a CONST operand goes in src0.
   if a is AMDOps.V_ADD: return _ins(_vop2_f(v_add_f32_e32, x, src), x.tag)
@@ -1102,6 +1196,47 @@ class AMDISARenderer(ISARenderer):
         if not isinstance(u.arg, tuple) and str(u.arg).split("(", 1)[0].startswith(
             ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")):
           out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0))))
+      return out
+    if getenv("AMD_ISA_WAITCNT_TARGETED", 0):
+      out = []
+      pend_vm:list[set[int]] = []; pend_lgkm:list[set[int]] = []; vm_store = lgkm_store = False
+      def _span(r): return set(range(r.offset, r.offset + r.sz))
+      def _uses(a) -> set[int]:
+        return set().union(*(_span(r) for r in self._inst_regs(a))) if self._inst_regs(a) else set()
+      def _drain(vm:int=0, lgkm:int=0, exp:int=0):
+        nonlocal vm_store, lgkm_store
+        out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, exp))))
+        if vm == 0: pend_vm.clear(); vm_store = False
+        if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
+      def _target_wait(uses:set[int], coalesce_vm:bool=False):
+        vdeps = [i for i, d in enumerate(pend_vm) if uses & d]
+        ldeps = [i for i, d in enumerate(pend_lgkm) if uses & d]
+        if not vdeps and not ldeps: return
+        vm = 0 if (coalesce_vm and vdeps) else (len(pend_vm) - max(vdeps) - 1 if vdeps else 63)
+        lgkm = len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63
+        out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, 7))))
+        if vdeps: del pend_vm[:(len(pend_vm) if coalesce_vm else max(vdeps)+1)]
+        if ldeps: del pend_lgkm[:max(ldeps)+1]
+      for u in uops:
+        a = u.arg
+        if isinstance(a, tuple):
+          if a[0] == "branch" and (pend_vm or pend_lgkm or vm_store or lgkm_store): _drain()
+          out.append(u); continue
+        m = str(a).split("(", 1)[0]
+        uses = _uses(a)
+        if m == "s_barrier" and (lgkm_store or pend_lgkm): _drain(vm=63, lgkm=0, exp=7)
+        elif m == "s_endpgm" and (vm_store or lgkm_store or pend_vm or pend_lgkm): _drain()
+        elif m.startswith("ds_load") and lgkm_store: _drain(vm=63, lgkm=0, exp=7)
+        else:
+          # Scalarized half-fragment paths otherwise emit one partial wait per v_pack. Coalesce those narrow-load
+          # consumers to the default-equivalent VMEM drain; the b128/WMMA route still gets true targeted waits.
+          _target_wait(uses, coalesce_vm=m.startswith("v_pack"))
+        out.append(u)
+        regs = self._inst_regs(a)
+        if m.startswith("global_load") and regs: pend_vm.append(_span(regs[0]))
+        elif m.startswith(("ds_load", "s_load", "ds_bpermute")) and regs: pend_lgkm.append(_span(regs[0]))
+        elif m.startswith("global_store"): vm_store = True
+        elif m.startswith("ds_store"): lgkm_store = True
       return out
     out = []
     pend_vm:set[int] = set(); pend_lgkm:set[int] = set(); vm_store = lgkm_store = False

@@ -14,6 +14,8 @@ from tinygrad.renderer import Renderer
 from tinygrad.schedule.indexing import BufferizeOpts
 from tinygrad.schedule.rangeify import PREFILL_DBUF, PREFILL_DBUF_NBUF, prefill_dbuf_reduce_range
 
+_TC_LOCAL_STAGE_DF_PACK_START = 238
+
 class Scheduler:
   def __init__(self, ast:UOp, ren:Renderer):
     self.ast, self.ren = ast, ren
@@ -311,7 +313,7 @@ class Scheduler:
               UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
             ]
             wmma_srcs = _tc_local_stage_wmma_sources(wmma_srcs, _tc_local_stage_ranges((wmma_srcs[0], wmma_srcs[1])),
-                                                     enabled=not _tc_local_stage_coop_b_post_opt() and
+                                                     enabled=not (_tc_local_stage_coop_b_post_opt() or _tc_local_stage_coop_post_opt()) and
                                                      (_tc_local_stage_with_planned_local() or
                                                      not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts)))
                                                      )
@@ -371,6 +373,9 @@ def _tc_local_stage_tile_only() -> bool:
 def _tc_local_stage_coop_b_post_opt() -> bool:
   return bool(getenv("PREFILL_TC_LOCAL_STAGE_COOP_B_POST", 0))
 
+def _tc_local_stage_coop_post_opt() -> bool:
+  return bool(getenv("PREFILL_TC_LOCAL_STAGE_COOP_POST", 0))
+
 _tc_local_stage_coop_b_stats = {"seen": 0, "rewritten": 0, "dumped": 0, "skipped": 0}
 
 
@@ -426,39 +431,45 @@ pm_tc_local_stage_post = PatternMatcher([
   (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_wmma_post),
 ])
 
-def _tc_local_stage_coop_b_wmma_post(wmma:UOp) -> UOp|None:
+def _tc_local_stage_coop_operand(wmma:UOp, operand_idx:int) -> UOp|None:
   mode = _tc_local_stage_mode()
-  if mode not in ("b", "both"): return None
+  if (operand_idx == 0 and mode not in ("a", "1", "true", "yes", "both")) or (operand_idx == 1 and mode not in ("b", "both")): return None
   _tc_local_stage_coop_b_stats["seen"] += 1
   if (limit := getenv("PREFILL_TC_LOCAL_STAGE_COOP_B_LIMIT", 0)) and _tc_local_stage_coop_b_stats["rewritten"] >= limit:
     return None
   # Keep this diagnostic cheap. A full backward-slice scan on every WMMA in a
   # medium GEMM is quadratic enough to hide the actual compile result.
-  if wmma.src[1].op in {Ops.STAGE, Ops.AFTER, Ops.BARRIER}: return None
-  # Cooperative map is only safe today for lane+reduce operand shaping. Keep fragment
-  # carriers (warp + explicit contract axes) in the staged identity and only allow
-  # optional UPCAST/UNROLL tile loops.
-  warp_ranges = [r for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
-  if len(warp_ranges) != 1 or wmma.src[1].dtype.count != 16: return None
+  src = wmma.src[operand_idx]
+  if src.op in {Ops.STAGE, Ops.AFTER, Ops.BARRIER} or src.op_in_backward_slice_with_self(Ops.BARRIER): return None
+  # Cooperative map is only safe today for lane+fragment operand shaping. Keep
+  # fragment carriers (warp + explicit CONTRACT axes) in the staged identity and
+  # close the store group over supported tile loops, including route-shaped GLOBAL
+  # tile carriers.
+  warp_ranges = [r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
+  if len(warp_ranges) != 1 or src.dtype.count != 16: return None
   lane = warp_ranges[0]
-  fragment_ranges, tile_ranges = _tc_local_stage_coop_b_ranges(wmma.src[1])
+  fragment_ranges, tile_ranges = _tc_local_stage_coop_b_ranges(src)
   if lane not in fragment_ranges:
     _tc_local_stage_coop_b_stats["skipped"] += 1
     if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
       _tc_local_stage_coop_b_stats["dumped"] += 1
       print("TC_LOCAL_STAGE_COOP_B_SKIP", json.dumps({
         "reason": "missing_fragment_warp_axis",
+        "operand": operand_idx,
         "warp": {"arg": str(lane.arg), "size": lane.vmax+1},
-        "all_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg)],
+        "all_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(src.ranges, key=lambda r: r.arg)],
       }))
     return None
-  unsupported_ranges = tuple(r for r in tile_ranges if r.arg[-1] not in {AxisType.UPCAST, AxisType.UNROLL})
+  allowed_tile_types = {AxisType.UPCAST, AxisType.UNROLL}
+  if getenv("PREFILL_TC_LOCAL_STAGE_COOP_GLOBAL", 0): allowed_tile_types.add(AxisType.GLOBAL)
+  unsupported_ranges = tuple(r for r in tile_ranges if r.arg[-1] not in allowed_tile_types)
   if unsupported_ranges:
     _tc_local_stage_coop_b_stats["skipped"] += 1
     if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
       _tc_local_stage_coop_b_stats["dumped"] += 1
       print("TC_LOCAL_STAGE_COOP_B_SKIP", json.dumps({
         "reason": "unsupported_tile_loop_range_type",
+        "operand": operand_idx,
         "warp": {"arg": str(lane.arg), "size": lane.vmax+1},
         "unsupported_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in unsupported_ranges],
       }))
@@ -470,27 +481,80 @@ def _tc_local_stage_coop_b_wmma_post(wmma:UOp) -> UOp|None:
   # becomes the true double-buffer once 1c peels the K-loop so both slots coexist in one body. Fail-closed to
   # the single 256-wide tile when there is no const-even reduce carrier in the fragment ranges.
   nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
-  kr = prefill_dbuf_reduce_range(wmma.src[1].ranges) if nbuf > 1 else None
-  base = 256 * nbuf if kr is not None else 256
-  slot = (kr % nbuf) * 256 if kr is not None else UOp.const(dtypes.int, 0)
-  bsh = UOp.placeholder((base,), wmma.src[1].dtype.scalar(), 990, addrspace=AddrSpace.LOCAL)
-  stores = [bsh.index(slot+row*16+i, dtype=bsh.dtype).store(wmma.src[1].gep(i), lane < 16).end() for i in range(16)]
+  kr = prefill_dbuf_reduce_range(src.ranges) if nbuf > 1 else None
+  tile_count = prod(r.vmax+1 for r in tile_ranges)
+  base = 256 * tile_count * nbuf if kr is not None else 256 * tile_count
+  tile_idx = UOp.const(dtypes.weakint, 0)
+  tile_mul = 1
+  for r in tile_ranges[::-1]:
+    tile_idx = tile_idx + r * tile_mul
+    tile_mul *= r.vmax+1
+  slot = ((kr % nbuf) * tile_count + tile_idx) * 256 if kr is not None else tile_idx * 256
+  bsh = UOp.placeholder((base,), src.dtype.scalar(), 990 + operand_idx, addrspace=AddrSpace.LOCAL)
+
+  # Import here to avoid importing AMD renderer for non-target compile paths at module import time.
+  from tinygrad.renderer.isa.amd import AMDOps, Register
+
+  pack_tag_base = _TC_LOCAL_STAGE_DF_PACK_START
+  pack_tags = tuple((Register(f"v{pack_tag_base + i}", pack_tag_base + i),) for i in range(4))
+
+  def _slot_idx(i:int|UOp) -> UOp:
+    return slot + row*16 + i
+
+  first_half_pairs = ((0, 1), (2, 3), (4, 5), (6, 7))
+  second_half_pairs = ((8, 9), (10, 11), (12, 13), (14, 15))
+  store_groups = ((first_half_pairs, 0), (second_half_pairs, 8))
+
+  stores: list[UOp] = []
+  for group_pairs, store_slot in store_groups:
+    packed_words = tuple(UOp(Ops.INS, dtypes.int32, src=(src.gep(i0), src.gep(i1)), arg=AMDOps.V_PACK, tag=pack_tags[i])
+                         for i, (i0, i1) in enumerate(group_pairs))
+    carry = UOp(Ops.NOOP, dtypes.int32.vec(4), src=packed_words)
+    stores.append(bsh.index(_slot_idx(store_slot), dtype=bsh.dtype).store(carry, lane < 16).end())
+
   stage = UOp.group(*stores)
-  if tile_ranges: stage = stage.end(*tile_ranges)
+  stage_ranges = tile_ranges
+  if stage_ranges: stage = stage.end(*stage_ranges)
   bar = UOp.barrier(stage)
-  vals = [bsh.after(bar)[slot+row*16+i] for i in range(16)]
-  bvec = vals[0].vectorize(*vals[1:])
+  range_by_axis = {r.arg[0]: r for r in src.src[0].ranges if r.op is Ops.RANGE}
+  frag_idx = UOp.const(dtypes.weakint, 0)
+  mul = 1
+  assert isinstance(src.arg, tuple), f"WMMA cooperative LDS staging expects CONTRACT arg, got {src.arg}"
+  for axis, size in src.arg[::-1]:
+    frag_idx = frag_idx + range_by_axis[axis] * mul
+    mul *= size
+  assert mul == src.dtype.count, f"WMMA cooperative LDS staging expected {src.dtype.count} fragment lanes, got {mul}"
+  scalar = bsh.after(bar).index(_slot_idx(frag_idx)).load()
+  bvec = UOp(Ops.CONTRACT, src.dtype, (scalar,), src.arg, tag=1)
   _tc_local_stage_coop_b_stats["rewritten"] += 1
   if getenv("PREFILL_TC_LOCAL_STAGE_DUMP") and _tc_local_stage_coop_b_stats["dumped"] < getenv("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", 8):
     _tc_local_stage_coop_b_stats["dumped"] += 1
     print("TC_LOCAL_STAGE_COOP_B", json.dumps({
+      "operand": operand_idx,
       "warp": {"arg": str(lane.arg), "size": lane.vmax+1},
-      "src1_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(wmma.src[1].ranges, key=lambda r: r.arg)],
+      "src_ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(src.ranges, key=lambda r: r.arg)],
     }))
-  return wmma.replace(src=(wmma.src[0], bvec, wmma.src[2]))
+  return wmma.replace(src=wmma.src[:operand_idx] + (bvec,) + wmma.src[operand_idx+1:])
+
+def _tc_local_stage_coop_wmma_post(wmma:UOp) -> UOp|None:
+  orig = wmma
+  out = _tc_local_stage_coop_operand(wmma, 0)
+  if out is not None: wmma = out
+  out = _tc_local_stage_coop_operand(wmma, 1)
+  if out is not None: wmma = out
+  return wmma if wmma is not orig else None
+
+def _tc_local_stage_coop_b_wmma_post(wmma:UOp) -> UOp|None:
+  mode = _tc_local_stage_mode()
+  if mode not in ("b", "both"): return None
+  return _tc_local_stage_coop_operand(wmma, 1)
 
 pm_tc_local_stage_coop_b_post = PatternMatcher([
   (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_coop_b_wmma_post),
+])
+
+pm_tc_local_stage_coop_post = PatternMatcher([
+  (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_coop_wmma_post),
 ])
 
 def _tc_local_stage_contract_src_post(wmma:UOp) -> UOp|None:
@@ -574,7 +638,9 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
       k = hand_coded_optimizations(k)
   if PREFILL_DBUF():
     _prefill_dbuf_peel(k)
-  if _tc_local_stage_coop_b_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+  if _tc_local_stage_coop_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+    k.ast = graph_rewrite(k.ast, pm_tc_local_stage_coop_post, name="tc local stage coop post")
+  elif _tc_local_stage_coop_b_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_coop_b_post, name="tc local stage coop b post")
   elif _tc_local_stage_scalar_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_scalar_post, name="tc local stage scalar post")

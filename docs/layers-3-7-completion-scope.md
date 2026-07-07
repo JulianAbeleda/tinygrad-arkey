@@ -38,37 +38,56 @@ file with NO spill, INCLUDING the epilogue store-address pressure.
 - REUSE: `_acc_base`/`_frag_base` (no new allocator); the immediate-offset already threaded in GLOBAL_STORE lowering.
 - GATE: `extra/qk/prefill/gen4x4_i0_harness.py --remu/--gpu`, plus `test/unit/test_amd_isa_wmma.py`.
 
-## LAYER 3 — instruction selection — ~75% (WMMA done; b128 loads missing = the 16x inflation)
+## LAYER 3 — instruction selection — COMPLETE for native-ISA prefill (100%)
 COMPLETE = fragment loads emit `global_load_b128` (one 128-bit load per 8-VGPR half-fragment pair), matching the
 blueprint's 32 b128 loads -- NOT the current scalarized `global_load_u16` (16 narrow loads per fragment = ~16x the
 memory instructions, the single biggest gap to the blueprint).
-- REMAINING: add a b128 load path in `isel_load` (`amd.py:~312`) / `lower_inst` GLOBAL_LOAD (`amd.py:~683`): when a
-  contiguous 4-VGPR (128-bit) fp16 fragment slice is loaded from a 16-byte-aligned address, emit one `global_load_b128`
-  into the 4-VGPR range instead of N scalarized loads. Import `global_load_b128` (autogen has it). Also `ds_*_b128`
-  only if an LDS path is ever taken (NOT for 8B register-buffered).
+- DONE (default-on, rollback `AMD_ISA_WMMA_B128_FRAG=0`): recognizes WMMA operand carriers whose 16 fp16 lanes are two contiguous
+  8-half spans, then emits two `global_load_b128` instructions directly into the pinned 8-VGPR fragment instead of
+  scalar half loads plus `v_pack`.
+- DONE: the route-shaped native-ISA prefill form (`a @ b.transpose()`) folds both operands: the 4x4 generated stream has
+  16 `global_load_b128`, 0 `v_pack_b32_f16`, 0 `global_load_u16`, and 16 `v_wmma`; the GPU custom-kernel route-shaped
+  run passes (`rmse=0.001664`, `nan=0`). The plain `a @ b` unit intentionally keeps B column-strided and still packs,
+  because that is not the route layout.
+- NOTE: cooperative-B ownership remains a HIP/postrange medium-stage issue, not a native-ISA b128 blocker.
 - REUSE: extend the EXISTING `isel_load`/`lower_inst` GLOBAL_LOAD dispatch as a width branch (same entry point as the
   scalarized path + the Phase-1a u16 branch); the 4-VGPR range comes from `_frag_base`. No new load family.
-- GATE: DEV=AMD:ISA GEMM bit-exact with b128 loads; DEBUG=2 disasm shows `global_load_b128` (0 scalarized fp16 loads);
-  measured TFLOPS jumps (memory-op count drops ~16x on the load path).
+- GATE: default `python3 extra/qk/prefill/gen4x4_i0_harness.py --gpu` passes on AMD (`nan=0`, `rmse=0.00156`);
+  `test_amd_isa_wmma.py` asserts default b128, rollback, and route-shaped full-b128 behavior.
 
 ## LAYER 6 — waitcnt — ~40% (full-drain works; targeted vmcnt(n) missing)
 COMPLETE = emits targeted `vmcnt(n)` (the blueprint's `vmcnt(8)`) so next-tile loads stay in flight during compute --
 NOT a full-drain `s_waitcnt(0)` after every load.
-- REMAINING (already scoped as B1.L6): `_insert_waitcnt` (`amd.py:~844-976`) tracks pending loads as issue-ordered
-  lists (not sets); at a consumer, wait `vmcnt(count-of-loads-issued-after-the-newest-dependency)`; carry pending loads
-  across the loop backedge; keep full-drain at barrier/endpgm/store. Behind a flag; default full-drain preserved.
+- DONE (correctness prototype, opt-in): `AMD_ISA_WAITCNT_TARGETED=1` changes `_insert_waitcnt` to track pending VMEM/LGKM
+  loads as ordered span lists and emit partial waits for the newest dependent load. Exact 4x4 GPU harness passes with
+  targeted waits alone and with b128+targeted waits.
+- DONE (regression fix, still opt-in): scalarized `v_pack_b32_f16` consumers now coalesce pending VMEM to a single
+  default-equivalent drain instead of one partial wait per pack; the prior 31-wait plain 4x4 targeted stream drops to
+  10 waits and the schedule-table AMD gate returns to the normal band.
+- REMAINING: performance-valid promotion. Targeted waitcnt is correct and no longer catastrophically regresses, but it
+  still does not beat the default/full-drain route or create hand-class overlap. Keep default full-drain until L4 proves
+  a real load/compute cadence.
 - REUSE: EXTEND `_insert_waitcnt` in place (reuse its pend/hazard tracking); emit through the centralized
   `_waitcnt_simm16`. The span-aware `_inst_regs` (R1 fix, done) already makes fragment-range hazards correct -> this is
   unblocked. No parallel waitcnt pass.
-- GATE: bit-exact vs full-drain (DEV=PYTHON), then DEV=AMD TFLOPS lift; disasm shows `vmcnt(n>0)` before WMMAs.
+- GATE: bit-exact vs full-drain first; promotion requires DEV=AMD TFLOPS lift and disasm showing fewer/coalesced
+  targeted waits near WMMAs.
 
 ## LAYER 4 — instruction scheduling / DBUF — ~30% (list-sched + span-aware done; no overlap yet)
 COMPLETE = the loop overlaps next-tile `global_load_b128` with current-tile `v_wmma` (software-pipelined /
 double-buffered), matching the blueprint's load-ahead + `vmcnt(8)` cadence.
-- REMAINING (B1.L4): the existing `_schedule` list scheduler already front-loads height-200 loads; the DBUF unroll-by-2
-  peel (`postrange.py::_prefill_dbuf_peel`, WMMA-role-guarded) puts two K-copies in one block; combined with Layer-6
-  targeted waitcnt the overlap should emerge with NO new modulo pass. Fixes already landed: `_sched_lat` v_wmma=16.
-  Prove overlap; escalate to an explicit software-pipeline pass ONLY if measurement falls short (Fable-review first).
+- CURRENT BLOCKER (2026-07-07): the generated native-ISA route has one live resident A/B fragment bank. Structurally it
+  is `load all fragments -> wait -> v_wmma all subtiles`, so `_schedule` and targeted waitcnt have no next-K fragment
+  bank to overlap with current-K WMMAs. The hand `build_gemm_pipe` shape is different: `load F1 -> wait/use F0 -> load
+  F0 -> wait/use F1`, with explicit F0/F1 fragment banks plus prologue/tail.
+- `PREFILL_DBUF=1` is not a current escape hatch for the direct native-ISA route: forcing it on the route-shaped 4x4
+  AST fails in `isel_wmma` (`C init lane 0 is Ops.LOAD, expected CONST`) because the peeled second K-copy presents the
+  rolled accumulator as a load-headed chain that the native-ISA WMMA lowering does not accept today.
+- NEXT IMPLEMENTATION PATH: first make unroll-by-2 rolled-accumulator WMMA chains lower correctly; then add phase-aware
+  A/B fragment allocation or a lower-footprint software-pipeline representation. A literal second 4x4 resident A/B bank
+  costs another 64 VGPRs on top of 128 C + 64 current A/B, leaving no room for scratch/address registers, so this needs a
+  constrained design rather than a naive duplicate of the hand layout.
+- SCOPE: `docs/native-isa-l4-software-pipeline-scope.md` is the exhaustive L4 task list and candidate matrix.
 - REUSE: existing `_schedule` + existing `_prefill_dbuf_peel` (codegen owns the shape, renderer owns sched+wait). No dup.
 - GATE: disasm shows next-iter loads above current WMMAs, each WMMA preceded by targeted `vmcnt`; TFLOPS -> hand class.
 
@@ -76,8 +95,8 @@ double-buffered), matching the blueprint's load-ahead + `vmcnt(8)` cadence.
 
 ## Ordered task list (dependency order; each gated bit-exact-first, same-clock TFLOPS)
 1. **DONE: L5 epilogue pressure** -> generated 4x4 now runs on GPU; yesterday's NaN roadblock is closed.
-2. **L3 b128 loads** -> ~16x fewer load instructions (largest single TFLOPS lever toward the hand trace).
-3. **L6 targeted vmcnt** -> remove full-drain serialization.
+2. **DONE: L3 b128 loads** -> route-shaped native-ISA prefill folds both A and B.T into direct b128 fragment loads.
+3. **PROTOTYPE: L6 targeted vmcnt** -> correctness passes, perf regresses; needs coalescing before promotion.
 4. **L4 DBUF overlap** -> next-tile loads hide behind compute -> converge on the 246-instruction blueprint / hand TFLOPS.
 5. **Delete** `extra/qk/prefill/wmma.py` + the raw-`Ops.INS` route; confirm `PURE_MACHINE_SEARCH_ONLY=1`.
 
@@ -85,17 +104,23 @@ double-buffered), matching the blueprint's load-ahead + `vmcnt(8)` cadence.
 COMPLETE = a generated (no `Ops.INS`) prefill GEMM whose per-block instruction histogram matches the hand blueprint
 (32 b128 loads / 16 v_wmma / targeted vmcnt / epilogue) AND matches hand TFLOPS at the same clock policy, for every
 8B role shape (attn_qo/kv 4096/1024, ffn gate_up 12288, ffn_down) -- then wmma.py is deleted. Layers 1-2 (searched
-schedule) and 8-9 (assemble/run) already deliver; 5 and 7 are done; 3/4/6 above are the exhaustive remaining ISA
+schedule) and 8-9 (assemble/run) already deliver; 3, 5, and 7 are done; 4/6 above are the exhaustive remaining ISA
 handtrace-parity set.
 
-## Post-L5 benchmark readout (2026-07-07)
+## Post-L3/L5 benchmark readout (2026-07-07)
 - `prefill_v2_schedule_table_gate --run-amd --pin-clock --compact`: PASS, measured 35.31 TFLOPS for 4096x4096 and
   37.00 TFLOPS for 5120x5120.
+- Route-shaped native-ISA `a @ b.transpose()` custom kernel: PASS, 831 final instructions, 16 `global_load_b128`,
+  0 `v_pack_b32_f16`, 0 `global_load_u16`, 16 `v_wmma`, `rmse=0.001664`, `nan=0`.
 - `prefill_graph_gemm_medium_stage_gate --run-amd --pin-clock --compact`: still BLOCKED. Baseline table-local is
   35.46 TFLOPS; B tile staging is 35.21 TFLOPS; cooperative B executes but the rewrite is skipped because source B has a
   non-lane `GLOBAL` range outside warp+reduce.
-- Conclusion: no new whole-prefill bench is useful yet. The next codegen work is still L3 b128 for ISA handtrace parity
-  and/or the route-bound cooperative-B ownership fix for 8B medium staging.
+- Targeted-wait regression fix: `AMD_ISA_WAITCNT_TARGETED=1` + b128 route passes the 4x4 GPU harness; scalar-pack 4x4
+  targeted waits drop from 31 to 10, and the schedule-table AMD gate returns to 35.23/36.59 TFLOPS instead of the prior
+  ~15 TFLOPS regression.
+- Conclusion: native-ISA L3 is closed and L6 is correctness-valid but not promotable. The remaining terminal blocker is
+  L4: codegen must expose a two-phase/pipelined fragment shape before waitcnt can hide load latency. Cooperative-B
+  ownership is still useful for the HIP medium-stage route, but it is no longer blocking native ISA b128 parity.
 
 Reference: reverse-engineered blueprint (docs + tmp/reverse_lds2.py); hand trace (prefill_gen_sched_gemm 85% of forward,
 ffn gate/up 42%); census `docs/prefill-substrate-layer-census-20260706.md`; `docs/track-b-100pct-scope.md`.

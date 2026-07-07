@@ -1,12 +1,13 @@
-import itertools, unittest
+import itertools, os, unittest
 from dataclasses import replace
 from tinygrad import Tensor
 from tinygrad.uop.ops import Ops, UOp, graph_rewrite
+from tinygrad.dtype import dtypes
 from tinygrad.codegen.opt import Opt, OptOps
-from tinygrad.helpers import Target
-from tinygrad.renderer.isa import IselContext
-from tinygrad.renderer.isa.amd import AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top
-from tinygrad.codegen import full_rewrite_to_sink, to_program
+from tinygrad.helpers import Target, getenv
+from tinygrad.renderer.isa import IselContext, Register
+from tinygrad.renderer.isa.amd import AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, isel_store, lower_inst
+from tinygrad.codegen import full_rewrite_to_sink, to_program, to_program_cache
 from tinygrad.renderer.amd.dsl import Reg
 
 
@@ -70,7 +71,8 @@ class TestAMDISAWmmaStructuralGate(unittest.TestCase):
     self.assertTrue(all(u.op is Ops.INS for u in insts), f"non-INS leaked into linear list: {[u.op for u in insts if u.op is not Ops.INS]}")
     mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
     self.assertIn("v_wmma_f32_16x16x16_f16", mns, "rendered instruction list must contain a v_wmma")
-    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 16, "8 A + 8 B fragment packs expected")
+    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), 2, "contiguous A fragment uses two b128 loads")
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 8, "strided B fragment still packs")
     # and it assembled to a non-empty binary
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
 
@@ -180,6 +182,15 @@ def _tc_matmul_ast_multitile(m_up:int):
   opts = (Opt(OptOps.TC, axis=0, arg=(0, 0, 1)),) + (Opt(OptOps.UPCAST, axis=0, arg=4),) * m_up
   return ast.replace(arg=replace(ast.arg, opts_to_apply=opts))
 
+def _tc_matmul_ast_multitile_transposed_b(m_up:int):
+  # Route-shaped fp16 prefill GEMM: A[M,K] @ B[N,K].T. Unlike the plain unit matmul B[K,N], the B fragment is contiguous
+  # over K, so b128 can fold both A and B fragments.
+  a = Tensor.empty(64, 64, dtype="half"); b = Tensor.empty(64, 64, dtype="half")
+  lin = (a @ b.transpose()).schedule_linear()
+  ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+  opts = (Opt(OptOps.TC, axis=0, arg=(0, 0, 1)),) + (Opt(OptOps.UPCAST, axis=0, arg=4),) * m_up
+  return ast.replace(arg=replace(ast.arg, opts_to_apply=opts))
+
 
 class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
   # B0.M DEV=PYTHON structural gate for the multi-output-tile register model. A hand_coded M/N>16 upcasts the output into
@@ -229,10 +240,12 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     ab_idx = set().union(*[set(range(b, b + 8)) for b in ab])
     acc_idx = set().union(*runs)
     self.assertTrue(ab_idx.isdisjoint(acc_idx), "resident A/B window and LOW accumulator region must not overlap")
-    # exactly WM+WN=8 distinct packed fragment sets (one per A-row + one per B-col) -> V_PACK count = (WM+WN)*8, not WM*WN*16
+    # A-row fragments are contiguous and default to b128; B-col fragments are strided and still pack once per B-col.
     packs = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "V_PACK"]
-    self.assertEqual(len(packs), (4 + 4) * 8, f"expected 64 V_PACK (each fragment packed ONCE), got {len(packs)}")
-    self.assertEqual(len(set(u.tag for u in packs)), 64, "each pack pinned to a distinct resident VGPR")
+    b128 = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "GLOBAL_LOAD_B128"]
+    self.assertEqual(len(b128), 4 * 2, f"expected 8 b128 loads for 4 contiguous A fragments, got {len(b128)}")
+    self.assertEqual(len(packs), 4 * 8, f"expected 32 V_PACK for 4 strided B fragments, got {len(packs)}")
+    self.assertEqual(len(set(u.tag for u in packs)), 32, "each pack pinned to a distinct resident VGPR")
     # (c) _vpool excludes the LOW accumulator region and resident A/B window, while reclaiming the v1..v7 padding
     # as scalar scratch. The low scratch keeps post-loop epilogues away from high WMMA/load scratch like v201/v202.
     pool = {r.index for r in _vpool(ictx)}
@@ -281,9 +294,10 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
     insts = lin_uop.src
     mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
-    # one v_wmma per subtile, and each fragment packed ONCE -> (WM+WN)*8 = 64 v_pack (NOT WM*WN*16 = 256)
+    # one v_wmma per subtile; contiguous A rows use b128, strided B cols pack once.
     self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16, "16 in-place v_wmma (one per subtile)")
-    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), (4 + 4) * 8, "64 v_pack: each A-row/B-col packed once")
+    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), 4 * 2, "8 b128: each contiguous A-row loaded once")
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 4 * 8, "32 v_pack: each strided B-col packed once")
     # every VGPR index stays inside the 256 file
     vidx = set()
     for u in insts:
@@ -295,6 +309,176 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
             if o >= 256: vidx.add(o - 256)
     self.assertLess(max(vidx), 256, "no VGPR index escapes the 256 file")
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
+
+  def test_16_subtile_b128_fragment_load_default(self):
+    # L3 hand-trace parity: when an operand's 16 half lanes are two contiguous 8-half spans, the default path may load
+    # the packed fragment directly with two b128 loads instead of scalar half loads + v_pack. In this AST the A-row
+    # fragments are contiguous (4 rows -> 8 b128 loads), while B is column-strided and correctly remains packed.
+    prg = to_program(_tc_matmul_ast_multitile(2), self.ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
+    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), 8, "4 contiguous A fragments -> 2 b128 loads each")
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 4 * 8, "strided B fragments still require packing")
+    self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
+
+  def test_16_subtile_b128_fragment_load_rollback(self):
+    old = os.environ.get("AMD_ISA_WMMA_B128_FRAG")
+    os.environ["AMD_ISA_WMMA_B128_FRAG"] = "0"; getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile(2), self.ren)
+    finally:
+      if old is None: os.environ.pop("AMD_ISA_WMMA_B128_FRAG", None)
+      else: os.environ["AMD_ISA_WMMA_B128_FRAG"] = old
+      getenv.cache_clear(); to_program_cache.clear()
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), (4 + 4) * 8)
+
+  def test_16_subtile_transposed_b_full_b128_fragment_loads(self):
+    prg = to_program(_tc_matmul_ast_multitile_transposed_b(2), self.ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
+    self.assertEqual(sum(1 for m in mns if m == "global_load_b128"), (4 + 4) * 2,
+                     "route-shaped A and transposed-B fragments are both contiguous")
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "global_load_u16"), 0)
+
+  def test_targeted_waitcnt_coalesces_scalar_pack_path(self):
+    old = os.environ.get("AMD_ISA_WAITCNT_TARGETED")
+    os.environ["AMD_ISA_WAITCNT_TARGETED"] = "1"; getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile(2), self.ren)
+      lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+      insts = self.ren._resolve_labels(self.ren._insert_waitcnt(self.ren._schedule(list(lin_uop.src))))
+    finally:
+      if old is None: os.environ.pop("AMD_ISA_WAITCNT_TARGETED", None)
+      else: os.environ["AMD_ISA_WAITCNT_TARGETED"] = old
+      getenv.cache_clear(); to_program_cache.clear()
+    mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 32)
+    self.assertLessEqual(sum(1 for m in mns if m == "s_waitcnt"), 10,
+                         "targeted waitcnt must not emit one wait per scalar v_pack")
+
+  def test_dbuf_route_smaller_tile_compiles_and_exposes_loads_between_wmmas(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_DBUF", "AMD_ISA_WAITCNT_TARGETED", "AMD_ISA_WMMA_B128_FRAG")}
+    os.environ["PREFILL_DBUF"] = "1"; os.environ["AMD_ISA_WAITCNT_TARGETED"] = "1"; os.environ["AMD_ISA_WMMA_B128_FRAG"] = "1"
+    getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile_transposed_b(1), self.ren)
+      lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+      insts = self.ren._resolve_labels(self.ren._insert_waitcnt(self.ren._schedule(list(lin_uop.src))))
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear(); to_program_cache.clear()
+    mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
+    bidx = [i for i, m in enumerate(mns) if m == "global_load_b128"]
+    widx = [i for i, m in enumerate(mns) if m == "v_wmma_f32_16x16x16_f16"]
+    self.assertEqual(len(widx), 8)
+    self.assertEqual(len(bidx), 32)
+    self.assertTrue(any(a < x < b for a, b in zip(widx, widx[1:]) for x in bidx),
+                    "smaller DBUF route should expose future b128 loads between WMMAs")
+
+  def test_local_stage_a_uses_lds_b128_fragment_loads(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_TC_LOCAL_STAGE", "PREFILL_TC_LOCAL_STAGE_POST", "AMD_ISA_WMMA_B128_FRAG")}
+    os.environ["PREFILL_TC_LOCAL_STAGE"] = "a"; os.environ["PREFILL_TC_LOCAL_STAGE_POST"] = "1"; os.environ["AMD_ISA_WMMA_B128_FRAG"] = "1"
+    getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile_transposed_b(2), self.ren)
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear(); to_program_cache.clear()
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
+    self.assertEqual(sum(1 for m in mns if m == "ds_load_b128"), 8, "4 staged A fragments -> 2 LDS b128 loads each")
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b128"), 0,
+                     "current local-stage stores are half.vec(4) LOAD carriers, not four packed contiguous VGPRs")
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b32"), 16)
+    self.assertEqual(sum(1 for m in mns if m == "s_barrier"), 1, "LDS staging must keep the store/load barrier")
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 0, "contiguous staged A and route-B should avoid scalar packs")
+    self.assertTrue(any("ds_load_b128" in str(u.arg) and ", 16)" in str(u.arg) for u in lin_uop.src if not isinstance(u.arg, tuple)),
+                    "second half of each staged fragment must use ds_load_b128 offset0=16")
+
+
+class TestAMDISALDSB128Lowering(unittest.TestCase):
+  def _v(self, i:int):
+    return UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV, tag=(Register(f"v{i}", i),))
+
+  def test_ds_load_b128_lowering_uses_offset0(self):
+    addr = self._v(5)
+    x = UOp(Ops.INS, dtypes.int32, src=(addr, UOp(Ops.NOOP, dtypes.void), UOp.const(dtypes.int32, 16).rtag()),
+            arg=AMDOps.DS_LOAD_B128, tag=(Register("v200", 200),))
+    inst, waits = lower_inst(x)
+    self.assertEqual(waits, [inst])
+    self.assertIn("ds_load_b128(v[200:203], v[5]", str(inst.arg))
+    self.assertTrue(str(inst.arg).endswith(", 16)"), f"expected offset0=16 in {inst.arg}")
+
+  def test_global_load_b128_lowering_uses_offset0(self):
+    off = self._v(5)
+    saddr = self._v(7)
+    x = UOp(Ops.INS, dtypes.int32, src=(off, saddr, UOp.const(dtypes.int32, 16).rtag()), arg=AMDOps.GLOBAL_LOAD_B128, tag=(Register("v200", 200),))
+    inst, waits = lower_inst(x)
+    self.assertEqual(waits, [inst])
+    self.assertIn("global_load_b128(v[200:203], v[5]", str(inst.arg))
+    self.assertTrue(str(inst.arg).endswith(", 16)"), f"expected offset0=16 in {inst.arg}")
+
+  def test_ds_store_b128_lowering_uses_offset0(self):
+    addr, data = self._v(6), tuple(self._v(i) for i in range(220, 224))
+    x = UOp(Ops.INS, dtypes.void, src=(addr,) + data + (UOp(Ops.NOOP, dtypes.void), UOp.const(dtypes.int32, 16).rtag()),
+            arg=AMDOps.DS_STORE_B128)
+    inst, waits = lower_inst(x)
+    self.assertEqual(waits, [inst])
+    self.assertIn("v[6], v[220:223]", str(inst.arg))
+    self.assertTrue(str(inst.arg).endswith(", 16)"), f"expected offset0=16 in {inst.arg}")
+
+  def test_lds_store_selects_b128_only_for_fixed_contiguous_packed_vgprs(self):
+    addr, order = self._v(7), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+    packed = UOp(Ops.NOOP, dtypes.int32.vec(4), src=tuple(self._v(i) for i in range(224, 228)))
+    out = isel_store(None, a, packed, UOp(Ops.STORE, dtypes.void))
+    self.assertIs(out.arg, AMDOps.DS_STORE_B128)
+    self.assertEqual(out.src[-1].arg, 0, "LDS address VGPR carries the dynamic byte address; b128 immediate stays offset0=0")
+
+  def test_lds_store_selects_b128_for_global_load_b128_operand(self):
+    addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+    packed = UOp(Ops.INS, dtypes.int32, src=(self._v(16), self._v(17), UOp(Ops.CONST, dtypes.int32, arg=0).rtag()),
+                 arg=AMDOps.GLOBAL_LOAD_B128, tag=(Register("v220", 220),))
+    out = isel_store(None, a, packed, UOp(Ops.STORE, dtypes.void))
+    self.assertIs(out.arg, AMDOps.DS_STORE_B128)
+    self.assertEqual(out.src[-1].arg, 0, "Wide source from GLOBAL_LOAD_B128 should keep the packed offset0=0")
+
+  def test_lds_store_rejects_global_load_b128_without_fixed_register_span(self):
+    addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+    packed = UOp(Ops.INS, dtypes.int32, src=(self._v(16), self._v(17), UOp(Ops.CONST, dtypes.int32, arg=0).rtag()),
+                 arg=AMDOps.GLOBAL_LOAD_B128, tag=())
+    out = isel_store(None, a, packed, UOp(Ops.STORE, dtypes.void))
+    self.assertIs(out.arg, AMDOps.DS_STORE)
+
+  def test_lds_store_rejects_noncontiguous_packed_vgpr_sources(self):
+    addr, order = self._v(11), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+    packed = UOp(Ops.NOOP, dtypes.int32.vec(4), src=(self._v(224), self._v(225), self._v(227), self._v(228)))
+    out = isel_store(None, a, packed, UOp(Ops.STORE, dtypes.void))
+    self.assertIs(out.arg, AMDOps.DS_STORE)
+
+  def test_ds_store_b128_lowering_with_single_packed_ins_operand(self):
+    addr = self._v(6)
+    data = UOp(Ops.INS, dtypes.int32, src=(self._v(15), self._v(16), UOp(Ops.CONST, dtypes.int32, arg=0).rtag()), arg=AMDOps.GLOBAL_LOAD_B128,
+               tag=(Register("v200", 200),))
+    x = UOp(Ops.INS, dtypes.void, src=(addr, data, UOp(Ops.NOOP, dtypes.void), UOp(Ops.CONST, dtypes.int32, arg=16).rtag()), arg=AMDOps.DS_STORE_B128)
+    inst, waits = lower_inst(x)
+    self.assertEqual(waits, [inst])
+    self.assertIn("v[6], v[200:203]", str(inst.arg))
+    self.assertTrue(str(inst.arg).endswith(", 16)"), f"expected offset0=16 in {inst.arg}")
 
 
 if __name__ == "__main__":
