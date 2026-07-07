@@ -24,7 +24,10 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
   v_xor_b32_e32, v_and_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
   v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32,
   v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
-  ds_store_b16, ds_load_u16, v_exp_f32_e32)
+  ds_store_b16, ds_load_u16, v_exp_f32_e32,
+  # B0.L7: RDNA3 wave32 tensor-core multiply-accumulate D = A*B + C (fp16 in, fp32 out)
+  v_wmma_f32_16x16x16_f16)
+from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.helpers import getenv
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
@@ -92,6 +95,7 @@ class AMDOps(FastEnum):
   S_WGID = 41                            # Phase N1B: workgroup id s{2+d} as a scalar source (s_mov into a scalar temp)
   ACCUM_READ = 42                        # RA1: read a pinned loop-carried accumulator -> v_mov vvirt, v[pin] (src[-1].arg=pin)
   ACCUM_WRITE = 43                       # RA1: write a pinned accumulator from a VGPR -> v_mov v[pin], vsrc (in-place loop-carried state)
+  V_WMMA = 44                            # B0.L7: RDNA3 tensor-core 16x16x16 matmul-accumulate -> v_wmma_f32_16x16x16_f16 (D=A*B+C)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -382,6 +386,49 @@ def isel_gep(x:UOp):
   if c.op is Ops.NOOP and not isinstance(c.dtype, PtrDType): return c.src[x.arg[0]]
   return None
 
+# ---- B0.L7: tensor-core emit. After no_vectorized_wmma (devectorizer) a per-group Ops.WMMA arrives with dtype
+# float.vec(8) and three STACK/NOOP lane-carriers: src[0]=A (16 half), src[1]=B (16 half), src[2]=C accumulator (8
+# float, the CONST-0.0 init the TC matcher builds, postrange.py:319). This mirrors the reference hand kernel
+# extra/qk/prefill/wmma.py (SPEC-ONLY, never imported): A/B each occupy 8 contiguous VGPRs (16 fp16 packed 2/reg),
+# C/D occupy 8 VGPRs (8 fp32); v_wmma computes D = A*B + C writing D IN PLACE over the C fragment.
+# ELEMENT ORDER (the known risk): the vec(16) element order is ALREADY the RDNA3 fragment order -- _apply_tc_opt
+# permuted the tensor by tc.permutes_for_shape_str(...) using the amd_rdna3 swizzle (tc.py:142-143) BEFORE building the
+# WMMA, exactly as the HIP/LLVM renderers rely on (they pass the half16 straight to __builtin_amdgcn_wmma). So the
+# renderer does NOT re-apply the swizzle: it packs element e into fragment VGPR (base + e//2), half (e%2: even->low16,
+# odd->high16). v_pack_b32_f16(vdst, s0, s1) puts s0 in low16, s1 in high16 -> pair (2i, 2i+1) -> reg i. This matches
+# the reference which loads A[l][0:16] as 16 CONTIGUOUS fp16 into regs Ab..Ab+7 (elem k in reg k//2).
+def isel_wmma(ctx:IselContext, x:UOp):
+  A, B, C = x.src[0], x.src[1], x.src[2]
+  abase = _frag_base(ctx, id(A), 8)
+  bbase = _frag_base(ctx, id(B), 8)
+  cbase = _frag_base(ctx, id(C), 8)
+  if abase is None or bbase is None or cbase is None:
+    raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
+  def _elems(carrier:UOp, n:int):
+    if carrier.op not in (Ops.STACK, Ops.NOOP) or len(carrier.src) != n:
+      raise NotImplementedError(f"AMD:ISA WMMA operand is not a {n}-lane STACK/NOOP carrier: {carrier.op} n={len(carrier.src)}")
+    return carrier.src
+  def _pin(base:int, i:int): return (Register(f"v{base+i}", base+i),)   # physical VGPR -> constrained vreg via alloc_vregs
+  aE, bE = _elems(A, 16), _elems(B, 16)
+  # A/B fragments: 8x v_pack_b32_f16, each pinned to its physical fragment VGPR (elem 2i -> low16, elem 2i+1 -> high16).
+  apk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, aE[2*i]), _tov(ctx, aE[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(abase, i)) for i in range(8)]
+  bpk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, bE[2*i]), _tov(ctx, bE[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(bbase, i)) for i in range(8)]
+  # C accumulator: init 8 VGPRs from the carrier's 8 float lanes (the TC matcher supplies CONST 0.0). V_CONST writes the
+  # value straight into the pinned fragment reg; the WMMA reads it as src2 and overwrites it with D.
+  cE = _elems(C, 8)
+  def _cinit(i:int):
+    if cE[i].op is not Ops.CONST:
+      raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST (K-reduction accumulation is a later stage)")
+    return UOp(Ops.INS, dtypes.float32, src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i))
+  cin = [_cinit(i) for i in range(8)]
+  # V_WMMA INS: srcs = A0..A7, B0..B7, C0..C7 (keeps all 24 fragment defs reachable + ordered before the matmul); the
+  # def (tag) is the C-range base -> vdst base. lower_inst reads the three fragment bases off src[0]/src[8]/src[16].
+  wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin), arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
+  # D outputs: element 0 is the WMMA def (v{cbase}); elements 1..7 are zero-cost passthroughs pinned to v{cbase+i} that
+  # DEPEND on the WMMA (MOV lowers to nothing) so the 8 result GEPs (devectorizer output split) read D[i] after the mma.
+  outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
+  return UOp(Ops.NOOP, x.dtype, src=tuple(outs))
+
 isel_matcher = PatternMatcher([
   (UPat(Ops.PARAM, name="x"), isel_param),
   (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
@@ -422,6 +469,8 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_IMUL) if x.arg == _N1B_UNI else _binop(ctx, x, AMDOps.V_IMUL)),
   (UPat(Ops.ADD, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_IADD) if x.arg == _N1B_UNI else _binop(ctx, x, AMDOps.V_IADD)),
   (UPat(Ops.SHL, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_ISHL) if x.arg == _N1B_UNI else None),
+  # B0.L7: tensor-core matmul -> fragment packing + v_wmma (MUST precede the catch-all INS rule below)
+  (UPat(Ops.WMMA, name="x"), isel_wmma),
   # catch-all register allocation seed (x86 alloc_vregs analog): tag None -> fresh vreg; physical -> constrained vreg
   (UPat(Ops.INS, name="x"), lambda ctx, x: alloc_vregs(ctx, x)),
 ])
@@ -511,6 +560,11 @@ def lower_inst(x:UOp):
     return (bp, [bp])
   if a is AMDOps.V_DOT2:                             # packed fp16 dot: acc=src[0], a_packed=src[1], b_packed=src[2]
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_WMMA:                             # B0.L7: D = A*B + C, 16x16x16 fp16->fp32. src=(A0..7,B0..7,C0..7).
+    # Fragment bases are the FIRST reg of each 8-VGPR run (src[0]=A base, src[8]=B base, src[16]=C base). D writes in
+    # place over C so vdst==src2. NOTE inclusive 8-reg slices: _V[b:b+7] == Reg(256+b, 8) (dsl slice end is inclusive).
+    a0, b0, dbase = src[0].reg.index, src[8].reg.index, src[16].reg.index
+    return _ins(v_wmma_f32_16x16x16_f16(vdst=_V[dbase:dbase+7], src0=_V[a0:a0+7], src1=_V[b0:b0+7], src2=_V[dbase:dbase+7]), x.tag)
   if a is AMDOps.V_EXP:                              # Phase N1A: hardware exp2 (2^x) -> one VALU op instead of a polynomial
     return _ins(v_exp_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a in (AMDOps.S_IMUL, AMDOps.S_IADD, AMDOps.S_ISHL):   # Phase N1B: uniform int math on the scalar pipe (SGPR result)
@@ -634,13 +688,20 @@ post_regalloc_matcher = PatternMatcher([
   (UPat(Ops.SINK, name="x"), lower_sink),
   # drop leftover non-instruction nodes (rtag'd immediate CONSTs read via .arg; carrier NOOPs/AFTER ordering; PARAM kept
   # for the kernarg-segment scan, SPECIAL gidx0 for the workgroup-id descriptor scan, DEFINE_REG for group-segment sizing)
-  (UPat((Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_REG), name="x"), lambda x: (x, [])),
+  # Ops.GROUP (PSEUDO_OP) just bundles already-linearized stores (e.g. the WMMA path's vec(8) output -> 8 scalar
+  # global_store INS via no_vectorized_store/UOp.group); its children are emitted on their own lines, so drop the wrapper.
+  (UPat((Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_REG, Ops.GROUP), name="x"), lambda x: (x, [])),
 ])
 
 # ============================ the renderer ============================
 class AMDISARenderer(ISARenderer):
   device = "AMD"
   has_local = True
+  # B0.L7: advertise the SHARED RDNA3 tensor-core descriptor (same object the HIP/LLVM renderers consume). This lets
+  # apply_opts()/_apply_tc_opt build Ops.WMMA (half in / float out); isel_wmma + lower_inst emit v_wmma_f32_16x16x16_f16.
+  # half (dtype_in) is NOT rejected upstream: _apply_tc_opt only requires tc.dtype_in == in0/in1 dtype (postrange.py:241);
+  # the half-input CAST/dequant path already lowers (V_CVT_H2F etc.) so the fragment sources render fine.
+  tensor_cores = amd_rdna3
   pre_isel_matcher = pre_isel_matcher
   isel_matcher = isel_matcher
   post_regalloc_matcher = post_regalloc_matcher
@@ -726,8 +787,12 @@ class AMDISARenderer(ISARenderer):
     mn = [str(u.arg).split("(", 1)[0] for u in block]
     regs = [self._inst_regs(u.arg) for u in block]
     is_store = [m.startswith(("ds_store", "global_store")) for m in mn]
-    defs = [(regs[i][0].offset if (regs[i] and not is_store[i]) else None) for i in range(n)]   # first reg = dst (non-store)
-    uses = [{r.offset for r in regs[i]} - ({defs[i]} if defs[i] is not None else set()) for i in range(n)]
+    # span-aware: a Reg of size sz occupies offsets [offset, offset+sz) -- a WMMA/b128 fragment is one Reg spanning 4-8
+    # VGPRs. Keying hazards on the base offset alone MISSES writes to base+1..base+sz-1 (the fragment packs), letting the
+    # scheduler reorder them across the consuming v_wmma -> garbage. Expand to the full span. Single regs (sz=1) unchanged.
+    def _span(r): return set(range(r.offset, r.offset + r.sz))
+    defs = [(_span(regs[i][0]) if (regs[i] and not is_store[i]) else None) for i in range(n)]   # dst span (set) or None
+    uses = [(set().union(*(_span(r) for r in regs[i])) if regs[i] else set()) - (defs[i] or set()) for i in range(n)]
     is_mem = [m.startswith(MEM) for m in mn]; is_ctrl = [_is_ctrl(m) for m in mn]
     # Full scheduling barriers: s_barrier AND every EXEC-affecting op (s_and_saveexec, s_mov to EXEC=126). EXEC-predicated
     # regions (gated stores) must stay intact -- reordering any op across the saveexec/restore boundary would change
@@ -747,10 +812,11 @@ class AMDISARenderer(ISARenderer):
       if is_bar[j]:
         for k in range(j): edge(k, j)                           # ...or below it
       if defs[j] is not None:
-        if defs[j] in last_def: edge(last_def[defs[j]], j)      # WAW
+        for d in defs[j]:                                       # WAW (span-aware)
+          if d in last_def: edge(last_def[d], j)
         for k in range(j):                                      # WAR: j overwrites a reg an earlier op read
-          if defs[j] in uses[k]: edge(k, j)
-        last_def[defs[j]] = j
+          if defs[j] & uses[k]: edge(k, j)
+        for d in defs[j]: last_def[d] = j
       if is_mem[j]: last_mem = j
       if is_ctrl[j]: last_ctrl = j
       if is_bar[j]: last_bar = j
