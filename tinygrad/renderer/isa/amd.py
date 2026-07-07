@@ -56,7 +56,18 @@ def _n_workitem_dims(ctx:IselContext) -> int:
   return n
 # B0.L5: WMMA A/B/C fragments live in the reserved high VGPR window v200..v237. FRAG_TOP is EXCLUSIVE so a fragment of 8
 # regs based at 230 uses v230..v237 (base+7 == 237): v>=238 is the raw-INS garbage trap (see gfx1100 raw-INS asm gotchas).
+# NOTE (B0.M multi-output-tile): the v>=238 garbage is a RAW-INS-only artifact; the ISA renderer's ELF descriptor auto-
+# sizes VGPR to the highest reg used, so through THIS renderer the real ceiling is OCCUPANCY, not v238. So we keep A/B in
+# the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
 FRAG_BASE, FRAG_TOP = 200, 238
+# B0.M: multi-output-tile C accumulators. A hand_coded M/N>16 upcasts the output into a WM x WN grid of 16x16 subtiles per
+# warp -> ONE reduce DEFINE_REG of vec width WM*WN*8, split by no_vectorized_wmma into WM*WN distinct Ops.WMMA each reading
+# an 8-lane accumulator slice. Each subtile needs its OWN fixed, contiguous, 8-aligned, loop-carried 8-VGPR run (v_wmma
+# reads+writes src2==vdst in place across the K RANGE loop). WM*WN*8 accumulators (16*8 = 128 for a 64x64 tile) do NOT fit
+# the 38-VGPR high fragment window, so the accumulators are placed LOW (8-aligned, from v8) -- mirrors _accum_pin's low
+# rationale (RA4): the descriptor sizes to the highest reg, so LOW pins don't inflate VGPR count the way v240+ would. v0
+# holds packed workitem ids and v1..v7 are the alignment pad (WMMA_ACC_BASE is the first 8-aligned index above v0).
+WMMA_ACC_BASE = 8
 def _has_wmma(ctx:IselContext) -> bool:
   # cache: does this kernel use a WMMA op? (fragment region is only reserved when it does, so non-WMMA kernels keep v200+)
   if (w := getattr(ctx, "_haswmma", None)) is None:
@@ -81,13 +92,55 @@ def _wmma_acc_regs(ctx:IselContext) -> set:
     ctx._wmmaacc = s
   return s
 def _is_wmma_acc(ctx:IselContext, dreg:UOp) -> bool: return id(dreg) in _wmma_acc_regs(ctx)
+
+# ---- B0.M: count the TOTAL number of 8-VGPR C accumulator runs the kernel needs (one per 16x16 output subtile). A ROLLED
+# accumulator DEFINE_REG of vec width W contributes W//8 runs (one per subtile); an UNROLLED chain head / single tile
+# contributes ONE run (its whole K-reduction accumulates in place); an accumulate tile (src[2] is a prior WMMA) shares the
+# head's run (0). >1 total runs == a multi-output-tile kernel -> the accumulators are placed LOW (see _acc_base/_vpool);
+# ==1 keeps the legacy single high-fragment behaviour (single-tile / rolled-16x16x64 / k64-chain tests unaffected). ----
+def _n_c_runs(ctx:IselContext) -> int:
+  if (n := getattr(ctx, "_ncruns", None)) is None:
+    n, seen = 0, set()
+    for u in ctx.uses:
+      if u.op is not Ops.WMMA: continue
+      c2 = u.src[2]
+      if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
+         and (dr := _reg_base(c2.src[0].src[0].src[0])).op is Ops.DEFINE_REG and dr.dtype.addrspace == AddrSpace.REG:
+        if id(dr) not in seen: seen.add(id(dr)); n += dr.dtype.size // 8   # ROLLED: W//8 subtiles for this accumulator
+      elif c2.op is not Ops.WMMA: n += 1                                    # chain head / single tile -> one run
+    ctx._ncruns = n
+  return n
+def _c_low(ctx:IselContext) -> bool: return _n_c_runs(ctx) > 1   # multi-output-tile -> C accumulators go LOW
+def _acc_base(ctx:IselContext, key) -> int:
+  # LOW C-accumulator allocator (multi-tile only): each distinct `key` (a subtile identity) gets an 8-aligned, contiguous
+  # 8-VGPR run from WMMA_ACC_BASE, STABLE across repeat calls. Bump-by-8 keeps every run 8-aligned. Separate dict from
+  # _frag (which now holds ONLY the reused A/B window) so the two regions never share a running top.
+  d = getattr(ctx, "_accfrag", None)
+  if d is None: d = ctx._accfrag = {}
+  if key not in d:
+    top = getattr(ctx, "_accfrag_top", WMMA_ACC_BASE)
+    base = (top + 7) // 8 * 8
+    d[key] = base; ctx._accfrag_top = base + 8
+  return d[key]
+def _acc_top(ctx:IselContext) -> int:
+  # top of the reserved LOW accumulator region, computed UPFRONT from ctx.uses so _vpool can exclude the whole region
+  # before any subtile is lazily allocated (else an early virtual could land on a not-yet-allocated accumulator VGPR).
+  return WMMA_ACC_BASE + _n_c_runs(ctx) * 8 if _c_low(ctx) else 0
+
 def _vpool(ctx:IselContext):
   # reserve v0 (packed workitem ids). RA4: when AMD_ISA_REG_ACCUM, also reserve the LOW pin range v1..v16 for pinned
   # accumulators (kept OUT of the normal pool so regalloc never assigns a virtual to a pin); virtuals start at v17.
-  # B0.L5: when a WMMA is present, ALSO exclude the fragment region [FRAG_BASE, FRAG_TOP) so regalloc virtuals never
-  # collide with the pinned A/B/C fragment VGPRs allocated by _frag_base.
+  # B0.L5: when a WMMA is present, ALSO exclude the A/B fragment window [FRAG_BASE, FRAG_TOP) so regalloc virtuals never
+  # collide with the pinned A/B fragment VGPRs allocated by _frag_base.
+  # B0.M: a multi-output-tile WMMA reserves the LOW C-accumulator region [WMMA_ACC_BASE, _acc_top) AND the reused A/B pair
+  # (exactly 2 fragments = [FRAG_BASE, FRAG_BASE+16)); virtuals take everything else below the 256-file top -- both the gap
+  # [_acc_top, FRAG_BASE) and the tail [FRAG_BASE+16, 256) above A/B (the legacy high window's upper half is unused when
+  # only A/B live there, so it is reclaimed to relieve pressure -> no spill). Single-tile keeps the legacy 3-fragment high
+  # window [FRAG_BASE, FRAG_TOP) fully reserved (virtuals [lo, FRAG_BASE)), unchanged.
   lo = ACCUM_PIN_TOP if getenv("AMD_ISA_REG_ACCUM", 0) else 1
-  return VBASE[lo:FRAG_BASE] if _has_wmma(ctx) else VBASE[lo:]
+  if not _has_wmma(ctx): return VBASE[lo:]
+  if _c_low(ctx): return VBASE[max(lo, _acc_top(ctx)):FRAG_BASE] + VBASE[FRAG_BASE + 16:256]
+  return VBASE[lo:FRAG_BASE]
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
@@ -271,13 +324,16 @@ def isel_index(ctx:IselContext, x:UOp):
   # and ordered. idx may be CONST (accumulator), a RANGE counter, or a runtime VGPR value (e.g. lidx-derived, Phase F).
   if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
     dreg = _reg_base(base)
-    # ROLLED-K WMMA accumulator: this REG element IS a lane of the in-place C fragment. Carry (order, v[cbase+idx]) so
-    # isel_load reads the fragment VGPR (post-loop) and isel_store inits it (pre-loop) / no-ops the ASSIGN. idx is the
-    # compile-time accumulator lane (0..7). cbase keyed on id(dreg) so isel_wmma agrees on the same 8-VGPR range.
+    # ROLLED-K WMMA accumulator: this REG element IS a lane of the in-place C fragment. Carry (order, v[cbase+elem]) so
+    # isel_load reads the fragment VGPR (post-loop) and isel_store inits it (pre-loop) / no-ops the ASSIGN. B0.M: the REG
+    # holds a WM*WN grid of 8-lane subtiles; idx (compile-time) selects subtile idx//8 and within-tile lane idx%8. Multi-
+    # tile -> a LOW per-subtile 8-run (_acc_base, keyed (id(dreg),subtile)); single-tile -> the legacy high fragment
+    # (_frag_base, keyed id(dreg)). isel_wmma keys IDENTICALLY so both agree on each subtile's 8-VGPR range.
     if _is_wmma_acc(ctx, dreg) and idx.op is Ops.CONST:
-      cbase = _frag_base(ctx, id(dreg), 8)
+      subtile, elem = divmod(idx.arg, 8)
+      cbase = _acc_base(ctx, (id(dreg), subtile)) if _c_low(ctx) else _frag_base(ctx, id(dreg), 8)
       if cbase is None: raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (C accumulator)")
-      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + idx.arg).rtag()), arg="wmma_acc")   # (order, pin)
+      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + elem).rtag()), arg="wmma_acc")   # (order, pin)
     # RA1 pinned accumulator: per-thread REG accumulator element with a COMPILE-TIME index -> a reserved VGPR carrier.
     if _accum_enabled() and dreg.dtype.addrspace == AddrSpace.REG and idx.op is Ops.CONST and \
        (pin := _accum_pin(ctx, dreg, idx.arg)) is not None:
@@ -479,7 +535,13 @@ def isel_wmma(ctx:IselContext, x:UOp):
   if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
      and _is_wmma_acc(ctx, (dreg := _reg_base(c2.src[0].src[0].src[0]))):
     after = c2.src[0].src[0].src[0]             # AFTER(DEFINE_REG, acc_init stores..., reduce_range) -- keeps init reachable
-    cbase = _frag_base(ctx, id(dreg), 8)        # SAME key as isel_index -> the shared in-place C fragment
+    idx0 = c2.src[0].src[0].src[1]              # lane-0 accumulator index -> subtile = idx0//8 (compile-time)
+    subtile = idx0.arg // 8 if idx0.op is Ops.CONST else 0
+    # B0.M: SAME keying as isel_index -> the shared in-place C fragment for THIS subtile. Multi-tile -> LOW per-subtile
+    # run; single-tile -> legacy high fragment. A/B stay a SINGLE reused (id(dreg),"A"/"B") pair (K-serial reload) in the
+    # high [200,238) window for ALL subtiles -- correct (each v_wmma repacks A/B before it reads them); per-row/col A/B
+    # residency is a later ILP optimisation.
+    cbase = _acc_base(ctx, (id(dreg), subtile)) if _c_low(ctx) else _frag_base(ctx, id(dreg), 8)
     abase = _frag_base(ctx, (id(dreg), "A"), 8); bbase = _frag_base(ctx, (id(dreg), "B"), 8)
     if cbase is None or abase is None or bbase is None:
       raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
@@ -492,11 +554,15 @@ def isel_wmma(ctx:IselContext, x:UOp):
   head = chain[-1]
   # ONE accumulator range for the whole chain (gate (b)): keyed on the head's const-0 carrier so every tile agrees on it.
   # A/B fragments are REUSED across all K-tiles (spec-reference: one A-frag + one B-frag range reloaded per K-substep),
-  # keyed on that same accumulator base -> a K>16 chain needs only 3 fragment ranges total and fits [200,238); allocating
-  # A/B per-tile would exhaust the 38-VGPR region at the 3rd tile.
-  cbase = _frag_base(ctx, id(head.src[2]), 8)
-  abase = _frag_base(ctx, (id(head.src[2]), "A"), 8)
-  bbase = _frag_base(ctx, (id(head.src[2]), "B"), 8)
+  # keyed on that same accumulator base -> a single K>16 chain needs only 3 fragment ranges total and fits [200,238);
+  # allocating A/B per-tile would exhaust the 38-VGPR region at the 3rd tile.
+  # B0.M: a MULTI-output-tile UNROLLed kernel has one chain PER subtile. Each chain's C goes LOW (per-head 8-run) and ALL
+  # chains SHARE the single reused high A/B pair (K-serial reload) -- WM*WN chains would otherwise blow the high window.
+  # Single-chain kernels (_c_low False) keep the legacy per-head high C + per-head A/B (k64-chain / single-tile tests).
+  cbase = _acc_base(ctx, id(head.src[2])) if _c_low(ctx) else _frag_base(ctx, id(head.src[2]), 8)
+  ab_key = "wmma_ab" if _c_low(ctx) else id(head.src[2])
+  abase = _frag_base(ctx, (ab_key, "A"), 8)
+  bbase = _frag_base(ctx, (ab_key, "B"), 8)
   if cbase is None or abase is None or bbase is None:
     raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
   prev:UOp|None = None

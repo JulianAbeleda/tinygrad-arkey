@@ -5,8 +5,9 @@ from tinygrad.uop.ops import Ops, UOp, graph_rewrite
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target
 from tinygrad.renderer.isa import IselContext
-from tinygrad.renderer.isa.amd import AMDISARenderer, FRAG_BASE, FRAG_TOP
+from tinygrad.renderer.isa.amd import AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top
 from tinygrad.codegen import full_rewrite_to_sink, to_program
+from tinygrad.renderer.amd.dsl import Reg
 
 
 def _tc_matmul_ast():
@@ -165,6 +166,96 @@ class TestAMDISAWmmaRolledKGate(unittest.TestCase):
     # (e) NO ds_store/ds_load for the accumulator anywhere
     self.assertFalse(any(mn(u) and mn(u).startswith(("ds_store", "ds_load")) for u in insts), "accumulator must not touch LDS")
     # (f) assembled to a non-empty binary without raising
+    self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
+
+
+def _tc_matmul_ast_multitile(m_up:int):
+  # a forced-TC 64x64x64 half matmul with the M/N output UPCAST into a WM x WN grid of 16x16 subtiles per warp. Each
+  # UPCAST(axis=0, arg=4) quadruples the per-warp output tile -> one UPCAST = 4 subtiles (32 acc VGPRs), two = 16 subtiles
+  # (WM=WN=4, 128 acc VGPRs). ROLLED K (no UNROLL) -> ONE reduce DEFINE_REG of width WM*WN*8 split by no_vectorized_wmma
+  # into WM*WN distinct Ops.WMMA, each src[2] an 8-lane accumulator slice (idx.arg == subtile*8).
+  a = Tensor.empty(64, 64, dtype="half"); b = Tensor.empty(64, 64, dtype="half")
+  lin = (a @ b).schedule_linear()
+  ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+  opts = (Opt(OptOps.TC, axis=0, arg=(0, 0, 1)),) + (Opt(OptOps.UPCAST, axis=0, arg=4),) * m_up
+  return ast.replace(arg=replace(ast.arg, opts_to_apply=opts))
+
+
+class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
+  # B0.M DEV=PYTHON structural gate for the multi-output-tile register model. A hand_coded M/N>16 upcasts the output into
+  # a WM x WN grid of 16x16 subtiles -> WM*WN accumulators. The bug: keying the C base on id(dreg) ALONE aliased all
+  # subtiles onto ONE 8-VGPR run (and isel_index walked cbase+idx.arg off the run). The fix pins each subtile its OWN
+  # fixed, contiguous, 8-aligned, LOW 8-VGPR run (loop-carried, read+written in place by v_wmma). NO numerical check
+  # (the parent's DEV=AMD gate). See amd.py _n_c_runs / _acc_base / _c_low / _vpool.
+  def setUp(self):
+    self.ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+
+  def _isel(self, ast):
+    fs = full_rewrite_to_sink(ast, self.ren, optimize=True)
+    n_wmma = len([u for u in fs.toposort() if u.op is Ops.WMMA])
+    fs = graph_rewrite(fs, self.ren.pre_isel_matcher, ctx=itertools.count(-1, -1), name="pre isel", bottom_up=True)
+    ictx = IselContext(fs)
+    fs = graph_rewrite(fs, self.ren.isel_matcher, ctx=ictx, name="isel", bottom_up=True)   # (d) no isel NotImplementedError
+    return fs, ictx, n_wmma
+
+  def test_16_subtile_register_model(self):
+    # 64x64x64 WM=WN=4 -> 16 output subtiles, 128 accumulator VGPRs (the bug's 4x4=128 case).
+    fs, ictx, n_wmma = self._isel(_tc_matmul_ast_multitile(2))
+    self.assertEqual(n_wmma, 16, "64x64 UPCASTx2 must build a 16-subtile WM*WN grid")
+    # (a) one V_WMMA INS per subtile
+    vwmma = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "V_WMMA"]
+    self.assertEqual(len(vwmma), 16, f"expected 16 V_WMMA INS (one per subtile), got {len(vwmma)}")
+    # (b) WM*WN distinct, non-overlapping, 8-aligned, LOW accumulator ranges, none exceeding the 256-VGPR file
+    bases = sorted(getattr(ictx, "_accfrag", {}).values())
+    self.assertEqual(len(bases), 16, f"expected 16 distinct LOW accumulator ranges, got {bases}")
+    for b in bases:
+      self.assertEqual(b % 8, 0, f"accumulator base {b} not 8-aligned")
+      self.assertGreaterEqual(b, WMMA_ACC_BASE); self.assertLess(b, FRAG_BASE)   # LOW (below the A/B high window)
+      self.assertLess(b + 7, 256)                                                # base+7 inside the file
+    runs = [set(range(b, b + 8)) for b in bases]
+    for i in range(len(runs)):
+      for j in range(i + 1, len(runs)):
+        self.assertEqual(len(runs[i] & runs[j]), 0, f"accumulator ranges {bases} overlap")
+    self.assertEqual(bases, list(range(WMMA_ACC_BASE, WMMA_ACC_BASE + 16 * 8, 8)), "128 contiguous 8-aligned acc VGPRs")
+    # the reused single A/B pair stays in the high fragment window (2 ranges only)
+    ab = sorted(getattr(ictx, "_frag", {}).values())
+    self.assertEqual(len(ab), 2, f"multi-tile must reuse ONE A + ONE B fragment (high window), got {ab}")
+    for b in ab: self.assertGreaterEqual(b, FRAG_BASE); self.assertLess(b + 7, FRAG_TOP)
+    # (c) _vpool excludes EXACTLY the LOW accumulator region AND the A/B window (a collision -> v_wmma clobbers a live virtual)
+    pool = {r.index for r in _vpool(ictx)}
+    acc_idx = set().union(*runs)
+    self.assertEqual(len(pool & acc_idx), 0, "_vpool must exclude the LOW accumulator VGPRs")
+    ab_window = set(range(FRAG_BASE, FRAG_BASE + 16))                            # the reused A + B pair (2 * 8 VGPRs)
+    self.assertEqual(len(pool & (set(ab) | ab_window)), 0, "_vpool must exclude the A/B fragment window")
+    self.assertTrue(ab_window.isdisjoint(acc_idx), "A/B window and LOW accumulator region must not overlap")
+    self.assertEqual(_acc_top(ictx), WMMA_ACC_BASE + 16 * 8, "reserved LOW region top = base + 128")
+    self.assertEqual(min(pool), _acc_top(ictx), "virtuals start immediately above the LOW accumulator region")
+    # (e) every physical VGPR the MODEL pins is inside the 256 file (accumulators [8,135], A/B [200,215], pool <=255)
+    self.assertLess(max(acc_idx | set(ab) | {ab[-1] + 7} | pool), 256)
+
+  def test_4_subtile_end_to_end_assembles(self):
+    # 64x64x64 WM=4 (one UPCAST) -> 4 subtiles (32 acc VGPRs): fits the file and lowers all the way to a binary with NO
+    # spill (stack_pointer stays unimplemented). Proves the multi-tile model produces a working, non-spilling program.
+    fs, ictx, n_wmma = self._isel(_tc_matmul_ast_multitile(1))
+    self.assertEqual(n_wmma, 4)
+    bases = sorted(getattr(ictx, "_accfrag", {}).values())
+    self.assertEqual(bases, [8, 16, 24, 32], f"4 distinct LOW 8-aligned acc ranges, got {bases}")
+    prg = to_program(_tc_matmul_ast_multitile(1), self.ren)   # (d) no NotImplementedError (spill) reaching regalloc
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    insts = lin_uop.src
+    # (e) total distinct VGPR indices used <= 256
+    vidx = set()
+    for u in insts:
+      if isinstance(u.arg, tuple): continue
+      for name, field in u.arg._fields:
+        v = getattr(u.arg, name)
+        if isinstance(v, Reg):
+          for o in range(v.offset, v.offset + v.sz):
+            if o >= 256: vidx.add(o - 256)
+    self.assertLessEqual(len(vidx), 256); self.assertLess(max(vidx), 256, "no VGPR index escapes the 256 file")
+    # (f) assembles clean: 4 in-place v_wmma + a non-empty binary
+    mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 4, "one v_wmma per subtile in the rendered list")
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
 
 
