@@ -217,21 +217,32 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
       for j in range(i + 1, len(runs)):
         self.assertEqual(len(runs[i] & runs[j]), 0, f"accumulator ranges {bases} overlap")
     self.assertEqual(bases, list(range(WMMA_ACC_BASE, WMMA_ACC_BASE + 16 * 8, 8)), "128 contiguous 8-aligned acc VGPRs")
-    # the reused single A/B pair stays in the high fragment window (2 ranges only)
-    ab = sorted(getattr(ictx, "_frag", {}).values())
-    self.assertEqual(len(ab), 2, f"multi-tile must reuse ONE A + ONE B fragment (high window), got {ab}")
-    for b in ab: self.assertGreaterEqual(b, FRAG_BASE); self.assertLess(b + 7, FRAG_TOP)
-    # (c) _vpool excludes EXACTLY the LOW accumulator region AND the A/B window (a collision -> v_wmma clobbers a live virtual)
-    pool = {r.index for r in _vpool(ictx)}
+    # B0.M per-row/col RESIDENCY: WM DISTINCT A-row + WN DISTINCT B-col fragments (NOT one reused pair), each packed ONCE
+    # and shared across its row/col. WM=WN=4 -> 8 resident 8-VGPR runs in the LOW window [_acc_top, FRAG_BASE), none in
+    # the (now free) legacy high window. Distinct, non-overlapping, 8-aligned.
+    self.assertEqual(getattr(ictx, "_frag", {}), {}, "multi-tile must NOT use the legacy high A/B window")
+    ab = sorted(getattr(ictx, "_abfrag", {}).values())
+    self.assertEqual(len(ab), 8, f"expected WM+WN=8 resident A/B fragments (4 A-rows + 4 B-cols), got {ab}")
+    self.assertEqual(ab, list(range(_acc_top(ictx), _acc_top(ictx) + 8 * 8, 8)), "8 contiguous 8-aligned resident A/B runs above the accumulators")
+    for b in ab:
+      self.assertEqual(b % 8, 0); self.assertGreaterEqual(b, _acc_top(ictx)); self.assertLess(b + 7, FRAG_BASE)   # LOW, below the freed high window
+    ab_idx = set().union(*[set(range(b, b + 8)) for b in ab])
     acc_idx = set().union(*runs)
+    self.assertTrue(ab_idx.isdisjoint(acc_idx), "resident A/B window and LOW accumulator region must not overlap")
+    # exactly WM+WN=8 distinct packed fragment sets (one per A-row + one per B-col) -> V_PACK count = (WM+WN)*8, not WM*WN*16
+    packs = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "V_PACK"]
+    self.assertEqual(len(packs), (4 + 4) * 8, f"expected 64 V_PACK (each fragment packed ONCE), got {len(packs)}")
+    self.assertEqual(len(set(u.tag for u in packs)), 64, "each pack pinned to a distinct resident VGPR")
+    # (c) _vpool excludes EXACTLY the LOW accumulator region AND the resident A/B window (collision -> v_wmma clobbers a live virtual)
+    pool = {r.index for r in _vpool(ictx)}
     self.assertEqual(len(pool & acc_idx), 0, "_vpool must exclude the LOW accumulator VGPRs")
-    ab_window = set(range(FRAG_BASE, FRAG_BASE + 16))                            # the reused A + B pair (2 * 8 VGPRs)
-    self.assertEqual(len(pool & (set(ab) | ab_window)), 0, "_vpool must exclude the A/B fragment window")
-    self.assertTrue(ab_window.isdisjoint(acc_idx), "A/B window and LOW accumulator region must not overlap")
+    self.assertEqual(len(pool & ab_idx), 0, "_vpool must exclude the resident A/B fragment window")
     self.assertEqual(_acc_top(ictx), WMMA_ACC_BASE + 16 * 8, "reserved LOW region top = base + 128")
-    self.assertEqual(min(pool), _acc_top(ictx), "virtuals start immediately above the LOW accumulator region")
-    # (e) every physical VGPR the MODEL pins is inside the 256 file (accumulators [8,135], A/B [200,215], pool <=255)
-    self.assertLess(max(acc_idx | set(ab) | {ab[-1] + 7} | pool), 256)
+    self.assertEqual(min(pool), _acc_top(ictx) + 8 * 8, "virtuals start immediately above the accumulator + resident A/B regions")
+    # (e) every physical VGPR the MODEL pins is inside the 256 file (accumulators [8,135], A/B [136,199], pool <=255)
+    self.assertLess(max(acc_idx | ab_idx | pool), 256)
+    # budget: WM*WN*8 accumulators (128) + (WM+WN)*8 resident A/B (64) = 192 physical VGPRs pinned, < 256
+    self.assertEqual(len(acc_idx | ab_idx), 128 + 64)
 
   def test_4_subtile_end_to_end_assembles(self):
     # 64x64x64 WM=4 (one UPCAST) -> 4 subtiles (32 acc VGPRs): fits the file and lowers all the way to a binary with NO
@@ -256,6 +267,30 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     # (f) assembles clean: 4 in-place v_wmma + a non-empty binary
     mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
     self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 4, "one v_wmma per subtile in the rendered list")
+    self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
+
+  def test_16_subtile_end_to_end_no_spill(self):
+    # B0.M per-row/col residency killer check: 64x64x64 WM=WN=4 (16 subtiles, 128 acc + 64 resident A/B VGPRs) lowers all
+    # the way to a binary with NO spill. BEFORE residency this SPILLED ("Inc 0: no spills") because all 16 subtiles
+    # re-packed A/B into ONE reused 16-VGPR pair (16*16 = 256 packs contending). AFTER: each A-row / B-col is packed ONCE
+    # (WM+WN = 8 fragment sets, 64 packs pinned to 64 distinct regs) -> the constraint is satisfiable -> no spill.
+    prg = to_program(_tc_matmul_ast_multitile(2), self.ren)   # must NOT raise NotImplementedError("no spills")
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    insts = lin_uop.src
+    mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
+    # one v_wmma per subtile, and each fragment packed ONCE -> (WM+WN)*8 = 64 v_pack (NOT WM*WN*16 = 256)
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16, "16 in-place v_wmma (one per subtile)")
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), (4 + 4) * 8, "64 v_pack: each A-row/B-col packed once")
+    # every VGPR index stays inside the 256 file
+    vidx = set()
+    for u in insts:
+      if isinstance(u.arg, tuple): continue
+      for name, _field in u.arg._fields:
+        v = getattr(u.arg, name)
+        if isinstance(v, Reg):
+          for o in range(v.offset, v.offset + v.sz):
+            if o >= 256: vidx.add(o - 256)
+    self.assertLess(max(vidx), 256, "no VGPR index escapes the 256 file")
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
 
 

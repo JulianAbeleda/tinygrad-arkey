@@ -127,19 +127,56 @@ def _acc_top(ctx:IselContext) -> int:
   # before any subtile is lazily allocated (else an early virtual could land on a not-yet-allocated accumulator VGPR).
   return WMMA_ACC_BASE + _n_c_runs(ctx) * 8 if _c_low(ctx) else 0
 
+# ---- B0.M per-row/col A/B fragment RESIDENCY (multi-output-tile only). A WM x WN grid of 16x16 subtiles has only WM
+# DISTINCT A fragments (one per M-row) and WN DISTINCT B fragments (one per N-col): subtile (m,n) reads A_m and B_n.
+# The A operand carrier (wmma.src[0]) is the SAME UOp for every subtile in an M-row and the B carrier (src[1]) is the
+# same for every subtile in an N-col (structural dedup -> identical id), so id(src[0]) IS the row key and id(src[1]) the
+# col key -- no swizzle reverse-engineering. We pack each of the WM A- and WN B-fragments ONCE (resident) and share it
+# across its row/col, instead of re-packing A and B per subtile into a single reused 16-VGPR pair (which forced WM*WN
+# re-packs -> overlapping pack lifetimes -> spill). The resident fragments live in a LOW window ABOVE the accumulators
+# [_acc_top, _ab_top); with the C accumulators (WM*WN*8) that is WM*WN*8 + (WM+WN)*8 physical VGPRs (192 for a 4x4 tile).
+def _n_ab_frags(ctx:IselContext) -> int:
+  # distinct A-row carriers + distinct B-col carriers across the ROLLED multi-tile WMMAs (== WM + WN). Computed UPFRONT
+  # from ctx.uses so _vpool can reserve the whole resident A/B window before any fragment is lazily allocated.
+  if (n := getattr(ctx, "_nabfrags", None)) is None:
+    As, Bs = set(), set()
+    for u in ctx.uses:
+      if u.op is not Ops.WMMA: continue
+      c2 = u.src[2]
+      if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
+         and (dr := _reg_base(c2.src[0].src[0].src[0])).op is Ops.DEFINE_REG and dr.dtype.addrspace == AddrSpace.REG:
+        As.add(id(u.src[0])); Bs.add(id(u.src[1]))
+    n = ctx._nabfrags = len(As) + len(Bs)
+  return n
+def _ab_top(ctx:IselContext) -> int:
+  # top of the reserved LOW resident A/B window (multi-tile only); virtuals + the freed high [FRAG_BASE,..) start here.
+  return _acc_top(ctx) + _n_ab_frags(ctx) * 8 if _c_low(ctx) else 0
+def _ab_base(ctx:IselContext, key) -> int|None:
+  # LOW resident A/B fragment allocator (multi-tile): each distinct A-row / B-col `key` gets an 8-aligned, contiguous,
+  # 8-VGPR run placed ABOVE the accumulator region [WMMA_ACC_BASE, _acc_top), packed ONCE and reused across the row/col.
+  # Bump-by-8 keeps every run 8-aligned. None if it would collide with the high fragment window (caller fails loud).
+  d = getattr(ctx, "_abfrag", None)
+  if d is None: d = ctx._abfrag = {}
+  if key not in d:
+    top = getattr(ctx, "_abfrag_top", _acc_top(ctx))
+    base = (top + 7) // 8 * 8
+    if base + 8 > FRAG_BASE: return None            # resident A/B window [_acc_top, FRAG_BASE) exhausted
+    d[key] = base; ctx._abfrag_top = base + 8
+  return d[key]
+
 def _vpool(ctx:IselContext):
   # reserve v0 (packed workitem ids). RA4: when AMD_ISA_REG_ACCUM, also reserve the LOW pin range v1..v16 for pinned
   # accumulators (kept OUT of the normal pool so regalloc never assigns a virtual to a pin); virtuals start at v17.
   # B0.L5: when a WMMA is present, ALSO exclude the A/B fragment window [FRAG_BASE, FRAG_TOP) so regalloc virtuals never
   # collide with the pinned A/B fragment VGPRs allocated by _frag_base.
-  # B0.M: a multi-output-tile WMMA reserves the LOW C-accumulator region [WMMA_ACC_BASE, _acc_top) AND the reused A/B pair
-  # (exactly 2 fragments = [FRAG_BASE, FRAG_BASE+16)); virtuals take everything else below the 256-file top -- both the gap
-  # [_acc_top, FRAG_BASE) and the tail [FRAG_BASE+16, 256) above A/B (the legacy high window's upper half is unused when
-  # only A/B live there, so it is reclaimed to relieve pressure -> no spill). Single-tile keeps the legacy 3-fragment high
+  # B0.M: a multi-output-tile WMMA reserves the LOW C-accumulator region [WMMA_ACC_BASE, _acc_top) AND the resident A/B
+  # window [_acc_top, _ab_top) (WM row + WN col fragments, each packed once). Virtuals take the whole tail [_ab_top, 256):
+  # the high fragment window [FRAG_BASE, FRAG_TOP) is now entirely FREE for multi-tile (A/B moved LOW next to the
+  # accumulators), so it is reclaimed to relieve pressure -> no spill. Single-tile keeps the legacy 3-fragment high
   # window [FRAG_BASE, FRAG_TOP) fully reserved (virtuals [lo, FRAG_BASE)), unchanged.
   lo = ACCUM_PIN_TOP if getenv("AMD_ISA_REG_ACCUM", 0) else 1
   if not _has_wmma(ctx): return VBASE[lo:]
-  if _c_low(ctx): return VBASE[max(lo, _acc_top(ctx)):FRAG_BASE] + VBASE[FRAG_BASE + 16:256]
+  if _c_low(ctx): return VBASE[max(lo, _ab_top(ctx)):256]
   return VBASE[lo:FRAG_BASE]
 
 class AMDOps(FastEnum):
@@ -514,6 +551,25 @@ def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bb
   outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
   return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
 
+# B0.M residency: pack a 16-fp16 fragment carrier into the 8 VGPRs [base, base+8) EXACTLY as _build_wmma_tile does
+# (element e -> reg base+e//2, e%2 low/high half via v_pack_b32_f16), but MEMOIZED on the carrier identity so a
+# per-row A / per-col B fragment is packed ONCE and every subtile in that row/col shares the resident 8-VGPR run.
+def _pack_frag(ctx:IselContext, carrier:UOp, base:int) -> tuple[UOp,...]:
+  memo = ctx._frag_pack = getattr(ctx, "_frag_pack", {})
+  if (pk := memo.get((id(carrier), base))) is not None: return pk
+  E = _wmma_elems(carrier, 16)
+  pk = tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
+  memo[(id(carrier), base)] = pk
+  return pk
+
+# B0.M residency: build ONE subtile v_wmma from ALREADY-PACKED resident A/B fragments (apk,bpk) + this subtile's 8 cin
+# accumulator lanes. Same element/lane order as _build_wmma_tile (A0..A7,B0..B7,C0..C7; def -> cbase) -- only the packs
+# are hoisted out (shared) instead of rebuilt per subtile. Returns the 8-lane D output carrier.
+def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,...], cin:list[UOp], cbase:int):
+  wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin), arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
+  outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
+  return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
+
 # B0.K: K-reduction (K>16) accumulates IN PLACE. postrange.py:324 + the devectorizer's `WMMA+add -> WMMA(src2+=add)` fold
 # (devectorizer.py:357) shape the K>16 reduce as a CHAIN of Ops.WMMA nodes: the head's src[2] is the 8-lane CONST-0
 # accumulator seed, and every later tile's src[2] IS the prior Ops.WMMA node (its D output = the running accumulator).
@@ -537,16 +593,25 @@ def isel_wmma(ctx:IselContext, x:UOp):
     after = c2.src[0].src[0].src[0]             # AFTER(DEFINE_REG, acc_init stores..., reduce_range) -- keeps init reachable
     idx0 = c2.src[0].src[0].src[1]              # lane-0 accumulator index -> subtile = idx0//8 (compile-time)
     subtile = idx0.arg // 8 if idx0.op is Ops.CONST else 0
-    # B0.M: SAME keying as isel_index -> the shared in-place C fragment for THIS subtile. Multi-tile -> LOW per-subtile
-    # run; single-tile -> legacy high fragment. A/B stay a SINGLE reused (id(dreg),"A"/"B") pair (K-serial reload) in the
-    # high [200,238) window for ALL subtiles -- correct (each v_wmma repacks A/B before it reads them); per-row/col A/B
-    # residency is a later ILP optimisation.
-    cbase = _acc_base(ctx, (id(dreg), subtile)) if _c_low(ctx) else _frag_base(ctx, id(dreg), 8)
+    # B0.M: SAME C keying as isel_index -> the in-place C fragment for THIS subtile. Multi-tile -> LOW per-subtile run;
+    # single-tile -> legacy high fragment. cin: 8 zero-cost MOVs (lower to nothing) pinned to the C fragment -> v_wmma
+    # reads src2==vdst==cbase in place. Their src is the raw AFTER so the acc_init stores get isel'd (PRE-loop V_CONST).
+    if _c_low(ctx):
+      # B0.M RESIDENCY: A/B keyed on the OPERAND carrier identity -> WM distinct A-row + WN distinct B-col resident
+      # 8-VGPR runs in the LOW window [_acc_top, _ab_top). Each fragment is packed ONCE (memoized in _pack_frag) and
+      # shared by every subtile in its row/col -> WM+WN pack-sets total (not WM*WN), so the pack lifetimes never contend.
+      cbase = _acc_base(ctx, (id(dreg), subtile))
+      abase = _ab_base(ctx, ("A", id(x.src[0]))); bbase = _ab_base(ctx, ("B", id(x.src[1])))
+      if cbase is None or abase is None or bbase is None:
+        raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={abase} B={bbase} C={cbase})")
+      cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+      apk, bpk = _pack_frag(ctx, x.src[0], abase), _pack_frag(ctx, x.src[1], bbase)
+      return memo.setdefault(x, _build_wmma_from_packs(ctx, apk, bpk, cin, cbase))
+    # single-tile rolled (k64-rolled / 16x16x64): legacy shared A/B high-window pair (byte-identical), one v_wmma in loop.
+    cbase = _frag_base(ctx, id(dreg), 8)
     abase = _frag_base(ctx, (id(dreg), "A"), 8); bbase = _frag_base(ctx, (id(dreg), "B"), 8)
     if cbase is None or abase is None or bbase is None:
       raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
-    # cin: 8 zero-cost MOVs (lower to nothing) pinned to the C fragment -> v_wmma reads src2==vdst==cbase in place. Their
-    # src is the raw AFTER so the acc_init stores get isel'd (PRE-loop V_CONST) and stay reachable through the WMMA.
     cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
     return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, ()))
   chain = [x]                                   # outermost .. head

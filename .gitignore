@@ -104,3 +104,5 @@ linux-*psp*.log
 linux-*vram*.log
 linux-*dense*.log
 linux-*audit*.log
+
+.claude/
