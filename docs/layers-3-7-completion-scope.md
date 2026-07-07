@@ -27,18 +27,16 @@ TFLOPS parity at the same clock policy.
 COMPLETE = `Ops.WMMA` lowers to `v_wmma_f32_16x16x16_f16` with correct fragment operands. DONE, AMD bit-exact
 (16x16x16 rmse 8.4e-4; rolled any-K rmse 1.6e-3). No remaining work. (`isel_wmma`, `lower_inst` V_WMMA.)
 
-## LAYER 5 — register allocation — ~70% (isel done; epilogue pressure blocks the 4x4 tile)
+## LAYER 5 — register allocation — COMPLETE (100%)
 COMPLETE = the blueprint's 4x4 register tile (16 accumulators = 128 VGPRs + A/B frags) allocates within the 256-VGPR
 file with NO spill, INCLUDING the epilogue store-address pressure.
 - DONE: LOW per-subtile accumulator model (`_acc_base`, `WMMA_ACC_BASE=8`, per-subtile key `(id(dreg), idx.arg//8)`),
   `_vpool` exclusion. Single/rolled/chain paths unchanged. (`amd.py` accumulator region + `_frag_base` split.)
-- REMAINING (the blocker): the store epilogue holds all WM*WN*8 output-store-address VGPRs live simultaneously
-  (linearizer computes all 128 addresses before storing) -> 128 acc + 128 offsets > 256 -> spill. FIX (pick one,
-  least-invasive first): (i) fold the constant per-element offset into the `global_store` immediate field where it fits
-  (+-4096); (ii) an epilogue store-address rescheduling that interleaves compute-address/store so few offsets are live.
-  This is a SCHEDULING concern, NOT a new register mechanism.
+- DONE: 4x4 terminal blocker fixed in `11396c605`. The generated post-loop epilogue was reusing high WMMA scratch
+  `v201/v202`; `_vpool` now reclaims the low `v1..v7` alignment pad as scalar scratch for multi-output WMMA, so epilogue
+  temps avoid the high WMMA scratch band. The I0 generated 4x4 harness remu-passes and GPU-passes with no env flags.
 - REUSE: `_acc_base`/`_frag_base` (no new allocator); the immediate-offset already threaded in GLOBAL_STORE lowering.
-- GATE: DEV=AMD 512x512x512 + 512x4096x4096 bit-exact + no spill with a fitting tile (2x2 first, then 4x4).
+- GATE: `extra/qk/prefill/gen4x4_i0_harness.py --remu/--gpu`, plus `test/unit/test_amd_isa_wmma.py`.
 
 ## LAYER 3 — instruction selection — ~75% (WMMA done; b128 loads missing = the 16x inflation)
 COMPLETE = fragment loads emit `global_load_b128` (one 128-bit load per 8-VGPR half-fragment pair), matching the
@@ -77,8 +75,8 @@ double-buffered), matching the blueprint's load-ahead + `vmcnt(8)` cadence.
 ---
 
 ## Ordered task list (dependency order; each gated bit-exact-first, same-clock TFLOPS)
-1. **L5 epilogue pressure** -> a fitting tile RUNS at real shapes (unblocks the first fair TFLOPS).
-2. **L3 b128 loads** -> ~16x fewer load instructions (largest single TFLOPS lever).
+1. **DONE: L5 epilogue pressure** -> generated 4x4 now runs on GPU; yesterday's NaN roadblock is closed.
+2. **L3 b128 loads** -> ~16x fewer load instructions (largest single TFLOPS lever toward the hand trace).
 3. **L6 targeted vmcnt** -> remove full-drain serialization.
 4. **L4 DBUF overlap** -> next-tile loads hide behind compute -> converge on the 246-instruction blueprint / hand TFLOPS.
 5. **Delete** `extra/qk/prefill/wmma.py` + the raw-`Ops.INS` route; confirm `PURE_MACHINE_SEARCH_ONLY=1`.
@@ -87,7 +85,17 @@ double-buffered), matching the blueprint's load-ahead + `vmcnt(8)` cadence.
 COMPLETE = a generated (no `Ops.INS`) prefill GEMM whose per-block instruction histogram matches the hand blueprint
 (32 b128 loads / 16 v_wmma / targeted vmcnt / epilogue) AND matches hand TFLOPS at the same clock policy, for every
 8B role shape (attn_qo/kv 4096/1024, ffn gate_up 12288, ffn_down) -- then wmma.py is deleted. Layers 1-2 (searched
-schedule) and 8-9 (assemble/run) already deliver; 7 is done; 3/4/5/6 above are the exhaustive remaining set.
+schedule) and 8-9 (assemble/run) already deliver; 5 and 7 are done; 3/4/6 above are the exhaustive remaining ISA
+handtrace-parity set.
+
+## Post-L5 benchmark readout (2026-07-07)
+- `prefill_v2_schedule_table_gate --run-amd --pin-clock --compact`: PASS, measured 35.31 TFLOPS for 4096x4096 and
+  37.00 TFLOPS for 5120x5120.
+- `prefill_graph_gemm_medium_stage_gate --run-amd --pin-clock --compact`: still BLOCKED. Baseline table-local is
+  35.46 TFLOPS; B tile staging is 35.21 TFLOPS; cooperative B executes but the rewrite is skipped because source B has a
+  non-lane `GLOBAL` range outside warp+reduce.
+- Conclusion: no new whole-prefill bench is useful yet. The next codegen work is still L3 b128 for ISA handtrace parity
+  and/or the route-bound cooperative-B ownership fix for 8B medium staging.
 
 Reference: reverse-engineered blueprint (docs + tmp/reverse_lds2.py); hand trace (prefill_gen_sched_gemm 85% of forward,
 ffn gate/up 42%); census `docs/prefill-substrate-layer-census-20260706.md`; `docs/track-b-100pct-scope.md`.

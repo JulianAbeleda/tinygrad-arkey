@@ -59,17 +59,17 @@ cannot reach the hand kernel's ~58. So a "done" HIP layer that can't own pipelin
 |---|---|---:|---|
 | 1 | Tensor/IR | **100%** | device-independent UOp graph; done |
 | 2 | Schedule/tiling | **100%** | `OptOps` TC/UPCAST/LOCAL/UNROLL/PADTO (`opt/__init__.py:6-9`, `postrange.py`); warmstart injects searched schedules (`postrange.py:541-564`) |
-| 3 | Instruction selection (ISA) | **70%** | 44 `AMDOps` cover scalar/VALU/LDS/global/loops/index (`isa/amd.py:57-83,358-399`); **missing `Ops.WMMA` isel + wide-mem b128** |
-| 4 | Instr. scheduling / pipelining | **25%** | list scheduler exists (`isa/amd.py:676`); **no modulo/software-pipeline**; the DBUF codegen scaffold is a *shape* only (`postrange.py:_prefill_dbuf_peel`), overlap unproven |
-| 5 | Register allocation (ISA) | **40%** | single-VGPR linear-scan + pools (`isa/amd.py:33-42`); **no consecutive-VGPR fragment ranges** (the WMMA A/B/C tuples); no spill (`:625-629`) |
+| 3 | Instruction selection (ISA) | **75%** | scalar/VALU/LDS/global/loops/index and `Ops.WMMA` lower on the native ISA path; **wide-mem b128 fragment loads remain missing** |
+| 4 | Instr. scheduling / pipelining | **30%** | list scheduler is span-aware and `v_wmma` latency is modeled; **no proven load/compute overlap or modulo/software-pipeline yet** |
+| 5 | Register allocation (ISA) | **100%** | multi-output WMMA uses low contiguous accumulator/A/B fragment windows and reclaims `v1..v7` scalar scratch for epilogues; generated 4x4 remu/GPU passes |
 | 6 | Async-mem sync / waitcnt (ISA) | **40%** | `_insert_waitcnt` works but **full-drain `s_waitcnt(0)` only** (`isa/amd.py:747-792`); no targeted `vmcnt(n)` |
-| 7 | Tensor-core instruction (ISA) | **5%** | **absent in the ISA renderer** (no WMMA op/emit); encoding IS available in autogen (`rdna3/ins.py:1764`) but not wired |
+| 7 | Tensor-core instruction (ISA) | **100%** | `Ops.WMMA` emits `v_wmma_f32_16x16x16_f16`; rolled any-K and 4x4 generated harnesses are bit-correct |
 | 8 | Assembly / object | **100%** | `assemble_linear`→ELF complete (`amd/elf.py:15`); autogen encodes every needed instr; **proven by the hand kernel end-to-end** |
 | 9 | Hardware | **100%** | gfx1100 characterized (WMMA units, vmcnt/lgkmcnt, VGPR≥238 trap known) |
 
-**AMD rollup:** floor (8) and top (1–2) done; the entire gap is the middle band (3/4/5/6/7) on the ISA renderer.
-**Critical path (hardest → do first):** L7 WMMA emit + L5 fragment regalloc (== "B0"), then L4/L6 pipelining +
-targeted waitcnt (== "B1"). L3 wide-mem + L8-adjacent are supporting.
+**AMD rollup:** floor (8), top (1–2), tensor-core emit (7), and WMMA register allocation (5) are done on the native ISA
+path. The remaining handtrace-parity gap is concentrated in L3 b128 fragment loads, L6 targeted waitcnt, and L4
+load/compute overlap. The current measured table-local generated path remains ~35-37 TFLOPS, below the hand trace class.
 
 ---
 
