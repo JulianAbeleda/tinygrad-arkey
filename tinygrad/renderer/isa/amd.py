@@ -580,7 +580,23 @@ def isel_wmma(ctx:IselContext, x:UOp):
     prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
   return memo[x]
 
+def _chain_epilogue_stores(ctx:IselContext, x:UOp):
+  # L5: serialize the multi-output-tile store epilogue (thread offset_k -> store_{k-1} as an IGNORED trailing src) so the
+  # linearizer emits offset_0,store_0,offset_1,store_1,... -> short live ranges, regalloc reuses a tiny pool (not 128).
+  if not _c_low(ctx) or getattr(ctx, "_epi_chained", False): return None
+  stores = [u for u in x.toposort() if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE]
+  if len(stores) < 2: return None
+  ctx._epi_chained = True
+  subs:dict[UOp,UOp] = {}; prev = stores[0]
+  for st in stores[1:]:
+    off = st.src[0]
+    new_off = off.replace(src=off.src + (prev,))
+    new_st = st.replace(src=(new_off,) + st.src[1:])
+    subs[st] = new_st; prev = new_st
+  return x.substitute(subs)
+
 isel_matcher = PatternMatcher([
+  (UPat(Ops.SINK, name="x"), _chain_epilogue_stores),   # L5: serialize the multi-tile store epilogue (fires last, root)
   (UPat(Ops.PARAM, name="x"), isel_param),
   (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
   (UPat(Ops.SPECIAL, name="x"), isel_special),
