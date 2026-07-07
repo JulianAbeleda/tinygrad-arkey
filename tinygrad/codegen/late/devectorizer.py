@@ -80,6 +80,8 @@ def expand_index(ctx, buf:UOp, vec:UOp):
 
 def fold_expanded_index(midx:UOp):
   buf = midx.src[0].src[0]
+  if not isinstance(buf.dtype, PtrDType): return None
+  buf_size = buf.ptrdtype.size if buf.ptrdtype.size != -1 else buf.max_numel()
   if not all(s.src[0] is buf for s in midx.src): return None
   if not all(isinstance(s.dtype, PtrDType) for s in midx.src): return None
 
@@ -99,6 +101,7 @@ def fold_expanded_index(midx:UOp):
   ret = []
   idxs: list[int|None] = [None]*len(midx.src)
   global_offset = 0
+  if buf.addrspace == AddrSpace.LOCAL and getenv("PREFILL_TC_LOCAL_STAGE_COOP_POST", 0): return None
   no_group = getenv("DEVECTORIZE_NO_PTR_GROUP", 0)
   for offsets in offsets_rootsrc.values():
     grouped_offsets = [[x] for x in sorted(offsets.keys())] if no_group else \
@@ -106,7 +109,7 @@ def fold_expanded_index(midx:UOp):
     for grp in grouped_offsets:
       # get the index offset for this element. using [0] is okay, because they are the same
       lidx = midx.src[offsets[grp[0]][0]]
-      if len(grp) > 1: lidx = lidx.cast(buf.ptrdtype.base.vec(len(grp)).ptr(size=buf.max_numel(), addrspace=buf.addrspace))
+      if len(grp) > 1: lidx = lidx.cast(buf.ptrdtype.base.vec(len(grp)).ptr(size=buf_size, addrspace=buf.addrspace))
       # set the idxs of the output
       for i,g in enumerate(grp):
         for oo in offsets[g]: idxs[oo] = global_offset+i
@@ -115,7 +118,7 @@ def fold_expanded_index(midx:UOp):
       global_offset += len(grp)
   assert None not in idxs, f"some idxs are missing {idxs}"
   # this base thing is for image, we want the CAT to be a normal pointer
-  post_cat = UOp(Ops.PTRCAT, buf.ptrdtype.base.ptr(size=buf.max_numel(), addrspace=buf.addrspace).vec(global_offset), tuple(ret))
+  post_cat = UOp(Ops.PTRCAT, buf.ptrdtype.base.ptr(size=buf_size, addrspace=buf.addrspace).vec(global_offset), tuple(ret))
   return post_cat.gep(tuple(cast(list[int], idxs)))
 
 def _gep_local_ptrcat(g:UOp, cat:UOp):
@@ -139,13 +142,18 @@ def cat_after_store(cat:UOp, data:UOp):
     offset += s.dtype.count
   return UOp.group(*ret)
 
-def gep_on_store(gep:UOp, st:UOp):
+def stack_load(tgt:UOp, ld:UOp) -> UOp|None:
+  if ld.dtype.count != len(tgt.src): return None
+  if not all(isinstance(p.dtype, PtrDType) for p in tgt.src): return None
+  return UOp(Ops.STACK, ld.dtype, tuple(p.load(dtype=ld.dtype.scalar()) for p in tgt.src))
+
+def gep_on_store(gep:UOp, st:UOp, gate:UOp|None=None):
   # NOTE: we need to invert the gep here, but it may be an expanding gep
   # fake argsort. TODO: handle duplicates
   a = {}
   for i,x in enumerate(gep.arg): a[x] = i
   new_arg = tuple(x[1] for x in sorted(a.items()))
-  return gep.src[0].store(st.gep(new_arg))
+  return gep.src[0].store(st.gep(new_arg), gate)
 
 load_store_folding = PatternMatcher([
   (UPat(Ops.PTRCAT, name="cat"), lambda cat: cat.src[0] if len(cat.src) == 1 and cat.dtype == cat.src[0].dtype else None),
@@ -155,7 +163,9 @@ load_store_folding = PatternMatcher([
   # GEP after LOAD
   (UPat(Ops.LOAD, src=(UPat(Ops.GEP, name="gep"),), name="ld", allow_any_len=True),
    lambda gep, ld: ld.replace(dtype=ld.dtype.scalar().vec(gep.dtype.count), src=(gep.src[0],)+ld.src[1:]).gep(gep.arg)),
+  (UPat(Ops.LOAD, src=(UPat(Ops.STACK, name="tgt"),), name="ld"), stack_load),
   # GEP on data of STORE
+  (UPat(Ops.STORE, src=(UPat(Ops.GEP, name="gep"), UPat.var("st"), UPat.var("gate"))), gep_on_store),
   (UPat(Ops.STORE, src=(UPat(Ops.GEP, name="gep"), UPat.var("st"))), gep_on_store),
   # put PTRCAT after LOAD
   (UPat(Ops.LOAD, src=(UPat(Ops.PTRCAT, name="cat"),), name="ld", allow_any_len=True),
@@ -200,13 +210,14 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
   # split based on the fold lengths
   global_offset = 0
   ret = []
+  buf_size = buf.ptrdtype.size if isinstance(buf.dtype, PtrDType) and buf.ptrdtype.size != -1 else buf.max_numel()
   while global_offset < sz:
     # with 1 at the end of the lengths list, this will always hit
     for fold_length in lengths:
       if global_offset+fold_length > sz: continue
       lidx = buf.index((offset + global_offset).valid(mask), ptr=True)
-      if fold_length > 1: lidx = lidx.cast(buf.ptrdtype.base.vec(fold_length).ptr(size=buf.max_numel(), addrspace=buf.addrspace))
-      if ls.op is Ops.STORE: ret.append(ls.replace(src=(lidx,ls.src[1].gep(tuple(range(global_offset, global_offset+fold_length))))))
+      if fold_length > 1: lidx = lidx.cast(buf.ptrdtype.base.vec(fold_length).ptr(size=buf_size, addrspace=buf.addrspace))
+      if ls.op is Ops.STORE: ret.append(ls.replace(src=(lidx,ls.src[1].gep(tuple(range(global_offset, global_offset+fold_length))))+ls.src[2:]))
       else: ret.append(ls.replace(src=(lidx,)+ls.src[1:], dtype=ls.dtype.scalar().vec(fold_length)))
       global_offset += fold_length
       break

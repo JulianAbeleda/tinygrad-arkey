@@ -376,6 +376,9 @@ def _tc_local_stage_coop_b_post_opt() -> bool:
 def _tc_local_stage_coop_post_opt() -> bool:
   return bool(getenv("PREFILL_TC_LOCAL_STAGE_COOP_POST", 0))
 
+def _prefill_lds_pack_post_expand() -> bool:
+  return bool(getenv("PREFILL_LDS_PACK_POST_EXPAND", 0))
+
 _tc_local_stage_coop_b_stats = {"seen": 0, "rewritten": 0, "dumped": 0, "skipped": 0}
 
 
@@ -492,25 +495,24 @@ def _tc_local_stage_coop_operand(wmma:UOp, operand_idx:int) -> UOp|None:
   slot = ((kr % nbuf) * tile_count + tile_idx) * 256 if kr is not None else tile_idx * 256
   bsh = UOp.placeholder((base,), src.dtype.scalar(), 990 + operand_idx, addrspace=AddrSpace.LOCAL)
 
-  # Import here to avoid importing AMD renderer for non-target compile paths at module import time.
-  from tinygrad.renderer.isa.amd import AMDOps, Register
-
-  pack_tag_base = _TC_LOCAL_STAGE_DF_PACK_START
-  pack_tags = tuple((Register(f"v{pack_tag_base + i}", pack_tag_base + i),) for i in range(4))
-
   def _slot_idx(i:int|UOp) -> UOp:
     return slot + row*16 + i
 
-  first_half_pairs = ((0, 1), (2, 3), (4, 5), (6, 7))
-  second_half_pairs = ((8, 9), (10, 11), (12, 13), (14, 15))
-  store_groups = ((first_half_pairs, 0), (second_half_pairs, 8))
-
   stores: list[UOp] = []
-  for group_pairs, store_slot in store_groups:
-    packed_words = tuple(UOp(Ops.INS, dtypes.int32, src=(src.gep(i0), src.gep(i1)), arg=AMDOps.V_PACK, tag=pack_tags[i])
-                         for i, (i0, i1) in enumerate(group_pairs))
-    carry = UOp(Ops.NOOP, dtypes.int32.vec(4), src=packed_words)
-    stores.append(bsh.index(_slot_idx(store_slot), dtype=bsh.dtype).store(carry, lane < 16).end())
+  if _prefill_lds_pack_post_expand():
+    # E3 diagnostic branch. This intentionally remains flag-only: placing V_PACK here is currently too early and is
+    # expected to fail verifier on route-shaped 4x4. Keep it isolated so E1/E2 can be tested without interference.
+    from tinygrad.renderer.isa.amd import AMDOps, Register
+    pack_tag_base = _TC_LOCAL_STAGE_DF_PACK_START
+    pack_tags = tuple((Register(f"v{pack_tag_base + i}", pack_tag_base + i),) for i in range(4))
+    store_groups = ((((0, 1), (2, 3), (4, 5), (6, 7)), 0), (((8, 9), (10, 11), (12, 13), (14, 15)), 8))
+    for group_pairs, store_slot in store_groups:
+      packed_words = tuple(UOp(Ops.INS, dtypes.int32, src=(src.gep(i0), src.gep(i1)), arg=AMDOps.V_PACK, tag=pack_tags[i])
+                           for i, (i0, i1) in enumerate(group_pairs))
+      carry = UOp(Ops.NOOP, dtypes.int32.vec(4), src=packed_words)
+      stores.append(bsh.index(_slot_idx(store_slot), dtype=bsh.dtype).store(carry, lane < 16).end())
+  else:
+    stores = [bsh.index(_slot_idx(i), dtype=bsh.dtype).gep(0).store(src.gep(i), lane < 16).end() for i in range(16)]
 
   stage = UOp.group(*stores)
   stage_ranges = tile_ranges

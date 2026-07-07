@@ -187,8 +187,53 @@ Next viable P1 options:
    AMD isel.
 3. Generate the packed store from already-expanded scalar lanes after the expander, not inside postrange.
 
-The local pointer `PTRCAT` blocker is improved by scalarizing local `GEP(PTRCAT)` in the devectorizer, and default/focused
-tests pass, but P1 remains open until packed staging is moved to a valid pipeline layer.
+The local pointer/readback blockers are improved by:
+
+- folding gated `STORE(GEP(local_ptr), value, gate)`;
+- avoiding local pointer `PTRCAT` formation for the cooperative LDS staging path;
+- scalarizing `LOAD(STACK(local_ptrs))`;
+- using pointer dtype size instead of shape inference for effect-dependent local pointer casts.
+
+Default/focused tests pass, and A-only cooperative LDS staging is now a valid scalar-store control. P1 remains open until
+packed staging is moved to a valid pipeline layer.
+
+## Parallel P1 Experiment Plan
+
+Run all three P1 options as mutually-exclusive experiments. They should never be enabled together on the promoted path.
+
+| Branch | Flag | Implementation layer | Hypothesis | First pass gate |
+|---|---|---|---|---|
+| E1. AMD late matcher | `PREFILL_LDS_PACK_LATE_MATCHER=1` | AMD renderer/pre-regalloc or final matcher | The expanded LDS store pattern is recognizable late enough to lower directly to `DS_STORE_B128`. | SPEC-clean probe with `ds_store_b128>0`. |
+| E2. Neutral carrier | `PREFILL_LDS_PACK_CARRIER=1` | UOp/codegen IR before AMD isel | A packed-fragment carrier can survive expansion without invalid `UNROLL(STACK)`. | Graph expands cleanly and AMD isel receives one packed carrier. |
+| E3. Post-expander pack | `PREFILL_LDS_PACK_POST_EXPAND=1` | After expander, before devectorizer/regalloc | Packing after UPCAST expansion avoids the early `V_PACK` verifier failure. | SPEC-clean probe with no malformed local pointer/vector nodes. |
+
+Current experiment results, 2026-07-07:
+
+| Probe | Result | Meaning |
+|---|---|---|
+| A-only scalar control: `PREFILL_TC_LOCAL_STAGE=a PREFILL_TC_LOCAL_STAGE_COOP_POST=1 PREFILL_TC_LOCAL_STAGE_COOP_GLOBAL=1` | `ok=true`; `ds_store_b16=64`, `ds_load_b128=8`, `ds_store_b128=0`, `wmma=16`; WMMA `src0=ds_load_b128`, `src1=global_load_b128`. | The generated LDS staging substrate is now verifier-clean, but it is scalar-store and therefore not a completion candidate. |
+| E1 flag: add `PREFILL_LDS_PACK_LATE_MATCHER=1` | Same as scalar control: `ds_store_b128=0`. | The flag is scaffolded only; no late AMD matcher has been implemented yet. |
+| E2 flag: add `PREFILL_LDS_PACK_CARRIER=1` | Same as scalar control: `ds_store_b128=0`. | The flag is scaffolded only; no neutral packed carrier has been implemented yet. |
+| E3 flag: add `PREFILL_LDS_PACK_POST_EXPAND=1` | Fails verifier on `Ops.UNROLL dtypes.half` over `Ops.STACK dtypes.half.vec(4)`. | The current E3 implementation is still the early `V_PACK` diagnostic, not a true post-expander pass. |
+| Both operands: `PREFILL_TC_LOCAL_STAGE=both` | Fails `NotImplementedError: Inc 0: no spills`. | Staging both A and B exceeds the current no-spill register budget before packed stores/lifetime fixes. |
+
+Comparison gates, in order:
+
+1. `SPEC=1` verifier clean.
+2. `ds_store_b128 > 0`.
+3. Scalar fragment staging absent: no promoted-path `ds_store_b16`; no per-fragment scalar `ds_store_b32`.
+4. Full 4x4 `m_up=2` compiles with no spills.
+5. GPU correctness.
+6. Same-clock TFLOPS win.
+
+Promotion rule:
+
+```text
+only one P1 branch can become the default candidate
+```
+
+The first branch to pass gates 1-4 becomes the integration candidate for P4/P5 lifetime and slot work. The other branches
+remain diagnostic fallbacks until the promoted candidate also passes GPU/perf.
 
 ## Stop Conditions
 
