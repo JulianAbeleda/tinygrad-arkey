@@ -60,6 +60,25 @@ def _has_wmma(ctx:IselContext) -> bool:
   if (w := getattr(ctx, "_haswmma", None)) is None:
     w = ctx._haswmma = any(u.op is Ops.WMMA for u in ctx.uses)
   return w
+# ---- ROLLED-K discriminator. A default (non-UNROLL) matmul with K>16 keeps the K reduction as a ROLLED RANGE loop with
+# ONE Ops.WMMA whose src[2] is an 8-lane carrier of LOADs from a reduce accumulator (reduce_to_acc, devectorizer.py):
+# LOAD(INDEX(AFTER(DEFINE_REG in AddrSpace.REG, acc_init, reduce_range), i)). Cache id(dreg) for every DEFINE_REG that
+# feeds some WMMA src[2] so isel_index/load/store/wmma can route those accumulator accesses to the in-place C fragment
+# (v_wmma emits vdst==src2==cbase, so a fixed zero-initialised cbase range IS the loop-carried accumulator -- no movs).
+def _wmma_acc_regs(ctx:IselContext) -> set:
+  if (s := getattr(ctx, "_wmmaacc", None)) is None:
+    s = set()
+    for u in ctx.uses:
+      if u.op is not Ops.WMMA: continue
+      carrier = u.src[2]
+      if carrier.op not in (Ops.STACK, Ops.NOOP): continue
+      for lane in carrier.src:
+        if lane.op is Ops.LOAD and lane.src[0].op is Ops.INDEX:
+          dreg = _reg_base(lane.src[0].src[0])
+          if dreg.op is Ops.DEFINE_REG and dreg.dtype.addrspace == AddrSpace.REG: s.add(id(dreg))
+    ctx._wmmaacc = s
+  return s
+def _is_wmma_acc(ctx:IselContext, dreg:UOp) -> bool: return id(dreg) in _wmma_acc_regs(ctx)
 def _vpool(ctx:IselContext):
   # reserve v0 (packed workitem ids). RA4: when AMD_ISA_REG_ACCUM, also reserve the LOW pin range v1..v16 for pinned
   # accumulators (kept OUT of the normal pool so regalloc never assigns a virtual to a pin); virtuals start at v17.
@@ -250,6 +269,13 @@ def isel_index(ctx:IselContext, x:UOp):
   # and ordered. idx may be CONST (accumulator), a RANGE counter, or a runtime VGPR value (e.g. lidx-derived, Phase F).
   if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
     dreg = _reg_base(base)
+    # ROLLED-K WMMA accumulator: this REG element IS a lane of the in-place C fragment. Carry (order, v[cbase+idx]) so
+    # isel_load reads the fragment VGPR (post-loop) and isel_store inits it (pre-loop) / no-ops the ASSIGN. idx is the
+    # compile-time accumulator lane (0..7). cbase keyed on id(dreg) so isel_wmma agrees on the same 8-VGPR range.
+    if _is_wmma_acc(ctx, dreg) and idx.op is Ops.CONST:
+      cbase = _frag_base(ctx, id(dreg), 8)
+      if cbase is None: raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (C accumulator)")
+      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + idx.arg).rtag()), arg="wmma_acc")   # (order, pin)
     # RA1 pinned accumulator: per-thread REG accumulator element with a COMPILE-TIME index -> a reserved VGPR carrier.
     if _accum_enabled() and dreg.dtype.addrspace == AddrSpace.REG and idx.op is Ops.CONST and \
        (pin := _accum_pin(ctx, dreg, idx.arg)) is not None:
@@ -288,7 +314,9 @@ def isel_load(ctx:IselContext, x:UOp):
   # allocation are deferred to Inc 1+. The N loads are wrapped in a NOOP lane-carrier consumed by GEP (lane extract).
   if x.src[0].op is not Ops.NOOP: return None
   idxc = x.src[0]                            # NOOP(base_ptr, byte_offset) or LDS carrier (arg=="lds")
-  if idxc.arg == "accum":                    # RA1: read pinned accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
+  if idxc.arg in ("accum", "wmma_acc"):      # read pinned/fragment accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
+    # wmma_acc: this serves the POST-loop read (the in-loop src[2] reads are consumed directly in isel_wmma via the
+    # in-place C fragment, so they never reach isel_load). order (src[0]) keeps the END/init chain reachable + ordered.
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
   if idxc.arg == "lds":                      # LDS load -> ds_load_b32 from the carrier's address VGPR (src[0]); src[1]=order
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
@@ -303,6 +331,14 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   # expands to N scalar global_store_b32 in post_regalloc (offset=lane*itemsize). Single INS (not a NOOP wrapper) so
   # no pseudo-op survives into assemble_linear, and regalloc allocates every lane value as a normal use.
   if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset) or LDS carrier
+  if a.arg == "wmma_acc":                     # ROLLED-K WMMA accumulator element (a.src=(order, pin==v[cbase+i]))
+    # (a) acc_init store: data is CONST 0.0 (gated outside reduce_range -> PRE-loop) -> materialise the C fragment lane to
+    # 0 via a pinned V_CONST. No memory op. The span-aware scheduler RAW-edges these inits before the in-place v_wmma.
+    if b.op is Ops.CONST:
+      return UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_pin(a.src[1].arg, 0))
+    # (b) ASSIGN store: data is the WMMA D output, already written IN PLACE to v[cbase+i] by v_wmma -> a NOOP passthrough
+    # (no memory op). Keeps the WMMA def (b) + the END/range order (a.src[0]) reachable so the loop backedge is preserved.
+    return UOp(Ops.NOOP, dtypes.void, src=(_tov(ctx, b), a.src[0]))
   if a.arg == "accum":                        # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
@@ -430,6 +466,25 @@ def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bb
 def isel_wmma(ctx:IselContext, x:UOp):
   memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
   if x in memo: return memo[x]
+  # ROLLED-K path (gate): a default matmul K>16 keeps ONE Ops.WMMA in a RANGE loop whose src[2] is an 8-lane carrier of
+  # LOADs from a reduce accumulator DEFINE_REG (NOT a CONST-0 seed, NOT a prior Ops.WMMA). The C fragment is a FIXED,
+  # zero-initialised 8-VGPR range (cbase); v_wmma does C+=A*B in place every iteration, so the whole reduction is ONE
+  # v_wmma with a loop backedge -- no per-iteration accumulator movs. The acc_init store (CONST 0.0, gated PRE-loop) and
+  # the ASSIGN store (WMMA D lane) are handled in isel_store; the post-loop read in isel_load. NOTE src[2] here is RAW
+  # (bottom-up applies this rule BEFORE descending -- see the K-reduction chain note below): the acc_init stores are
+  # reachable ONLY through src[2], so we thread the raw AFTER node into cin to keep their PRE-loop V_CONST inits alive.
+  c2 = x.src[2]
+  if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
+     and _is_wmma_acc(ctx, (dreg := _reg_base(c2.src[0].src[0].src[0]))):
+    after = c2.src[0].src[0].src[0]             # AFTER(DEFINE_REG, acc_init stores..., reduce_range) -- keeps init reachable
+    cbase = _frag_base(ctx, id(dreg), 8)        # SAME key as isel_index -> the shared in-place C fragment
+    abase = _frag_base(ctx, (id(dreg), "A"), 8); bbase = _frag_base(ctx, (id(dreg), "B"), 8)
+    if cbase is None or abase is None or bbase is None:
+      raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
+    # cin: 8 zero-cost MOVs (lower to nothing) pinned to the C fragment -> v_wmma reads src2==vdst==cbase in place. Their
+    # src is the raw AFTER so the acc_init stores get isel'd (PRE-loop V_CONST) and stay reachable through the WMMA.
+    cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+    return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, ()))
   chain = [x]                                   # outermost .. head
   while (c := chain[-1].src[2]).op is Ops.WMMA: chain.append(c)
   head = chain[-1]

@@ -26,6 +26,15 @@ def _tc_matmul_ast_k64():
   return ast.replace(arg=replace(ast.arg, opts_to_apply=opts))
 
 
+def _tc_matmul_ast_k64_rolled():
+  # a forced-TC 16x16x64 half matmul with the K axis LEFT ROLLED (no UNROLL) -> ONE Ops.WMMA in a RANGE loop with a
+  # reduce accumulator (reduce_to_acc). wmma.src[2] is an 8-lane carrier of LOADs from the accumulator DEFINE_REG.
+  a = Tensor.empty(16, 64, dtype="half"); b = Tensor.empty(64, 16, dtype="half")
+  lin = (a @ b).schedule_linear()
+  ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+  return ast.replace(arg=replace(ast.arg, opts_to_apply=(Opt(OptOps.TC, axis=0, arg=(0, 0, 1)),)))
+
+
 class TestAMDISAWmmaStructuralGate(unittest.TestCase):
   # DEV=PYTHON structural gate for B0.L7. NO numerical check (needs DEV=AMD -> parent's 16x16x16 bit-exact gate).
   def setUp(self):
@@ -100,6 +109,62 @@ class TestAMDISAWmmaKReduceGate(unittest.TestCase):
     vdst, src0, src1, src2 = [s.strip() for s in inner.rstrip(")").split(",")]
     self.assertEqual(vdst, src2, f"in-place accumulate requires vdst==src2, got {vdst} vs {src2}")
     # (d) assembled to a non-empty binary without raising
+    self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
+
+
+class TestAMDISAWmmaRolledKGate(unittest.TestCase):
+  # ROLLED-K DEV=PYTHON structural gate: a K=64 (RANGE loop, NOT unrolled) half matmul must lower to ONE in-place
+  # v_wmma in the loop body over a FIXED zero-initialised C fragment -- no per-iteration accumulator movs, no LDS.
+  # NO numerical check (that is the parent's 16x16x64 + 64x64x64 bit-exact gate on DEV=AMD).
+  def setUp(self):
+    self.ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+
+  def test_rolled_reaches_isel_and_one_accumulator(self):
+    ast = _tc_matmul_ast_k64_rolled()
+    fs = full_rewrite_to_sink(ast, self.ren, optimize=True)
+    self.assertEqual(len([u for u in fs.toposort() if u.op is Ops.WMMA]), 1, "rolled K must keep exactly one Ops.WMMA")
+    self.assertEqual(len([u for u in fs.toposort() if u.op is Ops.RANGE]), 1, "rolled K must keep the reduce RANGE loop")
+    fs = graph_rewrite(fs, self.ren.pre_isel_matcher, ctx=itertools.count(-1, -1), name="pre isel", bottom_up=True)
+    ictx = IselContext(fs)
+    fs = graph_rewrite(fs, self.ren.isel_matcher, ctx=ictx, name="isel", bottom_up=True)
+    # (a) reached the ROLLED isel_wmma path (C lane is Ops.LOAD, NOT the CONST-seed fail-loud) -> exactly one V_WMMA INS
+    wmmas = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "V_WMMA"]
+    self.assertEqual(len(wmmas), 1, "rolled isel_wmma must emit exactly one V_WMMA INS")
+    # (b) ONE cbase accumulator range -> 3 fragment ranges total (shared A,B,C), all inside [FRAG_BASE, FRAG_TOP)
+    bases = sorted(getattr(ictx, "_frag", {}).values())
+    self.assertEqual(len(bases), 3, f"expected exactly 3 fragment ranges (A,B,C), got {bases}")
+    for base in bases:
+      self.assertGreaterEqual(base, FRAG_BASE)
+      self.assertLess(base + 7, FRAG_TOP)
+
+  def test_rolled_one_inplace_v_wmma_in_loop_zero_movs(self):
+    prg = to_program(_tc_matmul_ast_k64_rolled(), self.ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    insts = list(lin_uop.src)
+    def is_tuple(u): return isinstance(u.arg, tuple)
+    def mn(u): return None if is_tuple(u) else str(u.arg).split("(", 1)[0]
+    # split the linear list into pre-loop / loop-body via the top/out label markers
+    top_i = next(i for i, u in enumerate(insts) if is_tuple(u) and u.arg[0] == "label" and u.arg[1][0] == "top")
+    out_i = next(i for i, u in enumerate(insts) if is_tuple(u) and u.arg[0] == "label" and u.arg[1][0] == "out")
+    pre, loop = insts[:top_i], insts[top_i:out_i]
+    cbase = 200                                             # first fragment allocated -> the C accumulator
+    def is_cbase_init(u):
+      return mn(u) == "v_mov_b32_e32" and "LIT" in str(u.arg) and any(f"v[{cbase+i}]" in str(u.arg) for i in range(8))
+    # (c) exactly ONE v_wmma in the loop body, with vdst == src2 == the C fragment (in-place accumulate)
+    wmma_lines = [str(u.arg) for u in loop if mn(u) == "v_wmma_f32_16x16x16_f16"]
+    self.assertEqual(len(wmma_lines), 1, f"expected exactly one v_wmma in the loop body, got {len(wmma_lines)}")
+    vdst, _s0, _s1, src2 = [s.strip() for s in wmma_lines[0].split("(", 1)[1].rstrip(")").split(",")]
+    self.assertEqual(vdst, src2, f"in-place accumulate requires vdst==src2, got {vdst} vs {src2}")
+    self.assertEqual(vdst, f"v[{cbase}:{cbase+7}]", f"C fragment must be v[{cbase}:{cbase+7}], got {vdst}")
+    # (d) 8 V_CONST 0.0 inits to the C fragment PRE-loop, and ZERO inits inside the loop (init exactly once)
+    self.assertEqual(sum(1 for u in pre if is_cbase_init(u)), 8, "expected 8 pre-loop V_CONST inits to the C fragment")
+    self.assertEqual(sum(1 for u in loop if is_cbase_init(u)), 0, "no accumulator init may sink into the loop")
+    # KEY INSIGHT check: NO accumulator movs in the loop (v_wmma accumulates in place)
+    loop_acc_mov = [u for u in loop if mn(u) == "v_mov_b32_e32" and any(f"v[{cbase+i}]" in str(u.arg) for i in range(8))]
+    self.assertEqual(len(loop_acc_mov), 0, f"no accumulator movs allowed in the loop, got {len(loop_acc_mov)}")
+    # (e) NO ds_store/ds_load for the accumulator anywhere
+    self.assertFalse(any(mn(u) and mn(u).startswith(("ds_store", "ds_load")) for u in insts), "accumulator must not touch LDS")
+    # (f) assembled to a non-empty binary without raising
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
 
 
