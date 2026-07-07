@@ -1,5 +1,5 @@
 import itertools
-from tinygrad.helpers import dedup
+from tinygrad.helpers import dedup, getenv
 from tinygrad.uop.ops import UOp, Ops, PatternMatcher, UPat
 from tinygrad.renderer.isa import ISARenderer, Register
 from tinygrad.dtype import dtypes, PtrDType
@@ -28,6 +28,28 @@ class LinearScanRegallocContext:
       for v in defs:
         if v in lr and (n:=max((lr[rng][-1] for rng in ranges if lr[rng][0] <= lr[v][-1] < lr[rng][-1]), default=None)): lr[v].append(n)
       if u.op is Ops.RANGE: ranges.append(u.reg)
+
+    # REGALLOC_DEBUG: the "no spills" failure is opaque -- it says nothing about WHAT is over the register pool. This
+    # traces the peak simultaneously-live virtual count and its composition (categorized by each vreg's defining op),
+    # so a spill is diagnosable: too many of one op (e.g. un-serialized fragment packs / store-offsets) points at a
+    # SCHEDULING/lifetime issue; a broad mix points at genuine capacity. Reproducible on DEV=PYTHON (no GPU needed).
+    if getenv("REGALLOC_DEBUG"):
+      import sys
+      def _cat(v:Register) -> str:
+        d = uops[lr[v][0]]
+        if not isinstance(d.arg, tuple): return str(d.arg).split("(",1)[0].split(".")[-1] or str(d.op)
+        return str(d.op).split(".")[-1]
+      live_at = [0]*len(uops)
+      for v,rng in lr.items():
+        for i in range(rng[0], rng[-1]+1): live_at[i]+=1
+      peak_i = max(range(len(uops)), key=lambda i: live_at[i]) if uops else 0
+      comp:dict[str,int] = {}
+      for v,rng in lr.items():
+        if rng[0] <= peak_i <= rng[-1]:
+          c = _cat(v); comp[c] = comp.get(c, 0) + 1
+      pool = len(ren._vpool(self)) if hasattr(ren, "_vpool") else "?"
+      sys.stderr.write(f"REGALLOC_DEBUG: {len(uops)} uops, PEAK {live_at[peak_i] if uops else 0} live vregs @ uop {peak_i}, pool={pool}\n")
+      for k,n in sorted(comp.items(), key=lambda kv:-kv[1]): sys.stderr.write(f"  {n:5d}  {k}\n")
 
     # allocate registers
     self.stack_size: int = 0
