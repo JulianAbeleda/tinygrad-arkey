@@ -397,37 +397,65 @@ def isel_gep(x:UOp):
 # renderer does NOT re-apply the swizzle: it packs element e into fragment VGPR (base + e//2), half (e%2: even->low16,
 # odd->high16). v_pack_b32_f16(vdst, s0, s1) puts s0 in low16, s1 in high16 -> pair (2i, 2i+1) -> reg i. This matches
 # the reference which loads A[l][0:16] as 16 CONTIGUOUS fp16 into regs Ab..Ab+7 (elem k in reg k//2).
-def isel_wmma(ctx:IselContext, x:UOp):
-  A, B, C = x.src[0], x.src[1], x.src[2]
-  abase = _frag_base(ctx, id(A), 8)
-  bbase = _frag_base(ctx, id(B), 8)
-  cbase = _frag_base(ctx, id(C), 8)
-  if abase is None or bbase is None or cbase is None:
-    raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
-  def _elems(carrier:UOp, n:int):
-    if carrier.op not in (Ops.STACK, Ops.NOOP) or len(carrier.src) != n:
-      raise NotImplementedError(f"AMD:ISA WMMA operand is not a {n}-lane STACK/NOOP carrier: {carrier.op} n={len(carrier.src)}")
-    return carrier.src
-  def _pin(base:int, i:int): return (Register(f"v{base+i}", base+i),)   # physical VGPR -> constrained vreg via alloc_vregs
-  aE, bE = _elems(A, 16), _elems(B, 16)
-  # A/B fragments: 8x v_pack_b32_f16, each pinned to its physical fragment VGPR (elem 2i -> low16, elem 2i+1 -> high16).
-  apk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, aE[2*i]), _tov(ctx, aE[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(abase, i)) for i in range(8)]
-  bpk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, bE[2*i]), _tov(ctx, bE[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(bbase, i)) for i in range(8)]
-  # C accumulator: init 8 VGPRs from the carrier's 8 float lanes (the TC matcher supplies CONST 0.0). V_CONST writes the
-  # value straight into the pinned fragment reg; the WMMA reads it as src2 and overwrites it with D.
-  cE = _elems(C, 8)
-  def _cinit(i:int):
-    if cE[i].op is not Ops.CONST:
-      raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST (K-reduction accumulation is a later stage)")
-    return UOp(Ops.INS, dtypes.float32, src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i))
-  cin = [_cinit(i) for i in range(8)]
+def _pin(base:int, i:int): return (Register(f"v{base+i}", base+i),)   # physical VGPR -> constrained vreg via alloc_vregs
+
+def _wmma_elems(carrier:UOp, n:int):
+  if carrier.op not in (Ops.STACK, Ops.NOOP) or len(carrier.src) != n:
+    raise NotImplementedError(f"AMD:ISA WMMA operand is not a {n}-lane STACK/NOOP carrier: {carrier.op} n={len(carrier.src)}")
+  return carrier.src
+
+# B0.K: build ONE K-tile v_wmma. `cin` is the 8 src2 lanes (V_CONST 0.0 at the chain head, else the prior tile's 8 pinned
+# D lanes). All three fragments are pinned: A->abase, B->bbase, D/C in-place->cbase. On accumulate tiles the A/B packs
+# carry `dep` (the prior WMMA def) as an extra ignored src so the shared-frag reload is scheduled AFTER the prior matmul
+# read it (WAR guard). Returns the 8-lane NOOP output carrier (lane 0 = the V_WMMA def, lanes 1..7 = passthrough MOVs).
+def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...]):
+  aE, bE = _wmma_elems(A, 16), _wmma_elems(B, 16)
+  apk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, aE[2*i]), _tov(ctx, aE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(abase, i)) for i in range(8)]
+  bpk = [UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, bE[2*i]), _tov(ctx, bE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(bbase, i)) for i in range(8)]
   # V_WMMA INS: srcs = A0..A7, B0..B7, C0..C7 (keeps all 24 fragment defs reachable + ordered before the matmul); the
   # def (tag) is the C-range base -> vdst base. lower_inst reads the three fragment bases off src[0]/src[8]/src[16].
   wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin), arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
   # D outputs: element 0 is the WMMA def (v{cbase}); elements 1..7 are zero-cost passthroughs pinned to v{cbase+i} that
   # DEPEND on the WMMA (MOV lowers to nothing) so the 8 result GEPs (devectorizer output split) read D[i] after the mma.
   outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
-  return UOp(Ops.NOOP, x.dtype, src=tuple(outs))
+  return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
+
+# B0.K: K-reduction (K>16) accumulates IN PLACE. postrange.py:324 + the devectorizer's `WMMA+add -> WMMA(src2+=add)` fold
+# (devectorizer.py:357) shape the K>16 reduce as a CHAIN of Ops.WMMA nodes: the head's src[2] is the 8-lane CONST-0
+# accumulator seed, and every later tile's src[2] IS the prior Ops.WMMA node (its D output = the running accumulator).
+# isel visits this chain top-down (outermost first) with the ORIGINAL, un-rewritten srcs (unified_rewrite applies the
+# rule before descending -- see the trace), so an accumulate tile sees a RAW Ops.WMMA at src[2], NOT a lowered carrier.
+# We therefore collapse the WHOLE chain on first touch and memoize each tile's output, so whichever node is visited first
+# builds the entire chain and later visits of inner tiles just return their cached carrier.
+def isel_wmma(ctx:IselContext, x:UOp):
+  memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
+  if x in memo: return memo[x]
+  chain = [x]                                   # outermost .. head
+  while (c := chain[-1].src[2]).op is Ops.WMMA: chain.append(c)
+  head = chain[-1]
+  # ONE accumulator range for the whole chain (gate (b)): keyed on the head's const-0 carrier so every tile agrees on it.
+  # A/B fragments are REUSED across all K-tiles (spec-reference: one A-frag + one B-frag range reloaded per K-substep),
+  # keyed on that same accumulator base -> a K>16 chain needs only 3 fragment ranges total and fits [200,238); allocating
+  # A/B per-tile would exhaust the 38-VGPR region at the 3rd tile.
+  cbase = _frag_base(ctx, id(head.src[2]), 8)
+  abase = _frag_base(ctx, (id(head.src[2]), "A"), 8)
+  bbase = _frag_base(ctx, (id(head.src[2]), "B"), 8)
+  if cbase is None or abase is None or bbase is None:
+    raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
+  prev:UOp|None = None
+  for tile in reversed(chain):                  # head first, then each accumulate tile
+    if prev is None:                            # HEAD: init the accumulator to 0 from the 8 CONST-0 seed lanes (V_CONST)
+      cE = _wmma_elems(tile.src[2], 8)
+      for i in range(8):
+        if cE[i].op is not Ops.CONST:
+          raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST at the K-reduction chain head")
+      cin = [UOp(Ops.INS, dtypes.float32, src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i)) for i in range(8)]
+      dep:tuple[UOp,...] = ()
+    else:                                       # ACCUMULATE: src2 = prior tile's 8 pinned D lanes (== v{cbase..cbase+7})
+      cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
+      dep = (prev.src[0],)                      # WAR guard: reload this tile's shared A/B frags only after the prior matmul
+    prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
+  return memo[x]
 
 isel_matcher = PatternMatcher([
   (UPat(Ops.PARAM, name="x"), isel_param),
