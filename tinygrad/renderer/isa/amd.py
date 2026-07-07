@@ -60,6 +60,7 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 # sizes VGPR to the highest reg used, so through THIS renderer the real ceiling is OCCUPANCY, not v238. So we keep A/B in
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
 FRAG_BASE, FRAG_TOP = 200, 238
+LDS_PACK_BASE = 238
 # B0.M: multi-output-tile C accumulators. A hand_coded M/N>16 upcasts the output into a WM x WN grid of 16x16 subtiles per
 # warp -> ONE reduce DEFINE_REG of vec width WM*WN*8, split by no_vectorized_wmma into WM*WN distinct Ops.WMMA each reading
 # an 8-lane accumulator slice. Each subtile needs its OWN fixed, contiguous, 8-aligned, loop-carried 8-VGPR run (v_wmma
@@ -216,6 +217,7 @@ class AMDOps(FastEnum):
   GLOBAL_LOAD_B128 = 45                  # L3: direct 16-byte fragment load into four packed fp16 WMMA operand VGPRs
   DS_LOAD_B128 = 46                       # L4/LDS: direct 16-byte LDS fragment load into four packed fp16 VGPRs
   DS_STORE_B128 = 47                      # L4/LDS: direct 16-byte LDS fragment store from four packed fp16 VGPRs
+  GATED_STORE_B128 = 48                   # EXEC-predicated ds_store_b128
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -446,7 +448,7 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   if a.arg == "accum":                        # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
-    if (bdata := _lds_b128_store_data(b)) is not None:
+    if (bdata := _lds_b128_store_data(ctx, b)) is not None:
       # Fail-closed: require explicit packed VGPR data for DS_STORE_B128.
       return UOp(Ops.INS, dtypes.void, src=(a.src[0],) + bdata + (a.src[1], UOp.const(dtypes.int32, 0).rtag()), arg=AMDOps.DS_STORE_B128)
     esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
@@ -518,9 +520,13 @@ def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
   # store(addr, val, gate) -> EXEC-predicated store: only lanes with gate!=0 write. kind const: 1=LDS, 0=global.
   if a.op is not Ops.NOOP: return None
   esz = b.dtype.itemsize   # element width (half=2/float=4) from the value dtype, known here (lowered INS srcs are void)
-  gate, val = _tov(ctx, g), _tov(ctx, b)
+  gate = _tov(ctx, g)
   if a.arg == "lds":   # src = (gate, addr_vgpr, val, kind=1, order, esz)
+    if (bdata := _lds_b128_store_data(ctx, b)) is not None:
+      return UOp(Ops.INS, dtypes.void, src=(gate, a.src[0]) + bdata + (a.src[1], UOp.const(dtypes.int32, 0).rtag()), arg=AMDOps.GATED_STORE_B128)
+    val = _tov(ctx, b)
     return UOp(Ops.INS, dtypes.void, src=(gate, a.src[0], val, UOp.const(dtypes.int32, 1).rtag(), a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)
+  val = _tov(ctx, b)
   return UOp(Ops.INS, dtypes.void, src=(gate, a.src[1], val, UOp.const(dtypes.int32, 0).rtag(), a.src[0], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)  # (gate,off,val,kind=0,base,esz)
 
 def isel_gep(x:UOp):
@@ -553,12 +559,15 @@ def _fixed_vgpr_index(u:UOp) -> int|None:
 def _fixed_contiguous_vgpr4(us:tuple[UOp, ...]) -> bool:
   return len(us) == 4 and (b := _fixed_vgpr_index(us[0])) is not None and [_fixed_vgpr_index(u) for u in us] == list(range(b, b + 4))
 
-def _lds_b128_store_data(u:UOp) -> tuple[UOp, ...]|None:
+def _lds_b128_store_data(ctx:IselContext|None, u:UOp) -> tuple[UOp, ...]|None:
   """Return the 4-wide VGPR data span for a packed LDS store, or None (fail-closed)."""
   if isinstance(u.dtype, PtrDType):
     return None
   if u.op is Ops.NOOP and u.dtype.count == 4 and u.dtype.scalar().itemsize == 4 and _fixed_contiguous_vgpr4(u.src):
     return tuple(u.src)
+  if ctx is not None and u.op is Ops.NOOP and u.dtype.count == 8 and u.dtype.scalar() is dtypes.half and len(u.src) == 8:
+    return tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, u.src[2*i]), _tov(ctx, u.src[2*i+1])),
+                     arg=AMDOps.V_PACK, tag=_pin(LDS_PACK_BASE, i)) for i in range(4))
   # Wide producers can already encode 4-reg spans as a single INS.
   if u.op is Ops.INS and u.arg in (AMDOps.GLOBAL_LOAD_B128, AMDOps.DS_LOAD_B128) and u.dtype is dtypes.int32:
     if _fixed_vgpr_index(u) is None:
@@ -976,6 +985,13 @@ def lower_inst(x:UOp):
     st = UOp(Ops.INS, arg=((ds_store_b16 if src[5].arg == 2 else ds_store_b32)(addr=addr, data0=val) if kind == 1
                            else (global_store_b16 if src[5].arg == 2 else global_store_b32)(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))   # src[5]=element size
     restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))        # restore EXEC (store ordering -> _insert_waitcnt)
+    return (restore, [cmp, save, st, restore])
+  if a is AMDOps.GATED_STORE_B128:
+    gate, addr, data, imm = _Vr(src[0].reg), _Vr(src[1].reg), src[2], src[-1]
+    cmp = UOp(Ops.INS, arg=v_cmp_ne_u32_e32(0, gate))
+    save = UOp(Ops.INS, arg=s_and_saveexec_b32(_S[5], VCC))
+    st = UOp(Ops.INS, arg=ds_store_b128(addr=addr, data0=_V[data.reg.index:data.reg.index+3], offset0=imm.arg))
+    restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))
     return (restore, [cmp, save, st, restore])
   if a is AMDOps.GLOBAL_STORE:
     # SCALARIZED: one INS -> N scalar stores, lane l at immediate offset l*itemsize. src=(off, base, val0..valN-1, isz)

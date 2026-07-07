@@ -213,9 +213,16 @@ Current experiment results, 2026-07-07:
 |---|---|---|
 | A-only scalar control: `PREFILL_TC_LOCAL_STAGE=a PREFILL_TC_LOCAL_STAGE_COOP_POST=1 PREFILL_TC_LOCAL_STAGE_COOP_GLOBAL=1` | `ok=true`; `ds_store_b16=64`, `ds_load_b128=8`, `ds_store_b128=0`, `wmma=16`; WMMA `src0=ds_load_b128`, `src1=global_load_b128`. | The generated LDS staging substrate is now verifier-clean, but it is scalar-store and therefore not a completion candidate. |
 | E1 flag: add `PREFILL_LDS_PACK_LATE_MATCHER=1` | Same as scalar control: `ds_store_b128=0`. | The flag is scaffolded only; no late AMD matcher has been implemented yet. |
-| E2 flag: add `PREFILL_LDS_PACK_CARRIER=1` | Same as scalar control: `ds_store_b128=0`. | The flag is scaffolded only; no neutral packed carrier has been implemented yet. |
+| E2 flag: add `PREFILL_LDS_PACK_CARRIER=1` | Fails verifier on `Ops.UNROLL dtypes.half` over `Ops.STACK dtypes.half.vec(4)`. | A postrange carrier is still too early; the carrier must be inserted after expansion or replaced by an E1 pre-isel rewrite. |
 | E3 flag: add `PREFILL_LDS_PACK_POST_EXPAND=1` | Fails verifier on `Ops.UNROLL dtypes.half` over `Ops.STACK dtypes.half.vec(4)`. | The current E3 implementation is still the early `V_PACK` diagnostic, not a true post-expander pass. |
 | Both operands: `PREFILL_TC_LOCAL_STAGE=both` | Fails `NotImplementedError: Inc 0: no spills`. | Staging both A and B exceeds the current no-spill register budget before packed stores/lifetime fixes. |
+
+Follow-up attempt, 2026-07-07:
+
+| Attempt | Result | Decision |
+|---|---|---|
+| E2 half8 carrier in `postrange.py`, lowered in AMD isel with four late `V_PACK`s plus gated `ds_store_b128`. | Still fails verifier before isel: `Ops.UNROLL dtypes.half` over `Ops.STACK dtypes.half.vec(4)`. | This proves a carrier built in postrange from `src.gep(...)` is still too early. E2 must be inserted after expansion, or E1 must rewrite the already verifier-clean scalar LDS store graph before instruction selection. |
+| E1 naive adjacency matcher. | Rejected before implementation. The verifier-clean graph is nested as groups of scalar stores whose apparent LDS address identity is not enough to prove one contiguous 16-byte row. | E1 needs a proof-based group matcher keyed by target LDS base plus constant slot offsets and source lane order, not a linear adjacency pass. |
 
 Comparison gates, in order:
 

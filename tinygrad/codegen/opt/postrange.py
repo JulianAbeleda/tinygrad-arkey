@@ -379,6 +379,9 @@ def _tc_local_stage_coop_post_opt() -> bool:
 def _prefill_lds_pack_post_expand() -> bool:
   return bool(getenv("PREFILL_LDS_PACK_POST_EXPAND", 0))
 
+def _prefill_lds_pack_carrier() -> bool:
+  return bool(getenv("PREFILL_LDS_PACK_CARRIER", 0))
+
 _tc_local_stage_coop_b_stats = {"seen": 0, "rewritten": 0, "dumped": 0, "skipped": 0}
 
 
@@ -510,6 +513,11 @@ def _tc_local_stage_coop_operand(wmma:UOp, operand_idx:int) -> UOp|None:
       packed_words = tuple(UOp(Ops.INS, dtypes.int32, src=(src.gep(i0), src.gep(i1)), arg=AMDOps.V_PACK, tag=pack_tags[i])
                            for i, (i0, i1) in enumerate(group_pairs))
       carry = UOp(Ops.NOOP, dtypes.int32.vec(4), src=packed_words)
+      stores.append(bsh.index(_slot_idx(store_slot), dtype=bsh.dtype).store(carry, lane < 16).end())
+  elif _prefill_lds_pack_carrier():
+    store_groups = ((tuple(range(0, 8)), 0), (tuple(range(8, 16)), 8))
+    for elems, store_slot in store_groups:
+      carry = UOp(Ops.NOOP, src.dtype.scalar().vec(8), tuple(src.gep(i) for i in elems))
       stores.append(bsh.index(_slot_idx(store_slot), dtype=bsh.dtype).store(carry, lane < 16).end())
   else:
     stores = [bsh.index(_slot_idx(i), dtype=bsh.dtype).gep(0).store(src.gep(i), lane < 16).end() for i in range(16)]

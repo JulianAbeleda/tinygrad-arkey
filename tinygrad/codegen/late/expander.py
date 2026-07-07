@@ -1,7 +1,7 @@
 # this converts a lowerer program into a vectorized program
 import functools, itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
-from tinygrad.helpers import dedup, flatten, all_same, prod, partition
+from tinygrad.helpers import dedup, flatten, all_same, prod, partition, getenv
 from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, AxisType, range_start
 from tinygrad.schedule.rangeify import BufferizeOpts
 
@@ -68,6 +68,7 @@ def do_expand(root:UOp):
 
   new_arg = root.arg
   if root.op is Ops.GEP:
+    if root.dtype.count != 1 and getenv("PREFILL_LDS_PACK_CARRIER", 0): return None
     assert root.dtype.count == 1
     # is this right?
     if new_srcs[0].dtype.count == 1 and root.arg == (0,):

@@ -480,6 +480,16 @@ class TestAMDISALDSB128Lowering(unittest.TestCase):
     self.assertIn("v[6], v[200:203]", str(inst.arg))
     self.assertTrue(str(inst.arg).endswith(", 16)"), f"expected offset0=16 in {inst.arg}")
 
+  def test_gated_ds_store_b128_lowering_masks_exec(self):
+    gate, addr, data = self._v(4), self._v(6), tuple(self._v(i) for i in range(238, 242))
+    x = UOp(Ops.INS, dtypes.void, src=(gate, addr) + data + (UOp(Ops.NOOP, dtypes.void), UOp.const(dtypes.int32, 0).rtag()),
+            arg=AMDOps.GATED_STORE_B128)
+    inst, waits = lower_inst(x)
+    self.assertEqual(inst, waits[-1])
+    self.assertEqual(len(waits), 4)
+    self.assertIn("v[6], v[238:241]", str(waits[2].arg))
+    self.assertIn("s_and_saveexec_b32", str(waits[1].arg))
+
 
 if __name__ == "__main__":
   unittest.main()
