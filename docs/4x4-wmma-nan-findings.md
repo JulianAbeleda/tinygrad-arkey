@@ -8,11 +8,18 @@ On DEV=AMD:ISA (the from-scratch AMDISARenderer), a rolled-K 64x64x64 fp16 WMMA 
 (WM=WN=4, 16-subtile) tile. Smaller tiles (2x4, 4x2 = 8 subtiles) are bit-exact. The default DEV=AMD (HIP/LLVM) path
 computes the same 4x4 correctly.
 
-## CURRENT ROOT CAUSE (by exhaustive elimination, all HW-confirmed)
-The fault is the **register allocator's DYNAMIC register-reuse output for the 16-subtile case** -- a value-neutral
-(remu-bit-exact) but hardware-faulting register-assignment / linear-order property of our generator's exact ~1155-inst
-stream that NO fixed-register hand kernel reproduces. It is NOT a hardware WMMA quirk, NOT any static feature, NOT the
-scheduler, NOT waitcnt. The exact reuse/line is not yet isolated -- see `4x4-allocator-terminal-isolation-list.md`.
+## CURRENT ROOT CAUSE (terminally isolated, HW-confirmed)
+The fault was the **post-loop store epilogue reusing high WMMA-loop scratch registers `v201` and `v202`** in the
+16-subtile generated stream. Those registers are logically dead, so remu is bit-correct, but the real GPU faults on the
+dynamic physical-register role transition from WMMA-loop address/load/pack scratch to epilogue address/data temporaries.
+
+The generated WMMA loop itself is correct:
+- replacing only the generated epilogue makes the original generated WMMA body pass on GPU;
+- keeping the generated epilogue but remapping `v201` and `v202` to low scratch makes GPU pass;
+- freshly reloading/repacking all WMMA fragments before every WMMA still fails until the epilogue temps are moved.
+
+Fix: multi-output WMMA now reclaims the unused low `v1..v7` alignment pad as scalar scratch in `_vpool`, while still
+excluding the low accumulator and resident A/B fragment windows. The unmutated generated 4x4 repro now passes on GPU.
 
 ## What it is NOT (each reproduced in a controlled hand kernel and PASSES on GPU; do NOT re-chase these)
 | Hypothesis | Verdict | Evidence |
@@ -33,6 +40,8 @@ scheduler, NOT waitcnt. The exact reuse/line is not yet isolated -- see `4x4-all
 | high load-dests v220-235 (our-gen's allocator max) | FALSE | A5 passes |
 | the list scheduler | FALSE | AMD_ISA_SCHED=0 still NaN |
 | missing/mis-tracked waitcnt | FALSE | AMD_ISA_WAITCNT_CONSERVATIVE=1 still NaN |
+| WMMA fragment producer chain | FALSE | clean reload/repack before every WMMA still GPU-fails until epilogue temps move |
+| generated epilogue logic | FALSE | generated epilogue is remu-correct; moving only `v201/v202` physical temps makes GPU pass |
 
 ## Grounding (AMD/LLVM docs)
 No documented rule explains the fault (RDNA3 ISA + LLVM are provenance/height/bank-agnostic for WMMA sources). The ONLY
@@ -55,9 +64,10 @@ undocumented/erratum-adjacent BUT confined to our-gen's dynamic stream (a clean 
 3. Ground every hardware hypothesis vs AMD ISA / LLVM source, never model introspection.
 4. Read Inst FIELDS / raw bytes, NEVER disassembler text (disasm has a VOP1-f16-cvt vdst>=128 rendering bug that caused a
    false root cause early on).
+5. Replace one generated slice at a time. The terminal slice was the epilogue: clean epilogue PASS, then generated
+   epilogue with only `v201/v202` remapped PASS.
 
-## Next (terminal isolation) -- see `4x4-allocator-terminal-isolation-list.md`
-I0 faithful NaN-reproducing harness -> L5 (allocator vs isel split) -> offline scans L1-L4 on the captured stream ->
-each confirmed by a two-way mutation GPU test (break-it-fixes-gen / add-it-breaks-A5). Then the fix constrains the
-allocator/isel to never emit the named pattern in the multi-tile path.
+## Status
+Resolved in the generated path. The I0 faithful harness passes remu and GPU with no env flags, and
+`test/unit/test_amd_isa_wmma.py` passes.
 </content>

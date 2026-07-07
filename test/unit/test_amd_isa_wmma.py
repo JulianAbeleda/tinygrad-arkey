@@ -233,12 +233,15 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     packs = [u for u in fs.toposort() if u.op is Ops.INS and getattr(u.arg, "name", None) == "V_PACK"]
     self.assertEqual(len(packs), (4 + 4) * 8, f"expected 64 V_PACK (each fragment packed ONCE), got {len(packs)}")
     self.assertEqual(len(set(u.tag for u in packs)), 64, "each pack pinned to a distinct resident VGPR")
-    # (c) _vpool excludes EXACTLY the LOW accumulator region AND the resident A/B window (collision -> v_wmma clobbers a live virtual)
+    # (c) _vpool excludes the LOW accumulator region and resident A/B window, while reclaiming the v1..v7 padding
+    # as scalar scratch. The low scratch keeps post-loop epilogues away from high WMMA/load scratch like v201/v202.
     pool = {r.index for r in _vpool(ictx)}
     self.assertEqual(len(pool & acc_idx), 0, "_vpool must exclude the LOW accumulator VGPRs")
     self.assertEqual(len(pool & ab_idx), 0, "_vpool must exclude the resident A/B fragment window")
     self.assertEqual(_acc_top(ictx), WMMA_ACC_BASE + 16 * 8, "reserved LOW region top = base + 128")
-    self.assertEqual(min(pool), _acc_top(ictx) + 8 * 8, "virtuals start immediately above the accumulator + resident A/B regions")
+    self.assertEqual(set(range(1, WMMA_ACC_BASE)), pool & set(range(1, WMMA_ACC_BASE)), "v1..v7 are available scratch")
+    self.assertEqual(min(p for p in pool if p >= WMMA_ACC_BASE), _acc_top(ictx) + 8 * 8,
+                     "high virtuals start immediately above the accumulator + resident A/B regions")
     # (e) every physical VGPR the MODEL pins is inside the 256 file (accumulators [8,135], A/B [136,199], pool <=255)
     self.assertLess(max(acc_idx | ab_idx | pool), 256)
     # budget: WM*WN*8 accumulators (128) + (WM+WN)*8 resident A/B (64) = 192 physical VGPRs pinned, < 256

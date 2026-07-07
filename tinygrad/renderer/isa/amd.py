@@ -176,7 +176,13 @@ def _vpool(ctx:IselContext):
   # window [FRAG_BASE, FRAG_TOP) fully reserved (virtuals [lo, FRAG_BASE)), unchanged.
   lo = ACCUM_PIN_TOP if getenv("AMD_ISA_REG_ACCUM", 0) else 1
   if not _has_wmma(ctx): return VBASE[lo:]
-  if _c_low(ctx): return VBASE[max(lo, _ab_top(ctx)):256]
+  if _c_low(ctx):
+    tail = VBASE[max(lo, _ab_top(ctx)):256]
+    # Multi-output WMMA reserves v8.. for C/A/B fragments, but v1..v7 are just alignment padding.
+    # Keep them available for short scalar scratch, especially the post-loop store epilogue, so it doesn't have to reuse
+    # the high v200+ address/load scratch region immediately after the WMMA loop.
+    if getenv("AMD_ISA_WMMA_LOW_SCRATCH", 1): return VBASE[lo:WMMA_ACC_BASE] + tail
+    return tail
   return VBASE[lo:FRAG_BASE]
 
 class AMDOps(FastEnum):
