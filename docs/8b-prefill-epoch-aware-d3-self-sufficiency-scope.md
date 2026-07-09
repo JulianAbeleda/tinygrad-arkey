@@ -428,3 +428,71 @@ Construct the rotated pipeline earlier, where each load is assigned exactly one 
 Any future suppression pass must enumerate the loads reached by the original store and prove that the replacement store
 reaches each of those loads first, with the required barrier in between. The current StageKey probe remains useful only
 as a diagnostic to reject weak aliases and to label producers.
+
+### Hand-Guided Producer Map Result
+
+Added `kernel_lifecycle_trace.py::lds_reaching_def_map` so the tracer answers the actual question:
+
+```text
+For each ds_load_b128 feeding WMMA, which prior ds_store_b128 is the reaching producer?
+```
+
+The generated active `2x2` trace now threads normalized DS byte windows from `a_fragment_alias_probe.py` into the
+lifecycle tracer. That matters because final addr-register families alone are too weak; byte windows recover the real
+producer/load relation for generated code.
+
+Baseline generated K-major+D3 `2x2`:
+
+| metric | value |
+| --- | ---: |
+| `ds_load_b128` | 32 |
+| reaching producer found | 32 |
+| missing producer | 0 |
+| WMMA A missing producer | 0 |
+| WMMA B missing producer | 0 |
+
+B phase-1 StageOwner suppression:
+
+| metric | value |
+| --- | ---: |
+| `ds_load_b128` | 32 |
+| reaching producer found | 32 |
+| missing producer | 0 |
+| changed producer assignments | 4 |
+| GPU status | WRONG `rr=1.4e+00` |
+
+The four changed producer assignments are the concrete failure:
+
+| load | baseline producer | suppressed producer | load epoch |
+| ---: | ---: | ---: | ---: |
+| 368 | store 341, epoch 5 | store 119, epoch 0 | 9 |
+| 372 | store 356, epoch 7 | store 355, epoch 8 | 9 |
+| 392 | store 65, epoch 0 | store 386, epoch 9 | 10 |
+| 397 | store 388, epoch 8 | store 167, epoch 0 | 11 |
+
+So the failure is not "no store reaches the load." A store still reaches each load syntactically. The failure is:
+
+```text
+the replacement reaching store has the wrong runtime epoch/value for that load.
+```
+
+This explains why exact StageOwner deletion can preserve structural coverage and still corrupt numerics.
+
+Hand LDS2 comparison:
+
+| signal | hand LDS2 |
+| --- | --- |
+| final-stream addr-family producer map | inconclusive, because hand uses different address-base registers for stores and loads |
+| builder lifecycle oracle | conclusive |
+| producer rule | `compute(slot N)` consumes the most recent completed `coop_store(slot N)` after a barrier; body stages the opposite slot for future compute |
+
+This is the useful hand-asm lesson: hand LDS2 does not delete duplicate-looking stores after lowering. It constructs the
+slot/epoch pipeline up front, so each compute phase already knows which slot it consumes and which future slot it
+produces.
+
+Primitive conclusion:
+
+```text
+Late suppression is exhausted.
+The fix must be earlier rotated-pipeline construction with explicit slot/epoch producer ownership.
+```

@@ -22,7 +22,7 @@ from tinygrad.renderer.isa import amd as amd_isa
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.prefill import native_isa_l4_stream_probe as sp
-from extra.qk.prefill.wmma import build_gemm_pipe, build_gemm_lds2
+from extra.qk.prefill.wmma import build_gemm_pipe, build_gemm_lds2, default_lds2_lifecycle_template
 from extra.qk.prefill_v2_schedule_search import _compile_native_program
 
 
@@ -47,6 +47,11 @@ def _generated_active_insts(args: argparse.Namespace, shape: tuple[int, int]) ->
   lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
   ren = AMDISARenderer(Target.parse(args.target))
   final_uops = sp._final_stream(ren, lin_uop.src)
+  try:
+    from extra.qk.prefill import a_fragment_alias_probe as afp
+    byte_trace = afp._analyze(sp._insts_from_uops(final_uops), prg)
+  except Exception as e:
+    byte_trace = {"error": f"{type(e).__name__}: {e}"}
   return sp._insts_from_uops(final_uops), {
     "program": str(prg.arg),
     "shape": f"{u0}x{u1}",
@@ -55,6 +60,8 @@ def _generated_active_insts(args: argparse.Namespace, shape: tuple[int, int]) ->
     "loc": args.loc,
     "unr": args.unr,
     "tail_off": "generated active prefill: _compile_native_program -> isel -> regalloc -> waitcnt/scheduler -> Inst",
+    "ds_byte_window_rows": {"stores": byte_trace.get("ds_store_rows", []), "loads": byte_trace.get("ds_load_rows", []),
+                            "status_counts": byte_trace.get("ds_window_status_counts", {}), "error": byte_trace.get("error")},
   }
 
 
@@ -69,6 +76,15 @@ def _hand_insts(kind: str, args: argparse.Namespace) -> tuple[list[Any], dict[st
       f"build_gemm_lds2({args.m},{args.n},{args.k},{args.waves_m},{args.waves_n},"
       f"{args.wm},{args.wn},{args.bk},{args.pad},{args.dbuf})"
     )}
+    template = default_lds2_lifecycle_template(args.dbuf)
+    meta["hand_lifecycle_oracle"] = {
+      "source": "extra/qk/prefill/wmma.py::default_lds2_lifecycle_template",
+      "meaning": "hand LDS2 assigns producers by logical DBUF slot before instruction emission",
+      "prologue": [(s.op, s.slot) for s in template.prologue],
+      "body": [(s.op, s.slot) for s in template.body],
+      "tail": [(s.op, s.slot) for s in template.tail],
+      "producer_rule": "compute(slot N) consumes stores from the most recent completed coop_store(slot N) after a barrier; body stores the opposite slot for a future compute",
+    }
   else:
     raise ValueError(kind)
   meta["tail_off"] = "hand: Python builder -> fixed Inst list"
@@ -270,6 +286,83 @@ def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma
   }
 
 
+def _barrier_epoch(idx: int, barrier_indices: list[int]) -> int:
+  return sum(1 for b in barrier_indices if b < idx)
+
+
+def _latest_overlapping_load(inst_idx: int, span: dict[str, int] | None, load_rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+  rows = [r for r in load_rows if r["idx"] < inst_idx and _pipeline_spans_overlap(r.get("spans", {}).get("vdst"), span)]
+  return rows[-1] if rows else None
+
+
+def _lds_reaching_def_map(ops: dict[str, list[dict[str, Any]]], wmma_indices: list[int], byte_rows: dict[str, Any] | None=None) -> dict[str, Any]:
+  barriers = [r["idx"] for r in ops.get("s_barrier", [])]
+  stores = sorted(ops.get("ds_store_b128", []), key=lambda r: r["idx"])
+  loads = sorted(ops.get("ds_load_b128", []), key=lambda r: r["idx"])
+  byte_store = {r["idx"]: r for r in (byte_rows or {}).get("stores", []) if r.get("op") == "ds_store_b128"}
+  byte_load = {r["idx"]: r for r in (byte_rows or {}).get("loads", []) if r.get("op") == "ds_load_b128"}
+  def row_key(row: dict[str, Any], table: dict[int, dict[str, Any]], fallback) -> str:
+    br = table.get(row["idx"])
+    if br is not None and br.get("window_status") == "known": return str(br.get("window"))
+    return fallback(row)
+  latest_store: dict[str, dict[str, Any]] = {}
+  load_rows = []
+  si = 0
+  for ld in loads:
+    while si < len(stores) and stores[si]["idx"] < ld["idx"]:
+      latest_store[row_key(stores[si], byte_store, _pipeline_store_key)] = stores[si]
+      si += 1
+    key = row_key(ld, byte_load, _pipeline_load_key)
+    st = latest_store.get(key)
+    load_rows.append({
+      "load_idx": ld["idx"],
+      "load_key": key,
+      "key_source": "normalized_byte_window" if byte_load.get(ld["idx"], {}).get("window_status") == "known" else "addr_family",
+      "load_epoch": _barrier_epoch(ld["idx"], barriers),
+      "producer_store_idx": None if st is None else st["idx"],
+      "producer_epoch": None if st is None else _barrier_epoch(st["idx"], barriers),
+      "barrier_between": False if st is None else any(st["idx"] < b < ld["idx"] for b in barriers),
+      "status": "covered" if st is not None else "missing_store",
+    })
+  load_by_idx = {r["load_idx"]: r for r in load_rows}
+  wmma_rows = []
+  for ordinal, wm in enumerate(ops.get(sp.WMMA_NAME, [])):
+    a_load = _latest_overlapping_load(wm["idx"], wm.get("spans", {}).get("src0"), loads)
+    b_load = _latest_overlapping_load(wm["idx"], wm.get("spans", {}).get("src1"), loads)
+    a_map = None if a_load is None else load_by_idx.get(a_load["idx"])
+    b_map = None if b_load is None else load_by_idx.get(b_load["idx"])
+    wmma_rows.append({
+      "wmma_ordinal": ordinal,
+      "wmma_idx": wm["idx"],
+      "a_load_idx": None if a_load is None else a_load["idx"],
+      "a_store_idx": None if a_map is None else a_map["producer_store_idx"],
+      "a_status": "missing_load" if a_load is None else a_map["status"],
+      "b_load_idx": None if b_load is None else b_load["idx"],
+      "b_store_idx": None if b_map is None else b_map["producer_store_idx"],
+      "b_status": "missing_load" if b_load is None else b_map["status"],
+    })
+  covered = [r for r in load_rows if r["status"] == "covered"]
+  missing = [r for r in load_rows if r["status"] != "covered"]
+  no_barrier = [r for r in covered if not r["barrier_between"]]
+  return {
+    "key_strength": "normalized_ds_byte_window_when_available_else_final_stream_addr_family",
+    "limitation": "if store/load address-base registers differ and no normalized byte window is available, final-stream matching can report missing even when hand-builder lifecycle is correct",
+    "byte_window_status_counts": None if byte_rows is None else byte_rows.get("status_counts", {}),
+    "byte_window_error": None if byte_rows is None else byte_rows.get("error"),
+    "load_count": len(load_rows),
+    "covered_load_count": len(covered),
+    "missing_load_count": len(missing),
+    "covered_without_barrier_count": len(no_barrier),
+    "load_rows_sample": load_rows[:24],
+    "missing_load_rows_sample": missing[:24],
+    "wmma_rows_sample": wmma_rows[:24],
+    "load_rows": load_rows,
+    "wmma_rows": wmma_rows,
+    "wmma_missing_a_count": sum(1 for r in wmma_rows if r["a_status"] != "covered"),
+    "wmma_missing_b_count": sum(1 for r in wmma_rows if r["b_status"] != "covered"),
+  }
+
+
 def _bytes(insts: list[Any]) -> int:
   total = 0
   for inst in insts:
@@ -362,6 +455,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     },
     "dbuf_gate_summary": dbuf,
     "dbuf_pipeline_construction_audit": _dbuf_pipeline_construction_audit(ops, widx),
+    "lds_reaching_def_map": _lds_reaching_def_map(ops, widx, meta.get("ds_byte_window_rows")),
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
   if full_rows:
@@ -399,6 +493,12 @@ def _print_compact(report: dict[str, Any]) -> None:
         f"waits_per_wmma_avg={report['waitcnt_summary']['per_wmma_avg']}")
   print(f"active_dbuf regions={active['regions'][:6]}")
   print(f"lds_families={report['lds_address_families']}")
+  rd = report["lds_reaching_def_map"]
+  print(f"lds_reaching_def covered={rd['covered_load_count']}/{rd['load_count']} "
+        f"missing={rd['missing_load_count']} no_barrier={rd['covered_without_barrier_count']} "
+        f"wmma_missing_a={rd['wmma_missing_a_count']} wmma_missing_b={rd['wmma_missing_b_count']}")
+  if "hand_lifecycle_oracle" in report:
+    print(f"hand_lifecycle={report['hand_lifecycle_oracle']['producer_rule']}")
   print(f"dbuf_D7={report['dbuf_gate_summary']['D7_scheduler_readiness']}")
 
 

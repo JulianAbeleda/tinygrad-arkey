@@ -404,6 +404,8 @@ def _analyze(insts: list[Any], prg: Any) -> dict[str, Any]:
     "a_missing_store_window_rows": missing_rows,
     "a_inconclusive_window_rows": inconclusive_rows,
     "ds_window_status_counts": dict(Counter(r["window_status"] for r in stores + loads)),
+    "ds_store_rows": stores,
+    "ds_load_rows": loads,
     "ds_unknown_rows": unknown_ds_rows[:32],
     "ds_out_of_bounds_rows": out_of_bounds_ds_rows[:32],
     "a_fragment_window_identity": {
