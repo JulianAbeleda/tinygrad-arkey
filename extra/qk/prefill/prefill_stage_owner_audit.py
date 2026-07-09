@@ -200,6 +200,66 @@ def wmma_rows(sink: UOp) -> list[dict[str, Any]]:
   return rows
 
 
+def _range_rows(u: UOp) -> list[dict[str, Any]]:
+  return [{"arg": repr(r.arg), "size": int(r.vmax + 1), "axis_type": str(r.arg[-1])}
+          for r in sorted(u.ranges, key=lambda r: repr(r.arg))]
+
+
+def _src_range_args(u: UOp) -> list[str]:
+  return [repr(s.arg) for s in u.src if s.op is Ops.RANGE]
+
+
+def generic_b_stage_contract(sink: UOp) -> dict[str, Any]:
+  stages = []
+  for stg in sink.toposort():
+    if stg.op is not Ops.STAGE: continue
+    fields = tag_fields(stg.tag)
+    if fields.get("role") != "B": continue
+    stages.append({
+      "stage_id": id(stg),
+      "stage_dtype": str(stg.dtype),
+      "stage_shape": [str(x) for x in stg.shape],
+      "stage_tag": repr(stg.tag),
+      "stage_src_ops": [s.op.name for s in stg.src],
+      "stage_src_dtypes": [str(s.dtype) for s in stg.src],
+      "stage_src_shapes": [[str(x) for x in s.shape] for s in stg.src],
+      "stage_index_range_args": _src_range_args(stg),
+      "stage_ranges": _range_rows(stg),
+      "contract_arg": repr(stg.src[0].arg) if stg.src and stg.src[0].op is Ops.CONTRACT else None,
+      "contract_src_op": stg.src[0].src[0].op.name if stg.src and stg.src[0].op is Ops.CONTRACT and stg.src[0].src else None,
+    })
+
+  consumers = []
+  for wi, w in enumerate([u for u in sink.toposort() if u.op is Ops.WMMA]):
+    b = w.src[1]
+    fields = tag_fields(b.tag)
+    consumers.append({
+      "wmma_i": wi,
+      "carrier_id": id(b),
+      "carrier_op": b.op.name,
+      "carrier_dtype": str(b.dtype),
+      "carrier_shape": [str(x) for x in b.shape],
+      "carrier_tag": repr(b.tag),
+      "carrier_role": fields.get("role"),
+      "carrier_src_ops": [s.op.name for s in b.src],
+      "carrier_index_range_args": _src_range_args(b),
+      "carrier_ranges": _range_rows(b),
+      "direct_stage_role": tag_fields(b.src[0].tag).get("role") if b.op is Ops.INDEX and b.src and b.src[0].op is Ops.STAGE else None,
+      "direct_stage_id": id(b.src[0]) if b.op is Ops.INDEX and b.src and b.src[0].op is Ops.STAGE else None,
+    })
+
+  direct_consumers = [r for r in consumers if r.get("direct_stage_role") == "B"]
+  return {
+    "stage_count": len(stages),
+    "consumer_count": len(consumers),
+    "direct_b_stage_consumer_count": len(direct_consumers),
+    "ok": len(stages) == 1 and len(direct_consumers) >= 1,
+    "expected_owned_stage_shape": "vector payload dtypes.half.vec(16) staged over WARP x LOCAL, not scalar lane16 packing",
+    "stages": stages,
+    "consumers": consumers,
+  }
+
+
 def compile_full_sink(m: int, n: int, k: int, u0: int, u1: int, loc: int, unr: int, boundary: str) -> UOp:
   rangeify.prefill_dbuf_clear_rotated_stage_lowering_audit()
   postrange._WARMSTART_OPTS = {(frozenset({m, n}), k): _opts_for(u0, u1, loc, unr)}
@@ -381,10 +441,12 @@ def main() -> int:
   owners = owner_records(stages)
   summary = {**summarize(stages, stores, consumers), **lowering_hook_summary(lowering_rows), "stage_count": len(stages)}
   plan = rotated_lifecycle_plan(owners)
+  b_contract = generic_b_stage_contract(sink)
   payload = {
     "shape": f"{u0}x{u1}", "m": args.m, "n": args.n, "k": args.k, "loc": args.loc, "unr": args.unr, "boundary": args.boundary,
     "summary": summary, "owner_records": owners,
     "lowering_hook_owner_records": lowering_rows,
+    "generic_b_stage_contract": b_contract,
     "rotated_lifecycle_plan": plan,
     "p4_readiness": p4_readiness(summary, plan, args.boundary),
     "stages": stages, "stores": stores, "wmma_operands": consumers,

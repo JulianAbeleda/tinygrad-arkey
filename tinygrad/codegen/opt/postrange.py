@@ -489,6 +489,15 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
         "ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(src.ranges, key=lambda r: r.arg)],
       }))
     return _tc_local_stage_src(src, fallback, 1)
+  if getenv("PREFILL_DBUF_OWNED_B_STAGE_IDENTITY", 0):
+    if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
+      print("PREFILL_DBUF_OWNED_B_STAGE", json.dumps({
+        "mode": "identity_generic_stage_contract",
+        "src_op": src.op.name,
+        "src_dtype": str(src.dtype),
+        "fallback_ranges": [repr(r.arg) for r in fallback],
+      }))
+    return _tc_local_stage_src(src, fallback, 1)
   if not getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0): return _fallback("flag_disabled")
   if not _tc_local_stage_with_planned_local(): return _fallback("planned_local_disabled")
   if src.op is not Ops.CONTRACT: return _fallback("src_not_contract")

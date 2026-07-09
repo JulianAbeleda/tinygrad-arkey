@@ -346,6 +346,49 @@ correct, and layout constants are not the missing piece. P4 must therefore proce
 
 Do not attempt A+B destructive lowering until B-only is correct on both small-N and active-N.
 
+#### P4C. Generic B Contract For The Replacement
+
+The known-correct generic B path is now audited by:
+
+```bash
+PYTHONPATH=. python3 extra/qk/prefill/prefill_stage_owner_audit.py \
+  --shape 2,2 --m 512 --n 5120 --k 5120 --loc 2 --unr 2 \
+  --boundary postrange --json
+```
+
+`generic_b_stage_contract.ok=true` means the B operand is still represented before lowering as:
+
+```text
+STAGE dtype:        dtypes.half.vec(16)
+STAGE shape:        [32, 2, 16]
+STAGE index ranges: WARP x LOCAL
+consumer:           INDEX(STAGE_B, WARP, LOCAL)
+contract arg:       ((5,2), (4,2), (3,2), (9,2))
+```
+
+This is the replacement contract. A correct owned B stage must preserve this vector payload and consumer identity. The
+refuted tile-key helper used scalar lane-oriented packing, which is why address-formula tuning did not fix correctness.
+
+Implementation order for the next push:
+
+| Step | Work | Gate |
+| --- | --- | --- |
+| P4C.1 | Keep `generic_b_stage_contract` green on the known-correct path. | `ok=true`, one B stage, one direct B consumer. |
+| P4C.2 | Add a default-off `OwnedBStage` builder that emits the same vector `STAGE_B` contract first, with no rotation. | Correctness and density identical to baseline. |
+| P4C.3 | Move only the owner/lifecycle metadata into `OwnedBStage`; no store count change yet. | Producer map unchanged; metadata says each consumer has one owner. |
+| P4C.4 | Only then add rotation/future ownership. | B-only correctness first; density must improve without late suppression. |
+
+Status:
+
+| Check | Result |
+| --- | --- |
+| `generic_b_stage_contract` on baseline | PASS: one B `STAGE`, one direct B consumer, vector payload over `WARP x LOCAL`. |
+| `PREFILL_DBUF_OWNED_B_STAGE_IDENTITY=1` | PASS: correct and structurally identical to baseline (`39.062 inst/WMMA`, `3.312 wait/WMMA`, `2.0 global_b128/WMMA`, `2.0 ds_store_b128/WMMA`, `4.0 ds_load_b128/WMMA`, `0.125 barrier/WMMA`). |
+
+This completes P4C.1/P4C.2. The next non-speculative step is P4C.3: attach explicit owner/lifecycle metadata to this
+identity path while preserving the same emitted stream. Rotation remains blocked until that metadata can prove which
+B producer epoch each direct B consumer owns.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.

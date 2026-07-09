@@ -115,3 +115,12 @@ def test_lowering_hook_summary_marks_ab_dbuf_ready():
   assert out["lowering_hook_owner_ready"] is True
   assert out["lowering_roles"] == ["A", "B"]
   assert out["lowering_count_by_role"] == {"A": 1, "B": 1}
+
+
+def test_generic_b_stage_contract_empty_fails_closed():
+  out = audit.generic_b_stage_contract(audit.UOp.sink())
+
+  assert out["ok"] is False
+  assert out["stage_count"] == 0
+  assert out["direct_b_stage_consumer_count"] == 0
+  assert "WARP x LOCAL" in out["expected_owned_stage_shape"]
