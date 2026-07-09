@@ -338,6 +338,7 @@ def owned_b_stage_emitter_scope() -> dict[str, Any]:
     "implemented_modes": {
       "identity": "emits the known-correct generic vector STAGE_B contract; no rotation or density change",
       "audit": "alias for identity emission while collecting proof metadata",
+      "object_identity": "routes through an explicit OwnedBStageEmitter object, but emits the same identity graph",
     },
     "blocked_modes": {
       "rotate": "fails fast until a prologue/body/tail materializer exists",

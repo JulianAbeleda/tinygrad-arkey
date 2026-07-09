@@ -167,6 +167,7 @@ def test_owned_b_stage_emitter_scope_names_identity_and_blocks_rotate():
 
   assert "postrange.py::_tc_local_stage_b_src" in out["hook"]
   assert "identity" in out["implemented_modes"]
+  assert "object_identity" in out["implemented_modes"]
   assert "rotate" in out["blocked_modes"]
   assert "prologue" in out["required_materializer"]
   assert "silently fall back" in out["forbidden_fallback"]

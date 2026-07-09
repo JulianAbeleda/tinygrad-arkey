@@ -575,6 +575,56 @@ target generated:  warmup once, then produce future slot inside body
 
 This is the ASM-derived lifecycle construction target for `OwnedBStageEmitter`.
 
+### P4G. Owned-B Emitter Object Boundary
+
+Status: implemented for identity only.
+
+`PREFILL_DBUF_OWNED_B_STAGE_EMIT=object_identity` now routes B staging through an explicit
+`OwnedBStageEmitter` at `postrange._tc_local_stage_b_src`, while deliberately emitting the same generic vector
+`STAGE_B` graph as the known-correct identity path.
+
+This proves the boundary is usable without changing behavior:
+
+```text
+shape=2x2
+status=ok
+TFLOPS=7.84
+WMMA=16
+global_load_b128=32
+ds_store_b128=32
+ds_load_b128=64
+s_barrier=2
+inst/WMMA=39.062
+wait/WMMA=3.312
+global/WMMA=2.0
+store/WMMA=2.0
+load/WMMA=4.0
+```
+
+The postrange owner audit still reports:
+
+```text
+owned_b_stage_lifecycle.ok=true
+p4c_rotation_readiness.ready=false
+blocked_at=P4C.4
+required_next_object=OwnedBStage(prologue produce k0, body consume k + produce k+1, tail consume final)
+```
+
+Pass:
+
+```text
+object_identity preserves correctness
+object_identity preserves density counters
+rotate still fails closed
+```
+
+Next:
+
+```text
+replace identity emission inside OwnedBStageEmitter with a real prologue/body/tail materializer
+do not implement rotate as same-epoch STAGE mutation or late store suppression
+```
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.
