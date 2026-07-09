@@ -131,7 +131,11 @@ First implementation should create a route/spec audit artifact using existing co
 bench/prefill-s10-lds2-ownership/hybrid-s9-s10-role-trace.json
 ```
 
-Status: created.
+Status: created by:
+
+```bash
+PYTHONPATH=. python3 extra/qk/prefill/s10_hybrid_role_trace.py
+```
 
 Expected rows:
 
@@ -148,6 +152,23 @@ The pass/fail rule is simple:
 If metadata changes the emitted route or drops pp512 below 4000 tok/s, it is not S10 MVP.
 If metadata preserves the S9 authority band and produces honest hybrid classification, S10 MVP passes.
 ```
+
+Current gate result:
+
+| artifact | pp512 | verdict |
+|---|---:|---|
+| `bench/prefill-s10-lds2-ownership/hybrid-s9-s10-pp512-authority.json` | `4389` | pass |
+
+Unit gate:
+
+```bash
+PYTHONPATH=. pytest -q \
+  test/unit/test_prefill_s10_hybrid_role_trace.py \
+  test/unit/test_prefill_schedule_spec.py \
+  test/unit/test_wmma_lds_spec.py
+```
+
+Result: `22 passed`.
 
 ## Goal
 
