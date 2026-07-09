@@ -117,3 +117,26 @@ def test_dbuf_pipeline_construction_audit_marks_prologue_body_overlap_not_redund
   assert audit["steady_state_body_produced_overlap_count"] == 1
   assert audit["pipeline_epoch_candidate"] is True
   assert "not a redundancy proof" in audit["note"]
+
+
+def test_dbuf_pipeline_construction_audit_reports_source_mismatch_for_same_lds_window():
+  def store(idx, imm):
+    return {"idx": idx, "spans": {"addr": {"kind": "v", "lo": 0, "hi": 0, "n": 1},
+                                  "data0": {"kind": "v", "lo": 232, "hi": 235, "n": 4}},
+            "text": f"ds_store_b128(v[0], v[0], v[232:235], v[0], {imm})"}
+  def gload(idx, sbase):
+    return {"idx": idx, "spans": {"vdst": {"kind": "v", "lo": 232, "hi": 235, "n": 4},
+                                  "addr": {"kind": "v", "lo": 85, "hi": 85, "n": 1},
+                                  "saddr": {"kind": "s", "lo": sbase, "hi": sbase + 1, "n": 2}},
+            "text": f"global_load_b128(v[232:235], v[85], v[0], s[{sbase}:{sbase+1}])"}
+
+  audit = life._dbuf_pipeline_construction_audit({
+    "global_load_b128": [gload(9, 8), gload(129, 10)],
+    "ds_store_b128": [store(10, 48), store(130, 48)],
+    "ds_load_b128": [],
+  }, [100, 160])
+
+  assert audit["prologue_body_physical_window_overlap_count"] == 1
+  assert audit["prologue_body_source_mismatch_count"] == 1
+  assert audit["prologue_body_source_mismatch_sample"][0]["prologue_sources"] == ["saddr=s8:9|vaddr=v85:85"]
+  assert audit["prologue_body_source_mismatch_sample"][0]["body_sources"] == ["saddr=s10:11|vaddr=v85:85"]

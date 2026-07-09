@@ -184,9 +184,28 @@ def _pipeline_load_key(row: dict[str, Any]) -> str:
   return _pipeline_store_key(row)
 
 
+def _pipeline_spans_overlap(a: dict[str, int] | None, b: dict[str, int] | None) -> bool:
+  if a is None or b is None or a.get("kind") != b.get("kind"): return False
+  return not (int(a["hi"]) < int(b["lo"]) or int(b["hi"]) < int(a["lo"]))
+
+
+def _pipeline_span_key(span: dict[str, int] | None) -> str:
+  if span is None: return "?"
+  return f"{span.get('kind')}{span.get('lo')}:{span.get('hi')}"
+
+
+def _pipeline_store_source_key(row: dict[str, Any], global_rows: list[dict[str, Any]]) -> str:
+  data = row.get("spans", {}).get("data0")
+  prev = [g for g in global_rows if g["idx"] < row["idx"] and _pipeline_spans_overlap(g.get("spans", {}).get("vdst"), data)]
+  if not prev: return "source_unknown"
+  g = prev[-1]
+  return f"saddr={_pipeline_span_key(g.get('spans', {}).get('saddr'))}|vaddr={_pipeline_span_key(g.get('spans', {}).get('addr'))}"
+
+
 def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma_indices: list[int]) -> dict[str, Any]:
   store_rows = ops.get("ds_store_b128", [])
   load_rows = ops.get("ds_load_b128", [])
+  global_rows = ops.get("global_load_b128", [])
   phases = ("prologue", "body", "tail")
   stores_by_phase = {p: [] for p in phases}
   loads_by_phase = {p: [] for p in phases}
@@ -198,7 +217,16 @@ def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma
       loads_by_phase[phase].append(row)
   store_keys = {p: [_pipeline_store_key(r) for r in rows] for p, rows in stores_by_phase.items()}
   key_sets = {p: set(keys) for p, keys in store_keys.items()}
+  source_by_phase_key = {p: {} for p in phases}
+  for phase, rows in stores_by_phase.items():
+    for row in rows:
+      source_by_phase_key[phase].setdefault(_pipeline_store_key(row), set()).add(_pipeline_store_source_key(row, global_rows))
   prologue_body_overlap = sorted(key_sets["prologue"] & key_sets["body"])
+  source_mismatch = []
+  for k in prologue_body_overlap:
+    pro_src, body_src = source_by_phase_key["prologue"].get(k, set()), source_by_phase_key["body"].get(k, set())
+    if pro_src and body_src and pro_src.isdisjoint(body_src):
+      source_mismatch.append({"window": k, "prologue_sources": sorted(pro_src), "body_sources": sorted(body_src)})
   body_first_store = min((r["idx"] for r in stores_by_phase["body"]), default=None)
   body_loads_before_body_store = []
   load_keys_before_body_store: set[str] = set()
@@ -216,12 +244,14 @@ def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma
     verdict = "no_body_staging"
   return {
     "verdict": verdict,
-    "note": "same physical LDS window across prologue/body is pipeline rotation evidence, not a redundancy proof",
+    "note": "same addr-register LDS window across prologue/body is pipeline/alias evidence, not a redundancy proof",
     "store_counts": {p: len(stores_by_phase[p]) for p in phases},
     "load_counts": {p: len(loads_by_phase[p]) for p in phases},
     "unique_store_windows": {p: len(key_sets[p]) for p in phases},
     "prologue_body_physical_window_overlap_count": len(prologue_body_overlap),
     "prologue_body_physical_window_overlap_sample": prologue_body_overlap[:16],
+    "prologue_body_source_mismatch_count": len(source_mismatch),
+    "prologue_body_source_mismatch_sample": source_mismatch[:8],
     "body_first_store_idx": body_first_store,
     "body_loads_before_first_body_store_count": len(body_loads_before_body_store),
     "body_loads_before_first_body_store_sample": body_loads_before_body_store[:16],

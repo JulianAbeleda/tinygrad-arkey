@@ -285,6 +285,26 @@ The construction selector removed the apparent duplicate physical windows and pr
 the values were not the same runtime epoch. This confirms the sharper reaching-def diagnosis: pipeline construction
 must carry an epoch/value recurrence, not only physical LDS windows and relative load placement.
 
+Follow-up source audit:
+
+```text
+overlap windows:              7
+source mismatches:            7
+prologue source for overlaps: s[8:9] + v85
+body source for overlaps:     s[10:11] + v85
+```
+
+This sharpens the failure again:
+
+```text
+the apparent duplicate windows are not duplicate values.
+they are different global source streams/epochs sharing the same weak LDS address-family key.
+```
+
+The current construction key is still too weak. It treats `addr-register + immediate` overlap as if it were a proven
+same LDS/logical producer. The next key must include the logical operand/source stream and runtime epoch, or the
+pipeline construction must happen before those streams collapse into reused LDS address registers.
+
 Next probe:
 
 ```text
@@ -295,7 +315,9 @@ Required change:
 
 ```text
 only suppress a prologue producer when the body producer has the same logical runtime epoch,
-not merely the same physical slot and not-warmup-consumed placement.
+same logical operand/source stream,
+and same logical runtime epoch,
+not merely the same address-family slot and not-warmup-consumed placement.
 ```
 
 If that epoch cannot be recovered from current D3 candidate metadata, the construction has to move earlier, before D3
