@@ -153,6 +153,17 @@ def _dbuf_d3a_compile_audit_summary(rows: list[dict[str, Any]]) -> dict[str, Any
   slots = sorted({p.get("dbuf_slot") for p in rows if p.get("dbuf_slot") is not None})
   nbufs = sorted({p.get("nbuf") for p in rows if p.get("nbuf") is not None})
   ok_rows = [p for p in rows if p.get("ok") is True]
+  stage_key_rows = [p for p in rows if p.get("kind") == "stage_key_audit"]
+  by_slot: dict[str, set[str]] = {}
+  by_key: dict[str, set[str]] = {}
+  for p in stage_key_rows:
+    slot = repr(p.get("slot"))
+    key = str(p.get("strong_key"))
+    source = str(p.get("source"))
+    by_slot.setdefault(slot, set()).add(source)
+    by_key.setdefault(key, set()).add(source)
+  weak_alias_slots = {k: sorted(v) for k, v in by_slot.items() if len(v) > 1}
+  strong_key_collisions = {k: sorted(v) for k, v in by_key.items() if len(v) > 1}
   return {
     "compile_audit_count": len(rows),
     "ok_audit_count": len(ok_rows),
@@ -160,6 +171,12 @@ def _dbuf_d3a_compile_audit_summary(rows: list[dict[str, Any]]) -> dict[str, Any
     "dbuf_slots": slots,
     "nbufs": nbufs,
     "ok": bool(rows) and len(ok_rows) == len(rows) and set(roles) >= {"A", "B"} and any(str(n).isdigit() and int(n) > 1 for n in nbufs),
+    "stage_key_audit_count": len(stage_key_rows),
+    "stage_key_weak_alias_slot_count": len(weak_alias_slots),
+    "stage_key_weak_alias_slot_sample": dict(list(sorted(weak_alias_slots.items()))[:8]),
+    "stage_key_strong_collision_count": len(strong_key_collisions),
+    "stage_key_strong_collision_sample": dict(list(sorted(strong_key_collisions.items()))[:8]),
+    "stage_key_rejects_weak_aliases": bool(weak_alias_slots) and not strong_key_collisions,
     "rows": rows,
   }
 

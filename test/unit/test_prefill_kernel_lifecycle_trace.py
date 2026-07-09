@@ -3,6 +3,7 @@ from pathlib import Path
 
 from extra.qk import pure_kernel_surface_audit as surface_audit
 from extra.qk.prefill import kernel_lifecycle_trace as life
+from extra.qk.prefill import native_isa_l4_stream_probe as sp
 from tinygrad.llm.generated_candidates import select_generated_candidate
 from tinygrad.llm.quant_specs import activation_spec, quant_spec
 from tinygrad.llm.runtime_specs import RuntimeOpSpec
@@ -140,3 +141,16 @@ def test_dbuf_pipeline_construction_audit_reports_source_mismatch_for_same_lds_w
   assert audit["prologue_body_source_mismatch_count"] == 1
   assert audit["prologue_body_source_mismatch_sample"][0]["prologue_sources"] == ["saddr=s8:9|vaddr=v85:85"]
   assert audit["prologue_body_source_mismatch_sample"][0]["body_sources"] == ["saddr=s10:11|vaddr=v85:85"]
+
+
+def test_stage_key_compile_audit_reports_strong_key_collisions():
+  out = sp._dbuf_d3a_compile_audit_summary([
+    {"kind": "stage_key_audit", "slot": 16, "source": "A0", "strong_key": "K0"},
+    {"kind": "stage_key_audit", "slot": 16, "source": "A1", "strong_key": "K1"},
+    {"kind": "stage_key_audit", "slot": 24, "source": "B0", "strong_key": "KB"},
+  ])
+
+  assert out["stage_key_audit_count"] == 3
+  assert out["stage_key_weak_alias_slot_count"] == 1
+  assert out["stage_key_strong_collision_count"] == 0
+  assert out["stage_key_rejects_weak_aliases"] is True

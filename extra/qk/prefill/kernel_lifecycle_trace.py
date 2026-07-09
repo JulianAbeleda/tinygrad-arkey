@@ -18,6 +18,7 @@ from tinygrad.codegen import to_program, to_program_cache
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa.amd import AMDISARenderer
+from tinygrad.renderer.isa import amd as amd_isa
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.prefill import native_isa_l4_stream_probe as sp
@@ -41,6 +42,7 @@ def _generated_insts(m_up: int, target: str) -> tuple[list[Any], dict[str, Any]]
 
 def _generated_active_insts(args: argparse.Namespace, shape: tuple[int, int]) -> tuple[list[Any], dict[str, Any]]:
   u0, u1 = shape
+  amd_isa.DBUF_D3A_AUDIT_LOG.clear()
   prg = _compile_native_program(args.m, args.n, args.k, u0, u1, args.loc, args.unr)
   lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
   ren = AMDISARenderer(Target.parse(args.target))
@@ -326,6 +328,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
   lds_families = sp._summarize_lds_addresses(ops)
   operand_families = sp._wmma_lds_operand_families(insts, ops[sp.WMMA_NAME])
   dbuf = sp._dbuf_gate_summary(ops, overlap, lds_families, operand_families, origins)
+  dbuf_compile_audit = sp._dbuf_d3a_compile_audit_summary(list(amd_isa.DBUF_D3A_AUDIT_LOG))
   origin_counts = Counter((x["src0"], x["src1"]) for x in origins)
   report = {
     "label": label,
@@ -359,6 +362,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     },
     "dbuf_gate_summary": dbuf,
     "dbuf_pipeline_construction_audit": _dbuf_pipeline_construction_audit(ops, widx),
+    "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
   if full_rows:
     report["track_rows"] = ops

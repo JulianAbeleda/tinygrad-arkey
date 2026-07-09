@@ -322,3 +322,54 @@ not merely the same address-family slot and not-warmup-consumed placement.
 
 If that epoch cannot be recovered from current D3 candidate metadata, the construction has to move earlier, before D3
 clones stores from already-expanded stage producers.
+
+## Theory 1 Small Test - StageKey Audit
+
+The small non-destructive test for Theory 1 is:
+
+```text
+PREFILL_WMMA_KMAJOR_STAGE_KEY_AUDIT=1
+```
+
+It emits proposed ownership keys without suppressing anything:
+
+```python
+StageKey = (
+  role,
+  source_stream,      # graph/source expression, stronger than final saddr/vaddr
+  logical_phase,      # phase_i
+  lds_slot,
+  stage_store_key,
+)
+```
+
+Result on generated K-major+D3 `2x2`:
+
+```text
+stage_key_audit_count:        76
+body logical phases observed: 1, 2, 3
+strong_key_collisions:        0
+```
+
+Interpretation:
+
+```text
+The semantic material needed for Theory 1 still exists at the D3/K-major boundary.
+```
+
+This does not yet prove a correct construction, but it proves the next probe does not need to guess from final
+addr-register windows. It can key ownership by role/source/logical phase and fail closed on key collisions.
+
+Next small destructive probe:
+
+```text
+exact StageKey ownership for one role and one body phase only
+```
+
+Stop immediately if:
+
+```text
+strong_key_collisions > 0
+or any deletion decision depends only on LDS slot/address-family
+or bounded correctness fails
+```

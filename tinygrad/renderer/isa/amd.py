@@ -1537,6 +1537,19 @@ def _dbuf_stage_epoch_key_for_store(ctx:IselContext|None, st:UOp, a:UOp|None=Non
   vkey = _dbuf_stage_value_key(st)
   return None if slot is None or vkey is None else ("stage_epoch", slot, vkey)
 
+def _dbuf_stage_strong_key(ctx:IselContext|None, role:str, st:UOp, *, phase:str, phase_i:int|None=None) -> tuple|None:
+  if ctx is None: return None
+  slot = _dbuf_stage_store_abs_slot(ctx, st)
+  vkey = _dbuf_stage_value_key(st)
+  skey = _dbuf_stage_store_key(st)
+  if slot is None or vkey is None: return None
+  return ("stage_key", ("role", role), ("source", vkey), ("logical_phase", phase_i),
+          ("lds_slot", slot), ("stage_store_key", skey), ("phase", phase))
+
+def _dbuf_stage_key_audit(ctx:IselContext|None, row:dict) -> None:
+  if ctx is None or not getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_AUDIT", 0): return
+  DBUF_D3A_AUDIT_LOG.append({"kind": "stage_key_audit", **row})
+
 def _dbuf_pipeline_epoch_should_suppress(ctx:IselContext|None, st:UOp, a:UOp) -> bool:
   # Diagnostic-only first pipeline construction probe. This removes physical-window duplicates but is not a proof of
   # runtime epoch equality; docs/8b-prefill-epoch-aware-d3-self-sufficiency-scope.md records the wrong-output result.
@@ -1595,7 +1608,7 @@ def _dbuf_d3a_stage_proof(ctx:IselContext, role:str, carrier:UOp) -> dict:
 def _freeze_audit_payload(payload:dict) -> tuple:
   return tuple(sorted(payload.items(), key=lambda x: x[0]))
 
-def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tuple[UOp,...]:
+def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_i:int|None=None) -> tuple[UOp,...]:
   if not (getenv("PREFILL_DBUF_D3A_POST", 0) and dep): return dep
   out = dep
   for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
@@ -1642,6 +1655,9 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tup
                                      "key": repr(skey), "value_key": repr(_dbuf_stage_value_key(cand)),
                                      "epoch_key": repr(_dbuf_stage_epoch_key_for_store(ctx, cand)),
                                      "abs_slot": abs_slot})
+        _dbuf_stage_key_audit(ctx, {"phase": "body", "role": role, "id": id(cand), "phase_i": phase_i,
+                                    "strong_key": repr(_dbuf_stage_strong_key(ctx, role, cand, phase="body", phase_i=phase_i)),
+                                    "slot": abs_slot, "source": repr(_dbuf_stage_value_key(cand))})
       out = (st,)
     if not moved: continue
     if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
@@ -1700,11 +1716,19 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
           cands, _reason = _dbuf_stage_candidates(carrier)
           for cand in cands:
             if (abs_slot := _dbuf_stage_store_abs_slot(ctx, cand)) is not None: warmup_slots.add(abs_slot)
+      if getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_AUDIT", 0):
+        for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
+          cands, _reason = _dbuf_stage_candidates(carrier)
+          for cand in cands:
+            _dbuf_stage_key_audit(ctx, {"phase": "needed", "role": role, "id": id(cand), "phase_i": phase_i,
+                                        "strong_key": repr(_dbuf_stage_strong_key(ctx, role, cand, phase="needed", phase_i=phase_i)),
+                                        "slot": _dbuf_stage_store_abs_slot(ctx, cand),
+                                        "source": repr(_dbuf_stage_value_key(cand))})
       akey, bkey = _wmma_frag_phase_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_phase_reuse_key(ctx, "B", tile.src[1])
       if akey is None or bkey is None: return None
       abase, bbase = _ab_base(ctx, ("A", akey)), _ab_base(ctx, ("B", bkey))
       if abase is None or bbase is None or cbases[chain_i] is None: return None
-      tile_phase_dep = _dbuf_d3a_probe_marker(ctx, tile, phase_dep) if getenv("PREFILL_WMMA_KMAJOR_D3A_MARKER", 0) and phase_i > 0 else phase_dep
+      tile_phase_dep = _dbuf_d3a_probe_marker(ctx, tile, phase_dep, phase_i=phase_i) if getenv("PREFILL_WMMA_KMAJOR_D3A_MARKER", 0) and phase_i > 0 else phase_dep
       def pack(role:str, carrier:UOp, key:tuple, base:int) -> tuple[UOp, ...]:
         pkey = (role, key, base)
         if pkey not in pack_cache: pack_cache[pkey] = _pack_frag_tile(ctx, carrier, base, tile_phase_dep, role)
