@@ -159,3 +159,13 @@ def test_owned_b_stage_lifecycle_builds_prologue_body_tail():
   ready = audit.p4c_rotation_readiness(contract, plan)
   assert ready["ready"] is False
   assert "no postrange/codegen emitter" in ready["reason"]
+
+
+def test_owned_b_stage_emitter_scope_names_identity_and_blocks_rotate():
+  out = audit.owned_b_stage_emitter_scope()
+
+  assert "postrange.py::_tc_local_stage_b_src" in out["hook"]
+  assert "identity" in out["implemented_modes"]
+  assert "rotate" in out["blocked_modes"]
+  assert "prologue" in out["required_materializer"]
+  assert "silently fall back" in out["forbidden_fallback"]

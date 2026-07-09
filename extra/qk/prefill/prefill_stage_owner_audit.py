@@ -332,6 +332,21 @@ def p4c_rotation_readiness(contract: dict[str, Any], lifecycle: dict[str, Any] |
   }
 
 
+def owned_b_stage_emitter_scope() -> dict[str, Any]:
+  return {
+    "hook": "tinygrad/codegen/opt/postrange.py::_tc_local_stage_b_src before generic Ops.STAGE lowering",
+    "implemented_modes": {
+      "identity": "emits the known-correct generic vector STAGE_B contract; no rotation or density change",
+      "audit": "alias for identity emission while collecting proof metadata",
+    },
+    "blocked_modes": {
+      "rotate": "fails fast until a prologue/body/tail materializer exists",
+    },
+    "required_materializer": "OwnedBStageEmitter(prologue produce k0, body consume k + produce k+1, tail consume last)",
+    "forbidden_fallback": "silently fall back to B tile-key or mutate same-epoch STAGE into k+1",
+  }
+
+
 def compile_full_sink(m: int, n: int, k: int, u0: int, u1: int, loc: int, unr: int, boundary: str) -> UOp:
   rangeify.prefill_dbuf_clear_rotated_stage_lowering_audit()
   postrange._WARMSTART_OPTS = {(frozenset({m, n}), k): _opts_for(u0, u1, loc, unr)}
@@ -521,6 +536,7 @@ def main() -> int:
     "lowering_hook_owner_records": lowering_rows,
     "generic_b_stage_contract": b_contract,
     "owned_b_stage_lifecycle": owned_b_lifecycle,
+    "owned_b_stage_emitter_scope": owned_b_stage_emitter_scope(),
     "p4c_rotation_readiness": p4c_rotation_readiness(b_contract, owned_b_lifecycle),
     "rotated_lifecycle_plan": plan,
     "p4_readiness": p4_readiness(summary, plan, args.boundary),

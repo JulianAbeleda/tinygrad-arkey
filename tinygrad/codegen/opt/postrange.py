@@ -493,7 +493,8 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
         "ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(src.ranges, key=lambda r: r.arg)],
       }))
     return _tc_local_stage_src(src, fallback, 1)
-  if getenv("PREFILL_DBUF_OWNED_B_STAGE_IDENTITY", 0):
+  owned_b_emit = str(getenv("PREFILL_DBUF_OWNED_B_STAGE_EMIT", "")).strip().lower()
+  if getenv("PREFILL_DBUF_OWNED_B_STAGE_IDENTITY", 0) or owned_b_emit in ("identity", "audit"):
     if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
       print("PREFILL_DBUF_OWNED_B_STAGE", json.dumps({
         "mode": "identity_generic_stage_contract",
@@ -502,6 +503,11 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
         "fallback_ranges": [repr(r.arg) for r in fallback],
       }))
     return _tc_local_stage_src(src, fallback, 1)
+  if owned_b_emit in ("rotate", "rotated"):
+    raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires a prologue/body/tail OwnedBStage emitter; "
+                         "refusing same-epoch STAGE mutation")
+  if owned_b_emit not in ("", "0", "false", "off", "no"):
+    raise KernelOptError(f"unknown PREFILL_DBUF_OWNED_B_STAGE_EMIT={owned_b_emit!r}; expected identity or rotate")
   if not getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0): return _fallback("flag_disabled")
   if not _tc_local_stage_with_planned_local(): return _fallback("planned_local_disabled")
   if src.op is not Ops.CONTRACT: return _fallback("src_not_contract")

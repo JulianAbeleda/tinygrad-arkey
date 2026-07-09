@@ -468,6 +468,44 @@ postrange owned-stage rewrite before generic Ops.STAGE lowering
 This is where P4D stops right now. The lifecycle is scoped and machine-audited; the behavior-changing emitter is still
 missing.
 
+#### P4E. OwnedBStage Emitter Boundary
+
+The postrange hook is now explicit:
+
+```text
+tinygrad/codegen/opt/postrange.py::_tc_local_stage_b_src
+```
+
+Emitter modes:
+
+| Flag | Result |
+| --- | --- |
+| `PREFILL_DBUF_OWNED_B_STAGE_EMIT=identity` | Emits the known-correct generic vector `STAGE_B` contract. This is behavior-neutral and remains correct. |
+| `PREFILL_DBUF_OWNED_B_STAGE_EMIT=audit` | Alias for identity emission while collecting proof metadata. |
+| `PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate` | Fails fast with `KernelOptError` until a prologue/body/tail materializer exists. |
+
+Measured identity gate:
+
+```text
+status=ok
+inst/WMMA=39.062
+wait/WMMA=3.312
+global_b128/WMMA=2.0
+ds_store_b128/WMMA=2.0
+ds_load_b128/WMMA=4.0
+barrier/WMMA=0.125
+```
+
+Measured rotate gate:
+
+```text
+status=KernelOptError
+message=PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires a prologue/body/tail OwnedBStage emitter; refusing same-epoch STAGE mutation
+```
+
+This is intentional. The emitter boundary is installed, but only identity emission is implemented. The next code change
+must implement the materializer, not bypass the gate.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.
