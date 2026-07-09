@@ -441,8 +441,12 @@ def _tc_local_stage_coop_b_ranges(src:UOp) -> tuple[tuple[UOp, ...], tuple[UOp, 
 
 
 def _tc_local_stage_buffer_tag(operand_idx:int, lds_buffer_id:int, nbuf:int, tile_count:int, tile_elems:int) -> tuple:
-  return ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
-          ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
+  tag = ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
+         ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
+  if operand_idx == 1 and getenv("PREFILL_DBUF_OWNED_B_STAGE_META", 0):
+    tag += (("owned_stage", "B_IDENTITY"), ("producer_epoch", "same_reduce"), ("consumer_epoch", "same_reduce"),
+            ("rotation", "none"))
+  return tag
 
 def _tc_local_stage_proof_dump(stage:str, operand_idx:int, idx:UOp, buffer_tag:tuple|None, extra:dict|None=None) -> None:
   if not getenv("PREFILL_WMMA_PROOF_CHAIN_DUMP", 0): return

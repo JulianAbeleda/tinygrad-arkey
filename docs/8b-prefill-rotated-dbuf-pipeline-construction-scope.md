@@ -384,10 +384,11 @@ Status:
 | --- | --- |
 | `generic_b_stage_contract` on baseline | PASS: one B `STAGE`, one direct B consumer, vector payload over `WARP x LOCAL`. |
 | `PREFILL_DBUF_OWNED_B_STAGE_IDENTITY=1` | PASS: correct and structurally identical to baseline (`39.062 inst/WMMA`, `3.312 wait/WMMA`, `2.0 global_b128/WMMA`, `2.0 ds_store_b128/WMMA`, `4.0 ds_load_b128/WMMA`, `0.125 barrier/WMMA`). |
+| `PREFILL_DBUF_OWNED_B_STAGE_IDENTITY=1 PREFILL_DBUF_OWNED_B_STAGE_META=1` | PASS: B stage and B consumer both carry `owned_stage=B_IDENTITY`, `producer_epoch=same_reduce`, `consumer_epoch=same_reduce`, `rotation=none`; stream remains correct and structurally unchanged. |
 
-This completes P4C.1/P4C.2. The next non-speculative step is P4C.3: attach explicit owner/lifecycle metadata to this
-identity path while preserving the same emitted stream. Rotation remains blocked until that metadata can prove which
-B producer epoch each direct B consumer owns.
+This completes P4C.1/P4C.2/P4C.3. The next non-speculative step is P4C.4: introduce a rotated B producer epoch only
+after the metadata can prove that every B consumer still has one owner. The first rotated probe must remain B-only and
+must fail closed before changing A or scheduler placement.
 
 ### P5. Add A
 
