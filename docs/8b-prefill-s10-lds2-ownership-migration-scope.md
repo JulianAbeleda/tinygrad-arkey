@@ -10,6 +10,16 @@ S10 is now narrowed to:
 search/spec ownership around the proven LDS2 backend atom, while preserving the S9 4k pp512 band
 ```
 
+The classification target is:
+
+```text
+hybrid machine-searched route over hand-tuned backend atoms
+```
+
+This is intentionally not `pure_generated`. It is also not "write another full hand kernel." The S9 execution body stays
+as the performance baseline, while S10 owns the metadata, role policy, search knobs, classification, and promotion gates
+around that body.
+
 The hard generated DBUF replacement path is explicitly parked for later R&D. That includes the P4/B tile-key,
 owner-aware rotated-stage rewrite, and generated DBUF lifecycle replacement work. Those are real compiler problems, but
 they are not required for the next useful S10 milestone.
@@ -70,6 +80,74 @@ The next S10 validation loop is:
 2. ignore one-shot smoke numbers for performance promotion,
 3. keep generated DBUF/P4 parked,
 4. search over the extracted LDS2 spec knobs only when the S9 authority path stays in the `>=4000 tok/s` pp512 band.
+
+## Hybrid S9/S10 Bare Minimum
+
+The minimum useful S10 phase is a no-performance-regression ownership layer:
+
+```text
+S9_FAST_BASELINE_WITH_S10_OWNERSHIP_METADATA
+```
+
+It uses:
+
+```text
+PREFILL_V2=1 PREFILL_GRAPH_GEMM=1
+```
+
+and does not use:
+
+```text
+PREFILL_WMMA_PIPE_PRIMITIVE=1
+PREFILL_WMMA_LDS_PRIMITIVE=1
+PREFILL_DBUF=1
+```
+
+Layer ownership:
+
+| Layer | Execution source | S10 responsibility | Promotion risk |
+|---|---|---|---|
+| role selection | S9 route behavior | describe each role through `PrefillGEMMScheduleSpec` | low |
+| pipe roles: `attn_qo`, `attn_kv`, `ffn_down` | S9 `build_gemm_pipe` backend atom | record/spec the selected pipe atom and params | low |
+| LDS role: `ffn_gate/up` | S9 `lower_lds2_gemm_kernel` / `build_gemm_lds2` backend atom | record/spec reg layout, memory layout, wait policy, cadence, lifecycle | low |
+| wait/layout search | S9 backend atom | choose only already-proven S9-safe spec knobs | medium-low |
+| emitted instruction lifecycle | S9 backend atom | preserve byte/perf identity unless a candidate is explicitly measured | low if gated |
+| generated DBUF replacement | none in this phase | parked | high; excluded |
+
+Done for this minimum phase means:
+
+| Gate | Required result |
+|---|---|
+| H0 role trace | one artifact maps every graph-GEMM role to `PrefillGEMMScheduleSpec` and selected backend atom. |
+| H1 classification | route is classified as `compiler_primitive_spec_owned__asm_backend_atom` / hybrid, not pure. |
+| H2 no primitive flags | authority run proves S10 metadata does not require generated pipe/LDS primitive flags. |
+| H3 S9 authority preserved | pp512 remains `>=4000 tok/s` under `K=8,warmups=4,rounds=3,pin_clock`. |
+| H4 search boundary | only S9-safe knobs are eligible: wait policy first, then byte-preserving layout/lifecycle metadata. |
+| H5 hard path parked | generated rotated DBUF/P4 is not part of this phase's acceptance criteria. |
+
+First implementation should create a route/spec audit artifact using existing code paths:
+
+```text
+bench/prefill-s10-lds2-ownership/hybrid-s9-s10-role-trace.json
+```
+
+Status: created.
+
+Expected rows:
+
+| role | route family | backend atom | ownership claim |
+|---|---|---|---|
+| `attn_qo` | `pipe` | `build_gemm_pipe` | S10 records spec/params; S9 emits atom |
+| `attn_kv` | `pipe` | `build_gemm_pipe` | S10 records spec/params; S9 emits atom |
+| `ffn_down` | `pipe` | `build_gemm_pipe` | S10 records spec/params; S9 emits atom |
+| `ffn_gate_up` | `lds` | `lower_lds2_gemm_kernel` / `build_gemm_lds2` | S10 records LDS2 layout/wait/cadence/lifecycle; S9 emits atom |
+
+The pass/fail rule is simple:
+
+```text
+If metadata changes the emitted route or drops pp512 below 4000 tok/s, it is not S10 MVP.
+If metadata preserves the S9 authority band and produces honest hybrid classification, S10 MVP passes.
+```
 
 ## Goal
 

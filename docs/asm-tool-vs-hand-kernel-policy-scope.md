@@ -29,6 +29,7 @@ write backend/compiler primitives. Machine search chooses how to compose them in
 | `generated_backend` | Kernel topology comes from tinygrad graph, descriptor, or search; backend emits target ASM. | yes | `decode_q4k_g3_generated`, `decode_q6k_coop_generated`, `prefill_v2_scheduler_matmul_default` |
 | `backend_asm_tool` | Reusable compiler/backend primitive for an instruction family. | yes | WMMA lowering, DS offset lowering, waitcnt policy |
 | `compiler_primitive_spec_owned__asm_backend_atom` | Route/spec owns lifecycle data and primitive selection; a reusable backend atom may emit ASM for the selected primitive. | research/opt-in until strict generated proof | S10 LDS2 `ffn_gate/up` route |
+| `hybrid_machine_searched_over_hand_tuned_backend_atoms` | Machine/search owns route policy, specs, knobs, artifacts, and promotion gates; the performance-critical backend atom is still a hand-tuned reusable ASM emitter. | opt-in or explicit baseline only | S10 minimum phase over S9 `build_gemm_pipe` / `lower_lds2_gemm_kernel` atoms |
 | `asm_probe` | Temporary diagnostic hand ASM to learn hardware semantics. | no product default | WMMA/register/waitcnt probes |
 | `asm_oracle` | Measured hand kernel kept as reference or escape hatch. | opt-in only | `PREFILL_GRAPH_GEMM=1` 8B prefill |
 | `hand_kernel_product` | Hand-authored per-shape kernel schedule used as the shipped route. | only by explicit exception | any new route-local raw instruction stream |
@@ -69,7 +70,8 @@ as a raw route-local instruction stream.
 
 | Route | Classification | Evidence |
 |---|---|---|
-| `PREFILL_GRAPH_GEMM=1` / `prefill_pipe_role_selective_generated` | `asm_oracle` / escape hatch | Reproduces 8B pp512 around 5111 tok/s, but executes `extra/qk/prefill/wmma.py` through raw `Ops.INS`. |
+| `PREFILL_GRAPH_GEMM=1` / `prefill_pipe_role_selective_generated` | `asm_oracle` / escape hatch | Current S9 authority reproduces 8B pp512 around 4400 tok/s, but executes `extra/qk/prefill/wmma.py` through raw `Ops.INS`. |
+| S10 minimum hybrid over S9 atoms | `hybrid_machine_searched_over_hand_tuned_backend_atoms` | Target phase: S10 owns specs/role policy/search gates while S9 `build_gemm_pipe` / `lower_lds2_gemm_kernel` still emit the backend atoms. |
 | `PREFILL_GRAPH_GEMM=0` / `prefill_v2_scheduler_matmul_default` | `generated_backend` | Ordinary tinygrad scheduler/codegen path, slower but pure. |
 | 2x2 LDS/DBUF generated work | `generated_backend` replacement path | Keep. This is the route to reproduce the hand oracle without a hand-authored kernel schedule. |
 
