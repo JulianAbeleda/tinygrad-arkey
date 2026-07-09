@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import os
+from typing import Any
 
 from tinygrad import Tensor, dtypes, getenv
 from tinygrad.device import Device
@@ -9,6 +11,42 @@ from tinygrad.helpers import colored
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
 from extra.qk.prefill import wmma as ref
+
+
+def _primitive_warmstart_key(spec) -> tuple[frozenset[int], int]:
+  return (frozenset({spec.m, spec.n}), spec.k)
+
+
+def _ensure_role_scoped_local_stage(pr) -> set:
+  keys = getattr(pr, "_WARMSTART_LOCAL_STAGE_KEYS", None)
+  if keys is None:
+    keys = set()
+    pr._WARMSTART_LOCAL_STAGE_KEYS = keys
+  return keys
+
+
+def _ensure_local_stage_deny_keys(pr) -> set:
+  keys = getattr(pr, "_WARMSTART_LOCAL_STAGE_DENY_KEYS", None)
+  if keys is None:
+    keys = set()
+    pr._WARMSTART_LOCAL_STAGE_DENY_KEYS = keys
+  return keys
+
+
+def _env_enabled(name: str) -> bool:
+  return str(os.environ.get(name, "0")).strip().lower() not in ("", "0", "false", "off", "no")
+
+
+def _pipe_local_stage_requested() -> bool:
+  return (
+    _env_enabled("PREFILL_DBUF") or
+    _env_enabled("PREFILL_DBUF_NBUF") or
+    str(os.environ.get("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() not in ("", "0", "false", "off", "no")
+  )
+
+
+def _attn_kv_no_local_stage_enabled() -> bool:
+  return os.environ.get("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1").strip().lower() not in ("", "0", "false", "off", "no")
 
 
 @lru_cache(maxsize=None)
@@ -105,6 +143,67 @@ def _emit_schedule(p: dict, name: str):
   return insts, lds_bytes, bm, bn, p["threads"], name
 
 
+def _summarize_lds_spec(lds_spec) -> dict[str, Any] | None:
+  if lds_spec is None: return None
+  data = lds_spec.to_json()
+  keep = (
+    "m", "n", "k", "tile_m", "tile_n", "tile_k", "waves_m", "waves_n", "wm", "wn", "threads", "pad", "dbuf",
+    "plra", "plrab", "leanaddr", "lds_buffer_bytes", "lds_buffers", "lds_total_bytes", "accum_vgprs",
+    "coop_temp_vgprs", "plr_mode", "legality_errors",
+  )
+  return {k: data[k] for k in keep if k in data}
+
+
+def prefill_lds_primitive_route_trace(out_f: int = 12288, in_f: int = 4096, *, role: str = "ffn_gate_up",
+                                      primitive_opt_in: bool | None = None,
+                                      allow_fallback: bool = True) -> dict[str, Any]:
+  """Structural route proof for the S10 LDS primitive opt-in path.
+
+  This does not build or launch a kernel. It records the schedule/spec identity and the surface that route_pf16_graph_gemm
+  would select, including whether that surface reaches the legacy build_gemm_lds2 raw oracle.
+  """
+  from extra.qk.prefill_schedule_spec import describe_prefill_schedule
+  from extra.qk.wmma_lds_spec import extract_wmma_lds_spec
+
+  spec = describe_prefill_schedule(out_f, in_f, role=role)
+  opt_in = os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") == "1" if primitive_opt_in is None else primitive_opt_in
+  lds_spec = extract_wmma_lds_spec(spec) if spec.route_family == "lds" else None
+  fallback_reason = None
+  selected_surface = "unsupported"
+  classification = "unsupported"
+  calls_build_gemm_lds2 = False
+
+  if opt_in and spec.route_family == "lds" and lds_spec is not None:
+    selected_surface = "generated_transport"
+    classification = "compiler_primitive_spec_owned__generated_transport"
+  elif opt_in and spec.route_family == "lds":
+    fallback_reason = "extract_wmma_lds_spec_failed"
+  elif opt_in:
+    fallback_reason = f"route_family={spec.route_family!r}_not_lds"
+  else:
+    fallback_reason = "PREFILL_WMMA_LDS_PRIMITIVE not enabled"
+
+  if fallback_reason is not None and allow_fallback and spec.route_family == "lds":
+    selected_surface = "fallback_raw_oracle"
+    classification = "legacy_raw_oracle"
+    calls_build_gemm_lds2 = True
+
+  return {
+    "schema": "prefill-s10-lds-route-trace.v1",
+    "role": role,
+    "route_family": spec.route_family,
+    "schedule_spec": spec.to_json(),
+    "lds_spec": _summarize_lds_spec(lds_spec),
+    "selected_surface": selected_surface,
+    "fallback_reason": fallback_reason,
+    "classification": classification,
+    "calls_build_gemm_lds2": calls_build_gemm_lds2,
+    "build_gemm_lds2_called": calls_build_gemm_lds2,
+    "allow_fallback": allow_fallback,
+    "primitive_opt_in": opt_in,
+  }
+
+
 def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | None:
   # `w` (optional): an explicit fp16 weight to GEMM against. PREFILL_CHUNKED passes an unstored
   # `lin.weight.cast(fp16).contiguous()` from inside a layer-sized TinyJit, so replay reuses the graph-owned fp16
@@ -127,9 +226,55 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   # TG-P4: the prefill GEMM schedule is emitted from a data PrefillGEMMScheduleSpec (machine_authored_generated route
   # prefill_pipe_role_selective_generated). This is the only runtime graph-GEMM prefill emitter.
   role = getattr(lin, "_prefill_graph_role", None)
-  from extra.qk.prefill_schedule_spec import describe_prefill_schedule, emit_prefill_gemm_from_spec
+  from extra.qk.prefill_schedule_spec import _spec_to_params, describe_prefill_schedule, emit_prefill_gemm_from_spec
   spec = describe_prefill_schedule(out_f, in_f, role=role)
-  built = emit_prefill_gemm_from_spec(spec)
+  pipe_resource_fallback_plan = None
+  if os.environ.get("PREFILL_WMMA_PIPE_PRIMITIVE") == "1" and spec.route_family == "pipe":
+    from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, pipe_primitive_local_stage_resource_plan, wmma_pipe_postrange_opts
+    if (pipe_spec := extract_wmma_pipe_spec(spec)) is not None:
+      resource_plan = pipe_primitive_local_stage_resource_plan(
+        pipe_spec, local_stage_requested=_pipe_local_stage_requested(),
+        allow_attn_kv_no_local_stage=_attn_kv_no_local_stage_enabled())
+      if os.environ.get("PREFILL_WMMA_PIPE_RESOURCE_GATE", "1") != "0" and not resource_plan["safe"]:
+        pipe_resource_fallback_plan = resource_plan
+        setattr(lin, "_prefill_pipe_primitive_fallback_reason", resource_plan["fallback_reason"])
+        setattr(lin, "_prefill_pipe_primitive_route", "pipe_resource_gated_raw_fallback")
+      else:
+        setattr(lin, "_prefill_pipe_primitive_route", resource_plan["decision"])
+        # Route-transport MVP: execute through the ordinary compiler-owned matmul path, not the hand custom-kernel
+        # wrapper. These defaults are the primitive ingredients proven by the bounded diagnostic lowerer.
+        for k, v in {
+          "AMD_ISA_WAITCNT_TARGETED": "1",
+          "AMD_ISA_WMMA_B128_FRAG": "1",
+          "AMD_ISA_REG_ACCUM": "1",
+          "PREFILL_WMMA_CHAIN_AB_RESIDENT": "1",
+        }.items():
+          os.environ.setdefault(k, v)
+        getenv.cache_clear()
+        import tinygrad.codegen.opt.postrange as pr
+        key = _primitive_warmstart_key(spec)
+        pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_pipe_postrange_opts(pipe_spec)}
+        _ensure_role_scoped_local_stage(pr)
+        if resource_plan["no_local_stage_selected"]:
+          _ensure_local_stage_deny_keys(pr).add(key)
+        a = x.reshape(512, in_f).cast(dtypes.float16).contiguous()
+        bt = w.cast(dtypes.float16).contiguous()
+        return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
+  if os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") == "1" and spec.route_family == "lds":
+    from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
+    if (lds_spec := extract_wmma_lds_spec(spec)) is not None:
+      for k, v in wmma_lds_generated_env_defaults(lds_spec).items():
+        os.environ.setdefault(k, v)
+      getenv.cache_clear()
+      import tinygrad.codegen.opt.postrange as pr
+      key = _primitive_warmstart_key(spec)
+      pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec)}
+      _ensure_role_scoped_local_stage(pr).add(key)
+      a = x.reshape(512, in_f).cast(dtypes.float16).contiguous()
+      bt = w.cast(dtypes.float16).contiguous()
+      return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
+  built = (_emit_schedule(_spec_to_params(spec), name=spec.kernel_name)
+           if pipe_resource_fallback_plan is not None else emit_prefill_gemm_from_spec(spec))
   if built is None: return None
   insts, lds_bytes, bm, bn, threads, name = built
   a = x.reshape(512, in_f).cast(dtypes.float16).contiguous()

@@ -41,12 +41,13 @@ PROFILE_PREFILL = "qwen3_8b_q4_k_m_gfx1100_prefill"
 # provenance vocabulary (strict default-purity audit):
 #   machine_authored_generated  -> emitted from profile/grammar/search-owned lowering; allowed as final default
 #   tinygrad_scheduler_generated -> ordinary tinygrad graph lowering; allowed as final default
+#   compiler_primitive_spec_owned -> compiler/search spec owns route lifecycle; reusable backend atom may emit ASM
 #   hand_authored_uop_template  -> Python UOp custom_kernel body written by humans; transitional default only
 #   external_handwritten_kernel -> HIP/ASM/C++/precompiled binary or explicit instruction emitter; not final default
 #   rollback_oracle            -> handwritten/specialized route retained only as rollback/reference
 ROUTE_PROVENANCE = (
   "machine_authored_generated", "tinygrad_scheduler_generated", "hand_authored_uop_template",
-  "external_handwritten_kernel", "rollback_oracle",
+  "compiler_primitive_spec_owned", "external_handwritten_kernel", "rollback_oracle",
 )
 FINAL_DEFAULT_PROVENANCE = {"machine_authored_generated", "tinygrad_scheduler_generated"}
 TRANSITIONAL_DEFAULT_PROVENANCE = {"hand_authored_uop_template"}
@@ -187,6 +188,82 @@ ROUTES = {
     "selector": "env_guard",
     "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec; writer extra/qk/prefill_schedule_spec.py (PrefillGEMMScheduleSpec lowered through the RDNA3 WMMA schedule generator ref.build_gemm_pipe / build_gemm_lds2).",
     "note": "spec-driven generated prefill GEMM schedule: PrefillGEMMScheduleSpec (data) captures the resolved tile/wave/pipeline/role-policy; emit_prefill_gemm_from_spec lowers it through the parameterized RDNA3 WMMA schedule generator. The RDNA3 WMMA instruction set is the target grammar; the schedule is machine-authored from the spec. The legacy fixed emit and PREFILL_GENERATED_SCHEDULE rollback were removed from runtime."},
+  "prefill_wmma_pipe_primitive_generated": {
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
+    "roles": ["attn_qo", "attn_kv", "ffn_down"], "excluded_roles": ["ffn_gate_up"],
+    "quant": ["fp16"],
+    "shape_guards": [
+      {"role": "attn_qo", "M": 512, "N": 4096, "K": 4096},
+      {"role": "attn_kv", "M": 512, "N": 1024, "K": 4096},
+      {"role": "ffn_down", "M": 512, "N": 4096, "K": 12288},
+      {"note": "graph-GEMM selected, but transport is ordinary generated Tensor matmul with pipe warmstart opts"}],
+    "env": {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_PIPE_PRIMITIVE": "1"},
+    "rollback": {"PREFILL_WMMA_PIPE_PRIMITIVE": "0"},
+    "strict_fallback": True,
+    "expected_kernels": [],
+    "forbidden_kernels": ["extra/qk/prefill/wmma.py instruction-list emitter", "Ops.INS", "prefill_gen_sched_gemm_* raw schedule substrate"],
+    "authority_gate": "extra/qk/prefill_pipe_mvp_artifact.py --route-sample-correctness",
+    "promotion_artifacts": ["bench/prefill-pipe-mvp/latest.json", "docs/8b-prefill-pipe-mvp-rest-scope.md"],
+    "purity_status": "research",
+    "provenance": "tinygrad_scheduler_generated",
+    "replacement_scope": "",
+    "selector": "env_guard",
+    "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm, gated by PREFILL_GRAPH_GEMM=1 + PREFILL_WMMA_PIPE_PRIMITIVE=1, lowers pipe roles through x.cast(float16).contiguous() @ w.cast(float16).contiguous().transpose() and installs WMMA pipe warmstart opts; no route-local raw instruction-list emitter.",
+    "note": "Generated pipe primitive MVP route identity for attn_qo, attn_kv, and ffn_down. This deliberately does not reclassify prefill_pipe_role_selective_generated, which remains the raw Ops.INS oracle route. ffn_gate_up remains excluded on the existing LDS/raw route until a separate primitive exists. Whole-model AMD:ISA ownership is separately blocked on broader non-GEMM renderer coverage."},
+  "prefill_wmma_pipe_lds_dbuf_primitive_generated": {
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
+    "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
+    "quant": ["fp16"],
+    "shape_guards": [
+      {"role": "attn_qo", "M": 512, "N": 4096, "K": 4096, "primitive": "pipe"},
+      {"role": "attn_kv", "M": 512, "N": 1024, "K": 4096, "primitive": "generated_pipe_no_local_stage"},
+      {"role": "ffn_down", "M": 512, "N": 4096, "K": 12288, "primitive": "pipe"},
+      {"role": "ffn_gate_up", "M": 512, "N": 12288, "K": 4096, "primitive": "lds_dbuf"},
+      {"note": "graph-GEMM selected with generated pipe primitive roles plus generated LDS/DBUF primitive for ffn_gate_up; attn_kv is generated pipe transport with local staging disabled, retaining resource-gated raw fallback when that policy is disabled or unsafe"}],
+    "env": {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_PIPE_PRIMITIVE": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
+            "PREFILL_DBUF": "1"},
+    "rollback": {"PREFILL_WMMA_PIPE_PRIMITIVE": "0", "PREFILL_WMMA_LDS_PRIMITIVE": "0", "PREFILL_DBUF": "0"},
+    "strict_fallback": True,
+    "expected_kernels": [],
+    "forbidden_kernels": ["extra/qk/prefill/wmma.py instruction-list emitter outside explicit safety fallback",
+                          "Ops.INS outside explicit safety fallback",
+                          "prefill_gen_sched_gemm_* raw schedule substrate outside explicit safety fallback"],
+    "authority_gate": "extra/qk/prefill_pipe_mvp_artifact.py --lds-primitive --lds-sample-correctness",
+    "promotion_artifacts": ["bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json",
+                            "bench/prefill-whole-synced/lds-dbuf-promoted-smoke.json",
+                            "docs/8b-prefill-generated-lifecycle-performance-integration-scope.md"],
+    "purity_status": "research",
+    "provenance": "compiler_primitive_spec_owned",
+    "replacement_scope": "S10 LDS2 route classification: WMMALDSSpec/LDS2 lifecycle ownership with ASM backend atom. This is not pure generated and not the full hand-kernel oracle.",
+    "selector": "env_guard",
+    "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm, gated by PREFILL_GRAPH_GEMM=1 + PREFILL_WMMA_PIPE_PRIMITIVE=1 + PREFILL_WMMA_LDS_PRIMITIVE=1 + PREFILL_DBUF=1; attn_qo/ffn_down use generated pipe primitive transport, attn_kv uses generated pipe transport with local staging disabled when generated local staging would exceed 64 KiB LDS, and ffn_gate_up uses the generated LDS/DBUF primitive.",
+    "route_classification": "compiler_primitive_spec_owned__asm_backend_atom",
+    "note": "Composed S10 route identity for lifecycle attribution: pipe primitive roles for attn_qo, attn_kv, and ffn_down; attn_kv disables local staging under LDS/DBUF because captured generated HIP with local staging declared 69632 bytes shared memory, and it retains resource-gated raw fallback if the no-local-stage policy is disabled or unsafe; WMMALDSSpec-owned LDS/DBUF primitive for ffn_gate_up. The S10 classification is compiler_primitive_spec_owned__asm_backend_atom: spec/compiler owned with a reusable ASM backend atom, distinct from both pure generated transport and the raw graph-GEMM full hand-kernel oracle."},
+  "prefill_wmma_lds_dbuf_primitive_mixed": {
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
+    "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
+    "quant": ["fp16"],
+    "shape_guards": [
+      {"role": "attn_qo", "M": 512, "N": 4096, "K": 4096, "primitive": "raw_pipe_oracle"},
+      {"role": "attn_kv", "M": 512, "N": 1024, "K": 4096, "primitive": "raw_pipe_oracle"},
+      {"role": "ffn_down", "M": 512, "N": 4096, "K": 12288, "primitive": "raw_pipe_oracle"},
+      {"role": "ffn_gate_up", "M": 512, "N": 12288, "K": 4096, "primitive": "lds_dbuf"},
+      {"note": "decoupled S10 route: only ffn_gate_up exercises the WMMALDSSpec-owned LDS/DBUF primitive"}],
+    "env": {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1", "PREFILL_DBUF": "1"},
+    "rollback": {"PREFILL_WMMA_LDS_PRIMITIVE": "0", "PREFILL_DBUF": "0"},
+    "strict_fallback": True,
+    "expected_kernels": ["prefill_gen_sched_gemm_*"],
+    "forbidden_kernels": [],
+    "authority_gate": "extra/qk/prefill/s10_compile_capture.py --scenario lds-only",
+    "promotion_artifacts": ["bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json",
+                            "bench/prefill-s10-lds2-ownership/compile-capture/report-lds-only.json"],
+    "purity_status": "research",
+    "provenance": "compiler_primitive_spec_owned",
+    "replacement_scope": "S10 decoupled LDS2 route classification: WMMALDSSpec owns the ffn_gate_up LDS lifecycle while pipe roles remain on the existing raw graph-GEMM oracle. This isolates LDS migration from the generated pipe primitive.",
+    "selector": "env_guard",
+    "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm, gated by PREFILL_GRAPH_GEMM=1 + PREFILL_WMMA_LDS_PRIMITIVE=1 + PREFILL_DBUF=1 and PREFILL_WMMA_PIPE_PRIMITIVE unset/0; attn_qo/attn_kv/ffn_down use the existing raw pipe oracle, while ffn_gate_up uses the WMMALDSSpec-owned LDS/DBUF primitive.",
+    "route_classification": "compiler_primitive_spec_owned__mixed_raw_pipe",
+    "note": "This is the S10 decoupling route. It is not strict pure and not the composed generated pipe+LDS route; it exists to validate the primitive LDS ownership step without the attn_kv generated-pipe LDS overflow."},
   "prefill_q4k_direct_tile4x4_default": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
     "roles": ["ffn_gate_up", "attn_qo", "ffn_down", "attn_kv"], "excluded_roles": [],

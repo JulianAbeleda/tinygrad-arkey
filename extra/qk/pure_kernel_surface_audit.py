@@ -17,7 +17,63 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 PURE_CLASSES = {"ordinary_tinygrad_graph", "descriptor_owned_uop_codegen", "backend_owned_intrinsic_lowering"}
 IMPURE_CLASSES = {"descriptor_wrapped_hand_kernel", "route_local_custom_kernel", "external_raw_or_binary",
+                  "compiler_primitive_spec_owned_asm_backend_atom", "compiler_primitive_spec_owned_mixed_raw_pipe",
                   "rollback_oracle", "unknown"}
+
+# ASM is not itself the purity boundary. Backend-emitted ASM from generated IR/specs is normal compiler work; a
+# hand-authored full-kernel schedule injected as raw instructions is the escape hatch/oracle class.
+SURFACE_POLICY: dict[str, dict[str, str]] = {
+  "ordinary_tinygrad_graph": {
+    "asm_usage": "backend_emitted_if_needed",
+    "kernel_authorship": "tinygrad_scheduler_generated",
+    "policy": "generated_default_allowed",
+  },
+  "descriptor_owned_uop_codegen": {
+    "asm_usage": "backend_emitted_from_descriptor",
+    "kernel_authorship": "descriptor_generated",
+    "policy": "generated_default_allowed",
+  },
+  "backend_owned_intrinsic_lowering": {
+    "asm_usage": "backend_asm_tool",
+    "kernel_authorship": "compiler_backend_generated",
+    "policy": "generated_default_allowed",
+  },
+  "compiler_primitive_spec_owned_asm_backend_atom": {
+    "asm_usage": "asm_backend_atom",
+    "kernel_authorship": "compiler_primitive_spec_owned",
+    "policy": "compiler_primitive_not_strict_pure_generated",
+  },
+  "compiler_primitive_spec_owned_mixed_raw_pipe": {
+    "asm_usage": "asm_backend_atom_and_raw_pipe_oracle",
+    "kernel_authorship": "mixed_compiler_primitive_and_raw_fallback",
+    "policy": "compiler_primitive_with_explicit_raw_pipe_fallback",
+  },
+  "descriptor_wrapped_hand_kernel": {
+    "asm_usage": "hand_kernel_substrate",
+    "kernel_authorship": "descriptor_selects_hand_authored_kernel",
+    "policy": "oracle_or_transitional_only",
+  },
+  "route_local_custom_kernel": {
+    "asm_usage": "custom_uop_template",
+    "kernel_authorship": "route_local_human_kernel_body",
+    "policy": "oracle_or_transitional_only",
+  },
+  "external_raw_or_binary": {
+    "asm_usage": "raw_instruction_or_binary_injection",
+    "kernel_authorship": "hand_authored_full_kernel_schedule",
+    "policy": "oracle_or_escape_hatch_only",
+  },
+  "rollback_oracle": {
+    "asm_usage": "oracle_unspecified",
+    "kernel_authorship": "rollback_or_reference_kernel",
+    "policy": "rollback_oracle_only",
+  },
+  "unknown": {
+    "asm_usage": "unknown",
+    "kernel_authorship": "unknown",
+    "policy": "not_promotable_until_classified",
+  },
+}
 
 RAW_MARKERS = ("Ops.INS", "Ops.BINARY", "asm volatile")
 CUSTOM_MARKERS = (".custom_kernel(", "Tensor.custom_kernel", "Ops.CUSTOM", "Ops.CUSTOMI")
@@ -55,6 +111,22 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
     "Schedule selection is spec-shaped, but executing substrate wraps raw RDNA3 instruction lists with Ops.INS.",
     replacement_scope="Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."),
+  "prefill_wmma_pipe_primitive_generated": RouteSurface(
+    "prefill_wmma_pipe_primitive_generated", "ordinary_tinygrad_graph",
+    ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/wmma_pipe_spec.py", "extra/qk/prefill_pipe_mvp_artifact.py"),
+    "Opt-in graph-GEMM pipe primitive uses ordinary Tensor matmul transport plus generated warmstart opts; it does not call the raw instruction-list pipe oracle.",
+    descriptor_artifact="WMMAPipeSpec"),
+  "prefill_wmma_pipe_lds_dbuf_primitive_generated": RouteSurface(
+    "prefill_wmma_pipe_lds_dbuf_primitive_generated", "compiler_primitive_spec_owned_asm_backend_atom",
+    ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/wmma_pipe_spec.py", "extra/qk/wmma_lds_spec.py",
+     "extra/qk/prefill_pipe_mvp_artifact.py"),
+    "S10 opt-in graph-GEMM route is spec-owned for LDS2 lifecycle and may lower ffn_gate_up through a reusable ASM backend atom; attn_kv uses generated pipe transport with local staging disabled, with the raw fallback retained as a safety rail.",
+    descriptor_artifact="WMMAPipeSpec+WMMALDSSpec"),
+  "prefill_wmma_lds_dbuf_primitive_mixed": RouteSurface(
+    "prefill_wmma_lds_dbuf_primitive_mixed", "compiler_primitive_spec_owned_mixed_raw_pipe",
+    ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/wmma_lds_spec.py", "extra/qk/prefill/wmma.py"),
+    "Decoupled S10 route: ffn_gate_up is WMMALDSSpec-owned while pipe roles stay on the existing raw graph-GEMM oracle.",
+    descriptor_artifact="WMMALDSSpec"),
   "prefill_q4k_int8_wmma_generated_research": RouteSurface(
     "prefill_q4k_int8_wmma_generated_research", "ordinary_tinygrad_graph",
     ("extra/qk/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py"),
@@ -111,6 +183,8 @@ def route_surface(route_id: str) -> RouteSurface:
     cls = "route_local_custom_kernel"
   elif prov == "tinygrad_scheduler_generated":
     cls = "ordinary_tinygrad_graph"
+  elif prov == "compiler_primitive_spec_owned":
+    cls = "compiler_primitive_spec_owned_asm_backend_atom"
   elif prov in route_manifest.FINAL_DEFAULT_PROVENANCE:
     cls = "unknown"
   else:
@@ -134,8 +208,11 @@ def route_surface_row(route_id: str) -> dict[str, Any]:
   else:
     expected_kernel_patterns = list(manifest.get("expected_kernels", ()))
   has_expected_kernel_binding = bool(expected_kernel_patterns)
+  policy = SURFACE_POLICY.get(surface.surface_class, SURFACE_POLICY["unknown"])
   return {"route_id": route_id, "status": status, "manifest_provenance": prov, "manifest_pure": manifest_pure,
           "surface_class": surface.surface_class, "surface_pure": surface_pure, "strict_pure": strict_pure,
+          "asm_usage": policy["asm_usage"], "kernel_authorship": policy["kernel_authorship"],
+          "surface_policy": policy["policy"],
           "contradiction": contradiction,
           "writer_files": list(surface.writer_files), "writer_file_exists": writer_file_exists,
           "writer_files_present": not missing_writer_files, "missing_writer_files": missing_writer_files, "markers": markers,

@@ -9,6 +9,7 @@
     "machine_authored_generated",
     "tinygrad_scheduler_generated",
     "hand_authored_uop_template",
+    "compiler_primitive_spec_owned",
     "external_handwritten_kernel",
     "rollback_oracle"
   ],
@@ -49,10 +50,8 @@
         }
       ],
       "env": {},
-      "rollback": {
-        "BUBBLEBEAM_FUTURESIGHT": "0"
-      },
-      "baseline_route_id": "decode_q4k_owned_warp",
+      "rollback": {},
+      "baseline_route_id": "ordinary_tinygrad_graph",
       "strict_fallback": true,
       "expected_kernels": [
         "q4k_g3_lanemap_gemv_*"
@@ -72,55 +71,6 @@
       "selector": "BoltBeam_route_policy_or_env_default",
       "route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (QK_ROUTE_POLICY selects decode_q4k_g3_generated per tensor when present, else g3 fires by default for g3_bubblebeam_shape or DECODE_Q4K_G3_ANYSHAPE structural eligibility; strict mode fails loud on hidden fallback); writer extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
       "note": "generated wave32 UOp program lowered from the G2 Q4_K LaneMap (extra/qk/gemv_g2_lanemap.py). Speed-equivalent to owned warp (-0.13..+0.41% across ctx 512-4096), token-identical, route-clean. DECODE_Q4K_G3_ANYSHAPE extends it structurally to larger dense Q4_K shapes (including attn_k when policy installs it). This is the positive-control pure-search default decode kernel."
-    },
-    "decode_q4k_owned_warp": {
-      "workload": "decode",
-      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
-      "status": "rollback_reference",
-      "roles": [
-        "ffn_gate_up",
-        "ffn_down",
-        "attn_qo"
-      ],
-      "excluded_roles": [],
-      "quant": [
-        "Q4_K"
-      ],
-      "shape_guards": [
-        {
-          "role": "ffn_gate_up",
-          "K": 4096,
-          "N": 12288
-        },
-        {
-          "role": "ffn_down",
-          "K": 12288,
-          "N": 4096
-        },
-        {
-          "role": "attn_qo",
-          "K": 4096,
-          "N": 4096
-        }
-      ],
-      "env": {
-        "BUBBLEBEAM_FUTURESIGHT": "0"
-      },
-      "rollback": {},
-      "strict_fallback": true,
-      "expected_kernels": [
-        "q4k_gemv_warp_4096_4096",
-        "q4k_gemv_warp_kernel"
-      ],
-      "authority_gate": "retired 2026-07-03; promotion banked in docs/qk-gate-series-conclusions.md (was extra/audit/amd_isa/g3_weight_promotion_gate.py)",
-      "promotion_artifacts": [
-        "docs/decode-q4k-gemv-warp-promotion-result-20260624.md"
-      ],
-      "purity_status": "owned_reference",
-      "provenance": "rollback_oracle",
-      "selector": "env_guard",
-      "route_attribution": "tinygrad/llm/decode_routes.py q4k_primitive_linear_call (Q4K_GEMV_WARP_PROJ default 1, q/o + Q4K_GEMV_WARP default 1, gate/up+down); reached only when BUBBLEBEAM_FUTURESIGHT=0 short-circuits the G3 branch. Writer extra/qk/quant/q4_k_gemv_primitive.py q4k_gemv_warp_kernel",
-      "note": "hand-written owned warp GEMV. The Q4K_GEMV_WARP* guards still default to 1, but the G3 branch intercepts first for the eligible shapes when BUBBLEBEAM_FUTURESIGHT is on (the default). So owned warp is the rollback/reference, not the live default."
     },
     "decode_q6k_coop_generated": {
       "workload": "decode",
@@ -156,10 +106,8 @@
         }
       ],
       "env": {},
-      "rollback": {
-        "DECODE_Q6K_GENERATED": "0"
-      },
-      "baseline_route_id": "decode_q6k_coop_shipped",
+      "rollback": {},
+      "baseline_route_id": "ordinary_tinygrad_graph",
       "strict_fallback": true,
       "expected_kernels": [
         "q6k_gen_coop_*",
@@ -179,137 +127,6 @@
       "selector": "BoltBeam_route_policy_or_env_default",
       "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call generated branch (getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated); writer extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel (spec-driven lowering of Q6KGEMVRouteSpec)",
       "note": "spec-driven generated Q6_K decode GEMV: emit_q6k_gemv_kernel lowers a Q6KGEMVRouteSpec (data) to the coop/partial UOp kernel. Byte-identical to the shipped hand templates (extra/qk/q6k_generated_coop_gate.py TG_P3_PASS: all_identical, worst gen/shipped time 1.011). Provenance conversion of the Q6_K default; shipped kernels retained as rollback/oracle (DECODE_Q6K_GENERATED=0)."
-    },
-    "decode_q6k_coop_shipped": {
-      "workload": "decode",
-      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
-      "status": "rollback_reference",
-      "roles": [
-        "ffn_down",
-        "lm_head",
-        "attn_v"
-      ],
-      "excluded_roles": [],
-      "quant": [
-        "Q6_K"
-      ],
-      "shape_guards": [
-        {
-          "role": "ffn_down",
-          "K": 12288,
-          "N": 4096
-        },
-        {
-          "role": "ffn_down_longk",
-          "K": ">=8192",
-          "N": "<100000"
-        },
-        {
-          "role": "lm_head",
-          "N": ">=100000"
-        },
-        {
-          "role": "attn_v",
-          "enabled_by": "Q6K_COVER_MORE=1"
-        }
-      ],
-      "env": {
-        "DECODE_Q6K_GENERATED": "0"
-      },
-      "rollback": {},
-      "strict_fallback": true,
-      "expected_kernels": [
-        "q6k_coop_partial_*",
-        "q6k_gemv_partial_*"
-      ],
-      "authority_gate": "extra/qk/q6k_generated_coop_gate.py",
-      "promotion_artifacts": [
-        "bench/tg-p3-q6k-generated-coop/latest.json"
-      ],
-      "purity_status": "owned_reference",
-      "provenance": "rollback_oracle",
-      "selector": "env_guard",
-      "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call shipped branch (reached only when DECODE_Q6K_GENERATED=0); writer extra/qk/quant/q6_k_gemv_primitive.py q6k_coop_partial_kernel / q6k_gemv_partial_kernel",
-      "note": "hand-authored Q6_K coop/partial UOp templates. Byte-identical to the generated route (decode_q6k_coop_generated), retained as the rollback/oracle one flag away (DECODE_Q6K_GENERATED=0)."
-    },
-    "decode_q6k_direct_refuted": {
-      "workload": "decode",
-      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
-      "status": "refuted",
-      "roles": [
-        "lm_head"
-      ],
-      "excluded_roles": [],
-      "quant": [
-        "Q6_K"
-      ],
-      "shape_guards": [
-        {
-          "role": "lm_head",
-          "N": ">=100000"
-        }
-      ],
-      "env": {
-        "Q6K_DIRECT_ROUTE": "1"
-      },
-      "rollback": {
-        "Q6K_DIRECT_ROUTE": "0"
-      },
-      "baseline_route_id": "decode_q6k_coop_shipped",
-      "strict_fallback": true,
-      "expected_kernels": [
-        "q6k_halfwarp_partition_151936_4096"
-      ],
-      "authority_gate": "extra/qk/decode_runtime_overhead.py",
-      "promotion_artifacts": [
-        "bench/amd-isa-backend-q6k-direct-speed/latest.json",
-        "bench/amd-isa-backend-q6k-direct-speed/summary.md"
-      ],
-      "purity_status": "refuted",
-      "provenance": "hand_authored_uop_template",
-      "selector": "env_guard",
-      "route_attribution": "tinygrad/llm/decode_routes.py q6k_primitive_linear_call Q6K_DIRECT_ROUTE branch (default-off); refuted vs decode_q6k_coop_shipped baseline.",
-      "note": "half-warp direct Q6_K lm_head route: token-correct + route-bound, but W==D regressed -4.77..-6.06% (median -5.44%). Default-off. Do NOT re-chase as built (only reopen with a different topology than the half-warp partition)."
-    },
-    "decode_attention_owned_two_kernel": {
-      "workload": "decode",
-      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
-      "status": "removed",
-      "roles": [
-        "attention_tile",
-        "attention_combine"
-      ],
-      "excluded_roles": [],
-      "quant": [
-        "fp16"
-      ],
-      "shape_guards": [
-        {
-          "B": 1,
-          "Hq": 32,
-          "Hkv": 8,
-          "Hd": 128,
-          "ctx": ">=512"
-        }
-      ],
-      "env": {},
-      "rollback": {},
-      "strict_fallback": true,
-      "expected_kernels": [
-        "owned_flash_tile_gqa_whole",
-        "owned_flash_combine"
-      ],
-      "authority_gate": "extra/qk/decode_runtime_overhead.py",
-      "promotion_artifacts": [
-        "docs/decode-two-kernel-problem-audit-result-20260625.md",
-        "bench/amd-isa-backend-decode-attention-ceiling/latest.json"
-      ],
-      "purity_status": "removed",
-      "provenance": "external_handwritten_kernel",
-      "replacement_scope": "decode_flash_live_split_g4_8b_kvboth",
-      "selector": "env_guard",
-      "route_attribution": "removed from tinygrad/llm/model.py; retired handwritten HIP attention implementation pruned.",
-      "note": "Retired owned HIP split tile + combine. Replaced as the 8B long-context default by decode_flash_live_split_g4_8b_kvboth so the hot path is generated machine-search code."
     },
     "decode_flash_live_split_g4_8b_kvboth": {
       "workload": "decode",
@@ -337,7 +154,7 @@
       "rollback": {
         "DECODE_LIVE_SPLIT": "0"
       },
-      "baseline_route_id": "decode_attention_owned_two_kernel",
+      "baseline_route_id": "retired_owned_attention_ceiling",
       "strict_fallback": true,
       "expected_kernels": [
         "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
@@ -356,9 +173,10 @@
       ],
       "purity_status": "search_generated_promoted",
       "provenance": "machine_authored_generated",
+      "replacement_scope": "",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route 8B generated branch: B=1,Hq=32,Hkv=8,Hd=128 -> flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True). Writer extra/qk/live_split_geometry.py + extra/qk/flash_decode.py generated UOp kernels.",
-      "note": "Promoted 8B long-context decode attention replacement. TG-P14 practical roofline closeout: worst-of-3 speed ctx512 98.5% / ctx4096 98.3% of owned, 48/48 deterministic prefilled token parity, route-bound, no hidden fallback. Default choice intentionally prefers generated machine-search code over the retired handwritten HIP route."
+      "route_attribution": "tinygrad/llm/decode_routes.py attention live-split branch: B=1,Hq=32,Hkv=8,Hd=128 -> extra/qk/live_split_geometry.py flash_decode_live_split_block_tile -> extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec (FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec).",
+      "note": "Promoted 8B long-context decode attention replacement. TG-P14 practical roofline closeout: worst-of-3 speed ctx512 98.5% / ctx4096 98.3% of owned, 48/48 deterministic prefilled token parity, route-bound, no hidden fallback. Provenance conversion 2026-07-06: the default binding is now descriptor-owned through FlashDecodeAttentionSpec; no handwritten HIP attention route remains."
     },
     "decode_flash_block_tile_g5_konly": {
       "workload": "decode",
@@ -385,10 +203,11 @@
       "rollback": {
         "DECODE_LIVE_SPLIT": "0"
       },
-      "baseline_route_id": "decode_attention_owned_two_kernel",
+      "baseline_route_id": "retired_owned_attention_ceiling",
       "strict_fallback": true,
       "expected_kernels": [
-        "flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel"
+        "flash_block_tiled_xlane_score_pv_tile_whole_cache_40_128",
+        "flash_fused_gmax_combine"
       ],
       "forbidden_kernels": [
         "owned_flash_tile_gqa_whole",
@@ -402,89 +221,12 @@
       ],
       "purity_status": "search_generated_promoted",
       "provenance": "machine_authored_generated",
+      "replacement_scope": "",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route UNIFIED live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5). QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1. Writer extra/qk/live_split_geometry.py flash_decode_live_split_block_tile(..., staging='KV_BOTH', fused_combine=True) -> generated UOp flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel.",
-      "note": "Promoted 2026-07-03: 14B (Hq=40/Hkv=8/Hd=128) decode now shares the MODULAR live-split route with 8B/32B (no per-model Hq hardcode). Live per-split length ceildiv(Tc,S_occ) is SEQLEN-BOUND: 14B decode is FLAT across max_context (69.24 tok/s @MAXC=1024 vs 69.04 @MAXC=8192, live ctx ~550), vs the retired fixed-L g5 route which read the full max_context buffer every token and collapsed as MAXC rose. W==D token-identical to the generic generated flash reference (DECODE_LIVE_SPLIT=0) at 8B/14B/32B. Staging is KV_BOTH (self-contained LDS); K_ONLY is unsupported under live-split geometry (wrong global-V addressing -> garbage). S_occ fixed at 48 (=4*CU/Hkv occupancy default). Rollback DECODE_LIVE_SPLIT=0."
+      "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route UNIFIED live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5). QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1. Binding flows through extra/qk/live_split_geometry.py -> FlashDecodeAttentionSpec.",
+      "note": "Promoted 2026-07-03: 14B (Hq=40/Hkv=8/Hd=128) decode now shares the modular live-split route with 8B/32B. Live per-split length ceildiv(Tc,S_occ) is seqlen-bound: 14B decode is flat across max_context (69.24 tok/s @MAXC=1024 vs 69.04 @MAXC=8192, live ctx ~550). W==D token-identical to the generic generated flash reference at 8B/14B/32B. Provenance conversion 2026-07-06: the default binding is descriptor-owned through FlashDecodeAttentionSpec."
     },
-    "decode_flash_block_tile_g5_8b_refuted": {
-      "workload": "decode",
-      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
-      "status": "removed",
-      "roles": [
-        "attention_tile",
-        "attention_combine"
-      ],
-      "excluded_roles": [],
-      "quant": [
-        "fp16"
-      ],
-      "shape_guards": [
-        {
-          "B": 1,
-          "Hq": 32,
-          "Hkv": 8,
-          "Hd": 128,
-          "G": 4,
-          "ctx": ">=512"
-        }
-      ],
-      "env": {},
-      "rollback": {},
-      "baseline_route_id": "decode_attention_owned_two_kernel",
-      "strict_fallback": true,
-      "expected_kernels": [
-        "flash_block_tiled_xlane_score_pv_tile_whole_cache_32_128",
-        "flash_state_gmax_32_128",
-        "flash_state_combine_32_128"
-      ],
-      "authority_gate": "historical TG-P5/TG-P8 artifacts; route no longer selectable",
-      "promotion_artifacts": [
-        "bench/tg-p5-attention-generated-default/latest.json",
-        "bench/tg-p5-attention-generated-default/summary.md"
-      ],
-      "purity_status": "removed",
-      "provenance": "machine_authored_generated",
-      "selector": "retired",
-      "route_attribution": "removed from tinygrad/llm/model.py; superseded by decode_flash_live_split_g4_8b_kvboth.",
-      "note": "Historical TG-P5/TG-P8 route. The generated G5 block-tile flash decode generalized correctly to the 8B geometry but was slower (87.6%/95.6% @ctx512/4096). It is no longer selectable because the validated live-split KV_BOTH route superseded it as the generated 8B default."
-    },
-    "decode_attention_generic_flash_generated": {
-      "workload": "decode",
-      "profile_id": "qwen3_8b_q4_k_m_gfx1100_decode",
-      "status": "superseded_rollback",
-      "roles": [
-        "attention_tile",
-        "attention_combine"
-      ],
-      "excluded_roles": [],
-      "quant": [
-        "fp16"
-      ],
-      "shape_guards": [
-        {
-          "B": 1,
-          "Hq": 32,
-          "Hkv": 8,
-          "Hd": 128,
-          "ctx": ">=512"
-        }
-      ],
-      "env": {
-        "DECODE_LIVE_SPLIT": "0"
-      },
-      "rollback": {},
-      "strict_fallback": true,
-      "authority_gate": "tinygrad generated flash attention fallback",
-      "promotion_artifacts": [
-        "bench/tg-p14-amd-recovery-and-pure-attention-landing/summary.md"
-      ],
-      "purity_status": "research",
-      "provenance": "tinygrad_scheduler_generated",
-      "selector": "env_guard",
-      "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route generic generated flash_decode_attention fallback reached when DECODE_LIVE_SPLIT=0.",
-      "note": "Generic generated tinygrad flash-decode fallback. It is retained only as a generated rollback/reference for the promoted live-split KV_BOTH route; the old native/HIP research route was pruned."
-    },
-    "prefill_pipe_role_selective_generated": {
+    "prefill_v2_scheduler_matmul_default": {
       "workload": "prefill",
       "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
       "status": "promoted_default",
@@ -505,11 +247,58 @@
           "M": 512,
           "N": "*",
           "K": "*",
-          "note": "graph-GEMM prefill ubatch=512; role_policy in the spec: pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288"
+          "note": "ordinary PREFILL_V2 fp16 matmul under warmstart TC opts"
         }
       ],
       "env": {},
       "rollback": {},
+      "strict_fallback": true,
+      "expected_kernels": [],
+      "forbidden_kernels": [
+        "prefill_gen_sched_gemm_* (on the default path)",
+        "Ops.INS"
+      ],
+      "authority_gate": "tinygrad/llm/model.py PREFILL_GRAPH_GEMM default",
+      "promotion_artifacts": [
+        "docs/pure-machine-search.md"
+      ],
+      "purity_status": "search_generated_promoted",
+      "provenance": "tinygrad_scheduler_generated",
+      "replacement_scope": "",
+      "selector": "env_default",
+      "route_attribution": "tinygrad/llm/prefill_routes.py route_prefill_linear default path: PREFILL_GRAPH_GEMM=0 -> x.cast(float16).linear(w.transpose(), bias) inside PREFILL_V2, with model.py installing warmstart TC opts around the prefill jit.",
+      "note": "Strict pure-machine-search default for fp16 resident/chunked prefill: ordinary tinygrad graph lowering owns matmul scheduling. The raw RDNA3 graph-GEMM instruction-list route remains opt-in via PREFILL_GRAPH_GEMM=1."
+    },
+    "prefill_pipe_role_selective_generated": {
+      "workload": "prefill",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
+      "status": "research",
+      "roles": [
+        "attn_qo",
+        "attn_kv",
+        "ffn_down",
+        "ffn_gate_up"
+      ],
+      "excluded_roles": [],
+      "quant": [
+        "Q4_K",
+        "Q6_K",
+        "fp16"
+      ],
+      "shape_guards": [
+        {
+          "M": 512,
+          "N": "*",
+          "K": "*",
+          "note": "graph-GEMM prefill ubatch=512; role_policy in the spec: pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288"
+        }
+      ],
+      "env": {
+        "PREFILL_GRAPH_GEMM": "1"
+      },
+      "rollback": {
+        "PREFILL_GRAPH_GEMM": "0"
+      },
       "strict_fallback": true,
       "expected_kernels": [
         "prefill_gen_sched_gemm_*"
@@ -523,10 +312,228 @@
         "bench/tg-p4-prefill-generated-schedule/summary.md"
       ],
       "purity_status": "search_generated_promoted",
-      "provenance": "machine_authored_generated",
-      "selector": "BoltBeam_route_policy_or_env_default",
+      "provenance": "external_handwritten_kernel",
+      "replacement_scope": "Route B: generated LDS+WMMA codegen substrate (PrefillWMMAScheduleSpec) replacing extra/qk/prefill/wmma.py raw Ops.INS. Schedule SELECTION is spec-generated, but the executing substrate wraps raw RDNA3 instruction lists -> external handwritten kernel under the strict rule.",
+      "selector": "env_guard",
       "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec; writer extra/qk/prefill_schedule_spec.py (PrefillGEMMScheduleSpec lowered through the RDNA3 WMMA schedule generator ref.build_gemm_pipe / build_gemm_lds2).",
       "note": "spec-driven generated prefill GEMM schedule: PrefillGEMMScheduleSpec (data) captures the resolved tile/wave/pipeline/role-policy; emit_prefill_gemm_from_spec lowers it through the parameterized RDNA3 WMMA schedule generator. The RDNA3 WMMA instruction set is the target grammar; the schedule is machine-authored from the spec. The legacy fixed emit and PREFILL_GENERATED_SCHEDULE rollback were removed from runtime."
+    },
+    "prefill_wmma_pipe_primitive_generated": {
+      "workload": "prefill",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
+      "status": "research",
+      "roles": [
+        "attn_qo",
+        "attn_kv",
+        "ffn_down"
+      ],
+      "excluded_roles": [
+        "ffn_gate_up"
+      ],
+      "quant": [
+        "fp16"
+      ],
+      "shape_guards": [
+        {
+          "role": "attn_qo",
+          "M": 512,
+          "N": 4096,
+          "K": 4096
+        },
+        {
+          "role": "attn_kv",
+          "M": 512,
+          "N": 1024,
+          "K": 4096
+        },
+        {
+          "role": "ffn_down",
+          "M": 512,
+          "N": 4096,
+          "K": 12288
+        },
+        {
+          "note": "graph-GEMM selected, but transport is ordinary generated Tensor matmul with pipe warmstart opts"
+        }
+      ],
+      "env": {
+        "PREFILL_GRAPH_GEMM": "1",
+        "PREFILL_WMMA_PIPE_PRIMITIVE": "1"
+      },
+      "rollback": {
+        "PREFILL_WMMA_PIPE_PRIMITIVE": "0"
+      },
+      "strict_fallback": true,
+      "expected_kernels": [],
+      "forbidden_kernels": [
+        "extra/qk/prefill/wmma.py instruction-list emitter",
+        "Ops.INS",
+        "prefill_gen_sched_gemm_* raw schedule substrate"
+      ],
+      "authority_gate": "extra/qk/prefill_pipe_mvp_artifact.py --route-sample-correctness",
+      "promotion_artifacts": [
+        "bench/prefill-pipe-mvp/latest.json",
+        "docs/8b-prefill-pipe-mvp-rest-scope.md"
+      ],
+      "purity_status": "research",
+      "provenance": "tinygrad_scheduler_generated",
+      "replacement_scope": "",
+      "selector": "env_guard",
+      "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm, gated by PREFILL_GRAPH_GEMM=1 + PREFILL_WMMA_PIPE_PRIMITIVE=1, lowers pipe roles through x.cast(float16).contiguous() @ w.cast(float16).contiguous().transpose() and installs WMMA pipe warmstart opts; no route-local raw instruction-list emitter.",
+      "note": "Generated pipe primitive MVP route identity for attn_qo, attn_kv, and ffn_down. This deliberately does not reclassify prefill_pipe_role_selective_generated, which remains the raw Ops.INS oracle route. ffn_gate_up remains excluded on the existing LDS/raw route until a separate primitive exists. Whole-model AMD:ISA ownership is separately blocked on broader non-GEMM renderer coverage."
+    },
+    "prefill_wmma_pipe_lds_dbuf_primitive_generated": {
+      "workload": "prefill",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
+      "status": "research",
+      "roles": [
+        "attn_qo",
+        "attn_kv",
+        "ffn_down",
+        "ffn_gate_up"
+      ],
+      "excluded_roles": [],
+      "quant": [
+        "fp16"
+      ],
+      "shape_guards": [
+        {
+          "role": "attn_qo",
+          "M": 512,
+          "N": 4096,
+          "K": 4096,
+          "primitive": "pipe"
+        },
+        {
+          "role": "attn_kv",
+          "M": 512,
+          "N": 1024,
+          "K": 4096,
+          "primitive": "pipe_resource_gated_raw_fallback"
+        },
+        {
+          "role": "ffn_down",
+          "M": 512,
+          "N": 4096,
+          "K": 12288,
+          "primitive": "pipe"
+        },
+        {
+          "role": "ffn_gate_up",
+          "M": 512,
+          "N": 12288,
+          "K": 4096,
+          "primitive": "lds_dbuf"
+        },
+        {
+          "note": "graph-GEMM selected with generated pipe primitive roles plus generated LDS/DBUF primitive for ffn_gate_up; attn_kv is not claimed as generated pipe owned while resource-gated to raw fallback"
+        }
+      ],
+      "env": {
+        "PREFILL_GRAPH_GEMM": "1",
+        "PREFILL_WMMA_PIPE_PRIMITIVE": "1",
+        "PREFILL_WMMA_LDS_PRIMITIVE": "1",
+        "PREFILL_DBUF": "1"
+      },
+      "rollback": {
+        "PREFILL_WMMA_PIPE_PRIMITIVE": "0",
+        "PREFILL_WMMA_LDS_PRIMITIVE": "0",
+        "PREFILL_DBUF": "0"
+      },
+      "strict_fallback": true,
+      "expected_kernels": [],
+      "forbidden_kernels": [
+        "extra/qk/prefill/wmma.py instruction-list emitter except attn_kv pipe_resource_gated_raw_fallback",
+        "Ops.INS outside explicit attn_kv pipe_resource_gated_raw_fallback",
+        "prefill_gen_sched_gemm_* raw schedule substrate outside explicit attn_kv fallback"
+      ],
+      "authority_gate": "extra/qk/prefill_pipe_mvp_artifact.py --lds-primitive --lds-sample-correctness",
+      "promotion_artifacts": [
+        "bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json",
+        "bench/prefill-whole-synced/lds-dbuf-promoted-smoke.json",
+        "docs/8b-prefill-generated-lifecycle-performance-integration-scope.md"
+      ],
+      "purity_status": "research",
+      "provenance": "compiler_primitive_spec_owned",
+      "replacement_scope": "S10 LDS2 route classification: WMMALDSSpec/LDS2 lifecycle ownership with ASM backend atom. This is not pure generated and not the full hand-kernel oracle.",
+      "selector": "env_guard",
+      "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm, gated by PREFILL_GRAPH_GEMM=1 + PREFILL_WMMA_PIPE_PRIMITIVE=1 + PREFILL_WMMA_LDS_PRIMITIVE=1 + PREFILL_DBUF=1; attn_qo/ffn_down use generated pipe primitive transport, attn_kv is resource-gated to the raw pipe fallback when generated local staging would exceed 64 KiB LDS, and ffn_gate_up uses the generated LDS/DBUF primitive.",
+      "route_classification": "compiler_primitive_spec_owned__asm_backend_atom",
+      "note": "Composed S10 route identity for lifecycle attribution: pipe primitive roles for attn_qo and ffn_down; attn_kv is resource-gated to raw pipe fallback under LDS/DBUF because captured generated HIP declared 69632 bytes shared memory; WMMALDSSpec-owned LDS/DBUF primitive for ffn_gate_up. The S10 classification is compiler_primitive_spec_owned__asm_backend_atom: spec/compiler owned with a reusable ASM backend atom, distinct from both pure generated transport and the raw graph-GEMM full hand-kernel oracle."
+    },
+    "prefill_wmma_lds_dbuf_primitive_mixed": {
+      "workload": "prefill",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
+      "status": "research",
+      "roles": [
+        "attn_qo",
+        "attn_kv",
+        "ffn_down",
+        "ffn_gate_up"
+      ],
+      "excluded_roles": [],
+      "quant": [
+        "fp16"
+      ],
+      "shape_guards": [
+        {
+          "role": "attn_qo",
+          "M": 512,
+          "N": 4096,
+          "K": 4096,
+          "primitive": "raw_pipe_oracle"
+        },
+        {
+          "role": "attn_kv",
+          "M": 512,
+          "N": 1024,
+          "K": 4096,
+          "primitive": "raw_pipe_oracle"
+        },
+        {
+          "role": "ffn_down",
+          "M": 512,
+          "N": 4096,
+          "K": 12288,
+          "primitive": "raw_pipe_oracle"
+        },
+        {
+          "role": "ffn_gate_up",
+          "M": 512,
+          "N": 12288,
+          "K": 4096,
+          "primitive": "lds_dbuf"
+        },
+        {
+          "note": "decoupled S10 route: only ffn_gate_up exercises the WMMALDSSpec-owned LDS/DBUF primitive"
+        }
+      ],
+      "env": {
+        "PREFILL_GRAPH_GEMM": "1",
+        "PREFILL_WMMA_LDS_PRIMITIVE": "1",
+        "PREFILL_DBUF": "1"
+      },
+      "rollback": {
+        "PREFILL_WMMA_LDS_PRIMITIVE": "0",
+        "PREFILL_DBUF": "0"
+      },
+      "strict_fallback": true,
+      "expected_kernels": [
+        "prefill_gen_sched_gemm_*"
+      ],
+      "forbidden_kernels": [],
+      "authority_gate": "extra/qk/prefill/s10_compile_capture.py --scenario lds-only",
+      "promotion_artifacts": [
+        "bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json",
+        "bench/prefill-s10-lds2-ownership/compile-capture/report-lds-only.json"
+      ],
+      "purity_status": "research",
+      "provenance": "compiler_primitive_spec_owned",
+      "replacement_scope": "S10 decoupled LDS2 route classification: WMMALDSSpec owns the ffn_gate_up LDS lifecycle while pipe roles remain on the existing raw graph-GEMM oracle. This isolates LDS migration from the generated pipe primitive.",
+      "selector": "env_guard",
+      "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm, gated by PREFILL_GRAPH_GEMM=1 + PREFILL_WMMA_LDS_PRIMITIVE=1 + PREFILL_DBUF=1 and PREFILL_WMMA_PIPE_PRIMITIVE unset/0; attn_qo/attn_kv/ffn_down use the existing raw pipe oracle, while ffn_gate_up uses the WMMALDSSpec-owned LDS/DBUF primitive.",
+      "route_classification": "compiler_primitive_spec_owned__mixed_raw_pipe",
+      "note": "This is the S10 decoupling route. It is not strict pure and not the composed generated pipe+LDS route; it exists to validate the primitive LDS ownership step without the attn_kv generated-pipe LDS overflow."
     },
     "prefill_q4k_direct_tile4x4_default": {
       "workload": "prefill",
@@ -557,23 +564,25 @@
       "baseline_route_id": "prefill_q4k_direct_packed_load_direct_out",
       "strict_fallback": true,
       "expected_kernels": [
-        "prefill_q4k_direct_packed_load_direct_out_gemm_*"
+        "q4k_gen_prefill_direct_out_*",
+        "q4k_gen_prefill_partials_*",
+        "q4k_gen_prefill_reduce_out_*"
       ],
       "authority_gate": "extra/qk/prefill_boltbeam_trace.py",
       "promotion_artifacts": [
         "docs/prefill-packed-generated-tile-scope-20260704.md"
       ],
-      "purity_status": "search_selected_specialized_route",
-      "provenance": "hand_authored_uop_template",
-      "replacement_scope": "14B/32B Q4_K prefill needs a generated quantized MMQ substrate that fuses dequant and matmul; this direct-packed UOp template is only the memory-safe interim route.",
+      "purity_status": "search_generated_promoted",
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
       "selector": "env_default",
-      "route_attribution": "tinygrad/llm/prefill_routes.py _direct_packed_opts default Q4_K schedule: LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4; rollback PREFILL_Q4K_DIRECT_SCHEDULE=legacy.",
-      "note": "Promoted Q4_K direct-packed schedule for 14B memory-safe prefill. Fable audit reframed the gap as dequant amortization across token/register tiles rather than a new kernel family. Clean pp512 improved 135.7 -> 173.6 tok/s on Qwen3-14B-Q4_K_M. Correctness matched the old lossless direct path for the checked ffn_gate row. This is a schedule default on the existing direct-output UOp route, not the final llama-class MMQ substrate."
+      "route_attribution": "tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> extra/qk/q4k_prefill_route_spec.py Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts still owns the selected schedule LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4.",
+      "note": "Q4_K direct-packed prefill provenance conversion. The default packed-load path no longer binds q4k_gemm_packed_load_direct_out_kernel/q4k_gemm_packed_load_kernel from prefill_routes.py; it emits q4k_gen_prefill_* kernels from Q4KPrefillRouteSpec. This preserves the memory-safe direct-packed schedule while moving the default route out of route-local hand-template ownership. PREFILL_Q4K_REDUCE_OUT=1 is also descriptor-owned as a correct-not-fast research selector."
     },
-    "prefill_q4k_generated_tile_research": {
+    "prefill_q6k_direct_generated": {
       "workload": "prefill",
       "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
-      "status": "research",
+      "status": "promoted_default",
       "roles": [
         "ffn_gate_up",
         "attn_qo",
@@ -582,54 +591,35 @@
       ],
       "excluded_roles": [],
       "quant": [
-        "Q4_K"
+        "Q6_K"
       ],
       "shape_guards": [
         {
           "M": 512,
-          "N": 17408,
-          "K": 5120,
-          "role": "ffn_gate_up",
-          "note": "first 14B target from BoltBeam practical roofline"
-        },
-        {
-          "M": 512,
-          "N": 5120,
-          "K": 5120,
-          "role": "attn_qo",
-          "note": "second Q4 target after ffn_gate_up moves"
-        },
-        {
-          "M": 512,
-          "N": 5120,
-          "K": 17408,
-          "role": "ffn_down",
-          "note": "third Q4 target after topology proves"
+          "N": "*",
+          "K": "*",
+          "note": "direct-packed Q6_K prefill, memory-safe route"
         }
       ],
-      "env": {
-        "PREFILL_QK_GENERATED_TILE": "1"
-      },
-      "rollback": {
-        "PREFILL_QK_GENERATED_TILE": "0"
-      },
-      "baseline_route_id": "prefill_q4k_direct_packed_load_direct_out",
+      "env": {},
+      "rollback": {},
+      "baseline_route_id": "ordinary_tinygrad_graph",
       "strict_fallback": true,
       "expected_kernels": [
-        "prefill_q4_k_generated_tile_*"
+        "q6k_gen_prefill_direct_out_*",
+        "q6k_gen_prefill_partials_*"
       ],
       "forbidden_kernels": [
-        "prefill_q4k_direct_packed_load_direct_out_gemm_* (on selected roles)"
+        "q6k_gemm_packed_load_* (on the default path)",
+        "q6k_gemm_* (on the default packed-load path)"
       ],
-      "authority_gate": "extra/qk/prefill_packed_roofline_scope.py + future generated-tile microgate",
-      "promotion_artifacts": [
-        "docs/prefill-packed-generated-tile-scope-20260704.md"
-      ],
-      "purity_status": "research",
+      "authority_gate": "test/unit/test_q6k_prefill_route_spec.py + test/unit/test_llm_prefill_routes.py",
+      "promotion_artifacts": [],
+      "purity_status": "search_generated_promoted",
       "provenance": "machine_authored_generated",
-      "selector": "env_guard",
-      "route_attribution": "future tinygrad/llm/prefill_routes.py branch guarded by PREFILL_QK_GENERATED_TILE=1; intended writer is a PackedPrefillTileSpec lowered to generated UOps, not a source-string or external handwritten kernel.",
-      "note": "14B/32B memory-safe parity research route. The first simple generated-UOp cooperative-lane probes are refuted: 256-thread lane_partials hit 0.99 GB/s, and one-wave direct_warp tops out at 1.29 GB/s on ffn_gate_up. After the Fable audit, the immediate shipped fix became prefill_q4k_direct_tile4x4_default. Keep this generated-tile route default-off; reopen only with a correct grouped/staged reduction or dequant-to-LDS/WMMA plan."
+      "selector": "env_default",
+      "route_attribution": "tinygrad/llm/prefill_routes.py Q6_K direct-packed branch -> extra/qk/q6k_prefill_route_spec.py Q6KPrefillRouteSpec + emit_q6k_packed_prefill_kernel; reuses the Q6_K packed-load dequant grammar while descriptor data owns prefill output layout, token axis, parts, and opts.",
+      "note": "Q6_K direct-packed prefill provenance conversion. The default packed-load path no longer binds q6k_gemm_packed_load_* hand UOp templates from prefill_routes.py; it emits q6k_gen_prefill_* kernels from Q6KPrefillRouteSpec. Non-packed-load Q6_K remains an explicit legacy debug path behind PREFILL_Q6K_PACKED_LOAD=0."
     },
     "prefill_q4k_int8_wmma_generated_research": {
       "workload": "prefill",
@@ -678,6 +668,56 @@
       "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma -> extra/qk/prefill_int8_wmma_spec.py Q4KInt8WMMAPrefillSpec + emit_q4k_int8_wmma_prefill_tensor; core RAW dot is ordinary Tensor.matmul(..., dtype=dtypes.int), relying on tinygrad/codegen/opt/tc.py and tinygrad/renderer/cstyle.py for iu8 WMMA.",
       "note": "Default-off first generated substrate for 14B Q4_K int8 MMQ. It reuses q8_1_quantize and Q4_K metadata helpers, validates algebra in the existing MMQ parity gate, and deliberately does not introduce a new handwritten kernel. Promotion requires an AMD gate proving wmma_i32_16x16x16_iu8 in generated code/ISA and 14B authority beating the direct-packed baseline."
     },
+    "prefill_q4k_int8_wmma_tiled_research": {
+      "workload": "prefill",
+      "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
+      "status": "research",
+      "roles": [
+        "ffn_gate_up",
+        "attn_qo",
+        "ffn_down",
+        "attn_kv"
+      ],
+      "excluded_roles": [],
+      "quant": [
+        "Q4_K"
+      ],
+      "shape_guards": [
+        {
+          "M": 512,
+          "N": "*",
+          "K": "*",
+          "note": "bounded Q4_K/Q8_1 tiled generated WMMA route; RAW must be tile-local, not [groups,M,N]"
+        }
+      ],
+      "env": {
+        "PREFILL_Q4K_Q8": "wmma_tiled"
+      },
+      "rollback": {
+        "PREFILL_Q4K_Q8": "0"
+      },
+      "baseline_route_id": "prefill_q4k_direct_tile4x4_default",
+      "strict_fallback": true,
+      "expected_kernels": [
+        "prefill_q4k_q8_1_wmma_tiled_generated_gemm_* or emitted Tensor kernels with wmma_i32_16x16x16_iu8"
+      ],
+      "forbidden_kernels": [
+        "new handwritten HIP/CUDA/source-string kernel",
+        "inline asm",
+        "route-local __builtin_amdgcn_wmma",
+        "prefill_q4k_direct_packed_load_direct_out_gemm_* (on selected roles)"
+      ],
+      "authority_gate": "extra/qk/q4k_wmma_tiled_lowering_feasibility.py + extra/qk/q4k_wmma_tiled_microgate.py + extra/qk/q4k_wmma_tiled_surface_gate.py + extra/qk/q4k_wmma_tiled_lifecycle_gate.py + extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py + extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py",
+      "promotion_artifacts": [
+        "docs/q4k-wmma-fused-tiled-prefill-execution-scope-20260705.md",
+        "docs/q4k-wmma-full-role-lowering-solution-scope-20260705.md"
+      ],
+      "purity_status": "research",
+      "provenance": "machine_authored_generated",
+      "selector": "env_guard",
+      "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_Q8=wmma_tiled -> extra/qk/prefill_int8_wmma_spec.py Q4KInt8WMMATiledPrefillSpec + one-tile emit_q4k_int8_wmma_tiled_prefill_tensor for the direct runtime path (with bounded fallback to emit_q4k_int8_wmma_tiled_lifecycle_tensor); route authority additionally requires extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py to run a bounded synthetic generated tiled loop via emit_q4k_int8_wmma_tiled_exec_tensor.",
+      "note": "One-tile tiled WMMA substrate is correct and codegen-valid: lowering feasibility and Q4_K/Q8_1 microgate pass on AMD with wmma_i32_16x16x16_iu8. Synthetic 14B role-shape execution now runs through a bounded generated tiled loop (emit_q4k_int8_wmma_tiled_exec_tensor) for route authority, while full runtime role-shape execution is still blocked on scheduler-owned tiled loop ownership. Promotion requires canonical 14B smoke beating the current direct-packed default."
+    },
     "prefill_q4k_reduce_out_research": {
       "workload": "prefill",
       "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
@@ -709,59 +749,17 @@
       "baseline_route_id": "prefill_q4k_direct_tile4x4_default",
       "strict_fallback": true,
       "expected_kernels": [
-        "prefill_q4k_direct_packed_load_reduce_out_gemm_*"
+        "q4k_gen_prefill_reduce_out_*"
       ],
       "authority_gate": "extra/qk/prefill_boltbeam_trace.py",
       "promotion_artifacts": [
         "docs/prefill-packed-generated-tile-scope-20260704.md"
       ],
       "purity_status": "research",
-      "provenance": "hand_authored_uop_template",
+      "provenance": "machine_authored_generated",
       "selector": "env_guard",
-      "route_attribution": "extra/qk/quant/q4_k_gemv_primitive.py q4k_gemm_packed_load_reduce_out_kernel, selected by tinygrad/llm/prefill_routes.py when PREFILL_Q4K_REDUCE_OUT=1.",
+      "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_REDUCE_OUT=1 -> extra/qk/q4k_prefill_route_spec.py Q4KPrefillRouteSpec(output_layout='reduce_out') + emit_q4k_packed_prefill_kernel.",
       "note": "Default-off primitive correctness fix. It replaces the manual direct-output accumulator recurrence with a real Ops.REDUCE, making GROUP schedules numerically valid: GROUP:0:10 on real 14B ffn_gate rel_rmse ~=1.6e-6 vs the lossless direct path. It is not promoted because clean pp512 is 169.7 tok/s vs 173.6 for the current Q4 tile4x4 manual direct-output default. Use this as the correctness foundation for future grouped/staged combine work."
-    },
-    "prefill_pipe_global_rollback": {
-      "workload": "prefill",
-      "profile_id": "qwen3_8b_q4_k_m_gfx1100_prefill",
-      "status": "superseded_rollback",
-      "roles": [
-        "attn_qo",
-        "attn_kv",
-        "ffn_down",
-        "ffn_gate_up"
-      ],
-      "excluded_roles": [],
-      "quant": [
-        "Q4_K",
-        "Q6_K",
-        "fp16"
-      ],
-      "shape_guards": [
-        {
-          "M": 512,
-          "N": "*",
-          "K": "*"
-        }
-      ],
-      "env": {
-        "PREFILL_GEMM_PIPELINE": "1",
-        "PREFILL_PIPE_ROLE_SELECTIVE": "0"
-      },
-      "rollback": {
-        "PREFILL_GEMM_PIPELINE": "0"
-      },
-      "strict_fallback": true,
-      "authority_gate": "extra/qk/prefill_whole_synced.py",
-      "promotion_artifacts": [
-        "bench/qk-prefill-pipe-promotion/latest.json",
-        "bench/qk-prefill-pipe-promotion/summary.md"
-      ],
-      "purity_status": "search_selected_specialized_route",
-      "provenance": "rollback_oracle",
-      "selector": "env_guard",
-      "route_attribution": "extra/qk/prefill_graph_gemm_route.py:55 (pipe on for all roles when PREFILL_PIPE_ROLE_SELECTIVE=0).",
-      "note": "global pipe (all roles): was TIER_A vs old lds2 default (+8.5..19.2%), superseded by role-selective (which excludes the saturated gate/up where pipe regressed ~17%). Kept as the A/B rollback comparator and the rollback target of role-selective."
     }
   },
   "refuted_axes": [
@@ -833,27 +831,30 @@
     "decode_q6k_coop_generated",
     "decode_flash_live_split_g4_8b_kvboth",
     "decode_flash_block_tile_g5_konly",
-    "prefill_pipe_role_selective_generated",
-    "prefill_q4k_direct_tile4x4_default"
+    "prefill_v2_scheduler_matmul_default",
+    "prefill_q4k_direct_tile4x4_default",
+    "prefill_q6k_direct_generated"
   ],
   "promoted_defaults": [
     "decode_q4k_g3_generated",
     "decode_q6k_coop_generated",
     "decode_flash_live_split_g4_8b_kvboth",
     "decode_flash_block_tile_g5_konly",
-    "prefill_pipe_role_selective_generated",
-    "prefill_q4k_direct_tile4x4_default"
+    "prefill_v2_scheduler_matmul_default",
+    "prefill_q4k_direct_tile4x4_default",
+    "prefill_q6k_direct_generated"
   ],
   "owned_defaults": [],
   "default_purity": {
-    "verdict": "TINYGRAD_DEFAULT_PURITY_FAIL",
+    "verdict": "TINYGRAD_DEFAULT_PURITY_PASS",
     "default_routes": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
       "decode_flash_live_split_g4_8b_kvboth",
       "decode_flash_block_tile_g5_konly",
-      "prefill_pipe_role_selective_generated",
-      "prefill_q4k_direct_tile4x4_default"
+      "prefill_v2_scheduler_matmul_default",
+      "prefill_q4k_direct_tile4x4_default",
+      "prefill_q6k_direct_generated"
     ],
     "rows": [
       {
@@ -885,24 +886,29 @@
         "final_default_allowed": true
       },
       {
-        "route_id": "prefill_pipe_role_selective_generated",
+        "route_id": "prefill_v2_scheduler_matmul_default",
         "status": "promoted_default",
-        "provenance": "machine_authored_generated",
+        "provenance": "tinygrad_scheduler_generated",
         "replacement_scope": "",
         "final_default_allowed": true
       },
       {
         "route_id": "prefill_q4k_direct_tile4x4_default",
         "status": "promoted_default",
-        "provenance": "hand_authored_uop_template",
-        "replacement_scope": "14B/32B Q4_K prefill needs a generated quantized MMQ substrate that fuses dequant and matmul; this direct-packed UOp template is only the memory-safe interim route.",
-        "final_default_allowed": false
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
+      },
+      {
+        "route_id": "prefill_q6k_direct_generated",
+        "status": "promoted_default",
+        "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
       }
     ],
     "forbidden_default_routes": [],
-    "transitional_default_routes": [
-      "prefill_q4k_direct_tile4x4_default"
-    ],
+    "transitional_default_routes": [],
     "final_default_allowed_provenance": [
       "machine_authored_generated",
       "tinygrad_scheduler_generated"

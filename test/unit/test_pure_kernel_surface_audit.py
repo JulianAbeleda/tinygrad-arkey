@@ -20,8 +20,52 @@ def test_route_surface_rows_classify_known_surfaces():
   assert audit.route_surface_row("decode_q4k_g3_generated")["strict_pure"] is True
   assert audit.route_surface_row("decode_q6k_coop_generated")["strict_pure"] is True
   assert audit.route_surface_row("prefill_v2_scheduler_matmul_default")["surface_class"] == "ordinary_tinygrad_graph"
+  assert audit.route_surface_row("prefill_wmma_pipe_primitive_generated")["surface_class"] == "ordinary_tinygrad_graph"
+  assert audit.route_surface_row("prefill_wmma_pipe_lds_dbuf_primitive_generated")["surface_class"] == "compiler_primitive_spec_owned_asm_backend_atom"
+  assert audit.route_surface_row("prefill_wmma_pipe_lds_dbuf_primitive_generated")["strict_pure"] is False
   assert audit.route_surface_row("prefill_q4k_direct_tile4x4_default")["surface_class"] == "descriptor_owned_uop_codegen"
   assert "Ops.INS" in audit.route_surface_row("prefill_pipe_role_selective_generated")["markers"]["extra/qk/prefill_graph_gemm_route.py"]
+
+
+def test_surface_rows_distinguish_backend_asm_from_hand_kernel_authorship():
+  generated = audit.route_surface_row("decode_q4k_g3_generated")
+  assert generated["strict_pure"] is True
+  assert generated["asm_usage"] == "backend_emitted_from_descriptor"
+  assert generated["kernel_authorship"] == "descriptor_generated"
+  assert generated["surface_policy"] == "generated_default_allowed"
+
+  prefill_oracle = audit.route_surface_row("prefill_pipe_role_selective_generated")
+  assert prefill_oracle["strict_pure"] is False
+  assert prefill_oracle["asm_usage"] == "raw_instruction_or_binary_injection"
+  assert prefill_oracle["kernel_authorship"] == "hand_authored_full_kernel_schedule"
+  assert prefill_oracle["surface_policy"] == "oracle_or_escape_hatch_only"
+
+  s10_route = audit.route_surface_row("prefill_wmma_pipe_lds_dbuf_primitive_generated")
+  assert s10_route["strict_pure"] is False
+  assert s10_route["asm_usage"] == "asm_backend_atom"
+  assert s10_route["kernel_authorship"] == "compiler_primitive_spec_owned"
+  assert s10_route["surface_policy"] == "compiler_primitive_not_strict_pure_generated"
+  assert "attn_kv uses generated pipe transport with local staging disabled" in s10_route["reason"]
+
+  s10_mixed_route = audit.route_surface_row("prefill_wmma_lds_dbuf_primitive_mixed")
+  assert s10_mixed_route["strict_pure"] is False
+  assert s10_mixed_route["asm_usage"] == "asm_backend_atom_and_raw_pipe_oracle"
+  assert s10_mixed_route["kernel_authorship"] == "mixed_compiler_primitive_and_raw_fallback"
+  assert s10_mixed_route["surface_policy"] == "compiler_primitive_with_explicit_raw_pipe_fallback"
+
+
+def test_s10_composed_manifest_records_attn_kv_generated_no_local_stage():
+  manifest = audit.route_manifest.ROUTES["prefill_wmma_pipe_lds_dbuf_primitive_generated"]
+  role_primitives = {g["role"]: g["primitive"] for g in manifest["shape_guards"] if "role" in g}
+  assert role_primitives == {
+    "attn_qo": "pipe",
+    "attn_kv": "generated_pipe_no_local_stage",
+    "ffn_down": "pipe",
+    "ffn_gate_up": "lds_dbuf",
+  }
+  assert "attn_kv uses generated pipe transport with local staging disabled" in manifest["route_attribution"]
+  assert "retaining resource-gated raw fallback" in manifest["shape_guards"][-1]["note"]
+  assert any("outside explicit safety fallback" in k for k in manifest["forbidden_kernels"])
 
 
 def test_l3_descriptor_surfaces_are_derived_from_registry():
@@ -166,3 +210,50 @@ def test_pure_search_guard_uses_strict_surface_classification():
   assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1"})
   with pytest.raises(RuntimeError, match="surface=external_raw_or_binary"):
     assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1", "PREFILL_GRAPH_GEMM": "1"})
+
+
+def test_pure_search_guard_distinguishes_generated_pipe_primitive_from_raw_oracle():
+  default_route = {r["family"]: r for r in effective_routes({})}["prefill_gemm"]
+  assert default_route["effective_route"] == "prefill_v2_scheduler_matmul_default"
+  assert default_route["rolled_back_to_oracle"] is False
+  assert default_route["pure"] is True
+
+  raw_route = {r["family"]: r for r in effective_routes({"PREFILL_GRAPH_GEMM": "1"})}["prefill_gemm"]
+  assert raw_route["effective_route"] == "prefill_pipe_role_selective_generated"
+  assert raw_route["rolled_back_to_oracle"] is True
+  assert raw_route["pure"] is False
+
+  primitive_route = {r["family"]: r for r in effective_routes({
+    "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_PIPE_PRIMITIVE": "1"})}["prefill_gemm"]
+  assert primitive_route["effective_route"] == "prefill_wmma_pipe_primitive_generated"
+  assert primitive_route["rolled_back_to_oracle"] is False
+  assert primitive_route["provenance"] == "tinygrad_scheduler_generated"
+  assert primitive_route["pure"] is True
+
+  lds_only_route = {r["family"]: r for r in effective_routes({
+    "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1", "PREFILL_DBUF": "1"})}["prefill_gemm"]
+  assert lds_only_route["effective_route"] == "prefill_wmma_lds_dbuf_primitive_mixed"
+  assert lds_only_route["rolled_back_to_oracle"] is False
+  assert lds_only_route["provenance"] == "compiler_primitive_spec_owned"
+  assert lds_only_route["surface_class"] == "compiler_primitive_spec_owned_mixed_raw_pipe"
+  assert lds_only_route["pure"] is False
+
+  lds_without_dbuf_route = {r["family"]: r for r in effective_routes({
+    "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1"})}["prefill_gemm"]
+  assert lds_without_dbuf_route["effective_route"] == "prefill_pipe_role_selective_generated"
+  assert lds_without_dbuf_route["rolled_back_to_oracle"] is True
+
+  pipe_lds_without_dbuf_route = {r["family"]: r for r in effective_routes({
+    "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_PIPE_PRIMITIVE": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1"})}["prefill_gemm"]
+  assert pipe_lds_without_dbuf_route["effective_route"] == "prefill_wmma_pipe_primitive_generated"
+  assert pipe_lds_without_dbuf_route["rolled_back_to_oracle"] is False
+  assert pipe_lds_without_dbuf_route["pure"] is True
+
+  composed_route = {r["family"]: r for r in effective_routes({
+    "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_PIPE_PRIMITIVE": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
+    "PREFILL_DBUF": "1"})}["prefill_gemm"]
+  assert composed_route["effective_route"] == "prefill_wmma_pipe_lds_dbuf_primitive_generated"
+  assert composed_route["rolled_back_to_oracle"] is False
+  assert composed_route["provenance"] == "compiler_primitive_spec_owned"
+  assert composed_route["surface_class"] == "compiler_primitive_spec_owned_asm_backend_atom"
+  assert composed_route["pure"] is False

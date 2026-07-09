@@ -1,0 +1,69 @@
+{
+  "schema": "prefill-s10-attn-kv-pipe-resource-gate-ab.v1",
+  "verdict": "S10_ATTN_KV_RESOURCE_GATE_PASS",
+  "gate_on": {
+    "path": "/home/ubuntu/tinygrad-arkey/bench/prefill-s10-lds2-ownership/compile-capture/report-composed-gate-on-ab.json",
+    "status": "ok",
+    "captured_failures": 0,
+    "role_routes": {
+      "attn_qo": "pipe",
+      "attn_kv": "pipe_resource_gated_raw_fallback",
+      "ffn_down": "pipe",
+      "ffn_gate_up": "lds_dbuf"
+    },
+    "whole_tok_s": {
+      "512": 218.15
+    },
+    "binding_gate": "PREFILL_ROUTE_BINDING_PASS"
+  },
+  "gate_off": {
+    "path": "/home/ubuntu/tinygrad-arkey/bench/prefill-s10-lds2-ownership/compile-capture/report-composed-gate-off-ab.json",
+    "status": "compile_or_runtime_error",
+    "captured_failures": 1,
+    "source_analysis": {
+      "kernel_name": "r_16_32_32_2_2_2_2_2_128_2_2",
+      "args": [
+        {
+          "type": "half",
+          "name": "data0",
+          "elements": 524288
+        },
+        {
+          "type": "half",
+          "name": "data1",
+          "elements": 2097152
+        },
+        {
+          "type": "half",
+          "name": "data2",
+          "elements": 4194304
+        }
+      ],
+      "inferred_prefill_shape": {
+        "m": 512,
+        "n": 1024,
+        "k": 4096
+      },
+      "inferred_prefill_role": "attn_kv",
+      "inferred_route_family": "pipe",
+      "shared_arrays": [
+        {
+          "type": "half",
+          "name": "buf0",
+          "elements": 2048,
+          "bytes": 4096
+        },
+        {
+          "type": "half",
+          "name": "buf2",
+          "elements": 32768,
+          "bytes": 65536
+        }
+      ],
+      "shared_bytes": 69632,
+      "shared_limit_bytes": 65536,
+      "shared_over_limit": true,
+      "contains_wmma_builtin": true
+    }
+  }
+}

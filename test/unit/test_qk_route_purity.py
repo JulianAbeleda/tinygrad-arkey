@@ -36,6 +36,8 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
   assert route_provenance("prefill_q6k_direct_generated") == "machine_authored_generated"
   assert route_provenance("prefill_pipe_role_selective_generated") == "external_handwritten_kernel"
+  assert route_provenance("prefill_wmma_pipe_primitive_generated") == "tinygrad_scheduler_generated"
+  assert route_provenance("prefill_wmma_pipe_lds_dbuf_primitive_generated") == "compiler_primitive_spec_owned"
   assert route_provenance("prefill_v2_scheduler_matmul_default") == "tinygrad_scheduler_generated"
   assert set(report["transitional_default_routes"]) == set()
   assert set(report["forbidden_default_routes"]) == set()

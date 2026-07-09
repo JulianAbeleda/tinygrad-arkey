@@ -1,0 +1,497 @@
+# 8B Prefill S10 LDS2 Ownership Migration Scope
+
+Date: 2026-07-09.
+
+## Goal
+
+S10 starts after S9 completed as:
+
+```text
+S9_COMPLETE_KEEP_OPT_IN
+```
+
+S10 is not a performance-tuning phase and not a pure-WMMA roofline phase. S10 is the ownership migration that moves
+`ffn_gate/up` from a monolithic hand-kernel lifecycle toward a compiler/search-owned LDS2 primitive.
+
+End state:
+
+```text
+ffn_gate/up
+  -> PrefillGEMMScheduleSpec
+  -> WMMALDSSpec / LDS2GemmSpec-owned layout, memory, wait, cadence, lifecycle
+  -> route-owned primitive selection and artifacts
+  -> backend emitter implementation
+```
+
+The current ASM emitter may remain the backend atom. The thing S10 removes is human ownership of the full kernel
+lifecycle as one opaque `build_gemm_lds2(...)` call.
+
+## Current Starting Point
+
+Already built:
+
+| Substrate | Status |
+|---|---|
+| `PrefillGEMMScheduleSpec` | captures resolved role schedule data |
+| `WMMALDSSpec` | exists in `extra/qk/wmma_lds_spec.py` |
+| `extract_wmma_lds_spec(...)` | extracts the LDS role spec from the prefill schedule |
+| `wmma_lds_slot_identity_proof(...)` | proves A/B LDS slot windows and DBUF window identity |
+| `wmma_lds_generated_env_defaults(...)` | points at the generated LDS transport substrate |
+| `wmma_lds_postrange_opts(...)` | defines the current generated postrange opts |
+| `PREFILL_WMMA_LDS_PRIMITIVE=1` route | exists as opt-in in `route_pf16_graph_gemm` |
+| `lower_wmma_lds_spec(...)` | intentionally fails closed; does not call `build_gemm_lds2` |
+| S9 knobs | wait/layout/lifecycle/PAD/search/report exist and default stays unchanged |
+
+Current gap:
+
+```text
+The fallback default route still emits raw Ops.INS through build_gemm_lds2.
+The opt-in LDS primitive route now proves route-bound sampled correctness, but whole-prefill composition does not compile yet.
+```
+
+## Current S10 Status
+
+After the first S10 implementation pass:
+
+| Gate | Status | Evidence |
+|---|---|---|
+| G0 baseline frozen | done | `bench/prefill-s10-lds2-ownership/baseline-freeze.json` |
+| G1 spec owns lifecycle data | done | `WMMALDSSpec` serializes reg/memory/wait/cadence/lifecycle and roundtrips JSON |
+| G2 route selects spec | done for opt-in trace/runtime surface | `PREFILL_WMMA_LDS_PRIMITIVE=1` route trace selects generated transport without `build_gemm_lds2` |
+| G3 fallback explicit | done for trace | route trace records `fallback_reason`, `selected_surface`, and `calls_build_gemm_lds2` |
+| G4 route trace | done | `bench/prefill-s10-lds2-ownership/route-trace.json` |
+| G5 correctness smoke | done for isolated ffn_gate/up LDS primitive | `bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json` passes sampled correctness |
+| G6 whole-prefill smoke | done for smoke compile/run | `lds-only` mixed route compiles/runs; composed route also compiles/runs after `attn_kv` pipe resource gate |
+| G7 classification update | done | route manifest/surface guard classify S10 as spec-owned with ASM backend atom, not strict pure, and do not claim generated-pipe ownership for resource-gated `attn_kv` |
+
+Current result:
+
+```text
+S10_PARTIAL_SPEC_OWNED_LDS_PRIMITIVE_VALIDATED
+```
+
+After decoupling the S10 LDS migration from the generated pipe primitive:
+
+```text
+S10_DECOUPLED_LDS_MIXED_ROUTE_COMPILES
+```
+
+Artifact:
+
+```text
+bench/prefill-s10-lds2-ownership/compile-capture/report-lds-only.json
+```
+
+Route:
+
+```text
+prefill_wmma_lds_dbuf_primitive_mixed
+```
+
+Role map:
+
+```text
+attn_qo     -> raw_pipe_oracle
+attn_kv     -> raw_pipe_oracle
+ffn_down    -> raw_pipe_oracle
+ffn_gate_up -> lds_dbuf
+```
+
+Smoke result:
+
+```text
+captured_failures = 0
+WHOLE-PREFILL@512 = 186 tok/s
+binding_gate      = PREFILL_ROUTE_BINDING_PASS
+```
+
+This is a correctness/route-ownership smoke, not a performance result. It proves the `ffn_gate/up` LDS primitive path can
+run inside whole-prefill once the generated pipe primitive is removed from the experiment.
+
+After adding the pipe resource gate:
+
+```text
+S10_COMPOSED_RESOURCE_GATED_ROUTE_COMPILES
+```
+
+Artifact:
+
+```text
+bench/prefill-s10-lds2-ownership/compile-capture/report-composed-after-gate.json
+```
+
+Role map:
+
+```text
+attn_qo     -> pipe
+attn_kv     -> pipe_resource_gated_raw_fallback
+ffn_down    -> pipe
+ffn_gate_up -> lds_dbuf
+```
+
+Smoke result:
+
+```text
+captured_failures = 0
+WHOLE-PREFILL@512 = 221 tok/s
+binding_gate      = PREFILL_ROUTE_BINDING_PASS
+```
+
+This is still not a promotion/performance result. It proves the original COMGR failure is removed by a pre-COMGR
+resource gate, and it keeps the unresolved generated-pipe `attn_kv` work visible as a fallback instead of hiding it.
+The composed route classification is therefore partial: `attn_qo` and `ffn_down` use generated pipe transport,
+`ffn_gate_up` uses the LDS/DBUF primitive, and `attn_kv` remains explicitly on the raw pipe fallback until the generated
+pipe local-staging plan is resource-safe.
+
+The next blocker is not the isolated LDS primitive. The focused ffn_gate/up route sample passes:
+
+```text
+PREFILL_LDS_DBUF_PRIMITIVE_PROMOTED_STRUCTURAL_CORRECTNESS
+rel_rmse = 0.000203936
+finite = true
+warmstart_key_present_after_route = true
+```
+
+Remaining blocker:
+
+```text
+PREFILL_GRAPH_GEMM=1
+PREFILL_WMMA_PIPE_PRIMITIVE=1
+PREFILL_WMMA_LDS_PRIMITIVE=1
+PREFILL_DBUF=1
+```
+
+fails whole-prefill smoke with:
+
+```text
+tinygrad.device.CompileError: comgr fail 1, ERROR
+```
+
+Source capture now identifies the failing generated HIP kernel:
+
+```text
+artifact: bench/prefill-s10-lds2-ownership/compile-capture/report.json
+source:   bench/prefill-s10-lds2-ownership/compile-capture/failed-001-HIPCompiler-9740011082908df4.cpp
+kernel:   r_16_32_32_2_2_2_2_2_128_2_2
+shape:    M=512, N=1024, K=4096
+role:     attn_kv
+family:   pipe
+LDS:      69632 bytes declared shared memory
+limit:    65536 bytes per workgroup
+```
+
+The declaration is:
+
+```text
+buf0[2048] half  -> 4096 bytes
+buf2[32768] half -> 65536 bytes
+total shared     -> 69632 bytes
+```
+
+So the S10 whole-route blocker is classified:
+
+```text
+S10_BLOCKED_PIPE_PRIMITIVE_ATTN_KV_LDS_OVERFLOW
+```
+
+This is not evidence that the isolated `ffn_gate/up` LDS primitive is wrong. The focused `ffn_gate/up` LDS route remains
+sample-correct. The composed whole-prefill route fails earlier because `PREFILL_WMMA_PIPE_PRIMITIVE=1` sends the
+`attn_kv` pipe role through a generated local-staging path that emits more LDS than gfx1100 permits.
+
+Decoupling is now implemented as:
+
+```text
+PREFILL_GRAPH_GEMM=1
+PREFILL_WMMA_LDS_PRIMITIVE=1
+PREFILL_DBUF=1
+PREFILL_WMMA_PIPE_PRIMITIVE unset
+```
+
+This selects:
+
+```text
+prefill_wmma_lds_dbuf_primitive_mixed
+```
+
+The original issue was isolated to the composed generated-pipe route:
+
+```text
+PREFILL_WMMA_PIPE_PRIMITIVE=1 + PREFILL_WMMA_LDS_PRIMITIVE=1 + PREFILL_DBUF=1
+```
+
+The failure class is generated pipe transport picking up an LDS/local-staging plan that is legal for larger roles
+or LDS roles but illegal for small-N `attn_kv`: output shape `512x1024` already forces a smaller tile/workgroup shape, and
+the emitted Tensor matmul transport still declares a full `65536` byte local B buffer plus another `4096` byte local A
+buffer. That is the exact over-budget resource event.
+
+Implemented mitigation:
+
+```text
+pipe_primitive_local_stage_resource_plan(...)
+```
+
+If generated pipe local staging is requested for the captured unsafe small-N shape, the route falls back before COMGR to
+the existing raw pipe emitter and records the fallback reason on the layer object.
+
+Remaining work for the pipe side is one of:
+
+1. keep `attn_kv` off generated pipe local staging,
+2. make generated pipe local staging resource-aware before COMGR,
+3. use a smaller local tile for `N=1024`,
+4. or leave `attn_kv` on the raw fallback while S10 finishes LDS ownership.
+
+## Non-Goals
+
+| Non-goal | Reason |
+|---|---|
+| Pure-WMMA practical peak | Deferred explicitly. |
+| More S9 tuning | S9 already resolved as opt-in/no default promotion. |
+| Reopen 4x4 | Parked on gfx1100 register pressure. |
+| Delete all ASM | Too broad; S10 only removes full-lifecycle ownership. |
+| Clone `build_gemm_lds2` into a second full instruction list | That preserves the problem under another name. |
+
+## Definition Of 100%
+
+S10 MVP is complete when:
+
+| Gate | Done means |
+|---|---|
+| G0 baseline frozen | S9 artifacts and route identity are referenced from this doc. |
+| G1 spec owns lifecycle data | One serializable LDS2 spec contains shape, memory layout, reg layout, wait policy, cadence, lifecycle, and S9 opt-in selection. |
+| G2 route selects spec | `ffn_gate/up` can be routed by spec identity without calling `build_gemm_lds2` on the selected S10 path. |
+| G3 fallback is explicit | Unsupported/generated-lowerer failures fall back only when allowed and are recorded as fallback, not misclassified as generated. |
+| G4 trace proves lifecycle ownership | A route trace records `role -> PrefillGEMMScheduleSpec -> WMMALDSSpec -> selected lowerer -> emitted surface`. |
+| G5 correctness smoke | S10 opt-in route returns finite/correct output on the active role shape or records exact blocker. |
+| G6 whole-prefill smoke | Existing whole-prefill harness runs with S10 route flags and records pp512/pp4096 or exact blocker. |
+| G7 classification update | Manifest/docs classify the route honestly: compiler primitive with ASM backend atom, not pure generated, not full hand kernel. |
+
+S10 is not complete if the only result is another raw `Ops.INS` kernel behind a new name.
+
+## Phase Plan
+
+### S10.0 Baseline Freeze
+
+Inputs:
+
+```text
+bench/prefill-lds2-s9/final-report.json
+bench/prefill-lds2-s9/roofline-audit.json
+bench/prefill-whole-synced/raw-hand-s9-combined-default-authority.json
+bench/prefill-whole-synced/raw-hand-s9-combined-best-authority.json
+```
+
+Output:
+
+```text
+bench/prefill-s10-lds2-ownership/baseline-freeze.json
+```
+
+Must record:
+
+- current route id,
+- current role classification,
+- S9 default-vs-opt-in decision,
+- active shape,
+- whole-prefill baseline band.
+
+### S10.1 Spec Completion
+
+File owner:
+
+```text
+extra/qk/wmma_lds_spec.py
+test/unit/test_wmma_lds_spec.py
+```
+
+Work:
+
+1. Add a single serializable `LDS2GemmSpec` or extend `WMMALDSSpec` to carry:
+   - `LDS2RegLayout`,
+   - `LDS2MemoryLayout`,
+   - `LDS2WaitPolicy`,
+   - `LDS2Cadence`,
+   - `LDS2LifecycleTemplate`,
+   - S9 selection label.
+2. Add `from_prefill_schedule(...)`.
+3. Add `to_json()` / `from_json()` roundtrip.
+4. Add `ownership_classification()`:
+
+```text
+compiler_primitive_with_asm_backend_atom
+```
+
+Done means unit tests can serialize the active `ffn_gate_up` spec and prove legality without calling the hand kernel.
+
+### S10.2 Route And Trace
+
+File owner:
+
+```text
+extra/qk/prefill_graph_gemm_route.py
+extra/qk/prefill/kernel_lifecycle_trace.py
+test/unit/test_prefill_graph_gemm_route.py
+test/unit/test_prefill_kernel_lifecycle_trace.py
+```
+
+Work:
+
+1. Add route trace fields for the LDS primitive opt-in:
+
+```text
+role
+route_family
+schedule_spec
+lds_spec
+selected_surface
+fallback_reason
+classification
+calls_build_gemm_lds2
+```
+
+2. Ensure S10 opt-in path records whether it used:
+
+```text
+generated_transport
+asm_backend_atom
+fallback_raw_oracle
+```
+
+3. Add a smoke command that emits a trace artifact without running whole-prefill:
+
+```text
+bench/prefill-s10-lds2-ownership/route-trace.json
+```
+
+Done means a test can prove the selected S10 route identity does not silently become the old raw oracle.
+
+### S10.3 Lowering Adapter MVP
+
+File owner:
+
+```text
+extra/qk/wmma_lds_spec.py
+extra/qk/prefill_graph_gemm_route.py
+test/unit/test_wmma_lds_spec.py
+```
+
+Allowed first MVP:
+
+```text
+lower WMMALDSSpec through existing lower_lds2_gemm_kernel only when explicitly requested as asm_backend_atom
+```
+
+This is not pure generated, but it is no longer route-local ownership of a whole hand kernel. It must be classified as:
+
+```text
+compiler_primitive_spec_owned__asm_backend_atom
+```
+
+Rules:
+
+- The adapter must accept a spec object, not raw loose parameters.
+- It must not call `build_gemm_lds2`; if it uses the ASM backend, call the named lowerer boundary.
+- It must emit an artifact/classification proving the lifecycle data came from the spec.
+- Default route unchanged.
+
+Done means byte parity with current default is proven for the active shape when using default S9 settings.
+
+### S10.4 Search Integration
+
+File owner:
+
+```text
+extra/qk/prefill/lds2_s9_combined_search.py
+extra/qk/wmma_lds_spec.py
+```
+
+Work:
+
+1. Move S9 candidate selection into the spec object.
+2. Replace S9 env-only candidate application with spec construction where practical.
+3. Keep env knobs as compatibility/CLI overrides only.
+
+Done means the combined candidate can be represented as one spec JSON row.
+
+### S10.5 Correctness And Timing Smoke
+
+Use existing harnesses only:
+
+```text
+extra/qk/prefill/hand_vs_generated_shape_matrix.py
+extra/qk/prefill_whole_synced.py
+extra/qk/prefill_harness.py
+```
+
+Artifacts:
+
+```text
+bench/prefill-s10-lds2-ownership/micro-smoke.json
+bench/prefill-s10-lds2-ownership/whole-smoke.json
+```
+
+Done means:
+
+- active role shape is correct, or exact blocker is recorded,
+- whole-prefill route runs, or exact blocker is recorded,
+- no new harness duplicates existing harness responsibilities.
+
+### S10.6 Classification And Manifest
+
+File owner:
+
+```text
+extra/qk/route_manifest.py
+extra/qk/pure_search_guard.py
+docs/asm-tool-vs-hand-kernel-policy-scope.md
+```
+
+Work:
+
+1. Add/adjust route classification for the S10 route.
+2. Distinguish:
+
+```text
+full_hand_kernel
+asm_backend_atom
+compiler_primitive_spec_owned
+pure_generated
+```
+
+3. Ensure guard output does not claim purity for the ASM backend atom.
+
+Done means route census and docs agree on the classification.
+
+## Parallel Work Split
+
+| Lane | Can run in parallel? | Owns | Output |
+|---|---|---|---|
+| A. Spec completion | yes | `wmma_lds_spec.py`, `test_wmma_lds_spec.py` | serializable ownership spec |
+| B. Route/trace | yes | route + lifecycle trace tests | route trace artifact path and fallback classification |
+| C. Harness/artifact | yes | new S10 artifact runner using existing harnesses | baseline/micro/whole smoke artifacts |
+| D. Classification | yes after A/B shape known | manifest/guard/docs | honest route taxonomy |
+| Main integration | sequence after A-C | docs + final tests + active smoke | S10 MVP verdict |
+
+## Expected Blockers
+
+| Blocker | Meaning | Escape hatch |
+|---|---|---|
+| generated transport too slow/wrong | S10 generated path cannot replace oracle yet | keep ASM backend atom but spec-owned |
+| lowerer still needs raw `Ops.INS` | acceptable only if emitted through spec-owned backend atom | classify honestly |
+| route trace cannot distinguish fallback | S10 cannot prove ownership | fix trace before performance work |
+| whole-prefill route falls back silently | invalid S10 result | add hard gate/failure artifact |
+
+## First Implementation Order
+
+1. Finish spec serialization/ownership classification.
+2. Add route trace proof.
+3. Add S10 artifact runner that reuses existing harnesses.
+4. Add ASM-backend-atom adapter if needed.
+5. Run micro/whole smoke.
+6. Update route classification.
+7. Decide S10 MVP status:
+
+```text
+S10_MVP_SPEC_OWNED_ASM_BACKEND_ATOM
+S10_BLOCKED_GENERATED_TRANSPORT
+S10_BLOCKED_TRACE_OR_CLASSIFICATION
+```

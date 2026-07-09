@@ -8,6 +8,7 @@ reports violations with the route id + replacement scope.
 
 Purity contract (docs/pure-machine-search.md; extra/qk/route_manifest.py):
   allowed on a pure default path : machine_authored_generated | tinygrad_scheduler_generated
+  not strict-pure generated      : compiler_primitive_spec_owned
   forbidden                      : external_handwritten_kernel | hand_authored_uop_template | rollback_oracle
 
 When PURE_MACHINE_SEARCH_ONLY=1 the model raises at init if any hot default is impure (unless the specific rollback
@@ -34,7 +35,7 @@ HOT_FAMILIES = [
   {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_generated",
    "rollback_active": lambda e: False},
   {"family": "prefill_gemm", "generated": "prefill_v2_scheduler_matmul_default", "oracle": "prefill_pipe_role_selective_generated",
-   "rollback_active": lambda e: str(e.get("PREFILL_GRAPH_GEMM", "0")).lower() not in ("0", "false", "off", "no", "")},
+   "effective": "prefill_gemm"},
   # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is descriptor-owned; the opt-in
   # PREFILL_Q4K_WMMA_FUSED route remains raw-ISA WMMA and is not selected here.
   {"family": "prefill_q4k", "generated": "prefill_q4k_direct_tile4x4_default", "oracle": "prefill_q4k_direct_tile4x4_default",
@@ -46,6 +47,23 @@ HOT_FAMILIES = [
   {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_flash_live_split_g4_8b_kvboth",
    "rollback_active": lambda e: False},
 ]
+
+
+def _enabled(env: dict[str, Any], key: str) -> bool:
+  return str(env.get(key, "0")).strip().lower() not in ("0", "false", "off", "no", "")
+
+
+def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
+  if not _enabled(env, "PREFILL_GRAPH_GEMM"):
+    return "prefill_v2_scheduler_matmul_default", False
+  if (_enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE") and _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and
+      _enabled(env, "PREFILL_DBUF")):
+    return "prefill_wmma_pipe_lds_dbuf_primitive_generated", False
+  if _enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE"):
+    return "prefill_wmma_pipe_primitive_generated", False
+  if _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and _enabled(env, "PREFILL_DBUF"):
+    return "prefill_wmma_lds_dbuf_primitive_mixed", False
+  return "prefill_pipe_role_selective_generated", True
 
 
 def _provenance(rid: str) -> str:
@@ -61,8 +79,11 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
   e = os.environ if env is None else env
   out = []
   for fam in HOT_FAMILIES:
-    rolled_back = fam["rollback_active"](e)
-    rid = fam["oracle"] if rolled_back else fam["generated"]
+    if fam.get("effective") == "prefill_gemm":
+      rid, rolled_back = _prefill_gemm_effective(e)
+    else:
+      rolled_back = fam["rollback_active"](e)
+      rid = fam["oracle"] if rolled_back else fam["generated"]
     prov = _provenance(rid)
     surface = route_surface_row(rid)
     out.append({"family": fam["family"], "effective_route": rid, "provenance": prov,
