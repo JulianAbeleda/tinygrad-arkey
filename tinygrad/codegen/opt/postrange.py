@@ -439,6 +439,96 @@ def _tc_local_stage_coop_b_ranges(src:UOp) -> tuple[tuple[UOp, ...], tuple[UOp, 
   tile = tuple(r for r in ranges if r.arg[-1] is not AxisType.REDUCE and r not in fragment)
   return fragment, tile
 
+def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:tuple|None=None,
+                                        stage_ranges:tuple[UOp, ...]|None=None) -> UOp|None:
+  # Paired materializer: unlike generic STAGE lowering, this owns both the LDS producer stores and the
+  # WMMA operand loads, so the DBUF slot offset is applied symmetrically to both sides.
+  if src.op in {Ops.STAGE, Ops.AFTER, Ops.BARRIER} or src.op_in_backward_slice_with_self(Ops.BARRIER): return None
+  warp_ranges = [r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
+  if len(warp_ranges) != 1 or src.dtype.count != 16: return None
+  lane = warp_ranges[0]
+  if stage_ranges is None:
+    fragment_ranges, tile_ranges = _tc_local_stage_coop_b_ranges(src)
+  else:
+    sranges = sorted(stage_ranges, key=lambda r: r.arg)
+    fragment_ranges = tuple(r for r in sranges if r.arg[-1] is AxisType.WARP)
+    tile_ranges = tuple(r for r in sranges if r.arg[-1] is not AxisType.WARP)
+  if lane not in fragment_ranges: return None
+  allowed_tile_types = {AxisType.UPCAST, AxisType.UNROLL}
+  if stage_ranges is not None: allowed_tile_types |= {AxisType.LOCAL, AxisType.GLOBAL}
+  if getenv("PREFILL_TC_LOCAL_STAGE_COOP_GLOBAL", 0): allowed_tile_types.add(AxisType.GLOBAL)
+  if getenv("PREFILL_TC_LOCAL_STAGE_COOP_LOCAL", 0): allowed_tile_types.add(AxisType.LOCAL)
+  if getenv("PREFILL_TC_LOCAL_STAGE_COOP_DROP_GLOBAL", 0):
+    tile_ranges = tuple(r for r in tile_ranges if r.arg[-1] is not AxisType.GLOBAL)
+  if getenv("PREFILL_TC_LOCAL_STAGE_COOP_DROP_LOCAL", 0):
+    tile_ranges = tuple(r for r in tile_ranges if r.arg[-1] is not AxisType.LOCAL)
+  if getenv("PREFILL_TC_LOCAL_STAGE_COOP_DROP_UNROLL", 0):
+    tile_ranges = tuple(r for r in tile_ranges if r.arg[-1] is not AxisType.UNROLL)
+  if (drop_unroll_size := getenv("PREFILL_TC_LOCAL_STAGE_COOP_DROP_UNROLL_SIZE", 0)):
+    tile_ranges = tuple(r for r in tile_ranges if not (r.arg[-1] is AxisType.UNROLL and r.vmax + 1 == drop_unroll_size))
+  if any(r.arg[-1] not in allowed_tile_types for r in tile_ranges): return None
+  a_full_lane = bool(getenv("PREFILL_TC_LOCAL_STAGE_A_FULL_LANE", 0))
+  row = lane if operand_idx == 0 and a_full_lane else lane & 15
+  nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
+  kr = prefill_dbuf_reduce_range(src.ranges) if nbuf > 1 else None
+  tile_count = prod(r.vmax+1 for r in tile_ranges)
+  tile_elems = 512 if operand_idx == 0 and a_full_lane else 256
+  base = tile_elems * tile_count * nbuf if kr is not None else tile_elems * tile_count
+  tile_idx = UOp.const(dtypes.weakint, 0)
+  tile_mul = 1
+  for r in tile_ranges[::-1]:
+    tile_idx = tile_idx + r * tile_mul
+    tile_mul *= r.vmax+1
+  slot = ((kr % nbuf) * tile_count + tile_idx) * tile_elems if kr is not None else tile_idx * tile_elems
+  lds_buffer_id = 990 + operand_idx
+  buffer_tag = owner_tag or ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
+                             ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
+  bsh = UOp.placeholder((base,), src.dtype.scalar(), lds_buffer_id, addrspace=AddrSpace.LOCAL).replace(tag=buffer_tag)
+
+  def _slot_idx(i:int|UOp) -> UOp:
+    return slot + row*16 + i
+
+  store_gate = UOp.const(dtypes.bool, True) if operand_idx == 0 and a_full_lane else lane < 16
+  stores: list[UOp] = []
+  prev_store: UOp|None = None
+  stage_store_i = 0
+  def _append_stage_store(idx:UOp, val:UOp) -> None:
+    nonlocal prev_store, stage_store_i
+    idx = idx.replace(tag=("tc_local_stage_store", operand_idx, lds_buffer_id, stage_store_i))
+    stage_store_i += 1
+    st = idx.store(val, store_gate)
+    st = st.replace(tag=idx.tag)
+    stores.append(st.end())
+    prev_store = st
+
+  if _prefill_lds_pack_carrier():
+    for elems, store_slot in ((tuple(range(0, 8)), 0), (tuple(range(8, 16)), 8)):
+      carry = UOp(Ops.NOOP, src.dtype.scalar().vec(8), tuple(src.gep(i) for i in elems))
+      _append_stage_store(bsh.index(_slot_idx(store_slot), dtype=bsh.dtype), carry)
+  else:
+    for i in range(16):
+      _append_stage_store(bsh.index(_slot_idx(i), dtype=bsh.dtype).gep(0), src.gep(i))
+
+  stage = UOp.group(*stores)
+  if tile_ranges: stage = stage.end(*tile_ranges)
+  bar = UOp.barrier(stage)
+  range_by_axis = {r.arg[0]: r for r in src.src[0].ranges if r.op is Ops.RANGE}
+  frag_idx = UOp.const(dtypes.weakint, 0)
+  mul = 1
+  if not isinstance(src.arg, tuple): return None
+  for axis, size in src.arg[::-1]:
+    if axis not in range_by_axis: return None
+    frag_idx = frag_idx + range_by_axis[axis] * mul
+    mul *= size
+  if mul != src.dtype.count: return None
+  proof_tag = _wmma_frag_proof_tag(operand_idx=operand_idx, lds_buffer_id=lds_buffer_id, nbuf=nbuf, kr=kr,
+                                   tile_idx=tile_idx, tile_count=tile_count, tile_elems=tile_elems,
+                                   producer=bar, byte_len=32)
+  ordered_local = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).replace(tag=buffer_tag)
+  scalar_idx = ordered_local.index(_slot_idx(frag_idx)).replace(tag=proof_tag)
+  scalar = scalar_idx.load().replace(tag=proof_tag)
+  return UOp(Ops.CONTRACT, src.dtype, (scalar,), src.arg, tag=1)
+
 
 def _tc_local_stage_buffer_tag(operand_idx:int, lds_buffer_id:int, nbuf:int, tile_count:int, tile_elems:int) -> tuple:
   tag = ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
@@ -510,6 +600,10 @@ class OwnedBStageEmitter:
           "src_dtype": str(self.src.dtype),
           "fallback_ranges": [repr(r.arg) for r in self.fallback],
         }))
+      if getenv("PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE", 0):
+        owner_tag = _tc_local_stage_buffer_tag(1, 991, PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1, 1, 256)
+        if (out := _tc_local_stage_paired_contract_src(self.src, 1, owner_tag=owner_tag, stage_ranges=self.fallback)) is not None: return out
+        raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE could not materialize paired B store/load contract")
       return _tc_local_stage_src(self.src, self.fallback, 1)
     raise KernelOptError(f"unknown PREFILL_DBUF_OWNED_B_STAGE_EMIT={self.mode!r}; expected identity, object_identity, or rotate")
 

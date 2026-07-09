@@ -666,6 +666,47 @@ implement _prefill_dbuf_owned_b_stage_lowering as a real materializer:
   tail consume final
 ```
 
+### P4I. Paired B Materializer Probe
+
+Status: blocked; wrong layout.
+
+We tested the first plausible implementation: reuse the cooperative paired store/load pattern from
+`_tc_local_stage_coop_operand` inside `OwnedBStageEmitter.rotate`, but keep it behind
+`PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE=1`.
+
+Result on bounded `2x2`, `512x5120x5120`, `loc=2`, `unr=2`:
+
+```text
+status=WRONG rr=nan
+WMMA=8                    # expected 16
+global_load_b128=16
+ds_store_b128=32
+ds_load_b128=32
+inst/WMMA=96.25
+wait/WMMA=5.625
+store/WMMA=4.0
+load/WMMA=4.0
+```
+
+Diagnosis:
+
+```text
+the generic cooperative row formula is not the B tile-key layout
+using WARP x LOCAL as the store surface preserves the old STAGE surface but collapses the WMMA grouping
+```
+
+So the implementation target is narrower than "paired LDS materializer":
+
+```text
+build a B tile-key paired materializer:
+  reuse the proven B tile-key slot_idx/layout/gate formula
+  emit store and load together, so DBUF slot offset is applied symmetrically
+  then split prologue/body/tail ownership without emitting the legacy duplicate producer
+```
+
+`PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate` remains fail-closed by default and reaches the rangeify hook; the wrong paired
+probe is not enabled unless `PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE=1` is set.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.
