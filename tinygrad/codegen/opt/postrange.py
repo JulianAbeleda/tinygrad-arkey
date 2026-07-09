@@ -497,6 +497,10 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   if len(warp_ranges) != 1: return _fallback("warp_range_count_not_1")
   if not isinstance(src.arg, tuple): return _fallback("contract_arg_not_tuple")
   lane = warp_ranges[0]
+  generic_layout = bool(getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY_GENERIC_LAYOUT", 0))
+  fallback_local_ranges = tuple(r for r in fallback if r.arg[-1] is AxisType.LOCAL)
+  if generic_layout and len(fallback_local_ranges) != 1: return _fallback("generic_layout_missing_local_range")
+  local_lane = fallback_local_ranges[0] if generic_layout else None
   tile_ranges = tuple(r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.GLOBAL)
   if not tile_ranges: return _fallback("missing_global_tile_ranges")
   stage_loop_ranges = tile_ranges
@@ -514,17 +518,24 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
     tile_mul *= r.vmax+1
   nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
   kr = prefill_dbuf_reduce_range(src.ranges) if nbuf > 1 else None
-  base = tile_count * 256 * nbuf if kr is not None else tile_count * 256
-  buffer_tag = _tc_local_stage_buffer_tag(1, 993, nbuf, tile_count, 256) if getenv("PREFILL_WMMA_AB_PROOF_META", 0) else None
+  layout_elems = 8192 if generic_layout else 256
+  generic_no_slot = generic_layout and bool(getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY_GENERIC_NO_SLOT", 0))
+  base = tile_count * layout_elems * nbuf if kr is not None and not generic_no_slot else tile_count * layout_elems
+  buffer_tag = _tc_local_stage_buffer_tag(1, 993, nbuf, tile_count, layout_elems) if getenv("PREFILL_WMMA_AB_PROOF_META", 0) else None
   bsh = UOp.placeholder((base,), src.dtype.scalar(), 993, addrspace=AddrSpace.LOCAL)
   if buffer_tag is not None: bsh = bsh.replace(tag=buffer_tag)
-  row = lane & 15
-  slot = ((kr % nbuf) * tile_count + tile_idx) * 256 if kr is not None else tile_idx * 256
-  gate = lane < 16
+  row = lane if generic_layout else lane & 15
+  slot = ((kr % nbuf) * tile_count + tile_idx) * layout_elems if kr is not None and not generic_no_slot else tile_idx * layout_elems
+  gate = UOp.const(dtypes.bool, True) if generic_layout else lane < 16
+  def slot_idx(i:int|UOp) -> UOp:
+    if generic_layout:
+      assert local_lane is not None
+      return slot + (row*2 + local_lane)*128 + i
+    return slot + row*16 + i
   stores: list[UOp] = []
   prev_store: UOp|None = None
   for i in range(16):
-    st = bsh.index(slot + row*16 + i, dtype=bsh.dtype).store(src.gep(i), gate)
+    st = bsh.index(slot_idx(i), dtype=bsh.dtype).store(src.gep(i), gate)
     stores.append(st.end())
     prev_store = st
   stage = UOp.group(*stores).end(*stage_loop_ranges)
@@ -536,10 +547,11 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
     frag_idx = frag_idx + range_by_axis[axis] * mul
     mul *= size
   if mul != src.dtype.count: return _fallback("contract_fragment_count_mismatch")
-  scalar_idx = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).index(slot + row*16 + frag_idx)
+  scalar_idx = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).index(slot_idx(frag_idx))
   if buffer_tag is not None: scalar_idx = scalar_idx.replace(tag=buffer_tag)
   _tc_local_stage_proof_dump("local_stage_b_tilekey", 1, scalar_idx, buffer_tag, {
-    "src_op": src.op.name, "src_tag": repr(src.tag), "tile_count": tile_count,
+    "src_op": src.op.name, "src_tag": repr(src.tag), "tile_count": tile_count, "generic_layout": generic_layout,
+    "generic_no_slot": generic_no_slot,
     "nbuf": nbuf, "has_kr": kr is not None, "tile_ranges": [repr(r.arg) for r in tile_ranges],
   })
   scalar = scalar_idx.load()

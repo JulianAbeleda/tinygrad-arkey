@@ -332,15 +332,17 @@ Status update:
 | Existing B tile-key helper on active `512x5120x5120` | BLOCKED. It silently falls back because B global `tile_count=160`; staging all N tiles as one LDS object is too large. |
 | `PREFILL_TC_LOCAL_STAGE_B_TILEKEY_DROP_GLOBAL=1` active-shape probe | REFUTED. It engages the helper but returns `WRONG rr=1.2e+00` and worsens density to about `94.75 inst/WMMA`, `4.0 ds_store_b128/WMMA`, `4.0 ds_load_b128/WMMA`. |
 | Existing B tile-key helper on small-N `512x512x5120` where `tile_count<=64` | REFUTED. It is still `WRONG rr=1.2e+00`, so the issue is not only active-shape LDS size; the helper's B layout/consumer mapping is incorrect. |
+| `PREFILL_TC_LOCAL_STAGE_B_TILEKEY_GENERIC_LAYOUT=1` | REFUTED. It changes B to the generic `(warp*2 + local)*128 + fragment` address shape but still returns `WRONG rr=1.2e+00`; density remains worse at about `96.1 inst/WMMA`. |
+| `PREFILL_TC_LOCAL_STAGE_B_TILEKEY_GENERIC_NO_SLOT=1` | REFUTED. Removing the explicit `kr%nbuf` slot from the generic-layout probe still returns `WRONG rr=1.3e+00`. |
 
 Conclusion: P4A is complete, but destructive P4 is still blocked. The current `rangeify` hook can see ownership, but it
 does not own the paired read index. The only existing co-located B helper that owns store+load is not semantically
-correct. P4 must therefore proceed by either:
+correct, and layout constants are not the missing piece. P4 must therefore proceed by either:
 
-1. fixing the B tile-key helper's layout against the generic STAGE B layout, then reusing it as the B-only destructive
-   path, or
-2. replacing it with a new postrange owned-stage group that constructs B producer and B consumer from the same
+1. replacing B tile-key with a new postrange owned-stage group that constructs B producer and B consumer from the same
    `RotatedStageOwner`.
+2. only if that is too invasive, first add a graph-level diff/audit that maps generic STAGE B's exact scalar producer
+   order to WMMA B fragment lanes, then rebuild B tile-key from that proof rather than by address-shape guessing.
 
 Do not attempt A+B destructive lowering until B-only is correct on both small-N and active-N.
 
