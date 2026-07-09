@@ -104,6 +104,16 @@ def test_rotated_stage_owner_tag_parser_is_fail_closed():
     "tile_elems": 256,
   }
 
+  rotated = rangeify.prefill_dbuf_rotated_stage_owner_fields((
+    "wmma_frag_buffer_proof", ("role", "B"), ("lds_buffer_id", 991), ("nbuf", 2),
+    ("tile_count", 1), ("tile_elems", 256), ("owned_stage", "B_ROTATE"),
+    ("lifecycle", "prologue_body_tail"), ("rotation", "kr_mod_nbuf")
+  ))
+
+  assert rotated["owned_stage"] == "B_ROTATE"
+  assert rotated["lifecycle"] == "prologue_body_tail"
+  assert rotated["rotation"] == "kr_mod_nbuf"
+
 
 def test_lowering_hook_summary_marks_ab_dbuf_ready():
   rows = [

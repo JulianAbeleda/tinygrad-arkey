@@ -625,6 +625,47 @@ replace identity emission inside OwnedBStageEmitter with a real prologue/body/ta
 do not implement rotate as same-epoch STAGE mutation or late store suppression
 ```
 
+### P4H. Rangeify Rotate Hook
+
+Status: implemented as a fail-closed hook only.
+
+`PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate PREFILL_DBUF_OWNED_B_STAGE_META=1` now creates an explicit B rotate owner
+tag:
+
+```text
+owned_stage=B_ROTATE
+lifecycle=prologue_body_tail
+rotation=kr_mod_nbuf
+```
+
+`rangeify.bufferize_to_store` has a narrow tagged branch for that owner before generic local `STAGE` lowering emits
+the prologue-only store:
+
+```text
+if role=B and owned_stage=B_ROTATE:
+  validate nbuf/tile_count/tile_elems/reduce carrier
+  fail closed until the prologue/body/tail materializer exists
+```
+
+Verified:
+
+```text
+full-boundary audit reaches tinygrad/schedule/rangeify.py::_prefill_dbuf_owned_b_stage_lowering
+error=PREFILL_DBUF owned B rotate lowering reached rangeify hook, but prologue/body/tail materializer is not implemented
+```
+
+This proves the tag survives to the only safe destructive boundary. It also prevents the bad outcome where `rotate`
+silently falls back to identity or to late store suppression.
+
+Remaining blocker:
+
+```text
+implement _prefill_dbuf_owned_b_stage_lowering as a real materializer:
+  prologue produce k0
+  body consume k and produce k+1
+  tail consume final
+```
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.

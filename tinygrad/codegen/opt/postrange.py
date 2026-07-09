@@ -444,8 +444,12 @@ def _tc_local_stage_buffer_tag(operand_idx:int, lds_buffer_id:int, nbuf:int, til
   tag = ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
          ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
   if operand_idx == 1 and getenv("PREFILL_DBUF_OWNED_B_STAGE_META", 0):
-    tag += (("owned_stage", "B_IDENTITY"), ("producer_epoch", "same_reduce"), ("consumer_epoch", "same_reduce"),
-            ("rotation", "none"))
+    mode = str(getenv("PREFILL_DBUF_OWNED_B_STAGE_EMIT", "")).strip().lower()
+    if mode in ("rotate", "rotated"):
+      tag += (("owned_stage", "B_ROTATE"), ("lifecycle", "prologue_body_tail"), ("rotation", "kr_mod_nbuf"))
+    else:
+      tag += (("owned_stage", "B_IDENTITY"), ("producer_epoch", "same_reduce"), ("consumer_epoch", "same_reduce"),
+              ("rotation", "none"))
   return tag
 
 def _tc_local_stage_proof_dump(stage:str, operand_idx:int, idx:UOp, buffer_tag:tuple|None, extra:dict|None=None) -> None:
@@ -469,7 +473,8 @@ def _tc_local_stage_proof_dump(stage:str, operand_idx:int, idx:UOp, buffer_tag:t
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...], operand_idx:int|None=None) -> UOp:
   staged = src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False))
   buffer_tag = None
-  if getenv("PREFILL_WMMA_AB_PROOF_META", 0) and operand_idx is not None and src.op is Ops.CONTRACT and src.dtype.count == 16:
+  owned_b_meta = operand_idx == 1 and getenv("PREFILL_DBUF_OWNED_B_STAGE_META", 0)
+  if (getenv("PREFILL_WMMA_AB_PROOF_META", 0) or owned_b_meta) and operand_idx is not None and src.op is Ops.CONTRACT and src.dtype.count == 16:
     nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
     buffer_tag = _tc_local_stage_buffer_tag(operand_idx, 990 + operand_idx, nbuf, 1, 256)
     staged = staged.replace(tag=buffer_tag)
@@ -496,8 +501,16 @@ class OwnedBStageEmitter:
         }))
       return _tc_local_stage_src(self.src, self.fallback, 1)
     if self.mode in ("rotate", "rotated"):
-      raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires a prologue/body/tail OwnedBStage emitter; "
-                           "refusing same-epoch STAGE mutation")
+      if not getenv("PREFILL_DBUF_OWNED_B_STAGE_META", 0):
+        raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires PREFILL_DBUF_OWNED_B_STAGE_META=1")
+      if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
+        print("PREFILL_DBUF_OWNED_B_STAGE", json.dumps({
+          "mode": "rotate_tagged_stage_contract",
+          "src_op": self.src.op.name,
+          "src_dtype": str(self.src.dtype),
+          "fallback_ranges": [repr(r.arg) for r in self.fallback],
+        }))
+      return _tc_local_stage_src(self.src, self.fallback, 1)
     raise KernelOptError(f"unknown PREFILL_DBUF_OWNED_B_STAGE_EMIT={self.mode!r}; expected identity, object_identity, or rotate")
 
 def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:

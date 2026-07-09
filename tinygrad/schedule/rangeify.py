@@ -7,7 +7,7 @@ from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, argsort, partition, get_single_element
 from tinygrad.codegen.simplify import pm_flatten_range, pm_reduce_simplify
-from tinygrad.codegen.opt import Opt
+from tinygrad.codegen.opt import Opt, KernelOptError
 from tinygrad.schedule.indexing import run_rangeify, BufferizeOpts, IndexingContext, apply_movement_op
 from tinygrad.schedule.multi import multi_pm
 from tinygrad.schedule.allreduce import create_allreduce_function
@@ -75,6 +75,21 @@ def _prefill_dbuf_audit_stage_lowering(x:UOp, idx:UOp, size:int) -> None:
     "has_reduce_range": bool(reduce_ranges),
     "tag": repr(x.tag),
   })
+
+def _prefill_dbuf_owned_b_stage_lowering(ctx:itertools.count, x:UOp, idx:UOp, size:int, rngs:list[UOp], sdtype:PtrDType) -> UOp|None:
+  fields = prefill_dbuf_rotated_stage_owner_fields(x.tag)
+  if not fields or fields.get("role") != "B" or fields.get("owned_stage") != "B_ROTATE": return None
+  missing = [k for k in ("lds_buffer_id", "nbuf", "tile_count", "tile_elems", "lifecycle", "rotation") if fields.get(k) is None]
+  if missing: raise KernelOptError(f"PREFILL_DBUF owned B rotate lowering missing fields: {missing}")
+  if fields.get("lifecycle") != "prologue_body_tail" or fields.get("rotation") != "kr_mod_nbuf":
+    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires lifecycle=prologue_body_tail and rotation=kr_mod_nbuf")
+  if not isinstance(fields.get("nbuf"), int) or fields["nbuf"] <= 1:
+    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires integer nbuf > 1")
+  if not isinstance(fields.get("tile_count"), int) or not isinstance(fields.get("tile_elems"), int):
+    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires concrete tile_count and tile_elems")
+  if prefill_dbuf_reduce_range(dedup(tuple(x.ranges) + tuple(idx.ranges))) is None:
+    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires a concrete reduce/slot carrier")
+  raise KernelOptError("PREFILL_DBUF owned B rotate lowering reached rangeify hook, but prologue/body/tail materializer is not implemented")
 
 def prefill_dbuf_reduce_range(rngs) -> UOp|None:
   # pick the K slot-carrier: the innermost (highest axis id) const-even-sized REDUCE/UNROLL range.
@@ -503,6 +518,7 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
     # byte-identical results. The real paired (k&1) store+read indexing lives at the co-located _tc_local_stage_src
     # site in postrange.py. The dead branch has been deleted; the plain single-slot allocation below is the sole path.
     _prefill_dbuf_audit_stage_lowering(x, idx, size)
+    if (owned_lowering := _prefill_dbuf_owned_b_stage_lowering(ctx, x, idx, size, rngs, sdtype)) is not None: return owned_lowering
     buf = UOp.placeholder((size,), x.dtype, next(ctx), AddrSpace.LOCAL)
     if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): buf = buf.replace(tag=x.tag)
     store_idx = buf.broadcast(x.src[1].dtype.count).index(idx, dtype=sdtype)
