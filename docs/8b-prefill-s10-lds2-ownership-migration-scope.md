@@ -153,11 +153,51 @@ If metadata changes the emitted route or drops pp512 below 4000 tok/s, it is not
 If metadata preserves the S9 authority band and produces honest hybrid classification, S10 MVP passes.
 ```
 
+## Narrow Hand-Coded DBUF Epoch Primitive
+
+The next compromise is to leave only the hardest `ffn_gate_up` DBUF epoch choreography hand-coded, while S10 owns the
+rest of the route/spec/search envelope.
+
+Allowed hand-coded primitive:
+
+```text
+DBUFEpochPrimitive(
+  nbuf=2,
+  slot_expr="epoch % 2",
+  prologue="produce epoch0 -> slot0",
+  body="consume epoch i, produce epoch i+1 into the alternate slot",
+  tail="consume final produced epoch",
+)
+```
+
+Machine/spec-owned around it:
+
+| Surface | Owner |
+|---|---|
+| role selection | S10 spec/search |
+| tile shape, waves, `BK`, `PAD`, `PLRAB` | S10 spec/search |
+| LDS reg/memory layout | S10 spec/search |
+| wait policy | S10 spec/search |
+| backend atom selection | S10 route/spec |
+| epoch prologue/body/tail correctness | hand-coded `DBUFEpochPrimitive` |
+| WMMA/DS/global-load encoding | backend ASM atoms |
+
+This is still not pure generated. It is:
+
+```text
+hybrid compiler primitive with hand-coded DBUF epoch coordinator
+```
+
+It becomes a fine-tuned hand kernel again if the epoch primitive hardcodes fixed registers, fixed role-specific shape,
+fixed epilogue, or emits the entire `ffn_gate_up` instruction lifecycle. The current trace must expose the primitive as
+metadata, not hide it inside a pure/generated claim.
+
 Current gate result:
 
 | artifact | pp512 | verdict |
 |---|---:|---|
 | `bench/prefill-s10-lds2-ownership/hybrid-s9-s10-pp512-authority.json` | `4389` | pass |
+| `bench/prefill-s10-lds2-ownership/hybrid-dbuf-epoch-pp512-authority.json` | `4408` | pass |
 
 Unit gate:
 
@@ -165,10 +205,11 @@ Unit gate:
 PYTHONPATH=. pytest -q \
   test/unit/test_prefill_s10_hybrid_role_trace.py \
   test/unit/test_prefill_schedule_spec.py \
-  test/unit/test_wmma_lds_spec.py
+  test/unit/test_wmma_lds_spec.py \
+  test/unit/test_prefill_wmma_lds2_reg_layout.py
 ```
 
-Result: `22 passed`.
+Result: `43 passed`.
 
 ## Goal
 

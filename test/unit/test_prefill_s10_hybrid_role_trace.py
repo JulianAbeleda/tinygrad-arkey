@@ -19,6 +19,7 @@ def test_s10_hybrid_role_trace_maps_roles_to_s9_backend_atoms():
     assert rows[role]["backend_atom"] == "build_gemm_pipe"
     assert rows[role]["classification"] == trace.HYBRID_CLASSIFICATION
     assert "lds_spec_summary" not in rows[role]
+    assert "hand_coded_epoch_primitive" not in rows[role]
 
   gate = rows["ffn_gate_up"]
   assert gate["route_family"] == "lds"
@@ -26,6 +27,9 @@ def test_s10_hybrid_role_trace_maps_roles_to_s9_backend_atoms():
   assert gate["lds_spec_summary"]["ownership_classification"] == "compiler_primitive_spec_owned__asm_backend_atom"
   assert gate["lds_spec_summary"]["selection_label"] == "S9_COMPLETE_KEEP_OPT_IN"
   assert gate["lds_spec_summary"]["legality_errors"] == []
+  assert gate["hand_coded_epoch_primitive"]["classification"] == "hand_coded_dbuf_epoch_primitive"
+  assert gate["hand_coded_epoch_primitive"]["slot_expr"] == "epoch % 2"
+  assert gate["hand_coded_epoch_primitive"]["reusable_contract"] == "parameterized_by_role_tile_layout_wait_policy"
 
 
 def test_s10_hybrid_role_trace_writes_artifact(tmp_path):

@@ -94,6 +94,46 @@ class LDS2LifecycleTemplate:
 
 
 @dataclass(frozen=True)
+class DBUFEpochPrimitive:
+  """Narrow hand-coded DBUF epoch coordinator for the S9/S10 hybrid route.
+
+  This is the intentionally hard part that remains inside the backend atom:
+  warm one slot, consume the current epoch, produce the next epoch into the
+  alternate slot, and drain the final slot. Everything around it can be owned by
+  schedule/spec/search without pretending the DBUF epoch choreography is pure
+  generated code.
+  """
+  name: str = "s9_dbuf_epoch_coordinator"
+  owner: str = "hand_coded_backend_primitive"
+  nbuf: int = 2
+  slot_expr: str = "epoch % 2"
+  prologue: tuple[str, ...] = ("produce epoch0 -> slot0",)
+  body: tuple[str, ...] = (
+    "consume epoch i -> slot(i % 2)",
+    "produce epoch i+1 -> slot((i+1) % 2)",
+    "barrier before produced slot is consumed",
+  )
+  tail: tuple[str, ...] = ("consume final produced epoch",)
+  reusable_contract: str = "parameterized_by_role_tile_layout_wait_policy"
+
+  def to_json(self) -> dict[str, Any]:
+    return {
+      "name": self.name, "owner": self.owner, "nbuf": self.nbuf, "slot_expr": self.slot_expr,
+      "prologue": list(self.prologue), "body": list(self.body), "tail": list(self.tail),
+      "reusable_contract": self.reusable_contract,
+      "classification": "hand_coded_dbuf_epoch_primitive",
+    }
+
+  @classmethod
+  def from_json(cls, data: dict[str, Any]) -> "DBUFEpochPrimitive":
+    return cls(name=data.get("name", cls.name), owner=data.get("owner", cls.owner),
+               nbuf=data.get("nbuf", cls.nbuf), slot_expr=data.get("slot_expr", cls.slot_expr),
+               prologue=tuple(data.get("prologue", cls.prologue)), body=tuple(data.get("body", cls.body)),
+               tail=tuple(data.get("tail", cls.tail)),
+               reusable_contract=data.get("reusable_contract", cls.reusable_contract))
+
+
+@dataclass(frozen=True)
 class WMMALDSSpec:
   m: int
   n: int
@@ -121,6 +161,7 @@ class WMMALDSSpec:
   wait: LDS2WaitPolicy = field(default_factory=LDS2WaitPolicy)
   cadence: LDS2Cadence = field(default_factory=LDS2Cadence)
   lifecycle: LDS2LifecycleTemplate = field(default_factory=LDS2LifecycleTemplate)
+  dbuf_epoch_primitive: DBUFEpochPrimitive = field(default_factory=DBUFEpochPrimitive)
   selection_label: str = LDS2_DEFAULT_SELECTION_LABEL
 
   @property
@@ -221,6 +262,7 @@ class WMMALDSSpec:
       "operand_a": self.operand_a, "operand_b": self.operand_b, "wait_policy": self.wait_policy,
       "reg_layout": self.reg_layout.to_json(), "memory_layout": self.memory_layout.to_json(),
       "wait": self.wait.to_json(), "cadence": self.cadence.to_json(), "lifecycle": self.lifecycle.to_json(),
+      "dbuf_epoch_primitive": self.dbuf_epoch_primitive.to_json(),
       "selection_label": self.selection_label, "ownership_classification": self.ownership_classification(),
       "target": self.target, "k_substeps": self.k_substeps, "row_stride": self.row_stride,
       "loads_a": self.loads_a, "loads_b": self.loads_b, "stride_a_bytes": self.stride_a_bytes,
@@ -244,6 +286,7 @@ class WMMALDSSpec:
     if "wait" in data: kwargs["wait"] = LDS2WaitPolicy.from_json(data["wait"])
     if "cadence" in data: kwargs["cadence"] = LDS2Cadence.from_json(data["cadence"])
     if "lifecycle" in data: kwargs["lifecycle"] = LDS2LifecycleTemplate.from_json(data["lifecycle"])
+    if "dbuf_epoch_primitive" in data: kwargs["dbuf_epoch_primitive"] = DBUFEpochPrimitive.from_json(data["dbuf_epoch_primitive"])
     return cls(**kwargs)
 
   @classmethod

@@ -3,7 +3,7 @@ import json
 
 from extra.qk.prefill_schedule_spec import PrefillGEMMScheduleSpec, emit_prefill_gemm_from_spec
 from extra.qk.wmma_lds_spec import (
-  LDS2_OWNERSHIP_CLASSIFICATION, WMMALDSSpec, extract_wmma_lds_spec, lower_wmma_lds_spec,
+  DBUFEpochPrimitive, LDS2_OWNERSHIP_CLASSIFICATION, WMMALDSSpec, extract_wmma_lds_spec, lower_wmma_lds_spec,
   wmma_lds_generated_env_defaults, wmma_lds_lowering_insertion_point, wmma_lds_postrange_opts,
   wmma_lds_slot_identity_proof)
 
@@ -41,6 +41,9 @@ def test_wmma_lds_spec_owns_s9_s10_lifecycle_surface():
   assert spec.wait.name == "vmem_to_lds_then_lgkm_to_wmma"
   assert spec.cadence.buffers == 2
   assert spec.lifecycle.backend_atom == "asm_backend_atom"
+  assert spec.dbuf_epoch_primitive.owner == "hand_coded_backend_primitive"
+  assert spec.dbuf_epoch_primitive.nbuf == 2
+  assert spec.dbuf_epoch_primitive.slot_expr == "epoch % 2"
   assert spec.selection_label == "S9_COMPLETE_KEEP_OPT_IN"
   assert spec.ownership_classification() == LDS2_OWNERSHIP_CLASSIFICATION
   assert spec.ownership_classification() == "compiler_primitive_spec_owned__asm_backend_atom"
@@ -63,6 +66,20 @@ def test_wmma_lds_spec_json_roundtrip_keeps_lifecycle_data():
   assert restored.to_json()["wait"] == spec.wait.to_json()
   assert restored.to_json()["cadence"] == spec.cadence.to_json()
   assert restored.to_json()["lifecycle"] == spec.lifecycle.to_json()
+  assert restored.to_json()["dbuf_epoch_primitive"] == spec.dbuf_epoch_primitive.to_json()
+
+
+def test_dbuf_epoch_primitive_is_narrow_hand_coded_boundary():
+  primitive = DBUFEpochPrimitive()
+  payload = primitive.to_json()
+  restored = DBUFEpochPrimitive.from_json(payload)
+
+  assert restored == primitive
+  assert payload["classification"] == "hand_coded_dbuf_epoch_primitive"
+  assert payload["owner"] == "hand_coded_backend_primitive"
+  assert payload["nbuf"] == 2
+  assert payload["slot_expr"] == "epoch % 2"
+  assert "fixed registers" not in payload["reusable_contract"]
 
 
 def test_extract_wmma_lds_spec_rejects_non_lds_or_illegal_schedule():

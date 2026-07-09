@@ -56,6 +56,7 @@ def role_row(role: str, out_f: int, in_f: int) -> dict[str, Any]:
     "schedule_spec": spec.to_json(),
   }
   if lds_spec is not None: row["lds_spec_summary"] = _lds_summary(lds_spec)
+  if lds_spec is not None: row["hand_coded_epoch_primitive"] = lds_spec.dbuf_epoch_primitive.to_json()
   return row
 
 
