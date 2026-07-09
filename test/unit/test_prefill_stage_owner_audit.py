@@ -1,4 +1,5 @@
 from extra.qk.prefill import prefill_stage_owner_audit as audit
+from extra.qk.prefill import kernel_lifecycle_trace as life
 from tinygrad.schedule import rangeify
 
 
@@ -169,3 +170,26 @@ def test_owned_b_stage_emitter_scope_names_identity_and_blocks_rotate():
   assert "rotate" in out["blocked_modes"]
   assert "prologue" in out["required_materializer"]
   assert "silently fall back" in out["forbidden_fallback"]
+
+
+def test_hand_lifecycle_oracle_extracts_owned_b_emitter_contract():
+  out = life._owned_b_emitter_oracle({
+    "hand_lifecycle_oracle": {
+      "source": "hand",
+      "producer_rule": "rule",
+      "prologue": [("coop_store", 0)],
+      "body": [("compute", 0), ("coop_store", 1), ("compute", 1), ("coop_store", 0)],
+      "tail": [("compute", 0), ("compute", 1)],
+    }
+  }, {
+    "store_counts": {"prologue": 8, "body": 24},
+    "body_loads_before_first_body_store_count": 8,
+    "pipeline_epoch_candidate": True,
+    "prologue_body_physical_window_overlap_count": 8,
+  })
+
+  assert out is not None
+  assert out["prologue_store_slots"] == [0]
+  assert out["body_compute_slots"] == [0, 1]
+  assert out["body_store_slots"] == [1, 0]
+  assert out["owned_b_stage_emitter_contract"]["body"][2] == {"op": "produce", "slot": 1, "epoch": "k+1"}

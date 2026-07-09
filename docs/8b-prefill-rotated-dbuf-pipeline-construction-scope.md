@@ -506,6 +506,75 @@ message=PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires a prologue/body/tail Own
 This is intentional. The emitter boundary is installed, but only identity emission is implemented. The next code change
 must implement the materializer, not bypass the gate.
 
+#### P4F. Hand ASM Lifecycle Oracle
+
+The hand LDS2 ASM path is now used as an oracle for lifecycle construction, not as code to copy. The reusable trace is:
+
+```bash
+PYTHONPATH=. DEV=AMD:ISA \
+  python3 extra/qk/prefill/kernel_lifecycle_trace.py \
+  --kind hand-lds2 --m 512 --n 5120 --k 5120 \
+  --wm 2 --wn 2 --waves-m 1 --waves-n 1 --bk 32 --dbuf 1 \
+  --json
+```
+
+It emits `owned_b_emitter_oracle`:
+
+```json
+{
+  "prologue_store_slots": [0],
+  "body_compute_slots": [0, 1],
+  "body_store_slots": [1, 0],
+  "tail_compute_slots": [0, 1],
+  "asm_stream_facts": {
+    "prologue_store_count": 8,
+    "body_store_count": 24,
+    "body_loads_before_first_body_store_count": 8,
+    "pipeline_epoch_candidate": true,
+    "prologue_body_physical_window_overlap_count": 8
+  }
+}
+```
+
+Compiler contract derived from ASM:
+
+```text
+prologue:
+  produce slot 0
+
+body:
+  consume slot 0
+  consume slot 1
+  produce slot 1
+  produce slot 0
+
+tail:
+  consume slot 0
+  consume slot 1
+```
+
+The generated identity path proves the gap: with the same DBUF-safe env, generated has correct LDS operands but all
+stores are in the prologue:
+
+```text
+generated identity:
+  ds_store_b128: 32
+  ds_load_b128: 64
+  s_barrier: 2
+  prologue stores: 32
+  body stores: 0
+  pipeline_epoch_candidate: false
+```
+
+So the materializer's job is not merely "emit LDS." It must move from prologue-only staging to hand-style body staging:
+
+```text
+current generated: produce all before compute
+target generated:  warmup once, then produce future slot inside body
+```
+
+This is the ASM-derived lifecycle construction target for `OwnedBStageEmitter`.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.

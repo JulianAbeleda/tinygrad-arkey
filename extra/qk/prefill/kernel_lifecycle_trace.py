@@ -286,6 +286,45 @@ def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma
   }
 
 
+def _owned_b_emitter_oracle(meta: dict[str, Any], construction: dict[str, Any]) -> dict[str, Any] | None:
+  hand = meta.get("hand_lifecycle_oracle")
+  if not hand: return None
+  def slots(phase: str, op: str) -> list[int]:
+    return [int(slot) for kind, slot in hand.get(phase, []) if kind == op and slot is not None]
+  prologue_store_slots = slots("prologue", "coop_store")
+  body_store_slots = slots("body", "coop_store")
+  body_compute_slots = slots("body", "compute")
+  tail_compute_slots = slots("tail", "compute")
+  return {
+    "source": "hand LDS2 ASM lifecycle trace",
+    "builder_template": hand.get("source"),
+    "producer_rule": hand.get("producer_rule"),
+    "prologue_store_slots": prologue_store_slots,
+    "body_compute_slots": body_compute_slots,
+    "body_store_slots": body_store_slots,
+    "tail_compute_slots": tail_compute_slots,
+    "asm_stream_facts": {
+      "prologue_store_count": construction.get("store_counts", {}).get("prologue"),
+      "body_store_count": construction.get("store_counts", {}).get("body"),
+      "body_loads_before_first_body_store_count": construction.get("body_loads_before_first_body_store_count"),
+      "pipeline_epoch_candidate": construction.get("pipeline_epoch_candidate"),
+      "prologue_body_physical_window_overlap_count": construction.get("prologue_body_physical_window_overlap_count"),
+    },
+    "owned_b_stage_emitter_contract": {
+      "prologue": [{"op": "produce", "slot": s, "epoch": "k0"} for s in prologue_store_slots],
+      "body": (
+        [{"op": "consume", "slot": s, "epoch": "k"} for s in body_compute_slots] +
+        [{"op": "produce", "slot": s, "epoch": "k+1"} for s in body_store_slots]
+      ),
+      "tail": [{"op": "consume", "slot": s, "epoch": "last"} for s in tail_compute_slots],
+    },
+    "compiler_requirement": (
+      "Generated OwnedBStage must not place all B stores in the prologue. It needs body staging that produces "
+      "the opposite slot for a future compute, plus explicit warmup/drain handling."
+    ),
+  }
+
+
 def _barrier_epoch(idx: int, barrier_indices: list[int]) -> int:
   return sum(1 for b in barrier_indices if b < idx)
 
@@ -423,6 +462,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
   dbuf = sp._dbuf_gate_summary(ops, overlap, lds_families, operand_families, origins)
   dbuf_compile_audit = sp._dbuf_d3a_compile_audit_summary(list(amd_isa.DBUF_D3A_AUDIT_LOG))
   origin_counts = Counter((x["src0"], x["src1"]) for x in origins)
+  construction = _dbuf_pipeline_construction_audit(ops, widx)
   report = {
     "label": label,
     **meta,
@@ -454,7 +494,8 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
       "store_load_intersection_count": lds_families["store_load_intersection_count"],
     },
     "dbuf_gate_summary": dbuf,
-    "dbuf_pipeline_construction_audit": _dbuf_pipeline_construction_audit(ops, widx),
+    "dbuf_pipeline_construction_audit": construction,
+    "owned_b_emitter_oracle": _owned_b_emitter_oracle(meta, construction),
     "lds_reaching_def_map": _lds_reaching_def_map(ops, widx, meta.get("ds_byte_window_rows")),
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
