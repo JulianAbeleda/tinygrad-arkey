@@ -148,9 +148,13 @@ def test_stage_key_compile_audit_reports_strong_key_collisions():
     {"kind": "stage_key_audit", "slot": 16, "source": "A0", "strong_key": "K0"},
     {"kind": "stage_key_audit", "slot": 16, "source": "A1", "strong_key": "K1"},
     {"kind": "stage_key_audit", "slot": 24, "source": "B0", "strong_key": "KB"},
+    {"kind": "stage_key_suppress_decision", "suppressed": False, "owner_key": "K0"},
+    {"kind": "stage_key_suppress_decision", "suppressed": True, "owner_key": "K1"},
   ])
 
   assert out["stage_key_audit_count"] == 3
   assert out["stage_key_weak_alias_slot_count"] == 1
   assert out["stage_key_strong_collision_count"] == 0
   assert out["stage_key_rejects_weak_aliases"] is True
+  assert out["stage_key_suppress_decision_count"] == 2
+  assert out["stage_key_suppressed_count"] == 1

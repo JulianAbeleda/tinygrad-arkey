@@ -154,6 +154,8 @@ def _dbuf_d3a_compile_audit_summary(rows: list[dict[str, Any]]) -> dict[str, Any
   nbufs = sorted({p.get("nbuf") for p in rows if p.get("nbuf") is not None})
   ok_rows = [p for p in rows if p.get("ok") is True]
   stage_key_rows = [p for p in rows if p.get("kind") == "stage_key_audit"]
+  suppress_rows = [p for p in rows if p.get("kind") == "stage_key_suppress_decision"]
+  suppressed_rows = [p for p in suppress_rows if p.get("suppressed") is True]
   by_slot: dict[str, set[str]] = {}
   by_key: dict[str, set[str]] = {}
   for p in stage_key_rows:
@@ -177,6 +179,9 @@ def _dbuf_d3a_compile_audit_summary(rows: list[dict[str, Any]]) -> dict[str, Any
     "stage_key_strong_collision_count": len(strong_key_collisions),
     "stage_key_strong_collision_sample": dict(list(sorted(strong_key_collisions.items()))[:8]),
     "stage_key_rejects_weak_aliases": bool(weak_alias_slots) and not strong_key_collisions,
+    "stage_key_suppress_decision_count": len(suppress_rows),
+    "stage_key_suppressed_count": len(suppressed_rows),
+    "stage_key_suppressed_sample": suppressed_rows[:8],
     "rows": rows,
   }
 

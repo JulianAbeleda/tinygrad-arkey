@@ -373,3 +373,58 @@ strong_key_collisions > 0
 or any deletion decision depends only on LDS slot/address-family
 or bounded correctness fails
 ```
+
+### StageKey Destructive Probe Result
+
+Implemented as an opt-in diagnostic:
+
+```text
+PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS=1
+PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_ROLE={A|B}
+PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_PHASE={1|2|3}
+```
+
+The destructive owner key intentionally excludes the raw `stage_store_key` because the original lowered store no longer
+retains it reliably at `isel_store`; it uses the still-surviving semantic fields:
+
+```python
+StageOwner = (
+  role,
+  source_stream,
+  logical_phase,
+  lds_slot,
+)
+```
+
+Result on generated K-major+D3 `2x2`, `M=512`, `N=5120`, `K=5120`, `loc=2`, `unr=2`:
+
+| probe | suppressed | structural delta | GPU status |
+| --- | ---: | --- | --- |
+| no suppression | 0 | inst 623, global 44, store 44, wait 57 | ok, ~9.39 TFLOPS |
+| A phase 1 | 0 | no movement | ok |
+| A phase 2 | 0 | no movement | ok |
+| A phase 3 | 0 | no movement | ok |
+| B phase 1 | 4 | inst 599, global 40, store 40, wait 53 | WRONG `rr=1.4e+00` |
+| B phase 2 | 4 | inst 600, global 40, store 40, wait 54 | WRONG `rr=1.4e+00` |
+| B phase 3 | 4 | inst 600, global 40, store 40, wait 54 | WRONG `rr=1.4e+00` |
+
+Conclusion:
+
+```text
+Theory 1 is valid as an identity/audit primitive but invalid as a late deletion primitive.
+```
+
+The only exact StageOwner matches that move the stream are B-side stores, and deleting them corrupts the result. That
+means the moved B store is not a reaching definition for every consumer load that the original store fed, even when
+role/source/phase/slot match. The missing proof is consumer/reaching-def ownership, not another physical alias key.
+
+Next direction:
+
+```text
+Stop trying to delete original stores at isel_store.
+Construct the rotated pipeline earlier, where each load is assigned exactly one producer before lowering.
+```
+
+Any future suppression pass must enumerate the loads reached by the original store and prove that the replacement store
+reaches each of those loads first, with the required barrier in between. The current StageKey probe remains useful only
+as a diagnostic to reject weak aliases and to label producers.

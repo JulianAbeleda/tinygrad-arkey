@@ -523,6 +523,8 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
        (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
       return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    if _dbuf_stage_key_should_suppress(ctx, x, a):
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
     if _dbuf_pipeline_epoch_should_suppress(ctx, x, a):
       return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
     if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS", 0) and \
@@ -654,6 +656,8 @@ def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
                                  "stolen_count": len(stolen_stages)})
     if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
        (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    if _dbuf_stage_key_should_suppress(ctx, x, a):
       return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
     if _dbuf_pipeline_epoch_should_suppress(ctx, x, a):
       return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
@@ -1546,9 +1550,37 @@ def _dbuf_stage_strong_key(ctx:IselContext|None, role:str, st:UOp, *, phase:str,
   return ("stage_key", ("role", role), ("source", vkey), ("logical_phase", phase_i),
           ("lds_slot", slot), ("stage_store_key", skey), ("phase", phase))
 
+def _dbuf_stage_owner_key(ctx:IselContext|None, role:str, st:UOp, *, phase_i:int|None=None, a:UOp|None=None) -> tuple|None:
+  if ctx is None: return None
+  slot = _dbuf_stage_store_abs_slot(ctx, st)
+  if slot is None and a is not None: slot = _dbuf_lowered_lds_slot(a)
+  vkey = _dbuf_stage_value_key(st)
+  if slot is None or vkey is None: return None
+  return ("stage_owner", ("role", role), ("source", vkey), ("logical_phase", phase_i),
+          ("lds_slot", slot))
+
 def _dbuf_stage_key_audit(ctx:IselContext|None, row:dict) -> None:
   if ctx is None or not getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_AUDIT", 0): return
   DBUF_D3A_AUDIT_LOG.append({"kind": "stage_key_audit", **row})
+
+def _dbuf_stage_key_suppress_role() -> str:
+  return str(getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_ROLE", "B")).strip().upper()
+
+def _dbuf_stage_key_suppress_phase() -> int:
+  try: return int(getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_PHASE", 1))
+  except ValueError: return 1
+
+def _dbuf_stage_key_should_suppress(ctx:IselContext|None, st:UOp, a:UOp) -> bool:
+  if ctx is None or not getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS", 0): return False
+  role, phase_i = _dbuf_stage_key_suppress_role(), _dbuf_stage_key_suppress_phase()
+  key = _dbuf_stage_owner_key(ctx, role, st, phase_i=phase_i, a=a)
+  owners = getattr(ctx, "_dbuf_stage_owner_keys", set())
+  ok = key is not None and key in owners
+  if getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_AUDIT", 0):
+    DBUF_D3A_AUDIT_LOG.append({"kind": "stage_key_suppress_decision", "role": role, "phase_i": phase_i,
+                               "suppressed": ok, "owner_key": repr(key), "owner_count": len(owners),
+                               "slot": _dbuf_lowered_lds_slot(a), "source": repr(_dbuf_stage_value_key(st))})
+  return ok
 
 def _dbuf_pipeline_epoch_should_suppress(ctx:IselContext|None, st:UOp, a:UOp) -> bool:
   # Diagnostic-only first pipeline construction probe. This removes physical-window duplicates but is not a proof of
@@ -1650,6 +1682,9 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
             body_slots.add(abs_slot)
         if (ekey := _dbuf_stage_epoch_key_for_store(ctx, cand)) is not None:
           stolen.add(ekey)
+        if (owner_key := _dbuf_stage_owner_key(ctx, role, cand, phase_i=phase_i)) is not None:
+          owners = ctx._dbuf_stage_owner_keys = getattr(ctx, "_dbuf_stage_owner_keys", set())
+          owners.add(owner_key)
         if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0):
           DBUF_D3A_AUDIT_LOG.append({"kind": "stolen_stage_key", "role": role, "id": id(cand),
                                      "key": repr(skey), "value_key": repr(_dbuf_stage_value_key(cand)),
@@ -1657,6 +1692,7 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
                                      "abs_slot": abs_slot})
         _dbuf_stage_key_audit(ctx, {"phase": "body", "role": role, "id": id(cand), "phase_i": phase_i,
                                     "strong_key": repr(_dbuf_stage_strong_key(ctx, role, cand, phase="body", phase_i=phase_i)),
+                                    "owner_key": repr(_dbuf_stage_owner_key(ctx, role, cand, phase_i=phase_i)),
                                     "slot": abs_slot, "source": repr(_dbuf_stage_value_key(cand))})
       out = (st,)
     if not moved: continue
@@ -1722,6 +1758,7 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
           for cand in cands:
             _dbuf_stage_key_audit(ctx, {"phase": "needed", "role": role, "id": id(cand), "phase_i": phase_i,
                                         "strong_key": repr(_dbuf_stage_strong_key(ctx, role, cand, phase="needed", phase_i=phase_i)),
+                                        "owner_key": repr(_dbuf_stage_owner_key(ctx, role, cand, phase_i=phase_i)),
                                         "slot": _dbuf_stage_store_abs_slot(ctx, cand),
                                         "source": repr(_dbuf_stage_value_key(cand))})
       akey, bkey = _wmma_frag_phase_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_phase_reuse_key(ctx, "B", tile.src[1])
