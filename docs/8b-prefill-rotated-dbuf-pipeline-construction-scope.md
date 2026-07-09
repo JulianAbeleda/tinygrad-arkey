@@ -209,6 +209,32 @@ B producer assignments do not switch to wrong epochs
 global/store per WMMA decreases
 ```
 
+Status: blocked.
+
+The P4 readiness gate now reports:
+
+```json
+{
+  "ready": false,
+  "blocked_at": "P4",
+  "reason": "no implemented owner-aware STAGE lowering hook; current lowering materializes generic local stores before renderer",
+  "required_hook": "lower Ops.STAGE with RotatedStageOwner so legacy duplicate producers are never emitted",
+  "forbidden_fallback": "PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS late deletion"
+}
+```
+
+This is the clear blocker for P4-P9. Existing alternatives were checked:
+
+| route | result |
+| --- | --- |
+| renderer late deletion | structurally smaller but wrong epoch/value |
+| StageOwner late suppression | wrong output |
+| existing `PREFILL_TC_LOCAL_STAGE_COOP_POST=1` shortcut | not viable as a quick P4 path; small trace compile did not finish within the bounded poll |
+| generic `Ops.STAGE` lowering | currently emits local stores through `rangeify.bufferize_to_store`, with no rotated owner hook |
+
+Therefore P4 cannot be completed by tuning flags or renderer suppression. It needs a new owner-aware lowering path at the
+`Ops.STAGE` materialization boundary.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.
@@ -220,6 +246,8 @@ A+B route correct
 global/store per WMMA moves below 2.75
 no late suppression flags enabled
 ```
+
+Status: blocked on P4. A cannot be added until one-role destructive owner lowering is correct.
 
 ### P6. Scheduler/Waitcnt Tuning
 
@@ -235,6 +263,23 @@ Pass:
 correctness unchanged
 TFLOPS improves beyond the current correct band
 ```
+
+Status: blocked on P4/P5. Scheduler tuning before correct owner-aware construction would tune the wrong lifecycle.
+
+### P7. Whole-Prefill Integration
+
+Status: blocked on P4/P5. Whole-prefill integration requires the generated primitive to be correct and smaller in the
+bounded GEMM first.
+
+### P8. Promotion Gate
+
+Status: blocked on P4/P7. There is no route to promote until owner-aware construction passes correctness and performance.
+
+### P9. Cleanup
+
+Status: partially actionable only for documentation. The late-suppression probes remain as negative evidence; they must
+not be enabled as fixes. Code cleanup should wait until the owner-aware `Ops.STAGE` lowering exists, otherwise we lose
+the repros that explain the blocker.
 
 ## Stop Conditions
 

@@ -301,6 +301,26 @@ def rotated_lifecycle_plan(records: list[dict[str, Any]]) -> dict[str, Any]:
   }
 
 
+def p4_readiness(summary: dict[str, Any], plan: dict[str, Any], boundary: str) -> dict[str, Any]:
+  if boundary != "postrange":
+    return {
+      "ready": False,
+      "blocked_at": "P4",
+      "reason": "destructive rotated construction must start at postrange; full lowering has already lost owner identity",
+    }
+  if not summary.get("pre_lowering_ownership_ready"):
+    return {"ready": False, "blocked_at": "P4", "reason": "missing A/B DBUF owner records"}
+  if not plan.get("ok"):
+    return {"ready": False, "blocked_at": "P4", "reason": "rotated lifecycle planner failed"}
+  return {
+    "ready": False,
+    "blocked_at": "P4",
+    "reason": "no implemented owner-aware STAGE lowering hook; current lowering materializes generic local stores before renderer",
+    "required_hook": "lower Ops.STAGE with RotatedStageOwner so legacy duplicate producers are never emitted",
+    "forbidden_fallback": "PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS late deletion",
+  }
+
+
 def summarize(stages: list[dict[str, Any]], stores: list[dict[str, Any]], wmma: list[dict[str, Any]]) -> dict[str, Any]:
   store_frag_windows = {(r["buffer_id"], (r["const_bytes"] // 32) * 32, 32) for r in stores}
   store_frag_windows_nobuf = {((r["const_bytes"] // 32) * 32, 32) for r in stores}
@@ -343,10 +363,13 @@ def main() -> int:
     sink = compile_full_sink(args.m, args.n, args.k, u0, u1, args.loc, args.unr, args.boundary)
     stages, stores, consumers = stage_rows(sink), store_rows(sink), wmma_rows(sink)
   owners = owner_records(stages)
+  summary = {**summarize(stages, stores, consumers), "stage_count": len(stages)}
+  plan = rotated_lifecycle_plan(owners)
   payload = {
     "shape": f"{u0}x{u1}", "m": args.m, "n": args.n, "k": args.k, "loc": args.loc, "unr": args.unr, "boundary": args.boundary,
-    "summary": {**summarize(stages, stores, consumers), "stage_count": len(stages)}, "owner_records": owners,
-    "rotated_lifecycle_plan": rotated_lifecycle_plan(owners),
+    "summary": summary, "owner_records": owners,
+    "rotated_lifecycle_plan": plan,
+    "p4_readiness": p4_readiness(summary, plan, args.boundary),
     "stages": stages, "stores": stores, "wmma_operands": consumers,
   }
   if args.json:
