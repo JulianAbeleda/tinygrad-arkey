@@ -235,6 +235,95 @@ This is the clear blocker for P4-P9. Existing alternatives were checked:
 Therefore P4 cannot be completed by tuning flags or renderer suppression. It needs a new owner-aware lowering path at the
 `Ops.STAGE` materialization boundary.
 
+#### P4A. Owner-Aware STAGE Lowering Scope
+
+The concrete hook is:
+
+```text
+tinygrad/schedule/rangeify.py::bufferize_to_store
+```
+
+That is where a `LOCAL` `Ops.STAGE` currently becomes:
+
+```python
+buf = LOCAL placeholder
+store_idx = buf.index(idx)
+do_store = store_idx.store(stage_src)
+return buf.after(do_store.barrier())
+```
+
+The current lowering is value-correct but owner-blind. It sees a staged tensor and materializes generic local stores. It
+does not know the rotated DBUF lifecycle:
+
+```python
+owner = RotatedStageOwner(
+  role, lds_buffer_id, nbuf,
+  reduce_epoch, dbuf_slot,
+  producer_phase, consumer_phase,
+)
+```
+
+P4 must add a default-off owner-aware path at this boundary. The first implementation should be deliberately narrow:
+
+| Step | Change | Pass condition |
+| --- | --- | --- |
+| P4A.1 parse owner metadata | Add a small parser for `wmma_frag_buffer_proof` / rotated owner tags at `Ops.STAGE` lowering time. | Unit test proves A/B role, LDS id, `nbuf=2`, tile size, and reduce carrier are recognized without importing prefill audit code into generic rangeify. |
+| P4A.2 non-destructive trace | Under `PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT=1`, emit/collect the exact owners seen by `bufferize_to_store` while keeping the produced graph byte-for-byte behavior-equivalent. | Existing generated route remains correct; audit shows the same A/B owners as `prefill_stage_owner_audit.py --boundary postrange`. |
+| P4A.3 B-only construction | Under `PREFILL_DBUF_ROTATED_STAGE_LOWERING=1 PREFILL_DBUF_ROTATED_STAGE_ROLE=B`, construct the B producer lifecycle from the owner plan and do not emit the legacy duplicate B producer for the same owner. | B stream shrinks, producer map remains 32/32 covered, and no load switches to a different epoch/value producer. |
+| P4A.4 B correctness/timing | Run bounded `2x2`, `512x5120x5120`, `loc=2`, `unr=2`. | `status=ok`; global/store per WMMA decreases versus current D3; no late suppression flags. |
+| P4A.5 A+B construction | Enable A after B passes. | A+B remains correct and reduces global/store density below the current `2.75/WMMA` band. |
+
+The lowering contract is:
+
+```python
+def lower_stage(stage):
+  owner = parse_rotated_owner(stage.tag)
+  if owner is None or not rotated_stage_enabled(owner.role):
+    return legacy_bufferize_to_store(stage)
+
+  plan = rotated_plan_for(owner)
+  assert plan.has_exactly_one_prior_producer_for_each_consumer()
+  assert plan.has_barrier_between_producer_and_consumer()
+  assert plan.epoch_key_includes_reduce_epoch_and_slot()
+  return materialize_owner_plan_without_legacy_duplicate(stage, plan)
+```
+
+The safety rules are stricter than value equality:
+
+| Rule | Why |
+| --- | --- |
+| Match by owner tuple, not final LDS address. | The failed suppression probe proved slot/address coverage can still pick the wrong epoch. |
+| Producer key includes role, LDS id, DBUF slot, reduce epoch, tile index, byte window. | Static expression equality is not enough in a rotated loop. |
+| Every consumer must have exactly one prior producer. | A covered load can still be covered by the wrong store. |
+| A barrier must separate producer and consumer on every emitted path. | LDS visibility is synchronization-dependent, not just dominance-dependent. |
+| No renderer late deletion fallback. | `PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS` already produced smaller wrong streams. |
+
+The first useful small test is not a performance run. It is:
+
+```bash
+PYTHONPATH=. PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT=1 \
+  python3 extra/qk/prefill/prefill_stage_owner_audit.py \
+  --shape 2,2 --m 512 --n 5120 --k 5120 --loc 2 --unr 2 \
+  --boundary postrange --json
+```
+
+Done for P4A.2 means the lowering hook sees the same owner set that the postrange audit sees. Only then should the
+B-only destructive flag exist.
+
+#### P4B. What Not To Build
+
+Do not build these as fixes:
+
+| Non-fix | Reason |
+| --- | --- |
+| More `PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS` variants | Late deletion already changed producer epochs and returned wrong values. |
+| Renderer moved-store memoization | It can reduce counts but collapses non-equivalent producers. |
+| Scheduler/waitcnt tuning before P4 | It tunes the current over-staged lifecycle, not the target lifecycle. |
+| Full A+B destructive rewrite first | If B-only fails, A+B doubles the ambiguity and hides the first bad ownership transition. |
+
+The next implementation checkpoint is therefore P4A.1/P4A.2: prove the actual `Ops.STAGE` lowering hook can see the
+same owner identity that exists at postrange, without changing the stream.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.
