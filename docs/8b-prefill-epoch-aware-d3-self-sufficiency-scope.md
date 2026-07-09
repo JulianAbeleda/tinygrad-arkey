@@ -1,4 +1,4 @@
-# 8B Prefill Epoch-Aware D3 Self-Sufficiency Scope
+# 8B Prefill Epoch-Aware DBUF Pipeline Construction Scope
 
 Date: 2026-07-09.
 
@@ -8,11 +8,12 @@ S10 lost the S9 hand-LDS2 win when `ffn_gate_up` moved from the hand-shaped LDS2
 ownership. The generated path can show either K-major fragment reuse or D3/body staging, but the current combined
 paths either duplicate too much work or corrupt output when they suppress originals.
 
-The next primitive is therefore not generic D3. It is:
+The next primitive is therefore not generic D3, and not a stronger after-the-fact suppress predicate. It is:
 
 ```text
-move future-slot stage stores into the body
-and suppress the original prologue stores only when the moved store is proven self-sufficient for the consuming load
+construct the DBUF pipeline with explicit warmup/body epochs
+so prologue stores feed only warmup consumers
+and body stores feed steady-state rotated consumers
 ```
 
 ## Current Facts
@@ -26,8 +27,9 @@ and suppress the original prologue stores only when the moved store is proven se
 | K-major + D3 stage steal | `10.33` bounded | `42.500` | `4.562` | `3.125` | `3.125` | `2.0` | `17` | true | `3` | ok, too heavy |
 | `(slot,value)` suppress | n/a | `542 inst total` | `3.062` | `1.625` | `1.625` | `2.0` | `17` | true | `3` | `WRONG rr=nan` |
 
-The failed `(slot,value)` suppress is decisive: matching the LDS slot and value source is still not enough. The moved
-body store must also be ordered so that it is the producer seen by the consuming `ds_load_b128`.
+The failed `(slot,value)` suppress is decisive: matching the LDS slot and value source is still not enough. Store
+deletion is a reaching-definitions problem, not a value-equality problem. A moved body store must reach every consuming
+`ds_load_b128` first, on every path, with the same runtime epoch value and an intervening barrier.
 
 ## Failure Model
 
@@ -52,32 +54,34 @@ consumer. Suppressing the original by value/window deletes a required producer a
 
 ## Primitive Fix
 
-Replace epoch suppression with self-sufficiency suppression:
+Build epochs correctly first; suppression is only an optional cleanup:
 
 ```python
-moved_store_proof = (
-  lds_slot_or_window,
-  value_source_key,
-  first_consuming_wmma_phase,
-  dependency_anchor_before_that_consumer,
-)
+distance = 1
 
-if original_store_key == moved_store_key
-   and moved_store_dominates_all_consumers_that_original_would_feed
-   and no earlier consumer needs the original:
-  suppress_original_store()
-else:
-  keep_original_store()
+# warmup: only the first distance epochs
+for k in range(distance):
+  store LDS[slot(k)] = value(k)
+barrier()
+
+for k in range(0, K):
+  frag = load LDS[slot(k)]
+  wmma(frag)
+
+  # steady state: produce future epochs only
+  if k + distance < K:
+    store LDS[slot(k + distance)] = value(k + distance)
+    barrier()
 ```
 
-In practical first implementation terms, this likely means a conservative rule:
+If we keep a cleanup pass, its invariant is:
 
 ```text
-suppress only original stores whose first consumer is at or after the moved-store insertion point
+A store may be deleted only if every load it reaches is also reached first, on all paths, by an equivalent store of the
+same runtime epoch value, with a synchronization point between replacement store and load.
 ```
 
-If consumer dominance cannot be proven, keep the original. Correct-but-heavy is acceptable for the probe; wrong output
-is not.
+In practice, most true prologue stores should remain: they exist to feed warmup consumers before the body store exists.
 
 ## Code Landmarks
 
@@ -89,6 +93,7 @@ is not.
 | Current suppress sites | `amd.py::isel_store`, `amd.py::isel_gated_store` | Suppresses originals under broad or `(slot,value)` flags. |
 | Gate extraction | `extra/qk/prefill/native_isa_l4_stream_probe.py::_dbuf_gate_summary` | D3/D7 structural truth source. |
 | Lifecycle tracer | `extra/qk/prefill/kernel_lifecycle_trace.py` | Existing no-GPU final-stream audit. |
+| Pipeline audit | `kernel_lifecycle_trace.py::dbuf_pipeline_construction_audit` | Classifies prologue/body physical LDS store overlap as pipeline rotation, not redundancy proof. |
 
 ## Done Definition
 
@@ -127,42 +132,38 @@ go if the rows reproduce the known pattern
 stop if the current tree no longer reproduces the wrong suppress row, because the suppression premise changed
 ```
 
-### P1. Consumer-Dominance Audit
+### P1. Pipeline Construction Audit
 
-Add a no-code-change trace first if possible:
+Use the lifecycle trace's `dbuf_pipeline_construction_audit` first:
 
 ```text
-for each moved stage store:
-  record insertion phase / dep anchor
-  record lds slot/window
-  record value key
-  record first WMMA/load that consumes the same slot/window
-
-for each suppressible original:
-  record whether an earlier consumer exists before the moved store
+classify DS stores by prologue/body/tail
+record physical LDS windows present in both prologue and body
+record body loads before the first body store
 ```
 
 Stop/go:
 
 ```text
-go if wrong-output suppress includes at least one suppressed original with an earlier consumer
-stop if corruption occurs despite no earlier consumers; then the moved store data/order itself is not equivalent
+go if the audit shows prologue/body physical-window overlap and body loads before body stores
+stop if there is no overlap; then duplicate traffic is coming from another source
 ```
 
-### P2. Conservative Suppression Flag
+### P2. Epoch-Aware Pipeline Construction
 
-Add a new opt-in flag; leave old flags reproducible:
+Add a new opt-in construction flag; leave old suppress flags reproducible:
 
 ```text
-PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_DOMINATED=1
+PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS=1
 ```
 
 Rules:
 
 ```text
-never suppress by bare LDS slot
-never suppress by only (slot,value)
-suppress only when moved-store proof says the moved store dominates the original's consumer set
+prologue emits warmup epochs only
+body emits future/steady-state epochs only
+slot/value equality never authorizes deletion
+cleanup suppression, if any, must be MemorySSA/reaching-def safe
 ```
 
 ### P3. Structural Gate
@@ -178,7 +179,7 @@ PREFILL_WMMA_AB_PROOF_FROM_LDS_DESC=1 \
 PREFILL_WMMA_KMAJOR_D3A_MARKER=1 \
 PREFILL_WMMA_KMAJOR_STAGE_STEAL=1 \
 PREFILL_WMMA_KMAJOR_STAGE_STEAL_MEMO=1 \
-PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_DOMINATED=1 \
+PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS=1 \
 python3 extra/qk/prefill/kernel_lifecycle_trace.py \
   --active-generated --kind generated --shapes 2,2 \
   --m 512 --n 5120 --k 5120 --loc 2 --unr 2 \
@@ -204,7 +205,7 @@ PREFILL_WMMA_AB_PROOF_FROM_LDS_DESC=1 \
 PREFILL_WMMA_KMAJOR_D3A_MARKER=1 \
 PREFILL_WMMA_KMAJOR_STAGE_STEAL=1 \
 PREFILL_WMMA_KMAJOR_STAGE_STEAL_MEMO=1 \
-PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_DOMINATED=1 \
+PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS=1 \
 python3 extra/qk/prefill/hand_vs_generated_shape_matrix.py \
   --shapes 2,2 --m 512 --n 5120 --k 5120 --loc 2 --unr 2 \
   --skip-hand --hand-reps 1 --hand-iters 1 --json
@@ -237,8 +238,8 @@ whole-prefill beats Path1 or records a named residual bottleneck
 
 This path is blocked only if all are true:
 
-- moved-store consumer dominance cannot be represented with the current final-stream/proof metadata;
-- a conservative dominance suppress keeps too many originals to improve traffic;
-- every stronger suppress either corrupts output or keeps barriers/stores above the gate.
+- warmup/body epochs cannot be represented in the current D3 stage construction;
+- the pipeline construction audit shows no way to distinguish warmup producers from steady-state producers;
+- every construction attempt either corrupts output or keeps barriers/stores above the gate.
 
-Until then, the next action is a dominance audit and conservative suppress probe, not broad scheduler tuning.
+Until then, the next action is pipeline construction, not broad scheduler tuning and not equality-key suppression.

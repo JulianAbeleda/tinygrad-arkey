@@ -2,6 +2,7 @@ import json, os, subprocess, sys
 from pathlib import Path
 
 from extra.qk import pure_kernel_surface_audit as surface_audit
+from extra.qk.prefill import kernel_lifecycle_trace as life
 from tinygrad.llm.generated_candidates import select_generated_candidate
 from tinygrad.llm.quant_specs import activation_spec, quant_spec
 from tinygrad.llm.runtime_specs import RuntimeOpSpec
@@ -95,3 +96,21 @@ def test_s10_lds_route_trace_cli_writes_artifact_without_raw_oracle_classificati
   assert file_report["classification"] == "compiler_primitive_spec_owned__generated_transport"
   assert file_report["fallback_reason"] is None
   assert file_report["calls_build_gemm_lds2"] is False
+
+
+def test_dbuf_pipeline_construction_audit_marks_prologue_body_overlap_not_redundancy():
+  def row(idx, imm):
+    return {"idx": idx, "spans": {"addr": {"kind": "v", "lo": 0, "hi": 0, "n": 1}},
+            "text": f"ds_store_b128(v[0], v[1], v[2:5], v[0], {imm})"}
+
+  audit = life._dbuf_pipeline_construction_audit({
+    "ds_store_b128": [row(10, 0), row(20, 16), row(130, 0), row(150, 32)],
+    "ds_load_b128": [{"idx": 105, "spans": {}, "text": "ds_load_b128(...)"},
+                     {"idx": 140, "spans": {}, "text": "ds_load_b128(...)"}],
+  }, [100, 120, 160])
+
+  assert audit["verdict"] == "physical_window_overlap_requires_epoch_reaching_def"
+  assert audit["store_counts"] == {"prologue": 2, "body": 2, "tail": 0}
+  assert audit["prologue_body_physical_window_overlap_count"] == 1
+  assert audit["body_loads_before_first_body_store_count"] == 1
+  assert "not a redundancy proof" in audit["note"]

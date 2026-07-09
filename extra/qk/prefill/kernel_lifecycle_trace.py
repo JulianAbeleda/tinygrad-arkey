@@ -165,6 +165,65 @@ def _wmma_origins_before(insts: list[Any], wmma_rows: list[dict[str, Any]]) -> l
   return out
 
 
+def _pipeline_phase(idx: int, wmma_indices: list[int]) -> str:
+  if not wmma_indices: return "no_wmma"
+  if idx < wmma_indices[0]: return "prologue"
+  if idx > wmma_indices[-1]: return "tail"
+  return "body"
+
+
+def _pipeline_store_key(row: dict[str, Any]) -> str:
+  try: return sp._addr_key(row)
+  except Exception:
+    span = row.get("spans", {}).get("addr")
+    if span is None: return "addr_unknown"
+    return f"{span.get('kind')}:{span.get('lo')}:{span.get('hi')}:{row.get('text', '')}"
+
+
+def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma_indices: list[int]) -> dict[str, Any]:
+  store_rows = ops.get("ds_store_b128", [])
+  load_rows = ops.get("ds_load_b128", [])
+  phases = ("prologue", "body", "tail")
+  stores_by_phase = {p: [] for p in phases}
+  loads_by_phase = {p: [] for p in phases}
+  for row in store_rows:
+    if (phase := _pipeline_phase(row["idx"], wmma_indices)) in stores_by_phase:
+      stores_by_phase[phase].append(row)
+  for row in load_rows:
+    if (phase := _pipeline_phase(row["idx"], wmma_indices)) in loads_by_phase:
+      loads_by_phase[phase].append(row)
+  store_keys = {p: [_pipeline_store_key(r) for r in rows] for p, rows in stores_by_phase.items()}
+  key_sets = {p: set(keys) for p, keys in store_keys.items()}
+  prologue_body_overlap = sorted(key_sets["prologue"] & key_sets["body"])
+  body_first_store = min((r["idx"] for r in stores_by_phase["body"]), default=None)
+  body_loads_before_body_store = []
+  if body_first_store is not None:
+    body_loads_before_body_store = [r["idx"] for r in loads_by_phase["body"] if r["idx"] < body_first_store]
+  if prologue_body_overlap:
+    verdict = "physical_window_overlap_requires_epoch_reaching_def"
+  elif stores_by_phase["body"]:
+    verdict = "body_staging_without_physical_overlap"
+  else:
+    verdict = "no_body_staging"
+  return {
+    "verdict": verdict,
+    "note": "same physical LDS window across prologue/body is pipeline rotation evidence, not a redundancy proof",
+    "store_counts": {p: len(stores_by_phase[p]) for p in phases},
+    "load_counts": {p: len(loads_by_phase[p]) for p in phases},
+    "unique_store_windows": {p: len(key_sets[p]) for p in phases},
+    "prologue_body_physical_window_overlap_count": len(prologue_body_overlap),
+    "prologue_body_physical_window_overlap_sample": prologue_body_overlap[:16],
+    "body_first_store_idx": body_first_store,
+    "body_loads_before_first_body_store_count": len(body_loads_before_body_store),
+    "body_loads_before_first_body_store_sample": body_loads_before_body_store[:16],
+    "construction_invariant": (
+      "Do not delete prologue stores from physical-window equality. Build/peel/predicate epochs so only warmup "
+      "epochs are emitted in the prologue, or prove MemorySSA-style that a body store reaches every consumer first "
+      "with the same runtime epoch and a barrier in between."
+    ),
+  }
+
+
 def _bytes(insts: list[Any]) -> int:
   total = 0
   for inst in insts:
@@ -255,6 +314,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
       "store_load_intersection_count": lds_families["store_load_intersection_count"],
     },
     "dbuf_gate_summary": dbuf,
+    "dbuf_pipeline_construction_audit": _dbuf_pipeline_construction_audit(ops, widx),
   }
   if full_rows:
     report["track_rows"] = ops
