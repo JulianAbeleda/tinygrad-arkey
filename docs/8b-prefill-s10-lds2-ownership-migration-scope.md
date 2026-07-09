@@ -2,6 +2,36 @@
 
 Date: 2026-07-09.
 
+## S-Phase Ledger
+
+Repo scan result: there is no committed `S11` or later phase after S10. Later work is documented as either old S10
+composed-route work or parked generated DBUF/P4 work, not as a numbered post-S10 phase.
+
+Current ledger:
+
+| Phase | Status | Meaning |
+|---|---|---|
+| S0 | done | Pin the fast graph-GEMM oracle/baseline. |
+| S1 | done | Extract LDS2 register layout. |
+| S2 | done | Extract LDS2 memory layout. |
+| S3 | done | Extract LDS2 wait policy. |
+| S4 | done | Extract LDS2 cadence. |
+| S5 | done | Extract LDS2 lifecycle template. |
+| S6 | done | Extract LDS2 primitive emitter. |
+| S7 | done | Extract shell/epilogue emitter. |
+| S8 | done | Make `build_gemm_lds2` a wrapper around `lower_lds2_gemm_kernel`. |
+| S9 | done / baseline | Safe search over extracted knobs; keep opt-in; S9 authority path preserves the 4k pp512 band. |
+| S10-A | done | Hybrid S9/S10 scope: S10 owns metadata/spec/search gates while S9 emits backend atoms. |
+| S10-B | done | Repeatable hybrid role trace over S9 backend atoms. |
+| S10-C | done | Isolate the hard DBUF epoch choreography as `DBUFEpochPrimitive`. |
+| S10-D | next | Search/control safe S10-owned knobs around the hybrid boundary while preserving pp512 `>=4000`. |
+| S10-E | pending | Promotion/rollback gate for the hybrid route. |
+| S10-F | pending | Real parameterized epoch primitive interface beyond metadata. |
+| S10-G | later | Partial generated replacement around the epoch primitive. |
+| S10-H | parked | Full generated DBUF lifecycle replacement. |
+
+So S10 is the active umbrella. Do not create S11 until S10-D/E/F are complete or explicitly retired.
+
 ## 2026-07-09 Pivot: Stop Pursuing The Hard DBUF Replacement In S10
 
 S10 is now narrowed to:
