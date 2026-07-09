@@ -202,17 +202,25 @@ def summarize_gate_ab(gate_on_report: pathlib.Path = DEFAULT_GATE_ON_REPORT,
   off_failures = gate_off.get("captured_failures") or []
   off_analysis = off_failures[0].get("source_analysis", {}) if off_failures else {}
   on_roles = on_whole.get("prefill_role_routes") or {}
-  pass_condition = (
-    gate_on.get("status") == "ok" and
-    len(gate_on.get("captured_failures") or []) == 0 and
-    on_roles.get("attn_kv") == "generated_pipe_no_local_stage" and
+  gate_off_reproduces_overflow = (
     gate_off.get("status") == "compile_or_runtime_error" and
     off_analysis.get("inferred_prefill_role") == "attn_kv" and
     off_analysis.get("shared_over_limit") is True
   )
+  gate_on_ok = (
+    gate_on.get("status") == "ok" and
+    len(gate_on.get("captured_failures") or []) == 0 and
+    gate_off_reproduces_overflow
+  )
+  if gate_on_ok and on_roles.get("attn_kv") == "generated_pipe_no_local_stage":
+    verdict = "S10_ATTN_KV_NO_LOCAL_STAGE_PASS"
+  elif gate_on_ok and on_roles.get("attn_kv") == "pipe_resource_gated_raw_fallback":
+    verdict = "S10_ATTN_KV_RESOURCE_GATE_PASS"
+  else:
+    verdict = "S10_ATTN_KV_GATE_AB_INCONCLUSIVE"
   return {
     "schema": "prefill-s10-attn-kv-pipe-resource-gate-ab.v1",
-    "verdict": "S10_ATTN_KV_NO_LOCAL_STAGE_PASS" if pass_condition else "S10_ATTN_KV_NO_LOCAL_STAGE_INCONCLUSIVE",
+    "verdict": verdict,
     "gate_on": {
       "path": str(gate_on_report),
       "status": gate_on.get("status"),
@@ -260,7 +268,8 @@ def main(argv: list[str] | None = None) -> int:
       print(f"{payload['status']} captured={len(payload['captured_failures'])} report={report_path}")
       for item in payload["captured_failures"]:
         print(f"  {item['compiler']} {item['source_lines']} lines {item['source_path']}: {item['exception']}")
-  if args.summarize_gate_ab: return 0 if payload["verdict"] == "S10_ATTN_KV_RESOURCE_GATE_PASS" else 1
+  if args.summarize_gate_ab:
+    return 0 if payload["verdict"] in ("S10_ATTN_KV_RESOURCE_GATE_PASS", "S10_ATTN_KV_NO_LOCAL_STAGE_PASS") else 1
   return 0 if payload["status"] == "ok" else 1
 
 
