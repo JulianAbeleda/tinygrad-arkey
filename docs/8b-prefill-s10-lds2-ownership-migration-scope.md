@@ -2,6 +2,73 @@
 
 Date: 2026-07-09.
 
+## 2026-07-09 Pivot: Stop Pursuing The Hard DBUF Replacement In S10
+
+S10 is now narrowed to:
+
+```text
+search/spec ownership around the proven LDS2 backend atom, while preserving the S9 4k pp512 band
+```
+
+The hard generated DBUF replacement path is explicitly parked for later R&D. That includes the P4/B tile-key,
+owner-aware rotated-stage rewrite, and generated DBUF lifecycle replacement work. Those are real compiler problems, but
+they are not required for the next useful S10 milestone.
+
+Active S10 should instead treat `lower_lds2_gemm_kernel(...)` / `LDS2PrimitiveEmitter` as the backend atom and move
+machine-searchable ownership around it:
+
+| Surface | S10 action | Why |
+|---|---|---|
+| LDS2 ASM backend atom | keep | It is the only route currently proven to hit the 4k pp512 band. |
+| `LDS2RegLayout` / `LDS2MemoryLayout` | search/spec-owned | Already extracted and byte-preserving. |
+| `LDS2WaitPolicy` | search/spec-owned | S9 proved this is safely searchable; `LGKM_COOP_STORE=2` is a valid opt-in. |
+| `LDS2Cadence` / `LDS2LifecycleTemplate` | search/spec-owned, conservative | Keep byte-equivalent defaults; only promote measured non-defaults. |
+| route role selection | search/spec-owned | Keep `ffn_gate/up` on LDS2, pipe roles on the fast raw pipe oracle for now. |
+| generated DBUF/P4 rotated-stage lowering | parked | This is the hard part; do not block S10 on it. |
+
+The practical milestone is therefore:
+
+```text
+S10_MVP_SEARCH_OWNED_LDS2_BACKEND_ATOM
+```
+
+not:
+
+```text
+S10_GENERATED_DBUF_REPLACEMENT
+```
+
+## Fresh 4k-Band Gate
+
+Archived S9 authority proves the path can hit the target band:
+
+| artifact | git | pp512 | pp4096 | note |
+|---|---:|---:|---:|---|
+| `bench/prefill-whole-synced/raw-hand-s9-combined-best-authority.json` | `b1259638d` dirty | `4413` | `3237` | best S9 combined authority |
+| `bench/prefill-whole-synced/raw-hand-s9-wait-store2-authority.json` | `b1259638d` dirty | `4416` | `3237` | `LGKM_COOP_STORE=2` opt-in authority |
+
+Fresh current-head smoke does not yet preserve that band:
+
+| command surface | git | pp512 | verdict |
+|---|---:|---:|---|
+| strict default, `PREFILL_V2=1` | `b3f314b7f` | `265` | not the graph-GEMM route |
+| `PREFILL_GRAPH_GEMM=1` | `b3f314b7f` | `124` | route selected but regressed |
+| `PREFILL_GRAPH_GEMM=1 PREFILL_LDS2_WAIT_LGKM_COOP_STORE=2` | `b3f314b7f` | `118` | S9 opt-in wait knob does not recover the band |
+| route dump, `PREFILL_GRAPH_GEMM=1 PREFILL_GRAPH_GEMM_ROUTE_DUMP=1` | `b3f314b7f` | `89` | diagnostic run, warmups 0 |
+
+So the immediate blocker is not generated DBUF ownership. The immediate blocker is:
+
+```text
+current HEAD no longer reproduces the archived S9 graph-GEMM 4k pp512 band
+```
+
+The next S10 validation loop is:
+
+1. restore or identify the regression between the archived S9 authority (`b1259638d`) and current head,
+2. fresh-run pp512 with the existing whole-prefill harness and pinned clocks,
+3. only claim S10 progress when current head is back in the `>=4000 tok/s` pp512 band,
+4. then search over the extracted LDS2 spec knobs without reopening generated DBUF replacement.
+
 ## Goal
 
 S10 starts after S9 completed as:

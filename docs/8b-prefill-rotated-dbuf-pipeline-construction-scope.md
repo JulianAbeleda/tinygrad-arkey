@@ -1,5 +1,27 @@
 # 8B Prefill Rotated DBUF Pipeline Construction Scope
 
+## Status: Parked After S10 Pivot
+
+Date: 2026-07-09.
+
+This scope is parked for the current S10 push.
+
+The owner-aware rotated DBUF replacement remains the right long-term compiler primitive, but it is the hard part:
+P4C/P4D require a behavior-changing prologue/body/tail owned-stage rewrite before they can safely reduce staging
+density. Current S10 will not block on that work.
+
+Current active direction:
+
+```text
+keep the proven LDS2 ASM backend atom,
+move search/spec ownership around it,
+restore fresh current-head pp512 to the archived S9 4k band,
+then search safe LDS2 knobs.
+```
+
+Reopen this document only after S10 has a fresh current-head authority run in the 4k pp512 band and needs a generated
+DBUF replacement rather than a spec-owned backend atom.
+
 ## Big Picture
 
 The generated K-major + DBUF path is correct but too dense. It emits extra global/LDS staging work per WMMA, so useful
