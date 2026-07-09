@@ -113,4 +113,7 @@ def test_dbuf_pipeline_construction_audit_marks_prologue_body_overlap_not_redund
   assert audit["store_counts"] == {"prologue": 2, "body": 2, "tail": 0}
   assert audit["prologue_body_physical_window_overlap_count"] == 1
   assert audit["body_loads_before_first_body_store_count"] == 1
+  assert audit["warmup_required_overlap_count"] == 0
+  assert audit["steady_state_body_produced_overlap_count"] == 1
+  assert audit["pipeline_epoch_candidate"] is True
   assert "not a redundancy proof" in audit["note"]

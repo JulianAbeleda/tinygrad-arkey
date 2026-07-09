@@ -180,6 +180,10 @@ def _pipeline_store_key(row: dict[str, Any]) -> str:
     return f"{span.get('kind')}:{span.get('lo')}:{span.get('hi')}:{row.get('text', '')}"
 
 
+def _pipeline_load_key(row: dict[str, Any]) -> str:
+  return _pipeline_store_key(row)
+
+
 def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma_indices: list[int]) -> dict[str, Any]:
   store_rows = ops.get("ds_store_b128", [])
   load_rows = ops.get("ds_load_b128", [])
@@ -197,8 +201,13 @@ def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma
   prologue_body_overlap = sorted(key_sets["prologue"] & key_sets["body"])
   body_first_store = min((r["idx"] for r in stores_by_phase["body"]), default=None)
   body_loads_before_body_store = []
+  load_keys_before_body_store: set[str] = set()
   if body_first_store is not None:
     body_loads_before_body_store = [r["idx"] for r in loads_by_phase["body"] if r["idx"] < body_first_store]
+    load_keys_before_body_store = {_pipeline_load_key(r) for r in loads_by_phase["prologue"] + loads_by_phase["body"]
+                                   if r["idx"] < body_first_store}
+  warmup_required_overlap = sorted(set(prologue_body_overlap) & load_keys_before_body_store)
+  steady_state_body_produced_overlap = sorted(set(prologue_body_overlap) - load_keys_before_body_store)
   if prologue_body_overlap:
     verdict = "physical_window_overlap_requires_epoch_reaching_def"
   elif stores_by_phase["body"]:
@@ -216,6 +225,11 @@ def _dbuf_pipeline_construction_audit(ops: dict[str, list[dict[str, Any]]], wmma
     "body_first_store_idx": body_first_store,
     "body_loads_before_first_body_store_count": len(body_loads_before_body_store),
     "body_loads_before_first_body_store_sample": body_loads_before_body_store[:16],
+    "warmup_required_overlap_count": len(warmup_required_overlap),
+    "warmup_required_overlap_sample": warmup_required_overlap[:16],
+    "steady_state_body_produced_overlap_count": len(steady_state_body_produced_overlap),
+    "steady_state_body_produced_overlap_sample": steady_state_body_produced_overlap[:16],
+    "pipeline_epoch_candidate": bool(steady_state_body_produced_overlap),
     "construction_invariant": (
       "Do not delete prologue stores from physical-window equality. Build/peel/predicate epochs so only warmup "
       "epochs are emitted in the prologue, or prove MemorySSA-style that a body store reaches every consumer first "

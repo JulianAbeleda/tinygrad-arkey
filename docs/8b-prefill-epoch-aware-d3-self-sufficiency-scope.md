@@ -243,3 +243,60 @@ This path is blocked only if all are true:
 - every construction attempt either corrupts output or keeps barriers/stores above the gate.
 
 Until then, the next action is pipeline construction, not broad scheduler tuning and not equality-key suppression.
+
+## P2 First Probe Result - 2026-07-09
+
+Implemented an opt-in first construction probe:
+
+```text
+PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS=1
+```
+
+The probe suppressed only prologue physical LDS windows that were later body-produced and not consumed before the first
+body store. This deliberately did not use the old broad suppress flags.
+
+Structural result:
+
+| Metric | K-major + D3 stage steal | `PIPELINE_EPOCHS=1` |
+| --- | ---: | ---: |
+| instruction total | `623` | `551` |
+| global_b128 | `44` | `32` |
+| ds_store_b128 | `44` | `32` |
+| ds_load_b128 | `32` | `32` |
+| barriers | `11` | `11` |
+| waits | `57` | `45` |
+| D3 | true | true |
+| D7 | true | true |
+| prologue/body physical overlap | `7` | `0` |
+
+Correctness result:
+
+```text
+status: WRONG rr=1.4e+00
+```
+
+Conclusion:
+
+```text
+physical warmup/body splitting is still not sufficient.
+```
+
+The construction selector removed the apparent duplicate physical windows and preserved the structural D3/D7 shape, but
+the values were not the same runtime epoch. This confirms the sharper reaching-def diagnosis: pipeline construction
+must carry an epoch/value recurrence, not only physical LDS windows and relative load placement.
+
+Next probe:
+
+```text
+PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS=2
+```
+
+Required change:
+
+```text
+only suppress a prologue producer when the body producer has the same logical runtime epoch,
+not merely the same physical slot and not-warmup-consumed placement.
+```
+
+If that epoch cannot be recovered from current D3 candidate metadata, the construction has to move earlier, before D3
+clones stores from already-expanded stage producers.

@@ -523,6 +523,8 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
        (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
       return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    if _dbuf_pipeline_epoch_should_suppress(ctx, x, a):
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
     if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS", 0) and \
        (id(x) in stolen_stages or _dbuf_stage_store_stolen(stolen_stages, x) or _dbuf_stage_addr_key(a) in stolen_stages or
         any(k in stolen_stages for k in _dbuf_lowered_lds_slot_keys(a))):
@@ -652,6 +654,8 @@ def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
                                  "stolen_count": len(stolen_stages)})
     if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
        (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    if _dbuf_pipeline_epoch_should_suppress(ctx, x, a):
       return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
     if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS", 0) and \
        (id(x) in stolen_stages or _dbuf_stage_store_stolen(stolen_stages, x) or _dbuf_stage_addr_key(a) in stolen_stages or
@@ -1533,6 +1537,17 @@ def _dbuf_stage_epoch_key_for_store(ctx:IselContext|None, st:UOp, a:UOp|None=Non
   vkey = _dbuf_stage_value_key(st)
   return None if slot is None or vkey is None else ("stage_epoch", slot, vkey)
 
+def _dbuf_pipeline_epoch_should_suppress(ctx:IselContext|None, st:UOp, a:UOp) -> bool:
+  # Diagnostic-only first pipeline construction probe. This removes physical-window duplicates but is not a proof of
+  # runtime epoch equality; docs/8b-prefill-epoch-aware-d3-self-sufficiency-scope.md records the wrong-output result.
+  if ctx is None or not getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0): return False
+  slot = _dbuf_stage_store_abs_slot(ctx, st)
+  if slot is None: slot = _dbuf_lowered_lds_slot(a)
+  if slot is None: return False
+  body_slots = getattr(ctx, "_dbuf_pipeline_body_slots", set())
+  warmup_slots = getattr(ctx, "_dbuf_pipeline_warmup_slots", set())
+  return slot in body_slots and slot not in warmup_slots
+
 def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple[UOp|None, str]:
   if st.op is not Ops.STORE or len(st.src) < 2 or not dep: return None, "bad_store_or_dep"
   idx, val = st.src[0], st.src[1]
@@ -1617,6 +1632,9 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tup
           stolen.add(skey)
         if (abs_slot := _dbuf_stage_store_abs_slot(ctx, cand)) is not None:
           stolen.add(("lds_slot", abs_slot))
+          if getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0):
+            body_slots = ctx._dbuf_pipeline_body_slots = getattr(ctx, "_dbuf_pipeline_body_slots", set())
+            body_slots.add(abs_slot)
         if (ekey := _dbuf_stage_epoch_key_for_store(ctx, cand)) is not None:
           stolen.add(ekey)
         if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0):
@@ -1676,6 +1694,12 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
     phase_dep = () if prev_phase_last is None else (prev_phase_last,)
     for chain_i, phase in enumerate(phases):
       tile = phase[phase_i]
+      if getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0) and phase_i == 0:
+        warmup_slots = ctx._dbuf_pipeline_warmup_slots = getattr(ctx, "_dbuf_pipeline_warmup_slots", set())
+        for carrier in (tile.src[0], tile.src[1]):
+          cands, _reason = _dbuf_stage_candidates(carrier)
+          for cand in cands:
+            if (abs_slot := _dbuf_stage_store_abs_slot(ctx, cand)) is not None: warmup_slots.add(abs_slot)
       akey, bkey = _wmma_frag_phase_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_phase_reuse_key(ctx, "B", tile.src[1])
       if akey is None or bkey is None: return None
       abase, bbase = _ab_base(ctx, ("A", akey)), _ab_base(ctx, ("B", bkey))
