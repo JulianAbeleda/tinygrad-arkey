@@ -19,6 +19,7 @@ import tinygrad.codegen as cg
 from tinygrad.codegen.opt import postrange
 from tinygrad.dtype import AddrSpace, PtrDType
 from tinygrad.helpers import getenv
+from tinygrad.schedule import rangeify
 from tinygrad.uop.ops import AxisType, Ops, UOp
 
 from extra.qk.prefill_v2_schedule_search import _opts_for
@@ -200,6 +201,7 @@ def wmma_rows(sink: UOp) -> list[dict[str, Any]]:
 
 
 def compile_full_sink(m: int, n: int, k: int, u0: int, u1: int, loc: int, unr: int, boundary: str) -> UOp:
+  rangeify.prefill_dbuf_clear_rotated_stage_lowering_audit()
   postrange._WARMSTART_OPTS = {(frozenset({m, n}), k): _opts_for(u0, u1, loc, unr)}
   postrange._warmstart_stats.update({"match": 0, "apply": 0, "error": 0})
   a = Tensor.empty(m, k, dtype=dtypes.half)
@@ -321,6 +323,19 @@ def p4_readiness(summary: dict[str, Any], plan: dict[str, Any], boundary: str) -
   }
 
 
+def lowering_hook_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+  roles = sorted({r.get("role") for r in rows if r.get("role") in ("A", "B")})
+  by_role = {role: [r for r in rows if r.get("role") == role] for role in roles}
+  return {
+    "lowering_owner_count": len(rows),
+    "lowering_roles": roles,
+    "lowering_count_by_role": {str(k): len(v) for k, v in by_role.items()},
+    "lowering_nbufs": sorted({r.get("nbuf") for r in rows if r.get("nbuf") is not None}),
+    "lowering_has_reduce_range_count": sum(1 for r in rows if r.get("has_reduce_range")),
+    "lowering_hook_owner_ready": set(roles) >= {"A", "B"} and set(r.get("nbuf") for r in rows) == {2},
+  }
+
+
 def summarize(stages: list[dict[str, Any]], stores: list[dict[str, Any]], wmma: list[dict[str, Any]]) -> dict[str, Any]:
   store_frag_windows = {(r["buffer_id"], (r["const_bytes"] // 32) * 32, 32) for r in stores}
   store_frag_windows_nobuf = {((r["const_bytes"] // 32) * 32, 32) for r in stores}
@@ -362,12 +377,14 @@ def main() -> int:
   with patched_env({**KMAJOR_LDS_ENV, "PREFILL_STAGE_PRESERVE_TAGS": "1"}):
     sink = compile_full_sink(args.m, args.n, args.k, u0, u1, args.loc, args.unr, args.boundary)
     stages, stores, consumers = stage_rows(sink), store_rows(sink), wmma_rows(sink)
+    lowering_rows = rangeify.prefill_dbuf_rotated_stage_lowering_audit_rows()
   owners = owner_records(stages)
-  summary = {**summarize(stages, stores, consumers), "stage_count": len(stages)}
+  summary = {**summarize(stages, stores, consumers), **lowering_hook_summary(lowering_rows), "stage_count": len(stages)}
   plan = rotated_lifecycle_plan(owners)
   payload = {
     "shape": f"{u0}x{u1}", "m": args.m, "n": args.n, "k": args.k, "loc": args.loc, "unr": args.unr, "boundary": args.boundary,
     "summary": summary, "owner_records": owners,
+    "lowering_hook_owner_records": lowering_rows,
     "rotated_lifecycle_plan": plan,
     "p4_readiness": p4_readiness(summary, plan, args.boundary),
     "stages": stages, "stores": stores, "wmma_operands": consumers,

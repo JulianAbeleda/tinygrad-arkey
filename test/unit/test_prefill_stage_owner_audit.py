@@ -1,4 +1,5 @@
 from extra.qk.prefill import prefill_stage_owner_audit as audit
+from tinygrad.schedule import rangeify
 
 
 def test_stage_ownership_summary_marks_postrange_ready():
@@ -82,3 +83,35 @@ def test_p4_readiness_rejects_full_lowering_boundary():
 
   assert out["ready"] is False
   assert "full lowering" in out["reason"]
+
+
+def test_rotated_stage_owner_tag_parser_is_fail_closed():
+  assert rangeify.prefill_dbuf_rotated_stage_owner_fields(None) == {}
+  assert rangeify.prefill_dbuf_rotated_stage_owner_fields(("other", ("role", "B"))) == {}
+
+  fields = rangeify.prefill_dbuf_rotated_stage_owner_fields((
+    "wmma_frag_buffer_proof", ("role", "B"), ("lds_buffer_id", 991), ("nbuf", 2),
+    ("tile_count", 3), ("tile_elems", 256)
+  ))
+
+  assert fields == {
+    "kind": "wmma_frag_buffer_proof",
+    "role": "B",
+    "lds_buffer_id": 991,
+    "nbuf": 2,
+    "tile_count": 3,
+    "tile_elems": 256,
+  }
+
+
+def test_lowering_hook_summary_marks_ab_dbuf_ready():
+  rows = [
+    {"role": "A", "nbuf": 2, "has_reduce_range": True},
+    {"role": "B", "nbuf": 2, "has_reduce_range": True},
+  ]
+
+  out = audit.lowering_hook_summary(rows)
+
+  assert out["lowering_hook_owner_ready"] is True
+  assert out["lowering_roles"] == ["A", "B"]
+  assert out["lowering_count_by_role"] == {"A": 1, "B": 1}
