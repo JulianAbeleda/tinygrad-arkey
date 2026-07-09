@@ -135,5 +135,27 @@ def test_p4c_rotation_readiness_blocks_identity_without_lifecycle_split():
 
   assert out["ready"] is False
   assert out["blocked_at"] == "P4C.4"
-  assert "prologue/body/tail" in out["reason"]
-  assert "reduce_epoch+1" in out["forbidden_shortcut"]
+  assert "reduce range" in out["reason"]
+
+
+def test_owned_b_stage_lifecycle_builds_prologue_body_tail():
+  contract = {
+    "ok": True,
+    "stages": [{
+      "owned_stage": "B_IDENTITY", "producer_epoch": "same_reduce",
+      "stage_ranges": [{"axis_type": "AxisType.REDUCE", "size": 80}],
+    }],
+    "consumers": [{"carrier_owned_stage": "B_IDENTITY", "carrier_consumer_epoch": "same_reduce"}],
+  }
+
+  plan = audit.owned_b_stage_lifecycle(contract)
+
+  assert plan["ok"] is True
+  assert plan["prologue"][0]["epoch"] == "k0"
+  assert plan["body"][0] == {"op": "consume", "role": "B", "slot": "k%2", "epoch": "k", "owner": plan["owner"]}
+  assert plan["body"][1]["epoch"] == "k+1"
+  assert plan["tail"][0]["epoch"] == "last"
+
+  ready = audit.p4c_rotation_readiness(contract, plan)
+  assert ready["ready"] is False
+  assert "no postrange/codegen emitter" in ready["reason"]

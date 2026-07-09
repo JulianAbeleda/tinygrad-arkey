@@ -274,24 +274,61 @@ def generic_b_stage_contract(sink: UOp) -> dict[str, Any]:
   }
 
 
-def p4c_rotation_readiness(contract: dict[str, Any]) -> dict[str, Any]:
+def _range_size(rows: list[dict[str, Any]], axis_type: str) -> int | None:
+  for r in rows:
+    if r.get("axis_type") == axis_type: return r.get("size")
+  return None
+
+
+def owned_b_stage_lifecycle(contract: dict[str, Any]) -> dict[str, Any]:
   if not contract.get("ok"):
-    return {"ready": False, "blocked_at": "P4C.4", "reason": "generic B stage contract is not established"}
+    return {"ok": False, "reason": "generic B stage contract is not established"}
   stages = contract.get("stages", [])
   consumers = contract.get("consumers", [])
   if len(stages) != 1 or not consumers:
-    return {"ready": False, "blocked_at": "P4C.4", "reason": "requires exactly one B stage and at least one direct B consumer"}
+    return {"ok": False, "reason": "requires exactly one B stage and at least one direct B consumer"}
   st, c = stages[0], consumers[0]
   if st.get("owned_stage") != "B_IDENTITY" or c.get("carrier_owned_stage") != "B_IDENTITY":
-    return {"ready": False, "blocked_at": "P4C.4", "reason": "owned B identity metadata is missing"}
+    return {"ok": False, "reason": "owned B identity metadata is missing"}
   if st.get("producer_epoch") != "same_reduce" or c.get("carrier_consumer_epoch") != "same_reduce":
-    return {"ready": False, "blocked_at": "P4C.4", "reason": "identity epoch metadata is incomplete"}
+    return {"ok": False, "reason": "identity epoch metadata is incomplete"}
+  reduce_size = _range_size(st.get("stage_ranges", []), "AxisType.REDUCE")
+  if reduce_size is None or reduce_size < 2:
+    return {"ok": False, "reason": "rotated lifecycle requires a reduce range of at least two epochs", "reduce_size": reduce_size}
+  owner = ("B", "lds_buffer_id=991", "nbuf=2")
+  return {
+    "ok": True,
+    "source": "audit_only_owned_b_stage_lifecycle",
+    "owner": owner,
+    "reduce_size": reduce_size,
+    "invariant": "consume(k) reads the most recent completed produce(k) for slot k%2; body produces k+1 before the next consume; prologue and tail are explicit",
+    "prologue": [
+      {"op": "produce", "role": "B", "slot": 0, "epoch": "k0", "owner": owner},
+      {"op": "barrier"},
+    ],
+    "body": [
+      {"op": "consume", "role": "B", "slot": "k%2", "epoch": "k", "owner": owner},
+      {"op": "produce", "role": "B", "slot": "(k+1)%2", "epoch": "k+1", "owner": owner},
+      {"op": "barrier"},
+    ],
+    "tail": [
+      {"op": "consume", "role": "B", "slot": "last%2", "epoch": "last", "owner": owner},
+    ],
+    "forbidden_shortcut": "rewrite existing same-epoch STAGE index to k+1 without first/last guards",
+  }
+
+
+def p4c_rotation_readiness(contract: dict[str, Any], lifecycle: dict[str, Any] | None = None) -> dict[str, Any]:
+  if lifecycle is None: lifecycle = owned_b_stage_lifecycle(contract)
+  if not lifecycle.get("ok"):
+    return {"ready": False, "blocked_at": "P4C.4", "reason": lifecycle.get("reason", "owned B lifecycle is not established")}
   return {
     "ready": False,
     "blocked_at": "P4C.4",
-    "reason": "rotated B needs a prologue/body/tail split before behavior changes; current contract still binds producer and consumer to the same reduce epoch",
+    "reason": "audit lifecycle exists, but no postrange/codegen emitter can yet materialize separate B prologue/body/tail producers",
     "required_next_object": "OwnedBStage(prologue produce k0, body consume k and produce k+1, tail consume final)",
-    "forbidden_shortcut": "substitute reduce_epoch -> reduce_epoch+1 inside the existing STAGE without first/tail guards",
+    "next_implementation_hook": "postrange owned-stage rewrite before generic Ops.STAGE lowering",
+    "forbidden_shortcut": lifecycle.get("forbidden_shortcut"),
   }
 
 
@@ -477,12 +514,14 @@ def main() -> int:
   summary = {**summarize(stages, stores, consumers), **lowering_hook_summary(lowering_rows), "stage_count": len(stages)}
   plan = rotated_lifecycle_plan(owners)
   b_contract = generic_b_stage_contract(sink)
+  owned_b_lifecycle = owned_b_stage_lifecycle(b_contract)
   payload = {
     "shape": f"{u0}x{u1}", "m": args.m, "n": args.n, "k": args.k, "loc": args.loc, "unr": args.unr, "boundary": args.boundary,
     "summary": summary, "owner_records": owners,
     "lowering_hook_owner_records": lowering_rows,
     "generic_b_stage_contract": b_contract,
-    "p4c_rotation_readiness": p4c_rotation_readiness(b_contract),
+    "owned_b_stage_lifecycle": owned_b_lifecycle,
+    "p4c_rotation_readiness": p4c_rotation_readiness(b_contract, owned_b_lifecycle),
     "rotated_lifecycle_plan": plan,
     "p4_readiness": p4_readiness(summary, plan, args.boundary),
     "stages": stages, "stores": stores, "wmma_operands": consumers,

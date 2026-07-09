@@ -405,6 +405,69 @@ P4C.4 readiness currently blocks:
 This is the next real layer. The identity owned B stage is safe, but rotation is not a local expression rewrite. It needs
 a lifecycle object that can represent warmup and drain explicitly.
 
+#### P4D. OwnedBStage Lifecycle Object
+
+P4D is the bridge from safe identity metadata to a behavior-changing rotated B stage. It is intentionally split into
+audit object first, emitter second.
+
+The audit object now exists as `owned_b_stage_lifecycle` in:
+
+```text
+extra/qk/prefill/prefill_stage_owner_audit.py
+```
+
+Real command:
+
+```bash
+PYTHONPATH=. PREFILL_DBUF_OWNED_B_STAGE_IDENTITY=1 PREFILL_DBUF_OWNED_B_STAGE_META=1 \
+  python3 extra/qk/prefill/prefill_stage_owner_audit.py \
+  --shape 2,2 --m 512 --n 5120 --k 5120 --loc 2 --unr 2 \
+  --boundary postrange --json
+```
+
+Current result:
+
+```json
+{
+  "owned_b_stage_lifecycle": {
+    "ok": true,
+    "source": "audit_only_owned_b_stage_lifecycle",
+    "reduce_size": 80,
+    "prologue": ["produce B slot0 epoch k0", "barrier"],
+    "body": ["consume B slot k%2 epoch k", "produce B slot (k+1)%2 epoch k+1", "barrier"],
+    "tail": ["consume B slot last%2 epoch last"]
+  },
+  "p4c_rotation_readiness": {
+    "ready": false,
+    "reason": "audit lifecycle exists, but no postrange/codegen emitter can yet materialize separate B prologue/body/tail producers",
+    "next_implementation_hook": "postrange owned-stage rewrite before generic Ops.STAGE lowering"
+  }
+}
+```
+
+Implementation contract for the emitter:
+
+| Phase | Emits | Must prove |
+| --- | --- | --- |
+| Prologue | `produce(B, slot=0, epoch=k0)` then barrier | First consumer has a completed producer. |
+| Body | `consume(B, slot=k%2, epoch=k)` and `produce(B, slot=(k+1)%2, epoch=k+1)` then barrier | Current consumer never reads the future producer; future producer is visible before next iteration. |
+| Tail | `consume(B, slot=last%2, epoch=last)` | Last produced value is consumed once and not overwritten first. |
+
+Forbidden shortcut:
+
+```text
+rewrite existing same-epoch STAGE index to k+1 without first/tail guards
+```
+
+Next code layer:
+
+```text
+postrange owned-stage rewrite before generic Ops.STAGE lowering
+```
+
+This is where P4D stops right now. The lifecycle is scoped and machine-audited; the behavior-changing emitter is still
+missing.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.
