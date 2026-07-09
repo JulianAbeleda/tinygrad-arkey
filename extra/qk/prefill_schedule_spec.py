@@ -19,6 +19,7 @@ saturated ffn_gate_up (uniquely out_f==12288), which keeps its faster LDS path. 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from typing import Any
 
 # ffn_gate_up is the protected (pipe-excluded) role: uniquely out_f==12288 on the tracked dense prefill shapes.
@@ -128,5 +129,13 @@ def _spec_to_params(spec: PrefillGEMMScheduleSpec) -> dict:
 
 def emit_prefill_gemm_from_spec(spec: PrefillGEMMScheduleSpec):
   """Lower a PrefillGEMMScheduleSpec to (insts, lds_bytes, bm, bn, threads, name)."""
+  if os.environ.get("PREFILL_WMMA_PIPE_PRIMITIVE") == "1" and spec.route_family == "pipe":
+    from extra.qk import wmma_pipe_spec
+    pipe_spec = wmma_pipe_spec.extract_wmma_pipe_spec(spec)
+    if pipe_spec is not None: return wmma_pipe_spec.lower_wmma_pipe_spec(pipe_spec)
+  if os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") == "1" and spec.route_family == "lds":
+    from extra.qk import wmma_lds_spec
+    lds_spec = wmma_lds_spec.extract_wmma_lds_spec(spec)
+    if lds_spec is not None: return wmma_lds_spec.lower_wmma_lds_spec(lds_spec)
   from extra.qk.prefill_graph_gemm_route import _emit_schedule
   return _emit_schedule(_spec_to_params(spec), name=spec.kernel_name)

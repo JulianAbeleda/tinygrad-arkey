@@ -4,6 +4,10 @@ Pure machine search means the selected hot runtime path is generated or spec-dri
 policy, and verified by tinygrad gates. Handwritten/owned routes may exist as rollback, historical baseline, or ceiling
 comparison, but they are not pure machine-search routes.
 
+Practical project target: **machine search over reusable compiler primitives**. Strict purity remains the audit label for
+routes whose executing topology is generated/spec-owned. Backend primitives may be hand-authored; complete
+model-specific kernel schedules may not be called pure.
+
 This document is the reviewer contract. If a route cannot be classified with these rules, the route is `unknown` and
 cannot claim pure machine-search provenance.
 
@@ -35,6 +39,48 @@ Classify the implementation that actually executes on the selected route, not th
 
 Search selecting a handwritten implementation does not make it pure. A route becomes pure only when the implementation
 itself is generated/spec-owned under the rules above.
+
+## ASM Is Not The Boundary
+
+Assembly is allowed as a compiler/backend target. The boundary is kernel authorship, not whether the final code contains
+AMD ISA.
+
+| Use | Pure route allowed? | Meaning |
+|---|---:|---|
+| backend-emitted ASM | yes | tinygrad/codegen lowers generated IR/specs into target instructions such as WMMA, DS loads, stores, or waitcnt. |
+| backend intrinsic lowering | yes | A reusable renderer/backend primitive emits one instruction family for generated callers. |
+| ASM probe | not a product route | A temporary diagnostic kernel used to establish hardware semantics. |
+| hand-authored full-kernel schedule | no, except oracle/escape hatch | A human writes the concrete load/LDS/WMMA/wait/store lifecycle for a hotspot. |
+| raw instruction or binary injection | no, except oracle/escape hatch | The selected runtime path injects prebuilt instructions or binaries instead of compiler-owned lowering. |
+
+So a generated kernel may end in ASM. That is normal. A hand kernel is different: the concrete kernel schedule is authored
+by a human rather than produced by the compiler/search/spec path.
+
+## Compiler Primitive Compromise
+
+The preferred compromise is not to make the compiler rediscover every hardware trick from first principles. It is to
+expose hardware tricks as reusable compiler primitives, then let search/spec compose them.
+
+Allowed primitives include:
+
+- WMMA intrinsic lowering,
+- targeted `waitcnt` lowering,
+- b128 global/DS load-store lowering,
+- LDS staging operations,
+- DBUF scheduling idioms,
+- register/layout constraints for WMMA fragments,
+- DS offset folding and address-lifetime rules.
+
+These are not hand kernels by themselves. They become a hand kernel only when a route-local implementation manually emits
+the complete executable lifecycle for a model/shape-specific hotspot.
+
+The goal for prefill is therefore:
+
+```text
+machine search chooses primitive composition
+backend emits AMD ISA
+no route-local full-kernel raw instruction list
+```
 
 ## Concrete Markers
 
@@ -80,7 +126,7 @@ route-local kernel directly emits a source string or instruction list to force i
 
 ## Audit Rule
 
-A route can claim pure machine-search status only if all of this is true:
+A route can claim strict pure-machine-search status only if all of this is true:
 
 - Its `route_manifest.py` row uses `machine_authored_generated` or `tinygrad_scheduler_generated`.
 - Its selected runtime path has no raw ISA/source-string/precompiled-binary injection.

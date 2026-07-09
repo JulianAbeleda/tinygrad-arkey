@@ -1,0 +1,162 @@
+# 8B Prefill Pipe MVP Remaining Scope
+
+Date: 2026-07-08.
+
+## Current State
+
+Cleared:
+
+- generated pipe diagnostic structure,
+- resident A/B pipe wait shape (`vmcnt(8)` for `pipe_tm=2,pipe_tn=2`),
+- bounded diagnostic correctness,
+- bounded route-bound nonzero correctness,
+- real `attn_qo` zero-input route execution,
+- real `attn_qo` sampled nonzero route correctness,
+- route attribution split between the raw graph-GEMM oracle and the generated pipe primitive
+  (`prefill_wmma_pipe_primitive_generated`),
+- MVP artifact trace counters from the existing lifecycle tracer:
+  `global_load_b128=32`, `wmma=8`, `targeted_waitcnt=11`, `full_waitcnt=0`, generated route attribution true,
+- whole-prefill AMD smoke with the opt-in generated pipe primitive selected and reported as pure/not rolled back,
+- path1 mixed whole-prefill gate (`--path1-mvp`) passing on the existing whole-prefill harness,
+- all pipe roles passing the generated primitive artifact (`PATH1_PIPE_ALL_ROLES_PASS`),
+- AMD:ISA lifecycle coverage needed to get the existing whole-prefill harness through token embedding
+  (`u8` global access, unsigned widening/float casts, per-lane `SHL`/`SHR`/`OR`).
+
+Current blocker: whole-prefill AMD:ISA smoke now gets past model load and token embedding, but the first layer prefill
+JIT hits general dynamic `CDIV` from non-GEMM float/transcendental/index lifecycle code. This is outside the generated
+pipe GEMM primitive. Route-level `attn_qo` correctness is proven; whole-model AMD:ISA lifecycle is not yet covered.
+
+Remaining goal: keep the opt-in route artifact authoritative for real `attn_qo`, then choose the next expansion target:
+role coverage on the existing AMD backend, or broader AMD:ISA elementwise/dynamic-index coverage for full native
+lifecycle ownership.
+
+## Harness Rule
+
+Do not add another benchmark harness.
+
+Use only the existing harness surfaces:
+
+| Need | Existing surface |
+|---|---|
+| MVP result ledger | `extra/qk/prefill_pipe_mvp_artifact.py` |
+| whole-prefill smoke/authority | `extra/qk/prefill_whole_synced.py` |
+| lifecycle/stream structure | `extra/qk/prefill/kernel_lifecycle_trace.py` |
+| route-bound execution | `extra/qk/prefill_graph_gemm_route.py::route_pf16_graph_gemm` |
+| route purity/provenance | `extra/qk/pure_kernel_surface_audit.py` |
+
+Any new code should be a small extension to one of these surfaces, not a new runner.
+
+## Remaining Gates
+
+### R1. Real `attn_qo` Nonzero Correctness
+
+Run the real opt-in route:
+
+```text
+PREFILL_WMMA_PIPE_PRIMITIVE=1
+route_pf16_graph_gemm(attn_qo, M=512,N=4096,K=4096)
+```
+
+Correctness method:
+
+- compute full GPU output,
+- compute fp32 numpy reference only for sampled output columns,
+- require finite output, nonzero output, and sampled `rel_rmse <= 2e-2`.
+
+Why sampled reference: full fp32 CPU reference for `512x4096x4096` is unnecessary for an MVP gate and would make CPU time
+the bottleneck.
+
+Artifact:
+
+```text
+bench/prefill-pipe-mvp/latest.json
+```
+
+Current result: pass, finite/nonzero, sampled rel RMSE about `2.1e-4`, selected route
+`prefill_wmma_pipe_primitive_generated`, `uses_hand_pipe_oracle=false`.
+
+### R2. Real `attn_qo` Timing
+
+Record compile-included timing in the MVP artifact first. Only after correctness passes should we split warm timing.
+
+This is not a promotion benchmark yet. It answers whether the route runs and roughly where it sits.
+
+Current result: artifact records compile-included sample timing only. Treat it as route viability, not promotion speed.
+
+### R3. Whole-Prefill Smoke
+
+Use the existing whole-prefill harness:
+
+```sh
+PYTHONPATH=. PREFILL_V2=1 PREFILL_GRAPH_GEMM=1 PREFILL_WMMA_PIPE_PRIMITIVE=1 \
+  python3 extra/qk/prefill_whole_synced.py --mode smoke --artifact bench/prefill-whole-synced/pipe-mvp-smoke.json --json
+```
+
+This stays opt-in. Do not replace the oracle/default route yet.
+
+Current result:
+
+- `DEV=AMD PREFILL_V2=1 PREFILL_GRAPH_GEMM=1 PREFILL_WMMA_PIPE_PRIMITIVE=1 PREFILL_ROUTE=fp16
+  PREFILL_CHUNKED=0 --logits-only` is the required Path 1 entry. The previous `auto + chunked` smoke could report
+  the generated route id while actually selecting direct-packed Q4/Q6 at `route_prefill_linear` before entering
+  `route_pf16_graph_gemm`.
+- `DEV=AMD PREFILL_V2=1 PREFILL_GRAPH_GEMM=1 PREFILL_WMMA_PIPE_PRIMITIVE=1 PREFILL_CHUNKED=1 --logits-only`
+  is now treated as a rejected historical smoke, not a Path 1 proof. It reported about 219 tok/s and:
+  - `prefill_route_family=prefill_wmma_pipe_primitive_generated`,
+  - `prefill_route_pure=true`,
+  - `prefill_route_rolled_back=false`,
+  - `prefill_route_provenance=tinygrad_scheduler_generated`.
+- `DEV=AMD python3 extra/qk/prefill_whole_synced.py --mode smoke --path1-mvp` writes
+  `bench/prefill-whole-synced/path1-mixed-mvp-smoke.json` and reports `PATH1_MIXED_PREFILL_MVP_PASS`.
+- `PREFILL_CHUNKED=1 --logits-only` gets past model load and token embedding on AMD:ISA.
+- It blocks in first-layer JIT input realization on dynamic `CDIV` generated by non-GEMM lifecycle code.
+- This should not be treated as a pipe primitive failure; it is a broader AMD:ISA backend surface gap.
+
+### R4. Role Expansion
+
+After `attn_qo` correctness + smoke passes, run the all-pipe-role artifact:
+
+```sh
+PYTHONPATH=. DEV=AMD:ISA:gfx1100 PREFILL_GRAPH_GEMM=1 PREFILL_WMMA_PIPE_PRIMITIVE=1 \
+  python3 extra/qk/prefill_pipe_mvp_artifact.py --all-pipe-roles --sample-cols 16 --compact
+```
+
+Required roles:
+
+1. `attn_kv`
+2. `ffn_down`
+
+Keep `ffn_gate_up` on LDS oracle.
+
+Completion artifact:
+
+```text
+bench/prefill-pipe-mvp/path1-all-pipe-roles.json
+```
+
+Current result: `PATH1_PIPE_ALL_ROLES_PASS` for `attn_qo`, `attn_kv`, and `ffn_down`; `ffn_gate_up` remains excluded.
+
+### R5. Promotion Decision
+
+Promotion requires:
+
+- no hand `custom_kernel`/full-kernel `Ops.INS` transport for the selected role,
+- finite nonzero correctness,
+- lifecycle trace with b128 + WMMA + pipe wait shape,
+- whole-prefill smoke,
+- later, same-clock performance comparison against oracle.
+
+## Stop Conditions
+
+Stop if:
+
+- sampled `attn_qo` nonzero correctness fails,
+- full-shape route emits NaN/Inf,
+- whole-prefill smoke cannot route through the opt-in path,
+- performance is so slow that the generated transport clearly regresses below the existing generated default.
+
+Do not stop merely because:
+
+- timing is compile-included,
+- only `attn_qo` is covered,
+- `ffn_gate_up` remains hand/LDS oracle.

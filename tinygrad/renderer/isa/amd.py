@@ -10,23 +10,24 @@ ABI (from LLVM model): s[0:1]=kernarg ptr at entry; v0=workitem id; buffer ptrs 
 s_waitcnt drains after memory ops.
 """
 from __future__ import annotations
+from typing import NamedTuple
 from tinygrad.uop import FastEnum
-from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
+from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, AxisType, GroupOp
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import ISARenderer, IselContext, Register
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b128, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
-  s_mov_b32, s_add_i32, s_mul_i32, s_lshl_b32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, ds_load_b128, ds_store_b128, s_barrier,
+  s_mov_b32, s_add_i32, s_mul_i32, s_lshl_b32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
   # Phase G: full block-tile ALU/control surface
-  v_xor_b32_e32, v_and_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
-  v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32,
+  v_xor_b32_e32, v_and_b32_e32, v_or_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
+  v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32, v_cvt_f32_u32_e32, v_cvt_u32_f32_e32,
   v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
   ds_store_b16, ds_load_u16, v_exp_f32_e32,
   # Phase-1a: 16-bit global access for fp16 elements (b32 over-reads/writes 2 bytes past the last element -> MMU fault)
-  global_load_u16, global_store_b16,
+  global_load_u8, global_store_b8, global_load_u16, global_store_b16,
   # B0.L7: RDNA3 wave32 tensor-core multiply-accumulate D = A*B + C (fp16 in, fp32 out)
   v_wmma_f32_16x16x16_f16)
 from tinygrad.codegen.opt.tc import amd_rdna3
@@ -60,7 +61,18 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 # sizes VGPR to the highest reg used, so through THIS renderer the real ceiling is OCCUPANCY, not v238. So we keep A/B in
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
 FRAG_BASE, FRAG_TOP = 200, 238
-LDS_PACK_BASE = 238
+LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
+DBUF_D3A_AUDIT_LOG:list[dict] = []
+
+class LDSAddr(NamedTuple):
+  buf: UOp
+  dyn: UOp|None
+  const_half: int
+  const_bytes: int
+  itemsize: int
+  base_bytes: int
+  order: UOp|None
+  idx: UOp
 # B0.M: multi-output-tile C accumulators. A hand_coded M/N>16 upcasts the output into a WM x WN grid of 16x16 subtiles per
 # warp -> ONE reduce DEFINE_REG of vec width WM*WN*8, split by no_vectorized_wmma into WM*WN distinct Ops.WMMA each reading
 # an 8-lane accumulator slice. Each subtile needs its OWN fixed, contiguous, 8-aligned, loop-carried 8-VGPR run (v_wmma
@@ -143,10 +155,19 @@ def _n_ab_frags(ctx:IselContext) -> int:
     As, Bs = set(), set()
     for u in ctx.uses:
       if u.op is not Ops.WMMA: continue
+      if getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0):
+        if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
+          if bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1)) and \
+             (akey := (_wmma_frag_phase_reuse_key(ctx, "A", u.src[0]) or _wmma_frag_proof_reuse_key(ctx, "A", u.src[0]))) is not None: As.add(akey)
+          if bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_B", 1)) and \
+             (bkey := (_wmma_frag_phase_reuse_key(ctx, "B", u.src[1]) or _wmma_frag_proof_reuse_key(ctx, "B", u.src[1]))) is not None: Bs.add(bkey)
+        else:
+          As.add(_wmma_frag_reuse_key(u.src[0])); Bs.add(_wmma_frag_reuse_key(u.src[1]))
+        continue
       c2 = u.src[2]
       if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
          and (dr := _reg_base(c2.src[0].src[0].src[0])).op is Ops.DEFINE_REG and dr.dtype.addrspace == AddrSpace.REG:
-        As.add(id(u.src[0])); Bs.add(id(u.src[1]))
+        As.add(_wmma_frag_reuse_key(u.src[0])); Bs.add(_wmma_frag_reuse_key(u.src[1]))
     n = ctx._nabfrags = len(As) + len(Bs)
   return n
 def _ab_top(ctx:IselContext) -> int:
@@ -176,15 +197,20 @@ def _vpool(ctx:IselContext):
   # accumulators), so it is reclaimed to relieve pressure -> no spill. Single-tile keeps the legacy 3-fragment high
   # window [FRAG_BASE, FRAG_TOP) fully reserved (virtuals [lo, FRAG_BASE)), unchanged.
   lo = ACCUM_PIN_TOP if getenv("AMD_ISA_REG_ACCUM", 0) else 1
-  if not _has_wmma(ctx): return VBASE[lo:]
+  def reserve_lds_pack(pool:tuple[Register, ...]) -> tuple[Register, ...]:
+    if getenv("PREFILL_LDS_PACK_ALLOW_POOL", 0): return pool
+    top = LDS_PACK_TOP if (getenv("PREFILL_LDS_PACK_LATE_MATCHER", 0) or getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0)) else LDS_PACK_BASE
+    if top == LDS_PACK_BASE: return pool
+    return tuple(r for r in pool if not (LDS_PACK_BASE <= r.index < top))
+  if not _has_wmma(ctx): return reserve_lds_pack(VBASE[lo:])
   if _c_low(ctx):
     tail = VBASE[max(lo, _ab_top(ctx)):256]
     # Multi-output WMMA reserves v8.. for C/A/B fragments, but v1..v7 are just alignment padding.
     # Keep them available for short scalar scratch, especially the post-loop store epilogue, so it doesn't have to reuse
     # the high v200+ address/load scratch region immediately after the WMMA loop.
-    if getenv("AMD_ISA_WMMA_LOW_SCRATCH", 1): return VBASE[lo:WMMA_ACC_BASE] + tail
-    return tail
-  return VBASE[lo:FRAG_BASE]
+    if getenv("AMD_ISA_WMMA_LOW_SCRATCH", 1): return reserve_lds_pack(VBASE[lo:WMMA_ACC_BASE] + tail)
+    return reserve_lds_pack(tail)
+  return reserve_lds_pack(VBASE[lo:FRAG_BASE])
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
@@ -218,6 +244,11 @@ class AMDOps(FastEnum):
   DS_LOAD_B128 = 46                       # L4/LDS: direct 16-byte LDS fragment load into four packed fp16 VGPRs
   DS_STORE_B128 = 47                      # L4/LDS: direct 16-byte LDS fragment store from four packed fp16 VGPRs
   GATED_STORE_B128 = 48                   # EXEC-predicated ds_store_b128
+  DS_STORE_B64 = 49                       # WITH_LOCAL packed half.vec4 LDS store from two packed fp16 VGPRs
+  GATED_STORE_B64 = 50                    # EXEC-predicated ds_store_b64
+  V_OR = 51                               # b32 or
+  V_CVT_U2F = 52                           # unsigned int -> f32
+  V_CVT_F2U = 53                           # f32 -> unsigned int
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -393,17 +424,43 @@ def isel_index(ctx:IselContext, x:UOp):
     if dreg.dtype.addrspace == AddrSpace.REG and _n_threads(ctx) > 1:   # per-thread accumulator slot: + tid*per_thread_bytes
       per = dreg.dtype.size * isz
       addends.append(UOp(Ops.INS, dtypes.int32, src=(_tid(ctx), UOp.const(dtypes.int32, per).rtag()), arg=AMDOps.V_IMUL, tag=_vreg_def(ctx)))
-    if idx.op is Ops.CONST: const_off += idx.arg * isz
+    addr_deps = (base,) if getenv("PREFILL_DBUF_LDS_ADDR_USE_DEP", 0) else ()
+    idx_for_addr, imm_off = idx, 0
+    # Safe DBUF LDS folding splits INDEX(buf, dyn + const) into address(dyn) plus a byte-valued DS immediate candidate.
+    # The final DS op still rechecks field width/alignment and materializes V_IADD on any unencodable case.
+    unsafe_fold = bool(getenv("PREFILL_DBUF_LDS_CONST_IMM", 0) and getenv("PREFILL_DBUF_LDS_CONST_IMM_UNSAFE", 0))
+    if getenv("PREFILL_DBUF_LDS_CONST_IMM", 0) and not unsafe_fold and \
+       (safe := _safe_lds_const_imm(ctx, x, dreg, idx, base)) is not None:
+      idx_for_addr, imm_off = safe
+      if not getenv("PREFILL_DBUF_LDS_REGION_BASE_SPLIT", 0): const_off = 0
+    if idx_for_addr.op is Ops.CONST: const_off += idx_for_addr.arg * isz
     else:
-      vidx = _movs2v(ctx, idx) if _is_sgpr(idx) else idx     # SGPR-resident (counter / N1B uniform) -> VGPR
-      addends.append(UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)))
+      vidx = _movs2v(ctx, idx_for_addr) if _is_sgpr(idx_for_addr) else idx_for_addr     # SGPR-resident (counter / N1B uniform) -> VGPR
+      addends.append(UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()) + addr_deps, arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)))
+    if unsafe_fold and addends:
+      imm_off = const_off
+      const_off = 0
     if not addends:
       addr = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, const_off).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
     else:
       addr = addends[0]
-      for nxt in addends[1:]: addr = UOp(Ops.INS, dtypes.int32, src=(addr, nxt), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
-      if const_off: addr = UOp(Ops.INS, dtypes.int32, src=(addr, UOp.const(dtypes.int32, const_off).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
-    return UOp(Ops.NOOP, x.dtype, src=(addr, base), arg="lds")
+      for nxt in addends[1:]: addr = UOp(Ops.INS, dtypes.int32, src=(addr, nxt) + addr_deps, arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+      remat_dep = (idx,) if isinstance(idx.tag, tuple) and idx.tag[:1] == ("dbuf_lds_base_remat",) else ()
+      if const_off: addr = UOp(Ops.INS, dtypes.int32, src=(addr, UOp.const(dtypes.int32, const_off).rtag()) + addr_deps + remat_dep,
+                               arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    if getenv("PREFILL_DBUF_LDS_REGION_BASE_MEMO", 0) and imm_off:
+      memo = ctx._lds_region_base_memo = getattr(ctx, "_lds_region_base_memo", {})
+      # The LDS pointer/order carrier may include AFTER dependencies. Keep that identity in the key so a shared address
+      # never skips the dependency chain that keeps the corresponding LDS stage reachable and ordered.
+      mkey = (id(dreg), id(base), _lds_key_uop(idx_for_addr), const_off)
+      if mkey in memo: addr = memo[mkey]
+      else: memo[mkey] = addr
+    lds_tag = x.tag
+    if lds_tag is None:
+      btag_src = base
+      while btag_src.op in (Ops.AFTER, Ops.CAST) and btag_src.src: btag_src = btag_src.src[0]
+      if isinstance(btag_src.tag, tuple) and btag_src.tag[:1] == ("wmma_frag_buffer_proof",): lds_tag = btag_src.tag
+    return UOp(Ops.NOOP, x.dtype, src=(addr, base) + ((UOp.const(dtypes.int32, imm_off).rtag(),) if imm_off else ()), arg="lds", tag=lds_tag)
   isz = base.dtype.itemsize if isinstance(base.dtype, PtrDType) else 4
   shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
   if idx.op is Ops.CONST:
@@ -418,17 +475,22 @@ def isel_load(ctx:IselContext, x:UOp):
   # SCALARIZED vec load (Inc 0): a vec(N) LOAD becomes N independent scalar global_load_b32, one per lane, with the
   # per-lane element offset folded into the load's immediate (offset=lane*itemsize). vec4/b128 + consecutive-VGPR
   # allocation are deferred to Inc 1+. The N loads are wrapped in a NOOP lane-carrier consumed by GEP (lane extract).
-  if x.src[0].op is not Ops.NOOP: return None
   idxc = x.src[0]                            # NOOP(base_ptr, byte_offset) or LDS carrier (arg=="lds")
+  dep:tuple[UOp, ...] = ()
+  if idxc.op is Ops.AFTER:
+    idxc, dep = idxc.src[0], idxc.src[1:]
+  if idxc.op is not Ops.NOOP: return None
   if idxc.arg in ("accum", "wmma_acc"):      # read pinned/fragment accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
     # wmma_acc: this serves the POST-loop read (the in-loop src[2] reads are consumed directly in isel_wmma via the
     # in-place C fragment, so they never reach isel_load). order (src[0]) keeps the END/init chain reachable + ordered.
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
   if idxc.arg == "lds":                      # LDS load -> ds_load_b32 from the carrier's address VGPR (src[0]); src[1]=order
-    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
+    addr = idxc.src[0] if len(idxc.src) < 3 or idxc.src[2].arg == 0 else \
+      UOp(Ops.INS, dtypes.int32, src=(idxc.src[0], idxc.src[2]), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]) + dep, arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
-  loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()),
+  loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()) + dep,
                     arg=AMDOps.GLOBAL_LOAD, tag=(ctx.vreg(_vpool(ctx)),)) for l in range(n))
   return loads[0] if n == 1 else UOp(Ops.NOOP, x.dtype, src=loads)
 
@@ -448,12 +510,41 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   if a.arg == "accum":                        # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
+    stolen_stages = getattr(ctx, "_dbuf_stolen_stage_stores", set()) if ctx is not None else set()
+    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
+      DBUF_D3A_AUDIT_LOG.append({"kind": "store_lower_key", "gated": False, "id": id(x),
+                                 "op": x.op.name, "src0_op": x.src[0].op.name if x.src else None,
+                                 "a0": repr(a.src[0])[:160] if a.src else None,
+                                 "key": repr(_dbuf_stage_store_key(x)), "addr_key": repr(_dbuf_stage_addr_key(a)),
+                                 "value_key": repr(_dbuf_stage_value_key(x)),
+                                 "epoch_key": repr(_dbuf_stage_epoch_key_for_store(ctx, x, a)),
+                                 "slot": _dbuf_lowered_lds_slot(a),
+                                 "stolen_count": len(stolen_stages)})
+    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
+       (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS", 0) and \
+       (id(x) in stolen_stages or _dbuf_stage_store_stolen(stolen_stages, x) or _dbuf_stage_addr_key(a) in stolen_stages or
+        any(k in stolen_stages for k in _dbuf_lowered_lds_slot_keys(a))):
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    if ctx is not None and _n_workitem_dims(ctx) > 1 and str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() in ("a", "both", "1", "true", "yes") and \
+       getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0) and not getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and \
+       not getenv("PREFILL_TC_LOCAL_STAGE_A_MULTIDIM_UNSAFE", 0):
+      raise NotImplementedError("A WITH_LOCAL staging needs a multi-dim LDS key")
+    lds_imm = a.src[2].arg if len(a.src) >= 3 else 0
+    if (direct := _withlocal_b128_store(ctx, a, b)) is not None:
+      return direct
     if (bdata := _lds_b128_store_data(ctx, b)) is not None:
       # Fail-closed: require explicit packed VGPR data for DS_STORE_B128.
-      return UOp(Ops.INS, dtypes.void, src=(a.src[0],) + bdata + (a.src[1], UOp.const(dtypes.int32, 0).rtag()), arg=AMDOps.DS_STORE_B128)
+      addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
+      return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b128_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.DS_STORE_B128)
+    if (bdata := _lds_b64_store_data(ctx, b)) is not None:
+      addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 8)
+      return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b64_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.DS_STORE_B64)
     esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
     if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
-    return UOp(Ops.INS, dtypes.void, src=(a.src[0], b, a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.DS_STORE)  # addr,data,order,esz
+    addr = a.src[0] if lds_imm == 0 else UOp(Ops.INS, dtypes.int32, src=(a.src[0], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, dtypes.void, src=(addr, b, a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.DS_STORE)  # addr,data,order,esz
   base, off = a.src[0], a.src[1]
   vals = b.src if (b.op is Ops.NOOP and not isinstance(b.dtype, PtrDType)) else (b,)   # STACK lane-carrier -> per-lane vals
   isz = vals[0].dtype.scalar().itemsize
@@ -492,10 +583,23 @@ def isel_cast(ctx:IselContext, x:UOp):
   s, d = x.src[0].dtype.scalar(), x.dtype.scalar()
   if s == d: return x.src[0]
   # value-preserving register reinterprets for our index ranges (64-bit treated as 32-bit; bool is 0/1)
-  if (s, d) in {(dtypes.long, dtypes.int), (dtypes.int, dtypes.long), (dtypes.bool, dtypes.int), (dtypes.int, dtypes.bool)}:
+  if (s, d) in {(dtypes.long, dtypes.int), (dtypes.int, dtypes.long), (dtypes.bool, dtypes.int), (dtypes.int, dtypes.bool),
+                (dtypes.uint, dtypes.int), (dtypes.int, dtypes.uint)}:
     return x.src[0]
+  if (s, d) in {(dtypes.uchar, dtypes.ushort), (dtypes.uchar, dtypes.uint), (dtypes.ushort, dtypes.uint), (dtypes.uint, dtypes.ulong)}:
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (s.itemsize * 8)) - 1).rtag()),
+               arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+  if (s, d) == (dtypes.ulong, dtypes.uint):
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << 32) - 1).rtag()),
+               arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+  if s in (dtypes.uchar, dtypes.ushort, dtypes.uint, dtypes.ulong) and d in (dtypes.float32, dtypes.half):
+    zext = UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (s.itemsize * 8)) - 1).rtag()),
+               arg=AMDOps.V_AND, tag=_vreg_def(ctx)) if s in (dtypes.uchar, dtypes.ushort) else _tov(ctx, x.src[0])
+    as_float = UOp(Ops.INS, dtypes.float32, src=(zext,), arg=AMDOps.V_CVT_U2F, tag=_vreg_def(ctx))
+    return as_float if d is dtypes.float32 else UOp(Ops.INS, x.dtype, src=(as_float,), arg=AMDOps.V_CVT_F2H, tag=_vreg_def(ctx))
   cvt = {(dtypes.float32, dtypes.half): AMDOps.V_CVT_F2H, (dtypes.half, dtypes.float32): AMDOps.V_CVT_H2F,
          (dtypes.float32, dtypes.int): AMDOps.V_CVT_F2I, (dtypes.int, dtypes.float32): AMDOps.V_CVT_I2F,
+         (dtypes.float32, dtypes.uint): AMDOps.V_CVT_F2U, (dtypes.float32, dtypes.ulong): AMDOps.V_CVT_F2U,
          (dtypes.bool, dtypes.float32): AMDOps.V_CVT_I2F}.get((s, d))
   if cvt is None: raise NotImplementedError(f"AMD:ISA CAST {s} -> {d} unsupported")
   return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=cvt, tag=_vreg_def(ctx))
@@ -509,12 +613,26 @@ def isel_cmp(ctx:IselContext, x:UOp, ne:bool):
 def isel_where(ctx:IselContext, x:UOp):  # cond(0/1) ? t : f
   return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1]), _tov(ctx, x.src[2])), arg=AMDOps.V_WHERE, tag=_vreg_def(ctx))
 
+def _const_int_value(u:UOp) -> int|None:
+  while u.op in (Ops.CAST, Ops.BITCAST) and u.src: u = u.src[0]
+  if u.op is Ops.CONST: return int(u.arg)
+  if len(u.src) == 2 and (a:=_const_int_value(u.src[0])) is not None and (b:=_const_int_value(u.src[1])) is not None:
+    if u.op is Ops.MUL: return a * b
+    if u.op is Ops.ADD: return a + b
+    if u.op is Ops.SHL: return a << b
+  return None
+
 def isel_divmod(ctx:IselContext, x:UOp, mod:bool):  # only constant power-of-two divisors (verified: tile uses /2, %2)
+  b = _const_int_value(x.src[1])
+  if not (b is not None and b > 0 and (b & (b - 1)) == 0):
+    raise NotImplementedError(f"AMD:ISA {'CMOD' if mod else 'CDIV'} non-pow2 divisor {b if b is not None else repr(x.src[1])[:240]}")
+  if mod: return UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, b - 1).rtag()), arg=AMDOps.V_AND, tag=None)
+  return UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, b.bit_length() - 1).rtag()), arg=AMDOps.V_LSHR, tag=None)
+
+def isel_shift(ctx:IselContext, x:UOp, left:bool):
   b = x.src[1]
-  if not (b.op is Ops.CONST and b.arg > 0 and (b.arg & (b.arg - 1)) == 0):
-    raise NotImplementedError(f"AMD:ISA {'CMOD' if mod else 'CDIV'} non-pow2 divisor {b.arg if b.op is Ops.CONST else b.op}")
-  if mod: return UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, b.arg - 1).rtag()), arg=AMDOps.V_AND, tag=None)
-  return UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, b.arg.bit_length() - 1).rtag()), arg=AMDOps.V_LSHR, tag=None)
+  if b.op is not Ops.CONST: raise NotImplementedError(f"AMD:ISA {'SHL' if left else 'SHR'} non-const shift")
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), b.rtag()), arg=AMDOps.V_OFFSET if left else AMDOps.V_LSHR, tag=_vreg_def(ctx))
 
 def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
   # store(addr, val, gate) -> EXEC-predicated store: only lanes with gate!=0 write. kind const: 1=LDS, 0=global.
@@ -522,10 +640,33 @@ def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
   esz = b.dtype.itemsize   # element width (half=2/float=4) from the value dtype, known here (lowered INS srcs are void)
   gate = _tov(ctx, g)
   if a.arg == "lds":   # src = (gate, addr_vgpr, val, kind=1, order, esz)
+    stolen_stages = getattr(ctx, "_dbuf_stolen_stage_stores", set()) if ctx is not None else set()
+    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
+      DBUF_D3A_AUDIT_LOG.append({"kind": "store_lower_key", "gated": True, "id": id(x),
+                                 "op": x.op.name, "src0_op": x.src[0].op.name if x.src else None,
+                                 "a0": repr(a.src[0])[:160] if a.src else None,
+                                 "key": repr(_dbuf_stage_store_key(x)), "addr_key": repr(_dbuf_stage_addr_key(a)),
+                                 "value_key": repr(_dbuf_stage_value_key(x)),
+                                 "epoch_key": repr(_dbuf_stage_epoch_key_for_store(ctx, x, a)),
+                                 "slot": _dbuf_lowered_lds_slot(a),
+                                 "stolen_count": len(stolen_stages)})
+    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
+       (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS", 0) and \
+       (id(x) in stolen_stages or _dbuf_stage_store_stolen(stolen_stages, x) or _dbuf_stage_addr_key(a) in stolen_stages or
+        any(k in stolen_stages for k in _dbuf_lowered_lds_slot_keys(a))):
+      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+    lds_imm = a.src[2].arg if len(a.src) >= 3 else 0
     if (bdata := _lds_b128_store_data(ctx, b)) is not None:
-      return UOp(Ops.INS, dtypes.void, src=(gate, a.src[0]) + bdata + (a.src[1], UOp.const(dtypes.int32, 0).rtag()), arg=AMDOps.GATED_STORE_B128)
+      addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
+      return UOp(Ops.INS, dtypes.void, src=(gate, addr) + bdata + _lds_b128_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.GATED_STORE_B128)
+    if (bdata := _lds_b64_store_data(ctx, b)) is not None:
+      addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 8)
+      return UOp(Ops.INS, dtypes.void, src=(gate, addr) + bdata + _lds_b64_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.GATED_STORE_B64)
     val = _tov(ctx, b)
-    return UOp(Ops.INS, dtypes.void, src=(gate, a.src[0], val, UOp.const(dtypes.int32, 1).rtag(), a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)
+    addr = a.src[0] if lds_imm == 0 else UOp(Ops.INS, dtypes.int32, src=(a.src[0], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, dtypes.void, src=(gate, addr, val, UOp.const(dtypes.int32, 1).rtag(), a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)
   val = _tov(ctx, b)
   return UOp(Ops.INS, dtypes.void, src=(gate, a.src[1], val, UOp.const(dtypes.int32, 0).rtag(), a.src[0], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)  # (gate,off,val,kind=0,base,esz)
 
@@ -556,24 +697,294 @@ def _wmma_elems(carrier:UOp, n:int):
 def _fixed_vgpr_index(u:UOp) -> int|None:
   return u.tag[0].index if isinstance(u.tag, tuple) and len(u.tag) == 1 and isinstance(u.tag[0], Register) else None
 
+def _constrained_vgpr_index(u:UOp) -> int|None:
+  if not (isinstance(u.tag, tuple) and len(u.tag) == 1 and isinstance(u.tag[0], Register)): return None
+  cons = u.tag[0].cons
+  return cons[0].index if len(cons) == 1 else None
+
 def _fixed_contiguous_vgpr4(us:tuple[UOp, ...]) -> bool:
   return len(us) == 4 and (b := _fixed_vgpr_index(us[0])) is not None and [_fixed_vgpr_index(u) for u in us] == list(range(b, b + 4))
 
 def _lds_b128_store_data(ctx:IselContext|None, u:UOp) -> tuple[UOp, ...]|None:
   """Return the 4-wide VGPR data span for a packed LDS store, or None (fail-closed)."""
+  if u.op is Ops.AFTER and u.src:
+    u = u.src[0]
   if isinstance(u.dtype, PtrDType):
     return None
   if u.op is Ops.NOOP and u.dtype.count == 4 and u.dtype.scalar().itemsize == 4 and _fixed_contiguous_vgpr4(u.src):
     return tuple(u.src)
-  if ctx is not None and u.op is Ops.NOOP and u.dtype.count == 8 and u.dtype.scalar() is dtypes.half and len(u.src) == 8:
+  if u.op is Ops.NOOP and u.dtype.count == 4 and u.dtype.scalar().itemsize == 4 and \
+     all(s.op is Ops.INS and s.arg is AMDOps.V_PACK and s.dtype is dtypes.int32 for s in u.src):
+    if ctx is not None and getenv("PREFILL_DBUF_D3A_POST", 0) and getenv("PREFILL_DBUF_D3A_STAGE_B", 1):
+      return tuple(UOp(Ops.INS, dtypes.int32, src=s.src, arg=AMDOps.V_PACK, tag=_pin(LDS_PACK_BASE, i)) for i, s in enumerate(u.src))
+    if ctx is not None:
+      vals = tuple(v for p in u.src for v in p.src[:2])
+      if len(vals) == 8 and (idx := _global_half8_base(vals)) is not None:
+        deps = tuple(v for p in u.src for v in p.src[2:])
+        idx = _index_after_dep(idx, deps[-1]) if deps else idx
+        idxc = isel_index(ctx, idx)
+        if idxc is not None and idxc.op is Ops.NOOP and idxc.arg != "lds" and len(idxc.src) == 2:
+          ptr, off = idxc.src
+          return (UOp(Ops.INS, dtypes.int32, src=(off, ptr, UOp.const(dtypes.int32, 0).rtag()) + deps,
+                      arg=AMDOps.GLOBAL_LOAD_B128, tag=_pin(LDS_PACK_BASE, 0)),)
+    ordered = tuple(sorted(u.src, key=lambda s: (_constrained_vgpr_index(s) is None, _constrained_vgpr_index(s) or 0)))
+    if (b := _constrained_vgpr_index(ordered[0])) is None or [_constrained_vgpr_index(s) for s in ordered] != list(range(b, b + 4)):
+      if ctx is None or LDS_PACK_BASE + 4 > LDS_PACK_TOP: return None
+      return tuple(UOp(Ops.INS, dtypes.int32, src=s.src, arg=AMDOps.V_PACK, tag=_pin(LDS_PACK_BASE, i)) for i, s in enumerate(u.src))
+    return ordered
+  if ctx is not None and u.op is Ops.NOOP and isinstance(u.arg, tuple) and len(u.arg) == 2 and u.arg[0] == "global_b128":
+    deps = _lds_b128_store_deps(u)
+    idx = _index_after_dep(u.arg[1], deps[-1]) if deps else u.arg[1]
+    idxc = isel_index(ctx, idx)
+    if idxc is None or idxc.op is not Ops.NOOP or idxc.arg == "lds" or len(idxc.src) != 2: return None
+    ptr, off = idxc.src
+    return (UOp(Ops.INS, dtypes.int32, src=(off, ptr, UOp.const(dtypes.int32, 0).rtag()) + deps,
+                arg=AMDOps.GLOBAL_LOAD_B128, tag=_pin(LDS_PACK_BASE, 0)),)
+  if ctx is not None and u.op in (Ops.NOOP, Ops.STACK) and u.dtype.count == 8 and u.dtype.scalar() is dtypes.half and len(u.src) >= 8:
+    if not all(s.dtype is dtypes.half for s in u.src[:8]): return None
+    if getenv("PREFILL_LDS_PACK_B_TILEKEY_DUMP", 0):
+      print("B_TILEKEY_PAYLOAD", [(None if (a := _wmma_half_addr(s)) is None else a[3]) for s in u.src[:8]])
+    base = LDS_PACK_BASE
+    if base + 4 > LDS_PACK_TOP: return None
     return tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, u.src[2*i]), _tov(ctx, u.src[2*i+1])),
-                     arg=AMDOps.V_PACK, tag=_pin(LDS_PACK_BASE, i)) for i in range(4))
+                     arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(4))
   # Wide producers can already encode 4-reg spans as a single INS.
   if u.op is Ops.INS and u.arg in (AMDOps.GLOBAL_LOAD_B128, AMDOps.DS_LOAD_B128) and u.dtype is dtypes.int32:
     if _fixed_vgpr_index(u) is None:
       return None
     return (u,)
   return None
+
+def _lds_b128_store_deps(u:UOp) -> tuple[UOp, ...]:
+  if u.op is Ops.AFTER and u.src:
+    return u.src[1:] + _lds_b128_store_deps(u.src[0])
+  if u.op is Ops.NOOP and isinstance(u.arg, tuple) and len(u.arg) == 2 and u.arg[0] == "global_b128":
+    return u.src[1:]
+  return u.src[8:] if u.op in (Ops.NOOP, Ops.STACK) and u.dtype.count == 8 and u.dtype.scalar() is dtypes.half and len(u.src) > 8 else ()
+
+def _lds_b64_store_data(ctx:IselContext|None, u:UOp) -> tuple[UOp, ...]|None:
+  if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B64", 0) or ctx is None or isinstance(u.dtype, PtrDType):
+    return None
+  if u.op is not Ops.NOOP or u.dtype.count != 4 or u.dtype.scalar() is not dtypes.half or len(u.src) < 4:
+    return None
+  if not all(s.dtype is dtypes.half for s in u.src[:4]):
+    return None
+  base = LDS_PACK_BASE
+  if base + 2 > LDS_PACK_TOP:
+    return None
+  return tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, u.src[2*i]), _tov(ctx, u.src[2*i+1])),
+                   arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(2))
+
+def _lds_b64_store_deps(u:UOp) -> tuple[UOp, ...]:
+  return u.src[4:] if u.op is Ops.NOOP and u.dtype.count == 4 and u.dtype.scalar() is dtypes.half and len(u.src) > 4 else ()
+
+def _ins_const_add(x:UOp) -> int|None:
+  if x.op is Ops.CONST: return int(x.arg)
+  if x.op is Ops.INS and x.arg is AMDOps.V_IADD:
+    a, b = _ins_const_add(x.src[0]), _ins_const_add(x.src[1])
+    if a is not None and b is not None: return a + b
+    if a is not None: return a
+    if b is not None: return b
+    return 0
+  return 0
+
+def _lds_addr_const_words(addr:UOp) -> int|None:
+  if addr.op is not Ops.INS or addr.arg is not AMDOps.V_OFFSET or len(addr.src) < 2: return None
+  if addr.src[1].op is not Ops.CONST or addr.src[1].arg != 1: return None
+  return _ins_const_add(addr.src[0])
+
+def _lds_imm_bytes(a:UOp) -> int:
+  return int(a.src[2].arg) if len(a.src) >= 3 and a.src[2].op is Ops.CONST else 0
+
+def _ds_imm_fits(imm:int) -> bool:
+  return 0 <= imm <= 0xff
+
+def _ds_addr_imm(ctx:IselContext, addr:UOp, imm:int, align:int=1) -> tuple[UOp, int]:
+  if _ds_imm_fits(imm) and (imm % align == 0 or getenv("PREFILL_DBUF_LDS_CONST_IMM_UNSAFE", 0)): return addr, imm
+  return UOp(Ops.INS, dtypes.int32, src=(addr, UOp.const(dtypes.int32, imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx)), 0
+
+def _safe_lds_const_imm(ctx:IselContext, idx_uop:UOp, dreg:UOp, idx:UOp, order:UOp|None=None) -> tuple[UOp, int]|None:
+  desc = decompose_lds_index(ctx, idx_uop, order)
+  if desc is None or desc.buf is not dreg or desc.dyn is None: return None
+  dyn, const_elems = _const_base(idx)
+  if dyn is not desc.dyn or desc.const_bytes != desc.base_bytes + const_elems * desc.itemsize: return None
+  if getenv("PREFILL_DBUF_LDS_REGION_BASE_SPLIT", 0):
+    return desc.dyn, desc.const_bytes - desc.base_bytes
+  return desc.dyn, desc.const_bytes
+
+def _fold_lds_addr_imm(ctx:IselContext, addr:UOp) -> tuple[UOp, int]:
+  if addr.op is not Ops.INS or addr.arg is not AMDOps.V_OFFSET or len(addr.src) < 2 or addr.src[1].op is not Ops.CONST:
+    return addr, 0
+  add = addr.src[0]
+  if add.op is not Ops.INS or add.arg is not AMDOps.V_IADD or len(add.src) < 2:
+    return addr, 0
+  lhs, rhs = add.src[0], add.src[1]
+  if rhs.op is Ops.CONST: base, const = lhs, int(rhs.arg)
+  elif lhs.op is Ops.CONST: base, const = rhs, int(lhs.arg)
+  else: return addr, 0
+  return UOp(Ops.INS, addr.dtype, src=(base, addr.src[1]) + addr.src[2:], arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)), const << int(addr.src[1].arg)
+
+def _withlocal_b128_store(ctx:IselContext, a:UOp, b:UOp) -> UOp|None:
+  if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): return None
+  if getenv("PREFILL_LDS_PACK_WITHLOCAL_B128_GROUP_ONLY", 0): return None
+  stage_mode = str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower()
+  if _n_workitem_dims(ctx) > 1 and stage_mode in ("a", "both", "1", "true", "yes") and \
+     not getenv("PREFILL_LDS_PACK_WITHLOCAL_MULTIDIM_UNSAFE", 0): return None
+  if b.op is not Ops.NOOP or b.dtype.count != 4 or b.dtype.scalar() is not dtypes.half or len(b.src) != 4: return None
+  if (slot := _lds_addr_const_words(a.src[0])) is None: return None
+  slot += _lds_imm_bytes(a) // 2
+  if slot % 8 == 4:
+    return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
+  if slot % 8 != 0: return None
+  if not all(s.op is Ops.INS and s.arg is AMDOps.GLOBAL_LOAD and s.dtype is dtypes.half and len(s.src) == 3 for s in b.src): return None
+  off, ptr = b.src[0].src[0], b.src[0].src[1]
+  if any(s.src[0] is not off or s.src[1] is not ptr or s.src[2].op is not Ops.CONST or s.src[2].arg != i*2 for i, s in enumerate(b.src)):
+    return None
+  deps = ()
+  addr = a.src[0]
+  imm = _lds_imm_bytes(a)
+  if getenv("PREFILL_DBUF_LDS_STORE_IMM_FOLD", 0):
+    addr, imm_add = _fold_lds_addr_imm(ctx, addr)
+    imm += imm_add
+  if getenv("PREFILL_DBUF", 0) and getenv("PREFILL_DBUF_LDS_STORE_BASE_SPLIT", 0):
+    addr = _split_store_final_const_add(ctx, addr)
+  if getenv("PREFILL_DBUF_DIRECT_B128_CHAIN", 0):
+    prev = getattr(ctx, "_withlocal_b128_prev", None)
+    deps = (prev,) if prev is not None else ()
+    off = _addr_ins_after_dep(ctx, off, prev)
+    if getenv("PREFILL_DBUF_DIRECT_B128_ADDR_REMAT", 0): addr = _addr_ins_after_dep(ctx, addr, prev)
+  ld = UOp(Ops.INS, dtypes.int32, src=(off, ptr, UOp.const(dtypes.int32, 0).rtag()) + deps,
+           arg=AMDOps.GLOBAL_LOAD_B128, tag=_pin(LDS_PACK_BASE, 0))
+  addr, imm = _ds_addr_imm(ctx, addr, imm, 16)
+  st = UOp(Ops.INS, dtypes.void, src=(addr, ld) + deps + (a.src[1], UOp.const(dtypes.int32, imm).rtag()),
+           arg=AMDOps.DS_STORE_B128)
+  if getenv("PREFILL_DBUF_DIRECT_B128_CHAIN", 0): ctx._withlocal_b128_prev = st
+  return st
+
+def _after_load_addr(u:UOp, dep:UOp|None) -> UOp:
+  if dep is None: return u
+  if u.op is Ops.GEP and u.src and u.src[0].op is Ops.LOAD:
+    return u.replace(src=(_after_load_addr(u.src[0], dep),))
+  if u.op is not Ops.LOAD: return u
+  addr = u.src[0]
+  if addr.op is Ops.CAST and addr.src and addr.src[0].op is Ops.INDEX:
+    return u.replace(src=(addr.replace(src=(addr.src[0].after(dep),)),) + u.src[1:])
+  if addr.op is Ops.INDEX:
+    return u.replace(src=(addr.after(dep),) + u.src[1:])
+  return u
+
+def _index_after_dep(idx:UOp, dep:UOp|None) -> UOp:
+  if dep is None or idx.op is not Ops.INDEX or not idx.src: return idx
+  return idx.replace(src=(idx.src[0].after(dep),) + idx.src[1:])
+
+def _split_dbuf_lds_index(idx:UOp, role:str) -> UOp:
+  if not (getenv("PREFILL_DBUF", 0) and getenv("PREFILL_DBUF_LDS_INDEX_SPLIT", 0)): return idx
+  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or len(idx.src) < 2: return idx
+  tag = ("dbuf_lds_index_split", role, id(idx), id(idx.src[1]))
+  def clone_expr(x:UOp) -> UOp:
+    if x.op in (Ops.ADD, Ops.MUL, Ops.SHL, Ops.AND):
+      return x.replace(src=tuple(clone_expr(s) for s in x.src), tag=("dbuf_lds_expr_split", role, id(x)))
+    return x
+  expr = clone_expr(idx.src[1])
+  return idx.replace(src=(idx.src[0], expr) + idx.src[2:], tag=tag)
+
+def _addr_ins_after_dep(ctx:IselContext, u:UOp, dep:UOp|None) -> UOp:
+  if dep is None or u.op is not Ops.INS or u.arg not in (AMDOps.V_OFFSET, AMDOps.V_IADD): return u
+  return UOp(Ops.INS, u.dtype, src=tuple(_addr_ins_after_dep(ctx, s, dep) for s in u.src[:2]) + (dep,),
+             arg=u.arg, tag=_vreg_def(ctx))
+
+def _global_half8_base(vals:tuple[UOp, ...]) -> UOp|None:
+  addrs = [_wmma_half_addr(v) for v in vals]
+  if any(a is None for a in addrs): return None
+  idx0, ptr0, expr0, c0 = addrs[0]
+  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
+  return idx0
+
+def decompose_lds_index(ctx:IselContext, idx:UOp, order:UOp|None=None) -> LDSAddr|None:
+  if idx.op is Ops.CAST and idx.src: idx = idx.src[0]
+  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or len(idx.src) < 2: return None
+  ptr = idx.src[0]
+  if not isinstance(ptr.dtype, PtrDType) or ptr.dtype.addrspace == AddrSpace.GLOBAL: return None
+  itemsize = ptr.dtype.base.itemsize
+  if itemsize <= 0: return None
+  buf = _reg_base(ptr)
+  dyn, const_elems = _const_base(idx.src[1])
+  base_bytes = _lds_byte_offset(ctx, buf)
+  const_bytes = base_bytes + const_elems * itemsize
+  if const_bytes % 2 != 0: return None
+  return LDSAddr(buf, dyn, const_bytes // 2, const_bytes, itemsize, base_bytes, order, idx)
+
+def _lds_key_uop(u:UOp):
+  if u.op is Ops.AFTER and u.src: return _lds_key_uop(u.src[0])
+  if u.op is Ops.CAST and u.src: return _lds_key_uop(u.src[0])
+  if u.op is Ops.CONST: return (u.op.name, u.dtype, u.arg)
+  if u.op is Ops.SPECIAL: return (u.op.name, u.arg)
+  return (u.op.name, u.dtype, u.arg, tuple(_lds_key_uop(s) for s in u.src))
+
+def _lds_proof_key(idx:UOp, width:int) -> tuple|None:
+  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or len(idx.src) < 2: return None
+  base_expr, const = _const_base(idx.src[1])
+  if base_expr is None: return None
+  return (_lds_key_uop(idx.src[0]), _lds_key_uop(base_expr), const, width)
+
+def _dump_lds_proof_key(role:str, idx:UOp, width:int, extra:dict|None=None, ctx:IselContext|None=None, order:UOp|None=None) -> None:
+  if not getenv("PREFILL_DBUF_LDS_PROOF_KEY_DUMP", 0): return
+  key = _lds_proof_key(idx, width)
+  base_expr, const = _const_base(idx.src[1]) if idx.op is Ops.INDEX and len(idx.src) >= 2 else (None, None)
+  desc = decompose_lds_index(ctx, idx, order) if ctx is not None else None
+  print("LDS_PROOF_KEY", {"role": role, "key": key, "const": const, "width": width,
+                          "buf_id": None if idx.op is not Ops.INDEX else id(idx.src[0]),
+                          "base_id": None if base_expr is None else id(base_expr),
+                          "base": None if base_expr is None else str(base_expr)[:240],
+                          "desc": None if desc is None else {"buf_id": id(desc.buf),
+                                                             "dyn_id": None if desc.dyn is None else id(desc.dyn),
+                                                             "const_half": desc.const_half,
+                                                             "const_bytes": desc.const_bytes,
+                                                             "itemsize": desc.itemsize,
+                                                             "base_bytes": desc.base_bytes,
+                                                             "has_order": desc.order is not None},
+                          **(extra or {})})
+
+def _load_vec4_index(v:UOp) -> UOp|None:
+  if v.op is not Ops.LOAD or v.dtype.count != 4 or v.dtype.scalar() is not dtypes.half: return None
+  idx = v.src[0].src[0] if v.src[0].op is Ops.CAST else v.src[0]
+  return idx if idx.op is Ops.INDEX and idx.src[1].op is not Ops.CONST else None
+
+def _tc_stage_tag(u:UOp|None):
+  tag = None if u is None else u.tag
+  return tag if isinstance(tag, tuple) and tag[:1] == ("tc_local_stage_store",) else None
+
+def _tc_stage_tag_from_buffer(idx:UOp|None, local_const:int, width:int):
+  tag = None if idx is None else idx.tag
+  if not (isinstance(tag, tuple) and tag[:1] == ("wmma_frag_buffer_proof",)): return None
+  try: meta = dict(tag[1:])
+  except Exception: return None
+  return ("tc_local_stage_store", meta.get("role"), meta.get("lds_buffer_id"), local_const, width)
+
+def _retag_tc_stage_store(st:UOp, tag) -> UOp:
+  return st.replace(tag=tag) if tag is not None else st
+
+def _retag_tc_stage_index(idx:UOp, tag) -> UOp:
+  return idx.replace(tag=tag) if tag is not None else idx
+
+def _local_vec4_store_info(st:UOp):
+  if st.op is not Ops.STORE or len(st.src) != 2: return None
+  stage_tag = _tc_stage_tag(st)
+  idx, val = st.src
+  idx = idx.src[0] if idx.op is Ops.CAST else idx
+  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or idx.dtype.base is not dtypes.half: return None
+  if val.op is not Ops.LOAD or val.dtype.count != 4 or val.dtype.scalar() is not dtypes.half: return None
+  base_expr, local_const = _const_base(idx.src[1])
+  gidx = _load_vec4_index(val)
+  if base_expr is None or gidx is None: return None
+  gbase_expr, global_const = _const_base(gidx.src[1])
+  if gbase_expr is None: return None
+  return idx, val, base_expr, local_const, gidx, gidx.src[0], gbase_expr, global_const, stage_tag
+
+def _has_local_axis(x:UOp) -> bool:
+  if x.op is Ops.RANGE and isinstance(x.arg, tuple) and x.arg[-1] is AxisType.LOCAL: return True
+  if x.op is Ops.SPECIAL and str(x.arg).startswith("lidx") and str(x.arg) != "lidx0": return True
+  return any(_has_local_axis(s) for s in x.src)
 
 def _const_base(x:UOp) -> tuple[UOp|None, int]:
   if x.op is Ops.CONST: return None, int(x.arg)
@@ -594,21 +1005,375 @@ def _wmma_half_addr(e:UOp):
   if base_expr is None: return None
   return idx, idx.src[0], base_expr, const + lane
 
-def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp,...]=()) -> tuple[UOp,...]|None:
+def _wmma_frag_addr_key(carrier:UOp) -> tuple|None:
+  # Experimental A/B residency key. The generated LDS path can clone
+  # equivalent row/column carriers, making id(carrier) too fine-grained and
+  # forcing per-subtile reloads. When all 16 lanes are a contiguous memory
+  # fragment, key by the source address structure instead.
+  if not getenv("PREFILL_WMMA_AB_ADDR_KEY", 0): return None
+  try: elems = _wmma_elems(carrier, 16)
+  except Exception: return None
+  addrs = [_wmma_half_addr(e) for e in elems]
+  if any(a is None for a in addrs): return None
+  _idx0, ptr0, expr0, c0 = addrs[0]
+  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
+  return (_lds_key_uop(ptr0), _lds_key_uop(expr0), c0)
+
+def _wmma_frag_proof_reuse_key(ctx:IselContext, role:str, carrier:UOp) -> tuple|None:
+  try: elems = _wmma_elems(carrier, 16)
+  except Exception: return None
+  addrs = [_wmma_half_addr(e) for e in elems]
+  if any(a is None for a in addrs): return None
+  idx0, ptr0, expr0, c0 = addrs[0]
+  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
+  proof = _wmma_frag_proof_from_elem(elems[0])
+  desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
+  if proof is None:
+    proof = _wmma_frag_buffer_proof_from_elem(elems[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
+  if proof is None: return None
+  required = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_len", "producer_epoch", "overwrite_epoch")
+  if proof.get("role") != role or any(proof.get(k) is None for k in required): return None
+  return tuple((k, proof[k]) for k in required)
+
+def _wmma_frag_phase_reuse_key(ctx:IselContext, role:str, carrier:UOp) -> tuple|None:
+  if not getenv("PREFILL_WMMA_AB_PHASE_SCOPED_KEY", 0): return None
+  try: elems = _wmma_elems(carrier, 16)
+  except Exception: return None
+  addrs = [_wmma_half_addr(e) for e in elems]
+  if any(a is None for a in addrs): return None
+  idx0, ptr0, expr0, c0 = addrs[0]
+  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
+  desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
+  proof = _wmma_frag_proof_from_elem(elems[0])
+  if proof is None:
+    proof = _wmma_frag_buffer_proof_from_elem(elems[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
+  if proof is None or desc is None or proof.get("role") != role: return None
+  if getenv("PREFILL_WMMA_PHASE_EXACT_WINDOW", 0):
+    return (("role", role), ("lds_buffer_id", proof.get("lds_buffer_id")),
+            ("byte_start", desc.const_bytes), ("byte_len", 32))
+  tile_bytes = getenv("PREFILL_WMMA_PHASE_TILE_BYTES_A" if role == "A" else "PREFILL_WMMA_PHASE_TILE_BYTES_B", 128)
+  if tile_bytes <= 0: return None
+  rel = desc.const_bytes - desc.base_bytes
+  row_or_col = rel // tile_bytes
+  return (("role", role), ("lds_buffer_id", proof.get("lds_buffer_id")), ("phase_row_or_col", row_or_col), ("byte_len", 32))
+
+def _wmma_frag_reuse_key(ctx:IselContext|UOp, role:str|None=None, carrier:UOp|None=None, fallback_key=None):
+  if carrier is None:
+    carrier = ctx  # type: ignore[assignment]
+    return _wmma_frag_addr_key(carrier) or id(carrier)
+  if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
+    return _wmma_frag_proof_reuse_key(ctx, role, carrier) or (fallback_key if fallback_key is not None else ("no_proof", role, id(carrier)))  # type: ignore[arg-type]
+  return _wmma_frag_addr_key(carrier) or id(carrier)
+
+def _wmma_frag_proof_from_elem(e:UOp) -> dict|None:
+  if e.op is Ops.GEP: e = e.src[0]
+  tags = [e.tag]
+  if e.op is Ops.LOAD and e.src:
+    tags.append(e.src[0].tag)
+    idx = e.src[0].src[0] if e.src[0].op is Ops.CAST else e.src[0]
+    if idx.op is Ops.INDEX: tags.append(idx.tag)
+  tag = next((t for t in tags if isinstance(t, tuple) and t and t[0] == "wmma_frag_proof"), None)
+  if tag is None: return None
+  try: return {k: v for k, v in tag[1:]}
+  except Exception: return None
+
+def _wmma_frag_buffer_proof_from_desc(desc:LDSAddr|None, role:str) -> dict|None:
+  proof = _wmma_frag_buffer_proof_from_tag(None if desc is None else desc.buf.tag, desc, role)
+  if proof is not None or desc is None or not getenv("PREFILL_WMMA_AB_PROOF_FROM_LDS_DESC", 0): return proof
+  byte_len = 32
+  byte_start = desc.const_bytes
+  ptr_key = _lds_key_uop(desc.buf)
+  window = (ptr_key, byte_start, byte_start + byte_len)
+  return {
+    "role": role,
+    "lds_buffer_id": ptr_key,
+    "nbuf": None,
+    "dbuf_slot": ("lds_byte_window", window),
+    "k_phase": ("lds_byte_window", window),
+    "logical_row_or_col": (role, byte_start, byte_len),
+    "byte_start": byte_start,
+    "byte_len": byte_len,
+    "producer_epoch": ("lds_write_before_barrier", window),
+    "overwrite_epoch": ("next_write_to_lds_window", window),
+  }
+
+def _wmma_frag_buffer_proof_from_tag(tag, desc:LDSAddr|None, role:str) -> dict|None:
+  if desc is None: return None
+  if not (isinstance(tag, tuple) and tag and tag[0] == "wmma_frag_buffer_proof"): return None
+  try: base = {k: v for k, v in tag[1:]}
+  except Exception: return None
+  if base.get("role") != role: return None
+  tile_elems = base.get("tile_elems")
+  nbuf = base.get("nbuf")
+  if not isinstance(tile_elems, int) or not isinstance(nbuf, int) or tile_elems <= 0: return None
+  slot_elems = tile_elems * max(int(base.get("tile_count", 1)), 1)
+  slot_bytes = slot_elems * desc.itemsize
+  dbuf_slot = desc.const_bytes // slot_bytes if slot_bytes > 0 else None
+  return {
+    "role": role,
+    "lds_buffer_id": base.get("lds_buffer_id"),
+    "nbuf": nbuf,
+    "dbuf_slot": dbuf_slot,
+    "k_phase": ("slot_mod", dbuf_slot),
+    "logical_row_or_col": (role, desc.const_bytes % max(slot_bytes, 1)),
+    "byte_start": desc.const_bytes,
+    "byte_len": 32,
+    "producer_epoch": ("lds_buffer", base.get("lds_buffer_id"), dbuf_slot),
+    "overwrite_epoch": ("lds_buffer", base.get("lds_buffer_id"), dbuf_slot, "next"),
+  }
+
+def _wmma_frag_buffer_proof_from_elem(e:UOp, desc:LDSAddr|None, role:str) -> dict|None:
+  if e.op is Ops.GEP: e = e.src[0]
+  if e.op is not Ops.LOAD or not e.src: return None
+  addr = e.src[0]
+  idx = addr.src[0] if addr.op is Ops.CAST else addr
+  if idx.op is not Ops.INDEX or not idx.src: return None
+  proof = _wmma_frag_store_epoch_proof(idx, desc, role)
+  if proof is not None: return proof
+  return _wmma_frag_buffer_proof_from_tag(addr.tag, desc, role) or _wmma_frag_buffer_proof_from_tag(idx.tag, desc, role) or \
+         _wmma_frag_buffer_proof_from_tag(idx.src[0].tag, desc, role)
+
+def _uop_byte_width(u:UOp) -> int:
+  try: return u.dtype.itemsize
+  except Exception: return 0
+
+def _wmma_frag_store_epoch_proof(idx:UOp, desc:LDSAddr|None, role:str) -> dict|None:
+  if desc is None or not getenv("PREFILL_WMMA_AB_PROOF_FROM_LDS_STORES", 0): return None
+  base = idx.src[0].src[0] if idx.src[0].op is Ops.AFTER and idx.src[0].src else None
+  barrier = next((s for s in idx.src[0].src[1:] if s.op is Ops.BARRIER), None) if idx.src[0].op is Ops.AFTER else None
+  if base is None or barrier is None: return None
+  byte_start, byte_end = desc.const_bytes, desc.const_bytes + 32
+  producers:list[tuple] = []
+  overlapping:list[tuple[int, int]] = []
+  for st in barrier.toposort():
+    if st.op is not Ops.STORE or len(st.src) < 2: continue
+    sidx = st.src[0].src[0] if st.src[0].op is Ops.CAST and st.src[0].src else st.src[0]
+    if sidx.op is not Ops.INDEX or sidx.addrspace != AddrSpace.LOCAL or len(sidx.src) < 2: continue
+    if _reg_base(sidx.src[0]) is not desc.buf: continue
+    _sdyn, sconst = _const_base(sidx.src[1])
+    width = _uop_byte_width(st.src[1]) or desc.itemsize
+    s0, s1 = desc.base_bytes + sconst * desc.itemsize, desc.base_bytes + sconst * desc.itemsize + width
+    if s1 <= byte_start or s0 >= byte_end: continue
+    overlapping.append((s0, s1))
+    producers.append((_lds_key_uop(st.src[1]), s0, s1, id(st)))
+  if not producers: return None
+  # Reject ambiguous overwrite windows. A valid 32-byte fragment proof needs
+  # exactly one producer coverage for every byte in the fragment.
+  for b in range(byte_start, byte_end):
+    if sum(1 for s0, s1 in overlapping if s0 <= b < s1) != 1: return None
+  producer_epoch = tuple(sorted(producers, key=lambda x: (x[1], x[2], x[3])))
+  ptr_key = _lds_key_uop(desc.buf)
+  window = (ptr_key, byte_start, byte_end, producer_epoch)
+  return {
+    "role": role,
+    "lds_buffer_id": ptr_key,
+    "nbuf": None,
+    "dbuf_slot": ("lds_store_epoch", window),
+    "k_phase": ("lds_store_epoch", window),
+    "logical_row_or_col": (role, byte_start, 32),
+    "byte_start": byte_start,
+    "byte_len": 32,
+    "producer_epoch": producer_epoch,
+    "overwrite_epoch": ("next_write_to_lds_window", ptr_key, byte_start, byte_end, id(barrier)),
+  }
+
+def _wmma_frag_proof_key(role:str, carrier:UOp) -> tuple|None:
+  try: elems = _wmma_elems(carrier, 16)
+  except Exception: return None
+  proofs = [_wmma_frag_proof_from_elem(e) for e in elems]
+  if any(p is None for p in proofs): return None
+  p0 = proofs[0]
+  required = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_len", "producer_epoch", "overwrite_epoch")
+  if p0.get("role") != role or any(p0.get(k) is None for k in required): return None
+  if any(p != p0 for p in proofs[1:]): return None
+  return tuple((k, p0[k]) for k in required)
+
+def _wmma_frag_proof_debug(e:UOp) -> dict:
+  out = {"elem_op": e.op.name, "elem_tag": repr(e.tag)}
+  if e.op is Ops.GEP and e.src:
+    out.update({"gep_src_op": e.src[0].op.name, "gep_src_tag": repr(e.src[0].tag)})
+    e = e.src[0]
+  if e.op is Ops.LOAD and e.src:
+    out["load_index_op"] = e.src[0].op.name
+    out["load_index_tag"] = repr(e.src[0].tag)
+    idx = e.src[0].src[0] if e.src[0].op is Ops.CAST else e.src[0]
+    out["index_op"] = idx.op.name
+    out["index_tag"] = repr(idx.tag)
+    if idx.op is Ops.INDEX and idx.src:
+      out["index_buf_op"] = idx.src[0].op.name
+      out["index_buf_tag"] = repr(idx.src[0].tag)
+  return out
+
+def _wmma_frag_key_dump(ctx:IselContext, role:str, carrier:UOp, *, phase:str, tile_i:int|None=None) -> None:
+  if not getenv("PREFILL_WMMA_FRAG_KEY_DUMP", 0): return
+  import json
+  try: elems = _wmma_elems(carrier, 16)
+  except Exception as e:
+    print("WMMA_FRAG_KEY", {"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
+                            "provable": False, "reason": f"not_16_lane_carrier:{type(e).__name__}"})
+    print("WMMA_FRAG_KEY_JSON", json.dumps({"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
+                                            "provable": False, "reason": f"not_16_lane_carrier:{type(e).__name__}"}))
+    return
+  addrs = [_wmma_half_addr(e) for e in elems]
+  if any(a is None for a in addrs):
+    print("WMMA_FRAG_KEY", {"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
+                            "provable": False, "reason": "non_memory_lane",
+                            "lane_addr_ok": [a is not None for a in addrs]})
+    print("WMMA_FRAG_KEY_JSON", json.dumps({"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
+                                            "provable": False, "reason": "non_memory_lane",
+                                            "lane_addr_ok": [a is not None for a in addrs]}))
+    return
+  idx0, ptr0, expr0, c0 = addrs[0]
+  contiguous = all(ptr is ptr0 and expr is expr0 and c == c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs))
+  desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
+  dyn, _const_elems = _const_base(idx0.src[1]) if idx0.op is Ops.INDEX and len(idx0.src) >= 2 else (None, 0)
+  reuse_key = _wmma_frag_addr_key(carrier)
+  proof_key = _wmma_frag_proof_key(role, carrier)
+  lane_proofs = [_wmma_frag_proof_from_elem(e) for e in elems]
+  proof0 = lane_proofs[0] if lane_proofs and lane_proofs[0] is not None else None
+  const_bytes = None if desc is None else desc.const_bytes
+  byte_len = 16 * (2 if desc is None else desc.itemsize)
+  if proof0 is None:
+    proof0 = _wmma_frag_buffer_proof_from_elem(elems[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
+    if proof0 is not None:
+      required_for_key = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_len", "producer_epoch", "overwrite_epoch")
+      proof_key = tuple((k, proof0[k]) for k in required_for_key) if all(proof0.get(k) is not None for k in required_for_key) else None
+  required = ("dbuf_slot", "k_phase", "logical_row_or_col", "producer_epoch", "overwrite_epoch")
+  missing = ["missing_proof_key"] if proof0 is None else [k for k in required if proof0.get(k) is None]
+  row_json = {
+    "role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier), "provable": contiguous,
+    "reuse_key": None if reuse_key is None else repr(reuse_key), "fallback_id_key": id(carrier),
+    "proof_key": None if proof_key is None else repr(proof_key),
+    "proof_fields": None if proof0 is None else {k: repr(v) for k, v in proof0.items()},
+    "proof_debug": _wmma_frag_proof_debug(elems[0]),
+    "ptr_key": repr(_lds_key_uop(ptr0)),
+    "dyn_key": None if dyn is None else repr(_lds_key_uop(dyn)),
+    "first_const_lane": c0, "lane_consts": [c for (_idx, _ptr, _expr, c) in addrs],
+    "contiguous": contiguous,
+    "const_byte_start": const_bytes, "const_byte_end": None if const_bytes is None else const_bytes + byte_len,
+    "byte_len": byte_len,
+    "lds": None if desc is None else {
+      "buf_id": id(desc.buf), "dyn_id": None if desc.dyn is None else id(desc.dyn),
+      "const_bytes": desc.const_bytes, "base_bytes": desc.base_bytes, "itemsize": desc.itemsize,
+    },
+    "missing_proof_fields": missing,
+    "proof_key_status": "ok" if proof_key is not None else ("unprovable:no_proof_metadata" if proof0 is None else "unprovable:incomplete_or_inconsistent_proof"),
+  }
+  print("WMMA_FRAG_KEY", {
+    "role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier), "provable": contiguous,
+    "reuse_key": reuse_key, "proof_key": proof_key, "fallback_id_key": id(carrier),
+    "ptr_id": id(ptr0), "ptr_key": _lds_key_uop(ptr0),
+    "dyn_id": None if dyn is None else id(dyn), "dyn_key": None if dyn is None else _lds_key_uop(dyn),
+    "first_const_lane": c0, "lane_consts": [c for (_idx, _ptr, _expr, c) in addrs],
+    "contiguous": contiguous,
+    "lds": None if desc is None else {
+      "buf_id": id(desc.buf), "dyn_id": None if desc.dyn is None else id(desc.dyn),
+      "const_bytes": desc.const_bytes, "base_bytes": desc.base_bytes, "itemsize": desc.itemsize,
+    },
+    "missing_proof_fields": missing,
+  })
+  print("WMMA_FRAG_KEY_JSON", json.dumps(row_json, sort_keys=True))
+
+def _wmma_chain_key_dump(ctx:IselContext, A:UOp, B:UOp, cbase:int, *, phase:str) -> None:
+  if not getenv("PREFILL_WMMA_CHAIN_KEY_DUMP", 0): return
+  import json
+  idx = getattr(ctx, "_wmma_chain_key_dump_idx", 0)
+  ctx._wmma_chain_key_dump_idx = idx + 1
+  def key(role:str, carrier:UOp) -> dict:
+    try:
+      elems = _wmma_elems(carrier, 16)
+      addrs = [_wmma_half_addr(e) for e in elems]
+      if any(a is None for a in addrs): return {"role": role, "provable": False, "reason": "non_memory_lane", "carrier_id": id(carrier)}
+      idx0, ptr0, expr0, c0 = addrs[0]
+      contiguous = all(ptr is ptr0 and expr is expr0 and c == c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs))
+      dyn, _const_elems = _const_base(idx0.src[1]) if idx0.op is Ops.INDEX and len(idx0.src) >= 2 else (None, 0)
+      desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
+      return {
+        "role": role, "provable": contiguous, "carrier_id": id(carrier),
+        "ptr_key": repr(_lds_key_uop(ptr0)), "dyn_key": None if dyn is None else repr(_lds_key_uop(dyn)),
+        "first_const_lane": c0, "lane_consts": [c for (_idx, _ptr, _expr, c) in addrs],
+        "reuse_key": None if _wmma_frag_addr_key(carrier) is None else repr(_wmma_frag_addr_key(carrier)),
+        "lds": None if desc is None else {"const_bytes": desc.const_bytes, "base_bytes": desc.base_bytes, "itemsize": desc.itemsize},
+      }
+    except Exception as e:
+      return {"role": role, "provable": False, "reason": f"{type(e).__name__}:{e}", "carrier_id": id(carrier)}
+  print("WMMA_CHAIN_KEY_JSON", json.dumps({
+    "wmma_ordinal": idx, "phase": phase, "cbase": cbase, "c_span": [cbase, cbase + 7],
+    "A": key("A", A), "B": key("B", B),
+  }, sort_keys=True))
+
+def _remat_final_const_add_index(idx:UOp) -> UOp:
+  if idx.op is not Ops.INDEX or len(idx.src) < 2: return idx
+  expr = idx.src[1]
+  tag = ("dbuf_lds_base_remat", id(idx), id(expr))
+  if expr.op is Ops.ADD and len(expr.src) == 2 and any(s.op is Ops.CONST for s in expr.src):
+    expr = UOp(expr.op, expr.dtype, expr.src, expr.arg, tag)
+    return idx.replace(src=(idx.src[0], expr) + idx.src[2:], tag=tag)
+  return idx.replace(tag=tag)
+
+def _remat_final_const_add_ins(ctx:IselContext, addr:UOp, dep:UOp|None) -> UOp:
+  if addr.op is not Ops.INS or addr.arg is not AMDOps.V_IADD or len(addr.src) < 2: return addr
+  if not (addr.src[0].op is Ops.CONST or addr.src[1].op is Ops.CONST): return addr
+  return UOp(Ops.INS, addr.dtype, src=addr.src[:2] + ((dep,) if dep is not None else ()), arg=addr.arg, tag=_vreg_def(ctx))
+
+def _remat_lds_load_addr(ctx:IselContext, addr:UOp, dep:UOp|None, deep:bool=False) -> UOp:
+  if addr.op is not Ops.INS: return addr
+  if addr.arg is AMDOps.V_OFFSET and len(addr.src) >= 2:
+    base = _remat_lds_load_addr(ctx, addr.src[0], dep, deep)
+    return addr if base is addr.src[0] else UOp(Ops.INS, addr.dtype, src=(base,) + addr.src[1:], arg=addr.arg, tag=_vreg_def(ctx))
+  if addr.arg is AMDOps.V_IADD and len(addr.src) >= 2 and (addr.src[0].op is Ops.CONST or addr.src[1].op is Ops.CONST):
+    src0, src1 = addr.src[:2]
+    if deep:
+      src0 = _remat_lds_load_addr(ctx, src0, dep, False)
+      src1 = _remat_lds_load_addr(ctx, src1, dep, False)
+    return UOp(Ops.INS, addr.dtype, src=(src0, src1) + ((dep,) if dep is not None else ()), arg=addr.arg, tag=_vreg_def(ctx))
+  if deep and addr.arg in (AMDOps.V_IMUL, AMDOps.V_AND) and len(addr.src) >= 2:
+    src0, src1 = addr.src[:2]
+    if addr.arg is AMDOps.V_IMUL:
+      src0 = _remat_lds_load_addr(ctx, src0, dep, False)
+      src1 = _remat_lds_load_addr(ctx, src1, dep, False)
+    return UOp(Ops.INS, addr.dtype, src=(src0, src1) + ((dep,) if dep is not None else ()), arg=addr.arg, tag=_vreg_def(ctx))
+  return addr
+
+def _split_store_final_const_add(ctx:IselContext, addr:UOp) -> UOp:
+  if addr.op is Ops.INS and addr.arg is AMDOps.V_OFFSET and len(addr.src) >= 2:
+    base = _split_store_final_const_add(ctx, addr.src[0])
+    return addr if base is addr.src[0] else UOp(Ops.INS, addr.dtype, src=(base,) + addr.src[1:], arg=addr.arg, tag=_vreg_def(ctx))
+  if addr.op is not Ops.INS or addr.arg is not AMDOps.V_IADD or len(addr.src) < 2: return addr
+  if not (addr.src[0].op is Ops.CONST or addr.src[1].op is Ops.CONST): return addr
+  return UOp(Ops.INS, addr.dtype, src=addr.src, arg=addr.arg, tag=_vreg_def(ctx))
+
+def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp,...]=(), role:str="frag") -> tuple[UOp,...]|None:
   if not getenv("AMD_ISA_WMMA_B128_FRAG", 1): return None
   addrs = [_wmma_half_addr(e) for e in E]
   if any(a is None for a in addrs): return None
   idx0, ptr0, expr0, c0 = addrs[0]
   if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
+  if dep: idx0 = _index_after_dep(idx0, dep[-1])
+  idx0 = _split_dbuf_lds_index(idx0, "load")
+  if getenv("PREFILL_DBUF_LDS_BASE_REMAT", 0) and getenv("PREFILL_DBUF", 0) and isinstance(ptr0.dtype, PtrDType) and \
+     ptr0.dtype.addrspace != AddrSpace.GLOBAL:
+    idx0 = _remat_final_const_add_index(idx0)
   idxc = isel_index(ctx, idx0)
-  if idxc is None or idxc.op is not Ops.NOOP or len(idxc.src) != 2: return None
+  if idxc is None or idxc.op is not Ops.NOOP or len(idxc.src) not in (2, 3): return None
   if idxc.arg == "lds":
-    addr, order = idxc.src
+    _dump_lds_proof_key(f"frag_load_b128_{role}", idx0, 16, {"base": base, "first_const": c0}, ctx, idxc.src[1])
+    addr, order = idxc.src[0], idxc.src[1]
+    remat_load_anchor = bool(getenv("PREFILL_DBUF_LDS_RELOAD_ANCHOR", 0))
+    if getenv("PREFILL_DBUF_LDS_BASE_REMAT", 0) and getenv("PREFILL_DBUF", 0) and not remat_load_anchor:
+      addr = _remat_lds_load_addr(ctx, addr, dep[-1] if dep else order, bool(getenv("PREFILL_DBUF_LDS_BASE_REMAT_DEEP", 0)))
+    base_imm = idxc.src[2].arg if len(idxc.src) >= 3 and idxc.src[2].op is Ops.CONST else 0
     loads:list[UOp] = []
+    active_dep = dep
     for j, imm in enumerate((0, 16)):
-      ld = UOp(Ops.INS, dtypes.int32, src=(addr, order, UOp.const(dtypes.int32, imm).rtag()) + dep,
+      load_addr = _remat_lds_load_addr(ctx, addr, active_dep[-1] if active_dep else order,
+                                       bool(getenv("PREFILL_DBUF_LDS_BASE_REMAT_DEEP", 0))) \
+        if remat_load_anchor and getenv("PREFILL_DBUF_LDS_BASE_REMAT", 0) and getenv("PREFILL_DBUF", 0) else addr
+      load_addr, ds_imm = _ds_addr_imm(ctx, load_addr, base_imm + imm, 16)
+      ld = UOp(Ops.INS, dtypes.int32, src=(load_addr, order, UOp.const(dtypes.int32, ds_imm).rtag()) + active_dep,
                arg=AMDOps.DS_LOAD_B128, tag=_pin(base, j * 4))
       loads.extend([ld] + [UOp(Ops.INS, dtypes.int32, src=(ld,), arg=AMDOps.MOV, tag=_pin(base, j * 4 + i)) for i in range(1, 4)])
+      if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0): active_dep = active_dep + (ld,)
     return tuple(loads)
   ptr, off = idxc.src
   loads:list[UOp] = []
@@ -623,9 +1388,10 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
 # carry `dep` (the prior WMMA def) as an extra ignored src so the shared-frag reload is scheduled AFTER the prior matmul
 # read it (WAR guard). Returns the 8-lane NOOP output carrier (lane 0 = the V_WMMA def, lanes 1..7 = passthrough MOVs).
 def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...]):
+  _wmma_chain_key_dump(ctx, A, B, cbase, phase="build_wmma_tile")
   aE, bE = _wmma_elems(A, 16), _wmma_elems(B, 16)
-  apk = _frag_b128_loads(ctx, aE, abase, dep) or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, aE[2*i]), _tov(ctx, aE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(abase, i)) for i in range(8))
-  bpk = _frag_b128_loads(ctx, bE, bbase, dep) or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, bE[2*i]), _tov(ctx, bE[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(bbase, i)) for i in range(8))
+  apk = _pack_frag_tile(ctx, A, abase, dep, "A")
+  bpk = _pack_frag_tile(ctx, B, bbase, dep, "B")
   # V_WMMA INS: srcs = A0..A7, B0..B7, C0..C7 (keeps all 24 fragment defs reachable + ordered before the matmul); the
   # def (tag) is the C-range base -> vdst base. lower_inst reads the three fragment bases off src[0]/src[8]/src[16].
   wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin), arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
@@ -634,24 +1400,299 @@ def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bb
   outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
   return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
 
+def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
+  E = _wmma_elems(carrier, 16)
+  return _frag_b128_loads(ctx, E, base, dep, role) or tuple(
+    UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
+
 # B0.M residency: pack a 16-fp16 fragment carrier into the 8 VGPRs [base, base+8) EXACTLY as _build_wmma_tile does
 # (element e -> reg base+e//2, e%2 low/high half via v_pack_b32_f16), but MEMOIZED on the carrier identity so a
 # per-row A / per-col B fragment is packed ONCE and every subtile in that row/col shares the resident 8-VGPR run.
-def _pack_frag(ctx:IselContext, carrier:UOp, base:int) -> tuple[UOp,...]:
+def _pack_frag(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...]=()) -> tuple[UOp,...]:
   memo = ctx._frag_pack = getattr(ctx, "_frag_pack", {})
-  if (pk := memo.get((id(carrier), base))) is not None: return pk
+  memo_key = (_wmma_frag_reuse_key(carrier), base)
+  if (pk := memo.get(memo_key)) is not None: return pk
   E = _wmma_elems(carrier, 16)
-  pk = _frag_b128_loads(ctx, E, base) or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1])), arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
-  memo[(id(carrier), base)] = pk
+  if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0) and (prev := getattr(ctx, "_frag_pack_prev", None)) is not None:
+    dep = dep + (prev,)
+  pk = _frag_b128_loads(ctx, E, base, dep, "pack") or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
+  if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0): ctx._frag_pack_prev = pk[-1]
+  memo[memo_key] = pk
   return pk
+
+def _dbuf_stage_candidate(carrier:UOp) -> tuple[UOp|None, str]:
+  try:
+    elems = _wmma_elems(carrier, 16)
+    addrs = [_wmma_half_addr(e) for e in elems]
+  except Exception:
+    return None, "not_wmma_memory_carrier"
+  if any(a is None for a in addrs): return None, "non_memory_lane"
+  for idx, ptr, _expr, _const in addrs:
+    if not isinstance(ptr.dtype, PtrDType) or ptr.dtype.addrspace != AddrSpace.LOCAL: return None, "not_local_lds_operand"
+    for st in idx.src[0].toposort():
+      if st.op is Ops.STORE and len(st.src) >= 2:
+        val = st.src[1]
+        if val.op is Ops.NOOP and isinstance(val.arg, tuple) and len(val.arg) == 2 and val.arg[0] == "global_b128":
+          return st, "global_b128"
+        vv = val.src[0] if val.op is Ops.AFTER and val.src else val
+        if vv.op is Ops.NOOP and vv.dtype.count == 4 and vv.dtype.scalar().itemsize == 4 and \
+           all(s.op is Ops.INS and s.arg is AMDOps.V_PACK and s.dtype is dtypes.int32 for s in vv.src):
+          return st, "vpack_vec4"
+  return None, "no_matching_store_value"
+
+def _dbuf_stage_candidates(carrier:UOp) -> tuple[list[UOp], str]:
+  try:
+    elems = _wmma_elems(carrier, 16)
+    addrs = [_wmma_half_addr(e) for e in elems]
+  except Exception:
+    return [], "not_wmma_memory_carrier"
+  if any(a is None for a in addrs): return [], "non_memory_lane"
+  idx0, ptr0, _expr0, c0 = addrs[0]
+  if not isinstance(ptr0.dtype, PtrDType) or ptr0.dtype.addrspace != AddrSpace.LOCAL: return [], "not_local_lds_operand"
+  target_consts = {c0, c0 + 8}
+  out: list[tuple[int, UOp]] = []
+  for st in idx0.src[0].toposort():
+    if st.op is not Ops.STORE or len(st.src) < 2: continue
+    sk = _dbuf_stage_store_key(st)
+    if sk is None or len(sk) < 3 or sk[2] not in target_consts: continue
+    val = st.src[1]
+    ok = val.op is Ops.NOOP and isinstance(val.arg, tuple) and len(val.arg) == 2 and val.arg[0] == "global_b128"
+    vv = val.src[0] if val.op is Ops.AFTER and val.src else val
+    ok = ok or (vv.op is Ops.NOOP and vv.dtype.count == 4 and vv.dtype.scalar().itemsize == 4 and
+                all(s.op is Ops.INS and s.arg is AMDOps.V_PACK and s.dtype is dtypes.int32 for s in vv.src))
+    if ok: out.append((int(sk[2]), st))
+  if not out: return [], "no_matching_store_value"
+  return [st for _, st in sorted(out, key=lambda x: x[0])], "ok"
+
+def _dbuf_stage_store_key(st:UOp) -> tuple|None:
+  if st.op is not Ops.STORE or not st.src: return None
+  if isinstance(st.tag, tuple) and st.tag[:1] == ("tc_local_stage_store",): return st.tag
+  idx = st.src[0]
+  while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
+  if idx.op is Ops.NOOP and isinstance(idx.tag, tuple) and idx.tag[:1] == ("tc_local_stage_store",): return idx.tag
+  if isinstance(idx.tag, tuple) and idx.tag[:1] == ("tc_local_stage_store",): return idx.tag
+  return _lds_proof_key(idx, 8) if idx.op is Ops.INDEX and idx.addrspace == AddrSpace.LOCAL else None
+
+def _dbuf_stage_value_key(st:UOp) -> tuple|None:
+  if st.op is not Ops.STORE or len(st.src) < 2: return None
+  val = st.src[1]
+  if val.op is Ops.AFTER and val.src: val = val.src[0]
+  if val.op is Ops.NOOP and isinstance(val.arg, tuple) and len(val.arg) == 2 and val.arg[0] == "global_b128":
+    return ("global_b128", _lds_key_uop(val.arg[1]))
+  if val.op is Ops.NOOP and val.dtype.count == 4 and val.dtype.scalar().itemsize == 4 and \
+     all(s.op is Ops.INS and s.arg is AMDOps.V_PACK and s.dtype is dtypes.int32 for s in val.src):
+    return ("vpack4", tuple(tuple(_lds_key_uop(x) for x in p.src[:2]) for p in val.src))
+  return None
+
+def _dbuf_stage_key_overlaps(a:tuple|None, b:tuple|None) -> bool:
+  if a is None or b is None or len(a) < 4 or len(b) < 4: return False
+  if a[:2] != b[:2]: return False
+  try:
+    a0, a1 = int(a[2]), int(a[2]) + int(a[3])
+    b0, b1 = int(b[2]), int(b[2]) + int(b[3])
+  except Exception:
+    return False
+  return a0 < b1 and b0 < a1
+
+def _dbuf_stage_store_stolen(stolen:set, st:UOp) -> bool:
+  skey = _dbuf_stage_store_key(st)
+  if skey in stolen: return True
+  return any(isinstance(k, tuple) and _dbuf_stage_key_overlaps(skey, k) for k in stolen)
+
+def _dbuf_stage_store_abs_slot(ctx:IselContext, st:UOp) -> int|None:
+  if st.op is not Ops.STORE or not st.src: return None
+  idx = st.src[0]
+  while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
+  desc = decompose_lds_index(ctx, idx, None) if idx.op is Ops.INDEX and idx.addrspace == AddrSpace.LOCAL else None
+  return None if desc is None else desc.const_half
+
+def _dbuf_stage_addr_key(a:UOp) -> tuple|None:
+  if isinstance(a.tag, tuple) and a.tag[:1] == ("tc_local_stage_store",): return a.tag
+  if isinstance(a.tag, tuple) and a.tag[:1] == ("wmma_frag_buffer_proof",) and (slot := _dbuf_lowered_lds_slot(a)) is not None:
+    return ("wmma_frag_stage_window", a.tag, (slot // 16) * 16, 16)
+  return None
+
+def _dbuf_lowered_lds_slot(a:UOp) -> int|None:
+  if a.op is not Ops.NOOP or a.arg != "lds" or not a.src: return None
+  imm = _lds_imm_bytes(a)
+  addr = a.src[0]
+  if (slot := _lds_addr_const_words(addr)) is not None: return slot + imm // 2
+  if addr.op is Ops.INS and addr.arg is AMDOps.V_IADD and addr.src:
+    if (slot := _lds_addr_const_words(addr.src[0])) is not None:
+      add = _ins_const_add(addr.src[1]) if len(addr.src) > 1 else None
+      return None if add is None else slot + add // 2 + imm // 2
+  return None
+
+def _dbuf_lowered_lds_slot_keys(a:UOp) -> tuple[tuple[str, int], ...]:
+  if (slot := _dbuf_lowered_lds_slot(a)) is None: return tuple()
+  return (("lds_slot", slot),)
+
+def _dbuf_stage_epoch_key_for_store(ctx:IselContext|None, st:UOp, a:UOp|None=None) -> tuple|None:
+  slot = _dbuf_stage_store_abs_slot(ctx, st) if ctx is not None else None
+  if slot is None and a is not None: slot = _dbuf_lowered_lds_slot(a)
+  vkey = _dbuf_stage_value_key(st)
+  return None if slot is None or vkey is None else ("stage_epoch", slot, vkey)
+
+def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple[UOp|None, str]:
+  if st.op is not Ops.STORE or len(st.src) < 2 or not dep: return None, "bad_store_or_dep"
+  idx, val = st.src[0], st.src[1]
+  if idx.op is not Ops.INDEX or val.op not in (Ops.NOOP, Ops.AFTER): return None, "bad_index_or_value"
+  idx = _index_after_dep(idx, dep[-1])
+  extra_deps:tuple[UOp, ...] = ()
+  if val.op is Ops.NOOP and isinstance(val.arg, tuple) and len(val.arg) == 2 and val.arg[0] == "global_b128":
+    val = val.replace(src=val.src + dep)
+  else:
+    extra_deps = dep
+    vv = val.src[0] if val.op is Ops.AFTER and val.src else val
+    if vv.op is Ops.NOOP and vv.dtype.count == 4 and vv.dtype.scalar().itemsize == 4 and \
+       all(s.op is Ops.INS and s.arg is AMDOps.V_PACK and s.dtype is dtypes.int32 for s in vv.src):
+      vv = vv.replace(src=tuple(s.replace(src=s.src + dep) for s in vv.src))
+      val = val.replace(src=(vv,) + val.src[1:]) if val.op is Ops.AFTER and val.src else vv
+  a = isel_index(ctx, idx)
+  if a is None or a.op is not Ops.NOOP or a.arg != "lds" or len(a.src) not in (2, 3): return None, "isel_index_not_lds"
+  bdata = _lds_b128_store_data(ctx, val)
+  if bdata is None: return None, "b128_data_rejected"
+  lds_imm = a.src[2].arg if len(a.src) >= 3 and a.src[2].op is Ops.CONST else 0
+  addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
+  return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b128_store_deps(val) + extra_deps + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()),
+             arg=AMDOps.DS_STORE_B128), "ok"
+
+def _dbuf_d3a_stage_proof(ctx:IselContext, role:str, carrier:UOp) -> dict:
+  try:
+    elems = _wmma_elems(carrier, 16)
+    idx0, _ptr0, _expr0, c0 = _wmma_half_addr(elems[0]) or (None, None, None, None)
+  except Exception as e:
+    return {"role": role, "ok": False, "reason": f"{type(e).__name__}:{e}"}
+  if idx0 is None or idx0.op is not Ops.INDEX:
+    return {"role": role, "ok": False, "reason": "no_lds_index"}
+  desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
+  proof = _wmma_frag_buffer_proof_from_elem(elems[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
+  desc_row = None if desc is None else {
+    "buf_arg": getattr(desc.buf, "arg", None), "buf_id": id(desc.buf), "const_bytes": desc.const_bytes,
+    "base_bytes": desc.base_bytes, "itemsize": desc.itemsize, "idx_id": id(idx0),
+  }
+  if proof is None:
+    return {"role": role, "ok": False, "reason": "no_buffer_proof", "first_const_lane": c0, "lds_desc": repr(desc_row)}
+  keep = ("role", "lds_buffer_id", "nbuf", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_start", "byte_len",
+          "producer_epoch", "overwrite_epoch")
+  return {"ok": True, "first_const_lane": c0, **{k: repr(proof.get(k)) for k in keep}}
+
+def _freeze_audit_payload(payload:dict) -> tuple:
+  return tuple(sorted(payload.items(), key=lambda x: x[0]))
+
+def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tuple[UOp,...]:
+  if not (getenv("PREFILL_DBUF_D3A_POST", 0) and dep): return dep
+  out = dep
+  for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
+    if role == "A" and not getenv("PREFILL_DBUF_D3A_STAGE_A", 0):
+      if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": "a_stage_gated_off"})
+      continue
+    if role == "B" and not getenv("PREFILL_DBUF_D3A_STAGE_B", 1):
+      if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": "b_stage_gated_off"})
+      continue
+    cands, reason = _dbuf_stage_candidates(carrier) if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) else ([], "")
+    if not cands:
+      cand, reason = _dbuf_stage_candidate(carrier)
+      cands = [] if cand is None else [cand]
+    if not cands:
+      if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": reason})
+      continue
+    moved: list[UOp] = []
+    for cand in cands:
+      skey = _dbuf_stage_store_key(cand)
+      use_memo = getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_MEMO", 0)
+      moved_memo = ctx._dbuf_moved_stage_emits = getattr(ctx, "_dbuf_moved_stage_emits", {}) if use_memo else {}
+      if use_memo and skey is not None and skey in moved_memo:
+        out = (UOp(Ops.INS, dtypes.void, src=(moved_memo[skey],), arg=AMDOps.BARRIER),); continue
+      st, emit_reason = _emit_dbuf_stage_store(ctx, cand, out)
+      if st is None:
+        if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": f"emit_rejected:{emit_reason}"})
+        continue
+      moved.append(st)
+      if use_memo and skey is not None: moved_memo[skey] = st
+      if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
+        stolen = ctx._dbuf_stolen_stage_stores = getattr(ctx, "_dbuf_stolen_stage_stores", set())
+        stolen.add(id(cand))
+        if skey is not None:
+          stolen.add(skey)
+        if (abs_slot := _dbuf_stage_store_abs_slot(ctx, cand)) is not None:
+          stolen.add(("lds_slot", abs_slot))
+        if (ekey := _dbuf_stage_epoch_key_for_store(ctx, cand)) is not None:
+          stolen.add(ekey)
+        if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0):
+          DBUF_D3A_AUDIT_LOG.append({"kind": "stolen_stage_key", "role": role, "id": id(cand),
+                                     "key": repr(skey), "value_key": repr(_dbuf_stage_value_key(cand)),
+                                     "epoch_key": repr(_dbuf_stage_epoch_key_for_store(ctx, cand)),
+                                     "abs_slot": abs_slot})
+      out = (st,)
+    if not moved: continue
+    if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
+      out = (UOp(Ops.INS, dtypes.void, src=tuple(moved), arg=AMDOps.BARRIER),)
+    if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append(_dbuf_d3a_stage_proof(ctx, role, carrier))
+  return out
 
 # B0.M residency: build ONE subtile v_wmma from ALREADY-PACKED resident A/B fragments (apk,bpk) + this subtile's 8 cin
 # accumulator lanes. Same element/lane order as _build_wmma_tile (A0..A7,B0..B7,C0..C7; def -> cbase) -- only the packs
 # are hoisted out (shared) instead of rebuilt per subtile. Returns the 8-lane D output carrier.
-def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,...], cin:list[UOp], cbase:int):
-  wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin), arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
+def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,...], cin:list[UOp], cbase:int, dep:tuple[UOp,...]=()):
+  wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin) + dep, arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
   outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
   return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
+
+def _wmma_chain_nodes(root:UOp) -> list[UOp]:
+  chain = [root]
+  while (c := chain[-1].src[2]).op is Ops.WMMA: chain.append(c)
+  return chain
+
+def _wmma_chain_head_acc(head:UOp):
+  c2 = head.src[2]
+  if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
+     and (dreg := _reg_base(c2.src[0].src[0].src[0])).op is Ops.DEFINE_REG:
+    idx0 = c2.src[0].src[0].src[1]
+    subtile = idx0.arg // 8 if idx0.op is Ops.CONST else 0
+    return dreg, subtile, c2.src[0].src[0].src[0]
+  return None
+
+def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
+  if not (getenv("PREFILL_WMMA_KMAJOR_PHASE", 0) and getenv("PREFILL_WMMA_AB_PROOF_KEY", 0) and
+          getenv("PREFILL_WMMA_AB_PHASE_SCOPED_KEY", 0) and _c_low(ctx)): return None
+  memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
+  if x in memo: return memo[x]
+  roots = [u for u in ctx.uses if u.op is Ops.WMMA and not any(c.op is Ops.WMMA for c in ctx.uses.get(u, []))]
+  if (expected_roots := getenv("PREFILL_WMMA_KMAJOR_ROOTS", 0)) and len(roots) != expected_roots: return None
+  chains = [_wmma_chain_nodes(r) for r in roots]
+  if any(len(c) != len(chains[0]) for c in chains): return None
+  phases = [list(reversed(c)) for c in chains]
+  heads = [p[0] for p in phases]
+  head_accs = [_wmma_chain_head_acc(h) for h in heads]
+  if any(ha is None for ha in head_accs): return None
+  cbases = [_acc_base(ctx, (id(ha[0]), ha[1])) for ha in head_accs]
+  cins = [[UOp(Ops.INS, dtypes.float32, src=(ha[2],), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+          for ha, cbase in zip(head_accs, cbases)]
+  prev_phase_last:UOp|None = None
+  for phase_i in range(len(phases[0])):
+    pack_cache:dict[tuple, tuple[UOp, ...]] = {}
+    prev_wm:UOp|None = None
+    phase_dep = () if prev_phase_last is None else (prev_phase_last,)
+    for chain_i, phase in enumerate(phases):
+      tile = phase[phase_i]
+      akey, bkey = _wmma_frag_phase_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_phase_reuse_key(ctx, "B", tile.src[1])
+      if akey is None or bkey is None: return None
+      abase, bbase = _ab_base(ctx, ("A", akey)), _ab_base(ctx, ("B", bkey))
+      if abase is None or bbase is None or cbases[chain_i] is None: return None
+      tile_phase_dep = _dbuf_d3a_probe_marker(ctx, tile, phase_dep) if getenv("PREFILL_WMMA_KMAJOR_D3A_MARKER", 0) and phase_i > 0 else phase_dep
+      def pack(role:str, carrier:UOp, key:tuple, base:int) -> tuple[UOp, ...]:
+        pkey = (role, key, base)
+        if pkey not in pack_cache: pack_cache[pkey] = _pack_frag_tile(ctx, carrier, base, tile_phase_dep, role)
+        return pack_cache[pkey]
+      dep = () if prev_wm is None else (prev_wm,)
+      out = _build_wmma_from_packs(ctx, pack("A", tile.src[0], akey, abase), pack("B", tile.src[1], bkey, bbase),
+                                   cins[chain_i], cbases[chain_i], dep)
+      memo[tile] = out
+      cins[chain_i] = list(out.src)
+      prev_wm = out.src[0]
+      prev_phase_last = prev_wm
+  return memo.get(x)
 
 # B0.K: K-reduction (K>16) accumulates IN PLACE. postrange.py:324 + the devectorizer's `WMMA+add -> WMMA(src2+=add)` fold
 # (devectorizer.py:357) shape the K>16 reduce as a CHAIN of Ops.WMMA nodes: the head's src[2] is the 8-lane CONST-0
@@ -663,6 +1704,7 @@ def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,..
 def isel_wmma(ctx:IselContext, x:UOp):
   memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
   if x in memo: return memo[x]
+  if (km := _try_wmma_kmajor_phase(ctx, x)) is not None: return km
   # ROLLED-K path (gate): a default matmul K>16 keeps ONE Ops.WMMA in a RANGE loop whose src[2] is an 8-lane carrier of
   # LOADs from a reduce accumulator DEFINE_REG (NOT a CONST-0 seed, NOT a prior Ops.WMMA). The C fragment is a FIXED,
   # zero-initialised 8-VGPR range (cbase); v_wmma does C+=A*B in place every iteration, so the whole reduction is ONE
@@ -684,7 +1726,8 @@ def isel_wmma(ctx:IselContext, x:UOp):
       # 8-VGPR runs in the LOW window [_acc_top, _ab_top). Each fragment is packed ONCE (memoized in _pack_frag) and
       # shared by every subtile in its row/col -> WM+WN pack-sets total (not WM*WN), so the pack lifetimes never contend.
       cbase = _acc_base(ctx, (id(dreg), subtile))
-      abase = _ab_base(ctx, ("A", id(x.src[0]))); bbase = _ab_base(ctx, ("B", id(x.src[1])))
+      abase = _ab_base(ctx, ("A", _wmma_frag_reuse_key(ctx, "A", x.src[0], ("no_proof", "A", id(x)))))
+      bbase = _ab_base(ctx, ("B", _wmma_frag_reuse_key(ctx, "B", x.src[1], ("no_proof", "B", id(x)))))
       if cbase is None or abase is None or bbase is None:
         raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={abase} B={bbase} C={cbase})")
       cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
@@ -711,17 +1754,19 @@ def isel_wmma(ctx:IselContext, x:UOp):
   # A/B fragments are REUSED across all K-tiles (spec-reference: one A-frag + one B-frag range reloaded per K-substep),
   # keyed on that same accumulator base -> a single K>16 chain needs only 3 fragment ranges total and fits [200,238);
   # allocating A/B per-tile would exhaust the 38-VGPR region at the 3rd tile.
-  # B0.M: a MULTI-output-tile UNROLLed kernel has one chain PER subtile. Each chain's C goes LOW (per-head 8-run) and ALL
-  # chains SHARE the single reused high A/B pair (K-serial reload) -- WM*WN chains would otherwise blow the high window.
+  # B0.M: a MULTI-output-tile UNROLLed kernel has one chain PER subtile. Each chain's C goes LOW (per-head 8-run) and,
+  # by default, ALL chains SHARE the single reused high A/B pair (K-serial reload). Experimental
+  # PREFILL_WMMA_CHAIN_AB_RESIDENT instead allocates resident A/B fragments by address key so row/col fragments can be
+  # reused across subtiles, matching the hand LDS2 amortization target when VGPR budget allows it.
   # Single-chain kernels (_c_low False) keep the legacy per-head high C + per-head A/B (k64-chain / single-tile tests).
   cbase = _acc_base(ctx, (id(head_acc[0]), head_acc[1]) if head_acc is not None else id(head.src[2])) if _c_low(ctx) else _frag_base(ctx, id(head.src[2]), 8)
   ab_key = "wmma_ab" if _c_low(ctx) else id(head.src[2])
   abase = _frag_base(ctx, (ab_key, "A"), 8)
   bbase = _frag_base(ctx, (ab_key, "B"), 8)
-  if cbase is None or abase is None or bbase is None:
+  if not (getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0) and _c_low(ctx)) and (cbase is None or abase is None or bbase is None):
     raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
   prev:UOp|None = None
-  for tile in reversed(chain):                  # head first, then each accumulate tile
+  for tile_i, tile in enumerate(reversed(chain)):                  # head first, then each accumulate tile
     if prev is None:                            # HEAD: init the accumulator to 0 from the 8 CONST-0 seed lanes (V_CONST)
       if head_acc is not None:
         cin = [UOp(Ops.INS, dtypes.float32, src=(head_acc[2],), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
@@ -735,7 +1780,30 @@ def isel_wmma(ctx:IselContext, x:UOp):
     else:                                       # ACCUMULATE: src2 = prior tile's 8 pinned D lanes (== v{cbase..cbase+7})
       cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
       dep = (prev.src[0],)                      # WAR guard: reload this tile's shared A/B frags only after the prior matmul
-    prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
+      dep = _dbuf_d3a_probe_marker(ctx, tile, dep)
+    if getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0) and _c_low(ctx):
+      _wmma_frag_key_dump(ctx, "A", tile.src[0], phase="chain_resident", tile_i=tile_i)
+      _wmma_frag_key_dump(ctx, "B", tile.src[1], phase="chain_resident", tile_i=tile_i)
+      resident_a = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1))
+      resident_b = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_B", 1))
+      if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
+        akey = _wmma_frag_phase_reuse_key(ctx, "A", tile.src[0]) or _wmma_frag_proof_reuse_key(ctx, "A", tile.src[0])
+        bkey = _wmma_frag_phase_reuse_key(ctx, "B", tile.src[1]) or _wmma_frag_proof_reuse_key(ctx, "B", tile.src[1])
+        if (resident_a and akey is None) or (resident_b and bkey is None):
+          prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
+          continue
+      else:
+        akey, bkey = _wmma_frag_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_reuse_key(ctx, "B", tile.src[1])
+      tabase = _ab_base(ctx, ("A", akey)) if resident_a else abase
+      tbbase = _ab_base(ctx, ("B", bkey)) if resident_b else bbase
+      if cbase is None or tabase is None or tbbase is None:
+        raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={tabase} B={tbbase} C={cbase})")
+      resident_dep = dep if getenv("PREFILL_WMMA_RESIDENT_PACK_DEP", 0) else ()
+      apk = _pack_frag(ctx, tile.src[0], tabase, resident_dep) if resident_a else _pack_frag_tile(ctx, tile.src[0], tabase, dep, "A")
+      bpk = _pack_frag(ctx, tile.src[1], tbbase, resident_dep) if resident_b else _pack_frag_tile(ctx, tile.src[1], tbbase, dep, "B")
+      prev = memo[tile] = _build_wmma_from_packs(ctx, apk, bpk, cin, cbase)
+    else:
+      prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
   return memo[x]
 
 def _chain_epilogue_stores(ctx:IselContext, x:UOp):
@@ -767,6 +1835,7 @@ isel_matcher = PatternMatcher([
   # Phase G ALU/control: bitwise, max, compares->bool, select, const-pow2 div/mod, gated store
   (UPat(Ops.XOR, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_XOR)),
   (UPat(Ops.AND, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_AND)),
+  (UPat(Ops.OR, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_OR)),
   (UPat(Ops.MAX, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_MAX)),
   (UPat(Ops.CMPLT, name="x"), lambda ctx, x: isel_cmp(ctx, x, ne=False)),
   (UPat(Ops.CMPNE, name="x"), lambda ctx, x: isel_cmp(ctx, x, ne=True)),
@@ -793,11 +1862,33 @@ isel_matcher = PatternMatcher([
   # Phase N1B: wave-uniform int address math -> scalar pipe (s_mul/s_add/s_lshl). Else per-lane VALU (v_mul_lo/v_add_nc).
   (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_IMUL) if x.arg == _N1B_UNI else _binop(ctx, x, AMDOps.V_IMUL)),
   (UPat(Ops.ADD, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_IADD) if x.arg == _N1B_UNI else _binop(ctx, x, AMDOps.V_IADD)),
-  (UPat(Ops.SHL, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_ISHL) if x.arg == _N1B_UNI else None),
+  (UPat(Ops.SHL, dtype=dtypes.ints, name="x"), lambda ctx, x: _sbinop(ctx, x, AMDOps.S_ISHL) if x.arg == _N1B_UNI else isel_shift(ctx, x, left=True)),
+  (UPat(Ops.SHR, dtype=dtypes.ints, name="x"), lambda ctx, x: isel_shift(ctx, x, left=False)),
   # B0.L7: tensor-core matmul -> fragment packing + v_wmma (MUST precede the catch-all INS rule below)
   (UPat(Ops.WMMA, name="x"), isel_wmma),
   # catch-all register allocation seed (x86 alloc_vregs analog): tag None -> fresh vreg; physical -> constrained vreg
   (UPat(Ops.INS, name="x"), lambda ctx, x: alloc_vregs(ctx, x)),
+])
+
+def _strip_linear_order_deps(x:UOp):
+  nx = None
+  if x.arg is AMDOps.GLOBAL_LOAD and len(x.src) > 3: nx = x.replace(src=x.src[:3])
+  elif x.arg is AMDOps.DS_LOAD and len(x.src) > 2: nx = x.replace(src=x.src[:2])
+  elif x.arg is AMDOps.DS_LOAD_B128 and len(x.src) > 3: nx = x.replace(src=x.src[:3])
+  elif x.arg is AMDOps.DS_STORE_B128 and len(x.src) > 7: nx = x.replace(src=x.src[:5] + x.src[-2:])
+  elif x.arg is AMDOps.GATED_STORE_B128 and len(x.src) > 8: nx = x.replace(src=x.src[:6] + x.src[-2:])
+  if nx is not None: return (nx, [nx])
+  return None
+
+def _strip_metadata_tag(x:UOp):
+  if isinstance(x.tag, tuple) and x.tag and x.tag[0] in ("wmma_frag_buffer_proof", "tc_local_stage_store", "wmma_frag_stage_window"):
+    nx = x.replace(tag=None)
+    return (nx, [nx])
+  return None
+
+pre_regalloc_matcher = PatternMatcher([
+  (UPat(Ops.INS, name="x"), _strip_linear_order_deps),
+  (UPat(GroupOp.All, name="x"), _strip_metadata_tag),
 ])
 
 def _binop(ctx:IselContext, x:UOp, op:AMDOps):
@@ -842,10 +1933,157 @@ def _mark_uniform(x:UOp):
   if all(uni(s) for s in x.src): return x.replace(arg=_N1B_UNI)
   return None
 
+def _pack_coop_lds_stores(x:UOp):
+  if not getenv("PREFILL_LDS_PACK_LATE_MATCHER", 0): return None
+  if len(x.src) != 16 or not all(g.op is Ops.GROUP and len(g.src) == 4 for g in x.src): return None
+  rows: dict[int, tuple[UOp, ...]] = {}
+  buf = base_expr = gate = None
+  for g in x.src:
+    stores = []
+    slot = None
+    for st in g.src:
+      if st.op is not Ops.STORE or len(st.src) != 3: return None
+      idx, val, cur_gate = st.src
+      if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or idx.dtype.base is not dtypes.half: return None
+      if val.dtype is not dtypes.half: return None
+      cur_base, cur_slot = _const_base(idx.src[1])
+      if cur_base is None: return None
+      if slot is None: slot = cur_slot
+      elif slot != cur_slot: return None
+      if buf is None: buf = idx.src[0]
+      elif idx.src[0] is not buf: return None
+      if base_expr is None: base_expr = cur_base
+      elif cur_base is not base_expr: return None
+      if gate is None: gate = cur_gate
+      elif cur_gate is not gate: return None
+      stores.append(st)
+    if slot is None or slot in rows: return None
+    rows[slot] = tuple(stores)
+  if sorted(rows) != list(range(16)): return None
+  packed = []
+  prev = None
+  for rep in range(4):
+    for slot0 in (0, 8):
+      raw_vals = tuple(rows[slot][rep].src[1] for slot in range(slot0, slot0 + 8))
+      vals = tuple(_after_load_addr(v, prev) for v in raw_vals)
+      carrier = UOp(Ops.NOOP, dtypes.half.vec(8), vals + ((prev,) if prev is not None else ()),
+                    arg=("global_b128", idx0) if getenv("PREFILL_LDS_PACK_GLOBAL_B128", 0) and (idx0 := _global_half8_base(raw_vals)) is not None else None)
+      tag = _tc_stage_tag(rows[slot0][rep]) or _tc_stage_tag(rows[slot0][rep].src[0])
+      prev = _retag_tc_stage_store(_retag_tc_stage_index(rows[slot0][rep].src[0], tag).store(carrier, gate), tag)
+      packed.append(prev)
+  return UOp.group(*packed)
+
+def _dbuf_store_addr_seed(x:UOp) -> UOp|None:
+  if not (getenv("PREFILL_DBUF", 0) and getenv("PREFILL_DBUF_GLOBAL_ADDR_INLOOP", 0)): return None
+  rs = sorted([r for r in x.ranges if r.op is Ops.RANGE and r.arg[-1] is AxisType.REDUCE], key=lambda r: r.arg)
+  return rs[0] if rs else None
+
+def _pack_withlocal_lds_stores(x:UOp):
+  if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): return None
+  dump = getenv("PREFILL_LDS_PACK_WITHLOCAL_DUMP", 0)
+  def fail(reason:str):
+    if dump:
+      infos = [_local_vec4_store_info(st) for st in x.src] if all(st.op is Ops.STORE for st in x.src) else []
+      print("WITHLOCAL_PACK_SKIP", reason, {"group_len": len(x.src), "ops": [s.op.name for s in x.src[:8]],
+                                            "local_consts": [None if info is None else info[3] for info in infos[:32]],
+                                            "global_consts": [None if info is None else info[7] for info in infos[:32]]})
+    return None
+  if len(x.src) < 2 or len(x.src) % 2 != 0 or not all(st.op is Ops.STORE for st in x.src): return fail("shape")
+  infos = [_local_vec4_store_info(st) for st in x.src]
+  if any(info is None for info in infos): return fail("store_info")
+  if getenv("PREFILL_LDS_PACK_WITHLOCAL_SKIP_SMALL_B_TILEKEY_BUF", 0) and getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0):
+    try:
+      local_nbytes = infos[0][0].src[0].dtype.nbytes()
+    except Exception:
+      local_nbytes = 0
+    # Diagnostic only: in the DBUF 4x2 both-stage route, A's local tile is 32KiB and B's tile-key local tile is
+    # 16KiB. Skipping the smaller generic pack tests whether B needs the explicit tile-major bridge instead.
+    if local_nbytes == 16 * 1024: return fail("small_b_tilekey_buf")
+  if any(_has_local_axis(info[6]) and not _has_local_axis(info[2]) for info in infos): return fail("local_identity")
+  if dump:
+    print("WITHLOCAL_PACK", {"group_len": len(x.src),
+                             "local_consts": [info[3] for info in infos[:32]],
+                             "global_consts": [info[7] for info in infos[:32]],
+                             "load_src_lens": [len(info[1].src) for info in infos[:32]],
+                             "load_src_ops": [[s.op.name for s in info[1].src] for info in infos[:4]],
+                             "local_base0": str(infos[0][2])[:240],
+                             "global_base0": str(infos[0][6])[:240]})
+  if getenv("PREFILL_LDS_PACK_REJECT_GLOBAL_DISCONTINUITY", 0):
+    gconsts = [info[7] for info in infos]
+    if any(abs(gconsts[i+1] - gconsts[i]) > 64 for i in range(len(gconsts)-1)): return fail("global_discontinuity")
+  packed = []
+  prev = _dbuf_store_addr_seed(x)
+  for i in range(0, len(infos), 2):
+    idx0, _val0, base0, lconst0, gidx0, gbuf0, gbase0, gconst0, tag0 = infos[i]
+    _idx1, _val1, base1, lconst1, _gidx1, gbuf1, gbase1, gconst1, _tag1 = infos[i+1]
+    if base1 is not base0 or lconst1 != lconst0 + 4: return fail("local_pair")
+    if gbuf1 is not gbuf0 or gbase1 is not gbase0 or gconst1 != gconst0 + 4: return fail("global_pair")
+    if lconst0 % 8 != 0 or gconst0 % 8 != 0: return fail("align")
+    carrier = UOp(Ops.NOOP, dtypes.half.vec(8), (gidx0,) + ((prev,) if prev is not None else ()), arg=("global_b128", gidx0))
+    tag = tag0 or _tc_stage_tag(idx0) or _tc_stage_tag_from_buffer(idx0, lconst0, 8)
+    sidx = _retag_tc_stage_index(_index_after_dep(_split_dbuf_lds_index(idx0, "store"), prev), tag)
+    _dump_lds_proof_key("withlocal_store_b128", sidx, 8, {"pair": i // 2, "global_const": gconst0}, None, prev)
+    prev = _retag_tc_stage_store(sidx.store(carrier), tag)
+    packed.append(prev)
+  return UOp.group(*packed)
+
+def _store_local_scalar_info(st:UOp):
+  if st.op is not Ops.STORE or len(st.src) != 3: return None
+  stage_tag = _tc_stage_tag(st)
+  idx, val, gate = st.src
+  idx = idx.src[0] if idx.op is Ops.CAST else idx
+  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or idx.dtype.base is not dtypes.half: return None
+  if val.dtype is not dtypes.half: return None
+  base_expr, local_const = _const_base(idx.src[1])
+  if base_expr is None: return None
+  return idx, val, gate, base_expr, local_const, stage_tag
+
+def _pack_b_tilekey_lds_stores(x:UOp):
+  if not (getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0) and getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0)): return None
+  dump = getenv("PREFILL_LDS_PACK_B_TILEKEY_DUMP", 0)
+  def fail(reason:str):
+    if dump:
+      flat_infos = [_store_local_scalar_info(st) for st in x.src] if all(st.op is Ops.STORE for st in x.src) else []
+      print("B_TILEKEY_PACK_SKIP", reason, {"group_len": len(x.src), "ops": [s.op.name for s in x.src[:4]],
+                                            "flat_consts": [None if info is None else info[4] for info in flat_infos[:64]]})
+    return None
+  if len(x.src) != 16 or not all(g.op is Ops.GROUP and len(g.src) > 0 for g in x.src): return fail("shape")
+  infos = [[_store_local_scalar_info(st) for st in g.src] for g in x.src]
+  if any(info is None for row in infos for info in row): return fail("scalar_info")
+  if dump:
+    print("B_TILEKEY_PACK", [[info[4] for info in row] for row in infos])
+    print("B_TILEKEY_VALS", [[(None if (a := _wmma_half_addr(info[1])) is None else a[3]) for info in row] for row in infos])
+  gate = infos[0][0][2]
+  base_expr = infos[0][0][3]
+  if any(info[2] is not gate or info[3] is not base_expr for row in infos for info in row): return fail("gate_or_base")
+  packed = []
+  prev = _dbuf_store_addr_seed(x)
+  for tile in range(len(infos[0])):
+    for half_row in range(2):
+      frag0 = half_row * 8
+      row = [infos[frag][tile] for frag in range(frag0, frag0 + 8)]
+      const0 = row[0][4]
+      if const0 % 8 != 0: return fail("const_align")
+      if [info[4] for info in row] != list(range(const0, const0 + 8)): return fail("const_sequence")
+      vals = tuple(_after_load_addr(info[1], prev) for info in row)
+      packs = tuple(UOp(Ops.INS, dtypes.int32, src=(vals[2*i], vals[2*i+1]) + ((prev,) if prev is not None else ()),
+                        arg=AMDOps.V_PACK, tag=_pin(LDS_PACK_BASE, i)) for i in range(4))
+      carrier = UOp(Ops.NOOP, dtypes.int32.vec(4), packs)
+      if prev is not None: carrier = carrier.after(prev)
+      tag = row[0][5] or _tc_stage_tag(row[0][0]) or _tc_stage_tag_from_buffer(row[0][0], const0, 8)
+      sidx = _retag_tc_stage_index(_index_after_dep(_split_dbuf_lds_index(row[0][0], "store"), prev), tag)
+      _dump_lds_proof_key("tilekey_store_b128", sidx, 8, {"tile": tile, "half_row": half_row}, None, prev)
+      prev = _retag_tc_stage_store(sidx.store(carrier, gate), tag)
+      packed.append(prev)
+  return UOp.group(*packed)
+
 # Phase N1B is OPT-IN (AMD_ISA_N1B=1). Default-off: the uniform address prefixes in the decode tile sit behind a
 # vector OOB-clamp (where()->v_cndmask), so the live addresses use the clamped VGPR index; scalarizing the pre-clamp
 # uniform value yields DEAD scalar ops (no live VALU removed) and triggers an SGPR-datapath fault. See phase-n1b gate.
 pre_isel_matcher = PatternMatcher([
+  (UPat(Ops.GROUP, name="x"), _pack_b_tilekey_lds_stores),
+  (UPat(Ops.GROUP, name="x"), _pack_withlocal_lds_stores),
+  (UPat(Ops.GROUP, name="x"), _pack_coop_lds_stores),
   (UPat((Ops.ADD, Ops.MUL, Ops.SHL), dtype=dtypes.ints, name="x"), lambda ctx, x: _mark_uniform(x) if getenv("AMD_ISA_N1B", 0) else None),
 ])
 
@@ -885,6 +2123,9 @@ def lower_inst(x:UOp):
     return (bp, [bp])
   if a is AMDOps.V_DOT2:                             # packed fp16 dot: acc=src[0], a_packed=src[1], b_packed=src[2]
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
+  if a is AMDOps.BARRIER:
+    b = UOp(Ops.INS, arg=s_barrier())
+    return (b, [b])
   if a is AMDOps.V_WMMA:                             # B0.L7: D = A*B + C, 16x16x16 fp16->fp32. src=(A0..7,B0..7,C0..7).
     # Fragment bases are the FIRST reg of each 8-VGPR run (src[0]=A base, src[8]=B base, src[16]=C base). D writes in
     # place over C so vdst==src2. NOTE inclusive 8-reg slices: _V[b:b+7] == Reg(256+b, 8) (dsl slice end is inclusive).
@@ -919,11 +2160,15 @@ def lower_inst(x:UOp):
   if a is AMDOps.DS_STORE_B128:
     if len(src) == 3:
       data, imm = src[1], src[2]
-    elif len(src) in (4, 6, 7):
+    elif len(src) in (4, 5, 6, 7):
       data, imm = src[1], src[-1]
     else:
       raise NotImplementedError(f"AMD:ISA unsupported DS_STORE_B128 source shape: {len(src)}")
     st = UOp(Ops.INS, arg=ds_store_b128(addr=_Vr(src[0].reg), data0=_V[data.reg.index:data.reg.index+3], offset0=imm.arg))
+    return (st, [st])
+  if a is AMDOps.DS_STORE_B64:
+    data, imm = src[1], src[-1]
+    st = UOp(Ops.INS, arg=ds_store_b64(addr=_Vr(src[0].reg), data0=_V[data.reg.index:data.reg.index+1], offset0=imm.arg))
     return (st, [st])
   if a is AMDOps.V_MOVK:                            # materialize a compile-time byte offset into a VGPR
     return _ins(v_mov_b32_e32(_Vr(x.reg), src[0].arg), x.tag)
@@ -935,7 +2180,7 @@ def lower_inst(x:UOp):
   if a is AMDOps.GLOBAL_LOAD:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg    # imm = per-lane element byte offset
     # Phase-1a: fp16 (itemsize 2) must use a 16-bit load; b32 reads 2 bytes past the final element -> page-boundary MMU fault.
-    gl = global_load_u16 if x.dtype.itemsize == 2 else global_load_b32
+    gl = global_load_u8 if x.dtype.itemsize == 1 else global_load_u16 if x.dtype.itemsize == 2 else global_load_b32
     ld = _ins(gl(vdst=_Vr(x.reg), addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
     return (ld, [ld])
   if a is AMDOps.GLOBAL_LOAD_B128:
@@ -959,6 +2204,9 @@ def lower_inst(x:UOp):
   if a is AMDOps.V_AND:                             # b32 and (VOP2); used directly and for CMOD-by-pow2 mask
     if src[1].op is Ops.CONST: return _ins(v_and_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
     return _ins(v_and_b32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
+  if a is AMDOps.V_OR:                              # b32 or (VOP2); CONST -> src0
+    if src[1].op is Ops.CONST: return _ins(v_or_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
+    return _ins(v_or_b32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
   if a is AMDOps.V_MAX: return _ins(_vop2_f(v_max_f32_e32, x, src), x.tag)   # f32 max (VOP2)
   if a is AMDOps.V_LSHR:                            # logical >> k (CDIV-by-pow2); shift imm in src[1], value in src[0]
     return _ins(v_lshrrev_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
@@ -966,6 +2214,8 @@ def lower_inst(x:UOp):
   if a is AMDOps.V_CVT_H2F: return _ins(v_cvt_f32_f16_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_F2I: return _ins(v_cvt_i32_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_I2F: return _ins(v_cvt_f32_i32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_CVT_U2F: return _ins(v_cvt_f32_u32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_CVT_F2U: return _ins(v_cvt_u32_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_PACK: return _ins(v_pack_b32_f16(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)  # 2 f16 -> b32
   if a in (AMDOps.V_CMPLT_F, AMDOps.V_CMPLT_I, AMDOps.V_CMPNE_F, AMDOps.V_CMPNE_I):
     # compare -> VCC, then materialize 0/1 into a VGPR via v_cndmask (src[2] holds a VGPR with constant 1)
@@ -993,11 +2243,18 @@ def lower_inst(x:UOp):
     st = UOp(Ops.INS, arg=ds_store_b128(addr=addr, data0=_V[data.reg.index:data.reg.index+3], offset0=imm.arg))
     restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))
     return (restore, [cmp, save, st, restore])
+  if a is AMDOps.GATED_STORE_B64:
+    gate, addr, data, imm = _Vr(src[0].reg), _Vr(src[1].reg), src[2], src[-1]
+    cmp = UOp(Ops.INS, arg=v_cmp_ne_u32_e32(0, gate))
+    save = UOp(Ops.INS, arg=s_and_saveexec_b32(_S[5], VCC))
+    st = UOp(Ops.INS, arg=ds_store_b64(addr=addr, data0=_V[data.reg.index:data.reg.index+1], offset0=imm.arg))
+    restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))
+    return (restore, [cmp, save, st, restore])
   if a is AMDOps.GLOBAL_STORE:
     # SCALARIZED: one INS -> N scalar stores, lane l at immediate offset l*itemsize. src=(off, base, val0..valN-1, isz)
     off_r, ptr_r, isz = src[0].reg, src[1].reg, src[-1].arg
     vals = src[2:-1]
-    gs = global_store_b16 if isz == 2 else global_store_b32   # Phase-1a: fp16 must use 16-bit store (b32 writes 2 stray bytes)
+    gs = global_store_b8 if isz == 1 else global_store_b16 if isz == 2 else global_store_b32
     stores = [UOp(Ops.INS, arg=gs(addr=_Vr(off_r), data=_Vr(v.reg), saddr=_S2(ptr_r), offset=l*isz))
               for l,v in enumerate(vals)]
     return (stores[-1], stores)    # vmcnt drain before endpgm inserted by _insert_waitcnt
@@ -1055,6 +2312,7 @@ class AMDISARenderer(ISARenderer):
   tensor_cores = amd_rdna3
   pre_isel_matcher = pre_isel_matcher
   isel_matcher = isel_matcher
+  pre_regalloc_matcher = pre_regalloc_matcher
   post_regalloc_matcher = post_regalloc_matcher
   # EXP2 listed as natively supported -> the shared transcendental pass leaves Ops.EXP2 intact (no VALU polynomial)
   # so isel can lower it to hardware v_exp_f32 (Phase N1A).
@@ -1081,11 +2339,14 @@ class AMDISARenderer(ISARenderer):
       a = u.arg
       if isinstance(a, tuple) and a[0] == "label": labels[a[1]] = off
       elif isinstance(a, tuple) and a[0] == "branch": off += 4
+      elif isinstance(a, tuple) and a[0] == "audit_dbuf_d3a_stage": pass
       else: off += len(a.to_bytes())
     out = []
     for u, p in zip(insts, pos):
       a = u.arg
       if isinstance(a, tuple) and a[0] == "label": continue                  # 0-byte marker, drop
+      if isinstance(a, tuple) and a[0] == "audit_dbuf_d3a_stage":
+        out.append(u); continue
       if isinstance(a, tuple) and a[0] == "branch":
         _, kind, target = a
         simm = (labels[target] - p - 4) // 4
@@ -1215,7 +2476,8 @@ class AMDISARenderer(ISARenderer):
       return out
     if getenv("AMD_ISA_WAITCNT_TARGETED", 0):
       out = []
-      pend_vm:list[set[int]] = []; pend_lgkm:list[set[int]] = []; vm_store = lgkm_store = False
+      pend_vm:list[set[int]] = []; pend_lgkm:list[set[int]] = []
+      vm_store = lgkm_store = False
       def _span(r): return set(range(r.offset, r.offset + r.sz))
       def _uses(a) -> set[int]:
         return set().union(*(_span(r) for r in self._inst_regs(a))) if self._inst_regs(a) else set()
@@ -1242,7 +2504,8 @@ class AMDISARenderer(ISARenderer):
         uses = _uses(a)
         if m == "s_barrier" and (lgkm_store or pend_lgkm): _drain(vm=63, lgkm=0, exp=7)
         elif m == "s_endpgm" and (vm_store or lgkm_store or pend_vm or pend_lgkm): _drain()
-        elif m.startswith("ds_load") and lgkm_store: _drain(vm=63, lgkm=0, exp=7)
+        elif m.startswith("ds_load") and lgkm_store:
+          if not getenv("AMD_ISA_WAITCNT_D3A_SKIP_STORE_LOAD", 0): _drain(vm=63, lgkm=0, exp=7)
         else:
           # Scalarized half-fragment paths otherwise emit one partial wait per v_pack. Coalesce those narrow-load
           # consumers to the default-equivalent VMEM drain; the b128/WMMA route still gets true targeted waits.

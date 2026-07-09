@@ -5,6 +5,8 @@
 #   B (src1) = 8 VGPR/lane (16 fp16): lane l holds B[0:16][l] (a column). We pass B TRANSPOSED in
 #     memory (Bt[n][k]=B[k][n]) so a column is contiguous -> Bt[l][0:16].
 #   C/D (src2/vdst) = 8 VGPR/lane (8 fp32): D[i] of lane l = C[row=i*2+(l>>4&1)][col=l&15].
+from dataclasses import dataclass
+import os
 import numpy as np
 from tinygrad import Tensor, Device, Context, GlobalCounters
 from tinygrad.uop.ops import UOp, Ops, KernelInfo
@@ -16,6 +18,166 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import *
 
 FA, FB, ACC = 20, 32, 44   # VGPR bases: A frag(8), B frag(8), accumulator(8)
 
+@dataclass(frozen=True)
+class LDS2RegLayout:
+  FA: int
+  FB: int
+  ACCb: int
+  CTA: int
+  CTB: int
+  SCR: int
+  FB2: int
+
+  def validate(self, WM, WN, loadsA, loadsB, PLRAB=0):
+    if self.FA < 0 or self.FB < 0 or self.ACCb < 0 or self.CTA < 0 or self.CTB < 0 or self.SCR < 0 or self.FB2 < 0:
+      raise AssertionError(f"negative LDS2 VGPR layout field: {self}")
+    if self.SCR+2 > 256: raise AssertionError(f"VGPR overflow {self.SCR+2}")
+    if PLRAB and self.FB2+WM*8+WN*8 > 256:
+      raise AssertionError(f"PLRAB VGPR overflow {self.FB2+WM*8+WN*8} (needs smaller tile than {WM}x{WN})")
+    if self.FB < self.FA + WM*8: raise AssertionError(f"LDS2 layout overlaps A/B fragments: {self}")
+    if self.ACCb < self.FB + WN*8: raise AssertionError(f"LDS2 layout overlaps B fragments/accumulators: {self}")
+    if self.CTA < self.ACCb + WM*WN*8: raise AssertionError(f"LDS2 layout overlaps accumulators/CTA: {self}")
+    if self.CTB < self.CTA + loadsA*4: raise AssertionError(f"LDS2 layout overlaps CTA/CTB: {self}")
+    if self.SCR < self.CTB + loadsB*4: raise AssertionError(f"LDS2 layout overlaps CTB/SCR: {self}")
+    if self.FB2 < self.SCR + 2: raise AssertionError(f"LDS2 layout overlaps scratch/PLRAB buffer: {self}")
+    return self
+
+def default_lds2_reg_layout(WM, WN, loadsA, loadsB) -> LDS2RegLayout:
+  FA=10; FB=FA+WM*8; ACCb=FB+WN*8; CTA=ACCb+WM*WN*8; CTB=CTA+loadsA*4; SCR=CTB+loadsB*4
+  return LDS2RegLayout(FA=FA, FB=FB, ACCb=ACCb, CTA=CTA, CTB=CTB, SCR=SCR, FB2=SCR+2)
+
+def env_lds2_reg_layout(WM, WN, loadsA, loadsB) -> LDS2RegLayout:
+  layout = default_lds2_reg_layout(WM, WN, loadsA, loadsB)
+  shift = int(os.environ.get("PREFILL_LDS2_REG_BLOCK_SHIFT", "0"))
+  if shift:
+    vals = {k: v + shift for k, v in layout.__dict__.items()}
+    layout = LDS2RegLayout(**vals)
+  return layout
+
+@dataclass(frozen=True)
+class LDS2MemoryLayout:
+  SA: int
+  SB: int
+  LDS_A: int
+  BUFSZ: int
+  NBUF: int
+
+  def validate(self):
+    if self.SA <= 0 or self.SB <= 0 or self.LDS_A <= 0 or self.BUFSZ <= 0 or self.NBUF not in (1, 2):
+      raise AssertionError(f"invalid LDS2 memory layout: {self}")
+    if self.BUFSZ*self.NBUF > 65536: raise AssertionError(f"LDS overflow {self.BUFSZ*self.NBUF}")
+    return self
+
+def default_lds2_memory_layout(BM, BN, BK, PAD, DBUF) -> LDS2MemoryLayout:
+  SA=BK*2+PAD; SB=BK*2+PAD; LDS_A=SA*BM; BUFSZ=LDS_A+SB*BN; NBUF=2 if DBUF else 1
+  return LDS2MemoryLayout(SA=SA, SB=SB, LDS_A=LDS_A, BUFSZ=BUFSZ, NBUF=NBUF)
+
+@dataclass(frozen=True)
+class LDS2WaitPolicy:
+  vm_after_coop_load: int = 0
+  lgkm_after_coop_store: int = 0
+  lgkm_after_frag_load: int = 0
+
+  def validate(self):
+    for name in ("vm_after_coop_load", "lgkm_after_coop_store", "lgkm_after_frag_load"):
+      val = getattr(self, name)
+      if not 0 <= val <= 63: raise AssertionError(f"invalid LDS2 wait policy {name}={val}")
+    return self
+
+  def wait_after_coop_load(self): return waitcnt_vm(self.vm_after_coop_load)
+  def wait_after_coop_store(self): return waitcnt_lgkm(self.lgkm_after_coop_store)
+  def wait_after_frag_load(self): return waitcnt_lgkm(self.lgkm_after_frag_load)
+
+def default_lds2_wait_policy() -> LDS2WaitPolicy:
+  return LDS2WaitPolicy()
+
+def env_lds2_wait_policy() -> LDS2WaitPolicy:
+  return LDS2WaitPolicy(
+    vm_after_coop_load=int(os.environ.get("PREFILL_LDS2_WAIT_VM_COOP_LOAD", "0")),
+    lgkm_after_coop_store=int(os.environ.get("PREFILL_LDS2_WAIT_LGKM_COOP_STORE", "0")),
+    lgkm_after_frag_load=int(os.environ.get("PREFILL_LDS2_WAIT_LGKM_FRAG_LOAD", "0")),
+  )
+
+@dataclass(frozen=True)
+class LDS2Cadence:
+  double_buffer: bool
+
+  def validate(self, DBUF):
+    if self.double_buffer != bool(DBUF):
+      raise AssertionError(f"LDS2 cadence double_buffer={self.double_buffer} disagrees with DBUF={DBUF}")
+    return self
+
+def default_lds2_cadence(DBUF) -> LDS2Cadence:
+  return LDS2Cadence(double_buffer=bool(DBUF))
+
+@dataclass(frozen=True)
+class LDS2LifecycleStep:
+  op: str
+  slot: int | None = None
+
+@dataclass(frozen=True)
+class LDS2LifecycleTemplate:
+  double_buffer: bool
+  prologue: tuple[LDS2LifecycleStep, ...]
+  body: tuple[LDS2LifecycleStep, ...]
+  tail: tuple[LDS2LifecycleStep, ...]
+
+  def validate(self, DBUF):
+    if self.double_buffer != bool(DBUF):
+      raise AssertionError(f"LDS2 lifecycle double_buffer={self.double_buffer} disagrees with DBUF={DBUF}")
+    valid = {
+      "init_counter", "label_loop", "coop_load", "wait_coop_load", "coop_store", "wait_coop_store",
+      "barrier", "compute", "compute_plr", "adv_k", "branch_nblk", "branch_nl",
+    }
+    for phase in (self.prologue, self.body, self.tail):
+      for step in phase:
+        if step.op not in valid: raise AssertionError(f"invalid LDS2 lifecycle op={step.op!r}")
+        if step.op in {"coop_load", "coop_store", "compute", "compute_plr"} and step.slot not in (0, 1):
+          raise AssertionError(f"invalid LDS2 lifecycle slot for {step.op}: {step.slot}")
+    return self
+
+def _ls(op, slot=None) -> LDS2LifecycleStep:
+  return LDS2LifecycleStep(op, slot)
+
+def default_lds2_lifecycle_template(DBUF) -> LDS2LifecycleTemplate:
+  if not DBUF:
+    return LDS2LifecycleTemplate(
+      double_buffer=False,
+      prologue=(_ls("init_counter"), _ls("label_loop")),
+      body=(
+        _ls("coop_load", 0), _ls("wait_coop_load"), _ls("coop_store", 0), _ls("wait_coop_store"), _ls("barrier"),
+        _ls("compute_plr", 0), _ls("barrier"), _ls("adv_k"), _ls("branch_nblk"),
+      ),
+      tail=(),
+    )
+  return LDS2LifecycleTemplate(
+    double_buffer=True,
+    prologue=(
+      _ls("coop_load", 0), _ls("wait_coop_load"), _ls("coop_store", 0), _ls("wait_coop_store"), _ls("barrier"),
+      _ls("adv_k"), _ls("init_counter"), _ls("label_loop"),
+    ),
+    body=(
+      _ls("coop_load", 1), _ls("compute", 0), _ls("wait_coop_load"), _ls("coop_store", 1), _ls("wait_coop_store"), _ls("barrier"), _ls("adv_k"),
+      _ls("coop_load", 0), _ls("compute", 1), _ls("wait_coop_load"), _ls("coop_store", 0), _ls("wait_coop_store"), _ls("barrier"), _ls("adv_k"),
+      _ls("branch_nl"),
+    ),
+    tail=(
+      _ls("coop_load", 1), _ls("compute", 0), _ls("wait_coop_load"), _ls("coop_store", 1), _ls("wait_coop_store"), _ls("barrier"),
+      _ls("compute", 1),
+    ),
+  )
+
+def env_lds2_lifecycle_template(DBUF) -> LDS2LifecycleTemplate:
+  template = default_lds2_lifecycle_template(DBUF)
+  if DBUF and os.environ.get("PREFILL_LDS2_LIFECYCLE_PROLOGUE_INIT_BEFORE_ADV_K", "0") != "0":
+    template = LDS2LifecycleTemplate(
+      double_buffer=True,
+      prologue=template.prologue[:5] + (template.prologue[6], template.prologue[5], template.prologue[7]),
+      body=template.body,
+      tail=template.tail,
+    )
+  return template
+
 def waitcnt_lgkm(n):
   # DS/LDS wait: lgkmcnt=bits[9:4] (per extra/qk/prefill/wmma.py). vmcnt/expcnt maxed (don't wait on them).
   return s_waitcnt(simm16=(0x7) | ((n & 0x3F) << 4) | (0x3F << 10))
@@ -26,6 +188,188 @@ def waitcnt_vm(n):
   # Wait until <=n outstanding VMEM loads; leave expcnt/lgkmcnt maxed (don't wait on them).
   if getenv("FULLWAIT",0): return s_waitcnt(simm16=0)
   return s_waitcnt(simm16=(0x7) | ((0x3F) << 4) | ((n & 0x3F) << 10))
+
+class LDS2PrimitiveEmitter:
+  def __init__(self, emit, label, branch, **kwargs):
+    self.e, self.label, self.branch = emit, label, branch
+    self.__dict__.update(kwargs)
+    self.VRA=self.SCR+1; self.VRB=self.VRA+self.loadsA; self.SKA=18; self.SKB=20
+
+  def dsoff(self, o): return dict(offset0=o&0xFF, offset1=(o>>8)&0xFF)
+
+  def emit_kernel_prologue(self):
+    self.e(s_load_b128(sdata=s[4:7], sbase=s[0:1], offset=0, soffset=NULL))
+    self.e(s_load_b64(sdata=s[8:9], sbase=s[0:1], offset=0x10, soffset=NULL))
+    self.e(s_waitcnt(simm16=0))
+
+  def emit_tile_setup(self):
+    self.e(v_lshrrev_b32_e32(v[8], 5, v[0]))
+    if self.WAVES_N==1: self.e(v_mov_b32_e32(v[19], v[8])); self.e(v_mov_b32_e32(v[20], 0))
+    elif self.WAVES_N==2: self.e(v_lshrrev_b32_e32(v[19],1,v[8])); self.e(v_and_b32_e32(v[20],1,v[8]))
+    elif self.WAVES_N==4: self.e(v_lshrrev_b32_e32(v[19],2,v[8])); self.e(v_and_b32_e32(v[20],3,v[8]))
+    else: raise AssertionError("WAVES_N in {1,2,4}")
+    self.e(v_and_b32_e32(v[1], 15, v[0]))
+    self.e(v_lshlrev_b32_e32(v[6], 4, v[19]))
+    self.e(v_mul_lo_u32(v[6], v[6], self.WM)); self.e(v_add_nc_u32_e32(v[6], v[6], v[1])); self.e(v_mul_lo_u32(v[6], v[6], self.SA))
+    self.e(v_lshlrev_b32_e32(v[7], 4, v[20])); self.e(v_mul_lo_u32(v[7], v[7], self.WN)); self.e(v_add_nc_u32_e32(v[7], v[7], v[1]))
+    self.e(v_mul_lo_u32(v[7], v[7], self.SB))
+    lg2=self.CPR.bit_length()-1
+    self.e(v_and_b32_e32(v[10], self.CPR-1, v[0])); self.e(v_lshrrev_b32_e32(v[11], lg2, v[0]))
+    self.e(s_lshl_b32(s[10], s[3], self.BM.bit_length()-1)); self.e(s_lshl_b32(s[11], s[2], self.BN.bit_length()-1))
+    self.e(v_add_nc_u32_e32(v[2], s[10], v[11])); self.e(v_mul_lo_u32(v[2], v[2], self.K*2)); self.e(v_lshlrev_b32_e32(v[12],4,v[10])); self.e(v_add_nc_u32_e32(v[2], v[2], v[12]))
+    self.e(v_mul_lo_u32(v[4], v[11], self.SA)); self.e(v_add_nc_u32_e32(v[4], v[4], v[12]))
+    self.e(v_add_nc_u32_e32(v[3], s[11], v[11])); self.e(v_mul_lo_u32(v[3], v[3], self.K*2)); self.e(v_add_nc_u32_e32(v[3], v[3], v[12]))
+    self.e(v_mul_lo_u32(v[5], v[11], self.SB)); self.e(v_add_nc_u32_e32(v[5], v[5], v[12]))
+
+  def zero_accumulators(self):
+    for i in range(self.WM*self.WN*8): self.e(v_mov_b32_e32(v[self.ACCb+i], 0))
+
+  def setup_leanaddr(self):
+    if not self.LEANADDR: return
+    assert self.VRB+self.loadsB<=256, f"LEANADDR VGPR overflow {self.VRB+self.loadsB}"
+    for j in range(self.loadsA):
+      self.e(v_mov_b32_e32(v[self.VRA+j], v[2]) if j==0 else v_add_nc_u32_e32(v[self.VRA+j], j*self.RSTRIDE*self.K*2, v[2]))
+    for j in range(self.loadsB):
+      self.e(v_mov_b32_e32(v[self.VRB+j], v[3]) if j==0 else v_add_nc_u32_e32(v[self.VRB+j], j*self.RSTRIDE*self.K*2, v[3]))
+    self.e(s_mov_b32(s[self.SKA], s[4])); self.e(s_mov_b32(s[self.SKA+1], s[5]))
+    self.e(s_mov_b32(s[self.SKB], s[6])); self.e(s_mov_b32(s[self.SKB+1], s[7]))
+
+  def coop_load_lean(self, buf):
+    for j in range(self.loadsA):
+      self.e(global_load_b128(vdst=v[self.CTA+j*4:self.CTA+j*4+3], addr=v[self.VRA+j:self.VRA+j], saddr=s[self.SKA:self.SKA+1], offset=0))
+    for j in range(self.loadsB):
+      self.e(global_load_b128(vdst=v[self.CTB+j*4:self.CTB+j*4+3], addr=v[self.VRB+j:self.VRB+j], saddr=s[self.SKB:self.SKB+1], offset=0))
+
+  def adv_kbase(self):
+    self.e(s_add_u32(s[self.SKA], s[self.SKA], self.BK*2)); self.e(s_addc_u32(s[self.SKA+1], s[self.SKA+1], 0))
+    self.e(s_add_u32(s[self.SKB], s[self.SKB], self.BK*2)); self.e(s_addc_u32(s[self.SKB+1], s[self.SKB+1], 0))
+
+  def coop_load(self, buf):
+    if self.LEANADDR: return self.coop_load_lean(buf)
+    for j in range(self.loadsA):
+      if j==0: ar=2
+      else: self.e(v_add_nc_u32_e32(v[self.SCR], j*self.RSTRIDE*self.K*2, v[2])); ar=self.SCR
+      self.e(global_load_b128(vdst=v[self.CTA+j*4:self.CTA+j*4+3], addr=v[ar:ar], saddr=s[4:5], offset=0))
+    for j in range(self.loadsB):
+      if j==0: br_=3
+      else: self.e(v_add_nc_u32_e32(v[self.SCR], j*self.RSTRIDE*self.K*2, v[3])); br_=self.SCR
+      self.e(global_load_b128(vdst=v[self.CTB+j*4:self.CTB+j*4+3], addr=v[br_:br_], saddr=s[6:7], offset=0))
+
+  def coop_store(self, buf):
+    bo=buf*self.BUFSZ
+    for j in range(self.loadsA):
+      self.e(ds_store_b128(addr=v[4], data0=v[self.CTA+j*4:self.CTA+j*4+3], **self.dsoff(bo+j*self.RSTRIDE*self.SA)))
+    for j in range(self.loadsB):
+      self.e(ds_store_b128(addr=v[5], data0=v[self.CTB+j*4:self.CTB+j*4+3], **self.dsoff(bo+self.LDS_A+j*self.RSTRIDE*self.SB)))
+
+  def compute(self, buf):
+    bo=buf*self.BUFSZ
+    for kt in range(self.KT):
+      for mi in range(self.WM):
+        o=bo+mi*16*self.SA+kt*32
+        self.e(ds_load_b128(vdst=v[self.FA+mi*8:self.FA+mi*8+3],   addr=v[6], **self.dsoff(o)))
+        if not self.DSHALF: self.e(ds_load_b128(vdst=v[self.FA+mi*8+4:self.FA+mi*8+7], addr=v[6], **self.dsoff(o+16)))
+      for ni in range(self.WN):
+        o=bo+self.LDS_A+ni*16*self.SB+kt*32
+        self.e(ds_load_b128(vdst=v[self.FB+ni*8:self.FB+ni*8+3],   addr=v[7], **self.dsoff(o)))
+        if not self.DSHALF: self.e(ds_load_b128(vdst=v[self.FB+ni*8+4:self.FB+ni*8+7], addr=v[7], **self.dsoff(o+16)))
+      self.e(self.wait.wait_after_frag_load())
+      for mi in range(self.WM):
+        for ni in range(self.WN):
+          ac=self.ACCb+(mi*self.WN+ni)*8
+          self.e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[self.FA+mi*8:self.FA+mi*8+7], src1=v[self.FB+ni*8:self.FB+ni*8+7], src2=v[ac:ac+7]))
+
+  def compute_plra(self, buf):
+    assert self.KT==2 and (self.loadsA*4+self.loadsB*4)>=self.WM*8, "PLRA needs KT==2 and dead CTA/CTB room for WM*8 A-frags"
+    bo=buf*self.BUFSZ; FAp=self.CTA
+    def la(dst,kt):
+      for mi in range(self.WM):
+        o=bo+mi*16*self.SA+kt*32
+        self.e(ds_load_b128(vdst=v[dst+mi*8:dst+mi*8+3],   addr=v[6], **self.dsoff(o)))
+        self.e(ds_load_b128(vdst=v[dst+mi*8+4:dst+mi*8+7], addr=v[6], **self.dsoff(o+16)))
+    def lb(kt):
+      for ni in range(self.WN):
+        o=bo+self.LDS_A+ni*16*self.SB+kt*32
+        self.e(ds_load_b128(vdst=v[self.FB+ni*8:self.FB+ni*8+3],   addr=v[7], **self.dsoff(o)))
+        self.e(ds_load_b128(vdst=v[self.FB+ni*8+4:self.FB+ni*8+7], addr=v[7], **self.dsoff(o+16)))
+    def ww(As):
+      for mi in range(self.WM):
+        for ni in range(self.WN):
+          ac=self.ACCb+(mi*self.WN+ni)*8
+          self.e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[As+mi*8:As+mi*8+7], src1=v[self.FB+ni*8:self.FB+ni*8+7], src2=v[ac:ac+7]))
+    la(self.FA,0); lb(0); self.e(self.wait.wait_after_frag_load())
+    la(FAp,1); ww(self.FA); lb(1); self.e(self.wait.wait_after_frag_load()); ww(FAp)
+
+  def compute_plrab(self, buf):
+    assert self.KT==2, "PLRAB needs KT==2"
+    bo=buf*self.BUFSZ; FAp=self.FB2; FBp=self.FB2+self.WM*8
+    def la(dst,kt):
+      for mi in range(self.WM):
+        o=bo+mi*16*self.SA+kt*32
+        self.e(ds_load_b128(vdst=v[dst+mi*8:dst+mi*8+3],   addr=v[6], **self.dsoff(o)))
+        self.e(ds_load_b128(vdst=v[dst+mi*8+4:dst+mi*8+7], addr=v[6], **self.dsoff(o+16)))
+    def lb(dst,kt):
+      for ni in range(self.WN):
+        o=bo+self.LDS_A+ni*16*self.SB+kt*32
+        self.e(ds_load_b128(vdst=v[dst+ni*8:dst+ni*8+3],   addr=v[7], **self.dsoff(o)))
+        self.e(ds_load_b128(vdst=v[dst+ni*8+4:dst+ni*8+7], addr=v[7], **self.dsoff(o+16)))
+    def ww(As,Bs):
+      for mi in range(self.WM):
+        for ni in range(self.WN):
+          ac=self.ACCb+(mi*self.WN+ni)*8
+          self.e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[As+mi*8:As+mi*8+7], src1=v[Bs+ni*8:Bs+ni*8+7], src2=v[ac:ac+7]))
+    la(self.FA,0); lb(self.FB,0); self.e(self.wait.wait_after_frag_load())
+    la(FAp,1); lb(FBp,1); ww(self.FA,self.FB); self.e(self.wait.wait_after_frag_load()); ww(FAp,FBp)
+
+  def compute_selected_plr(self, buf):
+    return self.compute_plrab(buf) if self.PLRAB else self.compute_plra(buf) if self.PLRA else self.compute(buf)
+
+  def advance_k(self):
+    if self.LEANADDR: self.adv_kbase()
+    else: self.e(v_add_nc_u32_e32(v[2], self.BK*2, v[2])); self.e(v_add_nc_u32_e32(v[3], self.BK*2, v[3]))
+
+  def emit_lifecycle_step(self, step):
+    if step.op == "init_counter": self.e(s_mov_b32(s[16], 0))
+    elif step.op == "label_loop": self.label('LOOP')
+    elif step.op == "coop_load": self.coop_load(step.slot)
+    elif step.op == "wait_coop_load": self.e(self.wait.wait_after_coop_load())
+    elif step.op == "coop_store": self.coop_store(step.slot)
+    elif step.op == "wait_coop_store": self.e(self.wait.wait_after_coop_store())
+    elif step.op == "barrier": self.e(s_barrier())
+    elif step.op == "compute": self.compute(step.slot)
+    elif step.op == "compute_plr": self.compute_selected_plr(step.slot)
+    elif step.op == "adv_k": self.advance_k()
+    elif step.op == "branch_nblk":
+      self.e(s_add_i32(s[16], s[16], 1)); self.e(s_cmp_lt_i32(s[16], self.NBLK)); self.e(s_cbranch_scc1(simm16=0)); self.branch('LOOP')
+    elif step.op == "branch_nl":
+      self.e(s_add_i32(s[16], s[16], 1)); self.e(s_cmp_lt_i32(s[16], self.NL)); self.e(s_cbranch_scc1(simm16=0)); self.branch('LOOP')
+    else: raise AssertionError(f"unhandled LDS2 lifecycle step {step}")
+
+  def emit_lifecycle(self, lifecycle):
+    for phase in (lifecycle.prologue, lifecycle.body, lifecycle.tail):
+      for step in phase: self.emit_lifecycle_step(step)
+
+  def emit_epilogue(self):
+    self.e(v_and_b32_e32(v[8], 15, v[0])); self.e(v_lshrrev_b32_e32(v[9], 4, v[0])); self.e(v_and_b32_e32(v[9], 1, v[9]))
+    self.e(v_lshrrev_b32_e32(v[10], 5, v[0]))
+    if self.WAVES_N==1: self.e(v_mov_b32_e32(v[11], v[10])); self.e(v_mov_b32_e32(v[15], 0))
+    elif self.WAVES_N==2: self.e(v_lshrrev_b32_e32(v[11],1,v[10])); self.e(v_and_b32_e32(v[15],1,v[10]))
+    else: self.e(v_lshrrev_b32_e32(v[11],2,v[10])); self.e(v_and_b32_e32(v[15],3,v[10]))
+    self.e(v_lshlrev_b32_e32(v[21], 4, v[11])); self.e(v_mul_lo_u32(v[21], v[21], self.WM)); self.e(v_add_nc_u32_e32(v[21], s[10], v[21]))
+    self.e(v_lshlrev_b32_e32(v[22], 4, v[15])); self.e(v_mul_lo_u32(v[22], v[22], self.WN)); self.e(v_add_nc_u32_e32(v[22], s[11], v[22]))
+    for mi in range(self.WM):
+      for ni in range(self.WN):
+        ac=self.ACCb+(mi*self.WN+ni)*8
+        self.e(v_add_nc_u32_e32(v[12], v[21], v[9])); self.e(v_add_nc_u32_e32(v[12], mi*16, v[12]))
+        self.e(v_add_nc_u32_e32(v[13], v[22], v[8])); self.e(v_add_nc_u32_e32(v[13], ni*16, v[13]))
+        self.e(v_mul_lo_u32(v[12], v[12], self.N)); self.e(v_add_nc_u32_e32(v[12], v[12], v[13])); self.e(v_lshlrev_b32_e32(v[12], 1, v[12]))
+        for i in range(8):
+          self.e(v_cvt_f16_f32_e32(v[14], v[ac+i]))
+          self.e(global_store_b16(addr=v[12:12], data=v[14], saddr=s[8:9], offset=0))
+          if i<7: self.e(v_add_nc_u32_e32(v[12], self.N*4, v[12]))
+
+  def emit_kernel_end(self):
+    self.e(s_waitcnt(simm16=0)); self.e(s_sendmsg(simm16=3)); self.e(s_endpgm())
 
 def build_gemm_pipe(M, N, K, TM, TN):
   # Double-buffered software-pipelined GEMM (A2). Unroll-by-2: F0 holds even-k frags, F1 holds odd-k.
@@ -102,7 +446,7 @@ def build_gemm_pipe(M, N, K, TM, TN):
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
 
-def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0, LEANADDR=0, DSHALF=0):
+def lower_lds2_gemm_kernel(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0, LEANADDR=0, DSHALF=0, *, reg_layout=None, memory_layout=None, wait_policy=None, cadence=None, lifecycle_template=None):
   # P2/P3 (A3): parametric LDS-staged multi-wave GEMM. WAVES_M x WAVES_N wave32; each wave does WM x WN WMMA
   # tiles. BK = K-block depth (KT=BK/16 substeps). PAD = LDS row-pad bytes (bank-conflict avoidance). DBUF =
   # double-buffer LDS via unroll-by-2 (prefetch next block while computing current; removes the inner barrier).
@@ -112,177 +456,37 @@ def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PL
   THREADS=WAVES_M*WAVES_N*32; BM=WAVES_M*WM*16; BN=WAVES_N*WN*16; KT=BK//16; CPR=BK//8; RSTRIDE=THREADS//CPR
   assert M%BM==0 and N%BN==0 and K%BK==0 and THREADS%CPR==0 and BM%RSTRIDE==0 and BN%RSTRIDE==0
   loadsA=BM//RSTRIDE; loadsB=BN//RSTRIDE; NBLK=K//BK
-  SA=BK*2+PAD; SB=BK*2+PAD; LDS_A=SA*BM; BUFSZ=LDS_A+SB*BN; NBUF=2 if DBUF else 1
-  FA=10; FB=FA+WM*8; ACCb=FB+WN*8; CTA=ACCb+WM*WN*8; CTB=CTA+loadsA*4; SCR=CTB+loadsB*4
-  FB2=SCR+2                                          # 2nd fragment buffer for full A+B PLR (PLRAB), past everything
-  assert SCR+2<=256, f"VGPR overflow {SCR+2}"
-  if PLRAB: assert FB2+WM*8+WN*8<=256, f"PLRAB VGPR overflow {FB2+WM*8+WN*8} (needs smaller tile than {WM}x{WN})"
-  assert BUFSZ*NBUF<=65536, f"LDS overflow {BUFSZ*NBUF}"
+  lds_layout = (memory_layout or default_lds2_memory_layout(BM, BN, BK, PAD, DBUF)).validate()
+  SA, SB, LDS_A, BUFSZ, NBUF = lds_layout.SA, lds_layout.SB, lds_layout.LDS_A, lds_layout.BUFSZ, lds_layout.NBUF
+  layout = (reg_layout or env_lds2_reg_layout(WM, WN, loadsA, loadsB)).validate(WM, WN, loadsA, loadsB, PLRAB)
+  FA, FB, ACCb, CTA, CTB, SCR, FB2 = layout.FA, layout.FB, layout.ACCb, layout.CTA, layout.CTB, layout.SCR, layout.FB2
+  wait = (wait_policy or env_lds2_wait_policy()).validate()
+  cadence = (cadence or default_lds2_cadence(DBUF)).validate(DBUF)
+  lifecycle = (lifecycle_template or env_lds2_lifecycle_template(DBUF)).validate(DBUF)
   I=[]; Br=[]; lbl={}
   def e(i): I.append(i); return i
   def label(n): lbl[n]=sum(i.size() for i in I)
   def br(t): Br.append((len(I)-1,t))
-  def dsoff(o): return dict(offset0=o&0xFF, offset1=(o>>8)&0xFF)
-  e(s_load_b128(sdata=s[4:7], sbase=s[0:1], offset=0, soffset=NULL))
-  e(s_load_b64(sdata=s[8:9], sbase=s[0:1], offset=0x10, soffset=NULL))
-  e(s_waitcnt(simm16=0))
-  # wave_m=(tid>>5)>>log2(WAVES_N) ... waves laid out row-major: wave=tid>>5; wave_m=wave//WAVES_N; wave_n=wave%WAVES_N
-  e(v_lshrrev_b32_e32(v[8], 5, v[0]))                                       # wave
-  if WAVES_N==1: e(v_mov_b32_e32(v[19], v[8])); e(v_mov_b32_e32(v[20], 0))
-  elif WAVES_N==2: e(v_lshrrev_b32_e32(v[19],1,v[8])); e(v_and_b32_e32(v[20],1,v[8]))
-  elif WAVES_N==4: e(v_lshrrev_b32_e32(v[19],2,v[8])); e(v_and_b32_e32(v[20],3,v[8]))
-  else: raise AssertionError("WAVES_N in {1,2,4}")
-  # frag read bases: vAfrag=(wave_m*WM*16 + (tid&15))*SA ; vBfrag=LDS_A + (wave_n*WN*16 + (tid&15))*SB
-  e(v_and_b32_e32(v[1], 15, v[0]))                                          # tid&15
-  e(v_lshlrev_b32_e32(v[6], 4, v[19]))                                      # wave_m*16  (* WM below via mul)
-  e(v_mul_lo_u32(v[6], v[6], WM)); e(v_add_nc_u32_e32(v[6], v[6], v[1])); e(v_mul_lo_u32(v[6], v[6], SA))
-  e(v_lshlrev_b32_e32(v[7], 4, v[20])); e(v_mul_lo_u32(v[7], v[7], WN)); e(v_add_nc_u32_e32(v[7], v[7], v[1]))
-  e(v_mul_lo_u32(v[7], v[7], SB))                                          # raw (LDS_A added in compute offset)
-  # coop-load: thread tid -> chunk=tid%CPR, row0=tid//CPR; loads rows row0 + j*RSTRIDE (j<loadsX), chunk fixed.
-  lg2=CPR.bit_length()-1
-  e(v_and_b32_e32(v[10], CPR-1, v[0])); e(v_lshrrev_b32_e32(v[11], lg2, v[0]))   # chunk, row0  (temp, pre-loop)
-  e(s_lshl_b32(s[10], s[3], BM.bit_length()-1)); e(s_lshl_b32(s[11], s[2], BN.bit_length()-1))  # gy*BM, gx*BN
-  # vA_glob = (gy*BM + row0)*K*2 + chunk*16 ; vA_lds = row0*SA + chunk*16
-  e(v_add_nc_u32_e32(v[2], s[10], v[11])); e(v_mul_lo_u32(v[2], v[2], K*2)); e(v_lshlrev_b32_e32(v[12],4,v[10])); e(v_add_nc_u32_e32(v[2], v[2], v[12]))
-  e(v_mul_lo_u32(v[4], v[11], SA)); e(v_add_nc_u32_e32(v[4], v[4], v[12]))
-  e(v_add_nc_u32_e32(v[3], s[11], v[11])); e(v_mul_lo_u32(v[3], v[3], K*2)); e(v_add_nc_u32_e32(v[3], v[3], v[12]))
-  e(v_mul_lo_u32(v[5], v[11], SB)); e(v_add_nc_u32_e32(v[5], v[5], v[12]))
-  for i in range(WM*WN*8): e(v_mov_b32_e32(v[ACCb+i], 0))
-  # ---- LEANADDR (Lever A): move per-iter coop-load address arith from VALU -> SALU. Precompute the INVARIANT
-  # per-lane row byte-offsets (one vgpr per cooperative-load row), and advance the K-position by incrementing
-  # SCALAR buffer base pointers (s_add) instead of recomputing vector addresses (v_add) every K-block. ----
-  VRA=SCR+1; VRB=VRA+loadsA; SKA=18; SKB=20         # invariant row vgprs (A then B); scalar k-base sgpr pairs
-  if LEANADDR:
-    assert VRB+loadsB<=256, f"LEANADDR VGPR overflow {VRB+loadsB}"
-    for j in range(loadsA): e(v_mov_b32_e32(v[VRA+j], v[2]) if j==0 else v_add_nc_u32_e32(v[VRA+j], j*RSTRIDE*K*2, v[2]))
-    for j in range(loadsB): e(v_mov_b32_e32(v[VRB+j], v[3]) if j==0 else v_add_nc_u32_e32(v[VRB+j], j*RSTRIDE*K*2, v[3]))
-    e(s_mov_b32(s[SKA], s[4])); e(s_mov_b32(s[SKA+1], s[5])); e(s_mov_b32(s[SKB], s[6])); e(s_mov_b32(s[SKB+1], s[7]))
-  def coop_load_lean(buf):                          # addr=invariant row vgpr, saddr=advancing scalar k-base
-    for j in range(loadsA): e(global_load_b128(vdst=v[CTA+j*4:CTA+j*4+3], addr=v[VRA+j:VRA+j], saddr=s[SKA:SKA+1], offset=0))
-    for j in range(loadsB): e(global_load_b128(vdst=v[CTB+j*4:CTB+j*4+3], addr=v[VRB+j:VRB+j], saddr=s[SKB:SKB+1], offset=0))
-  def adv_kbase():                                  # SALU K-advance (replaces the v2/v3 VALU advance)
-    e(s_add_u32(s[SKA], s[SKA], BK*2)); e(s_addc_u32(s[SKA+1], s[SKA+1], 0))
-    e(s_add_u32(s[SKB], s[SKB], BK*2)); e(s_addc_u32(s[SKB+1], s[SKB+1], 0))
-  def coop_load(buf):                              # global -> CT regs (vmcnt drains at caller)
-    if LEANADDR: return coop_load_lean(buf)
-    for j in range(loadsA):
-      if j==0: ar=2
-      else: e(v_add_nc_u32_e32(v[SCR], j*RSTRIDE*K*2, v[2])); ar=SCR
-      e(global_load_b128(vdst=v[CTA+j*4:CTA+j*4+3], addr=v[ar:ar], saddr=s[4:5], offset=0))
-    for j in range(loadsB):
-      if j==0: br_=3
-      else: e(v_add_nc_u32_e32(v[SCR], j*RSTRIDE*K*2, v[3])); br_=SCR
-      e(global_load_b128(vdst=v[CTB+j*4:CTB+j*4+3], addr=v[br_:br_], saddr=s[6:7], offset=0))
-  def coop_store(buf):                             # CT regs -> LDS[buf]
-    bo=buf*BUFSZ
-    for j in range(loadsA): e(ds_store_b128(addr=v[4], data0=v[CTA+j*4:CTA+j*4+3], **dsoff(bo+j*RSTRIDE*SA)))
-    for j in range(loadsB): e(ds_store_b128(addr=v[5], data0=v[CTB+j*4:CTB+j*4+3], **dsoff(bo+LDS_A+j*RSTRIDE*SB)))
-  def compute(buf):                                # WMMAs from LDS[buf]
-    bo=buf*BUFSZ
-    for kt in range(KT):
-      for mi in range(WM):
-        o=bo+mi*16*SA+kt*32
-        e(ds_load_b128(vdst=v[FA+mi*8:FA+mi*8+3],   addr=v[6], **dsoff(o)))
-        if not DSHALF: e(ds_load_b128(vdst=v[FA+mi*8+4:FA+mi*8+7], addr=v[6], **dsoff(o+16)))  # DSHALF: drop 2nd half (INCORRECT; ds_load-count throughput probe)
-      for ni in range(WN):
-        o=bo+LDS_A+ni*16*SB+kt*32
-        e(ds_load_b128(vdst=v[FB+ni*8:FB+ni*8+3],   addr=v[7], **dsoff(o)))
-        if not DSHALF: e(ds_load_b128(vdst=v[FB+ni*8+4:FB+ni*8+7], addr=v[7], **dsoff(o+16)))
-      e(waitcnt_lgkm(0))
-      for mi in range(WM):
-        for ni in range(WN):
-          ac=ACCb+(mi*WN+ni)*8
-          e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[FA+mi*8:FA+mi*8+7], src1=v[FB+ni*8:FB+ni*8+7], src2=v[ac:ac+7]))
-  def compute_plra(buf):                           # A-prefetch PLR: substep1 A loaded during substep0 WMMAs
-    assert KT==2 and (loadsA*4+loadsB*4)>=WM*8, "PLRA needs KT==2 and dead CTA/CTB room for WM*8 A-frags"
-    bo=buf*BUFSZ; FAp=CTA                           # FAp reuses the dead coop-load temp regs (CTA..CTB)
-    def la(dst,kt):                                 # load this wave's WM A-fragments for substep kt
-      for mi in range(WM):
-        o=bo+mi*16*SA+kt*32
-        e(ds_load_b128(vdst=v[dst+mi*8:dst+mi*8+3],   addr=v[6], **dsoff(o)))
-        e(ds_load_b128(vdst=v[dst+mi*8+4:dst+mi*8+7], addr=v[6], **dsoff(o+16)))
-    def lb(kt):
-      for ni in range(WN):
-        o=bo+LDS_A+ni*16*SB+kt*32
-        e(ds_load_b128(vdst=v[FB+ni*8:FB+ni*8+3],   addr=v[7], **dsoff(o)))
-        e(ds_load_b128(vdst=v[FB+ni*8+4:FB+ni*8+7], addr=v[7], **dsoff(o+16)))
-    def ww(As):
-      for mi in range(WM):
-        for ni in range(WN):
-          ac=ACCb+(mi*WN+ni)*8
-          e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[As+mi*8:As+mi*8+7], src1=v[FB+ni*8:FB+ni*8+7], src2=v[ac:ac+7]))
-    la(FA,0); lb(0); e(waitcnt_lgkm(0))            # substep0 A,B ready
-    la(FAp,1)                                       # PREFETCH substep1 A (no wait) -> overlaps substep0 WMMAs
-    ww(FA)                                          # substep0 WMMAs (FA read before lb(1) overwrites FB; safe WAR)
-    lb(1); e(waitcnt_lgkm(0))                       # substep1 B + wait (FAp prefetch already done, FB1 now ready)
-    ww(FAp)                                         # substep1 WMMAs from the prefetched A
-  def compute_plrab(buf):                          # FULL A+B PLR: both substep1 operands prefetched (needs 2nd buf FB2)
-    assert KT==2, "PLRAB needs KT==2"
-    bo=buf*BUFSZ; FAp=FB2; FBp=FB2+WM*8             # 2nd fragment buffer (A' then B')
-    def la(dst,kt):
-      for mi in range(WM):
-        o=bo+mi*16*SA+kt*32
-        e(ds_load_b128(vdst=v[dst+mi*8:dst+mi*8+3],   addr=v[6], **dsoff(o)))
-        e(ds_load_b128(vdst=v[dst+mi*8+4:dst+mi*8+7], addr=v[6], **dsoff(o+16)))
-    def lb(dst,kt):
-      for ni in range(WN):
-        o=bo+LDS_A+ni*16*SB+kt*32
-        e(ds_load_b128(vdst=v[dst+ni*8:dst+ni*8+3],   addr=v[7], **dsoff(o)))
-        e(ds_load_b128(vdst=v[dst+ni*8+4:dst+ni*8+7], addr=v[7], **dsoff(o+16)))
-    def ww(As,Bs):
-      for mi in range(WM):
-        for ni in range(WN):
-          ac=ACCb+(mi*WN+ni)*8
-          e(v_wmma_f32_16x16x16_f16(vdst=v[ac:ac+7], src0=v[As+mi*8:As+mi*8+7], src1=v[Bs+ni*8:Bs+ni*8+7], src2=v[ac:ac+7]))
-    la(FA,0); lb(FB,0); e(waitcnt_lgkm(0))         # substep0 A,B
-    la(FAp,1); lb(FBp,1)                            # PREFETCH substep1 A AND B -> overlap substep0 WMMAs
-    ww(FA,FB)                                       # substep0 WMMAs (separate buffers: no WAR on substep1 prefetch)
-    e(waitcnt_lgkm(0)); ww(FAp,FBp)                # substep1 ready (loads hidden) -> WMMAs
-  comp = compute_plrab if PLRAB else compute_plra if PLRA else compute
-  if not DBUF:
-    e(s_mov_b32(s[16], 0))
-    label('LOOP')
-    coop_load(0); e(waitcnt_vm(0)); coop_store(0); e(waitcnt_lgkm(0)); e(s_barrier())
-    comp(0); e(s_barrier())
-    if LEANADDR: adv_kbase()                        # SALU K-advance (no VALU v2/v3 advance)
-    else: e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
-    e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], NBLK)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
-  else:
-    # double-buffer, unroll-by-2: prefetch next block into the OTHER buffer while computing current.
-    coop_load(0); e(waitcnt_vm(0)); coop_store(0); e(waitcnt_lgkm(0)); e(s_barrier())
-    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
-    e(s_mov_b32(s[16], 0)); NL=(NBLK//2)-1
-    label('LOOP')
-    coop_load(1); compute(0); e(waitcnt_vm(0)); coop_store(1); e(waitcnt_lgkm(0)); e(s_barrier())
-    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
-    coop_load(0); compute(1); e(waitcnt_vm(0)); coop_store(0); e(waitcnt_lgkm(0)); e(s_barrier())
-    e(v_add_nc_u32_e32(v[2], BK*2, v[2])); e(v_add_nc_u32_e32(v[3], BK*2, v[3]))
-    e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], NL)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
-    coop_load(1); compute(0); e(waitcnt_vm(0)); coop_store(1); e(waitcnt_lgkm(0)); e(s_barrier())
-    compute(1)
-  # epilogue (recompute wave_m/wave_n from tid — v[19]/v[20] were clobbered by the K-loop frag loads)
-  e(v_and_b32_e32(v[8], 15, v[0])); e(v_lshrrev_b32_e32(v[9], 4, v[0])); e(v_and_b32_e32(v[9], 1, v[9]))
-  e(v_lshrrev_b32_e32(v[10], 5, v[0]))                                      # wave
-  if WAVES_N==1: e(v_mov_b32_e32(v[11], v[10])); e(v_mov_b32_e32(v[15], 0))
-  elif WAVES_N==2: e(v_lshrrev_b32_e32(v[11],1,v[10])); e(v_and_b32_e32(v[15],1,v[10]))
-  else: e(v_lshrrev_b32_e32(v[11],2,v[10])); e(v_and_b32_e32(v[15],3,v[10]))
-  e(v_lshlrev_b32_e32(v[21], 4, v[11])); e(v_mul_lo_u32(v[21], v[21], WM)); e(v_add_nc_u32_e32(v[21], s[10], v[21]))  # gy*BM + wave_m*WM*16
-  e(v_lshlrev_b32_e32(v[22], 4, v[15])); e(v_mul_lo_u32(v[22], v[22], WN)); e(v_add_nc_u32_e32(v[22], s[11], v[22]))  # gx*BN + wave_n*WN*16
-  for mi in range(WM):
-    for ni in range(WN):
-      ac=ACCb+(mi*WN+ni)*8
-      e(v_add_nc_u32_e32(v[12], v[21], v[9])); e(v_add_nc_u32_e32(v[12], mi*16, v[12]))
-      e(v_add_nc_u32_e32(v[13], v[22], v[8])); e(v_add_nc_u32_e32(v[13], ni*16, v[13]))
-      e(v_mul_lo_u32(v[12], v[12], N)); e(v_add_nc_u32_e32(v[12], v[12], v[13])); e(v_lshlrev_b32_e32(v[12], 1, v[12]))
-      for i in range(8):
-        e(v_cvt_f16_f32_e32(v[14], v[ac+i]))
-        e(global_store_b16(addr=v[12:12], data=v[14], saddr=s[8:9], offset=0))
-        if i<7: e(v_add_nc_u32_e32(v[12], N*4, v[12]))
-  e(s_waitcnt(simm16=0)); e(s_sendmsg(simm16=3)); e(s_endpgm())
+  prim = LDS2PrimitiveEmitter(e, label, br, K=K, BK=BK, KT=KT, NBLK=NBLK, NL=(NBLK//2)-1,
+    M=M, N=N, WAVES_N=WAVES_N, BM=BM, BN=BN, CPR=CPR, WM=WM, WN=WN, PLRA=PLRA, PLRAB=PLRAB, LEANADDR=LEANADDR, DSHALF=DSHALF, loadsA=loadsA, loadsB=loadsB,
+    RSTRIDE=RSTRIDE, SA=SA, SB=SB, LDS_A=LDS_A, BUFSZ=BUFSZ, FA=FA, FB=FB, ACCb=ACCb, CTA=CTA, CTB=CTB,
+    SCR=SCR, FB2=FB2, wait=wait)
+  prim.emit_kernel_prologue()
+  prim.emit_tile_setup()
+  prim.zero_accumulators()
+  prim.setup_leanaddr()
+  prim.emit_lifecycle(lifecycle)
+  prim.emit_epilogue()
+  prim.emit_kernel_end()
   for idx,t in Br:
     off=(lbl[t]-sum(i.size() for i in I[:idx+1]))//4
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
+
+def build_gemm_lds2(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0, LEANADDR=0, DSHALF=0, *, reg_layout=None, memory_layout=None, wait_policy=None, cadence=None, lifecycle_template=None):
+  return lower_lds2_gemm_kernel(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA, PLRAB, LEANADDR, DSHALF,
+    reg_layout=reg_layout, memory_layout=memory_layout, wait_policy=wait_policy, cadence=cadence,
+    lifecycle_template=lifecycle_template)
 
 def build_gemm_lds2_q4k(M, N, K, WAVES_M, WAVES_N, WM, WN):
   # Q4_K fused-dequant variant of build_gemm_lds2. A is fp16 [M,K]. B(=Bt) is PACKED Q4_K bytes
@@ -438,4 +642,3 @@ def build_gemm_lds2_q4k(M, N, K, WAVES_M, WAVES_N, WM, WN):
     off=(lbl[t]-sum(i.size() for i in I[:idx+1]))//4
     assert -32768<=off<=32767; I[idx].simm16=off
   return I
-

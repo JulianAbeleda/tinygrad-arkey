@@ -104,9 +104,14 @@ Goal was to replace this hand kernel with tinygrad codegen (no-hand-kernel manda
   `bufferize(LOCAL, removable=False)`. Payoff is clear (this hand kernel proves 66 TFLOPS is achievable with
   LDS-staging); the risk is the build. Track-1 codegen (schedule search, shipped) alone is ~40-48 TFLOPS
   global-direct; the 40->66 gap IS the LDS input-staging this kernel does by hand.
-- **GO/NO-GO decider (cheap, do first in a dedicated codegen session):** does cooperative LDS input-staging
-  lift plain fp16 codegen WMMA at attn_qo (512x5120x5120) from ~40 -> ~58+ TFLOPS? GO(>=58) -> build Route B
-  (add Q4_K decode fusion, match 808, delete this kernel). NO-GO(<=50) -> keep this kernel.
+- **GO/NO-GO decider:** resolved as NO-GO for the register-resident/targeted-wait shortcut. On 2026-07-08,
+  `DEV=AMD:ISA AMD_ISA_REG_ACCUM=1 AMD_ISA_WAITCNT_TARGETED=1 AMD_ISA_WMMA_B128_FRAG=1 REGALLOC_ADDR_REMAT=1`
+  on attn_qo `(512x5120x5120)` measured `u0=2,u1=2,loc=0,unr=8 -> status=ok, 16.79 TFLOPS`; full-drain control
+  was `16.35 TFLOPS`. The intended table shape `u0=4,u1=4,loc=4,unr=8` is not a measurable GO candidate in the
+  current native-ISA path: with `REGALLOC_END_NO_SOURCE_LIVE=1` it returns `WRONG rr=nan`; without that flag it
+  faults on GPU. The `u0=4,u1=4,loc=0,unr=8` register-resident shape also faults. Targeted/deferred `vmcnt` alone
+  therefore does not lift plain fp16 codegen toward ~58 TFLOPS; keep this hand kernel unless a deeper staging/lifetime
+  primitive changes the substrate.
 - **Why not built yet:** the LDS-staging application code (WARP address-key + explicit CONTRACT fold +
   removable=False; see docs/codegen-wmma-lds-staging-design-20260705.md:77-99) was cleared from scratchpad and
   must be reconstructed; the cooperative-partition perf step (store_keys != read_keys) is unfinished with

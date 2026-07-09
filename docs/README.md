@@ -6,7 +6,30 @@ from the tracked tree; use git history for archaeology.
 ## Start Here
 
 - `../README.md` - repo purpose, current performance snapshot, and run commands.
-- `pure-machine-search.md` - project rule: generated/spec-driven routes are the target path.
+- `pure-machine-search.md` - project rule: machine search over reusable compiler primitives; strict purity audit terms.
+- `asm-tool-vs-hand-kernel-policy-scope.md` - policy separating backend-emitted ASM and compiler primitives from
+  hand-authored full-kernel schedules.
+- `8b-prefill-lifecycle-compiler-primitives-scope.md` - 8B prefill plan for reducing the 5k hand oracle into
+  machine-searched compiler primitives.
+- `8b-prefill-e2e-mvp-lifecycle-ownership-scope.md` - two-push plan: opt-in E2E pipe MVP first, full lifecycle ownership
+  second.
+- `8b-prefill-path1-mixed-mvp-scope.md` - active Path 1 MVP: normal AMD lifecycle plus generated pipe primitive route,
+  with a fail-closed whole-prefill gate.
+- `8b-prefill-ffn-gate-up-lds-primitive-scope.md` - next primitive track for reducing the `ffn_gate_up` LDS hand
+  oracle into a generated compiler-owned LDS WMMA primitive.
+- `8b-prefill-hybrid-lds-dbuf-primitive-scope.md` - feasibility and guardrails for hand-authored reusable LDS/DBUF
+  compiler primitives without reverting to a full hand-tuned kernel.
+- `8b-prefill-generated-lifecycle-performance-integration-scope.md` - current post-DBUF scope: route identity,
+  fail-closed e2e binding, per-role timing, and lifecycle-density gates needed before another performance primitive.
+- `8b-prefill-generated-dbuf-clustering-blocker-scope.md` - current narrow blocker: combine D3 next-slot DBUF cadence
+  with phase-scoped LDS fragment residency / WMMA clustering before another e2e promotion attempt.
+- `8b-prefill-lifecycle-compression-audit-20260709.md` - layered audit showing where the 58-TFLOPS gap is already
+  visible before e2e: final stream density and epoch-unsafe stage suppression.
+- `8b-prefill-epoch-aware-stage-movement-scope.md` - implementation scope for the next primitive: safe producer-epoch
+  keyed D3 stage movement/suppression.
+- `8b-prefill-generated-pipe-lowerer-mvp-scope.md` - first generated pipe lowerer slice: diagnostic compiler-owned
+  b128/WMMA/store structure and the remaining wait-policy/route-transport blockers.
+- `8b-prefill-pipe-mvp-rest-scope.md` - remaining opt-in pipe MVP gates using existing harnesses only.
 - `handwritten-kernel-exhaustive-lowering-scope-20260706.md` - exhaustive lowering scope for converting handwritten
   route surfaces into pure tinygrad/codegen paths.
 - `pure-machine-search-roadmap.md` - current route/search roadmap and promotion rules.

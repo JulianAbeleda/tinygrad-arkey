@@ -99,15 +99,25 @@ PREFILL_TC_ATTN = bool(_prefill_tc_attn_default())
 # it bound a symbolic start_pos that fails the concrete-int guard so the path never fired. Overturned 2026-06-20
 # (correct concrete-int, same-process interleaved synced A/B). See docs/prefill-branch-b-tc-attention-result-20260620.md.
 # The loop-found per-shape TC schedule (gate-validated; NO BEAM -- BEAM hangs gfx1100). Forced onto the
-# prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. The contraction-heavy shapes (in>out, e.g.
-# ffn_down 4096x12288) want UPCAST(0,4); the rest UPCAST(0,2) -- using one schedule for all drops the chain
-# to ~9% (verified). See docs/amd-decode-prefill-v2-gate-20260616.md.
+# prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. 4x4 is parked on gfx1100 by default because the
+# generated DBUF path hits the VGPR wall; set PREFILL_ALLOW_PARKED_4X4=1 only for explicit diagnostic work.
+def _prefill_allow_parked_4x4() -> bool: return bool(getenv("PREFILL_ALLOW_PARKED_4X4", 0))
+
+def _prefill_v2_without_parked_4x4(opts:tuple) -> tuple:
+  if _prefill_allow_parked_4x4(): return opts
+  up = {o.axis: o.arg for o in opts if o.op is OptOps.UPCAST}
+  if up.get(0) == 4 and up.get(1) == 4:
+    return tuple(Opt(o.op, o.axis, 2) if o.op is OptOps.UPCAST and o.axis == 1 else o for o in opts)
+  return opts
+
 def _prefill_v2_opts(out_f:int, in_f:int) -> tuple:
   # UNROLL(reduce,8): unrolling the K loop makes each thread's global->LDS copy loads contiguous, so they fold
   # from per-element global_load_d16 (+ ~8 v_mov register-init/WMMA) to wide global_load_b128 (~2 v_mov/WMMA).
   # +3.7% pp512, no VGPR spill (UNROLL,4 spills 362), dNLL -0.00013. See docs/prefill-cgw3-copy-unroll-result-20260619.md.
-  return (Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, 4 if in_f > out_f else 2), Opt(OptOps.UPCAST, 1, 4),
-          Opt(OptOps.UNROLL, 0, 8))
+  u0 = 4 if in_f > out_f else 2
+  u1 = 4
+  return _prefill_v2_without_parked_4x4((Opt(OptOps.TC, 0, (-1, 2, 1)), Opt(OptOps.UPCAST, 0, u0), Opt(OptOps.UPCAST, 1, u1),
+                                         Opt(OptOps.UNROLL, 0, 8)))
 
 def should_use_flash_decode(start_pos, T, use_flash:bool=False) -> bool:
   return _route_should_use_flash_decode(start_pos, T, use_flash, getenv_fn=getenv)
@@ -565,6 +575,13 @@ class Transformer:
   # the dense FFN + attn projection linears prefill-v2 accelerates (per block)
   _PREFILL_V2_LINEARS = ("ffn_gate", "ffn_up", "ffn_down", "ffn_gate_shexp", "ffn_up_shexp", "ffn_down_shexp",
                          "attn_q", "attn_k", "attn_v", "attn_output")
+  def _prefill_v2_role_for_name(self, name:str) -> str:
+    if name in ("ffn_gate", "ffn_up", "ffn_gate_shexp", "ffn_up_shexp"): return "ffn_gate_up"
+    if name in ("ffn_down", "ffn_down_shexp"): return "ffn_down"
+    if name in ("attn_q", "attn_output"): return "attn_qo"
+    if name in ("attn_k", "attn_v"): return "attn_kv"
+    return ""
+
   def _prefill_v2_dims(self, lin):
     out_f = getattr(lin, "out_features", None) or lin.weight.shape[0]
     in_f  = getattr(lin, "in_features", None)  or lin.weight.shape[1]
@@ -577,6 +594,8 @@ class Transformer:
       for n in self._PREFILL_V2_LINEARS:
         lin = getattr(block, n, None)
         if lin is None or getattr(lin, "weight", None) is None: continue
+        if not getattr(lin, "name", ""): setattr(lin, "name", n)
+        setattr(lin, "_prefill_graph_role", self._prefill_v2_role_for_name(n))
         out_f, in_f = self._prefill_v2_dims(lin)
         if out_f is not None: yield lin, out_f, in_f
 
@@ -671,7 +690,7 @@ class Transformer:
       _table = load_table()
     except Exception:
       _table = {}
-    def _opts(out_f, in_f): return _table.get((out_f, in_f)) or _prefill_v2_opts(out_f, in_f)
+    def _opts(out_f, in_f): return _prefill_v2_without_parked_4x4(_table.get((out_f, in_f)) or _prefill_v2_opts(out_f, in_f))
     return {(frozenset({out_f, PREFILL_UBATCH}), in_f): _opts(out_f, in_f)
             for _, out_f, in_f in self._prefill_v2_covered()}
 

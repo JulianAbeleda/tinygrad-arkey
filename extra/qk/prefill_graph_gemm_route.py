@@ -49,6 +49,10 @@ def _attn_kv_no_local_stage_enabled() -> bool:
   return os.environ.get("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1").strip().lower() not in ("", "0", "false", "off", "no")
 
 
+def _route_dump(payload: dict[str, Any]) -> None:
+  if _env_enabled("PREFILL_GRAPH_GEMM_ROUTE_DUMP"): print("PREFILL_GRAPH_GEMM_ROUTE", payload)
+
+
 @lru_cache(maxsize=None)
 def _resolve_schedule(out_f: int, in_f: int):
   # TG-P4 refactor: resolve the prefill GEMM schedule parameters (tile/waves/pipeline/role-selective) into a data
@@ -228,6 +232,9 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   role = getattr(lin, "_prefill_graph_role", None)
   from extra.qk.prefill_schedule_spec import _spec_to_params, describe_prefill_schedule, emit_prefill_gemm_from_spec
   spec = describe_prefill_schedule(out_f, in_f, role=role)
+  _route_dump({"role": role, "shape": (512, out_f, in_f), "route_family": spec.route_family,
+               "pipe_primitive": os.environ.get("PREFILL_WMMA_PIPE_PRIMITIVE", "0"),
+               "lds_primitive": os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE", "0")})
   pipe_resource_fallback_plan = None
   if os.environ.get("PREFILL_WMMA_PIPE_PRIMITIVE") == "1" and spec.route_family == "pipe":
     from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, pipe_primitive_local_stage_resource_plan, wmma_pipe_postrange_opts
@@ -236,10 +243,14 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
         pipe_spec, local_stage_requested=_pipe_local_stage_requested(),
         allow_attn_kv_no_local_stage=_attn_kv_no_local_stage_enabled())
       if os.environ.get("PREFILL_WMMA_PIPE_RESOURCE_GATE", "1") != "0" and not resource_plan["safe"]:
+        _route_dump({"role": role, "shape": (512, out_f, in_f), "decision": "pipe_resource_gated_raw_fallback",
+                     "resource_plan": resource_plan})
         pipe_resource_fallback_plan = resource_plan
         setattr(lin, "_prefill_pipe_primitive_fallback_reason", resource_plan["fallback_reason"])
         setattr(lin, "_prefill_pipe_primitive_route", "pipe_resource_gated_raw_fallback")
       else:
+        _route_dump({"role": role, "shape": (512, out_f, in_f), "decision": resource_plan["decision"],
+                     "resource_plan": resource_plan})
         setattr(lin, "_prefill_pipe_primitive_route", resource_plan["decision"])
         # Route-transport MVP: execute through the ordinary compiler-owned matmul path, not the hand custom-kernel
         # wrapper. These defaults are the primitive ingredients proven by the bounded diagnostic lowerer.
@@ -270,9 +281,12 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
       key = _primitive_warmstart_key(spec)
       pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec)}
       _ensure_role_scoped_local_stage(pr).add(key)
+      _route_dump({"role": role, "shape": (512, out_f, in_f), "decision": "lds_primitive_matmul_transport"})
       a = x.reshape(512, in_f).cast(dtypes.float16).contiguous()
       bt = w.cast(dtypes.float16).contiguous()
       return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
+  _route_dump({"role": role, "shape": (512, out_f, in_f), "decision": "raw_emit_schedule",
+               "pipe_resource_fallback": pipe_resource_fallback_plan is not None})
   built = (_emit_schedule(_spec_to_params(spec), name=spec.kernel_name)
            if pipe_resource_fallback_plan is not None else emit_prefill_gemm_from_spec(spec))
   if built is None: return None

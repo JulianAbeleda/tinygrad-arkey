@@ -245,6 +245,63 @@ pm_to_program = PatternMatcher([
   (UPat(Ops.PROGRAM, src=(UPat(), UPat(Ops.DEVICE), UPat(Ops.LINEAR), UPat(Ops.SOURCE, name="source")), name="prg"), do_compile),
 ])
 
+def _wmma_proof_first_elem(carrier:UOp) -> UOp:
+  if carrier.op in (Ops.STACK, Ops.NOOP) and carrier.src: return carrier.src[0]
+  if carrier.op is Ops.CONTRACT and carrier.src: return carrier.src[0]
+  return carrier
+
+def _wmma_proof_chain_row(e:UOp) -> dict:
+  out = {"elem_op": e.op.name, "elem_tag": repr(e.tag), "elem_id": id(e)}
+  if e.op is Ops.GEP and e.src:
+    out.update({"gep_src_op": e.src[0].op.name, "gep_src_tag": repr(e.src[0].tag), "gep_src_id": id(e.src[0])})
+    e = e.src[0]
+  if e.op is Ops.LOAD and e.src:
+    out["load_index_op"] = e.src[0].op.name
+    out["load_index_tag"] = repr(e.src[0].tag)
+    out["load_index_id"] = id(e.src[0])
+    idx = e.src[0].src[0] if e.src[0].op is Ops.CAST and e.src[0].src else e.src[0]
+    out["index_op"] = idx.op.name
+    out["index_tag"] = repr(idx.tag)
+    out["index_id"] = id(idx)
+    if idx.op is Ops.INDEX and idx.src:
+      out["index_buf_op"] = idx.src[0].op.name
+      out["index_buf_tag"] = repr(idx.src[0].tag)
+      out["index_buf_id"] = id(idx.src[0])
+      out["index_buf_src_ops"] = [s.op.name for s in idx.src[0].src[:8]]
+      out["index_buf_src_tags"] = [repr(s.tag) for s in idx.src[0].src[:8]]
+      out["index_buf_src_ids"] = [id(s) for s in idx.src[0].src[:8]]
+      out["index_buf_src0_child_ops"] = [s.op.name for s in idx.src[0].src[0].src[:8]] if idx.src[0].src else []
+      out["index_buf_src1_child_ops"] = [s.op.name for s in idx.src[0].src[1].src[:8]] if len(idx.src[0].src) > 1 else []
+  elif e.op is Ops.INDEX and e.src:
+    out["index_op"] = e.op.name
+    out["index_tag"] = repr(e.tag)
+    out["index_id"] = id(e)
+    out["index_buf_op"] = e.src[0].op.name
+    out["index_buf_tag"] = repr(e.src[0].tag)
+    out["index_buf_id"] = id(e.src[0])
+    out["index_buf_src_ops"] = [s.op.name for s in e.src[0].src[:8]]
+    out["index_buf_src_tags"] = [repr(s.tag) for s in e.src[0].src[:8]]
+    out["index_buf_src_ids"] = [id(s) for s in e.src[0].src[:8]]
+    out["index_buf_src0_child_ops"] = [s.op.name for s in e.src[0].src[0].src[:8]] if e.src[0].src else []
+    out["index_buf_src1_child_ops"] = [s.op.name for s in e.src[0].src[1].src[:8]] if len(e.src[0].src) > 1 else []
+  return out
+
+def _dump_wmma_proof_chains(phase:str, sink:UOp) -> None:
+  if not getenv("PREFILL_WMMA_PROOF_CHAIN_DUMP", 0): return
+  import json
+  try: nodes = sink.toposort()
+  except Exception: return
+  for wmma_i, u in enumerate(x for x in nodes if x.op is Ops.WMMA and len(x.src) >= 2):
+    for operand_idx, role in ((0, "A"), (1, "B")):
+      carrier = u.src[operand_idx]
+      row = {
+        "phase": phase, "wmma": wmma_i, "role": role,
+        "carrier_op": carrier.op.name, "carrier_tag": repr(carrier.tag),
+        "carrier_id": id(carrier), "carrier_src_count": len(carrier.src),
+      }
+      row.update(_wmma_proof_chain_row(_wmma_proof_first_elem(carrier)))
+      print("PREISEL_WMMA_PROOF_JSON", json.dumps(row, sort_keys=True))
+
 @track_rewrites(name=lambda ast,renderer,ret,**kwargs: TracingKey(ret.src[0].arg.name,(ret.src[0].arg.function_name, ast), ret=renderer), replay=True)
 @Context(ALLOW_DEVICE_USAGE=0)
 def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
@@ -263,9 +320,11 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
     assert isinstance(ast.arg, KernelInfo), "requires KernelInfo on arg to to_program"
     full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)
     prog_info = ProgramInfo.from_sink(full_sink)
+    _dump_wmma_proof_chains("after_full_rewrite", full_sink)
     # instruction selection
     if isinstance(renderer, ISARenderer):
       full_sink = graph_rewrite(full_sink, renderer.pre_isel_matcher, ctx=itertools.count(-1, -1), name="pre instruction selection", bottom_up=True)
+      _dump_wmma_proof_chains("after_pre_isel", full_sink)
       full_sink = graph_rewrite(full_sink, renderer.isel_matcher, ctx=IselContext(full_sink), name="instruction selection", bottom_up=True)
     prg = UOp(Ops.PROGRAM, src=(full_sink, UOp(Ops.DEVICE, arg=renderer.target.device)), arg=prog_info)
   else: raise RuntimeError(f"can't call to_program on {ast.op}")

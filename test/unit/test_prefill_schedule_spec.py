@@ -1,3 +1,4 @@
+from dataclasses import replace
 from types import SimpleNamespace
 
 from extra.qk.prefill_schedule_spec import (
@@ -53,6 +54,80 @@ def test_emit_prefill_gemm_from_spec_targets_expected_wmma_builders(monkeypatch)
   assert calls[0][0] == "lds"
   assert lds_out[0] == ("lds_ins",)
   assert lds_out[4] == 128
+
+
+def test_emit_prefill_gemm_default_still_calls_emit_schedule(monkeypatch):
+  from extra.qk import prefill_graph_gemm_route as route
+  from extra.qk import wmma_pipe_spec
+
+  calls = []
+
+  def fake_emit(params, name):
+    calls.append((params["pipe_mode"], name))
+    return ("default_emit",)
+
+  monkeypatch.delenv("PREFILL_WMMA_PIPE_PRIMITIVE", raising=False)
+  monkeypatch.setattr(route, "_emit_schedule", fake_emit)
+  monkeypatch.setattr(wmma_pipe_spec, "lower_wmma_pipe_spec", lambda spec: (_ for _ in ()).throw(AssertionError("lowerer diverted")))
+
+  assert emit_prefill_gemm_from_spec(_schedule_spec("pipe")) == ("default_emit",)
+  assert calls == [(True, "prefill_gen_sched_gemm_512_4096_4096")]
+
+
+def test_emit_prefill_gemm_opt_in_pipe_routes_to_lowerer(monkeypatch):
+  from extra.qk import prefill_graph_gemm_route as route
+  from extra.qk import wmma_pipe_spec
+
+  lowered = []
+
+  def fake_lower(pipe_spec):
+    lowered.append(pipe_spec)
+    return ("generated_pipe_stub", pipe_spec.to_json())
+
+  monkeypatch.setenv("PREFILL_WMMA_PIPE_PRIMITIVE", "1")
+  monkeypatch.setattr(route, "_emit_schedule", lambda params, name: (_ for _ in ()).throw(AssertionError("_emit_schedule called")))
+  monkeypatch.setattr(wmma_pipe_spec, "lower_wmma_pipe_spec", fake_lower)
+
+  out = emit_prefill_gemm_from_spec(_schedule_spec("pipe"))
+  assert out[0] == "generated_pipe_stub"
+  assert lowered and lowered[0].m == 512
+  assert lowered[0].n == 4096
+
+
+def test_emit_prefill_gemm_opt_in_lds_never_diverts(monkeypatch):
+  from extra.qk import prefill_graph_gemm_route as route
+  from extra.qk import wmma_pipe_spec
+
+  calls = []
+
+  def fake_emit(params, name):
+    calls.append((params["pipe_mode"], name))
+    return ("lds_emit",)
+
+  monkeypatch.setenv("PREFILL_WMMA_PIPE_PRIMITIVE", "1")
+  monkeypatch.setattr(route, "_emit_schedule", fake_emit)
+  monkeypatch.setattr(wmma_pipe_spec, "lower_wmma_pipe_spec", lambda spec: (_ for _ in ()).throw(AssertionError("LDS diverted")))
+
+  assert emit_prefill_gemm_from_spec(_schedule_spec("lds")) == ("lds_emit",)
+  assert calls == [(False, "prefill_gen_sched_gemm_512_4096_4096")]
+
+
+def test_emit_prefill_gemm_opt_in_unsupported_pipe_fails_closed(monkeypatch):
+  from extra.qk import prefill_graph_gemm_route as route
+  from extra.qk import wmma_pipe_spec
+
+  calls = []
+
+  def fake_emit(params, name):
+    calls.append((params["pipe_mode"], name))
+    return ("fallback_emit",)
+
+  monkeypatch.setenv("PREFILL_WMMA_PIPE_PRIMITIVE", "1")
+  monkeypatch.setattr(route, "_emit_schedule", fake_emit)
+  monkeypatch.setattr(wmma_pipe_spec, "lower_wmma_pipe_spec", lambda spec: (_ for _ in ()).throw(AssertionError("unsupported diverted")))
+
+  assert emit_prefill_gemm_from_spec(replace(_schedule_spec("pipe"), waitcnt_policy="drain_all")) == ("fallback_emit",)
+  assert calls == [(True, "prefill_gen_sched_gemm_512_4096_4096")]
 
 
 def test_prefill_pipe_role_selective_generated_pure_search_proof_points_to_shaped_wmma_rangeify():

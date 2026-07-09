@@ -2,6 +2,12 @@
 
 Date: 2026-07-07.
 
+## Superseded Scope Note
+
+The `4x4` generated path described in this document is parked on gfx1100 as of 2026-07-08. The active software-pipeline
+work is the same primitive, but applied to fitting shapes: `2x2`, `4x2`, and `2x4`. Do not use this document to justify
+new `4x4` spill/NaN work unless `docs/gfx1100-4x4-path-parked-scope.md` is explicitly reopened.
+
 Goal: close the remaining generated-vs-hand performance gap after L3/L5/L6 correctness work. The generated native-ISA
 route is now correct and emits direct b128 route-shaped fragments, but it does not expose the hand kernel's load/compute
 overlap.

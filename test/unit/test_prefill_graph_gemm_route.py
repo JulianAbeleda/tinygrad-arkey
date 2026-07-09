@@ -308,6 +308,63 @@ def test_route_pf16_graph_gemm_pipe_primitive_attn_kv_uses_generated_no_local_st
   assert (frozenset({512, 1024}), 4096) in captured["local_stage_deny_keys"]
 
 
+def test_attn_kv_no_local_stage_policy_denies_composed_local_stage_key(monkeypatch):
+  import tinygrad.codegen.opt.postrange as pr
+  monkeypatch.setenv("PREFILL_WMMA_PIPE_PRIMITIVE", "1")
+  monkeypatch.setenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1")
+  pr.getenv.cache_clear()
+
+  assert pr._warmstart_attn_kv_no_local_stage_key((frozenset({512, 1024}), 4096)) is True
+  assert pr._warmstart_attn_kv_no_local_stage_key((frozenset({2, 4, 8, 16, 1024}), 1)) is True
+  assert pr._warmstart_pipe_primitive_no_local_stage_key((frozenset({512, 4096}), 12288)) is True
+  assert pr._warmstart_pipe_primitive_no_local_stage_key((frozenset({2, 4, 8, 16, 4096}), 1)) is True
+  assert pr._warmstart_pipe_primitive_no_local_stage_key((frozenset({512, 12288}), 4096)) is False
+  pr.getenv.cache_clear()
+
+
+def test_attn_kv_no_local_stage_policy_can_be_disabled(monkeypatch):
+  import tinygrad.codegen.opt.postrange as pr
+  monkeypatch.setenv("PREFILL_WMMA_PIPE_PRIMITIVE", "1")
+  monkeypatch.setenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "0")
+  pr.getenv.cache_clear()
+
+  assert pr._warmstart_attn_kv_no_local_stage_key((frozenset({512, 1024}), 4096)) is False
+  assert pr._warmstart_attn_kv_no_local_stage_key((frozenset({2, 4, 8, 16, 1024}), 1)) is False
+  assert pr._warmstart_pipe_primitive_no_local_stage_key((frozenset({2, 4, 8, 16, 4096}), 1)) is False
+  pr.getenv.cache_clear()
+
+
+def test_prefill_v2_covered_linears_are_role_tagged():
+  from tinygrad.llm.model import Transformer
+
+  class _Weight:
+    def __init__(self, shape):
+      self.shape = shape
+
+  tr = object.__new__(Transformer)
+  tr.blk = [SimpleNamespace(
+    attn_q=SimpleNamespace(weight=_Weight((4096, 4096))),
+    attn_k=SimpleNamespace(weight=_Weight((1024, 4096))),
+    attn_v=SimpleNamespace(weight=_Weight((1024, 4096))),
+    attn_output=SimpleNamespace(weight=_Weight((4096, 4096))),
+    ffn_gate=SimpleNamespace(weight=_Weight((12288, 4096))),
+    ffn_up=SimpleNamespace(weight=_Weight((12288, 4096))),
+    ffn_down=SimpleNamespace(weight=_Weight((4096, 12288))),
+  )]
+
+  covered = {name: getattr(tr.blk[0], name) for name in tr._PREFILL_V2_LINEARS if hasattr(tr.blk[0], name)}
+  list(tr._prefill_v2_covered())
+
+  assert covered["attn_q"]._prefill_graph_role == "attn_qo"
+  assert covered["attn_k"]._prefill_graph_role == "attn_kv"
+  assert covered["attn_v"]._prefill_graph_role == "attn_kv"
+  assert covered["attn_output"]._prefill_graph_role == "attn_qo"
+  assert covered["ffn_gate"]._prefill_graph_role == "ffn_gate_up"
+  assert covered["ffn_up"]._prefill_graph_role == "ffn_gate_up"
+  assert covered["ffn_down"]._prefill_graph_role == "ffn_down"
+  assert covered["attn_k"].name == "attn_k"
+
+
 def test_route_pf16_graph_gemm_lds_primitive_opt_in_uses_existing_generated_lds_transport(monkeypatch):
   route._resolve_schedule.cache_clear()
   captured = {}

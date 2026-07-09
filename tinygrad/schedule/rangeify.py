@@ -31,6 +31,9 @@ def prefill_dbuf_reduce_range(rngs) -> UOp|None:
   # fail-closed: symbolic or odd or absent -> None (caller keeps single-buffer behavior).
   cands = [r for r in rngs if r.op is Ops.RANGE and r.arg[-1] in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE)
            and r.src[0].op is Ops.CONST and isinstance(r.src[0].arg, int) and (int(r.vmax)+1) % 2 == 0]
+  if getenv("PREFILL_DBUF_REDUCE_RANGE_STRICT", 0):
+    red = [r for r in cands if r.arg[-1] is AxisType.REDUCE]
+    if red: return max(red, key=lambda r: r.arg[0])
   return max(cands, key=lambda r: r.arg[0]) if cands else None
 
 def add_ranges_to_store(ctx, x):
@@ -450,7 +453,12 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
     # byte-identical results. The real paired (k&1) store+read indexing lives at the co-located _tc_local_stage_src
     # site in postrange.py. The dead branch has been deleted; the plain single-slot allocation below is the sole path.
     buf = UOp.placeholder((size,), x.dtype, next(ctx), AddrSpace.LOCAL)
-    do_store = buf.broadcast(x.src[1].dtype.count).index(idx, dtype=sdtype).store(x.src[0]).end(*rngs)
+    if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): buf = buf.replace(tag=x.tag)
+    store_idx = buf.broadcast(x.src[1].dtype.count).index(idx, dtype=sdtype)
+    if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): store_idx = store_idx.replace(tag=x.tag)
+    do_store = store_idx.store(x.src[0])
+    if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): do_store = do_store.replace(tag=x.tag)
+    do_store = do_store.end(*rngs)
     return buf.after(do_store.barrier())
 
 # collapse any BUFFERIZE to single input BUFFERIZE

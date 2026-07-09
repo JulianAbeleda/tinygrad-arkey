@@ -201,10 +201,10 @@ The current safety gate is allowed to stand even if the full generated `attn_kv`
 ## Current Verdict
 
 ```text
-S10_ATTN_KV_DISABLE_LOCAL_STAGE_PHASE1_IMPLEMENTED
+S10_ATTN_KV_WARMSTART_POLICY_COMPOSED_PASS
 ```
 
-Phase 1 converts the composed S10 `attn_kv` role from raw fallback to:
+Phase 1 converted the composed S10 `attn_kv` role from raw fallback to:
 
 ```text
 generated_pipe_no_local_stage
@@ -212,8 +212,23 @@ generated_pipe_no_local_stage
 
 The raw `pipe_resource_gated_raw_fallback` remains as a safety rail when
 `PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE=0`, when the policy is not selected, or when a future resource plan is unsafe.
-The next required verdict is an S10 composed smoke/capture on hardware proving the generated no-local-stage path compiles
-and remains correct/performance-acceptable.
+
+The composed route now compiles under the generated no-local-stage policy:
+
+```text
+bench/prefill-s10-lds2-ownership/compile-capture/report-composed-warmstart-policy-proof.json
+bench/prefill-s10-lds2-ownership/compile-capture/report-composed-warmstart-policy-proof-ccache0.json
+```
+
+Both reports have:
+
+```text
+status=ok
+captured_failures=0
+prefill_role_routes.attn_kv=generated_pipe_no_local_stage
+```
+
+The `CCACHE=0` report is the stronger proof: it rules out compile-cache masking of the old `buf2[32768]` source.
 
 ## Crash Probe Result
 
@@ -244,22 +259,139 @@ Case results:
 | `attn_qo_generated_pipe_control` | `AMD:ISA:gfx1100` | correctness pass |
 | `attn_kv_raw_fallback_safety` | `AMD:ISA:gfx1100` | timeout/error in the isolated helper |
 
-The important finding is that isolated `attn_kv` no-local-stage is correct on both the ISA and HIP targets. The composed
-whole-prefill smoke still emits the old oversized local-staged HIP source:
+The important isolated finding was that `attn_kv` no-local-stage is correct on both the ISA and HIP targets. The composed
+whole-prefill smoke used to emit the old oversized local-staged HIP source:
 
 ```text
 role: attn_kv
 LDS:  69632 > 65536
 ```
 
-So the remaining blocker is not the generated `attn_kv` no-local-stage primitive itself. It is a whole-prefill
-composition issue: the no-local-stage policy is not being applied to the `attn_kv` kernel generated inside the model run.
+That blocker is now diagnosed and fixed at the primitive policy layer.
 
-Next direction:
+## Root Cause
 
-```text
-trace whole-prefill warmstart/local-stage key application for attn_kv
+The failing composed source was not raw route fallback. It was the generated matmul transport inheriting leaked LDS
+local-stage env from the S10 `ffn_gate_up` LDS primitive.
+
+The local-stage policy was previously checked too late:
+
+```python
+forced = _WARMSTART_OPTS[original_key]
+for opt in forced:
+  k.apply_opt(opt)  # TC apply builds WMMA sources and can insert LDS local staging here
+
+local_stage_allowed = _warmstart_local_stage_allowed(k)  # too late; key is already transformed
 ```
 
-Specifically, compare the isolated passing `attn_kv` route against the composed failing source and find why the composed
-path still enters the local-staging rewrite.
+By the time the late gate saw:
+
+```text
+([2,4,8,16,1024], red=1) -> allowed=False
+```
+
+the early TC path had already created:
+
+```text
+half buf0[2048]
+half buf2[32768]
+```
+
+The primitive issue was therefore: **warmstart local-stage policy was keyed on the original matmul shape but consumed
+after TC/UPCAST/UNROLL mutated the scheduler key.**
+
+## Primitive Fix
+
+Carry the original warmstart local-stage decision on the `Scheduler` before applying forced opts, and consume that same
+decision in both early and late local-stage gates.
+
+Required behavior:
+
+```python
+warm_key = _warmstart_key(k)                         # e.g. ({512,1024},4096)
+forced = _WARMSTART_OPTS.get(warm_key)
+if forced is not None:
+  k._warmstart_original_key = warm_key
+  k._warmstart_local_stage_allowed = _warmstart_local_stage_allowed_key(warm_key)
+  for opt in forced:
+    k.apply_opt(opt)
+
+# Inside TC apply, before _tc_local_stage_wmma_sources(...)
+early_allowed = getattr(self, "_warmstart_local_stage_allowed", None)
+if early_allowed is None:
+  early_allowed = not _warmstart_pipe_primitive_no_local_stage_key(_warmstart_key(self))
+
+wmma_srcs = _tc_local_stage_wmma_sources(..., enabled=early_allowed and ...)
+```
+
+This is the primitive fix because the policy now follows the compile plan, not the post-mutated incidental scheduler
+shape. It generalizes to any future warmstart role whose staging policy differs from global env defaults.
+
+## Lifecycle Scope
+
+| Layer | Required state | Status |
+|---|---|---|
+| Model role identity | Covered prefill-v2 linears carry `_prefill_graph_role` and `name` before route selection. | fixed |
+| Route policy | `attn_kv` chooses `generated_pipe_no_local_stage`; `ffn_gate_up` chooses LDS primitive. | fixed |
+| Warmstart policy | Original warmstart key stores local-stage allowed/denied before forced opts mutate the graph. | fixed |
+| Early TC local-stage | `_apply_tc_opt` consumes the stored policy before inserting LDS buffers. | fixed |
+| Late DBUF/post local-stage | Existing late gate consumes the same stored policy. | fixed |
+| Hardware compile | Composed S10 smoke compiles with `captured_failures=0`. | fixed |
+
+## Regression Gates
+
+Minimum gates for this fix:
+
+```text
+PYTHONPATH=. pytest -q \
+  test/unit/test_prefill_graph_gemm_route.py \
+  test/unit/test_prefill_s10_compile_capture.py \
+  test/unit/test_attn_kv_no_local_stage_crash_probe.py
+```
+
+Hardware gates:
+
+```text
+PYTHONPATH=. DEV=AMD CCACHE=0 PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE=1 \
+  python3 extra/qk/prefill/s10_compile_capture.py \
+  --scenario composed --mode smoke --max-context 1024 \
+  --report bench/prefill-s10-lds2-ownership/compile-capture/report-composed-warmstart-policy-proof-ccache0.json
+```
+
+Expected:
+
+```text
+status=ok
+captured_failures=0
+```
+
+Focused isolated proof:
+
+```text
+PREFILL_TC_LOCAL_STAGE=both
+PREFILL_TC_LOCAL_STAGE_WITH_LOCAL=1
+PREFILL_TC_LOCAL_STAGE_B_TILEKEY=1
+PREFILL_DBUF=1
+```
+
+For `M=512,N=1024,K=4096,role=attn_kv`, a fresh compile must show:
+
+```text
+shared_bytes=0
+shared_arrays=[]
+buf2[32768]=false
+```
+
+## Non-Goals
+
+This fix does not claim:
+
+```text
+attn_kv is performance-optimal
+all pipe roles should disable local staging forever
+the process-global LDS env defaults are fully eliminated
+```
+
+Those are follow-up tuning and lifecycle-cleanup problems. The completed scope here is narrower and concrete: prevent
+the generated `attn_kv` no-local-stage route from inheriting LDS local staging and exceeding the gfx1100 64 KiB LDS
+limit in composed S10 prefill.

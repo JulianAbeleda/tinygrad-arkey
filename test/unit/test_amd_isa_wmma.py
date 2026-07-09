@@ -2,12 +2,14 @@ import itertools, os, unittest
 from dataclasses import replace
 from tinygrad import Tensor
 from tinygrad.uop.ops import Ops, UOp, graph_rewrite
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa import IselContext, Register
-from tinygrad.renderer.isa.amd import AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, isel_store, lower_inst
+from tinygrad.renderer.isa.amd import (
+  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, decompose_lds_index, isel_index, isel_store, lower_inst)
 from tinygrad.codegen import full_rewrite_to_sink, to_program, to_program_cache
+from tinygrad.codegen.late.devectorizer import load_store_folding
 from tinygrad.renderer.amd.dsl import Reg
 
 
@@ -75,6 +77,33 @@ class TestAMDISAWmmaStructuralGate(unittest.TestCase):
     self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 8, "strided B fragment still packs")
     # and it assembled to a non-empty binary
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
+
+
+class TestAMDISAIntegerCastGate(unittest.TestCase):
+  def test_uchar_to_ushort_uses_byte_load_half_store(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    a = Tensor.empty(8, dtype=dtypes.uchar)
+    lin = a.cast(dtypes.ushort).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertIn("global_load_u8", mns)
+    self.assertIn("global_store_b16", mns)
+    self.assertNotIn("global_load_b32", mns)
+
+  def test_uchar_to_float_masks_then_converts(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    a = Tensor.empty(8, dtype=dtypes.uchar)
+    lin = a.cast(dtypes.float32).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertIn("global_load_u8", mns)
+    self.assertIn("v_and_b32_e32", mns)
+    self.assertIn("v_cvt_f32_u32_e32", mns)
+    self.assertIn("global_store_b32", mns)
 
 
 class TestAMDISAWmmaKReduceGate(unittest.TestCase):
@@ -208,6 +237,51 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     ictx = IselContext(fs)
     fs = graph_rewrite(fs, self.ren.isel_matcher, ctx=ictx, name="isel", bottom_up=True)   # (d) no isel NotImplementedError
     return fs, ictx, n_wmma
+
+  def _dbuf_withlocal_both_mns(self, *, sched:int=1, extra_env:dict[str, str]|None=None):
+    keys = ("PREFILL_TC_LOCAL_STAGE", "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", "PREFILL_TC_LOCAL_STAGE_B_TILEKEY",
+            "PREFILL_TC_LOCAL_STAGE_POST", "PREFILL_LDS_PACK_WITHLOCAL_B128", "PREFILL_DBUF",
+            "PREFILL_DBUF_LDS_CONST_IMM", "PREFILL_DBUF_LDS_INDEX_SPLIT", "PREFILL_DBUF_LDS_STORE_BASE_SPLIT",
+            "PREFILL_DBUF_DIRECT_B128_CHAIN", "PREFILL_DBUF_LDS_ADDR_USE_DEP", "AMD_ISA_WAITCNT_TARGETED",
+            "AMD_ISA_WMMA_B128_FRAG", "AMD_ISA_REG_ACCUM", "REGALLOC_ADDR_REMAT", "AMD_ISA_SCHED",
+            "PREFILL_DBUF_D3A_POST", "PREFILL_DBUF_D3A_STAGE_A", "PREFILL_DBUF_D3A_STAGE_B",
+            "PREFILL_DBUF_GLOBAL_ADDR_INLOOP")
+    old = {k: os.environ.get(k) for k in keys}
+    os.environ.update({
+      "PREFILL_TC_LOCAL_STAGE": "both",
+      "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL": "1",
+      "PREFILL_TC_LOCAL_STAGE_B_TILEKEY": "1",
+      "PREFILL_TC_LOCAL_STAGE_POST": "1",
+      "PREFILL_LDS_PACK_WITHLOCAL_B128": "1",
+      "PREFILL_DBUF": "1",
+      "PREFILL_DBUF_LDS_CONST_IMM": "1",
+      "PREFILL_DBUF_LDS_INDEX_SPLIT": "1",
+      "PREFILL_DBUF_LDS_STORE_BASE_SPLIT": "1",
+      "PREFILL_DBUF_DIRECT_B128_CHAIN": "1",
+      "PREFILL_DBUF_LDS_ADDR_USE_DEP": "1",
+      "AMD_ISA_WAITCNT_TARGETED": "1",
+      "AMD_ISA_WMMA_B128_FRAG": "1",
+      "AMD_ISA_REG_ACCUM": "1",
+      "REGALLOC_ADDR_REMAT": "1",
+      "AMD_ISA_SCHED": str(sched),
+    })
+    if extra_env is not None: os.environ.update(extra_env)
+    getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile_transposed_b(1), self.ren)
+      lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+      insts = self.ren._resolve_labels(self.ren._insert_waitcnt(self.ren._schedule(list(lin_uop.src)) if sched else list(lin_uop.src)))
+      return [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear(); to_program_cache.clear()
+
+  @staticmethod
+  def _between_wmma_has(mns:list[str], names:set[str]) -> bool:
+    widx = [i for i, m in enumerate(mns) if m == "v_wmma_f32_16x16x16_f16"]
+    return any(a < i < b and mns[i] in names for a, b in zip(widx, widx[1:]) for i in range(a + 1, b))
 
   def test_16_subtile_register_model(self):
     # 64x64x64 WM=WN=4 -> 16 output subtiles, 128 accumulator VGPRs (the bug's 4x4=128 case).
@@ -383,6 +457,88 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     self.assertTrue(any(a < x < b for a, b in zip(widx, widx[1:]) for x in bidx),
                     "smaller DBUF route should expose future b128 loads between WMMAs")
 
+  def test_dbuf_withlocal_both_smaller_tile_keeps_packed_lds_stores(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_TC_LOCAL_STAGE", "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL",
+                                          "PREFILL_TC_LOCAL_STAGE_B_TILEKEY", "PREFILL_LDS_PACK_WITHLOCAL_B128",
+                                          "PREFILL_DBUF", "PREFILL_DBUF_LDS_CONST_IMM", "PREFILL_DBUF_LDS_INDEX_SPLIT",
+                                          "PREFILL_DBUF_LDS_STORE_BASE_SPLIT", "PREFILL_DBUF_DIRECT_B128_CHAIN",
+                                          "PREFILL_DBUF_LDS_ADDR_USE_DEP", "AMD_ISA_WAITCNT_TARGETED",
+                                          "AMD_ISA_WMMA_B128_FRAG")}
+    os.environ["PREFILL_TC_LOCAL_STAGE"] = "both"
+    os.environ["PREFILL_TC_LOCAL_STAGE_WITH_LOCAL"] = "1"
+    os.environ["PREFILL_TC_LOCAL_STAGE_B_TILEKEY"] = "1"
+    os.environ["PREFILL_LDS_PACK_WITHLOCAL_B128"] = "1"
+    os.environ["PREFILL_DBUF"] = "1"
+    os.environ["PREFILL_DBUF_LDS_CONST_IMM"] = "1"
+    os.environ["PREFILL_DBUF_LDS_INDEX_SPLIT"] = "1"
+    os.environ["PREFILL_DBUF_LDS_STORE_BASE_SPLIT"] = "1"
+    os.environ["PREFILL_DBUF_DIRECT_B128_CHAIN"] = "1"
+    os.environ["PREFILL_DBUF_LDS_ADDR_USE_DEP"] = "1"
+    os.environ["AMD_ISA_WAITCNT_TARGETED"] = "1"
+    os.environ["AMD_ISA_WMMA_B128_FRAG"] = "1"
+    getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile_transposed_b(1), self.ren)
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear(); to_program_cache.clear()
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    insts = self.ren._resolve_labels(self.ren._insert_waitcnt(self.ren._schedule(list(lin_uop.src))))
+    mns = [str(u.arg).split("(", 1)[0] for u in insts if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 8)
+    self.assertGreater(sum(1 for m in mns if m == "ds_store_b128"), 0)
+    self.assertEqual(sum(1 for m in mns if m in ("ds_store_b16", "ds_store_b32", "ds_store_b64")), 0,
+                     "DBUF both-side packed staging must not fall back to scalar/narrow LDS stores")
+    widx = [i for i, m in enumerate(mns) if m == "v_wmma_f32_16x16x16_f16"]
+    gidx = [i for i, m in enumerate(mns) if m in ("global_load_b128", "ds_store_b128", "ds_load_b128")]
+    self.assertTrue(any(a < x < b for a, b in zip(widx, widx[1:]) for x in gidx),
+                    "DBUF both-side staging must keep current-slot LDS consumption between WMMAs")
+
+  def test_dbuf_withlocal_both_currently_has_only_current_lds_loads_between_wmmas(self):
+    mns = self._dbuf_withlocal_both_mns()
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 8)
+    self.assertEqual(sum(1 for m in mns if m in ("ds_store_b16", "ds_store_b32", "ds_store_b64")), 0)
+    self.assertTrue(self._between_wmma_has(mns, {"ds_load_b128"}),
+                    "current DBUF body should expose current-slot LDS loads between WMMAs")
+    self.assertFalse(self._between_wmma_has(mns, {"global_load_b128", "ds_store_b128", "ds_store_b64", "ds_store_b32", "ds_store_b16"}),
+                     "current DBUF body must not be mistaken for next-slot staging")
+
+  def test_dbuf_withlocal_both_scheduler_off_still_lacks_future_staging(self):
+    mns = self._dbuf_withlocal_both_mns(sched=0)
+    self.assertTrue(self._between_wmma_has(mns, {"ds_load_b128"}))
+    self.assertFalse(self._between_wmma_has(mns, {"global_load_b128", "ds_store_b128", "ds_store_b64", "ds_store_b32", "ds_store_b16"}),
+                     "D3 failure must be present before AMD list scheduling, not caused by it")
+
+  def test_dbuf_withlocal_both_addr_inloop_flag_does_not_create_future_staging(self):
+    mns = self._dbuf_withlocal_both_mns(extra_env={"PREFILL_DBUF_GLOBAL_ADDR_INLOOP": "1"})
+    self.assertTrue(self._between_wmma_has(mns, {"ds_load_b128"}))
+    self.assertFalse(self._between_wmma_has(mns, {"global_load_b128", "ds_store_b128", "ds_store_b64", "ds_store_b32", "ds_store_b16"}))
+
+  @unittest.expectedFailure
+  def test_dbuf_withlocal_both_d3_target_future_staging_between_wmmas(self):
+    mns = self._dbuf_withlocal_both_mns()
+    self.assertTrue(self._between_wmma_has(mns, {"ds_load_b128"}),
+                    "steady-state body should still contain current-slot LDS consumption")
+    self.assertTrue(self._between_wmma_has(mns, {"global_load_b128", "ds_store_b128"}),
+                    "D3 target: generated DBUF body contains next-slot wide staging between WMMAs")
+    self.assertFalse(self._between_wmma_has(mns, {"ds_store_b64", "ds_store_b32", "ds_store_b16"}),
+                     "D3 must not satisfy cadence via scalar/narrow LDS stores")
+    self.assertEqual(sum(1 for m in mns if m in ("ds_store_b16", "ds_store_b32", "ds_store_b64")), 0,
+                     "DBUF D3 must preserve packed LDS staging without scalar/narrow fallback")
+
+  def test_dbuf_withlocal_both_d3a_flag_future_staging_between_wmmas(self):
+    mns = self._dbuf_withlocal_both_mns(extra_env={"PREFILL_DBUF_D3A_POST": "1"})
+    self.assertTrue(self._between_wmma_has(mns, {"ds_load_b128"}),
+                    "steady-state body should still contain current-slot LDS consumption")
+    self.assertTrue(self._between_wmma_has(mns, {"global_load_b128", "ds_store_b128"}),
+                    "D3-A prototype target: generated DBUF body contains next-slot wide staging between WMMAs")
+    self.assertFalse(self._between_wmma_has(mns, {"ds_store_b64", "ds_store_b32", "ds_store_b16"}),
+                     "D3-A must not satisfy cadence via scalar/narrow LDS stores")
+    self.assertEqual(sum(1 for m in mns if m in ("ds_store_b16", "ds_store_b32", "ds_store_b64")), 0,
+                     "DBUF D3-A must preserve packed LDS staging without scalar/narrow fallback")
+
   def test_local_stage_a_uses_lds_b128_fragment_loads(self):
     old = {k: os.environ.get(k) for k in ("PREFILL_TC_LOCAL_STAGE", "PREFILL_TC_LOCAL_STAGE_POST", "AMD_ISA_WMMA_B128_FRAG")}
     os.environ["PREFILL_TC_LOCAL_STAGE"] = "a"; os.environ["PREFILL_TC_LOCAL_STAGE_POST"] = "1"; os.environ["AMD_ISA_WMMA_B128_FRAG"] = "1"
@@ -406,10 +562,163 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     self.assertTrue(any("ds_load_b128" in str(u.arg) and ", 16)" in str(u.arg) for u in lin_uop.src if not isinstance(u.arg, tuple)),
                     "second half of each staged fragment must use ds_load_b128 offset0=16")
 
+  def test_local_stage_withlocal_b128_pack_removes_scalar_stores(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_TC_LOCAL_STAGE", "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL",
+                                          "PREFILL_LDS_PACK_WITHLOCAL_B128", "AMD_ISA_WMMA_B128_FRAG")}
+    os.environ["PREFILL_TC_LOCAL_STAGE"] = "a"
+    os.environ["PREFILL_TC_LOCAL_STAGE_WITH_LOCAL"] = "1"
+    os.environ["PREFILL_LDS_PACK_WITHLOCAL_B128"] = "1"
+    os.environ["AMD_ISA_WMMA_B128_FRAG"] = "1"
+    getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile_transposed_b(2), self.ren)
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear(); to_program_cache.clear()
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
+    self.assertEqual(sum(1 for m in mns if m == "ds_load_b128"), 8)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b128"), 8)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b32"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "global_load_u16"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "s_barrier"), 1)
+
+  def test_local_stage_a_with_b_tilekey_still_packs_withlocal_b128(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_TC_LOCAL_STAGE", "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL",
+                                          "PREFILL_TC_LOCAL_STAGE_B_TILEKEY", "PREFILL_LDS_PACK_WITHLOCAL_B128",
+                                          "AMD_ISA_WMMA_B128_FRAG")}
+    os.environ["PREFILL_TC_LOCAL_STAGE"] = "a"
+    os.environ["PREFILL_TC_LOCAL_STAGE_WITH_LOCAL"] = "1"
+    os.environ["PREFILL_TC_LOCAL_STAGE_B_TILEKEY"] = "1"
+    os.environ["PREFILL_LDS_PACK_WITHLOCAL_B128"] = "1"
+    os.environ["AMD_ISA_WMMA_B128_FRAG"] = "1"
+    getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile_transposed_b(2), self.ren)
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear(); to_program_cache.clear()
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
+    self.assertEqual(sum(1 for m in mns if m == "ds_load_b128"), 8)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b128"), 8)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b16"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b32"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "global_load_u16"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 0)
+
+  def test_b_tilekey_withlocal_b128_bridge_removes_scalar_lds_stores(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_TC_LOCAL_STAGE", "PREFILL_TC_LOCAL_STAGE_WITH_LOCAL",
+                                          "PREFILL_TC_LOCAL_STAGE_B_TILEKEY", "PREFILL_LDS_PACK_WITHLOCAL_B128",
+                                          "AMD_ISA_WMMA_B128_FRAG")}
+    os.environ["PREFILL_TC_LOCAL_STAGE"] = "b"
+    os.environ["PREFILL_TC_LOCAL_STAGE_WITH_LOCAL"] = "1"
+    os.environ["PREFILL_TC_LOCAL_STAGE_B_TILEKEY"] = "1"
+    os.environ["PREFILL_LDS_PACK_WITHLOCAL_B128"] = "1"
+    os.environ["AMD_ISA_WMMA_B128_FRAG"] = "1"
+    getenv.cache_clear(); to_program_cache.clear()
+    try:
+      prg = to_program(_tc_matmul_ast_multitile_transposed_b(2), self.ren)
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear(); to_program_cache.clear()
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertEqual(sum(1 for m in mns if m == "v_wmma_f32_16x16x16_f16"), 16)
+    self.assertEqual(sum(1 for m in mns if m == "ds_load_b128"), 8)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b128"), 8)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b16"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "ds_store_b32"), 0)
+    self.assertEqual(sum(1 for m in mns if m == "v_pack_b32_f16"), 32)
+    self.assertEqual(sum(1 for m in mns if m == "s_barrier"), 1)
+
 
 class TestAMDISALDSB128Lowering(unittest.TestCase):
   def _v(self, i:int):
     return UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV, tag=(Register(f"v{i}", i),))
+
+  def test_dbuf_d3a_local_staging_buffers_do_not_fold_to_ptrcat(self):
+    old = os.environ.get("PREFILL_DBUF_D3A_POST")
+    os.environ["PREFILL_DBUF_D3A_POST"] = "1"; getenv.cache_clear()
+    try:
+      buf = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(2048, AddrSpace.LOCAL), arg=990)
+      dyn = UOp.special(32, "lidx0")
+      idxs = tuple(buf.index(dyn + i, ptr=True) for i in range(2))
+      folded = graph_rewrite(UOp(Ops.STACK, buf.dtype.vec(2), idxs), load_store_folding, name="d3a ptrcat proof")
+    finally:
+      if old is None: os.environ.pop("PREFILL_DBUF_D3A_POST", None)
+      else: os.environ["PREFILL_DBUF_D3A_POST"] = old
+      getenv.cache_clear()
+    self.assertFalse(any(u.op is Ops.PTRCAT for u in folded.toposort()),
+                     "D3-A local staging buffers must not become vector local PTRCATs")
+
+  def test_decompose_lds_index_reports_half_and_byte_constants(self):
+    ctx = IselContext(UOp.sink())
+    lds_dtype = dtypes.half.ptr(64, AddrSpace.LOCAL)
+    buf = UOp(Ops.DEFINE_LOCAL, lds_dtype, arg=64)
+    dyn = UOp(Ops.SPECIAL, dtypes.int32, arg="lidx0")
+    idx = UOp(Ops.INDEX, lds_dtype, src=(buf, UOp(Ops.ADD, dtypes.int32, src=(dyn, UOp.const(dtypes.int32, 7)))))
+    order = UOp(Ops.NOOP, dtypes.void)
+    desc = decompose_lds_index(ctx, idx, order)
+    self.assertIsNotNone(desc)
+    self.assertIs(desc.buf, buf)
+    self.assertIs(desc.dyn, dyn)
+    self.assertEqual(desc.const_half, 7)
+    self.assertEqual(desc.const_bytes, 14)
+    self.assertEqual(desc.itemsize, 2)
+    self.assertEqual(desc.base_bytes, 0)
+    self.assertIs(desc.order, order)
+
+  def test_safe_dbuf_lds_const_imm_splits_dynamic_and_byte_const(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_DBUF_LDS_CONST_IMM", "PREFILL_DBUF_LDS_CONST_IMM_UNSAFE")}
+    os.environ["PREFILL_DBUF_LDS_CONST_IMM"] = "1"
+    os.environ.pop("PREFILL_DBUF_LDS_CONST_IMM_UNSAFE", None)
+    getenv.cache_clear()
+    try:
+      ctx = IselContext(UOp.sink())
+      lds_dtype = dtypes.half.ptr(64, AddrSpace.LOCAL)
+      buf = UOp(Ops.DEFINE_LOCAL, lds_dtype, arg=64)
+      dyn = UOp(Ops.SPECIAL, dtypes.int32, arg="lidx0")
+      idx = UOp(Ops.INDEX, lds_dtype, src=(buf, UOp(Ops.ADD, dtypes.int32, src=(dyn, UOp.const(dtypes.int32, 8)))))
+      out = isel_index(ctx, idx)
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear()
+    self.assertEqual(out.arg, "lds")
+    self.assertEqual(out.src[2].arg, 16)
+    self.assertIs(out.src[0].src[0], dyn)
+
+  def test_unsafe_dbuf_lds_const_imm_keeps_legacy_address_expr(self):
+    old = {k: os.environ.get(k) for k in ("PREFILL_DBUF_LDS_CONST_IMM", "PREFILL_DBUF_LDS_CONST_IMM_UNSAFE")}
+    os.environ["PREFILL_DBUF_LDS_CONST_IMM"] = "1"
+    os.environ["PREFILL_DBUF_LDS_CONST_IMM_UNSAFE"] = "1"
+    getenv.cache_clear()
+    try:
+      ctx = IselContext(UOp.sink())
+      lds_dtype = dtypes.half.ptr(64, AddrSpace.LOCAL)
+      buf = UOp(Ops.DEFINE_LOCAL, lds_dtype, arg=64)
+      dyn = UOp(Ops.SPECIAL, dtypes.int32, arg="lidx0")
+      expr = UOp(Ops.ADD, dtypes.int32, src=(dyn, UOp.const(dtypes.int32, 8)))
+      idx = UOp(Ops.INDEX, lds_dtype, src=(buf, expr))
+      out = isel_index(ctx, idx)
+    finally:
+      for k, v in old.items():
+        if v is None: os.environ.pop(k, None)
+        else: os.environ[k] = v
+      getenv.cache_clear()
+    self.assertEqual(out.arg, "lds")
+    self.assertIs(out.src[0].src[0], expr)
 
   def test_ds_load_b128_lowering_uses_offset0(self):
     addr = self._v(5)
@@ -438,6 +747,15 @@ class TestAMDISALDSB128Lowering(unittest.TestCase):
     self.assertIn("v[6], v[220:223]", str(inst.arg))
     self.assertTrue(str(inst.arg).endswith(", 16)"), f"expected offset0=16 in {inst.arg}")
 
+  def test_ds_store_b64_lowering_uses_offset0(self):
+    addr, data = self._v(6), tuple(self._v(i) for i in range(220, 222))
+    x = UOp(Ops.INS, dtypes.void, src=(addr,) + data + (UOp(Ops.NOOP, dtypes.void), UOp.const(dtypes.int32, 16).rtag()),
+            arg=AMDOps.DS_STORE_B64)
+    inst, waits = lower_inst(x)
+    self.assertEqual(waits, [inst])
+    self.assertIn("v[6], v[220:221]", str(inst.arg))
+    self.assertTrue(str(inst.arg).endswith(", 16)"), f"expected offset0=16 in {inst.arg}")
+
   def test_lds_store_selects_b128_only_for_fixed_contiguous_packed_vgprs(self):
     addr, order = self._v(7), UOp(Ops.NOOP, dtypes.void)
     a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
@@ -445,6 +763,36 @@ class TestAMDISALDSB128Lowering(unittest.TestCase):
     out = isel_store(None, a, packed, UOp(Ops.STORE, dtypes.void))
     self.assertIs(out.arg, AMDOps.DS_STORE_B128)
     self.assertEqual(out.src[-1].arg, 0, "LDS address VGPR carries the dynamic byte address; b128 immediate stays offset0=0")
+
+  def test_ds_store_b128_keeps_aligned_safe_offset0(self):
+    addr, order = self._v(7), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order, UOp.const(dtypes.int32, 16).rtag()), arg="lds")
+    packed = UOp(Ops.NOOP, dtypes.int32.vec(4), src=tuple(self._v(i) for i in range(224, 228)))
+    out = isel_store(IselContext(UOp.sink()), a, packed, UOp(Ops.STORE, dtypes.void))
+    self.assertIs(out.arg, AMDOps.DS_STORE_B128)
+    self.assertIs(out.src[0], addr)
+    self.assertEqual(out.src[-1].arg, 16)
+
+  def test_ds_store_b128_materializes_unaligned_offset_candidate(self):
+    addr, order = self._v(7), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order, UOp.const(dtypes.int32, 14).rtag()), arg="lds")
+    packed = UOp(Ops.NOOP, dtypes.int32.vec(4), src=tuple(self._v(i) for i in range(224, 228)))
+    out = isel_store(IselContext(UOp.sink()), a, packed, UOp(Ops.STORE, dtypes.void))
+    self.assertIs(out.arg, AMDOps.DS_STORE_B128)
+    self.assertIs(out.src[0].arg, AMDOps.V_IADD)
+    self.assertEqual(out.src[0].src[1].arg, 14)
+    self.assertEqual(out.src[-1].arg, 0)
+
+  def test_lds_store_sorts_constrained_vpack_tuple_for_b128_span(self):
+    addr, order = self._v(7), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+    packs = tuple(
+      UOp(Ops.INS, dtypes.int32, src=(self._v(10 + 2*i), self._v(11 + 2*i)), arg=AMDOps.V_PACK, tag=(Register(f"v{r}", r),))
+      for i, r in enumerate((234, 232, 235, 233)))
+    packed = UOp(Ops.NOOP, dtypes.int32.vec(4), src=packs)
+    out = isel_store(None, a, packed, UOp(Ops.STORE, dtypes.void))
+    self.assertIs(out.arg, AMDOps.DS_STORE_B128)
+    self.assertEqual([u.tag[0].cons[0].index for u in out.src[1:5]], [232, 233, 234, 235])
 
   def test_lds_store_selects_b128_for_global_load_b128_operand(self):
     addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
@@ -454,6 +802,34 @@ class TestAMDISALDSB128Lowering(unittest.TestCase):
     out = isel_store(None, a, packed, UOp(Ops.STORE, dtypes.void))
     self.assertIs(out.arg, AMDOps.DS_STORE_B128)
     self.assertEqual(out.src[-1].arg, 0, "Wide source from GLOBAL_LOAD_B128 should keep the packed offset0=0")
+
+  def test_lds_store_selects_b64_for_half_vec4_with_flag(self):
+    old = os.environ.get("PREFILL_LDS_PACK_WITHLOCAL_B64")
+    os.environ["PREFILL_LDS_PACK_WITHLOCAL_B64"] = "1"; getenv.cache_clear()
+    try:
+      addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
+      a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+      vals = UOp(Ops.NOOP, dtypes.half.vec(4), src=tuple(UOp(Ops.INS, dtypes.half, arg=AMDOps.MOV, tag=(Register(f"v{i}", i),)) for i in range(10, 14)))
+      out = isel_store(IselContext(UOp.sink()), a, vals, UOp(Ops.STORE, dtypes.void))
+    finally:
+      if old is None: os.environ.pop("PREFILL_LDS_PACK_WITHLOCAL_B64", None)
+      else: os.environ["PREFILL_LDS_PACK_WITHLOCAL_B64"] = old
+      getenv.cache_clear()
+    self.assertIs(out.arg, AMDOps.DS_STORE_B64)
+    self.assertEqual(out.src[-1].arg, 0)
+
+  def test_lds_store_rejects_b64_without_flag(self):
+    old = os.environ.get("PREFILL_LDS_PACK_WITHLOCAL_B64")
+    os.environ.pop("PREFILL_LDS_PACK_WITHLOCAL_B64", None); getenv.cache_clear()
+    try:
+      addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
+      a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+      vals = UOp(Ops.NOOP, dtypes.half.vec(4), src=tuple(UOp(Ops.INS, dtypes.half, arg=AMDOps.MOV, tag=(Register(f"v{i}", i),)) for i in range(10, 14)))
+      out = isel_store(IselContext(UOp.sink()), a, vals, UOp(Ops.STORE, dtypes.void))
+    finally:
+      if old is not None: os.environ["PREFILL_LDS_PACK_WITHLOCAL_B64"] = old
+      getenv.cache_clear()
+    self.assertIs(out.arg, AMDOps.DS_STORE)
 
   def test_lds_store_rejects_global_load_b128_without_fixed_register_span(self):
     addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
