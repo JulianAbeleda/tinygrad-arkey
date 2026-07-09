@@ -353,6 +353,8 @@ def bufs_from_ast(ast:UOp, dname:str) -> list[Buffer]:
 # Step 3 warm-start: force a loop-found schedule on matmuls of a known shape signature.
 # Map key = (frozenset(output dims), product(reduce dims)); value = tuple[Opt]. Default None = no-op.
 _WARMSTART_OPTS = None
+_WARMSTART_LOCAL_STAGE_KEYS = None
+_WARMSTART_LOCAL_STAGE_DENY_KEYS = set()
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
 
 def _tc_local_stage_mode() -> str:
@@ -583,14 +585,26 @@ pm_tc_local_stage_scalar_post = PatternMatcher([
   (UPat(Ops.WMMA, name="wmma"), _tc_local_stage_contract_src_post),
 ])
 
-def _warmstart_match(k):
+def _warmstart_key(k):
   # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce)
   red, out = 1, []
   for s, t in zip(k.full_shape, k.axis_types):
     if t in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE):
       if isinstance(s, int): red *= s
     elif isinstance(s, int): out.append(s)
-  return _WARMSTART_OPTS.get((frozenset(out), red))
+  return (frozenset(out), red)
+
+def _warmstart_match(k):
+  return _WARMSTART_OPTS.get(_warmstart_key(k))
+
+def _warmstart_local_stage_allowed(k:Scheduler) -> bool:
+  # None preserves the historical global env behavior used by standalone probes. Primitive graph-GEMM routes set this
+  # to a concrete key set so LDS/DBUF rewrites only touch the intended role, not every warmstarted GEMM in the model.
+  key = _warmstart_key(k)
+  if (key == (frozenset({512, 1024}), 4096) and getenv("PREFILL_WMMA_PIPE_PRIMITIVE", 0) and
+      str(getenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1")).strip().lower() not in ("", "0", "false", "off", "no")):
+    return False
+  return key not in _WARMSTART_LOCAL_STAGE_DENY_KEYS and (_WARMSTART_LOCAL_STAGE_KEYS is None or key in _WARMSTART_LOCAL_STAGE_KEYS)
 
 def _prefill_dbuf_peel(k:Scheduler) -> None:
   # 1c: peel the K reduce by 2 by applying ONE extra UNROLL(=2) on a const-even REDUCE axis. UNROLL becomes an
@@ -646,15 +660,16 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
-  if PREFILL_DBUF():
+  local_stage_allowed = _warmstart_local_stage_allowed(k)
+  if local_stage_allowed and PREFILL_DBUF():
     _prefill_dbuf_peel(k)
-  if _tc_local_stage_coop_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+  if local_stage_allowed and _tc_local_stage_coop_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_coop_post, name="tc local stage coop post")
-  elif _tc_local_stage_coop_b_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+  elif local_stage_allowed and _tc_local_stage_coop_b_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_coop_b_post, name="tc local stage coop b post")
-  elif _tc_local_stage_scalar_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+  elif local_stage_allowed and _tc_local_stage_scalar_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_scalar_post, name="tc local stage scalar post")
-  elif _tc_local_stage_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
+  elif local_stage_allowed and _tc_local_stage_post_opt() and _tc_local_stage_mode() not in ("", "0", "false", "off", "no"):
     k.ast = graph_rewrite(k.ast, pm_tc_local_stage_post, name="tc local stage post")
   if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
     print("TC_LOCAL_STAGE_COOP_B_STATS", json.dumps(_tc_local_stage_coop_b_stats))
