@@ -124,3 +124,16 @@ def test_generic_b_stage_contract_empty_fails_closed():
   assert out["stage_count"] == 0
   assert out["direct_b_stage_consumer_count"] == 0
   assert "WARP x LOCAL" in out["expected_owned_stage_shape"]
+
+
+def test_p4c_rotation_readiness_blocks_identity_without_lifecycle_split():
+  out = audit.p4c_rotation_readiness({
+    "ok": True,
+    "stages": [{"owned_stage": "B_IDENTITY", "producer_epoch": "same_reduce"}],
+    "consumers": [{"carrier_owned_stage": "B_IDENTITY", "carrier_consumer_epoch": "same_reduce"}],
+  })
+
+  assert out["ready"] is False
+  assert out["blocked_at"] == "P4C.4"
+  assert "prologue/body/tail" in out["reason"]
+  assert "reduce_epoch+1" in out["forbidden_shortcut"]

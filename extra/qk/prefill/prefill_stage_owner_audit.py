@@ -274,6 +274,27 @@ def generic_b_stage_contract(sink: UOp) -> dict[str, Any]:
   }
 
 
+def p4c_rotation_readiness(contract: dict[str, Any]) -> dict[str, Any]:
+  if not contract.get("ok"):
+    return {"ready": False, "blocked_at": "P4C.4", "reason": "generic B stage contract is not established"}
+  stages = contract.get("stages", [])
+  consumers = contract.get("consumers", [])
+  if len(stages) != 1 or not consumers:
+    return {"ready": False, "blocked_at": "P4C.4", "reason": "requires exactly one B stage and at least one direct B consumer"}
+  st, c = stages[0], consumers[0]
+  if st.get("owned_stage") != "B_IDENTITY" or c.get("carrier_owned_stage") != "B_IDENTITY":
+    return {"ready": False, "blocked_at": "P4C.4", "reason": "owned B identity metadata is missing"}
+  if st.get("producer_epoch") != "same_reduce" or c.get("carrier_consumer_epoch") != "same_reduce":
+    return {"ready": False, "blocked_at": "P4C.4", "reason": "identity epoch metadata is incomplete"}
+  return {
+    "ready": False,
+    "blocked_at": "P4C.4",
+    "reason": "rotated B needs a prologue/body/tail split before behavior changes; current contract still binds producer and consumer to the same reduce epoch",
+    "required_next_object": "OwnedBStage(prologue produce k0, body consume k and produce k+1, tail consume final)",
+    "forbidden_shortcut": "substitute reduce_epoch -> reduce_epoch+1 inside the existing STAGE without first/tail guards",
+  }
+
+
 def compile_full_sink(m: int, n: int, k: int, u0: int, u1: int, loc: int, unr: int, boundary: str) -> UOp:
   rangeify.prefill_dbuf_clear_rotated_stage_lowering_audit()
   postrange._WARMSTART_OPTS = {(frozenset({m, n}), k): _opts_for(u0, u1, loc, unr)}
@@ -461,6 +482,7 @@ def main() -> int:
     "summary": summary, "owner_records": owners,
     "lowering_hook_owner_records": lowering_rows,
     "generic_b_stage_contract": b_contract,
+    "p4c_rotation_readiness": p4c_rotation_readiness(b_contract),
     "rotated_lifecycle_plan": plan,
     "p4_readiness": p4_readiness(summary, plan, args.boundary),
     "stages": stages, "stores": stores, "wmma_operands": consumers,

@@ -390,6 +390,21 @@ This completes P4C.1/P4C.2/P4C.3. The next non-speculative step is P4C.4: introd
 after the metadata can prove that every B consumer still has one owner. The first rotated probe must remain B-only and
 must fail closed before changing A or scheduler placement.
 
+P4C.4 readiness currently blocks:
+
+```json
+{
+  "ready": false,
+  "blocked_at": "P4C.4",
+  "reason": "rotated B needs a prologue/body/tail split before behavior changes; current contract still binds producer and consumer to the same reduce epoch",
+  "required_next_object": "OwnedBStage(prologue produce k0, body consume k and produce k+1, tail consume final)",
+  "forbidden_shortcut": "substitute reduce_epoch -> reduce_epoch+1 inside the existing STAGE without first/tail guards"
+}
+```
+
+This is the next real layer. The identity owned B stage is safe, but rotation is not a local expression rewrite. It needs
+a lifecycle object that can represent warmup and drain explicitly.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.
