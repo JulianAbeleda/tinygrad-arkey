@@ -214,3 +214,52 @@ The raw `pipe_resource_gated_raw_fallback` remains as a safety rail when
 `PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE=0`, when the policy is not selected, or when a future resource plan is unsafe.
 The next required verdict is an S10 composed smoke/capture on hardware proving the generated no-local-stage path compiles
 and remains correct/performance-acceptable.
+
+## Crash Probe Result
+
+Probe:
+
+```text
+extra/qk/prefill/attn_kv_no_local_stage_crash_probe.py
+```
+
+Artifact:
+
+```text
+bench/prefill-s10-lds2-ownership/attn-kv-no-local-stage-crash-probe.json
+```
+
+Result:
+
+```text
+S10_ATTN_KV_NO_LOCAL_STAGE_ISOLATED_PASS
+```
+
+Case results:
+
+| Case | Target | Result |
+|---|---|---|
+| `attn_kv_generated_no_local_stage` | `AMD:ISA:gfx1100` | correctness pass |
+| `attn_kv_generated_no_local_stage_hip` | `AMD` | correctness pass |
+| `attn_qo_generated_pipe_control` | `AMD:ISA:gfx1100` | correctness pass |
+| `attn_kv_raw_fallback_safety` | `AMD:ISA:gfx1100` | timeout/error in the isolated helper |
+
+The important finding is that isolated `attn_kv` no-local-stage is correct on both the ISA and HIP targets. The composed
+whole-prefill smoke still emits the old oversized local-staged HIP source:
+
+```text
+role: attn_kv
+LDS:  69632 > 65536
+```
+
+So the remaining blocker is not the generated `attn_kv` no-local-stage primitive itself. It is a whole-prefill
+composition issue: the no-local-stage policy is not being applied to the `attn_kv` kernel generated inside the model run.
+
+Next direction:
+
+```text
+trace whole-prefill warmstart/local-stage key application for attn_kv
+```
+
+Specifically, compare the isolated passing `attn_kv` route against the composed failing source and find why the composed
+path still enters the local-staging rewrite.
