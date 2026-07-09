@@ -47,27 +47,29 @@ Archived S9 authority proves the path can hit the target band:
 | `bench/prefill-whole-synced/raw-hand-s9-combined-best-authority.json` | `b1259638d` dirty | `4413` | `3237` | best S9 combined authority |
 | `bench/prefill-whole-synced/raw-hand-s9-wait-store2-authority.json` | `b1259638d` dirty | `4416` | `3237` | `LGKM_COOP_STORE=2` opt-in authority |
 
-Fresh current-head smoke does not yet preserve that band:
+Fresh current-head authority preserves that band when the S9 authority methodology is used:
 
 | command surface | git | pp512 | verdict |
 |---|---:|---:|---|
-| strict default, `PREFILL_V2=1` | `b3f314b7f` | `265` | not the graph-GEMM route |
-| `PREFILL_GRAPH_GEMM=1` | `b3f314b7f` | `124` | route selected but regressed |
-| `PREFILL_GRAPH_GEMM=1 PREFILL_LDS2_WAIT_LGKM_COOP_STORE=2` | `b3f314b7f` | `118` | S9 opt-in wait knob does not recover the band |
-| route dump, `PREFILL_GRAPH_GEMM=1 PREFILL_GRAPH_GEMM_ROUTE_DUMP=1` | `b3f314b7f` | `89` | diagnostic run, warmups 0 |
+| strict default smoke, `PREFILL_V2=1`, `K=1,warmups=1,rounds=1` | `b3f314b7f` | `265` | not the graph-GEMM route; not an S9 authority run |
+| graph-GEMM smoke, `PREFILL_GRAPH_GEMM=1`, `K=1,warmups=1,rounds=1` | `b3f314b7f` | `124` | one-shot smoke/capture settings; not valid for S9 throughput gating |
+| graph-GEMM smoke, `PREFILL_GRAPH_GEMM=1 PREFILL_LDS2_WAIT_LGKM_COOP_STORE=2`, `K=1,warmups=1,rounds=1` | `b3f314b7f` | `118` | same smoke caveat |
+| route dump, `PREFILL_GRAPH_GEMM=1 PREFILL_GRAPH_GEMM_ROUTE_DUMP=1`, `warmups=0` | `b3f314b7f` | `89` | diagnostic run only |
+| S9 authority, `PREFILL_V2=1 PREFILL_GRAPH_GEMM=1`, `K=8,warmups=4,rounds=3` | `fa254a410` | `4407` | current head reproduces the 4k band |
 
-So the immediate blocker is not generated DBUF ownership. The immediate blocker is:
+So the immediate blocker is not generated DBUF ownership and not the S9 path. The correct active path is:
 
 ```text
-current HEAD no longer reproduces the archived S9 graph-GEMM 4k pp512 band
+PREFILL_V2=1 PREFILL_GRAPH_GEMM=1
+python3 extra/qk/prefill_whole_synced.py --mode authority -K 8 --warmups 4 --rounds 3 ...
 ```
 
 The next S10 validation loop is:
 
-1. restore or identify the regression between the archived S9 authority (`b1259638d`) and current head,
-2. fresh-run pp512 with the existing whole-prefill harness and pinned clocks,
-3. only claim S10 progress when current head is back in the `>=4000 tok/s` pp512 band,
-4. then search over the extracted LDS2 spec knobs without reopening generated DBUF replacement.
+1. use the S9 authority path as the baseline escape hatch,
+2. ignore one-shot smoke numbers for performance promotion,
+3. keep generated DBUF/P4 parked,
+4. search over the extracted LDS2 spec knobs only when the S9 authority path stays in the `>=4000 tok/s` pp512 band.
 
 ## Goal
 
