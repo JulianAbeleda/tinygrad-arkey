@@ -324,6 +324,26 @@ Do not build these as fixes:
 The next implementation checkpoint is therefore P4A.1/P4A.2: prove the actual `Ops.STAGE` lowering hook can see the
 same owner identity that exists at postrange, without changing the stream.
 
+Status update:
+
+| Check | Result |
+| --- | --- |
+| `PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT=1`, `--boundary full` | PASS. The real `bufferize_to_store` hook sees exactly two owners: A/B, `nbuf=2`, with reduce/global ranges still present. |
+| Existing B tile-key helper on active `512x5120x5120` | BLOCKED. It silently falls back because B global `tile_count=160`; staging all N tiles as one LDS object is too large. |
+| `PREFILL_TC_LOCAL_STAGE_B_TILEKEY_DROP_GLOBAL=1` active-shape probe | REFUTED. It engages the helper but returns `WRONG rr=1.2e+00` and worsens density to about `94.75 inst/WMMA`, `4.0 ds_store_b128/WMMA`, `4.0 ds_load_b128/WMMA`. |
+| Existing B tile-key helper on small-N `512x512x5120` where `tile_count<=64` | REFUTED. It is still `WRONG rr=1.2e+00`, so the issue is not only active-shape LDS size; the helper's B layout/consumer mapping is incorrect. |
+
+Conclusion: P4A is complete, but destructive P4 is still blocked. The current `rangeify` hook can see ownership, but it
+does not own the paired read index. The only existing co-located B helper that owns store+load is not semantically
+correct. P4 must therefore proceed by either:
+
+1. fixing the B tile-key helper's layout against the generic STAGE B layout, then reusing it as the B-only destructive
+   path, or
+2. replacing it with a new postrange owned-stage group that constructs B producer and B consumer from the same
+   `RotatedStageOwner`.
+
+Do not attempt A+B destructive lowering until B-only is correct on both small-N and active-N.
+
 ### P5. Add A
 
 Repeat P3/P4 for A after B is correct.

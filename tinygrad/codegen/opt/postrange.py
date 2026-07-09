@@ -478,15 +478,35 @@ def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...], operand_idx:int|None=No
   return idx.replace(tag=buffer_tag) if buffer_tag is not None else idx
 
 def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
-  if not getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0) or not _tc_local_stage_with_planned_local() or src.op is not Ops.CONTRACT or src.dtype.count != 16:
+  def _fallback(reason:str) -> UOp:
+    if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
+      print("TC_LOCAL_STAGE_B_TILEKEY_SKIP", json.dumps({
+        "reason": reason,
+        "src_op": src.op.name,
+        "src_dtype": str(src.dtype),
+        "src_count": src.dtype.count,
+        "src_arg": repr(src.arg),
+        "ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(src.ranges, key=lambda r: r.arg)],
+      }))
     return _tc_local_stage_src(src, fallback, 1)
+  if not getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0): return _fallback("flag_disabled")
+  if not _tc_local_stage_with_planned_local(): return _fallback("planned_local_disabled")
+  if src.op is not Ops.CONTRACT: return _fallback("src_not_contract")
+  if src.dtype.count != 16: return _fallback("dtype_count_not_16")
   warp_ranges = [r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
-  if len(warp_ranges) != 1 or not isinstance(src.arg, tuple): return _tc_local_stage_src(src, fallback, 1)
+  if len(warp_ranges) != 1: return _fallback("warp_range_count_not_1")
+  if not isinstance(src.arg, tuple): return _fallback("contract_arg_not_tuple")
   lane = warp_ranges[0]
   tile_ranges = tuple(r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.GLOBAL)
-  if not tile_ranges: return _tc_local_stage_src(src, fallback, 1)
+  if not tile_ranges: return _fallback("missing_global_tile_ranges")
+  stage_loop_ranges = tile_ranges
   tile_count = prod(r.vmax+1 for r in tile_ranges)
-  if tile_count <= 0 or tile_count > 64: return _tc_local_stage_src(src, fallback, 1)
+  if tile_count > 64 and getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY_DROP_GLOBAL", 0):
+    # Active prefill has a large N tile loop. Staging all N tiles as one resident LDS object is not viable;
+    # stage the current loop instance and let the surrounding global loop reuse the same LDS window.
+    tile_ranges = ()
+    tile_count = 1
+  if tile_count <= 0 or tile_count > 64: return _fallback("tile_count_out_of_bounds")
   tile_idx = UOp.const(dtypes.weakint, 0)
   tile_mul = 1
   for r in tile_ranges[::-1]:
@@ -507,7 +527,7 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
     st = bsh.index(slot + row*16 + i, dtype=bsh.dtype).store(src.gep(i), gate)
     stores.append(st.end())
     prev_store = st
-  stage = UOp.group(*stores).end(*tile_ranges)
+  stage = UOp.group(*stores).end(*stage_loop_ranges)
   bar = UOp.barrier(stage)
   range_by_axis = {r.arg[0]: r for r in src.src[0].ranges if r.op is Ops.RANGE}
   frag_idx = UOp.const(dtypes.weakint, 0)
@@ -515,7 +535,7 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   for axis, size in src.arg[::-1]:
     frag_idx = frag_idx + range_by_axis[axis] * mul
     mul *= size
-  if mul != src.dtype.count: return _tc_local_stage_src(src, fallback, 1)
+  if mul != src.dtype.count: return _fallback("contract_fragment_count_mismatch")
   scalar_idx = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).index(slot + row*16 + frag_idx)
   if buffer_tag is not None: scalar_idx = scalar_idx.replace(tag=buffer_tag)
   _tc_local_stage_proof_dump("local_stage_b_tilekey", 1, scalar_idx, buffer_tag, {
