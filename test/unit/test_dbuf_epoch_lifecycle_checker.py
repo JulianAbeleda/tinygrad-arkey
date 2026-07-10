@@ -129,6 +129,80 @@ def _layout_key(role="A", **overrides):
   return data
 
 
+def _value_key(role="A", **overrides):
+  data = {
+    "role": role,
+    "matrix": role,
+    "m_tile": 0 if role == "A" else None,
+    "n_tile": None if role == "A" else 0,
+    "k_tile": 0,
+    "k_inner": None,
+    "global_base": f"{role.lower()}_base",
+    "global_window": {
+      "base": f"{role.lower()}_base+0",
+      "bytes": 4096,
+      "row_stride_bytes": 8192,
+      "rows": 16,
+      "cols": 128,
+      "layout": "row_major" if role == "A" else "row_major_bt",
+    },
+  }
+  data.update(overrides)
+  return data
+
+
+def test_matching_value_keys_pass():
+  value = _value_key("A")
+  events = [
+    DBUFEvent("produce", role="A", epoch=0, slot=0, value_key=value, step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, value_key=value, step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is True
+
+
+def test_mismatched_value_key_fails():
+  events = [
+    DBUFEvent("produce", role="B", epoch=0, slot=0, value_key=_value_key("B", k_tile=0), step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="B", epoch=0, slot=0, value_key=_value_key("B", k_tile=1), step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any("consumer value_key does not match producer" in err["error"] for err in report["errors"])
+
+
+def test_partial_value_key_proof_fails():
+  events = [
+    DBUFEvent("produce", role="A", epoch=0, slot=0, value_key=_value_key("A"), step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any("value_key must be present on both producer and consumer" in err["error"] for err in report["errors"])
+
+
+def test_value_key_role_mismatch_fails():
+  events = [
+    DBUFEvent("produce", role="A", epoch=0, slot=0, value_key=_value_key("B"), step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, value_key=_value_key("B"), step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any("value_key role does not match event role" in err["error"] for err in report["errors"])
+
+
 def test_matching_layout_keys_pass():
   layout = _layout_key("A")
   events = [
@@ -409,6 +483,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   exporters = {exporter["id"]: exporter for exporter in roadmap["exporters"]}
   assert layers["P1"]["status"] == "done"
   assert layers["P2"]["status"] == "done_for_s10_lds_spec"
+  assert layers["P3"]["status"] == "checker_schema_ready_exporters_pending"
   assert layers["P4"]["status"] == "done_for_s10_lds_spec_static"
   assert layers["P7"]["status"] == "pending"
   assert exporters["E1"]["status"] == "done"

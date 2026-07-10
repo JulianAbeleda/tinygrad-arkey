@@ -28,8 +28,8 @@ PROOF_LAYERS: tuple[dict[str, str], ...] = (
    "proof": "producer/consumer/barrier/overwrite correctness"},
   {"id": "P2", "name": "byte_window", "status": "done_for_s10_lds_spec",
    "proof": "producer and consumer agree on exact LDS byte interval"},
-  {"id": "P3", "name": "value_key", "status": "pending",
-   "proof": "global tile loaded by producer equals tile consumed by WMMA"},
+  {"id": "P3", "name": "value_key", "status": "checker_schema_ready_exporters_pending",
+   "proof": "global tile loaded by producer equals tile consumed by WMMA when exporters provide value_key"},
   {"id": "P4", "name": "layout", "status": "done_for_s10_lds_spec_static",
    "proof": "A/B row or transposed layout matches static WMMA operand contract when exporters provide layout_key"},
   {"id": "P5", "name": "wait_sync", "status": "pending",
@@ -73,6 +73,7 @@ class DBUFEvent:
   slot: int | str | None = None
   window: str = "default"
   lds_window: dict[str, Any] | None = None
+  value_key: dict[str, Any] | None = None
   layout_key: dict[str, Any] | None = None
   kind: str = ""
   count: int | None = None
@@ -83,7 +84,8 @@ class DBUFEvent:
   def from_json(cls, data: dict[str, Any]) -> "DBUFEvent":
     return cls(op=str(data["op"]), role=str(data.get("role", "")), epoch=data.get("epoch"),
                slot=data.get("slot"), window=str(data.get("window", "default")),
-               lds_window=data.get("lds_window"), layout_key=data.get("layout_key"),
+               lds_window=data.get("lds_window"), value_key=data.get("value_key"),
+               layout_key=data.get("layout_key"),
                kind=str(data.get("kind", "")), count=data.get("count"),
                phase=str(data.get("phase", "")),
                step=int(data.get("step", 0)))
@@ -95,6 +97,7 @@ class DBUFEvent:
     if self.slot is not None: out["slot"] = self.slot
     if self.window != "default": out["window"] = self.window
     if self.lds_window is not None: out["lds_window"] = dict(self.lds_window)
+    if self.value_key is not None: out["value_key"] = dict(self.value_key)
     if self.layout_key is not None: out["layout_key"] = dict(self.layout_key)
     if self.kind: out["kind"] = self.kind
     if self.count is not None: out["count"] = self.count
@@ -115,6 +118,33 @@ def _event_error(i: int, event: DBUFEvent, message: str) -> dict[str, Any]:
 def _window_tuple(window: dict[str, Any] | None) -> tuple[Any, Any, Any] | None:
   if window is None: return None
   return (window.get("base"), window.get("bytes"), window.get("stride"))
+
+
+def _value_tuple(value: dict[str, Any] | None) -> tuple[Any, ...] | None:
+  if value is None: return None
+  global_window = value.get("global_window")
+  if isinstance(global_window, dict):
+    gw: Any = (
+      global_window.get("base"), global_window.get("bytes"), global_window.get("row_stride_bytes"),
+      global_window.get("rows"), global_window.get("cols"), global_window.get("layout"),
+    )
+  else:
+    gw = None
+  return (
+    value.get("role"), value.get("matrix"), value.get("m_tile"), value.get("n_tile"),
+    value.get("k_tile"), value.get("k_inner"), value.get("global_base"), gw,
+  )
+
+
+def _value_errors(event: DBUFEvent) -> list[str]:
+  value = event.value_key
+  if value is None: return []
+  errors: list[str] = []
+  if value.get("role") != event.role:
+    errors.append(f"value_key role does not match event role: value={value.get('role')!r} event={event.role!r}")
+  if value.get("k_tile") is None:
+    errors.append("value_key requires k_tile")
+  return errors
 
 
 def _layout_tuple(layout: dict[str, Any] | None) -> tuple[Any, ...] | None:
@@ -210,13 +240,16 @@ def check_events(events: list[DBUFEvent], *, require_p5: bool = False) -> dict[s
         errors.append(_event_error(i, event, "duplicate producer for same role/epoch/slot/window"))
       if event.lds_window is not None and (event.lds_window.get("base") is None or event.lds_window.get("bytes") is None):
         errors.append(_event_error(i, event, "lds_window requires base and bytes"))
+      for message in _value_errors(event):
+        errors.append(_event_error(i, event, message))
       for message in _layout_errors(event):
         errors.append(_event_error(i, event, message))
       previous_live = live_by_slot.get(slot_key)
       if previous_live is not None and previous_live not in consumed:
         errors.append(_event_error(i, event, f"slot overwrite before consume: previous={previous_live!r}"))
       producers_by_key[key] = {"event_index": i, "barrier_id": barrier_id, "event": event.to_json(),
-                               "lds_window": event.lds_window, "layout_key": event.layout_key}
+                               "lds_window": event.lds_window, "value_key": event.value_key,
+                               "layout_key": event.layout_key}
       live_by_slot[slot_key] = key
       produced_since_barrier = True
       lgkm_store_drained = False
@@ -239,6 +272,14 @@ def check_events(events: list[DBUFEvent], *, require_p5: bool = False) -> dict[s
       errors.append(_event_error(i, event, f"consumer LDS window does not match producer: producer={producer_window!r} consumer={consumer_window!r}"))
     if event.lds_window is not None and (event.lds_window.get("base") is None or event.lds_window.get("bytes") is None):
       errors.append(_event_error(i, event, "lds_window requires base and bytes"))
+    for message in _value_errors(event):
+      errors.append(_event_error(i, event, message))
+    producer_value = _value_tuple(producer.get("value_key"))
+    consumer_value = _value_tuple(event.value_key)
+    if (producer_value is None) != (consumer_value is None):
+      errors.append(_event_error(i, event, "value_key must be present on both producer and consumer or neither"))
+    elif producer_value is not None and producer_value != consumer_value:
+      errors.append(_event_error(i, event, f"consumer value_key does not match producer: producer={producer_value!r} consumer={consumer_value!r}"))
     for message in _layout_errors(event):
       errors.append(_event_error(i, event, message))
     producer_layout = _layout_tuple(producer.get("layout_key"))

@@ -87,7 +87,7 @@ Required proof layers:
 |---|---|---|---|
 | P1 epoch lifecycle | producer/consumer/barrier/overwrite correctness | proves the DBUF ring is logically safe | done |
 | P2 byte-window proof | producer and consumer agree on exact LDS byte interval | prevents same-slot wrong-window bugs | checker/exporter ready for S10 LDS spec |
-| P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | not started |
+| P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | checker schema ready; exporters pending |
 | P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | checker/exporter ready for S10 LDS spec static layout |
 | P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker schema and strict mode implemented; exporters pending |
 | P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | not started |
@@ -125,8 +125,9 @@ For every WMMA operand consumer in generated ffn_gate_up:
 ```
 
 Current answer: epoch/slot/barrier is proven, the checker validates LDS byte-window equality, and S10 LDS spec exports
-static A/B layout keys. The checker also has an opt-in P5 strict mode for VM/LGKM wait events, but no production exporter
-feeds wait events yet.
+static A/B layout keys. The checker has a P3 `value_key` field and rejects partial or mismatched value proofs, but no
+exporter currently emits semantic global tile identity. The checker also has an opt-in P5 strict mode for VM/LGKM wait
+events.
 
 ## Current Status
 
