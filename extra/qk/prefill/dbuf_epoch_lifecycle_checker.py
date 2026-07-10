@@ -26,7 +26,7 @@ from typing import Any
 PROOF_LAYERS: tuple[dict[str, str], ...] = (
   {"id": "P1", "name": "epoch_lifecycle", "status": "done",
    "proof": "producer/consumer/barrier/overwrite correctness"},
-  {"id": "P2", "name": "byte_window", "status": "pending",
+  {"id": "P2", "name": "byte_window", "status": "done_for_s10_lds_spec",
    "proof": "producer and consumer agree on exact LDS byte interval"},
   {"id": "P3", "name": "value_key", "status": "pending",
    "proof": "global tile loaded by producer equals tile consumed by WMMA"},
@@ -43,7 +43,7 @@ PROOF_LAYERS: tuple[dict[str, str], ...] = (
 EXPORTERS: tuple[dict[str, str], ...] = (
   {"id": "E1", "name": "hybrid_primitive_exporter", "status": "done",
    "source": "hybrid-s9-s10-role-trace.json"},
-  {"id": "E2", "name": "s10_lds_spec_exporter", "status": "pending",
+  {"id": "E2", "name": "s10_lds_spec_exporter", "status": "done",
    "source": "WMMALDSSpec / slot identity proof"},
   {"id": "E3", "name": "hand_lifecycle_exporter", "status": "pending",
    "source": "kernel_lifecycle_trace.py / wmma.py lifecycle template"},
@@ -58,7 +58,7 @@ def s10_readiness_roadmap() -> dict[str, Any]:
   return {
     "schema": "dbuf-epoch-lifecycle-s10-roadmap.v1",
     "complete_for_s10": False,
-    "current_proof_coverage": "epoch/slot/barrier only",
+    "current_proof_coverage": "epoch/slot/barrier plus optional LDS byte-window equality when exporters provide windows",
     "proof_layers": [dict(x) for x in PROOF_LAYERS],
     "exporters": [dict(x) for x in EXPORTERS],
     "reopen_generated_dbuf_when": "P1-P7 pass on both hand/hybrid trace and generated candidate trace with equivalent coverage",
@@ -72,12 +72,14 @@ class DBUFEvent:
   epoch: int | str | None = None
   slot: int | str | None = None
   window: str = "default"
+  lds_window: dict[str, Any] | None = None
   step: int = 0
 
   @classmethod
   def from_json(cls, data: dict[str, Any]) -> "DBUFEvent":
     return cls(op=str(data["op"]), role=str(data.get("role", "")), epoch=data.get("epoch"),
-               slot=data.get("slot"), window=str(data.get("window", "default")), step=int(data.get("step", 0)))
+               slot=data.get("slot"), window=str(data.get("window", "default")),
+               lds_window=data.get("lds_window"), step=int(data.get("step", 0)))
 
   def to_json(self) -> dict[str, Any]:
     out: dict[str, Any] = {"op": self.op, "step": self.step}
@@ -85,6 +87,7 @@ class DBUFEvent:
     if self.epoch is not None: out["epoch"] = self.epoch
     if self.slot is not None: out["slot"] = self.slot
     if self.window != "default": out["window"] = self.window
+    if self.lds_window is not None: out["lds_window"] = dict(self.lds_window)
     return out
 
   def key(self) -> tuple[str, Any, Any, str]:
@@ -96,6 +99,11 @@ class DBUFEvent:
 
 def _event_error(i: int, event: DBUFEvent, message: str) -> dict[str, Any]:
   return {"event_index": i, "event": event.to_json(), "error": message}
+
+
+def _window_tuple(window: dict[str, Any] | None) -> tuple[Any, Any, Any] | None:
+  if window is None: return None
+  return (window.get("base"), window.get("bytes"), window.get("stride"))
 
 
 def check_events(events: list[DBUFEvent]) -> dict[str, Any]:
@@ -124,10 +132,13 @@ def check_events(events: list[DBUFEvent]) -> dict[str, Any]:
       producer_count += 1
       if key in producers_by_key:
         errors.append(_event_error(i, event, "duplicate producer for same role/epoch/slot/window"))
+      if event.lds_window is not None and (event.lds_window.get("base") is None or event.lds_window.get("bytes") is None):
+        errors.append(_event_error(i, event, "lds_window requires base and bytes"))
       previous_live = live_by_slot.get(slot_key)
       if previous_live is not None and previous_live not in consumed:
         errors.append(_event_error(i, event, f"slot overwrite before consume: previous={previous_live!r}"))
-      producers_by_key[key] = {"event_index": i, "barrier_id": barrier_id, "event": event.to_json()}
+      producers_by_key[key] = {"event_index": i, "barrier_id": barrier_id, "event": event.to_json(),
+                               "lds_window": event.lds_window}
       live_by_slot[slot_key] = key
       continue
 
@@ -140,6 +151,12 @@ def check_events(events: list[DBUFEvent]) -> dict[str, Any]:
       errors.append(_event_error(i, event, "matching producer does not happen before consumer"))
     if int(producer["barrier_id"]) >= barrier_id:
       errors.append(_event_error(i, event, "no barrier separates producer and consumer"))
+    producer_window = _window_tuple(producer.get("lds_window"))
+    consumer_window = _window_tuple(event.lds_window)
+    if producer_window is not None and consumer_window is not None and producer_window != consumer_window:
+      errors.append(_event_error(i, event, f"consumer LDS window does not match producer: producer={producer_window!r} consumer={consumer_window!r}"))
+    if event.lds_window is not None and (event.lds_window.get("base") is None or event.lds_window.get("bytes") is None):
+      errors.append(_event_error(i, event, "lds_window requires base and bytes"))
     if key in consumed:
       errors.append(_event_error(i, event, "same producer consumed more than once"))
     consumed.add(key)

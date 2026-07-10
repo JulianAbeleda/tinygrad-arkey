@@ -70,6 +70,46 @@ def test_duplicate_consume_fails():
   assert any(err["error"] == "same producer consumed more than once" for err in report["errors"])
 
 
+def test_matching_lds_windows_pass():
+  window = {"base": 10240, "bytes": 10240, "stride": 80}
+  events = [
+    DBUFEvent("produce", role="B", epoch=0, slot=0, lds_window=window, step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="B", epoch=0, slot=0, lds_window=window, step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is True
+  assert report["errors"] == []
+
+
+def test_mismatched_lds_windows_fail():
+  events = [
+    DBUFEvent("produce", role="B", epoch=0, slot=0, lds_window={"base": 10240, "bytes": 10240, "stride": 80}, step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="B", epoch=0, slot=0, lds_window={"base": 20480, "bytes": 10240, "stride": 80}, step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any("consumer LDS window does not match producer" in err["error"] for err in report["errors"])
+
+
+def test_incomplete_lds_window_fails():
+  events = [
+    DBUFEvent("produce", role="A", epoch=0, slot=0, lds_window={"base": 0}, step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, lds_window={"base": 0}, step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any(err["error"] == "lds_window requires base and bytes" for err in report["errors"])
+
+
 def test_cli_loads_event_json(tmp_path):
   path = tmp_path / "events.json"
   path.write_text(json.dumps({"events": [event.to_json() for event in canonical_dbuf_events(k_tiles=2)]}))
@@ -143,7 +183,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   layers = {layer["id"]: layer for layer in roadmap["proof_layers"]}
   exporters = {exporter["id"]: exporter for exporter in roadmap["exporters"]}
   assert layers["P1"]["status"] == "done"
-  assert layers["P2"]["status"] == "pending"
+  assert layers["P2"]["status"] == "done_for_s10_lds_spec"
   assert layers["P7"]["status"] == "pending"
   assert exporters["E1"]["status"] == "done"
   assert exporters["E5"]["status"] == "pending"
@@ -153,4 +193,4 @@ def test_cli_prints_s10_roadmap():
   report = main(["--roadmap", "--json"])
 
   assert report["complete_for_s10"] is False
-  assert report["current_proof_coverage"] == "epoch/slot/barrier only"
+  assert "optional LDS byte-window equality" in report["current_proof_coverage"]

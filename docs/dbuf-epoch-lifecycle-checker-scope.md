@@ -83,7 +83,7 @@ Required proof layers:
 | Layer | Proof | Why S10 needs it | Status |
 |---|---|---|---|
 | P1 epoch lifecycle | producer/consumer/barrier/overwrite correctness | proves the DBUF ring is logically safe | done |
-| P2 byte-window proof | producer and consumer agree on exact LDS byte interval | prevents same-slot wrong-window bugs | not started |
+| P2 byte-window proof | producer and consumer agree on exact LDS byte interval | prevents same-slot wrong-window bugs | checker/exporter ready for S10 LDS spec |
 | P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | not started |
 | P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | not started |
 | P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | not started |
@@ -101,7 +101,7 @@ S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 | Exporter | Source | Output | Status |
 |---|---|---|---|
 | E1 hybrid primitive exporter | `hybrid-s9-s10-role-trace.json` | P1 events from `DBUFEpochPrimitive` | done |
-| E2 S10 LDS spec exporter | `WMMALDSSpec` / slot identity proof | P2 LDS windows | pending |
+| E2 S10 LDS spec exporter | `WMMALDSSpec` / slot identity proof | P2 LDS windows | done |
 | E3 hand lifecycle exporter | `kernel_lifecycle_trace.py` / `wmma.py` lifecycle template | P1-P5 hand oracle events | pending |
 | E4 generated postrange exporter | pre-lowering `Ops.STAGE` / owner metadata | P1-P4 generated candidate events | pending |
 | E5 lowered stream exporter | generated AMD ISA or UOp stream | P5-P7 actual instruction events | pending |
@@ -121,7 +121,8 @@ For every WMMA operand consumer in generated ffn_gate_up:
   were live ranges bounded enough to avoid recreating the known pressure wall?
 ```
 
-Current answer: only the epoch/slot/barrier subset is proven.
+Current answer: epoch/slot/barrier is proven, and the checker validates LDS byte-window equality. The S10 LDS spec
+exporter now feeds exact slot-identity byte windows from `WMMALDSSpec` into the checker-compatible `lds_window` field.
 
 ## Current Status
 
@@ -143,6 +144,18 @@ PYTHONPATH=. python3 extra/qk/prefill/dbuf_epoch_lifecycle_checker.py \
 
 This validates the current `ffn_gate_up` `DBUFEpochPrimitive` contract without changing the fast path.
 
+The second exporter is implemented:
+
+```text
+WMMALDSSpec / wmma_lds_slot_identity_proof -> P2 LDS byte-window events
+```
+
+Tool:
+
+```text
+extra/qk/prefill/dbuf_s10_lds_spec_exporter.py
+```
+
 Unit gate:
 
 ```bash
@@ -155,6 +168,6 @@ consume traces fail.
 ## Decoupling Path
 
 1. Keep the checker pure metadata/event based.
-2. Add exporters from S10 role/spec traces into checker events. Done for the hybrid role trace.
+2. Add exporters from S10 role/spec traces into checker events. Done for the hybrid role trace and S10 LDS spec byte windows.
 3. Add exporters from generated DBUF attempts into checker events.
 4. Move the checker out of `extra/qk/prefill` once it has a stable schema and multiple producers.
