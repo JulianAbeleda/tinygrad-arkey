@@ -1,176 +1,201 @@
-# Fable Prompt: S10 WMMA Clustered LDS Consume
+# Fable Prompt: Compiler Scheduling Review For Clustered WMMA Consumers
 
-We need design advice, not generic GPU advice.
+I want a compiler/scheduling design review. Please reason from the math and pseudocode below, identify flaws in the
+current theory, and suggest the smallest robust primitive to test next.
 
-## Big Picture
-
-We are trying to replace a fast hand/backend-atom LDS2 WMMA lifecycle with a generated/compiler-owned S10 path in
-`tinygrad-arkey`.
-
-The role is 8B prefill `ffn_gate_up` / bounded active shape:
+This is not a request for vendor-specific assembly code. Treat the operations as abstract compiler IR nodes:
 
 ```text
-M=512, N=5120, K=5120 for the bounded probe
-active generated shape = 2x2
-target = AMD:ISA:gfx1100
+async_shared_load(fragment)
+wait_shared_loads(...)
+matrix_op(A_fragment, B_fragment, accumulator)
 ```
 
-S9 hand LDS2 is fast because it amortizes LDS loads and waits across WMMA clusters. S10 generated is correct but slow.
+## Problem
 
-## The Math
+We have a generated matrix-kernel path that is numerically correct but slow. The slow path appears to issue too much
+synchronization per unit of matrix work.
 
-RDNA3 fp16 WMMA useful work:
+The fast reference shape batches shared-memory fragment loads and then executes a burst of matrix ops. The generated
+shape has improved fragment reuse, but still places waits too frequently.
+
+The bounded test shape is:
 
 ```text
-1 WMMA = 16 * 16 * 16 FMAs = 8192 FLOPs
-useful_flops = wmma_count * 8192
-flops_per_overhead = useful_flops / overhead_count
+M=512, N=5120, K=5120
+logical tile shape = 2x2
 ```
 
-Measured:
+## Useful-Work Math
 
-| Route | P8 | WMMA | useful FLOPs | waits/WMMA | max burst | ds_load/WMMA | inst/WMMA | FLOPs/wait |
+For the matrix op in this test:
+
+```text
+1 matrix_op = 16 * 16 * 16 FMAs = 8192 FLOPs
+useful_flops = matrix_op_count * 8192
+flops_per_overhead(kind) = useful_flops / count(kind)
+```
+
+Measured structural counters:
+
+| Route | Quality gate | matrix ops | useful FLOPs | waits/op | max op burst | shared loads/op | inst/op | FLOPs/wait |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| S9 hand LDS2 `2x2` | pass | 64 | 524288 | 0.406 | 4 | 2.0 | 9.547 | 20165 |
-| S10 generated DBUF `2x2` | fail | 16 | 131072 | 3.312 | 1 | 4.0 | 39.062 | 2473 |
-| S10 K-major `2x2` | fail | 16 | 131072 | 2.875 | 3 | 2.0 | 34.625 | 2849 |
-| S10 K-major + clustered wait | fail | 16 | 131072 | 2.562 | 4 | 2.0 | 34.312 | ~3197 |
+| Fast reference `2x2` | pass | 64 | 524288 | 0.406 | 4 | 2.0 | 9.547 | 20165 |
+| Generated baseline `2x2` | fail | 16 | 131072 | 3.312 | 1 | 4.0 | 39.062 | 2473 |
+| Generated K-major `2x2` | fail | 16 | 131072 | 2.875 | 3 | 2.0 | 34.625 | 2849 |
+| Generated K-major + wait coalesce | fail | 16 | 131072 | 2.562 | 4 | 2.0 | 34.312 | ~3197 |
 
-K-major fixed LDS load reuse:
+Interpretation:
 
 ```text
-ds_load/WMMA: 4.0 -> 2.0
-max burst:    1 -> 3
-```
+K-major improved fragment reuse:
+  shared loads/op: 4.0 -> 2.0
+  max op burst:    1 -> 3
 
 But it did not fix wait amortization:
-
-```text
-S9 target: 0.406 waits/WMMA
-S10 now:   2.562-2.875 waits/WMMA
+  fast reference: 0.406 waits/op
+  generated:      2.562-2.875 waits/op
 ```
 
 ## Current Generated Shape
 
-Roughly:
+Approximate shape:
 
 ```python
 for phase in phases:
-    # loads are somewhat grouped after K-major, but not enough
-    ds_load fragments
-    wait
-    wmma
-    wait
-    wmma
-    ds_load/reload fragments
-    wmma
+    async_shared_load(fragment_group_0)
+    wait_shared_loads(partial)
+    matrix_op(...)
+
+    wait_shared_loads(partial)
+    matrix_op(...)
+
+    async_shared_load(fragment_group_1)
+    matrix_op(...)
 ```
 
-The desired shape:
+Desired shape:
 
 ```python
 for cluster in phase:
-    ds_load all A/B fragments needed by 4 WMMAs
-    s_waitcnt lgkmcnt(...)
+    async_shared_load(all_fragments_needed_by_cluster)
+    wait_shared_loads(cluster_ready)
 
-    wmma()
-    wmma()
-    wmma()
-    wmma()
+    matrix_op(...)
+    matrix_op(...)
+    matrix_op(...)
+    matrix_op(...)
 ```
 
 ## Failed Small Tests
 
-1. `AMD_ISA_WMMA_CLUSTER_LGKM_WAIT=1`
+### Test 1: Wait Coalescing Only
 
-For WMMA consumers only, coalesce the targeted LDS wait to `lgkmcnt(0)`.
+Idea:
 
-Result:
-
-```text
-K-major waits: 46 -> 41
-wait/WMMA: 2.875 -> 2.562
-max burst: 3 -> 4
-TFLOPS: 12.24 -> 11.88
+```python
+if next_consumer_is_matrix_op:
+    wait_for_all_outstanding_shared_loads()
 ```
 
-This is structurally positive but slower. It is too blunt: it waits for more, but does not improve load placement.
+Result:
 
-2. `PREFILL_WMMA_CLUSTERED_LDS_CONSUME=1`
+```text
+waits:      46 -> 41
+wait/op:    2.875 -> 2.562
+max burst:  3 -> 4
+speed:      12.24 -> 11.88
+```
 
-Inside `_try_wmma_kmajor_phase`, we tried to materialize all A/B packs for a phase first and add them as dependencies
-to the phase's WMMAs.
+This improved structure slightly but slowed execution. It waits for more work but does not improve where loads are
+placed.
+
+### Test 2: Dependency-Only Preload
+
+Idea:
+
+```python
+for phase in phases:
+    packs = materialize_all_fragment_packs_for_phase()
+    for matrix_op in phase:
+        matrix_op.depends_on(packs)
+```
 
 Result:
 
 ```text
-wait/WMMA: 2.812
+wait/op: 2.812
 max burst: 3
-ds_load/WMMA: 2.0
+shared loads/op: 2.0
 ```
 
-Combined with clustered wait:
+With wait coalescing:
 
 ```text
-wait/WMMA: 2.562
+wait/op: 2.562
 max burst: 4
-TFLOPS: 11.55
+speed: 11.55
 ```
 
-So dependency-only preloading is not enough. It does not change the actual final DS-load/WMMA/wait structure enough.
+This also failed. Adding dependencies did not force the final stream into the desired load/wait/op cluster.
 
-## Relevant Code
+## Current Theory
 
-Key path:
+The missing primitive may need to represent a cluster explicitly, not just adjust waits or dependencies.
 
-```text
-tinygrad/renderer/isa/amd.py
-  _try_wmma_kmajor_phase(...)
-  _pack_frag_tile(...)
-  _frag_b128_loads(...)
-  _build_wmma_from_packs(...)
-  AMDISARenderer._insert_waitcnt(...)
+Possible abstraction:
+
+```python
+class MatrixConsumerCluster:
+    ops: list[MatrixOp]                 # e.g. 4 adjacent matrix ops
+    required_a_fragments: list[Fragment]
+    required_b_fragments: list[Fragment]
+    shared_memory_windows: list[ByteRange]
+    barrier_epoch: int
+    resident_register_plan: RegisterPlan
+
+def lower_cluster(cluster):
+    # choose stable resident registers for all fragments used by the cluster
+    for fragment in cluster.required_fragments:
+        emit_async_shared_load(fragment, into=cluster.resident_register_plan[fragment])
+
+    emit_wait_for_cluster_fragments(cluster)
+
+    for op in cluster.ops:
+        emit_matrix_op(op, using=cluster.resident_register_plan)
 ```
 
-Existing flags:
+Safety constraints:
 
 ```text
-PREFILL_WMMA_KMAJOR_PHASE=1
-PREFILL_WMMA_AB_PROOF_KEY=1
-PREFILL_WMMA_AB_PHASE_SCOPED_KEY=1
-PREFILL_WMMA_AB_PROOF_FROM_LDS_DESC=1
+1. All fragments are from the same barrier/synchronization epoch.
+2. Shared-memory byte windows are exact and non-overwritten before the cluster consumes them.
+3. Resident fragment registers are not reused until the cluster finishes.
+4. The cluster does not increase register pressure past the allocator limit.
+5. The lowering has a fallback to the current per-op path.
+```
+
+Success gate:
+
+```text
+waits/op <= 1.0, target about 0.4
+max op burst >= 4
+shared loads/op <= 2.0
+inst/op materially closer to 9-12 than 34+
+correctness preserved
 ```
 
 ## Question
 
-What is the primitive design that can make the generated path naturally satisfy the S9 amortization math?
+Please review this as a compiler scheduling problem.
 
-Specifically:
+1. Is the explicit `MatrixConsumerCluster` abstraction the right primitive, or is there a smaller one?
+2. Why did dependency-only preloading fail to change the final stream?
+3. What is the smallest next experiment that could prove or disprove the cluster abstraction?
+4. Are there known compiler techniques for this pattern, such as software-pipelined consumer groups, modulo-scheduled
+   load/compute clusters, or pressure-aware rematerialized fragment residency?
+5. What invariants should the implementation prove before rewriting the stream?
 
-```text
-waits/WMMA <= 1.0, target ~0.4
-max_wmma_burst >= 4
-ds_load_b128/WMMA <= 2.0
-inst/WMMA materially closer to 9-12 than 34+
-correctness preserved
-```
-
-I suspect the answer is not wait tuning and not dependency-only preloading. It may require a true cluster object:
-
-```python
-Cluster {
-  wmma_nodes: [4 adjacent WMMA nodes],
-  resident_A_fragments: fixed VGPR spans,
-  resident_B_fragments: fixed VGPR spans,
-  lds_windows: exact byte windows,
-  barrier_epoch: int,
-}
-
-emit_cluster(cluster):
-    emit all needed ds_load_b128 into resident VGPRs
-    emit one wait
-    emit all WMMAs before those VGPRs are reused
-```
-
-Please review that thesis and propose the smallest implementable primitive in this codebase.
+Please answer in pseudocode and design terms. Avoid assuming access to special hardware counters; use only final-stream
+instruction counts, wait counts, shared-load counts, and correctness/timing smoke tests.
 
