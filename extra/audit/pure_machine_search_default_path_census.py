@@ -90,7 +90,7 @@ CENSUS_OVERLAY = [
     "kernel_source": "extra/qk/prefill_schedule_spec.py emit_prefill_gemm_from_spec (PrefillGEMMScheduleSpec lowered via the parameterized RDNA3 WMMA schedule generator ref.build_gemm_pipe/build_gemm_lds2 -> prefill_gen_sched_gemm_*)",
     "authority_artifact": "bench/tg-p4-prefill-generated-schedule/latest.json (TG_P4_PASS_PREFILL_GENERATED_SCHEDULE: generated build present, role policy preserved)",
     "rollback_flag": "PREFILL_GRAPH_GEMM=0 returns to the scheduler-owned default",
-    "next_action": "reference/comparator only (hand backend atom, 4k) -- NOT a selectable machine-search option; reference the pure (prefill_wmma_pipe_primitive_generated) and hybrid (prefill_wmma_pipe_lds_dbuf_primitive_generated) routes as the two options",
+    "next_action": "keep opt-in until the executing WMMA substrate is generated instead of Ops.INS",
   }),
   ("prefill_v2_scheduler_matmul_default", {
     "shape_guard": "PREFILL_V2 fp16 resident/chunked matmul; graph-GEMM raw route not selected by default",
