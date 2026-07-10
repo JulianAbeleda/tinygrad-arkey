@@ -1,6 +1,6 @@
 from extra.qk.prefill_harness import (
   AUTHORITY_START_POSITIONS, AUTHORITY_WHOLE_LENGTHS, DEFAULT_MODEL, SMOKE_START_POSITIONS, SMOKE_WHOLE_LENGTHS,
-  csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env,
+  csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env, resolve_prefill_model_profile,
 )
 from extra.qk import bench
 
@@ -35,6 +35,7 @@ def test_prefill_csv_and_argv_are_canonical():
   prof = prefill_run_profile("smoke", K=2, warmups=0, rounds=1)
   argv = prefill_authority_argv(DEFAULT_MODEL, prof, pin_clock=True, artifact=False)
   assert argv[:3] == ["extra/qk/prefill_whole_synced.py", "--model", DEFAULT_MODEL]
+  assert "--model-profile" in argv and "qwen3_8b_q4k_m_gfx1100" in argv
   assert "--pin-clock" in argv
   assert "--no-artifact" in argv
   assert "--start-positions" in argv and "0" in argv
@@ -48,6 +49,19 @@ def test_prefill_subprocess_env_is_import_light_policy():
   assert "PYTHONPATH" in env
 
 
+def test_prefill_model_profile_selects_14b_direct_packed_defaults():
+  prof = resolve_prefill_model_profile(model_path="/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf")
+  assert prof.id == "qwen3_14b_q4k_m_gfx1100"
+  env = prefill_subprocess_env(model_profile_id="14b")
+  assert env["PREFILL_V2"] == "1"
+  assert env["PREFILL_ROUTE"] == "direct_packed"
+  assert env["PREFILL_PACKED_STREAM"] == "1"
+  assert env["ALLOW_DEVICE_USAGE"] == "1"
+  run = prefill_run_profile("smoke")
+  argv = prefill_authority_argv(prof.default_model, run, model_profile_id=prof.id)
+  assert "--model-profile" in argv and prof.id in argv
+
+
 def test_bench_prefill_dispatches_authority(monkeypatch):
   calls = []
   monkeypatch.setattr(bench, "_run", lambda *args, **kwargs: calls.append((args, kwargs)) or 0)
@@ -59,7 +73,19 @@ def test_bench_prefill_dispatches_authority(monkeypatch):
   assert args[0] == "PREFILL pp@L"
   assert "--pin-clock" in args[1]
   assert "--no-artifact" in args[1]
-  assert kwargs["label"] == "smoke"
+  assert kwargs["label"] == "smoke:qwen3_8b_q4k_m_gfx1100"
+
+
+def test_bench_prefill_dispatches_14b_profile(monkeypatch):
+  calls = []
+  monkeypatch.setattr(bench, "_run", lambda *args, **kwargs: calls.append((args, kwargs)) or 0)
+  rc = bench.main(["--model", "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf", "--model-profile", "14b",
+                   "--prefill", "--prefill-mode", "smoke", "--prefill-no-artifact"])
+  assert rc == 0
+  args, kwargs = calls[0]
+  assert "--model-profile" in args[1] and "qwen3_14b_q4k_m_gfx1100" in args[1]
+  assert args[2]["PREFILL_ROUTE"] == "direct_packed"
+  assert kwargs["label"] == "smoke:qwen3_14b_q4k_m_gfx1100"
 
 
 def test_bench_decode_dispatches_authority(monkeypatch):

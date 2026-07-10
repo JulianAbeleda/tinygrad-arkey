@@ -42,6 +42,14 @@ from the tracked tree; use git history for archaeology.
   decoupling Q4/Q6 defaults from route policy, and repairing the stale E2E harness surface before core cleanup.
 - `budget-reduction-lanes-3-5-scope-20260710.md` - executable scope for the next budget lanes: Q4/Q6 install-loop
   dedupe, model admission extraction, and staged AMD ISA / prefill machine-search extraction.
+- `prefill-harness-profile-generalization-20260710.md` - shared 8B/14B prefill authority harness profile surface;
+  no separate 14B harness.
+- `14b-prefill-hybrid-mmq-machine-search-scope-20260710.md` - exhaustive scope for applying the 8B
+  machine-search/epoch discipline to 14B Q4_K/Q8_1 MMQ with an honest hybrid atom boundary.
+- `14b-role-facts-inventory-20260710.md` - GGUF-derived 14B tensor role/quant/shape/route-plan inventory; first
+  facts-backed MMQ target is Q4_K `ffn_gate_up`.
+- `14b-direct-packed-prefill-authority-baseline-20260710.md` - shared-harness 14B direct-packed baseline artifact
+  summary; current pp512 baseline is 364.50 tok/s and intentionally `authority_incomplete`.
 - `handwritten-kernel-exhaustive-lowering-scope-20260706.md` - exhaustive lowering scope for converting handwritten
   route surfaces into pure tinygrad/codegen paths.
 - `pure-machine-search-roadmap.md` - current route/search roadmap and promotion rules.

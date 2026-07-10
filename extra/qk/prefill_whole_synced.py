@@ -20,7 +20,10 @@ import time
 from typing import Any
 
 from extra.llm.generate import load_model_and_tokenizer
-from extra.qk.prefill_harness import DEFAULT_MODEL, PREFILL_MODES, csv_ints, prefill_run_profile
+from extra.qk.prefill_harness import (
+  DEFAULT_MODEL, DEFAULT_MODEL_PROFILE, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints, prefill_run_profile,
+  resolve_prefill_model_profile,
+)
 from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
 from extra.qk.pure_search_guard import effective_routes
 
@@ -246,9 +249,10 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
                       require_route: str | None = None, comparator_id: str | None = None,
                       candidate_id: str | None = None, primitive_class: str | None = None,
                       threshold: dict[str, Any] | None = None, ledger: str | None = None,
-                      quality_gate: dict[str, Any] | None = None) -> dict[str, Any]:
+                      quality_gate: dict[str, Any] | None = None, model_profile_id: str | None = None) -> dict[str, Any]:
   if K < 1 or warmups < 0 or rounds < 1: raise ValueError("K >= 1, warmups >= 0, and rounds >= 1 are required")
-  os.environ.setdefault("PREFILL_V2", "1")
+  model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
+  for key, value in model_profile.env.items(): os.environ.setdefault(key, value)
   if pin_clock: set_clock_pin_env(os.environ, True)
 
   from tinygrad import Tensor, Device, TinyJit
@@ -316,6 +320,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
   report = {
     "schema": "prefill-whole-synced-authority.v1",
     "model": model_path,
+    "model_profile": {"id": model_profile.id, "note": model_profile.note, "env_defaults": dict(model_profile.env)},
     "mode": mode,
     "chunk_n": chunk_n,
     "chunk_ms": {str(k): round(v, 4) for k, v in chunk_ms.items()},
@@ -372,6 +377,9 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
 def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--model", default=os.environ.get("QK_MODEL", DEFAULT_MODEL), help="GGUF path")
+  ap.add_argument("--model-profile", default=os.environ.get("QK_MODEL_PROFILE", ""),
+                  choices=("", *MODEL_HARNESS_PROFILES.keys(), "8b", "14b"),
+                  help=f"model/profile defaults; default infers from --model or uses {DEFAULT_MODEL_PROFILE}")
   ap.add_argument("--mode", choices=PREFILL_MODES, default="authority")
   ap.add_argument("-K", type=int, default=None, help="bursts to min over")
   ap.add_argument("--warmups", type=int, default=None, help="TinyJit warm/capture forwards per start position")
@@ -424,7 +432,8 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                              require_route=args.require_route or None,
                              comparator_id=args.comparator_id or None, candidate_id=args.candidate_id or None,
                              primitive_class=args.primitive_class or None, threshold=threshold,
-                             ledger=args.ledger or None, quality_gate=quality_gate)
+                             ledger=args.ledger or None, quality_gate=quality_gate,
+                             model_profile_id=args.model_profile or None)
   if not args.no_artifact:
     out = pathlib.Path(args.artifact) if args.artifact else ARTIFACT_DIR / "latest.json"
     if not out.is_absolute(): out = ROOT / out

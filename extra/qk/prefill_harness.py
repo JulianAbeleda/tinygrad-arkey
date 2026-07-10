@@ -13,6 +13,7 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
+DEFAULT_MODEL_PROFILE = "qwen3_8b_q4k_m_gfx1100"
 AUTHORITY_START_POSITIONS = (0, 512, 1024, 2048, 3584)
 AUTHORITY_WHOLE_LENGTHS = (512, 1024, 2048, 4096)
 SMOKE_START_POSITIONS = (0,)
@@ -45,6 +46,48 @@ class PrefillRunProfile:
       raise ValueError(f"max start_pos {max_start} + chunk_n {self.chunk_n} exceeds max_context {self.max_context}")
 
 
+@dataclass(frozen=True)
+class PrefillModelHarnessProfile:
+  id: str
+  default_model: str
+  env: dict[str, str]
+  note: str
+
+
+MODEL_HARNESS_PROFILES: dict[str, PrefillModelHarnessProfile] = {
+  "qwen3_8b_q4k_m_gfx1100": PrefillModelHarnessProfile(
+    id="qwen3_8b_q4k_m_gfx1100",
+    default_model=DEFAULT_MODEL,
+    env={"PREFILL_V2": "1"},
+    note="8B fp16/PREFILL_V2 authority path",
+  ),
+  "qwen3_14b_q4k_m_gfx1100": PrefillModelHarnessProfile(
+    id="qwen3_14b_q4k_m_gfx1100",
+    default_model="/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    env={"PREFILL_V2": "1", "PREFILL_ROUTE": "direct_packed", "PREFILL_PACKED_STREAM": "1", "ALLOW_DEVICE_USAGE": "1"},
+    note="14B memory-safe direct-packed authority baseline",
+  ),
+}
+_MODEL_PROFILE_ALIASES = {
+  "8b": "qwen3_8b_q4k_m_gfx1100",
+  "qwen3_8b_q4_k_m_gfx1100": "qwen3_8b_q4k_m_gfx1100",
+  "14b": "qwen3_14b_q4k_m_gfx1100",
+  "qwen3_14b_q4_k_m_gfx1100": "qwen3_14b_q4k_m_gfx1100",
+}
+
+
+def resolve_prefill_model_profile(profile_id: str | None = None, *, model_path: str | None = None) -> PrefillModelHarnessProfile:
+  if profile_id:
+    key = _MODEL_PROFILE_ALIASES.get(profile_id.strip().lower(), profile_id.strip())
+    try: return MODEL_HARNESS_PROFILES[key]
+    except KeyError as exc:
+      raise KeyError(f"unknown prefill model profile {profile_id!r}; known={sorted(MODEL_HARNESS_PROFILES)}") from exc
+  name = pathlib.Path(model_path or DEFAULT_MODEL).name.lower()
+  if "14b" in name: return MODEL_HARNESS_PROFILES["qwen3_14b_q4k_m_gfx1100"]
+  if "8b" in name: return MODEL_HARNESS_PROFILES["qwen3_8b_q4k_m_gfx1100"]
+  return MODEL_HARNESS_PROFILES[DEFAULT_MODEL_PROFILE]
+
+
 def csv_ints(raw: str) -> tuple[int, ...]:
   vals = tuple(int(x) for x in raw.replace(" ", "").split(",") if x)
   if not vals: raise ValueError("expected at least one comma-separated integer")
@@ -71,10 +114,12 @@ def prefill_run_profile(mode: str = "authority", *, K: int | None = None, warmup
   return prof
 
 
-def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, pin_clock: bool = False,
-                           artifact: bool = True) -> list[str]:
+def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, model_profile_id: str | None = None,
+                           pin_clock: bool = False, artifact: bool = True) -> list[str]:
   profile.validate()
+  model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
   argv = ["extra/qk/prefill_whole_synced.py", "--model", model_path, "--mode", profile.mode,
+          "--model-profile", model_profile.id,
           "-K", str(profile.K), "--warmups", str(profile.warmups), "--rounds", str(profile.rounds),
           "--start-positions", ",".join(str(x) for x in profile.start_positions),
           "--whole-lengths", ",".join(str(x) for x in profile.whole_lengths),
@@ -84,7 +129,9 @@ def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, pin_c
   return argv
 
 
-def prefill_subprocess_env(extra: dict | None = None) -> dict[str, str]:
-  env = {"PYTHONPATH": str(ROOT), "PREFILL_V2": "1"}
+def prefill_subprocess_env(extra: dict | None = None, *, model_profile_id: str | None = None,
+                           model_path: str | None = None) -> dict[str, str]:
+  model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
+  env = {"PYTHONPATH": str(ROOT), **model_profile.env}
   for k, v in (extra or {}).items(): env[str(k)] = str(v)
   return env
