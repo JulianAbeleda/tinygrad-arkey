@@ -33,6 +33,8 @@ BACKEND_ATOM_ID = "q4k_q8_1_mmq_reference_backed_atom_v0"
 AMD_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_uop_atom_v0"
 AMD_WARP_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_warp_atom_v0"
 AMD_WARP_BATCHED_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_warp_batched_atom_v0"
+AMD_DOT4_BATCHED_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_dot4_batched_atom_v0"
+AMD_DOT4X4_BATCHED_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_dot4x4_batched_atom_v0"
 
 
 @dataclass(frozen=True)
@@ -186,6 +188,98 @@ def _q4k_q8_1_bounded_warp_kernel(m:int, n:int, k:int, role:str):
   return kernel
 
 
+def _pack_q8x4(xq: UOp, base_idx: UOp) -> UOp:
+  packed = UOp.const(dtypes.uint32, 0)
+  for i in range(4):
+    byte = xq[base_idx + i].cast(dtypes.uint8).cast(dtypes.uint32)
+    packed = packed.bitwise_or(byte.lshift(i * 8))
+  return packed
+
+
+def _sudot4(q_unsigned_bytes: UOp, x_signed_bytes: UOp) -> UOp:
+  zero = UOp.const(dtypes.int32, 0)
+  return UOp(Ops.CUSTOMI, dtypes.int32, (zero, q_unsigned_bytes, x_signed_bytes),
+             arg="__builtin_amdgcn_sudot4(true, {1}, true, {2}, {0}, false)")
+
+
+def _q4k_q8_1_bounded_dot4_kernel(m:int, n:int, k:int, role:str):
+  if k % Q4_K_BLOCK_ELEMS:
+    raise ValueError(f"AMD dot4 MMQ atom requires k to be Q4_K block aligned, got {k}")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  full_q8_groups = k // Q8_1_BLOCK_ELEMS
+  name = f"q4k_q8_1_mmq_dot4_batched_atom_{role}_{m}_{n}_{k}"
+
+  def kernel(out: UOp, words: UOp, xq: UOp, xscales: UOp) -> UOp:
+    row = UOp.special(n, "gidx0")
+    bb = UOp.special(m, "gidx1")
+    lane = UOp.special(32, "lidx0")
+    lane4 = lane % UOp.const(dtypes.int32, 8)
+    active = lane < UOp.const(dtypes.int32, 8)
+    blk = UOp.range(k_blocks, 0, axis_type=AxisType.REDUCE)
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = UOp.const(dtypes.float32, 0.0)
+    ones = UOp.const(dtypes.uint32, 0x01010101)
+    for grp in range(8):
+      d, dmin, sc, mn = _q4k_group_params(words, base, grp)
+      qword = words[base + 4 + (grp//2)*8 + lane4]
+      qpack = qword.rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F)
+      q8_idx = bb * k + blk * Q4_K_BLOCK_ELEMS + grp * Q8_1_BLOCK_ELEMS + lane4 * 4
+      scale_idx = bb * full_q8_groups + blk * (Q4_K_BLOCK_ELEMS // Q8_1_BLOCK_ELEMS) + grp
+      xpack = _pack_q8x4(xq, q8_idx)
+      dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
+      dot_sum = _sudot4(ones, xpack).cast(dtypes.float32)
+      scale = xscales[scale_idx].cast(dtypes.float32)
+      contrib = contrib + scale * (d * sc.cast(dtypes.float32) * dot_q - dmin * mn.cast(dtypes.float32) * dot_sum)
+    contrib = active.where(contrib, UOp.const(dtypes.float32, 0.0))
+    acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+    total = warp_reduce_sum(acc[0], lane, 32)
+    return out[bb, row].store(total).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+
+  return kernel
+
+
+def _q4k_q8_1_bounded_dot4x4_kernel(m:int, n:int, k:int, role:str):
+  if k % Q4_K_BLOCK_ELEMS:
+    raise ValueError(f"AMD dot4x4 MMQ atom requires k to be Q4_K block aligned, got {k}")
+  if m % 4:
+    raise ValueError(f"AMD dot4x4 MMQ atom requires M to be a multiple of 4, got {m}")
+  k_blocks = k // Q4_K_BLOCK_ELEMS
+  full_q8_groups = k // Q8_1_BLOCK_ELEMS
+  name = f"q4k_q8_1_mmq_dot4x4_batched_atom_{role}_{m}_{n}_{k}"
+
+  def kernel(out: UOp, words: UOp, xq: UOp, xscales: UOp) -> UOp:
+    row = UOp.special(n, "gidx0")
+    bb4 = UOp.special(m // 4, "gidx1")
+    lane = UOp.special(32, "lidx0")
+    subtok = lane // UOp.const(dtypes.int32, 8)
+    lane4 = lane % UOp.const(dtypes.int32, 8)
+    bb = bb4 * 4 + subtok
+    blk = UOp.range(k_blocks, 0, axis_type=AxisType.REDUCE)
+    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    contrib = UOp.const(dtypes.float32, 0.0)
+    ones = UOp.const(dtypes.uint32, 0x01010101)
+    for grp in range(8):
+      d, dmin, sc, mn = _q4k_group_params(words, base, grp)
+      qword = words[base + 4 + (grp//2)*8 + lane4]
+      qpack = qword.rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F)
+      q8_idx = bb * k + blk * Q4_K_BLOCK_ELEMS + grp * Q8_1_BLOCK_ELEMS + lane4 * 4
+      scale_idx = bb * full_q8_groups + blk * (Q4_K_BLOCK_ELEMS // Q8_1_BLOCK_ELEMS) + grp
+      xpack = _pack_q8x4(xq, q8_idx)
+      dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
+      dot_sum = _sudot4(ones, xpack).cast(dtypes.float32)
+      scale = xscales[scale_idx].cast(dtypes.float32)
+      contrib = contrib + scale * (d * sc.cast(dtypes.float32) * dot_q - dmin * mn.cast(dtypes.float32) * dot_sum)
+    acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
+    acc = acc.after(acc[0].store(0.0))
+    acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+    total = warp_reduce_sum(acc[0], lane, 8)
+    return out[bb, row].store(total).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+
+  return kernel
+
+
 def amd_atom_source_hash(spec: Q4KQ81MMQTileSpec) -> str:
   # Stable evidence for the generated UOp atom identity. This is not a binary hash.
   payload = repr(_q4k_q8_1_tile_kernel(spec)(UOp.placeholder((spec.tile_m, spec.tile_n), dtypes.float32, 0),
@@ -205,6 +299,24 @@ def amd_warp_atom_source_hash(spec: Q4KQ81MMQTileSpec) -> str:
 
 def amd_warp_batched_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
   payload = repr(_q4k_q8_1_bounded_warp_kernel(m, n, k, role)(
+    UOp.placeholder((m, n), dtypes.float32, 0),
+    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    UOp.placeholder((m * k,), dtypes.int8, 2),
+    UOp.placeholder((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
+  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def amd_dot4_batched_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
+  payload = repr(_q4k_q8_1_bounded_dot4_kernel(m, n, k, role)(
+    UOp.placeholder((m, n), dtypes.float32, 0),
+    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    UOp.placeholder((m * k,), dtypes.int8, 2),
+    UOp.placeholder((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
+  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def amd_dot4x4_batched_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
+  payload = repr(_q4k_q8_1_bounded_dot4x4_kernel(m, n, k, role)(
     UOp.placeholder((m, n), dtypes.float32, 0),
     UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
     UOp.placeholder((m * k,), dtypes.int8, 2),
@@ -257,6 +369,48 @@ def run_q4k_q8_1_mmq_bounded_amd_warp(q4k_bytes: np.ndarray, xq: np.ndarray, xsc
   return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=MMQLifecycleRow(role=role, tile_id=f"bounded_{m}x{n}x{k}",
                             counters=zero_counters(dot_accumulation_epochs=1, output_store_epochs=1, output_stores=m*n)),
                             backend_atom_id=AMD_WARP_BATCHED_BACKEND_ATOM_ID)
+
+
+def run_q4k_q8_1_mmq_bounded_amd_dot4(q4k_bytes: np.ndarray, xq: np.ndarray, xscales: np.ndarray, *,
+                                      role: str, device: str = "AMD") -> Q4KQ8MMQAtomResult:
+  q4 = np.asarray(q4k_bytes, dtype=np.uint8)
+  if q4.ndim != 3:
+    raise ValueError(f"q4k_bytes must have shape [N,K/256,144], got {q4.shape}")
+  n, k_blocks, _ = q4.shape
+  k = k_blocks * Q4_K_BLOCK_ELEMS
+  xq_arr = np.asarray(xq, dtype=np.int8)
+  if xq_arr.ndim != 2 or xq_arr.shape[1] != k:
+    raise ValueError(f"xq must have shape [M,{k}], got {xq_arr.shape}")
+  m = xq_arr.shape[0]
+  words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
+  xq_t = Tensor(np.ascontiguousarray(xq_arr.reshape(-1)), dtype=dtypes.int8, device=device).realize()
+  xs_t = Tensor(np.ascontiguousarray(np.asarray(xscales, dtype=np.float32).reshape(-1)), dtype=dtypes.float32, device=device).realize()
+  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
+    words, xq_t, xs_t, fxn=_q4k_q8_1_bounded_dot4_kernel(m, n, k, role))[0].realize()
+  return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=MMQLifecycleRow(role=role, tile_id=f"bounded_dot4_{m}x{n}x{k}",
+                            counters=zero_counters(dot_accumulation_epochs=1, output_store_epochs=1, output_stores=m*n)),
+                            backend_atom_id=AMD_DOT4_BATCHED_BACKEND_ATOM_ID)
+
+
+def run_q4k_q8_1_mmq_bounded_amd_dot4x4(q4k_bytes: np.ndarray, xq: np.ndarray, xscales: np.ndarray, *,
+                                        role: str, device: str = "AMD") -> Q4KQ8MMQAtomResult:
+  q4 = np.asarray(q4k_bytes, dtype=np.uint8)
+  if q4.ndim != 3:
+    raise ValueError(f"q4k_bytes must have shape [N,K/256,144], got {q4.shape}")
+  n, k_blocks, _ = q4.shape
+  k = k_blocks * Q4_K_BLOCK_ELEMS
+  xq_arr = np.asarray(xq, dtype=np.int8)
+  if xq_arr.ndim != 2 or xq_arr.shape[1] != k:
+    raise ValueError(f"xq must have shape [M,{k}], got {xq_arr.shape}")
+  m = xq_arr.shape[0]
+  words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
+  xq_t = Tensor(np.ascontiguousarray(xq_arr.reshape(-1)), dtype=dtypes.int8, device=device).realize()
+  xs_t = Tensor(np.ascontiguousarray(np.asarray(xscales, dtype=np.float32).reshape(-1)), dtype=dtypes.float32, device=device).realize()
+  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
+    words, xq_t, xs_t, fxn=_q4k_q8_1_bounded_dot4x4_kernel(m, n, k, role))[0].realize()
+  return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=MMQLifecycleRow(role=role, tile_id=f"bounded_dot4x4_{m}x{n}x{k}",
+                            counters=zero_counters(dot_accumulation_epochs=1, output_store_epochs=1, output_stores=m*n)),
+                            backend_atom_id=AMD_DOT4X4_BATCHED_BACKEND_ATOM_ID)
 
 
 def run_q4k_q8_1_mmq_tile_with_lifecycle(q4k_bytes: np.ndarray, xq: np.ndarray, xscales: np.ndarray,

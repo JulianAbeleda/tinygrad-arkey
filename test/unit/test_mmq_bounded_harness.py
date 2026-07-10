@@ -66,7 +66,7 @@ def test_mmq_bounded_harness_amd_warp_backend_is_selectable_metadata_only():
   assert meta["candidate_route_id"] == CANDIDATE_ROUTE_ID
 
 
-@pytest.mark.parametrize("backend", ["direct_packed", "amd_warp_batched"])
+@pytest.mark.parametrize("backend", ["direct_packed", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched"])
 def test_mmq_bounded_harness_comparator_and_batched_backends_are_selectable_metadata_only(backend):
   cfg = BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend=backend, measure_direct_packed=True)
   meta = candidate_metadata(cfg)

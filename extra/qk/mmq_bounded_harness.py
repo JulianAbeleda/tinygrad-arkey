@@ -53,7 +53,7 @@ class BoundedMMQConfig:
   warmups: int = 0
   rounds: int = 1
   seed: int = 20260710
-  backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "direct_packed"] = "reference"
+  backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed"] = "reference"
   measure_direct_packed: bool = False
 
   @property
@@ -69,7 +69,7 @@ class BoundedMMQConfig:
     return self.k_groups * Q8_1_BLOCK_ELEMS
 
   def validate(self) -> None:
-    if self.backend not in ("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "direct_packed"):
+    if self.backend not in ("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed"):
       raise ValueError(f"unknown backend={self.backend!r}")
     if min(self.m_tile, self.n_tile, self.k_groups, self.m_tiles, self.n_tiles) <= 0:
       raise ValueError("tile sizes, tile counts, and k_groups must be positive")
@@ -195,6 +195,26 @@ def _run_amd_warp_batched(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarra
   return np.asarray(run_q4k_q8_1_mmq_bounded_amd_warp(q4k_bytes, xq, xscales, role=ROLE).output, dtype=np.float32)
 
 
+def _run_amd_dot4_batched(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray) -> np.ndarray:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import run_q4k_q8_1_mmq_bounded_amd_dot4
+  except Exception as exc:
+    raise MMQAtomUnavailableError(
+      f"{CANDIDATE_ROUTE_ID} selected but AMD dot4 batched atom entrypoint is unavailable"
+    ) from exc
+  return np.asarray(run_q4k_q8_1_mmq_bounded_amd_dot4(q4k_bytes, xq, xscales, role=ROLE).output, dtype=np.float32)
+
+
+def _run_amd_dot4x4_batched(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray) -> np.ndarray:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import run_q4k_q8_1_mmq_bounded_amd_dot4x4
+  except Exception as exc:
+    raise MMQAtomUnavailableError(
+      f"{CANDIDATE_ROUTE_ID} selected but AMD dot4x4 batched atom entrypoint is unavailable"
+    ) from exc
+  return np.asarray(run_q4k_q8_1_mmq_bounded_amd_dot4x4(q4k_bytes, xq, xscales, role=ROLE).output, dtype=np.float32)
+
+
 def _amd_uop_hash(spec:Q4KQ81MMQTileSpec) -> str | None:
   try:
     from extra.qk.mmq_q4k_q8_atom import amd_atom_source_hash
@@ -215,6 +235,22 @@ def _amd_warp_batched_uop_hash(config:BoundedMMQConfig) -> str | None:
   try:
     from extra.qk.mmq_q4k_q8_atom import amd_warp_batched_atom_source_hash
     return amd_warp_batched_atom_source_hash(config.bounded_m, config.bounded_n, config.bounded_k, ROLE)
+  except Exception:
+    return None
+
+
+def _amd_dot4_batched_uop_hash(config:BoundedMMQConfig) -> str | None:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import amd_dot4_batched_atom_source_hash
+    return amd_dot4_batched_atom_source_hash(config.bounded_m, config.bounded_n, config.bounded_k, ROLE)
+  except Exception:
+    return None
+
+
+def _amd_dot4x4_batched_uop_hash(config:BoundedMMQConfig) -> str | None:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import amd_dot4x4_batched_atom_source_hash
+    return amd_dot4x4_batched_atom_source_hash(config.bounded_m, config.bounded_n, config.bounded_k, ROLE)
   except Exception:
     return None
 
@@ -253,9 +289,13 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   for spec in specs:
     reference_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] = _run_reference_tile(q4k_bytes, xq, xscales, spec)
 
-  if config.backend in ("amd_warp_batched", "direct_packed"):
-    full_runner = (lambda: _run_amd_warp_batched(q4k_bytes, xq, xscales)) if config.backend == "amd_warp_batched" else (
-      lambda: _run_direct_packed(q4k_bytes, xq, xscales))
+  if config.backend in ("amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed"):
+    full_runner = {
+      "amd_warp_batched": lambda: _run_amd_warp_batched(q4k_bytes, xq, xscales),
+      "amd_dot4_batched": lambda: _run_amd_dot4_batched(q4k_bytes, xq, xscales),
+      "amd_dot4x4_batched": lambda: _run_amd_dot4x4_batched(q4k_bytes, xq, xscales),
+      "direct_packed": lambda: _run_direct_packed(q4k_bytes, xq, xscales),
+    }[config.backend]
     samples_ms, last_full = _time_full_output(full_runner, config.warmups, config.rounds)
     last_tiles = [last_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
   else:
@@ -272,7 +312,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
 
   reference_tiles = [reference_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
   max_abs = max(float(np.max(np.abs(got - ref))) for got, ref in zip(last_tiles, reference_tiles)) if last_tiles else 0.0
-  atol = _fp32_accum_atol(config.bounded_k) if config.backend in ("amd", "amd_warp", "amd_warp_batched", "direct_packed") else 2e-5
+  atol = _fp32_accum_atol(config.bounded_k) if config.backend in ("amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed") else 2e-5
   ok = max_abs <= atol
   direct_samples_ms, direct_max_abs, direct_status = None, None, "not_requested"
   if config.backend == "direct_packed":
@@ -303,10 +343,12 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
       },
     },
     "artifacts": {"harness_source_hash": _source_hash(),
-                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched") else None,
+                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched") else None,
                   "amd_uop_hash": _amd_uop_hash(specs[0]) if config.backend == "amd" and specs else None,
                   "amd_warp_uop_hash": _amd_warp_uop_hash(specs[0]) if config.backend == "amd_warp" and specs else None,
                   "amd_warp_batched_uop_hash": _amd_warp_batched_uop_hash(config) if config.backend == "amd_warp_batched" else None,
+                  "amd_dot4_batched_uop_hash": _amd_dot4_batched_uop_hash(config) if config.backend == "amd_dot4_batched" else None,
+                  "amd_dot4x4_batched_uop_hash": _amd_dot4x4_batched_uop_hash(config) if config.backend == "amd_dot4x4_batched" else None,
                   "emitted_binary_hash": None},
     "blockers": [] if config.backend != "atom" else ["atom backend is reference-backed; AMD GPU atom body is not implemented"],
   }
@@ -314,7 +356,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
 
 def _parse_args() -> argparse.Namespace:
   ap = argparse.ArgumentParser(description="Bounded Q4_K/Q8_1 MMQ harness for 14B ffn_gate_up")
-  ap.add_argument("--backend", choices=("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "direct_packed"), default="reference")
+  ap.add_argument("--backend", choices=("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed"), default="reference")
   ap.add_argument("--m-tile", type=int, default=16)
   ap.add_argument("--n-tile", type=int, default=16)
   ap.add_argument("--k-groups", type=int, default=8)

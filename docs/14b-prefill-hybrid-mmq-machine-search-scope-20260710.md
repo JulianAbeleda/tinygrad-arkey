@@ -468,6 +468,8 @@ backend=amd   -> AMD UOp custom-kernel tile atom
 backend=amd_warp -> AMD UOp custom-kernel tile atom with one wave reducing 32 Q positions
 backend=direct_packed -> bounded comparator using the existing Q4KPrefillRouteSpec direct-packed lowering
 backend=amd_warp_batched -> one custom-kernel launch for the whole bounded MxN grid
+backend=amd_dot4_batched -> one-launch dot4 inner-loop probe, one output per wave, 8 active lanes
+backend=amd_dot4x4_batched -> one-launch dot4 inner-loop probe, four token outputs per wave, 4x8-lane subgroups
 ```
 
 The AMD path is intentionally narrow: whole-Q4_K-block K tiles only (`k0 % 256 == 0`, `k_groups % 8 == 0`), fp32
@@ -501,6 +503,21 @@ backend=amd_warp_batched, bounded 16x16x512, warmups=1, rounds=3, measure_direct
 status=PASS
 max_abs=0.00030517578125 at K-scaled fp32 accumulation atol=0.001536
 median_ms ~= 5.9 vs direct_packed ~= 9.0
+
+backend=amd_dot4_batched, bounded 16x16x512, warmups=1, rounds=3, measure_direct_packed=true
+status=PASS
+max_abs=0.0003662109375 at K-scaled fp32 accumulation atol=0.001536
+median_ms ~= 7.0 vs direct_packed ~= 9.2
+
+backend=amd_dot4x4_batched, bounded 16x16x512, warmups=1, rounds=3, measure_direct_packed=true
+status=PASS
+max_abs=0.0003662109375 at K-scaled fp32 accumulation atol=0.001536
+median_ms ~= 6.9 vs direct_packed ~= 8.8
+
+backend=amd_dot4x4_batched, bounded 32x32x512, warmups=1, rounds=3, measure_direct_packed=true
+status=PASS
+max_abs=0.00048828125 at K-scaled fp32 accumulation atol=0.001536
+median_ms ~= 7.1 vs direct_packed ~= 9.0
 ```
 
 Current blocker: representativeness. The one-launch warp atom is now correct and beats the bounded direct-packed
@@ -508,6 +525,11 @@ comparator on small synthetic bounded shapes, but this is not whole-prefill auth
 comparator deliberately uses the existing direct-packed math/lowering without forcing the live production `LOCAL`
 opts; applying those opts directly in this custom bounded harness rejects with `local is for globals`. Whole-prefill
 promotion still requires the canonical 14B smoke/authority path to beat the live direct-packed baseline.
+
+Dot4 probe verdict: correct but not yet better. The first dot4 variants reproduce the key llama inner-loop idea
+(`sudot4` over four Q positions, with Q4_K scale/min correction in the dot path), but they do not beat the scalar
+batched warp atom in bounded timing. This says the missing llama-level ingredient is not just the dot instruction;
+it is tile staging/reuse and output ownership. Keep the dot4 probes as phase evidence, not as a promotion candidate.
 
 ### M7 - One-Role Whole-Prefill Transfer
 
