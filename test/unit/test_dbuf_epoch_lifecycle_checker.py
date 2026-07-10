@@ -2,7 +2,7 @@ import json
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import (
   DBUFEvent, canonical_dbuf_events, canonical_dbuf_events_with_waits, check_events, events_from_epoch_primitive,
-  events_from_s10_role_trace, main, s10_readiness_roadmap)
+  events_from_hand_lds2_lifecycle, events_from_s10_role_trace, main, s10_readiness_roadmap)
 
 
 def test_canonical_dbuf_lifecycle_passes():
@@ -306,6 +306,29 @@ def test_s10_role_trace_exporter_uses_ffn_gate_up_epoch_primitive():
   assert report["consumer_count"] == 4
 
 
+def test_hand_lds2_lifecycle_exporter_builds_p5_checkable_events():
+  events = events_from_hand_lds2_lifecycle(k_tiles=2)
+  report = check_events(events, require_p5=True)
+
+  assert report["ok"] is True
+  assert report["producer_count"] == 4
+  assert report["consumer_count"] == 4
+  assert report["wait_count"] == 6
+  assert events[1].lds_window == {"base": 0, "bytes": 10240, "stride": 80}
+  assert events[2].lds_window == {"base": 10240, "bytes": 10240, "stride": 80}
+  assert events[9].lds_window == {"base": 20480, "bytes": 10240, "stride": 80}
+  assert events[10].lds_window == {"base": 30720, "bytes": 10240, "stride": 80}
+
+
+def test_hand_lds2_lifecycle_exporter_rejects_single_buffer():
+  try:
+    events_from_hand_lds2_lifecycle(dbuf=0)
+  except ValueError as e:
+    assert "requires dbuf=1" in str(e)
+  else:
+    raise AssertionError("expected hand LDS2 DBUF exporter to reject dbuf=0")
+
+
 def test_cli_exports_s10_role_trace(tmp_path):
   trace_path = tmp_path / "trace.json"
   trace_path.write_text(json.dumps({
@@ -320,6 +343,15 @@ def test_cli_exports_s10_role_trace(tmp_path):
   assert report["ok"] is True
   assert report["source"]["kind"] == "s10_role_trace"
   assert len(report["events"]) == 10
+
+
+def test_cli_exports_hand_lds2_lifecycle_with_p5():
+  report = main(["--hand-lds2", "--k-tiles", "2", "--require-p5", "--json"])
+
+  assert report["ok"] is True
+  assert report["source"]["kind"] == "hand_lds2_lifecycle_template"
+  assert report["p5_wait_sync"] == "checked"
+  assert len(report["events"]) == 16
 
 
 def test_cli_require_p5_fails_legacy_canonical():
@@ -341,6 +373,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   assert layers["P4"]["status"] == "done_for_s10_lds_spec_static"
   assert layers["P7"]["status"] == "pending"
   assert exporters["E1"]["status"] == "done"
+  assert exporters["E3"]["status"] == "done_for_lds2_template"
   assert exporters["E5"]["status"] == "pending"
 
 

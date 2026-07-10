@@ -105,7 +105,7 @@ S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 |---|---|---|---|
 | E1 hybrid primitive exporter | `hybrid-s9-s10-role-trace.json` | P1 events from `DBUFEpochPrimitive` | done |
 | E2 S10 LDS spec exporter | `WMMALDSSpec` / slot identity proof | P2 LDS windows | done |
-| E3 hand lifecycle exporter | `kernel_lifecycle_trace.py` / `wmma.py` lifecycle template | P1-P5 hand oracle events | pending |
+| E3 hand lifecycle exporter | `kernel_lifecycle_trace.py` / `wmma.py` lifecycle template | P1/P2/P5 hand oracle events from the LDS2 template | done for template oracle |
 | E4 generated postrange exporter | pre-lowering `Ops.STAGE` / owner metadata | P1-P4 generated candidate events | pending |
 | E5 lowered stream exporter | generated AMD ISA or UOp stream | P5-P7 actual instruction events | pending |
 
@@ -174,6 +174,23 @@ PYTHONPATH=. python3 extra/qk/prefill/dbuf_epoch_lifecycle_checker.py --canonica
 ```
 
 Legacy traces without explicit wait events still pass P1/P2/P4 checks, but fail when P5 is required.
+
+The third exporter is implemented for the hand LDS2 template oracle:
+
+```text
+default_lds2_lifecycle_template + default_lds2_memory_layout + default_lds2_wait_policy -> P1/P2/P5 checker events
+```
+
+Command:
+
+```bash
+PYTHONPATH=. python3 extra/qk/prefill/dbuf_epoch_lifecycle_checker.py \
+  --hand-lds2 --k-tiles 4 --require-p5 --json
+```
+
+This proves the hand oracle's logical DBUF ring, exact LDS slot byte windows, and VM/LGKM wait phases. It is not the P7
+lowered-stream proof; final instruction rows still need a fail-closed exporter once role/epoch/slot metadata survives
+lowering.
 
 ## Decoupling Path
 

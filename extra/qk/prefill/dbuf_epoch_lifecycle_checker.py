@@ -45,7 +45,7 @@ EXPORTERS: tuple[dict[str, str], ...] = (
    "source": "hybrid-s9-s10-role-trace.json"},
   {"id": "E2", "name": "s10_lds_spec_exporter", "status": "done",
    "source": "WMMALDSSpec / slot identity proof"},
-  {"id": "E3", "name": "hand_lifecycle_exporter", "status": "pending",
+  {"id": "E3", "name": "hand_lifecycle_exporter", "status": "done_for_lds2_template",
    "source": "kernel_lifecycle_trace.py / wmma.py lifecycle template"},
   {"id": "E4", "name": "generated_postrange_exporter", "status": "pending",
    "source": "pre-lowering Ops.STAGE / owner metadata"},
@@ -296,6 +296,60 @@ def canonical_dbuf_events_with_waits(*, roles: tuple[str, ...] = ("A", "B"), k_t
   return events
 
 
+def _hand_lds2_window(layout: Any, role: str, slot: int) -> dict[str, Any]:
+  base = slot * layout.BUFSZ
+  if role == "A":
+    return {"base": base, "bytes": layout.LDS_A, "stride": layout.SA}
+  if role == "B":
+    return {"base": base + layout.LDS_A, "bytes": layout.BUFSZ - layout.LDS_A, "stride": layout.SB}
+  raise ValueError(f"unsupported hand LDS2 role {role!r}")
+
+
+def events_from_hand_lds2_lifecycle(*, roles: tuple[str, ...] = ("A", "B"), k_tiles: int = 4,
+                                    bm: int = 128, bn: int = 128, bk: int = 32, pad: int = 16,
+                                    dbuf: int = 1) -> list[DBUFEvent]:
+  """Export the hand LDS2 lifecycle template into proof-checker events.
+
+  This intentionally exports the logical hand oracle, not final instruction
+  rows. P7 owns lowered-stream proof. The function still reads the existing
+  hand template/layout/wait policy so the checker contract stays tied to the
+  current S9/S10 backend atom.
+  """
+  if not dbuf: raise ValueError("hand LDS2 DBUF lifecycle exporter requires dbuf=1")
+  from extra.qk.prefill.wmma import default_lds2_lifecycle_template, default_lds2_memory_layout, default_lds2_wait_policy
+  template = default_lds2_lifecycle_template(dbuf).validate(dbuf)
+  layout = default_lds2_memory_layout(bm, bn, bk, pad, dbuf).validate()
+  wait = default_lds2_wait_policy().validate()
+  if not any(step.op == "compute" and step.slot == 0 for step in template.body):
+    raise ValueError("hand LDS2 template does not expose compute(slot 0) in body")
+  if not any(step.op == "compute" and step.slot == 1 for step in template.body):
+    raise ValueError("hand LDS2 template does not expose compute(slot 1) in body")
+
+  events: list[DBUFEvent] = []
+  step = 0
+
+  def append_produce_phase(epoch: int, slot: int, phase: str) -> None:
+    nonlocal step
+    events.append(DBUFEvent("wait", kind="vm", count=wait.vm_after_coop_load, phase=f"{phase}_wait_coop_load", step=step)); step += 1
+    for role in roles:
+      events.append(DBUFEvent("produce", role=role, epoch=epoch, slot=slot, window=f"{role}:slot{slot}",
+                              lds_window=_hand_lds2_window(layout, role, slot), phase=phase, step=step)); step += 1
+    events.append(DBUFEvent("wait", kind="lgkm", count=wait.lgkm_after_coop_store, phase=f"{phase}_wait_coop_store", step=step)); step += 1
+    events.append(DBUFEvent("barrier", phase=phase, step=step)); step += 1
+    events.append(DBUFEvent("wait", kind="lgkm", count=wait.lgkm_after_frag_load, phase=f"{phase}_wait_frag_load", step=step)); step += 1
+
+  append_produce_phase(0, 0, "prologue")
+  for epoch in range(k_tiles):
+    slot = epoch % 2
+    for role in roles:
+      events.append(DBUFEvent("consume", role=role, epoch=epoch, slot=slot, window=f"{role}:slot{slot}",
+                              lds_window=_hand_lds2_window(layout, role, slot), phase="body_compute", step=step)); step += 1
+    next_epoch = epoch + 1
+    if next_epoch < k_tiles:
+      append_produce_phase(next_epoch, next_epoch % 2, "body")
+  return events
+
+
 def canonical_dbuf_events(*, roles: tuple[str, ...] = ("A", "B"), k_tiles: int = 4, nbuf: int = 2) -> list[DBUFEvent]:
   if k_tiles < 1: raise ValueError("k_tiles must be >= 1")
   if nbuf < 2: raise ValueError("nbuf must be >= 2")
@@ -354,6 +408,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--input", type=pathlib.Path, help="JSON list of events or object with events")
   ap.add_argument("--s10-role-trace", type=pathlib.Path, help="export events from a S10 hybrid role trace artifact")
+  ap.add_argument("--hand-lds2", action="store_true", help="export events from the hand LDS2 lifecycle template")
   ap.add_argument("--role", default="ffn_gate_up", help="role to export from --s10-role-trace")
   ap.add_argument("--canonical", action="store_true", help="check the built-in canonical DBUF plan")
   ap.add_argument("--k-tiles", type=int, default=4)
@@ -377,12 +432,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     trace = json.loads(args.s10_role_trace.read_text())
     events = events_from_s10_role_trace(trace, role=args.role, k_tiles=args.k_tiles, roles=roles)
     source = {"kind": "s10_role_trace", "path": str(args.s10_role_trace), "role": args.role}
+  elif args.hand_lds2:
+    events = events_from_hand_lds2_lifecycle(roles=roles, k_tiles=args.k_tiles)
+    source = {"kind": "hand_lds2_lifecycle_template"}
   else:
     events = canonical_dbuf_events(roles=roles, k_tiles=args.k_tiles)
     source = {"kind": "canonical"}
   report = check_events(events, require_p5=args.require_p5)
   report["source"] = source
-  report["events"] = [event.to_json() for event in events] if args.canonical or args.s10_role_trace else []
+  report["events"] = [event.to_json() for event in events] if args.canonical or args.s10_role_trace or args.hand_lds2 else []
   if args.json: print(json.dumps(report, indent=2))
   else: print("PASS" if report["ok"] else "FAIL")
   return report
