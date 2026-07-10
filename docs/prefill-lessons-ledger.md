@@ -137,3 +137,36 @@ results.
   BubbleBeam/FutureSight is the only current route path (old Beam/FutureSign wording is historical/compat-only).
   FutureSight applies its COALESCE via `opts_to_apply` → `apply_opt` in `postrange.py`, never through the timing beam
   (which was removed).
+
+## Banked from the 2026-07-10 doc census (unique verdicts/numbers)
+
+- **QK experiment-series conclusions (was `qk-gate-series-conclusions.md`; route_manifest authority now points here).**
+  - *Decode-attention combine compiler wall (`EMITTER_BLOCKED`):* any combine that shares softmax weights across `d`
+    or fuses the gmax max-reduce lowers the reduction accumulator REG into a non-assignable vectorized
+    `make_float4(...)=...` store; `REG_STORE_DEVEC=1` trades the compile error for NaN (max-reduce mis-lowers). Only
+    the shipped single-reduce per-`d` combine compiles. The decode-attention math primitives are all proven correct
+    (Cluster A micro-proofs P11–P15), so this is a tinygrad codegen-primitive gap, NOT a decode design failure. As of
+    2026-07-03 the wall appears to have SHIFTED (shared-weight/inline-gmax combines now compile) — a live reopen lead.
+  - *Prefill asm-scheduler (Cluster B, on `build_gemm_lds2` streams):* register-legal + wait-correct reorder can still
+    miscompile if `build_regions` ignores the backward-branch TARGET (loop entry) — fix adds branch-target boundaries,
+    then fence-only cross-motion is byte-identical-correct (RDNA3 interlocks VALU/VMEM deps; `s_delay_alu` is perf-only).
+    Waitcnt RELOCATION (drop per-block `lgkm(0)` drain, insert minimal per-WMMA `lgkmcnt`): **DBUF1 ~+6%, PLRA ~+2%,
+    kv_halved regresses** → config-dependent, gated on whole-prefill confirmation.
+  - *Decode physical-tile:* generated axis ownership recomputes q·k per PV output column (runtime scales with Wp) — the
+    named unlock is **score reuse across PV output columns**; the score-broadcast family (Path B) provides it (32col/1col
+    multiple <16, sublinear) and refutes the `assigned_kv` cache view as the full-model MMU root cause.
+  - *AMD native-ISA backend arc (`extra/audit/amd_isa/`, ~35 files/4,900 LOC, retired 2026-07-03):* an opt-in
+    `DEV=AMD:ISA` renderer assembling decode/GEMV straight to RDNA3; never promoted to default, no external importers,
+    bench dirs gone — recoverable only from git history. Established Q6_K direct half-warp route for `lm_head`, PINNED
+    VGPR accumulators + LDS reclaim, consumer-only waitcnt, hardware `exp2→v_exp_f32` lowering.
+- **14B prefill vs llama roofline (was `prefill-14b-llama-parity-trace-20260704.md`):** tinygrad 144 tok/s @ 2.23
+  effective packed GB/s vs llama.cpp 1624.9 tok/s @ 27.2 GB/s (8.9%). Six packed-GEMM rows are ~93–95% of the tinygrad
+  step; elementwise/norm overhead is only ~3% (NOT the first-order gap). Verdict: the remaining gap is the
+  packed-prefill matmul substrate/topology, not fusion or attention.
+- **Decode system-residual ceiling (was `amd-isa-system-residual-to-bandwidth-ceiling-scope-20260629.md`):** best decode
+  ~95–104 tok/s vs a streaming-bandwidth ceiling implying ~163 tok/s; implied ~522 GB/s = ~64% of measured
+  streaming-copy achievable. Attention KV-read is <1% of the weight-read floor at ctx4096 → further attention work is
+  low-leverage; the lever is the weight (non-attention) path.
+- **8B-vs-14B occupancy verdict (was `beam-removal-and-pmc-handoff-20260704.md`):** 14B is *proportionally more work*,
+  not a 14B-specific efficiency loss. The shared Q4_K prefill GEMM is latency/occupancy/codegen-bound at ~45% occupancy
+  / ~1% of fp16 peak, and a config sweep proved occupancy is **not** tunable via workgroup/parts.

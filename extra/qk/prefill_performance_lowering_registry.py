@@ -11,7 +11,7 @@ from typing import Any, TypedDict
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-DOC_PATH = "docs/prefill-performance-lowering-scope-20260706.md"
+DOC_PATH = "docs/prefill-lessons-ledger.md"
 
 VALID_OWNER_AREAS = ("scheduler", "codegen", "vocab", "policy")
 VALID_STATUSES = ("not_started", "pending", "in_progress", "blocked", "ready", "done")
@@ -58,7 +58,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "extra/qk/prefill_v2_schedule_search.py",
       "extra/qk/prefill_v2_schedule_table.json",
       "tinygrad/llm/model.py",
-      "docs/codegen-wmma-lds-staging-design-20260705.md",
+      "docs/prefill-lessons-ledger.md",
     ],
     "gates": [
       "PURE_MACHINE_SEARCH_ONLY",
@@ -86,8 +86,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "`bench/prefill-whole-synced/latest.json` carries the bounded strict-pure smoke pp512 value and route attribution."
     ],
     "reuse_files": [
-      "docs/8b-prefill-generated-route-closed-20260705.md",
-      "docs/handwritten-kernel-exhaustive-lowering-scope-20260706.md",
+      "docs/prefill-lessons-ledger.md",
+      "docs/prefill-lessons-ledger.md",
       "extra/qk/prefill_v2_schedule_search.py",
       "extra/qk/prefill_v2_schedule_table.json",
       "extra/qk/prefill_v2_schedule_table_gate.py",
@@ -125,7 +125,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "8B pp512 bounded whole-prefill smoke showed no win from B-tile staging (1699 tok/s vs 1744 tok/s baseline)",
     ],
     "reuse_files": [
-      "docs/codegen-wmma-lds-staging-design-20260705.md",
+      "docs/prefill-lessons-ledger.md",
       "tinygrad/schedule/rangeify.py",
       "tinygrad/codegen/opt/postrange.py",
       "tinygrad/llm/model.py",
@@ -176,8 +176,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "No medium/route-bound fp16 graph-GEMM performance gate exists yet",
     ],
     "reuse_files": [
-      "docs/codegen-wmma-lds-staging-design-20260705.md",
-      "docs/handwritten-kernel-exhaustive-lowering-scope-20260706.md",
+      "docs/prefill-lessons-ledger.md",
+      "docs/prefill-lessons-ledger.md",
       "tinygrad/llm/model.py",
       "extra/qk/prefill_graph_gemm_fp16_stage_gate.py",
       "bench/prefill-graph-gemm-fp16-both-operands-stage/latest.json",
@@ -216,7 +216,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "bench/prefill-graph-gemm-coop-route-contract/latest.json",
       "tinygrad/schedule/rangeify.py",
       "tinygrad/schedule/wmma.py",
-      "docs/handwritten-kernel-exhaustive-lowering-scope-20260706.md",
+      "docs/prefill-lessons-ledger.md",
       "tinygrad/llm/model.py",
     ],
     "gates": [
@@ -248,7 +248,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "Only needed if phase 1-4 leaves >20% residual vs historical graph-GEMM trajectory",
     ],
     "reuse_files": [
-      "docs/codegen-wmma-lds-staging-design-20260705.md",
+      "docs/prefill-lessons-ledger.md",
       "tinygrad/codegen/opt/postrange.py",
     ],
     "gates": [
@@ -274,7 +274,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "8B performance parity must be demonstrated before route authority changes.",
     ],
     "reuse_files": [
-      "docs/prefill-performance-lowering-scope-20260706.md",
+      "docs/prefill-lessons-ledger.md",
       "extra/qk/prefill_performance_lowering_report.py",
     ],
     "gates": [
@@ -308,7 +308,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "extra/qk/q6k_prefill_route_spec.py",
       "extra/qk/q4k_wmma_tile_lowering.py",
       "extra/qk/q4k_wmma_full_role_contract_gate.py",
-      "docs/route-b-iu8-wmma-mmq-design-20260705.md",
+      "docs/prefill-lessons-ledger.md",
     ],
     "gates": [
       "BUBBLEBEAM_FUTURESIGHT",
@@ -334,8 +334,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "Current direct-packed route remains memory-safe but performance-limited by dequant/VALU",
     ],
     "reuse_files": [
-      "docs/prefill-packed-generated-tile-scope-20260704.md",
-      "docs/prefill-14b-llama-parity-trace-20260704.md",
+      "docs/prefill-lessons-ledger.md",
+      "docs/prefill-lessons-ledger.md",
     ],
     "gates": [
       "prefill_14b_baseline_gate",
@@ -358,7 +358,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "completion_rationale": "Bounded full-role tile contract is centralized, compile-time checked, and gated.",
     "blockers": [],
     "reuse_files": [
-      "docs/q4k-wmma-full-role-lowering-solution-scope-20260705.md",
+      "docs/prefill-lessons-ledger.md",
       "extra/qk/prefill_int8_wmma_spec.py",
       "extra/qk/q4k_prefill_route_spec.py",
       "tinygrad/llm/generated_candidates.py",
@@ -387,7 +387,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "completion_rationale": "The shaped WMMA surface is selected and backed by scheduler/codegen evidence.",
     "blockers": [],
     "reuse_files": [
-      "docs/route-b-iu8-wmma-mmq-design-20260705.md",
+      "docs/prefill-lessons-ledger.md",
       "tinygrad/renderer/amd/generate.py",
       "tinygrad/codegen/experimental.py",
       "bench/q4k-wmma-scheduler-surface/latest.json",
@@ -418,7 +418,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "extra/qk/q4k_wmma_tiled_microgate.py",
       "extra/qk/q4k_wmma_tiled_surface_gate.py",
       "extra/qk/q4k_wmma_tiled_lowering_feasibility.py",
-      "docs/q4k-wmma-full-role-lowering-solution-scope-20260705.md",
+      "docs/prefill-lessons-ledger.md",
       "bench/q4k-wmma-tiled-lifecycle/latest.json",
     ],
     "gates": [
@@ -481,7 +481,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "tinygrad/llm/prefill_routes.py",
       "tinygrad/llm/generated_candidates.py",
       "extra/qk/prefill_14b_model_authority_gate.py",
-      "docs/prefill-performance-lowering-scope-20260706.md",
+      "docs/prefill-lessons-ledger.md",
     ],
     "gates": [
       "prefill_14b_model_authority_gate",
@@ -507,8 +507,8 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "No 14B full-prefill residual attribution exists yet for a data-driven Q6_K keep-vs-promote policy decision.",
     ],
     "reuse_files": [
-      "docs/route-b-iu8-wmma-mmq-design-20260705.md",
-      "docs/prefill-14b-llama-parity-trace-20260704.md",
+      "docs/prefill-lessons-ledger.md",
+      "docs/prefill-lessons-ledger.md",
       "tinygrad/llm/generated_candidates.py",
       "tinygrad/llm/prefill_routes.py",
       "tinygrad/llm/route_policy.py",
@@ -538,7 +538,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
       "No >1.25x improvement on strict-pure 14B packed baseline yet",
     ],
     "reuse_files": [
-      "docs/prefill-performance-lowering-scope-20260706.md",
+      "docs/prefill-lessons-ledger.md",
       "extra/qk/prefill_performance_lowering_report.py",
     ],
     "gates": [

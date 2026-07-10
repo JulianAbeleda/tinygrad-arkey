@@ -1,6 +1,6 @@
 """Controlled fault-isolation variants of the passing hand-ASM WMMA GEMM (see wmma.py build_gemm_pipe).
 
-Goal (docs/4x4-wmma-fault-isolation-scope.md, Part 2): perturb the KNOWN-GOOD hand kernel ONE variable at a
+Goal (docs/prefill-lessons-ledger.md, Part 2): perturb the KNOWN-GOOD hand kernel ONE variable at a
 time to isolate the gfx1100 v_wmma fault. Factors: operand ROLE {A=src0,B=src1,C=src2}, register HEIGHT
 {low<120 / high>=128}, PROVENANCE {VMEM=global_load_b128 / VALU=v_pack_b32_f16}.
 

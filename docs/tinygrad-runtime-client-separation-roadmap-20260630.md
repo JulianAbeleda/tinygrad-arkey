@@ -524,7 +524,7 @@ Goal: define the prompt envelope the proprietary app should produce.
 Build doc/schema:
 
 ```text
-docs/tinygrad-client-context-envelope-v1.md
+docs/tinygrad-runtime-client-separation-implementation-status-20260630.md  (R6 spec; envelope schema inline below)
 ```
 
 Recommended XML-style sections:

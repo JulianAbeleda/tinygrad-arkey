@@ -29,7 +29,7 @@ def test_prefill_performance_registry_rows_are_valid_and_ordered():
   assert rows
   assert len(rows) == len(set(r["id"] for r in rows))
   assert len(registry.ids()) == len(rows)
-  assert pathlib.Path(pathlib.Path(registry.DOC_PATH)).name == "prefill-performance-lowering-scope-20260706.md"
+  assert pathlib.Path(pathlib.Path(registry.DOC_PATH)).name == "prefill-lessons-ledger.md"
 
   by_target: dict[str, list[int]] = {}
   for row in rows:

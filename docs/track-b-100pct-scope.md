@@ -185,5 +185,5 @@ Everything else reuses/extends existing code. Total NEW surface across all of Tr
 - **14B:** ONE thin index adapter calling the EXISTING `_q4k_weight` decode verbatim (+`.cast(f16)`); ONE generated route replacing the `Ops.INS` call. ZERO new dequant math, ZERO new LDS-staging/residency code.
 Centralized single-source-of-truth helpers: `_frag_base` (fragment ranges), `_waitcnt_simm16` (wait packing), `_q4k_weight` (Q4_K decode — shared by VALU fallback AND fused-WMMA), `operand_staging_policy` (REGISTER-vs-LDS fork — one predicate on operand-compute-cost × reuse, model/GPU/quant-agnostic, replaces the manual staging env). Anti-duplication guard: the Tensor-family Q4_K decode in `prefill_int8_wmma_spec.py` is for the REFUTED int8 path — do NOT use it; reuse the UOp-family `_q4k_weight` only.
 
-Source scopes: agent B0/B1/14B outputs (2026-07-06); census `docs/prefill-substrate-layer-census-20260706.md`.
+Source scopes: agent B0/B1/14B outputs (2026-07-06); census banked in `docs/prefill-lessons-ledger.md`.
 </content>

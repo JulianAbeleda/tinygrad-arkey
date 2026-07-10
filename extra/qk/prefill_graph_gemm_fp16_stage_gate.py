@@ -19,7 +19,7 @@ from typing import Any
 from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
 
 SCHEMA = "prefill-graph-gemm-fp16-single-operand-stage-gate.v1"
-HANDOFF = Path("docs/HANDOFF-routeB-lds-codegen-20260706.md")
+HANDOFF = Path("docs/prefill-lessons-ledger.md")
 
 _PROBE = r'''
 import json

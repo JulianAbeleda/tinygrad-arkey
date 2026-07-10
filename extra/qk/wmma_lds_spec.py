@@ -470,9 +470,9 @@ def wmma_lds_lowering_insertion_point() -> dict[str, Any]:
     "generated_transport_opts": "extra/qk/wmma_lds_spec.py::wmma_lds_postrange_opts",
     "oracle_role": "ffn_gate_up",
     "reuse_existing_substrate": [
-      "docs/generated-machine-code-lds-dbuf-100pct-scope.md",
-      "docs/native-isa-l4-software-pipeline-scope.md",
-      "docs/dbuf-safe-ds-offset-folding-scope.md",
+      "docs/prefill-lessons-ledger.md",
+      "docs/prefill-lessons-ledger.md",
+      "docs/prefill-lessons-ledger.md",
       "tinygrad/codegen/opt/postrange.py cooperative LDS/DBUF staging machinery",
       "tinygrad/renderer/isa/amd.py LDSAddr/decompose_lds_index and DS_LOAD_B128/DS_STORE_B128 lowering",
       "extra/qk/prefill/native_isa_l4_stream_probe.py structural LDS/DBUF probe",

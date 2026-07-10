@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "prefill-graph-gemm-single-operand-stage-gate.v1"
-HANDOFF = Path("docs/HANDOFF-routeB-lds-codegen-20260706.md")
+HANDOFF = Path("docs/prefill-lessons-ledger.md")
 SURFACE_ARTIFACT = Path("bench/q4k-wmma-scheduler-surface/latest.json")
 
 _PROBE = r'''

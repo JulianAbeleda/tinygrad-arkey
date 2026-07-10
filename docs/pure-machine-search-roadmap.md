@@ -53,14 +53,14 @@ generation and attack prefill/shape/quant targets with authority gates.
 | `docs/pure-machine-search.md` | Narrative of current generated/default/fallback kernel boundaries |
 | `docs/decode-two-kernel-problem-audit-result-20260625.md` | Why the attention tile+combine route is exhausted and combine is not the active lever |
 | `docs/amd-isa-g3-weight-promotion-hardening-scope-20260629.md` | Generated G3 Q4_K promotion package |
-| `docs/amd-isa-system-residual-to-bandwidth-ceiling-scope-20260629.md` | Decode residual/ceiling audit after G3 parity |
+| `docs/prefill-lessons-ledger.md` | Decode residual/ceiling audit after G3 parity (banked) |
 | `docs/amd-isa-q6k-direct-route-full-scope-20260629.md` | Q6_K direct-route scope and refuted default-off outcome |
-| `docs/prefill-pure-machine-search-roadmap-20260629.md` | Prefill roadmap and P0-P2/Pipe authority chain |
+| `docs/prefill-lessons-ledger.md` | Prefill roadmap and P0-P2/Pipe authority chain (banked) |
 | `docs/low-level-wall-exposure-audit-goal.md` | How to classify missing primitive/codegen walls |
 | `docs/layout-codegen-full-scope-20260625.md` | Existing execution plan for layout/codegen exposure |
 | `docs/gemv-pure-search-generated-route-scope.md` | GEMV-only execution scope for replacing the FutureSight custom bridge with generated code |
 | `docs/gemv-g2-minimal-codegen-representation-scope.md` | Next executable GEMV step: prove or block the minimal Q4_K lane-map/codegen representation |
-| `docs/gemv-g3-codegen-lowering-scope.md` | Current GEMV step: lower the LaneMap route into one-word-per-lane generated code |
+| `docs/prefill-lessons-ledger.md` | GEMV step: lower the LaneMap route into one-word-per-lane generated code (banked) |
 | `docs/decode-attention-pure-search-scope.md` | Decode attention execution scope for replacing owned tile+combine with generated/search-owned code |
 | `docs/decode-attention-a1-generated-skeleton-scope.md` | Next executable attention step: route-clean generated skeleton before speed work |
 | `docs/decode-attention-a1-generated-skeleton-result.md` | A1 result: generated route is token-correct and owned-free, but reintroduces `E_49152` |
@@ -99,7 +99,7 @@ generation and attack prefill/shape/quant targets with authority gates.
 | `docs/decode-attention-online-state-pv-tile-p10-xlane-output-result.md` | P10 isolated x-lane final-output numeric result |
 | `docs/decode-attention-online-state-pv-tile-p11-xlane-merge-result.md` | P11 synthetic x-lane online-softmax merge microproof |
 | `docs/decode-attention-online-state-pv-tile-p12-xlane-components-result.md` | P12 component test for max/sum/gated-store/LSE x-lane merge |
-| `docs/decode-generated-tile-codegen-scope.md` | Current generated decode tile codegen scope: vector loads, LDS/block tiling, and scheduling residuals |
+| `docs/prefill-lessons-ledger.md` | Generated decode tile codegen scope: vector loads, LDS/block tiling, scheduling residuals (banked) |
 | `docs/decode-generated-tile-codex-prompt.md` | Self-contained execution prompt for the generated decode tile codegen lane |
 | `docs/decode-attention-pure-search-gap-audit-result.md` | Canonical decode-attention pure-search gap audit: time delta plus primitive/search-vocabulary attribution |
 | `docs/decode-attention-control-plane-closure-result.md` | Decode attention guardrail/search-vocab control-plane closure result |

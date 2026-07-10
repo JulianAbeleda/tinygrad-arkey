@@ -9,7 +9,7 @@ delivers 5167 tok/s (unpinned) / 4413 (pinned) / ~58-68 eff TFLOPS. This work re
 - K-reduction: unrolled chain (21778c090) + rolled any-K accumulator (8ad8603b8) — 16x16x64 bit-exact.
 - Phase-1a fp16 16-bit global access (15ff272a8) — multi-workgroup MMU fault fixed.
 - Phase-1b multi-output-tile register model (bbd7c77d1) — per-subtile LOW accumulators, keyed (id(dreg), idx.arg//8).
-- Scopes/blueprint: docs/layers-3-7-completion-scope.md, track-b-phases-scope.md, the reverse-engineered hand
+- Scopes/blueprint: docs/track-b-100pct-scope.md (L3-7 completion + track-b phases banked there), the reverse-engineered hand
   blueprint (246 instr: 32 global_load_b128, 16 v_wmma 4x4, vmcnt(8), cvt+b16 epilogue, NO LDS).
 
 ## Validated on hardware

@@ -47,7 +47,5 @@ authority harness (`extra/qk/prefill_whole_synced.py --mode authority --pin-cloc
 
 - Generated composed LDS/DBUF transport (`prefill_wmma_pipe_lds_dbuf_primitive_generated`) is the
   correct route but slow generated transport: pinned `pp512 ~1332` vs the `~4413` backend-atom band.
-  Retired by S10.5 as correct-but-slow. See the deferred scope docs:
-  `docs/generated-machine-code-lds-dbuf-100pct-scope.md`,
-  `docs/8b-prefill-generated-pipe-lowerer-mvp-scope.md`,
-  `docs/8b-prefill-generated-lifecycle-performance-integration-scope.md`.
+  Retired by S10.5 as correct-but-slow. Lessons banked in `docs/prefill-lessons-ledger.md`
+  (DBUF/LDS operand staging + "why hand beats generated" density thesis).

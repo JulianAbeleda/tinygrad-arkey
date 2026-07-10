@@ -60,7 +60,7 @@ cannot reach the hand kernel's ~58. So a "done" HIP layer that can't own pipelin
 | 1 | Tensor/IR | **100%** | device-independent UOp graph; done |
 | 2 | Schedule/tiling | **100%** | `OptOps` TC/UPCAST/LOCAL/UNROLL/PADTO (`opt/__init__.py:6-9`, `postrange.py`); warmstart injects searched schedules (`postrange.py:541-564`) |
 | 3 | Instruction selection (ISA) | **100%** | scalar/VALU/LDS/global/loops/index and `Ops.WMMA` lower on the native ISA path; default-on b128 fragment loads fold route-shaped prefill `a @ b.T` into 16 `global_load_b128`, 0 packs, 0 scalar half loads |
-| 4 | Instr. scheduling / pipelining | **30%** | list scheduler is span-aware and `v_wmma` latency is modeled; remaining blocker is explicit two-phase fragment pipeline scope in `docs/native-isa-l4-software-pipeline-scope.md` |
+| 4 | Instr. scheduling / pipelining | **30%** | list scheduler is span-aware and `v_wmma` latency is modeled; remaining blocker is explicit two-phase fragment pipeline scope (banked in `docs/prefill-lessons-ledger.md`) |
 | 5 | Register allocation (ISA) | **100%** | multi-output WMMA uses low contiguous accumulator/A/B fragment windows and reclaims `v1..v7` scalar scratch for epilogues; generated 4x4 remu/GPU passes |
 | 6 | Async-mem sync / waitcnt (ISA) | **55%** | `_insert_waitcnt` default remains full-drain; opt-in targeted `vmcnt(n)` is 4x4-correct and scalar-pack waits are coalesced, but it is still not a performance-valid default |
 | 7 | Tensor-core instruction (ISA) | **100%** | `Ops.WMMA` emits `v_wmma_f32_16x16x16_f16`; rolled any-K and 4x4 generated harnesses are bit-correct |
@@ -125,6 +125,6 @@ Same regime as NVIDIA: Apple's compiler owns 4/5/6/8; floor = MSL source.
 - **The AMD gap is concentrated and defined:** 5 items in `renderer/isa/amd.py` (L7 WMMA, L5 fragment regalloc, L4
   pipelining, L6 targeted waitcnt, L3 wide-mem). Everything above and below is at 100%.
 
-Sources for the agnostic framing: see `docs/prefill-substrate-layer-census-20260706.md` (LLVM backend phases, MLIR
+Sources for the agnostic framing: see `docs/prefill-lessons-ledger.md` (census banked: LLVM backend phases, MLIR
 progressive lowering, RDNA3 ISA, SIInsertWaitcnts, CUTLASS pipelining, seb-v gfx11 50-TFLOPS proof).
 </content>

@@ -108,7 +108,7 @@ CENSUS_OVERLAY = [
     "selector": "env_default",
     "route_guard": "tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts selects LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4",
     "kernel_source": "extra/qk/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel (spec-driven lowering of Q4KPrefillRouteSpec -> q4k_gen_prefill_direct_out_* / q4k_gen_prefill_partials_*)",
-    "authority_artifact": "docs/prefill-packed-generated-tile-scope-20260704.md",
+    "authority_artifact": "docs/prefill-lessons-ledger.md",
     "rollback_flag": "PREFILL_Q4K_DIRECT_SCHEDULE=legacy",
     "next_action": "keep generated descriptor binding; Q4_K int8-WMMA remains a separate research substrate, not the shipped default",
   }),
