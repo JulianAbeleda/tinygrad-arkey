@@ -99,7 +99,7 @@ Blocked candidates:
 
 | Candidate | Why blocked |
 |---|---|
-| `cooperative_multi_wave_tile` | cooperative multi-wave output ownership is not implemented |
+| `cooperative_multi_wave_tile` | blocked_translation: no proven multi-wave single-store output ownership primitive |
 | `full_14b_prefill_route` | full llama-style MMQ route is not implemented; default remains `direct_packed` |
 
 Promotion verdict remains:
@@ -145,7 +145,7 @@ staged_ds4_reference_probe    PASS
 amd_ds4_dot4x4_packed         PASS/searchable
 amd_ds4_lds_skeleton          PASS/evidence_only
 q4k_tile_loader_source_hash   present in run artifacts
-cooperative_multi_wave_tile   blocked
+cooperative_multi_wave_tile   blocked_translation
 full_14b_prefill_route        blocked
 ```
 
@@ -154,9 +154,15 @@ full_14b_prefill_route        blocked
 The next implementation is not a new route. It is a hand-coded translation of the next llama kernel structure into
 `extra/qk/mmq_q4k_q8_atom.py`, guarded by bounded machine-search rows:
 
-1. Add cooperative multi-wave output ownership after the LDS skeleton is stable.
-2. Compare cooperative tile candidates against `direct_packed`, `amd_ds4_warp_direct`, `amd_ds4_dot4x4_packed`, and `amd_ds4_lds_skeleton` in the machine-search report.
+1. Add a proven multi-wave output ownership primitive, or a lower-level atom path that can single-store each output in a cooperative tile.
+2. Re-attempt `q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0` on bounded shapes.
 3. Only after bounded win, add one-role opt-in route evidence for `ffn_gate_up`.
+
+Current stop condition:
+
+```text
+BLOCKED_ON_COOPERATIVE_OWNERSHIP_UOP_GAP
+```
 
 Non-goals remain:
 

@@ -1,6 +1,6 @@
 from extra.qk.mmq_bounded_harness import (
-  ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
-  BoundedMMQConfig,
+  ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
+  AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, BoundedMMQConfig,
 )
 from extra.qk.mmq_machine_search import build_search_report
 
@@ -28,8 +28,11 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
     "direct DS4 GPU atom",
     "R3 LDS skeleton atom",
   ]
-  assert [row["status"] for row in report["done_components"]] == ["done"] * 7
-  assert {row["component"] for row in report["done_components"]} == set(report["searchable_components"])
+  assert [row["status"] for row in report["done_components"][:-1]] == ["done"] * 7
+  assert report["done_components"][-1]["component"] == "R4 cooperative multi-wave output ownership"
+  assert report["done_components"][-1]["status"] == "blocked_translation"
+  assert report["done_components"][-1]["implementation"] == AMD_DS4_COOP_TILE_BACKEND_ID
+  assert {row["component"] for row in report["done_components"] if row["status"] == "done"} == set(report["searchable_components"])
 
   rows = {row["candidate_id"]: row for row in report["searchable_candidates"]}
   assert set(rows) == {
@@ -62,7 +65,20 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
 
   blocked = {row["candidate_id"]: row for row in report["blocked_candidates"]}
   assert "amd_ds4_dot4x4_packed" not in blocked
-  assert blocked["cooperative_multi_wave_tile"]["status"] == "blocked"
+  coop = blocked["cooperative_multi_wave_tile"]
+  assert coop["status"] == "blocked_translation"
+  assert coop["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID
+  assert coop["metadata"]["backend_atom_id"] == AMD_DS4_COOP_TILE_BACKEND_ID
+  assert coop["metadata"]["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
+  assert coop["evidence"]["bounded_only"] is True
+  assert coop["evidence"]["production_dispatch_changed"] is False
+  assert coop["evidence"]["default_route"] == "direct_packed"
+  assert coop["evidence"]["attempted_shapes"] == [
+    {"M": 8, "N": 8, "K": 256},
+    {"M": 16, "N": 16, "K": 256},
+    {"M": 16, "N": 16, "K": 512},
+  ]
+  assert "no proven block-shared output ownership primitive" in coop["evidence"]["exact_blocker"]
   assert blocked["full_14b_prefill_route"]["status"] == "blocked"
 
 

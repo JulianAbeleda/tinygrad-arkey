@@ -19,8 +19,9 @@ if __package__ in (None, ""):
 
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
-  AMD_DS4_LDS_SKELETON_BACKEND_ID, BoundedMMQConfig, CANDIDATE_ROUTE_ID, COMPARATOR_ID, LLAMA_MMQ_GEOMETRY,
-  PUBLIC_LABEL, STAGED_DS4_BACKEND_ID, candidate_metadata, run_bounded_harness,
+  AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, BoundedMMQConfig, CANDIDATE_ROUTE_ID,
+  COMPARATOR_ID, LLAMA_MMQ_GEOMETRY, PUBLIC_LABEL, STAGED_DS4_BACKEND_ID, candidate_metadata,
+  coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
 
 
@@ -96,6 +97,13 @@ DONE_COMPONENTS: tuple[dict[str, Any], ...] = (
     "status": "done",
     "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton",
     "proof": "test/unit/test_mmq_q4k_q8_atom.py",
+  },
+  {
+    "component": "R4 cooperative multi-wave output ownership",
+    "status": "blocked_translation",
+    "implementation": AMD_DS4_COOP_TILE_BACKEND_ID,
+    "proof": "test/unit/test_mmq_machine_search.py",
+    "blocker": "no proven block-shared output ownership primitive for multiple waves to cooperatively accumulate and single-store a DS4 output tile",
   },
 )
 
@@ -209,12 +217,17 @@ SEARCHABLE_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
 BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
   {
     "candidate_id": "cooperative_multi_wave_tile",
-    "backend": "not_implemented",
+    "backend": AMD_DS4_COOP_TILE_BACKEND_ID,
     "activation_layout": ACTIVATION_LAYOUT_MMQ_DS4,
-    "status": "blocked",
+    "status": "blocked_translation",
     "search_class": "llama_style_tile_structure",
     "promotion_eligible": False,
-    "reason": "cooperative multi-wave output ownership is not implemented",
+    "reason": "cooperative multi-wave output ownership translation is blocked; no PASS is claimed",
+    "evidence": coop_tile_blocked_translation_evidence(),
+    "metadata": candidate_metadata(BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8,
+                                                    backend=AMD_DS4_COOP_TILE_BACKEND_ID,
+                                                    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+                                                    measure_direct_packed=True)),
   },
   {
     "candidate_id": "full_14b_prefill_route",
@@ -263,7 +276,7 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "production_dispatch_changed": False,
     "default_route": "direct_packed",
     "done_components": list(DONE_COMPONENTS),
-    "searchable_components": [row["component"] for row in DONE_COMPONENTS],
+    "searchable_components": [row["component"] for row in DONE_COMPONENTS if row["status"] == "done"],
     "searchable_candidates": rows,
     "blocked_candidates": list(BLOCKED_CANDIDATES),
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",

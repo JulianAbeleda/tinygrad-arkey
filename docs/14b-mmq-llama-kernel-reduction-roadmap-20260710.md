@@ -40,7 +40,7 @@ The source queue is the Q4_K MMQ path in:
 | packed dot primitive | `vecdotq.cuh`: `ggml_cuda_dp4a`/AMD `sudot4` path | partially converted |
 | packed DS4 dot4x4 lane mapping | `mmq.cuh`: callsite around `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
 | shared/LDS tile layout | `mmq.cuh`: shared `tile_y`, `tile_x`, `mmq_get_nbytes_shared` | converted_searchable skeleton |
-| cooperative tile loop | `mmq.cuh`: `mul_mat_q_process_tile` | source_clone |
+| cooperative tile loop | `mmq.cuh`: `mul_mat_q_process_tile` | blocked_translation |
 | writeback | `mmq.cuh`: `mmq_write_back_mma` / `mmq_write_back_dp4a` | source_clone |
 | full launch integration | `mmq.cuh`: `launch_mul_mat_q`, `mul_mat_q_case` | source_clone |
 
@@ -69,7 +69,7 @@ staged_ds4_reference_probe    PASS
 amd_ds4_dot4x4_packed         PASS/searchable
 amd_ds4_lds_skeleton          PASS/evidence_only
 q4k_tile_loader_source_hash   present in run artifacts
-cooperative_multi_wave_tile   blocked
+cooperative_multi_wave_tile   blocked_translation
 full_14b_prefill_route        blocked
 production_dispatch_changed   false
 default_route                 direct_packed
@@ -263,6 +263,12 @@ tests cover at least 8x8x256, 16x16x256, and 16x16x512
 machine-search compares it against direct_packed and amd_ds4_warp_direct
 ```
 
+Status: blocked_translation. The target backend ID is registered as
+`q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0`, but no PASS is claimed. The exact blocker is that tinygrad custom UOp
+lowering has no proven block-shared output ownership primitive for multiple waves to cooperatively accumulate the same
+DS4 output tile and store each output exactly once. The R3 LDS skeleton proves LOCAL memory and a barrier, but it still
+maps one output owner per `gidx`/`lidx` lane group, not llama's 8-wave 128x128 fragment ownership.
+
 Stop if:
 
 ```text
@@ -291,6 +297,9 @@ machine-search emits candidate rows with geometry, correctness, timing, source h
 best candidate beats or explains failure against direct_packed and current direct DS4 warp
 ```
 
+Status: blocked_by_R4. Geometry search is not meaningful until the cooperative multi-wave tile has a correct bounded
+candidate.
+
 Stop if:
 
 ```text
@@ -318,6 +327,9 @@ one-role smoke proves no hidden direct_packed fallback
 same-session bounded comparator exists
 whole-prefill authority artifact exists only after bounded win
 ```
+
+Status: blocked_by_R4. One-role route evidence is illegal until a bounded cooperative candidate wins against the
+same-session comparator.
 
 Stop if:
 
@@ -358,6 +370,8 @@ BLOCKED_ON_LDS_RESOURCE_LIMIT
 BLOCKED_ON_COOPERATIVE_OWNERSHIP_UOP_GAP
 BLOCKED_NO_BOUNDED_WIN_VS_DIRECT_PACKED
 ```
+
+Current outcome: `BLOCKED_ON_COOPERATIVE_OWNERSHIP_UOP_GAP`.
 
 ## Machine-Search Report Requirements
 
