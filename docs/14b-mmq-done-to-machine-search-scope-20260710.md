@@ -94,6 +94,7 @@ Searchable candidates:
 | `staged_ds4_reference_probe` | `q4k_q8_1_mmq_amd_staged_ds4_atom_v0` | lifecycle/reference evidence only |
 | `amd_ds4_dot4x4_packed` | `q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0` | R1 packed DS4 dot4x4 atom, bounded-searchable |
 | `amd_ds4_lds_skeleton` | `q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0` | R3 real LDS/barrier skeleton, evidence-only |
+| `llama_mmq_coop_tile_oracle` | `llama_mmq_q4k_q8_1_coop_tile_oracle` | R4 cooperative writeback structure oracle, oracle-only |
 
 Blocked candidates:
 
@@ -144,6 +145,7 @@ amd_ds4_warp_direct           PASS
 staged_ds4_reference_probe    PASS
 amd_ds4_dot4x4_packed         PASS/searchable
 amd_ds4_lds_skeleton          PASS/evidence_only
+llama_mmq_coop_tile_oracle    PASS/oracle_only
 q4k_tile_loader_source_hash   present in run artifacts
 cooperative_multi_wave_tile   blocked_translation
 full_14b_prefill_route        blocked
@@ -163,6 +165,12 @@ Current stop condition:
 ```text
 BLOCKED_ON_COOPERATIVE_OWNERSHIP_UOP_GAP
 ```
+
+The llama cooperative tile oracle is now available as reference evidence. It records the local clone anchors and the
+8-wave/16x16 writeback ownership map, but it is not a production atom and does not change the stop condition.
+
+Boltbeam note: no Boltbeam tool/connector was available in this session. When available, use it to mine GPU resource
+facts for candidate geometry and occupancy; keep those facts as evidence inputs, not route selectors.
 
 Non-goals remain:
 

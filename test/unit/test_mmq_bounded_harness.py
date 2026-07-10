@@ -4,7 +4,8 @@ import extra.qk.mmq_bounded_harness as harness
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
   AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE,
-  STAGED_DS4_BACKEND_ID, BoundedMMQConfig, MMQAtomUnavailableError, candidate_metadata,
+  LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, STAGED_DS4_BACKEND_ID, BoundedMMQConfig, MMQAtomUnavailableError,
+  candidate_metadata,
   coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
 
@@ -155,6 +156,24 @@ def test_mmq_bounded_harness_amd_ds4_coop_tile_is_known_but_blocked_translation(
 
   with pytest.raises(MMQAtomUnavailableError, match="blocked_translation"):
     run_bounded_harness(cfg)
+
+
+def test_mmq_bounded_harness_llama_coop_tile_oracle_runs_without_route_promotion():
+  cfg = BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
+                         measure_direct_packed=True)
+  report = run_bounded_harness(cfg)
+
+  assert report["status"] == "PASS"
+  assert report["metadata"]["backend"] == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID
+  assert report["metadata"]["backend_atom_id"] == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID
+  assert report["metadata"]["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
+  assert report["activation_layout_source"] == "llama_mmq_coop_tile_oracle_carrier"
+  assert report["correctness"]["max_abs"] == 0.0
+  assert report["artifacts"]["llama_mmq_oracle_source_hash"]
+  assert report["artifacts"]["llama_mmq_oracle_source_policy"]["vendored_cuda"] is False
+  assert report["artifacts"]["llama_mmq_oracle_tiles"][0]["oracle_only"] is True
+  assert report["artifacts"]["llama_mmq_oracle_tiles"][0]["writeback_owner_count"] == 1
+  assert report["metadata"]["rollback"] == COMPARATOR_ID
 
 
 def test_mmq_bounded_harness_amd_ds4_dot4x4_backend_runs_bounded_correctness(monkeypatch):

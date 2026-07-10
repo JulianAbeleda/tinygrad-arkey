@@ -20,8 +20,8 @@ if __package__ in (None, ""):
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
   AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, BoundedMMQConfig, CANDIDATE_ROUTE_ID,
-  COMPARATOR_ID, LLAMA_MMQ_GEOMETRY, PUBLIC_LABEL, STAGED_DS4_BACKEND_ID, candidate_metadata,
-  coop_tile_blocked_translation_evidence, run_bounded_harness,
+  COMPARATOR_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, LLAMA_MMQ_GEOMETRY, PUBLIC_LABEL, STAGED_DS4_BACKEND_ID,
+  candidate_metadata, coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
 
 
@@ -104,6 +104,12 @@ DONE_COMPONENTS: tuple[dict[str, Any], ...] = (
     "implementation": AMD_DS4_COOP_TILE_BACKEND_ID,
     "proof": "test/unit/test_mmq_machine_search.py",
     "blocker": "no proven block-shared output ownership primitive for multiple waves to cooperatively accumulate and single-store a DS4 output tile",
+  },
+  {
+    "component": "R4 llama cooperative tile oracle",
+    "status": "done",
+    "implementation": "extra.qk.mmq_llama_oracle.run_llama_mmq_coop_tile_oracle",
+    "proof": "test/unit/test_mmq_llama_oracle.py",
   },
 )
 
@@ -209,6 +215,19 @@ SEARCHABLE_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
     reason="R3 real tinygrad custom kernel stages DS4 q8 values through LOCAL memory and a barrier; bounded-only skeleton, not production dispatch",
     m_tile=4,
     n_tile=5,
+    k_groups=8,
+    measure_direct_packed=True,
+  ),
+  MMQSearchCandidate(
+    candidate_id="llama_mmq_coop_tile_oracle",
+    backend=LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="oracle_only",
+    search_class="llama_structure_oracle",
+    promotion_eligible=False,
+    reason="translated llama cooperative writeback ownership oracle; not a production atom and not a selectable route",
+    m_tile=16,
+    n_tile=16,
     k_groups=8,
     measure_direct_packed=True,
   ),

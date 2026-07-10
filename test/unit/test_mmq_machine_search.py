@@ -1,6 +1,7 @@
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
-  AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, BoundedMMQConfig,
+  AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
+  BoundedMMQConfig,
 )
 from extra.qk.mmq_machine_search import build_search_report
 
@@ -27,11 +28,12 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
     "sudot4 primitive availability",
     "direct DS4 GPU atom",
     "R3 LDS skeleton atom",
+    "R4 llama cooperative tile oracle",
   ]
-  assert [row["status"] for row in report["done_components"][:-1]] == ["done"] * 7
-  assert report["done_components"][-1]["component"] == "R4 cooperative multi-wave output ownership"
-  assert report["done_components"][-1]["status"] == "blocked_translation"
-  assert report["done_components"][-1]["implementation"] == AMD_DS4_COOP_TILE_BACKEND_ID
+  blocked_components = [row for row in report["done_components"] if row["status"] == "blocked_translation"]
+  assert len(blocked_components) == 1
+  assert blocked_components[0]["component"] == "R4 cooperative multi-wave output ownership"
+  assert blocked_components[0]["implementation"] == AMD_DS4_COOP_TILE_BACKEND_ID
   assert {row["component"] for row in report["done_components"] if row["status"] == "done"} == set(report["searchable_components"])
 
   rows = {row["candidate_id"]: row for row in report["searchable_candidates"]}
@@ -42,6 +44,7 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
     "staged_ds4_reference_probe",
     "amd_ds4_dot4x4_packed",
     "amd_ds4_lds_skeleton",
+    "llama_mmq_coop_tile_oracle",
   }
   assert rows["amd_ds4_warp_direct"]["backend"] == AMD_DS4_WARP_BACKEND_ID
   assert rows["amd_ds4_warp_direct"]["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
@@ -62,6 +65,9 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
   assert rows["amd_ds4_lds_skeleton"]["status"] == "evidence_only"
   assert rows["amd_ds4_lds_skeleton"]["promotion_eligible"] is False
   assert rows["amd_ds4_lds_skeleton"]["metadata"]["backend_atom_id"] == AMD_DS4_LDS_SKELETON_BACKEND_ID
+  assert rows["llama_mmq_coop_tile_oracle"]["backend"] == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID
+  assert rows["llama_mmq_coop_tile_oracle"]["status"] == "oracle_only"
+  assert rows["llama_mmq_coop_tile_oracle"]["promotion_eligible"] is False
 
   blocked = {row["candidate_id"]: row for row in report["blocked_candidates"]}
   assert "amd_ds4_dot4x4_packed" not in blocked
@@ -102,5 +108,6 @@ def test_mmq_machine_search_runner_receives_bounded_configs():
   assert any(cfg.backend == AMD_DS4_WARP_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
   assert any(cfg.backend == AMD_DS4_DOT4X4_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
   assert any(cfg.backend == AMD_DS4_LDS_SKELETON_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
+  assert any(cfg.backend == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
   assert all(row["run"]["status"] == "PASS" for row in report["searchable_candidates"])
   assert all(row["run"]["artifacts"]["q4k_tile_loader_source_hash"] == "loader" for row in report["searchable_candidates"])
