@@ -23,6 +23,47 @@ import json
 import pathlib
 from typing import Any
 
+PROOF_LAYERS: tuple[dict[str, str], ...] = (
+  {"id": "P1", "name": "epoch_lifecycle", "status": "done",
+   "proof": "producer/consumer/barrier/overwrite correctness"},
+  {"id": "P2", "name": "byte_window", "status": "pending",
+   "proof": "producer and consumer agree on exact LDS byte interval"},
+  {"id": "P3", "name": "value_key", "status": "pending",
+   "proof": "global tile loaded by producer equals tile consumed by WMMA"},
+  {"id": "P4", "name": "layout", "status": "pending",
+   "proof": "A/B row or transposed layout matches WMMA operand contract"},
+  {"id": "P5", "name": "wait_sync", "status": "pending",
+   "proof": "VMEM waits, LGKM waits, and barriers are present in the right phase"},
+  {"id": "P6", "name": "lifetime_pressure", "status": "pending",
+   "proof": "address and fragment live ranges are bounded by the lifecycle"},
+  {"id": "P7", "name": "lowered_stream", "status": "pending",
+   "proof": "generated graph or stream exports actual stores/loads/waits/WMMA into this schema"},
+)
+
+EXPORTERS: tuple[dict[str, str], ...] = (
+  {"id": "E1", "name": "hybrid_primitive_exporter", "status": "done",
+   "source": "hybrid-s9-s10-role-trace.json"},
+  {"id": "E2", "name": "s10_lds_spec_exporter", "status": "pending",
+   "source": "WMMALDSSpec / slot identity proof"},
+  {"id": "E3", "name": "hand_lifecycle_exporter", "status": "pending",
+   "source": "kernel_lifecycle_trace.py / wmma.py lifecycle template"},
+  {"id": "E4", "name": "generated_postrange_exporter", "status": "pending",
+   "source": "pre-lowering Ops.STAGE / owner metadata"},
+  {"id": "E5", "name": "lowered_stream_exporter", "status": "pending",
+   "source": "generated AMD ISA or UOp stream"},
+)
+
+
+def s10_readiness_roadmap() -> dict[str, Any]:
+  return {
+    "schema": "dbuf-epoch-lifecycle-s10-roadmap.v1",
+    "complete_for_s10": False,
+    "current_proof_coverage": "epoch/slot/barrier only",
+    "proof_layers": [dict(x) for x in PROOF_LAYERS],
+    "exporters": [dict(x) for x in EXPORTERS],
+    "reopen_generated_dbuf_when": "P1-P7 pass on both hand/hybrid trace and generated candidate trace with equivalent coverage",
+  }
+
 
 @dataclass(frozen=True)
 class DBUFEvent:
@@ -183,8 +224,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--canonical", action="store_true", help="check the built-in canonical DBUF plan")
   ap.add_argument("--k-tiles", type=int, default=4)
   ap.add_argument("--roles", default="A,B", help="comma-separated roles for --canonical")
+  ap.add_argument("--roadmap", action="store_true", help="print S10 proof/exporter roadmap")
   ap.add_argument("--json", action="store_true")
   args = ap.parse_args(argv)
+
+  if args.roadmap:
+    report = s10_readiness_roadmap()
+    if args.json: print(json.dumps(report, indent=2))
+    else: print("S10_READY" if report["complete_for_s10"] else "S10_INCOMPLETE")
+    return report
 
   roles = tuple(x.strip() for x in args.roles.split(",") if x.strip())
   if args.input:

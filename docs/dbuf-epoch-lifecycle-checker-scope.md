@@ -43,6 +43,86 @@ analysis tool. S10 can export traces into it, but S10 should not be required to 
 | no early overwrite | a slot cannot be reused before the previous epoch in that slot is consumed |
 | no duplicate consume | a producer cannot feed multiple consumers unless the trace explicitly models fanout later |
 
+## Exhaustive S10 Target
+
+The current checker is phase 1 only. To become the central proof object for pure S10, the checker must carry enough
+information to prove that a generated DBUF lifecycle can replace the hand-coded `DBUFEpochPrimitive`.
+
+Target event schema:
+
+```python
+produce(
+  role="A" | "B",
+  epoch=int,
+  slot=int,
+  window="logical tile/window id",
+  lds_window={"base": int, "bytes": int, "stride": int},
+  global_window={"tensor": str, "m": [lo, hi], "n": [lo, hi], "k": [lo, hi]},
+  layout="a_row_major" | "b_transposed",
+  value_key={"tensor": str, "tile": tuple, "epoch": int},
+  wait_source="vmem",
+)
+
+sync(kind="barrier")
+wait(kind="vmcnt" | "lgkmcnt", count=int)
+
+consume(
+  role="A" | "B",
+  epoch=int,
+  slot=int,
+  window="same logical tile/window id",
+  lds_window={"base": int, "bytes": int, "stride": int},
+  fragment={"shape": "wmma_f16_16x16x16", "operand": "A" | "B"},
+  lane_map="rdna3_a_row" | "rdna3_b_col",
+  consumer="wmma_i",
+)
+```
+
+Required proof layers:
+
+| Layer | Proof | Why S10 needs it | Status |
+|---|---|---|---|
+| P1 epoch lifecycle | producer/consumer/barrier/overwrite correctness | proves the DBUF ring is logically safe | done |
+| P2 byte-window proof | producer and consumer agree on exact LDS byte interval | prevents same-slot wrong-window bugs | not started |
+| P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | not started |
+| P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | not started |
+| P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | not started |
+| P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | not started |
+| P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | not started |
+
+S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
+
+1. the hand-coded S9/S10 hybrid trace,
+2. the generated candidate trace,
+3. and a diff proving both traces have equivalent role/epoch/window/value coverage.
+
+## Exporters Needed
+
+| Exporter | Source | Output | Status |
+|---|---|---|---|
+| E1 hybrid primitive exporter | `hybrid-s9-s10-role-trace.json` | P1 events from `DBUFEpochPrimitive` | done |
+| E2 S10 LDS spec exporter | `WMMALDSSpec` / slot identity proof | P2 LDS windows | pending |
+| E3 hand lifecycle exporter | `kernel_lifecycle_trace.py` / `wmma.py` lifecycle template | P1-P5 hand oracle events | pending |
+| E4 generated postrange exporter | pre-lowering `Ops.STAGE` / owner metadata | P1-P4 generated candidate events | pending |
+| E5 lowered stream exporter | generated AMD ISA or UOp stream | P5-P7 actual instruction events | pending |
+
+## Done Definition For "All S10 Info"
+
+The checker is complete enough for S10 when it can answer:
+
+```text
+For every WMMA operand consumer in generated ffn_gate_up:
+  which global tile produced it?
+  which LDS byte window carried it?
+  which DBUF slot and epoch owned it?
+  which barrier/wait made it visible?
+  which fragment/lane map feeds WMMA?
+  was the slot overwritten only after the last consumer?
+  were live ranges bounded enough to avoid recreating the known pressure wall?
+```
+
+Current answer: only the epoch/slot/barrier subset is proven.
+
 ## Current Status
 
 Implemented as a standalone metadata/event checker. It does not alter S9/S10 execution.

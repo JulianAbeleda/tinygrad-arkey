@@ -1,7 +1,8 @@
 import json
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import (
-  DBUFEvent, canonical_dbuf_events, check_events, events_from_epoch_primitive, events_from_s10_role_trace, main)
+  DBUFEvent, canonical_dbuf_events, check_events, events_from_epoch_primitive, events_from_s10_role_trace, main,
+  s10_readiness_roadmap)
 
 
 def test_canonical_dbuf_lifecycle_passes():
@@ -132,3 +133,24 @@ def test_cli_exports_s10_role_trace(tmp_path):
   assert report["ok"] is True
   assert report["source"]["kind"] == "s10_role_trace"
   assert len(report["events"]) == 10
+
+
+def test_s10_roadmap_does_not_overclaim_readiness():
+  roadmap = s10_readiness_roadmap()
+
+  assert roadmap["schema"] == "dbuf-epoch-lifecycle-s10-roadmap.v1"
+  assert roadmap["complete_for_s10"] is False
+  layers = {layer["id"]: layer for layer in roadmap["proof_layers"]}
+  exporters = {exporter["id"]: exporter for exporter in roadmap["exporters"]}
+  assert layers["P1"]["status"] == "done"
+  assert layers["P2"]["status"] == "pending"
+  assert layers["P7"]["status"] == "pending"
+  assert exporters["E1"]["status"] == "done"
+  assert exporters["E5"]["status"] == "pending"
+
+
+def test_cli_prints_s10_roadmap():
+  report = main(["--roadmap", "--json"])
+
+  assert report["complete_for_s10"] is False
+  assert report["current_proof_coverage"] == "epoch/slot/barrier only"
