@@ -34,8 +34,8 @@ PROOF_LAYERS: tuple[dict[str, str], ...] = (
    "proof": "A/B row or transposed layout matches static WMMA operand contract when exporters provide layout_key"},
   {"id": "P5", "name": "wait_sync", "status": "pending",
    "proof": "VMEM waits, LGKM waits, and barriers are present in the right phase"},
-  {"id": "P6", "name": "lifetime_pressure", "status": "pending",
-   "proof": "address and fragment live ranges are bounded by the lifecycle"},
+  {"id": "P6", "name": "lifetime_pressure", "status": "advisory_schema_ready",
+   "proof": "advisory reg-pressure summaries reject known DBUF address live-range hazards"},
   {"id": "P7", "name": "lowered_stream", "status": "pending",
    "proof": "generated graph or stream exports actual stores/loads/waits/WMMA into this schema"},
 )
@@ -306,6 +306,48 @@ def check_events(events: list[DBUFEvent], *, require_p5: bool = False) -> dict[s
     "wait_count": wait_count,
     "p5_wait_sync": "checked" if require_p5 else ("events_present_not_required" if wait_count else "not_proven"),
     "unconsumed_count": len(unconsumed),
+    "errors": errors,
+  }
+
+
+def check_pressure_summary(summary: dict[str, Any], *, vgpr_limit: int = 256) -> dict[str, Any]:
+  """Advisory P6 gate for DBUF reg-pressure summaries.
+
+  This is not a substitute for allocator live intervals. It is a fail-closed
+  summary checker for the signatures that previously made generated DBUF unsafe:
+  long-lived address producers, address values feeding non-address consumers,
+  and rematerialized values escaping into data/WMMA/control uses.
+  """
+  errors: list[dict[str, Any]] = []
+  peak = int(summary.get("peak", summary.get("regalloc_peak", {}).get("peak", 0)) or 0)
+  if peak > vgpr_limit:
+    errors.append({"error": f"VGPR peak exceeds limit: {peak} > {vgpr_limit}"})
+
+  live_to_reduce_end = summary.get("live_to_reduce_end", {})
+  if isinstance(live_to_reduce_end, dict):
+    v_offset = int(live_to_reduce_end.get("V_OFFSET", 0) or 0)
+    v_iadd = int(live_to_reduce_end.get("V_IADD", 0) or 0)
+    dbuf_addr = int(live_to_reduce_end.get("dbuf_address", live_to_reduce_end.get("DBUF_ADDRESS", 0)) or 0)
+    if v_offset >= 64 and v_iadd >= 64:
+      errors.append({"error": "known bad signature: 64 V_OFFSET + 64 V_IADD live to reduce END"})
+    if dbuf_addr > int(summary.get("max_dbuf_address_live_to_reduce_end", 0) or 0):
+      errors.append({"error": f"DBUF address values live to reduce END: {dbuf_addr}"})
+
+  for i, value in enumerate(summary.get("values", [])):
+    if not isinstance(value, dict): continue
+    pressure_class = value.get("pressure_class")
+    consumer_kind = value.get("consumer_kind")
+    if pressure_class in ("address", "dbuf_address") and consumer_kind not in ("memory_address", "pure_address", None):
+      errors.append({"value_index": i, "value": value, "error": f"DBUF address value feeds non-address consumer {consumer_kind!r}"})
+    if value.get("rematerializable") and consumer_kind in ("wmma", "data", "control", "memory_data"):
+      errors.append({"value_index": i, "value": value, "error": f"rematerializable value feeds unsafe consumer {consumer_kind!r}"})
+
+  return {
+    "schema": "dbuf-pressure-summary-check.v1",
+    "ok": not errors,
+    "advisory": True,
+    "peak": peak,
+    "vgpr_limit": vgpr_limit,
     "errors": errors,
   }
 

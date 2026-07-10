@@ -90,7 +90,7 @@ Required proof layers:
 | P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | checker schema ready; exporters pending |
 | P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | checker/exporter ready for S10 LDS spec static layout |
 | P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker schema and strict mode implemented; exporters pending |
-| P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | not started |
+| P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | advisory summary checker implemented |
 | P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | not started |
 
 S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
@@ -202,6 +202,16 @@ prefill_stage_owner_audit.owner_records -> conservative P1 checker events
 It requires exactly A+B owner records with `nbuf=2` and `lds_buffer_id`, then exports role/epoch/slot ownership windows
 like `A:owner990:slot0`. It deliberately does not claim P2 byte windows, P3 value keys, P5 waits, or P7 final-stream
 facts.
+
+The P6 pressure checker is implemented as an advisory summary gate:
+
+```text
+check_pressure_summary(summary)
+```
+
+It fails known unsafe summaries such as VGPR peak overflow, `64 V_OFFSET + 64 V_IADD` live to reduce END, DBUF address
+values live to reduce END, address values feeding non-address consumers, and rematerializable values feeding WMMA/data or
+control uses. It remains advisory until backed by allocator live intervals or exported UOp def/use traces.
 
 ## Decoupling Path
 

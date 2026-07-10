@@ -1,9 +1,9 @@
 import json
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import (
-  DBUFEvent, canonical_dbuf_events, canonical_dbuf_events_with_waits, check_events, events_from_epoch_primitive,
-  events_from_hand_lds2_lifecycle, events_from_postrange_owner_records, events_from_s10_role_trace, main,
-  s10_readiness_roadmap)
+  DBUFEvent, canonical_dbuf_events, canonical_dbuf_events_with_waits, check_events, check_pressure_summary,
+  events_from_epoch_primitive, events_from_hand_lds2_lifecycle, events_from_postrange_owner_records,
+  events_from_s10_role_trace, main, s10_readiness_roadmap)
 
 
 def test_canonical_dbuf_lifecycle_passes():
@@ -442,6 +442,58 @@ def test_postrange_owner_record_exporter_fails_closed_without_dbuf():
     raise AssertionError("expected nbuf=1 record to fail")
 
 
+def test_pressure_summary_passes_clean_local_address_lifetimes():
+  report = check_pressure_summary({
+    "peak": 132,
+    "live_to_reduce_end": {"V_OFFSET": 0, "V_IADD": 0, "dbuf_address": 0},
+    "values": [
+      {"pressure_class": "dbuf_address", "consumer_kind": "memory_address", "rematerializable": True},
+      {"pressure_class": "fragment", "consumer_kind": "wmma", "rematerializable": False},
+    ],
+  })
+
+  assert report["ok"] is True
+  assert report["advisory"] is True
+
+
+def test_pressure_summary_rejects_peak_overflow():
+  report = check_pressure_summary({"peak": 300})
+
+  assert report["ok"] is False
+  assert report["errors"][0]["error"] == "VGPR peak exceeds limit: 300 > 256"
+
+
+def test_pressure_summary_rejects_known_dbuf_address_signature():
+  report = check_pressure_summary({
+    "peak": 220,
+    "live_to_reduce_end": {"V_OFFSET": 64, "V_IADD": 64, "dbuf_address": 4},
+  })
+
+  assert report["ok"] is False
+  assert any("64 V_OFFSET + 64 V_IADD" in err["error"] for err in report["errors"])
+  assert any("DBUF address values live to reduce END" in err["error"] for err in report["errors"])
+
+
+def test_pressure_summary_rejects_address_value_feeding_wmma():
+  report = check_pressure_summary({
+    "peak": 120,
+    "values": [{"pressure_class": "dbuf_address", "consumer_kind": "wmma", "rematerializable": False}],
+  })
+
+  assert report["ok"] is False
+  assert any("non-address consumer" in err["error"] for err in report["errors"])
+
+
+def test_pressure_summary_rejects_remat_value_feeding_data():
+  report = check_pressure_summary({
+    "peak": 120,
+    "values": [{"pressure_class": "address", "consumer_kind": "memory_data", "rematerializable": True}],
+  })
+
+  assert report["ok"] is False
+  assert any("rematerializable value feeds unsafe consumer" in err["error"] for err in report["errors"])
+
+
 def test_cli_exports_s10_role_trace(tmp_path):
   trace_path = tmp_path / "trace.json"
   trace_path.write_text(json.dumps({
@@ -485,6 +537,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   assert layers["P2"]["status"] == "done_for_s10_lds_spec"
   assert layers["P3"]["status"] == "checker_schema_ready_exporters_pending"
   assert layers["P4"]["status"] == "done_for_s10_lds_spec_static"
+  assert layers["P6"]["status"] == "advisory_schema_ready"
   assert layers["P7"]["status"] == "pending"
   assert exporters["E1"]["status"] == "done"
   assert exporters["E3"]["status"] == "done_for_lds2_template"
