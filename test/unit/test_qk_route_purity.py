@@ -43,6 +43,25 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert set(report["forbidden_default_routes"]) == set()
 
 
+def test_prefill_machine_search_options_are_pure_and_hybrid_only():
+  # A new reader browsing the prefill machine-search options must see only the two search routes: pure and hybrid.
+  # The hand-coded backend atom is kept (pure/hybrid build on it, and it is the 4k comparator) but is NOT selectable.
+  from extra.qk.route_manifest import selectable_routes, non_selectable_routes, route, route_env
+  ATOM = "prefill_pipe_role_selective_generated"
+  PURE = "prefill_wmma_pipe_primitive_generated"
+  HYBRID = "prefill_wmma_pipe_lds_dbuf_primitive_generated"
+  prefill_options = set(selectable_routes(workload="prefill"))
+  assert ATOM not in prefill_options, "hand atom must not be offered as a selectable option"
+  assert {PURE, HYBRID} <= prefill_options, "pure and hybrid must both remain selectable options"
+  assert ATOM in non_selectable_routes()
+  # The atom stays fully resolvable by id (nothing depending on it breaks).
+  assert route(ATOM)["provenance"] == "external_handwritten_kernel"
+  assert route_env(ATOM) == {"PREFILL_GRAPH_GEMM": "1"}
+  # Base-substrate invariant: pure and hybrid both include the atom's base flag (that is why it is kept, not deleted).
+  assert set(route_env(ATOM).items()) <= set(route_env(PURE).items())
+  assert set(route_env(ATOM).items()) <= set(route_env(HYBRID).items())
+
+
 def test_default_path_census_uses_manifest_provenance():
   census = build_census()
   assert census["verdict"] == "PMS_R0_PASS_CENSUS_PINNED"

@@ -53,6 +53,19 @@ FINAL_DEFAULT_PROVENANCE = {"machine_authored_generated", "tinygrad_scheduler_ge
 TRANSITIONAL_DEFAULT_PROVENANCE = {"hand_authored_uop_template"}
 FORBIDDEN_DEFAULT_PROVENANCE = {"external_handwritten_kernel", "rollback_oracle"}
 
+# purity_status is a DERIVED human-facing label, not an independent axis. It is a pure function of (status, provenance)
+# so it can never silently drift from them (F4: it used to be a hand-maintained third vocabulary that disagreed with
+# the route's real status/provenance). derive_purity_status is the single source; validate_manifest() enforces that
+# every stored purity_status equals the derived value, and the census sources its purity_status from here.
+PURITY_STATUS_VOCAB = ("search_generated_promoted", "refuted", "research")
+
+def derive_purity_status(status: str, provenance: str) -> str:
+  if status in ("promoted_default", "default_shipped") and provenance in FINAL_DEFAULT_PROVENANCE:
+    return "search_generated_promoted"
+  if status == "refuted":
+    return "refuted"
+  return "research"
+
 ROUTES = {
   # ---------------- decode weight GEMV: Q4_K ----------------
   "decode_q4k_g3_generated": {
@@ -182,12 +195,14 @@ ROUTES = {
     "authority_gate": "extra/qk/prefill_generated_schedule_gate.py",
     "promotion_artifacts": ["bench/tg-p4-prefill-generated-schedule/latest.json",
                             "bench/tg-p4-prefill-generated-schedule/summary.md"],
-    "purity_status": "search_generated_promoted",
+    "purity_status": "research",  # derived from (status=research, provenance=external_handwritten_kernel); was drifted to search_generated_promoted
     "provenance": "external_handwritten_kernel",
     "replacement_scope": "Route B: generated LDS+WMMA codegen substrate (PrefillWMMAScheduleSpec) replacing extra/qk/prefill/wmma.py raw Ops.INS. Schedule SELECTION is spec-generated, but the executing substrate wraps raw RDNA3 instruction lists -> external handwritten kernel under the strict rule.",
     "selector": "env_guard",
+    "selectable": False,
+    "not_selectable_reason": "This is the hand-coded backend atom (external_handwritten_kernel), not a machine-search route. It is the base graph-GEMM substrate (PREFILL_GRAPH_GEMM=1) that the two machine-search options build on top of, and it is the 4k authority comparator. It stays fully resolvable by id (pure and hybrid include its base flag; the S10.5 generator measures against it), but it is NOT offered as a standalone option. The machine-search routes to reference are prefill_wmma_pipe_primitive_generated (pure) and prefill_wmma_pipe_lds_dbuf_primitive_generated (hybrid).",
     "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec; writer extra/qk/prefill_schedule_spec.py (PrefillGEMMScheduleSpec lowered through the RDNA3 WMMA schedule generator ref.build_gemm_pipe / build_gemm_lds2).",
-    "note": "spec-driven generated prefill GEMM schedule: PrefillGEMMScheduleSpec (data) captures the resolved tile/wave/pipeline/role-policy; emit_prefill_gemm_from_spec lowers it through the parameterized RDNA3 WMMA schedule generator. The RDNA3 WMMA instruction set is the target grammar; the schedule is machine-authored from the spec. The legacy fixed emit and PREFILL_GENERATED_SCHEDULE rollback were removed from runtime."},
+    "note": "Hand-coded backend atom / 4k authority comparator, NOT a selectable machine-search option (see not_selectable_reason). Reference the pure and hybrid routes instead. Detail: PrefillGEMMScheduleSpec (data) captures the resolved tile/wave/pipeline/role-policy; emit_prefill_gemm_from_spec lowers it through the parameterized RDNA3 WMMA schedule generator over raw RDNA3 instruction lists. The legacy fixed emit and PREFILL_GENERATED_SCHEDULE rollback were removed from runtime."},
   "prefill_wmma_pipe_primitive_generated": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
     "roles": ["attn_qo", "attn_kv", "ffn_down"], "excluded_roles": ["ffn_gate_up"],
@@ -430,6 +445,16 @@ def default_routes() -> list[str]:
 def routes_by_status(status: str) -> list[str]:
   return [rid for rid, r in ROUTES.items() if r["status"] == status]
 
+def selectable_routes(workload: str | None = None) -> list[str]:
+  """Routes offered as options a person picks from. Excludes routes marked selectable=False (e.g. the hand-coded
+  backend atom, which remains resolvable by id as a base substrate/comparator but is not a standalone option).
+  A non-selectable route is still in ROUTES and still returned by route()/route_env()."""
+  return [rid for rid, r in ROUTES.items()
+          if r.get("selectable", True) and (workload is None or r.get("workload") == workload)]
+
+def non_selectable_routes() -> list[str]:
+  return [rid for rid, r in ROUTES.items() if not r.get("selectable", True)]
+
 def route_provenance(route_id: str) -> str:
   prov = str(route(route_id).get("provenance", ""))
   if prov not in ROUTE_PROVENANCE:
@@ -468,6 +493,26 @@ def validate_manifest() -> list[str]:
         errors.append(f"{rid}: default route cannot be provenance=rollback_oracle")
       if prov in ("hand_authored_uop_template", "external_handwritten_kernel") and not r.get("replacement_scope"):
         errors.append(f"{rid}: non-pure default provenance={prov} requires replacement_scope")
+    # purity_status is derived, not declared: any stored value must equal derive_purity_status(status, provenance).
+    if "purity_status" in r:
+      expected = derive_purity_status(r["status"], str(prov))
+      if r["purity_status"] != expected:
+        errors.append(f"{rid}: purity_status={r['purity_status']!r} drifted from derived {expected!r} "
+                      f"(status={r['status']}, provenance={prov})")
+    # selectable, if present, must be a bool. A route hidden from the options list (selectable=False) is kept only
+    # because a selectable route builds on it: its activation env must be a subset of some selectable route's env
+    # (the base-substrate invariant) and it must carry a not_selectable_reason. This keeps the flag non-decorative.
+    if "selectable" in r:
+      if not isinstance(r["selectable"], bool):
+        errors.append(f"{rid}: selectable must be a bool, got {r['selectable']!r}")
+      elif r["selectable"] is False:
+        if not r.get("not_selectable_reason"):
+          errors.append(f"{rid}: selectable=False requires a not_selectable_reason")
+        base_env = set((r.get("env") or {}).items())
+        if not any(sid != rid and base_env <= set((ROUTES[sid].get("env") or {}).items())
+                   for sid in ROUTES if ROUTES[sid].get("selectable", True)):
+          errors.append(f"{rid}: selectable=False but no selectable route builds on its env {dict(base_env)} "
+                        f"(a hidden route must be the base substrate of a selectable option, else delete it)")
   return errors
 
 def to_manifest_dict() -> dict:

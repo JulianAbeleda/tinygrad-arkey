@@ -23,15 +23,46 @@ from typing import Any
 from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE
 from extra.qk.pure_kernel_surface_audit import route_surface_row
 
+def _enabled(env: dict[str, Any], key: str) -> bool:
+  return str(env.get(key, "0")).strip().lower() not in ("0", "false", "off", "no", "")
+
+
+def _env_flag(env: dict[str, Any], key: str, default: int) -> bool:
+  """Mirror tinygrad.getenv(key, default): an UNSET key resolves to the runtime DEFAULT value, not 0. This is the ONLY
+  place the guard encodes a runtime getenv default; test/unit/test_pure_search_guard_boundary.py pins these against the
+  real decode_routes.py getenv defaults so a flipped default (e.g. BUBBLEBEAM_FUTURESIGHT -> 0) fails the suite instead
+  of silently diverging from the shipped route."""
+  v = env.get(key)
+  if v is None: return bool(default)
+  return str(v).strip().lower() not in ("0", "false", "off", "no", "")
+
+
+def _decode_q4k_rolled_back(e: dict[str, Any]) -> bool:
+  # decode_routes.py q4k_primitive_linear_call: generated G3 fires when getenv("BUBBLEBEAM_FUTURESIGHT", 1) is truthy
+  # AND getenv("Q4K_GEMV_SCHEDULER") is unset. Otherwise decode falls to the ORDINARY tinygrad graph (pure -- the hand
+  # owned-warp rollback kernels were deleted 2026-07-06). DECODE_Q4K_INKERNEL_COMBINE_KV / DECODE_Q4K_SPLIT_K_KV only
+  # pick GENERATED G3 sub-variants (still pure), so they are NOT rollbacks and do not appear here.
+  return not (_env_flag(e, "BUBBLEBEAM_FUTURESIGHT", 1) and not _enabled(e, "Q4K_GEMV_SCHEDULER"))
+
+
+def _decode_attention_rolled_back(e: dict[str, Any]) -> bool:
+  # decode_routes.py flash_decode_attention_route: the generated live-split route is on by getenv("DECODE_LIVE_SPLIT",
+  # 1). DECODE_LIVE_SPLIT=0 de-selects it; runtime then fails loud (no handwritten flash fallback remains).
+  return not _env_flag(e, "DECODE_LIVE_SPLIT", 1)
+
+
 # Each hot route family resolves to an EFFECTIVE route id from the environment. `rollback_active(env)` is True when the
-# env selects the handwritten oracle instead of the generated default; `generated_route`/`oracle_route` are the two
-# manifest route ids. `pure_default` names the generated route that SHOULD be selected on a pure path.
+# env leaves the generated default; `generated`/`oracle` are the manifest route ids for the two arms. The decode
+# rollback predicates read the REAL decode_routes.py env gates (with real getenv defaults) so the guard's model tracks
+# the actual selector rather than a hardcoded constant; the boundary test drives the real dispatcher to prove it. The
+# handwritten decode rollback kernels were deleted (no backups), so the decode "oracle" arm is the family's own
+# generated route (its canonical manifest route); the boundary test is what catches an impure/de-selected decode
+# default, since a rollback here lands on the pure ordinary graph or fails loud rather than a hand kernel.
 HOT_FAMILIES = [
-  # decode_q4k_owned_warp rollback DELETED 2026-07-06 (no backups): BUBBLEBEAM_FUTURESIGHT=0 now falls to the
-  # ordinary tinygrad graph (pure), not a hand kernel. Generated G3 is the only Q4_K decode kernel route.
   {"family": "decode_q4k_gemv", "generated": "decode_q4k_g3_generated", "oracle": "decode_q4k_g3_generated",
-   "rollback_active": lambda e: False},
-  # Q6_K shipped hand-kernel rollback was deleted (no backups): generated Q6_K decode is now unconditional.
+   "rollback_active": _decode_q4k_rolled_back},
+  # Q6_K shipped hand-kernel rollback was deleted (no backups): generated Q6_K decode is unconditional -- no env
+  # de-selects it in decode_routes.py q6k_primitive_linear_call.
   {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_generated",
    "rollback_active": lambda e: False},
   {"family": "prefill_gemm", "generated": "prefill_v2_scheduler_matmul_default", "oracle": "prefill_pipe_role_selective_generated",
@@ -40,17 +71,9 @@ HOT_FAMILIES = [
   # PREFILL_Q4K_WMMA_FUSED route remains raw-ISA WMMA and is not selected here.
   {"family": "prefill_q4k", "generated": "prefill_q4k_direct_tile4x4_default", "oracle": "prefill_q4k_direct_tile4x4_default",
    "rollback_active": lambda e: False},
-  # attention: 8B long-context decode now defaults to the generated live-split + fused-combine + KV_BOTH route. The
-  # only rollback here is to generic generated tinygrad flash decode; the retired owned HIP tile is not selected.
-  # Generic flash oracle deleted 2026-07-06 (no backups): the generic/whole-cache/fused
-  # handwritten flash routes are gone; unsupported shapes fail loud. Generated live-split is the only kernel route.
   {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_flash_live_split_g4_8b_kvboth",
-   "rollback_active": lambda e: False},
+   "rollback_active": _decode_attention_rolled_back},
 ]
-
-
-def _enabled(env: dict[str, Any], key: str) -> bool:
-  return str(env.get(key, "0")).strip().lower() not in ("0", "false", "off", "no", "")
 
 
 def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:

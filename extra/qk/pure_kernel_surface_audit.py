@@ -20,6 +20,27 @@ IMPURE_CLASSES = {"descriptor_wrapped_hand_kernel", "route_local_custom_kernel",
                   "compiler_primitive_spec_owned_asm_backend_atom", "compiler_primitive_spec_owned_mixed_raw_pipe",
                   "rollback_oracle", "unknown"}
 
+# SINGLE prov->surface-class table (F3). route surface-class is a projection of manifest provenance, not an independent
+# hand-maintained axis. `machine_authored_generated` is deliberately absent: it is surface-AMBIGUOUS (descriptor codegen
+# via generated_route_registry, or ordinary tinygrad graph for a research route) so it must carry an explicit
+# ROUTE_SURFACES row; it falls through to "unknown" so an unclassified generated route is caught, not assumed pure.
+PROVENANCE_SURFACE_CLASS: dict[str, str] = {
+  "rollback_oracle": "rollback_oracle",
+  "external_handwritten_kernel": "external_raw_or_binary",
+  "hand_authored_uop_template": "route_local_custom_kernel",
+  "tinygrad_scheduler_generated": "ordinary_tinygrad_graph",
+  "compiler_primitive_spec_owned": "compiler_primitive_spec_owned_asm_backend_atom",
+}
+
+def surface_class_for_provenance(provenance: str, route_classification: str = "") -> str:
+  """The surface class implied by a route's manifest provenance. compiler_primitive routes are refined by the manifest
+  `route_classification` (the mixed-vs-composed distinction is DATA, not a second table). Ambiguous/unknown provenance
+  yields 'unknown'."""
+  cls = PROVENANCE_SURFACE_CLASS.get(provenance, "unknown")
+  if provenance == "compiler_primitive_spec_owned" and route_classification.endswith("mixed_raw_pipe"):
+    cls = "compiler_primitive_spec_owned_mixed_raw_pipe"
+  return cls
+
 # ASM is not itself the purity boundary. Backend-emitted ASM from generated IR/specs is normal compiler work; a
 # hand-authored full-kernel schedule injected as raw instructions is the escape hatch/oracle class.
 SURFACE_POLICY: dict[str, dict[str, str]] = {
@@ -175,20 +196,7 @@ def route_surface(route_id: str) -> RouteSurface:
                         descriptor_artifact=str(reg["descriptor_artifact"]))
   r = route_manifest.ROUTES.get(route_id, {})
   prov = str(r.get("provenance", "unknown"))
-  if prov == "rollback_oracle":
-    cls = "rollback_oracle"
-  elif prov == "external_handwritten_kernel":
-    cls = "external_raw_or_binary"
-  elif prov == "hand_authored_uop_template":
-    cls = "route_local_custom_kernel"
-  elif prov == "tinygrad_scheduler_generated":
-    cls = "ordinary_tinygrad_graph"
-  elif prov == "compiler_primitive_spec_owned":
-    cls = "compiler_primitive_spec_owned_asm_backend_atom"
-  elif prov in route_manifest.FINAL_DEFAULT_PROVENANCE:
-    cls = "unknown"
-  else:
-    cls = "unknown"
+  cls = surface_class_for_provenance(prov, str(r.get("route_classification", "")))
   return RouteSurface(route_id, cls, (), f"No explicit strict route-surface row for manifest provenance {prov!r}.")
 
 
@@ -219,6 +227,23 @@ def route_surface_row(route_id: str) -> dict[str, Any]:
           "expected_kernel_patterns": expected_kernel_patterns, "has_expected_kernel_binding": has_expected_kernel_binding,
           "descriptor_artifact": surface.descriptor_artifact, "reason": surface.reason,
           "replacement_scope": surface.replacement_scope or str(manifest.get("replacement_scope", ""))}
+
+
+def surface_class_provenance_drift() -> list[dict[str, Any]]:
+  """Consistency gate (F3): every explicit ROUTE_SURFACES row whose manifest provenance is determinate (in the
+  prov->class table) must carry the class that provenance implies. This keeps the explicit class a machine-checked
+  projection of provenance instead of a second hand-maintained value that can silently disagree. Rows with
+  surface-ambiguous provenance (machine_authored_generated) are exempt -- their explicit class is load-bearing."""
+  drift = []
+  for rid, surface in ROUTE_SURFACES.items():
+    r = route_manifest.ROUTES.get(rid, {})
+    prov = str(r.get("provenance", "unknown"))
+    if prov not in PROVENANCE_SURFACE_CLASS: continue  # ambiguous provenance keeps its explicit class
+    expected = surface_class_for_provenance(prov, str(r.get("route_classification", "")))
+    if surface.surface_class != expected:
+      drift.append({"route_id": rid, "provenance": prov,
+                    "explicit_surface_class": surface.surface_class, "provenance_implied": expected})
+  return drift
 
 
 def route_rows() -> list[dict[str, Any]]:
@@ -267,11 +292,13 @@ def build() -> dict[str, Any]:
   missing_writer_files = sorted({path for row in rows for path in row["missing_writer_files"]})
   unmanifested_ids = [s["surface_id"] for s in unmanifested_rows]
   unmanifested_blocker_ids = sorted(unmanifested_ids)
+  surface_class_drift = surface_class_provenance_drift()
   audit_blockers = {
     "strict_default_route_blockers": sorted([r["route_id"] for r in report["blockers"]]),
     "missing_writer_file_routes": routes_with_missing_writer_files,
     "unmanifested_runtime_surfaces": unmanifested_blocker_ids,
     "routes_missing_explicit_surface_rows": sorted(missing),
+    "surface_class_provenance_drift": sorted([d["route_id"] for d in surface_class_drift]),
   }
   audit_pass = not any(audit_blockers.values())
   by_surface: dict[str, int] = {}
