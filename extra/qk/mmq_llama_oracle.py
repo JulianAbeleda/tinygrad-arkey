@@ -77,6 +77,104 @@ class LlamaMMQOracleResult:
     }
 
 
+def llama_mma_sum_slot_mapping(spec: Q4KQ81MMQTileSpec,
+                               geometry: LlamaMMQOracleGeometry = LlamaMMQOracleGeometry()) -> dict[str, Any]:
+  """Static llama MMQ per-thread sum[] ownership model for AMD WMMA/MFMA writeback.
+
+  This is a bounded research probe: it mirrors the source formulas around
+  `sum[(j0/tile_C::J + n)*tile_C::ne + l]` and `mmq_write_back_mma`, but it
+  does not claim that tinygrad has emitted or verified a production kernel.
+  """
+  spec.validate()
+  geometry.validate()
+  bounded_warps = (spec.tile_m + geometry.tile_c_i - 1) // geometry.tile_c_i
+  tile_c_thread_elems = geometry.tile_c_i * geometry.tile_c_j // geometry.warp_size
+  slots_per_thread = tile_c_thread_elems * ((spec.tile_n + geometry.tile_c_j - 1) // geometry.tile_c_j)
+
+  slots: list[dict[str, Any]] = []
+  covered: dict[tuple[int, int], dict[str, Any]] = {}
+  duplicates: list[dict[str, Any]] = []
+  for warp_id in range(min(geometry.nwarps, bounded_warps)):
+    i0 = warp_id * geometry.tile_c_i
+    for n_subtile in range(0, min(spec.tile_n, geometry.mmq_x), geometry.tile_c_j):
+      slot_block = n_subtile // geometry.tile_c_j
+      for lane_id in range(geometry.warp_size):
+        for lane_l in range(tile_c_thread_elems):
+          frag_linear = lane_l * geometry.warp_size + lane_id
+          local_m = i0 + (frag_linear % geometry.tile_c_i)
+          local_n = n_subtile + (frag_linear // geometry.tile_c_i)
+          if local_m >= spec.tile_m or local_n >= spec.tile_n:
+            continue
+          slot = slot_block * tile_c_thread_elems + lane_l
+          row = {
+            "thread": {"warp_id": warp_id, "lane_id": lane_id, "threadIdx.y": warp_id, "threadIdx.x": lane_id},
+            "sum_slot": slot,
+            "slot_formula": "(j0/tile_C::J + n)*tile_C::ne + l",
+            "l": lane_l,
+            "fragment_linear": frag_linear,
+            "local_m": local_m,
+            "local_n": local_n,
+            "m": spec.m0 + local_m,
+            "n": spec.n0 + local_n,
+            "tile_c": {"I": geometry.tile_c_i, "J": geometry.tile_c_j, "thread_elems": tile_c_thread_elems,
+                       "layout": "DATA_LAYOUT_J_MAJOR"},
+          }
+          key = (row["m"], row["n"])
+          if key in covered:
+            duplicates.append({"first": covered[key], "duplicate": row})
+          else:
+            covered[key] = row
+          slots.append(row)
+
+  missing = [
+    {"m": spec.m0 + m, "n": spec.n0 + n}
+    for m in range(spec.tile_m) for n in range(spec.tile_n)
+    if (spec.m0 + m, spec.n0 + n) not in covered
+  ]
+  return {
+    "schema": "llama-mmq-asm-sum-slot-mapping-probe.v1",
+    "candidate_id": "llama_mmq_r4_sum_slot_mapping_probe",
+    "backend_atom_id": "research_only_sum_slot_static",
+    "probe_kind": "sum_slot_accumulator_mapping",
+    "status": "static_mapping_pass" if not missing and not duplicates else "static_mapping_fail",
+    "research_only": True,
+    "production_dispatch_changed": False,
+    "default_route": "direct_packed",
+    "geometry": geometry.to_json(),
+    "tile": {"m_tile": spec.tile_m, "n_tile": spec.tile_n, "m0": spec.m0, "n0": spec.n0,
+             "bounded_warps": bounded_warps},
+    "tile_c_thread_elems": tile_c_thread_elems,
+    "slots_per_thread": slots_per_thread,
+    "mapped_output_count": len(covered),
+    "expected_output_count": spec.tile_m * spec.tile_n,
+    "duplicate_store_count": len(duplicates),
+    "missing_store_count": len(missing),
+    "duplicates": duplicates,
+    "missing": missing,
+    "slots": tuple(slots),
+    "tinygrad_asm_surface": {
+      "representable_static_identity": True,
+      "candidate_helper": "AMD_ISA_REG_ACCUM pinned DEFINE_REG element with compile-time index",
+      "bounded_shapes": [{"M": 16, "N": 16, "K": 256}, {"M": 32, "N": 32, "K": 256}],
+      "runtime_kernel_probe_status": "blocked_missing_physical_slot_introspection",
+      "exact_missing_primitive_or_api": (
+        "research-only AMD custom-kernel/ASM helper API that returns, for each generated output store, "
+        "the source DEFINE_REG/sum[] element identity and physical VGPR or spill slot after AMD ISA lowering"
+      ),
+      "smallest_next_code_change": (
+        "add an opt-in debug manifest from tinygrad.renderer.isa.amd for ACCUM_READ/ACCUM_WRITE and global_store "
+        "instructions carrying UOp tag, pinned VGPR, thread/lane scope, and output index"
+      ),
+    },
+    "source_anchors": [
+      "float sum[mmq_x*mmq_y / (nwarps*warp_size)]",
+      "sum[(j0/tile_C::J + n)*tile_C::ne + l]",
+      "mmq_write_back_mma",
+      "dst[ids_dst[j]*stride + i]",
+    ],
+  }
+
+
 def llama_mmq_source_policy() -> dict[str, Any]:
   return {
     "mode": "translated_structure_oracle_do_not_bind_production",
