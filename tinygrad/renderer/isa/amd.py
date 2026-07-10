@@ -76,6 +76,37 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 FRAG_BASE, FRAG_TOP = 200, 238
 LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
 DBUF_D3A_AUDIT_LOG:list[dict] = []
+AMD_ISA_PROOF_MANIFEST:list[dict] = []
+
+def reset_amd_isa_proof_manifest() -> None:
+  AMD_ISA_PROOF_MANIFEST.clear()
+
+def amd_isa_proof_manifest() -> tuple[dict, ...]:
+  return tuple(AMD_ISA_PROOF_MANIFEST)
+
+def _proof_manifest_enabled() -> bool:
+  return bool(getenv("AMD_ISA_PROOF_MANIFEST", 0))
+
+def _proof_carrier_meta(u:UOp|None) -> dict:
+  if u is None or not isinstance(u.arg, tuple): return {}
+  if u.arg[:1] == ("accum",):
+    return {"carrier_kind": "accum", "define_reg_id": u.arg[1], "element": u.arg[2], "pin_vgpr": u.arg[3]}
+  if u.arg[:1] == ("wmma_acc",):
+    return {"carrier_kind": "wmma_acc", "define_reg_id": u.arg[1], "subtile": u.arg[2], "element": u.arg[3], "physical_vgpr": u.arg[4]}
+  return {}
+
+def _proof_record(kind:str, x:UOp, inst, extra:dict|None=None) -> None:
+  if not _proof_manifest_enabled(): return
+  row = {
+    "schema": "amd-isa-renderer-proof-manifest-row.v1",
+    "kind": kind,
+    "logical_op": x.arg.name if isinstance(x.arg, AMDOps) else str(x.arg),
+    "emitted": str(inst),
+    "dest_reg": getattr(getattr(x, "reg", None), "index", None),
+    "source_regs": [getattr(getattr(s, "reg", None), "index", None) for s in x.src],
+  }
+  if extra is not None: row.update(extra)
+  AMD_ISA_PROOF_MANIFEST.append(row)
 
 class LDSAddr(NamedTuple):
   buf: UOp
@@ -424,11 +455,13 @@ def isel_index(ctx:IselContext, x:UOp):
       subtile, elem = divmod(idx.arg, 8)
       cbase = _acc_base(ctx, (id(dreg), subtile)) if _c_low(ctx) else _frag_base(ctx, id(dreg), 8)
       if cbase is None: raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (C accumulator)")
-      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + elem).rtag()), arg="wmma_acc")   # (order, pin)
+      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + elem).rtag()),
+                 arg=("wmma_acc", id(dreg), subtile, elem, cbase + elem))   # (order, pin)
     # RA1 pinned accumulator: per-thread REG accumulator element with a COMPILE-TIME index -> a reserved VGPR carrier.
     if _accum_enabled() and dreg.dtype.addrspace == AddrSpace.REG and idx.op is Ops.CONST and \
        (pin := _accum_pin(ctx, dreg, idx.arg)) is not None:
-      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, pin).rtag()), arg="accum")   # (order, pin)
+      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, pin).rtag()),
+                 arg=("accum", id(dreg), idx.arg, pin))   # (order, pin)
     base_off, isz = _lds_byte_offset(ctx, dreg), base.dtype.base.itemsize
     shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
     addends = []                                                     # runtime (VGPR) byte-offset terms
@@ -492,7 +525,8 @@ def isel_load(ctx:IselContext, x:UOp):
   if idxc.op is Ops.AFTER:
     idxc, dep = idxc.src[0], idxc.src[1:]
   if idxc.op is not Ops.NOOP: return None
-  if idxc.arg in ("accum", "wmma_acc"):      # read pinned/fragment accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
+  if idxc.arg in ("accum", "wmma_acc") or (isinstance(idxc.arg, tuple) and idxc.arg[:1] in (("accum",), ("wmma_acc",))):
+    # read pinned/fragment accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
     # wmma_acc: this serves the POST-loop read (the in-loop src[2] reads are consumed directly in isel_wmma via the
     # in-place C fragment, so they never reach isel_load). order (src[0]) keeps the END/init chain reachable + ordered.
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
@@ -511,7 +545,8 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   # expands to N scalar global_store_b32 in post_regalloc (offset=lane*itemsize). Single INS (not a NOOP wrapper) so
   # no pseudo-op survives into assemble_linear, and regalloc allocates every lane value as a normal use.
   if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset) or LDS carrier
-  if a.arg == "wmma_acc":                     # ROLLED-K WMMA accumulator element (a.src=(order, pin==v[cbase+i]))
+  if a.arg == "wmma_acc" or (isinstance(a.arg, tuple) and a.arg[:1] == ("wmma_acc",)):
+    # ROLLED-K WMMA accumulator element (a.src=(order, pin==v[cbase+i]))
     # (a) acc_init store: data is CONST 0.0 (gated outside reduce_range -> PRE-loop) -> materialise the C fragment lane to
     # 0 via a pinned V_CONST. No memory op. The span-aware scheduler RAW-edges these inits before the in-place v_wmma.
     if b.op is Ops.CONST:
@@ -519,7 +554,8 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     # (b) ASSIGN store: data is the WMMA D output, already written IN PLACE to v[cbase+i] by v_wmma -> a NOOP passthrough
     # (no memory op). Keeps the WMMA def (b) + the END/range order (a.src[0]) reachable so the loop backedge is preserved.
     return UOp(Ops.NOOP, dtypes.void, src=(_tov(ctx, b), a.src[0]))
-  if a.arg == "accum":                        # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
+  if a.arg == "accum" or (isinstance(a.arg, tuple) and a.arg[:1] == ("accum",)):
+    # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
     if ctx is not None and _n_workitem_dims(ctx) > 1 and str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() in ("a", "both", "1", "true", "yes") and \
@@ -1682,7 +1718,12 @@ def lower_inst(x:UOp):
     # Fragment bases are the FIRST reg of each 8-VGPR run (src[0]=A base, src[8]=B base, src[16]=C base). D writes in
     # place over C so vdst==src2. NOTE inclusive 8-reg slices: _V[b:b+7] == Reg(256+b, 8) (dsl slice end is inclusive).
     a0, b0, dbase = src[0].reg.index, src[8].reg.index, src[16].reg.index
-    return _ins(v_wmma_f32_16x16x16_f16(vdst=_V[dbase:dbase+7], src0=_V[a0:a0+7], src1=_V[b0:b0+7], src2=_V[dbase:dbase+7]), x.tag)
+    inst = v_wmma_f32_16x16x16_f16(vdst=_V[dbase:dbase+7], src0=_V[a0:a0+7], src1=_V[b0:b0+7], src2=_V[dbase:dbase+7])
+    _proof_record("wmma", x, inst, {
+      "a_vgpr_range": [a0, a0 + 7], "b_vgpr_range": [b0, b0 + 7], "c_vgpr_range": [dbase, dbase + 7],
+      "accumulator_in_place": True,
+    })
+    return _ins(inst, x.tag)
   if a is AMDOps.V_EXP:                              # Phase N1A: hardware exp2 (2^x) -> one VALU op instead of a polynomial
     return _ins(v_exp_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a in (AMDOps.S_IMUL, AMDOps.S_IADD, AMDOps.S_ISHL):   # Phase N1B: uniform int math on the scalar pipe (SGPR result)
@@ -1694,9 +1735,21 @@ def lower_inst(x:UOp):
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
   if a is AMDOps.ACCUM_READ:                        # RA1: read pinned accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
-    return _ins(v_mov_b32_e32(_Vr(x.reg), _V[src[1].arg]), x.tag)
+    inst = v_mov_b32_e32(_Vr(x.reg), _V[src[1].arg])
+    _proof_record("accum_read", x, inst, {
+      **_proof_carrier_meta(src[0]),
+      "source_pin_vgpr": src[1].arg,
+      "dest_vgpr": x.reg.index,
+    })
+    return _ins(inst, x.tag)
   if a is AMDOps.ACCUM_WRITE:                       # RA1: write pinned accumulator <- vsrc -> v_mov v[pin], vsrc. src=(vsrc, order, pin)
-    w = _ins(v_mov_b32_e32(_V[src[2].arg], _Vr(src[0].reg)), x.tag)
+    inst = v_mov_b32_e32(_V[src[2].arg], _Vr(src[0].reg))
+    _proof_record("accum_write", x, inst, {
+      **_proof_carrier_meta(src[1]),
+      "dest_pin_vgpr": src[2].arg,
+      "source_vgpr": src[0].reg.index,
+    })
+    w = _ins(inst, x.tag)
     return (w, [w])
   if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap
     ldfn = ds_load_u16 if x.dtype.itemsize == 2 else ds_load_b32
@@ -1807,8 +1860,18 @@ def lower_inst(x:UOp):
     off_r, ptr_r, isz = src[0].reg, src[1].reg, src[-1].arg
     vals = src[2:-1]
     gs = global_store_b8 if isz == 1 else global_store_b16 if isz == 2 else global_store_b32
-    stores = [UOp(Ops.INS, arg=gs(addr=_Vr(off_r), data=_Vr(v.reg), saddr=_S2(ptr_r), offset=l*isz))
-              for l,v in enumerate(vals)]
+    stores = []
+    for l,v in enumerate(vals):
+      inst = gs(addr=_Vr(off_r), data=_Vr(v.reg), saddr=_S2(ptr_r), offset=l*isz)
+      _proof_record("global_store", x, inst, {
+        "store_lane": l,
+        "itemsize": isz,
+        "byte_offset": l * isz,
+        "addr_vgpr": off_r.index,
+        "data_vgpr": v.reg.index,
+        "saddr_sgpr_pair": [ptr_r.index, ptr_r.index + 1],
+      })
+      stores.append(UOp(Ops.INS, arg=inst))
     return (stores[-1], stores)    # vmcnt drain before endpgm inserted by _insert_waitcnt
   return None
 
