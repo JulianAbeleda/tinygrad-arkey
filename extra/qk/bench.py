@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Canonical QK benchmark entry point.
 
-At present this restores the prefill authority dispatcher used by the prefill
-performance docs. Decode authority files were removed from the live tree, so
-`--decode` fails explicitly instead of routing to an ad hoc replacement.
+Dispatches to the repo's blessed measurement authorities in isolated
+subprocesses. Report throughput from this entry point, not from generate TTFT.
 """
 from __future__ import annotations
 
@@ -15,6 +14,9 @@ import sys
 
 from extra.qk.prefill_harness import (
   PREFILL_MODES, csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env,
+)
+from extra.qk.decode_harness import (
+  csv_ints as decode_csv_ints, decode_authority_argv, decode_run_profile, decode_subprocess_env,
 )
 from extra.qk.timing_harness import add_clock_pin_arg
 
@@ -31,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--model", required=True, help="GGUF path")
   ap.add_argument("--prefill", action="store_true", help="prefill authority only")
-  ap.add_argument("--decode", action="store_true", help="decode authority only; currently unavailable")
+  ap.add_argument("--decode", action="store_true", help="decode authority only")
   ap.add_argument("--prefill-mode", choices=PREFILL_MODES, default="authority")
   ap.add_argument("--prefill-K", type=int, default=None)
   ap.add_argument("--prefill-warmups", type=int, default=None)
@@ -39,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--prefill-start-positions", default=None)
   ap.add_argument("--prefill-whole-lengths", default=None)
   ap.add_argument("--prefill-no-artifact", action="store_true", help="do not write prefill-whole-synced/latest.json")
+  ap.add_argument("--decode-ckpts", default=None, help="comma-separated decode checkpoint contexts")
+  ap.add_argument("--decode-nmeas", type=int, default=None, help="override decode measurements per context")
+  ap.add_argument("--decode-max-context", type=int, default=None, help="override decode model max_context")
   add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
 
@@ -53,9 +58,9 @@ def main(argv: list[str] | None = None) -> int:
                                                      artifact=not args.prefill_no_artifact),
               prefill_subprocess_env(), label=profile.mode) or rc
   if args.decode or both:
-    print("DECODE authority harness is not present in this tree; refusing to report decode from a non-authority path.",
-          file=sys.stderr)
-    rc = rc or 2
+    profile = decode_run_profile(ckpts=decode_csv_ints(args.decode_ckpts) if args.decode_ckpts else None,
+                                 max_context=args.decode_max_context, nmeas=args.decode_nmeas)
+    rc = _run("DECODE W==D", decode_authority_argv(args.model, profile), decode_subprocess_env(args.model)) or rc
   return rc
 
 

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Authority decode benchmark + matched-context llama.cpp comparison for the per-model bench docs.
 
-Replaces the diagnostic end-to-end numbers with the repo's blessed measurement authorities:
+Produces fixed-context authority artifacts alongside the older generate-window E2E artifacts:
   - decode: extra/qk/decode_runtime_overhead.py (clean W==D, TinyJit, synced, NMEAS=40, fixed context,
     shipped FLASH_DECODE_THRESHOLD so the owned-attention route fires at ctx>=512). tok_s_W per ctx.
   - llama.cpp: llama-bench tg128 at MATCHED depth (-d <ctx>) so decode is compared at the same context, and
     pp512 for prefill reference.
-The key correction over model_e2e_bench: decode is measured at FIXED contexts (128 and 512), not a median over a
-growing-context generate window, and llama is compared at the same depth.
+Key difference from model_e2e_bench: decode is measured at FIXED contexts (128 and 512), not a median over a
+growing-context generate window, and llama is compared at the same depth. Adopting this for README tables is a
+methodology decision, not a mechanical replacement.
 
 Writes bench/models/qwen/data/amd-gfx1100/<id>.authority.json
 

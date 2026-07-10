@@ -62,6 +62,14 @@ def test_bench_prefill_dispatches_authority(monkeypatch):
   assert kwargs["label"] == "smoke"
 
 
-def test_bench_decode_fails_without_authority(capsys):
-  assert bench.main(["--model", DEFAULT_MODEL, "--decode"]) == 2
-  assert "DECODE authority harness is not present" in capsys.readouterr().err
+def test_bench_decode_dispatches_authority(monkeypatch):
+  calls = []
+  monkeypatch.setattr(bench, "_run", lambda *args, **kwargs: calls.append((args, kwargs)) or 0)
+  rc = bench.main(["--model", DEFAULT_MODEL, "--decode", "--decode-ckpts", "128", "--decode-nmeas", "2",
+                   "--decode-max-context", "256"])
+  assert rc == 0
+  assert calls
+  args, _kwargs = calls[0]
+  assert args[0] == "DECODE W==D"
+  assert args[1][:3] == ["extra/qk/decode_runtime_overhead.py", "--model", DEFAULT_MODEL]
+  assert "--ckpts" in args[1] and "128" in args[1]

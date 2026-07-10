@@ -18,7 +18,7 @@ The main idea is still kernel search, but the bar is strict: a route only become
 
 ## Current performance state
 
-Machine: RX 7900 XTX (24 GB), AMD gfx1100. Measured 2026-07-03 on `master` (all shipping defaults incl. the attn_v route fix). Decode = median steady-state W==D via `extra/llm/model_e2e_bench.py` (the `generate` harness), auto clock; both runtimes measured the same way, same GGUFs, on the same box.
+Machine: RX 7900 XTX (24 GB), AMD gfx1100. Measured 2026-07-03 on `master` (all shipping defaults incl. the attn_v route fix). Decode = median steady-state W==D via `extra/llm/model_e2e_bench.py` (the retained `generate` artifact harness), auto clock; both runtimes measured the same way, same GGUFs, on the same box. New throughput claims should use the canonical authority entry below (`extra/qk/bench.py`); migrating this historical table to fixed-context authority artifacts is a separate methodology update.
 
 **tinygrad now leads llama.cpp on decode across all three models at both contexts** — a few percent at ctx512, widening at ctx4096 (tinygrad decode is context-robust; llama's tg falls off with KV depth). The recent lift on 14B/8B/32B comes from the attn_v route-miss fix (`DECODE_ROUTE_ATTN_V`, +8.9% 8B / +13% 14B, byte-identical).
 
