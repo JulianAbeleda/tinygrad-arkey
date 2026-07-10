@@ -101,9 +101,9 @@ def fold_expanded_index(midx:UOp):
   ret = []
   idxs: list[int|None] = [None]*len(midx.src)
   global_offset = 0
-  if buf.addrspace == AddrSpace.LOCAL and (getenv("PREFILL_TC_LOCAL_STAGE_COOP_POST", 0) or
-                                           (getenv("PREFILL_DBUF_D3A_POST", 0) and buf.op is Ops.DEFINE_LOCAL and buf.arg in (990, 991, 993)) or
-                                           (getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0) and buf.op is Ops.DEFINE_LOCAL and buf.arg in (991, 993))):
+  if buf.addrspace == AddrSpace.LOCAL and (
+      (getenv("PREFILL_DBUF_D3A_POST", 0) and buf.op is Ops.DEFINE_LOCAL and buf.arg in (990, 991, 993)) or
+      (getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0) and buf.op is Ops.DEFINE_LOCAL and buf.arg in (991, 993))):
     return None
   no_group = getenv("DEVECTORIZE_NO_PTR_GROUP", 0)
   for offsets in offsets_rootsrc.values():

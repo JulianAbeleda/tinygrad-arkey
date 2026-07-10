@@ -34,14 +34,14 @@ Source: read-only flag classification 2026-07-10 (5-family audit). Route ground 
 
 ## TC_LOCAL_STAGE family — cooperative + refuted staging variants
 
-- **PREFILL_TC_LOCAL_STAGE_COOP_POST / _COOP_B_POST / _COOP_B_LIMIT** — CLASSIFIED. Cooperative packed LDS store/load rewrite (+ B-only entry + rewrite-count cap). Verifier-clean but central route-bound gate **non-finite**; "does not solve this route." Bank: `docs/generated-machine-code-lds-dbuf-100pct-scope.md`, `docs/hand-vs-generated-delta-current-scope.md`. Superseded by the correct B_TILEKEY path (kept). Safe: off, no route.
-- **PREFILL_TC_LOCAL_STAGE_COOP_GLOBAL / _COOP_LOCAL / _COOP_DROP_GLOBAL / _COOP_DROP_LOCAL / _COOP_DROP_UNROLL / _COOP_DROP_UNROLL_SIZE** — CLASSIFIED. Tune which tile-axis types the coop materializer accepts/drops. Only ever exercised inside the non-finite coop probe. Safe: pure tuning for an abandoned path.
-- **PREFILL_TC_LOCAL_STAGE_A_FULL_LANE** — CLASSIFIED. 512-elem full-lane A LDS layout attempt. "Diagnostic-only… does not fix the cooperative correctness failure," gate non-finite. Safe: off, superseded.
-- **PREFILL_TC_LOCAL_STAGE_SPLIT_POST_A** — CLASSIFIED. In `both` mode, stage A post / B early. REFUTED: `wrong output (rr=nan)`. Bank: 100pct-scope. Safe: banked refuted.
-- **PREFILL_TC_LOCAL_STAGE_SCALAR_POST** — CLASSIFIED. Post-opt scalar contract-src staging — scalar LDS is the failure mode being eliminated (B2); no PASS; superseded by B_TILEKEY. Safe: dead scalar precursor.
-- **PREFILL_TC_LOCAL_STAGE_TILE_ONLY** — CLASSIFIED (lowest confidence). WARP-only stage-range restriction; no recipe/route uses it, no banked positive; superseded by the WITH_LOCAL lane-range default. Safe: no live effect off.
-- **PREFILL_TC_LOCAL_STAGE_B_TILEKEY_GENERIC_LAYOUT / _GENERIC_NO_SLOT** — CLASSIFIED. Alternate 8192-elem "generic" B tile-key layout + slot-carrier-drop sub-toggle. No PASS; the banked-correct path is the non-generic 256-elem layout. Safe: unbanked experimental layout, base B path kept.
-- **PREFILL_TC_LOCAL_STAGE_B_TILEKEY_DROP_GLOBAL** — CLASSIFIED. Stage one N-tile instance instead of all when tile_count>64. REFUTED: `WRONG rr=1.2e+00`, density regressed ~94.75 inst/WMMA. Bank: 100pct-scope. Safe: banked refuted.
+- **PREFILL_TC_LOCAL_STAGE_COOP_POST / _COOP_B_POST / _COOP_B_LIMIT** — REMOVED (Phase 2, Group C). Cooperative packed LDS store/load rewrite (+ B-only entry + rewrite-count cap). Verifier-clean but central route-bound gate **non-finite**; "does not solve this route." Bank: `docs/generated-machine-code-lds-dbuf-100pct-scope.md`, `docs/hand-vs-generated-delta-current-scope.md`. Superseded by the correct B_TILEKEY path (kept). Safe: off, no route.
+- **PREFILL_TC_LOCAL_STAGE_COOP_GLOBAL / _COOP_LOCAL / _COOP_DROP_GLOBAL / _COOP_DROP_LOCAL / _COOP_DROP_UNROLL / _COOP_DROP_UNROLL_SIZE** — REMOVED (Phase 2, Group C). Tune which tile-axis types the coop materializer accepts/drops. Only ever exercised inside the non-finite coop probe. Safe: pure tuning for an abandoned path.
+- **PREFILL_TC_LOCAL_STAGE_A_FULL_LANE** — REMOVED (Phase 2, Group C). 512-elem full-lane A LDS layout attempt. "Diagnostic-only… does not fix the cooperative correctness failure," gate non-finite. Safe: off, superseded.
+- **PREFILL_TC_LOCAL_STAGE_SPLIT_POST_A** — REMOVED (Phase 2, Group C). In `both` mode, stage A post / B early. REFUTED: `wrong output (rr=nan)`. Bank: 100pct-scope. Safe: banked refuted.
+- **PREFILL_TC_LOCAL_STAGE_SCALAR_POST** — REMOVED (Phase 2, Group C). Post-opt scalar contract-src staging — scalar LDS is the failure mode being eliminated (B2); no PASS; superseded by B_TILEKEY. Safe: dead scalar precursor.
+- **PREFILL_TC_LOCAL_STAGE_TILE_ONLY** — REMOVED (Phase 2, Group C) (was lowest confidence). WARP-only stage-range restriction; no recipe/route uses it, no banked positive; superseded by the WITH_LOCAL lane-range default. Safe: no live effect off.
+- **PREFILL_TC_LOCAL_STAGE_B_TILEKEY_GENERIC_LAYOUT / _GENERIC_NO_SLOT** — REMOVED (Phase 2, Group C). Alternate 8192-elem "generic" B tile-key layout + slot-carrier-drop sub-toggle. No PASS; the banked-correct path is the non-generic 256-elem layout. Safe: unbanked experimental layout, base B path kept.
+- **PREFILL_TC_LOCAL_STAGE_B_TILEKEY_DROP_GLOBAL** — REMOVED (Phase 2, Group C). Stage one N-tile instance instead of all when tile_count>64. REFUTED: `WRONG rr=1.2e+00`, density regressed ~94.75 inst/WMMA. Bank: 100pct-scope. Safe: banked refuted.
 
 ## LDS_PACK family — dumps, refuted packs, verifier-dead carriers
 
