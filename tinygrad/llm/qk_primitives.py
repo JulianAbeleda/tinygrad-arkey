@@ -6,7 +6,8 @@ from tinygrad.helpers import prod
 from tinygrad.llm.gguf import ggml_data_to_tensor
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
-from tinygrad.llm.route_policy import _q4k_policy, _q6k_policy, _qk_generated_policy_entry
+from tinygrad.llm.route_policy import _q4k_policy, _qk_generated_policy_entry
+from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan
 
 
 def _qk_amd_gfx1100_arch_ok() -> bool:
@@ -247,12 +248,14 @@ def _set_module_at(root, path:str, value) -> None:
   else: setattr(parent, attr, value)
 
 def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
-                            budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar") -> list[Q4KPrimitiveLinear]:
+                            budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar",
+                            route_plan:ModelRoutePlan|None=None) -> list[Q4KPrimitiveLinear]:
   supported_generated_families = {"q4_k_packed_u32", "q4_k_packed_u32_direct"}
   raw_words = Tensor(gguf, dtype=dtypes.uint32)
   installed: list[Q4KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
   budget = budget or QKPrimitiveBudget()
+  if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
   debug = bool(getenv("Q4K_PRIMITIVE_DEBUG", getenv("QK_GENERATED_POLICY_DEBUG", 0)))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != 12:
@@ -266,11 +269,14 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       continue
     rows, cols = tuple(reversed(dims))
     if generated_policy is None:
-      if (policy := _q4k_policy(name)) is None:
+      if route_plan is None or (route_entry := route_plan.primitive(name)) is None:
         skipped["policy_fallback"] += 1
         continue
-      parts, opt_specs = policy
-      kernel_mode = "partial"
+      if route_entry.quant_label != "Q4_K" or route_entry.rows != rows or route_entry.cols != cols:
+        skipped["policy_unsupported"] += 1
+        continue
+      parts, opt_specs = route_entry.parts, route_entry.opts
+      kernel_mode = route_entry.kernel_mode
     else:
       if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols, name)) is None:
         skipped["policy_missing"] += 1
@@ -290,7 +296,7 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     if byte_start % 4 != 0:
       skipped["misaligned"] += 1
       continue
-    module_path = name[:-len(".weight")]
+    module_path = name[:-len(".weight")] if generated_policy is not None else route_entry.module_path
     try: module = _module_at(model, module_path)
     except (AttributeError, IndexError, ValueError):
       skipped["missing_module"] += 1
@@ -330,11 +336,13 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
   return installed
 
 def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
-                            budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar") -> list[Q6KPrimitiveLinear]:
+                            budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar",
+                            route_plan:ModelRoutePlan|None=None) -> list[Q6KPrimitiveLinear]:
   raw_halfs = Tensor(gguf, dtype=dtypes.uint16)
   installed: list[Q6KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
   budget = budget or QKPrimitiveBudget()
+  if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
   debug = bool(getenv("Q6K_PRIMITIVE_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", getenv("QK_GENERATED_POLICY_DEBUG", 0))))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != 14:
@@ -348,10 +356,13 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       continue
     rows, cols = tuple(reversed(dims))
     if generated_policy is None:
-      if (policy := _q6k_policy(name)) is None:
+      if route_plan is None or (route_entry := route_plan.primitive(name)) is None:
         skipped["policy_fallback"] += 1
         continue
-      parts, opt_specs = policy
+      if route_entry.quant_label != "Q6_K" or route_entry.rows != rows or route_entry.cols != cols:
+        skipped["policy_unsupported"] += 1
+        continue
+      parts, opt_specs = route_entry.parts, route_entry.opts
     else:
       if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols, name)) is None:
         skipped["policy_missing"] += 1
@@ -367,7 +378,7 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     if byte_start % 2 != 0:
       skipped["misaligned"] += 1
       continue
-    module_path = name[:-len(".weight")]
+    module_path = name[:-len(".weight")] if generated_policy is not None else route_entry.module_path
     try: module = _module_at(model, module_path)
     except (AttributeError, IndexError, ValueError):
       skipped["missing_module"] += 1

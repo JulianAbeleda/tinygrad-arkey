@@ -22,6 +22,8 @@ from tinygrad.llm.qk_primitives import (
   QK_AMD_GFX1100_ARCH_OK, QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _demote_q6k_to_q4, _install_q4k_fusions, _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
 )
+from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
+from tinygrad.llm.model_route_plan import build_model_route_plan
 from tinygrad.llm.route_policy import (
   _load_qk_generated_policy, _qk_generated_policy_len, _load_qk_route_policy, _set_qk_route_policy,
   _qk_route_policy_selected, _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated,
@@ -1052,6 +1054,8 @@ class Transformer:
           delattr(Tensor, _n) if _v is None else setattr(Tensor, _n, _v)
     nn.state.load_state_dict(model, state_dict, verbose=False, consume=True, realize=False)  # NOTE: rope_freqs.weight (32,) is unused
     if q4k_meta is not None:
+      model_facts = model_facts_from_gguf_metadata(kv, q4k_meta)
+      route_plan = build_model_route_plan(q4k_meta, model_facts)
       # auto-enabled primitives default to `shared` storage (view the GGUF in place, storage_bytes=0) so
       # large models (e.g. 32B) stay within VRAM; explicit Q4K_PRIMITIVE keeps `sidecar`; env always wins.
       qk_cfg = QKConfig.from_env(storage_default="shared" if q4k_auto else "sidecar")
@@ -1062,11 +1066,11 @@ class Transformer:
       if generated_policy is not None:
         if qk_cfg.policy_debug:
           print(f"QK_GENERATED_POLICY_DEBUG loaded={qk_generated_policy_path} entries={_qk_generated_policy_len(generated_policy)}")
-        primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q4_storage_mode)
-        primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q6_storage_mode)
+        primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q4_storage_mode, route_plan)
+        primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, generated_policy, primitive_budget, q6_storage_mode, route_plan)
       else:
-        if use_q4k_primitive: primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q4_storage_mode)
-        if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q6_storage_mode)
+        if use_q4k_primitive: primitive_linears += _install_q4k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q4_storage_mode, route_plan)
+        if use_q6k_primitive: primitive_linears += _install_q6k_primitives(model, pathlib.Path(gguf), q4k_meta, None, primitive_budget, q6_storage_mode, route_plan)
       if qk_cfg.storage_debug:
         summary = _qk_storage_summary(primitive_linears)
         cap = -1 if primitive_budget.cap_bytes is None else primitive_budget.cap_bytes
