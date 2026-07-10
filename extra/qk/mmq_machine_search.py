@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 import json
 import pathlib
 import sys
@@ -20,9 +21,12 @@ if __package__ in (None, ""):
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
   AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, BoundedMMQConfig, CANDIDATE_ROUTE_ID,
-  COMPARATOR_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, LLAMA_MMQ_GEOMETRY, PUBLIC_LABEL, STAGED_DS4_BACKEND_ID,
+  COMPARATOR_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, LLAMA_MMQ_GEOMETRY, PUBLIC_LABEL, QUANT, ROLE,
+  STAGED_DS4_BACKEND_ID,
   candidate_metadata, coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
+from extra.qk.mmq_llama_oracle import llama_mma_writeback_owners
+from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
 
 
 SCHEMA = "q4k-q8-1-mmq-machine-search.v1"
@@ -302,18 +306,100 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
   }
 
 
+def build_boltbeam_oracle_trace(*, context: int = 512) -> dict[str, Any]:
+  spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=128, n=128, k=256, m_tile=128, n_tile=128,
+                                    activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  owners = list(llama_mma_writeback_owners(spec))
+  owner_hash = hashlib.sha256(json.dumps(owners, sort_keys=True).encode()).hexdigest()[:16]
+  return {
+    "schema": "boltbeam.hw_trace.v1",
+    "model_id": "qwen3-14b-q4k-mmq-oracle",
+    "target_id": "amd_gfx1100",
+    "workload": "prefill",
+    "provider_id": "tinygrad/mmq-llama-oracle",
+    "source_schema": SCHEMA,
+    "contexts": [context],
+    "metadata": {
+      "production_dispatch_changed": False,
+      "default_route": "direct_packed",
+      "promotion_eligible": False,
+      "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",
+    },
+    "rows": [
+      {
+        "scope": "kernel",
+        "context": context,
+        "kernel": "llama_mmq_coop_tile_oracle",
+        "kind": "gemm",
+        "role": ROLE,
+        "quant": QUANT,
+        "shape": [spec.tile_m, spec.tile_n, spec.k],
+        "calls": 1,
+        "tile_oracle": {
+          "kind": "cooperative_tile",
+          "source": "extra.qk.mmq_llama_oracle.llama_mma_writeback_owners",
+          "candidate_id": "llama_mmq_coop_tile_oracle",
+          "backend_id": LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
+          "target_backend_atom_id": AMD_DS4_COOP_TILE_BACKEND_ID,
+          "route_family": "llama_mmq_cooperative_tile",
+          "geometry": {
+            **LLAMA_MMQ_GEOMETRY,
+            "warp_size": 32,
+            "tile_c_i": 16,
+            "tile_c_j": 16,
+            "tile_c_ne": 256,
+          },
+          "wave_ownership": {
+            "owner": "warp_id_owns_16x16_output_fragment",
+            "mapping": "8 warps cover 128 M rows; each warp owns 16-row stripes across 16-column fragments",
+            "requires_single_store_per_output": True,
+          },
+          "writeback_owner_count": len(owners),
+          "expected_writeback_owners_hash": owner_hash,
+          "writeback_owners": owners,
+        },
+        "candidate_geometry": {
+          "mmq_x": 128,
+          "mmq_y": 128,
+          "iter_k": 256,
+          "nwarps": 8,
+          "warp_size": 32,
+          "tile_m": 128,
+          "tile_n": 128,
+          "tile_k": 256,
+          "tile_c_i": 16,
+          "tile_c_j": 16,
+        },
+        "resource_constraints": {
+          "scratch_bytes": {"eq": 0},
+          "duplicate_store_count": {"eq": 0},
+          "missing_store_count": {"eq": 0},
+          "production_dispatch_changed": {"eq": False},
+        },
+        "sources": {
+          "llama_mmq_source": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+          "tinygrad_oracle": "extra/qk/mmq_llama_oracle.py",
+        },
+      }
+    ],
+  }
+
+
 def _parse_args() -> argparse.Namespace:
   ap = argparse.ArgumentParser(description="Bounded machine-search report for completed 14B Q4_K/Q8_1 MMQ pieces")
   ap.add_argument("--run", action="store_true", help="execute searchable bounded candidates")
   ap.add_argument("--warmups", type=int, default=0)
   ap.add_argument("--rounds", type=int, default=1)
   ap.add_argument("--out", type=pathlib.Path, default=None)
+  ap.add_argument("--boltbeam-oracle-trace", action="store_true",
+                  help="emit a boltbeam.hw_trace.v1 cooperative-tile oracle evidence trace")
   return ap.parse_args()
 
 
 def main() -> None:
   args = _parse_args()
-  report = build_search_report(run=args.run, warmups=args.warmups, rounds=args.rounds)
+  report = build_boltbeam_oracle_trace() if args.boltbeam_oracle_trace else build_search_report(
+    run=args.run, warmups=args.warmups, rounds=args.rounds)
   text = json.dumps(report, indent=2, sort_keys=True)
   if args.out is not None:
     args.out.parent.mkdir(parents=True, exist_ok=True)

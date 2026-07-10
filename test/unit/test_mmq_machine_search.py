@@ -4,6 +4,7 @@ from extra.qk.mmq_bounded_harness import (
   BoundedMMQConfig,
 )
 from extra.qk.mmq_machine_search import build_search_report
+from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
 
 def test_mmq_machine_search_only_marks_completed_components_searchable():
@@ -111,3 +112,20 @@ def test_mmq_machine_search_runner_receives_bounded_configs():
   assert any(cfg.backend == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
   assert all(row["run"]["status"] == "PASS" for row in report["searchable_candidates"])
   assert all(row["run"]["artifacts"]["q4k_tile_loader_source_hash"] == "loader" for row in report["searchable_candidates"])
+
+
+def test_mmq_boltbeam_oracle_trace_preserves_route_gates_and_owner_contract():
+  trace = build_boltbeam_oracle_trace(context=512)
+
+  assert trace["schema"] == "boltbeam.hw_trace.v1"
+  assert trace["metadata"]["production_dispatch_changed"] is False
+  assert trace["metadata"]["default_route"] == "direct_packed"
+  row = trace["rows"][0]
+  assert row["scope"] == "kernel"
+  assert row["role"] == "ffn_gate_up"
+  assert row["tile_oracle"]["backend_id"] == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID
+  assert row["tile_oracle"]["target_backend_atom_id"] == AMD_DS4_COOP_TILE_BACKEND_ID
+  assert row["tile_oracle"]["geometry"]["nwarps"] == 8
+  assert row["tile_oracle"]["writeback_owner_count"] == 64
+  assert row["resource_constraints"]["duplicate_store_count"]["eq"] == 0
+  assert row["resource_constraints"]["production_dispatch_changed"]["eq"] is False
