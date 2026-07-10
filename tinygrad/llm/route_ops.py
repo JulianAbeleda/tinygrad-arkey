@@ -52,3 +52,5 @@ def emit_q6k_packed_prefill_kernel(*args, **kwargs):
 def flash_decode_live_split_block_tile(*args, **kwargs): return _attr("extra.qk.live_split_geometry", "flash_decode_live_split_block_tile")(*args, **kwargs)
 
 def assert_pure_machine_search(*args, **kwargs): return _attr("extra.qk.pure_search_guard", "assert_pure_machine_search")(*args, **kwargs)
+
+def prefill_v2_load_table(*args, **kwargs): return _attr("extra.qk.prefill_v2_schedule_search", "load_table")(*args, **kwargs)

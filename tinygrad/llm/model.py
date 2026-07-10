@@ -686,8 +686,7 @@ class Transformer:
     # heuristic per shape when present -- it adds the LOCAL opt the heuristic omits (measured up-to-3x on
     # LOCAL-starved shapes). Absent/unreadable table -> pure static fallback (zero behavior change).
     try:
-      from extra.qk.prefill_v2_schedule_search import load_table
-      _table = load_table()
+      _table = qk_ops.prefill_v2_load_table()
     except Exception:
       _table = {}
     def _opts(out_f, in_f): return _prefill_v2_without_parked_4x4(_table.get((out_f, in_f)) or _prefill_v2_opts(out_f, in_f))
