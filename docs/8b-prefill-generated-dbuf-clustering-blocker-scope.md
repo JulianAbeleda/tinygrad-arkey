@@ -1027,6 +1027,25 @@ own the matrix-consumer cluster at the K-major/lowering boundary: choose the res
 loads, emit one readiness wait, then emit the 4 WMMAs before fragment reuse.
 ```
 
+### T6 Needle Test: Does Wait Movement Alone Move Timing?
+
+Small bounded test on `2x2`, `m=512,n=5120,k=5120`, with clock pin enabled:
+
+| Variant | Correct | TFLOPS samples | waits | Readout |
+|---|---|---:|---:|---|
+| K-major base | yes | `11.54`, `6.94`, `6.69` | 46 | noisy baseline |
+| K-major + conservative clustered LGKM wait | yes | `11.36`, `6.14`, `7.96` | 41 | removes 5 waits, timing not decisively better |
+| unsafe skip later WMMA LDS waits | no, `rr=1.1e+00` | `0.0` | 55 | not viable; downstream drains increase waits |
+
+Readout:
+
+```text
+The conservative wait coalescer moves structure in the right direction and stays correct, but bounded timing is too noisy
+and not decisively better. The unsafe deletion probe proves the obvious shortcut is wrong. Therefore the "will it move"
+test does not justify a wait-only implementation; it supports the stricter primitive: legal cluster lowering must keep
+the fragment-load dependencies intact while increasing the amount of WMMA work between waits.
+```
+
 The next code should be small and fail-closed:
 
 ```python
