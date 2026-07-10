@@ -12,7 +12,7 @@ ARTIFACT = ROOT / "bench/q4k-wmma-tiled-no-hand-kernel/latest.json"
 IMPLEMENTATION_FILES = (
   "extra/qk/prefill_int8_wmma_spec.py",
   "tinygrad/llm/route_ops.py",
-  "tinygrad/llm/generated_candidates.py",
+  "extra/qk/generated_candidates.py",
   "extra/qk/q4k_wmma_tile_lowering.py",
 )
 

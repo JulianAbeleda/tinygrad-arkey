@@ -53,23 +53,22 @@ authored from generated and excludes vendored `tinygrad/viz/assets`.
 
 ### Lane 1 — LLM Taxonomy Relocation
 
-Move canonical spec/taxonomy code out of `tinygrad/llm`:
+Status: completed. The canonical spec/taxonomy code now lives under `extra/qk`; the compatibility shims in
+`tinygrad/llm` were removed after import census showed no live direct users:
 
 ```text
-tinygrad/llm/runtime_specs.py          142 sz.py lines
-tinygrad/llm/quant_specs.py             51 sz.py lines
-tinygrad/llm/generated_candidates.py    93 sz.py lines
+tinygrad/llm/runtime_specs.py          deleted
+tinygrad/llm/quant_specs.py            deleted
+tinygrad/llm/generated_candidates.py   deleted
 ```
 
-Expected budget reduction: about 286 `sz.py` lines, minus tiny compatibility stubs if retained.
-
-Target home: `extra/qk/`.
+Current home: `extra/qk/`.
 
 Rationale:
 
 - `generated_candidates.py` is generated-route authority metadata and is only used by tests and `extra/qk` gates.
 - `runtime_specs.py` and `quant_specs.py` are taxonomy/spec helpers; live runtime reaches them through
-  `tinygrad/llm/prefill_routes.py`, not through backend execution.
+  `tinygrad/llm/prefill_routes.py` through lazy adapter access, not through backend execution.
 - CUDA/NV are unaffected.
 
 Proof:

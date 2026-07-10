@@ -38,9 +38,8 @@ leave it. The fork's real issue is **orthogonality (research living in framework
   (~350). `AMDISARenderer` is an off-default research backend, not the shipping renderer. → **Extract to `extra/qk`
   behind one adapter** (research registers *into* core; do NOT add `import extra.qk` to `tinygrad/` — keep
   `test_tinygrad_boundary` green). **Highest-leverage cleanup.**
-- **~348 LOC** JSON-spec taxonomy `tinygrad/llm/{runtime_specs,quant_specs,generated_candidates}.py` — a
-  second, mostly test-only spec system misfiled in the live package (`generated_candidates` imported by zero live
-  code). → move to `extra/`.
+- JSON-spec taxonomy now lives in `extra/qk`; the old `tinygrad/llm/{runtime_specs,quant_specs,generated_candidates}.py`
+  shims were deleted after import census showed no live direct users.
 - **~200 LOC** PSP debug tracing + `AM_*` experiment hooks in `runtime/support/am/ip/psp.py` → slim after AM boot
   stabilizes.
 - Inline experimental lowerings in `codegen/__init__.py` + prefill guards in `codegen/late/devectorizer.py` →
@@ -55,14 +54,13 @@ leave it. The fork's real issue is **orthogonality (research living in framework
    relocate the ~53 keep-for-debug survivors into `DebugFlags`; `PREFILL_V2` default-`auto` promotion as its OWN
    gated commit (it's the one real global-default change). Map in `docs/prefill-flag-classification.md`.
 2. **ISA-renderer extraction:** move the ~1,350 LOC machine-search out of `amd.py`/`postrange.py` into `extra/qk`
-   behind an adapter. Prove byte-identical (remu: render `AMDISARenderer` machine-code and sha256 the stream for
-   direct 2x2/4x2/2x4 + kmajor 2x2/4x2/2x4/4x4 — the Phase-2 method).
-3. **Taxonomy move:** `runtime_specs`/`quant_specs`/`generated_candidates` → `extra/`.
-4. **NV/CUDA decision:** gfx1100-only? If yes, delete ~1,930 LOC.
-5. **Deferred audit items** (need AMD GPU, see memory `pure-machine-search-audit-2026-07`): re-measure the dropped
+   behind an adapter. Seed proof now exists in `test/unit/test_amd_isa_extraction_fixtures.py`; extend it to direct
+   2x2/4x2/2x4 + kmajor 2x2/4x2/2x4/4x4 before moving renderer policy.
+3. **NV/CUDA decision:** gfx1100-only? If yes, delete ~1,930 LOC.
+4. **Deferred audit items** (need AMD GPU, see memory `pure-machine-search-audit-2026-07`): re-measure the dropped
    schedule-table shapes (4096x4096 +8); backfill new quality/comparator fields into old authority artifacts;
    F3 dual-activation policy unification; F4 hardcoded-shape → data-table move.
-6. **Minor:** `extra/tools/doc_link_baseline.txt` is gitignored (`*.txt`), so the linter isn't reproducibly green on
+5. **Minor:** `extra/tools/doc_link_baseline.txt` is gitignored (`*.txt`), so the linter isn't reproducibly green on
    a fresh checkout — either track it or fix the remaining baselined links.
 
 ## Hazards / rules for whoever continues
