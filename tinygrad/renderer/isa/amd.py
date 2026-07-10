@@ -1678,6 +1678,7 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
       _dbuf_lifecycle_audit({
         "op": "produce", "role": role, "phase": "body", "phase_i": phase_i,
         "slot": abs_slot, "epoch": phase_i, "window": None if abs_slot is None else f"{role}:slot{abs_slot}",
+        "uop_id": id(st),
         "stage_store_key": repr(skey), "value_key": repr(_dbuf_stage_value_key(cand)),
       })
       if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
@@ -1707,7 +1708,9 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
       out = (st,)
     if not moved: continue
     if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
-      out = (UOp(Ops.INS, dtypes.void, src=tuple(moved), arg=AMDOps.BARRIER),)
+      barrier = UOp(Ops.INS, dtypes.void, src=tuple(moved), arg=AMDOps.BARRIER)
+      _dbuf_lifecycle_audit({"op": "barrier", "phase": "body", "phase_i": phase_i, "uop_id": id(barrier)})
+      out = (barrier,)
     proof_row = _dbuf_d3a_stage_proof(ctx, role, carrier)
     if proof_row.get("ok"):
       slot = proof_row.get("dbuf_slot")
@@ -2569,13 +2572,25 @@ class AMDISARenderer(ISARenderer):
     # backedges/exits drain so cross-iteration store->load hazards can't slip past). Labels start a clean block.
     # Full-drain (simm16=0) is always correct; the count drop comes from batching loads + dropping needless store waits.
     from tinygrad.helpers import getenv
+    def _audit_wait_uop(wait:UOp, vm:int, lgkm:int, phase:str) -> None:
+      if vm == 0 and lgkm == 0:
+        wait_kind, count = "full", 0
+      elif vm != 63:
+        wait_kind, count = "vm", vm
+      elif lgkm != 63:
+        wait_kind, count = "lgkm", lgkm
+      else:
+        wait_kind, count = "full", 0
+      _dbuf_lifecycle_audit({"op": "wait", "wait_kind": wait_kind, "count": count, "phase": phase, "uop_id": id(wait)})
     if getenv("AMD_ISA_WAITCNT_CONSERVATIVE", 0):   # baseline (Phase J A/B): drain after every memory op (old model)
       out: list[UOp] = []
       for u in uops:
         out.append(u)
         if not isinstance(u.arg, tuple) and str(u.arg).split("(", 1)[0].startswith(
             ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")):
-          out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0))))
+          wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0)))
+          _audit_wait_uop(wait, 0, 0, "conservative_after_memory")
+          out.append(wait)
       return out
     if getenv("AMD_ISA_WAITCNT_TARGETED", 0):
       out = []
@@ -2586,7 +2601,9 @@ class AMDISARenderer(ISARenderer):
         return set().union(*(_span(r) for r in self._inst_regs(a))) if self._inst_regs(a) else set()
       def _drain(vm:int=0, lgkm:int=0, exp:int=0):
         nonlocal vm_store, lgkm_store
-        out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, exp))))
+        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, exp)))
+        _audit_wait_uop(wait, vm, lgkm, "targeted_drain")
+        out.append(wait)
         if vm == 0: pend_vm.clear(); vm_store = False
         if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
       def _target_wait(uses:set[int], coalesce_vm:bool=False):
@@ -2595,7 +2612,9 @@ class AMDISARenderer(ISARenderer):
         if not vdeps and not ldeps: return
         vm = 0 if (coalesce_vm and vdeps) else (len(pend_vm) - max(vdeps) - 1 if vdeps else 63)
         lgkm = len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63
-        out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, 7))))
+        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, 7)))
+        _audit_wait_uop(wait, vm, lgkm, "targeted_consumer")
+        out.append(wait)
         if vdeps: del pend_vm[:(len(pend_vm) if coalesce_vm else max(vdeps)+1)]
         if ldeps: del pend_lgkm[:max(ldeps)+1]
       for u in uops:
@@ -2624,7 +2643,9 @@ class AMDISARenderer(ISARenderer):
     pend_vm:set[int] = set(); pend_lgkm:set[int] = set(); vm_store = lgkm_store = False
     def _drain():
       nonlocal vm_store, lgkm_store
-      out.append(UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0))))
+      wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0)))
+      _audit_wait_uop(wait, 0, 0, "default_drain")
+      out.append(wait)
       pend_vm.clear(); pend_lgkm.clear(); vm_store = lgkm_store = False
     for u in uops:
       a = u.arg

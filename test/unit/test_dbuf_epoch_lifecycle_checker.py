@@ -537,12 +537,13 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   assert layers["P2"]["status"] == "done_for_s10_lds_spec"
   assert layers["P3"]["status"] == "checker_schema_ready_exporters_pending"
   assert layers["P4"]["status"] == "done_for_s10_lds_spec_static"
+  assert layers["P5"]["status"] == "checker_reconcile_and_live_wait_anchors_ready"
   assert layers["P6"]["status"] == "advisory_schema_ready"
-  assert layers["P7"]["status"] == "pending"
+  assert layers["P7"]["status"] == "side_channel_anchor_reconcile_ready_live_exporters_partial"
   assert exporters["E1"]["status"] == "done"
   assert exporters["E3"]["status"] == "done_for_lds2_template"
   assert exporters["E4"]["status"] == "done_for_owner_records"
-  assert exporters["E5"]["status"] == "fail_closed_status_report"
+  assert exporters["E5"]["status"] == "fail_closed_plus_side_channel_anchor_reconcile"
 
 
 def test_cli_prints_s10_roadmap():

@@ -419,6 +419,14 @@ def _side_channel_lifecycle_events(rows: list[dict[str, Any]]) -> dict[str, Any]
   lifecycle_rows = [r for r in rows if r.get("kind") == "dbuf_lifecycle_event"]
   for i, row in enumerate(lifecycle_rows):
     op = row.get("op")
+    if op == "wait":
+      wait_kind = row.get("wait_kind", row.get("wait", row.get("waitcnt_kind")))
+      count = row.get("count")
+      if wait_kind is None or count is None:
+        errors.append({"row_index": i, "row": row, "error": "incomplete lifecycle side-channel wait row: requires wait_kind and count"})
+        continue
+      events.append(DBUFEvent("wait", kind=str(wait_kind), count=int(count), step=i, phase=str(row.get("phase", ""))))
+      continue
     if op == "barrier":
       events.append(DBUFEvent("barrier", step=i, phase=str(row.get("phase", ""))))
       continue
@@ -427,11 +435,89 @@ def _side_channel_lifecycle_events(rows: list[dict[str, Any]]) -> dict[str, Any]
       errors.append({"row_index": i, "row": row, "error": f"incomplete lifecycle side-channel row: missing={missing}"})
       continue
     events.append(DBUFEvent(str(op), role=str(row["role"]), epoch=row["epoch"], slot=row["slot"],
-                            window=str(row.get("window", "default")), step=i, phase=str(row.get("phase", ""))))
+                            window=str(row.get("window", "default")), value_key=row.get("value_key"),
+                            step=i, phase=str(row.get("phase", ""))))
   check = check_events(events) if events else None
   return {
     "schema": "dbuf-lifecycle-side-channel.v1",
     "row_count": len(lifecycle_rows),
+    "event_count": len(events),
+    "errors": errors,
+    "check": check,
+    "events": [e.to_json() for e in events],
+    "rows": lifecycle_rows,
+  }
+
+
+def _row_anchor(row: dict[str, Any]) -> tuple[str, Any] | None:
+  if row.get("uop_id") is not None: return ("uop_id", row["uop_id"])
+  if row.get("idx") is not None: return ("idx", row["idx"])
+  return None
+
+
+def _side_anchor(row: dict[str, Any]) -> tuple[str, Any] | None:
+  if row.get("uop_id") is not None: return ("uop_id", row["uop_id"])
+  if row.get("inst_idx") is not None: return ("idx", row["inst_idx"])
+  if row.get("idx") is not None: return ("idx", row["idx"])
+  return None
+
+
+def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: dict[str, Any]) -> dict[str, Any]:
+  from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
+  physical_by_op = {
+    "produce": sorted(ops.get("ds_store_b128", []), key=lambda r: r["idx"]),
+    "consume": sorted(ops.get("ds_load_b128", []), key=lambda r: r["idx"]),
+    "barrier": sorted(ops.get("s_barrier", []), key=lambda r: r["idx"]),
+    "wait": sorted(ops.get("s_waitcnt", []), key=lambda r: r["idx"]),
+  }
+  by_anchor: dict[tuple[str, Any], tuple[str, dict[str, Any]]] = {}
+  for op, rows in physical_by_op.items():
+    for row in rows:
+      if (anchor := _row_anchor(row)) is not None: by_anchor[anchor] = (op, row)
+  errors: list[dict[str, Any]] = []
+  events: list[DBUFEvent] = []
+  for i, row in enumerate(side.get("rows", [])):
+    op = row.get("op")
+    if op not in ("produce", "consume", "barrier", "wait"):
+      errors.append({"row_index": i, "row": row, "error": f"unknown side-channel op {op!r}"})
+      continue
+    anchor = _side_anchor(row)
+    if anchor is None:
+      errors.append({"row_index": i, "row": row, "error": "side-channel row has no uop_id/inst_idx anchor"})
+      continue
+    found = by_anchor.get(anchor)
+    if found is None:
+      errors.append({"row_index": i, "row": row, "error": f"side-channel anchor not found in lowered rows: {anchor!r}"})
+      continue
+    physical_op, physical_row = found
+    if physical_op != op:
+      errors.append({"row_index": i, "row": row, "error": f"side-channel op {op!r} maps to physical {physical_op!r}"})
+      continue
+    if op == "wait":
+      wait_kind = row.get("wait_kind", row.get("wait", row.get("waitcnt_kind")))
+      count = row.get("count")
+      if wait_kind is None or count is None:
+        errors.append({"row_index": i, "row": row, "error": "anchored side-channel wait row is incomplete: requires wait_kind and count"})
+        continue
+      events.append(DBUFEvent("wait", kind=str(wait_kind), count=int(count), step=int(physical_row["idx"]),
+                              phase=str(row.get("phase", ""))))
+      continue
+    if op == "barrier":
+      events.append(DBUFEvent("barrier", step=int(physical_row["idx"]), phase=str(row.get("phase", ""))))
+      continue
+    missing = [k for k in ("role", "epoch", "slot") if row.get(k) is None]
+    if missing:
+      errors.append({"row_index": i, "row": row, "error": f"anchored side-channel row is incomplete: missing={missing}"})
+      continue
+    events.append(DBUFEvent(str(op), role=str(row["role"]), epoch=row["epoch"], slot=row["slot"],
+                            window=str(row.get("window", "default")), value_key=row.get("value_key"),
+                            step=int(physical_row["idx"]),
+                            phase=str(row.get("phase", ""))))
+  events = sorted(events, key=lambda e: e.step)
+  check = check_events(events, require_p5=any(e.op == "wait" for e in events)) if events else None
+  return {
+    "schema": "dbuf-side-channel-row-reconcile.v1",
+    "ok": bool(events) and not errors and check is not None and check["ok"],
     "event_count": len(events),
     "errors": errors,
     "check": check,
@@ -456,10 +542,16 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
   metadata_rows = [r for r in stores + loads if _dbuf_metadata(r) is not None]
   partial_rows = [r for r in stores + loads if r.get("dbuf_partial") is not None]
   side = side_channel or {"row_count": 0, "event_count": 0, "errors": [], "check": None, "events": []}
+  reconciled = _reconcile_side_channel_to_rows(ops, side) if side.get("row_count") else None
+  if reconciled is not None and reconciled.get("ok"):
+    return {"schema": "dbuf-lowered-stream-export.v1", "status": "exported",
+            "reason": None, "physical": physical, "check": reconciled["check"],
+            "side_channel": side, "reconciled_side_channel": reconciled,
+            "events": reconciled["events"]}
   if not stores or not loads or not barriers:
     return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
             "reason": "lowered stream lacks complete LDS store/load/barrier chain", "physical": physical,
-            "side_channel": side, "events": []}
+            "side_channel": side, "reconciled_side_channel": reconciled, "events": []}
   if len(metadata_rows) != len(stores) + len(loads):
     reason = "insufficient lowered lifecycle metadata: role/epoch/slot not present on every LDS store/load"
     if side.get("event_count"):
@@ -469,7 +561,7 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
             "physical": physical, "metadata_rows": len(metadata_rows), "partial_metadata_rows": len(partial_rows),
             "partial_metadata_sample": [r.get("dbuf_partial") for r in partial_rows[:8]],
             "required_metadata_rows": len(stores) + len(loads),
-            "side_channel": side,
+            "side_channel": side, "reconciled_side_channel": reconciled,
             "events": []}
 
   from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events

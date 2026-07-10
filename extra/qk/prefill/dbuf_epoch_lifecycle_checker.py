@@ -32,11 +32,11 @@ PROOF_LAYERS: tuple[dict[str, str], ...] = (
    "proof": "global tile loaded by producer equals tile consumed by WMMA when exporters provide value_key"},
   {"id": "P4", "name": "layout", "status": "done_for_s10_lds_spec_static",
    "proof": "A/B row or transposed layout matches static WMMA operand contract when exporters provide layout_key"},
-  {"id": "P5", "name": "wait_sync", "status": "pending",
-   "proof": "VMEM waits, LGKM waits, and barriers are present in the right phase"},
+  {"id": "P5", "name": "wait_sync", "status": "checker_reconcile_and_live_wait_anchors_ready",
+   "proof": "VMEM waits, LGKM waits, and barriers are present in the right phase when exporters provide wait events"},
   {"id": "P6", "name": "lifetime_pressure", "status": "advisory_schema_ready",
    "proof": "advisory reg-pressure summaries reject known DBUF address live-range hazards"},
-  {"id": "P7", "name": "lowered_stream", "status": "pending",
+  {"id": "P7", "name": "lowered_stream", "status": "side_channel_anchor_reconcile_ready_live_exporters_partial",
    "proof": "generated graph or stream exports actual stores/loads/waits/WMMA into this schema"},
 )
 
@@ -49,7 +49,7 @@ EXPORTERS: tuple[dict[str, str], ...] = (
    "source": "kernel_lifecycle_trace.py / wmma.py lifecycle template"},
   {"id": "E4", "name": "generated_postrange_exporter", "status": "done_for_owner_records",
    "source": "pre-lowering Ops.STAGE / owner metadata"},
-  {"id": "E5", "name": "lowered_stream_exporter", "status": "fail_closed_status_report",
+  {"id": "E5", "name": "lowered_stream_exporter", "status": "fail_closed_plus_side_channel_anchor_reconcile",
    "source": "generated AMD ISA or UOp stream"},
 )
 

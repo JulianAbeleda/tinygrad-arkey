@@ -89,9 +89,9 @@ Required proof layers:
 | P2 byte-window proof | producer and consumer agree on exact LDS byte interval | prevents same-slot wrong-window bugs | checker/exporter ready for S10 LDS spec |
 | P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | checker schema ready; exporters pending |
 | P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | checker/exporter ready for S10 LDS spec static layout |
-| P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker schema and strict mode implemented; exporters pending |
+| P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker strict mode, side-channel reconciliation, and live wait anchors implemented |
 | P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | advisory summary checker implemented |
-| P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | not started |
+| P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | fail-closed exporter plus side-channel row reconciliation implemented; live consume anchors pending |
 
 S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 
@@ -107,7 +107,7 @@ S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 | E2 S10 LDS spec exporter | `WMMALDSSpec` / slot identity proof | P2 LDS windows | done |
 | E3 hand lifecycle exporter | `kernel_lifecycle_trace.py` / `wmma.py` lifecycle template | P1/P2/P5 hand oracle events from the LDS2 template | done for template oracle |
 | E4 generated postrange exporter | pre-lowering `Ops.STAGE` / owner metadata | P1 generated owner events from postrange owner records | done for owner records |
-| E5 lowered stream exporter | generated AMD ISA or UOp stream | fail-closed P7 status plus checker export when role/epoch/slot metadata exists | fail-closed status report implemented |
+| E5 lowered stream exporter | generated AMD ISA or UOp stream | fail-closed P7 status plus checker export when role/epoch/slot metadata or side-channel anchors exist | fail-closed plus side-channel anchor reconciliation implemented |
 
 ## Done Definition For "All S10 Info"
 
@@ -216,13 +216,14 @@ control uses. It remains advisory until backed by allocator live intervals or ex
 The E5/P7 lowered-stream bridge is implemented in `kernel_lifecycle_trace.py`:
 
 ```text
-_p7_lowered_stream_export(ops, reaching)
+_p7_lowered_stream_export(ops, reaching, side_channel=None)
 ```
 
 It exports actual lowered `ds_store_b128` / `s_barrier` / `ds_load_b128` rows into checker events only when every store
 and load carries explicit logical `role`, `epoch`, and `slot` metadata. If that metadata is absent, it returns
 `status=fail_closed` with physical counts and the reason instead of guessing from registers or byte windows. Current real
-lowered streams are expected to fail closed until ownership tags survive lowering.
+lowered streams are expected to fail closed unless either complete metadata is present or side-channel rows can be anchored
+to actual lowered rows.
 
 The tracer now keeps generated final UOps through row extraction, normalizes complete `dbuf_lifecycle` tags into `dbuf`
 rows, and reports existing `wmma_frag_proof` / `wmma_frag_buffer_proof` / `tc_local_stage_store` tags as `dbuf_partial`.
@@ -235,17 +236,35 @@ The side-channel route is now formalized through `DBUF_D3A_AUDIT_LOG` rows:
 ```python
 {
   "kind": "dbuf_lifecycle_event",
-  "op": "produce" | "consume" | "barrier",
+  "op": "produce" | "consume" | "barrier" | "wait",
   "role": "A" | "B",
   "epoch": ...,
   "slot": ...,
   "window": ...,
+  "uop_id": ...,
+  "wait_kind": "vm" | "lgkm" | "full",  # wait rows only
+  "count": 0,                           # wait rows only
 }
 ```
 
-`kernel_lifecycle_trace.py::_side_channel_lifecycle_events` normalizes those rows into checker events. P7 currently keeps
-this as context on fail-closed reports until every side-channel event can be reconciled to actual lowered store/load/barrier
-rows. That reconciliation step is the next remaining hard requirement.
+`kernel_lifecycle_trace.py::_side_channel_lifecycle_events` normalizes those rows into checker events, including optional
+P3 `value_key` and P5 wait events. `_reconcile_side_channel_to_rows` then matches side-channel rows to actual lowered
+`ds_store_b128`, `ds_load_b128`, `s_barrier`, and `s_waitcnt` rows by stable `uop_id` or final `idx` anchors before running
+the checker. If reconciliation passes, `_p7_lowered_stream_export` exports the checked final stream; if any anchor is
+missing or maps to the wrong physical op, it remains fail-closed.
+
+Current live coverage:
+
+- final-row extraction exports `uop_id` for UOp-backed rows,
+- D3A produce events emit `uop_id`,
+- D3A explicit barrier events emit `uop_id`,
+- waitcnt insertion emits live `s_waitcnt` side-channel anchors,
+- synthetic side-channel tests prove P1/P3/P5/P7 reconciliation behavior.
+
+Remaining live exporter work:
+
+- emit consume anchors from the actual lowered `ds_load_b128` producer, not only the WMMA fragment proof,
+- run the reconciled exporter on the generated candidate trace and compare coverage to the hand/hybrid oracle.
 
 ## Decoupling Path
 

@@ -206,6 +206,105 @@ def test_p7_lowered_stream_export_carries_side_channel_fail_closed_context():
   assert out["status"] == "fail_closed"
   assert "side-channel records exist" in out["reason"]
   assert out["side_channel"]["check"]["ok"] is True
+  assert out["reconciled_side_channel"]["errors"][0]["error"] == "side-channel row has no uop_id/inst_idx anchor"
+
+
+def test_p7_lowered_stream_export_exports_reconciled_side_channel():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0", "uop_id": 10},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier", "uop_id": 11},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0", "uop_id": 12},
+  ])
+  out = life._p7_lowered_stream_export({
+    "ds_store_b128": [{"idx": 20, "uop_id": 10}],
+    "s_barrier": [{"idx": 21, "uop_id": 11}],
+    "ds_load_b128": [{"idx": 22, "uop_id": 12}],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"}, side)
+
+  assert out["status"] == "exported"
+  assert out["check"]["ok"] is True
+  assert out["events"] == [
+    {"op": "produce", "step": 20, "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+    {"op": "barrier", "step": 21},
+    {"op": "consume", "step": 22, "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+  ]
+
+
+def test_side_channel_reconciliation_rejects_wrong_physical_op():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "uop_id": 12},
+  ])
+
+  out = life._reconcile_side_channel_to_rows({
+    "ds_store_b128": [],
+    "s_barrier": [],
+    "ds_load_b128": [{"idx": 22, "uop_id": 12}],
+  }, side)
+
+  assert out["ok"] is False
+  assert out["errors"][0]["error"] == "side-channel op 'produce' maps to physical 'consume'"
+
+
+def test_side_channel_reconciliation_checks_value_keys():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0",
+     "uop_id": 10, "value_key": {"role": "B", "matrix": "B", "k_tile": 0}},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier", "uop_id": 11},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0",
+     "uop_id": 12, "value_key": {"role": "B", "matrix": "B", "k_tile": 1}},
+  ])
+
+  out = life._reconcile_side_channel_to_rows({
+    "ds_store_b128": [{"idx": 20, "uop_id": 10}],
+    "s_barrier": [{"idx": 21, "uop_id": 11}],
+    "ds_load_b128": [{"idx": 22, "uop_id": 12}],
+  }, side)
+
+  assert out["ok"] is False
+  assert any("consumer value_key does not match producer" in err["error"] for err in out["check"]["errors"])
+
+
+def test_p7_lowered_stream_export_exports_reconciled_side_channel_with_waits():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0", "uop_id": 10},
+    {"kind": "dbuf_lifecycle_event", "op": "wait", "wait_kind": "vm", "count": 0, "uop_id": 9, "phase": "after_coop_load"},
+    {"kind": "dbuf_lifecycle_event", "op": "wait", "wait_kind": "lgkm", "count": 0, "uop_id": 11, "phase": "after_coop_store"},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier", "uop_id": 12},
+    {"kind": "dbuf_lifecycle_event", "op": "wait", "wait_kind": "lgkm", "count": 0, "uop_id": 13, "phase": "after_frag_load"},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0", "uop_id": 14},
+  ])
+
+  out = life._p7_lowered_stream_export({
+    "s_waitcnt": [{"idx": 19, "uop_id": 9}, {"idx": 21, "uop_id": 11}, {"idx": 23, "uop_id": 13}],
+    "ds_store_b128": [{"idx": 20, "uop_id": 10}],
+    "s_barrier": [{"idx": 22, "uop_id": 12}],
+    "ds_load_b128": [{"idx": 24, "uop_id": 14}],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"}, side)
+
+  assert out["status"] == "exported"
+  assert out["check"]["ok"] is True
+  assert out["check"]["p5_wait_sync"] == "checked"
+  assert [event["op"] for event in out["events"]] == ["wait", "produce", "wait", "barrier", "wait", "consume"]
+
+
+def test_side_channel_reconciliation_rejects_missing_p5_wait():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "wait", "wait_kind": "vm", "count": 0, "uop_id": 9},
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0", "uop_id": 10},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier", "uop_id": 12},
+    {"kind": "dbuf_lifecycle_event", "op": "wait", "wait_kind": "lgkm", "count": 0, "uop_id": 13},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0", "uop_id": 14},
+  ])
+
+  out = life._reconcile_side_channel_to_rows({
+    "s_waitcnt": [{"idx": 19, "uop_id": 9}, {"idx": 23, "uop_id": 13}],
+    "ds_store_b128": [{"idx": 20, "uop_id": 10}],
+    "s_barrier": [{"idx": 22, "uop_id": 12}],
+    "ds_load_b128": [{"idx": 24, "uop_id": 14}],
+  }, side)
+
+  assert out["ok"] is False
+  assert any("P5 requires LGKM wait after LDS stores before barrier" in err["error"] for err in out["check"]["errors"])
 
 
 def test_lowered_row_tag_normalizer_exports_complete_lifecycle_metadata():

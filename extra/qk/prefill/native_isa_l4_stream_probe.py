@@ -239,6 +239,7 @@ def _interesting_rows(insts: list[Any], name: str, fields: tuple[str, ...]) -> l
     if isinstance(inst, tuple) or _mn(inst) != name: continue
     spans = {k: v for k, v in _field_spans(inst).items() if k in fields}
     row = {"idx": idx, "spans": spans, "text": str(inst)}
+    if isinstance(raw, UOp): row["uop_id"] = id(raw)
     if isinstance(raw, UOp) and (payload := _audit_payload_from_tag(raw.tag)) is not None: row["audit_payload"] = payload
     if isinstance(raw, UOp):
       dbuf, partial = _dbuf_metadata_from_tag(raw.tag)
