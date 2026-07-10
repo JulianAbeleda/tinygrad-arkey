@@ -217,3 +217,63 @@ Current generated decision from the bundle:
 ```text
 promotion_gates.decision = keep_s9_authority_and_treat_candidate_as_research
 ```
+
+## Refreshed S10 Baseline - 2026-07-10
+
+Command:
+
+```bash
+PYTHONPATH=. DEV=AMD \
+PREFILL_GRAPH_GEMM=1 \
+PREFILL_WMMA_PIPE_PRIMITIVE=1 \
+PREFILL_WMMA_LDS_PRIMITIVE=1 \
+PREFILL_DBUF=1 \
+PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE=1 \
+python3 extra/qk/prefill_whole_synced.py \
+  --mode authority \
+  --require-route prefill_wmma_pipe_lds_dbuf_primitive_generated \
+  --artifact bench/prefill-whole-synced/s10-composed-current-authority.json \
+  --json \
+  --pin-clock
+```
+
+Route binding passed:
+
+```text
+selected_route = prefill_wmma_pipe_lds_dbuf_primitive_generated
+verdict        = PREFILL_ROUTE_BINDING_PASS
+role routes    = attn_qo:pipe, attn_kv:generated_pipe_no_local_stage, ffn_down:pipe, ffn_gate_up:lds_dbuf
+```
+
+New authority row:
+
+| Length | Pure baseline tok/s | S10 current tok/s | Delta |
+|---:|---:|---:|---:|
+| 512 | `1629.74` | `1332.22` | `-18.26%` |
+| 1024 | `1587.88` | `1318.20` | `-16.98%` |
+| 2048 | `1518.44` | `1271.21` | `-16.28%` |
+| 4096 | `1420.14` | `1188.86` | `-16.29%` |
+
+Against S9 authority:
+
+| Gate | Actual | Target | Pass |
+|---|---:|---:|---|
+| pp512 vs `0.98 * S9` | `1332.22` | `4308.74` | no |
+| pp4096 vs `0.98 * S9` | `1188.86` | `3164.34` | no |
+| pp512 vs pure baseline | `1332.22` | `1629.74` | no |
+| pp4096 vs pure baseline | `1188.86` | `1420.14` | no |
+
+Actuals bundle artifact:
+
+```bash
+PYTHONPATH=. python3 extra/qk/prefill/baseline_audit_bundle.py \
+  --candidate bench/prefill-whole-synced/s10-composed-current-authority.json \
+  --output bench/prefill-baseline-audit/s10-current-actuals.json \
+  --json
+```
+
+Current decision remains:
+
+```text
+keep_s9_authority_and_treat_candidate_as_research
+```
