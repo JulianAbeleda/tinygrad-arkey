@@ -116,6 +116,47 @@ def llama_mma_writeback_owners(spec: Q4KQ81MMQTileSpec,
   return tuple(owners)
 
 
+def llama_mma_writeback_coverage(spec: Q4KQ81MMQTileSpec,
+                                 geometry: LlamaMMQOracleGeometry = LlamaMMQOracleGeometry()) -> dict[str, Any]:
+  owners = llama_mma_writeback_owners(spec, geometry)
+  covered: dict[tuple[int, int], dict[str, Any]] = {}
+  duplicates: list[dict[str, Any]] = []
+  for fragment_id, owner in enumerate(owners):
+    m0, m1 = owner["m_range"]
+    n0, n1 = owner["n_range"]
+    for m in range(m0, m1):
+      for n in range(n0, n1):
+        key = (m, n)
+        point_owner = {
+          "m": m,
+          "n": n,
+          "fragment_id": fragment_id,
+          "warp_id": owner["warp_id"],
+          "fragment_m_range": owner["m_range"],
+          "fragment_n_range": owner["n_range"],
+        }
+        if key in covered:
+          duplicates.append({"m": m, "n": n, "first": covered[key], "duplicate": point_owner})
+        else:
+          covered[key] = point_owner
+
+  missing = [
+    {"m": spec.m0 + m, "n": spec.n0 + n}
+    for m in range(spec.tile_m) for n in range(spec.tile_n)
+    if (spec.m0 + m, spec.n0 + n) not in covered
+  ]
+  return {
+    "owner_fragment_count": len(owners),
+    "covered_output_count": len(covered),
+    "expected_output_count": spec.tile_m * spec.tile_n,
+    "duplicate_store_count": len(duplicates),
+    "missing_store_count": len(missing),
+    "duplicates": duplicates,
+    "missing": missing,
+    "owners": owners,
+  }
+
+
 def run_llama_mmq_coop_tile_oracle(q4k_bytes: np.ndarray, q8_ds4: Q81MMQDS4Activation, spec: Q4KQ81MMQTileSpec,
                                    geometry: LlamaMMQOracleGeometry = LlamaMMQOracleGeometry()) -> LlamaMMQOracleResult:
   spec.validate()

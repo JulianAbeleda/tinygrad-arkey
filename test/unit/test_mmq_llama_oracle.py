@@ -2,8 +2,8 @@ import numpy as np
 
 from extra.qk.mmq_bounded_harness import _finite_q4k_bytes, _q8_activation_inputs, ACTIVATION_LAYOUT_MMQ_DS4
 from extra.qk.mmq_llama_oracle import (
-  LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, LlamaMMQOracleGeometry, llama_mma_writeback_owners,
-  llama_mmq_source_policy, run_llama_mmq_coop_tile_oracle,
+  LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, LlamaMMQOracleGeometry, llama_mma_writeback_coverage,
+  llama_mma_writeback_owners, llama_mmq_source_policy, run_llama_mmq_coop_tile_oracle,
 )
 from extra.qk.mmq_q4k_q8_reference import (
   Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_ds4_tile_reference,
@@ -22,6 +22,25 @@ def test_llama_mmq_oracle_writeback_owners_follow_8_wave_16x16_stripes():
   assert owners[-1]["warp_id"] == 7
   assert owners[-1]["m_range"] == [112, 128]
   assert owners[-1]["n_range"] == [112, 128]
+
+
+def test_llama_mmq_writeback_coverage_has_no_missing_or_duplicate_stores():
+  cases = [
+    (16, 16, 1),
+    (32, 16, 2),
+    (32, 32, 4),
+    (128, 128, 64),
+  ]
+  for m, n, expected_fragments in cases:
+    spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=m, n=n, k=256, m_tile=m, n_tile=n,
+                                      activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+    coverage = llama_mma_writeback_coverage(spec)
+
+    assert coverage["owner_fragment_count"] == expected_fragments
+    assert coverage["covered_output_count"] == m * n
+    assert coverage["expected_output_count"] == m * n
+    assert coverage["duplicate_store_count"] == 0
+    assert coverage["missing_store_count"] == 0
 
 
 def test_llama_mmq_oracle_matches_ds4_reference_for_bounded_tile():
