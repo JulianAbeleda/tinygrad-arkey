@@ -697,6 +697,65 @@ explicit owned-stage pseudo surviving until K-major/isel lowering
 
 K-major-only should remain the current best generated baseline, but it does not solve D3/body next-slot ownership.
 
+## S9/S10 Amortization Math - 2026-07-10
+
+The useful-work formula is:
+
+```text
+1 fp16 RDNA3 WMMA = 16 * 16 * 16 FMAs = 8192 FLOPs
+useful_flops      = wmma_count * 8192
+flops_per_overhead(kind) = useful_flops / count(kind)
+```
+
+Commands:
+
+```bash
+DEV=AMD:ISA PYTHONPATH=. python3 extra/qk/prefill/kernel_lifecycle_trace.py --kind hand-lds2 \
+  --m 512 --n 5120 --k 5120 --wm 2 --wn 2 --waves-m 1 --waves-n 1 --bk 64 --dbuf 1 \
+  --target AMD:ISA:gfx1100 --json
+
+DEV=AMD:ISA AMD_ISA_WMMA_B128_FRAG=1 AMD_ISA_REG_ACCUM=1 AMD_ISA_WAITCNT_TARGETED=1 \
+PREFILL_TC_LOCAL_STAGE=both PREFILL_TC_LOCAL_STAGE_WITH_LOCAL=1 PREFILL_TC_LOCAL_STAGE_B_TILEKEY=1 \
+PREFILL_TC_LOCAL_STAGE_POST=1 PREFILL_LDS_PACK_WITHLOCAL_B128=1 PREFILL_DBUF=1 \
+PREFILL_DBUF_LDS_CONST_IMM=1 PREFILL_DBUF_LDS_INDEX_SPLIT=1 PREFILL_DBUF_LDS_STORE_BASE_SPLIT=1 \
+PREFILL_DBUF_DIRECT_B128_CHAIN=1 PREFILL_DBUF_LDS_ADDR_USE_DEP=1 REGALLOC_ADDR_REMAT=1 \
+PYTHONPATH=. python3 extra/qk/prefill/kernel_lifecycle_trace.py --active-generated --kind generated \
+  --shapes 2,2 --m 512 --n 5120 --k 5120 --loc 2 --unr 2 --target AMD:ISA:gfx1100 --json
+
+DEV=AMD:ISA AMD_ISA_WMMA_B128_FRAG=1 AMD_ISA_REG_ACCUM=1 AMD_ISA_WAITCNT_TARGETED=1 \
+PREFILL_TC_LOCAL_STAGE=both PREFILL_TC_LOCAL_STAGE_WITH_LOCAL=1 PREFILL_TC_LOCAL_STAGE_B_TILEKEY=1 \
+PREFILL_TC_LOCAL_STAGE_POST=1 PREFILL_LDS_PACK_WITHLOCAL_B128=1 PREFILL_DBUF=1 \
+PREFILL_DBUF_LDS_CONST_IMM=1 PREFILL_DBUF_LDS_INDEX_SPLIT=1 PREFILL_DBUF_LDS_STORE_BASE_SPLIT=1 \
+PREFILL_DBUF_DIRECT_B128_CHAIN=1 PREFILL_DBUF_LDS_ADDR_USE_DEP=1 REGALLOC_ADDR_REMAT=1 \
+PREFILL_WMMA_KMAJOR_PHASE=1 PREFILL_WMMA_AB_PROOF_KEY=1 PREFILL_WMMA_AB_PHASE_SCOPED_KEY=1 \
+PREFILL_WMMA_AB_PROOF_FROM_LDS_DESC=1 PYTHONPATH=. \
+python3 extra/qk/prefill/kernel_lifecycle_trace.py --active-generated --kind generated \
+  --shapes 2,2 --m 512 --n 5120 --k 5120 --loc 2 --unr 2 --target AMD:ISA:gfx1100 --json
+```
+
+| Route | P8 | WMMA | useful FLOPs | waits/WMMA | max burst | ds_load/WMMA | inst/WMMA | FLOPs/wait | FLOPs/DS load | FLOPs/inst |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| S9 hand LDS2 `2x2` | pass, `hand_lds2_quality` | 64 | 524288 | 0.406 | 4 | 2.0 | 9.547 | 20165 | 4096 | 858 |
+| S10 generated DBUF `2x2` | fail, wait amortization | 16 | 131072 | 3.312 | 1 | 4.0 | 39.062 | 2473 | 2048 | 210 |
+| S10 K-major `2x2` | fail, not DBUF-like | 16 | 131072 | 2.875 | 3 | 2.0 | 34.625 | 2849 | 4096 | 237 |
+
+Conclusion:
+
+```text
+K-major proves the formula moves in the right direction:
+  ds_load/WMMA improves 4.0 -> 2.0
+  max burst improves 1 -> 3
+  FLOPs/DS-load improves 2048 -> 4096
+
+But it does not yet solve wait amortization:
+  S9 hand 2x2:      ~20165 FLOPs/wait
+  S10 DBUF:          ~2473 FLOPs/wait
+  S10 K-major:       ~2849 FLOPs/wait
+```
+
+So the remaining primitive gap is not just LDS load reuse. The generated route must also move waits from per-WMMA shape
+toward phase-cluster shape.
+
 ### P3. A+B Owned Materializer
 
 Extend P2 to A and B only after B-only is correct.
