@@ -612,6 +612,91 @@ or introduce an explicit stage pseudo that survives until K-major lowering.
 
 Do not promote `PREFILL_DBUF_OWNED_B_STAGE_ROTATE_MATERIALIZE`; it is a default-off failed probe.
 
+## Small-Test Matrix - 2026-07-10
+
+Bounded target:
+
+```text
+shape=2x2
+M=512, N=5120, K=5120
+loc=2, unr=2
+target=AMD:ISA:gfx1100
+```
+
+### Structural Trace Results
+
+| Variant | Correct compile | WMMA | inst | global/WMMA | store/WMMA | load/WMMA | wait/WMMA | barriers | max burst | Verdict |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| baseline DBUF | yes | 16 | 625 | 2.000 | 2.000 | 4.000 | 3.312 | 2 | 1 | correct but no reuse/cluster |
+| K-major only | yes | 16 | 537 | 2.000 | 2.000 | 2.000 | 2.875 | 2 | 3 | best current generated signal |
+| K-major + D3 marker | yes | 16 | 645 | 3.125 | 3.125 | 2.000 | 4.188 | 2 | 2 | additive over-stage |
+| K-major phase steal, no suppress | yes | 16 | 775 | 4.250 | 4.250 | 2.000 | 6.250 | 20 | 3 | too much duplicate work/barriers |
+| K-major phase steal + memo | yes | 16 | 669 | 3.125 | 3.125 | 2.000 | 4.562 | 17 | 3 | still duplicate/barrier heavy |
+| K-major pipeline epochs | compiles | 16 | 532 | 1.625 | 1.625 | 2.000 | 3.125 | 17 | 3 | smaller but wrong output |
+| postrange rotate materializer | no | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | no-spill |
+
+### Correctness/Timing Smoke
+
+| Variant | Status | TFLOPS |
+|---|---|---:|
+| K-major only | ok | 12.24 |
+| K-major + D3 marker | ok | 9.18 |
+| K-major phase steal + memo | ok | 8.84 |
+| K-major pipeline epochs | wrong, `rr=nan` | 0.0 |
+| stage steal broad suppress | wrong, `rr=nan` | 0.0 |
+| stage steal epoch suppress | wrong, `rr=nan` | 0.0 |
+| stage-key suppress B phase 1 | wrong, `rr=1.4e+00` | 0.0 |
+| postrange rotate materializer | native allocation fails, `Inc 0: no spills` | n/a |
+
+### Explicit Stage-Pseudo Feasibility
+
+This route was tested without adding a new opcode by exporting the existing postrange owner records into the DBUF
+lifecycle checker.
+
+Input owner records:
+
+```text
+A owner: lds_buffer_id=990, nbuf=2, reduce=(0, AxisType.REDUCE)
+B owner: lds_buffer_id=991, nbuf=2, reduce=(0, AxisType.REDUCE)
+```
+
+Logical event export:
+
+```text
+event_count=20
+producer_count=8
+consumer_count=8
+check_events(require_p5=False): ok
+check_events(require_p5=True): fails only because pseudo wait events are not represented
+```
+
+Interpretation:
+
+```text
+The owner metadata is sufficient to build a correct logical prologue/body/tail pseudo lifecycle.
+The missing piece is a lowering representation that carries wait/barrier placement and materializes the pseudo late
+enough to avoid the postrange materializer's register-pressure failure.
+```
+
+### Decision
+
+Current-head small tests eliminate:
+
+```text
+late suppression
+epoch suppression
+postrange guarded future-store materialization
+additive D3/stage stealing as a performance route
+```
+
+The only route with a positive small-test signal is:
+
+```text
+explicit owned-stage pseudo surviving until K-major/isel lowering
+```
+
+K-major-only should remain the current best generated baseline, but it does not solve D3/body next-slot ownership.
+
 ### P3. A+B Owned Materializer
 
 Extend P2 to A and B only after B-only is correct.
