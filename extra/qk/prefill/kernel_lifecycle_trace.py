@@ -469,6 +469,22 @@ def _side_anchor(row: dict[str, Any]) -> tuple[str, Any] | None:
   return None
 
 
+def _anchor_alias_map(side: dict[str, Any]) -> dict[tuple[str, Any], tuple[str, Any]]:
+  return {
+    tuple(alias["from"]): tuple(alias["to"])
+    for alias in side.get("anchor_aliases", [])
+    if isinstance(alias, dict) and isinstance(alias.get("from"), list) and isinstance(alias.get("to"), list)
+  }
+
+
+def _resolve_anchor(anchor: tuple[str, Any], aliases: dict[tuple[str, Any], tuple[str, Any]]) -> tuple[str, Any]:
+  seen: set[tuple[str, Any]] = set()
+  while anchor in aliases and anchor not in seen:
+    seen.add(anchor)
+    anchor = aliases[anchor]
+  return anchor
+
+
 def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: dict[str, Any]) -> dict[str, Any]:
   from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
   physical_by_op = {
@@ -483,11 +499,7 @@ def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: 
       if (anchor := _row_anchor(row)) is not None: by_anchor[anchor] = (op, row)
   errors: list[dict[str, Any]] = []
   events: list[DBUFEvent] = []
-  anchor_aliases = {
-    tuple(alias["from"]): tuple(alias["to"])
-    for alias in side.get("anchor_aliases", [])
-    if isinstance(alias, dict) and isinstance(alias.get("from"), list) and isinstance(alias.get("to"), list)
-  }
+  anchor_aliases = _anchor_alias_map(side)
   for i, row in enumerate(side.get("rows", [])):
     op = row.get("op")
     if op not in ("produce", "consume", "barrier", "wait"):
@@ -497,10 +509,7 @@ def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: 
     if anchor is None:
       errors.append({"row_index": i, "row": row, "error": "side-channel row has no uop_id/inst_idx anchor"})
       continue
-    seen: set[tuple[str, Any]] = set()
-    while anchor in anchor_aliases and anchor not in seen:
-      seen.add(anchor)
-      anchor = anchor_aliases[anchor]
+    anchor = _resolve_anchor(anchor, anchor_aliases)
     found = by_anchor.get(anchor)
     if found is None:
       errors.append({"row_index": i, "row": row, "error": f"side-channel anchor not found in lowered rows: {anchor!r}"})
@@ -549,6 +558,58 @@ def _byte_window_tuple(row: dict[str, Any]) -> tuple[Any, int, int] | None:
   return (norm["base"], int(norm["lo"]), int(norm["hi"]))
 
 
+def _byte_window_p5_report(ops: dict[str, list[dict[str, Any]]], events: list[Any]) -> dict[str, Any]:
+  waits = [e for e in events if e.op == "wait"]
+  produces = [e for e in events if e.op == "produce"]
+  barriers = [e for e in events if e.op == "barrier"]
+  consumes = [e for e in events if e.op == "consume"]
+  wmmas = sorted(ops.get(sp.WMMA_NAME, []), key=lambda r: r["idx"])
+  errors: list[dict[str, Any]] = []
+
+  def is_vm(e) -> bool: return e.op == "wait" and e.kind in ("vm", "full") and e.count == 0
+  def is_lgkm_drain(e) -> bool: return e.op == "wait" and e.kind in ("lgkm", "full") and e.count == 0
+  def is_lgkm_target(e) -> bool: return e.op == "wait" and e.kind in ("lgkm", "full") and isinstance(e.count, int)
+
+  for event in produces:
+    if not any(is_vm(w) and w.step < event.step for w in waits):
+      errors.append({"event": event.to_json(), "error": "P5 byte-window bridge requires a VM wait before LDS produce"})
+  for event in barriers:
+    if any(p.step < event.step for p in produces) and not any(is_lgkm_drain(w) and w.step < event.step for w in waits):
+      errors.append({"event": event.to_json(), "error": "P5 byte-window bridge requires an LGKM drain before barrier"})
+  for event in consumes:
+    barrier_step = max((b.step for b in barriers if b.step < event.step), default=-1)
+    if not any(is_lgkm_target(w) and barrier_step < w.step < event.step for w in waits):
+      errors.append({"event": event.to_json(),
+                     "error": "P5 byte-window bridge requires an LGKM wait before WMMA consume"})
+
+  return {
+    "schema": "dbuf-byte-window-p5-check.v1",
+    "ok": not errors,
+    "wait_count": len(waits),
+    "producer_count": len(produces),
+    "consumer_count": len(consumes),
+    "barrier_count": len(barriers),
+    "wmma_count": len(wmmas),
+    "mode": "targeted_lgkm_wait_before_wmma_consume",
+    "errors": errors,
+  }
+
+
+def _wmma_consumer_idx_for_load(ops: dict[str, list[dict[str, Any]]], load_idx: int) -> int | None:
+  load_row = next((r for r in ops.get("ds_load_b128", []) if int(r["idx"]) == load_idx), None)
+  if load_row is None: return None
+  load_regs = _span_regs(load_row.get("spans", {}).get("vdst"))
+  if not load_regs:
+    row = next((r for r in sorted(ops.get(sp.WMMA_NAME, []), key=lambda r: r["idx"]) if int(r["idx"]) > load_idx), None)
+    return None if row is None else int(row["idx"])
+  for row in sorted(ops.get(sp.WMMA_NAME, []), key=lambda r: r["idx"]):
+    if int(row["idx"]) <= load_idx: continue
+    spans = row.get("spans", {})
+    if load_regs & (_span_regs(spans.get("src0")) | _span_regs(spans.get("src1"))):
+      return int(row["idx"])
+  return None
+
+
 def _reconcile_side_channel_by_byte_windows(ops: dict[str, list[dict[str, Any]]], side: dict[str, Any],
                                             byte_rows: dict[str, Any] | None) -> dict[str, Any] | None:
   from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
@@ -559,6 +620,9 @@ def _reconcile_side_channel_by_byte_windows(ops: dict[str, list[dict[str, Any]]]
   if not stores or not loads or not barriers: return None
   by_load_start: dict[tuple[Any, int], dict[str, Any]] = {}
   store_windows: dict[tuple[Any, int, int], dict[str, Any]] = {}
+  loads_by_idx = {int(r["idx"]): r for r in loads}
+  physical_loads_by_anchor = {_row_anchor(r): r for r in ops.get("ds_load_b128", []) if _row_anchor(r) is not None}
+  anchor_aliases = _anchor_alias_map(side)
   for row in loads:
     base, lo, _hi = _byte_window_tuple(row)  # type: ignore[misc]
     by_load_start[(base, lo)] = row
@@ -592,7 +656,19 @@ def _reconcile_side_channel_by_byte_windows(ops: dict[str, list[dict[str, Any]]]
     if not matching_loads:
       errors.append({"row_index": i, "row": row, "error": f"no physical ds_load_b128 starts consume byte window {start}:{end}"})
       continue
-    base, load0 = min(matching_loads, key=lambda x: int(x[1]["idx"]))
+    load0 = None
+    if (anchor := _side_anchor(row)) is not None:
+      resolved = _resolve_anchor(anchor, anchor_aliases)
+      physical = physical_loads_by_anchor.get(resolved)
+      if physical is not None: load0 = loads_by_idx.get(int(physical["idx"]))
+    if load0 is not None:
+      anchored = next(((base, candidate) for base, candidate in matching_loads if load0 is candidate), None)
+      if anchored is None:
+        errors.append({"row_index": i, "row": row, "error": f"anchored ds_load_b128 does not match consume byte window {start}:{end}"})
+        continue
+      base, load0 = anchored
+    else:
+      base, load0 = min(matching_loads, key=lambda x: int(x[1]["idx"]))
     store_parts = []
     cursor = start
     while cursor < end:
@@ -604,7 +680,8 @@ def _reconcile_side_channel_by_byte_windows(ops: dict[str, list[dict[str, Any]]]
       errors.append({"row_index": i, "row": row, "error": f"stores do not exactly cover consume byte window {start}:{end}"})
       continue
     store_step = min(int(s["idx"]) for s in store_parts)
-    consume_step = int(load0["idx"])
+    load_step = int(load0["idx"])
+    consume_step = _wmma_consumer_idx_for_load(ops, load_step) or load_step
     barrier = next((b for b in barriers if store_step < int(b["idx"]) < consume_step), None)
     if barrier is None:
       errors.append({"row_index": i, "row": row, "error": f"no barrier separates store window {start}:{end} from consume"})
@@ -620,14 +697,15 @@ def _reconcile_side_channel_by_byte_windows(ops: dict[str, list[dict[str, Any]]]
                             step=consume_step, phase=str(row.get("phase", ""))))
 
   events = sorted(events, key=lambda e: e.step)
-  # This bridge proves lowered producer/consumer/barrier ownership. P5 remains covered by the direct wait reconciler.
   check = check_events(events, require_p5=False) if events else None
+  p5 = _byte_window_p5_report(ops, events) if events else None
   return {
     "schema": "dbuf-byte-window-row-reconcile.v1",
-    "ok": bool(events) and not errors and check is not None and check["ok"],
+    "ok": bool(events) and not errors and check is not None and check["ok"] and p5 is not None and p5["ok"],
     "event_count": len(events),
     "errors": errors,
     "check": check,
+    "p5_check": p5,
     "events": [e.to_json() for e in events],
   }
 

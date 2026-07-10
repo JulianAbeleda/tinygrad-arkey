@@ -89,7 +89,7 @@ Required proof layers:
 | P2 byte-window proof | producer and consumer agree on exact LDS byte interval | prevents same-slot wrong-window bugs | checker/exporter ready for S10 LDS spec |
 | P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | checker schema ready; exporters pending |
 | P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | checker/exporter ready for S10 LDS spec static layout |
-| P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker strict mode, side-channel reconciliation, and live wait anchors implemented |
+| P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker strict mode, side-channel reconciliation, live wait anchors, and byte-window bridge P5 implemented |
 | P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | advisory summary checker implemented |
 | P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | active packed-LDS trace exports through normalized byte-window producer ownership |
 
@@ -272,14 +272,13 @@ Current generated-trace result:
   `check.ok=true`.
 - Direct side-channel producer rows are still absent for this route. The producer proof comes from normalized physical
   `ds_store_b128` byte-window coverage of each logical 32-byte consume.
-- P5 wait events are present in the exported event trace, but the byte-window bridge currently runs the checker with
-  strict P5 disabled; strict P5 remains covered by direct wait reconciliation and should be promoted into the bridge next.
+- Strict bridge P5 passes for all three active shapes. The bridge validates VM waits before LDS produces, LGKM drains before
+  barriers, and targeted LGKM waits before the WMMA that consumes each loaded fragment.
 
 Remaining MVP work:
 
-1. Promote strict P5 validation in the byte-window bridge once duplicated wait side-channel rows are deduped by final row.
-2. Diff generated checked events against the hand/hybrid oracle for role/epoch/window/value coverage.
-3. Keep `4x4` parked under the hardware/register-budget decision; do not reopen it as part of this P7 MVP.
+1. Diff generated checked events against the hand/hybrid oracle for role/epoch/window/value coverage.
+2. Keep `4x4` parked under the hardware/register-budget decision; do not reopen it as part of this P7 MVP.
 
 ## Decoupling Path
 

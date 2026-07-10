@@ -32,7 +32,7 @@ PROOF_LAYERS: tuple[dict[str, str], ...] = (
    "proof": "global tile loaded by producer equals tile consumed by WMMA when exporters provide value_key"},
   {"id": "P4", "name": "layout", "status": "done_for_s10_lds_spec_static",
    "proof": "A/B row or transposed layout matches static WMMA operand contract when exporters provide layout_key"},
-  {"id": "P5", "name": "wait_sync", "status": "checker_reconcile_and_live_wait_anchors_ready",
+  {"id": "P5", "name": "wait_sync", "status": "checker_reconcile_live_wait_and_byte_window_bridge_ready",
    "proof": "VMEM waits, LGKM waits, and barriers are present in the right phase when exporters provide wait events"},
   {"id": "P6", "name": "lifetime_pressure", "status": "advisory_schema_ready",
    "proof": "advisory reg-pressure summaries reject known DBUF address live-range hazards"},

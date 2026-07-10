@@ -537,7 +537,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   assert layers["P2"]["status"] == "done_for_s10_lds_spec"
   assert layers["P3"]["status"] == "checker_schema_ready_exporters_pending"
   assert layers["P4"]["status"] == "done_for_s10_lds_spec_static"
-  assert layers["P5"]["status"] == "checker_reconcile_and_live_wait_anchors_ready"
+  assert layers["P5"]["status"] == "checker_reconcile_live_wait_and_byte_window_bridge_ready"
   assert layers["P6"]["status"] == "advisory_schema_ready"
   assert layers["P7"]["status"] == "active_packed_lds_exports_via_byte_window_ownership"
   assert exporters["E1"]["status"] == "done"
