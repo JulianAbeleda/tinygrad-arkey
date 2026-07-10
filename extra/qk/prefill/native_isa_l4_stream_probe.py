@@ -187,6 +187,7 @@ def _dbuf_d3a_compile_audit_summary(rows: list[dict[str, Any]]) -> dict[str, Any
 
 
 def _waitcnt_simm16(inst: Any) -> int | None:
+  if isinstance(inst, UOp): inst = inst.arg
   if _mn(inst) != "s_waitcnt": return None
   return getattr(inst, "simm16", getattr(inst, "sim16", None))
 
@@ -200,6 +201,37 @@ def _audit_payload_from_tag(tag: Any) -> dict[str, Any] | None:
   try: return dict(tag[1])
   except Exception: return None
 
+def _tag_fields(tag: Any) -> dict[str, Any]:
+  if not (isinstance(tag, tuple) and tag): return {}
+  out: dict[str, Any] = {"kind": tag[0]}
+  for item in tag[1:]:
+    if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str): out[item[0]] = item[1]
+  return out
+
+def _dbuf_metadata_from_tag(tag: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+  fields = _tag_fields(tag)
+  kind = fields.get("kind")
+  if kind == "dbuf_lifecycle":
+    meta = {k: fields[k] for k in ("role", "epoch", "slot") if k in fields}
+    if "window" in fields: meta["window"] = fields["window"]
+    return (meta, None) if {"role", "epoch", "slot"} <= set(meta) else (None, fields)
+  if kind == "wmma_frag_proof":
+    partial = {
+      "kind": kind, "role": fields.get("role"), "epoch": fields.get("producer_epoch"),
+      "slot": fields.get("dbuf_slot"), "window": repr(fields.get("logical_row_or_col")),
+      "lds_buffer_id": fields.get("lds_buffer_id"), "nbuf": fields.get("nbuf"),
+    }
+    if partial["role"] is not None and partial["epoch"] is not None and partial["slot"] is not None:
+      return {"role": partial["role"], "epoch": repr(partial["epoch"]), "slot": repr(partial["slot"]),
+              "window": str(partial["window"])}, None
+    return None, partial
+  if kind == "wmma_frag_buffer_proof":
+    return None, {"kind": kind, "role": fields.get("role"), "lds_buffer_id": fields.get("lds_buffer_id"),
+                  "nbuf": fields.get("nbuf"), "tile_count": fields.get("tile_count"), "tile_elems": fields.get("tile_elems")}
+  if kind == "tc_local_stage_store" and len(tag) >= 5:
+    return None, {"kind": kind, "role": tag[1], "lds_buffer_id": tag[2], "byte_start": tag[3], "byte_len": tag[4]}
+  return None, None
+
 def _interesting_rows(insts: list[Any], name: str, fields: tuple[str, ...]) -> list[dict[str, Any]]:
   rows = []
   for idx, raw in enumerate(insts):
@@ -208,6 +240,10 @@ def _interesting_rows(insts: list[Any], name: str, fields: tuple[str, ...]) -> l
     spans = {k: v for k, v in _field_spans(inst).items() if k in fields}
     row = {"idx": idx, "spans": spans, "text": str(inst)}
     if isinstance(raw, UOp) and (payload := _audit_payload_from_tag(raw.tag)) is not None: row["audit_payload"] = payload
+    if isinstance(raw, UOp):
+      dbuf, partial = _dbuf_metadata_from_tag(raw.tag)
+      if dbuf is not None: row["dbuf"] = dbuf
+      if partial is not None: row["dbuf_partial"] = partial
     rows.append(row)
   return rows
 

@@ -224,6 +224,12 @@ and load carries explicit logical `role`, `epoch`, and `slot` metadata. If that 
 `status=fail_closed` with physical counts and the reason instead of guessing from registers or byte windows. Current real
 lowered streams are expected to fail closed until ownership tags survive lowering.
 
+The tracer now keeps generated final UOps through row extraction, normalizes complete `dbuf_lifecycle` tags into `dbuf`
+rows, and reports existing `wmma_frag_proof` / `wmma_frag_buffer_proof` / `tc_local_stage_store` tags as `dbuf_partial`.
+The attempted direct tag-survival route is intentionally not used: AMD regalloc treats tuple tags as register definitions,
+so proof metadata cannot simply survive through regalloc in `UOp.tag`. The remaining P7 hook must be a side-channel export
+before metadata tags are stripped, or a metadata carrier that regalloc explicitly ignores.
+
 ## Decoupling Path
 
 1. Keep the checker pure metadata/event based.

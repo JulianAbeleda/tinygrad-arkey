@@ -37,7 +37,7 @@ def _generated_insts(m_up: int, target: str) -> tuple[list[Any], dict[str, Any]]
   prg = to_program(ast, ren)
   lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
   final_uops = sp._final_stream(ren, lin_uop.src)
-  return sp._insts_from_uops(final_uops), {"program": str(prg.arg), "tail_off": "generated: UOps -> isel -> regalloc -> waitcnt/scheduler -> Inst"}
+  return final_uops, {"program": str(prg.arg), "tail_off": "generated: UOps -> isel -> regalloc -> waitcnt/scheduler -> Inst"}
 
 
 def _generated_active_insts(args: argparse.Namespace, shape: tuple[int, int]) -> tuple[list[Any], dict[str, Any]]:
@@ -52,7 +52,7 @@ def _generated_active_insts(args: argparse.Namespace, shape: tuple[int, int]) ->
     byte_trace = afp._analyze(sp._insts_from_uops(final_uops), prg)
   except Exception as e:
     byte_trace = {"error": f"{type(e).__name__}: {e}"}
-  return sp._insts_from_uops(final_uops), {
+  return final_uops, {
     "program": str(prg.arg),
     "shape": f"{u0}x{u1}",
     "u0": u0,
@@ -140,6 +140,7 @@ def _span_regs(span: dict[str, int] | None) -> set[int]:
 
 
 def _def_regs(inst: Any) -> set[int]:
+  if isinstance(inst, UOp): inst = inst.arg
   if isinstance(inst, tuple): return set()
   spans = sp._field_spans(inst)
   name = sp._mn(inst).lower()
@@ -425,13 +426,16 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
     "key_strength": reaching.get("key_strength"),
   }
   metadata_rows = [r for r in stores + loads if _dbuf_metadata(r) is not None]
+  partial_rows = [r for r in stores + loads if r.get("dbuf_partial") is not None]
   if not stores or not loads or not barriers:
     return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
             "reason": "lowered stream lacks complete LDS store/load/barrier chain", "physical": physical, "events": []}
   if len(metadata_rows) != len(stores) + len(loads):
     return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
             "reason": "insufficient lowered lifecycle metadata: role/epoch/slot not present on every LDS store/load",
-            "physical": physical, "metadata_rows": len(metadata_rows), "required_metadata_rows": len(stores) + len(loads),
+            "physical": physical, "metadata_rows": len(metadata_rows), "partial_metadata_rows": len(partial_rows),
+            "partial_metadata_sample": [r.get("dbuf_partial") for r in partial_rows[:8]],
+            "required_metadata_rows": len(stores) + len(loads),
             "events": []}
 
   from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
@@ -454,6 +458,7 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
 def _bytes(insts: list[Any]) -> int:
   total = 0
   for inst in insts:
+    if isinstance(inst, UOp): inst = inst.arg
     if isinstance(inst, tuple): continue
     total += len(inst.to_bytes())
   return total

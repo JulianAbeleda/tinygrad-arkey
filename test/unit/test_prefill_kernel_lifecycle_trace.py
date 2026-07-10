@@ -155,6 +155,35 @@ def test_p7_lowered_stream_export_fails_closed_without_metadata():
   assert out["events"] == []
 
 
+def test_p7_lowered_stream_export_reports_partial_metadata():
+  out = life._p7_lowered_stream_export({
+    "ds_store_b128": [{"idx": 0, "dbuf_partial": {"kind": "tc_local_stage_store", "role": "B"}}],
+    "s_barrier": [{"idx": 1}],
+    "ds_load_b128": [{"idx": 2, "dbuf_partial": {"kind": "wmma_frag_buffer_proof", "role": "B"}}],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"})
+
+  assert out["status"] == "fail_closed"
+  assert out["metadata_rows"] == 0
+  assert out["partial_metadata_rows"] == 2
+  assert out["partial_metadata_sample"][0]["kind"] == "tc_local_stage_store"
+
+
+def test_lowered_row_tag_normalizer_exports_complete_lifecycle_metadata():
+  dbuf, partial = sp._dbuf_metadata_from_tag((
+    "dbuf_lifecycle", ("role", "A"), ("epoch", 3), ("slot", 1), ("window", "A:slot1"),
+  ))
+
+  assert partial is None
+  assert dbuf == {"role": "A", "epoch": 3, "slot": 1, "window": "A:slot1"}
+
+
+def test_lowered_row_tag_normalizer_keeps_stage_store_partial():
+  dbuf, partial = sp._dbuf_metadata_from_tag(("tc_local_stage_store", "B", 991, 128, 16))
+
+  assert dbuf is None
+  assert partial == {"kind": "tc_local_stage_store", "role": "B", "lds_buffer_id": 991, "byte_start": 128, "byte_len": 16}
+
+
 def test_p7_lowered_stream_export_checks_metadata_when_present():
   out = life._p7_lowered_stream_export({
     "ds_store_b128": [{"idx": 0, "dbuf": {"role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"}}],
