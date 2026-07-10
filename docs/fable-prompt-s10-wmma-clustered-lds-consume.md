@@ -59,8 +59,16 @@ But it did not fix wait amortization:
 
 ## Why We Think The Fast Reference Is Fast
 
-The fast reference is not just faster because it has more matrix ops. It is faster because fixed overhead is amortized
-over larger matrix-op clusters.
+The fast reference counters cover a larger scheduling window than the generated K-major probe:
+
+```text
+fast reference:      64 matrix ops
+generated K-major:   16 matrix ops
+```
+
+That difference is important. Per-op normalization is useful for seeing density, but it can make fixed overhead look
+like a per-op instruction problem. The strongest non-confounded signal is wait amortization: the fast reference does 4x
+the matrix work with fewer absolute waits.
 
 Fast reference `2x2` raw counts:
 
@@ -70,7 +78,9 @@ useful_flops          = 64 * 8192 = 524288
 wait_count            = 26
 shared_load_count     = 128
 instruction_count     = 611
+non_matrix_inst_count = 611 - 64 = 547
 max_matrix_op_burst   = 4
+average_ops_per_wait  = 64 / 26 ~= 2.46
 ```
 
 Derived math:
@@ -93,7 +103,9 @@ useful_flops          = 16 * 8192 = 131072
 wait_count            = 46
 shared_load_count     = 32
 instruction_count     = 554
+non_matrix_inst_count = 554 - 16 = 538
 max_matrix_op_burst   = 3
+average_ops_per_wait  = 16 / 46 ~= 0.35
 ```
 
 Derived math:
@@ -114,9 +126,15 @@ This is the key inference:
 Generated K-major already matches the fast reference on shared-load amortization:
   FLOPs/shared_load = 4096 in both
 
-But it is still far behind on wait and instruction amortization:
-  FLOPs/wait        = 2849 generated vs 20165 fast reference
-  FLOPs/instruction = 237 generated vs 858 fast reference
+The real structural gap is wait amortization:
+  absolute waits        = 46 generated vs 26 fast reference
+  average ops/wait      = 0.35 generated vs 2.46 fast reference
+  FLOPs/wait            = 2849 generated vs 20165 fast reference
+
+The instruction/op gap is mostly a density/window artifact:
+  non-matrix inst count = 538 generated vs 547 fast reference
+  FLOPs/instruction    = 237 generated vs 858 fast reference because the fast reference spreads similar fixed overhead
+                         across 4x the matrix work.
 ```
 
 So the next design should not primarily target fewer shared loads. It should target:
@@ -124,7 +142,7 @@ So the next design should not primarily target fewer shared loads. It should tar
 ```text
 1. fewer waits per cluster,
 2. larger matrix-op bursts after each wait,
-3. fewer bookkeeping instructions between useful matrix ops.
+3. more matrix work per fixed scheduling/lifecycle window.
 ```
 
 ## Current Generated Shape
